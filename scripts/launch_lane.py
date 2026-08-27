@@ -77,6 +77,30 @@ RUNTIME_TRANSPORTS: dict[str, dict[str, tuple[str, ...]]] = {
     },
 }
 TRANSPORT_KINDS = ("worktree", "prompt", "final_text")
+# Approval/sandbox policy: config DECLARES `parallel.<runtime>_approval_policy` from
+# this engine-owned vocabulary and the engine emits the argv contribution. Every
+# unrestricted spelling (bypassPermissions, danger-full-access, the dangerously-*
+# flags, auto, manual, plan) is a deliberate non-member: no config value makes the
+# wrapper widen a lane to unrestricted. The Codex contribution is validated and
+# passed; its behaviour is unclaimed until a Codex writing-lane record exists.
+RUNTIME_APPROVAL_POLICIES: dict[str, dict[str, tuple[str, ...]]] = {
+    "codex": {
+        "read-only": ("--sandbox", "read-only"),
+        "workspace-write": ("--sandbox", "workspace-write"),
+    },
+    "claude": {
+        "dont-ask": ("--permission-mode", "dontAsk"),
+        "accept-edits": ("--permission-mode", "acceptEdits"),
+    },
+}
+# The Claude trust route (design matrix, 2026-08-27): an unattended lane worktree
+# is an untrusted workspace, so the branch's project settings never supply policy
+# and the operator's user settings must not either. `--setting-sources ""` loads
+# neither; the cockpit-owned profile passed with `--settings` is the one source.
+CLAUDE_SETTING_SOURCES_ARGS = ("--setting-sources", "")
+# Whole-tool Bash allowances widen a lane to unrestricted shell without a
+# declaration; the profile validator refuses them by exact spelling.
+WHOLE_TOOL_BASH_ALLOWS = frozenset({"Bash", "Bash()", "Bash(*)", "Bash(*:*)"})
 SAFE_EXECUTABLE_PATH = os.pathsep.join(
     (*os.defpath.split(os.pathsep), "/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin")
 )
@@ -97,15 +121,26 @@ class RuntimeProfile:
     """One runtime's config-owned headless template, validated and resolved."""
 
     def __init__(
-        self, runtime: str, command: list[str], transports: dict[str, str]
+        self,
+        runtime: str,
+        command: list[str],
+        transports: dict[str, str],
+        approval: dict[str, Any],
     ) -> None:
         self.runtime = runtime
         self.command = command
         self.transports = transports
+        # {"declared", "argv", "settings_profile_path", "settings_profile_sha256"}:
+        # the declared policy, the exact argv it produces, and the trust-route
+        # profile the argv names (Claude) — bound into the request by both sides.
+        self.approval = approval
 
     def child_argv(self, worktree: str, final_message: str) -> list[str]:
-        # Fixed order: command prefix, worktree, final text, prompt. For Codex this
-        # is exactly the #609 argv; for Claude it is `claude -p --output-format json`.
+        # Fixed order: command prefix, approval contribution, worktree, final text,
+        # prompt. For Codex this is the #609 argv with `--sandbox <policy>` in the
+        # second slot; for Claude it is `claude -p --setting-sources "" --permission-mode
+        # <mode> --settings <profile> --output-format json`.
+        approval_args = list(self.approval["argv"])
         worktree_args = (
             ["--cd", worktree] if self.transports["worktree"] == "cd-flag" else []
         )
@@ -114,7 +149,7 @@ class RuntimeProfile:
         else:
             final_args = ["--output-format", "json"]
         prompt_args = ["-"] if self.transports["prompt"] == "stdin-dash" else []
-        return [*self.command, *worktree_args, *final_args, *prompt_args]
+        return [*self.command, *approval_args, *worktree_args, *final_args, *prompt_args]
 
 
 class _ForkedChild:
@@ -335,6 +370,7 @@ def _config_for_launcher(runtime: str) -> tuple[RuntimeProfile, int, int, int, P
                 f"{', '.join(RUNTIME_TRANSPORTS[runtime][kind])}"
             )
         transports[kind] = declared
+    approval = _approval_for_runtime(runtime, config, root)
     if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout <= 0:
         raise LaunchError("config parallel.observation_timeout_seconds must be positive")
     if not isinstance(lifetime, int) or isinstance(lifetime, bool) or lifetime <= 0:
@@ -356,12 +392,78 @@ def _config_for_launcher(runtime: str) -> tuple[RuntimeProfile, int, int, int, P
             f"configured {runtime} launcher is unavailable on the trusted path"
         )
     return (
-        RuntimeProfile(runtime, [resolved_executable, *command[1:]], transports),
+        RuntimeProfile(runtime, [resolved_executable, *command[1:]], transports, approval),
         timeout,
         lifetime,
         termination_grace,
         root.resolve(),
     )
+
+
+def _validate_settings_profile(raw: bytes, path: Path) -> None:
+    """Refuse a lane settings profile that is not one bounded permissions object.
+
+    The mode is config-declared and passed as `--permission-mode`, so a profile
+    carrying `permissions.defaultMode` would be a second authority for the same
+    decision; a whole-tool Bash allowance would widen the lane to unrestricted
+    shell without any declaration. Both refuse before an attempt record exists.
+    """
+    try:
+        profile = json.loads(raw)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise LaunchError(f"lane settings profile {path} is not valid JSON") from exc
+    if not isinstance(profile, dict):
+        raise LaunchError(f"lane settings profile {path} must be one JSON object")
+    permissions = profile.get("permissions")
+    if not isinstance(permissions, dict):
+        raise LaunchError(f"lane settings profile {path} must declare a permissions object")
+    if "defaultMode" in permissions:
+        raise LaunchError(
+            f"lane settings profile {path} must not declare permissions.defaultMode; "
+            "the mode is config-declared through parallel.claude_approval_policy"
+        )
+    for key in ("allow", "deny", "ask"):
+        entries = permissions.get(key, [])
+        if not isinstance(entries, list) or not all(isinstance(item, str) for item in entries):
+            raise LaunchError(f"lane settings profile {path} permissions.{key} must be a list of strings")
+    for entry in permissions.get("allow", []):
+        if entry.strip() in WHOLE_TOOL_BASH_ALLOWS:
+            raise LaunchError(
+                f"lane settings profile {path} widens Bash to unrestricted ({entry!r}); "
+                "declare each command prefix instead"
+            )
+
+
+def _approval_for_runtime(runtime: str, config: dict[str, Any], root: Path) -> dict[str, Any]:
+    key = f"parallel.{runtime}_approval_policy"
+    declared = get(config, key, None)
+    vocabulary = RUNTIME_APPROVAL_POLICIES[runtime]
+    if not isinstance(declared, str) or declared not in vocabulary:
+        raise LaunchError(f"config {key} must declare one of {', '.join(vocabulary)}")
+    contribution = list(vocabulary[declared])
+    profile_path: str | None = None
+    profile_sha256: str | None = None
+    if runtime == "claude":
+        profile_key = "parallel.claude_settings_profile"
+        configured = get(config, profile_key, None)
+        if not isinstance(configured, str) or not configured:
+            raise LaunchError(f"config {profile_key} must name the lane settings profile")
+        candidate = Path(configured)
+        if not candidate.is_absolute():
+            candidate = root / candidate
+        if candidate.is_symlink() or not candidate.is_file():
+            raise LaunchError(f"lane settings profile {candidate} is not a regular file")
+        raw = _read_stable_regular_file(candidate)
+        _validate_settings_profile(raw, candidate)
+        profile_path = str(candidate.resolve())
+        profile_sha256 = _sha256(raw)
+        contribution = [*CLAUDE_SETTING_SOURCES_ARGS, *contribution, "--settings", profile_path]
+    return {
+        "declared": declared,
+        "argv": contribution,
+        "settings_profile_path": profile_path,
+        "settings_profile_sha256": profile_sha256,
+    }
 
 
 def _git(cwd: Path, *args: str) -> str:
@@ -627,7 +729,9 @@ def _request_binding(
     process_nonce: str,
 ) -> dict[str, Any]:
     # Computed identically by parent and child; the child refuses when its own
-    # config resolves to a different runtime, command, or transport set.
+    # config resolves to a different runtime, command, transport set, or approval
+    # policy — including a settings profile whose bytes changed between the two
+    # reads, since the digest is part of the binding.
     return {
         "descriptor_sha256": _sha256(descriptor_raw),
         "task_sha256": task_sha256,
@@ -635,16 +739,35 @@ def _request_binding(
         "configured_command": list(profile.command),
         "runtime": profile.runtime,
         "transports": dict(profile.transports),
+        "approval_policy": {
+            "declared": profile.approval["declared"],
+            "argv": list(profile.approval["argv"]),
+            "settings_profile_path": profile.approval["settings_profile_path"],
+            "settings_profile_sha256": profile.approval["settings_profile_sha256"],
+        },
         "process_nonce_sha256": _sha256(process_nonce.encode()),
     }
 
 
 def _extract_final_text(transport: str, final_bytes: bytes) -> bytes:
     """Return the runtime's final text from the reserved evidence file, or refuse."""
+    return _extract_final_result(transport, final_bytes)[0]
+
+
+def _extract_final_result(
+    transport: str, final_bytes: bytes
+) -> tuple[bytes, list[Any] | None]:
+    """Return (final text, permission denials) from the reserved evidence file.
+
+    The denial list is what makes a refused write visible: Claude's envelope stays
+    `subtype=success` / `is_error=false` when a tool call is denied, and only
+    `permission_denials` says so. `None` means the transport cannot observe it
+    (`last-message-file`); it is never reported as an empty list.
+    """
     if transport == "last-message-file":
         if not final_bytes:
             raise LaunchError("child returned success without final-message evidence")
-        return final_bytes
+        return final_bytes, None
     if not final_bytes:
         raise LaunchError("runtime produced no JSON result on stdout")
     try:
@@ -669,7 +792,10 @@ def _extract_final_text(transport: str, final_bytes: bytes) -> bytes:
     result = value.get("result")
     if not isinstance(result, str) or not result:
         raise LaunchError("runtime result text is missing or empty")
-    return result.encode("utf-8")
+    denials = value.get("permission_denials")
+    if not isinstance(denials, list):
+        raise LaunchError("runtime result carries no permission_denials list")
+    return result.encode("utf-8"), denials
 
 
 def _redirect_stdout_to_reserved_final(final_message: Path) -> None:
@@ -760,6 +886,13 @@ def _child_main(arguments: argparse.Namespace) -> int:
         expected = _expected_identity(descriptor)
         observed = _observed_identity(process_nonce)
         _validate_observation(expected, observed)
+        final_message = Path(arguments.final_message)
+        argv = profile.child_argv(expected["worktree"], str(final_message))
+        # The exact argv this observer will exec, including the approval
+        # contribution, is durable before the ready signal; the parent compares it
+        # against its own expectation, so a child that drops the policy or the
+        # trust step cannot be acknowledged.
+        observed["argv"] = list(argv)
         receipt = {
             "schema_version": SCHEMA_VERSION,
             "status": "observed",
@@ -782,8 +915,6 @@ def _child_main(arguments: argparse.Namespace) -> int:
             raise LaunchError("parent did not acknowledge the durable observation")
         os.close(arguments.ack_fd)
         os.environ[PROCESS_LINEAGE_ENV] = process_nonce
-        final_message = Path(arguments.final_message)
-        argv = profile.child_argv(expected["worktree"], str(final_message))
         if profile.transports["final_text"] == "json-stdout":
             # Immediately before exec, so nothing the wrapper prints can precede
             # the runtime's own JSON on the evidence file.
@@ -878,12 +1009,14 @@ def _validate_parent_binding(
     pid: int,
     process_nonce: str,
     live_start_fingerprint: str | None,
+    expected_argv: list[str],
 ) -> None:
     observed_process = receipt.get("observed", {}).get("process", {})
     if (
         receipt.get("status") != "observed"
         or receipt.get("descriptor_id") != descriptor_id
         or receipt.get("request") != request
+        or receipt.get("observed", {}).get("argv") != expected_argv
         or observed_process.get("pid") != pid
         or observed_process.get("capability_nonce") != process_nonce
         or (
@@ -905,6 +1038,7 @@ def _terminal_receipt(
     error: str | None,
     final_text_transport: str,
     final_text: bytes | None,
+    permission_denials: list[Any] | None,
     required_observed_sha256: str | None = None,
 ) -> None:
     try:
@@ -946,6 +1080,9 @@ def _terminal_receipt(
         "final_message_sha256": _sha256(final_bytes) if final_bytes else None,
         "final_text_transport": final_text_transport,
         "final_text_sha256": _sha256(final_text) if final_text else None,
+        # A list is the runtime's own denial record (empty when nothing was
+        # refused); None means this transport cannot observe the policy outcome.
+        "permission_denials": permission_denials,
         "finished_at": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
     }
     _write_atomic(receipt_path, receipt)
@@ -1120,6 +1257,7 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
             error=f"cannot reserve empty final-message evidence: {exc}",
             final_text_transport=final_text_transport,
             final_text=None,
+            permission_denials=None,
         )
         return 70
 
@@ -1195,6 +1333,9 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
                         pid=process.pid,
                         process_nonce=process_nonce,
                         live_start_fingerprint=_process_start_fingerprint(process.pid),
+                        expected_argv=profile.child_argv(
+                            descriptor["worktree"], str(final_message)
+                        ),
                     )
                 except LaunchError:
                     error = "durable child observation or process identity is invalid"
@@ -1223,8 +1364,11 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
             final_bytes = _read_stable_regular_file(final_message)
         final_text: bytes | None = None
         final_text_error: str | None = None
+        permission_denials: list[Any] | None = None
         try:
-            final_text = _extract_final_text(final_text_transport, final_bytes)
+            final_text, permission_denials = _extract_final_result(
+                final_text_transport, final_bytes
+            )
         except LaunchError as exc:
             final_text_error = str(exc)
         if caught:
@@ -1238,8 +1382,18 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
                 error="launcher interrupted",
                 final_text_transport=final_text_transport,
                 final_text=final_text,
+                permission_denials=permission_denials,
             )
             return 128 + caught[0]
+        # A denied tool call does not fail the runtime's envelope (Claude reports
+        # `success` with the refusal only in `permission_denials`), so the approval
+        # transition is read here, before any success is acknowledged: a lane that
+        # was refused a write under the declared policy is `failed`, not `completed`.
+        if error is None and returncode == 0 and final_text_error is None and permission_denials:
+            error = (
+                "runtime reported permission denials under declared policy "
+                f"{profile.approval['declared']}"
+            )
         if error is not None or returncode != 0 or final_text_error is not None:
             if error is None:
                 error = (
@@ -1257,6 +1411,7 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
                 error=error,
                 final_text_transport=final_text_transport,
                 final_text=None,
+                permission_denials=permission_denials,
             )
             return 70
         if bound_receipt_sha256 is None:
@@ -1271,6 +1426,7 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
             error=None,
             final_text_transport=final_text_transport,
             final_text=final_text,
+            permission_denials=permission_denials,
             required_observed_sha256=bound_receipt_sha256,
         )
         print(f"[lane-launcher] receipt: {receipt_path}", file=sys.stderr)
@@ -1296,6 +1452,7 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
             error="launcher interrupted" if caught else str(exc),
             final_text_transport=final_text_transport,
             final_text=None,
+            permission_denials=None,
         )
         return 128 + caught[0] if caught else 70
     finally:

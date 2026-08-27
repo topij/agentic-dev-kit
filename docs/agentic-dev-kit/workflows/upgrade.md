@@ -399,10 +399,19 @@ fi
 The refreshed migrator also owns the additive `parallel:` launcher block. It preserves
 each existing flat value and adds only missing `codex_headless_command`,
 `descriptor_ttl_seconds`, `observation_timeout_seconds`, and
-`termination_grace_seconds` keys. A same-named key nested under another child is not a
+`termination_grace_seconds` keys, the per-runtime `*_transport` declarations, and the
+per-runtime approval policy — `codex_approval_policy`, `claude_approval_policy`, and
+`claude_settings_profile`. A same-named key nested under another child is not a
 flat launcher key and does not suppress the shipped default. The command is an argv
 sequence consumed without a shell; the lifetime, observation bound, and termination
-grace must remain positive integers for descriptor issuance and launch.
+grace must remain positive integers for descriptor issuance and launch; each
+approval policy must stay inside the wrapper's vocabulary (Codex `read-only` /
+`workspace-write`, Claude `dont-ask` / `accept-edits`) — an unrestricted spelling
+refuses at launch. The same run seeds the Claude lane settings profile at the path
+`claude_settings_profile` names when no file is there (`seeded <path>`), and never
+rewrites one that exists: the profile is adopter-owned lane policy, outside the
+manifest, so an upgrade cannot replace your allow-list; diff it against the kit's
+`config/claude-lane-settings.json` yourself when you want the shipped entries.
 
 The refreshed migrator owns the additive `triage:` block. It inserts the complete flat
 block when absent and adds only missing keys to a partial block, preserving existing

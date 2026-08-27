@@ -1033,6 +1033,9 @@ migrate_parallel_schema() {
   claude_worktree_transport: process-cwd
   claude_prompt_transport: stdin
   claude_final_text_transport: json-stdout
+  codex_approval_policy: read-only
+  claude_approval_policy: accept-edits
+  claude_settings_profile: config/claude-lane-settings.json
   descriptor_ttl_seconds: 900
   observation_timeout_seconds: 30
   termination_grace_seconds: 5
@@ -1047,9 +1050,65 @@ migrate_parallel_schema() {
   ensure_parallel_key claude_worktree_transport '  claude_worktree_transport: process-cwd'
   ensure_parallel_key claude_prompt_transport '  claude_prompt_transport: stdin'
   ensure_parallel_key claude_final_text_transport '  claude_final_text_transport: json-stdout'
+  ensure_parallel_key codex_approval_policy '  codex_approval_policy: read-only'
+  ensure_parallel_key claude_approval_policy '  claude_approval_policy: accept-edits'
+  ensure_parallel_key claude_settings_profile '  claude_settings_profile: config/claude-lane-settings.json'
   ensure_parallel_key descriptor_ttl_seconds '  descriptor_ttl_seconds: 900'
   ensure_parallel_key observation_timeout_seconds '  observation_timeout_seconds: 30'
   ensure_parallel_key termination_grace_seconds '  termination_grace_seconds: 5'
+}
+
+# The Claude lane settings profile — the ONE settings source an unattended Claude
+# lane loads (scripts/launch_lane.py passes it with `--settings` beside
+# `--setting-sources ""`). Adopter-owned policy like config/dev-model.yaml: seeded
+# only when absent, never rewritten, and deliberately outside the kit manifest so
+# an upgrade cannot replace an adopter's lane allow-list. The shipped allow-list is
+# the minimum a writing lane needs to commit, push, open and ready a PR, and poll
+# it; `gh pr merge` and force pushes are denied because landing is the cockpit's.
+seed_claude_lane_profile() {
+  _profile="$(sed -n 's/^  claude_settings_profile:[[:space:]]*//p' "$CONFIG_FILE" | head -n 1)"
+  _profile="${_profile%%#*}"
+  _profile="$(printf '%s' "$_profile" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//')"
+  [ -n "$_profile" ] || _profile="config/claude-lane-settings.json"
+  if [ -e "$_profile" ] || [ -L "$_profile" ]; then
+    return 0
+  fi
+  mkdir -p "$(dirname "$_profile")"
+  cat > "$_profile" <<'PROFILE'
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git remote:*)",
+      "Bash(git fetch:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh pr ready:*)",
+      "Bash(gh run view:*)",
+      "Bash(gh repo view:*)",
+      "Bash(uv run scripts/pr_watch.py:*)",
+      "Bash(uv run scripts/devkit/pr_watch.py:*)"
+    ],
+    "deny": [
+      "Bash(gh pr merge:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push --force-with-lease:*)"
+    ]
+  }
+}
+PROFILE
+  echo "seeded $_profile"
 }
 
 # Schema additions introduced after the v2 template release. Same idempotent
@@ -1956,6 +2015,7 @@ fi
 preflight_migration_config
 migrate_runtime_schema
 migrate_parallel_schema
+seed_claude_lane_profile
 migrate_kit_schema
 
 # ── prompts ──────────────────────────────────────────────────────────────

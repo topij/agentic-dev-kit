@@ -211,10 +211,13 @@ from `runtime.launchers`; shared workflows use the runtime-neutral
 `cheap`/`default`/`expensive` tiers and translate them through
 `models.runtime_mappings` only when the runtime exposes that control.
 Unattended Codex and Claude lanes additionally use the config-owned
-`parallel.<runtime>_headless_command` and declared transports through
-`scripts/launch_lane.py`; the wrapper applies the one-shot descriptor's
-worktree/environment and records child-observed identity before starting the
-runtime's stable non-interactive client (`codex exec` or `claude -p`).
+`parallel.<runtime>_headless_command`, declared transports, and declared
+`parallel.<runtime>_approval_policy` through `scripts/launch_lane.py`; the wrapper
+applies the one-shot descriptor's worktree/environment, passes the bounded policy as
+argv (for Claude with the cockpit-owned `config/claude-lane-settings.json` profile as
+the lane's only settings source), records child-observed identity before starting the
+runtime's stable non-interactive client (`codex exec` or `claude -p`), and reads the
+runtime's own denial record back before reporting success.
 
 ## Adopting into an existing repo
 

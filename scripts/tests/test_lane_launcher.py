@@ -124,6 +124,8 @@ CLAUDE_OUTPUT_MODES = (
     "array",
     "text",
     "none",
+    "denied",
+    "no-denial-list",
 )
 
 
@@ -154,6 +156,10 @@ def _fake_claude(
         "array": "sys.stdout.write(json.dumps([good]) + '\\n')",
         "text": "sys.stdout.write('plain text, not JSON\\n')",
         "none": "pass",
+        # What Claude 2.1.247 actually prints when a tool call is refused: a
+        # `success` envelope whose only trace of the refusal is this list.
+        "denied": "sys.stdout.write(json.dumps({**good, 'permission_denials': [{'tool_name': 'Write', 'tool_use_id': 'toolu_x', 'tool_input': {'file_path': 'x.txt'}}]}) + '\\n')",
+        "no-denial-list": "sys.stdout.write(json.dumps({k: v for k, v in good.items() if k != 'permission_denials'}) + '\\n')",
     }[output]
     path.write_text(
         "#!/usr/bin/env python3\n"
@@ -183,6 +189,15 @@ def _fake_claude(
     path.chmod(0o755)
 
 
+# The shape the kit seeds: a bounded allow-list and no defaultMode.
+LANE_PROFILE: dict[str, object] = {
+    "permissions": {
+        "allow": ["Bash(git status:*)", "Bash(git commit:*)", "Bash(gh pr create:*)"],
+        "deny": ["Bash(gh pr merge:*)"],
+    }
+}
+
+
 def _install_repo(
     tmp_path: Path,
     *,
@@ -195,6 +210,10 @@ def _install_repo(
     ignore_sigterm: bool = False,
     spawn_descendant: bool = False,
     spawn_detached_descendant: bool = False,
+    codex_policy: str | None = "read-only",
+    claude_policy: str | None = "accept-edits",
+    profile: dict[str, object] | bytes | None = None,
+    profile_key: str | None = "config/claude-lane-settings.json",
 ):
     remote = tmp_path / "origin.git"
     subprocess.run(
@@ -255,7 +274,10 @@ def _install_repo(
         "  claude_worktree_transport: process-cwd\n"
         "  claude_prompt_transport: stdin\n"
         "  claude_final_text_transport: json-stdout\n"
-        "  descriptor_ttl_seconds: 900\n"
+        + (f"  codex_approval_policy: {codex_policy}\n" if codex_policy is not None else "")
+        + (f"  claude_approval_policy: {claude_policy}\n" if claude_policy is not None else "")
+        + (f"  claude_settings_profile: {profile_key}\n" if profile_key is not None else "")
+        + "  descriptor_ttl_seconds: 900\n"
         "  observation_timeout_seconds: 5\n"
         "  termination_grace_seconds: 1\n"
         "vcs:\n"
@@ -263,6 +285,13 @@ def _install_repo(
         "  dev_branch_prefix: lane\n",
         encoding="utf-8",
     )
+    profile_path = repo / "config" / "claude-lane-settings.json"
+    if profile is None:
+        profile = LANE_PROFILE
+    if isinstance(profile, bytes):
+        profile_path.write_bytes(profile)
+    else:
+        profile_path.write_text(json.dumps(profile, indent=2) + "\n", encoding="utf-8")
     sessions = tmp_path / "sessions"
     env = {**os.environ, "DEVKIT_SESSIONS_DIR": str(sessions)}
     created = subprocess.run(
@@ -632,6 +661,7 @@ def test_process_reuse_cannot_satisfy_parent_binding() -> None:
         "descriptor_id": "descriptor",
         "request": copy.deepcopy(request),
         "observed": {
+            "argv": ["/bin/runtime", "--sandbox", "read-only"],
             "process": {
                 "pid": 41,
                 "capability_nonce": "old-nonce",
@@ -646,6 +676,7 @@ def test_process_reuse_cannot_satisfy_parent_binding() -> None:
         pid=41,
         process_nonce="old-nonce",
         live_start_fingerprint=None,
+        expected_argv=["/bin/runtime", "--sandbox", "read-only"],
     )
     with pytest.raises(launcher.LaunchError, match="process identity"):
         launcher._validate_parent_binding(
@@ -655,6 +686,7 @@ def test_process_reuse_cannot_satisfy_parent_binding() -> None:
             pid=41,
             process_nonce="reused-process-nonce",
             live_start_fingerprint=None,
+            expected_argv=["/bin/runtime", "--sandbox", "read-only"],
         )
 
 
@@ -1216,8 +1248,32 @@ def test_claude_wrapper_replaces_inherited_identity_and_binds_json_final_text(
     assert envelope["type"] == "result" and envelope["is_error"] is False
     final = json.loads(envelope["result"])
     # Claude's argv carries no worktree flag and no prompt argument: cwd comes
-    # from the process and the prompt from stdin.
-    assert final["argv"] == ["--output-format", "json"]
+    # from the process and the prompt from stdin. The approval contribution sits
+    # between the command prefix and the final-text arguments.
+    profile_path = str((repo / "config" / "claude-lane-settings.json").resolve())
+    assert final["argv"] == [
+        "--setting-sources",
+        "",
+        "--permission-mode",
+        "acceptEdits",
+        "--settings",
+        profile_path,
+        "--output-format",
+        "json",
+    ]
+    assert receipt["request"]["approval_policy"] == {
+        "declared": "accept-edits",
+        "argv": final["argv"][:6],
+        "settings_profile_path": profile_path,
+        "settings_profile_sha256": hashlib.sha256(
+            (repo / "config" / "claude-lane-settings.json").read_bytes()
+        ).hexdigest(),
+    }
+    assert receipt["observed"]["argv"] == [
+        *receipt["request"]["configured_command"],
+        *final["argv"],
+    ]
+    assert receipt["terminal"]["permission_denials"] == []
     assert final["cwd"] == descriptor["worktree"]
     assert final["branch"] == descriptor["branch"]
     assert final["env"] == descriptor["env"]
@@ -1236,7 +1292,9 @@ def test_claude_wrapper_replaces_inherited_identity_and_binds_json_final_text(
     assert receipt["observed"]["repo_root"] == str(repo)
 
 
-def test_codex_child_argv_and_evidence_route_are_unchanged(tmp_path: Path) -> None:
+def test_codex_child_argv_is_pinned_with_the_policy_slot_and_evidence_route_unchanged(
+    tmp_path: Path,
+) -> None:
     _repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(tmp_path)
 
     result = _run_launcher(engine_dir, descriptor, prompt, env)
@@ -1245,14 +1303,31 @@ def test_codex_child_argv_and_evidence_route_are_unchanged(tmp_path: Path) -> No
     receipt = _receipt(sessions, descriptor)
     final_path = Path(receipt["terminal"]["final_message_path"])
     final = json.loads(final_path.read_text(encoding="utf-8"))
-    # Pinned: the #609 argv, byte for byte, in the same order.
+    # Pinned: the #609 argv, byte for byte and in the same order, with exactly one
+    # addition — the declared sandbox policy in the slot after the command prefix.
+    # Dropping or reordering `--cd`, the evidence file, or the stdin dash while the
+    # policy is added is the regression this pin reports.
     assert final["argv"] == [
+        "--sandbox",
+        "read-only",
         "--cd",
         descriptor["worktree"],
         "--output-last-message",
         str(final_path),
         "-",
     ]
+    assert receipt["request"]["approval_policy"] == {
+        "declared": "read-only",
+        "argv": ["--sandbox", "read-only"],
+        "settings_profile_path": None,
+        "settings_profile_sha256": None,
+    }
+    assert receipt["observed"]["argv"] == [
+        receipt["request"]["configured_command"][0],
+        *final["argv"],
+    ]
+    # `last-message-file` cannot observe the approval outcome: null, never [].
+    assert receipt["terminal"]["permission_denials"] is None
     assert receipt["request"]["runtime"] == "codex"
     assert receipt["request"]["transports"] == {
         "worktree": "cd-flag",
@@ -1418,17 +1493,34 @@ def test_claude_descriptor_is_one_shot_after_a_successful_launch(tmp_path: Path)
     assert "already has a launch attempt" in second.stderr
 
 
+def _approval(
+    declared: str, argv: list[str], *, profile: str | None = None
+) -> dict[str, object]:
+    return {
+        "declared": declared,
+        "argv": argv,
+        "settings_profile_path": profile,
+        "settings_profile_sha256": "p" * 64 if profile else None,
+    }
+
+
 def test_request_binding_carries_runtime_and_transports() -> None:
     launcher = _load_launcher()
     codex = launcher.RuntimeProfile(
         "codex",
         ["/bin/codex", "exec"],
         {"worktree": "cd-flag", "prompt": "stdin-dash", "final_text": "last-message-file"},
+        _approval("read-only", ["--sandbox", "read-only"]),
     )
     claude = launcher.RuntimeProfile(
         "claude",
         ["/bin/claude", "-p"],
         {"worktree": "process-cwd", "prompt": "stdin", "final_text": "json-stdout"},
+        _approval(
+            "accept-edits",
+            ["--setting-sources", "", "--permission-mode", "acceptEdits", "--settings", "/profile.json"],
+            profile="/profile.json",
+        ),
     )
     bind = lambda profile: launcher._request_binding(  # noqa: E731
         b"descriptor",
@@ -1439,16 +1531,32 @@ def test_request_binding_carries_runtime_and_transports() -> None:
     )
     assert bind(codex) != bind(claude)
     assert bind(codex)["transports"] is not codex.transports
+    assert bind(codex)["approval_policy"] is not codex.approval
+    assert bind(codex)["approval_policy"]["argv"] is not codex.approval["argv"]
+    assert bind(claude)["approval_policy"]["settings_profile_path"] == "/profile.json"
     assert codex.child_argv("/wt", "/final") == [
         "/bin/codex",
         "exec",
+        "--sandbox",
+        "read-only",
         "--cd",
         "/wt",
         "--output-last-message",
         "/final",
         "-",
     ]
-    assert claude.child_argv("/wt", "/final") == ["/bin/claude", "-p", "--output-format", "json"]
+    assert claude.child_argv("/wt", "/final") == [
+        "/bin/claude",
+        "-p",
+        "--setting-sources",
+        "",
+        "--permission-mode",
+        "acceptEdits",
+        "--settings",
+        "/profile.json",
+        "--output-format",
+        "json",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -1471,6 +1579,11 @@ def test_request_binding_carries_runtime_and_transports() -> None:
         ("json-stdout", b'{"type":"result","subtype":"success","is_error":false,"result":""}', "missing or empty"),
         ("json-stdout", b'{"type":"result","subtype":"success","is_error":false,"result":7}', "missing or empty"),
         ("json-stdout", b'{"type":"result","subtype":"success","is_error":false}', "missing or empty"),
+        # The approval outcome must be observable: a result with no list-valued
+        # `permission_denials` is refused rather than read as "nothing denied".
+        ("json-stdout", b'{"type":"result","subtype":"success","is_error":false,"result":"a"}', "no permission_denials list"),
+        ("json-stdout", b'{"type":"result","subtype":"success","is_error":false,"result":"a","permission_denials":null}', "no permission_denials list"),
+        ("json-stdout", b'{"type":"result","subtype":"success","is_error":false,"result":"a","permission_denials":{}}', "no permission_denials list"),
     ),
 )
 def test_final_text_extraction_refuses_every_non_result_shape(
@@ -1492,9 +1605,23 @@ def test_last_message_file_without_bytes_is_missing_evidence() -> None:
 
 def test_final_text_extraction_accepts_one_result_object() -> None:
     launcher = _load_launcher()
-    good = b'\n {"type":"result","subtype":"success","is_error":false,"result":"done \xc3\xa9"} \n'
+    good = (
+        b'\n {"type":"result","subtype":"success","is_error":false,'
+        b'"result":"done \xc3\xa9","permission_denials":[]} \n'
+    )
     assert launcher._extract_final_text("json-stdout", good) == "done é".encode()
+    assert launcher._extract_final_result("json-stdout", good) == ("done é".encode(), [])
+    denied = (
+        b'{"type":"result","subtype":"success","is_error":false,"result":"done",'
+        b'"permission_denials":[{"tool_name":"Write"}]}'
+    )
+    # Extraction reports the denial; refusing the lane is the launcher's decision.
+    assert launcher._extract_final_result("json-stdout", denied) == (
+        b"done",
+        [{"tool_name": "Write"}],
+    )
     assert launcher._extract_final_text("last-message-file", b"raw text") == b"raw text"
+    assert launcher._extract_final_result("last-message-file", b"raw text") == (b"raw text", None)
 
 
 def test_json_stdout_redirect_requires_the_reserved_empty_file(tmp_path: Path) -> None:
@@ -1538,3 +1665,419 @@ def test_json_stdout_redirect_requires_the_reserved_empty_file(tmp_path: Path) -
     )
     assert probe.stdout == b""
     assert reserved.read_bytes() == b"RUNTIME-OUTPUT"
+
+
+# ── Approval/sandbox policy and the Claude trust route (#601) ────────────────────
+
+
+def _rewrite_parallel_key(descriptor: dict[str, object], key: str, value: str | None) -> None:
+    """Rewrite (or drop, when value is None) one flat `parallel` key in the fixture config."""
+    config_path = Path(descriptor["repo_root"]) / "config" / "dev-model.yaml"
+    lines = config_path.read_text(encoding="utf-8").splitlines(keepends=True)
+    rewritten = [
+        (f"  {key}: {value}\n" if value is not None else "")
+        if line.startswith(f"  {key}:")
+        else line
+        for line in lines
+    ]
+    assert rewritten != lines
+    config_path.write_text("".join(rewritten), encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("runtime", "declared", "mode_argv"),
+    (
+        ("claude", "dont-ask", ["--permission-mode", "dontAsk"]),
+        ("claude", "accept-edits", ["--permission-mode", "acceptEdits"]),
+        ("codex", "read-only", ["--sandbox", "read-only"]),
+        ("codex", "workspace-write", ["--sandbox", "workspace-write"]),
+    ),
+)
+def test_each_declared_policy_reaches_the_child_argv_in_the_fixed_slot(
+    tmp_path: Path, runtime: str, declared: str, mode_argv: list[str]
+) -> None:
+    kwargs = {"claude_policy": declared} if runtime == "claude" else {"codex_policy": declared}
+    repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime=runtime, **kwargs
+    )
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+    assert result.returncode == 0, result.stderr
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "completed"
+    assert receipt["request"]["approval_policy"]["declared"] == declared
+    final_path = Path(receipt["terminal"]["final_message_path"])
+    if runtime == "claude":
+        envelope = json.loads(final_path.read_bytes())
+        argv = json.loads(envelope["result"])["argv"]
+        profile_path = str((repo / "config" / "claude-lane-settings.json").resolve())
+        assert argv[:6] == ["--setting-sources", "", *mode_argv, "--settings", profile_path]
+        assert argv[6:] == ["--output-format", "json"]
+    else:
+        argv = json.loads(final_path.read_text(encoding="utf-8"))["argv"]
+        assert argv[:2] == mode_argv
+        assert argv[2:] == ["--cd", descriptor["worktree"], "--output-last-message", str(final_path), "-"]
+    assert receipt["request"]["approval_policy"]["argv"] == argv[: len(receipt["request"]["approval_policy"]["argv"])]
+    assert receipt["observed"]["argv"] == [*receipt["request"]["configured_command"], *argv]
+
+
+def test_permission_denials_fail_the_lane_before_any_success(tmp_path: Path) -> None:
+    # Positive construction for the approval transition: Claude's envelope for a
+    # refused write is `subtype=success`, `is_error=false`; the refusal lives only
+    # in `permission_denials`. The wrapper must read it before acknowledging.
+    _repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", claude_output="denied"
+    )
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+    assert result.returncode == 70, result.stderr
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "failed"
+    assert receipt["terminal"]["returncode"] == 0
+    assert "permission denials under declared policy accept-edits" in receipt["terminal"]["error"]
+    assert receipt["terminal"]["permission_denials"] == [
+        {"tool_name": "Write", "tool_use_id": "toolu_x", "tool_input": {"file_path": "x.txt"}}
+    ]
+    # The envelope is still bound as evidence; the extracted text is not success.
+    assert receipt["terminal"]["final_message_sha256"] is not None
+    assert receipt["terminal"]["final_text_sha256"] is None
+    assert Path(descriptor["session_dir"], "launch-attempt.json").exists()
+
+
+def test_result_without_a_denial_list_is_not_success(tmp_path: Path) -> None:
+    _repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", claude_output="no-denial-list"
+    )
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+    assert result.returncode == 70, result.stderr
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "failed"
+    assert "no permission_denials list" in receipt["terminal"]["error"]
+    assert receipt["terminal"]["permission_denials"] is None
+
+
+@pytest.mark.parametrize(
+    ("runtime", "key", "declared"),
+    (
+        ("claude", "claude_approval_policy", "bypassPermissions"),
+        ("claude", "claude_approval_policy", "bypass"),
+        ("claude", "claude_approval_policy", "dangerously-skip-permissions"),
+        ("claude", "claude_approval_policy", "auto"),
+        ("claude", "claude_approval_policy", "manual"),
+        ("claude", "claude_approval_policy", "plan"),
+        ("claude", "claude_approval_policy", "acceptEdits"),
+        ("claude", "claude_approval_policy", "workspace-write"),
+        ("claude", "claude_approval_policy", None),
+        ("codex", "codex_approval_policy", "danger-full-access"),
+        ("codex", "codex_approval_policy", "approve-for-me"),
+        ("codex", "codex_approval_policy", "dangerously-bypass-approvals-and-sandbox"),
+        ("codex", "codex_approval_policy", "accept-edits"),
+        ("codex", "codex_approval_policy", None),
+    ),
+)
+def test_undeclared_or_unrestricted_policy_is_refused_before_the_attempt(
+    tmp_path: Path, runtime: str, key: str, declared: str | None
+) -> None:
+    _repo, engine_dir, _sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime=runtime
+    )
+    _rewrite_parallel_key(descriptor, key, declared)
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+    assert result.returncode == 64
+    assert f"config parallel.{key} must declare one of" in result.stderr
+    assert not Path(descriptor["session_dir"], "launch-attempt.json").exists()
+
+
+def test_no_declaration_can_make_the_engine_emit_an_unrestricted_flag() -> None:
+    launcher = _load_launcher()
+    # The vocabulary is exactly these members; a grown vocabulary is a failure
+    # here before any argv is examined.
+    assert {
+        runtime: set(policies) for runtime, policies in launcher.RUNTIME_APPROVAL_POLICIES.items()
+    } == {
+        "codex": {"read-only", "workspace-write"},
+        "claude": {"dont-ask", "accept-edits"},
+    }
+    forbidden = (
+        "bypassPermissions",
+        "--dangerously-skip-permissions",
+        "--allow-dangerously-skip-permissions",
+        "danger-full-access",
+        "--dangerously-bypass-approvals-and-sandbox",
+        "--dangerously-bypass-hook-trust",
+        "--approve-for-me",
+        "auto",
+        "manual",
+        "plan",
+    )
+    for policies in launcher.RUNTIME_APPROVAL_POLICIES.values():
+        for argv in policies.values():
+            assert not set(argv) & set(forbidden), argv
+    assert launcher.CLAUDE_SETTING_SOURCES_ARGS == ("--setting-sources", "")
+
+
+@pytest.mark.parametrize(
+    ("profile", "fragment"),
+    (
+        (b"{not json", "not valid JSON"),
+        (b"[]\n", "one JSON object"),
+        ({}, "permissions object"),
+        ({"permissions": []}, "permissions object"),
+        ({"permissions": {"allow": [], "defaultMode": "bypassPermissions"}}, "defaultMode"),
+        ({"permissions": {"allow": [], "defaultMode": "acceptEdits"}}, "defaultMode"),
+        ({"permissions": {"allow": ["Bash"]}}, "widens Bash"),
+        ({"permissions": {"allow": ["Bash(*)"]}}, "widens Bash"),
+        ({"permissions": {"allow": ["Bash(*:*)"]}}, "widens Bash"),
+        ({"permissions": {"allow": [" Bash "]}}, "widens Bash"),
+        ({"permissions": {"allow": "Bash(git:*)"}}, "list of strings"),
+        ({"permissions": {"allow": [1]}}, "list of strings"),
+    ),
+)
+def test_widening_or_malformed_settings_profile_is_a_refused_trust_step(
+    tmp_path: Path, profile: dict[str, object] | bytes, fragment: str
+) -> None:
+    _repo, engine_dir, _sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", profile=profile
+    )
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+    assert result.returncode == 64, result.stderr
+    assert "lane settings profile" in result.stderr and fragment in result.stderr
+    assert not Path(descriptor["session_dir"], "launch-attempt.json").exists()
+
+
+def test_missing_symlinked_or_undeclared_settings_profile_is_refused(tmp_path: Path) -> None:
+    repo, engine_dir, _sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude"
+    )
+    profile_path = repo / "config" / "claude-lane-settings.json"
+    attempt = Path(descriptor["session_dir"], "launch-attempt.json")
+
+    profile_path.unlink()
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+    assert result.returncode == 64 and "not a regular file" in result.stderr
+    assert not attempt.exists()
+
+    elsewhere = tmp_path / "elsewhere.json"
+    elsewhere.write_text(json.dumps(LANE_PROFILE), encoding="utf-8")
+    profile_path.symlink_to(elsewhere)
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+    assert result.returncode == 64 and "not a regular file" in result.stderr
+    assert not attempt.exists()
+
+    profile_path.unlink()
+    profile_path.write_text(json.dumps(LANE_PROFILE), encoding="utf-8")
+    _rewrite_parallel_key(descriptor, "claude_settings_profile", None)
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+    assert result.returncode == 64
+    assert "config parallel.claude_settings_profile must name the lane settings profile" in result.stderr
+    assert not attempt.exists()
+
+    # Codex has no profile key and does not read one: a missing file is not a
+    # Codex refusal.
+    codex = _install_repo(tmp_path / "codex", runtime="codex", profile_key=None)
+    (codex[0] / "config" / "claude-lane-settings.json").unlink()
+    result = _run_launcher(codex[1], codex[3], codex[4], codex[5])
+    assert result.returncode == 0, result.stderr
+
+
+def test_absolute_profile_path_outside_the_repository_is_accepted_and_bound(
+    tmp_path: Path,
+) -> None:
+    elsewhere = tmp_path / "operator-profile.json"
+    elsewhere.write_text(json.dumps(LANE_PROFILE), encoding="utf-8")
+    _repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", profile_key=str(elsewhere)
+    )
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+    assert result.returncode == 0, result.stderr
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["request"]["approval_policy"]["settings_profile_path"] == str(elsewhere.resolve())
+    assert receipt["request"]["approval_policy"]["settings_profile_sha256"] == hashlib.sha256(
+        elsewhere.read_bytes()
+    ).hexdigest()
+    assert "--settings" in receipt["observed"]["argv"]
+    assert receipt["observed"]["argv"][receipt["observed"]["argv"].index("--settings") + 1] == str(
+        elsewhere.resolve()
+    )
+
+
+def test_profile_rewritten_after_the_parent_read_is_refused_by_the_child(
+    tmp_path: Path,
+) -> None:
+    # Locally recomputed hostile transition: the parent bound one profile digest
+    # into the attempt; the child's own read resolves to different bytes. The
+    # request bindings differ, so the child is not bound to the attempt.
+    launcher = _load_launcher()
+    transports = {"worktree": "process-cwd", "prompt": "stdin", "final_text": "json-stdout"}
+    parent_profile = launcher.RuntimeProfile(
+        "claude", ["/bin/claude", "-p"], transports, _approval(
+            "accept-edits", ["--settings", "/p.json"], profile="/p.json"
+        )
+    )
+    child_profile = launcher.RuntimeProfile(
+        "claude", ["/bin/claude", "-p"], transports, {
+            **_approval("accept-edits", ["--settings", "/p.json"], profile="/p.json"),
+            "settings_profile_sha256": "q" * 64,
+        }
+    )
+    session = tmp_path / "session"
+    session.mkdir()
+    descriptor_id = "0f2d8e2e-2a3d-4b3e-9d1f-1c2d3e4f5a6b"
+    capability = b"c" * 32
+    request = launcher._request_binding(
+        b"descriptor",
+        task_sha256="t",
+        combined_prompt_sha256="c",
+        profile=parent_profile,
+        process_nonce=capability.hex(),
+    )
+    attempt = {
+        "schema_version": launcher.SCHEMA_VERSION,
+        "status": "starting",
+        "descriptor_id": descriptor_id,
+        "request": request,
+        # The child compares against its parent's pid; this test is its own child.
+        "parent_process": {"pid": os.getppid(), "start_fingerprint": None},
+        "started_at": "2026-08-27T00:00:00Z",
+    }
+    launcher._write_atomic(session / "launch-attempt.json", attempt)
+    descriptor = {"descriptor_id": descriptor_id, "session_dir": str(session)}
+
+    def arguments() -> object:
+        read_end, write_end = os.pipe()
+        os.write(write_end, capability)
+        os.close(write_end)
+        return type(
+            "Arguments",
+            (),
+            {
+                "descriptor_id": descriptor_id,
+                "attempt": str(session / "launch-attempt.json"),
+                "receipt": str(session / f"launch-receipt-{descriptor_id}.json"),
+                "final_message": str(session / f"launch-final-{descriptor_id}.txt"),
+                "task_sha256": "t",
+                "combined_prompt_sha256": "c",
+                "authority_fd": read_end,
+            },
+        )()
+
+    # The parent's own profile binds.
+    assert launcher._validate_child_authority(
+        arguments(), descriptor, b"descriptor", parent_profile
+    ) == capability.hex()
+    # A profile whose bytes changed does not, even though every other field matches.
+    with pytest.raises(launcher.LaunchError, match="not bound to the exclusive parent launch attempt"):
+        launcher._validate_child_authority(arguments(), descriptor, b"descriptor", child_profile)
+
+
+@pytest.mark.parametrize(
+    "dropped",
+    (
+        ("--settings", "/profile.json"),
+        ("--setting-sources", ""),
+        ("--permission-mode", "acceptEdits"),
+        ("--sandbox", "read-only"),
+    ),
+)
+def test_observed_argv_that_omits_the_policy_or_trust_step_fails_parent_validation(
+    dropped: tuple[str, str],
+) -> None:
+    # The trust step skipped while the receipt claims it: `request` still carries
+    # the profile digest, only the exec'd argv lost the flag. The parent compares
+    # the argv the child recorded against its own expectation and refuses.
+    launcher = _load_launcher()
+    expected = [
+        "/bin/runtime",
+        "--setting-sources",
+        "",
+        "--permission-mode",
+        "acceptEdits",
+        "--settings",
+        "/profile.json",
+        "--sandbox",
+        "read-only",
+        "--output-format",
+        "json",
+    ]
+    index = expected.index(dropped[0])
+    assert expected[index : index + 2] == list(dropped)
+    mutated = expected[:index] + expected[index + 2 :]
+    request = {"approval_policy": {"settings_profile_sha256": "p" * 64}}
+
+    def receipt(argv: list[str]) -> dict[str, object]:
+        return {
+            "status": "observed",
+            "descriptor_id": "descriptor",
+            "request": copy.deepcopy(request),
+            "observed": {
+                "argv": argv,
+                "process": {"pid": 41, "capability_nonce": "nonce", "start_fingerprint": None},
+            },
+        }
+
+    launcher._validate_parent_binding(
+        receipt(list(expected)),
+        descriptor_id="descriptor",
+        request=request,
+        pid=41,
+        process_nonce="nonce",
+        live_start_fingerprint=None,
+        expected_argv=expected,
+    )
+    with pytest.raises(launcher.LaunchError, match="durable child observation"):
+        launcher._validate_parent_binding(
+            receipt(mutated),
+            descriptor_id="descriptor",
+            request=request,
+            pid=41,
+            process_nonce="nonce",
+            live_start_fingerprint=None,
+            expected_argv=expected,
+        )
+    # An observation with no argv at all is not "nothing to compare".
+    with pytest.raises(launcher.LaunchError, match="durable child observation"):
+        missing = receipt(list(expected))
+        del missing["observed"]["argv"]
+        launcher._validate_parent_binding(
+            missing,
+            descriptor_id="descriptor",
+            request=request,
+            pid=41,
+            process_nonce="nonce",
+            live_start_fingerprint=None,
+            expected_argv=expected,
+        )
+
+
+@pytest.mark.kit_repo_only("config/dev-model.yaml", "config/claude-lane-settings.json")
+def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_validates() -> None:
+    launcher = _load_launcher()
+    root = ENGINE_DIR.parent
+    config = launcher.load_config(root / "config" / "dev-model.yaml", overlay=False)
+    codex = launcher._approval_for_runtime("codex", config, root)
+    claude = launcher._approval_for_runtime("claude", config, root)
+    assert codex == {
+        "declared": "read-only",
+        "argv": ["--sandbox", "read-only"],
+        "settings_profile_path": None,
+        "settings_profile_sha256": None,
+    }
+    profile = root / "config" / "claude-lane-settings.json"
+    assert claude["declared"] == "accept-edits"
+    assert claude["settings_profile_path"] == str(profile.resolve())
+    assert claude["settings_profile_sha256"] == hashlib.sha256(profile.read_bytes()).hexdigest()
+    assert claude["argv"] == [
+        "--setting-sources",
+        "",
+        "--permission-mode",
+        "acceptEdits",
+        "--settings",
+        str(profile.resolve()),
+    ]
+    shipped = json.loads(profile.read_text(encoding="utf-8"))
+    assert set(shipped) == {"permissions"}
+    assert set(shipped["permissions"]) == {"allow", "deny"}
+    # Landing is the cockpit's: the lane cannot merge or rewrite history.
+    assert "Bash(gh pr merge:*)" in shipped["permissions"]["deny"]
+    assert "Bash(git push --force:*)" in shipped["permissions"]["deny"]
+    assert "Bash(git push -f:*)" in shipped["permissions"]["deny"]
+    assert "Bash(gh pr merge:*)" not in shipped["permissions"]["allow"]
+    assert all(entry.startswith("Bash(") and entry.endswith(":*)") for entry in shipped["permissions"]["allow"])
