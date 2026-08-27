@@ -155,8 +155,11 @@ record exists, in the same shape as the transports:
   to the repository root or absolute. Shipped default `config/claude-lane-settings.json`,
   seeded by `init.sh` when absent and adopter-owned afterwards. The engine refuses a
   profile that is missing, a symlink, not a regular file, not one JSON object, without
-  a `permissions` object, with `permissions.defaultMode` (the mode is config-declared,
-  one authority), or whose `permissions.allow` carries a `Bash` entry with no literal command
+  a `permissions` object, with any `permissions` key other than `allow`, `deny`,
+  `ask` — `defaultMode` (the mode is config-declared, one authority),
+  `additionalDirectories` (tool access beyond the worktree with no rule in any list),
+  or an unrecognised key, refused rather than passed through (panel round 14) — or
+  whose `permissions.allow` carries a `Bash` entry with no literal command
   prefix — the pattern, read literally (only the entry's outer whitespace is
   ignored; inside the parentheses a space is a character, as the runtime's matcher
   reads it), must start with a letter, digit, or path character and its head
@@ -212,7 +215,7 @@ must contain and how it fails.
 | Situation | Where it is decided | Declared outcome | Receipt status | Attempt record |
 | --- | --- | --- | --- | --- |
 | Policy key absent, outside the vocabulary, or an unrestricted spelling | `_config_for_launcher`, before the attempt | `refused-declaration` (exit 64) | none | not created |
-| Profile missing, symlinked, malformed, without `permissions`, with `defaultMode`, or widening a whole tool | same | `refused-trust-step` (exit 64) | none | not created |
+| Profile missing, symlinked, malformed, without `permissions`, with a `permissions` key outside `allow`/`deny`/`ask` (`defaultMode`, `additionalDirectories`, unrecognised), or widening a whole tool | same | `refused-trust-step` (exit 64) | none | not created |
 | Profile bytes differ between the parent's and the child's read | child authority check | `refused-trust-step` | `rejected` → parent terminalizes `failed` | remains |
 | Child argv would omit or alter the policy contribution | parent binding validation (`observed.argv` ≠ expected) | `refused-observation` | `failed` | remains |
 | Runtime returns a `success` envelope with non-empty `permission_denials` (a denied write, or an action that would have prompted with no operator) | parent, after exit | `denied` | `failed`, error names the declared policy, `terminal.permission_denials` carries the list | remains |
@@ -276,7 +279,10 @@ Hostile mutations recomputed locally (each must be killed by a behavioural asser
   (kills 2);
 - a runtime adapter contradicting shared policy (an adapter line naming
   `--permission-mode`, `--dangerously-skip-permissions`, or `--sandbox`) (kills 8);
-- a profile with `defaultMode: bypassPermissions` or `allow: ["Bash"]` accepted (kills 5).
+- a profile with `defaultMode: bypassPermissions` or `allow: ["Bash"]` accepted (kills 5);
+- a profile with `permissions.additionalDirectories` — or any key outside the three
+  rule lists — accepted as bounded (the closed-set check removed; kills the round-14
+  cases in `test_widening_or_malformed_settings_profile_is_a_refused_trust_step`).
 
 ## Ownership boundary
 

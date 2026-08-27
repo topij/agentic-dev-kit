@@ -101,8 +101,9 @@ parallel:
   # `--setting-sources ""` plus this cockpit-owned profile through `--settings`;
   # it is the ONE settings source a lane loads. Path relative to the repo root or
   # absolute; seeded by init.sh when absent and adopter-owned afterwards. The
-  # wrapper refuses a profile with `permissions.defaultMode` or a whole-tool Bash
-  # allowance.
+  # wrapper refuses a profile whose `permissions` object carries any key other
+  # than `allow`, `deny`, `ask` (`defaultMode`, `additionalDirectories`, an
+  # unrecognised key) or a whole-tool Bash allowance.
   claude_settings_profile: config/claude-lane-settings.json
   # A descriptor is a one-shot launch authority, not standing permission. The
   # issuer stamps this lifetime into the descriptor and the wrapper rejects an

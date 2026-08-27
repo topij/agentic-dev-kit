@@ -1918,6 +1918,22 @@ def test_edit_tool_allow_must_be_scoped_inside_the_worktree(entry: str, escapes:
         ({"permissions": []}, "permissions object"),
         ({"permissions": {"allow": [], "defaultMode": "bypassPermissions"}}, "defaultMode"),
         ({"permissions": {"allow": [], "defaultMode": "acceptEdits"}}, "defaultMode"),
+        # The permissions object carries only the three rule lists. A profile
+        # widening tool access through `additionalDirectories` (the settings form
+        # of `--add-dir`) passed the validator with no rule in any list, with or
+        # without an allow list beside it; any key outside the closed set is
+        # refused rather than passed through (panel round 14, adversarial lens).
+        (
+            {"permissions": {"allow": ["Edit(**)"], "additionalDirectories": ["/etc", "/"]}},
+            "permissions.additionalDirectories",
+        ),
+        ({"permissions": {"additionalDirectories": ["/"]}}, "permissions.additionalDirectories"),
+        ({"permissions": {"allow": [], "additionalDirectories": []}}, "permissions.additionalDirectories"),
+        (
+            {"permissions": {"allow": [], "disableBypassPermissionsMode": "disable"}},
+            "permissions.disableBypassPermissionsMode",
+        ),
+        ({"permissions": {"allow": [], "Allow": ["Bash"]}}, "permissions.Allow"),
         ({"permissions": {"allow": ["Bash"]}}, "widens Bash"),
         ({"permissions": {"allow": ["Bash(*)"]}}, "widens Bash"),
         ({"permissions": {"allow": ["Bash(*:*)"]}}, "widens Bash"),
@@ -2243,6 +2259,7 @@ def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_valida
     shipped = json.loads(profile.read_text(encoding="utf-8"))
     assert set(shipped) == {"permissions"}
     assert set(shipped["permissions"]) == {"allow", "deny"}
+    assert set(shipped["permissions"]) <= set(launcher.PERMISSION_RULE_LISTS)
     # Landing is the cockpit's: the merge command and the flag spellings of a
     # force push are denied. A prefix rule cannot express "contains a forced
     # update", so `git push origin +HEAD:main` is NOT denied by this profile

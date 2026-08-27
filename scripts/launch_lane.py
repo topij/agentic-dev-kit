@@ -139,6 +139,15 @@ EDIT_TOOLS = frozenset({"Edit", "Write", "MultiEdit", "NotebookEdit"})
 # the UNC spelling of absolute on the platform that uses it; a literal
 # character on this POSIX-only kit, refused rather than left unscoped).
 OUTSIDE_WORKTREE_PATTERN_LEADS = ("//", "~", "\\")
+# The only keys a lane profile's `permissions` object may carry: the three rule
+# lists the validator inspects. The order is the order the refusal names them in.
+# Anything else is refused rather than passed through — `defaultMode` would be a
+# second authority for the config-declared mode, `additionalDirectories` (the
+# settings form of `--add-dir`) widens tool access beyond the worktree with no
+# rule in any list, and a key this client ignores may be honoured by another.
+# Structural again: a closed set of accepted keys, not a list of known-widening
+# spellings (panel round 14, adversarial lens).
+PERMISSION_RULE_LISTS = ("allow", "deny", "ask")
 
 
 def _edit_allow_escapes_the_worktree(entry: str) -> bool:
@@ -488,13 +497,19 @@ def _config_for_launcher(runtime: str) -> tuple[RuntimeProfile, int, int, int, P
 def _validate_settings_profile(raw: bytes, path: Path) -> None:
     """Refuse a lane settings profile whose `permissions` object is not bounded.
 
-    The mode is config-declared and passed as `--permission-mode`, so a profile
-    carrying `permissions.defaultMode` would be a second authority for the same
-    decision; a `Bash` entry in `permissions.allow` with no literal command prefix
-    would widen the lane to unrestricted shell without any declaration. Both refuse
-    before an attempt record exists. Only `allow` is inspected for widening: a
-    `deny` entry narrows, and an `ask` entry cannot widen an unattended `-p` lane,
-    where a call that would prompt is a denial the wrapper reads back from
+    The `permissions` object carries the three rule lists (`allow`, `deny`,
+    `ask`) and nothing else. The mode is config-declared and passed as
+    `--permission-mode`, so a profile carrying `permissions.defaultMode` would be
+    a second authority for the same decision; `permissions.additionalDirectories`
+    is the settings form of `--add-dir` and widens tool access beyond the worktree
+    with no rule in any list; and a key the wrapper does not recognise is refused
+    rather than passed through, because an entry this client ignores may be
+    honoured by another (panel round 14, adversarial lens). A `Bash` entry in
+    `permissions.allow` with no literal command prefix would widen the lane to
+    unrestricted shell without any declaration. All of these refuse before an
+    attempt record exists. Only `allow` is inspected for widening among the lists:
+    a `deny` entry narrows, and an `ask` entry cannot widen an unattended `-p`
+    lane, where a call that would prompt is a denial the wrapper reads back from
     `permission_denials`. An edit-tool entry (`Edit`, `Write`, `MultiEdit`,
     `NotebookEdit`) must carry a path pattern relative to the worktree root; a
     bare tool name writes anywhere and a pattern rooted outside the worktree is a
@@ -519,7 +534,16 @@ def _validate_settings_profile(raw: bytes, path: Path) -> None:
             f"lane settings profile {path} must not declare permissions.defaultMode; "
             "the mode is config-declared through parallel.claude_approval_policy"
         )
-    for key in ("allow", "deny", "ask"):
+    for key in permissions:
+        if key not in PERMISSION_RULE_LISTS:
+            raise LaunchError(
+                f"lane settings profile {path} must not declare permissions.{key}; "
+                f"a lane profile's permissions object carries only "
+                f"{', '.join(PERMISSION_RULE_LISTS)} (additionalDirectories widens "
+                "tool access beyond the worktree, and an unrecognised key is refused "
+                "rather than passed through)"
+            )
+    for key in PERMISSION_RULE_LISTS:
         entries = permissions.get(key, [])
         if not isinstance(entries, list) or not all(isinstance(item, str) for item in entries):
             raise LaunchError(f"lane settings profile {path} permissions.{key} must be a list of strings")

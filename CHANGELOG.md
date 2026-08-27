@@ -65,7 +65,9 @@ starts.
   it against the kit's copy yourself. Keep each policy inside the wrapper's vocabulary:
   an unrestricted spelling (`bypassPermissions`, `danger-full-access`, any
   `dangerously-*`) or a missing key refuses at launch, as does a profile carrying
-  `permissions.defaultMode`, a `Bash` allow entry whose pattern has no literal
+  any `permissions` key other than `allow`, `deny`, `ask` (`defaultMode`,
+  `additionalDirectories`, or one the wrapper does not recognise — refused, not
+  passed through), a `Bash` allow entry whose pattern has no literal
   command prefix (`Bash`, `Bash(*)`, `Bash(**)`, `Bash(:*)`, `Bash(/*)` — the head
   before the first wildcard, separator, or space must hold a letter or digit), or an
   edit-tool allow with no worktree-relative path pattern (`Write`, `Write(//…)`,

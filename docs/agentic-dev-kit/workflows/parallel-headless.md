@@ -122,8 +122,9 @@ the allow list bounds what a lane can *do* — write, commit, push, open a PR �
 what it can see.
 `accept-edits` is declarable and is not the default because the runtime then also
 auto-accepts its own class of file-system Bash commands inside the worktree — `rm`,
-`mv`, redirection writes, and `cat` were observed accepted live at 2.1.247 with none
-of them in the allow list — so under that value the allow list bounds only what the
+`mv`, and redirection writes were observed accepted live at 2.1.247 with none of
+them in the allow list (`cat` ran too, and belongs to the read-only class above that
+either value accepts) — so under that value the allow list bounds only what the
 runtime's own classifier does not already accept. Every
 unrestricted spelling — `bypassPermissions`, `auto`, `manual`, `plan`,
 `danger-full-access`, the `--dangerously-*` flags — is a non-member the wrapper
@@ -189,8 +190,12 @@ settings, and the cockpit-owned profile named by `parallel.claude_settings_profi
 adopter-owned afterwards) is passed with `--settings` as the one settings source the
 lane loads — its permission rules and its hooks apply, the branch's do not. The
 wrapper refuses a profile that is missing, symlinked, not one JSON object, without a
-`permissions` object, carrying `permissions.defaultMode` (the mode is declared once,
-in config), or carrying a `Bash` allow entry with no literal command prefix — `Bash`,
+`permissions` object, carrying any `permissions` key other than the three rule lists
+`allow`, `deny`, `ask` — `defaultMode` (the mode is declared once, in config),
+`additionalDirectories` (the settings form of `--add-dir`, tool access beyond the
+worktree with no rule in any list), or a key the wrapper does not recognise, refused
+rather than passed through because an entry this client ignores may be honoured by
+another — or carrying a `Bash` allow entry with no literal command prefix — `Bash`,
 `Bash(*)`, `Bash(**)`, `Bash(:*)`, `Bash(/*)`, anything whose pattern head (the
 pattern read literally, up to the first wildcard, `:`, or space) holds no letter or
 digit — decided by that structure, not by a list of spellings — or granting an edit
