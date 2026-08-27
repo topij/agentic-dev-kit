@@ -69,6 +69,13 @@ runtime:
     codex: codex
 parallel:
   codex_headless_command: [codex, exec]
+  codex_worktree_transport: cd-flag
+  codex_prompt_transport: stdin-dash
+  codex_final_text_transport: last-message-file
+  claude_headless_command: [claude, -p]
+  claude_worktree_transport: process-cwd
+  claude_prompt_transport: stdin
+  claude_final_text_transport: json-stdout
   descriptor_ttl_seconds: 900
   observation_timeout_seconds: 30
   termination_grace_seconds: 5
@@ -120,6 +127,13 @@ runtime:
     codex: codex
 parallel:
   codex_headless_command: [codex, exec]
+  codex_worktree_transport: cd-flag
+  codex_prompt_transport: stdin-dash
+  codex_final_text_transport: last-message-file
+  claude_headless_command: [claude, -p]
+  claude_worktree_transport: process-cwd
+  claude_prompt_transport: stdin
+  claude_final_text_transport: json-stdout
   descriptor_ttl_seconds: 900
   observation_timeout_seconds: 30
   termination_grace_seconds: 5
@@ -1589,9 +1603,12 @@ state:
     assert config["triage"] == shipped["triage"]
 
     config_path = repo / "config" / "dev-model.yaml"
+    # An adopter's own per-runtime values survive the additive migration: the
+    # absolute Claude binary a user-local install needs, plus one shared scalar.
     partial = re.sub(
         r"(?m)^parallel:\n(?:  [^\n]*\n)+",
-        "parallel:\n  descriptor_ttl_seconds: 321\n",
+        "parallel:\n  descriptor_ttl_seconds: 321\n"
+        "  claude_headless_command: [/opt/adopter/bin/claude, -p]\n",
         config_path.read_text(encoding="utf-8"),
         count=1,
     )
@@ -1607,16 +1624,21 @@ state:
         config_path.read_text(encoding="utf-8")
     )["parallel"]
 
+    adopter_owned = {"descriptor_ttl_seconds", "claude_headless_command"}
     assert migrated_partial["descriptor_ttl_seconds"] == 321
+    assert migrated_partial["claude_headless_command"] == ["/opt/adopter/bin/claude", "-p"]
     assert {
         key: value
         for key, value in migrated_partial.items()
-        if key != "descriptor_ttl_seconds"
+        if key not in adopter_owned
     } == {
         key: value
         for key, value in shipped["parallel"].items()
-        if key != "descriptor_ttl_seconds"
+        if key not in adopter_owned
     }
+    for runtime in ("codex", "claude"):
+        for kind in ("worktree", "prompt", "final_text"):
+            assert f"{runtime}_{kind}_transport" in migrated_partial
 
     nested_same_name = re.sub(
         r"(?m)^parallel:\n(?:  [^\n]*\n)+",
@@ -2223,9 +2245,9 @@ def test_bookend_integrations_are_shared_thin_declared_and_manifested() -> None:
 
 @pytest.mark.kit_repo_only(
     "scripts/dev_session.sh",
-    "scripts/launch_codex_lane.py",
+    "scripts/launch_lane.py",
     "scripts/reconcile_sessions.sh",
-    "scripts/tests/test_codex_lane_launcher.py",
+    "scripts/tests/test_lane_launcher.py",
     "scripts/tests/test_portability.py",
     "scripts/tests/test_reconcile_sessions.py",
     "docs/agentic-dev-kit/workflows/parallel.md",
@@ -2247,6 +2269,9 @@ def test_parallel_identity_chain_files_are_manifest_owned_for_adopter_upgrade() 
     changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     release_entry_598 = changelog.split("## #598", 1)[1].split("\n---", 1)[0]
     release_entry_609 = changelog.split("## #609", 1)[1].split("\n---", 1)[0]
+    # Newest first, so the per-runtime generalisation entry is the one directly
+    # above #609; it must name the renamed engine and the per-runtime keys.
+    release_entry_lane = changelog.split("## #609", 1)[0].rsplit("\n## #", 1)[1]
     existing_identity_roles = {
         "scripts/dev_session.sh": "engine",
         "scripts/reconcile_sessions.sh": "engine",
@@ -2257,8 +2282,8 @@ def test_parallel_identity_chain_files_are_manifest_owned_for_adopter_upgrade() 
     }
     launcher_roles = {
         "init.sh": "installer",
-        "scripts/launch_codex_lane.py": "engine",
-        "scripts/tests/test_codex_lane_launcher.py": "test",
+        "scripts/launch_lane.py": "engine",
+        "scripts/tests/test_lane_launcher.py": "test",
         "docs/agentic-dev-kit/workflows/upgrade.md": "workflow",
         "docs/templates/AGENTS.md.tmpl": "template",
     }
@@ -2282,6 +2307,19 @@ def test_parallel_identity_chain_files_are_manifest_owned_for_adopter_upgrade() 
         "docs/agentic-dev-kit/workflows/parallel-headless.md",
     }
     assert all(path in release_entry_609 for path in adopter_launcher_paths)
+    for text in (
+        "scripts/launch_lane.py",
+        "scripts/tests/test_lane_launcher.py",
+        "scripts/launch_codex_lane.py",
+        "init.sh",
+        "config/dev-model.yaml",
+        "docs/agentic-dev-kit/workflows/parallel-headless.md",
+        "`<runtime>_headless_command`",
+        "`<runtime>_prompt_transport`",
+        "`<runtime>_final_text_transport`",
+        "`final_text_sha256`",
+    ):
+        assert text in release_entry_lane, text
 
 
 @pytest.mark.kit_repo_only(
@@ -13390,20 +13428,26 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
     assert set(claude_frontmatter["paths"]) == {
         "scripts/dev_session.sh",
         "scripts/devkit/dev_session.sh",
-        "scripts/launch_codex_lane.py",
-        "scripts/devkit/launch_codex_lane.py",
+        "scripts/launch_lane.py",
+        "scripts/devkit/launch_lane.py",
         "scripts/pr_watch.py",
         "scripts/devkit/pr_watch.py",
     }
     for text in (root_agents, template, merge_section, claude_rule):
         assert "pr_watch.py" in text
         assert "dev_session.sh" in text
-        assert "launch_codex_lane.py" in text
+        assert "launch_lane.py" in text
     changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     launcher_entry = changelog.split("## #609", 1)[1].split("\n---", 1)[0]
     assert "adopter-owned `AGENTS.md`" in launcher_entry
     assert ".claude/rules/safety-critical-changes.md" in launcher_entry
     assert "scripts/devkit/launch_codex_lane.py" in launcher_entry
+    # The rename entry directly above #609 tells the adopter to move both bindings.
+    rename_entry = changelog.split("## #609", 1)[0].rsplit("\n## #", 1)[1]
+    assert "adopter-owned `AGENTS.md`" in rename_entry
+    assert ".claude/rules/safety-critical-changes.md" in rename_entry
+    assert "scripts/devkit/" in rename_entry
+    assert "`launch_lane.py`" in rename_entry
 
 
 @pytest.mark.kit_repo_only("saved_plans/codex-hooks-live-probe/.codex/hooks.json")

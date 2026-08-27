@@ -17,7 +17,7 @@ rule above says *don't start the session yourself*). That's the wrong shape for 
 *sandboxed* lane without a human in the loop. `--headless` is for exactly that:
 
 ```bash
-<engine-dir>/dev_session.sh new --headless <scope> --merge-class <self|operator> --runtime codex
+<engine-dir>/dev_session.sh new --headless <scope> --merge-class <self|operator> --runtime <codex|claude>
 ```
 
 It creates the worktree + sandbox exactly as `new` does, but instead of the human
@@ -78,35 +78,52 @@ descriptor — **do not hand-copy or paraphrase it into this workflow or a launc
 Always read it fresh from one of those two engine surfaces so a future edit propagates
 without maintaining a second copy.
 
-**Supported Codex launch contract.** Run `new --headless --runtime codex` once (or set
-`DEVKIT_RUNTIME=codex` for descriptor issuance), write the task-specific prompt to a
-regular file, and invoke the config-owned kit engine with the persisted descriptor
-path. A descriptor issued for the default Claude runtime is intentionally refused by
-this Codex-only wrapper.
+**Supported unattended launch contract — Codex and Claude.** Run `new --headless
+--runtime <codex|claude>` once (or set `DEVKIT_RUNTIME` for descriptor issuance), write
+the task-specific prompt to a regular file, and invoke the one config-owned kit engine
+with the persisted descriptor path. The descriptor's `runtime` selects the template;
+the wrapper refuses a descriptor whose runtime has no configured command.
 
 ```bash
-python3 <engine-dir>/launch_codex_lane.py \
+python3 <engine-dir>/launch_lane.py \
   --descriptor <session>/launch-descriptor.json \
   --prompt-file <task-prompt>
 ```
 
-`parallel.codex_headless_command` supplies the argv prefix (the shipped value selects
-stable `codex exec`), `parallel.descriptor_ttl_seconds` supplies descriptor lifetime,
+Per runtime, `parallel.<runtime>_headless_command` supplies the argv prefix (the
+shipped values select stable `codex exec` and `claude -p`), and
+`parallel.<runtime>_worktree_transport`, `parallel.<runtime>_prompt_transport`, and
+`parallel.<runtime>_final_text_transport` declare how the runtime is told its
+worktree, receives its prompt, and returns its final text. Those declarations are
+checked, not chosen: the engine owns the vocabulary and the argv each transport
+produces, and refuses a declaration the named runtime does not implement. Codex
+declares `cd-flag` / `stdin-dash` / `last-message-file` — `--cd <worktree>`, the
+prompt on stdin behind a `-` argument, final text through `--output-last-message`.
+Claude declares `process-cwd` / `stdin` / `json-stdout` — the working directory is the
+child process's own, the prompt arrives on stdin with no argument, and the final text
+is the `result` of the one JSON object `--output-format json` prints on stdout, which
+the wrapper redirects onto the reserved final-message file before `exec`. Shared
+across runtimes, `parallel.descriptor_ttl_seconds` supplies descriptor lifetime,
 `parallel.observation_timeout_seconds` bounds the child observation handshake, and
 `parallel.termination_grace_seconds` bounds graceful cleanup before forced process-
 group termination. Resolve all through the merged config; never restate them in an
-adapter or fixture.
+adapter or fixture. A user-local runtime install is outside the wrapper's trusted
+executable path by design: name the absolute binary in the command.
 
 The wrapper is the supported mechanism because it owns the guarantees a native agent
-dispatch or direct `codex exec` call does not: worktree `cwd`, inherited-identity
-removal, trusted executable lookup, descriptor environment replacement and rewrite seal,
-session-scoped one-shot attempt and final-path authority, and a fork-only child observer
-with no public direct entry that reads Git fetch/push origin identity, the marker,
-persisted lane metadata, filesystem relationships, a freshly derived canonical prompt
-contract, and its own process before `exec`. It writes a receipt in the session
-directory, binds the exact descriptor/task/combined-prompt bytes, and returns success
-only after the Codex command exits successfully and a durable terminal receipt binds
-the final-message bytes by digest.
+dispatch or direct `codex exec` / `claude -p` call does not: worktree `cwd`,
+inherited-identity removal, trusted executable lookup, descriptor environment
+replacement and rewrite seal, session-scoped one-shot attempt and final-path
+authority, and a fork-only child observer with no public direct entry that reads Git
+fetch/push origin identity, the marker, persisted lane metadata, filesystem
+relationships, a freshly derived canonical prompt contract, and its own process before
+`exec`. It writes a receipt in the session directory, binds the exact
+descriptor/task/combined-prompt bytes plus the runtime and its declared transports,
+and returns success only after the runtime command exits successfully and a durable
+terminal receipt binds the final-message evidence bytes and the extracted final text
+by digest. For Claude, an empty stdout, malformed or partial JSON, more than one JSON
+value, a non-`result` object, an error result, or an empty `result` is a failed
+terminal receipt, never success.
 
 The descriptor, rewrite seal, and receipt fail closed on expiry, descriptor-only byte
 rewrite, or reuse; a moved descriptor; a descriptor environment that disagrees with its repository,
@@ -128,11 +145,15 @@ process already controlling the same OS account and able to replace the seal, me
 engine, worktree, or receipt together; that stronger signer/broker problem is outside
 this local mechanism.
 
-Do not hand this descriptor to native in-session agent dispatch, a desktop task,
-Codex cloud, or direct `codex exec`: those surfaces do not apply this complete local
+Do not hand this descriptor to native in-session agent dispatch on either runtime, a
+desktop task, Codex cloud, a Claude remote session, or direct `codex exec` /
+`claude -p`: those surfaces do not apply this complete local
 worktree/environment/receipt contract. App-server is experimental and is not selected
 for this bounded mechanism. Keep the lane attended when the wrapper is unavailable.
-Model and reasoning-effort calibration remain separate from launcher identity.
+Model and reasoning-effort calibration, and the approval or permission policy a
+writing lane needs, remain separate from launcher identity; a lane runs under the
+checked-out project's own hooks and permission rules, which `claude -p` loads from its
+cwd.
 
 Every supported launcher must still prepend `prompt_preamble` verbatim and must not
 open a second worktree on top of `new --headless`. The wrapper does both by consuming

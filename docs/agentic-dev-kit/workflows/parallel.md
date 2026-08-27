@@ -31,7 +31,7 @@ command is invoked; they do not replace, relax, or reconstruct this chain.
 | Surface | Authoritative inputs | Durable evidence | Failure / resume result |
 | --- | --- | --- | --- |
 | `new` | configured protected branch and lane prefix; requested branch, base, and merge class | session `branch`, `base`, and `merge_class`; worktree and sandbox | creation failure is not a lane; retry only after accounting for any branch or worktree the failed Git operation left behind |
-| `new --headless` | the same identity plus resolved absolute worktree, sandbox, and repository roots; a relative sessions container is anchored to the invocation directory before any write | marker, canonical one-shot descriptor, persisted identity, and activation file agree; the supported Codex wrapper adds an exclusive attempt and observed/terminal receipt | an env-incapable launcher cannot resume this as an unattended state-writing lane; the selected wrapper rejects expiry, reuse, partial evidence, or any child-observed identity mismatch |
+| `new --headless` | the same identity plus resolved absolute worktree, sandbox, and repository roots; a relative sessions container is anchored to the invocation directory before any write | marker, canonical one-shot descriptor, persisted identity, and activation file agree; the supported per-runtime wrapper (Codex or Claude, selected by the descriptor's `runtime` and its config-owned transports) adds an exclusive attempt and observed/terminal receipt binding the final text | an env-incapable launcher cannot resume this as an unattended state-writing lane; the selected wrapper rejects expiry, reuse, partial evidence, or any child-observed identity mismatch |
 | scope `pr-watch` | one intact session; exact checkout repository; same-repository open PR whose base, head branch, owner, and fork flag match the persisted lane | acknowledgements and review receipt in that session's state root | missing, ambiguous, foreign, or malformed identity refuses before the review engine runs |
 | `merge` | persisted `self` class plus the scope-watch identity chain; act-time report for the same PR, base, and head | forge merge pinned to the validated head | any identity movement or failed/ambiguous forge result refuses; re-poll and resume from the exact current head |
 | reconciliation | exact checkout repository; authoritative PR list; persisted base/class when a session survives; stable snapshots of every surviving local ref, remote-tracking ref, and live origin branch | `merged`, `held`, `open`, or `parked` row plus the batch exit contract | repository/read/shape failure emits no board and stops; an observed newer or moving branch tip keeps the lane resumable |
@@ -49,6 +49,9 @@ launcher mutation with the environment-capable launcher rather than simulating o
 | inherit cockpit lane/state variables instead of applying descriptor `env` | the supported wrapper removes inherited `DEVKIT_*`, assigns every descriptor key unconditionally, and the live child/receipt must observe only the descriptor environment |
 | launch a correct descriptor in another worktree, or let a child echo descriptor identity without observing Git/filesystem/process state | the child-side observer refuses before `exec`; caller-supplied expected fields cannot substitute for Git, marker, persisted metadata, path relationships, and the launch capability |
 | reuse an expired, foreign, interrupted, or completed descriptor/process, or return before observations/final text are durable | exclusive attempt creation, descriptor expiry, process-capability handshake, observed receipt, and terminal final-message digest refuse the launch or its success outcome |
+| declare a transport the named runtime does not implement (Claude prompt as an argument, Codex final text on stdout, a worktree flag for Claude), or issue a descriptor for a runtime without a configured command | the wrapper refuses before any attempt record exists; the receipt's request binds the runtime and its transports so parent and child cannot resolve different templates |
+| return Claude final text that is empty, malformed, partial, duplicated, an array, a non-`result` object, an error result, or an empty `result`; or accept it before the child observation is durably bound | the terminal receipt is `failed` with the reason named, `final_text_sha256` is absent, and the exclusive attempt remains; success requires the bound observation, a clean exit, and exactly one successful result object |
+| change the Codex argv order, drop `--cd`, `--output-last-message`, or the `-` argument, or route Codex evidence through stdout while adding Claude | the pinned Codex argv and `last-message-file` route fail their behavioral test; Claude support cannot regress Codex silently |
 | drop or alter persisted branch, base, or merge class | merge refuses; reconciliation cannot widen the lane to `held` |
 | inherit ambient `GH_REPO`, fail a forge read, or return malformed JSON | the engine stops before rendering or authorizing an empty/clean result |
 | return a fork, foreign owner, wrong base, or wrong head branch under the requested head name | row is not eligible to identify or terminalize the lane |
@@ -245,14 +248,13 @@ merge to the reviewed head commit. It refuses any lane whose persisted class is 
 those directly after the required review and sign-off.
 
 **How the tier reaches the lane.** Interactive `new` lanes keep the tier as a kickoff
-suggestion and the operator selects available runtime controls. The supported Codex
-headless wrapper deliberately inherits the configured client compute: this launcher
-slice establishes worktree, environment, identity, and receipt authority only. Native
-agent dispatch cannot become a headless-lane shortcut merely because it exposes model
-or effort controls; without the complete descriptor environment and observer/receipt
-chain it remains unsupported for state-writing lanes. Codex model and effort
-calibration is a separate parity slice. Claude currently has no supported unattended
-state-writing path, so keep Claude lanes attended.
+suggestion and the operator selects available runtime controls. The supported headless
+wrapper deliberately inherits the configured client compute on both runtimes: the
+launcher establishes worktree, environment, identity, and receipt authority only.
+Native agent dispatch cannot become a headless-lane shortcut merely because it exposes
+model or effort controls; without the complete descriptor environment and
+observer/receipt chain it remains unsupported for state-writing lanes on either
+runtime. Model and effort calibration for both runtimes is a separate parity slice.
 
 **Default-safe.** A lane with no assigned tier inherits the cockpit's current
 effort/model — i.e. unspecified ⇒ today's behavior, no regression. The tier is an

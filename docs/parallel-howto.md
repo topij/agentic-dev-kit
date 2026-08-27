@@ -169,7 +169,7 @@ A headless lane has **no human terminal** to hand a launch line to, so `new` beh
 differently:
 
 ```bash
-scripts/dev_session.sh new <scope> --headless --merge-class <self|operator> --runtime codex
+scripts/dev_session.sh new <scope> --headless --merge-class <self|operator> --runtime <codex|claude>
 ```
 
 Instead of printing a copy-paste line, `--headless` writes a sticky
@@ -177,12 +177,14 @@ Instead of printing a copy-paste line, `--headless` writes a sticky
 sandbox from disk (they don't inherit a shell), and emits a machine-readable descriptor
 whose `prompt_preamble` carries the **lane contract** and whose `env` map contains the
 lane-specific roots. It also persists the canonical one-shot descriptor beside the
-lane metadata. For Codex, launch it only through the kit-owned wrapper, which removes
-inherited lane/repository overrides, assigns the descriptor environment, verifies the
-child's independent identity observations, and writes an observed/terminal receipt:
+lane metadata. For either runtime, launch it only through the kit-owned wrapper, which
+removes inherited lane/repository overrides, assigns the descriptor environment,
+verifies the child's independent identity observations, starts the runtime's
+config-owned headless command (`codex exec` or `claude -p`), and writes an
+observed/terminal receipt:
 
 ```bash
-python3 scripts/launch_codex_lane.py \
+python3 scripts/launch_lane.py \
   --descriptor <session>/launch-descriptor.json \
   --prompt-file <task-prompt>
 ```
@@ -194,11 +196,11 @@ checks. See the exact contract text with:
 scripts/dev_session.sh print-contract
 ```
 
-Do not pass the descriptor directly to native agent dispatch or direct `codex exec`:
-neither supplies the wrapper's complete environment, observer, one-shot authority, and
-receipt contract. Interactive `new` and your CI/cron runner never set the marker, so
-their behavior is unchanged. Claude has no supported unattended state-writing path in
-this slice; keep Claude lanes attended.
+Do not pass the descriptor directly to native agent dispatch or direct `codex exec` /
+`claude -p`: none of those supplies the wrapper's complete environment, observer,
+one-shot authority, and receipt contract. Interactive `new` and your CI/cron runner
+never set the marker, so their behavior is unchanged. Attended lanes on either runtime
+stay supported through plain `new`.
 
 For the full JSON descriptor/receipt contract and verbatim-injection rule, see
 [`agentic-dev-kit/workflows/parallel-headless.md`](agentic-dev-kit/workflows/parallel-headless.md)

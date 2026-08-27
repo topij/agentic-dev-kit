@@ -25,7 +25,7 @@ ENGINE_DIR = Path(__file__).resolve().parent.parent
 
 def _load_launcher(engine_dir: Path = ENGINE_DIR) -> ModuleType:
     spec = importlib.util.spec_from_file_location(
-        "launch_codex_lane", engine_dir / "launch_codex_lane.py"
+        "launch_lane", engine_dir / "launch_lane.py"
     )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -101,6 +101,7 @@ def _fake_codex(
         "  'inherited_fd_open': inherited_fd_open,\n"
         "  'contract_first': prompt.startswith('LANE CONTRACT (binding):'),\n"
         "  'pid': os.getpid(),\n"
+        "  'argv': args,\n"
         "}\n"
         f"{ignore_line}\n"
         f"{descendant_line}\n"
@@ -113,9 +114,81 @@ def _fake_codex(
     path.chmod(0o755)
 
 
+CLAUDE_OUTPUT_MODES = (
+    "valid",
+    "malformed",
+    "duplicated",
+    "foreign",
+    "error",
+    "empty-result",
+    "array",
+    "text",
+    "none",
+)
+
+
+def _fake_claude(
+    path: Path,
+    *,
+    output: str = "valid",
+    sleep: bool = False,
+    corrupt_receipt: bool = False,
+    ignore_stdin: bool = False,
+) -> None:
+    """A stand-in for `claude -p --output-format json`: prompt on stdin, one JSON
+    result object on stdout. `output` selects a hostile stdout shape."""
+    sleep_line = "time.sleep(60)" if sleep else ""
+    corrupt_line = (
+        "[p.write_text('{}\\n', encoding='utf-8') for p in Path.cwd().parent.glob('launch-receipt-*.json')]"
+        if corrupt_receipt
+        else ""
+    )
+    prompt_line = "prompt = ''" if ignore_stdin else "prompt = sys.stdin.read()"
+    emit = {
+        "valid": "sys.stdout.write(json.dumps(good) + '\\n')",
+        "malformed": "sys.stdout.write(json.dumps(good)[:-7])",
+        "duplicated": "sys.stdout.write(json.dumps(good) + '\\n' + json.dumps(good) + '\\n')",
+        "foreign": "sys.stdout.write(json.dumps({'type': 'system', 'subtype': 'init', 'result': 'x'}) + '\\n')",
+        "error": "sys.stdout.write(json.dumps({**good, 'is_error': True, 'subtype': 'error_during_execution'}) + '\\n')",
+        "empty-result": "sys.stdout.write(json.dumps({**good, 'result': ''}) + '\\n')",
+        "array": "sys.stdout.write(json.dumps([good]) + '\\n')",
+        "text": "sys.stdout.write('plain text, not JSON\\n')",
+        "none": "pass",
+    }[output]
+    path.write_text(
+        "#!/usr/bin/env python3\n"
+        "import json, os, signal, subprocess, sys, time\n"
+        "from pathlib import Path\n"
+        "args = sys.argv[1:]\n"
+        f"{prompt_line}\n"
+        "result = {\n"
+        "  'cwd': str(Path.cwd().resolve()),\n"
+        "  'branch': subprocess.run(['git','branch','--show-current'], check=True, capture_output=True, text=True).stdout.strip(),\n"
+        "  'push_url': subprocess.run(['git','remote','get-url','--push','origin'], check=True, capture_output=True, text=True).stdout.strip(),\n"
+        "  'env': {k: v for k, v in os.environ.items() if k.startswith('DEVKIT_')},\n"
+        "  'gh_repo_present': 'GH_REPO' in os.environ,\n"
+        "  'git_environment_present': sorted(k for k in os.environ if k.startswith('GIT_')),\n"
+        "  'contract_first': prompt.startswith('LANE CONTRACT (binding):'),\n"
+        "  'pid': os.getpid(),\n"
+        "  'argv': args,\n"
+        "}\n"
+        "good = {'type': 'result', 'subtype': 'success', 'is_error': False, "
+        "'result': json.dumps(result, sort_keys=True), 'session_id': 'fake', 'permission_denials': []}\n"
+        f"{corrupt_line}\n"
+        f"{emit}\n"
+        "sys.stdout.flush()\n"
+        f"{sleep_line}\n",
+        encoding="utf-8",
+    )
+    path.chmod(0o755)
+
+
 def _install_repo(
     tmp_path: Path,
     *,
+    runtime: str = "codex",
+    claude_output: str = "valid",
+    claude_ignore_stdin: bool = False,
     sleep: bool = False,
     write_final: bool = True,
     corrupt_receipt: bool = False,
@@ -155,6 +228,14 @@ def _install_repo(
         spawn_descendant=spawn_descendant,
         spawn_detached_descendant=spawn_detached_descendant,
     )
+    fake_claude = tmp_path / "fake-claude"
+    _fake_claude(
+        fake_claude,
+        output=claude_output,
+        sleep=sleep,
+        corrupt_receipt=corrupt_receipt,
+        ignore_stdin=claude_ignore_stdin,
+    )
     (repo / "config").mkdir()
     (repo / "config" / "dev-model.yaml").write_text(
         "paths:\n"
@@ -164,8 +245,16 @@ def _install_repo(
         "  default: codex\n"
         "  launchers:\n"
         "    codex: codex\n"
+        "    claude: claude\n"
         "parallel:\n"
         f"  codex_headless_command: [{json.dumps(str(fake_codex))}]\n"
+        "  codex_worktree_transport: cd-flag\n"
+        "  codex_prompt_transport: stdin-dash\n"
+        "  codex_final_text_transport: last-message-file\n"
+        f"  claude_headless_command: [{json.dumps(str(fake_claude))}]\n"
+        "  claude_worktree_transport: process-cwd\n"
+        "  claude_prompt_transport: stdin\n"
+        "  claude_final_text_transport: json-stdout\n"
         "  descriptor_ttl_seconds: 900\n"
         "  observation_timeout_seconds: 5\n"
         "  termination_grace_seconds: 1\n"
@@ -184,7 +273,7 @@ def _install_repo(
             "probe",
             "--headless",
             "--runtime",
-            "codex",
+            runtime,
         ],
         cwd=repo,
         env=env,
@@ -207,7 +296,7 @@ def _run_launcher(
     return subprocess.run(
         [
             sys.executable,
-            str(engine_dir / "launch_codex_lane.py"),
+            str(engine_dir / "launch_lane.py"),
             "--descriptor",
             str(descriptor["descriptor_path"]),
             "--prompt-file",
@@ -301,7 +390,7 @@ def test_caller_inheritable_file_descriptor_is_closed_before_runtime_exec(
         result = subprocess.run(
             [
                 sys.executable,
-                str(engine_dir / "launch_codex_lane.py"),
+                str(engine_dir / "launch_lane.py"),
                 "--descriptor",
                 str(descriptor["descriptor_path"]),
                 "--prompt-file",
@@ -638,7 +727,7 @@ def test_forced_interruption_stops_child_and_records_terminal_outcome(tmp_path: 
     process = subprocess.Popen(
         [
             sys.executable,
-            str(engine / "launch_codex_lane.py"),
+            str(engine / "launch_lane.py"),
             "--descriptor",
             str(descriptor["descriptor_path"]),
             "--prompt-file",
@@ -707,7 +796,7 @@ def test_internal_child_mode_cannot_be_forged_by_a_caller(tmp_path: Path) -> Non
     ack_read, ack_write = os.pipe()
     command = [
         sys.executable,
-        str(engine / "launch_codex_lane.py"),
+        str(engine / "launch_lane.py"),
         "_child",
         "--descriptor",
         str(descriptor["descriptor_path"]),
@@ -805,7 +894,7 @@ def test_sigterm_ignoring_child_is_forcibly_stopped_within_the_configured_bound(
     process = subprocess.Popen(
         [
             sys.executable,
-            str(engine / "launch_codex_lane.py"),
+            str(engine / "launch_lane.py"),
             "--descriptor",
             str(descriptor["descriptor_path"]),
             "--prompt-file",
@@ -987,7 +1076,7 @@ def test_interruption_terminates_detached_launch_lineage(tmp_path: Path) -> None
     process = subprocess.Popen(
         [
             sys.executable,
-            str(engine / "launch_codex_lane.py"),
+            str(engine / "launch_lane.py"),
             "--descriptor",
             str(descriptor["descriptor_path"]),
             "--prompt-file",
@@ -1070,3 +1159,362 @@ def test_exception_after_reaped_leader_still_cleans_up_descendant(
         if descendant_pid is not None:
             with contextlib.suppress(ProcessLookupError):
                 os.kill(descendant_pid, signal.SIGKILL)
+
+
+# ── Per-runtime generalisation: Claude through `claude -p`, Codex unchanged ──────
+
+
+def _receipt(sessions: Path, descriptor: dict[str, object]) -> dict[str, object]:
+    return json.loads(
+        (sessions / "probe" / f"launch-receipt-{descriptor['descriptor_id']}.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+
+def test_claude_wrapper_replaces_inherited_identity_and_binds_json_final_text(
+    tmp_path: Path,
+) -> None:
+    repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude"
+    )
+    fake_bin = tmp_path / "hostile-bin"
+    fake_bin.mkdir()
+    fake_git_marker = tmp_path / "fake-git-ran"
+    fake_git = fake_bin / "git"
+    fake_git.write_text(
+        f"#!/bin/sh\nprintf ran > {fake_git_marker}\nexit 97\n", encoding="utf-8"
+    )
+    fake_git.chmod(0o755)
+    inherited = {
+        **env,
+        "DEVKIT_STATE_ROOT": str(tmp_path / "foreign-state"),
+        "DEVKIT_ROOT": str(tmp_path / "foreign-repo"),
+        "DEVKIT_FOREIGN_LANE": "must-be-removed",
+        "GH_REPO": "foreign/project",
+        "GIT_WORK_TREE": str(tmp_path / "foreign-worktree"),
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "remote.origin.pushurl",
+        "GIT_CONFIG_VALUE_0": str(tmp_path / "foreign-origin"),
+        "PATH": f"{fake_bin}{os.pathsep}{env['PATH']}",
+    }
+
+    result = _run_launcher(engine_dir, descriptor, prompt, inherited)
+
+    assert result.returncode == 0, result.stderr
+    assert descriptor["runtime"] == "claude"
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "completed"
+    assert receipt["request"]["runtime"] == "claude"
+    assert receipt["request"]["transports"] == {
+        "worktree": "process-cwd",
+        "prompt": "stdin",
+        "final_text": "json-stdout",
+    }
+    raw = Path(receipt["terminal"]["final_message_path"]).read_bytes()
+    envelope = json.loads(raw)
+    assert envelope["type"] == "result" and envelope["is_error"] is False
+    final = json.loads(envelope["result"])
+    # Claude's argv carries no worktree flag and no prompt argument: cwd comes
+    # from the process and the prompt from stdin.
+    assert final["argv"] == ["--output-format", "json"]
+    assert final["cwd"] == descriptor["worktree"]
+    assert final["branch"] == descriptor["branch"]
+    assert final["env"] == descriptor["env"]
+    assert final["gh_repo_present"] is False
+    assert final["git_environment_present"] == []
+    assert final["push_url"] == descriptor["origin_push_url"]
+    assert final["contract_first"] is True
+    assert not fake_git_marker.exists()
+    assert receipt["terminal"]["final_text_transport"] == "json-stdout"
+    assert receipt["terminal"]["final_message_sha256"] == hashlib.sha256(raw).hexdigest()
+    assert (
+        receipt["terminal"]["final_text_sha256"]
+        == hashlib.sha256(envelope["result"].encode()).hexdigest()
+    )
+    assert receipt["terminal"]["final_text_sha256"] != receipt["terminal"]["final_message_sha256"]
+    assert receipt["observed"]["repo_root"] == str(repo)
+
+
+def test_codex_child_argv_and_evidence_route_are_unchanged(tmp_path: Path) -> None:
+    _repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(tmp_path)
+
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+
+    assert result.returncode == 0, result.stderr
+    receipt = _receipt(sessions, descriptor)
+    final_path = Path(receipt["terminal"]["final_message_path"])
+    final = json.loads(final_path.read_text(encoding="utf-8"))
+    # Pinned: the #609 argv, byte for byte, in the same order.
+    assert final["argv"] == [
+        "--cd",
+        descriptor["worktree"],
+        "--output-last-message",
+        str(final_path),
+        "-",
+    ]
+    assert receipt["request"]["runtime"] == "codex"
+    assert receipt["request"]["transports"] == {
+        "worktree": "cd-flag",
+        "prompt": "stdin-dash",
+        "final_text": "last-message-file",
+    }
+    assert receipt["terminal"]["final_text_transport"] == "last-message-file"
+    assert receipt["terminal"]["final_text_sha256"] == receipt["terminal"]["final_message_sha256"]
+    assert receipt["terminal"]["final_message_sha256"] == hashlib.sha256(
+        final_path.read_bytes()
+    ).hexdigest()
+
+
+@pytest.mark.parametrize(
+    ("output", "fragment"),
+    (
+        ("malformed", "not one complete JSON object"),
+        ("duplicated", "more than one JSON value"),
+        ("foreign", "not a result object"),
+        ("error", "unsuccessful result"),
+        ("empty-result", "missing or empty"),
+        ("array", "not an object"),
+        ("text", "not one complete JSON object"),
+        ("none", "no JSON result on stdout"),
+    ),
+)
+def test_hostile_claude_stdout_is_a_failed_terminal_receipt(
+    tmp_path: Path, output: str, fragment: str
+) -> None:
+    _repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", claude_output=output
+    )
+
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+
+    assert result.returncode == 70, result.stderr
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "failed"
+    assert fragment in receipt["terminal"]["error"]
+    assert receipt["terminal"]["final_text_sha256"] is None
+    # The exclusive attempt stays: a hostile stdout does not free the descriptor.
+    assert Path(descriptor["session_dir"], "launch-attempt.json").exists()
+
+
+def test_claude_prompt_not_delivered_on_stdin_is_visible_in_the_final_text(
+    tmp_path: Path,
+) -> None:
+    # Positive construction for the transport claim: a runtime that does not read
+    # stdin cannot have seen the lane contract, and the bound final text says so.
+    _repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", claude_ignore_stdin=True
+    )
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+    assert result.returncode == 0, result.stderr
+    receipt = _receipt(sessions, descriptor)
+    envelope = json.loads(Path(receipt["terminal"]["final_message_path"]).read_bytes())
+    assert json.loads(envelope["result"])["contract_first"] is False
+    honest = _install_repo(tmp_path / "honest", runtime="claude")
+    result = _run_launcher(honest[1], honest[3], honest[4], honest[5])
+    assert result.returncode == 0, result.stderr
+    envelope = json.loads(
+        Path(_receipt(honest[2], honest[3])["terminal"]["final_message_path"]).read_bytes()
+    )
+    assert json.loads(envelope["result"])["contract_first"] is True
+
+
+@pytest.mark.parametrize(
+    ("runtime", "key", "declared"),
+    (
+        ("claude", "claude_prompt_transport", "stdin-dash"),
+        ("claude", "claude_final_text_transport", "last-message-file"),
+        ("claude", "claude_worktree_transport", "cd-flag"),
+        ("codex", "codex_prompt_transport", "stdin"),
+        ("codex", "codex_final_text_transport", "json-stdout"),
+        ("codex", "codex_worktree_transport", "process-cwd"),
+        ("claude", "claude_prompt_transport", "argument"),
+    ),
+)
+def test_declared_transport_the_runtime_does_not_implement_is_refused(
+    tmp_path: Path, runtime: str, key: str, declared: str
+) -> None:
+    _repo, engine_dir, _sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime=runtime
+    )
+    config_path = Path(descriptor["repo_root"]) / "config" / "dev-model.yaml"
+    lines = config_path.read_text(encoding="utf-8").splitlines(keepends=True)
+    rewritten = [
+        f"  {key}: {declared}\n" if line.startswith(f"  {key}:") else line for line in lines
+    ]
+    assert rewritten != lines
+    config_path.write_text("".join(rewritten), encoding="utf-8")
+
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+
+    assert result.returncode == 64
+    assert f"config parallel.{key} must declare one of" in result.stderr
+    assert not Path(descriptor["session_dir"], "launch-attempt.json").exists()
+
+
+def test_descriptor_for_an_untemplated_runtime_is_refused(tmp_path: Path) -> None:
+    launcher = _load_launcher()
+    _repo, engine_dir, _sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude"
+    )
+    descriptor_path = Path(descriptor["descriptor_path"])
+    authority_path = Path(descriptor["session_dir"]) / "launch-authority.json"
+
+    foreign = copy.deepcopy(descriptor)
+    foreign["runtime"] = "gemini"
+    foreign_raw = launcher._canonical_json(foreign)
+    descriptor_path.write_bytes(foreign_raw)
+    authority = json.loads(authority_path.read_text(encoding="utf-8"))
+    authority["descriptor_sha256"] = hashlib.sha256(foreign_raw).hexdigest()
+    authority_path.chmod(0o600)
+    authority_path.write_bytes(launcher._canonical_json(authority))
+    result = _run_launcher(engine_dir, foreign, prompt, env)
+    assert result.returncode == 64
+    assert "not a supported headless runtime" in result.stderr
+    assert not Path(descriptor["session_dir"], "launch-attempt.json").exists()
+
+    # A supported runtime name whose command the config does not template.
+    descriptor_path.write_bytes(launcher._canonical_json(descriptor))
+    authority["descriptor_sha256"] = hashlib.sha256(
+        launcher._canonical_json(descriptor)
+    ).hexdigest()
+    authority_path.write_bytes(launcher._canonical_json(authority))
+    config_path = Path(descriptor["repo_root"]) / "config" / "dev-model.yaml"
+    config_path.write_text(
+        "".join(
+            line
+            for line in config_path.read_text(encoding="utf-8").splitlines(keepends=True)
+            if not line.startswith("  claude_headless_command:")
+        ),
+        encoding="utf-8",
+    )
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+    assert result.returncode == 64
+    assert "parallel.claude_headless_command must be a non-empty argv sequence" in result.stderr
+    assert not Path(descriptor["session_dir"], "launch-attempt.json").exists()
+
+
+def test_claude_final_text_is_not_accepted_before_the_observation_is_bound(
+    tmp_path: Path,
+) -> None:
+    _repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", corrupt_receipt=True
+    )
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+    assert result.returncode != 0
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "failed"
+    assert "observed receipt changed" in receipt["terminal"]["error"]
+
+
+def test_claude_descriptor_is_one_shot_after_a_successful_launch(tmp_path: Path) -> None:
+    _repo, engine_dir, _sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude"
+    )
+    first = _run_launcher(engine_dir, descriptor, prompt, env)
+    second = _run_launcher(engine_dir, descriptor, prompt, env)
+    assert first.returncode == 0, first.stderr
+    assert second.returncode != 0
+    assert "already has a launch attempt" in second.stderr
+
+
+def test_request_binding_carries_runtime_and_transports() -> None:
+    launcher = _load_launcher()
+    codex = launcher.RuntimeProfile(
+        "codex",
+        ["/bin/codex", "exec"],
+        {"worktree": "cd-flag", "prompt": "stdin-dash", "final_text": "last-message-file"},
+    )
+    claude = launcher.RuntimeProfile(
+        "claude",
+        ["/bin/claude", "-p"],
+        {"worktree": "process-cwd", "prompt": "stdin", "final_text": "json-stdout"},
+    )
+    bind = lambda profile: launcher._request_binding(  # noqa: E731
+        b"descriptor",
+        task_sha256="t",
+        combined_prompt_sha256="c",
+        profile=profile,
+        process_nonce="n",
+    )
+    assert bind(codex) != bind(claude)
+    assert bind(codex)["transports"] is not codex.transports
+    assert codex.child_argv("/wt", "/final") == [
+        "/bin/codex",
+        "exec",
+        "--cd",
+        "/wt",
+        "--output-last-message",
+        "/final",
+        "-",
+    ]
+    assert claude.child_argv("/wt", "/final") == ["/bin/claude", "-p", "--output-format", "json"]
+
+
+@pytest.mark.parametrize(
+    ("transport", "payload", "fragment"),
+    (
+        ("last-message-file", b"", "final-message evidence"),
+        ("json-stdout", b"", "no JSON result"),
+        ("json-stdout", b"\xff\xfe", "not UTF-8"),
+        ("json-stdout", b'{"type": "result"', "not one complete JSON object"),
+        ("json-stdout", b'{"type":"result","subtype":"success","is_error":false,"result":"a"}\n{}', "more than one"),
+        ("json-stdout", b'[{"type":"result"}]', "not an object"),
+        ("json-stdout", b'{"type":"assistant","result":"a"}', "not a result object"),
+        ("json-stdout", b'{"type":"result","subtype":"success","is_error":true,"result":"a"}', "unsuccessful"),
+        ("json-stdout", b'{"type":"result","subtype":"error_max_turns","is_error":false,"result":"a"}', "unsuccessful"),
+        ("json-stdout", b'{"type":"result","subtype":"success","is_error":false,"result":""}', "missing or empty"),
+        ("json-stdout", b'{"type":"result","subtype":"success","is_error":false,"result":7}', "missing or empty"),
+        ("json-stdout", b'{"type":"result","subtype":"success","is_error":false}', "missing or empty"),
+    ),
+)
+def test_final_text_extraction_refuses_every_non_result_shape(
+    transport: str, payload: bytes, fragment: str
+) -> None:
+    launcher = _load_launcher()
+    with pytest.raises(launcher.LaunchError, match=fragment):
+        launcher._extract_final_text(transport, payload)
+
+
+def test_final_text_extraction_accepts_one_result_object() -> None:
+    launcher = _load_launcher()
+    good = b'\n {"type":"result","subtype":"success","is_error":false,"result":"done \xc3\xa9"} \n'
+    assert launcher._extract_final_text("json-stdout", good) == "done é".encode()
+    assert launcher._extract_final_text("last-message-file", b"raw text") == b"raw text"
+
+
+def test_json_stdout_redirect_requires_the_reserved_empty_file(tmp_path: Path) -> None:
+    launcher = _load_launcher()
+    occupied = tmp_path / "occupied.txt"
+    occupied.write_text("stale", encoding="utf-8")
+    link_target = tmp_path / "target.txt"
+    link_target.touch()
+    link = tmp_path / "link.txt"
+    link.symlink_to(link_target)
+    missing = tmp_path / "missing.txt"
+    for path, fragment in (
+        (occupied, "not an empty regular file"),
+        (link, "cannot open"),
+        (missing, "cannot open"),
+    ):
+        with pytest.raises(launcher.LaunchError, match=fragment):
+            launcher._redirect_stdout_to_reserved_final(path)
+    # The redirect itself is exercised in a child so pytest's stdout stays intact.
+    reserved = tmp_path / "reserved.txt"
+    reserved.touch()
+    probe = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import importlib.util, sys, os\n"
+            f"spec = importlib.util.spec_from_file_location('l', {str(ENGINE_DIR / 'launch_lane.py')!r})\n"
+            "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n"
+            "from pathlib import Path\n"
+            f"m._redirect_stdout_to_reserved_final(Path({str(reserved)!r}))\n"
+            "os.write(1, b'RUNTIME-OUTPUT')\n",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    assert probe.stdout == b""
+    assert reserved.read_bytes() == b"RUNTIME-OUTPUT"

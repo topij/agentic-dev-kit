@@ -56,10 +56,27 @@ runtime:
     codex: codex
 
 parallel:
-  # The supported unattended Codex path is a kit-owned wrapper around the stable
-  # non-interactive CLI. Keep this an argv sequence: the wrapper never invokes a
-  # shell, so a launcher value cannot smuggle shell syntax into the child.
+  # The supported unattended path for either runtime is one kit-owned wrapper
+  # (scripts/launch_lane.py) around that runtime's stable non-interactive CLI.
+  # Keep each command an argv sequence: the wrapper never invokes a shell, so a
+  # launcher value cannot smuggle shell syntax into the child. A user-local
+  # install (~/.local/bin, for example) is outside the wrapper's trusted lookup
+  # path by design; name the absolute binary here instead.
+  #
+  # The three *_transport keys per runtime are DECLARATIONS the wrapper checks,
+  # not free choices: it owns the vocabulary and refuses a transport the named
+  # runtime does not implement. Codex: `--cd <worktree>`, prompt on stdin behind a
+  # `-` argument, final text via `--output-last-message`. Claude: cwd from the
+  # process, prompt on stdin, one JSON result object on stdout from
+  # `--output-format json`.
   codex_headless_command: [codex, exec]
+  codex_worktree_transport: cd-flag
+  codex_prompt_transport: stdin-dash
+  codex_final_text_transport: last-message-file
+  claude_headless_command: [claude, -p]
+  claude_worktree_transport: process-cwd
+  claude_prompt_transport: stdin
+  claude_final_text_transport: json-stdout
   # A descriptor is a one-shot launch authority, not standing permission. The
   # issuer stamps this lifetime into the descriptor and the wrapper rejects an
   # expired value before starting a child.

@@ -2,8 +2,8 @@
 paths:
   - "scripts/dev_session.sh"
   - "scripts/devkit/dev_session.sh"
-  - "scripts/launch_codex_lane.py"
-  - "scripts/devkit/launch_codex_lane.py"
+  - "scripts/launch_lane.py"
+  - "scripts/devkit/launch_lane.py"
   # pr_watch.py COMPUTES the merge gate (`mergeable` / the legacy `done` alias)
   # that dev_session.sh merely re-checks. It was left out while `done` looked
   # like a watch-loop verdict — but a change here can authorize a merge on an

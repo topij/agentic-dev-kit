@@ -1026,6 +1026,13 @@ migrate_parallel_schema() {
   if ! grep -q '^parallel:' "$CONFIG_FILE"; then
     insert_before_section "doc_budgets:" 'parallel:
   codex_headless_command: [codex, exec]
+  codex_worktree_transport: cd-flag
+  codex_prompt_transport: stdin-dash
+  codex_final_text_transport: last-message-file
+  claude_headless_command: [claude, -p]
+  claude_worktree_transport: process-cwd
+  claude_prompt_transport: stdin
+  claude_final_text_transport: json-stdout
   descriptor_ttl_seconds: 900
   observation_timeout_seconds: 30
   termination_grace_seconds: 5
@@ -1033,6 +1040,13 @@ migrate_parallel_schema() {
     echo "added parallel launcher config to config/dev-model.yaml"
   fi
   ensure_parallel_key codex_headless_command '  codex_headless_command: [codex, exec]'
+  ensure_parallel_key codex_worktree_transport '  codex_worktree_transport: cd-flag'
+  ensure_parallel_key codex_prompt_transport '  codex_prompt_transport: stdin-dash'
+  ensure_parallel_key codex_final_text_transport '  codex_final_text_transport: last-message-file'
+  ensure_parallel_key claude_headless_command '  claude_headless_command: [claude, -p]'
+  ensure_parallel_key claude_worktree_transport '  claude_worktree_transport: process-cwd'
+  ensure_parallel_key claude_prompt_transport '  claude_prompt_transport: stdin'
+  ensure_parallel_key claude_final_text_transport '  claude_final_text_transport: json-stdout'
   ensure_parallel_key descriptor_ttl_seconds '  descriptor_ttl_seconds: 900'
   ensure_parallel_key observation_timeout_seconds '  observation_timeout_seconds: 30'
   ensure_parallel_key termination_grace_seconds '  termination_grace_seconds: 5'

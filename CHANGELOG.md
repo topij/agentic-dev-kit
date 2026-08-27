@@ -42,6 +42,40 @@ starts.
 
 ---
 
+## #611 — 2026-08-27
+
+- **BREAKING (engine CLI surface) — the unattended lane launcher is
+  `scripts/launch_lane.py` and serves Codex and Claude; `scripts/launch_codex_lane.py`
+  is gone with no alias.** **Refresh `scripts/launch_lane.py`,
+  `scripts/tests/test_lane_launcher.py`, `config/dev-model.yaml`, `init.sh`, and the
+  shared parallel workflows `docs/agentic-dev-kit/workflows/parallel.md` and
+  `docs/agentic-dev-kit/workflows/parallel-headless.md` together; delete
+  `scripts/launch_codex_lane.py` and `scripts/tests/test_codex_lane_launcher.py`
+  (and their rendered `scripts/devkit/` paths); replace `launch_codex_lane.py` with
+  `launch_lane.py` in the adopter-owned `AGENTS.md` safety-critical ground rule and in
+  `.claude/rules/safety-critical-changes.md`'s path list — `./init.sh --no-clobber`
+  preserves those existing bindings and does not rename the route for you. Issue
+  descriptors with `new --headless --runtime <codex|claude>`; the wrapper's CLI
+  (`--descriptor`, `--prompt-file`) and its exit codes are unchanged.**
+- **ADDED (config keys) — `parallel` now owns, per runtime, `<runtime>_headless_command`
+  plus the declared `<runtime>_worktree_transport`, `<runtime>_prompt_transport`, and
+  `<runtime>_final_text_transport`; the shipped Claude command is `[claude, -p]`.**
+  **Refresh `init.sh` and run `./init.sh --no-clobber`; the additive migration installs
+  the missing flat keys without replacing adopter values. Keep each transport at the
+  value the runtime implements (Codex `cd-flag` / `stdin-dash` / `last-message-file`,
+  Claude `process-cwd` / `stdin` / `json-stdout`) — the wrapper refuses any other. A
+  user-local `claude` (for example `~/.local/bin/claude`) is outside the trusted
+  executable path: set `claude_headless_command` to the absolute binary.**
+- **CHANGED (report shape) — the launch attempt and receipt `request` object gains
+  `runtime` and `transports`, and the receipt `terminal` object gains
+  `final_text_transport` and `final_text_sha256`.** **`final_message_sha256` keeps its
+  meaning (digest of the reserved final-message evidence file). For Codex the two
+  digests are equal; for Claude `final_text_sha256` digests the `result` string
+  extracted from the JSON envelope. Read `final_text_sha256` when you want the lane's
+  final text; a `failed` receipt carries `null` there.**
+
+---
+
 ## #609 — 2026-08-26
 
 - **ADDED (engine CLI surface) — unattended Codex lanes now use a one-shot,

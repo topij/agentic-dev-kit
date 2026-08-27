@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
-"""Launch one Codex headless lane from a one-shot dev-session descriptor.
+"""Launch one headless lane (Codex or Claude) from a one-shot dev-session descriptor.
 
 The public path validates the durable descriptor, scrubs inherited lane and
 repository identity, starts a child observer in the intended worktree, and does
 not acknowledge a successful launch until the child's independent observation is
 durably bound to the descriptor and process.  The observer then ``exec``s the
-config-selected Codex command without changing PID.
+runtime's config-selected headless command without changing PID.
+
+The descriptor's ``runtime`` selects a config-owned template under ``parallel``:
+``<runtime>_headless_command`` plus three declared transports.  The engine owns the
+transport vocabulary and the argv each one produces; a declaration the runtime does
+not implement refuses before launch, so config cannot make Claude read its prompt
+from an argument or make Codex report through stdout.
 """
 
 from __future__ import annotations
@@ -51,6 +57,26 @@ REPOSITORY_OVERRIDE_KEYS = frozenset(
     }
 )
 PROCESS_LINEAGE_ENV = "ADK_LAUNCH_PROCESS_NONCE"
+# The runtimes this bounded mechanism supports, and the transports each one
+# implements. Config DECLARES a transport per runtime (`parallel.<runtime>_*`); the
+# engine validates the declaration against this table and assembles the argv. The
+# Codex triple reproduces the #609 argv byte for byte; the Claude triple is what
+# `claude -p` documents: cwd from the process, prompt on stdin, one JSON result
+# object on stdout under `--output-format json`.
+SUPPORTED_RUNTIMES = ("codex", "claude")
+RUNTIME_TRANSPORTS: dict[str, dict[str, tuple[str, ...]]] = {
+    "codex": {
+        "worktree": ("cd-flag",),
+        "prompt": ("stdin-dash",),
+        "final_text": ("last-message-file",),
+    },
+    "claude": {
+        "worktree": ("process-cwd",),
+        "prompt": ("stdin",),
+        "final_text": ("json-stdout",),
+    },
+}
+TRANSPORT_KINDS = ("worktree", "prompt", "final_text")
 SAFE_EXECUTABLE_PATH = os.pathsep.join(
     (*os.defpath.split(os.pathsep), "/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin")
 )
@@ -65,6 +91,30 @@ def _is_repository_override_key(key: str) -> bool:
 
 class LaunchError(RuntimeError):
     """A fail-closed launcher refusal."""
+
+
+class RuntimeProfile:
+    """One runtime's config-owned headless template, validated and resolved."""
+
+    def __init__(
+        self, runtime: str, command: list[str], transports: dict[str, str]
+    ) -> None:
+        self.runtime = runtime
+        self.command = command
+        self.transports = transports
+
+    def child_argv(self, worktree: str, final_message: str) -> list[str]:
+        # Fixed order: command prefix, worktree, final text, prompt. For Codex this
+        # is exactly the #609 argv; for Claude it is `claude -p --output-format json`.
+        worktree_args = (
+            ["--cd", worktree] if self.transports["worktree"] == "cd-flag" else []
+        )
+        if self.transports["final_text"] == "last-message-file":
+            final_args = ["--output-last-message", final_message]
+        else:
+            final_args = ["--output-format", "json"]
+        prompt_args = ["-"] if self.transports["prompt"] == "stdin-dash" else []
+        return [*self.command, *worktree_args, *final_args, *prompt_args]
 
 
 class _ForkedChild:
@@ -234,8 +284,8 @@ def _load_descriptor(path: Path, *, now: dt.datetime | None = None) -> tuple[dic
         raise LaunchError("descriptor env must contain exactly the lane identity keys")
     if not all(isinstance(key, str) and isinstance(value, str) for key, value in env.items()):
         raise LaunchError("descriptor env keys and values must be strings")
-    if descriptor.get("runtime") != "codex":
-        raise LaunchError("descriptor runtime is not codex")
+    if descriptor.get("runtime") not in SUPPORTED_RUNTIMES:
+        raise LaunchError("descriptor runtime is not a supported headless runtime")
     expected_env = {
         "DEVKIT_STATE_ROOT": descriptor.get("state_root"),
         "DEVKIT_ROOT": descriptor.get("repo_root"),
@@ -260,17 +310,31 @@ def _load_descriptor(path: Path, *, now: dt.datetime | None = None) -> tuple[dic
     return descriptor, raw
 
 
-def _config_for_launcher() -> tuple[list[str], int, int, int, Path]:
+def _config_for_launcher(runtime: str) -> tuple[RuntimeProfile, int, int, int, Path]:
+    if runtime not in SUPPORTED_RUNTIMES:
+        raise LaunchError("descriptor runtime is not a supported headless runtime")
     root = repo_root(SCRIPT_DIR)
     config = load_config(root / "config" / "dev-model.yaml")
-    command = get(config, "parallel.codex_headless_command", None)
+    command = get(config, f"parallel.{runtime}_headless_command", None)
     timeout = get(config, "parallel.observation_timeout_seconds", None)
     lifetime = get(config, "parallel.descriptor_ttl_seconds", None)
     termination_grace = get(config, "parallel.termination_grace_seconds", None)
     if not isinstance(command, list) or not command or not all(
         isinstance(item, str) and item for item in command
     ):
-        raise LaunchError("config parallel.codex_headless_command must be a non-empty argv sequence")
+        raise LaunchError(
+            f"config parallel.{runtime}_headless_command must be a non-empty argv sequence"
+        )
+    transports: dict[str, str] = {}
+    for kind in TRANSPORT_KINDS:
+        key = f"parallel.{runtime}_{kind}_transport"
+        declared = get(config, key, None)
+        if not isinstance(declared, str) or declared not in RUNTIME_TRANSPORTS[runtime][kind]:
+            raise LaunchError(
+                f"config {key} must declare one of "
+                f"{', '.join(RUNTIME_TRANSPORTS[runtime][kind])}"
+            )
+        transports[kind] = declared
     if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout <= 0:
         raise LaunchError("config parallel.observation_timeout_seconds must be positive")
     if not isinstance(lifetime, int) or isinstance(lifetime, bool) or lifetime <= 0:
@@ -288,9 +352,11 @@ def _config_for_launcher() -> tuple[list[str], int, int, int, Path]:
         else shutil.which(executable, path=SAFE_EXECUTABLE_PATH)
     )
     if not resolved_executable or not os.access(resolved_executable, os.X_OK):
-        raise LaunchError("configured Codex launcher is unavailable on the trusted path")
+        raise LaunchError(
+            f"configured {runtime} launcher is unavailable on the trusted path"
+        )
     return (
-        [resolved_executable, *command[1:]],
+        RuntimeProfile(runtime, [resolved_executable, *command[1:]], transports),
         timeout,
         lifetime,
         termination_grace,
@@ -552,11 +618,82 @@ def _read_pipe_capability(descriptor: int) -> bytes:
     return capability
 
 
+def _request_binding(
+    descriptor_raw: bytes,
+    *,
+    task_sha256: str,
+    combined_prompt_sha256: str,
+    profile: RuntimeProfile,
+    process_nonce: str,
+) -> dict[str, Any]:
+    # Computed identically by parent and child; the child refuses when its own
+    # config resolves to a different runtime, command, or transport set.
+    return {
+        "descriptor_sha256": _sha256(descriptor_raw),
+        "task_sha256": task_sha256,
+        "combined_prompt_sha256": combined_prompt_sha256,
+        "configured_command": list(profile.command),
+        "runtime": profile.runtime,
+        "transports": dict(profile.transports),
+        "process_nonce_sha256": _sha256(process_nonce.encode()),
+    }
+
+
+def _extract_final_text(transport: str, final_bytes: bytes) -> bytes:
+    """Return the runtime's final text from the reserved evidence file, or refuse."""
+    if transport == "last-message-file":
+        if not final_bytes:
+            raise LaunchError("child returned success without final-message evidence")
+        return final_bytes
+    if not final_bytes:
+        raise LaunchError("runtime produced no JSON result on stdout")
+    try:
+        text = final_bytes.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise LaunchError("runtime stdout is not UTF-8 JSON") from exc
+    stripped = text.strip()
+    try:
+        value, end = json.JSONDecoder().raw_decode(stripped)
+    except json.JSONDecodeError as exc:
+        raise LaunchError(
+            f"runtime stdout is not one complete JSON object: {exc.msg}"
+        ) from exc
+    if stripped[end:].strip():
+        raise LaunchError("runtime stdout holds more than one JSON value")
+    if not isinstance(value, dict):
+        raise LaunchError("runtime JSON result is not an object")
+    if value.get("type") != "result":
+        raise LaunchError("runtime JSON is not a result object")
+    if value.get("is_error") is not False or value.get("subtype") != "success":
+        raise LaunchError("runtime reported an unsuccessful result")
+    result = value.get("result")
+    if not isinstance(result, str) or not result:
+        raise LaunchError("runtime result text is missing or empty")
+    return result.encode("utf-8")
+
+
+def _redirect_stdout_to_reserved_final(final_message: Path) -> None:
+    """Point fd 1 at the parent-reserved, still-empty final-message file."""
+    flags = os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(final_message, flags)
+    except OSError as exc:
+        raise LaunchError(f"cannot open reserved final-message evidence: {exc}") from exc
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_size != 0 or info.st_nlink != 1:
+            raise LaunchError("reserved final-message evidence is not an empty regular file")
+        sys.stdout.flush()
+        os.dup2(descriptor, 1)
+    finally:
+        os.close(descriptor)
+
+
 def _validate_child_authority(
     arguments: argparse.Namespace,
     descriptor: dict[str, Any],
     descriptor_raw: bytes,
-    command: list[str],
+    profile: RuntimeProfile,
 ) -> str:
     if arguments.descriptor_id != descriptor["descriptor_id"]:
         raise LaunchError("child descriptor identity disagrees with the descriptor")
@@ -583,13 +720,13 @@ def _validate_child_authority(
         raise LaunchError("launch attempt is not canonical")
     capability = _read_pipe_capability(arguments.authority_fd)
     process_nonce = capability.hex()
-    expected_request = {
-        "descriptor_sha256": _sha256(descriptor_raw),
-        "task_sha256": arguments.task_sha256,
-        "combined_prompt_sha256": arguments.combined_prompt_sha256,
-        "configured_command": list(command),
-        "process_nonce_sha256": _sha256(process_nonce.encode()),
-    }
+    expected_request = _request_binding(
+        descriptor_raw,
+        task_sha256=arguments.task_sha256,
+        combined_prompt_sha256=arguments.combined_prompt_sha256,
+        profile=profile,
+        process_nonce=process_nonce,
+    )
     if (
         attempt.get("status") != "starting"
         or attempt.get("descriptor_id") != descriptor["descriptor_id"]
@@ -613,13 +750,13 @@ def _child_main(arguments: argparse.Namespace) -> int:
         receipt_path = Path(descriptor["session_dir"]) / (
             f"launch-receipt-{descriptor['descriptor_id']}.json"
         )
-        command, _timeout, _lifetime, _termination_grace, config_root = (
-            _config_for_launcher()
+        profile, _timeout, _lifetime, _termination_grace, config_root = (
+            _config_for_launcher(descriptor["runtime"])
         )
         if Path(descriptor["repo_root"]).resolve() != config_root:
             raise LaunchError("descriptor repository is foreign to the launcher configuration")
         _validate_descriptor_contract(descriptor, config_root)
-        process_nonce = _validate_child_authority(arguments, descriptor, raw, command)
+        process_nonce = _validate_child_authority(arguments, descriptor, raw, profile)
         expected = _expected_identity(descriptor)
         observed = _observed_identity(process_nonce)
         _validate_observation(expected, observed)
@@ -627,13 +764,13 @@ def _child_main(arguments: argparse.Namespace) -> int:
             "schema_version": SCHEMA_VERSION,
             "status": "observed",
             "descriptor_id": descriptor["descriptor_id"],
-            "request": {
-                "descriptor_sha256": _sha256(raw),
-                "task_sha256": arguments.task_sha256,
-                "combined_prompt_sha256": arguments.combined_prompt_sha256,
-                "configured_command": list(command),
-                "process_nonce_sha256": _sha256(process_nonce.encode()),
-            },
+            "request": _request_binding(
+                raw,
+                task_sha256=arguments.task_sha256,
+                combined_prompt_sha256=arguments.combined_prompt_sha256,
+                profile=profile,
+                process_nonce=process_nonce,
+            ),
             "expected": dict(expected),
             "observed": dict(observed),
             "observed_at": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -645,8 +782,12 @@ def _child_main(arguments: argparse.Namespace) -> int:
             raise LaunchError("parent did not acknowledge the durable observation")
         os.close(arguments.ack_fd)
         os.environ[PROCESS_LINEAGE_ENV] = process_nonce
-        final_message = str(Path(arguments.final_message))
-        argv = [*command, "--cd", expected["worktree"], "--output-last-message", final_message, "-"]
+        final_message = Path(arguments.final_message)
+        argv = profile.child_argv(expected["worktree"], str(final_message))
+        if profile.transports["final_text"] == "json-stdout":
+            # Immediately before exec, so nothing the wrapper prints can precede
+            # the runtime's own JSON on the evidence file.
+            _redirect_stdout_to_reserved_final(final_message)
         _close_nonstandard_descriptors()
         os.execvpe(argv[0], argv, os.environ)
     except LaunchError as exc:
@@ -660,7 +801,7 @@ def _child_main(arguments: argparse.Namespace) -> int:
             _write_atomic(receipt_path, rejected)
         with contextlib.suppress(OSError):
             os.write(arguments.ready_fd, b"REJECTED\n")
-        print(f"[codex-lane-launcher] child refused: {exc}", file=sys.stderr)
+        print(f"[lane-launcher] child refused: {exc}", file=sys.stderr)
         return 70
 
 
@@ -708,7 +849,7 @@ def _fork_observer_child(
             os.close(prompt_read)
             returncode = _child_main(arguments)
         except BaseException as exc:  # child must terminalize without re-entering parent
-            print(f"[codex-lane-launcher] forked child failed: {exc}", file=sys.stderr)
+            print(f"[lane-launcher] forked child failed: {exc}", file=sys.stderr)
         finally:
             with contextlib.suppress(Exception):
                 sys.stdout.flush()
@@ -762,6 +903,8 @@ def _terminal_receipt(
     caught_signal: int | None,
     final_message: Path,
     error: str | None,
+    final_text_transport: str,
+    final_text: bytes | None,
     required_observed_sha256: str | None = None,
 ) -> None:
     try:
@@ -801,6 +944,8 @@ def _terminal_receipt(
         "error": error,
         "final_message_path": str(final_message),
         "final_message_sha256": _sha256(final_bytes) if final_bytes else None,
+        "final_text_transport": final_text_transport,
+        "final_text_sha256": _sha256(final_text) if final_text else None,
         "finished_at": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
     }
     _write_atomic(receipt_path, receipt)
@@ -913,12 +1058,13 @@ def _wait_for_process_or_signal(
 def launch(descriptor_path: Path, prompt_path: Path) -> int:
     descriptor, descriptor_raw = _load_descriptor(descriptor_path)
     (
-        command,
+        profile,
         observation_timeout,
         configured_lifetime,
         termination_grace,
         config_root,
-    ) = _config_for_launcher()
+    ) = _config_for_launcher(descriptor["runtime"])
+    final_text_transport = profile.transports["final_text"]
     if Path(descriptor["repo_root"]).resolve() != config_root:
         raise LaunchError("descriptor repository is foreign to the launcher configuration")
     _validate_descriptor_contract(descriptor, config_root)
@@ -939,13 +1085,13 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
     attempt_path = session_dir / "launch-attempt.json"
     receipt_path = session_dir / f"launch-receipt-{descriptor_id}.json"
     final_message = session_dir / f"launch-final-{descriptor_id}.txt"
-    request = {
-        "descriptor_sha256": _sha256(descriptor_raw),
-        "task_sha256": _sha256(task),
-        "combined_prompt_sha256": _sha256(combined),
-        "configured_command": list(command),
-        "process_nonce_sha256": _sha256(process_nonce.encode()),
-    }
+    request = _request_binding(
+        descriptor_raw,
+        task_sha256=_sha256(task),
+        combined_prompt_sha256=_sha256(combined),
+        profile=profile,
+        process_nonce=process_nonce,
+    )
     attempt = {
         "schema_version": SCHEMA_VERSION,
         "status": "starting",
@@ -972,6 +1118,8 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
             caught_signal=None,
             final_message=final_message,
             error=f"cannot reserve empty final-message evidence: {exc}",
+            final_text_transport=final_text_transport,
+            final_text=None,
         )
         return 70
 
@@ -1073,6 +1221,12 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
         final_bytes = b""
         if final_message.is_file() and not final_message.is_symlink():
             final_bytes = _read_stable_regular_file(final_message)
+        final_text: bytes | None = None
+        final_text_error: str | None = None
+        try:
+            final_text = _extract_final_text(final_text_transport, final_bytes)
+        except LaunchError as exc:
+            final_text_error = str(exc)
         if caught:
             _terminal_receipt(
                 receipt_path,
@@ -1082,14 +1236,16 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
                 caught_signal=caught[0],
                 final_message=final_message,
                 error="launcher interrupted",
+                final_text_transport=final_text_transport,
+                final_text=final_text,
             )
             return 128 + caught[0]
-        if error is not None or returncode != 0 or not final_bytes:
+        if error is not None or returncode != 0 or final_text_error is not None:
             if error is None:
                 error = (
                     f"child exited with status {returncode}"
                     if returncode != 0
-                    else "child returned success without final-message evidence"
+                    else final_text_error
                 )
             _terminal_receipt(
                 receipt_path,
@@ -1099,6 +1255,8 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
                 caught_signal=None,
                 final_message=final_message,
                 error=error,
+                final_text_transport=final_text_transport,
+                final_text=None,
             )
             return 70
         if bound_receipt_sha256 is None:
@@ -1111,9 +1269,11 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
             caught_signal=None,
             final_message=final_message,
             error=None,
+            final_text_transport=final_text_transport,
+            final_text=final_text,
             required_observed_sha256=bound_receipt_sha256,
         )
-        print(f"[codex-lane-launcher] receipt: {receipt_path}", file=sys.stderr)
+        print(f"[lane-launcher] receipt: {receipt_path}", file=sys.stderr)
         return 0
     except (LaunchError, OSError) as exc:
         returncode: int | None = process.poll() if process is not None else None
@@ -1134,6 +1294,8 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
             caught_signal=caught[0] if caught else None,
             final_message=final_message,
             error="launcher interrupted" if caught else str(exc),
+            final_text_transport=final_text_transport,
+            final_text=None,
         )
         return 128 + caught[0] if caught else 70
     finally:
@@ -1169,7 +1331,7 @@ def main(argv: list[str] | None = None) -> int:
             raise LaunchError("--descriptor and --prompt-file are required")
         return launch(Path(arguments.descriptor), Path(arguments.prompt_file))
     except LaunchError as exc:
-        print(f"[codex-lane-launcher] error: {exc}", file=sys.stderr)
+        print(f"[lane-launcher] error: {exc}", file=sys.stderr)
         return 64
 
 
