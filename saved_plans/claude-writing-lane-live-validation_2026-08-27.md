@@ -603,3 +603,12 @@ denial read-back, and the receipt.
   more.
 - **Model and effort calibration** (`#605`) remain outside this slice; the envelopes
   named the models the client selected without any lane-side choice.
+- **The profile shipped at merge differs from the last observed profile
+  (`e3370add…`) by one narrowing**: panel round 11 observed, against a throwaway
+  remote, that the broad `Bash(git remote:*)` entry let a lane run
+  `git remote set-url origin <elsewhere>` and push there through the push allow, so
+  the shipped entry is read-only (`git remote get-url`, `git remote -v`). No lane in
+  this record ran a `git remote` command, so the observations above stand for the
+  narrowed profile as they do for the observed one; the digest of the shipped file is
+  the one `test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_validates`
+  validates at each revision.

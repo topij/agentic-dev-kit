@@ -135,7 +135,10 @@ PATTERN_HEAD_TERMINATORS = frozenset("*?:")
 # writes live. Today this guard is a backstop behind that resolution, not the only
 # boundary.
 EDIT_TOOLS = frozenset({"Edit", "Write", "MultiEdit", "NotebookEdit"})
-OUTSIDE_WORKTREE_PATTERN_LEADS = ("//", "~")
+# `//` filesystem-absolute, `~` home, and a backslash lead (`\\server\\share`,
+# the UNC spelling of absolute on the platform that uses it; a literal
+# character on this POSIX-only kit, refused rather than left unscoped).
+OUTSIDE_WORKTREE_PATTERN_LEADS = ("//", "~", "\\")
 
 
 def _edit_allow_escapes_the_worktree(entry: str) -> bool:
@@ -1181,7 +1184,9 @@ def _terminal_receipt(
         "final_text_transport": final_text_transport,
         "final_text_sha256": _sha256(final_text) if final_text else None,
         # A list is the runtime's own denial record (empty when nothing was
-        # refused); None means this transport cannot observe the policy outcome.
+        # refused); None means the outcome was not observed — the transport
+        # cannot expose it (`last-message-file`), or the result could not be
+        # extracted at all. Never spelled `[]` in either case.
         "permission_denials": permission_denials,
         "finished_at": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
     }

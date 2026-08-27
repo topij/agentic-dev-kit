@@ -16724,6 +16724,7 @@ def test_parallel_adapters_carry_no_approval_policy_and_the_shared_workflow_does
         "accept-edits",
     ):
         assert required in shared, required
-    assert "--dangerously-skip-permissions" not in shared.replace(
-        "`--dangerously-skip-permissions`", ""
-    ).replace("--dangerously-skip-permissions,", "")
+    # The shared workflow names the unrestricted flag only by the `--dangerously-*`
+    # family; a spelled-out flag is a directive it must not carry (a mutation that
+    # injects one fails this — panel rounds 6, 8, 11).
+    assert "--dangerously-skip-permissions" not in shared

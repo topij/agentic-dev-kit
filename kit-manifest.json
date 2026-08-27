@@ -42,7 +42,7 @@
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
-      "sha256": "2bcebb91807ac899ba03682315e32e90a31204353da5ec9160e565a4cd2c9cfe"
+      "sha256": "7156edc133b73df0b71a761c3db922789be41b38592a7222ce315593cb2200c0"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
@@ -98,7 +98,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "154b55c162d65889308544921ff0dc51dad001c0e2e47a08b7eb06b95f32c310"
+      "sha256": "1d38e7171cff6b5fd1387cf8e82349324cd162de53337e54a3bfa5fddf8ef3ee"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -134,7 +134,7 @@
     },
     "scripts/launch_lane.py": {
       "role": "engine",
-      "sha256": "b0806437e41195a19d61997451cc678867ed10e1ca23d102b05f942c871a8714"
+      "sha256": "aa8d8efd52e5557846d613cbb08919c7feaaf667781c70b01d51dda9fc9634cd"
     },
     "scripts/lib/atomic_write.py": {
       "required_by": [
@@ -245,7 +245,7 @@
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
-      "sha256": "eb810fff5f9fb42baaf90a3da5f0dac5ab9bd30b578a0bf1134a003dbf3f87bf"
+      "sha256": "0823d53192a109e9bfc0f11e3463aa441e7892cbbf363da9f50bb1c1c01a77c4"
     },
     "scripts/tests/test_mutation_gate.py": {
       "role": "test",
@@ -257,7 +257,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "2f4c97a4d60fe149a4271d106c07921a262b1e1a5a5019ff68984fb5ad88ebba"
+      "sha256": "a369c42788a00d2167434336d3c28b9821e16bbb4c1c410e3ad8138d576b89fa"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

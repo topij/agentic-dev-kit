@@ -1889,6 +1889,8 @@ def test_whole_tool_bash_is_decided_by_structure_not_by_spelling(
         ("Edit(C:/Users/x/**)", True),
         ("Edit(C:\\Users\\x\\**)", True),
         ("Edit(c:/**)", True),
+        ("Edit(\\\\server\\share\\**)", True),
+        ("Write(\\x)", True),
         ("Edit(notes/C:/**)", False),
         ("Write(/notes/**)", False),
         ("Write(notes/..hidden/**)", False),
@@ -2252,6 +2254,11 @@ def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_valida
     # spellings do not match it; a hostile refspec after `origin` still does.
     assert "Bash(git push -u origin:*)" in shipped["permissions"]["allow"]
     assert "Bash(git push:*)" not in shipped["permissions"]["allow"]
+    # `git remote` is read-only: a broad `git remote:*` let a lane retarget
+    # `origin` and push elsewhere (panel round 11, live).
+    assert "Bash(git remote get-url:*)" in shipped["permissions"]["allow"]
+    assert "Bash(git remote -v:*)" in shipped["permissions"]["allow"]
+    assert "Bash(git remote:*)" not in shipped["permissions"]["allow"]
     assert "Bash(git push --force:*)" in shipped["permissions"]["deny"]
     assert "Bash(git push -f:*)" in shipped["permissions"]["deny"]
     assert "Bash(gh pr merge:*)" not in shipped["permissions"]["allow"]

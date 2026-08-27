@@ -49,8 +49,8 @@ starts.
   `accept-edits`, shipped `dont-ask`) and, for Claude, `claude_settings_profile`
   (shipped `config/claude-lane-settings.json`, which grants file editing through
   the worktree-relative `Edit(**)` — the rule that governs every file-editing tool at
-  Claude Code 2.1.247 — bounded `git`/`gh pr` prefixes, and `Bash(git push -u
-  origin:*)`, the push form the lane contract names). That rule bounds nothing after
+  Claude Code 2.1.247 — bounded `git`/`gh pr` prefixes with `git remote` read-only,
+  and `Bash(git push -u origin:*)`, the push form the lane contract names). That rule bounds nothing after
   `origin`: a `--force`/`-f` placed there, `:x`, and `+HEAD:x` all still match it, so
   the profile does not protect branch history — keep your protected branches
   protected on the forge; a lane-side push gate is follow-up work.** **Declare `accept-edits` only knowing that the runtime

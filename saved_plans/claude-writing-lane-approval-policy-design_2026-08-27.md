@@ -284,8 +284,10 @@ and must agree, but the runtime loads the path itself at `exec`, so a same-accou
 writer replacing the file inside the child's observe-to-exec window is not caught
 (panel round 2, adversarial lens, reported as structural and not reproduced).
 Passing the validated bytes inline instead of the path would close it and is a
-separate change. The shipped profile's push allow is `Bash(git push -u origin:*)` and its deny
-entries name the flag spellings of a force push. A rule cannot say "contains a
+separate change. The shipped profile's push allow is `Bash(git push -u origin:*)`, its `git remote`
+allow is read-only (`get-url`, `-v` — a broad `git remote:*` let the panel's lane
+retarget `origin` and push elsewhere through the push allow, round 11, live), and
+its deny entries name the flag spellings of a force push. A rule cannot say "contains a
 forced update" or bound the refspec: under the first draft's broad `Bash(git push:*)`
 the panel reproduced `git push origin +HEAD:main` (round 4), an unflagged ref
 deletion `git push origin :x`, and a bundled `git push -uf …` (round 8) passing
