@@ -185,6 +185,13 @@ _LEGACY_CODEX_BODIES = {
 """,
 }
 
+_LEGACY_CODEX_DESCRIPTIONS = {
+    "adopt": "Selectively adopt agentic-dev-kit into an existing repo — inspect what's already present, propose an install plan the operator confirms, then install only the missing pieces without clobbering existing files. Use when integrating the kit into a mature repository rather than a fresh one.",
+    "parallel": "Plan, launch, inspect, reconcile, and remove isolated development lanes backed by Git worktrees and per-lane state sandboxes. Use when work can be split into disjoint file footprints, when the user requests parallel development, or when inspecting existing agent lanes.",
+    "pr-watch": "Drive a pull request through the deterministic poll, fix, acknowledge, and re-poll loop until CI is green and review findings are resolved. Use after opening or updating a pull request, when asked to watch CI or reviews, or when a task must continue until its PR is green and clean.",
+    "upgrade": "Upgrade an already-adopted agentic-dev-kit installation to the current kit — migrate the config schema, refresh kit-owned engines, and diff anything that drifted. The counterpart to adopt (first install) and to re-running ./init.sh (config only). Use when pulling a kit update into a repo that already has the kit.",
+}
+
 
 @dataclass(frozen=True)
 class AdapterStatus:
@@ -247,15 +254,19 @@ def render_adapter(
     if not description.strip() or "\n" in description:
         raise ValueError("adapter description must be a non-empty single line")
 
+    rendered_description = description
+    if template_version == 1 and runtime == "codex" and slug in _LEGACY_CODEX_BODIES:
+        rendered_description = _LEGACY_CODEX_DESCRIPTIONS[slug]
+
     if runtime == "claude":
-        frontmatter = ["---", f"description: {_yaml_scalar(description)}"]
+        frontmatter = ["---", f"description: {_yaml_scalar(rendered_description)}"]
         if slug in _ARGUMENT_HINTS:
             frontmatter.append(f"argument-hint: {json.dumps(_ARGUMENT_HINTS[slug])}")
     else:
         frontmatter = [
             "---",
             f"name: {slug}",
-            f"description: {_yaml_scalar(description)}",
+            f"description: {_yaml_scalar(rendered_description)}",
         ]
     frontmatter.extend(["---", ""])
 

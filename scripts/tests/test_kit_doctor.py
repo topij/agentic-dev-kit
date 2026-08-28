@@ -21,6 +21,7 @@ diagnosable at all:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
@@ -39,6 +40,13 @@ sys.path.insert(0, str(ENGINE_DIR / "lib"))
 import kit_doctor  # noqa: E402
 import run_installed_tests  # noqa: E402
 import runtime_adapters  # noqa: E402
+
+LEGACY_CODEX_SHA256 = {
+    "adopt": "fee749f57477fc21ced59027209d48eac22fafc44b15307bfff209028897def9",
+    "parallel": "c5e34023e188965187727caa77939edbfe71cf762247e27afc0b7b6b9aa58882",
+    "pr-watch": "549e0d08f78c6ed5814f2504451d7a11c0a8bc593dc9420ccec9b07d784973f8",
+    "upgrade": "b667fea4d997d0e4126518501bb8deac276aba42fcf26e2f80a7ddd26f9fba54",
+}
 
 
 def _write(path: Path, text: str) -> None:
@@ -102,6 +110,14 @@ def test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned(tmp_p
         "codex",
         slug,
         description,
+        f"docs/agentic-dev-kit/workflows/{slug}.md",
+        template_version=1,
+    )
+    assert hashlib.sha256(legacy.encode()).hexdigest() == LEGACY_CODEX_SHA256[slug]
+    assert legacy == runtime_adapters.render_adapter(
+        "codex",
+        slug,
+        f"{description} Future wording.",
         f"docs/agentic-dev-kit/workflows/{slug}.md",
         template_version=1,
     )
@@ -186,17 +202,61 @@ def test_installed_test_targets_use_manifest_not_directory_contents(tmp_path):
     root = tmp_path / "adopter"
     declared = root / "scripts" / "devkit" / "tests" / "test_declared.py"
     undeclared = root / "scripts" / "devkit" / "tests" / "test_undeclared.py"
+    state_paths = (
+        root
+        / "scripts"
+        / "devkit"
+        / "lib"
+        / "state_paths"
+        / "tests"
+        / "test_state_paths.py"
+    )
     _write(declared, "def test_declared(): pass\n")
     _write(undeclared, "raise AssertionError('must not run')\n")
+    _write(state_paths, "def test_state_paths(): pass\n")
     manifest = root / "kit-manifest.json"
     manifest.write_text(
-        json.dumps({"files": {"scripts/tests/test_declared.py": {"role": "test"}}}),
+        json.dumps(
+            {
+                "files": {
+                    "scripts/tests/test_declared.py": {"role": "test"},
+                    "scripts/lib/state_paths/tests/test_state_paths.py": {
+                        "role": "test"
+                    },
+                }
+            }
+        ),
         encoding="utf-8",
     )
 
     assert run_installed_tests.installed_test_targets(
         root, manifest, "scripts/devkit"
-    ) == [declared]
+    ) == [state_paths, declared]
+
+
+def test_installed_test_main_invokes_pytest_and_propagates_failure(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "adopter"
+    runner = root / "scripts" / "devkit" / "run_installed_tests.py"
+    target = root / "scripts" / "devkit" / "tests" / "test_declared.py"
+    _write(runner, "# installed runner location\n")
+    _write(target, "def test_declared(): pass\n")
+    (root / "kit-manifest.json").write_text(
+        json.dumps({"files": {"scripts/tests/test_declared.py": {"role": "test"}}}),
+        encoding="utf-8",
+    )
+    calls = []
+
+    def fake_pytest_main(args):
+        calls.append(args)
+        return 7
+
+    monkeypatch.setattr(run_installed_tests, "__file__", str(runner))
+    monkeypatch.setattr(run_installed_tests.pytest, "main", fake_pytest_main)
+
+    assert run_installed_tests.main(["--root", str(root)]) == 7
+    assert calls == [[str(target), "-q"]]
 
 
 def test_installed_test_targets_skip_a_declined_missing_test_root(tmp_path):
@@ -222,7 +282,9 @@ def test_installed_test_targets_refuse_declared_symlink(tmp_path):
         run_installed_tests.installed_test_targets(tmp_path, manifest, "scripts")
 
 
-def test_adapter_report_refuses_a_source_adapter_the_renderer_does_not_own(tmp_path):
+def test_adapter_report_refuses_a_source_adapter_the_renderer_does_not_own(
+    tmp_path, capsys
+):
     source = tmp_path / "source"
     shutil.copytree(REPO_ROOT / ".claude", source / ".claude")
     shutil.copytree(REPO_ROOT / ".agents", source / ".agents")
@@ -235,6 +297,19 @@ def test_adapter_report_refuses_a_source_adapter_the_renderer_does_not_own(tmp_p
 
     with pytest.raises(ValueError, match="does not equal the current rendered form"):
         runtime_adapters.compare_adapters(source, REPO_ROOT)
+
+    code = kit_doctor.main(
+        [
+            "--root",
+            str(REPO_ROOT),
+            "--adapter-report",
+            "--adapter-source",
+            str(source),
+        ]
+    )
+
+    assert code == 2
+    assert "does not equal the current rendered form" in capsys.readouterr().err
 
 
 def test_adapter_report_cli_is_read_only_and_does_not_require_adopter_config(
