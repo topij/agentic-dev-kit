@@ -350,8 +350,6 @@ remains the comparison baseline.
 
 ______________________________________________________________________
 
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Active open items from them are folded into the "Open for next session" lists above.
 
