@@ -1,0 +1,264 @@
+# Pre-launch capture — 2026-08-28T11:49:59Z
+
+## origin/main (fetched and verified at session start)
+0934b6de0426a3ee41e661112d42743f123ddc3d
+
+## cockpit HEAD (branch feat/first-real-headless-lane, no commits yet)
+0934b6de0426a3ee41e661112d42743f123ddc3d
+
+## launcher and config byte-identity vs origin/main
+(empty diff above = unchanged)
+
+## profile digest
+4ace4389fa06db1ad6336ff68d63e18c5cab97ccc2b2000d4c061d4616d6df9f  config/claude-lane-settings.json
+
+## claude client on the trusted path
+lrwxr-xr-x@ 1 topi  admin  29 Aug 28 14:48 /opt/homebrew/bin/claude -> /Users/topi/.local/bin/claude
+2.1.250 (Claude Code)
+
+## cockpit worktrees before launch
+worktree /Users/topi/Coding/agentic-dev-kit
+HEAD 0934b6de0426a3ee41e661112d42743f123ddc3d
+branch refs/heads/feat/first-real-headless-lane
+
+worktree /private/tmp/adk-correctness-5274b8f.b0LizY/review
+HEAD 5274b8fdc0bfcedd8b1b6b645924f5ce68b1fcd6
+detached
+
+worktree /private/tmp/adk-final-neutral-adv-5274b8f.0seDjn/tree
+HEAD 5274b8fdc0bfcedd8b1b6b645924f5ce68b1fcd6
+detached
+
+worktree /private/tmp/adk-panel-adversarial-ba7862f.jAahdK
+HEAD ba7862ff88ee18ad1d102c360e12ed072f52ff40
+detached
+
+worktree /private/tmp/adk-review-adversarial-50c1451.luc07p
+HEAD 50c145138a66439f1fcd23e9847974f071b07bb4
+detached
+
+worktree /private/tmp/adk-review-bacff4d-adversarial.AE2ZSn/review
+HEAD bacff4d0fb591b9bb57ac3417f66ee747b281414
+detached
+
+worktree /private/tmp/adk-review-correctness-50c1451.YUHLom
+HEAD 50c145138a66439f1fcd23e9847974f071b07bb4
+detached
+
+worktree /private/tmp/adk-review-correctness-ba7862f.IALZ73
+HEAD ba7862ff88ee18ad1d102c360e12ed072f52ff40
+detached
+
+worktree /private/tmp/adk-review-final-adversarial-bb2f284.x2erT0
+HEAD bb2f2845aa508aa26b326e3a9d7480c97031dc49
+detached
+
+worktree /private/tmp/adk-review-final-correctness-bb2f284.qFOtLE
+HEAD bb2f2845aa508aa26b326e3a9d7480c97031dc49
+detached
+
+worktree /private/tmp/adk-review-fix-adversarial-8b32a89.66tmHJ
+HEAD 8b32a89aea3e1b7ca2cac2b268ed886d73cdb2e1
+detached
+
+worktree /private/tmp/adk-review-fix-correctness-8b32a89.cx3hNc
+HEAD 8b32a89aea3e1b7ca2cac2b268ed886d73cdb2e1
+detached
+
+worktree /private/tmp/adk-review-phase2-correctness-599e652.Qx1ANL
+HEAD 599e6529fc6a332b02f382e25e022ef29c34ae0c
+detached
+
+worktree /private/tmp/adk-review-release-adversarial-988efe0.EAWREW
+HEAD 988efe0ba013e82c9c8a1a61b1d1cb1df1f9c295
+detached
+
+worktree /private/tmp/adk-review-release-correctness-988efe0.0US3oQ
+HEAD 988efe0ba013e82c9c8a1a61b1d1cb1df1f9c295
+detached
+
+worktree /private/tmp/adk-review-ship-adversarial-6081407.nGXtu3
+HEAD 608140733c37fda87d3e02bc5c456745c7e3df99
+detached
+
+worktree /private/tmp/adk-review-ship-correctness-6081407.Nud2XI
+HEAD 608140733c37fda87d3e02bc5c456745c7e3df99
+detached
+
+worktree /private/tmp/adk-review-terminal-adversarial-43e2800.AEKKJv
+HEAD 43e280060fa02d69cfe8c454023bd195e99c91cc
+detached
+
+worktree /private/tmp/adk-review-terminal-correctness-43e2800.NOWZdQ
+HEAD 43e280060fa02d69cfe8c454023bd195e99c91cc
+detached
+
+worktree /private/tmp/adk-terminal-adversarial-599e652-r2.OPHZ2W/lens-adversarial-599e652
+HEAD 599e6529fc6a332b02f382e25e022ef29c34ae0c
+detached
+
+worktree /private/tmp/adk-terminal-adversarial-599e652.Fr3bM8/lens-adversarial-599e652
+HEAD 599e6529fc6a332b02f382e25e022ef29c34ae0c
+detached
+
+worktree /private/tmp/agentic-dev-kit-pr595-lens-adversarial-0daa662
+HEAD 0daa662275de0835b8a0f3b4d0e3e0da0f82aa1d
+detached
+
+worktree /private/tmp/agentic-dev-kit-pr595-lens-adversarial-1c920ef
+HEAD 1c920ef135e672b50d0aa57741cec50b7003d60b
+detached
+
+worktree /private/tmp/agentic-dev-kit-pr595-lens-adversarial-2a5b94c
+HEAD 2a5b94c041762805458de958dcaaf68dc3154050
+detached
+
+worktree /private/tmp/agentic-dev-kit-pr595-lens-adversarial-3ba5af3
+HEAD 3ba5af3481a6cc36925a91ba1ac7be121bd04ce0
+detached
+
+worktree /private/tmp/agentic-dev-kit-pr595-lens-adversarial-4ecf049
+HEAD 4ecf049f8429fb0e2ce98d3fd9974377d13a2f85
+detached
+
+worktree /private/tmp/agentic-dev-kit-pr595-lens-adversarial-7136e3f
+HEAD 7136e3f541a7168bd524fc46a0e9b8178b14db9c
+detached
+
+worktree /private/tmp/agentic-dev-kit-pr595-lens-adversarial-88f2a4d
+HEAD 88f2a4d4e94522f03a928f5259de53906931112b
+detached
+
+worktree /private/tmp/agentic-dev-kit-pr595-lens-adversarial-b7d00e8
+HEAD b7d00e87b8eeab43335099cd821640b73a9c0087
+detached
+
+worktree /private/tmp/agentic-dev-kit-pr595-lens-adversarial-c414dec
+HEAD c414dec9341901dfd29eacc0052ec57ff8f1d77a
+detached
+
+worktree /private/tmp/agentic-dev-kit-pr595-lens-adversarial-c52984f
+HEAD c52984fafef412fc41c3fbf5b548a175fe910841
+detached
+
+worktree /private/tmp/agentic-dev-kit-pr595-lens-adversarial-d4c97bb
+HEAD d4c97bb536b808cf6a88550ccdf9d16681f3734c
+detached
+
+worktree /private/tmp/agentic-dev-kit-pr595-lens-correctness-0daa662
+HEAD 0daa662275de0835b8a0f3b4d0e3e0da0f82aa1d
+detached
+
+worktree /private/tmp/agentic-dev-kit-pr595-lens-correctness-1c920ef
+HEAD 1c920ef135e672b50d0aa57741cec50b7003d60b
+detached
+
+worktree /private/tmp/agentic-dev-kit-pr595-lens-correctness-2a5b94c
+HEAD 2a5b94c041762805458de958dcaaf68dc3154050
+detached
+
+worktree /private/tmp/agentic-dev-kit-pr595-lens-correctness-3ba5af3
+HEAD 3ba5af3481a6cc36925a91ba1ac7be121bd04ce0
+detached
+
+worktree /private/tmp/agentic-dev-kit-pr595-lens-correctness-4ecf049
+HEAD 4ecf049f8429fb0e2ce98d3fd9974377d13a2f85
+detached
+
+worktree /private/tmp/agentic-dev-kit-pr595-lens-correctness-7136e3f
+HEAD 7136e3f541a7168bd524fc46a0e9b8178b14db9c
+detached
+
+worktree /private/tmp/agentic-dev-kit-pr595-lens-correctness-88f2a4d
+HEAD 88f2a4d4e94522f03a928f5259de53906931112b
+detached
+
+worktree /private/tmp/agentic-dev-kit-pr595-lens-correctness-b7d00e8
+HEAD b7d00e87b8eeab43335099cd821640b73a9c0087
+detached
+
+worktree /private/tmp/agentic-dev-kit-pr595-lens-correctness-c414dec
+HEAD c414dec9341901dfd29eacc0052ec57ff8f1d77a
+detached
+
+worktree /private/tmp/agentic-dev-kit-pr595-lens-correctness-c52984f
+HEAD c52984fafef412fc41c3fbf5b548a175fe910841
+detached
+
+worktree /private/tmp/agentic-dev-kit-pr595-lens-correctness-d4c97bb
+HEAD d4c97bb536b808cf6a88550ccdf9d16681f3734c
+detached
+
+worktree /private/tmp/lens-correctness-bacff4d
+HEAD bacff4d0fb591b9bb57ac3417f66ee747b281414
+detached
+
+worktree /private/tmp/mut-adversarial-bf7d4f5.U7Om7O/worktree
+HEAD bf7d4f51c76bec05c6e18a9dc98ad6f4c2a7ba08
+detached
+
+worktree /private/tmp/parallel-panel-adversarial-51abcc6
+HEAD 51abcc665525e1ad486a4a747ea0b0d38548b957
+detached
+
+worktree /private/tmp/parallel-panel-adversarial-722402b
+HEAD 722402b82cbd2074e1f8a1a863530c71061da457
+detached
+
+worktree /private/tmp/parallel-panel-adversarial-adc7cc3
+HEAD adc7cc365573aa101743314a13c5753b15f0758b
+detached
+
+worktree /private/tmp/parallel-panel-adversarial-f8a0b5c
+HEAD f8a0b5cffb8bf98c54034f8da8750ed9e526ba0e
+detached
+
+worktree /private/tmp/parallel-panel-correctness-51abcc6
+HEAD 51abcc665525e1ad486a4a747ea0b0d38548b957
+detached
+
+worktree /private/tmp/parallel-panel-correctness-722402b
+HEAD 722402b82cbd2074e1f8a1a863530c71061da457
+detached
+
+worktree /private/tmp/parallel-panel-correctness-adc7cc3
+HEAD adc7cc365573aa101743314a13c5753b15f0758b
+detached
+
+worktree /private/tmp/parallel-panel-correctness-f8a0b5c
+HEAD f8a0b5cffb8bf98c54034f8da8750ed9e526ba0e
+detached
+
+worktree /private/tmp/pr609-adversarial-fix-bf7d4f5.rtcaoT/worktree
+HEAD bf7d4f51c76bec05c6e18a9dc98ad6f4c2a7ba08
+detached
+
+worktree /Users/topi/Coding/agentic-dev-kit/.claude/worktrees/agent-a1c1cf0be6bb38d14
+HEAD 9a0639329c61a30afe85717feb7c2a6887004fcf
+branch refs/heads/feat/manifest-track-test-suite
+
+worktree /Users/topi/Coding/agentic-dev-kit/.claude/worktrees/agent-a8541eb4def3cba85
+HEAD a55722c02c59f5e970e61046f9dcce9b446d3828
+branch refs/heads/feat/review-evidence-head-honesty
+
+worktree /Users/topi/Coding/agentic-dev-kit/.claude/worktrees/agent-afba583a4eeeff52e
+HEAD 2d9c39bbbf7eae43bb0aadef69432ee7d959d222
+branch refs/heads/chore/guard-kit-binding-in-upgrade-md
+
+worktree /Users/topi/Coding/dev-model-sessions/counts-in-prose/wt
+HEAD fda561586ec8d2b6000b6622ea454b430f8d3040
+branch refs/heads/dev/counts-in-prose
+
+worktree /Users/topi/Coding/dev-model-sessions/merge-gate-scrub/wt
+HEAD 9de2daa31801f4446c19da7df2b022f1ebb1ee99
+branch refs/heads/dev/merge-gate-scrub
+
+worktree /Users/topi/Coding/dev-model-sessions/upgrade-paths/wt
+HEAD ce0229a9daa54c86813335d0ff45a2e5c527855e
+branch refs/heads/dev/upgrade-paths
+
+
+## cockpit working tree before launch
+?? saved_plans/claude-side-assessment_2026-08-26.md
+?? saved_plans/first-real-headless-lane-design_2026-08-28.md
+?? saved_plans/first-real-headless-lane-evidence_2026-08-28/
