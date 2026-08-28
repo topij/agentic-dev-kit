@@ -76,16 +76,12 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="installed-state manifest (default: <root>/kit-manifest.json)",
     )
-    parser.add_argument(
-        "--engine-dir",
-        required=True,
-        help="configured repo-relative paths.engines value",
-    )
     args = parser.parse_args(argv)
     root = args.root.resolve()
     manifest_path = args.manifest or (root / "kit-manifest.json")
     try:
-        targets = installed_test_targets(root, manifest_path, args.engine_dir)
+        engine_dir = Path(__file__).resolve().parent.relative_to(root).as_posix()
+        targets = installed_test_targets(root, manifest_path, engine_dir)
     except ValueError as exc:
         parser.error(str(exc))
     if not targets:

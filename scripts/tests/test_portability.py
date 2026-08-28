@@ -1775,7 +1775,10 @@ def test_parallel_adapter_policy_contradictions_are_rejected() -> None:
 def _assert_upgrade_verifies_only_installed_test_modules(workflow: str) -> None:
     step = workflow.split("## Step 5 — Verify", 1)[1].split("## Step 6", 1)[0]
     assert "/run_installed_tests.py" in step
-    assert '--root "$REPO" --engine-dir <engine-dir>' in step
+    assert (
+        '/run_installed_tests.py --root "${REPO:?REPO is not set — re-run Step 0}"'
+        in step
+    )
     assert "reads the adopter's `kit-manifest.json`" in step
     assert "present but undeclared test" in step
     assert "python -m pytest" not in step
@@ -1789,7 +1792,11 @@ def test_upgrade_verification_selects_installed_tests_instead_of_test_roots() ->
 
     for hostile in (
         workflow.replace("/run_installed_tests.py", "/pytest.py", 1),
-        workflow.replace('--root "$REPO"', '--root "/tmp"', 1),
+        workflow.replace(
+            '/run_installed_tests.py --root "${REPO:?REPO is not set — re-run Step 0}"',
+            '/run_installed_tests.py --root "/tmp"',
+            1,
+        ),
         workflow.replace("reads the adopter's `kit-manifest.json`", "scans the directory", 1),
     ):
         with pytest.raises(AssertionError):

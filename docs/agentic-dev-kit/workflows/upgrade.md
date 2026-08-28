@@ -769,7 +769,7 @@ Commit the rewritten `kit-manifest.json` with the rest of the upgrade.
 
 ```bash
 uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --manifest /tmp/agentic-dev-kit/kit-manifest.json
-tmp="$(mktemp -d)" && DEVKIT_STATE_ROOT="$tmp" uv run --with pytest --with pyyaml python "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/run_installed_tests.py --root "$REPO" --engine-dir <engine-dir>
+tmp="$(mktemp -d)" && DEVKIT_STATE_ROOT="$tmp" uv run --with pytest --with pyyaml python "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/run_installed_tests.py --root "${REPO:?REPO is not set — re-run Step 0}"
 uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/check_doc_budget.py
 ```
 
