@@ -208,6 +208,7 @@ def test_adapter_report_preserves_a_hardlinked_path_as_adopter_owned(tmp_path):
     path = adopter / ".agents/skills/adopt/SKILL.md"
     path.parent.mkdir(parents=True)
     path.hardlink_to(outside)
+    before = outside.read_bytes()
 
     statuses = runtime_adapters.compare_adapters(REPO_ROOT, adopter)
     status = next(item for item in statuses if item.path == ".agents/skills/adopt/SKILL.md")
@@ -215,6 +216,8 @@ def test_adapter_report_preserves_a_hardlinked_path_as_adopter_owned(tmp_path):
     assert status.state == "adopter-owned"
     assert "multiply-linked" in status.detail
     assert path.stat().st_ino == outside.stat().st_ino
+    assert path.read_bytes() == before
+    assert outside.read_bytes() == before
 
 
 def test_installed_test_targets_use_manifest_not_directory_contents(tmp_path):
@@ -379,7 +382,9 @@ def test_installed_test_targets_refuse_declared_symlinked_ancestor(tmp_path):
     (outside / "test_link.py").write_text("def test_outside(): pass\n", encoding="utf-8")
     engine = tmp_path / "scripts"
     engine.mkdir()
-    (engine / "tests").symlink_to(outside, target_is_directory=True)
+    test_root = engine / "tests"
+    test_root.symlink_to(outside, target_is_directory=True)
+    before = (outside / "test_link.py").read_bytes()
     manifest = tmp_path / "kit-manifest.json"
     manifest.write_text(
         json.dumps({"files": {"scripts/tests/test_link.py": {"role": "test"}}}),
@@ -388,6 +393,8 @@ def test_installed_test_targets_refuse_declared_symlinked_ancestor(tmp_path):
 
     with pytest.raises(ValueError, match="crosses a symlink"):
         run_installed_tests.installed_test_targets(tmp_path, manifest, "scripts")
+    assert test_root.is_symlink()
+    assert (outside / "test_link.py").read_bytes() == before
 
 
 def test_adapter_report_refuses_a_source_adapter_the_renderer_does_not_own(
