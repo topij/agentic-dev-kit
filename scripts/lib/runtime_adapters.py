@@ -288,6 +288,30 @@ def _adapter_path(runtime: str, slug: str) -> str:
     return f".agents/skills/{slug}/SKILL.md"
 
 
+def _unsafe_adopter_path(root: Path, rel: str) -> str | None:
+    """Describe a path shape that an upgrade must preserve rather than write through."""
+
+    current = root
+    parts = Path(rel).parts
+    for index, part in enumerate(parts):
+        current /= part
+        if current.is_symlink():
+            return f"symlink at {Path(*parts[: index + 1])}; preserve and inspect manually"
+        if not current.exists():
+            continue
+        if index < len(parts) - 1 and not current.is_dir():
+            return f"non-directory ancestor at {Path(*parts[: index + 1])}; preserve manually"
+        if index == len(parts) - 1:
+            if not current.is_file():
+                return "non-regular adapter path; preserve and inspect manually"
+            try:
+                if current.stat().st_nlink != 1:
+                    return "multiply-linked adapter path; preserve and inspect manually"
+            except OSError as exc:
+                return f"cannot inspect adapter path: {exc}"
+    return None
+
+
 def compare_adapters(source_root: Path, adopter_root: Path) -> list[AdapterStatus]:
     """Compare an adopter against adapters rendered from a source kit checkout."""
 
@@ -314,6 +338,12 @@ def compare_adapters(source_root: Path, adopter_root: Path) -> list[AdapterStatu
                 )
 
             adopter_path = adopter_root / rel
+            unsafe_path = _unsafe_adopter_path(adopter_root, rel)
+            if unsafe_path is not None:
+                statuses.append(
+                    AdapterStatus(runtime, slug, rel, "adopter-owned", unsafe_path)
+                )
+                continue
             if not adopter_path.is_file():
                 statuses.append(
                     AdapterStatus(runtime, slug, rel, "missing", "install the rendered adapter")

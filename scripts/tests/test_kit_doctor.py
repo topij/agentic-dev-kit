@@ -37,6 +37,7 @@ sys.path.insert(0, str(ENGINE_DIR))
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
 import kit_doctor  # noqa: E402
+import run_installed_tests  # noqa: E402
 import runtime_adapters  # noqa: E402
 
 
@@ -90,17 +91,18 @@ def test_shipped_runtime_adapters_equal_the_renderer_for_both_runtimes():
     }
 
 
-def test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned(tmp_path):
+@pytest.mark.parametrize("slug", ["adopt", "parallel", "pr-watch", "upgrade"])
+def test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned(tmp_path, slug):
     source = REPO_ROOT
     adopter = tmp_path / "adopter"
-    rel = ".agents/skills/upgrade/SKILL.md"
+    rel = f".agents/skills/{slug}/SKILL.md"
     source_text = (source / rel).read_text(encoding="utf-8")
     description = runtime_adapters._frontmatter(source_text)["description"]
     legacy = runtime_adapters.render_adapter(
         "codex",
-        "upgrade",
+        slug,
         description,
-        "docs/agentic-dev-kit/workflows/upgrade.md",
+        f"docs/agentic-dev-kit/workflows/{slug}.md",
         template_version=1,
     )
     _write(adopter / rel, legacy)
@@ -126,6 +128,7 @@ def test_authored_adapter_change_is_reported_and_preserved_for_each_runtime(tmp_
             path.read_text(encoding="utf-8") + "\nKeep this adopter policy.\n",
             encoding="utf-8",
         )
+    before = {rel: (adopter / rel).read_bytes() for rel in changed}
 
     statuses = runtime_adapters.compare_adapters(REPO_ROOT, adopter)
     by_path = {status.path: status for status in statuses}
@@ -133,6 +136,90 @@ def test_authored_adapter_change_is_reported_and_preserved_for_each_runtime(tmp_
     for rel in changed:
         assert by_path[rel].state == "adopter-owned"
         assert "leave unchanged" in by_path[rel].detail
+        assert (adopter / rel).read_bytes() == before[rel]
+
+
+@pytest.mark.parametrize(
+    "runtime, rel",
+    [
+        ("claude", ".claude/commands/adopt.md"),
+        ("codex", ".agents/skills/adopt/SKILL.md"),
+    ],
+)
+def test_adapter_report_preserves_a_symlink_path_as_adopter_owned(tmp_path, runtime, rel):
+    adopter = tmp_path / "adopter"
+    outside = tmp_path / "outside.md"
+    outside.write_text("outside\n", encoding="utf-8")
+    path = adopter / rel
+    path.parent.mkdir(parents=True)
+    path.symlink_to(outside)
+
+    statuses = runtime_adapters.compare_adapters(REPO_ROOT, adopter)
+    status = next(item for item in statuses if item.runtime == runtime and item.path == rel)
+
+    assert status.state == "adopter-owned"
+    assert "symlink" in status.detail
+    assert path.is_symlink()
+    assert outside.read_text(encoding="utf-8") == "outside\n"
+
+
+def test_adapter_report_preserves_a_symlinked_ancestor_as_adopter_owned(tmp_path):
+    adopter = tmp_path / "adopter"
+    outside = tmp_path / "outside-agents"
+    outside.mkdir()
+    adopter.mkdir()
+    (adopter / ".agents").symlink_to(outside, target_is_directory=True)
+
+    statuses = runtime_adapters.compare_adapters(REPO_ROOT, adopter)
+    status = next(
+        item
+        for item in statuses
+        if item.runtime == "codex" and item.path == ".agents/skills/adopt/SKILL.md"
+    )
+
+    assert status.state == "adopter-owned"
+    assert "symlink at .agents" in status.detail
+    assert list(outside.iterdir()) == []
+
+
+def test_installed_test_targets_use_manifest_not_directory_contents(tmp_path):
+    root = tmp_path / "adopter"
+    declared = root / "scripts" / "devkit" / "tests" / "test_declared.py"
+    undeclared = root / "scripts" / "devkit" / "tests" / "test_undeclared.py"
+    _write(declared, "def test_declared(): pass\n")
+    _write(undeclared, "raise AssertionError('must not run')\n")
+    manifest = root / "kit-manifest.json"
+    manifest.write_text(
+        json.dumps({"files": {"scripts/tests/test_declared.py": {"role": "test"}}}),
+        encoding="utf-8",
+    )
+
+    assert run_installed_tests.installed_test_targets(
+        root, manifest, "scripts/devkit"
+    ) == [declared]
+
+
+def test_installed_test_targets_skip_a_declined_missing_test_root(tmp_path):
+    manifest = tmp_path / "kit-manifest.json"
+    manifest.write_text(json.dumps({"files": {}}), encoding="utf-8")
+
+    assert run_installed_tests.installed_test_targets(tmp_path, manifest, "scripts") == []
+
+
+def test_installed_test_targets_refuse_declared_symlink(tmp_path):
+    outside = tmp_path / "outside.py"
+    outside.write_text("def test_outside(): pass\n", encoding="utf-8")
+    target = tmp_path / "scripts" / "tests" / "test_link.py"
+    target.parent.mkdir(parents=True)
+    target.symlink_to(outside)
+    manifest = tmp_path / "kit-manifest.json"
+    manifest.write_text(
+        json.dumps({"files": {"scripts/tests/test_link.py": {"role": "test"}}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="crosses a symlink"):
+        run_installed_tests.installed_test_targets(tmp_path, manifest, "scripts")
 
 
 def test_adapter_report_refuses_a_source_adapter_the_renderer_does_not_own(tmp_path):

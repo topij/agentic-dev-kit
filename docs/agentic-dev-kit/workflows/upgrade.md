@@ -769,23 +769,7 @@ Commit the rewritten `kit-manifest.json` with the rest of the upgrade.
 
 ```bash
 uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --manifest /tmp/agentic-dev-kit/kit-manifest.json
-tmp="$(mktemp -d)" && DEVKIT_STATE_ROOT="$tmp" uv run --with pytest --with pyyaml python -c '
-from pathlib import Path
-import sys
-import pytest
-
-targets = [
-    str(path)
-    for root in map(Path, sys.argv[1:])
-    if root.is_dir()
-    for path in sorted(root.glob("test_*.py"))
-]
-if not targets:
-    print("kit tests: none installed — suite skipped")
-    raise SystemExit(0)
-print("kit tests:", *targets, sep="\n  ")
-raise SystemExit(pytest.main([*targets, "-q"]))
-' "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/lib/state_paths/tests "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/tests
+tmp="$(mktemp -d)" && DEVKIT_STATE_ROOT="$tmp" uv run --with pytest --with pyyaml python "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/run_installed_tests.py --root "$REPO" --engine-dir <engine-dir>
 uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/check_doc_budget.py
 ```
 
@@ -804,12 +788,16 @@ evidence store, while the run otherwise looks clean. `#428` measured it: an unpa
 a reset `seen` set. A conftest fixture closes this for anyone who has it (see
 `scripts/tests/conftest.py`'s `_hermetic_state_root`), but this command is
 the independent outer layer: it protects a sized-down adopter whose declared
-install set includes a test module without every conftest or sibling test. Test
-paths are kit-owned and upgradeable now, but they remain individually declinable,
+install set includes a runnable test module without every conftest or sibling test.
+Test paths are kit-owned and upgradeable now, but they remain individually declinable,
 so a partial test surface is a supported case rather than evidence of a broken
-upgrade. The command enumerates only installed `test_*.py` files and says when
-there are none, instead of passing a declined directory to pytest and stopping
-before an installed test can run. That is the current form of the case
+upgrade. The runner reads the adopter's `kit-manifest.json`, invokes only declared
+top-level `test_*.py` modules under the configured engine's test roots, and says when
+there are none. A present but undeclared test is not part of the installed kit suite;
+a declared module whose support imports were declined is an inconsistent installation
+and fails collection rather than being silently skipped. The runner avoids passing a
+declined directory to pytest and stopping before an installed test can run. That is the
+current form of the case
 `#40`/`#132` first exposed.
 
 Write it as the two-step `tmp="$(mktemp -d)" && …`, not as an inline
