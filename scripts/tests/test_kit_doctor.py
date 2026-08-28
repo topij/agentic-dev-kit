@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path, PurePosixPath
@@ -36,6 +37,7 @@ sys.path.insert(0, str(ENGINE_DIR))
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
 import kit_doctor  # noqa: E402
+import runtime_adapters  # noqa: E402
 
 
 def _write(path: Path, text: str) -> None:
@@ -61,6 +63,112 @@ def _manifest(entries: dict[str, str | None], version: int = 2) -> dict:
         "kit_version": version,
         "files": {p: {"sha256": h, "role": "engine"} for p, h in entries.items()},
     }
+
+
+def test_shipped_runtime_adapters_equal_the_renderer_for_both_runtimes():
+    statuses = runtime_adapters.compare_adapters(REPO_ROOT, REPO_ROOT)
+    actual_paths = {
+        path.relative_to(REPO_ROOT).as_posix()
+        for pattern in (".claude/commands/*.md", ".agents/skills/*/SKILL.md")
+        for path in REPO_ROOT.glob(pattern)
+    }
+
+    assert statuses
+    assert {status.runtime for status in statuses} == {"claude", "codex"}
+    assert {status.state for status in statuses} == {"kit-current"}
+    assert {status.path for status in statuses} == actual_paths
+    parity = (REPO_ROOT / "docs" / "agentic-dev-kit" / "runtime-parity.md").read_text(
+        encoding="utf-8"
+    )
+    assert "fetched kit's adapter renderer" in parity
+    assert "authored command preserved" in parity
+    assert "authored skill preserved" in parity
+    assert not {
+        path
+        for path, _role in kit_doctor.KIT_OWNED
+        if path.startswith((".claude/", ".agents/"))
+    }
+
+
+def test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned(tmp_path):
+    source = REPO_ROOT
+    adopter = tmp_path / "adopter"
+    rel = ".agents/skills/upgrade/SKILL.md"
+    source_text = (source / rel).read_text(encoding="utf-8")
+    description = runtime_adapters._frontmatter(source_text)["description"]
+    legacy = runtime_adapters.render_adapter(
+        "codex",
+        "upgrade",
+        description,
+        "docs/agentic-dev-kit/workflows/upgrade.md",
+        template_version=1,
+    )
+    _write(adopter / rel, legacy)
+
+    statuses = runtime_adapters.compare_adapters(source, adopter)
+    status = next(item for item in statuses if item.path == rel)
+
+    assert status.state == "kit-stale"
+    assert "refresh freely" in status.detail
+
+
+def test_authored_adapter_change_is_reported_and_preserved_for_each_runtime(tmp_path):
+    adopter = tmp_path / "adopter"
+    shutil.copytree(REPO_ROOT / ".claude", adopter / ".claude")
+    shutil.copytree(REPO_ROOT / ".agents", adopter / ".agents")
+    changed = {
+        ".claude/commands/adopt.md",
+        ".agents/skills/adopt/SKILL.md",
+    }
+    for rel in changed:
+        path = adopter / rel
+        path.write_text(
+            path.read_text(encoding="utf-8") + "\nKeep this adopter policy.\n",
+            encoding="utf-8",
+        )
+
+    statuses = runtime_adapters.compare_adapters(REPO_ROOT, adopter)
+    by_path = {status.path: status for status in statuses}
+
+    for rel in changed:
+        assert by_path[rel].state == "adopter-owned"
+        assert "leave unchanged" in by_path[rel].detail
+
+
+def test_adapter_report_refuses_a_source_adapter_the_renderer_does_not_own(tmp_path):
+    source = tmp_path / "source"
+    shutil.copytree(REPO_ROOT / ".claude", source / ".claude")
+    shutil.copytree(REPO_ROOT / ".agents", source / ".agents")
+    shutil.copytree(
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows",
+        source / "docs" / "agentic-dev-kit" / "workflows",
+    )
+    path = source / ".claude" / "commands" / "adopt.md"
+    path.write_text(path.read_text(encoding="utf-8") + "\nSource drift.\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="does not equal the current rendered form"):
+        runtime_adapters.compare_adapters(source, REPO_ROOT)
+
+
+def test_adapter_report_cli_is_read_only_and_does_not_require_adopter_config(
+    tmp_path, capsys
+):
+    code = kit_doctor.main(
+        [
+            "--root",
+            str(tmp_path),
+            "--adapter-report",
+            "--adapter-source",
+            str(REPO_ROOT),
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert code == 0
+    assert payload["adapters"]
+    assert {item["state"] for item in payload["adapters"]} == {"missing"}
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_remap_follows_configured_engines_dir():
@@ -1045,6 +1153,7 @@ def test_the_shell_source_dependency_is_a_KNOWN_GAP_not_an_oversight():
     assert set(graph) == {
         "scripts/lib/atomic_write.py",
         "scripts/lib/kitconfig.py",
+        "scripts/lib/runtime_adapters.py",
         "scripts/lib/state_paths/paths.py",
         "scripts/lib/state_paths/repo_root.py",
         "scripts/lib/state_paths/resolver.py",

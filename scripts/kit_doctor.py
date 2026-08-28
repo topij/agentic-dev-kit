@@ -139,6 +139,10 @@ Usage (``<engine-dir>`` is ``paths.engines`` in config/dev-model.yaml, default
     uv run <engine-dir>/kit_doctor.py --manifest <kit checkout>/kit-manifest.json
                                                     # compare against upstream, splitting
                                                     # drift by cause
+    uv run <kit checkout>/scripts/kit_doctor.py --root <adopter> \
+        --adapter-report --adapter-source <kit checkout>
+                                                    # classify runtime bindings by
+                                                    # their rendered form
 
 Exit codes:
     0 — every kit-owned file is `unchanged`, or absent without being a finding:
@@ -157,7 +161,9 @@ Exit codes:
         `new-upstream` are NOT in this set and never fail the gate: the first
         is the supported sized-down state, and the second is a file the adopter
         has never been asked about — failing CI on either would make the gate
-        fire on a healthy repo and on every kit release respectively.
+        fire on a healthy repo and on every kit release respectively. Adapter-report
+        mode is informational and also exits 0 after a complete comparison: an
+        adopter-owned adapter is a preserve-and-report decision, never drift.
         Under ``--record-install`` this same code means the baseline was
         written but some present kit-owned path was EXCLUDED from it — see that
         mode's stderr list. Exiting 0 there would let a caller that reads only
@@ -196,6 +202,7 @@ _REGISTRATION_PARSE_ERRORS = (
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from kitconfig import get, load_config, repo_root  # noqa: E402
+from runtime_adapters import compare_adapters, render_adapter_report, report_json  # noqa: E402
 
 MANIFEST_NAME = "kit-manifest.json"
 
@@ -222,6 +229,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/panel_prompt.py", "engine"),
     ("scripts/conftest.py", "engine"),
     ("scripts/lib/kitconfig.py", "engine"),
+    ("scripts/lib/runtime_adapters.py", "engine"),
     ("scripts/lib/atomic_write.py", "engine"),
     ("scripts/lib/devmodel_config.py", "engine"),
     ("scripts/lib/repo_root.sh", "engine"),
@@ -2875,6 +2883,17 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="kit checkout this install came from; its HEAD is stamped as kit_commit",
     )
+    parser.add_argument(
+        "--adapter-report",
+        action="store_true",
+        help="classify runtime adapters as rendered kit glue, adopter-owned, or missing",
+    )
+    parser.add_argument(
+        "--adapter-source",
+        type=Path,
+        default=None,
+        help="kit checkout whose current renderer and adapter descriptions define expected bytes",
+    )
     parser.add_argument("--root", type=Path, default=None, help="repo root (default: discovered)")
     parser.add_argument(
         "--manifest", type=Path, default=None, help="manifest to COMPARE against (the kit's)"
@@ -2895,6 +2914,23 @@ def main(argv: list[str] | None = None) -> int:
     # neither flag is passed both resolve to the same file — the self-check —
     # and the split correctly reduces to "any mismatch is a local edit".
     baseline_path = args.baseline or (root / MANIFEST_NAME)
+
+    if args.adapter_report:
+        if args.generate_manifest or args.record_install:
+            parser.error("--adapter-report cannot be combined with a write mode")
+        source_root = (
+            args.adapter_source or Path(__file__).resolve().parent.parent
+        ).resolve()
+        try:
+            adapter_statuses = compare_adapters(source_root, root)
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        if args.json:
+            print(json.dumps({"adapters": report_json(adapter_statuses)}, indent=1))
+        else:
+            print(render_adapter_report(adapter_statuses))
+        return 0
 
     try:
         config = load_config(root / "config" / "dev-model.yaml")
