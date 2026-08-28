@@ -290,10 +290,12 @@ settled the three that were open:
   command and forbids deferring verification to CI without running it; a lane could not
   comply, structurally. Measured under the shipped profile before the grant: `make test`
   and a bare `uv run pytest` were both refused, with a `cat` in the same session
-  accepted as the live control. The grant is bounded to the one target — `make
-  mutation-test` is refused, token boundaries again — and needs no companion `uv`/`uvx`
-  entry, because the permission check is on the Bash tool call and not on what the
-  recipe spawns (both measured, same bundle).
+  accepted as the live control. It needs no companion `uv`/`uvx` entry, because the
+  permission check is on the Bash tool call and not on what the recipe spawns.
+  **Read the entry as admitting a command whose text begins with `make test`, which is
+  not "the `test` target":** standalone `make mutation-test` is refused, but
+  `make test mutation-test` runs both goals. A panel lens falsified the stronger claim
+  by running the two-goal form, and it was corrected rather than hedged.
 - **`Bash(uv run scripts/kit_doctor.py:*)`**, and the `scripts/devkit/` spelling beside
   it as `pr_watch.py` already has — because a lane editing any kit-owned file must
   refresh the manifest or its PR is deterministically red, which costs the lane its
@@ -318,6 +320,16 @@ Both findings correct the same sentence, in opposite directions: this profile do
 bound "what a lane can do". There is a class of write it **cannot authorize**
 (`.claude/`), and a class of execution it **authorizes with no rule in any list** (the
 composition above).
+
+**What a matched prefix does not do is swallow the rest of a compound command**, and
+the distinction is worth stating because it is easy to measure wrongly. Each
+`;`-separated segment is permission-checked on its own: `make test; curl …` and
+`git status; curl …` are both refused, while `make test; echo …` runs — `echo` being
+accepted on its own, not carried in by the prefix. A panel lens ran the `echo` form,
+read it as the prefix widening to arbitrary shell, and reported a HIGH; the
+denied-segment case is the one that separates the two readings, and until it is run
+neither is established. Chaining is therefore not a route around the allow list, and
+`#631`'s composition — rewrite a granted engine, then run it — remains the one that is.
 
 Every supported launcher must still prepend `prompt_preamble` verbatim and must not
 open a second worktree on top of `new --headless`. The wrapper does both by consuming

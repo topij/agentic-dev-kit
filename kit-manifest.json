@@ -44,7 +44,7 @@
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
-      "sha256": "724e99a2d7f8b40b6d3576b1ba94676ca840490ec4fb7ffb86af591000a1d4c3"
+      "sha256": "21f1dd444a636bb2c635bf21090fc483d0a2176e8078eebae4575f53788f1afe"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
@@ -100,7 +100,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "1d2f3adc79abb1934fa0157a3409aafed6c8fb67d5894e16fe04ed00cb65d093"
+      "sha256": "a45ee438e98a2567a66edb64581df620ccc346d1ff632dd716b4c144de253134"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -247,7 +247,7 @@
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
-      "sha256": "2f064b769709e0193b58f8b12c0e6d20ab2ac8207fe5d220eeb6a71ad2d4b1f1"
+      "sha256": "2fa95d6708194c57d5d4f4efb1e6f7a563633786f344d3478e3345c478ddbd3c"
     },
     "scripts/tests/test_mutation_gate.py": {
       "role": "test",

@@ -53,9 +53,13 @@ starts.
   not diverged); take the `scripts/devkit/` spelling only if that is your
   `paths.engines`. Without the first, a lane cannot run the `AGENTS.md` verification
   command and its first verification is CI; without the others, a lane that edits a
-  kit-owned file cannot refresh the manifest and its PR is deterministically red. The
-  `make` grant is bounded to the `test` target — `make mutation-test` does not match
-  it. `launch_lane.py`'s structural validator is unchanged and still refuses a `Bash`
+  kit-owned file cannot refresh the manifest and its PR is deterministically red. Read
+  the `make` entry as what it is: it admits a command whose text **begins with**
+  `make test`, which is not "the `test` target" — standalone `make mutation-test` is
+  refused, while `make test mutation-test` runs **both** goals. A `;`-chained segment
+  is permission-checked on its own, so a matched prefix does not carry a denied command
+  with it (`make test; curl …` is refused).
+  `launch_lane.py`'s structural validator is unchanged and still refuses a `Bash`
   allow with no literal command prefix, an edit tool without a worktree-relative
   pattern, and any `permissions` key outside `allow`/`deny`/`ask`.
 - **CHANGED (gate semantics) — the lane settings profile is documented as

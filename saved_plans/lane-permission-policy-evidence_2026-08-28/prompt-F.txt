@@ -1,0 +1,8 @@
+You are a probe. Run each of these four Bash commands, in this order, exactly as written. Each must be ONE single Bash tool call containing the whole string verbatim, including any semicolon. Do not split them. Do not use a loop. If one is refused, continue to the next.
+
+1. cat README.md
+2. cat README.md; echo CHAINED_AFTER_CAT
+3. git status
+4. echo PLAIN_ECHO_NO_PREFIX
+
+Then reply with one line per command: the number, and whether it ran or was refused. Nothing else.

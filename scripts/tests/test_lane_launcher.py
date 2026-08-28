@@ -2297,9 +2297,13 @@ def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_valida
     # open, on measurements in
     # `saved_plans/lane-permission-policy-evidence_2026-08-28/`. `make test` is the
     # `AGENTS.md` verification command and was refused under the profile as it
-    # stood, so a lane's first verification was always CI; the grant is bounded to
-    # the one target, because the runtime matches on token boundaries and
-    # `make mutation-test` is refused by this entry (measured, not inferred).
+    # stood, so a lane's first verification was always CI. What the entry bounds is
+    # narrower than it reads: it admits a command whose text BEGINS with
+    # `make test`, so standalone `make mutation-test` is refused but
+    # `make test mutation-test` runs both goals. This assertion pins the entry's
+    # spelling and claims only that — a panel lens falsified the stronger
+    # "bounded to the one target" reading this comment first carried, by running
+    # the two-goal form live.
     assert "Bash(make test:*)" in shipped["permissions"]["allow"]
     assert "Bash(make:*)" not in shipped["permissions"]["allow"]
     # `kit_doctor.py` is granted for BOTH engine layouts, exactly as `pr_watch.py`

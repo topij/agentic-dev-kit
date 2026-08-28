@@ -6,7 +6,7 @@ The evidence bundle beside this file
 ([`lane-permission-policy-evidence_2026-08-28/`](lane-permission-policy-evidence_2026-08-28/))
 carries every prompt, every result object, and every profile the probes loaded.
 
-All four probes ran on 2026-08-28 against Claude Code **2.1.250**, in a throwaway Git
+Every probe below ran on 2026-08-28 against Claude Code **2.1.250**, in a throwaway Git
 repository at a scratch path, under the lane's own trust route and nothing else:
 
 ```
@@ -140,10 +140,12 @@ Profile: `profile-proposed.json` (shipped + the three entries this slice adds).
 | 3 | `uv run scripts/kit_doctor.py --generate-manifest` | ran |
 | 4 | `uv run scripts/kit_doctor.py` | ran |
 
-Row 2 is the bound, measured rather than asserted: the runtime matches Bash rules on
-token boundaries, so `Bash(make test:*)` admits the `test` target and **not** every
-`make` target. `mutation-test` is a different token and is refused. Granting `make test`
-is not granting `make`.
+Row 2 was originally read as "the grant is bounded to the one target". **That reading
+was wrong, and a panel lens falsified it** — see *Round 1* below. What row 2 actually
+establishes is narrower: the *standalone string* `make mutation-test` is refused.
+Granting `make test` is not granting `make`, and that much holds; but the entry admits
+any command whose text **begins with** `make test`, so `make test mutation-test` runs
+both goals.
 
 Row 1 also settles a question the grant would otherwise raise. `make test`'s recipe
 shells out to `uvx ruff` and `uv run --with pytest …`, and neither has an entry in any
@@ -246,3 +248,70 @@ doctrine, and it lands in `runtime-parity.md`'s "Command permissions" row:
   `config/claude-lane-settings.json` when absent and never rewrites it, so an installed
   adopter keeps the profile they have and gets these grants only by copying them in.
   `CHANGELOG.md` says so.
+
+## Round 1 — the panel, and the one claim it killed
+
+CodeRabbit reports `Review skipped: automatic reviews are disabled`, so the configured
+fallback panel carried the review. Both lenses ran at
+`6e8837cf8ab7795ac72821698de627c21feaebb0` as the kit-owned `.claude/agents/<lens>.md`
+definitions, on prompts from `scripts/panel_prompt.py`.
+
+### adversarial — one HIGH, declined on a measurement; one LOW, accepted and upgraded
+
+The lens reported that `Bash(make test:*)` "permits arbitrary chained shell execution
+via `;`", having run `make test -n; echo INJECTED_AFTER_SEMICOLON` and
+`git status; echo INJECTED_VIA_GIT_STATUS` and observed both run with an empty denial
+list. It read that as a matched prefix swallowing the rest of the command string.
+
+**Declined, because the evidence cannot separate two explanations and the other one is
+true.** `echo` is accepted on its own here — measured, `prompt-F`/`result-F`: bare
+`echo PLAIN_ECHO_NO_PREFIX` ran with no allow entry covering it. So both segments of the
+lens's compound were independently acceptable, and the run says nothing about whether
+the prefix carried anything.
+
+The decisive case is a compound whose second segment is **denied**, and it was run
+(`prompt-G`/`result-G`):
+
+| command | outcome |
+|---|---|
+| `curl -s https://example.com` | refused |
+| `make test; curl -s https://example.com` | **refused** |
+| `git status; curl -s https://example.com` | **refused** |
+
+Each `;`-separated segment is permission-checked on its own. A matched prefix does not
+widen to arbitrary shell, and chaining is not a route around the allow list. Hedging the
+sentence would have left the lens's explanation standing beside the true one; running
+the denied-segment case killed it.
+
+### The same finding's second half was right, and is fixed
+
+The lens also observed `make test mutation-test` running both recipes, against the claim
+that the grant is "bounded to the one target". Reproduced (`prompt-E`/`result-E`): it
+runs. The claim was false as written — `Bash(make test:*)` admits a command whose text
+*begins with* `make test`, which is not the same as bounding which `make` goals execute.
+Probe D row 2 measured only that the standalone string `make mutation-test` is refused,
+and the prose generalised past it. That is this repository's own *Numbers in prose*
+failure — a verdict (`bounded`) resting on a measurement that did not support it — found
+by a lens rather than by the author, in the same PR that argues for measuring instead of
+inferring.
+
+Corrected in `init.sh`, `CHANGELOG.md`, `parallel-headless.md`, the test comment, and
+the two paragraphs above, each now stating the begins-with bound and naming the two-goal
+form that shows it.
+
+### correctness — no findings
+
+It did not take the claims on re-reading. It recomputed `shasum -a 256` for all four
+files whose manifest hashes changed and matched them; extracted
+`seed_claude_lane_profile` from `init.sh` and ran it standalone against a fresh scratch
+directory, confirming the produced file is byte-identical to the shipped profile and
+that a pre-seeded target is left untouched; confirmed `launch_lane.py`,
+`dev_session.sh` and `pr_watch.py` have zero hunks between base and head; and
+mutation-tested the new assertions four ways — widening `Bash(make test:*)` to
+`Bash(make:*)`, dropping the `scripts/devkit/kit_doctor.py` grant, narrowing the bare
+`kit_doctor.py` grant to `--generate-manifest`, and reordering the `uv run` list — with
+all four killed by the named assertion rather than by the drift check.
+
+It also ran the full suite in its own scratch clone at the reviewed sha and printed
+`2007 passed, 3 warnings in 360.27s`, exit 0 — an independent reproduction of the
+stamp below, on a copy the author did not prepare.
