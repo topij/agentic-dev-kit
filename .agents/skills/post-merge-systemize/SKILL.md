@@ -5,10 +5,11 @@ description: Find recurring root causes across merged-PR review findings and rou
 
 # Post-Merge Systemize
 
-1. Work from the repository root.
-2. Read `config/dev-model.yaml` and resolve configured paths and capabilities from it.
-3. Read `docs/agentic-dev-kit/workflows/post-merge-systemize.md` completely.
-4. Follow that workflow, treating invocation arguments as the `backfill` and `test` entry-point keywords.
-5. Use the current runtime's forge, tracker, notification, and repository mechanisms. Do not substitute a tool named by another runtime.
-6. Treat the configured analysis tier as guidance unless this client can mechanically apply its model or effort mapping; never claim a compute change that did not occur.
-7. Never create or modify a tracker item without explicit operator confirmation.
+Read `docs/agentic-dev-kit/workflows/post-merge-systemize.md` completely and follow it.
+
+Treat the user's argument as entry-point keywords. Resolve configured paths from the
+repository root and merged configuration defined by the shared workflow; translate only
+runtime-native invocation and available mechanisms. This runtime's repository-instruction
+layer is `AGENTS.md`. Translate the configured analysis tier only when the current
+launcher exposes that control; otherwise treat it as guidance and do not claim that the
+model or effort changed.
