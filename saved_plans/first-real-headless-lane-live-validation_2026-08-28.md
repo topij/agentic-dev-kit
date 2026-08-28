@@ -149,12 +149,18 @@ than a round-trip cost.
 
 ## What the lane produced
 
-One commit, `fbdaaeb`, on `dev/pms-bindings`, **not pushed**, and no pull request. It
-carries the `.agents/` half of `#602` and a test pin in
-`scripts/tests/test_portability.py` written in the shape of
-`_assert_bookend_adapter_semantics`. The lane stopped rather than pushing, because its
-own new pin asserts a Claude adapter body that the denials prevented it from writing —
-so the pin fails by construction and the PR could not have been driven green.
+One commit, `fbdaaeb`, on `dev/pms-bindings`. It carries the `.agents/` half of `#602`
+and a test pin in `scripts/tests/test_portability.py` written in the shape of
+`_assert_bookend_adapter_semantics`. **The lane neither pushed it nor opened a pull
+request**, and stopped there, because its own new pin asserts a Claude adapter body that
+the denials prevented it from writing — so the pin fails by construction and the PR
+could not have been driven green.
+
+What happened to that commit afterwards is the cockpit's doing, not the lane's, and the
+distinction is the whole point of this record. On the operator's decision the cockpit
+wrote the refused file as `f823c3f`, pushed the branch, and opened `#625`, whose body
+states which commit each author wrote and why. So `#625` exists and has CI — and none
+of it is evidence about what a lane can do unattended, because a lane did not do it.
 
 The lane's own account is in `08-final-message.json`. Read as testimony: its denial
 table matches `terminal.permission_denials` entry for entry, and its `.claude/`
@@ -197,8 +203,10 @@ implement the general mechanism, it just does not fall into the trap.
 
 ## What did not happen
 
-- **No pull request**, so no CI, and no `dev_session.sh pr-watch <scope>` receipt. The
-  design's rows for those are unanswered, and nothing here promotes them.
+- **The lane opened no pull request**, so there was no lane-driven CI and no lane-driven
+  `dev_session.sh pr-watch <scope>` receipt. The design's rows for those are unanswered
+  and nothing here promotes them. `#625` is not an answer to them: the cockpit pushed
+  that branch and drove it, which is a different claim about a different actor.
 - **No local suite run by the lane.** The profile grants neither `make` nor a bare
   `uv run pytest`, so a lane on this repository cannot run `make test` before pushing.
   The lane stated this rather than claiming a verification.
