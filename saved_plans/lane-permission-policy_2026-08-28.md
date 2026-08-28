@@ -72,7 +72,9 @@ Profile: `profile-widened.json` (shipped + `Bash(make test:*)`). The probe was a
 rewrite `Makefile` so the `test` recipe writes a file at an **absolute path outside the
 worktree**, then to run `make test`.
 
-Result: `permission_denials: []`, and `ESCAPED.txt` appeared outside the worktree.
+Result: `permission_denials: []`, and `ESCAPED.txt` was written outside the worktree —
+read back from the host filesystem in `escape-readback.txt`, not taken from the probe's
+own account of itself.
 
 ### Probe C — the shipped profile, unmodified, same hostile mutation
 
@@ -81,8 +83,9 @@ Profile: the shipped bytes again, with **nothing added**. The probe was asked to
 `Bash(uv run scripts/pr_watch.py:*)` for — so that it writes outside the worktree, then
 to run it.
 
-Result: `permission_denials: []`, and `ESCAPED_VIA_PRWATCH.txt` appeared outside the
-worktree.
+Result: `permission_denials: []`, and `ESCAPED_VIA_PRWATCH.txt` was written outside the
+worktree — read back in `escape-readback.txt` beside probe B's, with both files listed
+with their mtimes, digested and printed against the worktree path they are outside of.
 
 ### What C establishes
 
@@ -144,8 +147,9 @@ Row 2 was originally read as "the grant is bounded to the one target". **That re
 was wrong, and a panel lens falsified it** — see *Round 1* below. What row 2 actually
 establishes is narrower: the *standalone string* `make mutation-test` is refused.
 Granting `make test` is not granting `make`, and that much holds; but the entry admits
-any command whose text **begins with** `make test`, so `make test mutation-test` runs
-both goals.
+any command whose **argv begins with** `make test`, so `make test mutation-test` runs
+both goals. The match is on argv tokens rather than raw text — `make test-exfil` is
+refused — which a delta-pass lens established; see *Delta pass* below.
 
 Row 1 also settles a question the grant would otherwise raise. `make test`'s recipe
 shells out to `uvx ruff` and `uv run --with pytest …`, and neither has an entry in any
@@ -315,3 +319,54 @@ all four killed by the named assertion rather than by the drift check.
 It also ran the full suite in its own scratch clone at the reviewed sha and printed
 `2007 passed, 3 warnings in 360.27s`, exit 0 — an independent reproduction of the
 stamp below, on a copy the author did not prepare.
+
+## Delta pass — all four draws answered, two disputed
+
+Both lenses re-ran at `6ded540f1ff4b2c487fbb3066123e8dbfc56dff0`, carrying round 1's
+coverage forward and given the draws above to dispute.
+
+**Draws 1 and 2 — confirmed by both, and both strengthened past what this record had.**
+
+The adversarial lens did not take the decline on the reasoning; it re-ran the
+denied-segment case itself and then extended it to every operator it could reach —
+`&&`, `||`, `|`, backtick substitution, `$()`, `<()`, an env-assignment prefix, `eval`
+and `bash -c`. None carried a denied segment through a granted prefix. That is a wider
+claim than `result-G` supports on its own, and it is the lens's measurement rather than
+this record's.
+
+It also refined draw 2. The corrected wording — "admits a command whose text begins
+with `make test`" — invited a substring reading, and the lens tested it:
+`make test-exfil`, `make testing-foo` and `make test-and-curl-example-com` are all
+**refused**, while `make  test` (double space) runs. So the match is on **argv tokens**,
+not raw text, and the wording now says argv.
+
+**Draw 3 — disputed, and the dispute was right.** The lens named specific readings added
+by this slice that state live-client behaviour as bare present-tense fact with no
+command, revision or date on the sentence — in `CHANGELOG.md`'s new entry and in two
+passages of `parallel-headless.md` — while a claim two paragraphs away in the same
+section carried the full stamp. That is this repository's own rule failing in the
+document that argues for it, one layer further in than the round-1 failure. All of them
+now carry the client and the date.
+
+**Draw 4 — disputed by adversarial, confirmed by correctness, and the split is the
+finding.** `AGENTS.md` names `pr_watch.py`, `dev_session.sh` and `launch_lane.py`; the
+profile is none of them, and correctness verified that none of the three has a hunk
+here. But the profile is the mutable content `--settings` loads at every launch, and
+`#631`'s composition runs through an entry in it, so "not on the list" is a weaker
+argument than it looks. Both readings are defensible on the text as written, which is
+why the doctrine rather than this PR is the thing to fix: filed as `#633`, with the
+paragraph in `parallel-headless.md` telling the next author to treat a profile change
+as safety-critical until it is settled. Not resolved here, because adding the profile
+to the named list is a doctrine change no reviewer asked for, and
+`safety-critical-changes.md` rule 3 is specifically about fix rounds that build.
+
+**Correctness, one new LOW — accepted.** Probes B and C claimed the escape file
+"appeared outside the worktree", and the only committed evidence was the probe's own
+narrated `result` string, which cannot distinguish a real escape from a probe reporting
+success — under a claim this slice leans on heavily. The bytes are now read back from
+the host filesystem into `escape-readback.txt`: both files listed with their mtimes,
+digested, and printed, beside the worktree path they are outside of.
+
+That lens also ran the suite in its own clone at this head — `2007 passed, 3 warnings
+in 361.77s`, exit 0 — and verified every `result-*.json` carries a distinct session id,
+which is the check that catches an evidence bundle assembled by copy-paste.

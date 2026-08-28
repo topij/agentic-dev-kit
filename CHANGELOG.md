@@ -54,11 +54,16 @@ starts.
   `paths.engines`. Without the first, a lane cannot run the `AGENTS.md` verification
   command and its first verification is CI; without the others, a lane that edits a
   kit-owned file cannot refresh the manifest and its PR is deterministically red. Read
-  the `make` entry as what it is: it admits a command whose text **begins with**
-  `make test`, which is not "the `test` target" — standalone `make mutation-test` is
-  refused, while `make test mutation-test` runs **both** goals. A `;`-chained segment
-  is permission-checked on its own, so a matched prefix does not carry a denied command
-  with it (`make test; curl …` is refused).
+  the `make` entry as what it is: it admits a command whose argv **begins with**
+  `make test`, which is not "the `test` target". Probed at Claude Code **2.1.250** on
+  **2026-08-28** under the lane trust route (evidence in
+  `saved_plans/lane-permission-policy-evidence_2026-08-28/`): standalone
+  `make mutation-test` was refused while `make test mutation-test` ran **both** goals,
+  and the match is on argv tokens rather than raw text, so `make test-exfil` was refused
+  too. In the same probes a chained segment was permission-checked on its own, so a
+  matched prefix did not carry a denied command with it — `make test; curl …` and
+  `git status; curl …` were both refused, as were the `&&`, `||`, `|`, backtick,
+  `$()`, `<()` and env-assignment spellings.
   `launch_lane.py`'s structural validator is unchanged and still refuses a `Bash`
   allow with no literal command prefix, an edit tool without a worktree-relative
   pattern, and any `permissions` key outside `allow`/`deny`/`ask`.

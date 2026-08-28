@@ -267,7 +267,11 @@ asked to rewrite `scripts/pr_watch.py` — already granted
 `Bash(uv run scripts/pr_watch.py:*)` — so that it writes an absolute path outside the
 worktree, and then to run it, did exactly that and returned an empty
 `permission_denials` (`#606`, Claude Code 2.1.250, 2026-08-28, evidence bundle in
-`saved_plans/lane-permission-policy-evidence_2026-08-28/`). No spelling of that entry
+`saved_plans/lane-permission-policy-evidence_2026-08-28/`). The escaped file is read
+back from the host filesystem in that bundle's `escape-readback.txt` rather than taken
+from the probe's own account of itself, because a probe narrating success and a probe
+that actually escaped are otherwise the same evidence — a delta-pass lens named that
+gap. No spelling of that entry
 closes it while the lane can write the file it names: a command-prefix allow list
 cannot constrain the *contents* of a file its prefix names. Closing it needs a
 different mechanism — an OS sandbox around the child, or granting only scripts
@@ -283,19 +287,25 @@ Against a lane that is actively hostile, or prompt-injected into acting like one
 profile has never been the thing standing in the way — the descriptor seal already
 disclaims that boundary above, and the allow list does not reinstate it.
 
-So the shipped grants are decided on what each one **buys** a lane, `#606` having
-settled the three that were open:
+So the shipped grants are decided on what each one **buys** a lane. `#606` settled the
+grantable questions — these two — and then the `.claude/` question below, which no
+grant reaches:
 
 - **`Bash(make test:*)`** — `AGENTS.md` makes `make test` the repository's verification
   command and forbids deferring verification to CI without running it; a lane could not
-  comply, structurally. Measured under the shipped profile before the grant: `make test`
-  and a bare `uv run pytest` were both refused, with a `cat` in the same session
-  accepted as the live control. It needs no companion `uv`/`uvx` entry, because the
-  permission check is on the Bash tool call and not on what the recipe spawns.
-  **Read the entry as admitting a command whose text begins with `make test`, which is
-  not "the `test` target":** standalone `make mutation-test` is refused, but
-  `make test mutation-test` runs both goals. A panel lens falsified the stronger claim
-  by running the two-goal form, and it was corrected rather than hedged.
+  comply, structurally. Probed at Claude Code 2.1.250 on 2026-08-28 under the shipped
+  profile before the grant: `make test` and a bare `uv run pytest` were refused, with a
+  `cat` in the same session accepted as the live control. It needs no companion
+  `uv`/`uvx` entry, because the permission check is on the Bash tool call and not on
+  what the recipe spawns.
+  **Read the entry as admitting a command whose argv begins with `make test`, which is
+  not "the `test` target":** at that same client and date, standalone
+  `make mutation-test` was refused while `make test mutation-test` ran both goals. The
+  match is on argv tokens rather than raw text, so `make test-exfil` and
+  `make testing-foo` were refused as well — "begins with" bounds the leading tokens,
+  not a string prefix. A panel lens falsified the stronger "bounded to the one target"
+  claim by running the two-goal form, and a delta-pass lens established the token
+  boundary; both were corrected here rather than hedged.
 - **`Bash(uv run scripts/kit_doctor.py:*)`**, and the `scripts/devkit/` spelling beside
   it as `pr_watch.py` already has — because a lane editing any kit-owned file must
   refresh the manifest or its PR is deterministically red, which costs the lane its
@@ -321,15 +331,33 @@ bound "what a lane can do". There is a class of write it **cannot authorize**
 (`.claude/`), and a class of execution it **authorizes with no rule in any list** (the
 composition above).
 
+**Whether editing this profile is itself a safety-critical change is an open question,
+and it is open in the doctrine rather than settled here.** `AGENTS.md` names three
+files — `pr_watch.py`, `dev_session.sh`, `launch_lane.py` — and the profile is none of
+them; it is data those engines read. But it is the mutable content `--settings` loads
+at every launch, and the composition above runs through it, so "not on the list" is a
+weaker argument than it looks. A delta-pass adversarial lens disputed the scoping on
+exactly that ground while a correctness lens confirmed it, which is the disagreement
+recorded rather than resolved. Until it is settled (`#633`), treat a change to this
+file the way `safety-critical-changes.md` would: both lenses before merge, and the
+operator lands it.
+
 **What a matched prefix does not do is swallow the rest of a compound command**, and
-the distinction is worth stating because it is easy to measure wrongly. Each
-`;`-separated segment is permission-checked on its own: `make test; curl …` and
-`git status; curl …` are both refused, while `make test; echo …` runs — `echo` being
-accepted on its own, not carried in by the prefix. A panel lens ran the `echo` form,
-read it as the prefix widening to arbitrary shell, and reported a HIGH; the
-denied-segment case is the one that separates the two readings, and until it is run
-neither is established. Chaining is therefore not a route around the allow list, and
-`#631`'s composition — rewrite a granted engine, then run it — remains the one that is.
+the distinction is worth stating because it is easy to measure wrongly. Each segment of
+a compound is permission-checked on its own. Probed at Claude Code 2.1.250 on
+2026-08-28: `make test; curl …` and `git status; curl …` were both refused against a
+bare `curl` control that was refused too, while `make test; echo …` ran — `echo` being
+accepted on its own, not carried in by the prefix. A delta-pass lens extended this
+across every operator it could reach — `&&`, `||`, `|`, backtick substitution, `$()`,
+`<()`, and an env-assignment prefix, plus `eval` and `bash -c` — and found none that
+carried a denied segment through a granted one.
+
+That distinction had to be measured, not reasoned: a panel lens ran only the `echo`
+form, read it as the prefix widening to arbitrary shell, and reported a HIGH. The
+accept-form evidence cannot separate "the prefix carried the rest" from "both parts
+were acceptable anyway"; only the denied-segment case does. So chaining is not a route
+around the allow list, and `#631`'s composition — rewrite a granted engine, then run
+it — remains the one that is.
 
 Every supported launcher must still prepend `prompt_preamble` verbatim and must not
 open a second worktree on top of `new --headless`. The wrapper does both by consuming
