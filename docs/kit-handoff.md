@@ -14,14 +14,79 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-28 — PRs `#626` and `#625` merged the first real headless task on
-the generalised launcher. The lane ran on this repository, terminalized `failed` at a
-capability boundary, and that is the result: a Claude lane cannot write under `.claude/`
-and cannot refresh the kit manifest, so it cannot complete kit-owned work end to end.
-Phase 4 is closed; Phase 5 (`#606`) is next, and this slice handed it two decidable
-inputs and one constraint it cannot decide.
+Last updated: 2026-08-28 — PR `#632` opened Phase 5 by deciding Claude's shipped lane
+permissions as repository policy (`#606`). A lane may now run `make test` and
+`kit_doctor.py`; a lane doing kit-owned Claude-adapter work is declared unsupported. The
+slice's larger result is what measuring the grants turned up: the profile already
+authorized execution outside the worktree with no rule for it, so it is documented as
+task-scoping rather than a security boundary (`#631`), and whether it is a
+safety-critical file at all is now an open doctrine question (`#633`).
 
-## Latest session — 2026-08-28 (first real headless lane on this repository)
+## Latest session — 2026-08-28 (Claude's shipped lane permissions as repository policy)
+
+**Theme —** PR `#632` (squash `e04e8ff`) took Phase 5's first slice: `#606`, decided as
+three separate questions about `config/claude-lane-settings.json` rather than one bundle.
+The record is
+[`lane-permission-policy_2026-08-28.md`](../saved_plans/lane-permission-policy_2026-08-28.md)
+with a committed evidence bundle beside it, every probe run under the lane's own trust
+route against the pinned client.
+
+- **The two grantable questions were granted, and the third is not grantable.** A lane
+  gets `Bash(make test:*)` — `AGENTS.md` makes that the verification command and a lane
+  was structurally refused it, so its first verification was always CI — and
+  `kit_doctor.py` in both engine spellings, without which a lane editing any kit-owned
+  file cannot refresh the manifest and its PR is deterministically red. `#627`'s
+  `.claude/` guard is the client's own and no allow-list entry reaches it, so the
+  decision is what the kit *says*: a lane doing kit-owned Claude-adapter work is not a
+  supported case, and a parity change is split — lane for the runtime-neutral half and
+  the Codex adapter, cockpit for `.claude/`.
+
+- **Measuring the objection to the first grant is what reframed the slice.** `make` runs
+  what the worktree's `Makefile` says and `Edit(**)` lets a lane write it — so the grant
+  looked like unrestricted execution. It is, and so is what already shipped: under the
+  shipped bytes with nothing added, a lane rewrote `scripts/pr_watch.py` and ran it,
+  writing outside the worktree with an empty denial list. `Edit(**)` bounds file edits,
+  not a process. The profile is now documented as task-scoping — fail-closed for a
+  *confused* lane — rather than a security boundary, with the mechanism filed as `#631`
+  rather than built here.
+
+- **The mirror to Codex is the doctrine, not the grants.** `--sandbox` has no per-command
+  list to receive one, and bounds the process rather than the command name — narrower
+  exactly where the prefix list is weakest. `runtime-parity.md`'s "Command permissions"
+  row carries that, and that the `.claude/` asymmetry is permanent rather than a gap to
+  close.
+
+- **The panel found a false claim of ours in each round, both times in prose beside
+  correct work.** Round 1 killed "the grant is bounded to the one target" by running
+  `make test mutation-test`; the delta pass then showed the *replacement* wording still
+  invited a substring reading, the real bound being argv tokens. It also caught readings
+  stated without their client and date in the document that argues for stamping them.
+  One HIGH was declined by measuring the case the lens's own evidence could not supply.
+  Dispositions are on the PR and the lessons in
+  [`review-process-learnings_2026-08-24.md`](../saved_plans/review-process-learnings_2026-08-24.md).
+
+- **Filed this session:** `#631` (the profile grants execution it cannot bound),
+  `#633` (is the profile a safety-critical file — the two lenses split on it).
+  Occurrences added to `#510` (a wrapper reported exit 0 for a `make test` that failed,
+  the pipeline's status being `tail`'s) and `#628` (the lane contract should carry this
+  slice's two outcomes alongside that issue's own item, as one change to a
+  safety-critical engine).
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `7a5ffe2eb8681ec78057d6bb6f74b1b9a682622e` on 2026-08-28 printed `2007 passed, 3
+  warnings in 358.77s` on a quiet tree; the merged squash is `e04e8ff`. A delta-pass
+  correctness lens reproduced that run independently in its own clone.
+
+▶ Next: Phase 5 continues with `#236` and the `#243` narrowing — `#243`'s extraction has
+landed (every workflow has a shared doc, adapters are thin on both runtimes), so what
+remains is its residual and the rendered-adapter comparison `#236`'s adapter half needs.
+`#606` stays open for its `.claude/settings.json` half: engine-path templating, the
+`SessionStart` matcher, and the missing `kit_doctor` check for the permissions block.
+`#621` stays open.
+
+______________________________________________________________________
+
+## Session — 2026-08-28 (first real headless lane on this repository)
 
 **Theme —** PR `#626` (squash `2de16ed`) recorded the first headless lane run on this
 repository rather than a synthetic one, and PR `#625` (squash `6e7143c`) landed the
@@ -300,54 +365,6 @@ lane that performs a scoped write and lands a PR through `dev_session.sh pr-watc
 Keep calibration (`#605`, `#255`) and the first real headless task (`#602`) in the
 slices after. Stamp the final `make test` as a PR comment at the merged head and
 record the round reading with the same `gh` command the learnings document uses.
-
-______________________________________________________________________
-
-## Session — 2026-08-27 (Codex environment-capable launcher merged)
-
-**Theme —** PR `#609` delivered the bounded Codex launcher slice: a kit-owned wrapper
-now applies an absolute worktree and replacement lane environment, independently
-observes the child, and binds the request, attempt, process lineage, observation, final
-text, and terminal receipt before success.
-
-- **The supported surface is explicit.** `new --headless` accepts the descriptor when
-  the runtime resolves to Codex through `--runtime codex` or
-  `DEVKIT_RUNTIME=codex`. Claude remains supported for attended lanes; its headless
-  parity cell is a declared gap because no unattended state-writing path has live
-  runtime evidence yet.
-
-- **Repository authority stays with shared policy and kit-owned engines.** The launcher
-  replaces inherited lane/state values, removes repository overrides, resolves the
-  runtime through trusted paths, observes worktree/repository/lane/state/branch/base/
-  forge/process identity in the child, and fails closed on stale or foreign evidence,
-  interrupted or partial launches, reused process identity, detached descendants, and
-  an unbound success. Runtime adapters remain translation-only.
-
-- **The live record is intentionally bounded.** The Codex-produced record proves the
-  read-only isolation and receipt chain at its stamped client and revision. It does not
-  claim writing-lane approval behavior, Claude headless behavior, model/effort
-  calibration, downstream adaptation, or a general launcher framework.
-
-- **The adopter and review surfaces moved with the engine.** The launcher is tracked as
-  safety-critical kit-owned content, the changelog names the adopter refresh path, and
-  the configured fallback panel disposition records the accepted positive/hostile pairs
-  after CodeRabbit reported automatic review unavailable.
-
-▶ Next: create `feat/claude-environment-capable-launcher` from current `origin/main`
-and run the slice from a Claude Code session, because the live record must be produced
-by the runtime under test. Generalise `scripts/launch_codex_lane.py` into a per-runtime
-wrapper: keep the descriptor, scrub, child observer, one-shot attempt, and receipt chain
-unchanged; move the runtime check and child argv into a config-owned per-runtime template
-(`parallel.<runtime>_headless_command` plus each runtime's final-text transport —
-`claude -p` reads the prompt from stdin, takes cwd from the process, and returns final
-text on stdout with `--output-format json`). Write the design matrix and semantic/
-mutation rows before code, obtain a Claude-produced live isolation record matching
-`saved_plans/codex-environment-capable-launcher-live-validation_2026-08-26.md`, then
-move the headless parity row's Claude cell from gap to the observed mechanism. Keep
-approval policy and the writing-lane record (`#601`), calibration (`#605`), and `#602`
-in the slices that follow, in that order. Stamp final `make test` as a PR comment at the
-merged head, post the panel disposition, and record the review-round count so PR `#609`
-remains the comparison baseline.
 
 ______________________________________________________________________
 

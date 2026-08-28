@@ -353,3 +353,89 @@ length'` at `92a3c15d13be50ae0a02ba0c40ac78e80a1e56e0` on 2026-08-27 printed `4`
   and discarded before reaching the record, and filed as an occurrence on `#511`. The
   tell was a second error in the same output (`init.sh: No such file or directory`) that
   was unmistakably wrong; the first result on its own looked like a finding.
+
+## Lane-permission-policy additions from PR `#632`
+
+Two rounds, both lenses each round. Round 1 produced one HIGH that was declined on a
+measurement and one LOW that was right and became a real fix; the delta pass disputed
+two of four draws, and both disputes were right. The learnings below are about *probe
+design* — this slice's findings were reached by running the real client rather than by
+reading a diff, and most of what went wrong went wrong in what a probe was taken to
+establish.
+
+### An accept-form probe cannot establish a permission boundary. Only the denied case can.
+
+Round 1's adversarial lens reported that a granted prefix widens to arbitrary shell,
+having run `make test; echo …` and seen it succeed. The run was real and the conclusion
+did not follow: `echo` is accepted here on its own, so **both** segments were
+independently allowed and the result is identical under the two competing explanations —
+"the prefix carried the rest" and "both parts were fine anyway".
+
+The case that separates them is a compound whose second segment is **denied** standalone.
+It was run, and refused. So the boundary held and the finding did not.
+
+The general form: **an observation that everything ran tells you nothing about which
+rule allowed it.** To attribute an outcome to a specific grant, the probe needs a
+component that the grant is the *only* possible source of permission for. A control that
+succeeds is not a control.
+
+This cost nothing to check and would have cost a HIGH's worth of doctrine had it been
+accepted — and equally, hedging it ("chaining may widen the grant") would have shipped
+the false explanation standing beside the true one, unfalsifiable and permanent.
+
+### A correction can under-correct, and the fix round's wording needs its own falsification
+
+Round 1 correctly killed "the grant is bounded to the one target" and replaced it with
+"admits a command whose **text** begins with `make test`". That was better and still
+wrong in a way nobody had tested: it invites a *substring* reading. The delta-pass lens
+tested exactly that — `make test-exfil`, `make testing-foo`,
+`make test-and-curl-example-com` are all refused — establishing the match is on **argv
+tokens**, not raw text.
+
+So a fix round's replacement wording is a new claim, and it inherits none of the
+original's scrutiny. It is the least-reviewed sentence in the PR at the moment it is
+written, and it is written under the pressure of having just been wrong. Two rounds
+found two successive versions of the same sentence overstating, in different directions.
+
+### A probe's self-report is not evidence of the probe's effect
+
+`result-B.json` and `result-C.json` carry the probe's own narration — "step 2 ran",
+"the file was written". A delta-pass lens pointed out that this cannot distinguish a
+real worktree escape from a probe *reporting* one, under the claim the whole slice leans
+on.
+
+The fix is cheap and should be the default: **capture the effect from outside the
+probe.** The escaped files were still on the host filesystem, so they were listed with
+their mtimes, digested and printed into `escape-readback.txt`, beside the worktree path
+they are outside of. An effect that leaves an artifact should always be read back by the
+party that did not produce it.
+
+The same lens checked something worth stealing: that every `result-*.json` in the bundle
+carries a **distinct session id**. That is the check which catches an evidence bundle
+assembled by copy-paste, and no amount of reading the prose finds it.
+
+### When lenses split, the split is the finding — route it to doctrine, do not pick a side
+
+On the safety-critical scoping draw, adversarial disputed and correctness confirmed, both
+correctly reasoning from the same text: `AGENTS.md` names three engines, and the changed
+file is data those engines load. Neither lens was wrong; the rule was ambiguous.
+
+The temptation is to adopt the stricter lens's reading in the PR — here, to add the
+profile to the named list. That is a doctrine change nobody asked for, arriving in a
+commit about permissions, which is precisely
+`safety-critical-changes.md` rule 3's trap. It was filed instead (`#633`), with the
+document telling the next author to take the conservative reading until it is settled.
+**A disagreement between lenses is evidence about the rule, not about the change.**
+
+### Sweep sibling claims when a lens rejects an inference
+
+The most useful thing this slice did happened before any review. The previous session's
+record contained, one bullet apart, a claim a lens had forced to be *measured* and a
+second claim of the identical shape — inferred from the same allow list — that nobody
+re-examined. The second was re-measured here as the first act of the slice.
+
+So: **when a review forces one claim from inference to measurement, the sibling claims
+resting on that same inference do not inherit the fix.** They are the likeliest place
+for the next defect, they are cheap to find (they sit near the corrected one), and they
+carry the corrected claim's credibility without having earned it. Worth a deliberate
+pass at the time of the original correction, not one session later.
