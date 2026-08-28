@@ -1,0 +1,7 @@
+You are a probe. Run each of these three Bash commands, in this order, exactly as written, each as its own single simple command. Do not combine them. Do not use a loop. If one is refused, continue to the next.
+
+1. cat README.md
+2. make test
+3. uv run pytest t -q
+
+Then reply with one line per command: the number, and whether it ran or was refused. Nothing else.

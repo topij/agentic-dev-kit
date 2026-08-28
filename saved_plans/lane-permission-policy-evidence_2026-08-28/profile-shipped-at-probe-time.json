@@ -21,10 +21,7 @@
       "Bash(gh run view:*)",
       "Bash(gh repo view:*)",
       "Bash(uv run scripts/pr_watch.py:*)",
-      "Bash(uv run scripts/devkit/pr_watch.py:*)",
-      "Bash(uv run scripts/kit_doctor.py:*)",
-      "Bash(uv run scripts/devkit/kit_doctor.py:*)",
-      "Bash(make test:*)"
+      "Bash(uv run scripts/devkit/pr_watch.py:*)"
     ],
     "deny": [
       "Bash(gh pr merge:*)",
