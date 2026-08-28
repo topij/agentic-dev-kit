@@ -42,6 +42,48 @@ starts.
 
 ---
 
+## #632 — 2026-08-28
+
+- **ADDED (config keys) — the shipped `config/claude-lane-settings.json` grants a lane
+  three more commands: `Bash(make test:*)`, `Bash(uv run scripts/kit_doctor.py:*)`, and
+  `Bash(uv run scripts/devkit/kit_doctor.py:*)`.** `init.sh` seeds this file when absent
+  and **never rewrites it**, so an installed adopter's profile is untouched by this
+  change and their lanes keep the old grants. **To adopt them, add the three entries to
+  your own profile** (or copy `config/claude-lane-settings.json` wholesale if you have
+  not diverged); take the `scripts/devkit/` spelling only if that is your
+  `paths.engines`. Without the first, a lane cannot run the `AGENTS.md` verification
+  command and its first verification is CI; without the others, a lane that edits a
+  kit-owned file cannot refresh the manifest and its PR is deterministically red. Read
+  the `make` entry as what it is: it admits a command whose argv **begins with**
+  `make test`, which is not "the `test` target". Probed at Claude Code **2.1.250** on
+  **2026-08-28** under the lane trust route (evidence in
+  `saved_plans/lane-permission-policy-evidence_2026-08-28/`): standalone
+  `make mutation-test` was refused while `make test mutation-test` ran **both** goals,
+  and the match is on argv tokens rather than raw text, so `make test-exfil` was refused
+  too. In the same probes a chained segment was permission-checked on its own, so a
+  matched prefix did not carry a denied command with it — `make test; curl …` and
+  `git status; curl …` were both refused, as were the `&&`, `||`, `|`, backtick,
+  `$()`, `<()` and env-assignment spellings.
+  `launch_lane.py`'s structural validator is unchanged and still refuses a `Bash`
+  allow with no literal command prefix, an edit tool without a worktree-relative
+  pattern, and any `permissions` key outside `allow`/`deny`/`ask`.
+- **CHANGED (gate semantics) — the lane settings profile is documented as
+  task-scoping, not a security boundary (`#631`).** No engine behaviour changes and no
+  entry is removed. If you relied on the profile to bound what a lane's *processes* can
+  reach, it does not and did not: `Edit(**)` bounds file edits to the worktree but not a
+  process, so a `Bash(<interpreter> <worktree-path>)` grant names a file the lane may
+  rewrite. What the profile does deliver is fail-closed behaviour for a lane that
+  wanders off-task. **Do not treat a lane worktree as a containment boundary**; run
+  lanes only on tasks and inputs you would run in your own session.
+- **CHANGED (gate semantics) — a lane doing kit-owned Claude-adapter work is declared
+  unsupported (`#606` deciding `#627`).** A Claude lane cannot write under `.claude/`
+  and no allow-list entry reaches that guard. **Split a runtime-parity change**: the
+  lane takes the runtime-neutral half and the Codex adapter, the cockpit takes the
+  `.claude/` half. A lane sent at `.claude/` terminalizes `failed`; that is the client's
+  guard, not a lane defect and not a profile gap to fix.
+
+---
+
 ## #623 — 2026-08-27
 
 - **CHANGED (config keys) — `models.runtime_mappings` defaults are recalibrated for a

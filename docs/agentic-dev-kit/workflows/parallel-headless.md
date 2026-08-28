@@ -116,10 +116,17 @@ inert on that client, so scope editing with `Edit(<pattern>)` and nothing else),
 a Bash call outside the declared prefixes is a denial — except for the read-only
 class the runtime accepts regardless at 2.1.247 (`pwd`, `whoami`, `cat`, `grep`,
 `find`, bare `git remote -v` ran with nothing in `permission_denials`, while `touch`,
-`curl`, `env` and `git remote show` were denied). So a lane can read whatever its
-process can read, the receipt cannot show a read the runtime never asked about, and
-the allow list bounds what a lane can *do* — write, commit, push, open a PR — not
-what it can see.
+`curl`, `env` and `git remote show` were denied). That acceptance is a property of
+command **shape** and not of command name: a `for … do cat … done` loop and a
+`;`-chained `grep`/`echo` compound were both denied at 2.1.250 in a session that
+accepted plain `grep` and `cat` (`#628`), and under `dont-ask` such a denial is
+terminal for the whole lane rather than a round trip. So a lane can read whatever its
+process can read, and the receipt cannot show a read the runtime never asked about.
+
+**What the allow list bounds is the lane's task, not its reach** — see the profile
+discussion below, where `#606` states the two directions in which "bounds what a lane
+can do" is wrong: a class of write it cannot authorize, and a class of execution it
+authorizes with no rule in any list.
 `accept-edits` is declarable and is not the default because the runtime then also
 auto-accepts its own class of file-system Bash commands inside the worktree — `rm`,
 `mv`, and redirection writes were observed accepted live at 2.1.247 with none of
@@ -249,8 +256,108 @@ one observed live against a throwaway remote. The deny entries for the flag
 spellings catch only the flag-first placement. So the profile does not protect a
 remote branch's history; that remains the forge's branch protection and the lane
 contract's own-branch rule, and a deterministic lane-side push gate is follow-up
-work, not a claim this contract makes. What else belongs in that profile as repository policy is `#606`, not this
-contract.
+work, not a claim this contract makes.
+
+**The profile scopes a lane's task; it is not a security boundary, and the difference
+is measured rather than conceded.** `Edit(**)` bounds file *edits* to the worktree; it
+does not bound a *process*. So a `Bash(<interpreter> <worktree-path>)` entry names a
+file the lane is separately allowed to rewrite, and the two grants compose into
+something neither one says. Under the shipped profile with **nothing added**, a lane
+asked to rewrite `scripts/pr_watch.py` — already granted
+`Bash(uv run scripts/pr_watch.py:*)` — so that it writes an absolute path outside the
+worktree, and then to run it, did exactly that and returned an empty
+`permission_denials` (`#606`, Claude Code 2.1.250, 2026-08-28, evidence bundle in
+`saved_plans/lane-permission-policy-evidence_2026-08-28/`). The escaped file is read
+back from the host filesystem in that bundle's `escape-readback.txt` rather than taken
+from the probe's own account of itself, because a probe narrating success and a probe
+that actually escaped are otherwise the same evidence — a delta-pass lens named that
+gap. No spelling of that entry
+closes it while the lane can write the file it names: a command-prefix allow list
+cannot constrain the *contents* of a file its prefix names. Closing it needs a
+different mechanism — an OS sandbox around the child, or granting only scripts
+resolved from outside the lane-writable worktree — which is `#631`, not an edit to
+this profile.
+
+What the profile does deliver, and what the allow list should be read as bounding, is
+**fail-closed behaviour for a confused lane**: one that wanders off-task reaches for
+something no rule covers, is denied, and the wrapper terminalizes the run `failed`
+with a legible record of what it reached for. That property is untouched by the
+composition above, because a confused lane does not rewrite an engine to escape.
+Against a lane that is actively hostile, or prompt-injected into acting like one, this
+profile has never been the thing standing in the way — the descriptor seal already
+disclaims that boundary above, and the allow list does not reinstate it.
+
+So the shipped grants are decided on what each one **buys** a lane. `#606` settled the
+grantable questions — these two — and then the `.claude/` question below, which no
+grant reaches:
+
+- **`Bash(make test:*)`** — `AGENTS.md` makes `make test` the repository's verification
+  command and forbids deferring verification to CI without running it; a lane could not
+  comply, structurally. Probed at Claude Code 2.1.250 on 2026-08-28 under the shipped
+  profile before the grant: `make test` and a bare `uv run pytest` were refused, with a
+  `cat` in the same session accepted as the live control. It needs no companion
+  `uv`/`uvx` entry, because the permission check is on the Bash tool call and not on
+  what the recipe spawns.
+  **Read the entry as admitting a command whose argv begins with `make test`, which is
+  not "the `test` target":** at that same client and date, standalone
+  `make mutation-test` was refused while `make test mutation-test` ran both goals. The
+  match is on argv tokens rather than raw text, so `make test-exfil` and
+  `make testing-foo` were refused as well — "begins with" bounds the leading tokens,
+  not a string prefix. A panel lens falsified the stronger "bounded to the one target"
+  claim by running the two-goal form, and a delta-pass lens established the token
+  boundary; both were corrected here rather than hedged.
+- **`Bash(uv run scripts/kit_doctor.py:*)`**, and the `scripts/devkit/` spelling beside
+  it as `pr_watch.py` already has — because a lane editing any kit-owned file must
+  refresh the manifest or its PR is deterministically red, which costs the lane its
+  whole result rather than one check. Granted bare rather than scoped to
+  `--generate-manifest`, so that checking the manifest before regenerating it does not
+  end the run. It admits `#464`'s broken redirect exactly as it admits the correct
+  invocation; a prefix rule cannot see a redirect, so that belongs in the lane contract.
+
+**A lane doing kit-owned Claude-adapter work is not a supported case** (`#606`
+deciding `#627`). A lane cannot write under `.claude/` — measured across `commands/`,
+`rules/`, `agents/`, `settings.json` and the bare directory, in two repositories and
+under two file-editing tools, in a session that wrote `.agents/`, `docs/` and
+`.github/workflows/`. Neither the `Edit(**)` glob nor dot-directories is the mechanism,
+and **no allow-list entry reaches it**: it is the client's own guard, so the profile
+cannot authorize it and no future entry here will. The supported route for a
+runtime-parity change is to split it — the lane takes the runtime-neutral half and the
+Codex adapter, the cockpit takes the `.claude/` half — which is what `#625` did by
+necessity. Do not send a lane at `.claude/` and read the resulting `failed` as a lane
+defect.
+
+Both findings correct the same sentence, in opposite directions: this profile does not
+bound "what a lane can do". There is a class of write it **cannot authorize**
+(`.claude/`), and a class of execution it **authorizes with no rule in any list** (the
+composition above).
+
+**Whether editing this profile is itself a safety-critical change is an open question,
+and it is open in the doctrine rather than settled here.** `AGENTS.md` names three
+files — `pr_watch.py`, `dev_session.sh`, `launch_lane.py` — and the profile is none of
+them; it is data those engines read. But it is the mutable content `--settings` loads
+at every launch, and the composition above runs through it, so "not on the list" is a
+weaker argument than it looks. A delta-pass adversarial lens disputed the scoping on
+exactly that ground while a correctness lens confirmed it, which is the disagreement
+recorded rather than resolved. Until it is settled (`#633`), treat a change to this
+file the way `safety-critical-changes.md` would: both lenses before merge, and the
+operator lands it.
+
+**What a matched prefix does not do is swallow the rest of a compound command**, and
+the distinction is worth stating because it is easy to measure wrongly. Each segment of
+a compound is permission-checked on its own. Probed at Claude Code 2.1.250 on
+2026-08-28: `make test; curl …` and `git status; curl …` were both refused against a
+bare `curl` control that was refused too, while `make test; echo …` ran — `echo` being
+accepted on its own, not carried in by the prefix. A delta-pass lens extended this
+across every operator it could reach — `&&`, `||`, `|`, backtick substitution, `$()`,
+`<()`, and an env-assignment prefix, plus `eval` and `bash -c` — and found none that
+carried a denied segment through a granted one.
+
+That distinction had to be measured, not reasoned: a panel lens ran only the `echo`
+form, read it as the prefix widening to arbitrary shell, and reported a HIGH. The
+accept-form evidence cannot separate "the prefix carried the rest" from "both parts
+were acceptable anyway"; only the denied-segment case does. So chaining is not a route
+around the allow list, and `#631`'s composition — rewrite a granted engine, then run
+it — remains the one that is.
 
 Every supported launcher must still prepend `prompt_preamble` verbatim and must not
 open a second worktree on top of `new --headless`. The wrapper does both by consuming

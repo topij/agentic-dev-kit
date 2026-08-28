@@ -32,7 +32,7 @@
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
-      "sha256": "4d14ae4eaacac52ef72e9d3ddfa6c8056d7c0892d5a66515abd8116f97485746"
+      "sha256": "3d8a2eafb25968ef0ed410a2d620981fdd859ede3e8e93945e815d1c71f9fa8d"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
@@ -44,7 +44,7 @@
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
-      "sha256": "3522783256c531a0fc630fa2a61d5f24fc311fb41e1073775773c27902af3bf8"
+      "sha256": "313e7ff0e855a1ea5af14933bc9109db9193b4f89a9bb37546d8ad170a438bdf"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
@@ -100,7 +100,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "f4d782b98c009bc2f492e7c66195b34abcee11397a86510097c32c881dc44057"
+      "sha256": "a45ee438e98a2567a66edb64581df620ccc346d1ff632dd716b4c144de253134"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -247,7 +247,7 @@
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
-      "sha256": "a380f72910ea5de56de1dc1ed3cc2b2b492f54272bf00ef0806ba0ed73bf4e0f"
+      "sha256": "2fa95d6708194c57d5d4f4efb1e6f7a563633786f344d3478e3345c478ddbd3c"
     },
     "scripts/tests/test_mutation_gate.py": {
       "role": "test",

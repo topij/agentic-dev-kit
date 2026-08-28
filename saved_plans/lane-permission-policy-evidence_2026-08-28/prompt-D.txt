@@ -1,0 +1,8 @@
+You are a probe. Run each of these four Bash commands, in this order, exactly as written, each as its own single simple command. Do not combine them. Do not use a loop. If one is refused, continue to the next.
+
+1. make test
+2. make mutation-test
+3. uv run scripts/kit_doctor.py --generate-manifest
+4. uv run scripts/kit_doctor.py
+
+Then reply with one line per command: the number, and whether it ran or was refused. Nothing else.

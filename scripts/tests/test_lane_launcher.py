@@ -2293,3 +2293,51 @@ def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_valida
         entry == "Edit(**)" or (entry.startswith("Bash(") and entry.endswith(":*)"))
         for entry in shipped["permissions"]["allow"]
     )
+    # `#606` (2026-08-28, Claude Code 2.1.250) decided the three grants that were
+    # open, on measurements in
+    # `saved_plans/lane-permission-policy-evidence_2026-08-28/`. `make test` is the
+    # `AGENTS.md` verification command and was refused under the profile as it
+    # stood, so a lane's first verification was always CI. What the entry bounds is
+    # narrower than it reads: it admits a command whose text BEGINS with
+    # `make test`, so standalone `make mutation-test` is refused but
+    # `make test mutation-test` runs both goals. This assertion pins the entry's
+    # spelling and claims only that — a panel lens falsified the stronger
+    # "bounded to the one target" reading this comment first carried, by running
+    # the two-goal form live.
+    assert "Bash(make test:*)" in shipped["permissions"]["allow"]
+    assert "Bash(make:*)" not in shipped["permissions"]["allow"]
+    # `kit_doctor.py` is granted for BOTH engine layouts, exactly as `pr_watch.py`
+    # is: `paths.engines` is the adopter's, and `scripts/devkit/` is the vendored
+    # layout `.claude/rules/safety-critical-changes.md` supports. Without it a lane
+    # that edits any kit-owned file cannot refresh the manifest, so its PR is
+    # deterministically red and the cockpit must finish the work (`#625`).
+    # Granted BARE rather than scoped to `--generate-manifest`, so that reading the
+    # doctor's report before regenerating does not hit a denial — which under the
+    # shipped `dont-ask` ends the whole run rather than costing a round trip.
+    for engine_dir in ("scripts", "scripts/devkit"):
+        assert f"Bash(uv run {engine_dir}/kit_doctor.py:*)" in shipped["permissions"]["allow"]
+        assert f"Bash(uv run {engine_dir}/pr_watch.py:*)" in shipped["permissions"]["allow"]
+    assert not any(
+        entry.startswith("Bash(uv run") and "--generate-manifest" in entry
+        for entry in shipped["permissions"]["allow"]
+    )
+    # What this profile does NOT claim, measured rather than reasoned (`#631`): a
+    # `Bash(<interpreter> <worktree-path>)` entry names a file `Edit(**)` lets the
+    # lane rewrite, so it composes into execution outside the worktree that no rule
+    # in any list describes. Under the shipped bytes with nothing added, a lane
+    # rewrote `scripts/pr_watch.py` and ran it, writing an absolute path outside the
+    # worktree, and returned an empty `permission_denials`. The profile is
+    # task-scoping — fail-closed for a CONFUSED lane — not a security boundary, and
+    # no spelling of these entries changes that while the lane can write the file
+    # each one names. This assertion pins the shape that carries the property, so a
+    # future entry naming a worktree path is a deliberate choice and not a slip.
+    assert [
+        entry
+        for entry in shipped["permissions"]["allow"]
+        if entry.startswith("Bash(uv run")
+    ] == [
+        "Bash(uv run scripts/pr_watch.py:*)",
+        "Bash(uv run scripts/devkit/pr_watch.py:*)",
+        "Bash(uv run scripts/kit_doctor.py:*)",
+        "Bash(uv run scripts/devkit/kit_doctor.py:*)",
+    ]
