@@ -1086,6 +1086,26 @@ migrate_parallel_schema() {
 # all match — so the profile does not protect branch history; that stays with
 # the forge and the lane contract, and the deny entries catch only the
 # flag-first spellings.
+# `#606` (2026-08-28, Claude Code 2.1.250) added the last three entries, each on a
+# measurement rather than on a reading of this list. `make test` is the AGENTS.md
+# verification command and was refused under the list as it stood, so a lane's
+# first verification was always CI; the grant is bounded to the one target,
+# because the runtime matches on token boundaries and `make mutation-test` is
+# refused by it. `kit_doctor.py` gets both engine spellings exactly as
+# `pr_watch.py` does, because `paths.engines` is the adopter's — without it a lane
+# that edits any kit-owned file cannot refresh the manifest, so its PR is
+# deterministically red and the cockpit must finish the work. It is granted bare
+# rather than scoped to `--generate-manifest` so that reading the doctor's report
+# before regenerating does not hit a denial, which under `dont-ask` ends the whole
+# run rather than costing a round trip.
+# What this list does NOT do, measured rather than reasoned (`#631`): it does not
+# bound a lane's processes. `Edit(**)` bounds file EDITS to the worktree, so a
+# `Bash(<interpreter> <worktree-path>)` entry names a file the lane may rewrite
+# and then run — done live under these exact bytes, writing outside the worktree
+# with an empty `permission_denials`. No spelling closes that while the lane can
+# write the file the prefix names. This list scopes a lane's TASK — it is
+# fail-closed for a lane that wanders off-task — and is not a containment
+# boundary. Keep that in mind before adding an entry that names a worktree path.
 seed_claude_lane_profile() {
   _profile="$(sed -n 's/^  claude_settings_profile:[[:space:]]*//p' "$CONFIG_FILE" | head -n 1)"
   _profile="${_profile%%#*}"
@@ -1119,7 +1139,10 @@ seed_claude_lane_profile() {
       "Bash(gh run view:*)",
       "Bash(gh repo view:*)",
       "Bash(uv run scripts/pr_watch.py:*)",
-      "Bash(uv run scripts/devkit/pr_watch.py:*)"
+      "Bash(uv run scripts/devkit/pr_watch.py:*)",
+      "Bash(uv run scripts/kit_doctor.py:*)",
+      "Bash(uv run scripts/devkit/kit_doctor.py:*)",
+      "Bash(make test:*)"
     ],
     "deny": [
       "Bash(gh pr merge:*)",
