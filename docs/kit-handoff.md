@@ -14,15 +14,57 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-28 — PR `#632` opened Phase 5 by deciding Claude's shipped lane
-permissions as repository policy (`#606`). A lane may now run `make test` and
-`kit_doctor.py`; a lane doing kit-owned Claude-adapter work is declared unsupported. The
-slice's larger result is what measuring the grants turned up: the profile already
-authorized execution outside the worktree with no rule for it, so it is documented as
-task-scoping rather than a security boundary (`#631`), and whether it is a
-safety-critical file at all is now an open doctrine question (`#633`).
+Last updated: 2026-08-29 — PR `#635` delivered generated runtime-adapter comparison and
+manifest-selected installed-suite verification for upgrades. `#236` now carries the
+re-measured adopter premise and residual scope; `#243` is narrowed to the runtime-specific
+workflow residue that still needs field exercise.
 
-## Latest session — 2026-08-28 (Claude's shipped lane permissions as repository policy)
+## Latest session — 2026-08-29 (runtime-adapter refresh, in a Codex session)
+
+**Theme —** In a Codex session, PR `#635` (squash `2f2561f`) took Phase 5's `#236`
+adapter/verification slice and narrowed `#243`. Upgrade now classifies generated Claude
+and Codex bindings from their slug, description and shared workflow path; generated
+bindings refresh, adopter-authored bindings are reported and preserved, and unsafe
+filesystem shapes fail closed.
+
+- **The stale premise was measured in a real adopter before design.** The measurement,
+  premise correction and resulting scope are recorded on `#236`; design started from
+  that record rather than the issue's original diagnosis.
+
+- **Step 5 now follows the adopter's manifest.** `scripts/run_installed_tests.py`
+  selects declared installed tests, applies engine remapping, refuses missing or unsafe
+  paths, propagates pytest's status, and makes an empty declaration an explicit skip.
+  The workflow no longer treats a directory-shaped pytest invocation as proof of what
+  upgrade delivered.
+
+- **The `#243` residue is runtime translation, not duplicated workflow doctrine.** The
+  generated comparison covers the shipped adapters. The issue comment names the
+  remaining native context, lane/delegation, compute/isolation, bootstrap and
+  instruction-layer carriers. This session followed `session-start` and `upgrade`
+  through their shared documents without a Codex workaround; upgrade's cloned-workflow
+  re-read remained load-bearing.
+
+- **The fallback panel changed the implementation at the boundaries it challenged.**
+  It found unsafe link shapes, a selector that was not actually manifest-owned,
+  historical fixtures coupled to current metadata, CLI branches whose exit semantics
+  were unpinned, doctor-first import ordering, mixed-mode fail-open behavior, and
+  preservation assertions that could not distinguish unchanged bytes from a replaced
+  path. The exact-head dispositions and independent mutation evidence are on PR `#635`;
+  the reusable lessons are in
+  [`review-process-learnings_2026-08-24.md`](../saved_plans/review-process-learnings_2026-08-24.md).
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `3032a2f47c2be34e49ea4148c0c5635ca99a83fd` on 2026-08-29 printed `2034 passed, 3
+  warnings in 352.43s`; the merged squash is `2f2561f`.
+
+▶ Next: take Phase 5's `#606` `.claude/settings.json` half: engine-path templating, the
+startup-only `SessionStart` matcher, and the missing `kit_doctor` check for the
+permissions block. Keep `#621`, `#631`, and `#633` open; use `#243` for the remaining
+runtime-specific workflow field exercises.
+
+______________________________________________________________________
+
+## Session — 2026-08-28 (Claude's shipped lane permissions as repository policy)
 
 **Theme —** PR `#632` (squash `e04e8ff`) took Phase 5's first slice: `#606`, decided as
 three separate questions about `config/claude-lane-settings.json` rather than one bundle.
@@ -308,68 +350,7 @@ the `post-merge-systemize` binding bug).
 
 ______________________________________________________________________
 
-## Session — 2026-08-27 (per-runtime launcher: Claude through `claude -p`)
-
-**Theme —** PR `#611` generalised the Codex wrapper into one kit-owned per-runtime
-launcher, `scripts/launch_lane.py`, run from a Claude Code session so the runtime under
-test produced its own live record. Codex's argv and evidence route are unchanged and
-pinned; Claude runs `claude -p --output-format json` with cwd from the process, the
-prompt on stdin, and its single JSON result bound by digest.
-
-- **Transports are declarations the engine checks.** Config owns, per runtime,
-  `parallel.<runtime>_headless_command` and its `*_transport` keys; the engine owns
-  the vocabulary each runtime implements and refuses any other declaration before an
-  attempt record exists. The attempt and receipt request bind the runtime and its
-  transports, so parent and child cannot resolve different templates. Everything
-  `#609` established — descriptor seal, environment replacement, trusted lookup,
-  child observation, nonce lineage, one-shot attempts, terminal receipts — is
-  byte-for-byte the same path.
-
-- **The live record moved the parity cell, and found the next slice's shape.** The
-  Claude-produced record in
-  [`claude-environment-capable-launcher-live-validation_2026-08-27.md`](../saved_plans/claude-environment-capable-launcher-live-validation_2026-08-27.md)
-  observed the client, as the exec'd observer, report the descriptor's worktree,
-  repository, branch, head, marker, and environment from inside the lane under hostile
-  inherited identity. It observed no write or approval transition, and it recorded
-  that a freshly issued lane worktree is an untrusted workspace to Claude, whose
-  committed `permissions.allow` entries it ignored. `parallel-headless.md` states that
-  limitation; the occurrence is on `#601`.
-
-- **Design before code held, and the panel record shows it.** The design matrix in
-  [`claude-environment-capable-launcher-design_2026-08-27.md`](../saved_plans/claude-environment-capable-launcher-design_2026-08-27.md)
-  preceded the engine change. The panel found no defect in engine behaviour: round 1
-  corrected an overstated sentence and filed the permission trust boundary, round 2
-  found coverage gaps (`is_error` absent, the hardlink clause) and a test-name
-  imprecision (answered by test code only, mutants recomputed and killed), round 3 was
-  a dual-lens delta pass with zero findings. The stamped round reading is in the learnings document beside `#609`'s.
-
-- **Merged under the doctrine's class.** The launcher is in the safety-critical path
-  binding, so the PR was held mergeable at `f7c0111` and merged on the operator's
-  explicit authorization in this session. Filed this session, each on exact-payload
-  approval: occurrences on `#601` and `#149`; earlier in the same session, `#601`–`#608`
-  and occurrences on `#466`, `#243`, `#255`, `#346`, `#236`, with `#341` and `#550`
-  closed as resolved.
-
-- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at `f7c0111` on
-  2026-08-27 printed `1799 passed, 3 warnings in 318.71s`; the merged squash is
-  `e0ef081`.
-
-▶ Next: create `feat/writing-lane-approval-policy` from current `origin/main` and take
-`#601`: add a config-owned approval/sandbox policy per runtime beside
-`parallel.<runtime>_headless_command`, pass it mechanically in `scripts/launch_lane.py`,
-and on Claude add the trust-establishment step the live record exposed (pre-trust the
-lane worktree, a trusted settings profile, or `--bare` with the contract re-injected).
-Write the design matrix first — action × approval state × durable evidence ×
-authoritative observer — then obtain a writing-lane live record on each runtime: a
-lane that performs a scoped write and lands a PR through `dev_session.sh pr-watch`.
-Keep calibration (`#605`, `#255`) and the first real headless task (`#602`) in the
-slices after. Stamp the final `make test` as a PR comment at the merged head and
-record the round reading with the same `gh` command the learnings document uses.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Active open items from them are folded into the "Open for next session" lists above.
 
 ______________________________________________________________________
-
