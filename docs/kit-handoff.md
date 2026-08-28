@@ -14,12 +14,72 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-28 — PR `#623` merged the capability-tier calibration: tiers
-calibrated per runtime from live probes, mechanical-versus-advisory declared beside
-every compute key, and the "no per-agent effort" claim retired on the surface it was
-false on. The first real headless task on the generalised launcher is next.
+Last updated: 2026-08-28 — PRs `#626` and `#625` merged the first real headless task on
+the generalised launcher. The lane ran on this repository, terminalized `failed` at a
+capability boundary, and that is the result: a Claude lane cannot write under `.claude/`
+and cannot refresh the kit manifest, so it cannot complete kit-owned work end to end.
+Phase 4 is closed; Phase 5 (`#606`) is next, and this slice handed it two decidable
+inputs and one constraint it cannot decide.
 
-## Latest session — 2026-08-27 (capability-tier calibration)
+## Latest session — 2026-08-28 (first real headless lane on this repository)
+
+**Theme —** PR `#626` (squash `2de16ed`) recorded the first headless lane run on this
+repository rather than a synthetic one, and PR `#625` (squash `6e7143c`) landed the
+`#602` binding fix the lane was given. The launcher and every shipped configuration
+value stayed byte-identical for the run. The design matrix in
+[`first-real-headless-lane-design_2026-08-28.md`](../saved_plans/first-real-headless-lane-design_2026-08-28.md)
+fixed the observers and a total terminal-outcome table before the launch; the record in
+[`first-real-headless-lane-live-validation_2026-08-28.md`](../saved_plans/first-real-headless-lane-live-validation_2026-08-28.md)
+carries what each row returned, beside a committed evidence bundle.
+
+- **The lane terminalized `failed`, and that is the finding.** It established for Claude
+  what the Codex record could not: structured denial read-back with real denials in it,
+  each naming its tool and target. The identity chain held throughout — worktree,
+  branch, base, state root, policy and profile digest all bound by the receipt, with the
+  cockpit's own `state/` untouched and the runtime's transcript independently confirming
+  the lane's cwd. Under the trust route the lane ran the product default,
+  `claude-opus-5` at effort `high`, read from that transcript.
+
+- **A Claude lane cannot complete kit-owned work here, for two separate reasons.** It
+  cannot write under `.claude/` — measured across `commands/`, `rules/`, `agents/`,
+  `settings.json` and the bare directory, in a session that wrote `.agents/`, `docs/`
+  and `.github/workflows/`, so neither the `Edit(**)` glob nor dot-directories is the
+  mechanism (`#627`). And it cannot run `kit_doctor.py --generate-manifest`, so after
+  editing any kit-owned file it cannot make its own PR green — a failure *after* the
+  work rather than before it. `#625`'s `.claude/` commit came from the cockpit for the
+  first reason, and its manifest commit for the second.
+
+- **Two smaller boundaries.** The read-only Bash class the shipped profile leans on is a
+  property of command **shape**: a `for … do cat … done` loop and a `;`-chained compound
+  were denied in the session that accepted plain `grep` and `cat` (`#628`). And the
+  shipped `claude_headless_command` cannot resolve a user-local install, with no overlay
+  reaching `parallel.*` (`#629`) — cleared for this run by a host symlink onto the
+  trusted path, so the kit stayed unchanged.
+
+- **The panel found real defects in the record, twice.** A correctness lens caught a
+  present-tense claim about branch state that had gone stale before its own commit
+  landed; the fix repaired two sentences and a delta-pass adversarial lens found a third
+  in a file that fix never touched. Another correctness lens caught the `.claude/` claim
+  generalising past its evidence, which was answered by measuring the gap rather than
+  hedging — and the measurement killed a competing explanation that narrowing would have
+  left standing. One Low was declined with the measurement that refuted it. The
+  dispositions are on both PRs and the lessons in
+  [`review-process-learnings_2026-08-24.md`](../saved_plans/review-process-learnings_2026-08-24.md).
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `77341814a66c478f9890e4b87592341800af0668` on 2026-08-28 printed `2006 passed, 3
+  warnings in 432.92s` on a quiet tree; the merged squashes are `2de16ed` and `6e7143c`.
+
+▶ Next: Phase 5, starting with `#606` — decide Claude's shipped lane permissions as
+repository policy. This slice hands it two inputs a grant can settle (the lane can run
+neither `make test` nor `kit_doctor.py --generate-manifest`) and one it cannot (`#627`'s
+`.claude/` guard, which no allow-list entry lifts). Then `#236` and the `#243`
+narrowing. `#621` stays open: this record met its intent by copying evidence out before
+the cleanup boundary, but did not build the bundle contract that issue asks for.
+
+______________________________________________________________________
+
+## Session — 2026-08-27 (capability-tier calibration)
 
 **Theme —** PR `#623` (squash `92a3c15`) calibrated `models.runtime_mappings` and
 `review.fallback_panel.lens_compute` for Claude Code and Codex from live probes of the
@@ -288,88 +348,6 @@ merged head, post the panel disposition, and record the review-round count so PR
 remains the comparison baseline.
 
 ______________________________________________________________________
-
-## Session — 2026-08-26 (triage forge provenance closes Phase 3)
-
-**Theme —** PR `#599` changed the friction-triage forge path so its lifecycle operations
-consume identifiers from preceding independently verified read-backs. The change
-targeted locally self-consistent records that exchanged repository, commit,
-pull-request, review, archive, or merge identities.
-
-- **The PR added an enumerated provenance spine.** It connected commit read-back's
-  observed commit and tree to push; verified remote-head read-back to pull-request
-  creation; pull-request read-back's PR and head to `pr-watch`; the reviewed PR,
-  observed head, reviewed head, and receipt to archive-sweep evidence; and that reviewed
-  identity to merge intent and read-back. It also added pre-write rejection routes for
-  foreign and future identifiers.
-
-- **The review retained independent authority boundaries.** PR `#599` kept proposal
-  content bound to its frozen authoritative source, derived semantic paths from merged
-  configuration, kept tracker attempts as separate persisted objects, constructed
-  duplicated evidence structures independently, and bound the ordered proposal set to
-  a batch report. It did not permit pre-action records to contain identifiers produced
-  by the pending action.
-
-- **The fix-round evidence exercised transitions rather than isolated records.** Its
-  positive cutpoints constructed action chains from durable predecessors. Its hostile
-  mutations recomputed locally valid records while changing lifecycle identities. PR
-  `#599` added semantic-oracle assertions for those mutations and added no workflow
-  policy to a runtime adapter.
-
-- **The merge satisfied the declared structural Phase 3 exit.** The delivered set was
-  shared workflow definitions, thin runtime bindings, config-owned policy, explicit
-  capability preflights, durable resume evidence, and cross-operation authority for
-  `post-merge-systemize`, `session-start`, `wrap-up`, and `triage-friction-log`. The PR
-  did not add a launcher, model/effort calibration, lane reconciliation, or downstream
-  cs-toolkit adaptation.
-
-▶ Next: create `feat/codex-environment-capable-launcher` from current `origin/main`.
-Inventory supported Codex launch surfaces against the absolute descriptor/environment-
-replacement contract, select an environment-capable mechanism, and obtain live lane-
-isolation evidence before changing shared launcher guidance. Keep model/effort
-calibration and downstream adapter reconciliation in later slices.
-
-______________________________________________________________________
-
-## Session — 2026-08-25 (triage integration preflights complete the shared phase)
-
-**Theme —** The friction-triage pipeline now has config-owned, runtime-neutral input,
-authority, artifact, resume, and outcome contracts, while the optional deterministic
-engines remain honestly absent and runtime adapters remain thin.
-
-- **Configuration and migration lead the contract.** `triage` owns its analysis tier,
-  mode-separated active state, session-unique frozen/report patterns, optional engine
-  names, commit subject, and PR draft policy. Refreshed `init.sh` adds the whole block or
-  missing flat keys without replacing adopter values and refuses ambiguous YAML before
-  writing. Shared `paths`, tracker, notification, state, branch, and model sections stay
-  authoritative.
-
-- **Approval and resume evidence are act-time gates.** Merged config, sandbox-aware
-  atomic state, and the exact frozen inbox are required. The configured engine pair is
-  atomic; both absent selects agent-executed LLM-only behavior and a partial pair stops.
-  Scheduled approval requires notification send/thread read; an interactive run can
-  degrade to the current session. Exact canonical payload digests bind approval,
-  attempts persist before writes, and failed or ambiguous tracker/forge responses take
-  destination read-back before any retry.
-
-- **Partial success cannot lose the inbox.** Finalization waits until every approved
-  tracker payload is verified, then sweeps only explicitly accounted blocks that remain
-  byte-identical to the frozen snapshot. Parked, unmentioned, failed, ambiguous, edited,
-  and window-added entries remain active. Test mode cannot write tracker, friction/archive,
-  branch, commit, push, or PR state.
-
-- **Parity is structural without pretending engine availability.** The Claude and Codex
-  bindings translate invocation and mechanisms only. Runtime parity, README/getting-
-  started, adoption/upgrade guidance, the changelog, installer fixtures, declaration-
-  derived semantic tests, and hostile mutations carry the same contract. No Phase 4
-  launcher, model/effort calibration, lane reconciliation, or downstream cs-toolkit
-  adaptation is included.
-
-▶ Next: create `feat/codex-environment-capable-launcher` from current `origin/main`.
-Inventory supported Codex launch surfaces against the absolute descriptor/environment-
-replacement contract, select an environment-capable mechanism, and obtain live lane-
-isolation evidence before changing shared launcher guidance. Keep model/effort
-calibration and downstream adapter reconciliation in later slices.
 
 ______________________________________________________________________
 

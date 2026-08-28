@@ -5,6 +5,90 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-08-26 (triage forge provenance closes Phase 3)
+
+**Theme —** PR `#599` changed the friction-triage forge path so its lifecycle operations
+consume identifiers from preceding independently verified read-backs. The change
+targeted locally self-consistent records that exchanged repository, commit,
+pull-request, review, archive, or merge identities.
+
+- **The PR added an enumerated provenance spine.** It connected commit read-back's
+  observed commit and tree to push; verified remote-head read-back to pull-request
+  creation; pull-request read-back's PR and head to `pr-watch`; the reviewed PR,
+  observed head, reviewed head, and receipt to archive-sweep evidence; and that reviewed
+  identity to merge intent and read-back. It also added pre-write rejection routes for
+  foreign and future identifiers.
+
+- **The review retained independent authority boundaries.** PR `#599` kept proposal
+  content bound to its frozen authoritative source, derived semantic paths from merged
+  configuration, kept tracker attempts as separate persisted objects, constructed
+  duplicated evidence structures independently, and bound the ordered proposal set to
+  a batch report. It did not permit pre-action records to contain identifiers produced
+  by the pending action.
+
+- **The fix-round evidence exercised transitions rather than isolated records.** Its
+  positive cutpoints constructed action chains from durable predecessors. Its hostile
+  mutations recomputed locally valid records while changing lifecycle identities. PR
+  `#599` added semantic-oracle assertions for those mutations and added no workflow
+  policy to a runtime adapter.
+
+- **The merge satisfied the declared structural Phase 3 exit.** The delivered set was
+  shared workflow definitions, thin runtime bindings, config-owned policy, explicit
+  capability preflights, durable resume evidence, and cross-operation authority for
+  `post-merge-systemize`, `session-start`, `wrap-up`, and `triage-friction-log`. The PR
+  did not add a launcher, model/effort calibration, lane reconciliation, or downstream
+  cs-toolkit adaptation.
+
+▶ Next: create `feat/codex-environment-capable-launcher` from current `origin/main`.
+Inventory supported Codex launch surfaces against the absolute descriptor/environment-
+replacement contract, select an environment-capable mechanism, and obtain live lane-
+isolation evidence before changing shared launcher guidance. Keep model/effort
+calibration and downstream adapter reconciliation in later slices.
+
+______________________________________________________________________
+
+## Session — 2026-08-25 (triage integration preflights complete the shared phase)
+
+**Theme —** The friction-triage pipeline now has config-owned, runtime-neutral input,
+authority, artifact, resume, and outcome contracts, while the optional deterministic
+engines remain honestly absent and runtime adapters remain thin.
+
+- **Configuration and migration lead the contract.** `triage` owns its analysis tier,
+  mode-separated active state, session-unique frozen/report patterns, optional engine
+  names, commit subject, and PR draft policy. Refreshed `init.sh` adds the whole block or
+  missing flat keys without replacing adopter values and refuses ambiguous YAML before
+  writing. Shared `paths`, tracker, notification, state, branch, and model sections stay
+  authoritative.
+
+- **Approval and resume evidence are act-time gates.** Merged config, sandbox-aware
+  atomic state, and the exact frozen inbox are required. The configured engine pair is
+  atomic; both absent selects agent-executed LLM-only behavior and a partial pair stops.
+  Scheduled approval requires notification send/thread read; an interactive run can
+  degrade to the current session. Exact canonical payload digests bind approval,
+  attempts persist before writes, and failed or ambiguous tracker/forge responses take
+  destination read-back before any retry.
+
+- **Partial success cannot lose the inbox.** Finalization waits until every approved
+  tracker payload is verified, then sweeps only explicitly accounted blocks that remain
+  byte-identical to the frozen snapshot. Parked, unmentioned, failed, ambiguous, edited,
+  and window-added entries remain active. Test mode cannot write tracker, friction/archive,
+  branch, commit, push, or PR state.
+
+- **Parity is structural without pretending engine availability.** The Claude and Codex
+  bindings translate invocation and mechanisms only. Runtime parity, README/getting-
+  started, adoption/upgrade guidance, the changelog, installer fixtures, declaration-
+  derived semantic tests, and hostile mutations carry the same contract. No Phase 4
+  launcher, model/effort calibration, lane reconciliation, or downstream cs-toolkit
+  adaptation is included.
+
+▶ Next: create `feat/codex-environment-capable-launcher` from current `origin/main`.
+Inventory supported Codex launch surfaces against the absolute descriptor/environment-
+replacement contract, select an environment-capable mechanism, and obtain live lane-
+isolation evidence before changing shared launcher guidance. Keep model/effort
+calibration and downstream adapter reconciliation in later slices.
+
+______________________________________________________________________
+
 ## Session — 2026-08-25 (parallel lane ownership returns to the kit)
 
 **Theme —** Reusable lane identity, forge safety, and resume behavior now live in the
