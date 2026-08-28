@@ -198,6 +198,25 @@ def test_adapter_report_preserves_a_symlinked_ancestor_as_adopter_owned(tmp_path
     assert list(outside.iterdir()) == []
 
 
+def test_adapter_report_preserves_a_hardlinked_path_as_adopter_owned(tmp_path):
+    adopter = tmp_path / "adopter"
+    outside = tmp_path / "outside.md"
+    outside.write_text(
+        (REPO_ROOT / ".agents/skills/adopt/SKILL.md").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    path = adopter / ".agents/skills/adopt/SKILL.md"
+    path.parent.mkdir(parents=True)
+    path.hardlink_to(outside)
+
+    statuses = runtime_adapters.compare_adapters(REPO_ROOT, adopter)
+    status = next(item for item in statuses if item.path == ".agents/skills/adopt/SKILL.md")
+
+    assert status.state == "adopter-owned"
+    assert "multiply-linked" in status.detail
+    assert path.stat().st_ino == outside.stat().st_ino
+
+
 def test_installed_test_targets_use_manifest_not_directory_contents(tmp_path):
     root = tmp_path / "adopter"
     declared = root / "scripts" / "devkit" / "tests" / "test_declared.py"
@@ -354,6 +373,23 @@ def test_installed_test_targets_refuse_declared_symlink(tmp_path):
         run_installed_tests.installed_test_targets(tmp_path, manifest, "scripts")
 
 
+def test_installed_test_targets_refuse_declared_symlinked_ancestor(tmp_path):
+    outside = tmp_path / "outside-tests"
+    outside.mkdir()
+    (outside / "test_link.py").write_text("def test_outside(): pass\n", encoding="utf-8")
+    engine = tmp_path / "scripts"
+    engine.mkdir()
+    (engine / "tests").symlink_to(outside, target_is_directory=True)
+    manifest = tmp_path / "kit-manifest.json"
+    manifest.write_text(
+        json.dumps({"files": {"scripts/tests/test_link.py": {"role": "test"}}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="crosses a symlink"):
+        run_installed_tests.installed_test_targets(tmp_path, manifest, "scripts")
+
+
 def test_adapter_report_refuses_a_source_adapter_the_renderer_does_not_own(
     tmp_path, capsys
 ):
@@ -403,6 +439,41 @@ def test_adapter_report_cli_is_read_only_and_does_not_require_adopter_config(
     assert payload["adapters"]
     assert {item["state"] for item in payload["adapters"]} == {"missing"}
     assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        ["--generate-manifest"],
+        ["--record-install"],
+        ["--from-kit", "source"],
+        ["--manifest", "comparison.json"],
+        ["--baseline", "baseline.json"],
+    ],
+)
+def test_adapter_report_refuses_drift_and_write_options(tmp_path, capsys, extra):
+    with pytest.raises(SystemExit) as exc:
+        kit_doctor.main(
+            [
+                "--root",
+                str(tmp_path),
+                "--adapter-report",
+                "--adapter-source",
+                str(REPO_ROOT),
+                *extra,
+            ]
+        )
+
+    assert exc.value.code == 2
+    assert "separate informational mode" in capsys.readouterr().err
+
+
+def test_adapter_source_requires_adapter_report(tmp_path, capsys):
+    with pytest.raises(SystemExit) as exc:
+        kit_doctor.main(["--root", str(tmp_path), "--adapter-source", str(REPO_ROOT)])
+
+    assert exc.value.code == 2
+    assert "requires --adapter-report" in capsys.readouterr().err
 
 
 def test_remap_follows_configured_engines_dir():

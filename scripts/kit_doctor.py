@@ -2922,8 +2922,22 @@ def main(argv: list[str] | None = None) -> int:
             report_json,
         )
 
-        if args.generate_manifest or args.record_install:
-            parser.error("--adapter-report cannot be combined with a write mode")
+        incompatible = [
+            option
+            for option, present in (
+                ("--generate-manifest", args.generate_manifest),
+                ("--record-install", args.record_install),
+                ("--from-kit", args.from_kit is not None),
+                ("--manifest", args.manifest is not None),
+                ("--baseline", args.baseline is not None),
+            )
+            if present
+        ]
+        if incompatible:
+            parser.error(
+                "--adapter-report is a separate informational mode and cannot be "
+                f"combined with {', '.join(incompatible)}"
+            )
         source_root = (
             args.adapter_source or Path(__file__).resolve().parent.parent
         ).resolve()
@@ -2937,6 +2951,9 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(render_adapter_report(adapter_statuses))
         return 0
+
+    if args.adapter_source is not None:
+        parser.error("--adapter-source requires --adapter-report")
 
     try:
         config = load_config(root / "config" / "dev-model.yaml")
