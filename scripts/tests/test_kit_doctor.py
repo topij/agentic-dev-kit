@@ -259,11 +259,83 @@ def test_installed_test_main_invokes_pytest_and_propagates_failure(
     assert calls == [[str(target), "-q"]]
 
 
+def test_installed_test_main_reports_a_successful_empty_suite(
+    tmp_path, monkeypatch, capsys
+):
+    root = tmp_path / "adopter"
+    runner = root / "scripts" / "devkit" / "run_installed_tests.py"
+    _write(runner, "# installed runner location\n")
+    (root / "kit-manifest.json").write_text(
+        json.dumps({"files": {}}), encoding="utf-8"
+    )
+    monkeypatch.setattr(run_installed_tests, "__file__", str(runner))
+    monkeypatch.setattr(
+        run_installed_tests.pytest,
+        "main",
+        lambda _args: pytest.fail("pytest must not run for an empty declared suite"),
+    )
+
+    assert run_installed_tests.main(["--root", str(root)]) == 0
+    assert "none declared installed — suite skipped" in capsys.readouterr().out
+
+
+def test_installed_test_targets_and_main_refuse_a_declared_missing_module(
+    tmp_path, monkeypatch, capsys
+):
+    root = tmp_path / "adopter"
+    runner = root / "scripts" / "devkit" / "run_installed_tests.py"
+    _write(runner, "# installed runner location\n")
+    manifest = root / "kit-manifest.json"
+    manifest.write_text(
+        json.dumps({"files": {"scripts/tests/test_missing.py": {"role": "test"}}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="missing or not regular"):
+        run_installed_tests.installed_test_targets(root, manifest, "scripts/devkit")
+
+    monkeypatch.setattr(run_installed_tests, "__file__", str(runner))
+    with pytest.raises(SystemExit) as exc_info:
+        run_installed_tests.main(["--root", str(root)])
+
+    assert exc_info.value.code == 2
+    assert "missing or not regular" in capsys.readouterr().err
+
+
 def test_installed_test_targets_skip_a_declined_missing_test_root(tmp_path):
     manifest = tmp_path / "kit-manifest.json"
     manifest.write_text(json.dumps({"files": {}}), encoding="utf-8")
 
     assert run_installed_tests.installed_test_targets(tmp_path, manifest, "scripts") == []
+
+
+def test_doctor_default_report_starts_without_the_adapter_renderer(tmp_path):
+    root = _fake_repo(tmp_path / "adopter", engines="scripts/devkit")
+    engine = root / "scripts" / "devkit"
+    shutil.copy2(REPO_ROOT / "scripts" / "kit_doctor.py", engine / "kit_doctor.py")
+    shutil.copytree(
+        REPO_ROOT / "scripts" / "lib",
+        engine / "lib",
+        ignore=shutil.ignore_patterns("runtime_adapters.py"),
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(engine / "kit_doctor.py"),
+            "--root",
+            str(root),
+            "--manifest",
+            str(REPO_ROOT / "kit-manifest.json"),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "ModuleNotFoundError" not in result.stderr
+    assert "runtime_adapters" not in result.stderr
 
 
 def test_installed_test_targets_refuse_declared_symlink(tmp_path):

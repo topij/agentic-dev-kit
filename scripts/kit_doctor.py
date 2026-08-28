@@ -202,7 +202,6 @@ _REGISTRATION_PARSE_ERRORS = (
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from kitconfig import get, load_config, repo_root  # noqa: E402
-from runtime_adapters import compare_adapters, render_adapter_report, report_json  # noqa: E402
 
 MANIFEST_NAME = "kit-manifest.json"
 
@@ -2917,6 +2916,12 @@ def main(argv: list[str] | None = None) -> int:
     baseline_path = args.baseline or (root / MANIFEST_NAME)
 
     if args.adapter_report:
+        from runtime_adapters import (  # noqa: E402
+            compare_adapters,
+            render_adapter_report,
+            report_json,
+        )
+
         if args.generate_manifest or args.record_install:
             parser.error("--adapter-report cannot be combined with a write mode")
         source_root = (
