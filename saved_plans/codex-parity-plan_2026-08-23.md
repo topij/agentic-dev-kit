@@ -75,9 +75,25 @@ their delivery order and exit conditions.
      Not built: the adopter-side `kit_doctor` check for a stale lens definition
      (`#255` carries the occurrence); the wrapper still carries no model or effort
      control, and a Claude lane under the trust route runs the product default.
-  5. Next: run the first real headless task on the generalised launcher (no tracker
-     item yet; earlier revisions cited `#602`, which is the `post-merge-systemize`
-     binding bug, not this task).
+  5. Done, as a fail-closed run: the first real headless task on the generalised
+     launcher (no tracker item; `#602` was the task the lane performed, not the slice).
+     The lane ran on this repository with the launcher and every shipped configuration
+     value byte-identical, and terminalized `failed` on a non-empty denial list. That
+     establishes for Claude what the Codex record could not — structured denial
+     read-back with real denials in it — and found two boundaries no synthetic lane
+     could reach: a lane cannot write under `.claude/`, which `Edit(**)` does not lift
+     and which the same lane's successful `.agents/` and `scripts/tests/` edits rule out
+     as a glob effect; and the read-only Bash class is a property of command shape, so a
+     loop or a `;`-chained compound of otherwise-accepted commands is denied. The lane
+     opened no pull request; the cockpit pushed its branch and opened `#625` only after
+     writing the file the lane was refused, so what stays unobserved is a *lane* driving
+     CI or earning a `pr-watch` receipt on a real repository — not CI on that branch.
+     Design and record:
+     [`first-real-headless-lane-design_2026-08-28.md`](first-real-headless-lane-design_2026-08-28.md),
+     [`first-real-headless-lane-live-validation_2026-08-28.md`](first-real-headless-lane-live-validation_2026-08-28.md).
+     Not built: a model or effort control on the wrapper, which the run gave no reason
+     to add — the lane resolved to the product default and the task did not need
+     another tier.
      Adopt now, mechanise later: the final verification stamp is a PR comment at the
      merged head, and a panel that ran leaves a disposition comment (`#603`, `#604`).
      Phase 5 owns `#606`, `#236`, and the `#243` narrowing (adapter generation); Phase 6

@@ -297,3 +297,59 @@ length'` at `92a3c15d13be50ae0a02ba0c40ac78e80a1e56e0` on 2026-08-27 printed `4`
   four rounds, some lenses fetched in the handed tree and disclosed it while others
   used `ls-remote`. The occurrences went to that issue; no wording change was made in
   the PR.
+
+## First real headless lane additions from PR `#626`
+
+- **A failed run is a result, and the design has to say so before the run.** The design
+  matrix fixed a *total* terminal-outcome table in advance — including `failed` with a
+  non-empty denial list, and the instruction attached to it: read the denials, decide
+  whether the profile is too narrow or the prompt out of scope, and **do not widen the
+  profile to make the run pass**. The run landed on exactly that row. Having written the
+  instruction before there was an outcome is what made "the lane failed" a finding
+  rather than a setback to be engineered around, and the profile was not widened by
+  either the lane or the cockpit.
+- **The lane's own diagnosis was right and was still not evidence.** Its final text said
+  "every write under `.claude/` is refused", which the receipt's denial list corroborated
+  entry for entry. The claim only became evidence when the cockpit reproduced it in an
+  unrelated repository under the same trust route, and when the lane's *successful*
+  `.agents/` and `scripts/tests/` edits ruled out the glob reading. Testimony that turns
+  out to be true is still testimony; what changed its status was a second observer.
+- **The first probe confirmed the claim and hid its scope.** Both the lane's denials and
+  that probe targeted `.claude/commands/`, and the record generalised to `.claude/` as a
+  directory and then reasoned about `rules/` and `agents/`. A delta-pass correctness lens
+  caught the extrapolation. The remedy that held was to **measure rather than hedge**: a
+  second probe covering each `.claude/` subdirectory plus controls outside it, which both
+  established the wider claim and killed a competing explanation nobody had excluded —
+  `.github/workflows/` was written in the session that was refused five `.claude/` paths,
+  so it is not a dot-directory effect. Narrowing the sentence would have left that
+  alternative standing.
+- **A stale-state sentence survives a fix that repairs its siblings.** A correctness lens
+  found the record asserting "not pushed, and no pull request" as present-tense fact,
+  false by the time the commit carrying it landed — it established this from commit
+  timestamps against live forge state, not by re-reading prose. The fix repaired two
+  sentences; a delta-pass adversarial lens then found a **third** instance in a file the
+  fix commit never touched, and disputed the author's draw that the fix "fully
+  discharges" the finding. The lesson is that this defect class is per-sentence, so the
+  fix has to be a sweep across every file the claim reached, not an edit at the place it
+  was reported.
+- **Stating draws for the delta pass is what produced that dispute.** The disputed draw
+  was the author's own claim of completeness. A delta pass with no draws to argue against
+  would have had to rediscover the defect on its own; naming the claim gave the lens
+  something falsifiable, and it falsified it.
+- **Both PRs' guards were verified by execution against the real regression, not the
+  synthetic catalogue.** Two independent lenses reverted the adapters to their pre-PR
+  bodies — the actual `#602` defect — and confirmed the new pin fails on it. One went
+  further and recovered the lane's specified body out of the final-message object by its
+  recorded digest, then byte-diffed it against the committed file, which is what makes
+  "the pin decided the file" a checked claim rather than an author's assurance.
+- **The quiet-tree rule held again, and cost a rerun each time.** Every `make test` stamp
+  in this slice was taken with no concurrent `pr_watch` poll and nothing uncommitted, and
+  each fix round meant another full run rather than reusing an earlier one. Panel prompts
+  were rendered only outside those runs, after the 2026-08-27 entry recording
+  `panel_prompt.py` hanging under exactly that contention.
+- **A persisted `cd` produced a false finding in a read sequence.** An evidence-copying
+  command's `cd` survived into the next call, and a hook-existence check then reported
+  this repository as shipping no pre-push hook — contradicting `AGENTS.md`. It was caught
+  and discarded before reaching the record, and filed as an occurrence on `#511`. The
+  tell was a second error in the same output (`init.sh: No such file or directory`) that
+  was unmistakably wrong; the first result on its own looked like a finding.
