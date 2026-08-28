@@ -203,6 +203,7 @@ Committed beside this record in
 | `07-receipt-terminal.json` | the terminal status, error, and denial list |
 | `08-final-message.json` | digest `170e8375…`, equal to the receipt's `terminal.final_message_sha256` |
 | `09-dotclaude-scope-probe.json` | the scope probe's own result object — its denial list and the `.claude/` enumeration above |
+| `10-kit-doctor-grant-probe.json` | the manifest-grant probe's result object — `pr_watch.py` accepted, `kit_doctor.py --generate-manifest` denied |
 
 **Recomputable by a later reader:** every digest above, against these committed bytes
 and against `config/claude-lane-settings.json` at the sha this record names. The
@@ -230,4 +231,18 @@ implement the general mechanism, it just does not fall into the trap.
 - **No local suite run by the lane.** The profile grants neither `make` nor a bare
   `uv run pytest`, so a lane on this repository cannot run `make test` before pushing.
   The lane stated this rather than claiming a verification.
+
+- **The lane could not have refreshed the kit manifest either**, which is what a change
+  to any kit-owned file requires. This was first asserted from the allow list — its only
+  `uv` grants are `Bash(uv run scripts/pr_watch.py:*)` and
+  `Bash(uv run scripts/devkit/pr_watch.py:*)` — and a review lens correctly objected that
+  the inference was doing work the evidence had not: *this run itself* established that
+  absence from the allow list does not imply denial, because the runtime accepts a
+  read-only class no rule covers. Measured instead, in a throwaway repository under the
+  same trust route, asking one session for both commands in order:
+  `uv run scripts/pr_watch.py --json` ran; `uv run scripts/kit_doctor.py
+  --generate-manifest` was denied, and appears in `permission_denials` as a `Bash` entry
+  carrying that exact command string. `10-kit-doctor-grant-probe.json` carries the
+  result object. So the claim holds, and now on a measurement rather than on a
+  from-the-allow-list inference the same document warns against elsewhere.
 - **The profile was not widened**, by the lane or by the cockpit.
