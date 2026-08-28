@@ -115,15 +115,34 @@ out:
   and is in its commit. So `Edit(**)` does match a dot-directory; the glob is not the
   mechanism.
 - The same lane's `Edit` of `scripts/tests/test_portability.py` succeeded.
-- A separate cockpit probe, in an unrelated throwaway Git repository under the **same**
-  trust route (`--setting-sources "" --permission-mode dontAsk --settings
-  <the same profile>`), asked for two full-content replacements. `docs/probe.md` was
-  written; `.claude/commands/probe.md` was refused, with the denial recorded as
-  `{"tool_name": "Write", "file_path": ".../.claude/commands/probe.md"}`. The probe
-  repository shares nothing with this one but the profile.
+- Two separate cockpit probes, in unrelated throwaway Git repositories under the
+  **same** trust route (`--setting-sources "" --permission-mode dontAsk --settings
+  <the same profile>`), which share nothing with this repository but the profile.
 
-So the refusal follows the `.claude/` path prefix, across two tools, two repositories,
-and two file-editing tools.
+The second probe is the one that establishes the directory's scope, because the run
+above and the first probe both happened to target `.claude/commands/`. It asked for the
+same one-word `Edit` — the tool `Edit(**)` grants — in each of these paths, in one
+session, instructed to attempt every one regardless of earlier refusals. Its denial list
+and the files' own bytes afterwards agree:
+
+| path | outcome |
+|---|---|
+| `.claude/commands/t.md` | `Edit` denied, file unchanged |
+| `.claude/rules/t.md` | `Edit` denied, file unchanged |
+| `.claude/agents/t.md` | `Edit` denied, file unchanged |
+| `.claude/t.md` | `Edit` denied, file unchanged |
+| `.claude/settings.json` | `Edit` denied, file unchanged |
+| `.agents/skills/demo/SKILL.md` | edited |
+| `docs/t.md` | edited |
+| `.github/workflows/t.yml` | edited |
+
+So the refusal covers `.claude/` as a directory — its `rules/` and `agents/`
+subdirectories included, which the lane's own run never reached — and it is not a
+property of dot-directories, since `.agents/` and `.github/workflows/` were both
+written in that same session. It reproduces across two file-editing tools (`Edit` here,
+`Write` in the first probe) and three repositories.
+
+`09-dotclaude-scope-probe.json` carries that probe's result object.
 
 **Why this matters beyond `#602`.** The kit's runtime-parity work lives half in
 `.claude/commands/`, `.claude/rules/`, and `.claude/agents/`. A Claude lane that cannot
@@ -183,6 +202,7 @@ Committed beside this record in
 | `06-worktree-state-root-marker.txt` | the sticky sandbox marker as the child read it |
 | `07-receipt-terminal.json` | the terminal status, error, and denial list |
 | `08-final-message.json` | digest `170e8375…`, equal to the receipt's `terminal.final_message_sha256` |
+| `09-dotclaude-scope-probe.json` | the scope probe's own result object — its denial list and the `.claude/` enumeration above |
 
 **Recomputable by a later reader:** every digest above, against these committed bytes
 and against `config/claude-lane-settings.json` at the sha this record names. The

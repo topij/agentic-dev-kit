@@ -85,7 +85,9 @@ their delivery order and exit conditions.
      and which the same lane's successful `.agents/` and `scripts/tests/` edits rule out
      as a glob effect; and the read-only Bash class is a property of command shape, so a
      loop or a `;`-chained compound of otherwise-accepted commands is denied. The lane
-     opened no pull request, so CI and `pr-watch` on a real repository stay unobserved.
+     opened no pull request; the cockpit pushed its branch and opened `#625` only after
+     writing the file the lane was refused, so what stays unobserved is a *lane* driving
+     CI or earning a `pr-watch` receipt on a real repository — not CI on that branch.
      Design and record:
      [`first-real-headless-lane-design_2026-08-28.md`](first-real-headless-lane-design_2026-08-28.md),
      [`first-real-headless-lane-live-validation_2026-08-28.md`](first-real-headless-lane-live-validation_2026-08-28.md).

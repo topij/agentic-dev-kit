@@ -1,0 +1,58 @@
+{
+  "is_error": false,
+  "permission_denials": [
+    {
+      "tool_input": {
+        "file_path": "/private/tmp/claude-502/-Users-topi-Coding-agentic-dev-kit/3ddeff2f-591c-4974-a7f4-92f70c760dd1/scratchpad/probe2/.claude/commands/t.md",
+        "new_string": "CHANGED",
+        "old_string": "ORIGINAL",
+        "replace_all": false
+      },
+      "tool_name": "Edit",
+      "tool_use_id": "toolu_01TLeRWB5VJUG2WeyJ5918cH"
+    },
+    {
+      "tool_input": {
+        "file_path": "/private/tmp/claude-502/-Users-topi-Coding-agentic-dev-kit/3ddeff2f-591c-4974-a7f4-92f70c760dd1/scratchpad/probe2/.claude/rules/t.md",
+        "new_string": "CHANGED",
+        "old_string": "ORIGINAL",
+        "replace_all": false
+      },
+      "tool_name": "Edit",
+      "tool_use_id": "toolu_013pQpdco5J7NzxX5vftFkK5"
+    },
+    {
+      "tool_input": {
+        "file_path": "/private/tmp/claude-502/-Users-topi-Coding-agentic-dev-kit/3ddeff2f-591c-4974-a7f4-92f70c760dd1/scratchpad/probe2/.claude/agents/t.md",
+        "new_string": "CHANGED",
+        "old_string": "ORIGINAL",
+        "replace_all": false
+      },
+      "tool_name": "Edit",
+      "tool_use_id": "toolu_01US7m5Q7xKrr9d3wnzJRZSo"
+    },
+    {
+      "tool_input": {
+        "file_path": "/private/tmp/claude-502/-Users-topi-Coding-agentic-dev-kit/3ddeff2f-591c-4974-a7f4-92f70c760dd1/scratchpad/probe2/.claude/t.md",
+        "new_string": "CHANGED",
+        "old_string": "ORIGINAL",
+        "replace_all": false
+      },
+      "tool_name": "Edit",
+      "tool_use_id": "toolu_012oZXV48Ao9Ucotz2Pk2m5W"
+    },
+    {
+      "tool_input": {
+        "file_path": "/private/tmp/claude-502/-Users-topi-Coding-agentic-dev-kit/3ddeff2f-591c-4974-a7f4-92f70c760dd1/scratchpad/probe2/.claude/settings.json",
+        "new_string": "CHANGED",
+        "old_string": "ORIGINAL",
+        "replace_all": false
+      },
+      "tool_name": "Edit",
+      "tool_use_id": "toolu_01HgWUk2tTgrTeeCNmi14Ua7"
+    }
+  ],
+  "result": "All eight attempted. Results:\n\n**Succeeded (3):**\n- `.agents/skills/demo/SKILL.md`\n- `docs/t.md`\n- `.github/workflows/t.yml`\n\n**Refused (5)** \u2014 all with the same denial: *\"Permission to use Edit has been denied because Claude Code is running in don't ask mode.\"*\n- `.claude/commands/t.md`\n- `.claude/rules/t.md`\n- `.claude/agents/t.md`\n- `.claude/t.md`\n- `.claude/settings.json`\n\nThe pattern: everything under `.claude/` was blocked; everything outside it went through \u2014 including `.agents/skills/demo/SKILL.md` and `.github/workflows/t.yml`, which are config-like but not under `.claude/`. So the guard is keyed on the `.claude/` directory rather than on file type or content.",
+  "subtype": "success",
+  "type": "result"
+}
