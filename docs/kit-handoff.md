@@ -47,8 +47,9 @@ carries what each row returned, beside a committed evidence bundle.
   mechanism (`#627`). And it cannot run `kit_doctor.py --generate-manifest` — measured,
   after a review lens objected that asserting it from the allow list used the very
   inference this run refuted — so after editing any kit-owned file it cannot make its
-  own PR green, a failure *after* the work rather than before it. `#625`'s `.claude/` commit came from the cockpit for the
-  first reason, and its manifest commit for the second.
+  own PR green, a failure *after* the work rather than before it. `#625`'s
+  `.claude/` commit came from the cockpit for the first reason, and its manifest
+  commit for the second.
 
 - **Two smaller boundaries.** The read-only Bash class the shipped profile leans on is a
   property of command **shape**: a `for … do cat … done` loop and a `;`-chained compound
