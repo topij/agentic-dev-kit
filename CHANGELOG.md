@@ -42,6 +42,29 @@ starts.
 
 ---
 
+## #635 — 2026-08-28
+
+- **ADDED (engine CLI surface / report shape) — `kit_doctor.py --adapter-report`
+  classifies each shipped Claude and Codex adapter as `kit-current`, `kit-stale`,
+  `adopter-owned`, or `missing`; `--adapter-source` selects the fetched kit whose
+  renderer is authoritative, and `--json` returns the rows under `adapters`.** To
+  adopt this path, refresh `scripts/kit_doctor.py`,
+  `scripts/lib/runtime_adapters.py`, `scripts/run_installed_tests.py`, and the upgrade
+  workflow together, then run the fetched doctor's adapter report before copying
+  adapters. Refresh `kit-stale`, leave
+  `kit-current`, install `missing`, and preserve `adopter-owned`. The renderer
+  recognizes the prior generated Codex bindings for adopt, parallel, PR watch, and
+  upgrade as stale kit output rather than adopter-authored content.
+- **CHANGED (gate semantics) — upgrade Step 5 verifies only installed kit test modules
+  selected from the adopter's manifest by `run_installed_tests.py`.** Refresh the upgrade
+  workflow and that runner before the next kit update. A declined test directory no
+  longer makes the verification command
+  fail as a missing path; when the manifest selects no installed test module, Step 5
+  reports the skip explicitly instead of treating pytest's empty collection as the
+  result.
+
+---
+
 ## #632 — 2026-08-28
 
 - **ADDED (config keys) — the shipped `config/claude-lane-settings.json` grants a lane

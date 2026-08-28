@@ -5,10 +5,8 @@ description: Plan, launch, inspect, reconcile, and remove isolated development l
 
 # Parallel Development
 
-1. Work from the repository root.
-2. Read `config/dev-model.yaml` and `docs/agentic-dev-kit/workflows/parallel.md` completely.
-3. Follow the requested action. With no action, show the read-only lane board.
-4. Resolve engine paths from the repository root; support both `scripts/dev_session.sh` and a namespaced adopted path such as `scripts/devkit/dev_session.sh`.
-5. Use the current runtime's supported parallel-task mechanism. Do not assume peer messaging, model selection, background execution, or automatic terminal launch unless the runtime exposes it.
-6. Preserve the cockpit/lane ownership boundary and require disjoint source-file footprints before launch.
-7. For behavioral changes to lane safety, read and apply `docs/agentic-dev-kit/safety-critical-changes.md`.
+Read `docs/agentic-dev-kit/workflows/parallel.md` completely and follow it.
+
+Treat the user's request as the parallel-development action and context. Resolve the
+configured engine path from the repository root; translate only runtime-native lane,
+isolation, and delegation mechanisms.

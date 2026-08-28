@@ -32,7 +32,7 @@
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
-      "sha256": "3d8a2eafb25968ef0ed410a2d620981fdd859ede3e8e93945e815d1c71f9fa8d"
+      "sha256": "17445cecc57b8c5b29ff5a4578c9b7780c07c4557f049da6d3171abb34671004"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
@@ -68,7 +68,7 @@
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
-      "sha256": "e31d3781fd1e38cfcfceb8450b4126a3f24b5301a9d8a16baa9fbf2e385780ea"
+      "sha256": "44d7f0714b3086815ed68804719d476c00bb8d052e0f05db2b2aebb872d08b25"
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
@@ -132,7 +132,7 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "91ca2eced5c2085ebdb7ea7a08ea09fce07abdbc6cb8eae8bc9e77f135fff0a0"
+      "sha256": "81338da08eef16bc7750f4dae0a4bbfd1f2f6e48b9537d15f696ea72a67e8192"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -167,6 +167,13 @@
     "scripts/lib/repo_root.sh": {
       "role": "engine",
       "sha256": "980cbf5596cea67033a5dd02d53630f2a92c24afd693ba7727d5fc50303ff555"
+    },
+    "scripts/lib/runtime_adapters.py": {
+      "required_by": [
+        "scripts/kit_doctor.py"
+      ],
+      "role": "engine",
+      "sha256": "589a8e33508301d683467f94a1ac0cb7418d8c799fa0751813c7028f960f1afa"
     },
     "scripts/lib/state_paths/__init__.py": {
       "role": "engine",
@@ -213,13 +220,17 @@
       "role": "engine",
       "sha256": "75d29491cf65b61d385bb7bbb1c2cd39b3f557bef05b1dfa4a049737e8937573"
     },
+    "scripts/run_installed_tests.py": {
+      "role": "engine",
+      "sha256": "4385056907334efbd44d7f67db3e10a302cf68433a18c666166b6b4d60c05235"
+    },
     "scripts/tests/_repo_layout.py": {
       "role": "test",
       "sha256": "ab5c81c04b751f61a603f8b8a80f182b103f85417a58feb8abb725aebad7881b"
     },
     "scripts/tests/conftest.py": {
       "role": "test",
-      "sha256": "865f99b7188799f83100d44b78a5138383ac24239ec6807f8c33c92643c74aca"
+      "sha256": "aa11d3ea18997d7beb676d64b84469d6d582888501a8ec40dbdc03f251af4057"
     },
     "scripts/tests/test_check_memory_budget.py": {
       "role": "test",
@@ -235,7 +246,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "b12ab2074e71f71d511ddf1caf75b2fcf05a7a43275da0e365df65cb76f9dd38"
+      "sha256": "22dc06d2f34a0a75328316e77f9c1292994891f059ddbba56c2b58e5e091a3b8"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -259,7 +270,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "df92e4addda4ee387b190ce44c68cc13536f1d3fd13dd312540c0bc0163789c0"
+      "sha256": "12494ebed6402caa63ab0e41781ea7b1e7d215c3933375822ec39ce55488e02f"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

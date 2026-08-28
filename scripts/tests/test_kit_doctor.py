@@ -21,8 +21,10 @@ diagnosable at all:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path, PurePosixPath
@@ -36,6 +38,15 @@ sys.path.insert(0, str(ENGINE_DIR))
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
 import kit_doctor  # noqa: E402
+import run_installed_tests  # noqa: E402
+import runtime_adapters  # noqa: E402
+
+LEGACY_CODEX_SHA256 = {
+    "adopt": "fee749f57477fc21ced59027209d48eac22fafc44b15307bfff209028897def9",
+    "parallel": "c5e34023e188965187727caa77939edbfe71cf762247e27afc0b7b6b9aa58882",
+    "pr-watch": "549e0d08f78c6ed5814f2504451d7a11c0a8bc593dc9420ccec9b07d784973f8",
+    "upgrade": "b667fea4d997d0e4126518501bb8deac276aba42fcf26e2f80a7ddd26f9fba54",
+}
 
 
 def _write(path: Path, text: str) -> None:
@@ -61,6 +72,415 @@ def _manifest(entries: dict[str, str | None], version: int = 2) -> dict:
         "kit_version": version,
         "files": {p: {"sha256": h, "role": "engine"} for p, h in entries.items()},
     }
+
+
+def test_shipped_runtime_adapters_equal_the_renderer_for_both_runtimes():
+    statuses = runtime_adapters.compare_adapters(REPO_ROOT, REPO_ROOT)
+    actual_paths = {
+        path.relative_to(REPO_ROOT).as_posix()
+        for pattern in (".claude/commands/*.md", ".agents/skills/*/SKILL.md")
+        for path in REPO_ROOT.glob(pattern)
+    }
+
+    assert statuses
+    assert {status.runtime for status in statuses} == {"claude", "codex"}
+    assert {status.state for status in statuses} == {"kit-current"}
+    assert {status.path for status in statuses} == actual_paths
+    parity = (REPO_ROOT / "docs" / "agentic-dev-kit" / "runtime-parity.md").read_text(
+        encoding="utf-8"
+    )
+    assert "fetched kit's adapter renderer" in parity
+    assert "authored command preserved" in parity
+    assert "authored skill preserved" in parity
+    assert not {
+        path
+        for path, _role in kit_doctor.KIT_OWNED
+        if path.startswith((".claude/", ".agents/"))
+    }
+
+
+@pytest.mark.parametrize("slug", ["adopt", "parallel", "pr-watch", "upgrade"])
+def test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned(tmp_path, slug):
+    source = REPO_ROOT
+    adopter = tmp_path / "adopter"
+    rel = f".agents/skills/{slug}/SKILL.md"
+    source_text = (source / rel).read_text(encoding="utf-8")
+    description = runtime_adapters._frontmatter(source_text)["description"]
+    legacy = runtime_adapters.render_adapter(
+        "codex",
+        slug,
+        description,
+        f"docs/agentic-dev-kit/workflows/{slug}.md",
+        template_version=1,
+    )
+    assert hashlib.sha256(legacy.encode()).hexdigest() == LEGACY_CODEX_SHA256[slug]
+    assert legacy == runtime_adapters.render_adapter(
+        "codex",
+        slug,
+        f"{description} Future wording.",
+        f"docs/agentic-dev-kit/workflows/{slug}.md",
+        template_version=1,
+    )
+    _write(adopter / rel, legacy)
+
+    statuses = runtime_adapters.compare_adapters(source, adopter)
+    status = next(item for item in statuses if item.path == rel)
+
+    assert status.state == "kit-stale"
+    assert "refresh freely" in status.detail
+
+
+def test_authored_adapter_change_is_reported_and_preserved_for_each_runtime(tmp_path):
+    adopter = tmp_path / "adopter"
+    shutil.copytree(REPO_ROOT / ".claude", adopter / ".claude")
+    shutil.copytree(REPO_ROOT / ".agents", adopter / ".agents")
+    changed = {
+        ".claude/commands/adopt.md",
+        ".agents/skills/adopt/SKILL.md",
+    }
+    for rel in changed:
+        path = adopter / rel
+        path.write_text(
+            path.read_text(encoding="utf-8") + "\nKeep this adopter policy.\n",
+            encoding="utf-8",
+        )
+    before = {rel: (adopter / rel).read_bytes() for rel in changed}
+
+    statuses = runtime_adapters.compare_adapters(REPO_ROOT, adopter)
+    by_path = {status.path: status for status in statuses}
+
+    for rel in changed:
+        assert by_path[rel].state == "adopter-owned"
+        assert "leave unchanged" in by_path[rel].detail
+        assert (adopter / rel).read_bytes() == before[rel]
+
+
+@pytest.mark.parametrize(
+    "runtime, rel",
+    [
+        ("claude", ".claude/commands/adopt.md"),
+        ("codex", ".agents/skills/adopt/SKILL.md"),
+    ],
+)
+def test_adapter_report_preserves_a_symlink_path_as_adopter_owned(tmp_path, runtime, rel):
+    adopter = tmp_path / "adopter"
+    outside = tmp_path / "outside.md"
+    outside.write_text("outside\n", encoding="utf-8")
+    path = adopter / rel
+    path.parent.mkdir(parents=True)
+    path.symlink_to(outside)
+
+    statuses = runtime_adapters.compare_adapters(REPO_ROOT, adopter)
+    status = next(item for item in statuses if item.runtime == runtime and item.path == rel)
+
+    assert status.state == "adopter-owned"
+    assert "symlink" in status.detail
+    assert path.is_symlink()
+    assert outside.read_text(encoding="utf-8") == "outside\n"
+
+
+def test_adapter_report_preserves_a_symlinked_ancestor_as_adopter_owned(tmp_path):
+    adopter = tmp_path / "adopter"
+    outside = tmp_path / "outside-agents"
+    outside.mkdir()
+    adopter.mkdir()
+    (adopter / ".agents").symlink_to(outside, target_is_directory=True)
+
+    statuses = runtime_adapters.compare_adapters(REPO_ROOT, adopter)
+    status = next(
+        item
+        for item in statuses
+        if item.runtime == "codex" and item.path == ".agents/skills/adopt/SKILL.md"
+    )
+
+    assert status.state == "adopter-owned"
+    assert "symlink at .agents" in status.detail
+    assert list(outside.iterdir()) == []
+
+
+def test_adapter_report_preserves_a_hardlinked_path_as_adopter_owned(tmp_path):
+    adopter = tmp_path / "adopter"
+    outside = tmp_path / "outside.md"
+    outside.write_text(
+        (REPO_ROOT / ".agents/skills/adopt/SKILL.md").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    path = adopter / ".agents/skills/adopt/SKILL.md"
+    path.parent.mkdir(parents=True)
+    path.hardlink_to(outside)
+    before = outside.read_bytes()
+
+    statuses = runtime_adapters.compare_adapters(REPO_ROOT, adopter)
+    status = next(item for item in statuses if item.path == ".agents/skills/adopt/SKILL.md")
+
+    assert status.state == "adopter-owned"
+    assert "multiply-linked" in status.detail
+    assert path.stat().st_ino == outside.stat().st_ino
+    assert path.read_bytes() == before
+    assert outside.read_bytes() == before
+
+
+def test_installed_test_targets_use_manifest_not_directory_contents(tmp_path):
+    root = tmp_path / "adopter"
+    declared = root / "scripts" / "devkit" / "tests" / "test_declared.py"
+    undeclared = root / "scripts" / "devkit" / "tests" / "test_undeclared.py"
+    state_paths = (
+        root
+        / "scripts"
+        / "devkit"
+        / "lib"
+        / "state_paths"
+        / "tests"
+        / "test_state_paths.py"
+    )
+    _write(declared, "def test_declared(): pass\n")
+    _write(undeclared, "raise AssertionError('must not run')\n")
+    _write(state_paths, "def test_state_paths(): pass\n")
+    manifest = root / "kit-manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "files": {
+                    "scripts/tests/test_declared.py": {"role": "test"},
+                    "scripts/lib/state_paths/tests/test_state_paths.py": {
+                        "role": "test"
+                    },
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert run_installed_tests.installed_test_targets(
+        root, manifest, "scripts/devkit"
+    ) == [state_paths, declared]
+
+
+def test_installed_test_main_invokes_pytest_and_propagates_failure(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "adopter"
+    runner = root / "scripts" / "devkit" / "run_installed_tests.py"
+    target = root / "scripts" / "devkit" / "tests" / "test_declared.py"
+    _write(runner, "# installed runner location\n")
+    _write(target, "def test_declared(): pass\n")
+    (root / "kit-manifest.json").write_text(
+        json.dumps({"files": {"scripts/tests/test_declared.py": {"role": "test"}}}),
+        encoding="utf-8",
+    )
+    calls = []
+
+    def fake_pytest_main(args):
+        calls.append(args)
+        return 7
+
+    monkeypatch.setattr(run_installed_tests, "__file__", str(runner))
+    monkeypatch.setattr(run_installed_tests.pytest, "main", fake_pytest_main)
+
+    assert run_installed_tests.main(["--root", str(root)]) == 7
+    assert calls == [[str(target), "-q"]]
+
+
+def test_installed_test_main_reports_a_successful_empty_suite(
+    tmp_path, monkeypatch, capsys
+):
+    root = tmp_path / "adopter"
+    runner = root / "scripts" / "devkit" / "run_installed_tests.py"
+    _write(runner, "# installed runner location\n")
+    (root / "kit-manifest.json").write_text(
+        json.dumps({"files": {}}), encoding="utf-8"
+    )
+    monkeypatch.setattr(run_installed_tests, "__file__", str(runner))
+    monkeypatch.setattr(
+        run_installed_tests.pytest,
+        "main",
+        lambda _args: pytest.fail("pytest must not run for an empty declared suite"),
+    )
+
+    assert run_installed_tests.main(["--root", str(root)]) == 0
+    assert "none declared installed — suite skipped" in capsys.readouterr().out
+
+
+def test_installed_test_targets_and_main_refuse_a_declared_missing_module(
+    tmp_path, monkeypatch, capsys
+):
+    root = tmp_path / "adopter"
+    runner = root / "scripts" / "devkit" / "run_installed_tests.py"
+    _write(runner, "# installed runner location\n")
+    manifest = root / "kit-manifest.json"
+    manifest.write_text(
+        json.dumps({"files": {"scripts/tests/test_missing.py": {"role": "test"}}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="missing or not regular"):
+        run_installed_tests.installed_test_targets(root, manifest, "scripts/devkit")
+
+    monkeypatch.setattr(run_installed_tests, "__file__", str(runner))
+    with pytest.raises(SystemExit) as exc_info:
+        run_installed_tests.main(["--root", str(root)])
+
+    assert exc_info.value.code == 2
+    assert "missing or not regular" in capsys.readouterr().err
+
+
+def test_installed_test_targets_skip_a_declined_missing_test_root(tmp_path):
+    manifest = tmp_path / "kit-manifest.json"
+    manifest.write_text(json.dumps({"files": {}}), encoding="utf-8")
+
+    assert run_installed_tests.installed_test_targets(tmp_path, manifest, "scripts") == []
+
+
+def test_doctor_default_report_starts_without_the_adapter_renderer(tmp_path):
+    root = _fake_repo(tmp_path / "adopter", engines="scripts/devkit")
+    engine = root / "scripts" / "devkit"
+    shutil.copy2(ENGINE_DIR / "kit_doctor.py", engine / "kit_doctor.py")
+    shutil.copytree(
+        ENGINE_DIR / "lib",
+        engine / "lib",
+        ignore=shutil.ignore_patterns("runtime_adapters.py"),
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(engine / "kit_doctor.py"),
+            "--root",
+            str(root),
+            "--manifest",
+            str(REPO_ROOT / "kit-manifest.json"),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "ModuleNotFoundError" not in result.stderr
+    assert "runtime_adapters" not in result.stderr
+
+
+def test_installed_test_targets_refuse_declared_symlink(tmp_path):
+    outside = tmp_path / "outside.py"
+    outside.write_text("def test_outside(): pass\n", encoding="utf-8")
+    target = tmp_path / "scripts" / "tests" / "test_link.py"
+    target.parent.mkdir(parents=True)
+    target.symlink_to(outside)
+    manifest = tmp_path / "kit-manifest.json"
+    manifest.write_text(
+        json.dumps({"files": {"scripts/tests/test_link.py": {"role": "test"}}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="crosses a symlink"):
+        run_installed_tests.installed_test_targets(tmp_path, manifest, "scripts")
+
+
+def test_installed_test_targets_refuse_declared_symlinked_ancestor(tmp_path):
+    outside = tmp_path / "outside-tests"
+    outside.mkdir()
+    (outside / "test_link.py").write_text("def test_outside(): pass\n", encoding="utf-8")
+    engine = tmp_path / "scripts"
+    engine.mkdir()
+    test_root = engine / "tests"
+    test_root.symlink_to(outside, target_is_directory=True)
+    before = (outside / "test_link.py").read_bytes()
+    manifest = tmp_path / "kit-manifest.json"
+    manifest.write_text(
+        json.dumps({"files": {"scripts/tests/test_link.py": {"role": "test"}}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="crosses a symlink"):
+        run_installed_tests.installed_test_targets(tmp_path, manifest, "scripts")
+    assert test_root.is_symlink()
+    assert (outside / "test_link.py").read_bytes() == before
+
+
+def test_adapter_report_refuses_a_source_adapter_the_renderer_does_not_own(
+    tmp_path, capsys
+):
+    source = tmp_path / "source"
+    shutil.copytree(REPO_ROOT / ".claude", source / ".claude")
+    shutil.copytree(REPO_ROOT / ".agents", source / ".agents")
+    shutil.copytree(
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows",
+        source / "docs" / "agentic-dev-kit" / "workflows",
+    )
+    path = source / ".claude" / "commands" / "adopt.md"
+    path.write_text(path.read_text(encoding="utf-8") + "\nSource drift.\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="does not equal the current rendered form"):
+        runtime_adapters.compare_adapters(source, REPO_ROOT)
+
+    code = kit_doctor.main(
+        [
+            "--root",
+            str(REPO_ROOT),
+            "--adapter-report",
+            "--adapter-source",
+            str(source),
+        ]
+    )
+
+    assert code == 2
+    assert "does not equal the current rendered form" in capsys.readouterr().err
+
+
+def test_adapter_report_cli_is_read_only_and_does_not_require_adopter_config(
+    tmp_path, capsys
+):
+    code = kit_doctor.main(
+        [
+            "--root",
+            str(tmp_path),
+            "--adapter-report",
+            "--adapter-source",
+            str(REPO_ROOT),
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert code == 0
+    assert payload["adapters"]
+    assert {item["state"] for item in payload["adapters"]} == {"missing"}
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        ["--generate-manifest"],
+        ["--record-install"],
+        ["--from-kit", "source"],
+        ["--manifest", "comparison.json"],
+        ["--baseline", "baseline.json"],
+    ],
+)
+def test_adapter_report_refuses_drift_and_write_options(tmp_path, capsys, extra):
+    with pytest.raises(SystemExit) as exc:
+        kit_doctor.main(
+            [
+                "--root",
+                str(tmp_path),
+                "--adapter-report",
+                "--adapter-source",
+                str(REPO_ROOT),
+                *extra,
+            ]
+        )
+
+    assert exc.value.code == 2
+    assert "separate informational mode" in capsys.readouterr().err
+
+
+def test_adapter_source_requires_adapter_report(tmp_path, capsys):
+    with pytest.raises(SystemExit) as exc:
+        kit_doctor.main(["--root", str(tmp_path), "--adapter-source", str(REPO_ROOT)])
+
+    assert exc.value.code == 2
+    assert "requires --adapter-report" in capsys.readouterr().err
 
 
 def test_remap_follows_configured_engines_dir():
@@ -1045,6 +1465,7 @@ def test_the_shell_source_dependency_is_a_KNOWN_GAP_not_an_oversight():
     assert set(graph) == {
         "scripts/lib/atomic_write.py",
         "scripts/lib/kitconfig.py",
+        "scripts/lib/runtime_adapters.py",
         "scripts/lib/state_paths/paths.py",
         "scripts/lib/state_paths/repo_root.py",
         "scripts/lib/state_paths/resolver.py",

@@ -143,6 +143,23 @@ from a first report.** `CHANGELOG.md`'s `#553` entry is a worked instance: the
 workflow doc it added was invisible to a pre-upgrade `kit_doctor` for this exact
 reason, and named nowhere until `kit_doctor.py` itself was refreshed.
 
+Then classify the runtime adapters with the **fetched kit's** renderer, not the
+installed engine's older idea of their shape:
+
+```bash
+uv run "${KIT:?KIT is not set — re-run Step 0}"/scripts/kit_doctor.py \
+  --root "${REPO:?REPO is not set — re-run Step 0}" \
+  --adapter-report --adapter-source "${KIT:?KIT is not set — re-run Step 0}"
+```
+
+This comparison is deliberately outside `KIT_OWNED` and never changes the drift
+gate. `kit-current` is byte-identical to the current rendered form; `kit-stale`
+matches an earlier rendered form and can be refreshed without losing authored
+behavior; `missing` can be installed; `adopter-owned` matches no known rendered
+form, so report it and leave it unchanged. The source kit's own adapters must first
+equal what its renderer produces, or the command refuses: a broken generator cannot
+classify an adopter by comparing it with itself.
+
 **A related risk sits one level up, in this very file, and whether the run above even
 catches it depends on when your installed copy was built.** `upgrade.md` has been
 tracked in `KIT_OWNED` since `#337`. If your installed `<engine-dir>/kit_doctor.py`
@@ -704,13 +721,16 @@ entries are exactly where the risk is.
 
 - **Shared workflows** (`docs/agentic-dev-kit/workflows/`) — same state logic as engines.
   These are prompts an agent reads verbatim; a stale one silently teaches old behavior.
-- **Runtime adapters** (`.claude/commands/`, `.agents/skills/`) — install any the kit has
-  that this repo lacks; ordinarily keep the adopter's version where one already exists.
-  The exception is an adapter migration that Step 1's selected changelog entry names as
-  required to obtain changed gate semantics. Diff that adapter, move any adopter policy
-  into config or the shared workflow, then take the kit's thin binding. Stop for an
-  irreconcilable local behavior rather than retaining an adapter that bypasses the new
-  gate. PR `#595`'s `post-merge-systemize` entry is the worked instance.
+- **Runtime adapters** (`.claude/commands/`, `.agents/skills/`) — follow Step 1's
+  rendered comparison per path. Refresh `kit-stale`, leave `kit-current` alone,
+  install `missing`, and report but preserve `adopter-owned`. Do not infer ownership
+  from a slug or from the presence of a shared-workflow link: the byte comparison is
+  what distinguishes generated glue from authored policy. An adapter migration that
+  Step 1's selected changelog entry names as required to obtain changed gate semantics
+  still needs an explicit reconciliation: move adopter policy into config or the shared
+  workflow, then take the rendered binding. Stop for irreconcilable local behavior
+  rather than retaining an adapter that bypasses the new gate. PR `#595`'s
+  `post-merge-systemize` entry is the worked instance.
 - **Templates** (`docs/templates/`) — refresh freely; the *rendered* docs are yours and
   are never touched.
 - **`.claude/settings.json`** — if this repo has its own, **merge** the kit's hooks and
@@ -749,7 +769,7 @@ Commit the rewritten `kit-manifest.json` with the rest of the upgrade.
 
 ```bash
 uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --manifest /tmp/agentic-dev-kit/kit-manifest.json
-tmp="$(mktemp -d)" && DEVKIT_STATE_ROOT="$tmp" uv run --with pytest --with pyyaml python -m pytest "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/lib/state_paths/tests "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/tests -q
+tmp="$(mktemp -d)" && DEVKIT_STATE_ROOT="$tmp" uv run --with pytest --with pyyaml python "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/run_installed_tests.py --root "${REPO:?REPO is not set — re-run Step 0}"
 uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/check_doc_budget.py
 ```
 
@@ -767,9 +787,18 @@ evidence store, while the run otherwise looks clean. `#428` measured it: an unpa
 `state/pr-watch/1.json` and `4242.json` with a fabricated review receipt and
 a reset `seen` set. A conftest fixture closes this for anyone who has it (see
 `scripts/tests/conftest.py`'s `_hermetic_state_root`), but this command is
-the second, independent layer: it protects an adopter who vendored the
-tests by hand, without that conftest, which `#40`/`#132` make a real case
-rather than a hypothetical one — no test file is in the kit manifest.
+the independent outer layer: it protects a sized-down adopter whose declared
+install set includes a runnable test module without every conftest or sibling test.
+Test paths are kit-owned and upgradeable now, but they remain individually declinable,
+so a partial test surface is a supported case rather than evidence of a broken
+upgrade. The runner reads the adopter's `kit-manifest.json`, invokes only declared
+top-level `test_*.py` modules under the configured engine's test roots, and says when
+there are none. A present but undeclared test is not part of the installed kit suite;
+a declared module whose support imports were declined is an inconsistent installation
+and fails collection rather than being silently skipped. The runner avoids passing a
+declined directory to pytest and stopping before an installed test can run. That is the
+current form of the case
+`#40`/`#132` first exposed.
 
 Write it as the two-step `tmp="$(mktemp -d)" && …`, not as an inline
 `DEVKIT_STATE_ROOT=$(mktemp -d) …`. The inline form fails **open**: a failed

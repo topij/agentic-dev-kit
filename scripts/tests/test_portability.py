@@ -1748,13 +1748,11 @@ Treat `$ARGUMENTS` as the requested parallel-development action and arguments.
 Resolve the engine path from the repository root.""",
         """# Parallel Development
 
-1. Work from the repository root.
-2. Read `config/dev-model.yaml` and `docs/agentic-dev-kit/workflows/parallel.md` completely.
-3. Follow the requested action. With no action, show the read-only lane board.
-4. Resolve engine paths from the repository root; support both `scripts/dev_session.sh` and a namespaced adopted path such as `scripts/devkit/dev_session.sh`.
-5. Use the current runtime's supported parallel-task mechanism. Do not assume peer messaging, model selection, background execution, or automatic terminal launch unless the runtime exposes it.
-6. Preserve the cockpit/lane ownership boundary and require disjoint source-file footprints before launch.
-7. For behavioral changes to lane safety, read and apply `docs/agentic-dev-kit/safety-critical-changes.md`.""",
+Read `docs/agentic-dev-kit/workflows/parallel.md` completely and follow it.
+
+Treat the user's request as the parallel-development action and context. Resolve the
+configured engine path from the repository root; translate only runtime-native lane,
+isolation, and delegation mechanisms.""",
     }
     assert body in allowed_bodies
 
@@ -1772,6 +1770,37 @@ def test_parallel_adapter_policy_contradictions_are_rejected() -> None:
         ):
             with pytest.raises(AssertionError):
                 _assert_parallel_adapter_is_translation_only(hostile)
+
+
+def _assert_upgrade_verifies_only_installed_test_modules(workflow: str) -> None:
+    step = workflow.split("## Step 5 — Verify", 1)[1].split("## Step 6", 1)[0]
+    assert "/run_installed_tests.py" in step
+    assert (
+        '/run_installed_tests.py --root "${REPO:?REPO is not set — re-run Step 0}"'
+        in step
+    )
+    assert "reads the adopter's `kit-manifest.json`" in step
+    assert "present but undeclared test" in step
+    assert "python -m pytest" not in step
+
+
+def test_upgrade_verification_selects_installed_tests_instead_of_test_roots() -> None:
+    workflow = (
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "upgrade.md"
+    ).read_text(encoding="utf-8")
+    _assert_upgrade_verifies_only_installed_test_modules(workflow)
+
+    for hostile in (
+        workflow.replace("/run_installed_tests.py", "/pytest.py", 1),
+        workflow.replace(
+            '/run_installed_tests.py --root "${REPO:?REPO is not set — re-run Step 0}"',
+            '/run_installed_tests.py --root "/tmp"',
+            1,
+        ),
+        workflow.replace("reads the adopter's `kit-manifest.json`", "scans the directory", 1),
+    ):
+        with pytest.raises(AssertionError):
+            _assert_upgrade_verifies_only_installed_test_modules(hostile)
 
 
 def _post_merge_capabilities(workflow: str) -> dict[str, tuple[str, str]]:
@@ -13391,7 +13420,9 @@ def test_systemize_upgrade_requires_replacing_the_legacy_claude_adapter() -> Non
     assert ".claude/commands/post-merge-systemize.md" in entry
     assert "replace" in entry
     assert "does not load the shared approval gate" in entry
-    assert "exception is an adapter migration" in upgrade
+    assert "adapter migration" in upgrade
+    assert "still needs an explicit reconciliation" in upgrade
+    assert "rendered comparison" in upgrade
     assert "retaining an adapter that bypasses the new gate" in " ".join(
         upgrade.split()
     )
