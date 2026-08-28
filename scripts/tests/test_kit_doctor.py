@@ -312,9 +312,9 @@ def test_installed_test_targets_skip_a_declined_missing_test_root(tmp_path):
 def test_doctor_default_report_starts_without_the_adapter_renderer(tmp_path):
     root = _fake_repo(tmp_path / "adopter", engines="scripts/devkit")
     engine = root / "scripts" / "devkit"
-    shutil.copy2(REPO_ROOT / "scripts" / "kit_doctor.py", engine / "kit_doctor.py")
+    shutil.copy2(ENGINE_DIR / "kit_doctor.py", engine / "kit_doctor.py")
     shutil.copytree(
-        REPO_ROOT / "scripts" / "lib",
+        ENGINE_DIR / "lib",
         engine / "lib",
         ignore=shutil.ignore_patterns("runtime_adapters.py"),
     )
