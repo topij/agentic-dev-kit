@@ -44,9 +44,10 @@ carries what each row returned, beside a committed evidence bundle.
   cannot write under `.claude/` — measured across `commands/`, `rules/`, `agents/`,
   `settings.json` and the bare directory, in a session that wrote `.agents/`, `docs/`
   and `.github/workflows/`, so neither the `Edit(**)` glob nor dot-directories is the
-  mechanism (`#627`). And it cannot run `kit_doctor.py --generate-manifest`, so after
-  editing any kit-owned file it cannot make its own PR green — a failure *after* the
-  work rather than before it. `#625`'s `.claude/` commit came from the cockpit for the
+  mechanism (`#627`). And it cannot run `kit_doctor.py --generate-manifest` — measured,
+  after a review lens objected that asserting it from the allow list used the very
+  inference this run refuted — so after editing any kit-owned file it cannot make its
+  own PR green, a failure *after* the work rather than before it. `#625`'s `.claude/` commit came from the cockpit for the
   first reason, and its manifest commit for the second.
 
 - **Two smaller boundaries.** The read-only Bash class the shipped profile leans on is a
