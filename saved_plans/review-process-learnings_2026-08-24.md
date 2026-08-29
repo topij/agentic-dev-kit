@@ -439,3 +439,48 @@ resting on that same inference do not inherit the fix.** They are the likeliest 
 for the next defect, they are cheap to find (they sit near the corrected one), and they
 carry the corrected claim's credibility without having earned it. Worth a deliberate
 pass at the time of the original correction, not one session later.
+
+## Runtime-adapter upgrade additions from PR `#635`
+
+- **A generated-artifact classifier needs fixtures independent of the renderer under
+  test.** The initial legacy fixtures called the historical renderer, and that renderer
+  still consumed current descriptions. At `dfd1976412ec530a1a7a6ec81f8028e7f4572a7a`
+  on 2026-08-28, a correctness mutation changed the historical text while
+  `UV_CACHE_DIR=/private/tmp/mut-correctness-dfd1976-F9FLJz/uv-cache
+  UV_TOOL_DIR=/private/tmp/mut-correctness-dfd1976-F9FLJz/uv-tools uv run --with pytest
+  --with pyyaml python -m pytest scripts/tests/test_kit_doctor.py -q -m 'not driftcheck'`
+  printed `421 passed, 1 deselected`. The fix freezes historical metadata and compares
+  it with independently checked-in digests of the prior rendered bytes.
+
+- **Read-only is an identity claim, not a byte-equality claim.** A test that snapshots
+  content misses unlink-and-recreate, symlink-target writes, and hardlink write-through.
+  The accepted fix added assertions for link identity, inode relationships, targets and
+  sentinels. The adversarial and correctness `make test` runs at
+  `3032a2f47c2be34e49ea4148c0c5635ca99a83fd` on 2026-08-29 printed `2034 passed, 3
+  warnings in 387.86s` and `2034 passed, 3 warnings in 385.43s`, respectively.
+
+- **Test the gate at the process boundary where the workflow relies on it.** Helper-only
+  tests left mutations alive in `main()` branches for unconditional skip, swallowed
+  source-validation failure, missing declared tests and omitted state-path roots. The
+  accepted fixes invoke the entry points and pin the returned status and pytest call,
+  because a correct selector below a fail-open wrapper does not protect upgrade.
+
+- **The applied-compute observer is part of review evidence.** The Codex carrier argv
+  requested `high`, but only rollout `turn_context` established what ran. At
+  `3032a2f47c2be34e49ea4148c0c5635ca99a83fd` on 2026-08-29, the following command read
+  back `model=gpt-5.6-sol` and `effort=high` for the persistent adversarial and
+  correctness audits:
+
+  ```sh
+  jq -c 'select(.type == "turn_context") | {file: input_filename, model: .payload.model, effort: .payload.effort, configured_effort: .payload.collaboration_mode.settings.reasoning_effort, cwd: .payload.cwd}' /Users/topi/.codex/sessions/2026/08/29/rollout-2026-08-29T01-11-19-01a04a6d-6a0f-73b0-bdef-70233fec1748.jsonl /Users/topi/.codex/sessions/2026/08/29/rollout-2026-08-29T01-11-28-01a04a6d-8d2d-7943-8173-848f222ded53.jsonl
+  ```
+
+  The final `--ephemeral` lens invocations intentionally retained no rollout to inspect.
+  A review launcher that promises applied compute has to preserve that minimal observer
+  or arrange an explicit readback before cleanup.
+
+- **A scratch tree must satisfy the suite's repository assumptions.** The correctness
+  delta lens initially used `git archive`, which cannot carry repository metadata. That
+  attempt was kept as a non-verdict, and the lens restarted in a fresh no-hardlink clone.
+  Scratch isolation and repository identity are separate properties; those properties
+  must coexist when the suite checks its own checkout.
