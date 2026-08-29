@@ -5,6 +5,64 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-08-28 (first real headless lane on this repository)
+
+**Theme —** PR `#626` (squash `2de16ed`) recorded the first headless lane run on this
+repository rather than a synthetic one, and PR `#625` (squash `6e7143c`) landed the
+`#602` binding fix the lane was given. The launcher and every shipped configuration
+value stayed byte-identical for the run. The design matrix in
+[`first-real-headless-lane-design_2026-08-28.md`](../saved_plans/first-real-headless-lane-design_2026-08-28.md)
+fixed the observers and a total terminal-outcome table before the launch; the record in
+[`first-real-headless-lane-live-validation_2026-08-28.md`](../saved_plans/first-real-headless-lane-live-validation_2026-08-28.md)
+carries what each row returned, beside a committed evidence bundle.
+
+- **The lane terminalized `failed`, and that is the finding.** It established for Claude
+  what the Codex record could not: structured denial read-back with real denials in it,
+  each naming its tool and target. The identity chain held throughout — worktree,
+  branch, base, state root, policy and profile digest all bound by the receipt, with the
+  cockpit's own `state/` untouched and the runtime's transcript independently confirming
+  the lane's cwd. Under the trust route the lane ran the product default,
+  `claude-opus-5` at effort `high`, read from that transcript.
+
+- **A Claude lane cannot complete kit-owned work here, for two separate reasons.** It
+  cannot write under `.claude/` — measured across `commands/`, `rules/`, `agents/`,
+  `settings.json` and the bare directory, in a session that wrote `.agents/`, `docs/`
+  and `.github/workflows/`, so neither the `Edit(**)` glob nor dot-directories is the
+  mechanism (`#627`). And it cannot run `kit_doctor.py --generate-manifest` — measured,
+  after a review lens objected that asserting it from the allow list used the very
+  inference this run refuted — so after editing any kit-owned file it cannot make its
+  own PR green, a failure *after* the work rather than before it. `#625`'s
+  `.claude/` commit came from the cockpit for the first reason, and its manifest
+  commit for the second.
+
+- **Two smaller boundaries.** The read-only Bash class the shipped profile leans on is a
+  property of command **shape**: a `for … do cat … done` loop and a `;`-chained compound
+  were denied in the session that accepted plain `grep` and `cat` (`#628`). And the
+  shipped `claude_headless_command` cannot resolve a user-local install, with no overlay
+  reaching `parallel.*` (`#629`) — cleared for this run by a host symlink onto the
+  trusted path, so the kit stayed unchanged.
+
+- **The panel found real defects in the record, twice.** A correctness lens caught a
+  present-tense claim about branch state that had gone stale before its own commit
+  landed; the fix repaired two sentences and a delta-pass adversarial lens found a third
+  in a file that fix never touched. Another correctness lens caught the `.claude/` claim
+  generalising past its evidence, which was answered by measuring the gap rather than
+  hedging — and the measurement killed a competing explanation that narrowing would have
+  left standing. One Low was declined with the measurement that refuted it. The
+  dispositions are on both PRs and the lessons in
+  [`review-process-learnings_2026-08-24.md`](../saved_plans/review-process-learnings_2026-08-24.md).
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `77341814a66c478f9890e4b87592341800af0668` on 2026-08-28 printed `2006 passed, 3
+  warnings in 432.92s` on a quiet tree; the merged squashes are `2de16ed` and `6e7143c`.
+
+▶ Next: Phase 5, starting with `#606` — decide Claude's shipped lane permissions as
+repository policy. This slice hands it two inputs a grant can settle (the lane can run
+neither `make test` nor `kit_doctor.py --generate-manifest`) and one it cannot (`#627`'s
+`.claude/` guard, which no allow-list entry lifts). Then `#236` and the `#243`
+narrowing. `#621` stays open: this record met its intent by copying evidence out before
+the cleanup boundary, but did not build the bundle contract that issue asks for.
+
 ## Session — 2026-08-27 (capability-tier calibration)
 
 **Theme —** PR `#623` (squash `92a3c15`) calibrated `models.runtime_mappings` and

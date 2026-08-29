@@ -14,11 +14,55 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-29 — `/triage-friction-log` graduated the inbox: PR `#646` (squash
-`ded3933`) filed `#641`–`#645` and swept them to the archive. The run ended `operator-held`
-rather than complete, and `#647` records why.
+Last updated: 2026-08-30 — PR `#649` (squash `1976923`) settled `#633`: the configured
+Claude lane settings profile is safety-critical policy, with Codex and Claude bindings
+pointing to the shared doctrine.
 
-## Latest session — 2026-08-29 (friction-log triage, in a Claude Code session)
+## Latest session — 2026-08-29 (safety-critical profile binding, in a Codex session)
+
+**Theme —** In a Codex session, PR `#649` (squash `1976923`) made the answer to `#633`
+explicit and checkable: changing the policy profile can change unattended authority while
+`launch_lane.py` remains byte-identical, so a behavioral profile change takes the shared
+safety-critical review and operator-merge route.
+
+- **Codex and Claude bind the same doctrine through runtime-native mechanisms.** The root
+  `AGENTS.md` names the profile resolved by `parallel.claude_settings_profile`; Claude's
+  path-scoped rule names the shipped path and tells adopters to move that entry when they
+  relocate the profile. The shared workflow carries the decision and its boundary rather
+  than either adapter restating the doctrine.
+
+- **The boundary is the dedicated policy file, not every configuration leaf.**
+  `config/dev-model.yaml` stays outside Claude's file-path trigger because that trigger
+  cannot select authority-bearing `parallel.*` keys without sweeping unrelated config.
+  `#346` still owns the workflow-document gap, `#434` still owns the test-side merge guard,
+  and `#621` and `#631` stay open. No lane grant from `#631` was built here.
+
+- **The CHANGELOG entry is intentional adopter guidance.** The change alters when the
+  operator-merge authorization gate applies, while `init.sh --no-clobber` preserves the
+  adopter-owned Codex and Claude bindings that need a manual update.
+
+- **Review turned the check from vocabulary matching into a semantic guard.** Negated
+  runtime instructions, inverted relocation remedies and a config-only profile move all
+  survived earlier substring checks. The merged test sentence-scopes the positive runtime,
+  workflow, Claude-comment and CHANGELOG obligations; a supported relocation updates the
+  config, Codex binding and Claude path while keeping shipped-default prose unchanged.
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `9926741668117bec53eb9e08534c0bcd83f5cbe3` on 2026-08-29 ended at `#393`'s known
+  `test_a_payload_too_deep_for_json_load_still_exits_zero` intermittent; that exact node
+  passed when `uv run --python 3.12 --with pytest --with pyyaml python -m pytest
+  scripts/tests/test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero
+  -q` ran in the same directory at the same revision and date. `gh pr checks 649`, run in
+  the same directory at that revision and date, reported the `toolkit` check successful.
+  `scripts/pr_watch.py 649 --json --no-persist`, run in the same directory at that revision
+  and date, reported it mergeable before the authorized squash merge.
+
+▶ Next: `session-start` — re-read `#621`, `#631`, `#346` and `#434` with live repository
+and tracker state before choosing the next slice.
+
+______________________________________________________________________
+
+## Session — 2026-08-29 (friction-log triage, in a Claude Code session)
 
 **Theme —** In a Claude Code session, `triage-friction-log` ran end to end in LLM-only mode —
 both configured engines are absent, which is the state that selects that mode, so every result
@@ -301,66 +345,6 @@ remains is its residual and the rendered-adapter comparison `#236`'s adapter hal
 `#606` stays open for its `.claude/settings.json` half: engine-path templating, the
 `SessionStart` matcher, and the missing `kit_doctor` check for the permissions block.
 `#621` stays open.
-
-______________________________________________________________________
-
-## Session — 2026-08-28 (first real headless lane on this repository)
-
-**Theme —** PR `#626` (squash `2de16ed`) recorded the first headless lane run on this
-repository rather than a synthetic one, and PR `#625` (squash `6e7143c`) landed the
-`#602` binding fix the lane was given. The launcher and every shipped configuration
-value stayed byte-identical for the run. The design matrix in
-[`first-real-headless-lane-design_2026-08-28.md`](../saved_plans/first-real-headless-lane-design_2026-08-28.md)
-fixed the observers and a total terminal-outcome table before the launch; the record in
-[`first-real-headless-lane-live-validation_2026-08-28.md`](../saved_plans/first-real-headless-lane-live-validation_2026-08-28.md)
-carries what each row returned, beside a committed evidence bundle.
-
-- **The lane terminalized `failed`, and that is the finding.** It established for Claude
-  what the Codex record could not: structured denial read-back with real denials in it,
-  each naming its tool and target. The identity chain held throughout — worktree,
-  branch, base, state root, policy and profile digest all bound by the receipt, with the
-  cockpit's own `state/` untouched and the runtime's transcript independently confirming
-  the lane's cwd. Under the trust route the lane ran the product default,
-  `claude-opus-5` at effort `high`, read from that transcript.
-
-- **A Claude lane cannot complete kit-owned work here, for two separate reasons.** It
-  cannot write under `.claude/` — measured across `commands/`, `rules/`, `agents/`,
-  `settings.json` and the bare directory, in a session that wrote `.agents/`, `docs/`
-  and `.github/workflows/`, so neither the `Edit(**)` glob nor dot-directories is the
-  mechanism (`#627`). And it cannot run `kit_doctor.py --generate-manifest` — measured,
-  after a review lens objected that asserting it from the allow list used the very
-  inference this run refuted — so after editing any kit-owned file it cannot make its
-  own PR green, a failure *after* the work rather than before it. `#625`'s
-  `.claude/` commit came from the cockpit for the first reason, and its manifest
-  commit for the second.
-
-- **Two smaller boundaries.** The read-only Bash class the shipped profile leans on is a
-  property of command **shape**: a `for … do cat … done` loop and a `;`-chained compound
-  were denied in the session that accepted plain `grep` and `cat` (`#628`). And the
-  shipped `claude_headless_command` cannot resolve a user-local install, with no overlay
-  reaching `parallel.*` (`#629`) — cleared for this run by a host symlink onto the
-  trusted path, so the kit stayed unchanged.
-
-- **The panel found real defects in the record, twice.** A correctness lens caught a
-  present-tense claim about branch state that had gone stale before its own commit
-  landed; the fix repaired two sentences and a delta-pass adversarial lens found a third
-  in a file that fix never touched. Another correctness lens caught the `.claude/` claim
-  generalising past its evidence, which was answered by measuring the gap rather than
-  hedging — and the measurement killed a competing explanation that narrowing would have
-  left standing. One Low was declined with the measurement that refuted it. The
-  dispositions are on both PRs and the lessons in
-  [`review-process-learnings_2026-08-24.md`](../saved_plans/review-process-learnings_2026-08-24.md).
-
-- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
-  `77341814a66c478f9890e4b87592341800af0668` on 2026-08-28 printed `2006 passed, 3
-  warnings in 432.92s` on a quiet tree; the merged squashes are `2de16ed` and `6e7143c`.
-
-▶ Next: Phase 5, starting with `#606` — decide Claude's shipped lane permissions as
-repository policy. This slice hands it two inputs a grant can settle (the lane can run
-neither `make test` nor `kit_doctor.py --generate-manifest`) and one it cannot (`#627`'s
-`.claude/` guard, which no allow-list entry lifts). Then `#236` and the `#243`
-narrowing. `#621` stays open: this record met its intent by copying evidence out before
-the cleanup boundary, but did not build the bundle contract that issue asks for.
 
 ______________________________________________________________________
 
