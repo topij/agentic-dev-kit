@@ -1408,43 +1408,83 @@ def _same_path(named: Path, target: Path) -> bool:
         return False
 
 
+# How the kit's own workflow invokes an engine, as argv tokens with the engine
+# path last. `pr-watch.md` and `dev_session.sh` both issue `uv run <path> …`,
+# and `init.sh` advises exactly that rule, so this is the command a grant has to
+# cover rather than a guess at one.
+#
+# An adopter who runs the engine some other way (`python3 <path>`) gets a false
+# `ungranted` here. That is the safe direction — an advisory line they can
+# ignore — and it is consistent with the rule the kit prints. The alternative,
+# accepting any runner, is what this function did before and is the defect the
+# comment on `_grants_invocation` records.
+_ENGINE_INVOCATION_PREFIX: tuple[str, ...] = ("uv", "run")
+
+
+def _grants_invocation(
+    words: list[str], configured: str, root: Path
+) -> bool:
+    """Whether a rule's lexed prefix pre-approves `uv run <configured> …`.
+
+    A **token-wise prefix test**, which is what Claude Code's prefix rules
+    actually are — matched on argv token boundaries, not on substring. So the
+    rule's words must be the opening words of the invocation, in order.
+
+    This replaced a test that asked only whether ANY word in the rule resolved
+    to the engine path, and that was wrong in both directions at once —
+    measured through `inspect_registrations`, not reasoned:
+
+    - `Bash(cat scripts/pr_watch.py:*)` reported the engine GRANTED. So did
+      `ruff check …` and `rm …`. None of them pre-approves running the engine;
+      every poll would still stop for approval while the check reported clean.
+      A review lens found this one.
+    - `Bash(uv run:*)`, which genuinely does pre-approve every poll, reported
+      `ungranted`. The engine's path appears nowhere in that rule, and the old
+      test could only find grants that named it.
+
+    The first direction is the dangerous one — false reassurance from the single
+    check built to surface this friction — and the second shows the shape of the
+    error was not a missing case but the wrong question. Asking whether the rule
+    is a prefix of the invocation answers both at once.
+
+    A rule LONGER than the invocation (`uv run <path> --json`) is not a prefix
+    of it and does not count. It pre-approves some polls and not others —
+    `--mark-seen` would still prompt — so reporting it as covering the workflow
+    would be the same false reassurance in a smaller way.
+    """
+    invocation = [*_ENGINE_INVOCATION_PREFIX, configured]
+    if not words or len(words) > len(invocation):
+        return False
+    target = root / configured
+    for index, word in enumerate(words):
+        expected = invocation[index]
+        if index < len(_ENGINE_INVOCATION_PREFIX):
+            if word != expected:
+                return False
+            continue
+        # The path position, compared as a path rather than as text so an
+        # equivalent spelling or the expanded project-dir variable still counts.
+        named = Path(word.replace(_ROOT_SENTINEL, str(root)))
+        if not named.is_absolute():
+            named = root / named
+        if not _same_path(named, target):
+            return False
+    return True
+
+
 def _granted_engine_names(
     prefixes: list[str] | None, engine_paths: dict[str, str], root: Path
 ) -> set[str]:
-    """The engine basenames some allow prefix names at its CONFIGURED path.
+    """The engine basenames some allow rule pre-approves running.
 
-    Both halves matter and they are what `#606` is about. A rule naming
-    `scripts/pr_watch.py` in a repo whose `paths.engines` is `scripts/devkit`
-    grants nothing — the path it names is not there — so matching the basename
-    alone would report the exact broken install this check exists to find as
-    healthy. The comparison is therefore against `engine_paths`, which is
-    already remapped, and not against the basename the rule happens to end with.
+    Note what this does NOT do, because the previous version did it and it was
+    the defect: it does not look for the engine's path anywhere in the rule. It
+    asks `_grants_invocation` whether the rule opens the command the workflow
+    issues. See that function for the two-directional failure that motivated it.
 
-    Lexing through `_script_words` rather than a substring test, for the reason
-    that function exists: `uv run "$CLAUDE_PROJECT_DIR/scripts/pr_watch.py"` and
-    `uv run scripts/pr_watch.py` are the same grant, and a substring test on the
-    raw rule text would also match the name inside an unrelated longer path.
-
-    The comparison is `_same_path` — equality against the engine path, `..` and
-    symlinks normalized — and that is load-bearing rather than tidy. A tail test
-    (`endswith(configured)`) was here first and it counted
-    `'$CLAUDE_PROJECT_DIR/scripts/pr_watch.py'` — single-quoted, so the shell
-    never expands it and `_script_words` deliberately leaves the segment
-    unmarked — as a grant, because the string does end in the engine's path. It
-    is a LITERAL path with a dollar sign in it, matching no ordinary invocation;
-    counting it silenced the very line an operator needed. Equality rejects it
-    without needing a rule about `$` at all, since a token that resolves to the
-    engine cannot contain one. `test_a_single_quoted_project_dir_does_not_count_
-    as_a_grant` pins that, and an explicit `$` guard beside this comparison
-    would be unreachable — removed after a mutation showed no test could tell it
-    from its absence.
-
-    Two other shapes contribute nothing, both failing in the same safe
-    direction — they can only leave an engine reported `ungranted`, a line that
-    neither fails the run nor claims a defect, with the rule in front of the
-    operator reading it: an unlexable prefix (an unbalanced quote), which no
-    shell would run either; and a token that resolves somewhere other than this
-    repository's engine.
+    An unlexable prefix (an unbalanced quote) contributes nothing — no shell
+    would run it either — and can only leave an engine reported `ungranted`, a
+    line that neither fails the run nor claims a defect.
     """
     if prefixes is None:
         return set(engine_paths)
@@ -1454,18 +1494,8 @@ def _granted_engine_names(
         if not lexed:
             continue
         for name, configured in engine_paths.items():
-            if name in granted:
-                continue
-            target = root / configured
-            for token in _matching_words(words, name):
-                named = Path(token.replace(_ROOT_SENTINEL, str(root)))
-                if not named.is_absolute():
-                    # Relative to the repo root, matching how the runtime runs a
-                    # command: the cockpit's cwd is the project.
-                    named = root / named
-                if _same_path(named, target):
-                    granted.add(name)
-                    break
+            if name not in granted and _grants_invocation(words, configured, root):
+                granted.add(name)
     return granted
 
 

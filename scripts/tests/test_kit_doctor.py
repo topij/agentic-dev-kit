@@ -6324,3 +6324,98 @@ def test_a_symlink_loop_in_the_named_path_yields_no_grant_and_no_crash(tmp_path)
     assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == [
         (".claude/settings.json", "scripts/pr_watch.py")
     ]
+
+
+@pytest.mark.parametrize(
+    "rule",
+    [
+        "Bash(cat scripts/pr_watch.py:*)",
+        "Bash(ruff check scripts/pr_watch.py:*)",
+        "Bash(rm scripts/pr_watch.py:*)",
+        "Bash(wc -l scripts/pr_watch.py:*)",
+    ],
+)
+def test_a_rule_that_names_the_engine_without_running_it_is_not_a_grant(tmp_path, rule):
+    """Naming the engine is not pre-approving it.
+
+    Found by a review lens: the check asked whether ANY word in the rule
+    resolved to the engine's path, so a rule that merely mentions the file —
+    linting it, reading it, deleting it — reported the engine as covered while
+    every poll would still stop for approval. False reassurance from the one
+    check built to surface that friction, which is the dangerous direction.
+    """
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(root, [rule])
+
+    assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == [
+        (".claude/settings.json", "scripts/pr_watch.py")
+    ]
+
+
+@pytest.mark.parametrize("rule", ["Bash(uv:*)", "Bash(uv run:*)"])
+def test_a_broader_rule_that_still_opens_the_invocation_is_a_grant(tmp_path, rule):
+    """The other direction the old test got wrong, and the one that shows the
+    error was the question rather than a missing case.
+
+    `Bash(uv run:*)` pre-approves every poll and does not contain the engine's
+    path at all, so a check that could only find grants NAMING the engine
+    reported `ungranted` — telling an adopter to add a rule they already had in
+    a broader form.
+    """
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(root, [rule])
+
+    assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == []
+
+
+def test_a_rule_longer_than_the_invocation_is_not_a_general_grant(tmp_path):
+    """`uv run <engine> --json` pre-approves some polls and not others —
+    `--mark-seen` would still prompt — so reporting it as covering the workflow
+    would be the same false reassurance in a smaller way."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(root, ["Bash(uv run scripts/pr_watch.py --json:*)"])
+
+    assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == [
+        (".claude/settings.json", "scripts/pr_watch.py")
+    ]
+
+
+def test_a_truncated_runner_token_is_not_a_grant(tmp_path):
+    """Claude Code matches a Bash rule on argv TOKEN boundaries, so `uv r` is
+    not a prefix of `uv run` — it is a different second token. The comparison
+    here is token-wise for that reason rather than string-wise."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(root, ["Bash(uv r scripts/pr_watch.py:*)"])
+
+    assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == [
+        (".claude/settings.json", "scripts/pr_watch.py")
+    ]
+
+
+@pytest.mark.parametrize(
+    "rule",
+    [
+        "Bash( :*)",  # whitespace only
+        "Bash(# uv run scripts/pr_watch.py:*)",  # a shell comment runs nothing
+    ],
+)
+def test_a_rule_whose_prefix_lexes_to_nothing_is_not_a_grant(tmp_path, rule):
+    """An empty token list is vacuously a prefix of anything, so without an
+    explicit guard a rule carrying no command at all would grant every engine.
+
+    Reachable rather than theoretical: whitespace survives the `:*` split, and
+    `_script_words` drops everything after an unquoted `#` at a word start
+    because no shell would run it. Found by mutation — removing the guard left
+    the whole permissions suite green.
+    """
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(root, [rule])
+
+    assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == [
+        (".claude/settings.json", "scripts/pr_watch.py")
+    ]

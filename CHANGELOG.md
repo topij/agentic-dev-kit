@@ -47,7 +47,12 @@ starts.
 - **ADDED (report shape) — `kit_doctor` reports a new registration state,
   `ungranted`, for a kit engine that is installed but that no
   `permissions.allow` rule in `.claude/settings.json` or
-  `.claude/settings.local.json` reaches at its configured path.** A `--json`
+  `.claude/settings.local.json` pre-approves running.** A rule counts when its
+  `:*` prefix opens the command the workflow issues (`uv run <engine> …`), read
+  as argv tokens: `Bash(uv run:*)` counts, `Bash(uv run <engine>:*)` counts, and
+  a rule that merely names the engine without running it (`Bash(cat <engine>:*)`)
+  does not. An exact rule with no `:*` matches one argument-less invocation and
+  does not count, since the workflow polls with arguments that vary. A `--json`
   consumer reading `registrations[].state` must accept the new value; a
   consumer that switches exhaustively on the old set needs a case for it.
   It does **not** join the exit code — approving each invocation is a supported
