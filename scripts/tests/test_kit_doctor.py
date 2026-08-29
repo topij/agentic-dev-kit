@@ -5997,6 +5997,38 @@ def test_the_ungranted_line_names_the_path_a_rule_would_have_to_name(tmp_path):
     assert "prompts" not in rendered
 
 
+def test_an_exact_rule_without_the_wildcard_is_not_a_grant(tmp_path):
+    """A `Bash(...)` rule without the `:*` suffix is an EXACT command match, so
+    it pre-approves one argument-less invocation and not the poll shape.
+
+    Measured at Claude Code 2.1.251 against the deny matcher, which shares this
+    grammar: under `Bash(git status)`, `git status` was refused and
+    `git status --short` was not. `pr-watch` polls with a PR number and flags
+    that vary per call, so an exact rule leaves every poll stopping for
+    approval — while the check, before this, reported the engine as covered.
+
+    Raised by a review lens. The author's own earlier probe had asserted the
+    opposite by testing THIS MODULE rather than the client.
+    """
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(root, ["Bash(uv run scripts/pr_watch.py)"])
+
+    assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == [
+        (".claude/settings.json", "scripts/pr_watch.py")
+    ]
+
+
+def test_the_prefix_form_of_the_same_rule_is_a_grant(tmp_path):
+    """The pair to the test above, so it pins the `:*` suffix specifically
+    rather than merely rejecting that rule text."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(root, ["Bash(uv run scripts/pr_watch.py:*)"])
+
+    assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == []
+
+
 @pytest.mark.parametrize("withholding", ["deny", "ask"])
 def test_a_deny_or_ask_rule_is_not_read_as_a_grant(tmp_path, withholding):
     """This check answers whether an allow rule pre-approves the engine. `ask`

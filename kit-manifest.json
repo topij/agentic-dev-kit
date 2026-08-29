@@ -132,7 +132,7 @@
     },
     "scripts/kit_doctor.py": {
       "role": "engine",
-      "sha256": "b34a1b3e7c93cddd524a2bd9bef4c097d7843fac7f59e24f9486a7dccbcbaf37"
+      "sha256": "fb112175281cc5291ad663b06034c82742104b5cd84aa97fd35f5cc45bc6a984"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -246,7 +246,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "47e8b76c4cebee3df60f1e6dba8a4e4f7ec53bfbab11f8993d990f3f9266cc38"
+      "sha256": "e59ea62b6c1c5585d616eda09dff8521b41a9d96acabb0adf0d51e993ae956c8"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",

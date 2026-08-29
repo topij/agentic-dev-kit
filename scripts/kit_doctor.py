@@ -1301,10 +1301,11 @@ _CODEX_HOOK_CONTRACT: dict[str, tuple[str, frozenset[str], int]] = {
 _CLAUDE_PERMISSION_ENGINES: frozenset[str] = frozenset({"pr_watch.py"})
 
 # The Claude Code permission rule this check reads: a `Bash(…)` rule whose
-# content is a command prefix, optionally ending in the `:*` wildcard. The
-# capture is the prefix; the wildcard is stripped because it is rule syntax
-# rather than part of any path.
-_BASH_PERMISSION_RULE = re.compile(r"^Bash\((.*?)(?::\*)?\)$", re.DOTALL)
+# content is a command, with the `:*` suffix marking it a PREFIX rule rather
+# than an exact one. The capture is the command; the second group is present
+# only for the prefix form, and the caller needs that distinction — see
+# `_bash_allow_prefixes`.
+_BASH_PERMISSION_RULE = re.compile(r"^Bash\((.*?)(:\*)?\)$", re.DOTALL)
 
 
 def _bash_allow_prefixes(document: object) -> list[str] | None:
@@ -1318,6 +1319,25 @@ def _bash_allow_prefixes(document: object) -> list[str] | None:
     None is the bare-`Bash` case, which grants every command and therefore every
     engine. Returning a sentinel rather than a synthetic prefix keeps the caller
     from having to model "matches anything" as a string it then lexes.
+
+    **Only the `:*` form counts, and that is the whole question this function
+    answers.** A rule WITHOUT the suffix is an exact command match, not a
+    prefix — measured at Claude Code 2.1.251 against the deny matcher, which
+    shares this grammar: under `Bash(git status)`, `git status` was refused and
+    `git status --short` was not. So an exact rule naming an engine pre-approves
+    exactly one argument-less invocation, and `pr-watch` polls with a PR number
+    and flags that vary per call. Counting it as a grant told an adopter their
+    polls were covered when every one of them would still stop for approval —
+    the false reassurance this check exists to prevent, in the direction that is
+    harder to notice because nothing prompts you to look.
+
+    A review lens raised it; the measurement above is what settled it, because
+    the author's own earlier probe had tested THIS MODULE's behaviour and
+    mistaken it for the client's. **The limit of that measurement, stated
+    because it is not nothing:** it observes the `deny` matcher, since headless
+    `-p` gates on `deny` and not on the absence of an `allow`. `allow` and
+    `deny` share one documented rule grammar, so the same matcher is the
+    reasonable reading — but it is a reading, not a second measurement.
     """
     if not isinstance(document, dict):
         return []
@@ -1337,7 +1357,7 @@ def _bash_allow_prefixes(document: object) -> list[str] | None:
         if rule.strip() in ("Bash", "Bash(*)", "Bash(:*)"):
             return None
         match = _BASH_PERMISSION_RULE.match(rule.strip())
-        if match:
+        if match and match.group(2):
             prefixes.append(match.group(1))
     return prefixes
 
