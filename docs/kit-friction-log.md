@@ -146,3 +146,13 @@ Swept entries are verbatim in the archive under `Graduated 2026-08-22`.
   author, or of a panel that has more purchase on prose than on tested code. If it recurs with
   a mechanism attached it is worth a rule; the shape to watch is whether a claim verified
   against a *command* ever failed, versus one verified against nothing.
+
+  **Recurrence — 2026-08-29, PR `#649`.** The safety-critical prose was correct, but its new
+  behavioral guard accepted explicit semantic inversions: a regex matched “are
+  safety-critical” later in a sentence that first said “not safety-critical”; substring checks
+  accepted “do not read and apply”; and file-wide token membership accepted reversed workflow,
+  Claude-comment and CHANGELOG remedies. The fix was to isolate each authoritative block,
+  normalize whitespace and assert the complete positive obligation, with negation mutants and
+  a supported configured-path relocation as controls. This supplies the mechanism the parked
+  entry lacked. Keep it active for the next `triage-friction-log` pass to decide whether the
+  recurring shape graduates into a shared review/testing rule.
