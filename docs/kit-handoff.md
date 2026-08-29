@@ -67,9 +67,16 @@ draft.
 
 - **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
   `52d25e5b95e2e7d8cb188c7bbeced43fbfcaffc7` on 2026-08-29 reported one failure, in
-  `test_pr_followup_hook.py`, which is the intermittent test recorded on `#393` and is
-  untouched by this change; the full suite at that same revision printed `2091 passed`
-  under both `--python 3.12` and `--python 3.14`, and CI was green on the merged head.
+  `test_pr_followup_hook.py` — the intermittent test recorded on `#393`, untouched by
+  this change — and the full suite at that revision printed `2081 passed` under both
+  `--python 3.12` and `--python 3.14`. At the tree that merged,
+  `5c5527ce58637d8165fefa1054e109dd9c84389c`, `uv run --python 3.12 … pytest` printed
+  `2091 passed` on 2026-08-29, and CI was green on the squash `83b959e`. **Read any one
+  of those counts as a reading of a suite with known intermittency, not as a property
+  of it:** review lenses reproducing the same commands in their own clones hit a
+  *different* intermittent failure at both revisions and under both interpreters, and
+  CI's own run of the merged head reported three skips where the local runs reported
+  none.
   Both review lenses reproduced the suite independently in their own clones.
 
 ▶ Next: measure the allow side of `Bash`, `Bash(*)` and `Bash(:*)` under a configuration

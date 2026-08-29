@@ -31,20 +31,27 @@
   values.** In one of five launches on `#637` the diffstat was retyped as `999
   insertions / 18 deletions` against the rendered `1000 / 16`. The correctness lens
   caught the mismatch and correctly declined to attribute it to a stale base or wrong
-  sha. **M** — bounded, because both lenses verify base and sha independently, but the
-  diffstat cross-check exists precisely to flag a wrong diff and a mistyped baseline
-  blunts it. No mechanism proposed: the fix could be a launcher that reads the rendered
-  file, or a rendered form the launch consumes directly, and choosing between them is
-  its own design question. Parked for accumulation — if a second round mis-transcribes
-  something load-bearing, that settles it.
+  sha. **M** — bounded, since both lenses verify base and sha independently, but the
+  diffstat cross-check exists to flag a wrong diff and a mistyped baseline blunts it.
+  No mechanism proposed: a launcher that reads the rendered file and a rendered form the
+  launch consumes directly are different designs. Parked for accumulation.
+- **A second intermittent test, found by a review lens rather than by the suite:
+  `test_reconcile_sessions.py::test_portable_bounded_runner_reaps_on_startup_interrupt`.**
+  Both PR `#638` lenses ran the pinned full suite in their own fresh clones and this
+  test failed for one of them at `52d25e5` and at `5c5527c`, under `--python 3.12` and
+  `--python 3.14` alike, while the cockpit's runs at the same revisions had it pass and
+  four consecutive isolated runs of it passed here. **M** — no mechanism identified, and the environment split is the signal: not the
+  interpreter, since it failed on both. Distinct from `#393`'s parser-recursion shape —
+  a reaping test failing only in a fresh clone points at process timing or at something
+  the clone does not carry. Parked for accumulation; what it already establishes is that
+  a local suite count and a lens's disagreed about whether this tree was green.
 - **A `cd` outlived its command twice in one session, both times in a throwaway probe
   rather than in two-tree work.** A symlink-behaviour probe and a permission-rule probe
   each left the shell in a scratch directory; the next edit using a repository-relative
-  path failed with `FileNotFoundError`. **L** — failed loudly both times, no damage.
-  `AGENTS.md`'s *Working across two trees* documents this hazard for verification
-  clones and adopter checkouts, which is not where either instance happened, so the
-  question this accumulates toward is whether that rule should be stated for any
-  `cd`-bearing command rather than for the two-tree case specifically.
+  path failed with `FileNotFoundError`. **L** — failed loudly both times, no damage. `AGENTS.md`'s *Working across two
+  trees* documents this for verification clones and adopter checkouts, neither of which
+  is where these happened; what accumulates is whether the rule belongs on any
+  `cd`-bearing command.
 
 ## 2026-08-27
 
