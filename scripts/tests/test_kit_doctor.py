@@ -5865,6 +5865,19 @@ def test_a_whole_tool_bash_grant_covers_every_engine(tmp_path, rule):
     assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == []
 
 
+def test_a_non_covering_rule_does_not_suppress_a_covering_one(tmp_path):
+    """`Bash(:*)` reaches `_granted_engine_names` as the empty prefix rather than
+    being dropped earlier, so it is evaluated beside its siblings. This pins that
+    contributing nothing is all it does — the property that would break if the
+    empty prefix were ever "repaired" into a match-anything, and the one the
+    removal of `Bash(:*)` from the whole-tool tuple relies on."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(root, ["Bash(:*)", "Bash(uv run scripts/pr_watch.py:*)"])
+
+    assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == []
+
+
 @pytest.mark.parametrize(
     "rule",
     [
