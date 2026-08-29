@@ -147,9 +147,11 @@ change to one is a reason to read the other.
   `scripts/hooks/pre-push` refuses any push from a `dev/*` branch that touches
   `docs/kit-handoff.md` or `docs/kit-friction-log.md`. A wrap-up commit on a `dev/*`
   branch is blocked by the repo's own hook.
-- **Behavioral changes to `scripts/pr_watch.py`, `scripts/dev_session.sh`, or
-  `scripts/launch_lane.py` are safety-critical.** Read and apply
-  `docs/agentic-dev-kit/safety-critical-changes.md` completely before changing either
+- **Behavioral changes to `scripts/pr_watch.py`, `scripts/dev_session.sh`,
+  `scripts/launch_lane.py`, or the profile named by
+  `parallel.claude_settings_profile` (`config/claude-lane-settings.json` in this
+  repository) are safety-critical.** Read and apply
+  `docs/agentic-dev-kit/safety-critical-changes.md` completely before changing any
   gate, launch-authority, or merge-authority path. This precise root instruction is
   the Codex binding; Claude's
   path-scoped rule binds the same shared file. Do not restate its doctrine here or in

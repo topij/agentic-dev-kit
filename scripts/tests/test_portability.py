@@ -13546,6 +13546,8 @@ def test_runtime_parity_contract_covers_workflows_and_adapters() -> None:
 )
 def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
     doctrine = "docs/agentic-dev-kit/safety-critical-changes.md"
+    profile_key = "parallel.claude_settings_profile"
+    profile_path = "config/claude-lane-settings.json"
     root_agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
     template = (REPO_ROOT / "docs" / "templates" / "AGENTS.md.tmpl").read_text(
         encoding="utf-8"
@@ -13574,13 +13576,18 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
         "scripts/devkit/dev_session.sh",
         "scripts/launch_lane.py",
         "scripts/devkit/launch_lane.py",
+        profile_path,
         "scripts/pr_watch.py",
         "scripts/devkit/pr_watch.py",
     }
+    # The policy input must be present in the Codex prose and Claude frontmatter;
+    # naming only its launcher would reproduce #633's ambiguous boundary.
     for text in (root_agents, template, merge_section, claude_rule):
         assert "pr_watch.py" in text
         assert "dev_session.sh" in text
         assert "launch_lane.py" in text
+        assert profile_key in text
+        assert profile_path in text
     changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     launcher_entry = changelog.split("## #609", 1)[1].split("\n---", 1)[0]
     assert "adopter-owned `AGENTS.md`" in launcher_entry

@@ -331,16 +331,16 @@ bound "what a lane can do". There is a class of write it **cannot authorize**
 (`.claude/`), and a class of execution it **authorizes with no rule in any list** (the
 composition above).
 
-**Whether editing this profile is itself a safety-critical change is an open question,
-and it is open in the doctrine rather than settled here.** `AGENTS.md` names three
-files — `pr_watch.py`, `dev_session.sh`, `launch_lane.py` — and the profile is none of
-them; it is data those engines read. But it is the mutable content `--settings` loads
-at every launch, and the composition above runs through it, so "not on the list" is a
-weaker argument than it looks. A delta-pass adversarial lens disputed the scoping on
-exactly that ground while a correctness lens confirmed it, which is the disagreement
-recorded rather than resolved. Until it is settled (`#633`), treat a change to this
-file the way `safety-critical-changes.md` would: both lenses before merge, and the
-operator lands it.
+**A behavioral change to this profile is safety-critical.** A profile-only edit changes
+what the unattended client is authorized to run even when `launch_lane.py` is
+byte-identical. The Codex binding in `AGENTS.md` names the profile configured by
+`parallel.claude_settings_profile`; Claude's path-scoped rule names the shipped
+`config/claude-lane-settings.json` and requires that entry to follow the config when
+an adopter relocates it. Both bindings route to the same
+`safety-critical-changes.md`; neither carries a runtime-specific copy of its doctrine.
+This decision is specific to the dedicated policy file. It does not put all of
+`config/dev-model.yaml` under the path trigger, which cannot distinguish
+`parallel.*` keys from unrelated configuration.
 
 **What a matched prefix does not do is swallow the rest of a compound command**, and
 the distinction is worth stating because it is easy to measure wrongly. Each segment of

@@ -18,6 +18,8 @@ status in the configured handoff, not in `AGENTS.md`.
   handoff, capture workflow friction, and leave one clear next step.
 - For customer-facing gates, destructive operations, recovery paths, security work,
   and behavioral changes to the configured `<engine-dir>/pr_watch.py`,
-  `<engine-dir>/dev_session.sh`, or `<engine-dir>/launch_lane.py`, read and apply
+  `<engine-dir>/dev_session.sh`, `<engine-dir>/launch_lane.py`, or the profile named
+  by `parallel.claude_settings_profile` (shipped as
+  `config/claude-lane-settings.json`), read and apply
   `docs/agentic-dev-kit/safety-critical-changes.md`. Green CI is necessary but not
   sufficient; require independent review and operator sign-off.
