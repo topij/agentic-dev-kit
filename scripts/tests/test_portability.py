@@ -13567,12 +13567,13 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
     root_binding = root_agents.split("- **Behavioral changes to", 1)[1].split(
         "\n- ", 1
     )[0]
-    assert re.search(
-        re.escape(profile_key)
-        + r"[\s\S]+"
-        + re.escape(profile_path)
-        + r"[\s\S]+are safety-critical\.",
-        root_binding,
+    root_binding_flat = " ".join(root_binding.split())
+    assert (
+        "`scripts/pr_watch.py`, `scripts/dev_session.sh`, "
+        "`scripts/launch_lane.py`, or the profile named by "
+        f"`{profile_key}` (`{profile_path}` in this repository) "
+        "are safety-critical."
+        in root_binding_flat
     )
     assert re.search(r"Read and apply\s+`" + re.escape(doctrine) + r"`", root_agents)
     template_binding = template.split(
