@@ -14,11 +14,63 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-29 — PR `#639` measured the allow side of the whole-tool `Bash`
-grants and settled the assertion `#637` shipped unstamped: `Bash(:*)` grants nothing and
-left the tuple. `#606` stays open for the rest of its own scope.
+Last updated: 2026-08-29 — `/triage-friction-log` graduated the inbox: PR `#646` (squash
+`ded3933`) filed `#641`–`#645` and swept them to the archive. The run ended `operator-held`
+rather than complete, and `#647` records why.
 
-## Latest session — 2026-08-29 (whole-tool Bash allow grants, in a Claude Code session)
+## Latest session — 2026-08-29 (friction-log triage, in a Claude Code session)
+
+**Theme —** In a Claude Code session, `triage-friction-log` ran end to end in LLM-only mode —
+both configured engines are absent, which is the state that selects that mode, so every result
+is `agent-executed` and `#6` still tracks vendoring them.
+
+- **Filed from the inbox:** `#641` (`launch_lane.py`'s `Bash(:*)` refusal — parked last
+  session, and filed here as its own issue rather than the `#631` comment that block offered,
+  on the operator's approval of the triage payload), `#642` (a lens asserting a base-currency relationship its own command did not
+  establish), `#643` (`panel_prompt.py` renders to a file while a Claude Code lens launch needs
+  inline text), `#644` (a second intermittent test, beside `#109`), `#645` (the scope of the
+  two-tree `cd` rule). The `#428`-guard entry was archived unfiled, because its own text records
+  that occurrence on `#467`.
+
+- **Three entries were kept active rather than swept, and the new marker says so in prose.**
+  Each parks itself for accumulation, and an archived entry reaches no later triage pass — the
+  distinction `#575` raises. Position alone cannot carry it, which is `#224`.
+
+- **The run ended `operator-held`, not complete, and that is this session's real finding.**
+  CodeRabbit reviewed `cf33e5e` cleanly, but its verdict arrived as an issue comment, so
+  `qualifying_bot_coverage` could not see it (`#44`) and `pr_watch` never bound a review
+  receipt. The operator merged on their own authority, which the workflow explicitly permits —
+  but completion requires the merged head to equal a retained `reviewed_head`, and no
+  completion route is reachable without one. The state was left valid, correct and
+  uncompletable, and a later resume would have hit the same wall. Filed as `#647`.
+
+- **No `--record-review` receipt was written, deliberately.** The receipt vocabulary names
+  fallback passes only and no fallback panel ran, so recording one would assert a review that
+  did not happen. `reviewed_head` was not inferred from the merged and reviewed heads being the
+  same commit; that inference is the thing the receipt exists to prevent.
+
+- **The uncompletable state was quarantined on the operator's go-ahead** to
+  `state/triage/quarantined-uncompletable_live_2026-08-29_281cfd4f574f3256_issue-647.json`,
+  preserved as `#647`'s evidence rather than deleted, so a later run starts a clean draft.
+
+- **Occurrence comments filed:** on `#491` (the poll prescribed the fallback panel for a bot
+  configured off rather than down — one `@coderabbitai review` got a real review of the merging
+  head) and on `#187`, closed 2026-08-09, whose mechanism recurred: the marker's first draft
+  left the inbox *longer* than before the sweep, and `triage-friction-log.md`'s finalize step
+  never mentions the budget.
+
+- **Verified:** the sweep was checked against the merged tree rather than the worktree that
+  wrote it — `git show ded3933:docs/kit-friction-log.md` and the archive, run in
+  `/Users/topi/Coding/agentic-dev-kit`, showed every swept block verbatim in the archive and
+  absent from the inbox, and every parked block still in the inbox and unarchived. `make test`
+  was not run: the change is two markdown documents, and `#646`'s `toolkit` check ran the suite.
+
+▶ Next: `session-start` — `#647` is new and unowned, `#606`, `#621`, `#631` and `#633` are
+untouched, and the parked inbox entries are waiting on recurrence rather than on a pass.
+
+______________________________________________________________________
+
+## Session — 2026-08-29 (whole-tool Bash allow grants, in a Claude Code session)
 
 **Theme —** In a Claude Code session, PR `#639` (squash `56c0eb3`) took `#606`'s
 residual: `_bash_allow_prefixes` asserted that `Bash`, `Bash(*)` and `Bash(:*)` each
@@ -309,58 +361,6 @@ neither `make test` nor `kit_doctor.py --generate-manifest`) and one it cannot (
 `.claude/` guard, which no allow-list entry lifts). Then `#236` and the `#243`
 narrowing. `#621` stays open: this record met its intent by copying evidence out before
 the cleanup boundary, but did not build the bundle contract that issue asks for.
-
-______________________________________________________________________
-
-## Session — 2026-08-27 (capability-tier calibration)
-
-**Theme —** PR `#623` (squash `92a3c15`) calibrated `models.runtime_mappings` and
-`review.fallback_panel.lens_compute` for Claude Code and Codex from live probes of the
-pinned clients (Claude Code 2.1.247, codex-cli 0.149.1) and declared, per key per
-runtime, whether each is mechanical or advisory. The design matrix in
-[`capability-tier-calibration-design_2026-08-27.md`](../saved_plans/capability-tier-calibration-design_2026-08-27.md)
-preceded the code; the record in
-[`capability-tier-calibration-live-validation_2026-08-27.md`](../saved_plans/capability-tier-calibration-live-validation_2026-08-27.md)
-carries every probe command and the observer field it read.
-
-- **The retired claim was half right, and the half that was right stayed.** "Claude's
-  delegation tool takes NO per-agent effort parameter" is true of the tool (it has
-  `model`, no `effort`; a plain subagent inherits the cockpit's effort) and false of
-  the runtime: the frontmatter `model` and `effort` of `.claude/agents/<name>.md` are
-  applied and read back from the runtime's own subagent transcript, as is `--agents`
-  JSON under the lane trust route. The kit now ships one definition per configured
-  lens, rendered from `lens_compute.claude` by `panel_prompt.py --agent-definition`,
-  seeded by `init.sh`, listed `ADOPTER_OWNED`, and pinned by tests to the generator's
-  bytes. The generator refuses an effort level the runtime would drop with only a
-  debug-mode log, quotes `model` (a `: ` or ` #` breaks or truncates bare YAML), and
-  holds the lens name to a slug.
-
-- **Codex's controls are on the argv and read back from the rollout.** `-m` and
-  `-c model_reasoning_effort=<level>` reach `turn_context`; a misspelled `-c` key is
-  accepted at exit 0 at the config default, an invalid level or model is refused by
-  the API at exit 1, `--ephemeral` leaves no observer. `runtime_mappings` is advisory
-  on both runtimes (no engine reads it) and its values now name what each client
-  accepted: `claude.expensive: fable`, `codex.expensive: xhigh`.
-
-- **The panel ran under the mechanism it reviewed.** Round 1's plain subagents ran at
-  the cockpit's inherited `xhigh`; rounds 2–4, launched as the kit-owned lens agents,
-  ran at the frontmatter's `high` — read from this session's subagent transcripts and
-  recorded. Round 1 found a HIGH in the new generator (bare `model` broke the
-  frontmatter), round 2 corrected the rationale for that fix and a consumer
-  enumeration, round 3 found the seed's `sed` interpolation mangling `&` and `|`,
-  round 4 found nothing by execution. Filed on their owning issues: `#574` (lenses
-  fetching in the handed tree, one occurrence comment per round that showed it), `#255` (no adopter-side check for a
-  stale lens definition — the doctor check that issue proposes).
-
-- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
-  `d85e1bf35fdda9f71f14e787133e2ca2f0b90c20` on 2026-08-27 printed `2006 passed, 3
-  warnings in 367.24s`; the merged squash is `92a3c15`.
-
-▶ Next: run the first real headless task on the generalised launcher (no tracker item;
-`#602` is the `post-merge-systemize` binding bug, not this). A Claude lane under the
-trust route runs the product default model and effort unless the descriptor's argv
-says otherwise — the wrapper still carries neither control, by design. Then Phase 5
-(`#606`, `#236`, the `#243` narrowing).
 
 ______________________________________________________________________
 
