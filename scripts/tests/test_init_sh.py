@@ -3624,9 +3624,12 @@ def _codex_session_start_commands() -> list[str]:
 def test_the_shipped_codex_session_start_carries_no_matcher() -> None:
     """The portable document check runs for every supported start source.
 
-    Codex supports a matcher on SessionStart, but copying Claude's `startup`
-    subset would narrow the registration. Omission is the intentional match-all
-    shape. The Claude-only memory checker must not be present here.
+    Codex supports a matcher on SessionStart; omitting it is the intentional
+    match-all shape. This used to read "copying Claude's `startup` subset would
+    narrow the registration", which stopped being true when `#606` measured that
+    subset and dropped it — both runtimes now omit the matcher, and the sibling
+    `test_the_shipped_claude_session_start_carries_no_matcher` holds the other
+    half. The Claude-only memory checker must still not be present here.
     """
     parsed = json.loads((REPO_ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8"))
     entries = [
@@ -5721,3 +5724,150 @@ def test_upgrade_changelog_lookup_reports_commits_it_could_not_index(
         f"silently — the failure this warning exists to make visible.\n"
         f"stdout:\n{result.stdout}"
     )
+
+
+# ── cockpit command permissions and the Claude matcher (#606) ────────────
+
+
+def _with_pr_watch(repo: Path, *, engines: str = "scripts") -> Path:
+    """`register_cockpit_permissions` returns early when the engine is absent."""
+    engine = repo / engines / "pr_watch.py"
+    engine.parent.mkdir(parents=True, exist_ok=True)
+    engine.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+    return repo
+
+
+def test_the_shipped_claude_session_start_carries_no_matcher() -> None:
+    """The same match-all shape as the Codex side, and now for a measured
+    reason rather than by analogy.
+
+    `"startup"` was here until `#606`, read as the runtime's limit. At Claude
+    Code 2.1.251 a four-group fixture established it is not: an omitted matcher
+    fires on both `startup` and `resume`, `"startup"` fires only on the first,
+    and a resumed session therefore skipped both tripwires. The runs are in
+    `saved_plans/claude-sessionstart-matcher-live-validation_2026-08-29.md`.
+
+    An explicit alternation would also cover both and is rejected on a different
+    ground: it enumerates the sources known when it was written, so it goes
+    stale silently the next time the runtime adds one. This test fails on ANY
+    matcher for that reason — a narrower one is the bug, and a wider one is the
+    bug's slower form.
+    """
+    parsed = json.loads(
+        (REPO_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8")
+    )
+    entries = [
+        entry
+        for entry in parsed["hooks"]["SessionStart"]
+        if any("budget" in hook.get("command", "") for hook in entry["hooks"])
+    ]
+    assert entries, "no SessionStart budget registration in the shipped file"
+    for entry in entries:
+        assert "matcher" not in entry, (
+            "the Claude SessionStart entry grew a matcher; a resumed, cleared or "
+            "compacted session then starts with the budget tripwires silent"
+        )
+
+
+def test_the_claude_budget_advisory_does_not_tell_an_adopter_to_narrow_it() -> None:
+    """The advisory is the only route by which this reaches a new adopter, so
+    the shipped file and the printed instructions have to agree about the
+    matcher as well as about the commands. They drifted the other way once
+    already — the file said `startup` and so did the text, both wrong together,
+    which is why the test above reads the file and this one reads the source."""
+    source = (REPO_ROOT / "init.sh").read_text(encoding="utf-8")
+    claude_advisory = source[source.index("register_budget_hooks()") :]
+    claude_advisory = claude_advisory[claude_advisory.index("Claude — .claude/settings.json") :]
+    claude_advisory = claude_advisory[: claude_advisory.index("\n}")]
+
+    assert "omit matcher" in claude_advisory
+    assert 'matcher \\"startup\\"' not in claude_advisory
+
+
+def test_the_permissions_advisory_names_the_configured_engine_dir(
+    tmp_path: Path,
+) -> None:
+    """`#606`'s reported defect, at the surface that causes it.
+
+    The kit's entry read `Bash(uv run scripts/pr_watch.py:*)` with `scripts`
+    baked in, and nothing printed it at all — so an adopter vendoring under
+    `scripts/devkit/` had no route to a correct rule except copying the kit's
+    file and knowing to edit it. A rule naming a path they do not have grants
+    nothing and prompts on every poll.
+    """
+    # V1_CONFIG has no `engines:` key — the migration supplies the default — so
+    # this adds one rather than rewriting one, and asserts the insertion took.
+    config = V1_CONFIG.replace(
+        "paths:\n", "paths:\n  engines: scripts/devkit\n", 1
+    )
+    assert "engines: scripts/devkit" in config
+    repo = _with_pr_watch(
+        _fixture(tmp_path, config=config, git=True), engines="scripts/devkit"
+    )
+
+    result = _run_init(repo)
+
+    assert "Bash(uv run scripts/devkit/pr_watch.py:*)" in result.stdout
+    assert "Bash(uv run scripts/pr_watch.py:*)" not in result.stdout
+
+
+def test_the_permissions_advisory_prints_the_shipped_allow_rules_verbatim(
+    tmp_path: Path,
+) -> None:
+    """Read out of `.claude/settings.json` rather than restated, for the reason
+    the budget advisory's sibling gives: comparing a copy against a copy makes a
+    shared defect invisible, and `kit-manifest.json` tracks neither settings
+    file so no drift check covers this either.
+
+    Scoped to the `Bash(...)` rules the advisory is about. A rule this repo
+    grants itself and does not advise is not a defect — the advisory is
+    deliberately the smaller list — so the assertion runs from the PRINTED side
+    to the shipped one.
+    """
+    repo = _with_pr_watch(_fixture(tmp_path, config=V1_CONFIG, git=True))
+
+    result = _run_init(repo)
+
+    shipped = set(
+        json.loads((REPO_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8"))[
+            "permissions"
+        ]["allow"]
+    )
+    printed = set(re.findall(r'"(Bash\([^"]*\))"', result.stdout))
+    assert printed, "the permissions advisory printed no Bash rules"
+    assert printed <= shipped, (
+        "the advisory offers rules this repo does not grant itself:\n"
+        f"  {sorted(printed - shipped)}"
+    )
+
+
+def test_the_permissions_advisory_is_skipped_when_the_engine_is_absent(
+    tmp_path: Path,
+) -> None:
+    """Per ENGINE, the granularity the budget advisory learned the hard way: an
+    adopter who declined `pr_watch.py` must not be handed a rule for a command
+    they do not have."""
+    repo = _fixture(tmp_path, config=V1_CONFIG, git=True)
+
+    result = _run_init(repo)
+
+    assert "permissions.allow" not in result.stdout
+
+
+def test_the_permissions_advisory_says_it_is_optional(tmp_path: Path) -> None:
+    """The cockpit allow-list trims prompts for an operator who is present; it
+    is not a boundary and nothing depends on it. An advisory that read as
+    required would be pressing a permission grant on an adopter who never asked
+    for one."""
+    repo = _with_pr_watch(_fixture(tmp_path, config=V1_CONFIG, git=True))
+
+    result = _run_init(repo)
+
+    block = result.stdout[result.stdout.index("cockpit's own command permissions") :]
+    block = block[: block.index("\n\n")] if "\n\n" in block else block
+    # Whitespace-normalised, because the advisory wraps for the terminal and a
+    # phrase that straddles two `echo` lines is the same phrase. Asserting the
+    # raw text would pin the line breaks, which is not what this test is about.
+    flowed = " ".join(block.split())
+    assert "optional" in flowed
+    assert "skip this entirely if you would rather approve each command" in flowed
