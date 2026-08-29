@@ -57,8 +57,8 @@ safety-critical review and operator-merge route.
   `scripts/pr_watch.py 649 --json --no-persist`, run in the same directory at that revision
   and date, reported it mergeable before the authorized squash merge.
 
-▶ Next: `session-start` — `#621`, `#631`, `#346` and `#434` stay open, so the next session
-has several threads rather than one.
+▶ Next: `session-start` — re-read `#621`, `#631`, `#346` and `#434` with live repository
+and tracker state before choosing the next slice.
 
 ______________________________________________________________________
 
