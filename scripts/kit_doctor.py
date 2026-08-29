@@ -218,6 +218,12 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/launch_lane.py", "engine"),
     ("scripts/reconcile_sessions.sh", "engine"),
     ("scripts/kit_doctor.py", "engine"),
+    # The executable half of live-validation-evidence.md. Track both: an
+    # upgrader receiving the doctrine without the verifier gets an instruction
+    # it cannot execute, while receiving the verifier without the doctrine
+    # loses the redaction and authoritative-observer boundary the CLI cannot
+    # infer from bytes alone.
+    ("scripts/verify_live_validation_bundle.py", "engine"),
     # Assembles panel launch prompts by QUOTING the contract out of
     # docs/agentic-dev-kit/fallback-review-panel.md at run time (#214). That
     # coupling is why it is tracked beside the doctrine rather than left
@@ -272,6 +278,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/test_reconcile_sessions.py", "test"),
     ("scripts/tests/test_repo_layout.py", "test"),
     ("scripts/tests/test_state_guard.py", "test"),
+    ("scripts/tests/test_live_validation_bundle.py", "test"),
     # `state_paths` is a package with its own `tests/`, hashed the same way for
     # the same reason: it sits under `scripts/lib/`, so `_remap` covers it
     # uniformly with everything else — no boundary to draw here.
@@ -325,6 +332,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # adopter cannot refresh the adapters or shared workflows while keeping an
     # older account of which ones are supposed to exist.
     ("docs/agentic-dev-kit/runtime-parity.md", "doctrine"),
+    ("docs/agentic-dev-kit/live-validation-evidence.md", "doctrine"),
     ("docs/agentic-dev-kit/safety-critical-changes.md", "doctrine"),
     # Tracked because safety-critical-changes.md — which IS refreshed by
     # /upgrade — links to it from rules 2 and 3. An untracked target means an
