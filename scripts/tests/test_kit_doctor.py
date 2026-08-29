@@ -6221,3 +6221,69 @@ def test_dead_registrations_docstring_accounts_for_every_state_it_omits(tmp_path
             f"dead_registrations omits {state!r} without saying why; that "
             "docstring's whole point is enumerating its omissions"
         )
+
+
+@pytest.mark.parametrize(
+    "spelling",
+    [
+        "scripts/pr_watch.py",
+        "./scripts/pr_watch.py",
+        "scripts//pr_watch.py",
+        "./scripts/./pr_watch.py",
+        "scripts/../scripts/pr_watch.py",
+    ],
+)
+def test_an_equivalent_spelling_of_the_engine_path_is_still_a_grant(tmp_path, spelling):
+    """A rule that names the engine by any equivalent path grants it.
+
+    Raised by a review bot against the `./` form, which does not actually
+    reproduce — `pathlib` folds `./` and doubled slashes away at parse time, so
+    those three were already granted before `_same_path` existed. `..` is the
+    one that was not: it stayed lexically unequal and reported a false
+    `ungranted` at a path that does run the engine. The parametrization keeps
+    all five, so the already-working forms cannot silently regress while the
+    fixed one is watched.
+    """
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(root, [f"Bash(uv run {spelling}:*)"])
+
+    assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == []
+
+
+def test_a_path_that_merely_ends_in_the_engine_name_is_not_a_grant(tmp_path):
+    """Normalization must not become a suffix match. `_same_path` resolves both
+    sides, and a resolved path under a different tree still differs — the
+    property the equality comparison was chosen for in the first place."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(root, ["Bash(uv run /elsewhere/scripts/pr_watch.py:*)"])
+
+    assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == [
+        (".claude/settings.json", "scripts/pr_watch.py")
+    ]
+
+
+def test_a_symlink_loop_in_the_named_path_yields_no_grant_and_no_crash(tmp_path):
+    """A rule whose path runs through a symlink loop reports `ungranted` and
+    does not bring the run down.
+
+    Renamed from `..._degrades_instead_of_raising`, which claimed more than it
+    checks. `Path.resolve` does NOT raise on a loop at the default
+    `strict=False` — measured at Python 3.14.6, it returns the path unresolved,
+    and only `strict=True` raises (errno 62). So this exercises the ordinary
+    not-equal path, NOT `_same_path`'s `except OSError`, and mutating that
+    clause does not fail this test. What it pins is the outcome an operator
+    sees for a pathological path: no grant, no traceback.
+    """
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    loop = root / "loop"
+    loop.symlink_to(root / "loop2")
+    (root / "loop2").symlink_to(loop)
+    _settings_with_allow(root, ["Bash(uv run loop/pr_watch.py:*)"])
+
+    # The assertion is that this returns at all, with the honest answer.
+    assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == [
+        (".claude/settings.json", "scripts/pr_watch.py")
+    ]

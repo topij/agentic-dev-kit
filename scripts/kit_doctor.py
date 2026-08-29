@@ -1342,6 +1342,48 @@ def _bash_allow_prefixes(document: object) -> list[str] | None:
     return prefixes
 
 
+def _same_path(named: Path, target: Path) -> bool:
+    """Whether two paths name the same file, normalizing `..` and symlinks.
+
+    `==` alone is LEXICAL, and the gap is narrow but real: `pathlib` folds away
+    `./` and doubled slashes when it parses (`Path("./scripts/pr_watch.py")` is
+    already `scripts/pr_watch.py`, so those forms compared equal before this
+    function existed), but it does not fold `..` — `scripts/../scripts/pr_watch.py`
+    stayed unequal and the engine was reported `ungranted` at a path that does
+    run it. A review bot raised this against the `./` form, which does not
+    reproduce; the `..` form does, and a symlinked repo root or engine is the
+    other case.
+
+    It also makes `_granted_engine_names`'s docstring true. That comment said
+    the comparison was "equality against the resolved engine path" while the
+    code resolved nothing — the kind of claim that reads as verified because it
+    sits beside working code.
+
+    `strict=False` is the default and returns a normalized absolute path for a
+    path that does not exist, which every ungranted case relies on.
+
+    **The `except OSError` is version-defensive, not a branch with a
+    demonstrated trigger here, and is marked as such because the obvious
+    candidate does not reach it.** A symlink loop was the assumed trigger and it
+    is not one: measured at Python 3.14.6, `resolve()` on a path through a loop
+    RETURNS the path unresolved, and only `resolve(strict=True)` raises
+    (`OSError`, errno 62). So no test in this suite kills a mutation of that
+    clause, and the honest reading is that it guards `resolve` semantics on
+    Python versions this repo does not pin rather than anything reproducible
+    today. It is kept rather than deleted because the module's standing rule is
+    that adopter input degrades the report instead of aborting it and a raise
+    here would take down the whole run — and because falling back to the lexical
+    comparison can only under-report a grant, printing one more advisory line,
+    never inventing one.
+    """
+    if named == target:
+        return True
+    try:
+        return named.resolve() == target.resolve()
+    except OSError:
+        return False
+
+
 def _granted_engine_names(
     prefixes: list[str] | None, engine_paths: dict[str, str], root: Path
 ) -> set[str]:
@@ -1359,9 +1401,9 @@ def _granted_engine_names(
     `uv run scripts/pr_watch.py` are the same grant, and a substring test on the
     raw rule text would also match the name inside an unrelated longer path.
 
-    The comparison is EQUALITY against the resolved engine path, and that is
-    load-bearing rather than tidy. A tail test (`endswith(configured)`) was here
-    first and it counted
+    The comparison is `_same_path` — equality against the engine path, `..` and
+    symlinks normalized — and that is load-bearing rather than tidy. A tail test
+    (`endswith(configured)`) was here first and it counted
     `'$CLAUDE_PROJECT_DIR/scripts/pr_watch.py'` — single-quoted, so the shell
     never expands it and `_script_words` deliberately leaves the segment
     unmarked — as a grant, because the string does end in the engine's path. It
@@ -1397,7 +1439,7 @@ def _granted_engine_names(
                     # Relative to the repo root, matching how the runtime runs a
                     # command: the cockpit's cwd is the project.
                     named = root / named
-                if named == target:
+                if _same_path(named, target):
                     granted.add(name)
                     break
     return granted
