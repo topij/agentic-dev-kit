@@ -13589,6 +13589,11 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
         assert profile_key in text
         assert profile_path in text
     changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    profile_entry = changelog.split("## #649", 1)[1].split("\n---", 1)[0]
+    assert "adopter-owned `AGENTS.md`" in profile_entry
+    assert ".claude/rules/safety-critical-changes.md" in profile_entry
+    assert profile_key in profile_entry
+    assert profile_path in profile_entry
     launcher_entry = changelog.split("## #609", 1)[1].split("\n---", 1)[0]
     assert "adopter-owned `AGENTS.md`" in launcher_entry
     assert ".claude/rules/safety-critical-changes.md" in launcher_entry

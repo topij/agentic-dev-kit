@@ -42,6 +42,20 @@ starts.
 
 ---
 
+## #649 — 2026-08-29
+
+- **CHANGED (gate semantics) — behavioral changes to the profile named by
+  `parallel.claude_settings_profile` now take the shared safety-critical review and
+  operator-merge route.** Add the configured profile to your adopter-owned `AGENTS.md`
+  binding and to `.claude/rules/safety-critical-changes.md`'s path list;
+  the shipped default is `config/claude-lane-settings.json`. When you relocate the
+  profile, move the Claude rule entry with it because rule frontmatter cannot resolve
+  `config/dev-model.yaml`. The path trigger does not cover that whole config file,
+  whose unrelated keys would be swept in with `parallel.*`; the workflow-document
+  gap in `#346` and the test-side guard in `#434` stay open.
+
+---
+
 ## #639 — 2026-08-29
 
 - **CHANGED (report shape) — `kit_doctor` no longer treats `Bash(:*)` as a
