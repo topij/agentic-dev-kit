@@ -5,6 +5,47 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-08-27 (Codex writing-lane record)
+
+**Theme —** PR `#620` (squash `58c5d7e`) recorded a Codex lane launched through
+`scripts/launch_lane.py` with a fixture-only `workspace-write` declaration. The lane
+performed the scoped write, committed after exact per-command approvals, pushed,
+opened a ready pull request, and received a cockpit `dev_session.sh pr-watch` review
+receipt. No launcher or shipped configuration changed; the shipped Codex approval
+policy remains `read-only`.
+
+- **The denial transport is not parity evidence.** The control lane observed an
+  outside-worktree write denial, protected Git-metadata denials, and a network-blocked
+  push, but Codex returned success and the `last-message-file` receipt terminalized
+  `completed` with `terminal.permission_denials: null`. The record also observed that
+  the exact state root was writable only when user config named it, user Codex config
+  reached both untrusted lanes, and project Codex config did not.
+
+- **The matrix moved only as far as durable evidence permits.** Cleanup removed the
+  fixture receipts, rollouts, and raw captures named by the record's digests. The
+  panel therefore required the capability promotion to be retracted. The record is a
+  bounded historical account, not durable proof of Codex writing-lane parity.
+
+- **Review disposition stayed scoped.** The retracted promotion received a full
+  adversarial/correctness rerun. A later Low record-prose imprecision was logged as an
+  occurrence on `#120`, without changing the reviewed head. The learnings document
+  carries the stamped disposition reading. Filed this session on exact-payload
+  approval: `#621` owns the missing durable-evidence handoff.
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `37ad8eab0286c45aaf1ab1098e42e1da04561549` on 2026-08-27 printed `1960 passed, 3
+  warnings in 365.20s`; the merged squash is `58c5d7e`.
+
+- **Housekeeping done:** the operator deleted
+  `topij/adk-writing-lane-synthetic-codex-20260827` from the GitHub UI after the
+  session token proved to lack `delete_repo`; `gh repo view` no longer resolves it.
+
+▶ Next: take calibration (`#605`, `#255`): calibrate both runtimes' neutral tiers,
+declare mechanical versus advisory model/effort controls per runtime, and retire the
+unsupported "no per-agent effort" claims. Keep the first real headless task on the
+generalised launcher in the following slice; it has no tracker item, and `#602` is the
+`post-merge-systemize` binding bug.
+
 ## Session — 2026-08-27 (writing-lane approval policy and the Claude trust route)
 
 **Theme —** PR `#614` (squash `d6b39c9`) added `parallel.codex_approval_policy`,

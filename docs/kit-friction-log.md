@@ -26,6 +26,25 @@
 
 ## 2026-08-29
 
+- **`scripts/launch_lane.py` refuses `Bash(:*)` from a lane profile on the rule's
+  shape, and the client grants nothing under that rule anyway.** Both `#639` lenses
+  reached this independently. The lane classifier asks whether a pattern is bounded;
+  `kit_doctor` now asks what the client actually grants, and the two answers point the
+  same way here — so the refusal costs an adopter a rule that was never dangerous.
+  **L** — no proposed fix, and both lenses called it out of scope. Parked for
+  accumulation: what matters is whether a shape-based classifier and a
+  measured-behaviour one drift apart somewhere it *does* matter. `#631` is the nearest
+  open item.
+- **A review lens asserted a base-currency relationship its own command did not
+  establish.** In `#639` round 3 the correctness lens wrote that the supplied base "is
+  the tip of `origin/main`" when it was the PR branch's prior head; its check
+  (`git log <base>..origin/main` empty) is satisfied by any descendant of `origin/main`.
+  The conclusion it drew — base is current for this round — was right, and the
+  adversarial lens established the same thing by the right route, so nothing rested on
+  it. **M** — the panel contract asks a lens to say *how* it established base currency
+  precisely so a wrong route is visible, and here the wrong route reached a right
+  answer, which is the case that would not be caught if the two lenses had agreed.
+  Parked for accumulation.
 - **`panel_prompt.py` renders a prompt to a FILE, but a Claude Code lens launch needs
   the text inline — so every round invites a hand transcription of the rendered
   values.** In one of five launches on `#637` the diffstat was retyped as `999
