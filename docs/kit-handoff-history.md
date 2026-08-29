@@ -5,6 +5,71 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-08-27 (writing-lane approval policy and the Claude trust route)
+
+**Theme —** PR `#614` (squash `d6b39c9`) added `parallel.codex_approval_policy`,
+`parallel.claude_approval_policy`, and `parallel.claude_settings_profile` beside the
+headless commands, and `scripts/launch_lane.py` now passes the declared policy in a
+fixed argv slot per runtime, validated like the transports. On Claude the trust route
+is `--setting-sources ""` plus the cockpit-owned profile through `--settings`: the
+untrusted lane worktree's own settings, hooks, `.mcp.json`, agents, and `CLAUDE.md`
+are not loaded, and the profile is the one settings source. The design matrix in
+[`claude-writing-lane-approval-policy-design_2026-08-27.md`](../saved_plans/claude-writing-lane-approval-policy-design_2026-08-27.md)
+preceded the code.
+
+- **The policy is a declaration the engine validates, and the profile is one too.**
+  An unrestricted or missing spelling refuses before an attempt record exists. The
+  profile validator is structural: the `permissions` object is closed to its three
+  rule lists, a `Bash` allow needs a literal command prefix, an edit tool needs a
+  worktree-relative pattern. The child re-reads the profile under the parent's digest,
+  and a `permission_denials` entry in the runtime's result terminalizes the lane
+  `failed` — a denied write is never a success. `test_lane_launcher.py` names each of
+  these with a recomputed mutant behind it.
+
+- **The Claude writing-lane record exists; the Codex one does not.** The record in
+  [`claude-writing-lane-live-validation_2026-08-27.md`](../saved_plans/claude-writing-lane-live-validation_2026-08-27.md)
+  observed a lane on a synthetic repository perform a scoped write, commit, push, open
+  a PR, and see it reviewed through the lane's own `pr-watch`, with denials read back
+  from the runtime. It also states what the runtime does on its own at 2.1.247 — a
+  read-only Bash class accepted under `dont-ask`, a file-system class under
+  `accept-edits`, project hooks not executed under the trust route, and a push rule
+  that bounds nothing after `origin` — so the allow list is the boundary on what a
+  lane can do, not on what it can see. The Codex value is validated and unobserved;
+  `runtime-parity.md` says so and the Codex cell did not move.
+
+- **What the panel's dispositions were made of.** The panel's findings were
+  claims asserted by inspection that a live probe refuted — a `-v` flag called
+  read-only, an allow list called the whole boundary, a runtime class attributed to
+  the wrong policy — and one structural gap (`additionalDirectories` passed through).
+  Each fix was least privilege or precise disclosure; no mechanism was added across
+  the rounds; the ones a finding prompted were filed as their own items. The stamped
+  round reading is in the learnings document beside `#609`'s and `#611`'s.
+
+- **Merged under the doctrine's class.** The launcher is in the safety-critical path
+  binding, so the PR was held mergeable at `d2e1090` and merged on the operator's
+  explicit authorization in this session. Filed this session, each on exact-payload
+  approval: `#615`, `#616`, `#617`, `#618`, an occurrence on `#467`, and occurrences on
+  `#574` (from `#614` round 15 and from the wrap-up PR's own round 1).
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at `d2e1090` on
+  2026-08-27 printed `1960 passed, 3 warnings in 397.20s`; the merged squash is
+  `d6b39c9`.
+
+- **Housekeeping done:** the synthetic repository
+  `topij/adk-writing-lane-synthetic-20260827` was deleted by the operator from the
+  GitHub UI on 2026-08-27, after the session's token proved to lack `delete_repo`;
+  `gh repo view` no longer resolves it.
+
+▶ Next: in a Codex session, produce the Codex writing-lane record on the generalised
+launcher: declare `parallel.codex_approval_policy: workspace-write` for the lane only,
+run a lane that performs a scoped write and lands a PR through
+`dev_session.sh pr-watch`, observe the sandbox and approval transitions Codex reports
+(what `--sandbox` denies and how a denial reaches the receipt), and move the Codex
+cell in `runtime-parity.md` only from that record. Then take `#605` (calibration,
+`#255`). The first real headless task on the launcher stays after both — it has no
+tracker item; the plan's earlier `#602` citation for it was a mis-reference (`#602` is
+the `post-merge-systemize` binding bug).
+
 ## Session — 2026-08-27 (per-runtime launcher: Claude through `claude -p`)
 
 **Theme —** PR `#611` generalised the Codex wrapper into one kit-owned per-runtime

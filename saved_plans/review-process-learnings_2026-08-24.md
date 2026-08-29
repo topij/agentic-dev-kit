@@ -484,3 +484,91 @@ pass at the time of the original correction, not one session later.
   attempt was kept as a non-verdict, and the lens restarted in a fresh no-hardlink clone.
   Scratch isolation and repository identity are separate properties; those properties
   must coexist when the suite checks its own checkout.
+
+## Cockpit-settings-policy additions from PR `#637`
+
+Seven dual-lens rounds plus one CodeRabbit review, on a change whose blast radius is a
+single advisory report line. Rounds 3 and 4 were clean on both lenses and rounds 5, 6
+and 7 each found something anyway, so this is also the clearest local instance of the
+"termination condition may never arrive" warning in `fallback-review-panel.md`.
+
+- **A local suite is evidence about the interpreter it ran on and nothing more.** At
+  `254fdcf492d1be64fb9a2f086e73fb413a25100b` on 2026-08-29, `make test` passed in three
+  independent checkouts — the cockpit's and both lenses' own clones — and CI failed on
+  the one test written for the changed branch. `Path.resolve()` reports a symlink loop
+  as `RuntimeError` on Python 3.12 and returns the path unresolved on 3.14.6; `make
+  test` carries no `--python`, so `uv` selected 3.13 and later 3.14 within one session
+  while `.github/workflows/test.yml` pins 3.12. **No number of additional lenses could
+  have caught this**, which is the part worth keeping: the panel's redundancy is across
+  reviewers, not across environments. Recorded on `#292`, whose thesis it extends.
+
+- **A probe of your own module cannot establish what the runtime does.** An early
+  cockpit probe printed `exact rule, no wildcard -> GRANTED` and was read as confirming
+  Claude Code's permission semantics. It was reporting `kit_doctor`'s behaviour back.
+  The real semantics, measured at Claude Code 2.1.251 under a deny rule of
+  `Bash(git status)`, are that `git status` is refused and `git status --short` is not.
+  Four panel rounds and a bot review passed over the resulting defect, because the
+  output of a self-probe is shaped exactly like a finding about the client.
+
+- **Ask what the guard is for, not whether its inputs appear.** The permission check
+  asked whether any word in a rule resolved to the engine's path. That was wrong in
+  both directions at once: `Bash(cat <engine>:*)`, `ruff check`, and `rm` all reported
+  the engine granted, while `Bash(uv run:*)` — which pre-approves every poll — reported
+  it ungranted. Rounds 5 and 6 each found one direction. The repair was not a further
+  case but a different question: are the rule's tokens a prefix of the command the
+  workflow issues. **Two consecutive rounds finding defects in one function is the
+  signal that its predicate is wrong**, not that its cases are incomplete.
+
+- **False mutation *survival* is the inverse hazard, and it reads as good news.** The
+  documented trap is the false kill. Here a mutation reverting `init.sh`'s advisory to
+  the narrower `SessionStart` matcher reported `7 passed` under `-k 'permission or
+  matcher or session_start'` — a filter that never selected
+  `test_the_claude_budget_advisory_does_not_tell_an_adopter_to_narrow_it`, the test that
+  guards it. Re-run with `advisory` in the expression, it failed. **A `deselected` count
+  does not detect this**: it confirms something was excluded, not that the guarding test
+  was included.
+
+- **A test that greps for a token is defeated by any other occurrence of it, including
+  narration about the test.** `test_dead_registrations_docstring_accounts_for_every_
+  state_it_omits` searches the docstring for each omitted state name. A self-referential
+  paragraph added beside the real sentence — recording that the sentence had been
+  missing for a round — contained the same word, so deleting the sentence still passed.
+  Removing the narration, which "Keep the record small" already asks for, restored the
+  kill.
+
+- **A guard whose comment credits it with work another line does.** An explicit `$`
+  check was added to reject a single-quoted `'$CLAUDE_PROJECT_DIR/…'` path, and its
+  docstring said so. Mutation showed no test could distinguish the guard from its
+  absence: switching the comparison to path equality had already subsumed it. Removed,
+  and the comment corrected to name the comparison. The same class recurred one round
+  later in the opposite direction — a docstring asserting a clause had "no demonstrated
+  trigger" on the strength of one interpreter, which CI falsified within minutes.
+
+- **A prompt assembled by a tool, retyped by hand, is a figure written from
+  expectation.** `panel_prompt.py` renders a prompt to a file; a Claude Code launch
+  needs the text inline. In one of five launches the diffstat was transcribed as
+  `999 insertions / 18 deletions` against the rendered `1000 / 16`. The correctness lens
+  caught the mismatch and correctly declined to attribute it to a stale base or wrong
+  sha. Bounded — both lenses verify base and sha independently — but the diffstat check
+  exists to flag a wrong diff, and a mistyped baseline blunts exactly that.
+
+- **`bot-coverage` is a window in which recording a receipt is the error.** CodeRabbit's
+  auto-review is disabled here, so the converged-head request is the review. It answered
+  at `405c23b680f49b92a4500b64a3a61d4fa0865535` with `covers_head: true`, and
+  `review_evidence.route` became `bot-coverage` — under which every `fallback:` literal
+  would name a substitute pass that did not run. The next fix round moved the head,
+  coverage went stale, the hourly budget was spent, and the panel receipt became the
+  honest evidence again. Both transitions behaved as `pr-watch` documents; the failure
+  available here is recording out of habit during the window.
+
+- **The engine refused a premature receipt and was right.** `--record-review` was
+  declined with `review bot coderabbit has not reported yet (pending 0.00m < 15m
+  grace)`, because the review request had just put the bot into a pending state.
+  Waiting rather than passing `--allow-pending-bot-review` — which is for evidence a
+  verdict will never arrive — cost about three minutes and produced a real review.
+
+- **A `cd` outlives its command in a one-off probe, not only in two-tree work.** Two
+  occurrences this session: a symlink probe and a permission probe each left the shell
+  in a scratch directory, and the next relative-path edit failed. `AGENTS.md` documents
+  the hazard for verification clones and adopter checkouts; both instances here were
+  throwaway probes, which is not where that rule tells you to expect it.

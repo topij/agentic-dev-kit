@@ -14,12 +14,73 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-29 — PR `#635` delivered generated runtime-adapter comparison and
-manifest-selected installed-suite verification for upgrades. `#236` now carries the
-re-measured adopter premise and residual scope; `#243` is narrowed to the runtime-specific
-workflow residue that still needs field exercise.
+Last updated: 2026-08-29 — PR `#637` delivered Phase 5's `#606` cockpit slice: the
+permissions advisory is templated on `paths.engines`, both runtimes drop the
+`SessionStart` matcher, and `kit_doctor` reports an engine no allow rule pre-approves.
+`#606` stays open for one unmeasured assertion the review surfaced.
 
-## Latest session — 2026-08-29 (runtime-adapter refresh, in a Codex session)
+## Latest session — 2026-08-29 (cockpit settings policy, in a Claude Code session)
+
+**Theme —** In a Claude Code session, PR `#637` (squash `83b959e`) took Phase 5's
+remaining `#606` slice, on `.claude/settings.json`. Its three questions were answered
+separately, and most of the change's value came from the review rather than the first
+draft.
+
+- **The engine path is templated, and `init.sh` prints it rather than writing it.** The
+  allow rule baked in `scripts` and no permissions advisory existed at all, so an
+  adopter vendoring under `scripts/devkit/` had no route to a correct rule. The advisory
+  follows `#303`'s print-never-write doctrine, and the reason is sharper here than for
+  hooks: an allow-list is policy about what may run unattended.
+
+- **The `SessionStart` matcher was ours, not the runtime's.** `"startup"` was read as a
+  limit until it was measured; a resumed session had been starting with both budget
+  tripwires silent. Both runtimes now omit the matcher. The runs, the fixture hash and
+  what was *not* exercised are in
+  [`claude-sessionstart-matcher-live-validation_2026-08-29.md`](../saved_plans/claude-sessionstart-matcher-live-validation_2026-08-29.md).
+
+- **The grant check was wrong in each direction available to it, always toward false
+  reassurance.** It counted an exact-form rule that pre-approves one argument-less
+  invocation; it counted any rule merely *naming* the engine — `cat`, `ruff check`,
+  `rm`; and it missed `Bash(uv run:*)`, which covers every poll. It now asks whether a
+  rule's tokens open the command the workflow issues. Rounds 5 and 6 each finding a
+  defect in the same function was the signal its predicate was wrong rather than its
+  cases incomplete.
+
+- **CI caught a defect no local run could.** `Path.resolve()` reports a symlink
+  loop as `RuntimeError` on Python 3.12 and returns the path unresolved on 3.14, and
+  `make test` pins no interpreter — so three independent local suites passed and CI went
+  red. The panel's redundancy is across reviewers, not across environments.
+
+- **Filed this session:** occurrence comments on `#393` (a second test resting on
+  `json.load` raising `RecursionError`, and the first observed failure of that shape,
+  which falsifies that issue's "latent" framing), `#292` (the interpreter axis of its
+  local-gate-weaker-than-CI thesis), and `#606` (the residual measurement task below).
+  Review lessons are in
+  [`review-process-learnings_2026-08-24.md`](../saved_plans/review-process-learnings_2026-08-24.md).
+
+- **Left deliberately open:** `_bash_allow_prefixes` asserts that `Bash`, `Bash(*)` and
+  `Bash(:*)` each grant every command, and that assertion carries no stamp while every
+  other behavioural claim in the change does. A cockpit deny-side probe and a lens
+  allow-side probe disagree on two of the three. The check is advisory and the kit never
+  emits `Bash(:*)`, so this was disclosed on the PR and on `#606` rather than fixed
+  under a stopping rule the operator set at one review round on the rewrite.
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `52d25e5b95e2e7d8cb188c7bbeced43fbfcaffc7` on 2026-08-29 reported one failure, in
+  `test_pr_followup_hook.py`, which is the intermittent test recorded on `#393` and is
+  untouched by this change; the full suite at that same revision printed `2091 passed`
+  under both `--python 3.12` and `--python 3.14`, and CI was green on the merged head.
+  Both review lenses reproduced the suite independently in their own clones.
+
+▶ Next: measure the allow side of `Bash`, `Bash(*)` and `Bash(:*)` under a configuration
+that gates on `allow`, then drop or stamp the unmeasured entries in
+`_bash_allow_prefixes` and move `test_a_whole_tool_bash_grant_covers_every_engine` with
+the result — `#606` carries the task. `#621`, `#631` and `#633` stay open; use `#243`
+for the remaining runtime-specific workflow field exercises.
+
+______________________________________________________________________
+
+## Session — 2026-08-29 (runtime-adapter refresh, in a Codex session)
 
 **Theme —** In a Codex session, PR `#635` (squash `2f2561f`) took Phase 5's `#236`
 adapter/verification slice and narrowed `#243`. Upgrade now classifies generated Claude
@@ -280,73 +341,6 @@ declare mechanical versus advisory model/effort controls per runtime, and retire
 unsupported "no per-agent effort" claims. Keep the first real headless task on the
 generalised launcher in the following slice; it has no tracker item, and `#602` is the
 `post-merge-systemize` binding bug.
-
-______________________________________________________________________
-
-## Session — 2026-08-27 (writing-lane approval policy and the Claude trust route)
-
-**Theme —** PR `#614` (squash `d6b39c9`) added `parallel.codex_approval_policy`,
-`parallel.claude_approval_policy`, and `parallel.claude_settings_profile` beside the
-headless commands, and `scripts/launch_lane.py` now passes the declared policy in a
-fixed argv slot per runtime, validated like the transports. On Claude the trust route
-is `--setting-sources ""` plus the cockpit-owned profile through `--settings`: the
-untrusted lane worktree's own settings, hooks, `.mcp.json`, agents, and `CLAUDE.md`
-are not loaded, and the profile is the one settings source. The design matrix in
-[`claude-writing-lane-approval-policy-design_2026-08-27.md`](../saved_plans/claude-writing-lane-approval-policy-design_2026-08-27.md)
-preceded the code.
-
-- **The policy is a declaration the engine validates, and the profile is one too.**
-  An unrestricted or missing spelling refuses before an attempt record exists. The
-  profile validator is structural: the `permissions` object is closed to its three
-  rule lists, a `Bash` allow needs a literal command prefix, an edit tool needs a
-  worktree-relative pattern. The child re-reads the profile under the parent's digest,
-  and a `permission_denials` entry in the runtime's result terminalizes the lane
-  `failed` — a denied write is never a success. `test_lane_launcher.py` names each of
-  these with a recomputed mutant behind it.
-
-- **The Claude writing-lane record exists; the Codex one does not.** The record in
-  [`claude-writing-lane-live-validation_2026-08-27.md`](../saved_plans/claude-writing-lane-live-validation_2026-08-27.md)
-  observed a lane on a synthetic repository perform a scoped write, commit, push, open
-  a PR, and see it reviewed through the lane's own `pr-watch`, with denials read back
-  from the runtime. It also states what the runtime does on its own at 2.1.247 — a
-  read-only Bash class accepted under `dont-ask`, a file-system class under
-  `accept-edits`, project hooks not executed under the trust route, and a push rule
-  that bounds nothing after `origin` — so the allow list is the boundary on what a
-  lane can do, not on what it can see. The Codex value is validated and unobserved;
-  `runtime-parity.md` says so and the Codex cell did not move.
-
-- **What the panel's dispositions were made of.** The panel's findings were
-  claims asserted by inspection that a live probe refuted — a `-v` flag called
-  read-only, an allow list called the whole boundary, a runtime class attributed to
-  the wrong policy — and one structural gap (`additionalDirectories` passed through).
-  Each fix was least privilege or precise disclosure; no mechanism was added across
-  the rounds; the ones a finding prompted were filed as their own items. The stamped
-  round reading is in the learnings document beside `#609`'s and `#611`'s.
-
-- **Merged under the doctrine's class.** The launcher is in the safety-critical path
-  binding, so the PR was held mergeable at `d2e1090` and merged on the operator's
-  explicit authorization in this session. Filed this session, each on exact-payload
-  approval: `#615`, `#616`, `#617`, `#618`, an occurrence on `#467`, and occurrences on
-  `#574` (from `#614` round 15 and from the wrap-up PR's own round 1).
-
-- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at `d2e1090` on
-  2026-08-27 printed `1960 passed, 3 warnings in 397.20s`; the merged squash is
-  `d6b39c9`.
-
-- **Housekeeping done:** the synthetic repository
-  `topij/adk-writing-lane-synthetic-20260827` was deleted by the operator from the
-  GitHub UI on 2026-08-27, after the session's token proved to lack `delete_repo`;
-  `gh repo view` no longer resolves it.
-
-▶ Next: in a Codex session, produce the Codex writing-lane record on the generalised
-launcher: declare `parallel.codex_approval_policy: workspace-write` for the lane only,
-run a lane that performs a scoped write and lands a PR through
-`dev_session.sh pr-watch`, observe the sandbox and approval transitions Codex reports
-(what `--sandbox` denies and how a denial reaches the receipt), and move the Codex
-cell in `runtime-parity.md` only from that record. Then take `#605` (calibration,
-`#255`). The first real headless task on the launcher stays after both — it has no
-tracker item; the plan's earlier `#602` citation for it was a mis-reference (`#602` is
-the `post-merge-systemize` binding bug).
 
 ______________________________________________________________________
 

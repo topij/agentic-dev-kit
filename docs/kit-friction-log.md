@@ -24,6 +24,28 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-08-29
+
+- **`panel_prompt.py` renders a prompt to a FILE, but a Claude Code lens launch needs
+  the text inline — so every round invites a hand transcription of the rendered
+  values.** In one of five launches on `#637` the diffstat was retyped as `999
+  insertions / 18 deletions` against the rendered `1000 / 16`. The correctness lens
+  caught the mismatch and correctly declined to attribute it to a stale base or wrong
+  sha. **M** — bounded, because both lenses verify base and sha independently, but the
+  diffstat cross-check exists precisely to flag a wrong diff and a mistyped baseline
+  blunts it. No mechanism proposed: the fix could be a launcher that reads the rendered
+  file, or a rendered form the launch consumes directly, and choosing between them is
+  its own design question. Parked for accumulation — if a second round mis-transcribes
+  something load-bearing, that settles it.
+- **A `cd` outlived its command twice in one session, both times in a throwaway probe
+  rather than in two-tree work.** A symlink-behaviour probe and a permission-rule probe
+  each left the shell in a scratch directory; the next edit using a repository-relative
+  path failed with `FileNotFoundError`. **L** — failed loudly both times, no damage.
+  `AGENTS.md`'s *Working across two trees* documents this hazard for verification
+  clones and adopter checkouts, which is not where either instance happened, so the
+  question this accumulates toward is whether that rule should be stated for any
+  `cd`-bearing command rather than for the two-tree case specifically.
+
 ## 2026-08-27
 
 - **`claude -p --output-format json` printed more than one JSON value on stdout in
