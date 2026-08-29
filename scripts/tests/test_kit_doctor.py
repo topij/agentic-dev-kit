@@ -5867,10 +5867,21 @@ def test_a_whole_tool_bash_grant_covers_every_engine(tmp_path, rule):
 
 def test_a_non_covering_rule_does_not_suppress_a_covering_one(tmp_path):
     """`Bash(:*)` reaches `_granted_engine_names` as the empty prefix rather than
-    being dropped earlier, so it is evaluated beside its siblings. This pins that
-    contributing nothing is all it does — the property that would break if the
-    empty prefix were ever "repaired" into a match-anything, and the one the
-    removal of `Bash(:*)` from the whole-tool tuple relies on."""
+    being dropped earlier, so it is evaluated beside its siblings.
+
+    What this pins is that a prefix contributing nothing does not short-circuit
+    the prefixes after it. Mutating the loop in `_granted_engine_names` to return
+    early on a prefix that lexes to no words fails this test and no other
+    behavioural one.
+
+    **It does not pin the other direction**, and an earlier draft of this
+    docstring claimed it did. Loosening `_grants_invocation`'s empty-words guard
+    into a match-anything leaves this test passing, because the covering rule
+    beside it grants the engine either way; the single-rule case
+    `test_a_rule_that_does_not_reach_the_engine_leaves_it_ungranted[Bash(:*)]` is
+    what catches that. Both readings were measured by mutation rather than
+    argued — the wrong one survived a round of review as prose beside a passing
+    test, which is how this file's own claims go stale."""
     root = _fake_repo(tmp_path)
     _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
     _settings_with_allow(root, ["Bash(:*)", "Bash(uv run scripts/pr_watch.py:*)"])

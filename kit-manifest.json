@@ -246,7 +246,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "a7425556eb887d55420cee1aa4df1cb346903cfe1abc4ebe0ac17310df926b56"
+      "sha256": "86511d3ff0fc820cf46e096455ceec35ae1732d335142d706fa843e3a7f27a84"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
