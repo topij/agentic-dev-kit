@@ -2624,7 +2624,7 @@ def render(report: Report) -> str:
             "ungranted": (
                 "·",
                 f"no permissions.allow rule reaches {reg.detail} — "
-                "each invocation prompts",
+                "nothing pre-approves it",
             ),
             "absent": ("·", "not present — no registration on this runtime"),
             "unreadable": ("⚠", f"unreadable — {reg.detail}"),

@@ -64,10 +64,11 @@ starts.
 - **CHANGED (hook coverage) — the `SessionStart` matcher is dropped from the
   advisory `init.sh` prints for Claude, as it already was for Codex.** To adopt,
   remove `"matcher": "startup"` from the `SessionStart` group in your
-  `.claude/settings.json`. Until you do, the budget tripwires stay silent on
-  every resumed, cleared, or compacted session — measured at Claude Code
-  2.1.251, where `"startup"` did not fire on a `--resume` that the matcher-less
-  form did.
+  `.claude/settings.json`. Until you do, a resumed session starts with both
+  budget tripwires silent — measured at Claude Code 2.1.251, where `"startup"`
+  did not fire on a `--resume` that the matcher-less form did. `clear` and
+  `compact` have no headless invocation and were not exercised; the same matcher
+  semantics should cover them, but that is inference rather than measurement.
 
 ---
 

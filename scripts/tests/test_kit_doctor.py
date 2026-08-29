@@ -5987,16 +5987,28 @@ def test_the_ungranted_line_names_the_path_a_rule_would_have_to_name(tmp_path):
     rendered = kit_doctor.render(report)
 
     assert "scripts/devkit/pr_watch.py" in rendered
-    assert "each invocation prompts" in rendered
+    assert "nothing pre-approves it" in rendered
+    # NOT "each invocation prompts", which the earlier wording said. A review
+    # lens caught it: an engine named only in `deny` also gets this line, and
+    # there the invocation is refused rather than prompted. What the check
+    # actually established is that no allow rule reaches the path; what the
+    # client does next depends on the rest of the config and the permission
+    # mode, neither of which this check reads.
+    assert "prompts" not in rendered
 
 
 @pytest.mark.parametrize("withholding", ["deny", "ask"])
 def test_a_deny_or_ask_rule_is_not_read_as_a_grant(tmp_path, withholding):
-    """This check answers whether the engine runs WITHOUT a prompt. `ask` IS a
-    prompt and `deny` is the absence of a grant, so folding either in would make
-    a rule that withholds permission read as one that confers it — and would
-    silence the line for the adopter who most needs it, the one who denied the
-    command on purpose."""
+    """This check answers whether an allow rule pre-approves the engine. `ask`
+    withholds that approval and `deny` refuses it, so folding either in would
+    make a rule that withholds permission read as one that confers it — and
+    would silence the line for the adopter who most needs it, the one who denied
+    the command on purpose.
+
+    Note the reported line says "nothing pre-approves it" rather than naming a
+    consequence: this fixture is exactly the case where the invocation is
+    refused rather than prompted, so a line promising a prompt would be false
+    here."""
     root = _fake_repo(tmp_path)
     _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
     _write(
@@ -6030,5 +6042,43 @@ def test_a_deny_rule_does_not_cancel_an_allow_rule_in_this_report(tmp_path):
             }
         ),
     )
+
+    assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == []
+
+
+def test_an_overlay_that_grants_nothing_does_not_erase_the_tracked_grant(tmp_path):
+    """The other direction from the overlay test above, and the only one that
+    actually pins the union.
+
+    `REGISTRATION_SURFACES` walks `.claude/settings.json` before
+    `.claude/settings.local.json`, so a grant found in the LATER surface
+    survives even a plain assignment — that test passes either way, by
+    coincidence of ordering. This is the shape that distinguishes them: the
+    tracked file grants the engine, the overlay exists and contributes nothing,
+    and only accumulating across surfaces keeps the earlier grant.
+
+    Found by a review lens mutating `|=` to `=` and watching the suite stay
+    green. Under that mutation an adopter whose tracked settings already grant
+    the engine is told every poll will prompt, which is false and unactionable —
+    the rule they would be told to add is the one they have.
+    """
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(root, ["Bash(uv run scripts/pr_watch.py:*)"])
+    _settings_with_allow(
+        root, ["Bash(gh pr view:*)"], surface="settings.local.json"
+    )
+
+    assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == []
+
+
+def test_an_empty_overlay_does_not_erase_the_tracked_grant(tmp_path):
+    """The degenerate form of the same shape: an overlay present but carrying no
+    `permissions` block at all, which is what most adopters' overlays look
+    like."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(root, ["Bash(uv run scripts/pr_watch.py:*)"])
+    _write(root / ".claude" / "settings.local.json", json.dumps({}))
 
     assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == []
