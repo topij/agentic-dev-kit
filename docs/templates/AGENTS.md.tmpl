@@ -23,7 +23,9 @@ doctrine into this runtime; it does not fork it.
   engines read it from there; never hardcode a value that belongs in it.
 - **Read the shared contract before changing anything, then the nearest
   path-scoped rule.** Behavioral changes to `{{ENGINE_DIR}}/pr_watch.py`,
-  `{{ENGINE_DIR}}/dev_session.sh`, or `{{ENGINE_DIR}}/launch_lane.py`,
+  `{{ENGINE_DIR}}/dev_session.sh`, `{{ENGINE_DIR}}/launch_lane.py`, or the profile
+  named by `parallel.claude_settings_profile` (shipped as
+  `config/claude-lane-settings.json`),
   along with customer-facing send paths,
   destructive operations, and kill/recovery paths, are governed by
   [`docs/agentic-dev-kit/safety-critical-changes.md`](docs/agentic-dev-kit/safety-critical-changes.md);

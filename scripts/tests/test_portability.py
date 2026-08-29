@@ -13540,12 +13540,21 @@ def test_runtime_parity_contract_covers_workflows_and_adapters() -> None:
 @pytest.mark.kit_repo_only(
     "AGENTS.md",
     "CHANGELOG.md",
+    "config/dev-model.yaml",
+    "docs/agentic-dev-kit/workflows/parallel-headless.md",
     "docs/templates/AGENTS.md.tmpl",
     "docs/AGENTS-sections.md",
     ".claude/rules/safety-critical-changes.md",
 )
 def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
     doctrine = "docs/agentic-dev-kit/safety-critical-changes.md"
+    profile_key = "parallel.claude_settings_profile"
+    config = yaml.safe_load(
+        (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
+    )
+    configured_profile_path = config["parallel"]["claude_settings_profile"]
+    assert isinstance(configured_profile_path, str) and configured_profile_path
+    shipped_profile_path = "config/claude-lane-settings.json"
     root_agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
     template = (REPO_ROOT / "docs" / "templates" / "AGENTS.md.tmpl").read_text(
         encoding="utf-8"
@@ -13553,20 +13562,80 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
     merge_section = (REPO_ROOT / "docs" / "AGENTS-sections.md").read_text(
         encoding="utf-8"
     )
+    parallel_workflow = (
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "parallel-headless.md"
+    ).read_text(encoding="utf-8")
     claude_rule = (
         REPO_ROOT / ".claude" / "rules" / "safety-critical-changes.md"
     ).read_text(encoding="utf-8")
 
-    assert re.search(r"Read and apply\s+`" + re.escape(doctrine) + r"`", root_agents)
-    assert re.search(
-        r"Read the shared contract[\s\S]+governed by[\s\S]+"
-        + re.escape(doctrine),
-        template,
+    root_binding = root_agents.split("- **Behavioral changes to", 1)[1].split(
+        "\n- ", 1
+    )[0]
+    root_binding_flat = " ".join(root_binding.split())
+    assert (
+        "`scripts/pr_watch.py`, `scripts/dev_session.sh`, "
+        "`scripts/launch_lane.py`, or the profile named by "
+        f"`{profile_key}` (`{configured_profile_path}` in this repository) "
+        f"are safety-critical.** Read and apply `{doctrine}` completely before "
+        "changing any gate, launch-authority, or merge-authority path."
+        in root_binding_flat
     )
-    assert re.search(r"read and apply\s+`" + re.escape(doctrine) + r"`", merge_section)
-    assert re.search(
-        r"Read `" + re.escape(doctrine) + r"` completely and apply that\s+doctrine",
-        claude_rule,
+    template_binding = template.split(
+        "- **Read the shared contract before changing anything", 1
+    )[1].split("\n- ", 1)[0]
+    template_binding_flat = " ".join(template_binding.split())
+    assert (
+        "path-scoped rule.** Behavioral changes to `{{ENGINE_DIR}}/pr_watch.py`, "
+        "`{{ENGINE_DIR}}/dev_session.sh`, `{{ENGINE_DIR}}/launch_lane.py`, or the "
+        f"profile named by `{profile_key}` (shipped as `{shipped_profile_path}`), "
+        "along with customer-facing send paths, destructive operations, and "
+        "kill/recovery paths, are governed by "
+        f"[`{doctrine}`]({doctrine}); when the configured review bot cannot review, "
+        "the substitute is the panel in "
+        "[`docs/agentic-dev-kit/fallback-review-panel.md`]"
+        "(docs/agentic-dev-kit/fallback-review-panel.md)."
+        in template_binding_flat
+    )
+    merge_binding = merge_section.split(
+        "- For customer-facing gates, destructive operations", 1
+    )[1].split("\n- ", 1)[0]
+    merge_binding_flat = " ".join(merge_binding.split())
+    assert (
+        "and behavioral changes to the configured `<engine-dir>/pr_watch.py`, "
+        "`<engine-dir>/dev_session.sh`, `<engine-dir>/launch_lane.py`, or the profile "
+        f"named by `{profile_key}` (shipped as `{shipped_profile_path}`), read and "
+        f"apply `{doctrine}`. Green CI is necessary but not sufficient; require "
+        "independent review and operator sign-off."
+        in merge_binding_flat
+    )
+    workflow_decision = parallel_workflow.split(
+        "**A behavioral change to this profile is safety-critical.**", 1
+    )[1].split("\n\n", 1)[0]
+    workflow_decision_flat = " ".join(workflow_decision.split())
+    assert workflow_decision_flat == (
+        "A profile-only edit changes what the unattended client is authorized to run "
+        "even when `launch_lane.py` is byte-identical. The Codex binding in "
+        f"`AGENTS.md` names the profile configured by `{profile_key}`; Claude's "
+        f"path-scoped rule names the shipped `{shipped_profile_path}` and requires "
+        "that entry to follow the config when an adopter relocates it. Both bindings "
+        "route to the same `safety-critical-changes.md`; neither carries a "
+        "runtime-specific copy of its doctrine. This decision is specific to the "
+        "dedicated policy file. It does not put all of `config/dev-model.yaml` under "
+        "the path trigger, which cannot distinguish `parallel.*` keys from unrelated "
+        "configuration."
+    )
+    assert (
+        "**A behavioral change to this profile is safety-critical.** A profile-only "
+        "edit changes what the unattended client is authorized to run even when "
+        "`launch_lane.py` is byte-identical."
+        in " ".join(parallel_workflow.split())
+    )
+    claude_body_flat = " ".join(claude_rule.split("---", 2)[2].split())
+    assert (
+        f"Read `{doctrine}` completely and apply that doctrine to every behavioral "
+        "change in the matched files."
+        in claude_body_flat
     )
     claude_frontmatter = yaml.safe_load(claude_rule.split("---", 2)[1])
     assert set(claude_frontmatter["paths"]) == {
@@ -13574,14 +13643,37 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
         "scripts/devkit/dev_session.sh",
         "scripts/launch_lane.py",
         "scripts/devkit/launch_lane.py",
+        configured_profile_path,
         "scripts/pr_watch.py",
         "scripts/devkit/pr_watch.py",
     }
-    for text in (root_agents, template, merge_section, claude_rule):
-        assert "pr_watch.py" in text
-        assert "dev_session.sh" in text
-        assert "launch_lane.py" in text
+    claude_profile_comment = claude_rule.split(
+        "  # This is the shipped", 1
+    )[1].split(f'\n  - "{configured_profile_path}"', 1)[0]
+    claude_profile_comment_flat = " ".join(
+        line.strip().removeprefix("# ")
+        for line in claude_profile_comment.splitlines()
+    )
+    assert claude_profile_comment_flat == (
+        f"`{profile_key}`. If that key names a different path, replace this entry "
+        "with the configured path: rule frontmatter cannot resolve values from "
+        "config/dev-model.yaml."
+    )
     changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    profile_entry = changelog.split("## #649", 1)[1].split("\n---", 1)[0]
+    profile_entry_flat = " ".join(profile_entry.split("\n- ", 1)[1].split())
+    assert profile_entry_flat == (
+        "**CHANGED (gate semantics) — behavioral changes to the profile named by "
+        f"`{profile_key}` now take the "
+        "shared safety-critical review and operator-merge route.** Add the configured "
+        "profile to your adopter-owned `AGENTS.md` binding and to "
+        "`.claude/rules/safety-critical-changes.md`'s path list; the shipped default "
+        f"is `{shipped_profile_path}`. When you relocate the profile, move the Claude "
+        "rule entry with it because rule frontmatter cannot resolve "
+        "`config/dev-model.yaml`. The path trigger does not cover that whole config "
+        "file, whose unrelated keys would be swept in with `parallel.*`; the "
+        "workflow-document gap in `#346` and the test-side guard in `#434` stay open."
+    )
     launcher_entry = changelog.split("## #609", 1)[1].split("\n---", 1)[0]
     assert "adopter-owned `AGENTS.md`" in launcher_entry
     assert ".claude/rules/safety-critical-changes.md" in launcher_entry
