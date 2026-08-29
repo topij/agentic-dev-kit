@@ -24,54 +24,37 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
-## 2026-08-29
+## 2026-08-29 — Backlog migrated to GitHub Issues (#641–#645)
 
-- **`scripts/launch_lane.py` refuses `Bash(:*)` from a lane profile on the rule's
-  shape, and the client grants nothing under that rule anyway.** Both `#639` lenses
-  reached this independently. The lane classifier asks whether a pattern is bounded;
-  `kit_doctor` now asks what the client actually grants, and the two answers point the
-  same way here — so the refusal costs an adopter a rule that was never dangerous.
-  **L** — no proposed fix, and both lenses called it out of scope. Parked for
-  accumulation: what matters is whether a shape-based classifier and a
-  measured-behaviour one drift apart somewhere it *does* matter. `#631` is the nearest
-  open item.
-- **A review lens asserted a base-currency relationship its own command did not
-  establish.** In `#639` round 3 the correctness lens wrote that the supplied base "is
-  the tip of `origin/main`" when it was the PR branch's prior head; its check
-  (`git log <base>..origin/main` empty) is satisfied by any descendant of `origin/main`.
-  The conclusion it drew — base is current for this round — was right, and the
-  adversarial lens established the same thing by the right route, so nothing rested on
-  it. **M** — the panel contract asks a lens to say *how* it established base currency
-  precisely so a wrong route is visible, and here the wrong route reached a right
-  answer, which is the case that would not be caught if the two lenses had agreed.
-  Parked for accumulation.
-- **`panel_prompt.py` renders a prompt to a FILE, but a Claude Code lens launch needs
-  the text inline — so every round invites a hand transcription of the rendered
-  values.** In one of five launches on `#637` the diffstat was retyped as `999
-  insertions / 18 deletions` against the rendered `1000 / 16`. The correctness lens
-  caught the mismatch and correctly declined to attribute it to a stale base or wrong
-  sha. **M** — bounded, since both lenses verify base and sha independently, but the
-  diffstat cross-check exists to flag a wrong diff and a mistyped baseline blunts it.
-  No mechanism proposed: a launcher that reads the rendered file and a rendered form the
-  launch consumes directly are different designs. Parked for accumulation.
-- **A second intermittent test, found by a review lens rather than by the suite:
-  `test_reconcile_sessions.py::test_portable_bounded_runner_reaps_on_startup_interrupt`.**
-  Both PR `#638` lenses ran the pinned full suite in their own fresh clones and this
-  test failed for one of them at `52d25e5` and at `5c5527c`, under `--python 3.12` and
-  `--python 3.14` alike, while the cockpit's runs at the same revisions had it pass and
-  four consecutive isolated runs of it passed here. **M** — no mechanism identified,
-  and the environment split is the signal: not the interpreter, since it failed on
-  both. Distinct from `#393`'s parser-recursion shape — a reaping test failing only in
-  a fresh clone points at process timing or at something the clone does not carry.
-  Parked for accumulation; what it already establishes is that the cockpit's count of
-  this tree and a lens's count of the same tree disagreed about whether it was green.
-- **A `cd` outlived its command twice in one session, both times in a throwaway probe
-  rather than in two-tree work.** A symlink-behaviour probe and a permission-rule probe
-  each left the shell in a scratch directory; the next edit using a repository-relative
-  path failed with `FileNotFoundError`. **L** — failed loudly both times, no damage. `AGENTS.md`'s *Working across two
-  trees* documents this for verification clones and adopter checkouts, neither of which
-  is where these happened; what accumulates is whether the rule belongs on any
-  `cd`-bearing command.
+Swept in **LLM-only mode**: both engines named by `triage.draft_engine` and
+`triage.finalize_engine` are absent, which is what selects it, and vendoring them is
+[#6](https://github.com/topij/agentic-dev-kit/issues/6). Every result here is **agent-executed**, not engine-verified.
+
+**Every block present at draft time is accounted for.** Graduated: [#641](https://github.com/topij/agentic-dev-kit/issues/641),
+[#642](https://github.com/topij/agentic-dev-kit/issues/642), [#643](https://github.com/topij/agentic-dev-kit/issues/643) (the cause behind [#570](https://github.com/topij/agentic-dev-kit/issues/570)'s symptom),
+[#644](https://github.com/topij/agentic-dev-kit/issues/644), [#645](https://github.com/topij/agentic-dev-kit/issues/645). Archived without filing: the `#428`-guard entry dated
+2026-08-27, whose own text records the occurrence on [#467](https://github.com/topij/agentic-dev-kit/issues/467). Each create was re-read
+from the tracker after landing per `#138` — state, title, body **and labels** — against its
+approved payload digest and its idempotency marker.
+
+**Kept active below this marker, deliberately not swept:** the `claude -p --output-format
+json` multi-value entry and the `panel_prompt.py` empty-render entry (both 2026-08-27, single
+instances, no mechanism identified), and the eight-panel-rounds entry (2026-08-22, parked on
+both park conditions). This is [#575](https://github.com/topij/agentic-dev-kit/issues/575)'s *skipped* versus *parked* distinction, and
+why [#224](https://github.com/topij/agentic-dev-kit/issues/224) says position alone does not tell you what is un-graduated: each waits
+for a recurrence an archived entry never reaches.
+
+**Approval.** The numbered proposal list went to the operator **in-session, not by DM** (the
+notification path degraded to the current session, which the interactive route permits); the
+decision came back the same session on 2026-08-29: `approve TRI-01 TRI-02 TRI-03 TRI-04
+TRI-05`, `archive TRI-07`, `park TRI-06 TRI-08 TRI-09`. This block is the committed approval
+record [#128](https://github.com/topij/agentic-dev-kit/issues/128) asks the interactive path to carry, since `state/` and `reports/` are
+gitignored.
+
+**Frozen inbox:** sha256 `e6e8ca7ba2ca523b2372dce9dfa6e52af845ffec4f9ec1cf5ec332f21081ce92`, from
+`shasum -a 256 docs/kit-friction-log.md` at `9c7e130` on 2026-08-29; re-read at finalize and
+required to match before the rewrite, every swept block byte-identical to its frozen block.
+Swept entries are verbatim in the archive under `Graduated 2026-08-29`.
 
 ## 2026-08-27
 
@@ -83,13 +66,7 @@
   occurrences. **L** — no mechanism identified, and the cockpit could not make it
   recur on demand; parked for accumulation. If it recurs, keep the raw stdout bytes
   and the stderr beside them before re-running.
-- **`make test`'s `#428` state guard tripped on the cockpit's own concurrent
-  `pr_watch.py 614 --json` poll**, which persisted `state/pr-watch/614.json` while the
-  suite ran; `make` exited 2 (pytest's own status inside it is 1) with the regression
-  banner printed above a summary line that still read `passed`, and a re-run with no
-  poll passed. This is `#467`'s shape — a snapshotted descendant changed by a
-  concurrent poll, with `--no-persist` as its documented avoidance — so the occurrence
-  is recorded on `#467`, and nothing is parked here. **L**.
+
 - **`panel_prompt.py` produced an empty prompt file and hung until the tool timeout,
   then rendered in about a second on an identical re-run.** In a shell `for` loop that
   created a detached lens worktree and immediately rendered the lens prompt into it
