@@ -5852,11 +5852,39 @@ def test_a_double_quoted_project_dir_is_a_grant(tmp_path):
     assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == []
 
 
-@pytest.mark.parametrize("rule", ["Bash", "Bash(*)", "Bash(:*)"])
+@pytest.mark.parametrize("rule", ["Bash", "Bash(*)"])
 def test_a_whole_tool_bash_grant_covers_every_engine(tmp_path, rule):
+    """Both spellings were measured against the client rather than assumed —
+    `_bash_allow_prefixes` names the run. `Bash(:*)` used to be a third case
+    here; it moved to the ungranted test below when the same run showed it
+    grants nothing."""
     root = _fake_repo(tmp_path)
     _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
     _settings_with_allow(root, [rule])
+
+    assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == []
+
+
+def test_a_non_covering_rule_does_not_suppress_a_covering_one(tmp_path):
+    """`Bash(:*)` reaches `_granted_engine_names` as the empty prefix rather than
+    being dropped earlier, so it is evaluated beside its siblings.
+
+    What this pins is that a prefix contributing nothing does not short-circuit
+    the prefixes after it. Mutating the loop in `_granted_engine_names` to return
+    early on a prefix that lexes to no words fails this test and no other
+    behavioural one.
+
+    **It does not pin the other direction**, and an earlier draft of this
+    docstring claimed it did. Loosening `_grants_invocation`'s empty-words guard
+    into a match-anything leaves this test passing, because the covering rule
+    beside it grants the engine either way; the single-rule case
+    `test_a_rule_that_does_not_reach_the_engine_leaves_it_ungranted[Bash(:*)]` is
+    what catches that. Both readings were measured by mutation rather than
+    argued — the wrong one survived a round of review as prose beside a passing
+    test, which is how this file's own claims go stale."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(root, ["Bash(:*)", "Bash(uv run scripts/pr_watch.py:*)"])
 
     assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == []
 
@@ -5867,6 +5895,10 @@ def test_a_whole_tool_bash_grant_covers_every_engine(tmp_path, rule):
         "Bash(uv run scripts/my_pr_watch.py:*)",  # an adopter's own longer name
         "Read(scripts/pr_watch.py)",  # a different tool entirely
         "Bash(uv run scripts/pr_watch.py:*",  # unbalanced — no shell would run it
+        # Reads like a whole-tool grant and measurably is not: under this rule
+        # the client refused a command no other rule named. It reaches here by
+        # contributing an empty prefix, which lexes to no words.
+        "Bash(:*)",
     ],
 )
 def test_a_rule_that_does_not_reach_the_engine_leaves_it_ungranted(tmp_path, rule):

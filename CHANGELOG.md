@@ -42,6 +42,19 @@ starts.
 
 ---
 
+## #639 — 2026-08-29
+
+- **CHANGED (report shape) — `kit_doctor` no longer treats `Bash(:*)` as a
+  whole-tool grant.** `Bash` and `Bash(*)` still cover every engine; `Bash(:*)`
+  now covers nothing, so an engine whose only allow rule is `Bash(:*)` reports
+  `ungranted` where it previously reported nothing. Measured against Claude Code
+  2.1.251 rather than assumed — under a configuration shown to gate on `allow`,
+  that rule was refused a command no other rule named. If you rely on `Bash(:*)`
+  to pre-approve an engine, replace it with `Bash(uv run:*)` or a rule naming the
+  invocation; if you pin the old reading in a test, drop the `Bash(:*)` case. As
+  before, `ungranted` joins neither the exit code nor `dead_registrations`, so
+  nothing here can fail a run.
+
 ## #637 — 2026-08-29
 
 - **ADDED (report shape) — `kit_doctor` reports a new registration state,
