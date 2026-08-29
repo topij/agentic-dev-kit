@@ -40,11 +40,12 @@
   Both PR `#638` lenses ran the pinned full suite in their own fresh clones and this
   test failed for one of them at `52d25e5` and at `5c5527c`, under `--python 3.12` and
   `--python 3.14` alike, while the cockpit's runs at the same revisions had it pass and
-  four consecutive isolated runs of it passed here. **M** — no mechanism identified, and the environment split is the signal: not the
-  interpreter, since it failed on both. Distinct from `#393`'s parser-recursion shape —
-  a reaping test failing only in a fresh clone points at process timing or at something
-  the clone does not carry. Parked for accumulation; what it already establishes is that
-  a local suite count and a lens's disagreed about whether this tree was green.
+  four consecutive isolated runs of it passed here. **M** — no mechanism identified,
+  and the environment split is the signal: not the interpreter, since it failed on
+  both. Distinct from `#393`'s parser-recursion shape — a reaping test failing only in
+  a fresh clone points at process timing or at something the clone does not carry.
+  Parked for accumulation; what it already establishes is that the cockpit's count of
+  this tree and a lens's count of the same tree disagreed about whether it was green.
 - **A `cd` outlived its command twice in one session, both times in a throwaway probe
   rather than in two-tree work.** A symlink-behaviour probe and a permission-rule probe
   each left the shell in a scratch directory; the next edit using a repository-relative
