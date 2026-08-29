@@ -45,23 +45,20 @@ safety-critical review and operator-merge route.
   runtime instructions, inverted relocation remedies and a config-only profile move all
   survived earlier substring checks. The merged test sentence-scopes the positive runtime,
   workflow, Claude-comment and CHANGELOG obligations; a supported relocation updates the
-  config, Codex binding and Claude path while keeping shipped-default prose unchanged. The
-  recurrence and its mechanism are recorded in `docs/kit-friction-log.md` for accumulation.
+  config, Codex binding and Claude path while keeping shipped-default prose unchanged.
 
 - **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
   `9926741668117bec53eb9e08534c0bcd83f5cbe3` on 2026-08-29 ended at `#393`'s known
   `test_a_payload_too_deep_for_json_load_still_exits_zero` intermittent; that exact node
-  passed in isolation with `uv run --python 3.12` at the same revision and date.
-  `gh pr checks 649`, run in the same directory at that revision and date, reported the
-  `toolkit` check successful. The `scripts/panel_prompt.py`-driven adversarial review in
-  `/private/tmp/agentic-dev-kit-panel-649-adversarial-9926741` and correctness review in
-  `/private/tmp/agentic-dev-kit-panel-649-correctness-9926741` reported no findings at that
-  exact head and date. `scripts/pr_watch.py 649 --json --no-persist`, run in
-  `/Users/topi/Coding/agentic-dev-kit` at that revision and date, reported it mergeable
-  before the authorized squash merge.
+  passed when `uv run --python 3.12 --with pytest --with pyyaml python -m pytest
+  scripts/tests/test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero
+  -q` ran in the same directory at the same revision and date. `gh pr checks 649`, run in
+  the same directory at that revision and date, reported the `toolkit` check successful.
+  `scripts/pr_watch.py 649 --json --no-persist`, run in the same directory at that revision
+  and date, reported it mergeable before the authorized squash merge.
 
-▶ Next: `session-start` — `#621`, `#631`, `#346` and `#434` stay open, while the active
-friction entry now carries a recurrence with a named mechanism for its next triage pass.
+▶ Next: `session-start` — `#621`, `#631`, `#346` and `#434` stay open, so the next session
+has several threads rather than one.
 
 ______________________________________________________________________
 
