@@ -13540,6 +13540,7 @@ def test_runtime_parity_contract_covers_workflows_and_adapters() -> None:
 @pytest.mark.kit_repo_only(
     "AGENTS.md",
     "CHANGELOG.md",
+    "config/dev-model.yaml",
     "docs/templates/AGENTS.md.tmpl",
     "docs/AGENTS-sections.md",
     ".claude/rules/safety-critical-changes.md",
@@ -13547,7 +13548,11 @@ def test_runtime_parity_contract_covers_workflows_and_adapters() -> None:
 def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
     doctrine = "docs/agentic-dev-kit/safety-critical-changes.md"
     profile_key = "parallel.claude_settings_profile"
-    profile_path = "config/claude-lane-settings.json"
+    config = yaml.safe_load(
+        (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
+    )
+    profile_path = config["parallel"]["claude_settings_profile"]
+    assert isinstance(profile_path, str) and profile_path
     root_agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
     template = (REPO_ROOT / "docs" / "templates" / "AGENTS.md.tmpl").read_text(
         encoding="utf-8"
@@ -13559,13 +13564,40 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
         REPO_ROOT / ".claude" / "rules" / "safety-critical-changes.md"
     ).read_text(encoding="utf-8")
 
-    assert re.search(r"Read and apply\s+`" + re.escape(doctrine) + r"`", root_agents)
+    root_binding = root_agents.split("- **Behavioral changes to", 1)[1].split(
+        "\n- ", 1
+    )[0]
     assert re.search(
-        r"Read the shared contract[\s\S]+governed by[\s\S]+"
-        + re.escape(doctrine),
-        template,
+        re.escape(profile_key)
+        + r"[\s\S]+"
+        + re.escape(profile_path)
+        + r"[\s\S]+are safety-critical\.",
+        root_binding,
     )
-    assert re.search(r"read and apply\s+`" + re.escape(doctrine) + r"`", merge_section)
+    assert re.search(r"Read and apply\s+`" + re.escape(doctrine) + r"`", root_agents)
+    template_binding = template.split(
+        "- **Read the shared contract before changing anything", 1
+    )[1].split("\n- ", 1)[0]
+    assert re.search(
+        re.escape(profile_key)
+        + r"[\s\S]+"
+        + re.escape(profile_path)
+        + r"[\s\S]+are governed by[\s\S]+"
+        + re.escape(doctrine),
+        template_binding,
+    )
+    merge_binding = merge_section.split(
+        "- For customer-facing gates, destructive operations", 1
+    )[1].split("\n- ", 1)[0]
+    assert re.search(
+        re.escape(profile_key)
+        + r"[\s\S]+"
+        + re.escape(profile_path)
+        + r"[\s\S]+read and apply\s+`"
+        + re.escape(doctrine)
+        + r"`",
+        merge_binding,
+    )
     assert re.search(
         r"Read `" + re.escape(doctrine) + r"` completely and apply that\s+doctrine",
         claude_rule,
