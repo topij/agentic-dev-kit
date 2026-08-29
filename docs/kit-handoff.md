@@ -14,7 +14,7 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-29 — PR `#649` (squash `1976923`) settled `#633`: the configured
+Last updated: 2026-08-30 — PR `#649` (squash `1976923`) settled `#633`: the configured
 Claude lane settings profile is safety-critical policy, with Codex and Claude bindings
 pointing to the shared doctrine.
 
