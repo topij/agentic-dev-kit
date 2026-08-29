@@ -1273,6 +1273,128 @@ _CODEX_HOOK_CONTRACT: dict[str, tuple[str, frozenset[str], int]] = {
 }
 
 
+# The engines the cockpit's own allow-list is worth checking for (#606). ONE
+# entry, and the narrowness is the design rather than an unfinished list.
+#
+# `pr_watch.py` earns it by being the engine `pr-watch` invokes in a POLL LOOP:
+# ungranted, it prompts once per poll for as long as the watch runs, which is
+# the friction the allow-list exists to remove. Every other kit engine is a
+# once-per-session operator-initiated command, where a single approval is not
+# friction worth a check — and a check that named them would report `ungranted`
+# against adopters who are perfectly happy approving them, which is #286's
+# failure wearing a new label.
+#
+# This is deliberately NOT derived from `KIT_OWNED` the way the hook check is.
+# There, breadth is right: every kit script a registration NAMES is claiming to
+# run, so the set follows the manifest. Here the claim runs the other way — that
+# an engine SHOULD have a grant — and that is a judgement about one workflow's
+# invocation pattern, not a property of the file. A manifest-derived set would
+# assert it about every engine the kit ever adds.
+_CLAUDE_PERMISSION_ENGINES: frozenset[str] = frozenset({"pr_watch.py"})
+
+# The Claude Code permission rule this check reads: a `Bash(…)` rule whose
+# content is a command prefix, optionally ending in the `:*` wildcard. The
+# capture is the prefix; the wildcard is stripped because it is rule syntax
+# rather than part of any path.
+_BASH_PERMISSION_RULE = re.compile(r"^Bash\((.*?)(?::\*)?\)$", re.DOTALL)
+
+
+def _bash_allow_prefixes(document: object) -> list[str] | None:
+    """The command prefixes `permissions.allow` grants, or None for "everything".
+
+    `allow` only. `deny` and `ask` are read by neither: this check answers
+    whether an engine can run WITHOUT a prompt, and `ask` is a prompt while
+    `deny` is the absence of a grant — folding either in would make a rule that
+    withholds permission read as one that confers it.
+
+    None is the bare-`Bash` case, which grants every command and therefore every
+    engine. Returning a sentinel rather than a synthetic prefix keeps the caller
+    from having to model "matches anything" as a string it then lexes.
+    """
+    if not isinstance(document, dict):
+        return []
+    permissions = document.get("permissions")
+    if not isinstance(permissions, dict):
+        return []
+    allow = permissions.get("allow")
+    if not isinstance(allow, list):
+        return []
+    prefixes: list[str] = []
+    for rule in allow:
+        if not isinstance(rule, str):
+            continue
+        # A bare tool name is the whole-tool grant, and `Bash(*)` is the same
+        # thing spelled with the wildcard. Either one covers every engine, so
+        # there is nothing left to report ungranted.
+        if rule.strip() in ("Bash", "Bash(*)", "Bash(:*)"):
+            return None
+        match = _BASH_PERMISSION_RULE.match(rule.strip())
+        if match:
+            prefixes.append(match.group(1))
+    return prefixes
+
+
+def _granted_engine_names(
+    prefixes: list[str] | None, engine_paths: dict[str, str], root: Path
+) -> set[str]:
+    """The engine basenames some allow prefix names at its CONFIGURED path.
+
+    Both halves matter and they are what `#606` is about. A rule naming
+    `scripts/pr_watch.py` in a repo whose `paths.engines` is `scripts/devkit`
+    grants nothing — the path it names is not there — so matching the basename
+    alone would report the exact broken install this check exists to find as
+    healthy. The comparison is therefore against `engine_paths`, which is
+    already remapped, and not against the basename the rule happens to end with.
+
+    Lexing through `_script_words` rather than a substring test, for the reason
+    that function exists: `uv run "$CLAUDE_PROJECT_DIR/scripts/pr_watch.py"` and
+    `uv run scripts/pr_watch.py` are the same grant, and a substring test on the
+    raw rule text would also match the name inside an unrelated longer path.
+
+    The comparison is EQUALITY against the resolved engine path, and that is
+    load-bearing rather than tidy. A tail test (`endswith(configured)`) was here
+    first and it counted
+    `'$CLAUDE_PROJECT_DIR/scripts/pr_watch.py'` — single-quoted, so the shell
+    never expands it and `_script_words` deliberately leaves the segment
+    unmarked — as a grant, because the string does end in the engine's path. It
+    is a LITERAL path with a dollar sign in it, matching no ordinary invocation;
+    counting it silenced the very line an operator needed. Equality rejects it
+    without needing a rule about `$` at all, since a token that resolves to the
+    engine cannot contain one. `test_a_single_quoted_project_dir_does_not_count_
+    as_a_grant` pins that, and an explicit `$` guard beside this comparison
+    would be unreachable — removed after a mutation showed no test could tell it
+    from its absence.
+
+    Two other shapes contribute nothing, both failing in the same safe
+    direction — they can only leave an engine reported `ungranted`, a line that
+    neither fails the run nor claims a defect, with the rule in front of the
+    operator reading it: an unlexable prefix (an unbalanced quote), which no
+    shell would run either; and a token that resolves somewhere other than this
+    repository's engine.
+    """
+    if prefixes is None:
+        return set(engine_paths)
+    granted: set[str] = set()
+    for prefix in prefixes:
+        lexed, words = _script_words(prefix)
+        if not lexed:
+            continue
+        for name, configured in engine_paths.items():
+            if name in granted:
+                continue
+            target = root / configured
+            for token in _matching_words(words, name):
+                named = Path(token.replace(_ROOT_SENTINEL, str(root)))
+                if not named.is_absolute():
+                    # Relative to the repo root, matching how the runtime runs a
+                    # command: the cockpit's cwd is the project.
+                    named = root / named
+                if named == target:
+                    granted.add(name)
+                    break
+    return granted
+
+
 
 def _codex_registration_semantics(
     document: object,
@@ -1478,6 +1600,13 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
     statuses: list[RegistrationStatus] = []
     codex_documents: dict[str, object] = {}
     codex_occurrences: dict[str, dict[str, int]] = {}
+    # Accumulated ACROSS the Claude surfaces rather than judged per surface,
+    # because the overlay is a real place to put a grant: an adopter who keeps
+    # `.claude/settings.local.json` out of version control and grants there is
+    # covered, and reporting `.claude/settings.json` ungranted would be a
+    # falsehood about a repo whose prompts are already gone.
+    claude_permission_grants: set[str] = set()
+    claude_permissions_read = False
     for runtime, surface, report_absent in REGISTRATION_SURFACES:
         path = root / surface
         if not path.is_file():
@@ -1511,6 +1640,15 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
             # adversarial lens, PR #389).
             statuses.append(RegistrationStatus(runtime, surface, "unreadable", str(exc)))
             continue
+        if runtime == "claude":
+            # Read before the hook walk, and unconditionally: a document whose
+            # `hooks` subtree is missing or degenerate still carries a
+            # `permissions` block the operator wants judged, and the walk below
+            # can `continue` past this point on an unreadable one.
+            claude_permissions_read = True
+            claude_permission_grants |= _granted_engine_names(
+                _bash_allow_prefixes(document), engine_paths, root
+            )
         registration_document: object = document
         if surface == ".codex/config.toml" and isinstance(document, dict):
             registration_document = {"hooks": document.get("hooks")}
@@ -1586,6 +1724,32 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
                     surface,
                     engine_paths,
                     codex_occurrences,
+                )
+            )
+    # The cockpit permissions result (#606), reported once per engine against
+    # `.claude/settings.json` rather than once per surface — the grant may live
+    # in either, so only the union of them has an answer.
+    #
+    # Gated on having READ a Claude surface. With no `.claude/` at all the repo
+    # is not a Claude adoption, and reporting a missing grant there would be the
+    # same over-claim as reporting a missing hook: the `absent` line above
+    # already says the only true thing available.
+    if claude_permissions_read:
+        for name in sorted(_CLAUDE_PERMISSION_ENGINES):
+            configured = engine_paths.get(name)
+            # Not installed is not ungranted. An adopter who declined the engine
+            # wants no rule naming it, and a line telling them to add one would
+            # be advice to grant a command they do not have.
+            if configured is None or not (root / configured).is_file():
+                continue
+            if name in claude_permission_grants:
+                continue
+            statuses.append(
+                RegistrationStatus(
+                    "claude",
+                    ".claude/settings.json",
+                    "ungranted",
+                    configured,
                 )
             )
     occurrence_names = {
@@ -2453,6 +2617,15 @@ def render(report: Report) -> str:
             # useful half when nothing is registered — it was computed and shown
             # only in `--json` (panel, correctness lens).
             "unregistered": ("·", f"no kit hook registered ({reg.detail})"),
+            # A CHOICE, like `unregistered`, and marked as one. An operator who
+            # prefers to approve each poll is in a supported state, so this
+            # neither fails the run nor reads as a defect — it says what is not
+            # granted and names the path a rule would have to name.
+            "ungranted": (
+                "·",
+                f"no permissions.allow rule reaches {reg.detail} — "
+                "each invocation prompts",
+            ),
             "absent": ("·", "not present — no registration on this runtime"),
             "unreadable": ("⚠", f"unreadable — {reg.detail}"),
         }.get(reg.state, ("⚠", reg.state))

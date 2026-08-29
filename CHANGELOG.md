@@ -42,6 +42,35 @@ starts.
 
 ---
 
+## #637 — 2026-08-29
+
+- **ADDED (report shape) — `kit_doctor` reports a new registration state,
+  `ungranted`, for a kit engine that is installed but that no
+  `permissions.allow` rule in `.claude/settings.json` or
+  `.claude/settings.local.json` reaches at its configured path.** A `--json`
+  consumer reading `registrations[].state` must accept the new value; a
+  consumer that switches exhaustively on the old set needs a case for it.
+  It does **not** join the exit code — approving each invocation is a supported
+  choice, so an `ungranted` line neither fails `kit_doctor` nor appears in
+  `dead_registrations`. Only `pr_watch.py` is checked, because it is the one
+  engine a workflow invokes in a poll loop.
+- **CHANGED (installer output) — `./init.sh` now prints a cockpit
+  `permissions.allow` advisory, with the engine path taken from your
+  `paths.engines` rather than hardcoded to `scripts/`.** Nothing is written:
+  `.claude/settings.json` stays yours. **If you vendored the engines anywhere
+  other than `scripts/`, your existing allow rule names a path you do not have
+  and grants nothing** — re-run `./init.sh` for the correct rule, or take the
+  path from the new `kit_doctor` line above.
+- **CHANGED (hook coverage) — the `SessionStart` matcher is dropped from the
+  advisory `init.sh` prints for Claude, as it already was for Codex.** To adopt,
+  remove `"matcher": "startup"` from the `SessionStart` group in your
+  `.claude/settings.json`. Until you do, the budget tripwires stay silent on
+  every resumed, cleared, or compacted session — measured at Claude Code
+  2.1.251, where `"startup"` did not fire on a `--resume` that the matcher-less
+  form did.
+
+---
+
 ## #635 — 2026-08-28
 
 - **ADDED (engine CLI surface / report shape) — `kit_doctor.py --adapter-report`

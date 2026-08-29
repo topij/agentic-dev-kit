@@ -5733,3 +5733,302 @@ def test_an_absent_upgrade_workflow_renders_no_block(tmp_path, capsys):
     )
     print(kit_doctor.render(report))
     assert _BOOTSTRAP_MARK not in capsys.readouterr().out
+
+
+# ── cockpit command permissions (#606) ───────────────────────────────────
+# `.claude/settings.json`'s `permissions` block had no test of any kind, which
+# is half of what #606 reports: `kit_doctor` walked only the `hooks` subtrees,
+# so an allow rule naming an engine path the adopter does not have was invisible
+# to every check the kit runs.
+
+
+def _settings_with_allow(root: Path, allow: list, *, surface: str = "settings.json") -> None:
+    _write(root / ".claude" / surface, json.dumps({"permissions": {"allow": allow}}))
+
+
+def _ungranted(statuses) -> list[tuple[str, str]]:
+    return [(s.surface, s.detail) for s in statuses if s.state == "ungranted"]
+
+
+def test_an_allow_rule_naming_the_wrong_engine_dir_is_reported_ungranted(tmp_path):
+    """#606's reported case, end to end.
+
+    The adopter vendored under `scripts/devkit/` and copied the kit's literal
+    entry. The rule parses, it is well-formed, and it grants nothing — the path
+    it names is not in this tree, so every `pr-watch` poll prompts.
+    """
+    root = _fake_repo(tmp_path, engines="scripts/devkit")
+    _write(root / "scripts" / "devkit" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(root, ["Bash(uv run scripts/pr_watch.py:*)"])
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts/devkit")
+
+    assert _ungranted(statuses) == [(".claude/settings.json", "scripts/devkit/pr_watch.py")]
+
+
+def test_an_allow_rule_at_the_configured_engine_dir_is_not_reported(tmp_path):
+    root = _fake_repo(tmp_path, engines="scripts/devkit")
+    _write(root / "scripts" / "devkit" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(root, ["Bash(uv run scripts/devkit/pr_watch.py:*)"])
+
+    assert _ungranted(kit_doctor.inspect_registrations(root, "scripts/devkit")) == []
+
+
+def test_both_engine_spellings_together_are_not_reported(tmp_path):
+    """The shape `init.sh` itself seeds into `config/claude-lane-settings.json`.
+
+    That profile carries BOTH spellings deliberately, because `paths.engines` is
+    the adopter's, so in every repo one of the two names a path that is not
+    there. An adopter mirroring that shape in their cockpit settings must not be
+    told something is wrong: one rule reaches the engine, which is the whole
+    question. A check keyed on "does every rule resolve" would fail this, and
+    would be #286's bug reopened against a healthy install.
+    """
+    root = _fake_repo(tmp_path, engines="scripts/devkit")
+    _write(root / "scripts" / "devkit" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(
+        root,
+        [
+            "Bash(uv run scripts/pr_watch.py:*)",
+            "Bash(uv run scripts/devkit/pr_watch.py:*)",
+        ],
+    )
+
+    assert _ungranted(kit_doctor.inspect_registrations(root, "scripts/devkit")) == []
+
+
+def test_a_grant_in_the_local_overlay_covers_the_tracked_settings(tmp_path):
+    """The overlay is a real place to put a grant — an adopter who keeps it out
+    of version control is covered, and reporting the tracked file ungranted
+    would be a falsehood about a repo whose prompts are already gone."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(root, ["Bash(gh pr view:*)"])
+    _settings_with_allow(
+        root, ["Bash(uv run scripts/pr_watch.py:*)"], surface="settings.local.json"
+    )
+
+    assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == []
+
+
+def test_a_declined_engine_is_not_reported_ungranted(tmp_path):
+    """Not installed is not ungranted. Telling an adopter who declined
+    `pr_watch.py` to add a rule for it is advice to grant a command they do not
+    have."""
+    root = _fake_repo(tmp_path)
+    _settings_with_allow(root, ["Bash(gh pr view:*)"])
+
+    assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == []
+
+
+def test_a_single_quoted_project_dir_does_not_count_as_a_grant(tmp_path):
+    """Single quotes suppress expansion, so this rule names a LITERAL path with
+    a dollar sign in it — the same dead-registration shape `_script_words`
+    exists to keep visible. Counting it as a grant was this check's first bug:
+    a tail comparison matched it (the string does end in the engine's path) and
+    silenced the line for a rule no ordinary invocation reaches. What rejects it
+    now is the equality comparison in `_granted_engine_names`, so this test is
+    the one that keeps that comparison from being loosened back."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(
+        root, ["Bash(uv run '$CLAUDE_PROJECT_DIR/scripts/pr_watch.py':*)"]
+    )
+
+    assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == [
+        (".claude/settings.json", "scripts/pr_watch.py")
+    ]
+
+
+def test_a_double_quoted_project_dir_is_a_grant(tmp_path):
+    """The other half of the pair above, so the single-quote test is pinning
+    quoting semantics rather than merely a `$`."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(
+        root, ['Bash(uv run "$CLAUDE_PROJECT_DIR/scripts/pr_watch.py":*)']
+    )
+
+    assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == []
+
+
+@pytest.mark.parametrize("rule", ["Bash", "Bash(*)", "Bash(:*)"])
+def test_a_whole_tool_bash_grant_covers_every_engine(tmp_path, rule):
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(root, [rule])
+
+    assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == []
+
+
+@pytest.mark.parametrize(
+    "rule",
+    [
+        "Bash(uv run scripts/my_pr_watch.py:*)",  # an adopter's own longer name
+        "Read(scripts/pr_watch.py)",  # a different tool entirely
+        "Bash(uv run scripts/pr_watch.py:*",  # unbalanced — no shell would run it
+    ],
+)
+def test_a_rule_that_does_not_reach_the_engine_leaves_it_ungranted(tmp_path, rule):
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(root, [rule])
+
+    assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == [
+        (".claude/settings.json", "scripts/pr_watch.py")
+    ]
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        {},
+        {"permissions": None},
+        {"permissions": {}},
+        {"permissions": {"allow": "Bash(uv run scripts/pr_watch.py:*)"}},
+        {"permissions": {"allow": [None, 3, {"nested": "object"}]}},
+        [1, 2, 3],
+        "a bare string",
+    ],
+)
+def test_a_malformed_permissions_block_degrades_instead_of_aborting(tmp_path, document):
+    """Same rule the parse and the hook walk follow: adopter-supplied JSON that
+    does not have the expected shape is reported, never raised."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    _write(root / ".claude" / "settings.json", json.dumps(document))
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert _ungranted(statuses) == [(".claude/settings.json", "scripts/pr_watch.py")]
+
+
+def test_permissions_are_judged_even_when_the_hooks_subtree_is_unreadable(tmp_path):
+    """The permissions read happens before the hook walk's `continue` paths, so
+    a document whose `hooks` subtree defeats the walk still gets its allow-list
+    judged. Without that ordering the two checks share a failure they do not
+    share a cause for."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    deep = {"permissions": {"allow": ["Bash(uv run scripts/pr_watch.py:*)"]}}
+    node = deep
+    for _ in range(kit_doctor._MAX_REGISTRATION_DEPTH + 5):
+        node["hooks"] = {}
+        node = node["hooks"]
+    _write(root / ".claude" / "settings.json", json.dumps(deep))
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert "unreadable" in [s.state for s in statuses if s.surface == ".claude/settings.json"]
+    assert _ungranted(statuses) == []
+
+
+def test_no_claude_surface_at_all_reports_no_permission_finding(tmp_path):
+    """A repo with no `.claude/` is not a Claude adoption. Reporting a missing
+    grant there is the same over-claim as reporting a missing hook: the `absent`
+    line already says the only true thing available."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert _ungranted(statuses) == []
+    assert ("claude", ".claude/settings.json", "absent") in [
+        (s.runtime, s.surface, s.state) for s in statuses
+    ]
+
+
+def test_an_ungranted_permission_does_not_fail_the_run(tmp_path):
+    """A choice, not a defect. An operator who prefers to approve each poll is
+    in a supported state, so this must stay out of `dead_registrations` and out
+    of the exit code — the distinction #286 and #527 were both filed about."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(root, ["Bash(gh pr view:*)"])
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    report = kit_doctor.Report(
+        kit_version_config=2,
+        kit_version_manifest=2,
+        engines_dir="scripts",
+        engines_dir_ok=True,
+        hooks_installed=True,
+        narrative_rendered={},
+        registrations=statuses,
+    )
+
+    assert [s.state for s in statuses if s.state == "ungranted"]
+    # The three properties `main` builds its exit code from. Asserting them
+    # rather than calling `main` keeps this a statement about the CLASSIFICATION
+    # — which is where a future state could wrongly join the gate — instead of
+    # about a process exit that a dozen unrelated things also decide.
+    assert report.dead_registrations == []
+    assert report.drifted == []
+    assert report.broken == []
+
+
+def test_the_ungranted_line_names_the_path_a_rule_would_have_to_name(tmp_path):
+    """The detail is the configured path rather than the basename, because that
+    is the whole content of the advice: an adopter under `scripts/devkit/` who
+    is shown `pr_watch.py` learns nothing they did not know."""
+    root = _fake_repo(tmp_path, engines="scripts/devkit")
+    _write(root / "scripts" / "devkit" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(root, [])
+
+    report = kit_doctor.Report(
+        kit_version_config=2,
+        kit_version_manifest=2,
+        engines_dir="scripts/devkit",
+        engines_dir_ok=True,
+        hooks_installed=True,
+        narrative_rendered={},
+        registrations=kit_doctor.inspect_registrations(root, "scripts/devkit"),
+    )
+    rendered = kit_doctor.render(report)
+
+    assert "scripts/devkit/pr_watch.py" in rendered
+    assert "each invocation prompts" in rendered
+
+
+@pytest.mark.parametrize("withholding", ["deny", "ask"])
+def test_a_deny_or_ask_rule_is_not_read_as_a_grant(tmp_path, withholding):
+    """This check answers whether the engine runs WITHOUT a prompt. `ask` IS a
+    prompt and `deny` is the absence of a grant, so folding either in would make
+    a rule that withholds permission read as one that confers it — and would
+    silence the line for the adopter who most needs it, the one who denied the
+    command on purpose."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    _write(
+        root / ".claude" / "settings.json",
+        json.dumps(
+            {"permissions": {withholding: ["Bash(uv run scripts/pr_watch.py:*)"]}}
+        ),
+    )
+
+    assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == [
+        (".claude/settings.json", "scripts/pr_watch.py")
+    ]
+
+
+def test_a_deny_rule_does_not_cancel_an_allow_rule_in_this_report(tmp_path):
+    """The other direction, stated so the pair above is not read as this check
+    modelling precedence. It does not: it reports whether an allow rule REACHES
+    the engine, and what a deny rule then does to that grant at runtime is the
+    client's to decide and `/permissions` to show. Reporting `ungranted` here
+    would be a claim about precedence this check has not measured."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    _write(
+        root / ".claude" / "settings.json",
+        json.dumps(
+            {
+                "permissions": {
+                    "allow": ["Bash(uv run scripts/pr_watch.py:*)"],
+                    "deny": ["Bash(uv run scripts/pr_watch.py:*)"],
+                }
+            }
+        ),
+    )
+
+    assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == []

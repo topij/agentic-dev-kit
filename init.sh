@@ -2049,9 +2049,20 @@ register_pr_hook() {
 # that stance from the ergonomics — the three defects behind it are recorded
 # in that function.
 #
-# Codex's current hook contract supports a `SessionStart` matcher over start
-# sources. This registration omits it deliberately so the housekeeping check
-# runs for every supported source rather than only Claude's `startup` subset.
+# NEITHER registration carries a `SessionStart` matcher, and that is now one
+# decision rather than two (#606). Codex's hook contract supports a matcher over
+# start sources and this omits it deliberately, so the housekeeping check runs
+# for every supported source. Claude's block used to name `"startup"`, which was
+# read as the runtime's limit until it was measured and turned out to be ours:
+# at Claude Code 2.1.251 a four-group fixture established that an omitted
+# matcher, `"*"`, and an explicit alternation all fire on both `startup` and
+# `resume`, while `"startup"` fires only on the first — so a resumed session
+# skipped both tripwires. Omission is preferred over the alternation for the
+# reason it is preferred here: an enumerated list of sources goes stale the next
+# time the runtime adds one, silently, which is `"startup"`'s failure again in
+# slower motion. The runs, their limits (`clear` and `compact` have no headless
+# invocation and were not exercised) and the fixture hash are in
+# `saved_plans/claude-sessionstart-matcher-live-validation_2026-08-29.md`.
 # Project hooks still require review and trust; `/hooks` is the authority for
 # what the current client loaded. The command resolves the project through git
 # because hooks may start below the repository root; #359's guard clauses make
@@ -2104,13 +2115,54 @@ register_budget_hooks() {
     echo "        skipped until trusted; absence in a noninteractive run does not distinguish"
     echo "        pending trust from a broken command, so /hooks is the diagnostic authority."
   fi
-  echo "      Claude — .claude/settings.json, under hooks.SessionStart, matcher \"startup\":"
+  echo "      Claude — .claude/settings.json, under hooks.SessionStart; omit matcher"
+  echo "      here too, so a resumed session is covered:"
   if [ -f "$_doc_budget_src" ]; then
     echo "        [ -z \"\$JOB_NAME\" ] && cd \"\$CLAUDE_PROJECT_DIR\" && uv run --script ${_doc_budget_src} --quiet || true"
   fi
   if [ -f "$_mem_budget_src" ]; then
     echo "        [ -z \"\$JOB_NAME\" ] && cd \"\$CLAUDE_PROJECT_DIR\" && uv run --script ${_mem_budget_src} --quiet || true"
   fi
+}
+
+# ── cockpit command permissions (#606) ───────────────────────────────────
+# The COCKPIT's own allow-list, which is a different file answering a different
+# question from `config/claude-lane-settings.json` above: that one is the single
+# settings source an unattended lane loads, this one trims prompts for an
+# operator who is sitting right there. Nothing here is a boundary — the operator
+# approves whatever it does not cover — so the entries are chosen for the one
+# workflow that polls in a loop and would otherwise prompt per poll.
+#
+# Same position as the two registrations above (#303): PRINT, write neither.
+# `.claude/settings.json` is the adopter's file, and the reason is sharper for
+# permissions than for hooks — an allow-list is policy about what may run
+# unattended, which is the last thing an installer should be writing into
+# someone's repository on their behalf.
+#
+# `${engines_dir}` is what makes this worth printing at all, and is the half
+# `#606` was filed about. The kit's own entry read `Bash(uv run
+# scripts/pr_watch.py:*)` with `scripts` baked in, so an adopter vendoring under
+# `scripts/devkit/` — the layout `safety-critical-changes.md` explicitly
+# supports — copied an entry that grants nothing: the rule names a path that
+# does not exist there, and every poll prompts. `kit_doctor` now reports that as
+# `ungranted` rather than leaving it to be discovered a prompt at a time.
+register_cockpit_permissions() {
+  _watch_src="${engines_dir}/pr_watch.py"
+  if [ ! -f "$_watch_src" ]; then
+    return 0
+  fi
+
+  echo "note: the cockpit's own command permissions are optional and hand-written."
+  echo "      They only trim approval prompts for a session you are watching; skip"
+  echo "      this entirely if you would rather approve each command."
+  echo "      Claude — .claude/settings.json, under permissions.allow:"
+  echo "        \"Bash(gh pr view:*)\", \"Bash(gh pr list:*)\", \"Bash(gh pr checks:*)\","
+  echo "        \"Bash(gh run view:*)\", \"Bash(uv run ${_watch_src}:*)\""
+  echo "      The last entry names YOUR engines dir; a rule naming a path you do not"
+  echo "      have grants nothing. \`kit_doctor.py\` reports an engine no rule reaches."
+  echo "      Codex has no per-command equivalent to receive these — its writing"
+  echo "      policy is \`--sandbox\`, which bounds the process rather than the command"
+  echo "      name. See docs/agentic-dev-kit/runtime-parity.md."
 }
 
 install_hooks() {
@@ -2615,6 +2667,7 @@ fi
 install_hooks
 register_pr_hook
 register_budget_hooks
+register_cockpit_permissions
 
 # ── done ───────────────────────────────────────────────────────────────
 
