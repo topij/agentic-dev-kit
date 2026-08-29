@@ -106,6 +106,13 @@ UV_CACHE_DIR=/private/tmp/session-start-uv-cache uv run \
   --json
 ```
 
+That command in `/Users/topi/Coding/agentic-dev-kit`, using the verifier at
+`76baa4079e885fae33a2d0efef3d18f402a2a4ff` on 2026-08-30, returned
+`status: verified`, `promotion: true`, and the claim IDs enumerated above. The first
+review pass had shown that comparing only the manifest and receipt let a
+self-consistently relabeled pair pass; the independent expectation arguments above are
+the resulting trust root.
+
 The repository suite drives the same public CLI through hostile mutations. It refuses:
 
 - surviving prose or a surviving declared digest when the named artifact is absent or
