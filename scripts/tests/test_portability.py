@@ -13572,36 +13572,35 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
         "`scripts/pr_watch.py`, `scripts/dev_session.sh`, "
         "`scripts/launch_lane.py`, or the profile named by "
         f"`{profile_key}` (`{profile_path}` in this repository) "
-        "are safety-critical."
+        f"are safety-critical.** Read and apply `{doctrine}` completely before "
+        "changing any gate, launch-authority, or merge-authority path."
         in root_binding_flat
     )
-    assert re.search(r"Read and apply\s+`" + re.escape(doctrine) + r"`", root_agents)
     template_binding = template.split(
         "- **Read the shared contract before changing anything", 1
     )[1].split("\n- ", 1)[0]
-    assert re.search(
-        re.escape(profile_key)
-        + r"[\s\S]+"
-        + re.escape(profile_path)
-        + r"[\s\S]+are governed by[\s\S]+"
-        + re.escape(doctrine),
-        template_binding,
+    template_binding_flat = " ".join(template_binding.split())
+    assert (
+        f"or the profile named by `{profile_key}` (shipped as `{profile_path}`), "
+        "along with customer-facing send paths, destructive operations, and "
+        "kill/recovery paths, are governed by "
+        f"[`{doctrine}`]({doctrine});"
+        in template_binding_flat
     )
     merge_binding = merge_section.split(
         "- For customer-facing gates, destructive operations", 1
     )[1].split("\n- ", 1)[0]
-    assert re.search(
-        re.escape(profile_key)
-        + r"[\s\S]+"
-        + re.escape(profile_path)
-        + r"[\s\S]+read and apply\s+`"
-        + re.escape(doctrine)
-        + r"`",
-        merge_binding,
+    merge_binding_flat = " ".join(merge_binding.split())
+    assert (
+        f"or the profile named by `{profile_key}` (shipped as `{profile_path}`), "
+        f"read and apply `{doctrine}`."
+        in merge_binding_flat
     )
-    assert re.search(
-        r"Read `" + re.escape(doctrine) + r"` completely and apply that\s+doctrine",
-        claude_rule,
+    claude_body_flat = " ".join(claude_rule.split("---", 2)[2].split())
+    assert (
+        f"Read `{doctrine}` completely and apply that doctrine to every behavioral "
+        "change in the matched files."
+        in claude_body_flat
     )
     claude_frontmatter = yaml.safe_load(claude_rule.split("---", 2)[1])
     assert set(claude_frontmatter["paths"]) == {
@@ -13623,10 +13622,15 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
         assert profile_path in text
     changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     profile_entry = changelog.split("## #649", 1)[1].split("\n---", 1)[0]
-    assert "adopter-owned `AGENTS.md`" in profile_entry
-    assert ".claude/rules/safety-critical-changes.md" in profile_entry
-    assert profile_key in profile_entry
-    assert profile_path in profile_entry
+    profile_entry_flat = " ".join(profile_entry.split())
+    assert (
+        f"behavioral changes to the profile named by `{profile_key}` now take the "
+        "shared safety-critical review and operator-merge route.** Add the configured "
+        "profile to your adopter-owned `AGENTS.md` binding and to "
+        "`.claude/rules/safety-critical-changes.md`'s path list; the shipped default "
+        f"is `{profile_path}`."
+        in profile_entry_flat
+    )
     launcher_entry = changelog.split("## #609", 1)[1].split("\n---", 1)[0]
     assert "adopter-owned `AGENTS.md`" in launcher_entry
     assert ".claude/rules/safety-critical-changes.md" in launcher_entry
