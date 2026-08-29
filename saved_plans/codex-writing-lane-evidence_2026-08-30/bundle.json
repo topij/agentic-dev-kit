@@ -1,0 +1,140 @@
+{
+  "artifacts": [
+    {
+      "kind": "command-capture",
+      "observer": "codex-cli",
+      "path": "artifacts/client-version.txt",
+      "sha256": "ca4fe30a68dd82c6a7af75eeb683f763cfb6554840590a9e345692269ae744f0"
+    },
+    {
+      "kind": "descriptor",
+      "observer": "dev-session-durable-descriptor",
+      "path": "artifacts/descriptor.json",
+      "sha256": "d57a3eeaeef0dd01e208735e71b2c672f409b03ffec06347408864de396691cf"
+    },
+    {
+      "kind": "filesystem-readback",
+      "observer": "cockpit-filesystem-readback",
+      "path": "artifacts/filesystem-readback.txt",
+      "sha256": "ae6b54246ec52ac4dfd8079ea44a19499f5966887f5c0673084cf8e6df38dbf0"
+    },
+    {
+      "kind": "final-message",
+      "observer": "codex-last-message-file",
+      "path": "artifacts/final-message.txt",
+      "sha256": "56c7748b3099da9282dde6c13e202b529740274577aa44ba4baaea8440051ca0"
+    },
+    {
+      "kind": "forge-readback",
+      "observer": "github-api",
+      "path": "artifacts/forge-readback.json",
+      "sha256": "d6fb6505b19a522d9cc6718d7c09a4510b3e96bbf0ef554a8fa9f63d5910a6c6"
+    },
+    {
+      "kind": "git-readback",
+      "observer": "git-remote-and-object-readback",
+      "path": "artifacts/git-readback.txt",
+      "sha256": "7767f7e2a40d17c61ec34ce205943a8414eb07810be28414bd50c35f68b47029"
+    },
+    {
+      "kind": "launcher-receipt",
+      "observer": "launch-lane-receipt",
+      "path": "artifacts/launcher-receipt.json",
+      "sha256": "06be15394a823fedf6abee96cd38746f8a6c1f951abbef7a9b4f8f2b92e839cc"
+    },
+    {
+      "kind": "review-receipt",
+      "observer": "pr-watch-state-and-forge-readback",
+      "path": "artifacts/review-receipt.json",
+      "sha256": "e71819c7a767c94adcee86c67f683045d7547af3a7a1f96792c8ae645f8c76b4"
+    },
+    {
+      "kind": "runtime-attestation",
+      "observer": "runtime-session-context",
+      "path": "artifacts/runtime-attestation.json",
+      "sha256": "95271b822394dd24e9f5d2fdb2ae3c3b5a380a74f0c49bbefd71d8f59fd2deaa"
+    },
+    {
+      "kind": "source-digest",
+      "observer": "git-object-source-readback",
+      "path": "artifacts/source-digests.txt",
+      "sha256": "fc189088bc1acfa6c79637d2787fdfda957d20af81acaf75cf6b5fab3ce1bab6"
+    }
+  ],
+  "bundle_id": "codex-writing-lane-2026-08-30",
+  "claims": [
+    {
+      "evidence": [
+        "artifacts/runtime-attestation.json",
+        "artifacts/descriptor.json",
+        "artifacts/launcher-receipt.json",
+        "artifacts/filesystem-readback.txt",
+        "artifacts/git-readback.txt",
+        "artifacts/source-digests.txt"
+      ],
+      "id": "codex-writing-lane-scoped-write-and-state",
+      "requires_applied_compute": true
+    },
+    {
+      "evidence": [
+        "artifacts/runtime-attestation.json",
+        "artifacts/descriptor.json",
+        "artifacts/launcher-receipt.json",
+        "artifacts/final-message.txt",
+        "artifacts/forge-readback.json",
+        "artifacts/git-readback.txt",
+        "artifacts/source-digests.txt"
+      ],
+      "id": "codex-writing-lane-ready-private-pr",
+      "requires_applied_compute": true
+    },
+    {
+      "evidence": [
+        "artifacts/forge-readback.json",
+        "artifacts/review-receipt.json"
+      ],
+      "id": "codex-writing-lane-exact-head-review-receipt",
+      "requires_applied_compute": false
+    },
+    {
+      "evidence": [
+        "artifacts/client-version.txt",
+        "artifacts/runtime-attestation.json"
+      ],
+      "id": "codex-writing-lane-applied-compute",
+      "requires_applied_compute": true
+    }
+  ],
+  "redaction": {
+    "excluded": [
+      "authentication-material",
+      "credentials",
+      "tokens",
+      "unrelated-user-data",
+      "unrelated-workspace-data"
+    ],
+    "reviewed": true,
+    "reviewer": "codex-cockpit-gpt-5-6-sol-max"
+  },
+  "review": {
+    "head": "5c4006d18e65e0443dc7b22f48c099ad07ce1da9",
+    "observer": "github-pr-readback-and-pr-watch-receipt"
+  },
+  "runtime": {
+    "applied_compute": {
+      "attestation": "artifacts/runtime-attestation.json",
+      "cwd": "/private/tmp/adk-codex-writing-20260830/sessions/write/wt",
+      "effort": "max",
+      "model": "gpt-5.6-sol",
+      "session_id": "01a04fb1-0b63-7921-982b-23ff66c200be"
+    },
+    "client_version": "codex-cli 0.149.1",
+    "name": "codex",
+    "session_persistence": "persistent"
+  },
+  "schema_version": 1,
+  "source": {
+    "repository": "https://github.com/topij/agentic-dev-kit",
+    "revision": "bdfd6ee702a630f0575f0c186f51b3bbbcd1810a"
+  }
+}

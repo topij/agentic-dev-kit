@@ -1,0 +1,8 @@
+worktree: /private/tmp/adk-codex-writing-20260830/sessions/write/wt
+notes/codex-writing-lane.md:
+Codex writing lane
+durable evidence validation
+
+state root: /private/tmp/adk-codex-writing-20260830/sessions/write/state
+codex-writing-state.txt:
+durable evidence state

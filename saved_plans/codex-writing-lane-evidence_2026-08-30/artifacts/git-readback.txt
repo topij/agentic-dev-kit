@@ -1,0 +1,9 @@
+remote branch:
+5c4006d18e65e0443dc7b22f48c099ad07ce1da9  refs/heads/dev/write
+
+changed paths from 83d3b623305a691dd874df44ca92270daa62ade9:
+A  notes/codex-writing-lane.md
+
+object read-back at 5c4006d18e65e0443dc7b22f48c099ad07ce1da9:
+Codex writing lane
+durable evidence validation

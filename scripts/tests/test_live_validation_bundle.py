@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _repo_layout import engine_dir  # noqa: E402
+from _repo_layout import engine_dir, find_repo_root  # noqa: E402
 
 ENGINE = engine_dir(Path(__file__).resolve()) / "verify_live_validation_bundle.py"
 SOURCE = "1" * 40
@@ -225,3 +225,25 @@ def test_the_promotion_receipt_is_bound_to_the_manifest_bytes(tmp_path: Path) ->
     result = _run(manifest, promotion)
     assert result.returncode == 2
     assert "manifest digest does not match" in result.stderr
+
+
+@pytest.mark.kit_repo_only(
+    "saved_plans/codex-writing-lane-evidence_2026-08-30/bundle.json",
+    "saved_plans/codex-writing-lane-evidence_2026-08-30/promotion.json",
+)
+def test_the_promoted_codex_writing_lane_bundle_remains_recomputable() -> None:
+    root = find_repo_root(ENGINE)
+    bundle = root / "saved_plans/codex-writing-lane-evidence_2026-08-30"
+    result = _run(bundle / "bundle.json", bundle / "promotion.json")
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {
+        "bundle_id": "codex-writing-lane-2026-08-30",
+        "claims": [
+            "codex-writing-lane-scoped-write-and-state",
+            "codex-writing-lane-ready-private-pr",
+            "codex-writing-lane-exact-head-review-receipt",
+            "codex-writing-lane-applied-compute",
+        ],
+        "promotion": True,
+        "status": "verified",
+    }

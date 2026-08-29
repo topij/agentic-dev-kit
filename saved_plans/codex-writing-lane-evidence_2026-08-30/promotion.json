@@ -1,0 +1,18 @@
+{
+  "authority": "docs/agentic-dev-kit/runtime-parity.md",
+  "claims": [
+    "codex-writing-lane-scoped-write-and-state",
+    "codex-writing-lane-ready-private-pr",
+    "codex-writing-lane-exact-head-review-receipt",
+    "codex-writing-lane-applied-compute"
+  ],
+  "manifest": "bundle.json",
+  "manifest_sha256": "653cafc609b99e1a0bc369a7556611b7014bfb2ce4452e4c1d4366fcf54187d3",
+  "reviewed_head": "5c4006d18e65e0443dc7b22f48c099ad07ce1da9",
+  "runtime": {
+    "client_version": "codex-cli 0.149.1",
+    "name": "codex"
+  },
+  "schema_version": 1,
+  "source_revision": "bdfd6ee702a630f0575f0c186f51b3bbbcd1810a"
+}

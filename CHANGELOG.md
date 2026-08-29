@@ -42,6 +42,20 @@ starts.
 
 ---
 
+## #651 — 2026-08-30
+
+- **ADDED (engine CLI surface) —
+  `<engine-dir>/verify_live_validation_bundle.py <bundle.json>` verifies the closed,
+  redacted retained-artifact contract; `--promotion <promotion.json>` additionally
+  binds capability promotion to the manifest digest, source revision, reviewed head,
+  runtime, client and claim IDs, and `--json` returns the machine-readable verdict.**
+  Copy the engine and `docs/agentic-dev-kit/live-validation-evidence.md` before using
+  a live runtime observation to promote parity. Treat exit `0` as verified and exit
+  `2` as an invalid bundle or promotion; do not clean up a synthetic fixture until
+  the copied destination passes this command.
+
+---
+
 ## #649 — 2026-08-29
 
 - **CHANGED (gate semantics) — behavioral changes to the profile named by

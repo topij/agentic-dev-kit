@@ -7,11 +7,13 @@ safety guarantees, review evidence, lane isolation, and upgrade behavior as Clau
 Code. Runtime-specific files may differ in shape; their observable contract should
 not.
 
-## Sprint status — 2026-08-27
+## Sprint status — reconciled 2026-08-30
 
 The machine-readable inventory and current capability judgments live in
 [`runtime-parity.md`](../docs/agentic-dev-kit/runtime-parity.md); this plan supplies
-their delivery order and exit conditions.
+their delivery order and exit conditions. This maintained status section reconciles
+merged repository state; the stamped pre-implementation baseline below remains the
+historical observation it was and is not silently refreshed.
 
 - [x] **Phase 1 — Declare the parity contract.** PR `#588` merged on 2026-08-23 with
   the maintained capability matrix, shared-workflow inventory, explicit exceptions,
@@ -32,7 +34,7 @@ their delivery order and exit conditions.
   `wrap-up`. PR `#599` merged the config-owned draft/approve/finalize matrix and the
   independently observed forge-provenance chain for `triage-friction-log`, closing the
   remaining structural exit.
-- [ ] **Phase 4 — Make delegation and parallel lanes equivalent.** PR `#598` delivered
+- [x] **Phase 4 — Make delegation and parallel lanes equivalent.** PR `#598` delivered
   the kit-owned engine boundary; PR `#609` delivered the Codex wrapper, its live record,
   and the declared Claude gap; PR `#611` generalised the wrapper to Claude
   (`claude -p`) with a Claude-produced live record and moved the parity row's Claude
@@ -98,8 +100,31 @@ their delivery order and exit conditions.
      merged head, and a panel that ran leaves a disposition comment (`#603`, `#604`).
      Phase 5 owns `#606`, `#236`, and the `#243` narrowing (adapter generation); Phase 6
      takes `#607` as the adopter pilot and `#608`.
-- [ ] **Phase 5 — Align permissions, installation, and upgrades.** Codex project
-  policy, adopter-owned merge surfaces, and adapter refresh behavior remain planned.
+  6. Done in PR `#651`: the repository-owned redacted evidence contract, hostile
+     missing/altered/wrong-revision mutations, and tracked positive control now refuse
+     promotion when the retained bytes or their binding are absent. A persistent Codex
+     writing lane at source revision
+     `bdfd6ee702a630f0575f0c186f51b3bbbcd1810a` produced descriptor-scoped worktree and
+     state output, a ready private pull request, and an exact-head cockpit review
+     receipt; the promotion is bound to synthetic head
+     `5c4006d18e65e0443dc7b22f48c099ad07ce1da9` and the runtime-owned applied-compute
+     attestation. The 2026-08-27 record stays historical and unpromoted. The retained
+     record is
+     [`codex-writing-lane-live-validation_2026-08-30.md`](codex-writing-lane-live-validation_2026-08-30.md).
+     This establishes the Phase 4 exit: the Codex batch preserved the descriptor state
+     sandbox, exact-head review evidence, and operator merge class without merging.
+- [ ] **Phase 5 — Align permissions, installation, and upgrades.** Merged deliveries
+  now include PR `#632` for the measured Claude lane policy and permanent adapter-write
+  asymmetry; PR `#635` for generated adapter refresh plus manifest-selected installed
+  tests; PR `#637` for the templated cockpit grant advisory, open-ended SessionStart,
+  and informational permission inspection; PR `#639` for the allow-side whole-tool
+  rule measurement; and PR `#649` for the safety-critical classification of the
+  configured lane profile. The exit is not yet established. `#236` retains the
+  engine/doctrine same-function-different-path survey, `#243` retains field exercises
+  for `adopt`, `parallel`, `triage-friction-log`, and `post-merge-systemize`, `#255`
+  retains adopter-side stale lens-definition inspection, and `#631` retains the lane
+  execution-boundary decision. `#606` remains open for deliberate tracker disposition
+  after its merged policy, cockpit, matcher, inspection, and allow-side slices.
 - [ ] **Phase 6 — Gate parity and roll it out.** Adoption fixtures, trusted smoke
   coverage, historical-status cleanup, and the adopter pilot remain planned.
 
@@ -349,30 +374,54 @@ degraded, held, resume, authority, and completion paths under shared definitions
 - [x] Add config-owned approval/sandbox policy per runtime and the Claude trust route,
   with a Claude writing-lane live record (`#601`; PR `#614`).
 - [x] Produce the Codex writing-lane live record from a Codex session before model or
-  effort calibration (`#601`; PR `#620`). The record remains unpromoted because its
-  raw fixture evidence was removed at cleanup; `#621` owns the durable-evidence gap.
-- Calibrate both runtimes' neutral tiers and mechanically pass supported model/effort
+  effort calibration (`#601`; PR `#620`). That 2026-08-27 record remains unpromoted
+  because its raw fixture evidence was removed at cleanup; its historical observations
+  stay bounded to that client and revision.
+- [x] Rerun the Codex writing lane through the durable redacted bundle contract
+  (`#621`; PR `#651`). The retained promotion binds the source revision, reviewed
+  synthetic head, client, persistent applied-compute attestation, authoritative
+  observers, destination digests, and exact-head review receipt. It promotes only the
+  claim IDs in the receipt and refuses absent, altered, ephemeral, and wrong-revision
+  carriers.
+- [x] Calibrate both runtimes' neutral tiers and mechanically pass supported model/effort
   keys to fallback-review lenses (`#605`, `#255`).
-- Use the generalised launcher for the first real headless task only after those slices
+- [x] Use the generalised launcher for the first real headless task only after those slices
   land (untracked; not `#602`).
 
 Done when a Codex parallel batch preserves the same state isolation, review evidence,
-and merge authority as Claude usage.
+and merge authority as Claude usage. The persistent 2026-08-30 rerun establishes that
+exit at source revision `bdfd6ee702a630f0575f0c186f51b3bbbcd1810a` and reviewed
+synthetic head `5c4006d18e65e0443dc7b22f48c099ad07ce1da9`; its descriptor carries operator merge
+class, and neither the lane nor the cockpit merged the synthetic pull request.
 
 ### Phase 5 — Align permissions, installation, and upgrades
 
-- Decide which Claude permission allowances are repository policy and express their
-  Codex equivalents through trusted project config or command rules.
-- Treat Codex hooks, config, and rules as adopter-owned merge surfaces rather than
-  replacement targets.
-- Derive runtime-adapter inventories from the filesystem and the parity declaration.
-- Track adapter baselines, or make the adapters sufficiently generated and thin that
-  runtime fixes can safely reach existing adopters.
-- Extend adoption, upgrade, and `kit_doctor` to inspect and report Codex skills,
-  metadata, configuration, hook semantics, and declared dependencies.
+- [x] Decide the shipped Claude lane allowances as repository policy and bind the Codex
+  side by equivalent safety doctrine rather than copied command syntax (PR `#632`).
+  The profile is task-scoping rather than a hostile-code boundary; `#631` owns the
+  executable-boundary mechanism.
+- [x] Make generated Claude and Codex adapters refreshable while preserving
+  adopter-authored variants, and make upgrade verification select the manifest-declared
+  installed tests (PR `#635`). `#236` keeps the engine/doctrine survey where path or
+  slug cannot identify equivalent function.
+- [x] Template the cockpit permission advisory on `paths.engines`, remove the narrow
+  SessionStart matcher on both runtimes, inspect cockpit grant coverage without failing
+  healthy adopters, and replace the unmeasured whole-tool rule with allow-side evidence
+  (PRs `#637` and `#639`). `#606` remains open for deliberate tracker disposition.
+- [x] Treat the configured Claude lane profile as safety-critical adopter-owned policy
+  through the Codex root binding and Claude path-scoped binding (PR `#649`). `#346` and
+  `#434` remain separate workflow/test binding-coverage decisions.
+- [ ] Exercise the remaining runtime-specific adapter translations through `adopt`,
+  `parallel`, `triage-friction-log`, and `post-merge-systemize` (`#243`).
+- [ ] Inspect adopter-side generated lens definitions against their configured
+  mechanical compute carrier (`#255`).
+- [ ] Settle `#631` from executable positive and hostile-negative evidence without
+  treating the Claude prefix list and Codex sandbox syntax as interchangeable.
 
 Done when an existing Codex adopter can upgrade without retaining stale runtime
-behavior or losing local policy.
+behavior or losing local policy. That exit remains open on the unchecked items above
+and on `#236`'s engine/doctrine survey; merged delivery slices are not used as a
+reassuring substitute for the exit.
 
 ### Phase 6 — Gate parity and roll it out
 
