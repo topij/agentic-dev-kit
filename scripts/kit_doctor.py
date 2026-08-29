@@ -1362,25 +1362,29 @@ def _same_path(named: Path, target: Path) -> bool:
     `strict=False` is the default and returns a normalized absolute path for a
     path that does not exist, which every ungranted case relies on.
 
-    **The `except OSError` is version-defensive, not a branch with a
-    demonstrated trigger here, and is marked as such because the obvious
-    candidate does not reach it.** A symlink loop was the assumed trigger and it
-    is not one: measured at Python 3.14.6, `resolve()` on a path through a loop
-    RETURNS the path unresolved, and only `resolve(strict=True)` raises
-    (`OSError`, errno 62). So no test in this suite kills a mutation of that
-    clause, and the honest reading is that it guards `resolve` semantics on
-    Python versions this repo does not pin rather than anything reproducible
-    today. It is kept rather than deleted because the module's standing rule is
-    that adopter input degrades the report instead of aborting it and a raise
-    here would take down the whole run — and because falling back to the lexical
-    comparison can only under-report a grant, printing one more advisory line,
-    never inventing one.
+    **The `except` catches two types because `resolve()` signals a symlink loop
+    differently on different Pythons, and this repo learned that from CI rather
+    than from reading.** A first version caught `OSError` alone, on a local
+    measurement at Python 3.14.6 where `resolve()` on a loop path simply RETURNS
+    it unresolved — from which the comment then concluded, wrongly, that the
+    clause had no reachable trigger at all. CI runs Python 3.12, where the same
+    input raises **`RuntimeError`** ("Too many levels of symbolic links", via
+    `pathlib.check_eloop`), and the suite went red on exactly the test written to
+    cover this. One version is not the behaviour; both are named here because
+    either may be what an adopter has.
+
+    So the clause is reachable, it is pinned by
+    `test_a_symlink_loop_in_the_named_path_yields_no_grant_and_no_crash` on any
+    Python that raises, and the degrade is the module's standing rule: adopter
+    input degrades the report instead of aborting it, since a raise here takes
+    down the whole run. Falling back to the lexical comparison can only
+    under-report a grant — one more advisory line — never invent one.
     """
     if named == target:
         return True
     try:
         return named.resolve() == target.resolve()
-    except OSError:
+    except (OSError, RuntimeError):
         return False
 
 

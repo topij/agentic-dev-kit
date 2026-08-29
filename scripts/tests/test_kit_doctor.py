@@ -6268,13 +6268,18 @@ def test_a_symlink_loop_in_the_named_path_yields_no_grant_and_no_crash(tmp_path)
     """A rule whose path runs through a symlink loop reports `ungranted` and
     does not bring the run down.
 
-    Renamed from `..._degrades_instead_of_raising`, which claimed more than it
-    checks. `Path.resolve` does NOT raise on a loop at the default
-    `strict=False` — measured at Python 3.14.6, it returns the path unresolved,
-    and only `strict=True` raises (errno 62). So this exercises the ordinary
-    not-equal path, NOT `_same_path`'s `except OSError`, and mutating that
-    clause does not fail this test. What it pins is the outcome an operator
-    sees for a pathological path: no grant, no traceback.
+    **Which code path this takes depends on the Python running it, and that is
+    the point rather than a caveat.** At Python 3.14.6 `resolve()` returns a loop
+    path unresolved, so this exercises the ordinary not-equal comparison. At
+    Python 3.12 — what CI runs — the same call raises `RuntimeError` through
+    `pathlib.check_eloop`, so it exercises `_same_path`'s `except` clause
+    instead. This test went red on CI while passing locally for exactly that
+    reason, and it is what established that the clause is reachable at all after
+    a local-only measurement had concluded it was not.
+
+    The assertion is the same either way, which is what makes it worth keeping:
+    whatever `resolve()` does with a pathological path, the operator sees no
+    grant and no traceback.
     """
     root = _fake_repo(tmp_path)
     _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
