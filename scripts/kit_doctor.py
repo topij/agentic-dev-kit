@@ -927,7 +927,15 @@ class Report:
         failing them would be #286's bug in a third place, a healthy adoption
         failing its own gate forever. `unresolvable` is a registration this check
         could not evaluate; reporting that as broken would be claiming a
-        measurement it did not make.
+        measurement it did not make. `ungranted` is omitted for the first of
+        those reasons rather than a new one: an operator who prefers to approve
+        each invocation has wired nothing wrong, so failing them would be the
+        same bug in a fourth place (#606).
+
+        That this list enumerates every state it omits is the property, and
+        `test_dead_registrations_docstring_accounts_for_every_state_it_omits`
+        holds it — so a state added without a sentence here fails that test
+        rather than going silent.
         """
         return [
             r
@@ -2638,6 +2646,18 @@ def render(report: Report) -> str:
         lines.append(
             "    (registrations are hand-written — ./init.sh prints both blocks; "
             "`/hooks` in a session is the authority on what loaded)"
+        )
+    if any(reg.state == "ungranted" for reg in report.registrations):
+        # Its OWN footer rather than a name added to the condition above, which
+        # is what a review lens first proposed. That footer is about hook
+        # registrations and names `/hooks` as the authority — neither is true of
+        # a permissions finding, so sharing it would answer an operator's
+        # question with a fact about a different file. What both footers do share
+        # is the reason they exist: the line above states a gap in a file this
+        # check never writes, so it owes the reader where the fix comes from.
+        lines.append(
+            "    (the cockpit allow-list is hand-written — ./init.sh prints the "
+            "rule for your engines dir; this check never writes it)"
         )
     for doc, rendered in report.narrative_rendered.items():
         # An entry point that is still the KIT's own is a different fact from a

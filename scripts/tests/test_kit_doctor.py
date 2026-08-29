@@ -6082,3 +6082,142 @@ def test_an_empty_overlay_does_not_erase_the_tracked_grant(tmp_path):
     _write(root / ".claude" / "settings.local.json", json.dumps({}))
 
     assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == []
+
+
+def test_an_ungranted_line_carries_its_own_hand_written_footer(tmp_path):
+    """The `ungranted` line states a gap in a file this check never writes, so
+    it owes the reader where the fix comes from.
+
+    Found by a review lens: the line could render alone — hooks fully wired,
+    only the permission rule wrong — with no note that `init.sh` prints the
+    corrected rule. The lens proposed adding `ungranted` to the existing
+    registration footer's condition; that footer names `/hooks` as the
+    authority and is about hook registrations, so this asserts the separate
+    wording instead, and asserts the hook footer is NOT what appears.
+    """
+    root = _fake_repo(tmp_path, engines="scripts/devkit")
+    _write(root / "scripts" / "devkit" / "pr_watch.py", "print('engine')\n")
+    # BOTH runtimes wired, because the hook footer fires on `absent` too and
+    # `.codex/hooks.json` missing is an `absent`. The first version of this test
+    # wired only Claude and failed on exactly that — which is the point: without
+    # a codex registration there is no fixture in which the `ungranted` footer
+    # renders alone, and the negative assertion below would have been vacuous.
+    _write(
+        root / ".codex" / "hooks.json",
+        json.dumps(
+            {
+                "hooks": {
+                    "SessionStart": [
+                        {
+                            "hooks": [
+                                {
+                                    "type": "command",
+                                    "command": 'root="$(git rev-parse --show-toplevel 2>/dev/null)" '
+                                    '|| exit 0; [ -n "$root" ] || exit 0; '
+                                    '[ -z "${JOB_NAME:-}" ] || exit 0; '
+                                    'uv run --script "$root/scripts/devkit/check_doc_budget.py" '
+                                    "--quiet || true",
+                                    "timeout": 15,
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        ),
+    )
+    _write(
+        root / ".claude" / "settings.json",
+        json.dumps(
+            {
+                "permissions": {"allow": []},
+                "hooks": {
+                    "SessionStart": [
+                        {
+                            "hooks": [
+                                {
+                                    "type": "command",
+                                    "command": "uv run --script scripts/devkit/check_doc_budget.py --quiet",
+                                }
+                            ]
+                        }
+                    ]
+                },
+            }
+        ),
+    )
+    statuses = kit_doctor.inspect_registrations(root, "scripts/devkit")
+    report = kit_doctor.Report(
+        kit_version_config=2,
+        kit_version_manifest=2,
+        engines_dir="scripts/devkit",
+        engines_dir_ok=True,
+        hooks_installed=True,
+        narrative_rendered={},
+        registrations=statuses,
+    )
+
+    rendered = kit_doctor.render(report)
+
+    assert "ungranted" in [s.state for s in statuses]
+    assert "the cockpit allow-list is hand-written" in rendered
+    assert "./init.sh prints the rule for your engines dir" in rendered
+    assert "`/hooks` in a session is the authority" not in rendered
+
+
+def test_the_ungranted_footer_is_not_printed_without_an_ungranted_line(tmp_path):
+    """The footer follows the finding. Printed unconditionally it would tell an
+    adopter whose allow-list is correct to go re-read `init.sh`."""
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(root, ["Bash(uv run scripts/pr_watch.py:*)"])
+    report = kit_doctor.Report(
+        kit_version_config=2,
+        kit_version_manifest=2,
+        engines_dir="scripts",
+        engines_dir_ok=True,
+        hooks_installed=True,
+        narrative_rendered={},
+        registrations=kit_doctor.inspect_registrations(root, "scripts"),
+    )
+
+    rendered = kit_doctor.render(report)
+
+    assert "ungranted" not in [s.state for s in report.registrations]
+    assert "the cockpit allow-list is hand-written" not in rendered
+
+
+def test_dead_registrations_docstring_accounts_for_every_state_it_omits(tmp_path):
+    """That docstring's stated purpose is enumerating its omissions ("The
+    omissions are the point"), so a state it never names is a silent one.
+
+    `ungranted` was missing for a round and a review lens caught it. This pins
+    the property rather than the sentence: every state the module can put in a
+    `RegistrationStatus` and that `dead_registrations` filters OUT must appear
+    somewhere in that docstring.
+    """
+    root = _fake_repo(tmp_path)
+    _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
+    _settings_with_allow(root, ["Bash(gh pr view:*)"])
+    _write(root / ".codex" / "hooks.json", "{not json at all")
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    report = kit_doctor.Report(
+        kit_version_config=2,
+        kit_version_manifest=2,
+        engines_dir="scripts",
+        engines_dir_ok=True,
+        hooks_installed=True,
+        narrative_rendered={},
+        registrations=statuses,
+    )
+    docstring = type(report).dead_registrations.__doc__
+    failing = {r.state for r in report.dead_registrations}
+    omitted = {r.state for r in statuses} - failing
+
+    assert omitted, "fixture produced no omitted state, so this asserts nothing"
+    for state in sorted(omitted):
+        assert state in docstring, (
+            f"dead_registrations omits {state!r} without saying why; that "
+            "docstring's whole point is enumerating its omissions"
+        )
