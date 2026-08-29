@@ -1316,9 +1316,28 @@ def _bash_allow_prefixes(document: object) -> list[str] | None:
     `deny` is the absence of a grant — folding either in would make a rule that
     withholds permission read as one that confers it.
 
-    None is the bare-`Bash` case, which grants every command and therefore every
+    None is the whole-tool case, which grants every command and therefore every
     engine. Returning a sentinel rather than a synthetic prefix keeps the caller
     from having to model "matches anything" as a string it then lexes.
+
+    **Which spellings are whole-tool grants was measured, not assumed.** Under
+    `claude -p --restricted --tools Bash --strict-mcp-config --settings <inline>`
+    at Claude Code 2.1.251 on 2026-08-29 — a configuration that gates on `allow`,
+    proved by a control run whose empty allow list refused the probe command and
+    recorded a `permission_denials` entry for it — `Bash` and `Bash(*)` each ran
+    a command no rule named, and `Bash(:*)` did not. `Bash(:*)` is therefore
+    absent from the tuple below, where it was previously asserted alongside the
+    other two.
+
+    Dropping it needs no compensating branch: it still matches
+    `_BASH_PERMISSION_RULE` and contributes the empty prefix, which lexes to no
+    words, and `_grants_invocation` rejects an empty word list. So it grants
+    nothing by the same route any other non-covering rule does.
+
+    An earlier reading of these three came from the **deny** matcher, since
+    headless `-p` gates on `deny` and not on the absence of an `allow`; it
+    disagreed with the measurement above on two of the three, and the reading
+    that survives is the one taken on the side this function is about.
 
     **Only the `:*` form counts, and that is the whole question this function
     answers.** A rule WITHOUT the suffix is an exact command match, not a
@@ -1333,11 +1352,15 @@ def _bash_allow_prefixes(document: object) -> list[str] | None:
 
     A review lens raised it; the measurement above is what settled it, because
     the author's own earlier probe had tested THIS MODULE's behaviour and
-    mistaken it for the client's. **The limit of that measurement, stated
-    because it is not nothing:** it observes the `deny` matcher, since headless
-    `-p` gates on `deny` and not on the absence of an `allow`. `allow` and
-    `deny` share one documented rule grammar, so the same matcher is the
-    reasonable reading — but it is a reading, not a second measurement.
+    mistaken it for the client's. That measurement observed the `deny` matcher,
+    and the same pair has since been re-measured on the `allow` side under the
+    allow-gating configuration named earlier in this docstring, at Claude Code
+    2.1.251 on 2026-08-29: under
+    `Bash(touch ran.marker)`, `touch ran.marker` ran and
+    `touch ran.marker extra.txt` was refused with a `permission_denials` entry,
+    while `Bash(touch:*)` ran the longer form. So the exact-vs-prefix reading
+    holds on the side this function is about, and no longer rests on the two
+    lists sharing a grammar.
     """
     if not isinstance(document, dict):
         return []
@@ -1353,8 +1376,10 @@ def _bash_allow_prefixes(document: object) -> list[str] | None:
             continue
         # A bare tool name is the whole-tool grant, and `Bash(*)` is the same
         # thing spelled with the wildcard. Either one covers every engine, so
-        # there is nothing left to report ungranted.
-        if rule.strip() in ("Bash", "Bash(*)", "Bash(:*)"):
+        # there is nothing left to report ungranted. `Bash(:*)` reads like a
+        # third spelling of the same thing and is not one — see the docstring
+        # for the run that separated them.
+        if rule.strip() in ("Bash", "Bash(*)"):
             return None
         match = _BASH_PERMISSION_RULE.match(rule.strip())
         if match and match.group(2):

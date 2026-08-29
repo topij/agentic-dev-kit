@@ -5852,8 +5852,12 @@ def test_a_double_quoted_project_dir_is_a_grant(tmp_path):
     assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == []
 
 
-@pytest.mark.parametrize("rule", ["Bash", "Bash(*)", "Bash(:*)"])
+@pytest.mark.parametrize("rule", ["Bash", "Bash(*)"])
 def test_a_whole_tool_bash_grant_covers_every_engine(tmp_path, rule):
+    """Both spellings were measured against the client rather than assumed —
+    `_bash_allow_prefixes` names the run. `Bash(:*)` used to be a third case
+    here; it moved to the ungranted test below when the same run showed it
+    grants nothing."""
     root = _fake_repo(tmp_path)
     _write(root / "scripts" / "pr_watch.py", "print('engine')\n")
     _settings_with_allow(root, [rule])
@@ -5867,6 +5871,10 @@ def test_a_whole_tool_bash_grant_covers_every_engine(tmp_path, rule):
         "Bash(uv run scripts/my_pr_watch.py:*)",  # an adopter's own longer name
         "Read(scripts/pr_watch.py)",  # a different tool entirely
         "Bash(uv run scripts/pr_watch.py:*",  # unbalanced — no shell would run it
+        # Reads like a whole-tool grant and measurably is not: under this rule
+        # the client refused a command no other rule named. It reaches here by
+        # contributing an empty prefix, which lexes to no words.
+        "Bash(:*)",
     ],
 )
 def test_a_rule_that_does_not_reach_the_engine_leaves_it_ungranted(tmp_path, rule):
