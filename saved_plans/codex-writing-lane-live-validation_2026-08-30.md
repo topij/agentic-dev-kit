@@ -88,10 +88,8 @@ default remains `read-only`.
 
 ## Verification and hostile mutations
 
-The public CLI owns the promotion check. This command in
-`/Users/topi/Coding/agentic-dev-kit`, using the verifier at source revision
-`bdfd6ee702a630f0575f0c186f51b3bbbcd1810a` on 2026-08-30, returned
-`status: verified`, `promotion: true`, and the claim IDs enumerated above:
+The public CLI owns the promotion check. The reviewer fixes the expected values from
+the review target and authoritative observers before reading the bundle's own labels:
 
 ```text
 UV_CACHE_DIR=/private/tmp/session-start-uv-cache uv run \
@@ -99,6 +97,12 @@ UV_CACHE_DIR=/private/tmp/session-start-uv-cache uv run \
   saved_plans/codex-writing-lane-evidence_2026-08-30/bundle.json \
   --promotion \
   saved_plans/codex-writing-lane-evidence_2026-08-30/promotion.json \
+  --expect-authority docs/agentic-dev-kit/runtime-parity.md \
+  --expect-source-repository https://github.com/topij/agentic-dev-kit \
+  --expect-source-revision bdfd6ee702a630f0575f0c186f51b3bbbcd1810a \
+  --expect-reviewed-head 5c4006d18e65e0443dc7b22f48c099ad07ce1da9 \
+  --expect-runtime codex \
+  --expect-client-version "codex-cli 0.149.1" \
   --json
 ```
 
@@ -106,7 +110,8 @@ The repository suite drives the same public CLI through hostile mutations. It re
 
 - surviving prose or a surviving declared digest when the named artifact is absent or
   altered;
-- a self-consistent bundle whose promotion receipt names another source revision;
+- a self-consistent bundle and promotion receipt relabeled to another source revision,
+  reviewed head, runtime, client, source repository, or capability authority;
 - an ephemeral carrier for an applied-compute claim;
 - a compute-dependent claim that omits the minimal runtime attestation;
 - undeclared artifact neighbors and credential-like JSON fields;
@@ -120,11 +125,9 @@ later artifact loss, mutation, or rebinding makes the repository gate fail.
 After the copied destination verified, the exact local fixture root
 `/private/tmp/adk-codex-writing-20260830` was removed. In
 `/Users/topi/Coding/agentic-dev-kit`, the absence command
-`test ! -e /private/tmp/adk-codex-writing-20260830` followed by the verifier command
-above, using the verifier at source revision
-`bdfd6ee702a630f0575f0c186f51b3bbbcd1810a` on 2026-08-30, returned zero after that
-cleanup. The promotion therefore no longer depends on the local descriptor, rollout,
-auth symlink, caches, or worktrees.
+`test ! -e /private/tmp/adk-codex-writing-20260830` returned zero on 2026-08-30. The
+retained promotion therefore no longer depends on the local descriptor, rollout, auth
+symlink, caches, or worktrees; its independent-binding verification is stamped above.
 
 Deletion of the private synthetic GitHub repository did **not** succeed: GitHub returned
 HTTP 403 because the current credential lacks the `delete_repo` scope. The cockpit did

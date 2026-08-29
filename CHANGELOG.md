@@ -48,7 +48,11 @@ starts.
   `<engine-dir>/verify_live_validation_bundle.py <bundle.json>` verifies the closed,
   redacted retained-artifact contract; `--promotion <promotion.json>` additionally
   binds capability promotion to the manifest digest, source revision, reviewed head,
-  runtime, client and claim IDs, and `--json` returns the machine-readable verdict.**
+  runtime, client and claim IDs, and `--json` returns the machine-readable verdict.
+  Promotion now requires `--expect-authority`, `--expect-source-repository`,
+  `--expect-source-revision`, `--expect-reviewed-head`, `--expect-runtime`, and
+  `--expect-client-version`; source those values independently from the review target
+  and authoritative observers before trusting the bundle's own labels.**
   Copy the engine and `docs/agentic-dev-kit/live-validation-evidence.md` before using
   a live runtime observation to promote parity. Treat exit `0` as verified and exit
   `2` as an invalid bundle or promotion; do not clean up a synthetic fixture until

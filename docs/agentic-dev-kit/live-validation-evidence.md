@@ -12,7 +12,13 @@ boundary:
 
 ```text
 uv run <engine-dir>/verify_live_validation_bundle.py <bundle>/bundle.json \
-  --promotion <bundle>/promotion.json
+  --promotion <bundle>/promotion.json \
+  --expect-authority docs/agentic-dev-kit/runtime-parity.md \
+  --expect-source-repository <repository-url> \
+  --expect-source-revision <full-source-sha> \
+  --expect-reviewed-head <full-reviewed-head-sha> \
+  --expect-runtime <runtime> \
+  --expect-client-version <exact-client-version>
 ```
 
 Verification is necessary, not sufficient. The named redaction reviewer still owns the
@@ -87,8 +93,12 @@ the enforced contract.
 `promotion.json` is a separate, closed receipt. It names `bundle.json`, carries the
 digest of its exact bytes, repeats the source revision, reviewed head, runtime and
 client, names the parity authority being changed, and enumerates the promoted claim
-IDs. The verifier compares every repeated field. This is what refuses a valid bundle
-captured from the wrong source revision or reviewed head.
+IDs. The verifier compares every repeated field and, for promotion, requires the
+reviewer to supply independently selected expected authority, source repository,
+source revision, reviewed head, runtime, and client values. Obtain those expectations
+from the review target and authoritative observer before reading the bundle labels; a
+self-consistent manifest and receipt are not their own trust root. This is what refuses
+a valid-looking pair relabeled to the wrong source revision or reviewed head.
 
 ## Permitted retained artifacts
 
@@ -164,8 +174,10 @@ depend on applied compute may use an ephemeral carrier, but must leave
 4. Re-read and digest the destination bytes. Fill `bundle.json`; never copy a digest
    computed only at the source.
 5. Fill `promotion.json` only for claims the parity authority will actually promote.
-6. Run the verifier with the promotion receipt. Review the retained bytes directly and
-   independently recompute the claim.
+6. Fix the expected authority/source/review/runtime/client values independently from
+   the review target and authoritative observers. Run the verifier with those values
+   and the promotion receipt. Review the retained bytes directly and independently
+   recompute the claim.
 7. Commit and review the bundle with the parity change. The reviewed synthetic/task
    head in the bundle and the reviewed implementation head are distinct when two pull
    requests exist; name both in the narrative instead of substituting one for the other.

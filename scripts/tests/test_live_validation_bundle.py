@@ -22,6 +22,14 @@ from _repo_layout import engine_dir, find_repo_root  # noqa: E402
 ENGINE = engine_dir(Path(__file__).resolve()) / "verify_live_validation_bundle.py"
 SOURCE = "1" * 40
 REVIEWED = "2" * 40
+FIXTURE_EXPECTATIONS = {
+    "authority": "docs/agentic-dev-kit/runtime-parity.md",
+    "source_repository": "https://github.com/example/source",
+    "source_revision": SOURCE,
+    "reviewed_head": REVIEWED,
+    "runtime": "codex",
+    "client_version": "codex-cli example",
+}
 
 
 def _sha(path: Path) -> str:
@@ -126,10 +134,18 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
     return manifest_path, promotion_path
 
 
-def _run(manifest: Path, promotion: Path | None = None) -> subprocess.CompletedProcess[str]:
+def _run(
+    manifest: Path,
+    promotion: Path | None = None,
+    *,
+    expectations: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     argv = [sys.executable, str(ENGINE), str(manifest), "--json"]
     if promotion is not None:
         argv.extend(["--promotion", str(promotion)])
+        bindings = FIXTURE_EXPECTATIONS if expectations is None else expectations
+        for field, value in bindings.items():
+            argv.extend([f"--expect-{field.replace('_', '-')}", value])
     return subprocess.run(argv, capture_output=True, text=True, check=False)
 
 
@@ -166,12 +182,154 @@ def test_prose_or_a_digest_cannot_outlive_the_artifact(tmp_path: Path, mutation:
 
 def test_a_self_consistent_bundle_for_the_wrong_revision_cannot_promote(tmp_path: Path) -> None:
     manifest, promotion = _fixture(tmp_path)
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    manifest_value["source"]["revision"] = "3" * 40
+    _write_json(manifest, manifest_value)
     promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
     promotion_value["source_revision"] = "3" * 40
+    promotion_value["manifest_sha256"] = _sha(manifest)
     _write_json(promotion, promotion_value)
     result = _run(manifest, promotion)
     assert result.returncode == 2
-    assert "source revision does not match" in result.stderr
+    assert "source revision does not match the independent expectation" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["source_revision", "reviewed_head", "runtime", "client_version"],
+)
+def test_promotion_receipt_repeated_fields_must_match_the_manifest(
+    tmp_path: Path,
+    field: str,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
+    if field == "source_revision":
+        promotion_value["source_revision"] = "3" * 40
+    elif field == "reviewed_head":
+        promotion_value["reviewed_head"] = "4" * 40
+    elif field == "runtime":
+        promotion_value["runtime"]["name"] = "claude"
+    else:
+        promotion_value["runtime"]["client_version"] = "codex-cli fabricated"
+    _write_json(promotion, promotion_value)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "does not match the bundle" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    [
+        ("authority", "docs/foreign-authority.md"),
+        ("source_repository", "https://github.com/example/foreign"),
+        ("reviewed_head", "4" * 40),
+        ("runtime", "claude"),
+        ("client_version", "codex-cli fabricated"),
+    ],
+)
+def test_other_self_consistent_promotion_relabeling_is_refused(
+    tmp_path: Path,
+    field: str,
+    replacement: str,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
+    if field == "authority":
+        promotion_value["authority"] = replacement
+    elif field == "source_repository":
+        manifest_value["source"]["repository"] = replacement
+    elif field == "reviewed_head":
+        manifest_value["review"]["head"] = replacement
+        promotion_value["reviewed_head"] = replacement
+    elif field == "runtime":
+        manifest_value["runtime"]["name"] = replacement
+        promotion_value["runtime"]["name"] = replacement
+    else:
+        manifest_value["runtime"]["client_version"] = replacement
+        promotion_value["runtime"]["client_version"] = replacement
+    _write_json(manifest, manifest_value)
+    promotion_value["manifest_sha256"] = _sha(manifest)
+    _write_json(promotion, promotion_value)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert f"promotion {field.replace('_', ' ')}" in result.stderr
+    assert "independent expectation" in result.stderr
+
+
+def test_a_promotion_without_independent_expected_bindings_is_refused(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ENGINE),
+            str(manifest),
+            "--promotion",
+            str(promotion),
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "promotion requires independent expected bindings" in result.stderr
+
+
+def test_json_too_deep_to_parse_uses_the_documented_refusal_exit(tmp_path: Path) -> None:
+    manifest = tmp_path / "bundle.json"
+    manifest.write_text("[" * 200_000 + '"value"' + "]" * 200_000, encoding="utf-8")
+
+    result = _run(manifest)
+
+    assert result.returncode == 2
+    assert "supported JSON nesting depth" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize("field", ["excluded", "evidence", "promoted_claims"])
+def test_malformed_nested_values_use_the_documented_refusal_exit(
+    tmp_path: Path,
+    field: str,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
+    if field == "excluded":
+        manifest_value["redaction"]["excluded"] = [{}]
+    elif field == "evidence":
+        manifest_value["claims"][0]["evidence"] = [{}]
+    else:
+        promotion_value["claims"] = [{}]
+    _write_json(manifest, manifest_value)
+    promotion_value["manifest_sha256"] = _sha(manifest)
+    _write_json(promotion, promotion_value)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "must be a non-empty string" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_credential_pattern_in_manifest_metadata_is_refused(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    manifest_value["source"]["repository"] = (
+        "https://ghp_abcdefghijklmnop@github.com/example/source"
+    )
+    _write_json(manifest, manifest_value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "bundle manifest contains credential-like content" in result.stderr
 
 
 def test_an_ephemeral_carrier_cannot_support_applied_compute(tmp_path: Path) -> None:
@@ -234,7 +392,18 @@ def test_the_promotion_receipt_is_bound_to_the_manifest_bytes(tmp_path: Path) ->
 def test_the_promoted_codex_writing_lane_bundle_remains_recomputable() -> None:
     root = find_repo_root(ENGINE)
     bundle = root / "saved_plans/codex-writing-lane-evidence_2026-08-30"
-    result = _run(bundle / "bundle.json", bundle / "promotion.json")
+    result = _run(
+        bundle / "bundle.json",
+        bundle / "promotion.json",
+        expectations={
+            "authority": "docs/agentic-dev-kit/runtime-parity.md",
+            "source_repository": "https://github.com/topij/agentic-dev-kit",
+            "source_revision": "bdfd6ee702a630f0575f0c186f51b3bbbcd1810a",
+            "reviewed_head": "5c4006d18e65e0443dc7b22f48c099ad07ce1da9",
+            "runtime": "codex",
+            "client_version": "codex-cli 0.149.1",
+        },
+    )
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout) == {
         "bundle_id": "codex-writing-lane-2026-08-30",

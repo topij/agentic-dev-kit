@@ -107,8 +107,9 @@ Client-dependent capability promotion follows
 [`live-validation-evidence.md`](live-validation-evidence.md). A narrative, a digest
 whose named bytes were cleaned up, or a carrier that cannot retain the authoritative
 applied-compute observation stays historical. `verify_live_validation_bundle.py`
-checks the closed bundle and promotion shapes, destination digests, source/review/runtime
-bindings, artifact inventory, redaction backstops, and persistent minimal
+checks the closed bundle and promotion shapes, destination digests, independently
+supplied source/review/runtime promotion expectations, artifact inventory, redaction
+backstops, and persistent minimal
 `turn_context` attestation when a claim depends on model, effort, or cwd. The named
 redaction reviewer and capability reviewer still own semantic minimization and whether
 the retained observers establish the promoted claim.

@@ -18,7 +18,13 @@ Usage:
 
     uv run <engine-dir>/verify_live_validation_bundle.py \
       saved_plans/example-evidence/bundle.json \
-      --promotion saved_plans/example-evidence/promotion.json
+      --promotion saved_plans/example-evidence/promotion.json \
+      --expect-authority docs/agentic-dev-kit/runtime-parity.md \
+      --expect-source-repository https://github.com/example/source \
+      --expect-source-revision <full-source-sha> \
+      --expect-reviewed-head <full-reviewed-head-sha> \
+      --expect-runtime codex \
+      --expect-client-version "codex-cli <version>"
 
 The command exits 0 only when every requested check passes and exits 2 for an
 invalid bundle, promotion receipt, or invocation.
@@ -109,6 +115,11 @@ def _string(value: Any, label: str) -> str:
     return value
 
 
+def _string_list(value: Any, label: str) -> list[str]:
+    items = _list(value, label)
+    return [_string(item, f"{label}[{index}]") for index, item in enumerate(items)]
+
+
 def _exact_keys(value: dict[str, Any], expected: set[str], label: str) -> None:
     actual = set(value)
     if actual != expected:
@@ -122,10 +133,20 @@ def _read_json(path: Path, label: str) -> dict[str, Any]:
         raw = path.read_text(encoding="utf-8")
     except OSError as exc:
         raise BundleError(f"{label} is unreadable: {path}: {exc}") from exc
+    for pattern in _FORBIDDEN_VALUE_PATTERNS:
+        if pattern.search(raw):
+            raise BundleError(f"{label} contains credential-like content: {path}")
     try:
-        return _object(json.loads(raw), label)
+        value = _object(json.loads(raw), label)
     except json.JSONDecodeError as exc:
         raise BundleError(f"{label} is not valid JSON: {path}: {exc}") from exc
+    except RecursionError as exc:
+        raise BundleError(f"{label} exceeds the supported JSON nesting depth: {path}") from exc
+    try:
+        _scan_json_keys(value, label)
+    except RecursionError as exc:
+        raise BundleError(f"{label} exceeds the supported JSON nesting depth: {path}") from exc
+    return value
 
 
 def _safe_relative_path(value: Any, label: str, *, beneath: str | None = None) -> str:
@@ -170,7 +191,16 @@ def _scan_artifact(path: Path, label: str) -> int:
             value = json.loads(text)
         except json.JSONDecodeError as exc:
             raise BundleError(f"{label} is not valid JSON: {path}: {exc}") from exc
-        _scan_json_keys(value, label)
+        except RecursionError as exc:
+            raise BundleError(
+                f"{label} exceeds the supported JSON nesting depth: {path}"
+            ) from exc
+        try:
+            _scan_json_keys(value, label)
+        except RecursionError as exc:
+            raise BundleError(
+                f"{label} exceeds the supported JSON nesting depth: {path}"
+            ) from exc
     return size
 
 
@@ -293,7 +323,7 @@ def validate_bundle(manifest_path: Path) -> dict[str, Any]:
     if redaction["reviewed"] is not True:
         raise BundleError("redaction.reviewed must be true before verification")
     _string(redaction["reviewer"], "redaction.reviewer")
-    excluded = _list(redaction["excluded"], "redaction.excluded")
+    excluded = _string_list(redaction["excluded"], "redaction.excluded")
     if set(excluded) != REQUIRED_EXCLUSIONS or len(excluded) != len(REQUIRED_EXCLUSIONS):
         raise BundleError(
             "redaction.excluded must enumerate every forbidden data category exactly once"
@@ -361,7 +391,7 @@ def validate_bundle(manifest_path: Path) -> dict[str, Any]:
         if not _SLUG.fullmatch(claim_id) or claim_id in claim_ids:
             raise BundleError(f"{label}.id must be a unique lowercase slug")
         claim_ids.add(claim_id)
-        evidence = _list(claim["evidence"], f"{label}.evidence")
+        evidence = _string_list(claim["evidence"], f"{label}.evidence")
         if not evidence or len(set(evidence)) != len(evidence):
             raise BundleError(f"{label}.evidence must contain unique artifact paths")
         for path in evidence:
@@ -382,7 +412,12 @@ def validate_bundle(manifest_path: Path) -> dict[str, Any]:
     return manifest
 
 
-def validate_promotion(promotion_path: Path, manifest_path: Path) -> dict[str, Any]:
+def validate_promotion(
+    promotion_path: Path,
+    manifest_path: Path,
+    *,
+    expected: dict[str, str],
+) -> dict[str, Any]:
     """Validate a capability-promotion receipt against a valid bundle."""
 
     if promotion_path.is_symlink() or not promotion_path.is_file():
@@ -432,13 +467,27 @@ def validate_promotion(promotion_path: Path, manifest_path: Path) -> dict[str, A
     }
     if runtime != expected_runtime:
         raise BundleError("promotion runtime does not match the bundle")
-    promoted_claims = _list(promotion["claims"], "promotion.claims")
+    promoted_claims = _string_list(promotion["claims"], "promotion.claims")
     if not promoted_claims or len(set(promoted_claims)) != len(promoted_claims):
         raise BundleError("promotion.claims must contain unique claim ids")
     available = {claim["id"] for claim in manifest["claims"]}
     unknown = sorted(set(promoted_claims) - available)
     if unknown:
         raise BundleError(f"promotion names claims absent from the bundle: {unknown}")
+
+    actual_binding = {
+        "authority": promotion["authority"],
+        "source_repository": manifest["source"]["repository"],
+        "source_revision": promotion["source_revision"],
+        "reviewed_head": promotion["reviewed_head"],
+        "runtime": runtime["name"],
+        "client_version": runtime["client_version"],
+    }
+    for field, expected_value in expected.items():
+        if actual_binding[field] != expected_value:
+            raise BundleError(
+                f"promotion {field.replace('_', ' ')} does not match the independent expectation"
+            )
     return promotion
 
 
@@ -446,6 +495,27 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("manifest", type=Path, help="path to bundle.json")
     parser.add_argument("--promotion", type=Path, help="promotion receipt to bind and verify")
+    parser.add_argument(
+        "--expect-authority",
+        help="independently selected capability-authority repository path",
+    )
+    parser.add_argument(
+        "--expect-source-repository",
+        help="independently observed source repository identity",
+    )
+    parser.add_argument(
+        "--expect-source-revision",
+        help="independently observed full source Git sha",
+    )
+    parser.add_argument(
+        "--expect-reviewed-head",
+        help="independently observed full reviewed-head Git sha",
+    )
+    parser.add_argument("--expect-runtime", help="independently observed runtime name")
+    parser.add_argument(
+        "--expect-client-version",
+        help="independently observed exact runtime client version",
+    )
     parser.add_argument("--json", action="store_true", help="print the verification result as JSON")
     return parser
 
@@ -455,8 +525,33 @@ def main(argv: list[str] | None = None) -> int:
     try:
         manifest = validate_bundle(args.manifest)
         promoted = None
+        expected = {
+            "authority": args.expect_authority,
+            "source_repository": args.expect_source_repository,
+            "source_revision": args.expect_source_revision,
+            "reviewed_head": args.expect_reviewed_head,
+            "runtime": args.expect_runtime,
+            "client_version": args.expect_client_version,
+        }
         if args.promotion is not None:
-            promoted = validate_promotion(args.promotion, args.manifest)
+            missing = sorted(field for field, value in expected.items() if value is None)
+            if missing:
+                raise BundleError(
+                    "promotion requires independent expected bindings: " + ", ".join(missing)
+                )
+            expected_values = {
+                field: _string(value, f"expected {field}") for field, value in expected.items()
+            }
+            _safe_relative_path(expected_values["authority"], "expected authority")
+            _validate_revision(expected_values["source_revision"], "expected source revision")
+            _validate_revision(expected_values["reviewed_head"], "expected reviewed head")
+            promoted = validate_promotion(
+                args.promotion,
+                args.manifest,
+                expected=expected_values,
+            )
+        elif any(value is not None for value in expected.values()):
+            raise BundleError("expected promotion bindings require --promotion")
     except BundleError as exc:
         print(f"live-validation evidence refused: {exc}", file=sys.stderr)
         return 2
