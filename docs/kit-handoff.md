@@ -14,12 +14,68 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-29 — PR `#637` delivered Phase 5's `#606` cockpit slice: the
-permissions advisory is templated on `paths.engines`, both runtimes drop the
-`SessionStart` matcher, and `kit_doctor` reports an engine no allow rule pre-approves.
-`#606` stays open for one unmeasured assertion the review surfaced.
+Last updated: 2026-08-29 — PR `#639` measured the allow side of the whole-tool `Bash`
+grants and settled the assertion `#637` shipped unstamped: `Bash(:*)` grants nothing and
+left the tuple. `#606` stays open for the rest of its own scope.
 
-## Latest session — 2026-08-29 (cockpit settings policy, in a Claude Code session)
+## Latest session — 2026-08-29 (whole-tool Bash allow grants, in a Claude Code session)
+
+**Theme —** In a Claude Code session, PR `#639` (squash `56c0eb3`) took `#606`'s
+residual: `_bash_allow_prefixes` asserted that `Bash`, `Bash(*)` and `Bash(:*)` each
+grant every command, the one behavioural claim in `#637` that shipped without a stamp.
+
+- **The hard part was the configuration, not the spellings.** Headless `-p` does not
+  gate on the absence of an `allow` rule, so the earlier cockpit probe could only ever
+  reach the deny matcher. `--restricted` ignores the user, project and local settings
+  files, which makes the rule under test the only rule in play; `--tools Bash` leaves
+  the model no non-Bash route to the observable.
+
+- **The control is what makes the readings mean anything.** An empty allow list refused
+  the probe command and the client recorded a `permission_denials` entry for it, so the
+  configuration is *shown* to gate on `allow` rather than assumed to. Two dead ends are
+  worth knowing: redirecting `CLAUDE_CONFIG_DIR` for isolation removes the credentials
+  with the settings, and `Not logged in` scored as a refusal until the harness learned
+  to report it separately.
+
+- **`Bash(:*)` grants nothing, and needed no compensating branch.** It still matches the
+  rule regex, contributes the empty prefix, lexes to no words, and `_grants_invocation`
+  rejects an empty word list. The exact-vs-prefix pair was re-measured on the allow side
+  at the same time, so that claim no longer rests on `allow` and `deny` sharing a
+  grammar. Runs, harness and its hash are in
+  [`claude-bash-allow-grants-live-validation_2026-08-29.md`](../saved_plans/claude-bash-allow-grants-live-validation_2026-08-29.md).
+
+- **The panel found the defect in the fix, not in the change.** CodeRabbit skipped, so
+  the fallback panel carried the review across three rounds. Round 1's adversarial lens
+  re-ran the committed harness against the live client and matched every documented row.
+  Round 2 found that the test *added in round 1* had a docstring naming the wrong
+  mutation — it claimed to pin the match-anything repair, which a sibling test catches,
+  when what it pins is short-circuit resistance. Prose beside a passing test is the
+  shape this repo's own rules are about, and it survived a round.
+
+- **Nothing was filed to the tracker this session.** Both lenses independently reached
+  `scripts/launch_lane.py`'s own `Bash(:*)` classifier, which refuses the rule from a
+  lane profile on its *shape*; this measurement says the client grants nothing under it,
+  so the refusal is more conservative than it needs to be. Neither lens proposed a fix
+  and both called it out of scope, so it is parked in the friction log rather than
+  filed — an occurrence comment on `#631` is available on the operator's go-ahead.
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `061a85c89ae3e97b8b7a3fea033c6794dcc74144` on 2026-08-29 reported one failure,
+  `test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero` —
+  `#393`'s intermittent, in a file this change does not touch — which passed on an
+  isolated re-run at that revision. `uv run --python 3.12 … pytest` at the same revision
+  printed `2091 passed`. Both round-1 lenses independently ran the full suite in their
+  own clones at `d272a5a` and each reported `1 failed, 2089 passed, 1 skipped` with the
+  same test failing — unlike `#637`, where the cockpit and the lenses hit *different*
+  intermittents at the same revision.
+
+▶ Next: `session-start` — `#606` remains open on its own scope, `#621`, `#631` and
+`#633` are untouched, and the friction-log inbox is over its budget with entries from
+today, so the next session has several threads rather than one.
+
+______________________________________________________________________
+
+## Session — 2026-08-29 (cockpit settings policy, in a Claude Code session)
 
 **Theme —** In a Claude Code session, PR `#637` (squash `83b959e`) took Phase 5's
 remaining `#606` slice, on `.claude/settings.json`. Its three questions were answered
@@ -305,49 +361,6 @@ carries every probe command and the observer field it read.
 trust route runs the product default model and effort unless the descriptor's argv
 says otherwise — the wrapper still carries neither control, by design. Then Phase 5
 (`#606`, `#236`, the `#243` narrowing).
-
-______________________________________________________________________
-
-## Session — 2026-08-27 (Codex writing-lane record)
-
-**Theme —** PR `#620` (squash `58c5d7e`) recorded a Codex lane launched through
-`scripts/launch_lane.py` with a fixture-only `workspace-write` declaration. The lane
-performed the scoped write, committed after exact per-command approvals, pushed,
-opened a ready pull request, and received a cockpit `dev_session.sh pr-watch` review
-receipt. No launcher or shipped configuration changed; the shipped Codex approval
-policy remains `read-only`.
-
-- **The denial transport is not parity evidence.** The control lane observed an
-  outside-worktree write denial, protected Git-metadata denials, and a network-blocked
-  push, but Codex returned success and the `last-message-file` receipt terminalized
-  `completed` with `terminal.permission_denials: null`. The record also observed that
-  the exact state root was writable only when user config named it, user Codex config
-  reached both untrusted lanes, and project Codex config did not.
-
-- **The matrix moved only as far as durable evidence permits.** Cleanup removed the
-  fixture receipts, rollouts, and raw captures named by the record's digests. The
-  panel therefore required the capability promotion to be retracted. The record is a
-  bounded historical account, not durable proof of Codex writing-lane parity.
-
-- **Review disposition stayed scoped.** The retracted promotion received a full
-  adversarial/correctness rerun. A later Low record-prose imprecision was logged as an
-  occurrence on `#120`, without changing the reviewed head. The learnings document
-  carries the stamped disposition reading. Filed this session on exact-payload
-  approval: `#621` owns the missing durable-evidence handoff.
-
-- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
-  `37ad8eab0286c45aaf1ab1098e42e1da04561549` on 2026-08-27 printed `1960 passed, 3
-  warnings in 365.20s`; the merged squash is `58c5d7e`.
-
-- **Housekeeping done:** the operator deleted
-  `topij/adk-writing-lane-synthetic-codex-20260827` from the GitHub UI after the
-  session token proved to lack `delete_repo`; `gh repo view` no longer resolves it.
-
-▶ Next: take calibration (`#605`, `#255`): calibrate both runtimes' neutral tiers,
-declare mechanical versus advisory model/effort controls per runtime, and retire the
-unsupported "no per-agent effort" claims. Keep the first real headless task on the
-generalised launcher in the following slice; it has no tracker item, and `#602` is the
-`post-merge-systemize` binding bug.
 
 ______________________________________________________________________
 
