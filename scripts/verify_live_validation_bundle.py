@@ -294,6 +294,53 @@ def _snapshot_sha256(files: dict[str, bytes], directories: set[str]) -> str:
     return digest.hexdigest()
 
 
+def _declared_artifact_paths_for_capture(
+    manifest_path: Path,
+    manifest_bytes: bytes,
+) -> set[str]:
+    """Return the bounded declared artifact set before artifact I/O begins."""
+
+    manifest = _read_json(manifest_path, "bundle manifest", raw=manifest_bytes)
+    _exact_keys(
+        manifest,
+        {
+            "schema_version",
+            "bundle_id",
+            "source",
+            "review",
+            "runtime",
+            "redaction",
+            "artifacts",
+            "claims",
+        },
+        "bundle manifest",
+    )
+    claims = _list(manifest["claims"], "claims")
+    if len(claims) > MAX_ARTIFACT_COUNT:
+        raise BundleError("claims exceeds the claim-count limit")
+    artifacts = _list(manifest["artifacts"], "artifacts")
+    if len(artifacts) > MAX_ARTIFACT_COUNT:
+        raise BundleError("artifacts exceeds the artifact-count limit")
+    declared: set[str] = set()
+    for index, item in enumerate(artifacts):
+        label = f"artifacts[{index}]"
+        record = _object(item, label)
+        _exact_keys(
+            record,
+            {"path", "sha256", "kind", "observer", "capture_request", "captured_on"},
+            label,
+        )
+        relative = _safe_relative_path(
+            record["path"],
+            f"{label}.path",
+            beneath="artifacts",
+        )
+        if relative in declared:
+            raise BundleError(f"duplicate artifact path: {relative}")
+        declared.add(relative)
+    return declared
+
+
 def _capture_bundle_snapshot(
     manifest_path: Path,
     *,
@@ -306,13 +353,19 @@ def _capture_bundle_snapshot(
     files: dict[str, bytes] = {}
     directories = {"artifacts"}
     observed_entries = 0
+    artifact_files: dict[str, tuple[int, str, os.stat_result]] = {}
+    directory_identities: dict[str, tuple[int, os.stat_result]] = {}
+    opened_artifact_directories: list[int] = []
 
-    def capture_artifacts(
+    def inventory_artifacts(
         descriptor: int,
         relative_directory: PurePosixPath,
     ) -> None:
         nonlocal observed_entries
-        before = os.fstat(descriptor)
+        directory_identities[relative_directory.as_posix()] = (
+            descriptor,
+            os.fstat(descriptor),
+        )
         try:
             with os.scandir(descriptor) as iterator:
                 entries = sorted(iterator, key=lambda entry: entry.name)
@@ -344,19 +397,33 @@ def _capture_bundle_snapshot(
                         raise BundleError(
                             f"artifact directory is unreadable: {relative_text}: {exc}"
                         ) from exc
-                    try:
-                        directories.add(relative_text)
-                        capture_artifacts(child, relative)
-                    finally:
-                        os.close(child)
+                    opened_artifact_directories.append(child)
+                    directories.add(relative_text)
+                    inventory_artifacts(child, relative)
                 elif entry.is_file(follow_symlinks=False):
-                    files[relative_text] = _read_regular_at(
+                    try:
+                        initial = os.stat(
+                            entry.name,
+                            dir_fd=descriptor,
+                            follow_symlinks=False,
+                        )
+                    except OSError as exc:
+                        raise BundleError(
+                            f"artifact entry is unreadable: {relative_text}: {exc}"
+                        ) from exc
+                    if not stat.S_ISREG(initial.st_mode):
+                        raise BundleError(
+                            f"artifact tree contains a non-regular entry: {relative_text}"
+                        )
+                    if initial.st_size > MAX_ARTIFACT_BYTES:
+                        raise BundleError(
+                            f"artifact {relative_text} exceeds its byte limit: "
+                            f"{root / relative_text}"
+                        )
+                    artifact_files[relative_text] = (
                         descriptor,
                         entry.name,
-                        f"artifact {relative_text}",
-                        root / relative_text,
-                        limit=MAX_ARTIFACT_BYTES,
-                        observer=observer,
+                        initial,
                     )
                 else:
                     raise BundleError(
@@ -364,11 +431,6 @@ def _capture_bundle_snapshot(
                     )
             except OSError as exc:
                 raise BundleError(f"artifact entry is unreadable: {relative_text}: {exc}") from exc
-        after = os.fstat(descriptor)
-        if _stat_identity(before) != _stat_identity(after):
-            raise BundleError(
-                f"artifact directory changed during snapshot capture: {relative_directory}"
-            )
 
     try:
         root_before = os.fstat(root_descriptor)
@@ -379,6 +441,7 @@ def _capture_bundle_snapshot(
             raise BundleError(f"bundle root is unreadable: {root}: {exc}") from exc
         allowed = {"artifacts", "bundle.json", "promotion.json"}
         seen: set[str] = set()
+        artifacts_descriptor: int | None = None
         for entry in root_entries:
             if any(unicodedata.category(character) == "Cs" for character in entry.name):
                 raise BundleError("bundle root contains a non-UTF-8 entry name")
@@ -396,34 +459,94 @@ def _capture_bundle_snapshot(
                         _directory_open_flags(),
                         dir_fd=root_descriptor,
                     )
-                    try:
-                        capture_artifacts(artifacts_descriptor, PurePosixPath("artifacts"))
-                    finally:
-                        os.close(artifacts_descriptor)
-                elif entry.is_file(follow_symlinks=False):
-                    label = {
-                        "bundle.json": "bundle manifest",
-                        "promotion.json": "promotion receipt",
-                    }[entry.name]
-                    files[entry.name] = _read_regular_at(
-                        root_descriptor,
-                        entry.name,
-                        label,
-                        root / entry.name,
-                        limit=MAX_BUNDLE_BYTES,
-                        observer=observer,
-                    )
-                else:
+                    opened_artifact_directories.append(artifacts_descriptor)
+                elif not entry.is_file(follow_symlinks=False):
                     raise BundleError(f"bundle root entry must be a regular file: {entry.name}")
+                else:
+                    continue
             except OSError as exc:
                 raise BundleError(f"bundle root entry is unreadable: {entry.name}: {exc}") from exc
         missing = {"artifacts", "bundle.json"} - seen
         if missing:
             raise BundleError(f"bundle root is missing required entries: {sorted(missing)}")
+
+        files["bundle.json"] = _read_regular_at(
+            root_descriptor,
+            "bundle.json",
+            "bundle manifest",
+            root / "bundle.json",
+            limit=MAX_BUNDLE_BYTES,
+            observer=observer,
+        )
+        declared_paths = _declared_artifact_paths_for_capture(
+            manifest_path,
+            files["bundle.json"],
+        )
+        envelope_bytes = len(files["bundle.json"])
+        if "promotion.json" in seen:
+            files["promotion.json"] = _read_regular_at(
+                root_descriptor,
+                "promotion.json",
+                "promotion receipt",
+                root / "promotion.json",
+                limit=MAX_BUNDLE_BYTES,
+                observer=observer,
+            )
+            envelope_bytes += len(files["promotion.json"])
+            if envelope_bytes > MAX_BUNDLE_BYTES:
+                raise BundleError("bundle envelope exceeds the bundle byte limit")
+
+        assert artifacts_descriptor is not None
+        inventory_artifacts(artifacts_descriptor, PurePosixPath("artifacts"))
+        actual_paths = set(artifact_files)
+        missing_paths = declared_paths - actual_paths
+        if missing_paths:
+            raise BundleError(
+                f"declared artifact is absent: {sorted(missing_paths)[0]}"
+            )
+        if actual_paths != declared_paths:
+            raise BundleError(
+                "artifact inventory differs: "
+                f"undeclared={sorted(actual_paths - declared_paths)}, "
+                f"missing={sorted(declared_paths - actual_paths)}"
+            )
+        envelope_bytes += sum(initial.st_size for _, _, initial in artifact_files.values())
+        if envelope_bytes > MAX_BUNDLE_BYTES:
+            raise BundleError("bundle envelope exceeds the bundle byte limit")
+
+        for relative_text in sorted(artifact_files):
+            descriptor, name, inventoried = artifact_files[relative_text]
+            try:
+                current = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+            except OSError as exc:
+                raise BundleError(
+                    f"artifact changed after inventory: {root / relative_text}: {exc}"
+                ) from exc
+            if _stat_identity(inventoried) != _stat_identity(current):
+                raise BundleError(
+                    f"artifact changed after inventory: {root / relative_text}"
+                )
+            files[relative_text] = _read_regular_at(
+                descriptor,
+                name,
+                f"artifact {relative_text}",
+                root / relative_text,
+                limit=MAX_ARTIFACT_BYTES,
+                observer=observer,
+            )
+
+        for relative_directory, (descriptor, before) in directory_identities.items():
+            if _stat_identity(before) != _stat_identity(os.fstat(descriptor)):
+                raise BundleError(
+                    "artifact directory changed during snapshot capture: "
+                    f"{relative_directory}"
+                )
         root_after = os.fstat(root_descriptor)
         if _stat_identity(root_before) != _stat_identity(root_after):
             raise BundleError("bundle root changed during snapshot capture")
     finally:
+        for descriptor in reversed(opened_artifact_directories):
+            os.close(descriptor)
         os.close(root_descriptor)
     return BundleSnapshot(
         root=root,

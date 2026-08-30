@@ -50,11 +50,14 @@ object IDs as this shape.
 Verification binds one immutable in-process snapshot, not an atomic state of a mutable
 multi-file directory at process return. The verifier opens every component of the
 bundle-root path relative to an already opened directory descriptor with no-follow
-semantics, retains the bundle-root and artifact-directory descriptors while walking,
-and captures each regular file once through those descriptors. An ancestor rename or
-symlink substitution after its descriptor is opened cannot redirect that capture.
-Directory identity changes during the walk and file identity or metadata changes during
-its read are refused. Every digest and semantic check then uses only the captured bytes.
+semantics and retains the bundle-root and artifact-directory descriptors while
+walking. It captures and parses the bounded manifest first, inventories artifact names
+and metadata through those descriptors, enforces the declared set and aggregate
+envelope, and only then captures each declared regular file once. An ancestor rename
+or symlink substitution after its descriptor is opened cannot redirect that capture.
+Directory identity changes during the walk and file identity or metadata changes from
+inventory through its read are refused. Every digest and semantic check then uses only
+the captured bytes.
 
 The JSON result includes `snapshot_sha256`, a canonical identity an independent reader
 can recompute from the retained bundle. Its input begins with the bytes

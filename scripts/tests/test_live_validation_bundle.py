@@ -2926,7 +2926,7 @@ def test_promotion_bytes_are_bounded_before_parsing(tmp_path: Path) -> None:
     assert "unreadable" not in result.stderr
 
 
-def test_bundle_only_artifact_bytes_are_bounded_by_the_bundle_envelope(
+def test_bundle_only_artifact_bytes_are_bounded_before_artifact_io(
     tmp_path: Path,
 ) -> None:
     manifest, promotion = _fixture(tmp_path)
@@ -2951,11 +2951,31 @@ def test_bundle_only_artifact_bytes_are_bounded_by_the_bundle_envelope(
         )
     _write_json(manifest, value)
     promotion.unlink()
+    artifact_io_marker = tmp_path / "artifact-io-observed"
 
-    result = _run(manifest)
+    result = _run_observed(
+        manifest,
+        None,
+        """\
+import os
+from pathlib import Path
+
+_marker = os.environ["LIVE_EVIDENCE_ARTIFACT_IO_MARKER"]
+
+def observer(event, path):
+    if event == "before-file-read" and "artifacts" in Path(path).parts:
+        with open(_marker, "w", encoding="utf-8") as stream:
+            stream.write(os.fspath(path))
+""",
+        env={
+            **os.environ,
+            "LIVE_EVIDENCE_ARTIFACT_IO_MARKER": str(artifact_io_marker),
+        },
+    )
 
     assert result.returncode == 2
     assert "bundle envelope exceeds the bundle byte limit" in result.stderr
+    assert not artifact_io_marker.exists()
 
 
 def test_promotion_bytes_are_bounded_by_the_bundle_envelope(tmp_path: Path) -> None:
@@ -3004,11 +3024,31 @@ def test_artifact_count_is_bounded_before_artifact_io(tmp_path: Path) -> None:
     ]
     _write_json(manifest, value)
     _refresh_promotion_digest(manifest, promotion)
+    artifact_io_marker = tmp_path / "artifact-io-observed"
 
-    result = _run(manifest, promotion)
+    result = _run_observed(
+        manifest,
+        promotion,
+        """\
+import os
+from pathlib import Path
+
+_marker = os.environ["LIVE_EVIDENCE_ARTIFACT_IO_MARKER"]
+
+def observer(event, path):
+    if event == "before-file-read" and "artifacts" in Path(path).parts:
+        with open(_marker, "w", encoding="utf-8") as stream:
+            stream.write(os.fspath(path))
+""",
+        env={
+            **os.environ,
+            "LIVE_EVIDENCE_ARTIFACT_IO_MARKER": str(artifact_io_marker),
+        },
+    )
 
     assert result.returncode == 2
     assert "artifact-count limit" in result.stderr
+    assert not artifact_io_marker.exists()
 
 
 def test_undeclared_artifact_tree_entries_are_bounded(tmp_path: Path) -> None:

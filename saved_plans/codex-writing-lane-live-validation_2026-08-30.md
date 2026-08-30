@@ -355,6 +355,17 @@ tree rather than the substituted target. These observer tests pass an explicit c
 to the CLI entry point in their child process; they do not install Python startup code
 or alter `PYTHONPATH`.
 
+A fresh adversarial and correctness fallback panel at
+`7079774c2368c50a1241403fe257f937f5042d04` on 2026-08-30 independently reproduced
+that the manifest artifact-count and aggregate-envelope refusals occurred only after
+artifact bytes had already been read. The public count-order test asserted the eventual
+refusal but did not observe artifact I/O, so that head was not review-clean. The
+resulting capture parses the bounded manifest before artifact I/O, inventories the
+declared tree through retained directory descriptors, checks the aggregate envelope
+from retained metadata, and then reads only the exact declared artifact set. The
+promotion-path hostiles now record any attempted artifact read and require no such
+event before either refusal.
+
 The repository suite drives the same public CLI through hostile mutations. It refuses:
 
 - surviving prose or a surviving declared digest when the named artifact is absent or
