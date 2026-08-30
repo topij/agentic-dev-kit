@@ -3,8 +3,9 @@
 The dangerous false-success is a plausible narrative or digest surviving after the
 bytes it names disappeared. These tests therefore drive the public CLI against real
 files. Deterministic mutation tests invoke the same CLI entry point in an isolated
-subprocess and supply only its explicit snapshot observer; they do not replace Python
-startup behavior or validate an internal helper in place of the promotion path.
+subprocess and supply only its explicit snapshot observer or directory-scan factory;
+they do not replace Python startup behavior or validate an internal helper in place of
+the promotion path.
 """
 
 from __future__ import annotations
@@ -479,7 +480,11 @@ module = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = module
 spec.loader.exec_module(module)
 {observer_source}
-raise SystemExit(module.main(sys.argv[1:], snapshot_observer=observer))
+raise SystemExit(module.main(
+    sys.argv[1:],
+    snapshot_observer=observer,
+    **globals().get("_main_kwargs", {{}}),
+))
 """
     return subprocess.run(
         [sys.executable, "-c", runner, *argv],
@@ -489,6 +494,51 @@ raise SystemExit(module.main(sys.argv[1:], snapshot_observer=observer))
         env=env,
         timeout=10,
     )
+
+
+BOUNDED_SCANDIR_SOURCE = """\
+import os
+
+class _BoundedScandir:
+    def __init__(self, context, limit):
+        self._context = context
+        self._limit = limit
+        self._iterator = None
+        self._seen = 0
+
+    def __enter__(self):
+        self._iterator = iter(self._context.__enter__())
+        return self
+
+    def __exit__(self, *args):
+        return self._context.__exit__(*args)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self._seen >= self._limit:
+            raise AssertionError("SCANDIR_CONSUMED_PAST_BOUND")
+        self._seen += 1
+        return next(self._iterator)
+
+_scan_call = 0
+_target_call = int(os.environ["LIVE_EVIDENCE_SCANDIR_TARGET_CALL"])
+_limit = int(os.environ["LIVE_EVIDENCE_SCANDIR_LIMIT"])
+
+def _scandir_factory(descriptor):
+    global _scan_call
+    _scan_call += 1
+    context = os.scandir(descriptor)
+    if _scan_call == _target_call:
+        return _BoundedScandir(context, _limit)
+    return context
+
+def observer(event, path):
+    pass
+
+_main_kwargs = {"scandir_factory": _scandir_factory}
+"""
 
 
 def _refresh_promotion_digest(manifest: Path, promotion: Path) -> None:
@@ -767,7 +817,7 @@ def test_manifest_claim_count_is_bounded_before_claim_validation(tmp_path: Path)
         }
         for index in range(256)
     )
-    manifest_value["claims"][0] = "invalid-before-count-limit"
+    manifest_value["claims"][0] = {"password": "hunter2-secret"}
     _write_json(manifest, manifest_value)
     _refresh_promotion_digest(manifest, promotion)
 
@@ -2415,6 +2465,9 @@ def test_credential_key_variants_are_refused(
     [
         "api key: hunter2-secret\n",
         "OPENAI_API_KEY=placeholder-credential-material\n",
+        '"api_key": "hunter2-secret"\n',
+        "'api_key': 'hunter2-secret'\n",
+        '"password": |\n  hunter2-secret\n',
     ],
 )
 def test_non_json_credential_assignment_variants_are_refused(
@@ -3022,6 +3075,7 @@ def test_artifact_count_is_bounded_before_artifact_io(tmp_path: Path) -> None:
     value["artifacts"] = [
         {**template, "path": f"artifacts/absent-{index}.json"} for index in range(257)
     ]
+    value["artifacts"][0] = "invalid-before-count-limit"
     _write_json(manifest, value)
     _refresh_promotion_digest(manifest, promotion)
     artifact_io_marker = tmp_path / "artifact-io-observed"
@@ -3060,10 +3114,46 @@ def test_undeclared_artifact_tree_entries_are_bounded(tmp_path: Path) -> None:
             encoding="utf-8",
         )
 
-    result = _run(manifest, promotion)
+    result = _run_observed(
+        manifest,
+        promotion,
+        BOUNDED_SCANDIR_SOURCE,
+        env={
+            **os.environ,
+            "LIVE_EVIDENCE_SCANDIR_TARGET_CALL": "2",
+            "LIVE_EVIDENCE_SCANDIR_LIMIT": "513",
+        },
+    )
 
     assert result.returncode == 2
     assert "entry-count limit" in result.stderr
+    assert "SCANDIR_CONSUMED_PAST_BOUND" not in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_undeclared_bundle_root_entries_stop_enumeration(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    for index in range(8):
+        (manifest.parent / f"undeclared-{index}.txt").write_text(
+            "neighbor\n",
+            encoding="utf-8",
+        )
+
+    result = _run_observed(
+        manifest,
+        promotion,
+        BOUNDED_SCANDIR_SOURCE,
+        env={
+            **os.environ,
+            "LIVE_EVIDENCE_SCANDIR_TARGET_CALL": "1",
+            "LIVE_EVIDENCE_SCANDIR_LIMIT": "4",
+        },
+    )
+
+    assert result.returncode == 2
+    assert "bundle root contains an undeclared entry" in result.stderr
+    assert "SCANDIR_CONSUMED_PAST_BOUND" not in result.stderr
+    assert "Traceback" not in result.stderr
 
 
 def test_promotion_manifest_path_must_be_lexically_canonical(tmp_path: Path) -> None:

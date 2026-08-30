@@ -43,6 +43,7 @@ must fit the verifier's declared digit bound; parser ambiguity is not evidence. 
 must supply `--promotion` and every independent expected binding. The byte ceiling
 covers the manifest, receipt, and artifacts, and the artifact- and claim-count
 ceilings apply before per-entry validation or artifact I/O.
+Directory entry ceilings stop iterator consumption before bounded names are sorted.
 This schema version supports Git SHA-1 object-format repositories. Source revisions,
 reviewed heads, and retained Git-proof object IDs are full lowercase SHA-1 object IDs;
 SHA-256 object-format repositories require a later schema rather than relabeling their

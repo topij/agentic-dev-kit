@@ -122,6 +122,11 @@ _FORBIDDEN_ASSIGNMENT_LABEL = (
     r"bearers?|cookies?|credentials?|pass[ \t_-]*phrases?|passwords?|"
     r"secrets?|tokens?)"
 )
+_FORBIDDEN_ASSIGNMENT_KEY = (
+    r"(?P<assignment_quote>[\"']?)"
+    + _FORBIDDEN_ASSIGNMENT_LABEL
+    + r"(?P=assignment_quote)"
+)
 _FORBIDDEN_VALUE_PATTERNS = (
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
     re.compile(r"\bgithub_pat_[A-Za-z0-9_]{12,}\b"),
@@ -132,14 +137,14 @@ _FORBIDDEN_VALUE_PATTERNS = (
     re.compile(r"\bAuthorization\s*:\s*Basic\s+[A-Za-z0-9+/]{8,}=*", re.IGNORECASE),
     re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{20,}\b"),
     re.compile(
-        r"(?<![A-Za-z0-9])" + _FORBIDDEN_ASSIGNMENT_LABEL + r"\s*[:=]\s*"
+        r"(?<![A-Za-z0-9])" + _FORBIDDEN_ASSIGNMENT_KEY + r"\s*[:=]\s*"
         r"(?:![^\s\"']+[ \t]+)*(?:"
         r'\$?"(?:[^"\r\n]|\\\r?\n){6,}"|'
         r"\$?'(?:[^'\r\n]|\\\r?\n){6,}'|[^\s\"\']{6,})",
         re.IGNORECASE,
     ),
     re.compile(
-        r"(?<![A-Za-z0-9])" + _FORBIDDEN_ASSIGNMENT_LABEL + r"\s*:\s*"
+        r"(?<![A-Za-z0-9])" + _FORBIDDEN_ASSIGNMENT_KEY + r"\s*:\s*"
         r"(?:![^\s\"']+[ \t]+)*[|>][0-9+-]{0,2}[^\r\n]*\r?\n"
         r"(?:[ \t]*\r?\n)*[ \t]+[^\r\n]{6,}",
         re.IGNORECASE,
@@ -152,6 +157,7 @@ class BundleError(ValueError):
 
 
 SnapshotObserver = Callable[[str, Path], None]
+ScandirFactory = Callable[[int], Any]
 
 
 @dataclass(frozen=True)
@@ -300,7 +306,12 @@ def _declared_artifact_paths_for_capture(
 ) -> set[str]:
     """Return the bounded declared artifact set before artifact I/O begins."""
 
-    manifest = _read_json(manifest_path, "bundle manifest", raw=manifest_bytes)
+    manifest = _read_json(
+        manifest_path,
+        "bundle manifest",
+        raw=manifest_bytes,
+        scan_content=False,
+    )
     _exact_keys(
         manifest,
         {
@@ -321,6 +332,14 @@ def _declared_artifact_paths_for_capture(
     artifacts = _list(manifest["artifacts"], "artifacts")
     if len(artifacts) > MAX_ARTIFACT_COUNT:
         raise BundleError("artifacts exceeds the artifact-count limit")
+    manifest_text = manifest_bytes.decode("utf-8")
+    _reject_credential_like_text(manifest_text, "bundle manifest", manifest_path)
+    try:
+        _scan_json_content(manifest, "bundle manifest", manifest_path)
+    except RecursionError as exc:
+        raise BundleError(
+            f"bundle manifest exceeds the supported JSON nesting depth: {manifest_path}"
+        ) from exc
     declared: set[str] = set()
     for index, item in enumerate(artifacts):
         label = f"artifacts[{index}]"
@@ -345,6 +364,7 @@ def _capture_bundle_snapshot(
     manifest_path: Path,
     *,
     observer: SnapshotObserver | None = None,
+    scandir_factory: ScandirFactory = os.scandir,
 ) -> BundleSnapshot:
     if manifest_path.name != "bundle.json":
         raise BundleError("bundle manifest must be named bundle.json")
@@ -366,21 +386,24 @@ def _capture_bundle_snapshot(
             descriptor,
             os.fstat(descriptor),
         )
+        entries: list[os.DirEntry[str]] = []
         try:
-            with os.scandir(descriptor) as iterator:
-                entries = sorted(iterator, key=lambda entry: entry.name)
+            with scandir_factory(descriptor) as iterator:
+                for entry in iterator:
+                    observed_entries += 1
+                    if observed_entries > MAX_ARTIFACT_TREE_ENTRIES:
+                        raise BundleError("artifact tree exceeds the entry-count limit")
+                    entries.append(entry)
         except OSError as exc:
             raise BundleError(
                 f"artifact directory is unreadable: {relative_directory}: {exc}"
             ) from exc
+        entries.sort(key=lambda entry: entry.name)
         for entry in entries:
-            observed_entries += 1
             if any(unicodedata.category(character) == "Cs" for character in entry.name):
                 raise BundleError("artifact tree contains a non-UTF-8 entry name")
             relative = relative_directory / entry.name
             relative_text = relative.as_posix()
-            if observed_entries > MAX_ARTIFACT_TREE_ENTRIES:
-                raise BundleError("artifact tree exceeds the entry-count limit")
             if entry.name.startswith("."):
                 raise BundleError(f"artifact tree contains a hidden entry: {relative_text}")
             try:
@@ -434,20 +457,30 @@ def _capture_bundle_snapshot(
 
     try:
         root_before = os.fstat(root_descriptor)
+        allowed = {"artifacts", "bundle.json", "promotion.json"}
+        root_entries: list[os.DirEntry[str]] = []
         try:
-            with os.scandir(root_descriptor) as iterator:
-                root_entries = sorted(iterator, key=lambda entry: entry.name)
+            with scandir_factory(root_descriptor) as iterator:
+                for entry in iterator:
+                    if any(
+                        unicodedata.category(character) == "Cs"
+                        for character in entry.name
+                    ):
+                        raise BundleError("bundle root contains a non-UTF-8 entry name")
+                    if entry.name not in allowed:
+                        raise BundleError(
+                            f"bundle root contains an undeclared entry: {entry.name}"
+                        )
+                    root_entries.append(entry)
+                    if len(root_entries) > len(allowed):
+                        raise BundleError("bundle root exceeds the entry-count limit")
         except OSError as exc:
             raise BundleError(f"bundle root is unreadable: {root}: {exc}") from exc
-        allowed = {"artifacts", "bundle.json", "promotion.json"}
+        root_entries.sort(key=lambda entry: entry.name)
         seen: set[str] = set()
         artifacts_descriptor: int | None = None
         for entry in root_entries:
-            if any(unicodedata.category(character) == "Cs" for character in entry.name):
-                raise BundleError("bundle root contains a non-UTF-8 entry name")
             seen.add(entry.name)
-            if entry.name not in allowed:
-                raise BundleError(f"bundle root contains an undeclared entry: {entry.name}")
             try:
                 if entry.is_symlink():
                     raise BundleError(f"bundle root contains a symlink: {entry.name}")
@@ -635,13 +668,15 @@ def _read_json(
     label: str,
     *,
     raw: bytes,
+    scan_content: bool = True,
 ) -> dict[str, Any]:
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise BundleError(f"{label} is unreadable: {path}: {exc}") from exc
-    _reject_credential_like_text(text, label, path)
-    return _object(_parse_json(text, label, path), label)
+    if scan_content:
+        _reject_credential_like_text(text, label, path)
+    return _object(_parse_json(text, label, path, scan_content=scan_content), label)
 
 
 def _collapse_credential_text(text: str) -> str:
@@ -662,7 +697,13 @@ def _reject_credential_like_text(text: str, label: str, path: Path) -> None:
                 raise BundleError(f"{label} contains credential-like content: {path}")
 
 
-def _parse_json(raw: str, label: str, path: Path) -> Any:
+def _parse_json(
+    raw: str,
+    label: str,
+    path: Path,
+    *,
+    scan_content: bool = True,
+) -> Any:
     def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
         value: dict[str, Any] = {}
         for key, child in pairs:
@@ -701,10 +742,13 @@ def _parse_json(raw: str, label: str, path: Path) -> Any:
         raise BundleError(f"{label} contains an unsupported JSON number: {path}") from exc
     except RecursionError as exc:
         raise BundleError(f"{label} exceeds the supported JSON nesting depth: {path}") from exc
-    try:
-        _scan_json_content(value, label, path)
-    except RecursionError as exc:
-        raise BundleError(f"{label} exceeds the supported JSON nesting depth: {path}") from exc
+    if scan_content:
+        try:
+            _scan_json_content(value, label, path)
+        except RecursionError as exc:
+            raise BundleError(
+                f"{label} exceeds the supported JSON nesting depth: {path}"
+            ) from exc
     return value
 
 
@@ -771,9 +815,20 @@ def _scan_artifact(path: Path, label: str, raw: bytes) -> int:
         text = raw.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise BundleError(f"{label} must be readable UTF-8 text: {path}: {exc}") from exc
-    _reject_credential_like_text(text, label, path)
     if path.suffix == ".json":
-        _parse_json(text, label, path)
+        try:
+            value = _parse_json(text, label, path, scan_content=False)
+        except BundleError:
+            _reject_credential_like_text(text, label, path)
+            raise
+        try:
+            _scan_json_content(value, label, path)
+        except RecursionError as exc:
+            raise BundleError(
+                f"{label} exceeds the supported JSON nesting depth: {path}"
+            ) from exc
+    else:
+        _reject_credential_like_text(text, label, path)
     return len(raw)
 
 
@@ -1611,12 +1666,14 @@ def main(
     argv: list[str] | None = None,
     *,
     snapshot_observer: SnapshotObserver | None = None,
+    scandir_factory: ScandirFactory = os.scandir,
 ) -> int:
     args = _parser().parse_args(argv)
     try:
         snapshot = _capture_bundle_snapshot(
             args.manifest,
             observer=snapshot_observer,
+            scandir_factory=scandir_factory,
         )
         manifest, _, _ = _validate_bundle(args.manifest, snapshot=snapshot)
         promoted = None

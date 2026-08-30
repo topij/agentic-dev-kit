@@ -366,6 +366,18 @@ from retained metadata, and then reads only the exact declared artifact set. The
 promotion-path hostiles now record any attempted artifact read and require no such
 event before either refusal.
 
+A fresh adversarial and correctness fallback panel at
+`74f737a8ceb225fa4a87ba1c6e504ad2e40df0a2` on 2026-08-30 reproduced a quoted YAML
+credential key reaching `status: verified`, root and artifact iterators being fully
+materialized before their entry ceilings, and recursive manifest credential scanning
+preceding top-level claim and artifact counts. The count-order mutation survived the
+drift-excluded behavioral suite, so that head was not review-clean. The resulting
+scanner accepts matching quotes around raw assignment labels, the manifest preflight
+parses without content scanning until its array counts pass, and directory iterators
+stop at the first excess entry before sorting. Promotion-path hostiles pin the quoted
+scalar and block forms, malformed first entries in over-limit arrays, and sentinel
+iterators that raise if either directory scan consumes beyond its ceiling.
+
 The repository suite drives the same public CLI through hostile mutations. It refuses:
 
 - surviving prose or a surviving declared digest when the named artifact is absent or
