@@ -283,6 +283,12 @@ retained bytes are confirmed after the final inventory, the promoted claim is na
 to the forge properties, and the count-order hostile makes an over-limit entry
 malformed. The changed head still requires a fresh complete panel.
 The documented verifier command above in `/Users/topi/Coding/agentic-dev-kit` at
+`823ee30f4df13be211285ed85fedc6244f5d1a44` on 2026-08-30 returned
+`status: verified`, `promotion: true`, and
+`codex-writing-lane-observed-write-and-state`,
+`codex-writing-lane-open-nondraft-clean-private-pr`, and
+`codex-writing-lane-exact-head-review-receipt`.
+The documented verifier command above in `/Users/topi/Coding/agentic-dev-kit` at
 `62a8f372d34fbb9fed6d49abd08d8bc7f477ad6d` on 2026-08-30 returned
 `status: verified`, `promotion: true`, and
 `codex-writing-lane-observed-write-and-state`,
