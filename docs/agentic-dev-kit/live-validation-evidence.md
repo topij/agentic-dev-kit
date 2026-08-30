@@ -216,7 +216,7 @@ YAML-tagged credential scalars, YAML credential block scalars, and common secret
 encodings in raw text and decoded JSON strings as a backstop. It rejects escaped
 Unicode surrogates, then repeats those scans after compatibility normalization and
 removing control, format, and combining-mark characters so an invisible separator
-cannot split a credential marker.
+cannot split a credential marker in either a value or a JSON key.
 `redaction.reviewed: true` records the required semantic review; it is not a claim that
 the scanner can prove absence of every secret.
 

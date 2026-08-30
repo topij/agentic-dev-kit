@@ -73,8 +73,8 @@ starts.
   dependency at the fixture revision. Unknown fields, missing observers,
   YAML-tagged credential scalars, Unicode control or format characters in schema
   string fields, and escaped Unicode surrogates are invalid. Credential scans also
-  remove combining marks after compatibility normalization. A retained
-  `promotion.json`
+  remove combining marks after compatibility normalization in values and JSON keys.
+  A retained `promotion.json`
   requires `--promotion` and all independent expectations; bundle-only verification
   refuses it. A runtime applied-compute object needs an independent expectation only
   when a selected claim depends on it. The declared per-artifact, aggregate,

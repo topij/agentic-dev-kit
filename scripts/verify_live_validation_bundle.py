@@ -241,16 +241,19 @@ def _read_json(
     return _object(_parse_json(raw, label, path), label)
 
 
-def _reject_credential_like_text(text: str, label: str, path: Path) -> None:
-    if any(unicodedata.category(character) == "Cs" for character in text):
-        raise BundleError(f"{label} contains an invalid Unicode surrogate: {path}")
+def _collapse_credential_text(text: str) -> str:
     normalized = unicodedata.normalize("NFKD", text)
-    collapsed = "".join(
+    return "".join(
         character
         for character in normalized
         if unicodedata.category(character) not in {"Cc", "Cf", "Mn", "Mc", "Me"}
     )
-    for candidate in (text, collapsed):
+
+
+def _reject_credential_like_text(text: str, label: str, path: Path) -> None:
+    if any(unicodedata.category(character) == "Cs" for character in text):
+        raise BundleError(f"{label} contains an invalid Unicode surrogate: {path}")
+    for candidate in (text, _collapse_credential_text(text)):
         for pattern in _FORBIDDEN_VALUE_PATTERNS:
             if pattern.search(candidate):
                 raise BundleError(f"{label} contains credential-like content: {path}")
@@ -390,7 +393,8 @@ def _scan_json_content(value: Any, label: str, path: Path) -> None:
     if isinstance(value, dict):
         for key, child in value.items():
             _reject_credential_like_text(str(key), label, path)
-            key_text = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", str(key))
+            key_text = _collapse_credential_text(str(key))
+            key_text = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", key_text)
             key_text = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", key_text)
             normalized_key = re.sub(r"[^A-Za-z0-9]+", "_", key_text)
             if _FORBIDDEN_JSON_KEY.search(normalized_key):

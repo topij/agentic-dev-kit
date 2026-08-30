@@ -216,6 +216,14 @@ drift-excluded suite even though the record said altered tree proofs were refuse
 Public-CLI hostiles now alter retained tree entries under their declared object ID and
 add a valid unreferenced proof tree, pinning both refusals. The changed head still
 requires a fresh complete panel.
+A fresh adversarial lens at `12b6ca54410e0b659ab9fc80a877e7cfd87944de` on
+2026-08-30 demonstrated that a credential-like JSON key split by a Unicode format
+character or written with compatibility characters could pass verification. A
+separately launched correctness lens at the same head showed that the redaction-review
+approval, exact exclusion declaration, and source-proof leaf/blob comparison were not
+behaviorally pinned. Credential-key scanning now uses the normalized collapsed form,
+and public-CLI hostiles pin the redaction gates and a hash-valid proof whose requested
+path points to the wrong blob. The changed head still requires a fresh complete panel.
 The documented verifier command above in `/Users/topi/Coding/agentic-dev-kit` at
 `62a8f372d34fbb9fed6d49abd08d8bc7f477ad6d` on 2026-08-30 returned
 `status: verified`, `promotion: true`, and the claim IDs enumerated above.

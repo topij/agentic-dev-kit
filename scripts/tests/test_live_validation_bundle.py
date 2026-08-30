@@ -1026,6 +1026,79 @@ def test_a_source_digest_git_blob_must_match_its_named_source_file(
     assert "does not match its source-file Git blob" in result.stderr
 
 
+def test_a_valid_source_proof_tree_must_point_to_the_ledger_blob(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+    )
+    foreign_blob = _git_oid("blob", b"print('foreign source')\n")
+    scripts_entries = [
+        {"mode": "100644", "name": "example.py", "oid": foreign_blob},
+    ]
+    scripts_bytes = b"100644 example.py\0" + bytes.fromhex(foreign_blob)
+    scripts_tree = _git_oid("tree", scripts_bytes)
+    root_entries = [{"mode": "40000", "name": "scripts", "oid": scripts_tree}]
+    root_bytes = b"40000 scripts\0" + bytes.fromhex(scripts_tree)
+    root_tree = _git_oid("tree", root_bytes)
+    commit_lines = [
+        f"tree {root_tree}",
+        "author Evidence Fixture <evidence@example.invalid> 0 +0000",
+        "committer Evidence Fixture <evidence@example.invalid> 0 +0000",
+        "",
+        "foreign source fixture",
+    ]
+    revision = _git_oid("commit", ("\n".join(commit_lines) + "\n").encode())
+    artifacts = manifest.parent / "artifacts"
+    proof = artifacts / "source-proof.json"
+    _write_json(
+        proof,
+        {
+            "schema_version": 1,
+            "namespace": "source",
+            "revision": revision,
+            "commit_lines": commit_lines,
+            "trees": [
+                {"oid": root_tree, "entries": root_entries},
+                {"oid": scripts_tree, "entries": scripts_entries},
+            ],
+        },
+    )
+    ledger = artifacts / "source-digests.txt"
+    ledger.write_text(
+        ledger.read_text(encoding="utf-8").replace(SOURCE, revision),
+        encoding="utf-8",
+    )
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    manifest_value["source"]["revision"] = revision
+    for artifact in manifest_value["artifacts"]:
+        if artifact["path"] == "artifacts/source-digests.txt":
+            artifact["sha256"] = _sha(ledger)
+        elif artifact["path"] == "artifacts/source-proof.json":
+            artifact["sha256"] = _sha(proof)
+    _write_json(manifest, manifest_value)
+    promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
+    promotion_value["source_revision"] = revision
+    promotion_value["manifest_sha256"] = _sha(manifest)
+    _write_json(promotion, promotion_value)
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = revision
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 2
+    assert "source Git proof blob differs" in result.stderr
+
+
 def test_a_source_digest_claim_must_link_every_named_source_file(tmp_path: Path) -> None:
     manifest, promotion = _fixture(tmp_path)
     expected_claims = _add_source_ledger(
@@ -1420,6 +1493,38 @@ def test_malformed_nested_values_use_the_documented_refusal_exit(
     assert "Traceback" not in result.stderr
 
 
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ("unreviewed", "redaction.reviewed must be true"),
+        ("missing-exclusion", "must enumerate every forbidden data category"),
+        ("duplicate-exclusion", "must enumerate every forbidden data category"),
+    ],
+)
+def test_required_redaction_approval_and_exclusions_are_refused_when_incomplete(
+    tmp_path: Path,
+    mutation: str,
+    message: str,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    if mutation == "unreviewed":
+        manifest_value["redaction"]["reviewed"] = False
+    elif mutation == "missing-exclusion":
+        manifest_value["redaction"]["excluded"].pop()
+    else:
+        manifest_value["redaction"]["excluded"].append(
+            manifest_value["redaction"]["excluded"][0]
+        )
+    _write_json(manifest, manifest_value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert message in result.stderr
+
+
 @pytest.mark.parametrize("target", ["manifest", "attestation", "promotion"])
 def test_duplicate_json_members_are_refused(tmp_path: Path, target: str) -> None:
     manifest, promotion = _fixture(tmp_path)
@@ -1811,6 +1916,8 @@ def test_credential_pattern_in_manifest_metadata_is_refused(tmp_path: Path) -> N
         "passphrase",
         "pass_phrase",
         "AWSAccessKeyId",
+        "to\u200bken",
+        "\uff50\uff41\uff53\uff53\uff57\uff4f\uff52\uff44",
     ],
 )
 def test_credential_key_variants_are_refused(
