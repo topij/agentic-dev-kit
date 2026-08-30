@@ -18,7 +18,9 @@ uv run <engine-dir>/verify_live_validation_bundle.py <bundle>/bundle.json \
   --expect-source-revision <full-source-sha> \
   --expect-reviewed-head <full-reviewed-head-sha> \
   --expect-runtime <runtime> \
-  --expect-client-version <exact-client-version>
+  --expect-client-version <exact-client-version> \
+  --expect-claim \
+  '{"id":"<claim>","evidence":["artifacts/<file>"],"requires_applied_compute":false}'
 ```
 
 Verification is necessary, not sufficient. The named redaction reviewer still owns the
@@ -101,15 +103,19 @@ leaving its age or provenance to narrative inference.
 The verifier refuses unknown fields so an unimplemented assertion cannot hide beside
 the enforced contract.
 
-`promotion.json` is a separate, closed receipt. It names `bundle.json`, carries the
-digest of its exact bytes, repeats the source revision, reviewed head, runtime and
+`promotion.json` is a separate, closed receipt stored beside the `bundle.json` it
+names; an external receipt cannot replace the bundle's own copy. It carries the digest
+of the manifest's exact bytes, repeats the source revision, reviewed head, runtime and
 client, names the parity authority being changed, and enumerates the promoted claim
 IDs. The verifier compares every repeated field and, for promotion, requires the
 reviewer to supply independently selected expected authority, source repository,
-source revision, reviewed head, runtime, and client values. Obtain those expectations
-from the review target and authoritative observer before reading the bundle labels; a
-self-consistent manifest and receipt are not their own trust root. This is what refuses
-a valid-looking pair relabeled to the wrong source revision or reviewed head.
+source revision, reviewed head, runtime, client, and the complete promoted claim
+objects. Supply each claim with repeatable `--expect-claim` compact JSON, including its
+ordered evidence paths and applied-compute dependency. Obtain those expectations from
+the review target and authoritative observer before reading the bundle labels; a
+self-consistent manifest and receipt are not their own trust root. This refuses a
+valid-looking pair relabeled to the wrong source revision or reviewed head, a claim
+renamed to imply a broader capability, and a claim whose evidence links were thinned.
 
 ## Permitted retained artifacts
 
@@ -128,10 +134,11 @@ verifier admits these kinds:
 Artifacts must be regular UTF-8 text files below `artifacts/`, use a permitted text
 suffix, appear exactly once in the manifest, fit the verifier's declared size bounds,
 and have no undeclared file, directory, special-file, hidden, or unreadable neighbor.
-The verifier walks the directory itself rather than treating an unreadable subtree as
-empty. Symlinks are never evidence: they preserve access to the ephemeral source rather
-than the bytes that must survive it. This prohibition covers every component of the
-bundle and promotion paths, not only the final directory entry.
+The verifier bounds and walks the directory itself rather than treating an unreadable
+subtree as empty. Symlinks are never evidence: they preserve access to the ephemeral
+source rather than the bytes that must survive it. This prohibition covers every
+component of the bundle, artifact, and promotion paths, not only the final directory
+entry; artifact bytes are not opened through an ancestor symlink before refusal.
 
 ## Excluded material and redaction
 
@@ -190,11 +197,11 @@ depend on applied compute may use an ephemeral carrier, but must leave
    request and capture date beside each digest. Fill `bundle.json`; never copy a digest
    computed only at the source.
 5. Fill `promotion.json` only for claims the parity authority will actually promote.
-6. Fix the expected authority/source/review/runtime/client values independently from
-   the review target and authoritative observers. Run the verifier with those values
-   and the promotion receipt. Review the retained bytes directly and independently
-   recompute the claim's semantic relationships rather than treating structural
-   verification as proof of what the retained fields mean.
+6. Fix the expected authority/source/review/runtime/client values and complete claim
+   objects independently from the review target and authoritative observers. Run the
+   verifier with those values and the promotion receipt. Review the retained bytes
+   directly and independently recompute the claim's semantic relationships rather
+   than treating structural verification as proof of what the retained fields mean.
 7. Commit and review the bundle with the parity change. The reviewed synthetic/task
    head in the bundle and the reviewed implementation head are distinct when two pull
    requests exist; name both in the narrative instead of substituting one for the other.

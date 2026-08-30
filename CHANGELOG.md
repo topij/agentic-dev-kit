@@ -51,17 +51,19 @@ starts.
   runtime, client and claim IDs, and `--json` returns the machine-readable verdict.
   Promotion now requires `--expect-authority`, `--expect-source-repository`,
   `--expect-source-revision`, `--expect-reviewed-head`, `--expect-runtime`, and
-  `--expect-client-version`; source those values independently from the review target
-  and authoritative observers before trusting the bundle's own labels.**
+  `--expect-client-version`, plus repeatable `--expect-claim` JSON fixing each claim's
+  ID, evidence paths, and applied-compute dependency; source those values independently
+  from the review target and authoritative observers before trusting the bundle's own
+  labels.**
   Copy the engine and `docs/agentic-dev-kit/live-validation-evidence.md` before using
   a live runtime observation to promote parity. Treat exit `0` as verified and exit
   `2` as an invalid bundle or promotion; duplicate JSON members, decoded credential
   markers, unsupported numbers, symlink traversal, and undeclared, unreadable, or
   non-regular bundle entries are invalid. Artifact records must carry their exact
   capture request and date. A retained `promotion.json` requires `--promotion` and all
-  independent expectations; bundle-only verification refuses it. The declared byte
-  and artifact-count ceilings apply before unbounded input work. Do not clean up a
-  synthetic fixture until the copied destination passes this command.
+  independent expectations; bundle-only verification refuses it. The declared byte,
+  artifact-count, and artifact-tree-entry ceilings apply before unbounded input work.
+  Do not clean up a synthetic fixture until the copied destination passes this command.
 
 ---
 

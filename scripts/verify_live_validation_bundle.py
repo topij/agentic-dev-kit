@@ -24,7 +24,8 @@ Usage:
       --expect-source-revision <full-source-sha> \
       --expect-reviewed-head <full-reviewed-head-sha> \
       --expect-runtime codex \
-      --expect-client-version "codex-cli <version>"
+      --expect-client-version "codex-cli <version>" \
+      --expect-claim '<exact-claim-json>'
 
 The command exits 0 only when every requested check passes and exits 2 for an
 invalid bundle, promotion receipt, or invocation.
@@ -47,6 +48,7 @@ SCHEMA_VERSION = 1
 MAX_ARTIFACT_BYTES = 1_048_576
 MAX_BUNDLE_BYTES = 8_388_608
 MAX_ARTIFACT_COUNT = 256
+MAX_ARTIFACT_TREE_ENTRIES = 512
 MAX_JSON_INTEGER_DIGITS = 4_300
 
 ALLOWED_ARTIFACT_KINDS = frozenset(
@@ -80,7 +82,7 @@ _SLUG = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 _CAPTURE_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _FORBIDDEN_JSON_KEY = re.compile(
     r"(?:^|_)(?:(?:api|access|private)_?keys?|auths?|authentications?|"
-    r"authorizations?|bearers?|cookies?|credentials?|passphrases?|passwords?|"
+    r"authorizations?|bearers?|cookies?|credentials?|pass_?phrases?|passwords?|"
     r"secrets?|tokens?)(?:$|_)",
     re.IGNORECASE,
 )
@@ -91,6 +93,13 @@ _FORBIDDEN_VALUE_PATTERNS = (
     re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{16,}\b"),
     re.compile(r"\bBearer\s+[A-Za-z0-9._~+/-]{12,}=*", re.IGNORECASE),
     re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"),
+    re.compile(r"\bAuthorization\s*:\s*Basic\s+[A-Za-z0-9+/]{8,}=*", re.IGNORECASE),
+    re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{20,}\b"),
+    re.compile(
+        r"\b(?:aws_?secret_?access_?key|password|pass_?phrase|api_?key|"
+        r"access_?token|secret|token)\s*[:=]\s*[^\s\"']{6,}",
+        re.IGNORECASE,
+    ),
 )
 
 
@@ -267,7 +276,7 @@ def _reject_symlink_traversal(path: Path, label: str) -> None:
     lexical = Path(os.path.abspath(path))
     try:
         resolved = path.resolve(strict=True)
-    except OSError as exc:
+    except (OSError, RuntimeError) as exc:
         raise BundleError(f"{label} is unreadable: {path}: {exc}") from exc
     if lexical != resolved:
         raise BundleError(f"{label} path must not traverse a symlink: {path}")
@@ -280,11 +289,15 @@ def _artifact_inventory(
     files: set[str] = set()
     directories = {artifact_root.relative_to(bundle_root).as_posix()}
     pending = [artifact_root]
+    observed_entries = 0
     while pending:
         current = pending.pop()
         try:
             with os.scandir(current) as entries:
                 for entry in entries:
+                    observed_entries += 1
+                    if observed_entries > MAX_ARTIFACT_TREE_ENTRIES:
+                        raise BundleError("artifact tree exceeds the entry-count limit")
                     path = Path(entry.path)
                     relative = path.relative_to(bundle_root).as_posix()
                     if entry.name.startswith("."):
@@ -505,6 +518,7 @@ def validate_bundle(manifest_path: Path) -> dict[str, Any]:
         if capture_date > date.today():
             raise BundleError(f"{label}.captured_on must not be in the future")
         path = bundle_root / rel
+        _reject_symlink_traversal(path, label)
         if path.is_symlink() or not path.is_file():
             raise BundleError(f"declared artifact is absent or not a regular file: {rel}")
         total_bytes += _file_size(path, label, limit=MAX_ARTIFACT_BYTES)
@@ -578,6 +592,7 @@ def validate_promotion(
     manifest_path: Path,
     *,
     expected: dict[str, str],
+    expected_claims: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """Validate a capability-promotion receipt against a valid bundle."""
 
@@ -586,6 +601,10 @@ def validate_promotion(
         raise BundleError(
             f"promotion receipt must be a regular file, not a symlink: {promotion_path}"
         )
+    if promotion_path.name != "promotion.json" or (
+        promotion_path.parent.resolve() != manifest_path.parent.resolve()
+    ):
+        raise BundleError("promotion receipt must be the bundle's own promotion.json")
     promotion = _read_json(promotion_path, "promotion receipt")
     _exact_keys(
         promotion,
@@ -607,6 +626,8 @@ def validate_promotion(
     ):
         raise BundleError("promotion schema_version differs from the bundle contract")
     rel_manifest = _safe_relative_path(promotion["manifest"], "promotion.manifest")
+    if rel_manifest != "bundle.json":
+        raise BundleError("promotion receipt must name bundle.json in its own directory")
     resolved_manifest = (promotion_path.parent / rel_manifest).resolve()
     if resolved_manifest != manifest_path.resolve():
         raise BundleError("promotion receipt names a different bundle manifest")
@@ -650,6 +671,10 @@ def validate_promotion(
     unknown = sorted(set(promoted_claims) - available)
     if unknown:
         raise BundleError(f"promotion names claims absent from the bundle: {unknown}")
+    if manifest["claims"] != expected_claims:
+        raise BundleError("bundle claims do not match the independent expectation")
+    if promoted_claims != [claim["id"] for claim in expected_claims]:
+        raise BundleError("promotion claims do not match the independent expectation")
 
     actual_binding = {
         "authority": promotion["authority"],
@@ -692,6 +717,15 @@ def _parser() -> argparse.ArgumentParser:
         "--expect-client-version",
         help="independently observed exact runtime client version",
     )
+    parser.add_argument(
+        "--expect-claim",
+        action="append",
+        default=[],
+        help=(
+            "repeatable compact JSON object fixing one promoted claim's id, evidence, "
+            "and requires_applied_compute value independently of the bundle"
+        ),
+    )
     parser.add_argument("--json", action="store_true", help="print the verification result as JSON")
     return parser
 
@@ -711,6 +745,8 @@ def main(argv: list[str] | None = None) -> int:
         }
         if args.promotion is not None:
             missing = sorted(field for field, value in expected.items() if value is None)
+            if not args.expect_claim:
+                missing.append("claims")
             if missing:
                 raise BundleError(
                     "promotion requires independent expected bindings: " + ", ".join(missing)
@@ -721,16 +757,42 @@ def main(argv: list[str] | None = None) -> int:
             _safe_relative_path(expected_values["authority"], "expected authority")
             _validate_revision(expected_values["source_revision"], "expected source revision")
             _validate_revision(expected_values["reviewed_head"], "expected reviewed head")
+            if len(args.expect_claim) > MAX_ARTIFACT_COUNT:
+                raise BundleError("expected claims exceeds the claim-count limit")
+            expected_claims: list[dict[str, Any]] = []
+            expected_claim_ids: set[str] = set()
+            for index, raw_claim in enumerate(args.expect_claim):
+                label = f"expected claims[{index}]"
+                if len(raw_claim.encode("utf-8")) > MAX_ARTIFACT_BYTES:
+                    raise BundleError(f"{label} exceeds the byte limit")
+                claim = _object(
+                    _parse_json(raw_claim, label, Path("<command-line>")),
+                    label,
+                )
+                _exact_keys(claim, {"id", "evidence", "requires_applied_compute"}, label)
+                claim_id = _string(claim["id"], f"{label}.id")
+                if not _SLUG.fullmatch(claim_id) or claim_id in expected_claim_ids:
+                    raise BundleError(f"{label}.id must be a unique lowercase slug")
+                expected_claim_ids.add(claim_id)
+                evidence = _string_list(claim["evidence"], f"{label}.evidence")
+                if not evidence or len(evidence) != len(set(evidence)):
+                    raise BundleError(f"{label}.evidence must contain unique artifact paths")
+                for path in evidence:
+                    _safe_relative_path(path, f"{label}.evidence", beneath="artifacts")
+                if not isinstance(claim["requires_applied_compute"], bool):
+                    raise BundleError(f"{label}.requires_applied_compute must be boolean")
+                expected_claims.append(claim)
             promoted = validate_promotion(
                 args.promotion,
                 args.manifest,
                 expected=expected_values,
+                expected_claims=expected_claims,
             )
         elif (args.manifest.parent / "promotion.json").exists():
             raise BundleError(
                 "a retained promotion.json requires --promotion and independent expected bindings"
             )
-        elif any(value is not None for value in expected.values()):
+        elif any(value is not None for value in expected.values()) or args.expect_claim:
             raise BundleError("expected promotion bindings require --promotion")
     except BundleError as exc:
         print(f"live-validation evidence refused: {exc}", file=sys.stderr)

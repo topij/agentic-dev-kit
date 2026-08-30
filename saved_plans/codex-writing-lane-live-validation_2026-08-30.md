@@ -107,22 +107,27 @@ UV_CACHE_DIR=/private/tmp/session-start-uv-cache uv run \
   --expect-reviewed-head 5c4006d18e65e0443dc7b22f48c099ad07ce1da9 \
   --expect-runtime codex \
   --expect-client-version "codex-cli 0.149.1" \
+  --expect-claim '{"evidence":["artifacts/runtime-attestation.json","artifacts/descriptor.json","artifacts/launcher-receipt.json","artifacts/filesystem-readback.txt","artifacts/git-readback.txt","artifacts/source-digests.txt"],"id":"codex-writing-lane-scoped-write-and-state","requires_applied_compute":true}' \
+  --expect-claim '{"evidence":["artifacts/runtime-attestation.json","artifacts/descriptor.json","artifacts/launcher-receipt.json","artifacts/final-message.txt","artifacts/forge-readback.json","artifacts/git-readback.txt","artifacts/source-digests.txt"],"id":"codex-writing-lane-ready-private-pr","requires_applied_compute":true}' \
+  --expect-claim '{"evidence":["artifacts/forge-readback.json","artifacts/review-receipt.json"],"id":"codex-writing-lane-exact-head-review-receipt","requires_applied_compute":false}' \
+  --expect-claim '{"evidence":["artifacts/client-version.txt","artifacts/runtime-attestation.json"],"id":"codex-writing-lane-applied-compute","requires_applied_compute":true}' \
   --json
 ```
 
-That command in the `<kit-checkout>`, using the verifier at
-`1927b6e7f3c07b4991db6902fd090a5c191c0410` on 2026-08-30, returned
-`status: verified`, `promotion: true`, and the claim IDs enumerated above. The first
-review pass had shown that comparing only the manifest and receipt let a
-self-consistently relabeled pair pass; the independent expectation arguments above are
-the resulting trust root.
+The independent reviewer runs that command against the committed verifier and records
+its revision, date, and actual result before promotion. The first review pass had shown
+that comparing only the manifest and receipt let a
+self-consistently relabeled pair pass; a later hostile pass also showed that preserving
+a claim ID while thinning its artifact links remained self-consistent. The independent
+binding and complete claim-object arguments above are the resulting trust root.
 
 The repository suite drives the same public CLI through hostile mutations. It refuses:
 
 - surviving prose or a surviving declared digest when the named artifact is absent or
   altered;
 - a self-consistent bundle and promotion receipt relabeled to another source revision,
-  reviewed head, runtime, client, source repository, or capability authority;
+  reviewed head, runtime, client, source repository, capability authority, claim ID, or
+  thinner claim-to-artifact relationship;
 - an ephemeral carrier for an applied-compute claim;
 - a compute-dependent claim that omits the minimal runtime attestation;
 - a retained runtime attestation that disagrees with any applied-compute binding;
@@ -130,16 +135,18 @@ The repository suite drives the same public CLI through hostile mutations. It re
   files, a symlinked bundle root, duplicate JSON members, credential-key spelling
   variants, secret markers hidden by JSON escaping, invalid UTF-8, non-finite or
   oversized JSON numbers, non-string persistence values, non-integer schema versions,
-  and unreadable artifact bytes without a traceback;
+  symlink loops, and unreadable artifact bytes without a traceback;
 - a promotion receipt whose manifest digest no longer matches.
 - a retained promotion receipt omitted from the invocation, an ancestor-symlinked
-  bundle path, unstamped artifact metadata, common passphrase and AWS credential
-  shapes, duplicate artifact paths, and an input envelope beyond the declared bounds.
+  bundle or artifact path, unstamped artifact metadata, common passphrase, Basic-auth,
+  Slack-token, password-assignment, and AWS credential shapes, duplicate artifact
+  paths, and an input envelope or artifact tree beyond the declared bounds.
 
 The kit-only structural control re-verifies this tracked bundle and promotion receipt.
-The claim-semantic control independently asserts the load-bearing relationships
-among the descriptor, launcher, final-message digest, destination read-backs, private
-ready pull request, exact-head review receipt, and persistent runtime attestation.
+The claim-semantic control independently asserts the complete claim-to-artifact map and
+the load-bearing relationships among the client-version capture, descriptor, launcher,
+final-message digest, destination and source-digest read-backs, private ready pull
+request, exact-head review receipt, and persistent runtime attestation.
 
 ## Cleanup result
 
