@@ -1,0 +1,18 @@
+Completed without merging.
+
+- Branch: `dev/write`
+- Commit: `5c4006d18e65e0443dc7b22f48c099ad07ce1da9` — `feat: add durable Codex writing-lane note`
+- PR: https://github.com/topij/adk-codex-writing-evidence-20260830/pull/1 — open and ready
+- Changed path: `notes/codex-writing-lane.md`
+- Patch read-back:
+
+```text
+Codex writing lane
+durable evidence validation
+```
+
+- State-root read-back: `durable evidence state\n`
+
+`gh pr checks 1` at that revision on `2026-08-30` reported no checks. The terminal PR-watch poll reported `converged: true`, `all_green: true`, and no review comments. It remained non-mergeable because independent-review evidence was absent and the merge-only rollup settling gate had not elapsed; no wait or merge was attempted.
+
+Observed permissions behavior: sandboxed Git-index and local remote-ref writes were initially denied because worktree metadata is outside the writable root. Scoped escalation was approved. The ready assertion also needed approved access to the external `uv` cache. The push itself reached GitHub before the local ref-update denial; the approved retry confirmed it was up to date.

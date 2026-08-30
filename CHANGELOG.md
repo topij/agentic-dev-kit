@@ -42,6 +42,60 @@ starts.
 
 ---
 
+## #651 — 2026-08-30
+
+- **ADDED (engine CLI surface) —
+  `<engine-dir>/verify_live_validation_bundle.py <bundle.json>` verifies the closed,
+  redacted retained-artifact contract; `--promotion <promotion.json>` additionally
+  binds capability promotion to the manifest digest, source revision, review
+  repository, reviewed head, redaction reviewer, complete runtime object and claim
+  IDs, and `--json` returns the machine-readable verdict.
+  Promotion now requires `--expect-authority`, `--expect-source-repository`,
+  `--expect-source-revision`, `--expect-review-repository`,
+  `--expect-reviewed-head`, `--expect-redaction-reviewer`, `--expect-runtime`,
+  `--expect-client-version`, and `--expect-session-persistence`, plus repeatable
+  `--expect-claim` JSON fixing each claim's ID, evidence paths, and applied-compute
+  dependency. A promoted applied-compute claim
+  additionally requires `--expect-applied-compute` with its complete independently
+  observed object; source every expectation from the review target and authoritative
+  observers before trusting the bundle's own labels.**
+  Copy the engine and `docs/agentic-dev-kit/live-validation-evidence.md` before using
+  a live runtime observation to promote parity. Treat exit `0` as verified and exit
+  `2` as an invalid bundle or promotion; duplicate JSON members, decoded credential
+  markers, unsupported numbers, symlink traversal, and undeclared, unreadable, or
+  non-regular bundle entries are invalid. Artifact records must carry their exact
+  capture request and UTC date. Digest, scanning, parsing, source-proof, and promotion
+  checks use one descriptor-relative, no-follow byte snapshot. The `--json` result now
+  includes `snapshot_sha256`; retain it with the verification observation and require a
+  later run against the retained bundle to reproduce it. The verifier does not claim an
+  atomic mutable-directory state at process return, so run it only with no concurrent
+  writer. A file changed during its descriptor read or a directory changed during
+  snapshot capture is refused, and an ancestor substitution cannot redirect already
+  opened directory descriptors.
+  Every `runtime-attestation` has
+  the documented closed shape and runtime-session observer even when a promoted claim
+  does not depend on applied compute. A `source-digest` ledger used by a promoted claim must
+  begin with the manifest's source revision and be accompanied by the exact
+  `source-file` bytes it names plus `source-git-proof` commit/tree metadata that
+  recomputes each mandatory Git blob's membership in that revision. Every such ledger
+  must retain source-revision bytes and their proof; a fixture-base header and proof
+  are supplementary, and the fixture proof must also prove every retained source
+  dependency at the fixture revision. Unknown fields, missing observers,
+  YAML-tagged credential scalars, Unicode control or format characters in schema
+  string fields, and escaped Unicode surrogates are invalid. Credential scans also
+  remove combining marks after compatibility normalization in values and JSON keys.
+  A retained `promotion.json`
+  requires `--promotion` and all independent expectations; bundle-only verification
+  refuses it. A runtime applied-compute object needs an independent expectation only
+  when a selected claim depends on it. The declared per-artifact, aggregate,
+  artifact-count, claim-count, and artifact-tree-entry ceilings apply before unbounded
+  input work.
+  This schema version accepts Git SHA-1 object-format repositories; source revisions,
+  reviewed heads, and Git-proof object IDs must use the full lowercase SHA-1 form.
+  Do not clean up a synthetic fixture until the copied destination passes this command.
+
+---
+
 ## #649 — 2026-08-29
 
 - **CHANGED (gate semantics) — behavioral changes to the profile named by

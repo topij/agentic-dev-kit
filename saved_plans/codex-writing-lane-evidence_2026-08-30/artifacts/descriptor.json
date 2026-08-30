@@ -1,0 +1,17 @@
+{
+  "base": "main",
+  "base_oid": "83d3b623305a691dd874df44ca92270daa62ade9",
+  "branch": "dev/write",
+  "descriptor_id": "ec07f5b3-14fb-4203-8e82-9ef62bfde785",
+  "expires_at": "2026-08-29T22:57:27.674451Z",
+  "issued_at": "2026-08-29T22:42:27.674451Z",
+  "lane_oid": "83d3b623305a691dd874df44ca92270daa62ade9",
+  "merge_class": "operator",
+  "origin_url": "git@github.com:topij/adk-codex-writing-evidence-20260830.git",
+  "repo_root": "/private/tmp/adk-codex-writing-20260830/repo",
+  "runtime": "codex",
+  "schema_version": 1,
+  "scope": "write",
+  "state_root": "/private/tmp/adk-codex-writing-20260830/sessions/write/state",
+  "worktree": "/private/tmp/adk-codex-writing-20260830/sessions/write/wt"
+}

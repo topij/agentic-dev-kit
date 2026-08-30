@@ -1,0 +1,33 @@
+{
+  "pull_request": {
+    "base": "main",
+    "commits": [
+      {
+        "headline": "feat: add durable Codex writing-lane note",
+        "oid": "5c4006d18e65e0443dc7b22f48c099ad07ce1da9"
+      }
+    ],
+    "files": [
+      {
+        "additions": 2,
+        "change_type": "ADDED",
+        "deletions": 0,
+        "path": "notes/codex-writing-lane.md"
+      }
+    ],
+    "head": "dev/write",
+    "head_oid": "5c4006d18e65e0443dc7b22f48c099ad07ce1da9",
+    "is_draft": false,
+    "merge_state": "CLEAN",
+    "number": 1,
+    "state": "OPEN",
+    "url": "https://github.com/topij/adk-codex-writing-evidence-20260830/pull/1"
+  },
+  "repository": {
+    "default_branch": "main",
+    "is_private": true,
+    "name": "topij/adk-codex-writing-evidence-20260830",
+    "url": "https://github.com/topij/adk-codex-writing-evidence-20260830",
+    "visibility": "PRIVATE"
+  }
+}

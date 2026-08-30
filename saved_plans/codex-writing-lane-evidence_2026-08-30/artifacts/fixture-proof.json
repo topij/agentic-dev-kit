@@ -1,0 +1,78 @@
+{
+  "commit_lines": [
+    "tree b6194910066708083b5bfa9f03c11883136d40f2",
+    "parent bdfd6ee702a630f0575f0c186f51b3bbbcd1810a",
+    "author Topi Järvinen <topi.jarvinen@gmail.com> 1788043308 +0300",
+    "committer Topi Järvinen <topi.jarvinen@gmail.com> 1788043308 +0300",
+    "",
+    "chore: configure Codex writing-lane fixture"
+  ],
+  "namespace": "fixture",
+  "revision": "83d3b623305a691dd874df44ca92270daa62ade9",
+  "schema_version": 1,
+  "trees": [
+    {
+      "entries": [
+        {"mode": "40000", "name": ".agents", "oid": "e78540ef2bf2ba62f81100a2a76686ceb46d3888"},
+        {"mode": "40000", "name": ".claude", "oid": "351bc0140f6e5f82a622cdf9267ac7bfef3d3eef"},
+        {"mode": "100644", "name": ".coderabbit.yaml", "oid": "86308c608f61efdbdeaba4273661685a1a3a59c1"},
+        {"mode": "40000", "name": ".codex", "oid": "58f49deb25491f8fd94a04c6a879d96523a52e06"},
+        {"mode": "40000", "name": ".github", "oid": "1988467b011ab83b799a331865d65684519bd8be"},
+        {"mode": "100644", "name": ".gitignore", "oid": "206981b9f199a53d7e755bf38368ecb5a7227e71"},
+        {"mode": "100644", "name": "AGENTS.md", "oid": "6066a38487d6c472929bbfecd2e1a605e0b43de9"},
+        {"mode": "100644", "name": "CHANGELOG.md", "oid": "6b8b05587acb81e19e2f9abc93ba8f90191023f1"},
+        {"mode": "100644", "name": "CLAUDE.md", "oid": "0777198cf6458d51ee32843d07b0900b2239d9a0"},
+        {"mode": "100644", "name": "LICENSE", "oid": "ae34caf988733ff31bc04c7fc77abf7da70b55ee"},
+        {"mode": "100644", "name": "Makefile", "oid": "53bb71d9d32b4f601258850bac3fdf8d56c16465"},
+        {"mode": "100644", "name": "PRINCIPLES.md", "oid": "5ddd8e14a984d680d79de4ade460afffc40a4da6"},
+        {"mode": "100644", "name": "README.md", "oid": "b54c1c5bf6ceb2f942dc8ce3a1183b3b8f2971bd"},
+        {"mode": "40000", "name": "config", "oid": "d2ab313e27b71ff2151902555ff36f168fdce9d3"},
+        {"mode": "40000", "name": "docs", "oid": "b44581356037fe5e3eed44ef3295f3a9d756ad82"},
+        {"mode": "100755", "name": "init.sh", "oid": "ac59adcfc1c5b9cfef51bfc001e7e4899001077b"},
+        {"mode": "100644", "name": "kit-manifest.json", "oid": "b579fb055ecadee812b7cfc7cb3c6ea22109e459"},
+        {"mode": "100644", "name": "ruff.toml", "oid": "f8f90fbd82e17e62a8a9a3b5be1ef73d4cfa8258"},
+        {"mode": "40000", "name": "saved_plans", "oid": "8b28f34918c4ed5d0230da870030fedcea697300"},
+        {"mode": "40000", "name": "scripts", "oid": "3243d0012e632243f1359d20695b3ed23a930c0d"}
+      ],
+      "oid": "b6194910066708083b5bfa9f03c11883136d40f2"
+    },
+    {
+      "entries": [
+        {"mode": "100644", "name": "claude-lane-settings.json", "oid": "9ec92ad04d6866e99607e91beb930161c7064d16"},
+        {"mode": "100644", "name": "dev-model.yaml", "oid": "e6829036c661e3535dcf24a574575cb866896258"}
+      ],
+      "oid": "d2ab313e27b71ff2151902555ff36f168fdce9d3"
+    },
+    {
+      "entries": [
+        {"mode": "100755", "name": "archive_plan_sessions.py", "oid": "b9e585da8dc9305f696276e2726e7b00855538f5"},
+        {"mode": "100755", "name": "check_doc_budget.py", "oid": "c1b97f726b89746cf6919de45d045d0e4f61bb65"},
+        {"mode": "100755", "name": "check_memory_budget.py", "oid": "1967f83458122a443e75d3297f359c9cdfc05aa4"},
+        {"mode": "100644", "name": "conftest.py", "oid": "ce8d8494efc88ce6eda8ba474c69cb277682a562"},
+        {"mode": "100755", "name": "dev_session.sh", "oid": "011a6a1102705f2c9255a086d9b78a8def341964"},
+        {"mode": "40000", "name": "hooks", "oid": "8ea28403a3052fb82787eef945c3af3ce3b63c01"},
+        {"mode": "100755", "name": "kit_doctor.py", "oid": "03e61bd09507c3c8893b64c6734c91705a5d9751"},
+        {"mode": "100755", "name": "launch_lane.py", "oid": "43f71791b519ac3d479f74099769f893a50fb585"},
+        {"mode": "40000", "name": "lib", "oid": "995b11f8a961b6cdcc37161f3209afd5b4ad8af8"},
+        {"mode": "100644", "name": "panel_prompt.py", "oid": "6a600234e7084d42620ff52793a46b2fb2bc04fb"},
+        {"mode": "100755", "name": "pr_watch.py", "oid": "0b6b6b1de7416322abb18995d3f555ec699d59a4"},
+        {"mode": "100755", "name": "reconcile_sessions.sh", "oid": "f0e43c5995fc2fe3203a58793615281b249f33a6"},
+        {"mode": "100755", "name": "run_installed_tests.py", "oid": "f0442d1b4fa563eb522be51e817bc234e0946f89"},
+        {"mode": "40000", "name": "tests", "oid": "06d84650a6c1093b6a3568766dfd080a9b635d70"},
+        {"mode": "100644", "name": "verify_live_validation_bundle.py", "oid": "30d67e6c59deb0ae4e3c3370582acc1999da6164"}
+      ],
+      "oid": "3243d0012e632243f1359d20695b3ed23a930c0d"
+    },
+    {
+      "entries": [
+        {"mode": "100644", "name": "atomic_write.py", "oid": "12f7994088ab66a22c6f8f3bfa37c0c80414c141"},
+        {"mode": "100644", "name": "devmodel_config.py", "oid": "51d86a0bbb7b312ca1db4aa0c2e4f8a66c729030"},
+        {"mode": "100644", "name": "kitconfig.py", "oid": "499ddcd2f7be6b3d78ef9dab1a108fb0ffbf5cf1"},
+        {"mode": "100644", "name": "repo_root.sh", "oid": "ba0c2e0f2a1b99de58872f4fdd6cc7f2a2279063"},
+        {"mode": "100644", "name": "runtime_adapters.py", "oid": "cd4b74ebe2e57fec07fd6d73135be39249420d13"},
+        {"mode": "40000", "name": "state_paths", "oid": "8570a470ce366535983d3ccd3eced799d90d496a"}
+      ],
+      "oid": "995b11f8a961b6cdcc37161f3209afd5b4ad8af8"
+    }
+  ]
+}

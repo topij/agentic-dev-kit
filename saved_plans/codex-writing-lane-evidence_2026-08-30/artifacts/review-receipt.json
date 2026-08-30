@@ -1,0 +1,35 @@
+{
+  "poll": {
+    "checks": {
+      "all_green": true,
+      "pending": 0,
+      "total": 0
+    },
+    "converged": true,
+    "head": "5c4006d18e65e0443dc7b22f48c099ad07ce1da9",
+    "is_draft": false,
+    "merge_blockers": [],
+    "merge_state": "CLEAN",
+    "mergeable": true,
+    "pr": 1,
+    "review_evidence": {
+      "head": "5c4006d18e65e0443dc7b22f48c099ad07ce1da9",
+      "lenses": [
+        "correctness"
+      ],
+      "route": "receipt",
+      "source": "fallback:codex",
+      "valid": true
+    },
+    "state": "OPEN",
+    "url": "https://github.com/topij/adk-codex-writing-evidence-20260830/pull/1"
+  },
+  "receipt": {
+    "head": "5c4006d18e65e0443dc7b22f48c099ad07ce1da9",
+    "lenses": [
+      "correctness"
+    ],
+    "recorded_at": "2026-08-29T22:49:11.879292+00:00",
+    "source": "fallback:codex"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "authority": "docs/agentic-dev-kit/runtime-parity.md",
+  "claims": [
+    "codex-writing-lane-observed-write-and-state",
+    "codex-writing-lane-open-nondraft-clean-private-pr",
+    "codex-writing-lane-exact-head-review-receipt"
+  ],
+  "manifest": "bundle.json",
+  "manifest_sha256": "ead37a95d5321ecf294c7158388ac14b98f5314fb312cb33fb5d9a50d1182b0b",
+  "redaction_reviewer": "codex-cockpit-gpt-5-6-sol-max",
+  "review_repository": "https://github.com/topij/adk-codex-writing-evidence-20260830",
+  "reviewed_head": "5c4006d18e65e0443dc7b22f48c099ad07ce1da9",
+  "runtime": {
+    "applied_compute": null,
+    "client_version": "codex-cli 0.149.1",
+    "name": "codex",
+    "session_persistence": "persistent"
+  },
+  "schema_version": 1,
+  "source_revision": "bdfd6ee702a630f0575f0c186f51b3bbbcd1810a"
+}

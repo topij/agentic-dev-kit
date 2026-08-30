@@ -1,0 +1,58 @@
+{
+  "descriptor_id": "ec07f5b3-14fb-4203-8e82-9ef62bfde785",
+  "observed": {
+    "argv": [
+      "/opt/homebrew/bin/codex",
+      "exec",
+      "--sandbox",
+      "workspace-write",
+      "--cd",
+      "/private/tmp/adk-codex-writing-20260830/sessions/write/wt",
+      "--output-last-message",
+      "/private/tmp/adk-codex-writing-20260830/sessions/write/launch-final-ec07f5b3-14fb-4203-8e82-9ef62bfde785.txt",
+      "-"
+    ],
+    "base": "main",
+    "base_oid": "83d3b623305a691dd874df44ca92270daa62ade9",
+    "branch": "dev/write",
+    "git_top": "/private/tmp/adk-codex-writing-20260830/sessions/write/wt",
+    "lane_oid": "83d3b623305a691dd874df44ca92270daa62ade9",
+    "merge_class": "operator",
+    "origin_url": "git@github.com:topij/adk-codex-writing-evidence-20260830.git",
+    "repo_root": "/private/tmp/adk-codex-writing-20260830/repo",
+    "repository_overrides_present": [],
+    "scope": "write",
+    "state_root": "/private/tmp/adk-codex-writing-20260830/sessions/write/state",
+    "worktree": "/private/tmp/adk-codex-writing-20260830/sessions/write/wt"
+  },
+  "request": {
+    "approval_policy": {
+      "argv": [
+        "--sandbox",
+        "workspace-write"
+      ],
+      "declared": "workspace-write"
+    },
+    "configured_command": [
+      "/opt/homebrew/bin/codex",
+      "exec"
+    ],
+    "runtime": "codex",
+    "transports": {
+      "final_text": "last-message-file",
+      "prompt": "stdin-dash",
+      "worktree": "cd-flag"
+    }
+  },
+  "schema_version": 1,
+  "status": "completed",
+  "terminal": {
+    "error": null,
+    "final_text_sha256": "56c7748b3099da9282dde6c13e202b529740274577aa44ba4baaea8440051ca0",
+    "final_text_transport": "last-message-file",
+    "finished_at": "2026-08-29T22:48:04.231937Z",
+    "permission_denials": null,
+    "returncode": 0,
+    "signal": null
+  }
+}
