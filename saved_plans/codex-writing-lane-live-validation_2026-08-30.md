@@ -177,7 +177,7 @@ receipt. Bidirectional source-evidence closure, ordinary-observer and nested-sch
 hostiles, and credential scanning after control/format removal are the resulting
 corrections; the changed head still requires a fresh complete panel.
 That command in `/Users/topi/Coding/agentic-dev-kit`, using the verifier at
-`99233e7ce074a04d8efb67bff98b010e652eca62` on 2026-08-30, returned
+`3e3e8bde6915b66af75ff2e3c60b252fdb61c964` on 2026-08-30, returned
 `status: verified`, `promotion: true`, and the claim IDs enumerated above.
 
 The repository suite drives the same public CLI through hostile mutations. It refuses:
