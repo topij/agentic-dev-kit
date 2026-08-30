@@ -196,7 +196,27 @@ bound the run artifacts to their UTC dates, recomputes the descriptor, launcher,
 review-receipt dates from retained timestamps, pins the attestation metadata guards,
 and scopes the CHANGELOG statement to schema strings. The changed head still requires
 a fresh complete panel.
-That command in `/Users/topi/Coding/agentic-dev-kit`, using the verifier at
+A fresh correctness lens at `d08b282f89d499d16db509507aaf229726f52f99` on
+2026-08-30 found that the fixture proof did not establish that the retained launcher
+sources were present in the executed fixture revision, the semantic control did not
+bind the authoritative ready/settled fields, and the source-ledger capture-date guard
+was not mutation-pinned. A separately launched adversarial lens at the same head
+demonstrated that the manifest accepted a claim array beyond the declared ceiling and
+that the retained-promotion omission guard killed its hostile mutation, then stopped
+under its security-content filter while probing Unicode redaction boundaries and
+produced no receipt. Fixture-revision proof of every retained execution dependency,
+direct semantic assertions for the forge and review-poll outcomes, capture-date and
+claim-bound hostiles, escaped-surrogate refusal, and credential scanning after Unicode
+compatibility normalization are the resulting corrections. The changed head still
+requires a fresh complete panel.
+The documented verifier command above in `/Users/topi/Coding/agentic-dev-kit` at
+`62a8f372d34fbb9fed6d49abd08d8bc7f477ad6d` on 2026-08-30 returned
+`status: verified`, `promotion: true`, and the claim IDs enumerated above.
+`UV_CACHE_DIR=/private/tmp/adk-651-uv-cache UV_PYTHON=3.12 make test` in that
+directory at the same revision and date reported `2256 passed, 3 warnings in
+368.47s`.
+An earlier run of that command in `/Users/topi/Coding/agentic-dev-kit`, using the
+verifier at
 `d276f80de1368b46149e26d1f29eb41485c180de` on 2026-08-30, returned
 `status: verified`, `promotion: true`, and the claim IDs enumerated above.
 

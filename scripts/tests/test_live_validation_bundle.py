@@ -243,7 +243,7 @@ CODEX_WRITING_EXPECTED_ARTIFACT_SHA256 = {
     "artifacts/execution-source-digests.txt": "5d2696ba86165f940cf5ab4e5426bbd7f05ad75e2efe9e92ef432903e7ca78ef",
     "artifacts/filesystem-readback.txt": "ae6b54246ec52ac4dfd8079ea44a19499f5966887f5c0673084cf8e6df38dbf0",
     "artifacts/final-message.txt": "56c7748b3099da9282dde6c13e202b529740274577aa44ba4baaea8440051ca0",
-    "artifacts/fixture-proof.json": "0ccf1c16d740c09ca6841e8a3f74dc3f3f09c4ada5f26268c74f238aed507440",
+    "artifacts/fixture-proof.json": "a9be47ffe03aa319dc059fd9df1b210ef6d1ae684eeea460c021695d8e45e7ed",
     "artifacts/fixture/config/dev-model.yaml": "d4cb774d636655c2c572aed4341c773ae057d09f444494f4b54a56a513035393",
     "artifacts/forge-readback.json": "d6fb6505b19a522d9cc6718d7c09a4510b3e96bbf0ef554a8fa9f63d5910a6c6",
     "artifacts/git-readback.txt": "7767f7e2a40d17c61ec34ce205943a8414eb07810be28414bd50c35f68b47029",
@@ -527,6 +527,176 @@ def test_a_source_digest_and_its_named_source_file_can_promote(tmp_path: Path) -
     result = _run(manifest, promotion, expected_claims=expected_claims)
 
     assert result.returncode == 0, result.stderr
+
+
+def test_a_fixture_proof_must_bind_retained_execution_sources(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+    )
+    artifacts = manifest.parent / "artifacts"
+    fixture_bytes = b"parallel:\n  fixture: true\n"
+    fixture_file = artifacts / "fixture/config/dev-model.yaml"
+    fixture_file.parent.mkdir(parents=True)
+    fixture_file.write_bytes(fixture_bytes)
+    fixture_blob = _git_oid("blob", fixture_bytes)
+    config_tree_entries = [
+        {"mode": "100644", "name": "dev-model.yaml", "oid": fixture_blob},
+    ]
+    config_tree_bytes = b"100644 dev-model.yaml\0" + bytes.fromhex(fixture_blob)
+    config_tree = _git_oid("tree", config_tree_bytes)
+    wrong_scripts_tree = "9" * 40
+    root_tree_entries = [
+        {"mode": "40000", "name": "config", "oid": config_tree},
+        {"mode": "40000", "name": "scripts", "oid": wrong_scripts_tree},
+    ]
+    root_tree_bytes = (
+        b"40000 config\0"
+        + bytes.fromhex(config_tree)
+        + b"40000 scripts\0"
+        + bytes.fromhex(wrong_scripts_tree)
+    )
+    root_tree = _git_oid("tree", root_tree_bytes)
+    fixture_commit_lines = [
+        f"tree {root_tree}",
+        f"parent {SOURCE}",
+        "author Evidence Fixture <evidence@example.invalid> 1 +0000",
+        "committer Evidence Fixture <evidence@example.invalid> 1 +0000",
+        "",
+        "changed fixture config",
+    ]
+    fixture_revision = _git_oid(
+        "commit",
+        ("\n".join(fixture_commit_lines) + "\n").encode(),
+    )
+    fixture_proof = artifacts / "fixture-proof.json"
+    _write_json(
+        fixture_proof,
+        {
+            "schema_version": 1,
+            "namespace": "fixture",
+            "revision": fixture_revision,
+            "commit_lines": fixture_commit_lines,
+            "trees": [
+                {"oid": root_tree, "entries": root_tree_entries},
+                {"oid": config_tree, "entries": config_tree_entries},
+            ],
+        },
+    )
+    ledger = artifacts / "source-digests.txt"
+    ledger.write_text(
+        ledger.read_text(encoding="utf-8").replace(
+            "source proof: artifacts/source-proof.json\n",
+            "source proof: artifacts/source-proof.json\n"
+            f"fixture base revision: {fixture_revision}\n"
+            "fixture proof: artifacts/fixture-proof.json\n",
+        )
+        + f"{hashlib.sha256(fixture_bytes).hexdigest()}  "
+        f"fixture/config/dev-model.yaml  git-blob:{fixture_blob}\n",
+        encoding="utf-8",
+    )
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    next(
+        artifact
+        for artifact in manifest_value["artifacts"]
+        if artifact["path"] == "artifacts/source-digests.txt"
+    )["sha256"] = _sha(ledger)
+    manifest_value["artifacts"].extend(
+        [
+            {
+                "capture_request": f"git cat-file commit/tree proof for {fixture_revision}",
+                "captured_on": "2026-08-30",
+                "path": "artifacts/fixture-proof.json",
+                "sha256": _sha(fixture_proof),
+                "kind": "source-git-proof",
+                "observer": "git-object-source-readback",
+            },
+            {
+                "capture_request": (
+                    f"git show {fixture_revision}:config/dev-model.yaml"
+                ),
+                "captured_on": "2026-08-30",
+                "path": "artifacts/fixture/config/dev-model.yaml",
+                "sha256": hashlib.sha256(fixture_bytes).hexdigest(),
+                "kind": "source-file",
+                "observer": "retained-git-object-bytes",
+            },
+        ]
+    )
+    manifest_value["claims"][0]["evidence"].extend(
+        [
+            "artifacts/fixture-proof.json",
+            "artifacts/fixture/config/dev-model.yaml",
+        ]
+    )
+    _write_json(manifest, manifest_value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(
+        manifest,
+        promotion,
+        expected_claims=manifest_value["claims"],
+    )
+
+    assert result.returncode == 2
+    assert "omits tree" in result.stderr
+    assert "fixture/scripts/example.py" in result.stderr
+
+
+def test_a_source_ledger_capture_date_must_match_its_artifact_record(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+    )
+    ledger = manifest.parent / "artifacts/source-digests.txt"
+    ledger.write_text(
+        ledger.read_text(encoding="utf-8").replace(
+            "source proof: artifacts/source-proof.json\n",
+            "source proof: artifacts/source-proof.json\ncaptured on: 2026-08-29\n",
+        ),
+        encoding="utf-8",
+    )
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    next(
+        artifact
+        for artifact in manifest_value["artifacts"]
+        if artifact["path"] == "artifacts/source-digests.txt"
+    )["sha256"] = _sha(ledger)
+    _write_json(manifest, manifest_value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion, expected_claims=expected_claims)
+
+    assert result.returncode == 2
+    assert "capture date differs from its artifact record" in result.stderr
+
+
+def test_manifest_claim_count_is_bounded_before_claim_validation(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    manifest_value["claims"].extend(
+        {
+            "id": f"bounded-claim-{index}",
+            "evidence": ["artifacts/forge-readback.json"],
+            "requires_applied_compute": False,
+        }
+        for index in range(256)
+    )
+    _write_json(manifest, manifest_value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "claims exceeds the claim-count limit" in result.stderr
 
 
 def test_a_self_consistently_relabelled_source_revision_is_refused(tmp_path: Path) -> None:
@@ -1508,8 +1678,14 @@ def test_json_escaping_cannot_hide_a_credential_value(
 
 @pytest.mark.parametrize(
     "control",
-    ["\u0085", "\u200b", "\u202e"],
-    ids=["nel", "zero-width-space", "right-to-left-override"],
+    ["\u0085", "\u034f", "\u200b", "\u202e", "\ufe0f"],
+    ids=[
+        "nel",
+        "combining-grapheme-joiner",
+        "zero-width-space",
+        "right-to-left-override",
+        "variation-selector",
+    ],
 )
 def test_unicode_controls_cannot_split_a_credential_marker(
     tmp_path: Path,
@@ -1527,6 +1703,24 @@ def test_unicode_controls_cannot_split_a_credential_marker(
 
     assert result.returncode == 2
     assert "credential-like content" in result.stderr
+
+
+def test_an_escaped_unicode_surrogate_is_refused_without_a_traceback(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    artifact = manifest.parent / "artifacts/forge-readback.json"
+    _write_json(artifact, {"note": "invalid-\ud800-scalar"})
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    value["artifacts"][1]["sha256"] = _sha(artifact)
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "invalid Unicode surrogate" in result.stderr
+    assert "Traceback" not in result.stderr
 
 
 def test_credential_pattern_in_manifest_metadata_is_refused(tmp_path: Path) -> None:
@@ -2227,6 +2421,8 @@ def test_the_promoted_codex_writing_lane_claims_remain_independently_recomputabl
     forge = json.loads((artifacts / "forge-readback.json").read_text(encoding="utf-8"))
     review = json.loads((artifacts / "review-receipt.json").read_text(encoding="utf-8"))
     attestation = json.loads((artifacts / "runtime-attestation.json").read_text(encoding="utf-8"))
+    source_proof = json.loads((artifacts / "source-proof.json").read_text(encoding="utf-8"))
+    fixture_proof = json.loads((artifacts / "fixture-proof.json").read_text(encoding="utf-8"))
 
     reviewed_head = manifest["review"]["head"]
     assert manifest["source"] == {
@@ -2372,6 +2568,7 @@ def test_the_promoted_codex_writing_lane_claims_remain_independently_recomputabl
     assert launcher["terminal"]["final_text_sha256"] == _sha(artifacts / "final-message.txt")
     assert forge["repository"]["is_private"] is True
     assert forge["repository"]["visibility"] == "PRIVATE"
+    assert forge["repository"]["default_branch"] == descriptor["base"]
     assert forge["repository"]["name"] == "topij/adk-codex-writing-evidence-20260830"
     assert forge["repository"]["url"] == (
         "https://github.com/topij/adk-codex-writing-evidence-20260830"
@@ -2382,6 +2579,7 @@ def test_the_promoted_codex_writing_lane_claims_remain_independently_recomputabl
     )
     assert forge["pull_request"]["state"] == "OPEN"
     assert forge["pull_request"]["is_draft"] is False
+    assert forge["pull_request"]["merge_state"] == "CLEAN"
     assert forge["pull_request"]["head_oid"] == reviewed_head
     assert forge["pull_request"]["head"] == descriptor["branch"]
     assert forge["pull_request"]["base"] == descriptor["base"]
@@ -2397,16 +2595,36 @@ def test_the_promoted_codex_writing_lane_claims_remain_independently_recomputabl
             "path": "notes/codex-writing-lane.md",
         }
     ]
-    assert review["receipt"]["head"] == reviewed_head
-    assert review["poll"]["head"] == reviewed_head
-    assert review["poll"]["pr"] == forge["pull_request"]["number"]
-    assert review["poll"]["url"] == forge["pull_request"]["url"]
-    assert review["poll"]["review_evidence"] == {
+    assert forge["pull_request"]["commits"] == [
+        {
+            "headline": "feat: add durable Codex writing-lane note",
+            "oid": reviewed_head,
+        }
+    ]
+    assert review["receipt"] == {
         "head": reviewed_head,
         "lenses": ["correctness"],
-        "route": "receipt",
+        "recorded_at": "2026-08-29T22:49:11.879292+00:00",
         "source": "fallback:codex",
-        "valid": True,
+    }
+    assert review["poll"] == {
+        "checks": {"all_green": True, "pending": 0, "total": 0},
+        "converged": True,
+        "head": reviewed_head,
+        "is_draft": False,
+        "merge_blockers": [],
+        "merge_state": "CLEAN",
+        "mergeable": True,
+        "pr": forge["pull_request"]["number"],
+        "review_evidence": {
+            "head": reviewed_head,
+            "lenses": ["correctness"],
+            "route": "receipt",
+            "source": "fallback:codex",
+            "valid": True,
+        },
+        "state": "OPEN",
+        "url": forge["pull_request"]["url"],
     }
     final_message = (artifacts / "final-message.txt").read_text(encoding="utf-8")
     assert f"- Branch: `{descriptor['branch']}`" in final_message
@@ -2466,6 +2684,21 @@ d4cb774d636655c2c572aed4341c773ae057d09f444494f4b54a56a513035393  fixture/config
 4ab496661883d8f4ad590a6612a48b31f8cbf770283bb09794096149276634e6  source/scripts/lib/kitconfig.py  git-blob:499ddcd2f7be6b3d78ef9dab1a108fb0ffbf5cf1
 980cbf5596cea67033a5dd02d53630f2a92c24afd693ba7727d5fc50303ff555  source/scripts/lib/repo_root.sh  git-blob:ba0c2e0f2a1b99de58872f4fdd6cc7f2a2279063
 """
+    assert source_proof["revision"] == manifest["source"]["revision"]
+    assert fixture_proof["revision"] == descriptor["base_oid"]
+    assert fixture_proof["revision"] == launcher["observed"]["base_oid"]
+    assert fixture_proof["commit_lines"][1] == (
+        f"parent {manifest['source']['revision']}"
+    )
+    source_root = {
+        entry["name"]: (entry["mode"], entry["oid"])
+        for entry in source_proof["trees"][0]["entries"]
+    }
+    fixture_root = {
+        entry["name"]: (entry["mode"], entry["oid"])
+        for entry in fixture_proof["trees"][0]["entries"]
+    }
+    assert fixture_root["scripts"] == source_root["scripts"]
     fixture_config = (artifacts / "fixture/config/dev-model.yaml").read_text(
         encoding="utf-8"
     )

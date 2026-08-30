@@ -111,9 +111,10 @@ checks the closed bundle and promotion shapes, destination digests, independentl
 supplied source/review/redaction/runtime/applied-compute and complete claim-object
 promotion expectations, artifact inventory, capture request/date stamps, bounded input
 envelopes and trees, redaction backstops, and persistent minimal `turn_context`
-attestation when a claim depends on model, effort, or cwd. The tracked semantic control
-adds a path-to-digest trust root outside the bundle, exact fixture-source relationships,
-and claim-specific observer relationships. The named
+attestation when a claim depends on model, effort, or cwd. For a fixture ledger, the
+verifier also walks every retained source dependency at the fixture revision. The
+tracked semantic control adds a path-to-digest trust root outside the bundle, fixes the
+fixture identity, and asserts claim-specific observer relationships. The named
 redaction reviewer and capability reviewer still own semantic minimization and whether
 the retained observers establish the promoted claim; a structurally valid bundle is
 not a substitute for that claim-specific recomputation.

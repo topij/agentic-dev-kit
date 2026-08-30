@@ -182,6 +182,8 @@ def _list(value: Any, label: str) -> list[Any]:
 def _string(value: Any, label: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise BundleError(f"{label} must be a non-empty string")
+    if any(unicodedata.category(character) == "Cs" for character in value):
+        raise BundleError(f"{label} must not contain Unicode surrogates")
     if any(unicodedata.category(character) in {"Cc", "Cf"} for character in value):
         raise BundleError(f"{label} must not contain control characters")
     return value
@@ -190,6 +192,8 @@ def _string(value: Any, label: str) -> str:
 def _git_text_line(value: Any, label: str) -> str:
     if not isinstance(value, str):
         raise BundleError(f"{label} must be a string")
+    if any(unicodedata.category(character) == "Cs" for character in value):
+        raise BundleError(f"{label} must not contain Unicode surrogates")
     if any(unicodedata.category(character) in {"Cc", "Cf"} for character in value):
         raise BundleError(f"{label} must not contain control characters")
     return value
@@ -238,10 +242,13 @@ def _read_json(
 
 
 def _reject_credential_like_text(text: str, label: str, path: Path) -> None:
+    if any(unicodedata.category(character) == "Cs" for character in text):
+        raise BundleError(f"{label} contains an invalid Unicode surrogate: {path}")
+    normalized = unicodedata.normalize("NFKD", text)
     collapsed = "".join(
         character
-        for character in text
-        if unicodedata.category(character) not in {"Cc", "Cf"}
+        for character in normalized
+        if unicodedata.category(character) not in {"Cc", "Cf", "Mn", "Mc", "Me"}
     )
     for candidate in (text, collapsed):
         for pattern in _FORBIDDEN_VALUE_PATTERNS:
@@ -779,6 +786,35 @@ def _validate_source_evidence(
                     f"source Git proof path has conflicting blob bindings: {namespace}/{git_path}"
                 )
             required_blobs[git_path] = expected_blob
+        if fixture_expected:
+            if fixture_proof_path is None or fixture_revision is None:
+                raise BundleError(
+                    f"source-digest ledger omits the fixture Git proof binding: {ledger_path}"
+                )
+            fixture_requirement = proof_requirements.get(fixture_proof_path)
+            if fixture_requirement is None:
+                fixture_blobs: dict[str, str] = {}
+                proof_requirements[fixture_proof_path] = (
+                    "fixture",
+                    fixture_revision,
+                    fixture_blobs,
+                )
+            else:
+                fixture_namespace, bound_revision, fixture_blobs = fixture_requirement
+                if fixture_namespace != "fixture" or bound_revision != fixture_revision:
+                    raise BundleError(
+                        f"source Git proof has conflicting ledger bindings: {fixture_proof_path}"
+                    )
+            for namespace, git_path, expected_blob in ledger_rows:
+                if namespace != "source":
+                    continue
+                fixture_blob = fixture_blobs.get(git_path)
+                if fixture_blob is not None and fixture_blob != expected_blob:
+                    raise BundleError(
+                        "fixture changes a retained execution source path: "
+                        f"fixture/{git_path}"
+                    )
+                fixture_blobs[git_path] = expected_blob
         named_source_files.update(ledger_paths)
         named_proof_files.update(ledger_proofs)
         source_files_by_ledger[ledger_path] = ledger_paths | ledger_proofs
@@ -835,6 +871,11 @@ def validate_bundle(manifest_path: Path) -> dict[str, Any]:
     bundle_id = _string(manifest["bundle_id"], "bundle_id")
     if not _SLUG.fullmatch(bundle_id):
         raise BundleError("bundle_id must be a lowercase slug")
+    claims = _list(manifest["claims"], "claims")
+    if not claims:
+        raise BundleError("claims must not be empty")
+    if len(claims) > MAX_ARTIFACT_COUNT:
+        raise BundleError("claims exceeds the claim-count limit")
 
     source = _object(manifest["source"], "source")
     _exact_keys(source, {"repository", "revision"}, "source")
@@ -951,9 +992,6 @@ def validate_bundle(manifest_path: Path) -> dict[str, Any]:
         artifact_by_path=artifact_by_path,
     )
 
-    claims = _list(manifest["claims"], "claims")
-    if not claims:
-        raise BundleError("claims must not be empty")
     claim_ids: set[str] = set()
     compute_claims: list[dict[str, Any]] = []
     for index, item in enumerate(claims):
@@ -1041,6 +1079,11 @@ def validate_promotion(
         or promotion["schema_version"] != SCHEMA_VERSION
     ):
         raise BundleError("promotion schema_version differs from the bundle contract")
+    promoted_claims = _string_list(promotion["claims"], "promotion.claims")
+    if not promoted_claims or len(set(promoted_claims)) != len(promoted_claims):
+        raise BundleError("promotion.claims must contain unique claim ids")
+    if len(promoted_claims) > MAX_ARTIFACT_COUNT:
+        raise BundleError("promotion.claims exceeds the claim-count limit")
     rel_manifest = _safe_relative_path(promotion["manifest"], "promotion.manifest")
     if rel_manifest != "bundle.json":
         raise BundleError("promotion receipt must name bundle.json in its own directory")
@@ -1090,9 +1133,6 @@ def validate_promotion(
     }
     if runtime != expected_runtime:
         raise BundleError("promotion runtime does not match the bundle")
-    promoted_claims = _string_list(promotion["claims"], "promotion.claims")
-    if not promoted_claims or len(set(promoted_claims)) != len(promoted_claims):
-        raise BundleError("promotion.claims must contain unique claim ids")
     available = {claim["id"] for claim in manifest["claims"]}
     unknown = sorted(set(promoted_claims) - available)
     if unknown:

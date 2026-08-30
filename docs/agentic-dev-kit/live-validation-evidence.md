@@ -40,8 +40,8 @@ JSON object must have unique member names, every number must be finite, and inte
 must fit the verifier's declared digit bound; parser ambiguity is not evidence. If a
 `promotion.json` is present, the verifier refuses bundle-only verification: the caller
 must supply `--promotion` and every independent expected binding. The byte ceiling
-covers the manifest, receipt, and artifacts, and the artifact-count ceiling applies
-before artifact I/O.
+covers the manifest, receipt, and artifacts, and the artifact- and claim-count
+ceilings apply before per-entry validation or artifact I/O.
 `bundle.json` has this closed shape:
 
 ```json
@@ -165,8 +165,11 @@ A source-digest ledger is not a substitute for its source bytes. It has exactly 
 `source proof: artifacts/<file>.json` header, and every ledger must retain at least one
 `source/` row plus that proof. A fixture ledger may add one
 `fixture base revision: <sha>` and one `fixture proof: artifacts/<file>.json` header,
-but those never replace the source revision and bind only `fixture/` rows. Each data
-row is `<sha256><two spaces><source-or-fixture/path><two spaces>git-blob:<sha>`.
+but those never replace the source revision. The fixture proof must prove both every
+`fixture/` row and every `source/` execution dependency in that ledger at the fixture
+revision; a fixture whose executed dependency differs from the retained source bytes
+is not evidence for a wrapper-attributed claim. Each data row is
+`<sha256><two spaces><source-or-fixture/path><two spaces>git-blob:<sha>`.
 An optional `captured on: <UTC YYYY-MM-DD>` header must match the artifact record.
 Retain every row's path as a `source-file` with the same SHA-256 and link the ledger,
 all named source files, and every used proof from the claim. The verifier refuses an
@@ -210,9 +213,10 @@ Prefer structural minimization over replacement strings. Extract only the fields
 claim needs into a new artifact, inspect those destination bytes, and digest those
 bytes. The verifier rejects credential-like JSON keys, raw credential-key assignments,
 YAML-tagged credential scalars, YAML credential block scalars, and common secret
-encodings in raw text and decoded JSON strings as a backstop. It repeats those scans
-after removing Unicode control and format characters so an invisible separator cannot
-split a credential marker.
+encodings in raw text and decoded JSON strings as a backstop. It rejects escaped
+Unicode surrogates, then repeats those scans after compatibility normalization and
+removing control, format, and combining-mark characters so an invisible separator
+cannot split a credential marker.
 `redaction.reviewed: true` records the required semantic review; it is not a claim that
 the scanner can prove absence of every secret.
 

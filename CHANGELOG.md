@@ -69,14 +69,17 @@ starts.
   `source-file` bytes it names plus `source-git-proof` commit/tree metadata that
   recomputes each mandatory Git blob's membership in that revision. Every such ledger
   must retain source-revision bytes and their proof; a fixture-base header and proof
-  are supplementary and bind only `fixture/` rows. Unknown fields, missing observers,
-  YAML-tagged credential scalars, and Unicode control or format characters in schema
-  string fields are invalid. A retained
+  are supplementary, and the fixture proof must also prove every retained source
+  dependency at the fixture revision. Unknown fields, missing observers,
+  YAML-tagged credential scalars, Unicode control or format characters in schema
+  string fields, and escaped Unicode surrogates are invalid. Credential scans also
+  remove combining marks after compatibility normalization. A retained
   `promotion.json`
   requires `--promotion` and all independent expectations; bundle-only verification
   refuses it. A runtime applied-compute object needs an independent expectation only
   when a selected claim depends on it. The declared per-artifact, aggregate,
-  artifact-count, and artifact-tree-entry ceilings apply before unbounded input work.
+  artifact-count, claim-count, and artifact-tree-entry ceilings apply before unbounded
+  input work.
   Do not clean up a synthetic fixture until the copied destination passes this command.
 
 ---

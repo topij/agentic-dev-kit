@@ -126,7 +126,7 @@
       "kind": "source-git-proof",
       "observer": "synthetic-git-object-readback",
       "path": "artifacts/fixture-proof.json",
-      "sha256": "0ccf1c16d740c09ca6841e8a3f74dc3f3f09c4ada5f26268c74f238aed507440"
+      "sha256": "a9be47ffe03aa319dc059fd9df1b210ef6d1ae684eeea460c021695d8e45e7ed"
     },
     {
       "capture_request": "git show 83d3b623305a691dd874df44ca92270daa62ade9:config/dev-model.yaml",
