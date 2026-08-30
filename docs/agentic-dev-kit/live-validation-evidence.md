@@ -30,7 +30,11 @@ truthfully excerpted from its authoritative observer, and free of private materi
 A bundle is a repository-owned directory containing only `bundle.json`,
 `promotion.json` when a capability is promoted, and an `artifacts/` directory. Every
 JSON object must have unique member names, every number must be finite, and integers
-must fit the verifier's declared digit bound; parser ambiguity is not evidence.
+must fit the verifier's declared digit bound; parser ambiguity is not evidence. If a
+`promotion.json` is present, the verifier refuses bundle-only verification: the caller
+must supply `--promotion` and every independent expected binding. The byte ceiling
+covers the manifest, receipt, and artifacts, and the artifact-count ceiling applies
+before artifact I/O.
 `bundle.json` has this closed shape:
 
 ```json
@@ -70,6 +74,8 @@ must fit the verifier's declared digit bound; parser ambiguity is not evidence.
   },
   "artifacts": [
     {
+      "capture_request": "<exact observer command or request>",
+      "captured_on": "<YYYY-MM-DD>",
       "path": "artifacts/<file>",
       "sha256": "<digest of the retained destination bytes>",
       "kind": "<permitted kind>",
@@ -88,7 +94,10 @@ must fit the verifier's declared digit bound; parser ambiguity is not evidence.
 
 The manifest is the binding surface: its source revision, reviewed head, runtime and
 client apply to every artifact digest and every claim-to-evidence link it contains.
-An artifact record adds the authoritative observer for those exact retained bytes.
+An artifact record adds the authoritative observer, exact capture command or request,
+and capture date for those exact retained bytes. Together with the manifest source
+revision and reviewed head, those fields stamp each retained reading rather than
+leaving its age or provenance to narrative inference.
 The verifier refuses unknown fields so an unimplemented assertion cannot hide beside
 the enforced contract.
 
@@ -121,7 +130,8 @@ suffix, appear exactly once in the manifest, fit the verifier's declared size bo
 and have no undeclared file, directory, special-file, hidden, or unreadable neighbor.
 The verifier walks the directory itself rather than treating an unreadable subtree as
 empty. Symlinks are never evidence: they preserve access to the ephemeral source rather
-than the bytes that must survive it.
+than the bytes that must survive it. This prohibition covers every component of the
+bundle and promotion paths, not only the final directory entry.
 
 ## Excluded material and redaction
 
@@ -176,13 +186,15 @@ depend on applied compute may use an ephemeral carrier, but must leave
    review head before the live run.
 2. Capture into the synthetic fixture. Keep credentials and unrelated data outside it.
 3. Copy only permitted, minimized artifacts into the repository-owned bundle.
-4. Re-read and digest the destination bytes. Fill `bundle.json`; never copy a digest
+4. Re-read and digest the destination bytes. Record the exact observer command or
+   request and capture date beside each digest. Fill `bundle.json`; never copy a digest
    computed only at the source.
 5. Fill `promotion.json` only for claims the parity authority will actually promote.
 6. Fix the expected authority/source/review/runtime/client values independently from
    the review target and authoritative observers. Run the verifier with those values
    and the promotion receipt. Review the retained bytes directly and independently
-   recompute the claim.
+   recompute the claim's semantic relationships rather than treating structural
+   verification as proof of what the retained fields mean.
 7. Commit and review the bundle with the parity change. The reviewed synthetic/task
    head in the bundle and the reviewed implementation head are distinct when two pull
    requests exist; name both in the narrative instead of substituting one for the other.

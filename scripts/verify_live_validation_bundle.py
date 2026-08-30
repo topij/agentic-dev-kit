@@ -39,12 +39,14 @@ import math
 import os
 import re
 import sys
+from datetime import date
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 SCHEMA_VERSION = 1
 MAX_ARTIFACT_BYTES = 1_048_576
 MAX_BUNDLE_BYTES = 8_388_608
+MAX_ARTIFACT_COUNT = 256
 MAX_JSON_INTEGER_DIGITS = 4_300
 
 ALLOWED_ARTIFACT_KINDS = frozenset(
@@ -75,9 +77,11 @@ REQUIRED_EXCLUSIONS = frozenset(
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 _SLUG = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+_CAPTURE_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _FORBIDDEN_JSON_KEY = re.compile(
     r"(?:^|_)(?:(?:api|access|private)_?keys?|auths?|authentications?|"
-    r"authorizations?|bearers?|cookies?|credentials?|passwords?|secrets?|tokens?)(?:$|_)",
+    r"authorizations?|bearers?|cookies?|credentials?|passphrases?|passwords?|"
+    r"secrets?|tokens?)(?:$|_)",
     re.IGNORECASE,
 )
 _FORBIDDEN_VALUE_PATTERNS = (
@@ -86,6 +90,7 @@ _FORBIDDEN_VALUE_PATTERNS = (
     re.compile(r"\bgh[pousr]_[A-Za-z0-9]{12,}\b"),
     re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{16,}\b"),
     re.compile(r"\bBearer\s+[A-Za-z0-9._~+/-]{12,}=*", re.IGNORECASE),
+    re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"),
 )
 
 
@@ -142,7 +147,23 @@ def _exact_keys(value: dict[str, Any], expected: set[str], label: str) -> None:
         raise BundleError(f"{label} keys differ: missing={missing}, extra={extra}")
 
 
-def _read_json(path: Path, label: str) -> dict[str, Any]:
+def _file_size(path: Path, label: str, *, limit: int) -> int:
+    try:
+        size = path.stat().st_size
+    except OSError as exc:
+        raise BundleError(f"{label} cannot be inspected: {path}: {exc}") from exc
+    if size > limit:
+        raise BundleError(f"{label} exceeds its byte limit: {path}")
+    return size
+
+
+def _read_json(
+    path: Path,
+    label: str,
+    *,
+    limit: int = MAX_BUNDLE_BYTES,
+) -> dict[str, Any]:
+    _file_size(path, label, limit=limit)
     try:
         raw = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
@@ -242,6 +263,16 @@ def _validate_bundle_root(manifest_path: Path) -> None:
         raise BundleError(f"bundle root is missing required entries: {sorted(missing)}")
 
 
+def _reject_symlink_traversal(path: Path, label: str) -> None:
+    lexical = Path(os.path.abspath(path))
+    try:
+        resolved = path.resolve(strict=True)
+    except OSError as exc:
+        raise BundleError(f"{label} is unreadable: {path}: {exc}") from exc
+    if lexical != resolved:
+        raise BundleError(f"{label} path must not traverse a symlink: {path}")
+
+
 def _artifact_inventory(
     artifact_root: Path,
     bundle_root: Path,
@@ -277,7 +308,8 @@ def _scan_json_content(value: Any, label: str, path: Path) -> None:
     if isinstance(value, dict):
         for key, child in value.items():
             _reject_credential_like_text(str(key), label, path)
-            key_text = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", str(key))
+            key_text = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", str(key))
+            key_text = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", key_text)
             normalized_key = re.sub(r"[^A-Za-z0-9]+", "_", key_text)
             if _FORBIDDEN_JSON_KEY.search(normalized_key):
                 raise BundleError(f"{label} contains forbidden credential-like key {key!r}")
@@ -373,6 +405,7 @@ def _validate_attestation(
 def validate_bundle(manifest_path: Path) -> dict[str, Any]:
     """Return the parsed manifest only after its complete bundle validates."""
 
+    _reject_symlink_traversal(manifest_path, "bundle manifest")
     if manifest_path.parent.is_symlink():
         raise BundleError("bundle root must be a retained directory, not a symlink")
     if manifest_path.is_symlink() or not manifest_path.is_file():
@@ -437,12 +470,18 @@ def validate_bundle(manifest_path: Path) -> dict[str, Any]:
     artifacts = _list(manifest["artifacts"], "artifacts")
     if not artifacts:
         raise BundleError("artifacts must not be empty")
+    if len(artifacts) > MAX_ARTIFACT_COUNT:
+        raise BundleError("artifacts exceeds the artifact-count limit")
     artifact_by_path: dict[str, dict[str, Any]] = {}
-    total_bytes = 0
+    total_bytes = _file_size(manifest_path, "bundle manifest", limit=MAX_BUNDLE_BYTES)
     for index, item in enumerate(artifacts):
         label = f"artifacts[{index}]"
         record = _object(item, label)
-        _exact_keys(record, {"path", "sha256", "kind", "observer"}, label)
+        _exact_keys(
+            record,
+            {"path", "sha256", "kind", "observer", "capture_request", "captured_on"},
+            label,
+        )
         rel = _safe_relative_path(record["path"], f"{label}.path", beneath="artifacts")
         if rel in artifact_by_path:
             raise BundleError(f"duplicate artifact path: {rel}")
@@ -455,15 +494,26 @@ def validate_bundle(manifest_path: Path) -> dict[str, Any]:
         if kind not in ALLOWED_ARTIFACT_KINDS:
             raise BundleError(f"unsupported artifact kind: {kind}")
         _string(record["observer"], f"{label}.observer")
+        _string_without_controls(record["capture_request"], f"{label}.capture_request")
+        captured_on = _string(record["captured_on"], f"{label}.captured_on")
+        if not _CAPTURE_DATE.fullmatch(captured_on):
+            raise BundleError(f"{label}.captured_on must use YYYY-MM-DD")
+        try:
+            capture_date = date.fromisoformat(captured_on)
+        except ValueError as exc:
+            raise BundleError(f"{label}.captured_on must be a calendar date") from exc
+        if capture_date > date.today():
+            raise BundleError(f"{label}.captured_on must not be in the future")
         path = bundle_root / rel
         if path.is_symlink() or not path.is_file():
             raise BundleError(f"declared artifact is absent or not a regular file: {rel}")
+        total_bytes += _file_size(path, label, limit=MAX_ARTIFACT_BYTES)
+        if total_bytes > MAX_BUNDLE_BYTES:
+            raise BundleError("bundle envelope exceeds the bundle byte limit")
         if _sha256(path) != digest:
             raise BundleError(f"artifact digest mismatch: {rel}")
-        total_bytes += _scan_artifact(path, label)
+        _scan_artifact(path, label)
         artifact_by_path[rel] = record
-    if total_bytes > MAX_BUNDLE_BYTES:
-        raise BundleError("declared artifacts exceed the bundle byte limit")
 
     artifact_root = bundle_root / "artifacts"
     if artifact_root.is_symlink() or not artifact_root.is_dir():
@@ -531,6 +581,7 @@ def validate_promotion(
 ) -> dict[str, Any]:
     """Validate a capability-promotion receipt against a valid bundle."""
 
+    _reject_symlink_traversal(promotion_path, "promotion receipt")
     if promotion_path.is_symlink() or not promotion_path.is_file():
         raise BundleError(
             f"promotion receipt must be a regular file, not a symlink: {promotion_path}"
@@ -566,6 +617,19 @@ def validate_promotion(
         raise BundleError("promotion receipt's manifest digest does not match")
 
     manifest = validate_bundle(manifest_path)
+    envelope_bytes = _file_size(
+        promotion_path,
+        "promotion receipt",
+        limit=MAX_BUNDLE_BYTES,
+    ) + _file_size(manifest_path, "bundle manifest", limit=MAX_BUNDLE_BYTES)
+    for artifact in manifest["artifacts"]:
+        envelope_bytes += _file_size(
+            manifest_path.parent / artifact["path"],
+            f"artifact {artifact['path']}",
+            limit=MAX_ARTIFACT_BYTES,
+        )
+        if envelope_bytes > MAX_BUNDLE_BYTES:
+            raise BundleError("bundle envelope exceeds the bundle byte limit")
     _safe_relative_path(promotion["authority"], "promotion.authority")
     if promotion["source_revision"] != manifest["source"]["revision"]:
         raise BundleError("promotion source revision does not match the bundle")
@@ -661,6 +725,10 @@ def main(argv: list[str] | None = None) -> int:
                 args.promotion,
                 args.manifest,
                 expected=expected_values,
+            )
+        elif (args.manifest.parent / "promotion.json").exists():
+            raise BundleError(
+                "a retained promotion.json requires --promotion and independent expected bindings"
             )
         elif any(value is not None for value in expected.values()):
             raise BundleError("expected promotion bindings require --promotion")

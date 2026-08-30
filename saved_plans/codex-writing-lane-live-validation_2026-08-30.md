@@ -61,6 +61,10 @@ The retained artifacts are deliberately minimized:
   read-backs;
 - source-file SHA-256 readings from the stamped source revision.
 
+Each manifest artifact record binds those bytes to its authoritative observer, exact
+capture request, and capture date; the manifest source revision and reviewed head
+complete the measurement stamp.
+
 The bundle excludes the authentication symlink and its target, controlled native
 configuration, full runtime rollouts, automatic-review rollout, caches, databases,
 prompt transcript, environment dump, unrelated repository files, operator-owned files,
@@ -128,9 +132,14 @@ The repository suite drives the same public CLI through hostile mutations. It re
   oversized JSON numbers, non-string persistence values, non-integer schema versions,
   and unreadable artifact bytes without a traceback;
 - a promotion receipt whose manifest digest no longer matches.
+- a retained promotion receipt omitted from the invocation, an ancestor-symlinked
+  bundle path, unstamped artifact metadata, common passphrase and AWS credential
+  shapes, duplicate artifact paths, and an input envelope beyond the declared bounds.
 
-The kit-only positive control re-verifies this tracked bundle and promotion receipt so
-later artifact loss, mutation, or rebinding makes the repository gate fail.
+The kit-only structural control re-verifies this tracked bundle and promotion receipt.
+The claim-semantic control independently asserts the load-bearing relationships
+among the descriptor, launcher, final-message digest, destination read-backs, private
+ready pull request, exact-head review receipt, and persistent runtime attestation.
 
 ## Cleanup result
 

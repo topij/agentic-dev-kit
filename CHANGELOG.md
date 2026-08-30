@@ -56,9 +56,12 @@ starts.
   Copy the engine and `docs/agentic-dev-kit/live-validation-evidence.md` before using
   a live runtime observation to promote parity. Treat exit `0` as verified and exit
   `2` as an invalid bundle or promotion; duplicate JSON members, decoded credential
-  markers, unsupported numbers, symlinked roots, and undeclared, unreadable, or
-  non-regular bundle entries are invalid. Do not clean up a synthetic fixture until
-  the copied destination passes this command.
+  markers, unsupported numbers, symlink traversal, and undeclared, unreadable, or
+  non-regular bundle entries are invalid. Artifact records must carry their exact
+  capture request and date. A retained `promotion.json` requires `--promotion` and all
+  independent expectations; bundle-only verification refuses it. The declared byte
+  and artifact-count ceilings apply before unbounded input work. Do not clean up a
+  synthetic fixture until the copied destination passes this command.
 
 ---
 

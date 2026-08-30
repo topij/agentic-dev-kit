@@ -108,11 +108,12 @@ Client-dependent capability promotion follows
 whose named bytes were cleaned up, or a carrier that cannot retain the authoritative
 applied-compute observation stays historical. `verify_live_validation_bundle.py`
 checks the closed bundle and promotion shapes, destination digests, independently
-supplied source/review/runtime promotion expectations, artifact inventory, redaction
-backstops, and persistent minimal
+supplied source/review/runtime promotion expectations, artifact inventory, capture
+request/date stamps, bounded input envelopes, redaction backstops, and persistent minimal
 `turn_context` attestation when a claim depends on model, effort, or cwd. The named
 redaction reviewer and capability reviewer still own semantic minimization and whether
-the retained observers establish the promoted claim.
+the retained observers establish the promoted claim; a structurally valid bundle is
+not a substitute for that claim-specific recomputation.
 
 ## Lifecycle validation boundary
 

@@ -7,7 +7,7 @@
     "codex-writing-lane-applied-compute"
   ],
   "manifest": "bundle.json",
-  "manifest_sha256": "653cafc609b99e1a0bc369a7556611b7014bfb2ce4452e4c1d4366fcf54187d3",
+  "manifest_sha256": "4b531db7ac75bed73b4c9b8221742ed04e3dec274461946b9662198a9d4a646a",
   "reviewed_head": "5c4006d18e65e0443dc7b22f48c099ad07ce1da9",
   "runtime": {
     "client_version": "codex-cli 0.149.1",

@@ -95,12 +95,16 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
         },
         "artifacts": [
             {
+                "capture_request": "runtime session turn_context readback for session-example",
+                "captured_on": "2026-08-30",
                 "path": "artifacts/runtime-attestation.json",
                 "sha256": _sha(attestation_path),
                 "kind": "runtime-attestation",
                 "observer": "runtime-session-context",
             },
             {
+                "capture_request": "gh pr view 1 --json headRefOid,state,isDraft",
+                "captured_on": "2026-08-30",
                 "path": "artifacts/forge-readback.json",
                 "sha256": _sha(forge_path),
                 "kind": "forge-readback",
@@ -166,6 +170,26 @@ def test_a_complete_bundle_and_promotion_receipt_verify(tmp_path: Path) -> None:
         "promotion": True,
         "status": "verified",
     }
+
+
+def test_a_bundle_without_a_promotion_receipt_verifies_structurally(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    promotion.unlink()
+
+    result = _run(manifest)
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["promotion"] is False
+
+
+def test_a_present_promotion_receipt_cannot_be_skipped(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    promotion.write_text("{not-json\n", encoding="utf-8")
+
+    result = _run(manifest)
+
+    assert result.returncode == 2
+    assert "requires --promotion" in result.stderr
 
 
 @pytest.mark.parametrize("mutation", ["absent", "altered"])
@@ -359,6 +383,46 @@ def test_duplicate_json_members_are_refused(tmp_path: Path, target: str) -> None
     assert "Traceback" not in result.stderr
 
 
+def test_duplicate_artifact_paths_are_refused(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    value["artifacts"].append(dict(value["artifacts"][0]))
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "duplicate artifact path" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement", "message"),
+    [
+        ("capture_request", "", "capture_request must be a non-empty string"),
+        ("captured_on", "2026/08/30", "captured_on must use YYYY-MM-DD"),
+        ("captured_on", "2026-99-99", "captured_on must be a calendar date"),
+        ("captured_on", "2999-01-01", "captured_on must not be in the future"),
+    ],
+)
+def test_artifact_measurement_stamps_are_required(
+    tmp_path: Path,
+    field: str,
+    replacement: str,
+    message: str,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    value["artifacts"][0][field] = replacement
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert message in result.stderr
+
+
 @pytest.mark.parametrize("number", ["NaN", "1e9999"])
 def test_non_finite_json_values_are_refused(tmp_path: Path, number: str) -> None:
     manifest, promotion = _fixture(tmp_path)
@@ -461,6 +525,8 @@ def test_credential_pattern_in_manifest_metadata_is_refused(tmp_path: Path) -> N
         "passwords",
         "secrets",
         "sessionCookies",
+        "passphrase",
+        "AWSAccessKeyId",
     ],
 )
 def test_credential_key_variants_are_refused(
@@ -482,6 +548,21 @@ def test_credential_key_variants_are_refused(
 
     assert result.returncode == 2
     assert "credential-like key" in result.stderr
+
+
+def test_common_aws_access_key_value_shape_is_refused(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    artifact = manifest.parent / "artifacts" / "forge-readback.json"
+    _write_json(artifact, {"identifier": "AKIAIOSFODNN7EXAMPLE"})
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    value["artifacts"][1]["sha256"] = _sha(artifact)
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "credential-like content" in result.stderr
 
 
 def test_boolean_schema_version_is_refused(tmp_path: Path) -> None:
@@ -706,8 +787,48 @@ def test_bundle_directory_itself_cannot_be_a_symlink(tmp_path: Path) -> None:
     result = _run(retained / "bundle.json", retained / "promotion.json")
 
     assert result.returncode == 2
-    assert "bundle root" in result.stderr
+    assert "bundle manifest path" in result.stderr
     assert "symlink" in result.stderr
+
+
+def test_a_bundle_path_cannot_traverse_an_ancestor_symlink(tmp_path: Path) -> None:
+    manifest, _ = _fixture(tmp_path / "source")
+    alias = tmp_path / "alias"
+    alias.symlink_to(manifest.parent.parent, target_is_directory=True)
+
+    result = _run(alias / "evidence" / "bundle.json", alias / "evidence" / "promotion.json")
+
+    assert result.returncode == 2
+    assert "must not traverse a symlink" in result.stderr
+
+
+def test_manifest_envelope_bytes_are_bounded_before_parsing(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    value["redaction"]["reviewer"] = "r" * 8_500_000
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "byte limit" in result.stderr
+
+
+def test_artifact_count_is_bounded_before_artifact_io(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    template = dict(value["artifacts"][0])
+    value["artifacts"] = [
+        {**template, "path": f"artifacts/absent-{index}.json"} for index in range(257)
+    ]
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "artifact-count limit" in result.stderr
 
 
 def test_promotion_manifest_path_must_be_lexically_canonical(tmp_path: Path) -> None:
@@ -749,8 +870,8 @@ def test_the_promotion_receipt_is_bound_to_the_manifest_bytes(tmp_path: Path) ->
     "saved_plans/codex-writing-lane-evidence_2026-08-30/bundle.json",
     "saved_plans/codex-writing-lane-evidence_2026-08-30/promotion.json",
 )
-def test_the_promoted_codex_writing_lane_bundle_remains_recomputable() -> None:
-    root = find_repo_root(ENGINE)
+def test_the_promoted_codex_writing_lane_bundle_remains_structurally_verifiable() -> None:
+    root = find_repo_root(ENGINE.parent)
     bundle = root / "saved_plans/codex-writing-lane-evidence_2026-08-30"
     result = _run(
         bundle / "bundle.json",
@@ -776,3 +897,73 @@ def test_the_promoted_codex_writing_lane_bundle_remains_recomputable() -> None:
         "promotion": True,
         "status": "verified",
     }
+
+
+@pytest.mark.kit_repo_only(
+    "saved_plans/codex-writing-lane-evidence_2026-08-30/bundle.json",
+    "saved_plans/codex-writing-lane-evidence_2026-08-30/promotion.json",
+)
+def test_the_promoted_codex_writing_lane_claims_remain_independently_recomputable() -> None:
+    root = find_repo_root(ENGINE.parent)
+    bundle = root / "saved_plans/codex-writing-lane-evidence_2026-08-30"
+    manifest = json.loads((bundle / "bundle.json").read_text(encoding="utf-8"))
+    artifacts = bundle / "artifacts"
+    descriptor = json.loads((artifacts / "descriptor.json").read_text(encoding="utf-8"))
+    launcher = json.loads((artifacts / "launcher-receipt.json").read_text(encoding="utf-8"))
+    forge = json.loads((artifacts / "forge-readback.json").read_text(encoding="utf-8"))
+    review = json.loads((artifacts / "review-receipt.json").read_text(encoding="utf-8"))
+    attestation = json.loads((artifacts / "runtime-attestation.json").read_text(encoding="utf-8"))
+
+    reviewed_head = manifest["review"]["head"]
+    assert descriptor["scope"] == "write"
+    assert descriptor["runtime"] == "codex"
+    assert descriptor["merge_class"] == "operator"
+    assert descriptor["branch"] == "dev/write"
+    assert descriptor["worktree"] == launcher["observed"]["worktree"]
+    assert descriptor["state_root"] == launcher["observed"]["state_root"]
+    assert descriptor["descriptor_id"] == launcher["descriptor_id"]
+    assert launcher["request"]["runtime"] == "codex"
+    assert launcher["status"] == "completed"
+    assert launcher["observed"]["branch"] == "dev/write"
+    assert launcher["terminal"]["returncode"] == 0
+    assert launcher["terminal"]["final_text_sha256"] == _sha(artifacts / "final-message.txt")
+    assert forge["repository"]["is_private"] is True
+    assert forge["repository"]["visibility"] == "PRIVATE"
+    assert forge["pull_request"]["state"] == "OPEN"
+    assert forge["pull_request"]["is_draft"] is False
+    assert forge["pull_request"]["head_oid"] == reviewed_head
+    assert forge["pull_request"]["files"] == [
+        {
+            "additions": 2,
+            "change_type": "ADDED",
+            "deletions": 0,
+            "path": "notes/codex-writing-lane.md",
+        }
+    ]
+    assert review["receipt"]["head"] == reviewed_head
+    assert review["poll"]["head"] == reviewed_head
+    assert review["poll"]["review_evidence"] == {
+        "head": reviewed_head,
+        "lenses": ["correctness"],
+        "route": "receipt",
+        "source": "fallback:codex",
+        "valid": True,
+    }
+    assert attestation == {
+        "session_id": manifest["runtime"]["applied_compute"]["session_id"],
+        "turn_context": {
+            "cwd": manifest["runtime"]["applied_compute"]["cwd"],
+            "effort": manifest["runtime"]["applied_compute"]["effort"],
+            "model": manifest["runtime"]["applied_compute"]["model"],
+        },
+    }
+    filesystem_readback = (artifacts / "filesystem-readback.txt").read_text(encoding="utf-8")
+    assert descriptor["worktree"] in filesystem_readback
+    assert "Codex writing lane\ndurable evidence validation" in filesystem_readback
+    assert "durable evidence state" in filesystem_readback
+    git_readback = (artifacts / "git-readback.txt").read_text(encoding="utf-8")
+    assert reviewed_head in git_readback
+    assert "A  notes/codex-writing-lane.md" in git_readback
+    assert "Codex writing lane\ndurable evidence validation" in git_readback
+    source_digests = (artifacts / "source-digests.txt").read_text(encoding="utf-8")
+    assert f"source revision: {manifest['source']['revision']}" in source_digests

@@ -1,60 +1,80 @@
 {
   "artifacts": [
     {
+      "capture_request": "/opt/homebrew/bin/codex --version",
+      "captured_on": "2026-08-30",
       "kind": "command-capture",
       "observer": "codex-cli",
       "path": "artifacts/client-version.txt",
       "sha256": "ca4fe30a68dd82c6a7af75eeb683f763cfb6554840590a9e345692269ae744f0"
     },
     {
+      "capture_request": "scripts/dev_session.sh new write --headless --runtime codex --merge-class operator",
+      "captured_on": "2026-08-30",
       "kind": "descriptor",
       "observer": "dev-session-durable-descriptor",
       "path": "artifacts/descriptor.json",
       "sha256": "d57a3eeaeef0dd01e208735e71b2c672f409b03ffec06347408864de396691cf"
     },
     {
+      "capture_request": "cockpit filesystem readback of descriptor-bound worktree and state root",
+      "captured_on": "2026-08-30",
       "kind": "filesystem-readback",
       "observer": "cockpit-filesystem-readback",
       "path": "artifacts/filesystem-readback.txt",
       "sha256": "ae6b54246ec52ac4dfd8079ea44a19499f5966887f5c0673084cf8e6df38dbf0"
     },
     {
+      "capture_request": "scripts/launch_lane.py final-message readback for descriptor ec07f5b3-14fb-4203-8e82-9ef62bfde785",
+      "captured_on": "2026-08-30",
       "kind": "final-message",
       "observer": "codex-last-message-file",
       "path": "artifacts/final-message.txt",
       "sha256": "56c7748b3099da9282dde6c13e202b529740274577aa44ba4baaea8440051ca0"
     },
     {
+      "capture_request": "gh repo view topij/adk-codex-writing-evidence-20260830 --json name,url,visibility,isPrivate,defaultBranchRef; gh pr view 1 --repo topij/adk-codex-writing-evidence-20260830 --json number,url,state,isDraft,mergeStateStatus,headRefName,headRefOid,baseRefName,commits,files",
+      "captured_on": "2026-08-30",
       "kind": "forge-readback",
       "observer": "github-api",
       "path": "artifacts/forge-readback.json",
       "sha256": "d6fb6505b19a522d9cc6718d7c09a4510b3e96bbf0ef554a8fa9f63d5910a6c6"
     },
     {
+      "capture_request": "git ls-remote origin refs/heads/dev/write; git diff-tree --no-commit-id --name-status -r 83d3b623305a691dd874df44ca92270daa62ade9..5c4006d18e65e0443dc7b22f48c099ad07ce1da9; git show 5c4006d18e65e0443dc7b22f48c099ad07ce1da9:notes/codex-writing-lane.md",
+      "captured_on": "2026-08-30",
       "kind": "git-readback",
       "observer": "git-remote-and-object-readback",
       "path": "artifacts/git-readback.txt",
       "sha256": "7767f7e2a40d17c61ec34ce205943a8414eb07810be28414bd50c35f68b47029"
     },
     {
+      "capture_request": "launch_lane receipt readback for descriptor ec07f5b3-14fb-4203-8e82-9ef62bfde785",
+      "captured_on": "2026-08-30",
       "kind": "launcher-receipt",
       "observer": "launch-lane-receipt",
       "path": "artifacts/launcher-receipt.json",
       "sha256": "06be15394a823fedf6abee96cd38746f8a6c1f951abbef7a9b4f8f2b92e839cc"
     },
     {
+      "capture_request": "uv run scripts/pr_watch.py 1 --json",
+      "captured_on": "2026-08-30",
       "kind": "review-receipt",
       "observer": "pr-watch-state-and-forge-readback",
       "path": "artifacts/review-receipt.json",
       "sha256": "e71819c7a767c94adcee86c67f683045d7547af3a7a1f96792c8ae645f8c76b4"
     },
     {
+      "capture_request": "runtime session turn_context readback for 01a04fb1-0b63-7921-982b-23ff66c200be",
+      "captured_on": "2026-08-30",
       "kind": "runtime-attestation",
       "observer": "runtime-session-context",
       "path": "artifacts/runtime-attestation.json",
       "sha256": "95271b822394dd24e9f5d2fdb2ae3c3b5a380a74f0c49bbefd71d8f59fd2deaa"
     },
     {
+      "capture_request": "git object readback and SHA-256 of each source path enumerated in artifacts/source-digests.txt at bdfd6ee702a630f0575f0c186f51b3bbbcd1810a",
+      "captured_on": "2026-08-30",
       "kind": "source-digest",
       "observer": "git-object-source-readback",
       "path": "artifacts/source-digests.txt",
