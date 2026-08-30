@@ -238,6 +238,14 @@ digest-bound final message in its evidence; a public-CLI no-header hostile pins 
 refusal path. The separately launched adversarial lens stopped under its
 security-content filter while probing credential syntax and produced no receipt. The
 changed head still requires a fresh complete panel.
+A fresh adversarial lens at `179a2ffc6a0f1096872b20e0ad6395165643b013` on
+2026-08-30 reported no findings. A separately launched correctness lens at the same
+head showed that weakening the shared closed-object guard to admit scalar values
+survived the complete drift-excluded suite, after which a scalar `source` escaped the
+documented refusal path with an uncaught type error. Public-CLI hostiles now replace
+the manifest, its closed nested objects, promotion, runtime attestation, Git proof
+objects, and independent expectation objects with scalars and require exit `2` without
+a traceback. The changed head still requires a fresh complete panel.
 The documented verifier command above in `/Users/topi/Coding/agentic-dev-kit` at
 `62a8f372d34fbb9fed6d49abd08d8bc7f477ad6d` on 2026-08-30 returned
 `status: verified`, `promotion: true`, and the claim IDs enumerated above.

@@ -1550,6 +1550,96 @@ def test_malformed_nested_values_use_the_documented_refusal_exit(
 
 
 @pytest.mark.parametrize(
+    "target",
+    [
+        "manifest",
+        "source",
+        "review",
+        "runtime",
+        "redaction",
+        "artifact",
+        "claim",
+        "promotion",
+        "promotion-runtime",
+        "attestation",
+        "source-proof",
+        "source-proof-tree",
+        "source-proof-entry",
+        "expected-claim",
+        "expected-compute",
+    ],
+)
+def test_non_object_closed_schemas_use_the_documented_refusal_exit(
+    tmp_path: Path,
+    target: str,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims: list[dict[str, object]] | None = None
+    if target == "manifest":
+        _write_json(manifest, 1)
+    elif target in {"source", "review", "runtime", "redaction", "artifact", "claim"}:
+        manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+        if target in {"source", "review", "runtime", "redaction"}:
+            manifest_value[target] = 1
+        elif target == "artifact":
+            manifest_value["artifacts"][0] = 1
+        else:
+            manifest_value["claims"][0] = 1
+        _write_json(manifest, manifest_value)
+        _refresh_promotion_digest(manifest, promotion)
+    elif target in {"promotion", "promotion-runtime"}:
+        if target == "promotion":
+            _write_json(promotion, 1)
+        else:
+            promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
+            promotion_value["runtime"] = 1
+            _write_json(promotion, promotion_value)
+    elif target == "attestation":
+        artifact = manifest.parent / "artifacts/runtime-attestation.json"
+        _write_json(artifact, 1)
+        manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+        manifest_value["artifacts"][0]["sha256"] = _sha(artifact)
+        _write_json(manifest, manifest_value)
+        _refresh_promotion_digest(manifest, promotion)
+    elif target in {"source-proof", "source-proof-tree", "source-proof-entry"}:
+        expected_claims = _add_source_ledger(
+            manifest,
+            promotion,
+            include_source_file=True,
+            claim_source_file=True,
+        )
+        proof = manifest.parent / "artifacts/source-proof.json"
+        if target == "source-proof":
+            proof_value: object = 1
+        else:
+            proof_value = json.loads(proof.read_text(encoding="utf-8"))
+            if target == "source-proof-tree":
+                proof_value["trees"][0] = 1
+            else:
+                proof_value["trees"][0]["entries"][0] = 1
+        _write_json(proof, proof_value)
+        manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+        next(
+            artifact
+            for artifact in manifest_value["artifacts"]
+            if artifact["path"] == "artifacts/source-proof.json"
+        )["sha256"] = _sha(proof)
+        _write_json(manifest, manifest_value)
+        _refresh_promotion_digest(manifest, promotion)
+
+    if target == "expected-claim":
+        result = _run(manifest, promotion, expected_claims=[1])  # type: ignore[list-item]
+    elif target == "expected-compute":
+        result = _run(manifest, promotion, expected_compute=1)  # type: ignore[arg-type]
+    else:
+        result = _run(manifest, promotion, expected_claims=expected_claims)
+
+    assert result.returncode == 2
+    assert "must be a JSON object" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize(
     ("mutation", "message"),
     [
         ("unreviewed", "redaction.reviewed must be true"),
