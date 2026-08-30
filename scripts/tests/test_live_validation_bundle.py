@@ -22,7 +22,38 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _repo_layout import engine_dir, find_repo_root  # noqa: E402
 
 ENGINE = engine_dir(Path(__file__).resolve()) / "verify_live_validation_bundle.py"
-SOURCE = "1" * 40
+
+
+def _git_oid(kind: str, data: bytes) -> str:
+    return hashlib.sha1(
+        f"{kind} {len(data)}\0".encode() + data,
+        usedforsecurity=False,
+    ).hexdigest()
+
+
+TEST_SOURCE_BYTES = b"print('retained source')\n"
+TEST_SOURCE_BLOB = _git_oid("blob", TEST_SOURCE_BYTES)
+TEST_SCRIPTS_TREE_ENTRIES = [
+    {"mode": "100644", "name": "example.py", "oid": TEST_SOURCE_BLOB},
+]
+TEST_SCRIPTS_TREE_BYTES = (
+    b"100644 example.py\0" + bytes.fromhex(TEST_SOURCE_BLOB)
+)
+TEST_SCRIPTS_TREE = _git_oid("tree", TEST_SCRIPTS_TREE_BYTES)
+TEST_ROOT_TREE_ENTRIES = [
+    {"mode": "40000", "name": "scripts", "oid": TEST_SCRIPTS_TREE},
+]
+TEST_ROOT_TREE_BYTES = b"40000 scripts\0" + bytes.fromhex(TEST_SCRIPTS_TREE)
+TEST_ROOT_TREE = _git_oid("tree", TEST_ROOT_TREE_BYTES)
+TEST_COMMIT_LINES = [
+    f"tree {TEST_ROOT_TREE}",
+    "author Evidence Fixture <evidence@example.invalid> 0 +0000",
+    "committer Evidence Fixture <evidence@example.invalid> 0 +0000",
+    "",
+    "retained source fixture",
+]
+TEST_COMMIT_BYTES = ("\n".join(TEST_COMMIT_LINES) + "\n").encode()
+SOURCE = _git_oid("commit", TEST_COMMIT_BYTES)
 REVIEWED = "2" * 40
 FIXTURE_EXPECTATIONS = {
     "authority": "docs/agentic-dev-kit/runtime-parity.md",
@@ -62,6 +93,8 @@ CODEX_WRITING_SOURCE_EVIDENCE = [
 ]
 CODEX_WRITING_EXECUTION_SOURCE_EVIDENCE = [
     "artifacts/execution-source-digests.txt",
+    "artifacts/source-proof.json",
+    "artifacts/fixture-proof.json",
     "artifacts/fixture/config/dev-model.yaml",
     *CODEX_WRITING_SOURCE_EVIDENCE,
 ]
@@ -128,6 +161,12 @@ CODEX_WRITING_EXPECTED_ARTIFACT_BINDINGS = {
         "artifacts/execution-source-digests.txt at "
         "83d3b623305a691dd874df44ca92270daa62ade9",
     ),
+    "artifacts/fixture-proof.json": (
+        "source-git-proof",
+        "synthetic-git-object-readback",
+        "git cat-file commit and tree-object readback for "
+        "83d3b623305a691dd874df44ca92270daa62ade9",
+    ),
     "artifacts/filesystem-readback.txt": (
         "filesystem-readback",
         "cockpit-filesystem-readback",
@@ -178,6 +217,12 @@ CODEX_WRITING_EXPECTED_ARTIFACT_BINDINGS = {
         "git object readback and SHA-256 of each source path enumerated in "
         "artifacts/source-digests.txt at bdfd6ee702a630f0575f0c186f51b3bbbcd1810a",
     ),
+    "artifacts/source-proof.json": (
+        "source-git-proof",
+        "git-object-source-readback",
+        "git cat-file commit and tree-object readback for "
+        "bdfd6ee702a630f0575f0c186f51b3bbbcd1810a",
+    ),
     "artifacts/fixture/config/dev-model.yaml": (
         "source-file",
         "retained-synthetic-git-object-bytes",
@@ -195,16 +240,18 @@ CODEX_WRITING_EXPECTED_ARTIFACT_BINDINGS = {
 CODEX_WRITING_EXPECTED_ARTIFACT_SHA256 = {
     "artifacts/client-version.txt": "ca4fe30a68dd82c6a7af75eeb683f763cfb6554840590a9e345692269ae744f0",
     "artifacts/descriptor.json": "d57a3eeaeef0dd01e208735e71b2c672f409b03ffec06347408864de396691cf",
-    "artifacts/execution-source-digests.txt": "c2344c3db6b50233d96faecc02d2559c07406878e851174c3edfa6074f7f7911",
+    "artifacts/execution-source-digests.txt": "5d2696ba86165f940cf5ab4e5426bbd7f05ad75e2efe9e92ef432903e7ca78ef",
     "artifacts/filesystem-readback.txt": "ae6b54246ec52ac4dfd8079ea44a19499f5966887f5c0673084cf8e6df38dbf0",
     "artifacts/final-message.txt": "56c7748b3099da9282dde6c13e202b529740274577aa44ba4baaea8440051ca0",
+    "artifacts/fixture-proof.json": "0ccf1c16d740c09ca6841e8a3f74dc3f3f09c4ada5f26268c74f238aed507440",
     "artifacts/fixture/config/dev-model.yaml": "d4cb774d636655c2c572aed4341c773ae057d09f444494f4b54a56a513035393",
     "artifacts/forge-readback.json": "d6fb6505b19a522d9cc6718d7c09a4510b3e96bbf0ef554a8fa9f63d5910a6c6",
     "artifacts/git-readback.txt": "7767f7e2a40d17c61ec34ce205943a8414eb07810be28414bd50c35f68b47029",
     "artifacts/launcher-receipt.json": "06be15394a823fedf6abee96cd38746f8a6c1f951abbef7a9b4f8f2b92e839cc",
     "artifacts/review-receipt.json": "e71819c7a767c94adcee86c67f683045d7547af3a7a1f96792c8ae645f8c76b4",
     "artifacts/runtime-attestation.json": "95271b822394dd24e9f5d2fdb2ae3c3b5a380a74f0c49bbefd71d8f59fd2deaa",
-    "artifacts/source-digests.txt": "079c325ee9f2c80222d4441826f1f19c0509d5d2a4c1f3b5f1af8541bbb166ad",
+    "artifacts/source-digests.txt": "5859493e48386ebb12e382b3b743ee5b00c7c9d6a93c31c8dbed2faae93f7c19",
+    "artifacts/source-proof.json": "5c605d93a352f9cf1f2bf6f067d6abcff923cbcaf03101d60fa398f3334abc3c",
     "artifacts/source/config/dev-model.yaml": "32d9e7b285a54438975c2aa2d9813adc5d017cef077b6df71564b1ae418a6d92",
     "artifacts/source/scripts/dev_session.sh": "2ae9af83f182fa726bdc2102d65820242b873aa9d6749f9a450c4b1afd55e4ba",
     "artifacts/source/scripts/launch_lane.py": "7787079163e9d678284db5df15311f059a519a61db6301980784864ab02ad9e6",
@@ -385,14 +432,29 @@ def _add_source_ledger(
 ) -> list[dict[str, object]]:
     artifacts = manifest.parent / "artifacts"
     source_file = artifacts / "source" / "scripts" / "example.py"
-    source_bytes = b"print('retained source')\n"
+    source_bytes = TEST_SOURCE_BYTES
     source_digest = hashlib.sha256(source_bytes).hexdigest()
+    source_proof = artifacts / "source-proof.json"
+    _write_json(
+        source_proof,
+        {
+            "schema_version": 1,
+            "namespace": "source",
+            "revision": SOURCE,
+            "commit_lines": TEST_COMMIT_LINES,
+            "trees": [
+                {"oid": TEST_ROOT_TREE, "entries": TEST_ROOT_TREE_ENTRIES},
+                {"oid": TEST_SCRIPTS_TREE, "entries": TEST_SCRIPTS_TREE_ENTRIES},
+            ],
+        },
+    )
     ledger = artifacts / "source-digests.txt"
     ledger.write_text(
         f"source revision: {SOURCE}\n"
+        "source proof: artifacts/source-proof.json\n"
         f"{source_digest if ledger_digest is None else ledger_digest}  "
-        "source/scripts/example.py"
-        f"{'  git-blob:' + ledger_git_blob if ledger_git_blob is not None else ''}\n",
+        "source/scripts/example.py  "
+        f"git-blob:{TEST_SOURCE_BLOB if ledger_git_blob is None else ledger_git_blob}\n",
         encoding="utf-8",
     )
     if include_source_file:
@@ -406,6 +468,16 @@ def _add_source_ledger(
             "path": "artifacts/source-digests.txt",
             "sha256": _sha(ledger),
             "kind": "source-digest",
+            "observer": "git-object-source-readback",
+        }
+    )
+    value["artifacts"].append(
+        {
+            "capture_request": f"git cat-file commit/tree proof for {SOURCE}",
+            "captured_on": "2026-08-30",
+            "path": "artifacts/source-proof.json",
+            "sha256": _sha(source_proof),
+            "kind": "source-git-proof",
             "observer": "git-object-source-readback",
         }
     )
@@ -425,6 +497,7 @@ def _add_source_ledger(
             value["claims"][0]["evidence"].append(
                 "artifacts/source/scripts/example.py"
             )
+            value["claims"][0]["evidence"].append("artifacts/source-proof.json")
     _write_json(manifest, value)
     _refresh_promotion_digest(manifest, promotion)
     return json.loads(json.dumps(value["claims"]))
@@ -454,6 +527,98 @@ def test_a_source_digest_and_its_named_source_file_can_promote(tmp_path: Path) -
     result = _run(manifest, promotion, expected_claims=expected_claims)
 
     assert result.returncode == 0, result.stderr
+
+
+def test_a_self_consistently_relabelled_source_revision_is_refused(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+    )
+    fabricated_revision = "3" * 40
+    ledger = manifest.parent / "artifacts/source-digests.txt"
+    ledger.write_text(
+        ledger.read_text(encoding="utf-8").replace(SOURCE, fabricated_revision),
+        encoding="utf-8",
+    )
+    proof = manifest.parent / "artifacts/source-proof.json"
+    proof_value = json.loads(proof.read_text(encoding="utf-8"))
+    proof_value["revision"] = fabricated_revision
+    _write_json(proof, proof_value)
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    manifest_value["source"]["revision"] = fabricated_revision
+    for artifact in manifest_value["artifacts"]:
+        if artifact["path"] == "artifacts/source-digests.txt":
+            artifact["sha256"] = _sha(ledger)
+        elif artifact["path"] == "artifacts/source-proof.json":
+            artifact["sha256"] = _sha(proof)
+    _write_json(manifest, manifest_value)
+    promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
+    promotion_value["source_revision"] = fabricated_revision
+    promotion_value["manifest_sha256"] = _sha(manifest)
+    _write_json(promotion, promotion_value)
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = fabricated_revision
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 2
+    assert "commit does not match its revision" in result.stderr
+
+
+def test_retained_source_bytes_absent_from_the_revision_tree_are_refused(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+    )
+    artifacts = manifest.parent / "artifacts"
+    original = artifacts / "source/scripts/example.py"
+    foreign = artifacts / "source/scripts/foreign.py"
+    original.rename(foreign)
+    ledger = artifacts / "source-digests.txt"
+    ledger.write_text(
+        ledger.read_text(encoding="utf-8").replace(
+            "source/scripts/example.py",
+            "source/scripts/foreign.py",
+        ),
+        encoding="utf-8",
+    )
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    for artifact in manifest_value["artifacts"]:
+        if artifact["path"] == "artifacts/source-digests.txt":
+            artifact["sha256"] = _sha(ledger)
+        elif artifact["path"] == "artifacts/source/scripts/example.py":
+            artifact["path"] = "artifacts/source/scripts/foreign.py"
+            artifact["capture_request"] = f"git show {SOURCE}:scripts/foreign.py"
+    manifest_value["claims"][0]["evidence"] = [
+        "artifacts/source/scripts/foreign.py"
+        if path == "artifacts/source/scripts/example.py"
+        else path
+        for path in manifest_value["claims"][0]["evidence"]
+    ]
+    _write_json(manifest, manifest_value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(
+        manifest,
+        promotion,
+        expected_claims=manifest_value["claims"],
+    )
+
+    assert result.returncode == 2
+    assert "does not contain source/scripts/foreign.py" in result.stderr
 
 
 def test_a_fixture_header_cannot_replace_the_bundle_source_revision(
@@ -580,7 +745,7 @@ def test_a_source_digest_claim_must_link_every_named_source_file(tmp_path: Path)
     result = _run(manifest, promotion, expected_claims=expected_claims)
 
     assert result.returncode == 2
-    assert "without all of its source-file evidence" in result.stderr
+    assert "without all of its source evidence" in result.stderr
 
 
 def test_a_bundle_without_a_promotion_receipt_verifies_structurally(tmp_path: Path) -> None:
@@ -989,6 +1154,7 @@ def test_duplicate_artifact_paths_are_refused(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("field", "replacement", "message"),
     [
+        ("observer", "", "observer must be a non-empty string"),
         ("capture_request", "", "capture_request must be a non-empty string"),
         ("captured_on", "2026/08/30", "captured_on must use YYYY-MM-DD"),
         ("captured_on", "2026-99-99", "captured_on must be a calendar date"),
@@ -1011,6 +1177,19 @@ def test_artifact_measurement_stamps_are_required(
 
     assert result.returncode == 2
     assert message in result.stderr
+
+
+def test_unknown_manifest_fields_are_refused(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    value["unreviewed_extension"] = "plausible"
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "bundle manifest keys differ" in result.stderr
 
 
 @pytest.mark.parametrize("zone", ["Etc/GMT+12", "Pacific/Kiritimati"])
@@ -1423,10 +1602,18 @@ def test_control_characters_in_artifact_paths_are_refused(
     assert "Traceback" not in result.stderr
 
 
-def test_control_characters_in_identity_fields_are_refused(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "control",
+    ["\u0085", "\u202e", "\u200b"],
+    ids=["nel", "right-to-left-override", "zero-width-space"],
+)
+def test_control_characters_in_identity_fields_are_refused(
+    tmp_path: Path,
+    control: str,
+) -> None:
     manifest, promotion = _fixture(tmp_path)
     value = json.loads(manifest.read_text(encoding="utf-8"))
-    controlled_repository = "https://github.com/example/source\u0085suffix"
+    controlled_repository = f"https://github.com/example/source{control}suffix"
     value["source"]["repository"] = controlled_repository
     _write_json(manifest, value)
     _refresh_promotion_digest(manifest, promotion)
@@ -1956,16 +2143,17 @@ def test_the_promoted_codex_writing_lane_claims_remain_independently_recomputabl
     assert "Codex writing lane\ndurable evidence validation" in git_readback
     source_digests = (artifacts / "source-digests.txt").read_text(encoding="utf-8")
     assert source_digests == """source revision: bdfd6ee702a630f0575f0c186f51b3bbbcd1810a
-7787079163e9d678284db5df15311f059a519a61db6301980784864ab02ad9e6  source/scripts/launch_lane.py
-2ae9af83f182fa726bdc2102d65820242b873aa9d6749f9a450c4b1afd55e4ba  source/scripts/dev_session.sh
-4ab496661883d8f4ad590a6612a48b31f8cbf770283bb09794096149276634e6  source/scripts/lib/kitconfig.py
-980cbf5596cea67033a5dd02d53630f2a92c24afd693ba7727d5fc50303ff555  source/scripts/lib/repo_root.sh
-32d9e7b285a54438975c2aa2d9813adc5d017cef077b6df71564b1ae418a6d92  source/config/dev-model.yaml
+source proof: artifacts/source-proof.json
+7787079163e9d678284db5df15311f059a519a61db6301980784864ab02ad9e6  source/scripts/launch_lane.py  git-blob:43f71791b519ac3d479f74099769f893a50fb585
+2ae9af83f182fa726bdc2102d65820242b873aa9d6749f9a450c4b1afd55e4ba  source/scripts/dev_session.sh  git-blob:011a6a1102705f2c9255a086d9b78a8def341964
+4ab496661883d8f4ad590a6612a48b31f8cbf770283bb09794096149276634e6  source/scripts/lib/kitconfig.py  git-blob:499ddcd2f7be6b3d78ef9dab1a108fb0ffbf5cf1
+980cbf5596cea67033a5dd02d53630f2a92c24afd693ba7727d5fc50303ff555  source/scripts/lib/repo_root.sh  git-blob:ba0c2e0f2a1b99de58872f4fdd6cc7f2a2279063
+32d9e7b285a54438975c2aa2d9813adc5d017cef077b6df71564b1ae418a6d92  source/config/dev-model.yaml  git-blob:6c4f4feaa870894537ba6173751a996c9a6716a7
 """
     retained_source_digests = {
         path: digest
-        for digest, path in (
-            line.split("  ", 1) for line in source_digests.splitlines()[1:]
+        for digest, path, _blob in (
+            line.split("  ", 2) for line in source_digests.splitlines()[2:]
         )
     }
     assert set(retained_source_digests) == {
@@ -1977,7 +2165,9 @@ def test_the_promoted_codex_writing_lane_claims_remain_independently_recomputabl
         encoding="utf-8"
     )
     assert execution_source_digests == """source revision: bdfd6ee702a630f0575f0c186f51b3bbbcd1810a
+source proof: artifacts/source-proof.json
 fixture base revision: 83d3b623305a691dd874df44ca92270daa62ade9
+fixture proof: artifacts/fixture-proof.json
 captured on: 2026-08-30
 d4cb774d636655c2c572aed4341c773ae057d09f444494f4b54a56a513035393  fixture/config/dev-model.yaml  git-blob:e6829036c661e3535dcf24a574575cb866896258
 2ae9af83f182fa726bdc2102d65820242b873aa9d6749f9a450c4b1afd55e4ba  source/scripts/dev_session.sh  git-blob:011a6a1102705f2c9255a086d9b78a8def341964

@@ -78,7 +78,15 @@
       "kind": "source-digest",
       "observer": "git-object-source-readback",
       "path": "artifacts/source-digests.txt",
-      "sha256": "079c325ee9f2c80222d4441826f1f19c0509d5d2a4c1f3b5f1af8541bbb166ad"
+      "sha256": "5859493e48386ebb12e382b3b743ee5b00c7c9d6a93c31c8dbed2faae93f7c19"
+    },
+    {
+      "capture_request": "git cat-file commit and tree-object readback for bdfd6ee702a630f0575f0c186f51b3bbbcd1810a",
+      "captured_on": "2026-08-30",
+      "kind": "source-git-proof",
+      "observer": "git-object-source-readback",
+      "path": "artifacts/source-proof.json",
+      "sha256": "5c605d93a352f9cf1f2bf6f067d6abcff923cbcaf03101d60fa398f3334abc3c"
     },
     {
       "capture_request": "git show bdfd6ee702a630f0575f0c186f51b3bbbcd1810a:config/dev-model.yaml",
@@ -110,7 +118,15 @@
       "kind": "source-digest",
       "observer": "synthetic-git-object-readback",
       "path": "artifacts/execution-source-digests.txt",
-      "sha256": "c2344c3db6b50233d96faecc02d2559c07406878e851174c3edfa6074f7f7911"
+      "sha256": "5d2696ba86165f940cf5ab4e5426bbd7f05ad75e2efe9e92ef432903e7ca78ef"
+    },
+    {
+      "capture_request": "git cat-file commit and tree-object readback for 83d3b623305a691dd874df44ca92270daa62ade9",
+      "captured_on": "2026-08-30",
+      "kind": "source-git-proof",
+      "observer": "synthetic-git-object-readback",
+      "path": "artifacts/fixture-proof.json",
+      "sha256": "0ccf1c16d740c09ca6841e8a3f74dc3f3f09c4ada5f26268c74f238aed507440"
     },
     {
       "capture_request": "git show 83d3b623305a691dd874df44ca92270daa62ade9:config/dev-model.yaml",
@@ -147,6 +163,8 @@
         "artifacts/git-readback.txt",
         "artifacts/source-digests.txt",
         "artifacts/execution-source-digests.txt",
+        "artifacts/source-proof.json",
+        "artifacts/fixture-proof.json",
         "artifacts/fixture/config/dev-model.yaml",
         "artifacts/source/config/dev-model.yaml",
         "artifacts/source/scripts/dev_session.sh",
@@ -166,6 +184,8 @@
         "artifacts/git-readback.txt",
         "artifacts/source-digests.txt",
         "artifacts/execution-source-digests.txt",
+        "artifacts/source-proof.json",
+        "artifacts/fixture-proof.json",
         "artifacts/fixture/config/dev-model.yaml",
         "artifacts/source/config/dev-model.yaml",
         "artifacts/source/scripts/dev_session.sh",

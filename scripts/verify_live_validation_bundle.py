@@ -69,6 +69,7 @@ ALLOWED_ARTIFACT_KINDS = frozenset(
         "runtime-attestation",
         "source-digest",
         "source-file",
+        "source-git-proof",
     }
 )
 ALLOWED_SUFFIXES = frozenset(
@@ -92,12 +93,19 @@ _SOURCE_LEDGER_REVISION = re.compile(r"^source revision: (?P<revision>[0-9a-f]{4
 _SOURCE_LEDGER_FIXTURE = re.compile(
     r"^fixture base revision: (?P<revision>[0-9a-f]{40})$"
 )
+_SOURCE_LEDGER_SOURCE_PROOF = re.compile(
+    r"^source proof: (?P<path>artifacts/[A-Za-z0-9][A-Za-z0-9._/-]*\.json)$"
+)
+_SOURCE_LEDGER_FIXTURE_PROOF = re.compile(
+    r"^fixture proof: (?P<path>artifacts/[A-Za-z0-9][A-Za-z0-9._/-]*\.json)$"
+)
 _SOURCE_LEDGER_CAPTURE = re.compile(r"^captured on: (?P<captured_on>\d{4}-\d{2}-\d{2})$")
 _SOURCE_LEDGER_ROW = re.compile(
     r"^(?P<sha256>[0-9a-f]{64})  "
     r"(?P<path>[A-Za-z0-9][A-Za-z0-9._/-]*)"
-    r"(?:  git-blob:(?P<git_blob>[0-9a-f]{40}))?$"
+    r"  git-blob:(?P<git_blob>[0-9a-f]{40})$"
 )
+_GIT_TREE_MODE = re.compile(r"^(?:40000|100644|100755|120000|160000)$")
 _FORBIDDEN_JSON_KEY = re.compile(
     r"(?:^|_)(?:(?:api|access|private)_?keys?|auths?|authentications?|"
     r"authorizations?|bearers?|cookies?|credentials?|pass_?phrases?|passwords?|"
@@ -153,6 +161,11 @@ def _git_blob_id(path: Path) -> str:
     return hashlib.sha1(payload, usedforsecurity=False).hexdigest()
 
 
+def _git_object_id(kind: str, data: bytes) -> str:
+    payload = f"{kind} {len(data)}\0".encode() + data
+    return hashlib.sha1(payload, usedforsecurity=False).hexdigest()
+
+
 def _object(value: Any, label: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise BundleError(f"{label} must be a JSON object")
@@ -168,7 +181,15 @@ def _list(value: Any, label: str) -> list[Any]:
 def _string(value: Any, label: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise BundleError(f"{label} must be a non-empty string")
-    if any(unicodedata.category(character) == "Cc" for character in value):
+    if any(unicodedata.category(character) in {"Cc", "Cf"} for character in value):
+        raise BundleError(f"{label} must not contain control characters")
+    return value
+
+
+def _git_text_line(value: Any, label: str) -> str:
+    if not isinstance(value, str):
+        raise BundleError(f"{label} must be a string")
+    if any(unicodedata.category(character) in {"Cc", "Cf"} for character in value):
         raise BundleError(f"{label} must not contain control characters")
     return value
 
@@ -449,6 +470,126 @@ def _validate_attestation(
         raise BundleError("runtime attestation disagrees with runtime.applied_compute")
 
 
+def _validate_git_source_proof(
+    *,
+    bundle_root: Path,
+    proof_path: str,
+    artifact_by_path: dict[str, dict[str, Any]],
+    namespace: str,
+    revision: str,
+    expected_blobs: dict[str, str],
+) -> None:
+    record = artifact_by_path.get(proof_path)
+    if record is None or record["kind"] != "source-git-proof":
+        raise BundleError(f"source ledger names an absent source-git-proof: {proof_path}")
+    proof = _read_json(
+        bundle_root / proof_path,
+        f"source Git proof {proof_path}",
+        limit=MAX_ARTIFACT_BYTES,
+    )
+    _exact_keys(
+        proof,
+        {"schema_version", "namespace", "revision", "commit_lines", "trees"},
+        f"source Git proof {proof_path}",
+    )
+    if type(proof["schema_version"]) is not int or proof["schema_version"] != SCHEMA_VERSION:
+        raise BundleError(f"source Git proof has an unsupported schema version: {proof_path}")
+    if _string(proof["namespace"], f"source Git proof {proof_path}.namespace") != namespace:
+        raise BundleError(f"source Git proof namespace differs from its ledger: {proof_path}")
+    proof_revision = _validate_revision(
+        proof["revision"], f"source Git proof {proof_path}.revision"
+    )
+    if proof_revision != revision:
+        raise BundleError(f"source Git proof revision differs from its ledger: {proof_path}")
+
+    commit_lines = _list(proof["commit_lines"], f"source Git proof {proof_path}.commit_lines")
+    if not commit_lines:
+        raise BundleError(f"source Git proof must retain commit content: {proof_path}")
+    normalized_lines = [
+        _git_text_line(line, f"source Git proof {proof_path}.commit_lines[{index}]")
+        for index, line in enumerate(commit_lines)
+    ]
+    commit_bytes = ("\n".join(normalized_lines) + "\n").encode("utf-8")
+    if _git_object_id("commit", commit_bytes) != revision:
+        raise BundleError(f"source Git proof commit does not match its revision: {proof_path}")
+    try:
+        header_end = normalized_lines.index("")
+    except ValueError as exc:
+        raise BundleError(f"source Git proof commit has no header boundary: {proof_path}") from exc
+    tree_headers = [
+        line.removeprefix("tree ")
+        for line in normalized_lines[:header_end]
+        if line.startswith("tree ")
+    ]
+    if len(tree_headers) != 1 or not _GIT_SHA.fullmatch(tree_headers[0]):
+        raise BundleError(f"source Git proof commit must name exactly one root tree: {proof_path}")
+    root_tree = tree_headers[0]
+
+    tree_values = _list(proof["trees"], f"source Git proof {proof_path}.trees")
+    if not tree_values:
+        raise BundleError(f"source Git proof must retain tree objects: {proof_path}")
+    trees: dict[str, dict[str, tuple[str, str]]] = {}
+    for tree_index, tree_value in enumerate(tree_values):
+        tree_label = f"source Git proof {proof_path}.trees[{tree_index}]"
+        tree = _object(tree_value, tree_label)
+        _exact_keys(tree, {"oid", "entries"}, tree_label)
+        oid = _validate_revision(tree["oid"], f"{tree_label}.oid")
+        if oid in trees:
+            raise BundleError(f"source Git proof repeats a tree object: {oid}")
+        entry_values = _list(tree["entries"], f"{tree_label}.entries")
+        entries: dict[str, tuple[str, str]] = {}
+        raw = bytearray()
+        for entry_index, entry_value in enumerate(entry_values):
+            entry_label = f"{tree_label}.entries[{entry_index}]"
+            entry = _object(entry_value, entry_label)
+            _exact_keys(entry, {"mode", "name", "oid"}, entry_label)
+            mode = _string(entry["mode"], f"{entry_label}.mode")
+            if not _GIT_TREE_MODE.fullmatch(mode):
+                raise BundleError(f"{entry_label}.mode is unsupported")
+            name = _string(entry["name"], f"{entry_label}.name")
+            if name in {".", ".."} or "/" in name or name in entries:
+                raise BundleError(f"{entry_label}.name is not a unique Git tree entry")
+            child_oid = _validate_revision(entry["oid"], f"{entry_label}.oid")
+            entries[name] = (mode, child_oid)
+            raw.extend(mode.encode("ascii") + b" " + name.encode("utf-8") + b"\0")
+            raw.extend(bytes.fromhex(child_oid))
+        if _git_object_id("tree", bytes(raw)) != oid:
+            raise BundleError(f"source Git proof tree content does not match its oid: {oid}")
+        trees[oid] = entries
+
+    visited_trees: set[str] = set()
+    for git_path, expected_blob in sorted(expected_blobs.items()):
+        canonical = _safe_relative_path(git_path, f"source Git proof path {git_path}")
+        parts = PurePosixPath(canonical).parts
+        tree_oid = root_tree
+        for index, part in enumerate(parts):
+            entries = trees.get(tree_oid)
+            if entries is None:
+                raise BundleError(
+                    f"source Git proof omits tree {tree_oid} needed for {namespace}/{git_path}"
+                )
+            visited_trees.add(tree_oid)
+            entry = entries.get(part)
+            if entry is None:
+                raise BundleError(
+                    f"source Git proof does not contain {namespace}/{git_path} at {revision}"
+                )
+            mode, child_oid = entry
+            if index < len(parts) - 1:
+                if mode != "40000":
+                    raise BundleError(
+                        f"source Git proof path crosses a non-tree entry: {namespace}/{git_path}"
+                    )
+                tree_oid = child_oid
+            elif mode not in {"100644", "100755"} or child_oid != expected_blob:
+                raise BundleError(
+                    f"source Git proof blob differs for {namespace}/{git_path} at {revision}"
+                )
+    unused_trees = sorted(set(trees) - visited_trees)
+    if unused_trees:
+        raise BundleError(f"source Git proof contains unneeded tree objects: {unused_trees}")
+
+
 def _validate_source_evidence(
     *,
     bundle_root: Path,
@@ -461,8 +602,15 @@ def _validate_source_evidence(
     ledgers = {
         path for path, record in artifact_by_path.items() if record["kind"] == "source-digest"
     }
+    proof_files = {
+        path
+        for path, record in artifact_by_path.items()
+        if record["kind"] == "source-git-proof"
+    }
     named_source_files: set[str] = set()
+    named_proof_files: set[str] = set()
     source_files_by_ledger: dict[str, set[str]] = {}
+    proof_requirements: dict[str, tuple[str, str, dict[str, str]]] = {}
     for ledger_path in sorted(ledgers):
         record = artifact_by_path[ledger_path]
         try:
@@ -475,9 +623,16 @@ def _validate_source_evidence(
             )
         revision_headers = 0
         fixture_headers = 0
+        source_proof_headers = 0
+        fixture_proof_headers = 0
         capture_headers = 0
         row_count = 0
         ledger_paths: set[str] = set()
+        ledger_proofs: set[str] = set()
+        source_proof_path: str | None = None
+        fixture_proof_path: str | None = None
+        fixture_revision: str | None = None
+        ledger_rows: list[tuple[str, str, str]] = []
         for line_number, line in enumerate(lines, start=1):
             revision_match = _SOURCE_LEDGER_REVISION.fullmatch(line)
             if revision_match:
@@ -491,6 +646,25 @@ def _validate_source_evidence(
             fixture_match = _SOURCE_LEDGER_FIXTURE.fullmatch(line)
             if fixture_match:
                 fixture_headers += 1
+                fixture_revision = fixture_match.group("revision")
+                continue
+            source_proof_match = _SOURCE_LEDGER_SOURCE_PROOF.fullmatch(line)
+            if source_proof_match:
+                source_proof_headers += 1
+                source_proof_path = _safe_relative_path(
+                    source_proof_match.group("path"),
+                    f"source-digest ledger {ledger_path}:{line_number}",
+                    beneath="artifacts",
+                )
+                continue
+            fixture_proof_match = _SOURCE_LEDGER_FIXTURE_PROOF.fullmatch(line)
+            if fixture_proof_match:
+                fixture_proof_headers += 1
+                fixture_proof_path = _safe_relative_path(
+                    fixture_proof_match.group("path"),
+                    f"source-digest ledger {ledger_path}:{line_number}",
+                    beneath="artifacts",
+                )
                 continue
             capture_match = _SOURCE_LEDGER_CAPTURE.fullmatch(line)
             if capture_match:
@@ -508,8 +682,15 @@ def _validate_source_evidence(
                     f"{ledger_path}:{line_number}"
                 )
             row_count += 1
+            row_path = row.group("path")
+            namespace, separator, git_path = row_path.partition("/")
+            if separator != "/" or namespace not in {"source", "fixture"} or not git_path:
+                raise BundleError(
+                    "source-digest ledger rows must use source/ or fixture/ namespaces: "
+                    f"{ledger_path}:{line_number}"
+                )
             source_file = _safe_relative_path(
-                f"artifacts/{row.group('path')}",
+                f"artifacts/{row_path}",
                 f"source-digest ledger {ledger_path}:{line_number}",
                 beneath="artifacts",
             )
@@ -530,14 +711,12 @@ def _validate_source_evidence(
                     f"{source_file}"
                 )
             expected_git_blob = row.group("git_blob")
-            if (
-                expected_git_blob is not None
-                and _git_blob_id(bundle_root / source_file) != expected_git_blob
-            ):
+            if _git_blob_id(bundle_root / source_file) != expected_git_blob:
                 raise BundleError(
                     "source-digest ledger does not match its source-file Git blob: "
                     f"{source_file}"
                 )
+            ledger_rows.append((namespace, git_path, expected_git_blob))
         if revision_headers != 1:
             raise BundleError(
                 f"source-digest ledger must contain exactly one revision header: {ledger_path}"
@@ -546,19 +725,75 @@ def _validate_source_evidence(
             raise BundleError(
                 f"source-digest ledger repeats its fixture-base header: {ledger_path}"
             )
+        if source_proof_headers > 1 or fixture_proof_headers > 1:
+            raise BundleError(f"source-digest ledger repeats a Git proof header: {ledger_path}")
         if capture_headers > 1:
             raise BundleError(
                 f"source-digest ledger repeats its capture-date header: {ledger_path}"
             )
         if row_count == 0:
             raise BundleError(f"source-digest ledger must name source-file bytes: {ledger_path}")
+        namespaces = {namespace for namespace, _, _ in ledger_rows}
+        if source_proof_headers != (1 if "source" in namespaces else 0):
+            raise BundleError(
+                f"source-digest ledger has an invalid source proof header: {ledger_path}"
+            )
+        fixture_expected = "fixture" in namespaces
+        if fixture_headers != (1 if fixture_expected else 0) or fixture_proof_headers != (
+            1 if fixture_expected else 0
+        ):
+            raise BundleError(
+                f"source-digest ledger has an invalid fixture proof binding: {ledger_path}"
+            )
+        for namespace, git_path, expected_blob in ledger_rows:
+            if namespace == "source":
+                proof_path = source_proof_path
+                proof_revision = source_revision
+            else:
+                proof_path = fixture_proof_path
+                proof_revision = fixture_revision
+            if proof_path is None or proof_revision is None:
+                raise BundleError(
+                    f"source-digest ledger omits the {namespace} Git proof binding: {ledger_path}"
+                )
+            ledger_proofs.add(proof_path)
+            existing = proof_requirements.get(proof_path)
+            if existing is None:
+                required_blobs: dict[str, str] = {}
+                proof_requirements[proof_path] = (namespace, proof_revision, required_blobs)
+            else:
+                existing_namespace, existing_revision, required_blobs = existing
+                if existing_namespace != namespace or existing_revision != proof_revision:
+                    raise BundleError(f"source Git proof has conflicting ledger bindings: {proof_path}")
+            previous_blob = required_blobs.get(git_path)
+            if previous_blob is not None and previous_blob != expected_blob:
+                raise BundleError(
+                    f"source Git proof path has conflicting blob bindings: {namespace}/{git_path}"
+                )
+            required_blobs[git_path] = expected_blob
         named_source_files.update(ledger_paths)
-        source_files_by_ledger[ledger_path] = ledger_paths
+        named_proof_files.update(ledger_proofs)
+        source_files_by_ledger[ledger_path] = ledger_paths | ledger_proofs
     if source_files != named_source_files:
         raise BundleError(
             "source-file inventory differs from the source-digest ledgers: "
             f"unlisted={sorted(source_files - named_source_files)}, "
             f"missing={sorted(named_source_files - source_files)}"
+        )
+    if proof_files != named_proof_files:
+        raise BundleError(
+            "source-git-proof inventory differs from the source-digest ledgers: "
+            f"unlisted={sorted(proof_files - named_proof_files)}, "
+            f"missing={sorted(named_proof_files - proof_files)}"
+        )
+    for proof_path, (namespace, revision, expected_blobs) in proof_requirements.items():
+        _validate_git_source_proof(
+            bundle_root=bundle_root,
+            proof_path=proof_path,
+            artifact_by_path=artifact_by_path,
+            namespace=namespace,
+            revision=revision,
+            expected_blobs=expected_blobs,
         )
     return source_files_by_ledger
 
@@ -732,7 +967,7 @@ def validate_bundle(manifest_path: Path) -> dict[str, Any]:
         for ledger_path, source_paths in source_files_by_ledger.items():
             if ledger_path in evidence_paths and not source_paths.issubset(evidence_paths):
                 raise BundleError(
-                    f"{label} names a source-digest ledger without all of its source-file "
+                    f"{label} names a source-digest ledger without all of its source "
                     f"evidence: {sorted(source_paths - evidence_paths)}"
                 )
         if not isinstance(claim["requires_applied_compute"], bool):

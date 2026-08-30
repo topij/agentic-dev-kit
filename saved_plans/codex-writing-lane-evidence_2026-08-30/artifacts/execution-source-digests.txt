@@ -1,5 +1,7 @@
 source revision: bdfd6ee702a630f0575f0c186f51b3bbbcd1810a
+source proof: artifacts/source-proof.json
 fixture base revision: 83d3b623305a691dd874df44ca92270daa62ade9
+fixture proof: artifacts/fixture-proof.json
 captured on: 2026-08-30
 d4cb774d636655c2c572aed4341c773ae057d09f444494f4b54a56a513035393  fixture/config/dev-model.yaml  git-blob:e6829036c661e3535dcf24a574575cb866896258
 2ae9af83f182fa726bdc2102d65820242b873aa9d6749f9a450c4b1afd55e4ba  source/scripts/dev_session.sh  git-blob:011a6a1102705f2c9255a086d9b78a8def341964

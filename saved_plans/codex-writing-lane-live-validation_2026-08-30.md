@@ -65,6 +65,8 @@ The retained artifacts are deliberately minimized:
   read-backs;
 - source-file SHA-256 ledgers and exact retained bytes for the upstream configuration,
   descriptor issuer, launcher, and their config-reader/root-discovery dependencies;
+- retained commit content and minimal tree-object metadata that independently proves
+  those source-file blobs belong to the named source and fixture revisions;
 - the exact synthetic configuration at fixture revision
   `83d3b623305a691dd874df44ca92270daa62ade9`, whose complete byte delta from the
   upstream configuration is independently constrained to the declared workspace-write,
@@ -119,8 +121,8 @@ UV_CACHE_DIR=/private/tmp/adk-651-uv-cache uv run --python 3.12 \
   --expect-runtime codex \
   --expect-client-version "codex-cli 0.149.1" \
   --expect-session-persistence persistent \
-  --expect-claim '{"evidence":["artifacts/descriptor.json","artifacts/launcher-receipt.json","artifacts/filesystem-readback.txt","artifacts/git-readback.txt","artifacts/source-digests.txt","artifacts/execution-source-digests.txt","artifacts/fixture/config/dev-model.yaml","artifacts/source/config/dev-model.yaml","artifacts/source/scripts/dev_session.sh","artifacts/source/scripts/launch_lane.py","artifacts/source/scripts/lib/kitconfig.py","artifacts/source/scripts/lib/repo_root.sh"],"id":"codex-writing-lane-scoped-write-and-state","requires_applied_compute":false}' \
-  --expect-claim '{"evidence":["artifacts/descriptor.json","artifacts/launcher-receipt.json","artifacts/final-message.txt","artifacts/forge-readback.json","artifacts/git-readback.txt","artifacts/source-digests.txt","artifacts/execution-source-digests.txt","artifacts/fixture/config/dev-model.yaml","artifacts/source/config/dev-model.yaml","artifacts/source/scripts/dev_session.sh","artifacts/source/scripts/launch_lane.py","artifacts/source/scripts/lib/kitconfig.py","artifacts/source/scripts/lib/repo_root.sh"],"id":"codex-writing-lane-ready-private-pr","requires_applied_compute":false}' \
+  --expect-claim '{"evidence":["artifacts/descriptor.json","artifacts/launcher-receipt.json","artifacts/filesystem-readback.txt","artifacts/git-readback.txt","artifacts/source-digests.txt","artifacts/execution-source-digests.txt","artifacts/source-proof.json","artifacts/fixture-proof.json","artifacts/fixture/config/dev-model.yaml","artifacts/source/config/dev-model.yaml","artifacts/source/scripts/dev_session.sh","artifacts/source/scripts/launch_lane.py","artifacts/source/scripts/lib/kitconfig.py","artifacts/source/scripts/lib/repo_root.sh"],"id":"codex-writing-lane-scoped-write-and-state","requires_applied_compute":false}' \
+  --expect-claim '{"evidence":["artifacts/descriptor.json","artifacts/launcher-receipt.json","artifacts/final-message.txt","artifacts/forge-readback.json","artifacts/git-readback.txt","artifacts/source-digests.txt","artifacts/execution-source-digests.txt","artifacts/source-proof.json","artifacts/fixture-proof.json","artifacts/fixture/config/dev-model.yaml","artifacts/source/config/dev-model.yaml","artifacts/source/scripts/dev_session.sh","artifacts/source/scripts/launch_lane.py","artifacts/source/scripts/lib/kitconfig.py","artifacts/source/scripts/lib/repo_root.sh"],"id":"codex-writing-lane-ready-private-pr","requires_applied_compute":false}' \
   --expect-claim '{"evidence":["artifacts/forge-readback.json","artifacts/review-receipt.json"],"id":"codex-writing-lane-exact-head-review-receipt","requires_applied_compute":false}' \
   --json
 ```
@@ -156,6 +158,14 @@ and common non-JSON credential keys escaped the redaction backstop. Promotion-sc
 compute comparison, mandatory first-line source identity, schema-wide Unicode-control
 refusal, and raw credential-key and YAML-block-scalar refusal are the resulting
 corrections.
+A fresh fallback panel at `8e0c58dbd3fe02bb0763e04ce857a5e3f332eb90` on
+2026-08-30 found that retained source bytes and Git blob IDs were self-consistent but
+did not prove membership in the named revision; bidirectional and zero-width format
+controls still crossed identity fields; the maintained parity plan overstated the
+uncorrelated runtime attestation; and closed-schema plus artifact-observer requirements
+were not mutation-pinned. Retained commit/tree proof traversal, schema-wide refusal of
+Unicode control and format categories, corrected promotion wording, and public-CLI
+hostile tests for the two central guards are the resulting corrections.
 That command in `/Users/topi/Coding/agentic-dev-kit`, using the verifier at
 `c946c32129b12e13b9ff32014c944a3a8d1dc149` on 2026-08-30, returned
 `status: verified`, `promotion: true`, and the claim IDs enumerated above.
@@ -172,7 +182,8 @@ The repository suite drives the same public CLI through hostile mutations. It re
 - a compute-dependent claim that omits the minimal runtime attestation;
 - a retained runtime attestation that disagrees with any applied-compute binding;
 - a source-digest ledger with an unsupported row, an absent or mismatched source-file,
-  a mismatched Git blob, or a claim link that omits bytes named by its ledger;
+  a mismatched Git blob, a missing or altered commit/tree proof, a source path absent
+  from the named revision, or a claim link that omits bytes or proof named by its ledger;
 - undeclared bundle-root or artifact-tree neighbors, unreadable subtrees, special
   files, a symlinked bundle root, duplicate JSON members, credential-key spelling
   variants, secret markers hidden by JSON escaping, invalid UTF-8, non-finite or

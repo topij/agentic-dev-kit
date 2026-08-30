@@ -156,16 +156,28 @@ verifier admits these kinds:
   independent destination observations;
 - `source-digest` for a bounded ledger of copied engine/config bytes at the stamped
   source revision, and `source-file` for each exact retained byte sequence the ledger
-  names and a promoted claim depends on.
+  names and a promoted claim depends on;
+- `source-git-proof` for the exact commit content and minimal Git tree-object metadata
+  that proves each named source-file blob belongs to the stamped revision.
 
 A source-digest ledger is not a substitute for its source bytes. It has exactly one
-`source revision: <sha>` header matching the manifest. A fixture ledger may add one
-`fixture base revision: <sha>` header, but that never replaces the source revision;
-the repository-owned semantic control independently pins the fixture relationship.
-Each data row is `<sha256><two spaces><path relative to artifacts/>`, optionally
-followed by `<two spaces>git-blob:<sha>`. An optional `captured on: <UTC YYYY-MM-DD>`
-header must match the artifact record. Retain every row's path as a `source-file` with
-the same SHA-256; the verifier also refuses an unlisted `source-file`.
+`source revision: <sha>` header matching the manifest. Every `source/` row requires a
+`source proof: artifacts/<file>.json` header. A fixture ledger may add one
+`fixture base revision: <sha>` and one `fixture proof: artifacts/<file>.json` header,
+but those never replace the source revision and bind only `fixture/` rows. Each data
+row is `<sha256><two spaces><source-or-fixture/path><two spaces>git-blob:<sha>`.
+An optional `captured on: <UTC YYYY-MM-DD>` header must match the artifact record.
+Retain every row's path as a `source-file` with the same SHA-256 and link the ledger,
+all named source files, and every used proof from the claim. The verifier refuses an
+unlisted source file or proof.
+
+A source Git proof is closed JSON carrying its namespace, revision, exact commit lines,
+and the complete entries of only the tree objects needed for the ledger paths. The
+verifier reconstructs the Git commit and tree bytes, recomputes their object IDs,
+walks from the commit's root tree to each path, and compares the reached blob with both
+the ledger and retained source-file bytes. Extra proof trees are invalid. This keeps
+revision membership independently recomputable from the redacted bundle after the
+source checkout or synthetic fixture has been removed.
 
 A wrapper-attributed claim retains the exact fixture configuration and direct
 repository source dependencies used by the issuer and launcher, not only their

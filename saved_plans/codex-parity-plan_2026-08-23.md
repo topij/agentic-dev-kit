@@ -388,10 +388,12 @@ degraded, held, resume, authority, and completion paths under shared definitions
   stay bounded to that client and revision.
 - [x] Rerun the Codex writing lane through the durable redacted bundle contract
   (`#621`; PR `#651`). The retained promotion binds the source revision, reviewed
-  synthetic repository and head, client, persistent applied-compute attestation,
-  independent redaction reviewer, authoritative observers, exact source bytes,
-  destination digests, and exact-head review receipt. It promotes only the complete
-  independently expected claim objects in the receipt and refuses absent, altered,
+  synthetic repository and head, client, persistent session carrier, independent
+  redaction reviewer, authoritative observers, exact source bytes and their retained
+  Git commit/tree membership proofs, destination digests, and exact-head review
+  receipt. The uncorrelated model, effort, cwd, and session attestation remains a
+  historical observation outside the promoted claim map. The receipt promotes only
+  the complete independently expected claim objects and refuses absent, altered,
   ephemeral, wrong-revision, relabeled, or evidence-thinned carriers.
 - [x] Calibrate both runtimes' neutral tiers and mechanically pass supported model/effort
   keys to fallback-review lenses (`#605`, `#255`).

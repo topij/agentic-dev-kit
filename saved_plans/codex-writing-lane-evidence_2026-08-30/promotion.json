@@ -6,7 +6,7 @@
     "codex-writing-lane-exact-head-review-receipt"
   ],
   "manifest": "bundle.json",
-  "manifest_sha256": "fe57ca2b5df8532a15b99afd1ac5616a885b5d352f93043704795f718cef85c4",
+  "manifest_sha256": "149585d16a7f194a82fc9bb138af1a5323303549b249a8122455fe8cf6335a12",
   "redaction_reviewer": "codex-cockpit-gpt-5-6-sol-max",
   "review_repository": "https://github.com/topij/adk-codex-writing-evidence-20260830",
   "reviewed_head": "5c4006d18e65e0443dc7b22f48c099ad07ce1da9",
