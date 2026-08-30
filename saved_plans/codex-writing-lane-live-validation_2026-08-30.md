@@ -149,7 +149,7 @@ controls crossed the string boundary. The mandatory source-revision header,
 supplementary fixture-base header, selection by the promotion receipt, and full
 Unicode-control rejection are the resulting corrections.
 That command in `/Users/topi/Coding/agentic-dev-kit`, using the verifier at
-`45f93e33603fd06502c406c38d92a1cbc28bc85e` on 2026-08-30, returned
+`a8a5edd5f855aaa0683008ec559ab834283df582` on 2026-08-30, returned
 `status: verified`, `promotion: true`, and the claim IDs enumerated above.
 
 The repository suite drives the same public CLI through hostile mutations. It refuses:
