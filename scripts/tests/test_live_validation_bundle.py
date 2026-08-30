@@ -1703,6 +1703,31 @@ def test_compute_claim_must_name_the_minimal_attestation(tmp_path: Path) -> None
 
 
 @pytest.mark.parametrize(
+    ("field", "replacement", "message"),
+    [
+        ("kind", "forge-readback", "must have kind runtime-attestation"),
+        ("observer", "generic-runtime-readback", "must be runtime-session-context"),
+    ],
+)
+def test_applied_compute_attestation_metadata_is_required(
+    tmp_path: Path,
+    field: str,
+    replacement: str,
+    message: str,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    value["artifacts"][0][field] = replacement
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert message in result.stderr
+
+
+@pytest.mark.parametrize(
     ("field", "replacement"),
     [
         ("model", "gpt-fabricated"),
@@ -2247,9 +2272,37 @@ def test_the_promoted_codex_writing_lane_claims_remain_independently_recomputabl
         path: _sha(bundle / path)
         for path in CODEX_WRITING_EXPECTED_ARTIFACT_SHA256
     } == CODEX_WRITING_EXPECTED_ARTIFACT_SHA256
-    assert {artifact["captured_on"] for artifact in manifest["artifacts"]} == {
-        "2026-08-30"
+    captured_on_by_path = {
+        artifact["path"]: artifact["captured_on"] for artifact in manifest["artifacts"]
     }
+    assert captured_on_by_path == {
+        "artifacts/client-version.txt": "2026-08-29",
+        "artifacts/descriptor.json": "2026-08-29",
+        "artifacts/filesystem-readback.txt": "2026-08-29",
+        "artifacts/final-message.txt": "2026-08-29",
+        "artifacts/forge-readback.json": "2026-08-29",
+        "artifacts/git-readback.txt": "2026-08-29",
+        "artifacts/launcher-receipt.json": "2026-08-29",
+        "artifacts/review-receipt.json": "2026-08-29",
+        "artifacts/runtime-attestation.json": "2026-08-29",
+        "artifacts/source-digests.txt": "2026-08-30",
+        "artifacts/source-proof.json": "2026-08-30",
+        "artifacts/source/config/dev-model.yaml": "2026-08-30",
+        "artifacts/source/scripts/dev_session.sh": "2026-08-30",
+        "artifacts/source/scripts/launch_lane.py": "2026-08-30",
+        "artifacts/execution-source-digests.txt": "2026-08-30",
+        "artifacts/fixture-proof.json": "2026-08-30",
+        "artifacts/fixture/config/dev-model.yaml": "2026-08-30",
+        "artifacts/source/scripts/lib/kitconfig.py": "2026-08-30",
+        "artifacts/source/scripts/lib/repo_root.sh": "2026-08-30",
+    }
+    assert captured_on_by_path["artifacts/descriptor.json"] == descriptor["issued_at"][:10]
+    assert captured_on_by_path["artifacts/launcher-receipt.json"] == (
+        launcher["terminal"]["finished_at"][:10]
+    )
+    assert captured_on_by_path["artifacts/review-receipt.json"] == (
+        review["receipt"]["recorded_at"][:10]
+    )
     assert (artifacts / "client-version.txt").read_text(encoding="utf-8") == (
         manifest["runtime"]["client_version"] + "\n"
     )
