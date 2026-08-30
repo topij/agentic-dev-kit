@@ -24,7 +24,7 @@ uv run <engine-dir>/verify_live_validation_bundle.py <bundle>/bundle.json \
   --expect-applied-compute \
   '{"model":"<model>","effort":"<effort>","cwd":"<cwd>","session_id":"<id>","attestation":"artifacts/runtime-attestation.json"}' \
   --expect-claim \
-  '{"id":"<claim>","evidence":["artifacts/<file>"],"requires_applied_compute":false}'
+  '{"id":"<claim>","evidence":["artifacts/runtime-attestation.json","artifacts/<file>"],"requires_applied_compute":true}'
 ```
 
 Verification is necessary, not sufficient. The named redaction reviewer still owns the
@@ -126,6 +126,14 @@ wrong source or review repository, revision, reviewed head, reviewer, or applied
 compute; a claim renamed to imply a broader capability; and a claim whose evidence
 links were thinned.
 
+A tracked capability promotion also needs a repository-owned semantic control with an
+exact path-to-digest map fixed outside the bundle. That control must hash the retained
+destination and compare the manifest's path/digest map with the same independent
+values. Without it, contradictory receipt or narrative bytes can be changed together
+with their manifest and promotion digests while remaining self-consistent. Structural
+verification still owns absence, alteration against the declared digest, inventory,
+and generic bindings; the independent map owns the exact promoted artifact bytes.
+
 ## Permitted retained artifacts
 
 Retain the smallest artifact that preserves the authoritative observation. The
@@ -141,6 +149,14 @@ verifier admits these kinds:
 - `source-digest` for a bounded ledger of copied engine/config bytes at the stamped
   source revision, and `source-file` for each exact retained byte sequence the ledger
   names and a promoted claim depends on.
+
+A wrapper-attributed claim retains the exact fixture configuration and direct
+repository source dependencies used by the issuer and launcher, not only their
+upstream versions. When fixture bytes differ from the source revision, retain the
+fixture bytes, source and fixture revision identities, and an independently asserted
+complete delta.
+When execution cannot be bound to those retained bytes or an exact fixture tree, narrow
+the claim to its independently observed outcome or leave it historical.
 
 Artifacts must be regular UTF-8 text files below `artifacts/`, use a permitted text
 suffix, appear exactly once in the manifest, fit the verifier's declared per-artifact
@@ -194,10 +210,15 @@ only this shape:
 
 The manifest and promotion receipt repeat those fields, the verifier requires exact
 equality, and the promotion caller must supply the same values from an independent
-runtime observation. A Codex
-`--ephemeral` run deliberately retains no session rollout, so the verifier refuses it
-for an applied-compute claim. Use a persistent run, copy the minimal attestation, verify
-the copied destination, and only then remove the runtime session. A claim that does not
+runtime observation. The minimal attestation establishes those values for its session;
+it does not by itself prove that the session performed a separately retained launcher
+invocation. A claim tying applied compute to a lane run must also retain a minimized
+runtime-owned correlation to that launch, such as a session-owned task nonce and final
+output digest bound into the launcher receipt. If no such durable correlation exists,
+leave applied compute outside that lane claim. A Codex `--ephemeral` run deliberately
+retains no session rollout, so the verifier refuses it for an applied-compute claim. Use
+a persistent run, copy the minimal attestation and required correlation, verify the
+copied destination, and only then remove the runtime session. A claim that does not
 depend on applied compute may use an ephemeral carrier, but must leave
 `runtime.applied_compute` null and may not imply model, effort, or cwd from argv.
 

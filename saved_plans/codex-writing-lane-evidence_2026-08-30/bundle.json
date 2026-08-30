@@ -78,7 +78,7 @@
       "kind": "source-digest",
       "observer": "git-object-source-readback",
       "path": "artifacts/source-digests.txt",
-      "sha256": "0c6f5d6ce5b1c2d86d1ddad4e245ac161072f11fbb5d2688a6ff13b9930178dd"
+      "sha256": "c922a945d0c461d948862b0dd827116b5d132fa5d043264b775b83a70817dbd4"
     },
     {
       "capture_request": "git show bdfd6ee702a630f0575f0c186f51b3bbbcd1810a:config/dev-model.yaml",
@@ -103,40 +103,78 @@
       "observer": "retained-git-object-bytes",
       "path": "artifacts/source/scripts/launch_lane.py",
       "sha256": "7787079163e9d678284db5df15311f059a519a61db6301980784864ab02ad9e6"
+    },
+    {
+      "capture_request": "git object readback and SHA-256 of each execution source path enumerated in artifacts/execution-source-digests.txt at 83d3b623305a691dd874df44ca92270daa62ade9",
+      "captured_on": "2026-08-30",
+      "kind": "source-digest",
+      "observer": "synthetic-git-object-readback",
+      "path": "artifacts/execution-source-digests.txt",
+      "sha256": "777027603e419211921a9447f2372433acc7e5cc7a51d9ca56bfe5b5aeb72b76"
+    },
+    {
+      "capture_request": "git show 83d3b623305a691dd874df44ca92270daa62ade9:config/dev-model.yaml",
+      "captured_on": "2026-08-30",
+      "kind": "source-file",
+      "observer": "retained-synthetic-git-object-bytes",
+      "path": "artifacts/fixture/config/dev-model.yaml",
+      "sha256": "d4cb774d636655c2c572aed4341c773ae057d09f444494f4b54a56a513035393"
+    },
+    {
+      "capture_request": "git show bdfd6ee702a630f0575f0c186f51b3bbbcd1810a:scripts/lib/kitconfig.py",
+      "captured_on": "2026-08-30",
+      "kind": "source-file",
+      "observer": "retained-git-object-bytes",
+      "path": "artifacts/source/scripts/lib/kitconfig.py",
+      "sha256": "4ab496661883d8f4ad590a6612a48b31f8cbf770283bb09794096149276634e6"
+    },
+    {
+      "capture_request": "git show bdfd6ee702a630f0575f0c186f51b3bbbcd1810a:scripts/lib/repo_root.sh",
+      "captured_on": "2026-08-30",
+      "kind": "source-file",
+      "observer": "retained-git-object-bytes",
+      "path": "artifacts/source/scripts/lib/repo_root.sh",
+      "sha256": "980cbf5596cea67033a5dd02d53630f2a92c24afd693ba7727d5fc50303ff555"
     }
   ],
   "bundle_id": "codex-writing-lane-2026-08-30",
   "claims": [
     {
       "evidence": [
-        "artifacts/runtime-attestation.json",
         "artifacts/descriptor.json",
         "artifacts/launcher-receipt.json",
         "artifacts/filesystem-readback.txt",
         "artifacts/git-readback.txt",
         "artifacts/source-digests.txt",
+        "artifacts/execution-source-digests.txt",
+        "artifacts/fixture/config/dev-model.yaml",
         "artifacts/source/config/dev-model.yaml",
         "artifacts/source/scripts/dev_session.sh",
-        "artifacts/source/scripts/launch_lane.py"
+        "artifacts/source/scripts/launch_lane.py",
+        "artifacts/source/scripts/lib/kitconfig.py",
+        "artifacts/source/scripts/lib/repo_root.sh"
       ],
       "id": "codex-writing-lane-scoped-write-and-state",
-      "requires_applied_compute": true
+      "requires_applied_compute": false
     },
     {
       "evidence": [
-        "artifacts/runtime-attestation.json",
         "artifacts/descriptor.json",
         "artifacts/launcher-receipt.json",
         "artifacts/final-message.txt",
         "artifacts/forge-readback.json",
         "artifacts/git-readback.txt",
         "artifacts/source-digests.txt",
+        "artifacts/execution-source-digests.txt",
+        "artifacts/fixture/config/dev-model.yaml",
         "artifacts/source/config/dev-model.yaml",
         "artifacts/source/scripts/dev_session.sh",
-        "artifacts/source/scripts/launch_lane.py"
+        "artifacts/source/scripts/launch_lane.py",
+        "artifacts/source/scripts/lib/kitconfig.py",
+        "artifacts/source/scripts/lib/repo_root.sh"
       ],
       "id": "codex-writing-lane-ready-private-pr",
-      "requires_applied_compute": true
+      "requires_applied_compute": false
     },
     {
       "evidence": [
@@ -145,14 +183,6 @@
       ],
       "id": "codex-writing-lane-exact-head-review-receipt",
       "requires_applied_compute": false
-    },
-    {
-      "evidence": [
-        "artifacts/client-version.txt",
-        "artifacts/runtime-attestation.json"
-      ],
-      "id": "codex-writing-lane-applied-compute",
-      "requires_applied_compute": true
     }
   ],
   "redaction": {
@@ -172,13 +202,7 @@
     "repository": "https://github.com/topij/adk-codex-writing-evidence-20260830"
   },
   "runtime": {
-    "applied_compute": {
-      "attestation": "artifacts/runtime-attestation.json",
-      "cwd": "/private/tmp/adk-codex-writing-20260830/sessions/write/wt",
-      "effort": "max",
-      "model": "gpt-5.6-sol",
-      "session_id": "01a04fb1-0b63-7921-982b-23ff66c200be"
-    },
+    "applied_compute": null,
     "client_version": "codex-cli 0.149.1",
     "name": "codex",
     "session_persistence": "persistent"

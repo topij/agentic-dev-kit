@@ -40,7 +40,7 @@ FIXTURE_EXPECTED_COMPUTE = {
     "session_id": "session-example",
     "attestation": "artifacts/runtime-attestation.json",
 }
-CODEX_WRITING_EXPECTED_COMPUTE = {
+CODEX_WRITING_HISTORICAL_COMPUTE = {
     "model": "gpt-5.6-sol",
     "effort": "max",
     "cwd": "/private/tmp/adk-codex-writing-20260830/sessions/write/wt",
@@ -52,9 +52,16 @@ CODEX_WRITING_SOURCE_PATHS = (
     "config/dev-model.yaml",
     "scripts/dev_session.sh",
     "scripts/launch_lane.py",
+    "scripts/lib/kitconfig.py",
+    "scripts/lib/repo_root.sh",
 )
 CODEX_WRITING_SOURCE_EVIDENCE = [
     f"artifacts/source/{path}" for path in CODEX_WRITING_SOURCE_PATHS
+]
+CODEX_WRITING_EXECUTION_SOURCE_EVIDENCE = [
+    "artifacts/execution-source-digests.txt",
+    "artifacts/fixture/config/dev-model.yaml",
+    *CODEX_WRITING_SOURCE_EVIDENCE,
 ]
 FIXTURE_EXPECTED_CLAIMS = [
     {
@@ -69,30 +76,28 @@ FIXTURE_EXPECTED_CLAIMS = [
 CODEX_WRITING_EXPECTED_CLAIMS = [
     {
         "evidence": [
-            "artifacts/runtime-attestation.json",
             "artifacts/descriptor.json",
             "artifacts/launcher-receipt.json",
             "artifacts/filesystem-readback.txt",
             "artifacts/git-readback.txt",
             "artifacts/source-digests.txt",
-            *CODEX_WRITING_SOURCE_EVIDENCE,
+            *CODEX_WRITING_EXECUTION_SOURCE_EVIDENCE,
         ],
         "id": "codex-writing-lane-scoped-write-and-state",
-        "requires_applied_compute": True,
+        "requires_applied_compute": False,
     },
     {
         "evidence": [
-            "artifacts/runtime-attestation.json",
             "artifacts/descriptor.json",
             "artifacts/launcher-receipt.json",
             "artifacts/final-message.txt",
             "artifacts/forge-readback.json",
             "artifacts/git-readback.txt",
             "artifacts/source-digests.txt",
-            *CODEX_WRITING_SOURCE_EVIDENCE,
+            *CODEX_WRITING_EXECUTION_SOURCE_EVIDENCE,
         ],
         "id": "codex-writing-lane-ready-private-pr",
-        "requires_applied_compute": True,
+        "requires_applied_compute": False,
     },
     {
         "evidence": [
@@ -101,14 +106,6 @@ CODEX_WRITING_EXPECTED_CLAIMS = [
         ],
         "id": "codex-writing-lane-exact-head-review-receipt",
         "requires_applied_compute": False,
-    },
-    {
-        "evidence": [
-            "artifacts/client-version.txt",
-            "artifacts/runtime-attestation.json",
-        ],
-        "id": "codex-writing-lane-applied-compute",
-        "requires_applied_compute": True,
     },
 ]
 CODEX_WRITING_EXPECTED_ARTIFACT_BINDINGS = {
@@ -121,6 +118,13 @@ CODEX_WRITING_EXPECTED_ARTIFACT_BINDINGS = {
         "descriptor",
         "dev-session-durable-descriptor",
         "scripts/dev_session.sh new write --headless --runtime codex --merge-class operator",
+    ),
+    "artifacts/execution-source-digests.txt": (
+        "source-digest",
+        "synthetic-git-object-readback",
+        "git object readback and SHA-256 of each execution source path enumerated in "
+        "artifacts/execution-source-digests.txt at "
+        "83d3b623305a691dd874df44ca92270daa62ade9",
     ),
     "artifacts/filesystem-readback.txt": (
         "filesystem-readback",
@@ -172,6 +176,11 @@ CODEX_WRITING_EXPECTED_ARTIFACT_BINDINGS = {
         "git object readback and SHA-256 of each source path enumerated in "
         "artifacts/source-digests.txt at bdfd6ee702a630f0575f0c186f51b3bbbcd1810a",
     ),
+    "artifacts/fixture/config/dev-model.yaml": (
+        "source-file",
+        "retained-synthetic-git-object-bytes",
+        "git show 83d3b623305a691dd874df44ca92270daa62ade9:config/dev-model.yaml",
+    ),
     **{
         f"artifacts/source/{path}": (
             "source-file",
@@ -180,6 +189,25 @@ CODEX_WRITING_EXPECTED_ARTIFACT_BINDINGS = {
         )
         for path in CODEX_WRITING_SOURCE_PATHS
     },
+}
+CODEX_WRITING_EXPECTED_ARTIFACT_SHA256 = {
+    "artifacts/client-version.txt": "ca4fe30a68dd82c6a7af75eeb683f763cfb6554840590a9e345692269ae744f0",
+    "artifacts/descriptor.json": "d57a3eeaeef0dd01e208735e71b2c672f409b03ffec06347408864de396691cf",
+    "artifacts/execution-source-digests.txt": "777027603e419211921a9447f2372433acc7e5cc7a51d9ca56bfe5b5aeb72b76",
+    "artifacts/filesystem-readback.txt": "ae6b54246ec52ac4dfd8079ea44a19499f5966887f5c0673084cf8e6df38dbf0",
+    "artifacts/final-message.txt": "56c7748b3099da9282dde6c13e202b529740274577aa44ba4baaea8440051ca0",
+    "artifacts/fixture/config/dev-model.yaml": "d4cb774d636655c2c572aed4341c773ae057d09f444494f4b54a56a513035393",
+    "artifacts/forge-readback.json": "d6fb6505b19a522d9cc6718d7c09a4510b3e96bbf0ef554a8fa9f63d5910a6c6",
+    "artifacts/git-readback.txt": "7767f7e2a40d17c61ec34ce205943a8414eb07810be28414bd50c35f68b47029",
+    "artifacts/launcher-receipt.json": "06be15394a823fedf6abee96cd38746f8a6c1f951abbef7a9b4f8f2b92e839cc",
+    "artifacts/review-receipt.json": "e71819c7a767c94adcee86c67f683045d7547af3a7a1f96792c8ae645f8c76b4",
+    "artifacts/runtime-attestation.json": "95271b822394dd24e9f5d2fdb2ae3c3b5a380a74f0c49bbefd71d8f59fd2deaa",
+    "artifacts/source-digests.txt": "c922a945d0c461d948862b0dd827116b5d132fa5d043264b775b83a70817dbd4",
+    "artifacts/source/config/dev-model.yaml": "32d9e7b285a54438975c2aa2d9813adc5d017cef077b6df71564b1ae418a6d92",
+    "artifacts/source/scripts/dev_session.sh": "2ae9af83f182fa726bdc2102d65820242b873aa9d6749f9a450c4b1afd55e4ba",
+    "artifacts/source/scripts/launch_lane.py": "7787079163e9d678284db5df15311f059a519a61db6301980784864ab02ad9e6",
+    "artifacts/source/scripts/lib/kitconfig.py": "4ab496661883d8f4ad590a6612a48b31f8cbf770283bb09794096149276634e6",
+    "artifacts/source/scripts/lib/repo_root.sh": "980cbf5596cea67033a5dd02d53630f2a92c24afd693ba7727d5fc50303ff555",
 }
 
 
@@ -848,6 +876,8 @@ def test_common_aws_access_key_value_shape_is_refused(tmp_path: Path) -> None:
     [
         "Authorization: Basic dXNlcjpwYXNzd29yZA==",
         "password=hunter2",
+        'password="hunter2"',
+        "password='hunter2'",
         "xoxb-" + "123456789012-123456789012-abcdefghijklmnopqrstuvwx",
         "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
     ],
@@ -1189,7 +1219,23 @@ def test_artifact_bytes_are_bounded_before_hashing_or_scanning(tmp_path: Path) -
     assert "unreadable" not in result.stderr
 
 
-def test_combined_artifact_bytes_are_bounded_by_the_bundle_envelope(
+def test_promotion_bytes_are_bounded_before_parsing(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    value = json.loads(promotion.read_text(encoding="utf-8"))
+    value["authority"] = "r" * 8_500_000
+    _write_json(promotion, value)
+    promotion.chmod(0)
+    try:
+        result = _run(manifest, promotion)
+    finally:
+        promotion.chmod(0o600)
+
+    assert result.returncode == 2
+    assert "promotion receipt exceeds its byte limit" in result.stderr
+    assert "unreadable" not in result.stderr
+
+
+def test_bundle_only_artifact_bytes_are_bounded_by_the_bundle_envelope(
     tmp_path: Path,
 ) -> None:
     manifest, promotion = _fixture(tmp_path)
@@ -1198,7 +1244,10 @@ def test_combined_artifact_bytes_are_bounded_by_the_bundle_envelope(
     payload = "x" * 1_000_000
     for index in range(9):
         path = artifacts / f"aggregate-{index}.txt"
-        path.write_text(payload, encoding="utf-8")
+        artifact_payload = payload
+        if index == 8:
+            artifact_payload = 'password="hunter2"\n' + payload
+        path.write_text(artifact_payload, encoding="utf-8")
         value["artifacts"].append(
             {
                 "capture_request": f"synthetic aggregate envelope probe {index}",
@@ -1209,6 +1258,43 @@ def test_combined_artifact_bytes_are_bounded_by_the_bundle_envelope(
                 "observer": "hostile-envelope-probe",
             }
         )
+    _write_json(manifest, value)
+    promotion.unlink()
+
+    result = _run(manifest)
+
+    assert result.returncode == 2
+    assert "bundle envelope exceeds the bundle byte limit" in result.stderr
+
+
+def test_promotion_bytes_are_bounded_by_the_bundle_envelope(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    artifacts = manifest.parent / "artifacts"
+    sizes = [1_000_000] * 8 + [350_000]
+    for index, size in enumerate(sizes):
+        path = artifacts / f"promotion-envelope-{index}.txt"
+        path.write_text("x" * size, encoding="utf-8")
+        value["artifacts"].append(
+            {
+                "capture_request": f"synthetic promotion envelope probe {index}",
+                "captured_on": "2026-08-30",
+                "path": f"artifacts/{path.name}",
+                "sha256": _sha(path),
+                "kind": "command-capture",
+                "observer": "hostile-envelope-probe",
+            }
+        )
+    _write_json(manifest, value)
+    last = artifacts / "promotion-envelope-8.txt"
+    bundle_bytes = manifest.stat().st_size + sum(
+        (manifest.parent / artifact["path"]).stat().st_size
+        for artifact in value["artifacts"]
+    )
+    adjusted_size = last.stat().st_size + (8_388_608 - 100 - bundle_bytes)
+    assert 0 < adjusted_size <= 1_048_576
+    last.write_text("x" * adjusted_size, encoding="utf-8")
+    value["artifacts"][-1]["sha256"] = _sha(last)
     _write_json(manifest, value)
     _refresh_promotion_digest(manifest, promotion)
 
@@ -1322,7 +1408,7 @@ def test_the_promoted_codex_writing_lane_bundle_remains_structurally_verifiable(
             "client_version": "codex-cli 0.149.1",
         },
         expected_claims=CODEX_WRITING_EXPECTED_CLAIMS,
-        expected_compute=CODEX_WRITING_EXPECTED_COMPUTE,
+        expected_compute=None,
     )
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout) == {
@@ -1331,7 +1417,6 @@ def test_the_promoted_codex_writing_lane_bundle_remains_structurally_verifiable(
             "codex-writing-lane-scoped-write-and-state",
             "codex-writing-lane-ready-private-pr",
             "codex-writing-lane-exact-head-review-receipt",
-            "codex-writing-lane-applied-compute",
         ],
         "promotion": True,
         "status": "verified",
@@ -1374,7 +1459,7 @@ def test_the_promoted_codex_writing_lane_claims_remain_independently_recomputabl
         "reviewed": True,
         "reviewer": "codex-cockpit-gpt-5-6-sol-max",
     }
-    assert manifest["runtime"]["applied_compute"] == CODEX_WRITING_EXPECTED_COMPUTE
+    assert manifest["runtime"]["applied_compute"] is None
     assert manifest["claims"] == CODEX_WRITING_EXPECTED_CLAIMS
     assert {
         artifact["path"]: (
@@ -1384,6 +1469,13 @@ def test_the_promoted_codex_writing_lane_claims_remain_independently_recomputabl
         )
         for artifact in manifest["artifacts"]
     } == CODEX_WRITING_EXPECTED_ARTIFACT_BINDINGS
+    assert {
+        artifact["path"]: artifact["sha256"] for artifact in manifest["artifacts"]
+    } == CODEX_WRITING_EXPECTED_ARTIFACT_SHA256
+    assert {
+        path: _sha(bundle / path)
+        for path in CODEX_WRITING_EXPECTED_ARTIFACT_SHA256
+    } == CODEX_WRITING_EXPECTED_ARTIFACT_SHA256
     assert {artifact["captured_on"] for artifact in manifest["artifacts"]} == {
         "2026-08-30"
     }
@@ -1416,7 +1508,6 @@ def test_the_promoted_codex_writing_lane_claims_remain_independently_recomputabl
     )
     assert descriptor["worktree"] == launcher["observed"]["worktree"]
     assert descriptor["state_root"] == launcher["observed"]["state_root"]
-    assert descriptor["worktree"] == manifest["runtime"]["applied_compute"]["cwd"]
     assert descriptor["descriptor_id"] == launcher["descriptor_id"]
     assert launcher["request"]["runtime"] == "codex"
     assert launcher["request"]["configured_command"] == [
@@ -1499,13 +1590,14 @@ def test_the_promoted_codex_writing_lane_claims_remain_independently_recomputabl
     assert f"- PR: {forge['pull_request']['url']} — open and ready" in final_message
     assert "- Changed path: `notes/codex-writing-lane.md`" in final_message
     assert attestation == {
-        "session_id": manifest["runtime"]["applied_compute"]["session_id"],
+        "session_id": CODEX_WRITING_HISTORICAL_COMPUTE["session_id"],
         "turn_context": {
-            "cwd": manifest["runtime"]["applied_compute"]["cwd"],
-            "effort": manifest["runtime"]["applied_compute"]["effort"],
-            "model": manifest["runtime"]["applied_compute"]["model"],
+            "cwd": CODEX_WRITING_HISTORICAL_COMPUTE["cwd"],
+            "effort": CODEX_WRITING_HISTORICAL_COMPUTE["effort"],
+            "model": CODEX_WRITING_HISTORICAL_COMPUTE["model"],
         },
     }
+    assert attestation["turn_context"]["cwd"] == descriptor["worktree"]
     filesystem_readback = (artifacts / "filesystem-readback.txt").read_text(encoding="utf-8")
     assert descriptor["worktree"] in filesystem_readback
     assert descriptor["state_root"] in filesystem_readback
@@ -1520,6 +1612,8 @@ def test_the_promoted_codex_writing_lane_claims_remain_independently_recomputabl
     assert source_digests == """source revision: bdfd6ee702a630f0575f0c186f51b3bbbcd1810a
 7787079163e9d678284db5df15311f059a519a61db6301980784864ab02ad9e6  scripts/launch_lane.py
 2ae9af83f182fa726bdc2102d65820242b873aa9d6749f9a450c4b1afd55e4ba  scripts/dev_session.sh
+4ab496661883d8f4ad590a6612a48b31f8cbf770283bb09794096149276634e6  scripts/lib/kitconfig.py
+980cbf5596cea67033a5dd02d53630f2a92c24afd693ba7727d5fc50303ff555  scripts/lib/repo_root.sh
 32d9e7b285a54438975c2aa2d9813adc5d017cef077b6df71564b1ae418a6d92  config/dev-model.yaml
 """
     retained_source_digests = {
@@ -1531,3 +1625,31 @@ def test_the_promoted_codex_writing_lane_claims_remain_independently_recomputabl
     assert set(retained_source_digests) == set(CODEX_WRITING_SOURCE_PATHS)
     for path, digest in retained_source_digests.items():
         assert _sha(artifacts / "source" / path) == digest
+    execution_source_digests = (artifacts / "execution-source-digests.txt").read_text(
+        encoding="utf-8"
+    )
+    assert execution_source_digests == """synthetic base revision: 83d3b623305a691dd874df44ca92270daa62ade9
+captured on: 2026-08-30
+d4cb774d636655c2c572aed4341c773ae057d09f444494f4b54a56a513035393  fixture/config/dev-model.yaml  git-blob:e6829036c661e3535dcf24a574575cb866896258
+2ae9af83f182fa726bdc2102d65820242b873aa9d6749f9a450c4b1afd55e4ba  source/scripts/dev_session.sh  git-blob:011a6a1102705f2c9255a086d9b78a8def341964
+7787079163e9d678284db5df15311f059a519a61db6301980784864ab02ad9e6  source/scripts/launch_lane.py  git-blob:43f71791b519ac3d479f74099769f893a50fb585
+4ab496661883d8f4ad590a6612a48b31f8cbf770283bb09794096149276634e6  source/scripts/lib/kitconfig.py  git-blob:499ddcd2f7be6b3d78ef9dab1a108fb0ffbf5cf1
+980cbf5596cea67033a5dd02d53630f2a92c24afd693ba7727d5fc50303ff555  source/scripts/lib/repo_root.sh  git-blob:ba0c2e0f2a1b99de58872f4fdd6cc7f2a2279063
+"""
+    fixture_config = (artifacts / "fixture/config/dev-model.yaml").read_text(
+        encoding="utf-8"
+    )
+    upstream_config = (artifacts / "source/config/dev-model.yaml").read_text(
+        encoding="utf-8"
+    )
+    expected_fixture_config = upstream_config.replace(
+        "  codex_approval_policy: read-only\n",
+        "  codex_approval_policy: workspace-write\n",
+    ).replace(
+        "  bots: [coderabbit]\n",
+        "  bots: []\n",
+    ).replace(
+        "  require_ci: true\n",
+        "  require_ci: false\n",
+    )
+    assert fixture_config == expected_fixture_config

@@ -3,22 +3,15 @@
   "claims": [
     "codex-writing-lane-scoped-write-and-state",
     "codex-writing-lane-ready-private-pr",
-    "codex-writing-lane-exact-head-review-receipt",
-    "codex-writing-lane-applied-compute"
+    "codex-writing-lane-exact-head-review-receipt"
   ],
   "manifest": "bundle.json",
-  "manifest_sha256": "1dbbcb7c6ae509191f5c9997364abe0997072119d6979df70f3103f6c0b90cf5",
+  "manifest_sha256": "78632403361d1bde82e599992562a9289aa6ed1777144d163e60a323b58293e3",
   "redaction_reviewer": "codex-cockpit-gpt-5-6-sol-max",
   "review_repository": "https://github.com/topij/adk-codex-writing-evidence-20260830",
   "reviewed_head": "5c4006d18e65e0443dc7b22f48c099ad07ce1da9",
   "runtime": {
-    "applied_compute": {
-      "attestation": "artifacts/runtime-attestation.json",
-      "cwd": "/private/tmp/adk-codex-writing-20260830/sessions/write/wt",
-      "effort": "max",
-      "model": "gpt-5.6-sol",
-      "session_id": "01a04fb1-0b63-7921-982b-23ff66c200be"
-    },
+    "applied_compute": null,
     "client_version": "codex-cli 0.149.1",
     "name": "codex"
   },

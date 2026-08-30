@@ -103,16 +103,18 @@ historical observation it was and is not silently refreshed.
   6. Carried by PR `#651`: the repository-owned redacted evidence contract, hostile
      missing/altered/wrong-revision/claim-relabel mutations, and tracked positive
      control now refuse promotion when the retained bytes, complete claim-to-artifact
-     map, independently expected applied compute, review provenance, or binding are
-     absent. A persistent Codex
+     map, independently expected applied compute for a claim that depends on it,
+     review provenance, or binding are absent. A persistent Codex
      writing lane at source revision
      `bdfd6ee702a630f0575f0c186f51b3bbbcd1810a` produced descriptor-scoped worktree and
      state output, a ready private pull request, and an exact-head cockpit review
-     receipt; the promotion retains the exact source bytes those claims depend on and
-     is bound to the synthetic repository and head
-     `5c4006d18e65e0443dc7b22f48c099ad07ce1da9` and the runtime-owned applied-compute
-     attestation. The 2026-08-27 record stays historical and unpromoted. The retained
-     record is
+     receipt; the promotion retains the exact upstream and fixture source bytes those
+     claims depend on and is bound to synthetic fixture revision
+     `83d3b623305a691dd874df44ca92270daa62ade9`, repository, and head
+     `5c4006d18e65e0443dc7b22f48c099ad07ce1da9`. The copied runtime attestation does not
+     correlate its session to the launcher invocation, so its model, effort, and cwd
+     remain historical and outside the promoted claim map. The 2026-08-27 record also
+     stays historical and unpromoted. The retained record is
      [`codex-writing-lane-live-validation_2026-08-30.md`](codex-writing-lane-live-validation_2026-08-30.md).
      This implements `#621`'s durable-evidence contract for the bounded writing-lane
      claims. It does not establish the Phase 4 exit: the retained run is a writing

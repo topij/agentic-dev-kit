@@ -103,7 +103,8 @@ _FORBIDDEN_VALUE_PATTERNS = (
     re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{20,}\b"),
     re.compile(
         r"\b(?:aws_?secret_?access_?key|password|pass_?phrase|api_?key|"
-        r"access_?token|secret|token)\s*[:=]\s*[^\s\"']{6,}",
+        r"access_?token|secret|token)\s*[:=]\s*(?:"
+        r'"[^"\r\n]{6,}"|\'[^\'\r\n]{6,}\'|[^\s\"\']{6,})',
         re.IGNORECASE,
     ),
 )
@@ -613,6 +614,11 @@ def validate_promotion(
         promotion_path.parent.resolve() != manifest_path.parent.resolve()
     ):
         raise BundleError("promotion receipt must be the bundle's own promotion.json")
+    promotion_bytes = _file_size(
+        promotion_path,
+        "promotion receipt",
+        limit=MAX_BUNDLE_BYTES,
+    )
     promotion = _read_json(promotion_path, "promotion receipt")
     _exact_keys(
         promotion,
@@ -648,11 +654,11 @@ def validate_promotion(
         raise BundleError("promotion receipt's manifest digest does not match")
 
     manifest = validate_bundle(manifest_path)
-    envelope_bytes = _file_size(
-        promotion_path,
-        "promotion receipt",
+    envelope_bytes = promotion_bytes + _file_size(
+        manifest_path,
+        "bundle manifest",
         limit=MAX_BUNDLE_BYTES,
-    ) + _file_size(manifest_path, "bundle manifest", limit=MAX_BUNDLE_BYTES)
+    )
     for artifact in manifest["artifacts"]:
         envelope_bytes += _file_size(
             manifest_path.parent / artifact["path"],

@@ -19,7 +19,8 @@ The cockpit copied the tracked repository at source revision
 `bdfd6ee702a630f0575f0c186f51b3bbbcd1810a` into a private synthetic GitHub repository.
 The fixture-only configuration selected `workspace-write`, disabled required CI for the
 repository that intentionally had no checks, and configured no review bot. Those
-fixture changes were committed on its `main`; they did not alter the source revision.
+fixture changes were committed on its `main` at
+`83d3b623305a691dd874df44ca92270daa62ade9`; they did not alter the source revision.
 
 `dev_session.sh new write --headless --runtime codex --merge-class operator` issued the
 persistent descriptor retained as `artifacts/descriptor.json`. `launch_lane.py` started
@@ -40,7 +41,10 @@ persistent descriptor retained as `artifacts/descriptor.json`. `launch_lane.py` 
 `codex --version` in the `<kit-checkout>` at source revision
 `bdfd6ee702a630f0575f0c186f51b3bbbcd1810a` on 2026-08-30 printed
 `codex-cli 0.149.1`. The run was persistent: no `--ephemeral` carrier was used, and the
-minimal attestation was copied before the runtime session was removed.
+minimal attestation was copied before the runtime session was removed. The retained
+attestation does not correlate that session id to the launcher invocation, so its
+model, effort, and cwd remain a stamped historical observation rather than a promoted
+property of the lane run.
 
 ## Independently retained observations
 
@@ -59,8 +63,12 @@ The retained artifacts are deliberately minimized:
 - the exact last-message bytes whose digest the launcher receipt carries;
 - bounded filesystem, Git remote/object, GitHub repository/PR, and PR-watch receipt
   read-backs;
-- a source-file SHA-256 ledger and the exact retained bytes for the configuration,
-  descriptor issuer, and launcher that the promoted lane claims depend on.
+- source-file SHA-256 ledgers and exact retained bytes for the upstream configuration,
+  descriptor issuer, launcher, and their config-reader/root-discovery dependencies;
+- the exact synthetic configuration at fixture revision
+  `83d3b623305a691dd874df44ca92270daa62ade9`, whose complete byte delta from the
+  upstream configuration is independently constrained to the declared workspace-write,
+  no-bot, and no-required-CI fixture changes.
 
 Each manifest artifact record binds those bytes to its authoritative observer, exact
 capture request, and capture date; the manifest source revision and reviewed head
@@ -80,16 +88,16 @@ The promotion receipt names these recomputable claims:
 - `codex-writing-lane-ready-private-pr` — the lane commit reached the remote and an
   independently read-back private pull request that was open and ready;
 - `codex-writing-lane-exact-head-review-receipt` — the cockpit's receipt and settled
-  poll bind the review evidence to the synthetic head;
-- `codex-writing-lane-applied-compute` — the persistent runtime session attests the
-  applied model, effort, cwd and session id repeated by the manifest.
+  poll bind the review evidence to the synthetic head.
 
 The record does **not** promote the precise per-command approval transitions described
 by the runtime's final prose, native user/project configuration reach, structured
 denial read-back, denial causes, synthetic CI, a synthetic merge, or behavior of a
 future client. The launcher receipt still carries `terminal.permission_denials: null`;
 nothing here repairs or generalizes that transport limitation. The shipped Codex lane
-default remains `read-only`.
+default remains `read-only`. Applied model, effort, cwd, and session identity are also
+not promoted because their retained authoritative observer is not correlated to this
+launcher invocation.
 
 ## Verification and hostile mutations
 
@@ -110,11 +118,9 @@ UV_CACHE_DIR=/private/tmp/adk-651-uv-cache uv run --python 3.12 \
   --expect-redaction-reviewer codex-cockpit-gpt-5-6-sol-max \
   --expect-runtime codex \
   --expect-client-version "codex-cli 0.149.1" \
-  --expect-applied-compute '{"model":"gpt-5.6-sol","effort":"max","cwd":"/private/tmp/adk-codex-writing-20260830/sessions/write/wt","session_id":"01a04fb1-0b63-7921-982b-23ff66c200be","attestation":"artifacts/runtime-attestation.json"}' \
-  --expect-claim '{"evidence":["artifacts/runtime-attestation.json","artifacts/descriptor.json","artifacts/launcher-receipt.json","artifacts/filesystem-readback.txt","artifacts/git-readback.txt","artifacts/source-digests.txt","artifacts/source/config/dev-model.yaml","artifacts/source/scripts/dev_session.sh","artifacts/source/scripts/launch_lane.py"],"id":"codex-writing-lane-scoped-write-and-state","requires_applied_compute":true}' \
-  --expect-claim '{"evidence":["artifacts/runtime-attestation.json","artifacts/descriptor.json","artifacts/launcher-receipt.json","artifacts/final-message.txt","artifacts/forge-readback.json","artifacts/git-readback.txt","artifacts/source-digests.txt","artifacts/source/config/dev-model.yaml","artifacts/source/scripts/dev_session.sh","artifacts/source/scripts/launch_lane.py"],"id":"codex-writing-lane-ready-private-pr","requires_applied_compute":true}' \
+  --expect-claim '{"evidence":["artifacts/descriptor.json","artifacts/launcher-receipt.json","artifacts/filesystem-readback.txt","artifacts/git-readback.txt","artifacts/source-digests.txt","artifacts/execution-source-digests.txt","artifacts/fixture/config/dev-model.yaml","artifacts/source/config/dev-model.yaml","artifacts/source/scripts/dev_session.sh","artifacts/source/scripts/launch_lane.py","artifacts/source/scripts/lib/kitconfig.py","artifacts/source/scripts/lib/repo_root.sh"],"id":"codex-writing-lane-scoped-write-and-state","requires_applied_compute":false}' \
+  --expect-claim '{"evidence":["artifacts/descriptor.json","artifacts/launcher-receipt.json","artifacts/final-message.txt","artifacts/forge-readback.json","artifacts/git-readback.txt","artifacts/source-digests.txt","artifacts/execution-source-digests.txt","artifacts/fixture/config/dev-model.yaml","artifacts/source/config/dev-model.yaml","artifacts/source/scripts/dev_session.sh","artifacts/source/scripts/launch_lane.py","artifacts/source/scripts/lib/kitconfig.py","artifacts/source/scripts/lib/repo_root.sh"],"id":"codex-writing-lane-ready-private-pr","requires_applied_compute":false}' \
   --expect-claim '{"evidence":["artifacts/forge-readback.json","artifacts/review-receipt.json"],"id":"codex-writing-lane-exact-head-review-receipt","requires_applied_compute":false}' \
-  --expect-claim '{"evidence":["artifacts/client-version.txt","artifacts/runtime-attestation.json"],"id":"codex-writing-lane-applied-compute","requires_applied_compute":true}' \
   --json
 ```
 
@@ -122,10 +128,16 @@ The first review pass showed that comparing only the manifest and receipt let a
 self-consistently relabeled pair pass; later hostile passes showed that preserving a
 claim ID while thinning its artifact links, fabricating applied compute and lane
 identity together, relabeling review provenance, or retaining source hashes without
-their bytes remained self-consistent. The independent bindings, complete claim objects,
-retained source bytes, and exact semantic controls above are the resulting trust root.
+their bytes remained self-consistent. A subsequent exact-head panel changed the design
+again: contradictory launcher, final-message, and review-receipt bytes still survived
+when their manifest digests were restamped; the two aggregate-envelope guards shared
+one non-isolating mutation test; quoted password assignments evaded the redaction
+backstop; and upstream wrapper bytes omitted the fixture configuration and direct
+source dependencies. The exact artifact-digest control, separated guard mutations,
+quoted-assignment refusal, executed-fixture ledger, bounded fixture delta, and removal
+of the uncorrelated applied-compute claim are the resulting trust root.
 That command in `/Users/topi/Coding/agentic-dev-kit`, using the verifier at
-`b99c4b27b9ac66701a500c72df23f9bb3a6d0ca7` on 2026-08-30, returned
+`VERIFY_IMPLEMENTATION_SHA` on 2026-08-30, returned
 `status: verified`, `promotion: true`, and the claim IDs enumerated above.
 
 The repository suite drives the same public CLI through hostile mutations. It refuses:
@@ -134,8 +146,8 @@ The repository suite drives the same public CLI through hostile mutations. It re
   altered;
 - a self-consistent bundle and promotion receipt relabeled to another source or review
   repository, source revision, reviewed head, redaction reviewer, runtime, client,
-  applied-compute object, capability authority, claim ID, or thinner
-  claim-to-artifact relationship;
+  applied-compute object, capability authority, claim ID, thinner claim-to-artifact
+  relationship, or contradictory retained artifact bytes;
 - an ephemeral carrier for an applied-compute claim;
 - a compute-dependent claim that omits the minimal runtime attestation;
 - a retained runtime attestation that disagrees with any applied-compute binding;
@@ -146,17 +158,18 @@ The repository suite drives the same public CLI through hostile mutations. It re
   symlink loops, and unreadable artifact bytes without a traceback;
 - a promotion receipt whose manifest digest no longer matches.
 - a retained promotion receipt omitted from the invocation, an ancestor-symlinked
-  bundle, artifact, or promotion path, unstamped artifact metadata, common passphrase, Basic-auth,
-  Slack-token, password-assignment, and AWS credential shapes, duplicate artifact
-  paths, and either a per-artifact or aggregate input envelope or artifact tree beyond
-  the declared bounds.
+  bundle, artifact, or promotion path, unstamped artifact metadata, common passphrase,
+  Basic-auth, Slack-token, quoted or unquoted password-assignment, and AWS credential
+  shapes, duplicate artifact paths, and either independently guarded aggregate input
+  envelope or an artifact tree beyond the declared bounds.
 
 The kit-only structural control re-verifies this tracked bundle and promotion receipt.
 The claim-semantic control independently asserts the complete claim-to-artifact map and
 the load-bearing literal identities and relationships among the client-version capture,
 descriptor, launcher, final-message, destination and retained source-file read-backs,
-private ready pull request, exact-head review receipt, redaction reviewer, and
-persistent runtime attestation.
+private ready pull request, exact-head review receipt, and redaction reviewer. It pins
+every retained artifact byte independently of the manifest and keeps the uncorrelated
+runtime attestation outside the promoted claim map.
 
 ## Cleanup result
 
