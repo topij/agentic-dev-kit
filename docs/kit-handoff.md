@@ -14,11 +14,54 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-30 — PR `#649` (squash `1976923`) settled `#633`: the configured
-Claude lane settings profile is safety-critical policy, with Codex and Claude bindings
-pointing to the shared doctrine.
+Last updated: 2026-08-31 — PR `#651` (squash `8e81293`) merged the durable
+live-validation evidence verifier and its retained Codex writing-lane bundle.
 
-## Latest session — 2026-08-29 (safety-critical profile binding, in a Codex session)
+## Latest session — 2026-08-31 (durable live-validation evidence, in a Codex session)
+
+**Theme —** PR `#651` settled the retained-bundle verifier around an explicit object:
+a descriptor-rooted immutable byte snapshot whose digest and semantic checks derive
+from the same captured bytes. It does not claim that a mutable multi-file directory has
+an atomic state at process return.
+
+- **Runtime —** Codex desktop, assigned model `gpt-5.6-sol`, reasoning effort `high`.
+  `jq` over the root rollout's final `turn_context`, run in
+  `/Users/topi/Coding/agentic-dev-kit` at `8e812936f8650589f6445a1761733a5f243a9cfb`
+  on 2026-08-31, read back those values and that directory.
+
+- **The race correction is descriptor-relative, not another path reread.** Validated
+  directory identities and no-follow opens anchor a captured-byte guarantee rather
+  than mutable on-disk state at return. The behavioral nodes
+  `test_an_earlier_artifact_changed_while_a_later_artifact_is_captured_binds_the_snapshot`
+  and `test_an_ancestor_swap_after_its_descriptor_opens_cannot_redirect_the_snapshot`
+  pin its race boundary. Their child processes receive an explicit observer callback
+  and install no Python startup module or `PYTHONPATH` override.
+
+- **The retained claim remains bounded.** The writing-lane bundle promotes its scoped
+  output, private open/non-draft/`CLEAN` pull request and exact-head review receipt.
+  Its uncorrelated runtime attestation remains outside the claim map. The synthetic
+  private repository `topij/adk-codex-writing-evidence-20260830` remains because the
+  available credential did not carry deletion authority.
+
+- **Phase 4 remains open.** The retained writing lane establishes `#621`'s bundle
+  mechanism but is not the independently recomputable Codex parallel-batch run named
+  by the phase exit. Under this sprint's operator-set boundary, `#621` remains open
+  without owning that run; `#631` remains a safety-critical execution-boundary decision.
+
+- **Review and merge evidence stays with PR `#651`.** Its
+  [exact-head panel disposition](https://github.com/topij/agentic-dev-kit/pull/651#issuecomment-5471285211)
+  carries the review commands and results; the merged PR binds that reviewed head to
+  squash `8e812936f8650589f6445a1761733a5f243a9cfb` without duplicating recomputable
+  command output here.
+
+▶ Next: `session-start` — take the draft-policy documentation correction as a fresh
+slice. Re-read `#365` and related `#169` against live repository and tracker state,
+choose one coherent ready-by-default rule only if the current surfaces support it,
+and do not start `#631` or the retained Codex parallel-batch Phase 4 exit.
+
+______________________________________________________________________
+
+## Session — 2026-08-29 (safety-critical profile binding, in a Codex session)
 
 **Theme —** In a Codex session, PR `#649` (squash `1976923`) made the answer to `#633`
 explicit and checkable: changing the policy profile can change unattended authority while
