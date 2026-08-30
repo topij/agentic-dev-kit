@@ -209,6 +209,13 @@ direct semantic assertions for the forge and review-poll outcomes, capture-date 
 claim-bound hostiles, escaped-surrogate refusal, and credential scanning after Unicode
 compatibility normalization are the resulting corrections. The changed head still
 requires a fresh complete panel.
+A fresh fallback panel at `5f27d2af457216ca27b87c03fc602ebd5b7ae384` on
+2026-08-30 produced a clean adversarial report and a correctness finding: disabling
+tree-object hash reconstruction or extra-tree rejection survived the complete
+drift-excluded suite even though the record said altered tree proofs were refused.
+Public-CLI hostiles now alter retained tree entries under their declared object ID and
+add a valid unreferenced proof tree, pinning both refusals. The changed head still
+requires a fresh complete panel.
 The documented verifier command above in `/Users/topi/Coding/agentic-dev-kit` at
 `62a8f372d34fbb9fed6d49abd08d8bc7f477ad6d` on 2026-08-30 returned
 `status: verified`, `promotion: true`, and the claim IDs enumerated above.

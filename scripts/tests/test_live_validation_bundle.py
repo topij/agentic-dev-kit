@@ -791,6 +791,64 @@ def test_retained_source_bytes_absent_from_the_revision_tree_are_refused(
     assert "does not contain source/scripts/foreign.py" in result.stderr
 
 
+def test_an_altered_source_tree_object_is_refused(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+    )
+    proof = manifest.parent / "artifacts/source-proof.json"
+    proof_value = json.loads(proof.read_text(encoding="utf-8"))
+    proof_value["trees"][0]["entries"].append(
+        {"mode": "100644", "name": "unrelated.txt", "oid": "9" * 40}
+    )
+    _write_json(proof, proof_value)
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    next(
+        artifact
+        for artifact in manifest_value["artifacts"]
+        if artifact["path"] == "artifacts/source-proof.json"
+    )["sha256"] = _sha(proof)
+    _write_json(manifest, manifest_value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion, expected_claims=expected_claims)
+
+    assert result.returncode == 2
+    assert "tree content does not match its oid" in result.stderr
+
+
+def test_an_unneeded_source_proof_tree_is_refused(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+    )
+    proof = manifest.parent / "artifacts/source-proof.json"
+    proof_value = json.loads(proof.read_text(encoding="utf-8"))
+    proof_value["trees"].append(
+        {"oid": _git_oid("tree", b""), "entries": []}
+    )
+    _write_json(proof, proof_value)
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    next(
+        artifact
+        for artifact in manifest_value["artifacts"]
+        if artifact["path"] == "artifacts/source-proof.json"
+    )["sha256"] = _sha(proof)
+    _write_json(manifest, manifest_value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion, expected_claims=expected_claims)
+
+    assert result.returncode == 2
+    assert "contains unneeded tree objects" in result.stderr
+
+
 def test_a_fixture_header_cannot_replace_the_bundle_source_revision(
     tmp_path: Path,
 ) -> None:
