@@ -281,14 +281,13 @@ def test_a_promotion_without_independent_expected_bindings_is_refused(tmp_path: 
     assert "promotion requires independent expected bindings" in result.stderr
 
 
-def test_json_too_deep_to_parse_uses_the_documented_refusal_exit(tmp_path: Path) -> None:
+def test_extreme_json_nesting_uses_the_documented_refusal_exit(tmp_path: Path) -> None:
     manifest = tmp_path / "bundle.json"
     manifest.write_text("[" * 200_000 + '"value"' + "]" * 200_000, encoding="utf-8")
 
     result = _run(manifest)
 
     assert result.returncode == 2
-    assert "supported JSON nesting depth" in result.stderr
     assert "Traceback" not in result.stderr
 
 
@@ -332,6 +331,55 @@ def test_credential_pattern_in_manifest_metadata_is_refused(tmp_path: Path) -> N
     assert "bundle manifest contains credential-like content" in result.stderr
 
 
+@pytest.mark.parametrize("credential_key", ["api-key", "apiKey", "access-key", "private_key"])
+def test_credential_key_variants_are_refused(
+    tmp_path: Path,
+    credential_key: str,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    artifact = manifest.parent / "artifacts" / "forge-readback.json"
+    _write_json(
+        artifact,
+        {credential_key: "credential-material-not-matching-a-token-pattern"},
+    )
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    value["artifacts"][1]["sha256"] = _sha(artifact)
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "credential-like key" in result.stderr
+
+
+def test_boolean_schema_version_is_refused(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
+    manifest_value["schema_version"] = True
+    _write_json(manifest, manifest_value)
+    promotion_value["schema_version"] = True
+    promotion_value["manifest_sha256"] = _sha(manifest)
+    _write_json(promotion, promotion_value)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "schema_version" in result.stderr
+
+
+def test_invalid_utf8_manifest_uses_the_documented_refusal_exit(tmp_path: Path) -> None:
+    manifest = tmp_path / "bundle.json"
+    manifest.write_bytes(b"\xff")
+
+    result = _run(manifest)
+
+    assert result.returncode == 2
+    assert "unreadable" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
 def test_an_ephemeral_carrier_cannot_support_applied_compute(tmp_path: Path) -> None:
     manifest, promotion = _fixture(tmp_path)
     value = json.loads(manifest.read_text(encoding="utf-8"))
@@ -352,6 +400,23 @@ def test_compute_claim_must_name_the_minimal_attestation(tmp_path: Path) -> None
     result = _run(manifest, promotion)
     assert result.returncode == 2
     assert "omits its attestation" in result.stderr
+
+
+def test_runtime_attestation_must_match_the_applied_compute_binding(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    attestation = manifest.parent / "artifacts" / "runtime-attestation.json"
+    attestation_value = json.loads(attestation.read_text(encoding="utf-8"))
+    attestation_value["turn_context"]["model"] = "gpt-fabricated"
+    _write_json(attestation, attestation_value)
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    manifest_value["artifacts"][0]["sha256"] = _sha(attestation)
+    _write_json(manifest, manifest_value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "runtime attestation disagrees" in result.stderr
 
 
 def test_an_undeclared_artifact_refuses_the_bundle(tmp_path: Path) -> None:

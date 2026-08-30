@@ -73,7 +73,7 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 _SLUG = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 _FORBIDDEN_JSON_KEY = re.compile(
-    r"(?:^|_)(?:api_?key|auth|authorization|bearer|credential|password|secret|token)(?:$|_)",
+    r"(?:^|_)(?:(?:api|access|private)_?key|auth|authorization|bearer|credential|password|secret|token)(?:$|_)",
     re.IGNORECASE,
 )
 _FORBIDDEN_VALUE_PATTERNS = (
@@ -131,7 +131,7 @@ def _exact_keys(value: dict[str, Any], expected: set[str], label: str) -> None:
 def _read_json(path: Path, label: str) -> dict[str, Any]:
     try:
         raw = path.read_text(encoding="utf-8")
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError) as exc:
         raise BundleError(f"{label} is unreadable: {path}: {exc}") from exc
     for pattern in _FORBIDDEN_VALUE_PATTERNS:
         if pattern.search(raw):
@@ -164,7 +164,9 @@ def _safe_relative_path(value: Any, label: str, *, beneath: str | None = None) -
 def _scan_json_keys(value: Any, label: str) -> None:
     if isinstance(value, dict):
         for key, child in value.items():
-            if _FORBIDDEN_JSON_KEY.search(str(key)):
+            key_text = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", str(key))
+            normalized_key = re.sub(r"[^A-Za-z0-9]+", "_", key_text)
+            if _FORBIDDEN_JSON_KEY.search(normalized_key):
                 raise BundleError(f"{label} contains forbidden credential-like key {key!r}")
             _scan_json_keys(child, label)
     elif isinstance(value, list):
@@ -290,7 +292,7 @@ def validate_bundle(manifest_path: Path) -> dict[str, Any]:
         },
         "bundle manifest",
     )
-    if manifest["schema_version"] != SCHEMA_VERSION:
+    if type(manifest["schema_version"]) is not int or manifest["schema_version"] != SCHEMA_VERSION:
         raise BundleError(f"unsupported schema_version: {manifest['schema_version']!r}")
     bundle_id = _string(manifest["bundle_id"], "bundle_id")
     if not _SLUG.fullmatch(bundle_id):
@@ -439,7 +441,10 @@ def validate_promotion(
         },
         "promotion receipt",
     )
-    if promotion["schema_version"] != SCHEMA_VERSION:
+    if (
+        type(promotion["schema_version"]) is not int
+        or promotion["schema_version"] != SCHEMA_VERSION
+    ):
         raise BundleError("promotion schema_version differs from the bundle contract")
     rel_manifest = _safe_relative_path(promotion["manifest"], "promotion.manifest")
     resolved_manifest = (promotion_path.parent / rel_manifest).resolve()

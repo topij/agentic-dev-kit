@@ -266,7 +266,7 @@
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "test",
-      "sha256": "cfe82f5588d1f2df8f32b1d4f4cef2e438a131fb5167dcff8d16ce777cb4da40"
+      "sha256": "c7cf7216c9d0fdf5e94655e2442e9e9cc25c9b28b033a74bc646a6d078c74100"
     },
     "scripts/tests/test_mutation_gate.py": {
       "role": "test",
@@ -302,7 +302,7 @@
     },
     "scripts/verify_live_validation_bundle.py": {
       "role": "engine",
-      "sha256": "98a7eab3fe19361404ec036e64a21837209c1849cd4f8db26e21f5138cba62d4"
+      "sha256": "c504d1ca4bf4d1253cfaa6c228d5267b3ed57bf07d27ba1f5a556611cb060198"
     }
   },
   "kit_version": 2

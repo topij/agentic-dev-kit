@@ -34,7 +34,7 @@ historical observation it was and is not silently refreshed.
   `wrap-up`. PR `#599` merged the config-owned draft/approve/finalize matrix and the
   independently observed forge-provenance chain for `triage-friction-log`, closing the
   remaining structural exit.
-- [x] **Phase 4 — Make delegation and parallel lanes equivalent.** PR `#598` delivered
+- [ ] **Phase 4 — Make delegation and parallel lanes equivalent.** PR `#598` delivered
   the kit-owned engine boundary; PR `#609` delivered the Codex wrapper, its live record,
   and the declared Claude gap; PR `#611` generalised the wrapper to Claude
   (`claude -p`) with a Claude-produced live record and moved the parity row's Claude
@@ -100,7 +100,7 @@ historical observation it was and is not silently refreshed.
      merged head, and a panel that ran leaves a disposition comment (`#603`, `#604`).
      Phase 5 owns `#606`, `#236`, and the `#243` narrowing (adapter generation); Phase 6
      takes `#607` as the adopter pilot and `#608`.
-  6. Done in PR `#651`: the repository-owned redacted evidence contract, hostile
+  6. Carried by PR `#651`: the repository-owned redacted evidence contract, hostile
      missing/altered/wrong-revision mutations, and tracked positive control now refuse
      promotion when the retained bytes or their binding are absent. A persistent Codex
      writing lane at source revision
@@ -111,8 +111,12 @@ historical observation it was and is not silently refreshed.
      attestation. The 2026-08-27 record stays historical and unpromoted. The retained
      record is
      [`codex-writing-lane-live-validation_2026-08-30.md`](codex-writing-lane-live-validation_2026-08-30.md).
-     This establishes the Phase 4 exit: the Codex batch preserved the descriptor state
-     sandbox, exact-head review evidence, and operator merge class without merging.
+     This implements `#621`'s durable-evidence contract for the bounded writing-lane
+     claims. It does not establish the Phase 4 exit: the retained run is a writing
+     lane, not the parallel batch the exit condition requires. The remaining exit is a
+     retained, independently recomputable Codex parallel-batch run that demonstrates
+     disjoint worktree and state-root identities, exact-head review evidence, and
+     operator merge authority without merging.
 - [ ] **Phase 5 — Align permissions, installation, and upgrades.** Merged deliveries
   now include PR `#632` for the measured Claude lane policy and permanent adapter-write
   asymmetry; PR `#635` for generated adapter refresh plus manifest-selected installed
@@ -389,10 +393,13 @@ degraded, held, resume, authority, and completion paths under shared definitions
   land (untracked; not `#602`).
 
 Done when a Codex parallel batch preserves the same state isolation, review evidence,
-and merge authority as Claude usage. The persistent 2026-08-30 rerun establishes that
-exit at source revision `bdfd6ee702a630f0575f0c186f51b3bbbcd1810a` and reviewed
-synthetic head `5c4006d18e65e0443dc7b22f48c099ad07ce1da9`; its descriptor carries operator merge
-class, and neither the lane nor the cockpit merged the synthetic pull request.
+and merge authority as Claude usage. The persistent 2026-08-30 writing-lane rerun does
+not establish that exit. It retains source revision
+`bdfd6ee702a630f0575f0c186f51b3bbbcd1810a`, reviewed synthetic head
+`5c4006d18e65e0443dc7b22f48c099ad07ce1da9`, descriptor state, exact-head review
+evidence, and operator merge class without merging, but contains no parallel-batch or
+inter-lane observation. The remaining exit is the retained parallel-batch run described
+above.
 
 ### Phase 5 — Align permissions, installation, and upgrades
 
