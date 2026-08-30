@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -402,11 +403,27 @@ def test_compute_claim_must_name_the_minimal_attestation(tmp_path: Path) -> None
     assert "omits its attestation" in result.stderr
 
 
-def test_runtime_attestation_must_match_the_applied_compute_binding(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    [
+        ("model", "gpt-fabricated"),
+        ("effort", "low"),
+        ("cwd", "/private/tmp/foreign/repo"),
+        ("session_id", "session-foreign"),
+    ],
+)
+def test_runtime_attestation_must_match_every_applied_compute_binding(
+    tmp_path: Path,
+    field: str,
+    replacement: str,
+) -> None:
     manifest, promotion = _fixture(tmp_path)
     attestation = manifest.parent / "artifacts" / "runtime-attestation.json"
     attestation_value = json.loads(attestation.read_text(encoding="utf-8"))
-    attestation_value["turn_context"]["model"] = "gpt-fabricated"
+    if field == "session_id":
+        attestation_value[field] = replacement
+    else:
+        attestation_value["turn_context"][field] = replacement
     _write_json(attestation, attestation_value)
     manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
     manifest_value["artifacts"][0]["sha256"] = _sha(attestation)
@@ -417,6 +434,24 @@ def test_runtime_attestation_must_match_the_applied_compute_binding(tmp_path: Pa
 
     assert result.returncode == 2
     assert "runtime attestation disagrees" in result.stderr
+
+
+@pytest.mark.skipif(
+    not hasattr(os, "geteuid") or os.geteuid() == 0,
+    reason="chmod cannot make a file unreadable for this process",
+)
+def test_an_unreadable_artifact_uses_the_documented_refusal_exit(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    artifact = manifest.parent / "artifacts" / "forge-readback.json"
+    artifact.chmod(0o000)
+    try:
+        result = _run(manifest, promotion)
+    finally:
+        artifact.chmod(0o644)
+
+    assert result.returncode == 2
+    assert "unreadable" in result.stderr
+    assert "Traceback" not in result.stderr
 
 
 def test_an_undeclared_artifact_refuses_the_bundle(tmp_path: Path) -> None:

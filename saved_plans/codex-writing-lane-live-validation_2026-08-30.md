@@ -121,9 +121,9 @@ The repository suite drives the same public CLI through hostile mutations. It re
   reviewed head, runtime, client, source repository, or capability authority;
 - an ephemeral carrier for an applied-compute claim;
 - a compute-dependent claim that omits the minimal runtime attestation;
-- a retained runtime attestation that disagrees with its applied-compute binding;
+- a retained runtime attestation that disagrees with any applied-compute binding;
 - undeclared artifact neighbors, credential-key spelling variants, invalid UTF-8, and
-  non-integer schema versions;
+  non-integer schema versions, and unreadable artifact bytes without a traceback;
 - a promotion receipt whose manifest digest no longer matches.
 
 The kit-only positive control re-verifies this tracked bundle and promotion receipt so
