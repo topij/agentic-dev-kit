@@ -136,9 +136,14 @@ one non-isolating mutation test; quoted password assignments evaded the redactio
 backstop; and upstream wrapper bytes omitted the fixture configuration and direct
 source dependencies. The exact artifact-digest control, separated guard mutations,
 quoted-assignment refusal, executed-fixture ledger, bounded fixture delta, and removal
-of the uncorrelated applied-compute claim are the resulting trust root.
+of the uncorrelated applied-compute claim are part of the resulting trust root. A fresh
+panel then showed that local-time capture dates failed behind the capture timezone,
+digest-ledger rows did not structurally require the source bytes they named, and the
+promotion's claimed complete runtime object omitted session persistence. UTC capture
+dates, the closed ledger grammar with digest/Git-blob/source-file and claim-link checks,
+and the independent session-persistence expectation are the resulting corrections.
 That command in `/Users/topi/Coding/agentic-dev-kit`, using the verifier at
-`ef15802ddaabbfef38e65ce3d5976951fa25aaa9` on 2026-08-30, returned
+`45f93e33603fd06502c406c38d92a1cbc28bc85e` on 2026-08-30, returned
 `status: verified`, `promotion: true`, and the claim IDs enumerated above.
 
 The repository suite drives the same public CLI through hostile mutations. It refuses:
@@ -147,11 +152,13 @@ The repository suite drives the same public CLI through hostile mutations. It re
   altered;
 - a self-consistent bundle and promotion receipt relabeled to another source or review
   repository, source revision, reviewed head, redaction reviewer, runtime, client,
-  applied-compute object, capability authority, claim ID, thinner claim-to-artifact
-  relationship, or contradictory retained artifact bytes;
+  session-persistence carrier, applied-compute object, capability authority, claim ID,
+  thinner claim-to-artifact relationship, or contradictory retained artifact bytes;
 - an ephemeral carrier for an applied-compute claim;
 - a compute-dependent claim that omits the minimal runtime attestation;
 - a retained runtime attestation that disagrees with any applied-compute binding;
+- a source-digest ledger with an unsupported row, an absent or mismatched source-file,
+  a mismatched Git blob, or a claim link that omits bytes named by its ledger;
 - undeclared bundle-root or artifact-tree neighbors, unreadable subtrees, special
   files, a symlinked bundle root, duplicate JSON members, credential-key spelling
   variants, secret markers hidden by JSON escaping, invalid UTF-8, non-finite or
