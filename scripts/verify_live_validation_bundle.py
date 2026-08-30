@@ -104,7 +104,8 @@ _FORBIDDEN_VALUE_PATTERNS = (
     re.compile(
         r"\b(?:aws_?secret_?access_?key|password|pass_?phrase|api_?key|"
         r"access_?token|secret|token)\s*[:=]\s*(?:"
-        r'"[^"\r\n]{6,}"|\'[^\'\r\n]{6,}\'|[^\s\"\']{6,})',
+        r'\$?"(?:[^"\r\n]|\\\r?\n){6,}"|'
+        r"\$?'(?:[^'\r\n]|\\\r?\n){6,}'|[^\s\"\']{6,})",
         re.IGNORECASE,
     ),
 )
