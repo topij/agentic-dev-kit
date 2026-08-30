@@ -1624,6 +1624,99 @@ def test_a_late_bundle_root_entry_during_final_inventory_is_refused(
     assert "Traceback" not in result.stderr
 
 
+def test_an_artifact_directory_replaced_between_inventories_is_refused(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    promotion.unlink()
+    bundle_root = manifest.parent
+    hook = tmp_path / "directory-swap-hook"
+    hook.mkdir()
+    marker = tmp_path / "directory-swap-marker.txt"
+    (hook / "sitecustomize.py").write_text(
+        """\
+import os
+import shutil
+
+_bundle_root = os.environ["LIVE_EVIDENCE_BUNDLE_ROOT"]
+_artifacts = os.path.join(_bundle_root, "artifacts")
+_replacement = os.environ["LIVE_EVIDENCE_REPLACEMENT"]
+_backup = os.environ["LIVE_EVIDENCE_BACKUP"]
+_marker = os.environ["LIVE_EVIDENCE_SWAP_MARKER"]
+shutil.copytree(_artifacts, _replacement)
+_original_scandir = os.scandir
+_original_stat = os.stat
+_root_scan_finished = False
+_triggered = False
+
+
+class _WrappedScandir:
+    def __init__(self, path):
+        self._path = os.fspath(path)
+        self._context = _original_scandir(path)
+
+    def __enter__(self):
+        self._iterator = self._context.__enter__()
+        return self
+
+    def __exit__(self, *args):
+        return self._context.__exit__(*args)
+
+    def close(self):
+        return self._context.close()
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        global _root_scan_finished
+        try:
+            return next(self._iterator)
+        except StopIteration:
+            if self._path == _bundle_root:
+                _root_scan_finished = True
+            raise
+
+
+def _stat(path, *args, **kwargs):
+    global _triggered
+    result = _original_stat(path, *args, **kwargs)
+    if os.fspath(path) == _bundle_root and _root_scan_finished and not _triggered:
+        _triggered = True
+        old_inode = _original_stat(_artifacts, follow_symlinks=False).st_ino
+        os.rename(_artifacts, _backup)
+        os.rename(_replacement, _artifacts)
+        new_inode = _original_stat(_artifacts, follow_symlinks=False).st_ino
+        with open(_marker, "w", encoding="utf-8") as stream:
+            stream.write(f"{old_inode} {new_inode}\\n")
+    return result
+
+
+os.scandir = _WrappedScandir
+os.stat = _stat
+""",
+        encoding="utf-8",
+    )
+
+    result = _run(
+        manifest,
+        env={
+            **os.environ,
+            "LIVE_EVIDENCE_BUNDLE_ROOT": str(bundle_root),
+            "LIVE_EVIDENCE_REPLACEMENT": str(tmp_path / "replacement-artifacts"),
+            "LIVE_EVIDENCE_BACKUP": str(tmp_path / "original-artifacts"),
+            "LIVE_EVIDENCE_SWAP_MARKER": str(marker),
+            "PYTHONPATH": str(hook),
+        },
+    )
+
+    old_inode, new_inode = marker.read_text(encoding="utf-8").split()
+    assert old_inode != new_inode
+    assert result.returncode == 2
+    assert "artifact directory changed during verification" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
 def test_a_self_consistent_bundle_for_the_wrong_revision_cannot_promote(tmp_path: Path) -> None:
     manifest, promotion = _fixture(tmp_path)
     manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
@@ -2510,6 +2603,47 @@ def test_invalid_utf8_manifest_uses_the_documented_refusal_exit(tmp_path: Path) 
     assert result.returncode == 2
     assert "unreadable" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+@pytest.mark.skipif(os.name == "nt", reason="raw POSIX argv bytes are required")
+@pytest.mark.parametrize(
+    "raw_option",
+    ["--expect-claim", "--expect-applied-compute"],
+)
+def test_invalid_utf8_json_expectation_uses_the_documented_refusal_exit(
+    tmp_path: Path,
+    raw_option: str,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    argv = [
+        os.fsencode(sys.executable),
+        os.fsencode(ENGINE),
+        os.fsencode(manifest),
+        b"--promotion",
+        os.fsencode(promotion),
+    ]
+    for field, value in FIXTURE_EXPECTATIONS.items():
+        argv.extend(
+            [
+                os.fsencode("--expect-" + field.replace("_", "-")),
+                os.fsencode(value),
+            ]
+        )
+    if raw_option == "--expect-applied-compute":
+        for claim in FIXTURE_EXPECTED_CLAIMS:
+            argv.extend(
+                [
+                    b"--expect-claim",
+                    json.dumps(claim, separators=(",", ":")).encode(),
+                ]
+            )
+    argv.extend([os.fsencode(raw_option), b"\xff"])
+
+    result = subprocess.run(argv, capture_output=True, check=False)
+
+    assert result.returncode == 2
+    assert b"must not contain Unicode surrogates" in result.stderr
+    assert b"Traceback" not in result.stderr
 
 
 @pytest.mark.parametrize("invalid_value", [[], {}], ids=["array", "object"])

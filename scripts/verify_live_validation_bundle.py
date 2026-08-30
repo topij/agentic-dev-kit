@@ -156,6 +156,36 @@ def _stat_identity(value: os.stat_result) -> tuple[int, int, int, int, int, int]
     )
 
 
+def _read_stable_directory_identity(
+    path: Path,
+    label: str,
+) -> tuple[int, int, int, int, int, int]:
+    try:
+        initial = os.stat(path, follow_symlinks=False)
+        current = os.stat(path, follow_symlinks=False)
+    except OSError as exc:
+        raise BundleError(f"{label} is unreadable: {path}: {exc}") from exc
+    if not stat.S_ISDIR(initial.st_mode) or not stat.S_ISDIR(current.st_mode):
+        raise BundleError(f"{label} must be a retained directory: {path}")
+    identity = _stat_identity(initial)
+    if identity != _stat_identity(current):
+        raise BundleError(f"{label} changed during verification: {path}")
+    return identity
+
+
+def _confirm_directory_identity(
+    path: Path,
+    label: str,
+    expected: tuple[int, int, int, int, int, int],
+) -> None:
+    try:
+        current = os.stat(path, follow_symlinks=False)
+    except OSError as exc:
+        raise BundleError(f"{label} changed during verification: {path}: {exc}") from exc
+    if _stat_identity(current) != expected:
+        raise BundleError(f"{label} changed during verification: {path}")
+
+
 def _read_stable_regular_bytes(path: Path, label: str, *, limit: int) -> bytes:
     try:
         initial = os.stat(path, follow_symlinks=False)
@@ -1405,6 +1435,14 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
+        _reject_symlink_traversal(args.manifest, "bundle manifest")
+        bundle_root = args.manifest.parent
+        artifact_root = bundle_root / "artifacts"
+        bundle_root_identity = _read_stable_directory_identity(bundle_root, "bundle root")
+        artifact_root_identity = _read_stable_directory_identity(
+            artifact_root,
+            "artifact directory",
+        )
         manifest = validate_bundle(args.manifest)
         promoted = None
         expected = {
@@ -1438,6 +1476,7 @@ def main(argv: list[str] | None = None) -> int:
             expected_claim_ids: set[str] = set()
             for index, raw_claim in enumerate(args.expect_claim):
                 label = f"expected claims[{index}]"
+                raw_claim = _string(raw_claim, label)
                 if len(raw_claim.encode("utf-8")) > MAX_ARTIFACT_BYTES:
                     raise BundleError(f"{label} exceeds the byte limit")
                 claim = _object(
@@ -1463,11 +1502,12 @@ def main(argv: list[str] | None = None) -> int:
             expected_applied_compute = None
             if args.expect_applied_compute is not None:
                 label = "expected applied compute"
-                if len(args.expect_applied_compute.encode("utf-8")) > MAX_ARTIFACT_BYTES:
+                raw_compute = _string(args.expect_applied_compute, label)
+                if len(raw_compute.encode("utf-8")) > MAX_ARTIFACT_BYTES:
                     raise BundleError(f"{label} exceeds the byte limit")
                 expected_applied_compute = _object(
                     _parse_json(
-                        args.expect_applied_compute,
+                        raw_compute,
                         label,
                         Path("<command-line>"),
                     ),
@@ -1513,6 +1553,12 @@ def main(argv: list[str] | None = None) -> int:
             or args.expect_applied_compute is not None
         ):
             raise BundleError("expected promotion bindings require --promotion")
+        _confirm_directory_identity(
+            artifact_root,
+            "artifact directory",
+            artifact_root_identity,
+        )
+        _confirm_directory_identity(bundle_root, "bundle root", bundle_root_identity)
     except BundleError as exc:
         print(f"live-validation evidence refused: {exc}", file=sys.stderr)
         return 2

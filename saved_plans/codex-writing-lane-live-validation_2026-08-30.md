@@ -294,6 +294,17 @@ suite. Raw credential assignments now cover hyphen and underscore separators, th
 schema explicitly supports SHA-1 object-format repositories, and a self-consistent
 invalid-revision hostile pins the format refusal. The changed head still requires a
 fresh complete panel.
+A fresh adversarial lens at `f393daac78397022a03d833e2f09e03e5cdc9375` on
+2026-08-30 reproduced a raw undecodable byte in `--expect-claim` escaping the
+documented refusal path with `UnicodeEncodeError`, a traceback, and exit `1`. A
+separately launched correctness lens at the same head replaced the byte-identical
+`artifacts/` directory between the bundle-root and artifact-tree inventories; the
+public CLI returned `status: verified` even though the top-level directory identity
+changed during the invocation. The JSON-bearing expectation options now validate
+surrogateescaped input before encoding, and the CLI binds the initial bundle-root and
+artifact-directory identities through its final success check. Public-CLI hostile
+probes pin the directory-replacement and malformed-argument refusal paths. The changed
+head still requires a fresh complete panel.
 The documented verifier command above in `/Users/topi/Coding/agentic-dev-kit` at
 `823ee30f4df13be211285ed85fedc6244f5d1a44` on 2026-08-30 returned
 `status: verified`, `promotion: true`, and
