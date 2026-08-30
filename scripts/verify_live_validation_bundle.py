@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 from pathlib import Path, PurePosixPath
@@ -73,7 +74,8 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 _SLUG = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 _FORBIDDEN_JSON_KEY = re.compile(
-    r"(?:^|_)(?:(?:api|access|private)_?key|auth|authorization|bearer|credential|password|secret|token)(?:$|_)",
+    r"(?:^|_)(?:(?:api|access|private)_?keys?|auths?|authentications?|"
+    r"authorizations?|bearers?|credentials?|passwords?|secrets?|tokens?)(?:$|_)",
     re.IGNORECASE,
 )
 _FORBIDDEN_VALUE_PATTERNS = (
@@ -139,8 +141,27 @@ def _read_json(path: Path, label: str) -> dict[str, Any]:
     for pattern in _FORBIDDEN_VALUE_PATTERNS:
         if pattern.search(raw):
             raise BundleError(f"{label} contains credential-like content: {path}")
+    return _object(_parse_json(raw, label, path), label)
+
+
+def _parse_json(raw: str, label: str, path: Path) -> Any:
+    def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        value: dict[str, Any] = {}
+        for key, child in pairs:
+            if key in value:
+                raise BundleError(f"{label} contains duplicate JSON key {key!r}: {path}")
+            value[key] = child
+        return value
+
+    def finite_number(constant: str) -> None:
+        raise BundleError(f"{label} contains non-finite JSON value {constant!r}: {path}")
+
     try:
-        value = _object(json.loads(raw), label)
+        value = json.loads(
+            raw,
+            object_pairs_hook=unique_object,
+            parse_constant=finite_number,
+        )
     except json.JSONDecodeError as exc:
         raise BundleError(f"{label} is not valid JSON: {path}: {exc}") from exc
     except RecursionError as exc:
@@ -154,6 +175,8 @@ def _read_json(path: Path, label: str) -> dict[str, Any]:
 
 def _safe_relative_path(value: Any, label: str, *, beneath: str | None = None) -> str:
     text = _string(value, label)
+    if any(ord(character) < 32 for character in text):
+        raise BundleError(f"{label} must not contain control characters")
     path = PurePosixPath(text)
     if path.is_absolute() or ".." in path.parts or "." in path.parts:
         raise BundleError(f"{label} must be a canonical relative path: {text}")
@@ -162,6 +185,66 @@ def _safe_relative_path(value: Any, label: str, *, beneath: str | None = None) -
     if beneath is not None and (not path.parts or path.parts[0] != beneath):
         raise BundleError(f"{label} must be beneath {beneath}/: {text}")
     return text
+
+
+def _validate_bundle_root(manifest_path: Path) -> None:
+    if manifest_path.name != "bundle.json":
+        raise BundleError("bundle manifest must be named bundle.json")
+    allowed = {"artifacts", "bundle.json", "promotion.json"}
+    seen: set[str] = set()
+    try:
+        with os.scandir(manifest_path.parent) as entries:
+            for entry in entries:
+                seen.add(entry.name)
+                if entry.name not in allowed:
+                    raise BundleError(f"bundle root contains an undeclared entry: {entry.name}")
+                if entry.is_symlink():
+                    raise BundleError(f"bundle root contains a symlink: {entry.name}")
+                if entry.name == "artifacts":
+                    if not entry.is_dir(follow_symlinks=False):
+                        raise BundleError("bundle root artifacts entry must be a directory")
+                elif not entry.is_file(follow_symlinks=False):
+                    raise BundleError(
+                        f"bundle root entry must be a regular file: {entry.name}"
+                    )
+    except OSError as exc:
+        raise BundleError(f"bundle root is unreadable: {manifest_path.parent}: {exc}") from exc
+    missing = {"artifacts", "bundle.json"} - seen
+    if missing:
+        raise BundleError(f"bundle root is missing required entries: {sorted(missing)}")
+
+
+def _artifact_inventory(
+    artifact_root: Path,
+    bundle_root: Path,
+) -> tuple[set[str], set[str]]:
+    files: set[str] = set()
+    directories = {artifact_root.relative_to(bundle_root).as_posix()}
+    pending = [artifact_root]
+    while pending:
+        current = pending.pop()
+        try:
+            with os.scandir(current) as entries:
+                for entry in entries:
+                    path = Path(entry.path)
+                    relative = path.relative_to(bundle_root).as_posix()
+                    if entry.name.startswith("."):
+                        raise BundleError(f"artifact tree contains a hidden entry: {relative}")
+                    if entry.is_symlink():
+                        raise BundleError(f"artifact tree contains a symlink: {relative}")
+                    if entry.is_dir(follow_symlinks=False):
+                        directories.add(relative)
+                        pending.append(path)
+                    elif entry.is_file(follow_symlinks=False):
+                        files.add(relative)
+                    else:
+                        raise BundleError(
+                            f"artifact tree contains a non-regular entry: {relative}"
+                        )
+        except OSError as exc:
+            relative = current.relative_to(bundle_root).as_posix()
+            raise BundleError(f"artifact directory is unreadable: {relative}: {exc}") from exc
+    return files, directories
 
 
 def _scan_json_keys(value: Any, label: str) -> None:
@@ -192,20 +275,7 @@ def _scan_artifact(path: Path, label: str) -> int:
         if pattern.search(text):
             raise BundleError(f"{label} contains credential-like content: {path}")
     if path.suffix == ".json":
-        try:
-            value = json.loads(text)
-        except json.JSONDecodeError as exc:
-            raise BundleError(f"{label} is not valid JSON: {path}: {exc}") from exc
-        except RecursionError as exc:
-            raise BundleError(
-                f"{label} exceeds the supported JSON nesting depth: {path}"
-            ) from exc
-        try:
-            _scan_json_keys(value, label)
-        except RecursionError as exc:
-            raise BundleError(
-                f"{label} exceeds the supported JSON nesting depth: {path}"
-            ) from exc
+        _parse_json(text, label, path)
     return size
 
 
@@ -281,6 +351,7 @@ def validate_bundle(manifest_path: Path) -> dict[str, Any]:
     if manifest_path.is_symlink() or not manifest_path.is_file():
         raise BundleError(f"bundle manifest must be a regular file, not a symlink: {manifest_path}")
     manifest = _read_json(manifest_path, "bundle manifest")
+    _validate_bundle_root(manifest_path)
     _exact_keys(
         manifest,
         {
@@ -320,7 +391,8 @@ def validate_bundle(manifest_path: Path) -> dict[str, Any]:
     if not _SLUG.fullmatch(_string(runtime["name"], "runtime.name")):
         raise BundleError("runtime.name must be a lowercase slug")
     _string(runtime["client_version"], "runtime.client_version")
-    if runtime["session_persistence"] not in {"persistent", "not-applicable", "ephemeral"}:
+    persistence = _string(runtime["session_persistence"], "runtime.session_persistence")
+    if persistence not in {"persistent", "not-applicable", "ephemeral"}:
         raise BundleError("runtime.session_persistence has an unsupported value")
 
     redaction = _object(manifest["redaction"], "redaction")
@@ -369,18 +441,25 @@ def validate_bundle(manifest_path: Path) -> dict[str, Any]:
     artifact_root = bundle_root / "artifacts"
     if artifact_root.is_symlink() or not artifact_root.is_dir():
         raise BundleError("bundle must contain a regular artifacts/ directory")
-    actual_paths: set[str] = set()
-    for path in artifact_root.rglob("*"):
-        if path.is_symlink():
-            raise BundleError(f"artifact tree contains a symlink: {path.relative_to(bundle_root)}")
-        if path.is_file():
-            actual_paths.add(path.relative_to(bundle_root).as_posix())
+    actual_paths, actual_directories = _artifact_inventory(artifact_root, bundle_root)
     declared_paths = set(artifact_by_path)
     if actual_paths != declared_paths:
         raise BundleError(
             "artifact inventory differs: "
             f"undeclared={sorted(actual_paths - declared_paths)}, "
             f"missing={sorted(declared_paths - actual_paths)}"
+        )
+    declared_directories = {"artifacts"}
+    for rel in declared_paths:
+        parent = PurePosixPath(rel).parent
+        while parent != PurePosixPath("."):
+            declared_directories.add(parent.as_posix())
+            parent = parent.parent
+    if actual_directories != declared_directories:
+        raise BundleError(
+            "artifact directory inventory differs: "
+            f"undeclared={sorted(actual_directories - declared_directories)}, "
+            f"missing={sorted(declared_directories - actual_directories)}"
         )
 
     claims = _list(manifest["claims"], "claims")

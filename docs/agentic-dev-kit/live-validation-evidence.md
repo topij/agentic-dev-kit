@@ -27,9 +27,10 @@ truthfully excerpted from its authoritative observer, and free of private materi
 
 ## Directory and manifest contract
 
-A bundle is a repository-owned directory containing `bundle.json`, `promotion.json`
-when a capability is promoted, and an `artifacts/` directory. `bundle.json` has this
-closed shape:
+A bundle is a repository-owned directory containing only `bundle.json`,
+`promotion.json` when a capability is promoted, and an `artifacts/` directory. Every
+JSON object must have unique member names and every number must be finite; parser
+ambiguity is not evidence. `bundle.json` has this closed shape:
 
 ```json
 {
@@ -116,8 +117,10 @@ verifier admits these kinds:
 
 Artifacts must be regular UTF-8 text files below `artifacts/`, use a permitted text
 suffix, appear exactly once in the manifest, fit the verifier's declared size bounds,
-and have no undeclared neighbor. Symlinks are never evidence: they preserve access to
-the ephemeral source rather than the bytes that must survive it.
+and have no undeclared file, directory, special-file, hidden, or unreadable neighbor.
+The verifier walks the directory itself rather than treating an unreadable subtree as
+empty. Symlinks are never evidence: they preserve access to the ephemeral source rather
+than the bytes that must survive it.
 
 ## Excluded material and redaction
 

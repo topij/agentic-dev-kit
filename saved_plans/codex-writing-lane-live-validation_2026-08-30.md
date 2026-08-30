@@ -122,8 +122,10 @@ The repository suite drives the same public CLI through hostile mutations. It re
 - an ephemeral carrier for an applied-compute claim;
 - a compute-dependent claim that omits the minimal runtime attestation;
 - a retained runtime attestation that disagrees with any applied-compute binding;
-- undeclared artifact neighbors, credential-key spelling variants, invalid UTF-8, and
-  non-integer schema versions, and unreadable artifact bytes without a traceback;
+- undeclared bundle-root or artifact-tree neighbors, unreadable subtrees, special
+  files, duplicate JSON members, credential-key spelling variants, invalid UTF-8,
+  non-finite JSON numbers, non-string persistence values, non-integer schema versions,
+  and unreadable artifact bytes without a traceback;
 - a promotion receipt whose manifest digest no longer matches.
 
 The kit-only positive control re-verifies this tracked bundle and promotion receipt so
@@ -131,12 +133,10 @@ later artifact loss, mutation, or rebinding makes the repository gate fail.
 
 ## Cleanup result
 
-After the copied destination verified, the exact local fixture root
-`/private/tmp/adk-codex-writing-20260830` was removed. In
-`/Users/topi/Coding/agentic-dev-kit`, the absence command
-`test ! -e /private/tmp/adk-codex-writing-20260830` returned zero on 2026-08-30. The
-retained promotion therefore no longer depends on the local descriptor, rollout, auth
-symlink, caches, or worktrees; its independent-binding verification is stamped above.
+After the copied destination verified, the cockpit removed the exact local fixture root
+`/private/tmp/adk-codex-writing-20260830` on 2026-08-30. The retained promotion
+therefore no longer depends on the local descriptor, rollout, auth symlink, caches, or
+worktrees; its independent-binding verification is stamped above.
 
 Deletion of the private synthetic GitHub repository did **not** succeed: GitHub returned
 HTTP 403 because the current credential lacks the `delete_repo` scope. The cockpit did

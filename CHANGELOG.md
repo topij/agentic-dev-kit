@@ -55,8 +55,9 @@ starts.
   and authoritative observers before trusting the bundle's own labels.**
   Copy the engine and `docs/agentic-dev-kit/live-validation-evidence.md` before using
   a live runtime observation to promote parity. Treat exit `0` as verified and exit
-  `2` as an invalid bundle or promotion; do not clean up a synthetic fixture until
-  the copied destination passes this command.
+  `2` as an invalid bundle or promotion; duplicate JSON members and undeclared,
+  unreadable, or non-regular bundle entries are invalid. Do not clean up a synthetic
+  fixture until the copied destination passes this command.
 
 ---
 

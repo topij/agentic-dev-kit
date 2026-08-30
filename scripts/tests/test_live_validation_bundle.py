@@ -317,6 +317,63 @@ def test_malformed_nested_values_use_the_documented_refusal_exit(
     assert "Traceback" not in result.stderr
 
 
+@pytest.mark.parametrize("target", ["manifest", "attestation", "promotion"])
+def test_duplicate_json_members_are_refused(tmp_path: Path, target: str) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    if target == "manifest":
+        text = manifest.read_text(encoding="utf-8")
+        manifest.write_text(
+            text.replace('{\n  "artifacts"', '{\n  "bundle_id": "decoy",\n  "artifacts"', 1),
+            encoding="utf-8",
+        )
+    elif target == "attestation":
+        artifact = manifest.parent / "artifacts" / "runtime-attestation.json"
+        text = artifact.read_text(encoding="utf-8")
+        artifact.write_text(
+            text.replace(
+                '    "model": "gpt-example"',
+                '    "model": "decoy",\n    "model": "gpt-example"',
+                1,
+            ),
+            encoding="utf-8",
+        )
+        value = json.loads(manifest.read_text(encoding="utf-8"))
+        value["artifacts"][0]["sha256"] = _sha(artifact)
+        _write_json(manifest, value)
+        _refresh_promotion_digest(manifest, promotion)
+    else:
+        text = promotion.read_text(encoding="utf-8")
+        promotion.write_text(
+            text.replace(
+                '{\n  "authority"',
+                '{\n  "authority": "docs/decoy.md",\n  "authority"',
+                1,
+            ),
+            encoding="utf-8",
+        )
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "duplicate JSON key" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_non_finite_json_values_are_refused(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    artifact = manifest.parent / "artifacts" / "forge-readback.json"
+    artifact.write_text('{"measurement": NaN}\n', encoding="utf-8")
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    value["artifacts"][1]["sha256"] = _sha(artifact)
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "non-finite JSON value" in result.stderr
+
+
 def test_credential_pattern_in_manifest_metadata_is_refused(tmp_path: Path) -> None:
     manifest, promotion = _fixture(tmp_path)
     manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
@@ -332,7 +389,19 @@ def test_credential_pattern_in_manifest_metadata_is_refused(tmp_path: Path) -> N
     assert "bundle manifest contains credential-like content" in result.stderr
 
 
-@pytest.mark.parametrize("credential_key", ["api-key", "apiKey", "access-key", "private_key"])
+@pytest.mark.parametrize(
+    "credential_key",
+    [
+        "api-key",
+        "apiKey",
+        "access-key",
+        "private_key",
+        "credentials",
+        "tokens",
+        "passwords",
+        "secrets",
+    ],
+)
 def test_credential_key_variants_are_refused(
     tmp_path: Path,
     credential_key: str,
@@ -378,6 +447,24 @@ def test_invalid_utf8_manifest_uses_the_documented_refusal_exit(tmp_path: Path) 
 
     assert result.returncode == 2
     assert "unreadable" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize("invalid_value", [[], {}], ids=["array", "object"])
+def test_session_persistence_shape_uses_the_documented_refusal_exit(
+    tmp_path: Path,
+    invalid_value: object,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    value["runtime"]["session_persistence"] = invalid_value
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "runtime.session_persistence must be a non-empty string" in result.stderr
     assert "Traceback" not in result.stderr
 
 
@@ -460,6 +547,77 @@ def test_an_undeclared_artifact_refuses_the_bundle(tmp_path: Path) -> None:
     result = _run(manifest, promotion)
     assert result.returncode == 2
     assert "undeclared" in result.stderr
+
+
+def test_an_undeclared_bundle_root_capture_refuses_the_bundle(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    synthetic_credential_marker = "ghp_" + ("a" * 16)
+    (manifest.parent / "raw-capture.txt").write_text(
+        synthetic_credential_marker + "\n",
+        encoding="utf-8",
+    )
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "bundle root contains an undeclared entry" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="FIFO is a POSIX artifact shape")
+def test_a_special_artifact_neighbor_refuses_the_bundle(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    os.mkfifo(manifest.parent / "artifacts" / "undeclared.fifo")
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "non-regular entry" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_an_undeclared_artifact_directory_refuses_the_bundle(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    (manifest.parent / "artifacts" / "undeclared").mkdir()
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "artifact directory inventory differs" in result.stderr
+
+
+@pytest.mark.skipif(
+    not hasattr(os, "geteuid") or os.geteuid() == 0,
+    reason="chmod cannot make a directory unreadable for this process",
+)
+def test_an_unreadable_artifact_subtree_refuses_the_bundle(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    directory = manifest.parent / "artifacts" / "opaque"
+    directory.mkdir()
+    (directory / "undeclared.txt").write_text("hidden capture\n", encoding="utf-8")
+    directory.chmod(0o000)
+    try:
+        result = _run(manifest, promotion)
+    finally:
+        directory.chmod(0o755)
+
+    assert result.returncode == 2
+    assert "artifact directory is unreadable" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_control_characters_in_artifact_paths_are_refused(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    value["artifacts"][0]["path"] = "artifacts/nul\u0000.txt"
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "must not contain control characters" in result.stderr
+    assert "Traceback" not in result.stderr
 
 
 def test_a_credential_like_json_field_refuses_the_bundle(tmp_path: Path) -> None:
