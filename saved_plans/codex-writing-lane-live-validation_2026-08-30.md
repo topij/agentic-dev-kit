@@ -111,7 +111,7 @@ UV_CACHE_DIR=/private/tmp/session-start-uv-cache uv run \
 ```
 
 That command in the `<kit-checkout>`, using the verifier at
-`9fc4ae8e48403bcb06131b1574de65434d942952` on 2026-08-30, returned
+`1927b6e7f3c07b4991db6902fd090a5c191c0410` on 2026-08-30, returned
 `status: verified`, `promotion: true`, and the claim IDs enumerated above. The first
 review pass had shown that comparing only the manifest and receipt let a
 self-consistently relabeled pair pass; the independent expectation arguments above are
