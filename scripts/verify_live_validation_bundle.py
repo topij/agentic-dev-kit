@@ -114,10 +114,16 @@ _FORBIDDEN_VALUE_PATTERNS = (
     re.compile(r"\bAuthorization\s*:\s*Basic\s+[A-Za-z0-9+/]{8,}=*", re.IGNORECASE),
     re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{20,}\b"),
     re.compile(
-        r"\b(?:aws_?secret_?access_?key|password|pass_?phrase|api_?key|"
-        r"access_?token|secret|token)\s*[:=]\s*(?:"
+        r"\b(?:aws_?secret_?access_?key|client_?secret|auth_?token|password|"
+        r"pass_?phrase|api_?key|access_?token|secret|token)\s*[:=]\s*(?:"
         r'\$?"(?:[^"\r\n]|\\\r?\n){6,}"|'
         r"\$?'(?:[^'\r\n]|\\\r?\n){6,}'|[^\s\"\']{6,})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:aws_?secret_?access_?key|client_?secret|auth_?token|password|"
+        r"pass_?phrase|api_?key|access_?token|secret|token)\s*:\s*"
+        r"[|>][0-9+-]{0,2}[^\r\n]*\r?\n[ \t]+[^\r\n]{6,}",
         re.IGNORECASE,
     ),
 )
@@ -162,14 +168,13 @@ def _list(value: Any, label: str) -> list[Any]:
 def _string(value: Any, label: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise BundleError(f"{label} must be a non-empty string")
+    if any(unicodedata.category(character) == "Cc" for character in value):
+        raise BundleError(f"{label} must not contain control characters")
     return value
 
 
 def _string_without_controls(value: Any, label: str) -> str:
-    text = _string(value, label)
-    if any(unicodedata.category(character) == "Cc" for character in text):
-        raise BundleError(f"{label} must not contain control characters")
-    return text
+    return _string(value, label)
 
 
 def _string_list(value: Any, label: str) -> list[str]:
@@ -464,6 +469,10 @@ def _validate_source_evidence(
             lines = (bundle_root / ledger_path).read_text(encoding="utf-8").splitlines()
         except (OSError, UnicodeDecodeError) as exc:
             raise BundleError(f"source-digest ledger is unreadable: {ledger_path}: {exc}") from exc
+        if not lines or _SOURCE_LEDGER_REVISION.fullmatch(lines[0]) is None:
+            raise BundleError(
+                f"source-digest ledger must begin with source revision: {ledger_path}"
+            )
         revision_headers = 0
         fixture_headers = 0
         capture_headers = 0
@@ -859,7 +868,7 @@ def validate_promotion(
         raise BundleError(
             "an applied-compute expectation requires an applied-compute claim"
         )
-    if runtime["applied_compute"] != expected_applied_compute:
+    if compute_required and runtime["applied_compute"] != expected_applied_compute:
         raise BundleError(
             "promotion applied compute does not match the independent expectation"
         )

@@ -148,6 +148,14 @@ revision, the implementation rejected a documented promotion subset, and Unicode
 controls crossed the string boundary. The mandatory source-revision header,
 supplementary fixture-base header, selection by the promotion receipt, and full
 Unicode-control rejection are the resulting corrections.
+A fresh fallback panel at `680e402dbd2764b7a9241ce7e95f85883b1c1b2d` on
+2026-08-30 found that the inverse promotion subset was refused when only an unpromoted
+claim carried applied compute, source revision could occur after the ledger's opening
+line despite the adopter contract, identity fields still admitted Unicode controls,
+and common non-JSON credential keys escaped the redaction backstop. Promotion-scoped
+compute comparison, mandatory first-line source identity, schema-wide Unicode-control
+refusal, and raw credential-key and YAML-block-scalar refusal are the resulting
+corrections.
 That command in `/Users/topi/Coding/agentic-dev-kit`, using the verifier at
 `a8a5edd5f855aaa0683008ec559ab834283df582` on 2026-08-30, returned
 `status: verified`, `promotion: true`, and the claim IDs enumerated above.
@@ -173,9 +181,10 @@ The repository suite drives the same public CLI through hostile mutations. It re
 - a promotion receipt whose manifest digest no longer matches.
 - a retained promotion receipt omitted from the invocation, an ancestor-symlinked
   bundle, artifact, or promotion path, unstamped artifact metadata, common passphrase,
-  Basic-auth, Slack-token, quoted or unquoted password-assignment, and AWS credential
-  shapes, duplicate artifact paths, and either independently guarded aggregate input
-  envelope or an artifact tree beyond the declared bounds.
+  Basic-auth, Slack-token, quoted, unquoted, or YAML block-scalar password assignment,
+  client-secret, auth-token, and AWS credential shapes, duplicate artifact paths, and
+  either independently guarded aggregate input envelope or an artifact tree beyond the
+  declared bounds.
 
 The kit-only structural control re-verifies this tracked bundle and promotion receipt.
 The claim-semantic control independently asserts the complete claim-to-artifact map and

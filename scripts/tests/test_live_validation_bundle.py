@@ -486,7 +486,37 @@ def test_a_fixture_header_cannot_replace_the_bundle_source_revision(
     result = _run(manifest, promotion, expected_claims=expected_claims)
 
     assert result.returncode == 2
-    assert "must contain exactly one revision header" in result.stderr
+    assert "must begin with source revision" in result.stderr
+
+
+def test_a_source_digest_must_begin_with_the_bundle_source_revision(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+    )
+    ledger = manifest.parent / "artifacts/source-digests.txt"
+    ledger.write_text(
+        f"fixture base revision: {'9' * 40}\n" + ledger.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    next(
+        artifact
+        for artifact in value["artifacts"]
+        if artifact["path"] == "artifacts/source-digests.txt"
+    )["sha256"] = _sha(ledger)
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion, expected_claims=expected_claims)
+
+    assert result.returncode == 2
+    assert "must begin with source revision" in result.stderr
 
 
 def test_a_source_digest_without_its_named_source_file_is_refused(tmp_path: Path) -> None:
@@ -563,7 +593,7 @@ def test_a_bundle_without_a_promotion_receipt_verifies_structurally(tmp_path: Pa
     assert json.loads(result.stdout)["promotion"] is False
 
 
-def test_promotion_can_select_a_subset_of_retained_claims(tmp_path: Path) -> None:
+def test_promotion_can_select_a_compute_claim_from_retained_claims(tmp_path: Path) -> None:
     manifest, promotion = _fixture(tmp_path)
     value = json.loads(manifest.read_text(encoding="utf-8"))
     value["claims"].append(
@@ -577,6 +607,33 @@ def test_promotion_can_select_a_subset_of_retained_claims(tmp_path: Path) -> Non
     _refresh_promotion_digest(manifest, promotion)
 
     result = _run(manifest, promotion)
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_promotion_can_select_a_non_compute_claim_while_retaining_compute(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    non_compute = {
+        "id": "retained-observation",
+        "evidence": ["artifacts/forge-readback.json"],
+        "requires_applied_compute": False,
+    }
+    value["claims"].append(non_compute)
+    _write_json(manifest, value)
+    promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
+    promotion_value["claims"] = [non_compute["id"]]
+    promotion_value["manifest_sha256"] = _sha(manifest)
+    _write_json(promotion, promotion_value)
+
+    result = _run(
+        manifest,
+        promotion,
+        expected_claims=[non_compute],
+        expected_compute=None,
+    )
 
     assert result.returncode == 0, result.stderr
 
@@ -1136,6 +1193,9 @@ def test_common_aws_access_key_value_shape_is_refused(tmp_path: Path) -> None:
         'password=$"hunter2"',
         "password=$'hunter2'",
         'password="hunter' + "\\\n" + '2"',
+        "client_secret: supersecretvalue",
+        "auth_token=supersecretvalue",
+        "password: |\n  supersecretvalue",
         "xoxb-" + "123456789012-123456789012-abcdefghijklmnopqrstuvwx",
         "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
     ],
@@ -1361,6 +1421,22 @@ def test_control_characters_in_artifact_paths_are_refused(
     assert result.returncode == 2
     assert "must not contain control characters" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+def test_control_characters_in_identity_fields_are_refused(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    controlled_repository = "https://github.com/example/source\u0085suffix"
+    value["source"]["repository"] = controlled_repository
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_repository"] = controlled_repository
+
+    result = _run(manifest, promotion, expectations=expectations)
+
+    assert result.returncode == 2
+    assert "must not contain control characters" in result.stderr
 
 
 def test_control_characters_in_applied_compute_are_refused(tmp_path: Path) -> None:
