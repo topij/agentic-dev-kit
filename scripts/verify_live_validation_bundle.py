@@ -43,6 +43,7 @@ import json
 import math
 import os
 import re
+import stat
 import sys
 import unicodedata
 from datetime import date, datetime, timezone
@@ -142,22 +143,80 @@ class BundleError(ValueError):
     """A condition that makes retained evidence or promotion unsafe to trust."""
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    try:
-        with path.open("rb") as stream:
-            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                digest.update(chunk)
-    except OSError as exc:
-        raise BundleError(f"evidence bytes are unreadable: {path}: {exc}") from exc
-    return digest.hexdigest()
+def _stat_identity(value: os.stat_result) -> tuple[int, int, int, int, int, int]:
+    return (
+        value.st_dev,
+        value.st_ino,
+        value.st_mode,
+        value.st_size,
+        value.st_mtime_ns,
+        value.st_ctime_ns,
+    )
 
 
-def _git_blob_id(path: Path) -> str:
+def _read_stable_regular_bytes(path: Path, label: str, *, limit: int) -> bytes:
     try:
-        data = path.read_bytes()
+        initial = os.stat(path, follow_symlinks=False)
     except OSError as exc:
-        raise BundleError(f"source-file bytes are unreadable: {path}: {exc}") from exc
+        raise BundleError(f"{label} is unreadable: {path}: {exc}") from exc
+    if not stat.S_ISREG(initial.st_mode):
+        raise BundleError(f"{label} must be a regular file: {path}")
+    if initial.st_size > limit:
+        raise BundleError(f"{label} exceeds its byte limit: {path}")
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise BundleError(f"{label} is unreadable: {path}: {exc}") from exc
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            raise BundleError(f"{label} must be a regular file: {path}")
+        if _stat_identity(initial) != _stat_identity(before):
+            raise BundleError(f"{label} changed while it was being opened: {path}")
+        if before.st_size > limit:
+            raise BundleError(f"{label} exceeds its byte limit: {path}")
+        chunks: list[bytes] = []
+        observed = 0
+        while True:
+            chunk = os.read(descriptor, min(1024 * 1024, limit + 1 - observed))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            observed += len(chunk)
+            if observed > limit:
+                raise BundleError(f"{label} exceeds its byte limit: {path}")
+        after = os.fstat(descriptor)
+    except OSError as exc:
+        raise BundleError(f"{label} is unreadable: {path}: {exc}") from exc
+    finally:
+        os.close(descriptor)
+    if _stat_identity(before) != _stat_identity(after) or observed != after.st_size:
+        raise BundleError(f"{label} changed while it was being read: {path}")
+    try:
+        current = os.stat(path, follow_symlinks=False)
+    except OSError as exc:
+        raise BundleError(f"{label} changed while it was being read: {path}: {exc}") from exc
+    if _stat_identity(after) != _stat_identity(current):
+        raise BundleError(f"{label} changed while it was being read: {path}")
+    return b"".join(chunks)
+
+
+def _confirm_unchanged(path: Path, label: str, expected: bytes, *, limit: int) -> None:
+    if _read_stable_regular_bytes(path, label, limit=limit) != expected:
+        raise BundleError(f"{label} changed during verification: {path}")
+
+
+def _sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _git_blob_id_bytes(data: bytes) -> str:
     payload = f"blob {len(data)}\0".encode() + data
     return hashlib.sha1(payload, usedforsecurity=False).hexdigest()
 
@@ -216,29 +275,21 @@ def _exact_keys(value: dict[str, Any], expected: set[str], label: str) -> None:
         raise BundleError(f"{label} keys differ: missing={missing}, extra={extra}")
 
 
-def _file_size(path: Path, label: str, *, limit: int) -> int:
-    try:
-        size = path.stat().st_size
-    except OSError as exc:
-        raise BundleError(f"{label} cannot be inspected: {path}: {exc}") from exc
-    if size > limit:
-        raise BundleError(f"{label} exceeds its byte limit: {path}")
-    return size
-
-
 def _read_json(
     path: Path,
     label: str,
     *,
     limit: int = MAX_BUNDLE_BYTES,
+    raw: bytes | None = None,
 ) -> dict[str, Any]:
-    _file_size(path, label, limit=limit)
+    if raw is None:
+        raw = _read_stable_regular_bytes(path, label, limit=limit)
     try:
-        raw = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as exc:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
         raise BundleError(f"{label} is unreadable: {path}: {exc}") from exc
-    _reject_credential_like_text(raw, label, path)
-    return _object(_parse_json(raw, label, path), label)
+    _reject_credential_like_text(text, label, path)
+    return _object(_parse_json(text, label, path), label)
 
 
 def _collapse_credential_text(text: str) -> str:
@@ -407,21 +458,15 @@ def _scan_json_content(value: Any, label: str, path: Path) -> None:
         _reject_credential_like_text(value, label, path)
 
 
-def _scan_artifact(path: Path, label: str) -> int:
+def _scan_artifact(path: Path, label: str, raw: bytes) -> int:
     try:
-        size = path.stat().st_size
-    except OSError as exc:
-        raise BundleError(f"{label} cannot be inspected: {path}: {exc}") from exc
-    if size > MAX_ARTIFACT_BYTES:
-        raise BundleError(f"{label} exceeds the per-artifact byte limit: {path}")
-    try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as exc:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
         raise BundleError(f"{label} must be readable UTF-8 text: {path}: {exc}") from exc
     _reject_credential_like_text(text, label, path)
     if path.suffix == ".json":
         _parse_json(text, label, path)
-    return size
+    return len(raw)
 
 
 def _validate_revision(value: Any, label: str) -> str:
@@ -436,8 +481,29 @@ def _validate_attestation(
     bundle_root: Path,
     runtime: dict[str, Any],
     artifact_by_path: dict[str, dict[str, Any]],
+    artifact_bytes_by_path: dict[str, bytes],
     compute_claims: list[dict[str, Any]],
 ) -> None:
+    attestations: dict[str, dict[str, Any]] = {}
+    for path, record in artifact_by_path.items():
+        if record["kind"] != "runtime-attestation":
+            continue
+        if record["observer"] != "runtime-session-context":
+            raise BundleError("runtime attestation observer must be runtime-session-context")
+        attestation = _read_json(
+            bundle_root / path,
+            "runtime attestation",
+            limit=MAX_ARTIFACT_BYTES,
+            raw=artifact_bytes_by_path[path],
+        )
+        _exact_keys(attestation, {"session_id", "turn_context"}, "runtime attestation")
+        _string_without_controls(attestation["session_id"], "runtime attestation.session_id")
+        context = _object(attestation["turn_context"], "runtime attestation.turn_context")
+        _exact_keys(context, {"model", "effort", "cwd"}, "runtime attestation.turn_context")
+        for key in ("model", "effort", "cwd"):
+            _string_without_controls(context[key], f"runtime attestation.turn_context.{key}")
+        attestations[path] = attestation
+
     persistence = runtime["session_persistence"]
     compute = runtime["applied_compute"]
     if not compute_claims:
@@ -465,17 +531,12 @@ def _validate_attestation(
         raise BundleError("runtime.applied_compute.attestation is not a declared artifact")
     if record["kind"] != "runtime-attestation":
         raise BundleError("applied-compute attestation must have kind runtime-attestation")
-    if record["observer"] != "runtime-session-context":
-        raise BundleError("applied-compute attestation observer must be runtime-session-context")
     for claim in compute_claims:
         if attestation_path not in claim["evidence"]:
             raise BundleError(
                 f"claim {claim['id']} depends on applied compute but omits its attestation"
             )
-    attestation = _read_json(bundle_root / attestation_path, "runtime attestation")
-    _exact_keys(attestation, {"session_id", "turn_context"}, "runtime attestation")
-    context = _object(attestation["turn_context"], "runtime attestation.turn_context")
-    _exact_keys(context, {"model", "effort", "cwd"}, "runtime attestation.turn_context")
+    attestation = attestations[attestation_path]
     expected = {
         "session_id": compute["session_id"],
         "turn_context": {
@@ -493,6 +554,7 @@ def _validate_git_source_proof(
     bundle_root: Path,
     proof_path: str,
     artifact_by_path: dict[str, dict[str, Any]],
+    artifact_bytes_by_path: dict[str, bytes],
     namespace: str,
     revision: str,
     expected_blobs: dict[str, str],
@@ -504,6 +566,7 @@ def _validate_git_source_proof(
         bundle_root / proof_path,
         f"source Git proof {proof_path}",
         limit=MAX_ARTIFACT_BYTES,
+        raw=artifact_bytes_by_path[proof_path],
     )
     _exact_keys(
         proof,
@@ -613,6 +676,7 @@ def _validate_source_evidence(
     bundle_root: Path,
     source_revision: str,
     artifact_by_path: dict[str, dict[str, Any]],
+    artifact_bytes_by_path: dict[str, bytes],
 ) -> dict[str, set[str]]:
     source_files = {
         path for path, record in artifact_by_path.items() if record["kind"] == "source-file"
@@ -632,8 +696,8 @@ def _validate_source_evidence(
     for ledger_path in sorted(ledgers):
         record = artifact_by_path[ledger_path]
         try:
-            lines = (bundle_root / ledger_path).read_text(encoding="utf-8").splitlines()
-        except (OSError, UnicodeDecodeError) as exc:
+            lines = artifact_bytes_by_path[ledger_path].decode("utf-8").splitlines()
+        except UnicodeDecodeError as exc:
             raise BundleError(f"source-digest ledger is unreadable: {ledger_path}: {exc}") from exc
         if not lines or _SOURCE_LEDGER_REVISION.fullmatch(lines[0]) is None:
             raise BundleError(
@@ -729,7 +793,7 @@ def _validate_source_evidence(
                     f"{source_file}"
                 )
             expected_git_blob = row.group("git_blob")
-            if _git_blob_id(bundle_root / source_file) != expected_git_blob:
+            if _git_blob_id_bytes(artifact_bytes_by_path[source_file]) != expected_git_blob:
                 raise BundleError(
                     "source-digest ledger does not match its source-file Git blob: "
                     f"{source_file}"
@@ -839,6 +903,7 @@ def _validate_source_evidence(
             bundle_root=bundle_root,
             proof_path=proof_path,
             artifact_by_path=artifact_by_path,
+            artifact_bytes_by_path=artifact_bytes_by_path,
             namespace=namespace,
             revision=revision,
             expected_blobs=expected_blobs,
@@ -846,15 +911,25 @@ def _validate_source_evidence(
     return source_files_by_ledger
 
 
-def validate_bundle(manifest_path: Path) -> dict[str, Any]:
-    """Return the parsed manifest only after its complete bundle validates."""
+def _validate_bundle(
+    manifest_path: Path,
+    *,
+    manifest_bytes: bytes | None = None,
+) -> tuple[dict[str, Any], int, dict[str, bytes]]:
+    """Return the parsed manifest and envelope size after complete validation."""
 
     _reject_symlink_traversal(manifest_path, "bundle manifest")
     if manifest_path.parent.is_symlink():
         raise BundleError("bundle root must be a retained directory, not a symlink")
     if manifest_path.is_symlink() or not manifest_path.is_file():
         raise BundleError(f"bundle manifest must be a regular file, not a symlink: {manifest_path}")
-    manifest = _read_json(manifest_path, "bundle manifest")
+    if manifest_bytes is None:
+        manifest_bytes = _read_stable_regular_bytes(
+            manifest_path,
+            "bundle manifest",
+            limit=MAX_BUNDLE_BYTES,
+        )
+    manifest = _read_json(manifest_path, "bundle manifest", raw=manifest_bytes)
     _validate_bundle_root(manifest_path)
     _exact_keys(
         manifest,
@@ -923,7 +998,8 @@ def validate_bundle(manifest_path: Path) -> dict[str, Any]:
     if len(artifacts) > MAX_ARTIFACT_COUNT:
         raise BundleError("artifacts exceeds the artifact-count limit")
     artifact_by_path: dict[str, dict[str, Any]] = {}
-    total_bytes = _file_size(manifest_path, "bundle manifest", limit=MAX_BUNDLE_BYTES)
+    artifact_bytes_by_path: dict[str, bytes] = {}
+    total_bytes = len(manifest_bytes)
     for index, item in enumerate(artifacts):
         label = f"artifacts[{index}]"
         record = _object(item, label)
@@ -958,13 +1034,15 @@ def validate_bundle(manifest_path: Path) -> dict[str, Any]:
         _reject_symlink_traversal(path, label)
         if path.is_symlink() or not path.is_file():
             raise BundleError(f"declared artifact is absent or not a regular file: {rel}")
-        total_bytes += _file_size(path, label, limit=MAX_ARTIFACT_BYTES)
+        artifact_bytes = _read_stable_regular_bytes(path, label, limit=MAX_ARTIFACT_BYTES)
+        total_bytes += len(artifact_bytes)
         if total_bytes > MAX_BUNDLE_BYTES:
             raise BundleError("bundle envelope exceeds the bundle byte limit")
-        if _sha256(path) != digest:
+        if _sha256_bytes(artifact_bytes) != digest:
             raise BundleError(f"artifact digest mismatch: {rel}")
-        _scan_artifact(path, label)
+        _scan_artifact(path, label, artifact_bytes)
         artifact_by_path[rel] = record
+        artifact_bytes_by_path[rel] = artifact_bytes
 
     artifact_root = bundle_root / "artifacts"
     if artifact_root.is_symlink() or not artifact_root.is_dir():
@@ -994,6 +1072,7 @@ def validate_bundle(manifest_path: Path) -> dict[str, Any]:
         bundle_root=bundle_root,
         source_revision=source["revision"],
         artifact_by_path=artifact_by_path,
+        artifact_bytes_by_path=artifact_bytes_by_path,
     )
 
     claim_ids: set[str] = set()
@@ -1032,8 +1111,29 @@ def validate_bundle(manifest_path: Path) -> dict[str, Any]:
         bundle_root=bundle_root,
         runtime=runtime,
         artifact_by_path=artifact_by_path,
+        artifact_bytes_by_path=artifact_bytes_by_path,
         compute_claims=compute_claims,
     )
+    _confirm_unchanged(
+        manifest_path,
+        "bundle manifest",
+        manifest_bytes,
+        limit=MAX_BUNDLE_BYTES,
+    )
+    for rel, raw in artifact_bytes_by_path.items():
+        _confirm_unchanged(
+            bundle_root / rel,
+            f"artifact {rel}",
+            raw,
+            limit=MAX_ARTIFACT_BYTES,
+        )
+    return manifest, total_bytes, artifact_bytes_by_path
+
+
+def validate_bundle(manifest_path: Path) -> dict[str, Any]:
+    """Return the parsed manifest only after its complete bundle validates."""
+
+    manifest, _, _ = _validate_bundle(manifest_path)
     return manifest
 
 
@@ -1056,12 +1156,12 @@ def validate_promotion(
         promotion_path.parent.resolve() != manifest_path.parent.resolve()
     ):
         raise BundleError("promotion receipt must be the bundle's own promotion.json")
-    promotion_bytes = _file_size(
+    promotion_bytes = _read_stable_regular_bytes(
         promotion_path,
         "promotion receipt",
         limit=MAX_BUNDLE_BYTES,
     )
-    promotion = _read_json(promotion_path, "promotion receipt")
+    promotion = _read_json(promotion_path, "promotion receipt", raw=promotion_bytes)
     _exact_keys(
         promotion,
         {
@@ -1097,23 +1197,21 @@ def validate_promotion(
     expected_manifest_digest = _string(promotion["manifest_sha256"], "promotion.manifest_sha256")
     if not _SHA256.fullmatch(expected_manifest_digest):
         raise BundleError("promotion.manifest_sha256 must be lowercase sha256")
-    if _sha256(manifest_path) != expected_manifest_digest:
-        raise BundleError("promotion receipt's manifest digest does not match")
-
-    manifest = validate_bundle(manifest_path)
-    envelope_bytes = promotion_bytes + _file_size(
+    manifest_bytes = _read_stable_regular_bytes(
         manifest_path,
         "bundle manifest",
         limit=MAX_BUNDLE_BYTES,
     )
-    for artifact in manifest["artifacts"]:
-        envelope_bytes += _file_size(
-            manifest_path.parent / artifact["path"],
-            f"artifact {artifact['path']}",
-            limit=MAX_ARTIFACT_BYTES,
-        )
-        if envelope_bytes > MAX_BUNDLE_BYTES:
-            raise BundleError("bundle envelope exceeds the bundle byte limit")
+    if _sha256_bytes(manifest_bytes) != expected_manifest_digest:
+        raise BundleError("promotion receipt's manifest digest does not match")
+
+    manifest, bundle_bytes, artifact_bytes_by_path = _validate_bundle(
+        manifest_path,
+        manifest_bytes=manifest_bytes,
+    )
+    envelope_bytes = len(promotion_bytes) + bundle_bytes
+    if envelope_bytes > MAX_BUNDLE_BYTES:
+        raise BundleError("bundle envelope exceeds the bundle byte limit")
     _safe_relative_path(promotion["authority"], "promotion.authority")
     if promotion["source_revision"] != manifest["source"]["revision"]:
         raise BundleError("promotion source revision does not match the bundle")
@@ -1179,6 +1277,25 @@ def validate_promotion(
             raise BundleError(
                 f"promotion {field.replace('_', ' ')} does not match the independent expectation"
             )
+    _confirm_unchanged(
+        manifest_path,
+        "bundle manifest",
+        manifest_bytes,
+        limit=MAX_BUNDLE_BYTES,
+    )
+    _confirm_unchanged(
+        promotion_path,
+        "promotion receipt",
+        promotion_bytes,
+        limit=MAX_BUNDLE_BYTES,
+    )
+    for rel, raw in artifact_bytes_by_path.items():
+        _confirm_unchanged(
+            manifest_path.parent / rel,
+            f"artifact {rel}",
+            raw,
+            limit=MAX_ARTIFACT_BYTES,
+        )
     return promotion
 
 

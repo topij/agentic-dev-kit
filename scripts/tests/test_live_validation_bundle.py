@@ -1211,6 +1211,40 @@ def test_a_bundle_without_a_promotion_receipt_verifies_structurally(tmp_path: Pa
     assert json.loads(result.stdout)["promotion"] is False
 
 
+def test_a_non_compute_claim_cannot_promote_an_open_runtime_attestation(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    claim = value["claims"][0]
+    claim["id"] = "reviewed-head-with-retained-session-context"
+    claim["evidence"] = [
+        "artifacts/runtime-attestation.json",
+        "artifacts/forge-readback.json",
+    ]
+    claim["requires_applied_compute"] = False
+    value["runtime"]["applied_compute"] = None
+    attestation = manifest.parent / "artifacts/runtime-attestation.json"
+    _write_json(attestation, {"unimplemented_assertion": "accepted"})
+    value["artifacts"][0]["sha256"] = _sha(attestation)
+    _write_json(manifest, value)
+    promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
+    promotion_value["claims"] = [claim["id"]]
+    promotion_value["runtime"]["applied_compute"] = None
+    _write_json(promotion, promotion_value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(
+        manifest,
+        promotion,
+        expected_claims=[claim],
+        expected_compute=None,
+    )
+
+    assert result.returncode == 2
+    assert "runtime attestation keys differ" in result.stderr
+
+
 def test_promotion_can_select_a_compute_claim_from_retained_claims(tmp_path: Path) -> None:
     manifest, promotion = _fixture(tmp_path)
     value = json.loads(manifest.read_text(encoding="utf-8"))
@@ -1279,6 +1313,68 @@ def test_prose_or_a_digest_cannot_outlive_the_artifact(tmp_path: Path, mutation:
     assert any(
         marker in result.stderr for marker in ("absent", "unreadable", "digest mismatch")
     )
+
+
+@pytest.mark.parametrize("target", ["manifest", "artifact"])
+def test_a_file_changed_during_its_descriptor_read_is_refused(
+    tmp_path: Path,
+    target: str,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    race_target = (
+        manifest
+        if target == "manifest"
+        else manifest.parent / "artifacts/forge-readback.json"
+    )
+    hook = tmp_path / "race-hook"
+    hook.mkdir()
+    (hook / "sitecustomize.py").write_text(
+        """\
+import os
+
+_target = os.environ["LIVE_EVIDENCE_RACE_TARGET"]
+_original_open = os.open
+_original_read = os.read
+_tracked = set()
+_triggered = False
+
+
+def _open(path, flags, *args, **kwargs):
+    descriptor = _original_open(path, flags, *args, **kwargs)
+    if os.fspath(path) == _target and flags & os.O_ACCMODE == os.O_RDONLY:
+        _tracked.add(descriptor)
+    return descriptor
+
+
+def _read(descriptor, size):
+    global _triggered
+    data = _original_read(descriptor, size)
+    if descriptor in _tracked and not data and not _triggered:
+        _triggered = True
+        with open(_target, "ab") as stream:
+            stream.write(b" ")
+    return data
+
+
+os.open = _open
+os.read = _read
+""",
+        encoding="utf-8",
+    )
+
+    result = _run(
+        manifest,
+        promotion,
+        env={
+            **os.environ,
+            "LIVE_EVIDENCE_RACE_TARGET": str(race_target),
+            "PYTHONPATH": str(hook),
+        },
+    )
+
+    assert result.returncode == 2
+    assert "changed while it was being read" in result.stderr
+    assert "Traceback" not in result.stderr
 
 
 def test_a_self_consistent_bundle_for_the_wrong_revision_cannot_promote(tmp_path: Path) -> None:

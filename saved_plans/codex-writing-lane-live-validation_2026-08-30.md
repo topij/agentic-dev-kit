@@ -246,6 +246,17 @@ documented refusal path with an uncaught type error. Public-CLI hostiles now rep
 the manifest, its closed nested objects, promotion, runtime attestation, Git proof
 objects, and independent expectation objects with scalars and require exit `2` without
 a traceback. The changed head still requires a fresh complete panel.
+A fresh adversarial lens at `0406f2f61fc500bbed2be1104359cc22fc37fdc9` on
+2026-08-30 changed a retained artifact immediately after its digest read and showed the
+verifier accepting semantic bytes different from the digested bytes. A separately
+launched correctness lens at the same head promoted a non-compute claim citing a
+`runtime-attestation` whose object did not have the contract's closed shape. The
+verifier now uses a stable descriptor snapshot for every byte-dependent operation,
+confirms retained bytes again before success, and validates every runtime-attestation
+shape while keeping applied-compute equality and carrier checks conditional. Public-CLI
+hostiles inject manifest and artifact changes during descriptor reads and promote a
+malformed non-compute attestation. The changed head still requires a fresh complete
+panel.
 The documented verifier command above in `/Users/topi/Coding/agentic-dev-kit` at
 `62a8f372d34fbb9fed6d49abd08d8bc7f477ad6d` on 2026-08-30 returned
 `status: verified`, `promotion: true`, and the claim IDs enumerated above.
@@ -268,6 +279,8 @@ The repository suite drives the same public CLI through hostile mutations. It re
 - an ephemeral carrier for an applied-compute claim;
 - a compute-dependent claim that omits the minimal runtime attestation;
 - a retained runtime attestation that disagrees with any applied-compute binding;
+- a malformed runtime attestation even when its claim does not depend on applied
+  compute, or a manifest or artifact changed during its descriptor read;
 - a source-digest ledger with an unsupported row, an absent or mismatched source-file,
   a mismatched Git blob, a missing or altered commit/tree proof, a source path absent
   from the named revision, or a claim link that omits bytes or proof named by its ledger;

@@ -200,6 +200,13 @@ subtree as empty. Symlinks are never evidence: they preserve access to the ephem
 source rather than the bytes that must survive it. This prohibition covers every
 component of the bundle, artifact, and promotion paths, not only the final directory
 entry; artifact bytes are not opened through an ancestor symlink before refusal.
+Each file is opened through a non-symlink-following descriptor and read into a bounded
+snapshot. Size, digest, credential scanning, JSON parsing, source-proof recomputation,
+and claim validation use those same bytes. The verifier compares descriptor identity
+and metadata before and after the read, then confirms the manifest, promotion receipt,
+and artifact bytes again before returning success. A promotion therefore validates the
+exact manifest snapshot named by its digest rather than reopening that path as a new
+observation.
 
 ## Excluded material and redaction
 
@@ -245,6 +252,10 @@ only this shape:
 }
 ```
 
+Every declared artifact of kind `runtime-attestation` has that closed shape and uses
+observer `runtime-session-context`, even when no promoted claim depends on applied
+compute. The equality, persistent-carrier, and independent applied-compute expectation
+checks become mandatory only when a claim sets `requires_applied_compute: true`.
 The manifest and promotion receipt repeat those fields, the verifier requires exact
 equality, and the promotion caller must supply the same values from an independent
 runtime observation. The minimal attestation establishes those values for its session;
