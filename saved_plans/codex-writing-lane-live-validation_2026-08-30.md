@@ -137,7 +137,7 @@ source dependencies. The exact artifact-digest control, separated guard mutation
 quoted-assignment refusal, executed-fixture ledger, bounded fixture delta, and removal
 of the uncorrelated applied-compute claim are the resulting trust root.
 That command in `/Users/topi/Coding/agentic-dev-kit`, using the verifier at
-`VERIFY_IMPLEMENTATION_SHA` on 2026-08-30, returned
+`ef15802ddaabbfef38e65ce3d5976951fa25aaa9` on 2026-08-30, returned
 `status: verified`, `promotion: true`, and the claim IDs enumerated above.
 
 The repository suite drives the same public CLI through hostile mutations. It refuses:
