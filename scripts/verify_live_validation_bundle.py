@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import sys
@@ -44,6 +45,7 @@ from typing import Any
 SCHEMA_VERSION = 1
 MAX_ARTIFACT_BYTES = 1_048_576
 MAX_BUNDLE_BYTES = 8_388_608
+MAX_JSON_INTEGER_DIGITS = 4_300
 
 ALLOWED_ARTIFACT_KINDS = frozenset(
     {
@@ -75,7 +77,7 @@ _GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 _SLUG = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 _FORBIDDEN_JSON_KEY = re.compile(
     r"(?:^|_)(?:(?:api|access|private)_?keys?|auths?|authentications?|"
-    r"authorizations?|bearers?|credentials?|passwords?|secrets?|tokens?)(?:$|_)",
+    r"authorizations?|bearers?|cookies?|credentials?|passwords?|secrets?|tokens?)(?:$|_)",
     re.IGNORECASE,
 )
 _FORBIDDEN_VALUE_PATTERNS = (
@@ -120,6 +122,13 @@ def _string(value: Any, label: str) -> str:
     return value
 
 
+def _string_without_controls(value: Any, label: str) -> str:
+    text = _string(value, label)
+    if any(ord(character) < 32 or ord(character) == 127 for character in text):
+        raise BundleError(f"{label} must not contain control characters")
+    return text
+
+
 def _string_list(value: Any, label: str) -> list[str]:
     items = _list(value, label)
     return [_string(item, f"{label}[{index}]") for index, item in enumerate(items)]
@@ -138,10 +147,14 @@ def _read_json(path: Path, label: str) -> dict[str, Any]:
         raw = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
         raise BundleError(f"{label} is unreadable: {path}: {exc}") from exc
-    for pattern in _FORBIDDEN_VALUE_PATTERNS:
-        if pattern.search(raw):
-            raise BundleError(f"{label} contains credential-like content: {path}")
+    _reject_credential_like_text(raw, label, path)
     return _object(_parse_json(raw, label, path), label)
+
+
+def _reject_credential_like_text(text: str, label: str, path: Path) -> None:
+    for pattern in _FORBIDDEN_VALUE_PATTERNS:
+        if pattern.search(text):
+            raise BundleError(f"{label} contains credential-like content: {path}")
 
 
 def _parse_json(raw: str, label: str, path: Path) -> Any:
@@ -156,29 +169,44 @@ def _parse_json(raw: str, label: str, path: Path) -> Any:
     def finite_number(constant: str) -> None:
         raise BundleError(f"{label} contains non-finite JSON value {constant!r}: {path}")
 
+    def finite_float(number: str) -> float:
+        value = float(number)
+        if not math.isfinite(value):
+            finite_number(number)
+        return value
+
+    def bounded_integer(number: str) -> int:
+        if len(number.lstrip("-")) > MAX_JSON_INTEGER_DIGITS:
+            raise BundleError(f"{label} contains an unsupported JSON integer: {path}")
+        return int(number)
+
     try:
         value = json.loads(
             raw,
             object_pairs_hook=unique_object,
             parse_constant=finite_number,
+            parse_float=finite_float,
+            parse_int=bounded_integer,
         )
+    except BundleError:
+        raise
     except json.JSONDecodeError as exc:
         raise BundleError(f"{label} is not valid JSON: {path}: {exc}") from exc
+    except ValueError as exc:
+        raise BundleError(f"{label} contains an unsupported JSON number: {path}") from exc
     except RecursionError as exc:
         raise BundleError(f"{label} exceeds the supported JSON nesting depth: {path}") from exc
     try:
-        _scan_json_keys(value, label)
+        _scan_json_content(value, label, path)
     except RecursionError as exc:
         raise BundleError(f"{label} exceeds the supported JSON nesting depth: {path}") from exc
     return value
 
 
 def _safe_relative_path(value: Any, label: str, *, beneath: str | None = None) -> str:
-    text = _string(value, label)
-    if any(ord(character) < 32 for character in text):
-        raise BundleError(f"{label} must not contain control characters")
+    text = _string_without_controls(value, label)
     path = PurePosixPath(text)
-    if path.is_absolute() or ".." in path.parts or "." in path.parts:
+    if path.is_absolute() or path.as_posix() != text or ".." in path.parts or "." in path.parts:
         raise BundleError(f"{label} must be a canonical relative path: {text}")
     if any(part.startswith(".") for part in path.parts):
         raise BundleError(f"{label} must not contain hidden path components: {text}")
@@ -190,6 +218,8 @@ def _safe_relative_path(value: Any, label: str, *, beneath: str | None = None) -
 def _validate_bundle_root(manifest_path: Path) -> None:
     if manifest_path.name != "bundle.json":
         raise BundleError("bundle manifest must be named bundle.json")
+    if manifest_path.parent.is_symlink():
+        raise BundleError("bundle root must be a retained directory, not a symlink")
     allowed = {"artifacts", "bundle.json", "promotion.json"}
     seen: set[str] = set()
     try:
@@ -204,9 +234,7 @@ def _validate_bundle_root(manifest_path: Path) -> None:
                     if not entry.is_dir(follow_symlinks=False):
                         raise BundleError("bundle root artifacts entry must be a directory")
                 elif not entry.is_file(follow_symlinks=False):
-                    raise BundleError(
-                        f"bundle root entry must be a regular file: {entry.name}"
-                    )
+                    raise BundleError(f"bundle root entry must be a regular file: {entry.name}")
     except OSError as exc:
         raise BundleError(f"bundle root is unreadable: {manifest_path.parent}: {exc}") from exc
     missing = {"artifacts", "bundle.json"} - seen
@@ -238,26 +266,27 @@ def _artifact_inventory(
                     elif entry.is_file(follow_symlinks=False):
                         files.add(relative)
                     else:
-                        raise BundleError(
-                            f"artifact tree contains a non-regular entry: {relative}"
-                        )
+                        raise BundleError(f"artifact tree contains a non-regular entry: {relative}")
         except OSError as exc:
             relative = current.relative_to(bundle_root).as_posix()
             raise BundleError(f"artifact directory is unreadable: {relative}: {exc}") from exc
     return files, directories
 
 
-def _scan_json_keys(value: Any, label: str) -> None:
+def _scan_json_content(value: Any, label: str, path: Path) -> None:
     if isinstance(value, dict):
         for key, child in value.items():
+            _reject_credential_like_text(str(key), label, path)
             key_text = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", str(key))
             normalized_key = re.sub(r"[^A-Za-z0-9]+", "_", key_text)
             if _FORBIDDEN_JSON_KEY.search(normalized_key):
                 raise BundleError(f"{label} contains forbidden credential-like key {key!r}")
-            _scan_json_keys(child, label)
+            _scan_json_content(child, label, path)
     elif isinstance(value, list):
         for child in value:
-            _scan_json_keys(child, label)
+            _scan_json_content(child, label, path)
+    elif isinstance(value, str):
+        _reject_credential_like_text(value, label, path)
 
 
 def _scan_artifact(path: Path, label: str) -> int:
@@ -271,9 +300,7 @@ def _scan_artifact(path: Path, label: str) -> int:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
         raise BundleError(f"{label} must be readable UTF-8 text: {path}: {exc}") from exc
-    for pattern in _FORBIDDEN_VALUE_PATTERNS:
-        if pattern.search(text):
-            raise BundleError(f"{label} contains credential-like content: {path}")
+    _reject_credential_like_text(text, label, path)
     if path.suffix == ".json":
         _parse_json(text, label, path)
     return size
@@ -311,7 +338,7 @@ def _validate_attestation(
         "runtime.applied_compute",
     )
     for key in ("model", "effort", "cwd", "session_id"):
-        _string(compute[key], f"runtime.applied_compute.{key}")
+        _string_without_controls(compute[key], f"runtime.applied_compute.{key}")
     attestation_path = _safe_relative_path(
         compute["attestation"], "runtime.applied_compute.attestation", beneath="artifacts"
     )
@@ -321,9 +348,7 @@ def _validate_attestation(
     if record["kind"] != "runtime-attestation":
         raise BundleError("applied-compute attestation must have kind runtime-attestation")
     if record["observer"] != "runtime-session-context":
-        raise BundleError(
-            "applied-compute attestation observer must be runtime-session-context"
-        )
+        raise BundleError("applied-compute attestation observer must be runtime-session-context")
     for claim in compute_claims:
         if attestation_path not in claim["evidence"]:
             raise BundleError(
@@ -348,6 +373,8 @@ def _validate_attestation(
 def validate_bundle(manifest_path: Path) -> dict[str, Any]:
     """Return the parsed manifest only after its complete bundle validates."""
 
+    if manifest_path.parent.is_symlink():
+        raise BundleError("bundle root must be a retained directory, not a symlink")
     if manifest_path.is_symlink() or not manifest_path.is_file():
         raise BundleError(f"bundle manifest must be a regular file, not a symlink: {manifest_path}")
     manifest = _read_json(manifest_path, "bundle manifest")
@@ -532,9 +559,7 @@ def validate_promotion(
     resolved_manifest = (promotion_path.parent / rel_manifest).resolve()
     if resolved_manifest != manifest_path.resolve():
         raise BundleError("promotion receipt names a different bundle manifest")
-    expected_manifest_digest = _string(
-        promotion["manifest_sha256"], "promotion.manifest_sha256"
-    )
+    expected_manifest_digest = _string(promotion["manifest_sha256"], "promotion.manifest_sha256")
     if not _SHA256.fullmatch(expected_manifest_digest):
         raise BundleError("promotion.manifest_sha256 must be lowercase sha256")
     if _sha256(manifest_path) != expected_manifest_digest:

@@ -37,7 +37,7 @@ persistent descriptor retained as `artifacts/descriptor.json`. `launch_lane.py` 
 }
 ```
 
-`codex --version` in `/Users/topi/Coding/agentic-dev-kit` at source revision
+`codex --version` in the `<kit-checkout>` at source revision
 `bdfd6ee702a630f0575f0c186f51b3bbbcd1810a` on 2026-08-30 printed
 `codex-cli 0.149.1`. The run was persistent: no `--ephemeral` carrier was used, and the
 minimal attestation was copied before the runtime session was removed.
@@ -106,7 +106,7 @@ UV_CACHE_DIR=/private/tmp/session-start-uv-cache uv run \
   --json
 ```
 
-That command in `/Users/topi/Coding/agentic-dev-kit`, using the verifier at
+That command in the `<kit-checkout>`, using the verifier at
 `ba0755dc50f47f6967a7f8bd4fd89e12f8df20de` on 2026-08-30, returned
 `status: verified`, `promotion: true`, and the claim IDs enumerated above. The first
 review pass had shown that comparing only the manifest and receipt let a
@@ -124,8 +124,8 @@ The repository suite drives the same public CLI through hostile mutations. It re
 - a retained runtime attestation that disagrees with any applied-compute binding;
 - undeclared bundle-root or artifact-tree neighbors, unreadable subtrees, special
   files, duplicate JSON members, credential-key spelling variants, invalid UTF-8,
-  non-finite JSON numbers, non-string persistence values, non-integer schema versions,
-  and unreadable artifact bytes without a traceback;
+  literal non-finite JSON constants, non-string persistence values, non-integer schema
+  versions, and unreadable artifact bytes without a traceback;
 - a promotion receipt whose manifest digest no longer matches.
 
 The kit-only positive control re-verifies this tracked bundle and promotion receipt so

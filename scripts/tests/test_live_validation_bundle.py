@@ -359,10 +359,11 @@ def test_duplicate_json_members_are_refused(tmp_path: Path, target: str) -> None
     assert "Traceback" not in result.stderr
 
 
-def test_non_finite_json_values_are_refused(tmp_path: Path) -> None:
+@pytest.mark.parametrize("number", ["NaN", "1e9999"])
+def test_non_finite_json_values_are_refused(tmp_path: Path, number: str) -> None:
     manifest, promotion = _fixture(tmp_path)
     artifact = manifest.parent / "artifacts" / "forge-readback.json"
-    artifact.write_text('{"measurement": NaN}\n', encoding="utf-8")
+    artifact.write_text(f'{{"measurement": {number}}}\n', encoding="utf-8")
     value = json.loads(manifest.read_text(encoding="utf-8"))
     value["artifacts"][1]["sha256"] = _sha(artifact)
     _write_json(manifest, value)
@@ -372,6 +373,65 @@ def test_non_finite_json_values_are_refused(tmp_path: Path) -> None:
 
     assert result.returncode == 2
     assert "non-finite JSON value" in result.stderr
+
+
+def test_huge_json_integer_uses_the_documented_refusal_exit(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    artifact = manifest.parent / "artifacts" / "forge-readback.json"
+    artifact.write_text(
+        '{"measurement":' + ("1" * 5_000) + "}\n",
+        encoding="utf-8",
+    )
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    value["artifacts"][1]["sha256"] = _sha(artifact)
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "unsupported JSON integer" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize("target", ["manifest", "promotion", "artifact"])
+def test_json_escaping_cannot_hide_a_credential_value(
+    tmp_path: Path,
+    target: str,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    escaped_marker = r"\u0067hp_abcdefghijklmnop"
+    if target == "manifest":
+        text = manifest.read_text(encoding="utf-8")
+        manifest.write_text(
+            text.replace(
+                "https://github.com/example/source",
+                f"https://{escaped_marker}@github.com/example/source",
+            ),
+            encoding="utf-8",
+        )
+        _refresh_promotion_digest(manifest, promotion)
+    elif target == "promotion":
+        text = promotion.read_text(encoding="utf-8")
+        promotion.write_text(
+            text.replace(
+                "docs/agentic-dev-kit/runtime-parity.md",
+                f"docs/{escaped_marker}.md",
+            ),
+            encoding="utf-8",
+        )
+    else:
+        artifact = manifest.parent / "artifacts" / "forge-readback.json"
+        artifact.write_text(f'{{"note":"{escaped_marker}"}}\n', encoding="utf-8")
+        value = json.loads(manifest.read_text(encoding="utf-8"))
+        value["artifacts"][1]["sha256"] = _sha(artifact)
+        _write_json(manifest, value)
+        _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "credential-like content" in result.stderr
 
 
 def test_credential_pattern_in_manifest_metadata_is_refused(tmp_path: Path) -> None:
@@ -400,6 +460,7 @@ def test_credential_pattern_in_manifest_metadata_is_refused(tmp_path: Path) -> N
         "tokens",
         "passwords",
         "secrets",
+        "sessionCookies",
     ],
 )
 def test_credential_key_variants_are_refused(
@@ -606,10 +667,14 @@ def test_an_unreadable_artifact_subtree_refuses_the_bundle(tmp_path: Path) -> No
     assert "Traceback" not in result.stderr
 
 
-def test_control_characters_in_artifact_paths_are_refused(tmp_path: Path) -> None:
+@pytest.mark.parametrize("control", ["\u0000", "\u007f"], ids=["nul", "del"])
+def test_control_characters_in_artifact_paths_are_refused(
+    tmp_path: Path,
+    control: str,
+) -> None:
     manifest, promotion = _fixture(tmp_path)
     value = json.loads(manifest.read_text(encoding="utf-8"))
-    value["artifacts"][0]["path"] = "artifacts/nul\u0000.txt"
+    value["artifacts"][0]["path"] = f"artifacts/control{control}.txt"
     _write_json(manifest, value)
     _refresh_promotion_digest(manifest, promotion)
 
@@ -618,6 +683,43 @@ def test_control_characters_in_artifact_paths_are_refused(tmp_path: Path) -> Non
     assert result.returncode == 2
     assert "must not contain control characters" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+def test_control_characters_in_applied_compute_are_refused(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    value["runtime"]["applied_compute"]["cwd"] = "/synthetic/impossible\u0000cwd"
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "runtime.applied_compute.cwd must not contain control characters" in result.stderr
+
+
+def test_bundle_directory_itself_cannot_be_a_symlink(tmp_path: Path) -> None:
+    manifest, _ = _fixture(tmp_path / "source")
+    retained = tmp_path / "retained-evidence"
+    retained.symlink_to(manifest.parent, target_is_directory=True)
+
+    result = _run(retained / "bundle.json", retained / "promotion.json")
+
+    assert result.returncode == 2
+    assert "bundle root" in result.stderr
+    assert "symlink" in result.stderr
+
+
+def test_promotion_manifest_path_must_be_lexically_canonical(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    value = json.loads(promotion.read_text(encoding="utf-8"))
+    value["manifest"] = "./bundle.json"
+    _write_json(promotion, value)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "canonical relative path" in result.stderr
 
 
 def test_a_credential_like_json_field_refuses_the_bundle(tmp_path: Path) -> None:

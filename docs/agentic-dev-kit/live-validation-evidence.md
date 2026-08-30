@@ -29,8 +29,9 @@ truthfully excerpted from its authoritative observer, and free of private materi
 
 A bundle is a repository-owned directory containing only `bundle.json`,
 `promotion.json` when a capability is promoted, and an `artifacts/` directory. Every
-JSON object must have unique member names and every number must be finite; parser
-ambiguity is not evidence. `bundle.json` has this closed shape:
+JSON object must have unique member names, every number must be finite, and integers
+must fit the verifier's declared digit bound; parser ambiguity is not evidence.
+`bundle.json` has this closed shape:
 
 ```json
 {
@@ -132,9 +133,10 @@ redaction boundary; these exclusions apply before committing its artifacts too.
 
 Prefer structural minimization over replacement strings. Extract only the fields the
 claim needs into a new artifact, inspect those destination bytes, and digest those
-bytes. The verifier rejects credential-like JSON keys and common secret encodings as a
-backstop. `redaction.reviewed: true` records the required semantic review; it is not a
-claim that the scanner can prove absence of every secret.
+bytes. The verifier rejects credential-like JSON keys and common secret encodings in
+both raw text and decoded JSON strings as a backstop. `redaction.reviewed: true` records
+the required semantic review; it is not a claim that the scanner can prove absence of
+every secret.
 
 Synthetic fixture paths and synthetic repository identifiers may remain when they are
 the evidence. Operator home paths and unrelated workspace paths do not. If a path is
