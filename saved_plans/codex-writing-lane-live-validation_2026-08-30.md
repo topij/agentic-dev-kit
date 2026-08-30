@@ -165,7 +165,17 @@ controls still crossed identity fields; the maintained parity plan overstated th
 uncorrelated runtime attestation; and closed-schema plus artifact-observer requirements
 were not mutation-pinned. Retained commit/tree proof traversal, schema-wide refusal of
 Unicode control and format categories, corrected promotion wording, and public-CLI
-hostile tests for the two central guards are the resulting corrections.
+hostile tests for the central closed-schema and observer guards are the resulting
+corrections.
+A correctness lens at `98ce743e72321badbafbbabb82e291965c51ac53` on
+2026-08-30 found that a claim citing source bytes could omit their ledger and proof,
+an ordinary artifact observer was not mutation-pinned, and nested closed schemas were
+not mutation-pinned. A separately launched adversarial lens demonstrated that a
+Unicode format character could split a credential marker in retained artifact content,
+then the reviewer route stopped under its security-content filter and produced no
+receipt. Bidirectional source-evidence closure, ordinary-observer and nested-schema
+hostiles, and credential scanning after control/format removal are the resulting
+corrections; the changed head still requires a fresh complete panel.
 That command in `/Users/topi/Coding/agentic-dev-kit`, using the verifier at
 `99233e7ce074a04d8efb67bff98b010e652eca62` on 2026-08-30, returned
 `status: verified`, `promotion: true`, and the claim IDs enumerated above.
@@ -193,7 +203,8 @@ The repository suite drives the same public CLI through hostile mutations. It re
 - a retained promotion receipt omitted from the invocation, an ancestor-symlinked
   bundle, artifact, or promotion path, unstamped artifact metadata, common passphrase,
   Basic-auth, Slack-token, quoted, unquoted, or YAML block-scalar password assignment,
-  client-secret, auth-token, and AWS credential shapes, duplicate artifact paths, and
+  client-secret, auth-token, Unicode-split credential markers, and AWS credential
+  shapes, duplicate artifact paths, and
   either independently guarded aggregate input envelope or an artifact tree beyond the
   declared bounds.
 

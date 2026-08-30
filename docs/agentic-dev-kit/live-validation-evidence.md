@@ -209,8 +209,10 @@ Prefer structural minimization over replacement strings. Extract only the fields
 claim needs into a new artifact, inspect those destination bytes, and digest those
 bytes. The verifier rejects credential-like JSON keys, raw credential-key assignments,
 YAML credential block scalars, and common secret encodings in raw text and decoded JSON
-strings as a backstop. `redaction.reviewed: true` records the required semantic review;
-it is not a claim that the scanner can prove absence of every secret.
+strings as a backstop. It repeats those scans after removing Unicode control and format
+characters so an invisible separator cannot split a credential marker.
+`redaction.reviewed: true` records the required semantic review; it is not a claim that
+the scanner can prove absence of every secret.
 
 Synthetic fixture paths and synthetic repository identifiers may remain when they are
 the evidence. Operator home paths and unrelated workspace paths do not. If a path is

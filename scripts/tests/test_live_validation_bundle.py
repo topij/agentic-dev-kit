@@ -745,7 +745,38 @@ def test_a_source_digest_claim_must_link_every_named_source_file(tmp_path: Path)
     result = _run(manifest, promotion, expected_claims=expected_claims)
 
     assert result.returncode == 2
-    assert "without all of its source evidence" in result.stderr
+    assert "incomplete source-evidence closure" in result.stderr
+
+
+def test_a_source_file_claim_must_link_its_ledger_and_proof(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+    )
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    value["claims"][0]["evidence"] = [
+        path
+        for path in value["claims"][0]["evidence"]
+        if path
+        not in {
+            "artifacts/source-digests.txt",
+            "artifacts/source-proof.json",
+        }
+    ]
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(
+        manifest,
+        promotion,
+        expected_claims=value["claims"],
+    )
+
+    assert result.returncode == 2
+    assert "incomplete source-evidence closure" in result.stderr
 
 
 def test_a_bundle_without_a_promotion_receipt_verifies_structurally(tmp_path: Path) -> None:
@@ -1179,6 +1210,19 @@ def test_artifact_measurement_stamps_are_required(
     assert message in result.stderr
 
 
+def test_an_ordinary_artifact_observer_is_required(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    value["artifacts"][1]["observer"] = ""
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "observer must be a non-empty string" in result.stderr
+
+
 def test_unknown_manifest_fields_are_refused(tmp_path: Path) -> None:
     manifest, promotion = _fixture(tmp_path)
     value = json.loads(manifest.read_text(encoding="utf-8"))
@@ -1190,6 +1234,66 @@ def test_unknown_manifest_fields_are_refused(tmp_path: Path) -> None:
 
     assert result.returncode == 2
     assert "bundle manifest keys differ" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "target",
+    ["source", "artifact", "claim", "promotion", "attestation", "proof", "tree", "tree-entry"],
+)
+def test_unknown_nested_fields_are_refused(tmp_path: Path, target: str) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = None
+    if target in {"proof", "tree", "tree-entry"}:
+        expected_claims = _add_source_ledger(
+            manifest,
+            promotion,
+            include_source_file=True,
+            claim_source_file=True,
+        )
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    if target == "source":
+        manifest_value["source"]["unreviewed_extension"] = "plausible"
+    elif target == "artifact":
+        manifest_value["artifacts"][1]["unreviewed_extension"] = "plausible"
+    elif target == "claim":
+        manifest_value["claims"][0]["unreviewed_extension"] = "plausible"
+    elif target == "promotion":
+        promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
+        promotion_value["unreviewed_extension"] = "plausible"
+        _write_json(promotion, promotion_value)
+    elif target == "attestation":
+        attestation = manifest.parent / "artifacts/runtime-attestation.json"
+        artifact_value = json.loads(attestation.read_text(encoding="utf-8"))
+        artifact_value["unreviewed_extension"] = "plausible"
+        _write_json(attestation, artifact_value)
+        manifest_value["artifacts"][0]["sha256"] = _sha(attestation)
+    else:
+        proof = manifest.parent / "artifacts/source-proof.json"
+        proof_value = json.loads(proof.read_text(encoding="utf-8"))
+        if target == "proof":
+            proof_value["unreviewed_extension"] = "plausible"
+        elif target == "tree":
+            proof_value["trees"][0]["unreviewed_extension"] = "plausible"
+        else:
+            proof_value["trees"][0]["entries"][0]["unreviewed_extension"] = "plausible"
+        _write_json(proof, proof_value)
+        next(
+            artifact
+            for artifact in manifest_value["artifacts"]
+            if artifact["path"] == "artifacts/source-proof.json"
+        )["sha256"] = _sha(proof)
+    if target != "promotion":
+        _write_json(manifest, manifest_value)
+        _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(
+        manifest,
+        promotion,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 2
+    assert "keys differ" in result.stderr
 
 
 @pytest.mark.parametrize("zone", ["Etc/GMT+12", "Pacific/Kiritimati"])
@@ -1287,6 +1391,29 @@ def test_json_escaping_cannot_hide_a_credential_value(
         value["artifacts"][1]["sha256"] = _sha(artifact)
         _write_json(manifest, value)
         _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "credential-like content" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "control",
+    ["\u0085", "\u200b", "\u202e"],
+    ids=["nel", "zero-width-space", "right-to-left-override"],
+)
+def test_unicode_controls_cannot_split_a_credential_marker(
+    tmp_path: Path,
+    control: str,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    artifact = manifest.parent / "artifacts/forge-readback.json"
+    _write_json(artifact, {"note": f"api{control}_key=abcdefghijklmnop"})
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    value["artifacts"][1]["sha256"] = _sha(artifact)
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
 
     result = _run(manifest, promotion)
 

@@ -237,9 +237,15 @@ def _read_json(
 
 
 def _reject_credential_like_text(text: str, label: str, path: Path) -> None:
-    for pattern in _FORBIDDEN_VALUE_PATTERNS:
-        if pattern.search(text):
-            raise BundleError(f"{label} contains credential-like content: {path}")
+    collapsed = "".join(
+        character
+        for character in text
+        if unicodedata.category(character) not in {"Cc", "Cf"}
+    )
+    for candidate in (text, collapsed):
+        for pattern in _FORBIDDEN_VALUE_PATTERNS:
+            if pattern.search(candidate):
+                raise BundleError(f"{label} contains credential-like content: {path}")
 
 
 def _parse_json(raw: str, label: str, path: Path) -> Any:
@@ -965,10 +971,13 @@ def validate_bundle(manifest_path: Path) -> dict[str, Any]:
             if rel not in artifact_by_path:
                 raise BundleError(f"{label} names undeclared evidence: {rel}")
         for ledger_path, source_paths in source_files_by_ledger.items():
-            if ledger_path in evidence_paths and not source_paths.issubset(evidence_paths):
+            source_closure = source_paths | {ledger_path}
+            if evidence_paths.intersection(source_closure) and not source_closure.issubset(
+                evidence_paths
+            ):
                 raise BundleError(
-                    f"{label} names a source-digest ledger without all of its source "
-                    f"evidence: {sorted(source_paths - evidence_paths)}"
+                    f"{label} names an incomplete source-evidence closure: "
+                    f"{sorted(source_closure - evidence_paths)}"
                 )
         if not isinstance(claim["requires_applied_compute"], bool):
             raise BundleError(f"{label}.requires_applied_compute must be boolean")
