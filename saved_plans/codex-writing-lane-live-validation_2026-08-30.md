@@ -167,7 +167,7 @@ were not mutation-pinned. Retained commit/tree proof traversal, schema-wide refu
 Unicode control and format categories, corrected promotion wording, and public-CLI
 hostile tests for the two central guards are the resulting corrections.
 That command in `/Users/topi/Coding/agentic-dev-kit`, using the verifier at
-`c946c32129b12e13b9ff32014c944a3a8d1dc149` on 2026-08-30, returned
+`99233e7ce074a04d8efb67bff98b010e652eca62` on 2026-08-30, returned
 `status: verified`, `promotion: true`, and the claim IDs enumerated above.
 
 The repository suite drives the same public CLI through hostile mutations. It refuses:
