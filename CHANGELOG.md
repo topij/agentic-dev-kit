@@ -85,6 +85,8 @@ starts.
   when a selected claim depends on it. The declared per-artifact, aggregate,
   artifact-count, claim-count, and artifact-tree-entry ceilings apply before unbounded
   input work.
+  This schema version accepts Git SHA-1 object-format repositories; source revisions,
+  reviewed heads, and Git-proof object IDs must use the full lowercase SHA-1 form.
   Do not clean up a synthetic fixture until the copied destination passes this command.
 
 ---

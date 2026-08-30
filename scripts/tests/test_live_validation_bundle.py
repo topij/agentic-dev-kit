@@ -795,6 +795,29 @@ def test_a_self_consistently_relabelled_source_revision_is_refused(tmp_path: Pat
     assert "commit does not match its revision" in result.stderr
 
 
+@pytest.mark.parametrize("revision", ["not-a-git-object-id", "4" * 64])
+def test_only_full_git_sha1_revision_ids_can_promote(
+    tmp_path: Path,
+    revision: str,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    manifest_value["source"]["revision"] = revision
+    _write_json(manifest, manifest_value)
+    promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
+    promotion_value["source_revision"] = revision
+    promotion_value["manifest_sha256"] = _sha(manifest)
+    _write_json(promotion, promotion_value)
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = revision
+
+    result = _run(manifest, promotion, expectations=expectations)
+
+    assert result.returncode == 2
+    assert "must be a full lowercase Git SHA-1 object id" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
 def test_a_source_proof_commit_without_a_header_boundary_is_refused_cleanly(
     tmp_path: Path,
 ) -> None:
@@ -2435,11 +2458,13 @@ def test_common_aws_access_key_value_shape_is_refused(tmp_path: Path) -> None:
         "password=$'hunter2'",
         'password="hunter' + "\\\n" + '2"',
         "client_secret: supersecretvalue",
+        "api-key: hunter2-secret",
         "auth_token=supersecretvalue",
         "password: |\n  supersecretvalue",
         "password: !!str |\n  supersecretvalue",
         "xoxb-" + "123456789012-123456789012-abcdefghijklmnopqrstuvwx",
         "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        "AWS-SECRET-ACCESS-KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
     ],
 )
 def test_common_credential_text_shapes_are_refused(

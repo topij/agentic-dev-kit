@@ -21,9 +21,9 @@ Usage:
       --promotion saved_plans/example-evidence/promotion.json \
       --expect-authority docs/agentic-dev-kit/runtime-parity.md \
       --expect-source-repository https://github.com/example/source \
-      --expect-source-revision <full-source-sha> \
+      --expect-source-revision <full-source-sha1> \
       --expect-review-repository https://github.com/example/review \
-      --expect-reviewed-head <full-reviewed-head-sha> \
+      --expect-reviewed-head <full-reviewed-head-sha1> \
       --expect-redaction-reviewer <independent-reviewer> \
       --expect-runtime codex \
       --expect-client-version "codex-cli <version>" \
@@ -87,7 +87,7 @@ REQUIRED_EXCLUSIONS = frozenset(
 )
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
-_GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
+_GIT_SHA1 = re.compile(r"^[0-9a-f]{40}$")
 _SLUG = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 _CAPTURE_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _SOURCE_LEDGER_REVISION = re.compile(r"^source revision: (?P<revision>[0-9a-f]{40})$")
@@ -123,16 +123,18 @@ _FORBIDDEN_VALUE_PATTERNS = (
     re.compile(r"\bAuthorization\s*:\s*Basic\s+[A-Za-z0-9+/]{8,}=*", re.IGNORECASE),
     re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{20,}\b"),
     re.compile(
-        r"\b(?:aws_?secret_?access_?key|client_?secret|auth_?token|password|"
-        r"pass_?phrase|api_?key|access_?token|secret|token)\s*[:=]\s*"
+        r"\b(?:aws[-_]?secret[-_]?access[-_]?key|client[-_]?secret|"
+        r"auth[-_]?token|password|pass[-_]?phrase|api[-_]?key|"
+        r"access[-_]?token|secret|token)\s*[:=]\s*"
         r"(?:![^\s\"']+[ \t]+)*(?:"
         r'\$?"(?:[^"\r\n]|\\\r?\n){6,}"|'
         r"\$?'(?:[^'\r\n]|\\\r?\n){6,}'|[^\s\"\']{6,})",
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:aws_?secret_?access_?key|client_?secret|auth_?token|password|"
-        r"pass_?phrase|api_?key|access_?token|secret|token)\s*:\s*"
+        r"\b(?:aws[-_]?secret[-_]?access[-_]?key|client[-_]?secret|"
+        r"auth[-_]?token|password|pass[-_]?phrase|api[-_]?key|"
+        r"access[-_]?token|secret|token)\s*:\s*"
         r"(?:![^\s\"']+[ \t]+)*[|>][0-9+-]{0,2}[^\r\n]*\r?\n[ \t]+[^\r\n]{6,}",
         re.IGNORECASE,
     ),
@@ -524,8 +526,8 @@ def _scan_artifact(path: Path, label: str, raw: bytes) -> int:
 
 def _validate_revision(value: Any, label: str) -> str:
     revision = _string(value, label)
-    if not _GIT_SHA.fullmatch(revision):
-        raise BundleError(f"{label} must be a full lowercase Git sha")
+    if not _GIT_SHA1.fullmatch(revision):
+        raise BundleError(f"{label} must be a full lowercase Git SHA-1 object id")
     return revision
 
 
@@ -655,7 +657,7 @@ def _validate_git_source_proof(
         for line in normalized_lines[:header_end]
         if line.startswith("tree ")
     ]
-    if len(tree_headers) != 1 or not _GIT_SHA.fullmatch(tree_headers[0]):
+    if len(tree_headers) != 1 or not _GIT_SHA1.fullmatch(tree_headers[0]):
         raise BundleError(f"source Git proof commit must name exactly one root tree: {proof_path}")
     root_tree = tree_headers[0]
 
@@ -1356,11 +1358,11 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--expect-source-revision",
-        help="independently observed full source Git sha",
+        help="independently observed full source Git SHA-1 object id",
     )
     parser.add_argument(
         "--expect-reviewed-head",
-        help="independently observed full reviewed-head Git sha",
+        help="independently observed full reviewed-head Git SHA-1 object id",
     )
     parser.add_argument(
         "--expect-review-repository",

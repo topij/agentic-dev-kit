@@ -15,9 +15,9 @@ uv run <engine-dir>/verify_live_validation_bundle.py <bundle>/bundle.json \
   --promotion <bundle>/promotion.json \
   --expect-authority docs/agentic-dev-kit/runtime-parity.md \
   --expect-source-repository <repository-url> \
-  --expect-source-revision <full-source-sha> \
+  --expect-source-revision <full-source-sha1> \
   --expect-review-repository <review-repository-url> \
-  --expect-reviewed-head <full-reviewed-head-sha> \
+  --expect-reviewed-head <full-reviewed-head-sha1> \
   --expect-redaction-reviewer <reviewer-identity> \
   --expect-runtime <runtime> \
   --expect-client-version <exact-client-version> \
@@ -42,6 +42,10 @@ must fit the verifier's declared digit bound; parser ambiguity is not evidence. 
 must supply `--promotion` and every independent expected binding. The byte ceiling
 covers the manifest, receipt, and artifacts, and the artifact- and claim-count
 ceilings apply before per-entry validation or artifact I/O.
+This schema version supports Git SHA-1 object-format repositories. Source revisions,
+reviewed heads, and retained Git-proof object IDs are full lowercase SHA-1 object IDs;
+SHA-256 object-format repositories require a later schema rather than relabeling their
+object IDs as this shape.
 Directory inventories are stable snapshots: the verifier refuses a bundle root or
 artifact directory whose descriptor identity changes during its walk, then confirms
 the manifest, promotion receipt, and every declared artifact against the retained
@@ -57,11 +61,11 @@ verification.
   "bundle_id": "runtime-capability-date",
   "source": {
     "repository": "https://github.com/owner/source",
-    "revision": "<full source sha>"
+    "revision": "<full source SHA-1 object id>"
   },
   "review": {
     "repository": "https://github.com/owner/review-target",
-    "head": "<full reviewed head sha>",
+    "head": "<full reviewed-head SHA-1 object id>",
     "observer": "<authoritative review read-back>"
   },
   "runtime": {

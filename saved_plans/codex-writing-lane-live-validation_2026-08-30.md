@@ -282,6 +282,18 @@ Directory walks now compare their descriptor identity across and after traversal
 retained bytes are confirmed after the final inventory, the promoted claim is narrowed
 to the forge properties, and the count-order hostile makes an over-limit entry
 malformed. The changed head still requires a fresh complete panel.
+A fresh adversarial lens at `83c9a59ed9d06704cd3fc100186ef4aade2e9ffe` on
+2026-08-30 showed that the promoted raw assignments `api-key: hunter2-secret` and
+`AWS-SECRET-ACCESS-KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` each returned
+`status: verified`. Its ancestor-symlink hostile was refused safely, after which the
+review route stopped under its security-content filter and produced no receipt. A
+separately launched correctness lens at the same head found that the generic full-Git-
+SHA wording contradicted the verifier's SHA-1-only proof construction and that replacing
+the revision-format guard with a nonempty-string check survived the drift-excluded
+suite. Raw credential assignments now cover hyphen and underscore separators, the
+schema explicitly supports SHA-1 object-format repositories, and a self-consistent
+invalid-revision hostile pins the format refusal. The changed head still requires a
+fresh complete panel.
 The documented verifier command above in `/Users/topi/Coding/agentic-dev-kit` at
 `823ee30f4df13be211285ed85fedc6244f5d1a44` on 2026-08-30 returned
 `status: verified`, `promotion: true`, and
