@@ -124,8 +124,9 @@ claim ID while thinning its artifact links, fabricating applied compute and lane
 identity together, relabeling review provenance, or retaining source hashes without
 their bytes remained self-consistent. The independent bindings, complete claim objects,
 retained source bytes, and exact semantic controls above are the resulting trust root.
-A fresh exact-head verification stamp follows after the reviewed correction is
-committed.
+That command in `/Users/topi/Coding/agentic-dev-kit`, using the verifier at
+`b99c4b27b9ac66701a500c72df23f9bb3a6d0ca7` on 2026-08-30, returned
+`status: verified`, `promotion: true`, and the claim IDs enumerated above.
 
 The repository suite drives the same public CLI through hostile mutations. It refuses:
 
