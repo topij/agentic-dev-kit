@@ -195,7 +195,7 @@ CODEX_WRITING_EXPECTED_ARTIFACT_BINDINGS = {
 CODEX_WRITING_EXPECTED_ARTIFACT_SHA256 = {
     "artifacts/client-version.txt": "ca4fe30a68dd82c6a7af75eeb683f763cfb6554840590a9e345692269ae744f0",
     "artifacts/descriptor.json": "d57a3eeaeef0dd01e208735e71b2c672f409b03ffec06347408864de396691cf",
-    "artifacts/execution-source-digests.txt": "777027603e419211921a9447f2372433acc7e5cc7a51d9ca56bfe5b5aeb72b76",
+    "artifacts/execution-source-digests.txt": "c2344c3db6b50233d96faecc02d2559c07406878e851174c3edfa6074f7f7911",
     "artifacts/filesystem-readback.txt": "ae6b54246ec52ac4dfd8079ea44a19499f5966887f5c0673084cf8e6df38dbf0",
     "artifacts/final-message.txt": "56c7748b3099da9282dde6c13e202b529740274577aa44ba4baaea8440051ca0",
     "artifacts/fixture/config/dev-model.yaml": "d4cb774d636655c2c572aed4341c773ae057d09f444494f4b54a56a513035393",
@@ -456,6 +456,39 @@ def test_a_source_digest_and_its_named_source_file_can_promote(tmp_path: Path) -
     assert result.returncode == 0, result.stderr
 
 
+def test_a_fixture_header_cannot_replace_the_bundle_source_revision(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+    )
+    ledger = manifest.parent / "artifacts/source-digests.txt"
+    ledger.write_text(
+        ledger.read_text(encoding="utf-8").replace(
+            f"source revision: {SOURCE}",
+            f"fixture base revision: {'9' * 40}",
+        ),
+        encoding="utf-8",
+    )
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    next(
+        artifact
+        for artifact in value["artifacts"]
+        if artifact["path"] == "artifacts/source-digests.txt"
+    )["sha256"] = _sha(ledger)
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion, expected_claims=expected_claims)
+
+    assert result.returncode == 2
+    assert "must contain exactly one revision header" in result.stderr
+
+
 def test_a_source_digest_without_its_named_source_file_is_refused(tmp_path: Path) -> None:
     manifest, promotion = _fixture(tmp_path)
     expected_claims = _add_source_ledger(
@@ -528,6 +561,24 @@ def test_a_bundle_without_a_promotion_receipt_verifies_structurally(tmp_path: Pa
 
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["promotion"] is False
+
+
+def test_promotion_can_select_a_subset_of_retained_claims(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    value["claims"].append(
+        {
+            "id": "retained-but-not-promoted",
+            "evidence": ["artifacts/forge-readback.json"],
+            "requires_applied_compute": False,
+        }
+    )
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_a_present_promotion_receipt_cannot_be_skipped(tmp_path: Path) -> None:
@@ -1290,7 +1341,11 @@ def test_an_unreadable_artifact_subtree_refuses_the_bundle(tmp_path: Path) -> No
     assert "Traceback" not in result.stderr
 
 
-@pytest.mark.parametrize("control", ["\u0000", "\u007f"], ids=["nul", "del"])
+@pytest.mark.parametrize(
+    "control",
+    ["\u0000", "\u007f", "\u0085"],
+    ids=["nul", "del", "nel"],
+)
 def test_control_characters_in_artifact_paths_are_refused(
     tmp_path: Path,
     control: str,
@@ -1845,7 +1900,8 @@ def test_the_promoted_codex_writing_lane_claims_remain_independently_recomputabl
     execution_source_digests = (artifacts / "execution-source-digests.txt").read_text(
         encoding="utf-8"
     )
-    assert execution_source_digests == """synthetic base revision: 83d3b623305a691dd874df44ca92270daa62ade9
+    assert execution_source_digests == """source revision: bdfd6ee702a630f0575f0c186f51b3bbbcd1810a
+fixture base revision: 83d3b623305a691dd874df44ca92270daa62ade9
 captured on: 2026-08-30
 d4cb774d636655c2c572aed4341c773ae057d09f444494f4b54a56a513035393  fixture/config/dev-model.yaml  git-blob:e6829036c661e3535dcf24a574575cb866896258
 2ae9af83f182fa726bdc2102d65820242b873aa9d6749f9a450c4b1afd55e4ba  source/scripts/dev_session.sh  git-blob:011a6a1102705f2c9255a086d9b78a8def341964

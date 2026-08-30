@@ -44,6 +44,7 @@ import math
 import os
 import re
 import sys
+import unicodedata
 from datetime import date, datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -87,9 +88,9 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 _SLUG = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 _CAPTURE_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-_SOURCE_LEDGER_REVISION = re.compile(
-    r"^(?P<label>source revision|synthetic base revision): "
-    r"(?P<revision>[0-9a-f]{40})$"
+_SOURCE_LEDGER_REVISION = re.compile(r"^source revision: (?P<revision>[0-9a-f]{40})$")
+_SOURCE_LEDGER_FIXTURE = re.compile(
+    r"^fixture base revision: (?P<revision>[0-9a-f]{40})$"
 )
 _SOURCE_LEDGER_CAPTURE = re.compile(r"^captured on: (?P<captured_on>\d{4}-\d{2}-\d{2})$")
 _SOURCE_LEDGER_ROW = re.compile(
@@ -166,7 +167,7 @@ def _string(value: Any, label: str) -> str:
 
 def _string_without_controls(value: Any, label: str) -> str:
     text = _string(value, label)
-    if any(ord(character) < 32 or ord(character) == 127 for character in text):
+    if any(unicodedata.category(character) == "Cc" for character in text):
         raise BundleError(f"{label} must not contain control characters")
     return text
 
@@ -464,6 +465,7 @@ def _validate_source_evidence(
         except (OSError, UnicodeDecodeError) as exc:
             raise BundleError(f"source-digest ledger is unreadable: {ledger_path}: {exc}") from exc
         revision_headers = 0
+        fixture_headers = 0
         capture_headers = 0
         row_count = 0
         ledger_paths: set[str] = set()
@@ -471,14 +473,15 @@ def _validate_source_evidence(
             revision_match = _SOURCE_LEDGER_REVISION.fullmatch(line)
             if revision_match:
                 revision_headers += 1
-                if (
-                    revision_match.group("label") == "source revision"
-                    and revision_match.group("revision") != source_revision
-                ):
+                if revision_match.group("revision") != source_revision:
                     raise BundleError(
                         "source-digest ledger source revision differs from the bundle: "
                         f"{ledger_path}:{line_number}"
                     )
+                continue
+            fixture_match = _SOURCE_LEDGER_FIXTURE.fullmatch(line)
+            if fixture_match:
+                fixture_headers += 1
                 continue
             capture_match = _SOURCE_LEDGER_CAPTURE.fullmatch(line)
             if capture_match:
@@ -529,6 +532,10 @@ def _validate_source_evidence(
         if revision_headers != 1:
             raise BundleError(
                 f"source-digest ledger must contain exactly one revision header: {ledger_path}"
+            )
+        if fixture_headers > 1:
+            raise BundleError(
+                f"source-digest ledger repeats its fixture-base header: {ledger_path}"
             )
         if capture_headers > 1:
             raise BundleError(
@@ -835,8 +842,10 @@ def validate_promotion(
     unknown = sorted(set(promoted_claims) - available)
     if unknown:
         raise BundleError(f"promotion names claims absent from the bundle: {unknown}")
-    if manifest["claims"] != expected_claims:
-        raise BundleError("bundle claims do not match the independent expectation")
+    claims_by_id = {claim["id"]: claim for claim in manifest["claims"]}
+    selected_claims = [claims_by_id[claim_id] for claim_id in promoted_claims]
+    if selected_claims != expected_claims:
+        raise BundleError("promoted claims do not match the independent expectation")
     if promoted_claims != [claim["id"] for claim in expected_claims]:
         raise BundleError("promotion claims do not match the independent expectation")
     compute_required = any(

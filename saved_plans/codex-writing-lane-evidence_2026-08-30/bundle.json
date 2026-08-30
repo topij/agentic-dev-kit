@@ -110,7 +110,7 @@
       "kind": "source-digest",
       "observer": "synthetic-git-object-readback",
       "path": "artifacts/execution-source-digests.txt",
-      "sha256": "777027603e419211921a9447f2372433acc7e5cc7a51d9ca56bfe5b5aeb72b76"
+      "sha256": "c2344c3db6b50233d96faecc02d2559c07406878e851174c3edfa6074f7f7911"
     },
     {
       "capture_request": "git show 83d3b623305a691dd874df44ca92270daa62ade9:config/dev-model.yaml",

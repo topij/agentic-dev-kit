@@ -65,7 +65,9 @@ starts.
   markers, unsupported numbers, symlink traversal, and undeclared, unreadable, or
   non-regular bundle entries are invalid. Artifact records must carry their exact
   capture request and UTC date; a `source-digest` ledger used by a promoted claim must
-  be accompanied by the exact `source-file` bytes it names. A retained `promotion.json`
+  begin with the manifest's source revision and be accompanied by the exact
+  `source-file` bytes it names; a fixture-base header is only supplementary. A retained
+  `promotion.json`
   requires `--promotion` and all independent expectations; bundle-only verification
   refuses it. The declared per-artifact, aggregate, artifact-count, and
   artifact-tree-entry ceilings apply before unbounded input work.

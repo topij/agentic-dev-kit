@@ -142,6 +142,12 @@ digest-ledger rows did not structurally require the source bytes they named, and
 promotion's claimed complete runtime object omitted session persistence. UTC capture
 dates, the closed ledger grammar with digest/Git-blob/source-file and claim-link checks,
 and the independent session-persistence expectation are the resulting corrections.
+A fallback panel at `c280e219566eec7567367c25c758d9c6d25fd93b` on 2026-08-30 then
+found that a fixture-specific revision header could replace the manifest source
+revision, the implementation rejected a documented promotion subset, and Unicode C1
+controls crossed the string boundary. The mandatory source-revision header,
+supplementary fixture-base header, selection by the promotion receipt, and full
+Unicode-control rejection are the resulting corrections.
 That command in `/Users/topi/Coding/agentic-dev-kit`, using the verifier at
 `45f93e33603fd06502c406c38d92a1cbc28bc85e` on 2026-08-30, returned
 `status: verified`, `promotion: true`, and the claim IDs enumerated above.

@@ -119,6 +119,9 @@ expected authority, source repository, source revision, review repository, revie
 head, redaction reviewer, runtime, client, session-persistence carrier, and complete
 promoted claim objects. When a claim depends on applied compute, the caller must also
 supply the complete expected applied-compute object with `--expect-applied-compute`.
+The bundle may retain validated claims that are not promoted. Only the IDs enumerated
+by `promotion.json` are selected and compared with the independent expected claim
+objects.
 Supply each claim with
 repeatable `--expect-claim` compact JSON, including its ordered evidence paths and
 applied-compute dependency. Obtain those expectations from the review target and
@@ -152,12 +155,14 @@ verifier admits these kinds:
   source revision, and `source-file` for each exact retained byte sequence the ledger
   names and a promoted claim depends on.
 
-A source-digest ledger is not a substitute for its source bytes. After exactly one
-`source revision: <sha>` or `synthetic base revision: <sha>` header, each data row is
-`<sha256><two spaces><path relative to artifacts/>`, optionally followed by `<two
-spaces>git-blob:<sha>`. An optional `captured on: <UTC YYYY-MM-DD>` header must match
-the artifact record. Retain every row's path as a `source-file` with the same SHA-256;
-the verifier also refuses an unlisted `source-file`.
+A source-digest ledger is not a substitute for its source bytes. It has exactly one
+`source revision: <sha>` header matching the manifest. A fixture ledger may add one
+`fixture base revision: <sha>` header, but that never replaces the source revision;
+the repository-owned semantic control independently pins the fixture relationship.
+Each data row is `<sha256><two spaces><path relative to artifacts/>`, optionally
+followed by `<two spaces>git-blob:<sha>`. An optional `captured on: <UTC YYYY-MM-DD>`
+header must match the artifact record. Retain every row's path as a `source-file` with
+the same SHA-256; the verifier also refuses an unlisted `source-file`.
 
 A wrapper-attributed claim retains the exact fixture configuration and direct
 repository source dependencies used by the issuer and launcher, not only their
