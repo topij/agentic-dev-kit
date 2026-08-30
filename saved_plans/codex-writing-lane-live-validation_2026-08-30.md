@@ -185,6 +185,17 @@ unknown-field coverage across the manifest source, review, runtime, applied-comp
 redaction, artifact, and claim objects; the promotion and its runtime; the attestation
 and its turn context; Git proofs, trees, and tree entries; and the expected claim and
 applied-compute objects are the resulting corrections.
+A fresh correctness lens at `4c2c9bdf247a9c0ca506385236a076f7f9b8bf09` on
+2026-08-30 found that the promoted descriptor carried the local calendar date rather
+than the UTC date in its own `issued_at` field, and that the CHANGELOG described
+schema-string control rejection as an artifact-wide rule. The adversarial lens at the
+same head mutation-tested the applied-compute attestation kind and observer guards,
+then stopped under its security-content filter without producing a receipt. The
+correction committed as `2f0491085d0103eeb01db24cbce6a325c6a7add6` on 2026-08-30
+bound the run artifacts to their UTC dates, recomputes the descriptor, launcher, and
+review-receipt dates from retained timestamps, pins the attestation metadata guards,
+and scopes the CHANGELOG statement to schema strings. The changed head still requires
+a fresh complete panel.
 That command in `/Users/topi/Coding/agentic-dev-kit`, using the verifier at
 `d276f80de1368b46149e26d1f29eb41485c180de` on 2026-08-30, returned
 `status: verified`, `promotion: true`, and the claim IDs enumerated above.
