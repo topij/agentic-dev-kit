@@ -25,7 +25,8 @@ uv run <engine-dir>/verify_live_validation_bundle.py <bundle>/bundle.json \
   --expect-applied-compute \
   '{"model":"<model>","effort":"<effort>","cwd":"<cwd>","session_id":"<id>","attestation":"artifacts/runtime-attestation.json"}' \
   --expect-claim \
-  '{"id":"<claim>","evidence":["artifacts/runtime-attestation.json","artifacts/<file>"],"requires_applied_compute":true}'
+  '{"id":"<claim>","evidence":["artifacts/runtime-attestation.json","artifacts/<file>"],"requires_applied_compute":true}' \
+  --json
 ```
 
 Verification is necessary, not sufficient. The named redaction reviewer still owns the
@@ -46,13 +47,32 @@ This schema version supports Git SHA-1 object-format repositories. Source revisi
 reviewed heads, and retained Git-proof object IDs are full lowercase SHA-1 object IDs;
 SHA-256 object-format repositories require a later schema rather than relabeling their
 object IDs as this shape.
-Directory inventories are stable snapshots: the verifier binds the bundle-root and
-top-level artifact-directory identities at invocation entry, refuses a directory whose
-descriptor identity changes during a walk, then reconfirms those initial identities,
-the manifest, promotion receipt, and every declared artifact against the retained bytes
-after the final inventory. A concurrent writer is therefore not a permitted evidence
-carrier: the verifier does not lock the filesystem, so run it against a private
-destination with no writer and treat any later change as invalidating the verification.
+Verification binds one immutable in-process snapshot, not an atomic state of a mutable
+multi-file directory at process return. The verifier opens every component of the
+bundle-root path relative to an already opened directory descriptor with no-follow
+semantics, retains the bundle-root and artifact-directory descriptors while walking,
+and captures each regular file once through those descriptors. An ancestor rename or
+symlink substitution after its descriptor is opened cannot redirect that capture.
+Directory identity changes during the walk and file identity or metadata changes during
+its read are refused. Every digest and semantic check then uses only the captured bytes.
+
+The JSON result includes `snapshot_sha256`, a canonical identity an independent reader
+can recompute from the retained bundle. Its input begins with the bytes
+`live-validation-snapshot-v1` followed by NUL. Next come the artifact directories in
+lexical relative-path order, each encoded as `d`, an unsigned eight-byte big-endian
+path length, and the UTF-8 path. Files follow in lexical relative-path order, each
+encoded as `f`, the same path-length and path encoding, an unsigned eight-byte
+big-endian content length, and the exact file bytes. The file set includes
+`bundle.json`, `promotion.json` when retained, and every artifact. The directory set
+includes `artifacts` and all of its retained descendants.
+
+A concurrent writer is not a permitted evidence carrier. The verifier does not lock
+the filesystem and does not claim that sequentially captured files coexist unchanged
+at the instant it returns. Run it against a private destination with no writer, retain
+the reported snapshot identity with the verification observation, and require a later
+recomputation to produce the same identity. Any later change invalidates that
+observation; rerun verification instead of treating an earlier success as a property
+of the changed directory.
 `bundle.json` has this closed shape:
 
 ```json
@@ -211,13 +231,14 @@ subtree as empty. Symlinks are never evidence: they preserve access to the ephem
 source rather than the bytes that must survive it. This prohibition covers every
 component of the bundle, artifact, and promotion paths, not only the final directory
 entry; artifact bytes are not opened through an ancestor symlink before refusal.
-Each file is opened through a non-symlink-following descriptor and read into a bounded
-snapshot. Size, digest, credential scanning, JSON parsing, source-proof recomputation,
-and claim validation use those same bytes. The verifier compares descriptor identity
-and metadata before and after the read, then confirms the bundle-root and artifact-tree
-inventories, manifest, promotion receipt, and artifact bytes again before returning
-success. A promotion therefore validates the exact manifest snapshot named by its
-digest rather than reopening that path as a new observation.
+Each file is opened relative to the retained directory descriptors with no-follow
+semantics and read into the bounded snapshot. Size, digest, credential scanning, JSON
+parsing, source-proof recomputation, claim validation, and promotion validation use
+those same bytes. The verifier compares descriptor identity and metadata before and
+after each read and refuses directory mutation detected during the capture. It does not
+perform a later sequence of path-based rereads: such a sequence cannot prove an atomic
+multi-file state and can reopen a substituted ancestor. A promotion therefore
+validates the exact manifest bytes named by its digest inside the reported snapshot.
 
 ## Excluded material and redaction
 

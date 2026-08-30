@@ -65,10 +65,13 @@ starts.
   markers, unsupported numbers, symlink traversal, and undeclared, unreadable, or
   non-regular bundle entries are invalid. Artifact records must carry their exact
   capture request and UTC date. Digest, scanning, parsing, source-proof, and promotion
-  checks use stable descriptor-read and directory-inventory snapshots, then reconfirm
-  every retained byte after the final inventory. The CLI also binds the initial bundle-
-  root and top-level artifact-directory identities through the complete invocation; a
-  file, bundle root, or artifact directory changed during verification is refused.
+  checks use one descriptor-relative, no-follow byte snapshot. The `--json` result now
+  includes `snapshot_sha256`; retain it with the verification observation and require a
+  later run against the retained bundle to reproduce it. The verifier does not claim an
+  atomic mutable-directory state at process return, so run it only with no concurrent
+  writer. A file changed during its descriptor read or a directory changed during
+  snapshot capture is refused, and an ancestor substitution cannot redirect already
+  opened directory descriptors.
   Every `runtime-attestation` has
   the documented closed shape and runtime-session observer even when a promoted claim
   does not depend on applied compute. A `source-digest` ledger used by a promoted claim must

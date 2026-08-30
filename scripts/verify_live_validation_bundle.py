@@ -46,6 +46,8 @@ import re
 import stat
 import sys
 import unicodedata
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -113,6 +115,13 @@ _FORBIDDEN_JSON_KEY = re.compile(
     r"secrets?|tokens?)(?:$|_)",
     re.IGNORECASE,
 )
+_FORBIDDEN_ASSIGNMENT_LABEL = (
+    r"(?:aws[ \t_-]*secret[ \t_-]*access[ \t_-]*keys?|"
+    r"client[ \t_-]*secrets?|api[ \t_-]*keys?|access[ \t_-]*keys?|"
+    r"private[ \t_-]*keys?|auths?|authentications?|authorizations?|"
+    r"bearers?|cookies?|credentials?|pass[ \t_-]*phrases?|passwords?|"
+    r"secrets?|tokens?)"
+)
 _FORBIDDEN_VALUE_PATTERNS = (
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
     re.compile(r"\bgithub_pat_[A-Za-z0-9_]{12,}\b"),
@@ -123,18 +132,14 @@ _FORBIDDEN_VALUE_PATTERNS = (
     re.compile(r"\bAuthorization\s*:\s*Basic\s+[A-Za-z0-9+/]{8,}=*", re.IGNORECASE),
     re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{20,}\b"),
     re.compile(
-        r"\b(?:aws[-_]?secret[-_]?access[-_]?key|client[-_]?secret|"
-        r"auth[-_]?token|password|pass[-_]?phrase|api[-_]?key|"
-        r"access[-_]?token|secret|token)\s*[:=]\s*"
+        r"(?<![A-Za-z0-9])" + _FORBIDDEN_ASSIGNMENT_LABEL + r"\s*[:=]\s*"
         r"(?:![^\s\"']+[ \t]+)*(?:"
         r'\$?"(?:[^"\r\n]|\\\r?\n){6,}"|'
         r"\$?'(?:[^'\r\n]|\\\r?\n){6,}'|[^\s\"\']{6,})",
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:aws[-_]?secret[-_]?access[-_]?key|client[-_]?secret|"
-        r"auth[-_]?token|password|pass[-_]?phrase|api[-_]?key|"
-        r"access[-_]?token|secret|token)\s*:\s*"
+        r"(?<![A-Za-z0-9])" + _FORBIDDEN_ASSIGNMENT_LABEL + r"\s*:\s*"
         r"(?:![^\s\"']+[ \t]+)*[|>][0-9+-]{0,2}[^\r\n]*\r?\n[ \t]+[^\r\n]{6,}",
         re.IGNORECASE,
     ),
@@ -143,6 +148,288 @@ _FORBIDDEN_VALUE_PATTERNS = (
 
 class BundleError(ValueError):
     """A condition that makes retained evidence or promotion unsafe to trust."""
+
+
+SnapshotObserver = Callable[[str, Path], None]
+
+
+@dataclass(frozen=True)
+class BundleSnapshot:
+    """One descriptor-rooted capture used by every verification check."""
+
+    root: Path
+    files: dict[str, bytes]
+    directories: frozenset[str]
+    sha256: str
+
+
+def _notify_snapshot(observer: SnapshotObserver | None, event: str, path: Path) -> None:
+    if observer is not None:
+        observer(event, path)
+
+
+def _directory_open_flags() -> int:
+    return (
+        os.O_RDONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+
+
+def _regular_open_flags() -> int:
+    return (
+        os.O_RDONLY
+        | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+
+
+def _open_directory_without_symlinks(
+    path: Path,
+    label: str,
+    observer: SnapshotObserver | None,
+) -> int:
+    absolute = Path(os.path.abspath(path))
+    try:
+        descriptor = os.open(os.sep, _directory_open_flags())
+    except OSError as exc:
+        raise BundleError(f"{label} is unreadable: {path}: {exc}") from exc
+    opened = Path(os.sep)
+    try:
+        for component in absolute.parts[1:]:
+            try:
+                child = os.open(component, _directory_open_flags(), dir_fd=descriptor)
+            except OSError as exc:
+                raise BundleError(
+                    f"{label} path must contain only retained directories and must not "
+                    f"traverse a symlink: {path}: {exc}"
+                ) from exc
+            os.close(descriptor)
+            descriptor = child
+            opened /= component
+            _notify_snapshot(observer, "directory-opened", opened)
+        current = os.fstat(descriptor)
+        if not stat.S_ISDIR(current.st_mode):
+            raise BundleError(f"{label} must be a retained directory: {path}")
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _read_regular_at(
+    directory_descriptor: int,
+    name: str,
+    label: str,
+    display_path: Path,
+    *,
+    limit: int,
+    observer: SnapshotObserver | None,
+) -> bytes:
+    try:
+        initial = os.stat(
+            name,
+            dir_fd=directory_descriptor,
+            follow_symlinks=False,
+        )
+    except OSError as exc:
+        raise BundleError(f"{label} is unreadable: {display_path}: {exc}") from exc
+    if not stat.S_ISREG(initial.st_mode):
+        raise BundleError(f"{label} must be a regular file: {display_path}")
+    if initial.st_size > limit:
+        raise BundleError(f"{label} exceeds its byte limit: {display_path}")
+    _notify_snapshot(observer, "before-file-read", display_path)
+    try:
+        descriptor = os.open(name, _regular_open_flags(), dir_fd=directory_descriptor)
+    except OSError as exc:
+        raise BundleError(f"{label} is unreadable: {display_path}: {exc}") from exc
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            raise BundleError(f"{label} must be a regular file: {display_path}")
+        if _stat_identity(initial) != _stat_identity(before):
+            raise BundleError(f"{label} changed while it was being opened: {display_path}")
+        if before.st_size > limit:
+            raise BundleError(f"{label} exceeds its byte limit: {display_path}")
+        chunks: list[bytes] = []
+        observed = 0
+        while True:
+            chunk = os.read(descriptor, min(1024 * 1024, limit + 1 - observed))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            observed += len(chunk)
+            if observed > limit:
+                raise BundleError(f"{label} exceeds its byte limit: {display_path}")
+        _notify_snapshot(observer, "file-read", display_path)
+        after = os.fstat(descriptor)
+    except OSError as exc:
+        raise BundleError(f"{label} is unreadable: {display_path}: {exc}") from exc
+    finally:
+        os.close(descriptor)
+    if _stat_identity(before) != _stat_identity(after) or observed != after.st_size:
+        raise BundleError(f"{label} changed while it was being read: {display_path}")
+    raw = b"".join(chunks)
+    _notify_snapshot(observer, "file-captured", display_path)
+    return raw
+
+
+def _snapshot_sha256(files: dict[str, bytes], directories: set[str]) -> str:
+    digest = hashlib.sha256(b"live-validation-snapshot-v1\0")
+    for directory in sorted(directories):
+        encoded = directory.encode("utf-8")
+        digest.update(b"d")
+        digest.update(len(encoded).to_bytes(8, "big"))
+        digest.update(encoded)
+    for relative, raw in sorted(files.items()):
+        encoded = relative.encode("utf-8")
+        digest.update(b"f")
+        digest.update(len(encoded).to_bytes(8, "big"))
+        digest.update(encoded)
+        digest.update(len(raw).to_bytes(8, "big"))
+        digest.update(raw)
+    return digest.hexdigest()
+
+
+def _capture_bundle_snapshot(
+    manifest_path: Path,
+    *,
+    observer: SnapshotObserver | None = None,
+) -> BundleSnapshot:
+    if manifest_path.name != "bundle.json":
+        raise BundleError("bundle manifest must be named bundle.json")
+    root = Path(os.path.abspath(manifest_path.parent))
+    root_descriptor = _open_directory_without_symlinks(root, "bundle root", observer)
+    files: dict[str, bytes] = {}
+    directories = {"artifacts"}
+    observed_entries = 0
+
+    def capture_artifacts(
+        descriptor: int,
+        relative_directory: PurePosixPath,
+    ) -> None:
+        nonlocal observed_entries
+        before = os.fstat(descriptor)
+        try:
+            with os.scandir(descriptor) as iterator:
+                entries = sorted(iterator, key=lambda entry: entry.name)
+        except OSError as exc:
+            raise BundleError(
+                f"artifact directory is unreadable: {relative_directory}: {exc}"
+            ) from exc
+        for entry in entries:
+            observed_entries += 1
+            if any(unicodedata.category(character) == "Cs" for character in entry.name):
+                raise BundleError("artifact tree contains a non-UTF-8 entry name")
+            relative = relative_directory / entry.name
+            relative_text = relative.as_posix()
+            if observed_entries > MAX_ARTIFACT_TREE_ENTRIES:
+                raise BundleError("artifact tree exceeds the entry-count limit")
+            if entry.name.startswith("."):
+                raise BundleError(f"artifact tree contains a hidden entry: {relative_text}")
+            try:
+                if entry.is_symlink():
+                    raise BundleError(f"artifact tree contains a symlink: {relative_text}")
+                if entry.is_dir(follow_symlinks=False):
+                    try:
+                        child = os.open(
+                            entry.name,
+                            _directory_open_flags(),
+                            dir_fd=descriptor,
+                        )
+                    except OSError as exc:
+                        raise BundleError(
+                            f"artifact directory is unreadable: {relative_text}: {exc}"
+                        ) from exc
+                    try:
+                        directories.add(relative_text)
+                        capture_artifacts(child, relative)
+                    finally:
+                        os.close(child)
+                elif entry.is_file(follow_symlinks=False):
+                    files[relative_text] = _read_regular_at(
+                        descriptor,
+                        entry.name,
+                        f"artifact {relative_text}",
+                        root / relative_text,
+                        limit=MAX_ARTIFACT_BYTES,
+                        observer=observer,
+                    )
+                else:
+                    raise BundleError(
+                        f"artifact tree contains a non-regular entry: {relative_text}"
+                    )
+            except OSError as exc:
+                raise BundleError(f"artifact entry is unreadable: {relative_text}: {exc}") from exc
+        after = os.fstat(descriptor)
+        if _stat_identity(before) != _stat_identity(after):
+            raise BundleError(
+                f"artifact directory changed during snapshot capture: {relative_directory}"
+            )
+
+    try:
+        root_before = os.fstat(root_descriptor)
+        try:
+            with os.scandir(root_descriptor) as iterator:
+                root_entries = sorted(iterator, key=lambda entry: entry.name)
+        except OSError as exc:
+            raise BundleError(f"bundle root is unreadable: {root}: {exc}") from exc
+        allowed = {"artifacts", "bundle.json", "promotion.json"}
+        seen: set[str] = set()
+        for entry in root_entries:
+            if any(unicodedata.category(character) == "Cs" for character in entry.name):
+                raise BundleError("bundle root contains a non-UTF-8 entry name")
+            seen.add(entry.name)
+            if entry.name not in allowed:
+                raise BundleError(f"bundle root contains an undeclared entry: {entry.name}")
+            try:
+                if entry.is_symlink():
+                    raise BundleError(f"bundle root contains a symlink: {entry.name}")
+                if entry.name == "artifacts":
+                    if not entry.is_dir(follow_symlinks=False):
+                        raise BundleError("bundle root artifacts entry must be a directory")
+                    artifacts_descriptor = os.open(
+                        entry.name,
+                        _directory_open_flags(),
+                        dir_fd=root_descriptor,
+                    )
+                    try:
+                        capture_artifacts(artifacts_descriptor, PurePosixPath("artifacts"))
+                    finally:
+                        os.close(artifacts_descriptor)
+                elif entry.is_file(follow_symlinks=False):
+                    label = {
+                        "bundle.json": "bundle manifest",
+                        "promotion.json": "promotion receipt",
+                    }[entry.name]
+                    files[entry.name] = _read_regular_at(
+                        root_descriptor,
+                        entry.name,
+                        label,
+                        root / entry.name,
+                        limit=MAX_BUNDLE_BYTES,
+                        observer=observer,
+                    )
+                else:
+                    raise BundleError(f"bundle root entry must be a regular file: {entry.name}")
+            except OSError as exc:
+                raise BundleError(f"bundle root entry is unreadable: {entry.name}: {exc}") from exc
+        missing = {"artifacts", "bundle.json"} - seen
+        if missing:
+            raise BundleError(f"bundle root is missing required entries: {sorted(missing)}")
+        root_after = os.fstat(root_descriptor)
+        if _stat_identity(root_before) != _stat_identity(root_after):
+            raise BundleError("bundle root changed during snapshot capture")
+    finally:
+        os.close(root_descriptor)
+    return BundleSnapshot(
+        root=root,
+        files=files,
+        directories=frozenset(directories),
+        sha256=_snapshot_sha256(files, directories),
+    )
 
 
 def _stat_identity(value: os.stat_result) -> tuple[int, int, int, int, int, int]:
@@ -154,94 +441,6 @@ def _stat_identity(value: os.stat_result) -> tuple[int, int, int, int, int, int]
         value.st_mtime_ns,
         value.st_ctime_ns,
     )
-
-
-def _read_stable_directory_identity(
-    path: Path,
-    label: str,
-) -> tuple[int, int, int, int, int, int]:
-    try:
-        initial = os.stat(path, follow_symlinks=False)
-        current = os.stat(path, follow_symlinks=False)
-    except OSError as exc:
-        raise BundleError(f"{label} is unreadable: {path}: {exc}") from exc
-    if not stat.S_ISDIR(initial.st_mode) or not stat.S_ISDIR(current.st_mode):
-        raise BundleError(f"{label} must be a retained directory: {path}")
-    identity = _stat_identity(initial)
-    if identity != _stat_identity(current):
-        raise BundleError(f"{label} changed during verification: {path}")
-    return identity
-
-
-def _confirm_directory_identity(
-    path: Path,
-    label: str,
-    expected: tuple[int, int, int, int, int, int],
-) -> None:
-    try:
-        current = os.stat(path, follow_symlinks=False)
-    except OSError as exc:
-        raise BundleError(f"{label} changed during verification: {path}: {exc}") from exc
-    if _stat_identity(current) != expected:
-        raise BundleError(f"{label} changed during verification: {path}")
-
-
-def _read_stable_regular_bytes(path: Path, label: str, *, limit: int) -> bytes:
-    try:
-        initial = os.stat(path, follow_symlinks=False)
-    except OSError as exc:
-        raise BundleError(f"{label} is unreadable: {path}: {exc}") from exc
-    if not stat.S_ISREG(initial.st_mode):
-        raise BundleError(f"{label} must be a regular file: {path}")
-    if initial.st_size > limit:
-        raise BundleError(f"{label} exceeds its byte limit: {path}")
-    flags = (
-        os.O_RDONLY
-        | getattr(os, "O_BINARY", 0)
-        | getattr(os, "O_CLOEXEC", 0)
-        | getattr(os, "O_NOFOLLOW", 0)
-    )
-    try:
-        descriptor = os.open(path, flags)
-    except OSError as exc:
-        raise BundleError(f"{label} is unreadable: {path}: {exc}") from exc
-    try:
-        before = os.fstat(descriptor)
-        if not stat.S_ISREG(before.st_mode):
-            raise BundleError(f"{label} must be a regular file: {path}")
-        if _stat_identity(initial) != _stat_identity(before):
-            raise BundleError(f"{label} changed while it was being opened: {path}")
-        if before.st_size > limit:
-            raise BundleError(f"{label} exceeds its byte limit: {path}")
-        chunks: list[bytes] = []
-        observed = 0
-        while True:
-            chunk = os.read(descriptor, min(1024 * 1024, limit + 1 - observed))
-            if not chunk:
-                break
-            chunks.append(chunk)
-            observed += len(chunk)
-            if observed > limit:
-                raise BundleError(f"{label} exceeds its byte limit: {path}")
-        after = os.fstat(descriptor)
-    except OSError as exc:
-        raise BundleError(f"{label} is unreadable: {path}: {exc}") from exc
-    finally:
-        os.close(descriptor)
-    if _stat_identity(before) != _stat_identity(after) or observed != after.st_size:
-        raise BundleError(f"{label} changed while it was being read: {path}")
-    try:
-        current = os.stat(path, follow_symlinks=False)
-    except OSError as exc:
-        raise BundleError(f"{label} changed while it was being read: {path}: {exc}") from exc
-    if _stat_identity(after) != _stat_identity(current):
-        raise BundleError(f"{label} changed while it was being read: {path}")
-    return b"".join(chunks)
-
-
-def _confirm_unchanged(path: Path, label: str, expected: bytes, *, limit: int) -> None:
-    if _read_stable_regular_bytes(path, label, limit=limit) != expected:
-        raise BundleError(f"{label} changed during verification: {path}")
 
 
 def _sha256_bytes(data: bytes) -> str:
@@ -311,11 +510,8 @@ def _read_json(
     path: Path,
     label: str,
     *,
-    limit: int = MAX_BUNDLE_BYTES,
-    raw: bytes | None = None,
+    raw: bytes,
 ) -> dict[str, Any]:
-    if raw is None:
-        raw = _read_stable_regular_bytes(path, label, limit=limit)
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -400,111 +596,13 @@ def _safe_relative_path(value: Any, label: str, *, beneath: str | None = None) -
     return text
 
 
-def _validate_bundle_root(manifest_path: Path) -> None:
-    if manifest_path.name != "bundle.json":
-        raise BundleError("bundle manifest must be named bundle.json")
-    if manifest_path.parent.is_symlink():
-        raise BundleError("bundle root must be a retained directory, not a symlink")
-    allowed = {"artifacts", "bundle.json", "promotion.json"}
-    seen: set[str] = set()
-    try:
-        initial = os.stat(manifest_path.parent, follow_symlinks=False)
-        if not stat.S_ISDIR(initial.st_mode):
-            raise BundleError("bundle root must be a retained directory")
-        with os.scandir(manifest_path.parent) as entries:
-            for entry in entries:
-                seen.add(entry.name)
-                if entry.name not in allowed:
-                    raise BundleError(f"bundle root contains an undeclared entry: {entry.name}")
-                if entry.is_symlink():
-                    raise BundleError(f"bundle root contains a symlink: {entry.name}")
-                if entry.name == "artifacts":
-                    if not entry.is_dir(follow_symlinks=False):
-                        raise BundleError("bundle root artifacts entry must be a directory")
-                elif not entry.is_file(follow_symlinks=False):
-                    raise BundleError(f"bundle root entry must be a regular file: {entry.name}")
-        current = os.stat(manifest_path.parent, follow_symlinks=False)
-    except OSError as exc:
-        raise BundleError(f"bundle root is unreadable: {manifest_path.parent}: {exc}") from exc
-    if _stat_identity(initial) != _stat_identity(current):
-        raise BundleError("bundle root changed during inventory")
-    missing = {"artifacts", "bundle.json"} - seen
-    if missing:
-        raise BundleError(f"bundle root is missing required entries: {sorted(missing)}")
-
-
-def _reject_symlink_traversal(path: Path, label: str) -> None:
-    lexical = Path(os.path.abspath(path))
-    try:
-        resolved = path.resolve(strict=True)
-    except (OSError, RuntimeError) as exc:
-        raise BundleError(f"{label} is unreadable: {path}: {exc}") from exc
-    if lexical != resolved:
-        raise BundleError(f"{label} path must not traverse a symlink: {path}")
-
-
-def _artifact_inventory(
-    artifact_root: Path,
-    bundle_root: Path,
-) -> tuple[set[str], set[str]]:
-    files: set[str] = set()
-    directories = {artifact_root.relative_to(bundle_root).as_posix()}
-    pending = [artifact_root]
-    directory_identities: dict[Path, tuple[int, int, int, int, int, int]] = {}
-    observed_entries = 0
-    while pending:
-        current = pending.pop()
-        try:
-            initial = os.stat(current, follow_symlinks=False)
-            if not stat.S_ISDIR(initial.st_mode):
-                relative = current.relative_to(bundle_root).as_posix()
-                raise BundleError(f"artifact tree contains a non-directory: {relative}")
-            with os.scandir(current) as entries:
-                for entry in entries:
-                    observed_entries += 1
-                    if observed_entries > MAX_ARTIFACT_TREE_ENTRIES:
-                        raise BundleError("artifact tree exceeds the entry-count limit")
-                    path = Path(entry.path)
-                    relative = path.relative_to(bundle_root).as_posix()
-                    if entry.name.startswith("."):
-                        raise BundleError(f"artifact tree contains a hidden entry: {relative}")
-                    if entry.is_symlink():
-                        raise BundleError(f"artifact tree contains a symlink: {relative}")
-                    if entry.is_dir(follow_symlinks=False):
-                        directories.add(relative)
-                        pending.append(path)
-                    elif entry.is_file(follow_symlinks=False):
-                        files.add(relative)
-                    else:
-                        raise BundleError(f"artifact tree contains a non-regular entry: {relative}")
-            after = os.stat(current, follow_symlinks=False)
-        except OSError as exc:
-            relative = current.relative_to(bundle_root).as_posix()
-            raise BundleError(f"artifact directory is unreadable: {relative}: {exc}") from exc
-        if _stat_identity(initial) != _stat_identity(after):
-            relative = current.relative_to(bundle_root).as_posix()
-            raise BundleError(f"artifact directory changed during inventory: {relative}")
-        directory_identities[current] = _stat_identity(after)
-    for path, expected in directory_identities.items():
-        try:
-            current = os.stat(path, follow_symlinks=False)
-        except OSError as exc:
-            relative = path.relative_to(bundle_root).as_posix()
-            raise BundleError(
-                f"artifact directory changed during inventory: {relative}: {exc}"
-            ) from exc
-        if _stat_identity(current) != expected:
-            relative = path.relative_to(bundle_root).as_posix()
-            raise BundleError(f"artifact directory changed during inventory: {relative}")
-    return files, directories
-
-
-def _validate_artifact_inventory(
-    artifact_root: Path,
-    bundle_root: Path,
+def _validate_snapshot_inventory(
+    snapshot: BundleSnapshot,
     declared_paths: set[str],
 ) -> None:
-    actual_paths, actual_directories = _artifact_inventory(artifact_root, bundle_root)
+    actual_paths = {
+        relative for relative in snapshot.files if relative.startswith("artifacts/")
+    }
     if actual_paths != declared_paths:
         raise BundleError(
             "artifact inventory differs: "
@@ -512,11 +610,12 @@ def _validate_artifact_inventory(
             f"missing={sorted(declared_paths - actual_paths)}"
         )
     declared_directories = {"artifacts"}
-    for rel in declared_paths:
-        parent = PurePosixPath(rel).parent
+    for relative in declared_paths:
+        parent = PurePosixPath(relative).parent
         while parent != PurePosixPath("."):
             declared_directories.add(parent.as_posix())
             parent = parent.parent
+    actual_directories = set(snapshot.directories)
     if actual_directories != declared_directories:
         raise BundleError(
             "artifact directory inventory differs: "
@@ -578,7 +677,6 @@ def _validate_attestation(
         attestation = _read_json(
             bundle_root / path,
             "runtime attestation",
-            limit=MAX_ARTIFACT_BYTES,
             raw=artifact_bytes_by_path[path],
         )
         _exact_keys(attestation, {"session_id", "turn_context"}, "runtime attestation")
@@ -650,7 +748,6 @@ def _validate_git_source_proof(
     proof = _read_json(
         bundle_root / proof_path,
         f"source Git proof {proof_path}",
-        limit=MAX_ARTIFACT_BYTES,
         raw=artifact_bytes_by_path[proof_path],
     )
     _exact_keys(
@@ -1000,22 +1097,20 @@ def _validate_bundle(
     manifest_path: Path,
     *,
     manifest_bytes: bytes | None = None,
+    snapshot: BundleSnapshot | None = None,
 ) -> tuple[dict[str, Any], int, dict[str, bytes]]:
     """Return the parsed manifest and envelope size after complete validation."""
 
-    _reject_symlink_traversal(manifest_path, "bundle manifest")
-    if manifest_path.parent.is_symlink():
-        raise BundleError("bundle root must be a retained directory, not a symlink")
-    if manifest_path.is_symlink() or not manifest_path.is_file():
-        raise BundleError(f"bundle manifest must be a regular file, not a symlink: {manifest_path}")
+    if snapshot is None:
+        snapshot = _capture_bundle_snapshot(manifest_path)
+    if Path(os.path.abspath(manifest_path.parent)) != snapshot.root:
+        raise BundleError("bundle manifest is outside the captured snapshot root")
     if manifest_bytes is None:
-        manifest_bytes = _read_stable_regular_bytes(
-            manifest_path,
-            "bundle manifest",
-            limit=MAX_BUNDLE_BYTES,
-        )
+        try:
+            manifest_bytes = snapshot.files["bundle.json"]
+        except KeyError as exc:
+            raise BundleError("bundle snapshot is missing bundle.json") from exc
     manifest = _read_json(manifest_path, "bundle manifest", raw=manifest_bytes)
-    _validate_bundle_root(manifest_path)
     _exact_keys(
         manifest,
         {
@@ -1076,7 +1171,7 @@ def _validate_bundle(
             "redaction.excluded must enumerate every forbidden data category exactly once"
         )
 
-    bundle_root = manifest_path.parent
+    bundle_root = snapshot.root
     artifacts = _list(manifest["artifacts"], "artifacts")
     if not artifacts:
         raise BundleError("artifacts must not be empty")
@@ -1116,10 +1211,10 @@ def _validate_bundle(
         if capture_date > datetime.now(timezone.utc).date():
             raise BundleError(f"{label}.captured_on must not be in the future")
         path = bundle_root / rel
-        _reject_symlink_traversal(path, label)
-        if path.is_symlink() or not path.is_file():
-            raise BundleError(f"declared artifact is absent or not a regular file: {rel}")
-        artifact_bytes = _read_stable_regular_bytes(path, label, limit=MAX_ARTIFACT_BYTES)
+        try:
+            artifact_bytes = snapshot.files[rel]
+        except KeyError as exc:
+            raise BundleError(f"declared artifact is absent: {rel}") from exc
         total_bytes += len(artifact_bytes)
         if total_bytes > MAX_BUNDLE_BYTES:
             raise BundleError("bundle envelope exceeds the bundle byte limit")
@@ -1129,11 +1224,8 @@ def _validate_bundle(
         artifact_by_path[rel] = record
         artifact_bytes_by_path[rel] = artifact_bytes
 
-    artifact_root = bundle_root / "artifacts"
-    if artifact_root.is_symlink() or not artifact_root.is_dir():
-        raise BundleError("bundle must contain a regular artifacts/ directory")
     declared_paths = set(artifact_by_path)
-    _validate_artifact_inventory(artifact_root, bundle_root, declared_paths)
+    _validate_snapshot_inventory(snapshot, declared_paths)
 
     source_files_by_ledger = _validate_source_evidence(
         bundle_root=bundle_root,
@@ -1181,28 +1273,14 @@ def _validate_bundle(
         artifact_bytes_by_path=artifact_bytes_by_path,
         compute_claims=compute_claims,
     )
-    _validate_bundle_root(manifest_path)
-    _validate_artifact_inventory(artifact_root, bundle_root, declared_paths)
-    _confirm_unchanged(
-        manifest_path,
-        "bundle manifest",
-        manifest_bytes,
-        limit=MAX_BUNDLE_BYTES,
-    )
-    for rel, raw in artifact_bytes_by_path.items():
-        _confirm_unchanged(
-            bundle_root / rel,
-            f"artifact {rel}",
-            raw,
-            limit=MAX_ARTIFACT_BYTES,
-        )
     return manifest, total_bytes, artifact_bytes_by_path
 
 
 def validate_bundle(manifest_path: Path) -> dict[str, Any]:
     """Return the parsed manifest only after its complete bundle validates."""
 
-    manifest, _, _ = _validate_bundle(manifest_path)
+    snapshot = _capture_bundle_snapshot(manifest_path)
+    manifest, _, _ = _validate_bundle(manifest_path, snapshot=snapshot)
     return manifest
 
 
@@ -1213,23 +1291,21 @@ def validate_promotion(
     expected: dict[str, str],
     expected_claims: list[dict[str, Any]],
     expected_applied_compute: dict[str, Any] | None,
+    snapshot: BundleSnapshot | None = None,
 ) -> dict[str, Any]:
     """Validate a capability-promotion receipt against a valid bundle."""
 
-    _reject_symlink_traversal(promotion_path, "promotion receipt")
-    if promotion_path.is_symlink() or not promotion_path.is_file():
-        raise BundleError(
-            f"promotion receipt must be a regular file, not a symlink: {promotion_path}"
-        )
     if promotion_path.name != "promotion.json" or (
-        promotion_path.parent.resolve() != manifest_path.parent.resolve()
+        Path(os.path.abspath(promotion_path.parent))
+        != Path(os.path.abspath(manifest_path.parent))
     ):
         raise BundleError("promotion receipt must be the bundle's own promotion.json")
-    promotion_bytes = _read_stable_regular_bytes(
-        promotion_path,
-        "promotion receipt",
-        limit=MAX_BUNDLE_BYTES,
-    )
+    if snapshot is None:
+        snapshot = _capture_bundle_snapshot(manifest_path)
+    try:
+        promotion_bytes = snapshot.files["promotion.json"]
+    except KeyError as exc:
+        raise BundleError("bundle snapshot is missing promotion.json") from exc
     promotion = _read_json(promotion_path, "promotion receipt", raw=promotion_bytes)
     _exact_keys(
         promotion,
@@ -1260,23 +1336,23 @@ def validate_promotion(
     rel_manifest = _safe_relative_path(promotion["manifest"], "promotion.manifest")
     if rel_manifest != "bundle.json":
         raise BundleError("promotion receipt must name bundle.json in its own directory")
-    resolved_manifest = (promotion_path.parent / rel_manifest).resolve()
-    if resolved_manifest != manifest_path.resolve():
+    expected_manifest_path = Path(os.path.abspath(promotion_path.parent / rel_manifest))
+    if expected_manifest_path != Path(os.path.abspath(manifest_path)):
         raise BundleError("promotion receipt names a different bundle manifest")
     expected_manifest_digest = _string(promotion["manifest_sha256"], "promotion.manifest_sha256")
     if not _SHA256.fullmatch(expected_manifest_digest):
         raise BundleError("promotion.manifest_sha256 must be lowercase sha256")
-    manifest_bytes = _read_stable_regular_bytes(
-        manifest_path,
-        "bundle manifest",
-        limit=MAX_BUNDLE_BYTES,
-    )
+    try:
+        manifest_bytes = snapshot.files["bundle.json"]
+    except KeyError as exc:
+        raise BundleError("bundle snapshot is missing bundle.json") from exc
     if _sha256_bytes(manifest_bytes) != expected_manifest_digest:
         raise BundleError("promotion receipt's manifest digest does not match")
 
-    manifest, bundle_bytes, artifact_bytes_by_path = _validate_bundle(
+    manifest, bundle_bytes, _ = _validate_bundle(
         manifest_path,
         manifest_bytes=manifest_bytes,
+        snapshot=snapshot,
     )
     envelope_bytes = len(promotion_bytes) + bundle_bytes
     if envelope_bytes > MAX_BUNDLE_BYTES:
@@ -1346,31 +1422,6 @@ def validate_promotion(
             raise BundleError(
                 f"promotion {field.replace('_', ' ')} does not match the independent expectation"
             )
-    _validate_bundle_root(manifest_path)
-    _validate_artifact_inventory(
-        manifest_path.parent / "artifacts",
-        manifest_path.parent,
-        set(artifact_bytes_by_path),
-    )
-    _confirm_unchanged(
-        manifest_path,
-        "bundle manifest",
-        manifest_bytes,
-        limit=MAX_BUNDLE_BYTES,
-    )
-    _confirm_unchanged(
-        promotion_path,
-        "promotion receipt",
-        promotion_bytes,
-        limit=MAX_BUNDLE_BYTES,
-    )
-    for rel, raw in artifact_bytes_by_path.items():
-        _confirm_unchanged(
-            manifest_path.parent / rel,
-            f"artifact {rel}",
-            raw,
-            limit=MAX_ARTIFACT_BYTES,
-        )
     return promotion
 
 
@@ -1432,18 +1483,18 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(
+    argv: list[str] | None = None,
+    *,
+    snapshot_observer: SnapshotObserver | None = None,
+) -> int:
     args = _parser().parse_args(argv)
     try:
-        _reject_symlink_traversal(args.manifest, "bundle manifest")
-        bundle_root = args.manifest.parent
-        artifact_root = bundle_root / "artifacts"
-        bundle_root_identity = _read_stable_directory_identity(bundle_root, "bundle root")
-        artifact_root_identity = _read_stable_directory_identity(
-            artifact_root,
-            "artifact directory",
+        snapshot = _capture_bundle_snapshot(
+            args.manifest,
+            observer=snapshot_observer,
         )
-        manifest = validate_bundle(args.manifest)
+        manifest, _, _ = _validate_bundle(args.manifest, snapshot=snapshot)
         promoted = None
         expected = {
             "authority": args.expect_authority,
@@ -1542,8 +1593,9 @@ def main(argv: list[str] | None = None) -> int:
                 expected=expected_values,
                 expected_claims=expected_claims,
                 expected_applied_compute=expected_applied_compute,
+                snapshot=snapshot,
             )
-        elif (args.manifest.parent / "promotion.json").exists():
+        elif "promotion.json" in snapshot.files:
             raise BundleError(
                 "a retained promotion.json requires --promotion and independent expected bindings"
             )
@@ -1553,12 +1605,6 @@ def main(argv: list[str] | None = None) -> int:
             or args.expect_applied_compute is not None
         ):
             raise BundleError("expected promotion bindings require --promotion")
-        _confirm_directory_identity(
-            artifact_root,
-            "artifact directory",
-            artifact_root_identity,
-        )
-        _confirm_directory_identity(bundle_root, "bundle root", bundle_root_identity)
     except BundleError as exc:
         print(f"live-validation evidence refused: {exc}", file=sys.stderr)
         return 2
@@ -1567,6 +1613,7 @@ def main(argv: list[str] | None = None) -> int:
         "bundle_id": manifest["bundle_id"],
         "promotion": promoted is not None,
         "claims": promoted["claims"] if promoted is not None else [],
+        "snapshot_sha256": snapshot.sha256,
     }
     if args.json:
         print(json.dumps(result, sort_keys=True))

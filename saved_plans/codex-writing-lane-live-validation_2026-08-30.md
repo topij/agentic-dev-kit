@@ -329,6 +329,32 @@ verifier at
 `codex-writing-lane-ready-private-pr`, and
 `codex-writing-lane-exact-head-review-receipt`.
 
+The interrupted Final20 sessions against
+`388da4220a68cf79906150341ed69648c81edff7` on 2026-08-30 produced no final report
+files and no exact-head receipt. Their bounded observations were:
+
+- a retained YAML artifact containing a whitespace-separated API-key assignment and a
+  retained raw artifact containing a prefixed environment-style API-key assignment
+  both reached `status: verified`;
+- scalar `runtime.applied_compute` and scalar runtime-attestation `turn_context`
+  values were not pinned by the drift-excluded behavioral suite;
+- changing an earlier artifact after its last sequential confirmation while a later
+  artifact was being confirmed still reached `status: verified`; and
+- an ancestor-directory substitution probe was interrupted before a verdict.
+
+The resulting correction treats one descriptor-rooted byte capture as the verified
+object and reports its canonical `snapshot_sha256`; it does not claim an atomic
+multi-file filesystem state at process return. Every path component is opened relative
+to an already validated directory descriptor with no-follow semantics, and all digest
+and semantic checks use the captured bytes. An isolated promotion-path observer test
+reproduces the earlier-file mutation: the first result remains bound to the captured
+snapshot identity, while an independent rerun against the changed retained directory
+refuses the artifact digest. A separate observer test swaps an already opened ancestor
+for a symlink and shows that the retained descriptor continues to capture the original
+tree rather than the substituted target. These observer tests pass an explicit callback
+to the CLI entry point in their child process; they do not install Python startup code
+or alter `PYTHONPATH`.
+
 The repository suite drives the same public CLI through hostile mutations. It refuses:
 
 - surviving prose or a surviving declared digest when the named artifact is absent or
@@ -341,7 +367,8 @@ The repository suite drives the same public CLI through hostile mutations. It re
 - a compute-dependent claim that omits the minimal runtime attestation;
 - a retained runtime attestation that disagrees with any applied-compute binding;
 - a malformed runtime attestation even when its claim does not depend on applied
-  compute, or a manifest or artifact changed during its descriptor read;
+  compute, a scalar applied-compute or attestation-context object, or a manifest or
+  artifact changed during its descriptor read;
 - a source-digest ledger with an unsupported row, an absent or mismatched source-file,
   a mismatched Git blob, a missing or altered commit/tree proof, a source path absent
   from the named revision, or a claim link that omits bytes or proof named by its ledger;
@@ -350,15 +377,15 @@ The repository suite drives the same public CLI through hostile mutations. It re
   variants, secret markers hidden by JSON escaping, invalid UTF-8, non-finite or
   oversized JSON numbers, non-string persistence values, non-integer schema versions,
   symlink loops, and unreadable artifact bytes without a traceback;
-- a bundle root or artifact directory changed during its inventory, an undeclared
-  artifact added as the final inventory exhausts, or a declared artifact changed
-  before the post-inventory byte confirmation;
+- a directory changed during descriptor-rooted snapshot capture or an undeclared
+  artifact added while that capture is in progress;
 - a promotion receipt whose manifest digest no longer matches.
 - a retained promotion receipt omitted from the invocation, an ancestor-symlinked
   bundle, artifact, or promotion path, unstamped artifact metadata, common passphrase,
   Basic-auth, Slack-token, quoted, unquoted, or YAML block-scalar password assignment,
-  client-secret, auth-token, Unicode-split credential markers, and AWS credential
-  shapes, duplicate artifact paths, and
+  client-secret, auth-token, whitespace-separated or environment-prefixed API-key
+  assignments, Unicode-split credential markers, and AWS credential shapes, duplicate
+  artifact paths, and
   either independently guarded aggregate input envelope or an artifact tree beyond the
   declared bounds.
 

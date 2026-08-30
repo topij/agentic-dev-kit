@@ -2,8 +2,9 @@
 
 The dangerous false-success is a plausible narrative or digest surviving after the
 bytes it names disappeared. These tests therefore drive the public CLI against real
-files. They do not import an internal helper and conclude that the helper agrees with
-itself.
+files. Deterministic mutation tests invoke the same CLI entry point in an isolated
+subprocess and supply only its explicit snapshot observer; they do not replace Python
+startup behavior or validate an internal helper in place of the promotion path.
 """
 
 from __future__ import annotations
@@ -22,56 +23,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _repo_layout import engine_dir, find_repo_root  # noqa: E402
 
 ENGINE = engine_dir(Path(__file__).resolve()) / "verify_live_validation_bundle.py"
-SCANDIR_MUTATION_HOOK = '''\
-import os
-
-_target = os.environ["LIVE_EVIDENCE_SCAN_TARGET"]
-_scan_number = int(os.environ["LIVE_EVIDENCE_SCAN_NUMBER"])
-_append_target = os.environ.get("LIVE_EVIDENCE_APPEND_TARGET")
-_add_target = os.environ.get("LIVE_EVIDENCE_ADD_TARGET")
-_original_scandir = os.scandir
-_scan_count = 0
-_triggered = False
-
-
-class _WrappedScandir:
-    def __init__(self, path):
-        self._path = os.fspath(path)
-        self._context = _original_scandir(path)
-
-    def __enter__(self):
-        self._iterator = self._context.__enter__()
-        return self
-
-    def __exit__(self, *args):
-        return self._context.__exit__(*args)
-
-    def close(self):
-        return self._context.close()
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        global _scan_count, _triggered
-        try:
-            return next(self._iterator)
-        except StopIteration:
-            if self._path == _target:
-                _scan_count += 1
-                if _scan_count == _scan_number and not _triggered:
-                    _triggered = True
-                    if _append_target is not None:
-                        with open(_append_target, "ab") as stream:
-                            stream.write(b" ")
-                    else:
-                        with open(_add_target, "w") as stream:
-                            stream.write("late undeclared bytes\\n")
-            raise
-
-
-os.scandir = _WrappedScandir
-'''
 
 
 def _git_oid(kind: str, data: bytes) -> str:
@@ -315,6 +266,33 @@ def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _snapshot_sha(root: Path) -> str:
+    digest = hashlib.sha256(b"live-validation-snapshot-v1\0")
+    directories = {
+        path.relative_to(root).as_posix()
+        for path in root.rglob("*")
+        if path.is_dir()
+    }
+    files = {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file()
+    }
+    for directory in sorted(directories):
+        encoded = directory.encode("utf-8")
+        digest.update(b"d")
+        digest.update(len(encoded).to_bytes(8, "big"))
+        digest.update(encoded)
+    for relative, raw in sorted(files.items()):
+        encoded = relative.encode("utf-8")
+        digest.update(b"f")
+        digest.update(len(encoded).to_bytes(8, "big"))
+        digest.update(encoded)
+        digest.update(len(raw).to_bytes(8, "big"))
+        digest.update(raw)
+    return digest.hexdigest()
+
+
 def _write_json(path: Path, value: object) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
@@ -428,17 +406,15 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
     return manifest_path, promotion_path
 
 
-def _run(
+def _argv(
     manifest: Path,
     promotion: Path | None = None,
     *,
     expectations: dict[str, str] | None = None,
     expected_claims: list[dict[str, object]] | None = None,
     expected_compute: dict[str, object] | None | object = DEFAULT_EXPECTED_COMPUTE,
-    env: dict[str, str] | None = None,
-    timeout: float = 10,
-) -> subprocess.CompletedProcess[str]:
-    argv = [sys.executable, str(ENGINE), str(manifest), "--json"]
+) -> list[str]:
+    argv = [str(manifest), "--json"]
     if promotion is not None:
         argv.extend(["--promotion", str(promotion)])
         bindings = FIXTURE_EXPECTATIONS if expectations is None else expectations
@@ -456,13 +432,62 @@ def _run(
             argv.extend(
                 ["--expect-applied-compute", json.dumps(compute, separators=(",", ":"))]
             )
+    return argv
+
+
+def _run(
+    manifest: Path,
+    promotion: Path | None = None,
+    *,
+    expectations: dict[str, str] | None = None,
+    expected_claims: list[dict[str, object]] | None = None,
+    expected_compute: dict[str, object] | None | object = DEFAULT_EXPECTED_COMPUTE,
+    env: dict[str, str] | None = None,
+    timeout: float = 10,
+) -> subprocess.CompletedProcess[str]:
+    argv = _argv(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+        expected_compute=expected_compute,
+    )
     return subprocess.run(
-        argv,
+        [sys.executable, str(ENGINE), *argv],
         capture_output=True,
         text=True,
         check=False,
         env=env,
         timeout=timeout,
+    )
+
+
+def _run_observed(
+    manifest: Path,
+    promotion: Path | None,
+    observer_source: str,
+    *,
+    env: dict[str, str],
+) -> subprocess.CompletedProcess[str]:
+    argv = _argv(manifest, promotion)
+    runner = f"""\
+import importlib.util
+import sys
+
+spec = importlib.util.spec_from_file_location("live_validation_verifier", {str(ENGINE)!r})
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+{observer_source}
+raise SystemExit(module.main(sys.argv[1:], snapshot_observer=observer))
+"""
+    return subprocess.run(
+        [sys.executable, "-c", runner, *argv],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+        timeout=10,
     )
 
 
@@ -562,6 +587,7 @@ def test_a_complete_bundle_and_promotion_receipt_verify(tmp_path: Path) -> None:
         "bundle_id": "example-live-validation",
         "claims": ["applied-compute-and-reviewed-head"],
         "promotion": True,
+        "snapshot_sha256": _snapshot_sha(manifest.parent),
         "status": "verified",
     }
 
@@ -1389,19 +1415,10 @@ def test_prose_or_a_digest_cannot_outlive_the_artifact(tmp_path: Path, mutation:
     )
 
 
-@pytest.mark.parametrize(
-    ("target", "read_number"),
-    [
-        ("manifest", 1),
-        ("artifact", 1),
-        ("manifest", 2),
-        ("artifact", 2),
-    ],
-)
+@pytest.mark.parametrize("target", ["manifest", "artifact"])
 def test_a_file_changed_during_its_descriptor_read_is_refused(
     tmp_path: Path,
     target: str,
-    read_number: int,
 ) -> None:
     manifest, promotion = _fixture(tmp_path)
     race_target = (
@@ -1409,54 +1426,25 @@ def test_a_file_changed_during_its_descriptor_read_is_refused(
         if target == "manifest"
         else manifest.parent / "artifacts/forge-readback.json"
     )
-    hook = tmp_path / "race-hook"
-    hook.mkdir()
-    (hook / "sitecustomize.py").write_text(
+    result = _run_observed(
+        manifest,
+        promotion,
         """\
 import os
 
 _target = os.environ["LIVE_EVIDENCE_RACE_TARGET"]
-_original_open = os.open
-_original_read = os.read
-_tracked = set()
-_open_count = 0
 _triggered = False
 
-
-def _open(path, flags, *args, **kwargs):
-    global _open_count
-    descriptor = _original_open(path, flags, *args, **kwargs)
-    if os.fspath(path) == _target and flags & os.O_ACCMODE == os.O_RDONLY:
-        _open_count += 1
-        if _open_count == int(os.environ["LIVE_EVIDENCE_RACE_READ_NUMBER"]):
-            _tracked.add(descriptor)
-    return descriptor
-
-
-def _read(descriptor, size):
+def observer(event, path):
     global _triggered
-    data = _original_read(descriptor, size)
-    if descriptor in _tracked and not data and not _triggered:
+    if event == "file-read" and os.fspath(path) == _target and not _triggered:
         _triggered = True
         with open(_target, "ab") as stream:
             stream.write(b" ")
-    return data
-
-
-os.open = _open
-os.read = _read
 """,
-        encoding="utf-8",
-    )
-
-    result = _run(
-        manifest,
-        promotion,
         env={
             **os.environ,
             "LIVE_EVIDENCE_RACE_TARGET": str(race_target),
-            "LIVE_EVIDENCE_RACE_READ_NUMBER": str(read_number),
-            "PYTHONPATH": str(hook),
         },
     )
 
@@ -1465,256 +1453,120 @@ os.read = _read
     assert "Traceback" not in result.stderr
 
 
-@pytest.mark.parametrize("target", ["manifest", "artifact", "promotion"])
-def test_a_file_changed_after_snapshot_before_confirmation_is_refused(
-    tmp_path: Path,
-    target: str,
-) -> None:
-    manifest, promotion = _fixture(tmp_path)
-    artifacts = manifest.parent / "artifacts"
-    mutation_target = {
-        "manifest": manifest,
-        "artifact": artifacts / "forge-readback.json",
-        "promotion": promotion,
-    }[target]
-    hook = tmp_path / "confirmation-hook"
-    hook.mkdir()
-    (hook / "sitecustomize.py").write_text(
-        SCANDIR_MUTATION_HOOK,
-        encoding="utf-8",
-    )
-
-    result = _run(
-        manifest,
-        promotion,
-        env={
-            **os.environ,
-            "LIVE_EVIDENCE_SCAN_TARGET": str(artifacts),
-            "LIVE_EVIDENCE_SCAN_NUMBER": "3" if target == "promotion" else "1",
-            "LIVE_EVIDENCE_APPEND_TARGET": str(mutation_target),
-            "PYTHONPATH": str(hook),
-        },
-    )
-
-    assert result.returncode == 2
-    assert "changed during verification" in result.stderr
-    assert "Traceback" not in result.stderr
-
-
-@pytest.mark.parametrize("inventory_number", [1, 2, 4])
-def test_an_undeclared_artifact_added_after_inventory_is_refused(
-    tmp_path: Path,
-    inventory_number: int,
-) -> None:
-    manifest, promotion = _fixture(tmp_path)
-    artifacts = manifest.parent / "artifacts"
-    hook = tmp_path / "inventory-hook"
-    hook.mkdir()
-    (hook / "sitecustomize.py").write_text(
-        SCANDIR_MUTATION_HOOK,
-        encoding="utf-8",
-    )
-
-    result = _run(
-        manifest,
-        promotion,
-        env={
-            **os.environ,
-            "LIVE_EVIDENCE_SCAN_TARGET": str(artifacts),
-            "LIVE_EVIDENCE_SCAN_NUMBER": str(inventory_number),
-            "LIVE_EVIDENCE_ADD_TARGET": str(artifacts / "late-undeclared.txt"),
-            "PYTHONPATH": str(hook),
-        },
-    )
-
-    assert (artifacts / "late-undeclared.txt").is_file()
-    assert result.returncode == 2
-    assert "artifact directory changed during inventory" in result.stderr
-    assert "Traceback" not in result.stderr
-
-
-def test_a_late_undeclared_artifact_during_final_inventory_is_refused(
+def test_an_earlier_artifact_changed_while_a_later_artifact_is_captured_binds_the_snapshot(
     tmp_path: Path,
 ) -> None:
     manifest, promotion = _fixture(tmp_path)
     artifacts = manifest.parent / "artifacts"
-    hook = tmp_path / "final-inventory-hook"
-    hook.mkdir()
-    (hook / "sitecustomize.py").write_text(
-        SCANDIR_MUTATION_HOOK,
-        encoding="utf-8",
-    )
-
-    result = _run(
+    earlier = artifacts / "forge-readback.json"
+    later = artifacts / "runtime-attestation.json"
+    captured_snapshot = _snapshot_sha(manifest.parent)
+    result = _run_observed(
         manifest,
         promotion,
-        env={
-            **os.environ,
-            "LIVE_EVIDENCE_SCAN_TARGET": str(artifacts),
-            "LIVE_EVIDENCE_SCAN_NUMBER": "5",
-            "LIVE_EVIDENCE_ADD_TARGET": str(artifacts / "late-undeclared.txt"),
-            "PYTHONPATH": str(hook),
-        },
-    )
-
-    assert (artifacts / "late-undeclared.txt").is_file()
-    assert result.returncode == 2
-    assert "changed during inventory" in result.stderr
-    assert "Traceback" not in result.stderr
-
-
-def test_an_artifact_changed_during_final_inventory_is_refused(tmp_path: Path) -> None:
-    manifest, promotion = _fixture(tmp_path)
-    artifacts = manifest.parent / "artifacts"
-    mutation_target = artifacts / "forge-readback.json"
-    original = mutation_target.read_bytes()
-    hook = tmp_path / "final-inventory-hook"
-    hook.mkdir()
-    (hook / "sitecustomize.py").write_text(
-        SCANDIR_MUTATION_HOOK,
-        encoding="utf-8",
-    )
-
-    result = _run(
-        manifest,
-        promotion,
-        env={
-            **os.environ,
-            "LIVE_EVIDENCE_SCAN_TARGET": str(artifacts),
-            "LIVE_EVIDENCE_SCAN_NUMBER": "5",
-            "LIVE_EVIDENCE_APPEND_TARGET": str(mutation_target),
-            "PYTHONPATH": str(hook),
-        },
-    )
-
-    assert mutation_target.read_bytes() == original + b" "
-    assert result.returncode == 2
-    assert "changed during verification" in result.stderr
-    assert "Traceback" not in result.stderr
-
-
-def test_a_late_bundle_root_entry_during_final_inventory_is_refused(
-    tmp_path: Path,
-) -> None:
-    manifest, promotion = _fixture(tmp_path)
-    bundle_root = manifest.parent
-    mutation_target = bundle_root / "late-root.txt"
-    hook = tmp_path / "final-root-inventory-hook"
-    hook.mkdir()
-    (hook / "sitecustomize.py").write_text(
-        SCANDIR_MUTATION_HOOK,
-        encoding="utf-8",
-    )
-
-    result = _run(
-        manifest,
-        promotion,
-        env={
-            **os.environ,
-            "LIVE_EVIDENCE_SCAN_TARGET": str(bundle_root),
-            "LIVE_EVIDENCE_SCAN_NUMBER": "5",
-            "LIVE_EVIDENCE_ADD_TARGET": str(mutation_target),
-            "PYTHONPATH": str(hook),
-        },
-    )
-
-    assert mutation_target.is_file()
-    assert result.returncode == 2
-    assert "bundle root changed during inventory" in result.stderr
-    assert "Traceback" not in result.stderr
-
-
-def test_an_artifact_directory_replaced_between_inventories_is_refused(
-    tmp_path: Path,
-) -> None:
-    manifest, promotion = _fixture(tmp_path)
-    promotion.unlink()
-    bundle_root = manifest.parent
-    hook = tmp_path / "directory-swap-hook"
-    hook.mkdir()
-    marker = tmp_path / "directory-swap-marker.txt"
-    (hook / "sitecustomize.py").write_text(
         """\
 import os
-import shutil
 
-_bundle_root = os.environ["LIVE_EVIDENCE_BUNDLE_ROOT"]
-_artifacts = os.path.join(_bundle_root, "artifacts")
-_replacement = os.environ["LIVE_EVIDENCE_REPLACEMENT"]
-_backup = os.environ["LIVE_EVIDENCE_BACKUP"]
-_marker = os.environ["LIVE_EVIDENCE_SWAP_MARKER"]
-shutil.copytree(_artifacts, _replacement)
-_original_scandir = os.scandir
-_original_stat = os.stat
-_root_scan_finished = False
+_earlier = os.environ["LIVE_EVIDENCE_EARLIER"]
+_later = os.environ["LIVE_EVIDENCE_LATER"]
 _triggered = False
 
-
-class _WrappedScandir:
-    def __init__(self, path):
-        self._path = os.fspath(path)
-        self._context = _original_scandir(path)
-
-    def __enter__(self):
-        self._iterator = self._context.__enter__()
-        return self
-
-    def __exit__(self, *args):
-        return self._context.__exit__(*args)
-
-    def close(self):
-        return self._context.close()
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        global _root_scan_finished
-        try:
-            return next(self._iterator)
-        except StopIteration:
-            if self._path == _bundle_root:
-                _root_scan_finished = True
-            raise
-
-
-def _stat(path, *args, **kwargs):
+def observer(event, path):
     global _triggered
-    result = _original_stat(path, *args, **kwargs)
-    if os.fspath(path) == _bundle_root and _root_scan_finished and not _triggered:
+    if event == "before-file-read" and os.fspath(path) == _later and not _triggered:
         _triggered = True
-        old_inode = _original_stat(_artifacts, follow_symlinks=False).st_ino
-        os.rename(_artifacts, _backup)
-        os.rename(_replacement, _artifacts)
-        new_inode = _original_stat(_artifacts, follow_symlinks=False).st_ino
-        with open(_marker, "w", encoding="utf-8") as stream:
-            stream.write(f"{old_inode} {new_inode}\\n")
-    return result
-
-
-os.scandir = _WrappedScandir
-os.stat = _stat
+        with open(_earlier, "ab") as stream:
+            stream.write(b" ")
 """,
-        encoding="utf-8",
-    )
-
-    result = _run(
-        manifest,
         env={
             **os.environ,
-            "LIVE_EVIDENCE_BUNDLE_ROOT": str(bundle_root),
-            "LIVE_EVIDENCE_REPLACEMENT": str(tmp_path / "replacement-artifacts"),
-            "LIVE_EVIDENCE_BACKUP": str(tmp_path / "original-artifacts"),
-            "LIVE_EVIDENCE_SWAP_MARKER": str(marker),
-            "PYTHONPATH": str(hook),
+            "LIVE_EVIDENCE_EARLIER": str(earlier),
+            "LIVE_EVIDENCE_LATER": str(later),
         },
     )
 
-    old_inode, new_inode = marker.read_text(encoding="utf-8").split()
-    assert old_inode != new_inode
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["snapshot_sha256"] == captured_snapshot
+    assert _snapshot_sha(manifest.parent) != captured_snapshot
+    recomputed = _run(manifest, promotion)
+    assert recomputed.returncode == 2
+    assert "artifact digest mismatch" in recomputed.stderr
+
+
+def test_an_undeclared_artifact_added_during_snapshot_capture_is_refused(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    artifacts = manifest.parent / "artifacts"
+    trigger = artifacts / "runtime-attestation.json"
+    added = artifacts / "late-undeclared.txt"
+    result = _run_observed(
+        manifest,
+        promotion,
+        """\
+import os
+
+_trigger = os.environ["LIVE_EVIDENCE_TRIGGER"]
+_added = os.environ["LIVE_EVIDENCE_ADDED"]
+_triggered = False
+
+def observer(event, path):
+    global _triggered
+    if event == "before-file-read" and os.fspath(path) == _trigger and not _triggered:
+        _triggered = True
+        with open(_added, "w", encoding="utf-8") as stream:
+            stream.write("late undeclared bytes\\n")
+""",
+        env={
+            **os.environ,
+            "LIVE_EVIDENCE_TRIGGER": str(trigger),
+            "LIVE_EVIDENCE_ADDED": str(added),
+        },
+    )
+
+    assert added.is_file()
     assert result.returncode == 2
-    assert "artifact directory changed during verification" in result.stderr
+    assert "artifact directory changed during snapshot capture" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+def test_an_ancestor_swap_after_its_descriptor_opens_cannot_redirect_the_snapshot(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path / "container")
+    ancestor = manifest.parent.parent
+    original = tmp_path / "container-original"
+    hostile = tmp_path / "hostile"
+    hostile.mkdir()
+    result = _run_observed(
+        manifest,
+        promotion,
+        """\
+import os
+
+_ancestor = os.environ["LIVE_EVIDENCE_ANCESTOR"]
+_original = os.environ["LIVE_EVIDENCE_ORIGINAL"]
+_hostile = os.environ["LIVE_EVIDENCE_HOSTILE"]
+_triggered = False
+
+def observer(event, path):
+    global _triggered
+    if event == "directory-opened" and os.fspath(path) == _ancestor and not _triggered:
+        _triggered = True
+        os.rename(_ancestor, _original)
+        os.symlink(_hostile, _ancestor)
+""",
+        env={
+            **os.environ,
+            "LIVE_EVIDENCE_ANCESTOR": str(ancestor),
+            "LIVE_EVIDENCE_ORIGINAL": str(original),
+            "LIVE_EVIDENCE_HOSTILE": str(hostile),
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["snapshot_sha256"] == _snapshot_sha(original / "evidence")
+    assert ancestor.is_symlink()
 
 
 def test_a_self_consistent_bundle_for_the_wrong_revision_cannot_promote(tmp_path: Path) -> None:
@@ -1992,12 +1844,14 @@ def test_malformed_nested_values_use_the_documented_refusal_exit(
         "source",
         "review",
         "runtime",
+        "applied-compute",
         "redaction",
         "artifact",
         "claim",
         "promotion",
         "promotion-runtime",
         "attestation",
+        "attestation-context",
         "source-proof",
         "source-proof-tree",
         "source-proof-entry",
@@ -2013,10 +1867,20 @@ def test_non_object_closed_schemas_use_the_documented_refusal_exit(
     expected_claims: list[dict[str, object]] | None = None
     if target == "manifest":
         _write_json(manifest, 1)
-    elif target in {"source", "review", "runtime", "redaction", "artifact", "claim"}:
+    elif target in {
+        "source",
+        "review",
+        "runtime",
+        "applied-compute",
+        "redaction",
+        "artifact",
+        "claim",
+    }:
         manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
         if target in {"source", "review", "runtime", "redaction"}:
             manifest_value[target] = 1
+        elif target == "applied-compute":
+            manifest_value["runtime"]["applied_compute"] = 1
         elif target == "artifact":
             manifest_value["artifacts"][0] = 1
         else:
@@ -2030,9 +1894,14 @@ def test_non_object_closed_schemas_use_the_documented_refusal_exit(
             promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
             promotion_value["runtime"] = 1
             _write_json(promotion, promotion_value)
-    elif target == "attestation":
+    elif target in {"attestation", "attestation-context"}:
         artifact = manifest.parent / "artifacts/runtime-attestation.json"
-        _write_json(artifact, 1)
+        if target == "attestation":
+            _write_json(artifact, 1)
+        else:
+            artifact_value = json.loads(artifact.read_text(encoding="utf-8"))
+            artifact_value["turn_context"] = 1
+            _write_json(artifact, artifact_value)
         manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
         manifest_value["artifacts"][0]["sha256"] = _sha(artifact)
         _write_json(manifest, manifest_value)
@@ -2523,6 +2392,37 @@ def test_credential_key_variants_are_refused(
     assert "credential-like key" in result.stderr
 
 
+@pytest.mark.parametrize(
+    "credential_text",
+    [
+        "api key: hunter2-secret\n",
+        "OPENAI_API_KEY=placeholder-credential-material\n",
+    ],
+)
+def test_non_json_credential_assignment_variants_are_refused(
+    tmp_path: Path,
+    credential_text: str,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    old_artifact = manifest.parent / "artifacts" / "forge-readback.json"
+    artifact = manifest.parent / "artifacts" / "forge-readback.yaml"
+    old_artifact.rename(artifact)
+    artifact.write_text(credential_text, encoding="utf-8")
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    value["artifacts"][1]["path"] = "artifacts/forge-readback.yaml"
+    value["artifacts"][1]["sha256"] = _sha(artifact)
+    value["claims"][0]["evidence"][1] = "artifacts/forge-readback.yaml"
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
+    expected_claims = json.loads(json.dumps(FIXTURE_EXPECTED_CLAIMS))
+    expected_claims[0]["evidence"][1] = "artifacts/forge-readback.yaml"
+
+    result = _run(manifest, promotion, expected_claims=expected_claims)
+
+    assert result.returncode == 2
+    assert "credential-like content" in result.stderr
+
+
 def test_common_aws_access_key_value_shape_is_refused(tmp_path: Path) -> None:
     manifest, promotion = _fixture(tmp_path)
     artifact = manifest.parent / "artifacts" / "forge-readback.json"
@@ -2601,7 +2501,7 @@ def test_invalid_utf8_manifest_uses_the_documented_refusal_exit(tmp_path: Path) 
     result = _run(manifest)
 
     assert result.returncode == 2
-    assert "unreadable" in result.stderr
+    assert "live-validation evidence refused" in result.stderr
     assert "Traceback" not in result.stderr
 
 
@@ -2894,7 +2794,7 @@ def test_bundle_directory_itself_cannot_be_a_symlink(tmp_path: Path) -> None:
     result = _run(retained / "bundle.json", retained / "promotion.json")
 
     assert result.returncode == 2
-    assert "bundle manifest path" in result.stderr
+    assert "bundle root path must contain only retained directories" in result.stderr
     assert "symlink" in result.stderr
 
 
@@ -2908,7 +2808,7 @@ def test_a_bundle_path_cannot_traverse_an_ancestor_symlink(tmp_path: Path) -> No
     result = _run(alias / "evidence" / "bundle.json", alias / "evidence" / "promotion.json")
 
     assert result.returncode == 2
-    assert "must not traverse a symlink" in result.stderr
+    assert "bundle root path must contain only retained directories" in result.stderr
 
 
 def test_an_artifact_path_cannot_traverse_an_ancestor_symlink(tmp_path: Path) -> None:
@@ -2928,7 +2828,7 @@ def test_an_artifact_path_cannot_traverse_an_ancestor_symlink(tmp_path: Path) ->
     result = _run(manifest, promotion)
 
     assert result.returncode == 2
-    assert "must not traverse a symlink" in result.stderr
+    assert "artifact tree contains a symlink" in result.stderr
 
 
 def test_a_promotion_path_cannot_traverse_an_ancestor_symlink(tmp_path: Path) -> None:
@@ -2942,7 +2842,7 @@ def test_a_promotion_path_cannot_traverse_an_ancestor_symlink(tmp_path: Path) ->
     result = _run(manifest, alias / "promotion.json")
 
     assert result.returncode == 2
-    assert "must not traverse a symlink" in result.stderr
+    assert "must be the bundle's own promotion.json" in result.stderr
 
 
 def test_a_symlink_loop_uses_the_documented_refusal_exit(tmp_path: Path) -> None:
@@ -2952,7 +2852,7 @@ def test_a_symlink_loop_uses_the_documented_refusal_exit(tmp_path: Path) -> None
     result = _run(loop / "bundle.json", loop / "promotion.json")
 
     assert result.returncode == 2
-    assert "unreadable" in result.stderr
+    assert "bundle root path must contain only retained directories" in result.stderr
     assert "Traceback" not in result.stderr
 
 
@@ -2987,7 +2887,7 @@ def test_artifact_bytes_are_bounded_before_hashing_or_scanning(tmp_path: Path) -
         artifact.chmod(0o600)
 
     assert result.returncode == 2
-    assert "artifacts[1] exceeds its byte limit" in result.stderr
+    assert "artifact artifacts/forge-readback.json exceeds its byte limit" in result.stderr
     assert "unreadable" not in result.stderr
 
 
@@ -3192,6 +3092,7 @@ def test_the_promoted_codex_writing_lane_bundle_remains_structurally_verifiable(
             "codex-writing-lane-exact-head-review-receipt",
         ],
         "promotion": True,
+        "snapshot_sha256": _snapshot_sha(bundle),
         "status": "verified",
     }
 
