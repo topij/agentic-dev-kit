@@ -78,7 +78,31 @@
       "kind": "source-digest",
       "observer": "git-object-source-readback",
       "path": "artifacts/source-digests.txt",
-      "sha256": "fc189088bc1acfa6c79637d2787fdfda957d20af81acaf75cf6b5fab3ce1bab6"
+      "sha256": "0c6f5d6ce5b1c2d86d1ddad4e245ac161072f11fbb5d2688a6ff13b9930178dd"
+    },
+    {
+      "capture_request": "git show bdfd6ee702a630f0575f0c186f51b3bbbcd1810a:config/dev-model.yaml",
+      "captured_on": "2026-08-30",
+      "kind": "source-file",
+      "observer": "retained-git-object-bytes",
+      "path": "artifacts/source/config/dev-model.yaml",
+      "sha256": "32d9e7b285a54438975c2aa2d9813adc5d017cef077b6df71564b1ae418a6d92"
+    },
+    {
+      "capture_request": "git show bdfd6ee702a630f0575f0c186f51b3bbbcd1810a:scripts/dev_session.sh",
+      "captured_on": "2026-08-30",
+      "kind": "source-file",
+      "observer": "retained-git-object-bytes",
+      "path": "artifacts/source/scripts/dev_session.sh",
+      "sha256": "2ae9af83f182fa726bdc2102d65820242b873aa9d6749f9a450c4b1afd55e4ba"
+    },
+    {
+      "capture_request": "git show bdfd6ee702a630f0575f0c186f51b3bbbcd1810a:scripts/launch_lane.py",
+      "captured_on": "2026-08-30",
+      "kind": "source-file",
+      "observer": "retained-git-object-bytes",
+      "path": "artifacts/source/scripts/launch_lane.py",
+      "sha256": "7787079163e9d678284db5df15311f059a519a61db6301980784864ab02ad9e6"
     }
   ],
   "bundle_id": "codex-writing-lane-2026-08-30",
@@ -90,7 +114,10 @@
         "artifacts/launcher-receipt.json",
         "artifacts/filesystem-readback.txt",
         "artifacts/git-readback.txt",
-        "artifacts/source-digests.txt"
+        "artifacts/source-digests.txt",
+        "artifacts/source/config/dev-model.yaml",
+        "artifacts/source/scripts/dev_session.sh",
+        "artifacts/source/scripts/launch_lane.py"
       ],
       "id": "codex-writing-lane-scoped-write-and-state",
       "requires_applied_compute": true
@@ -103,7 +130,10 @@
         "artifacts/final-message.txt",
         "artifacts/forge-readback.json",
         "artifacts/git-readback.txt",
-        "artifacts/source-digests.txt"
+        "artifacts/source-digests.txt",
+        "artifacts/source/config/dev-model.yaml",
+        "artifacts/source/scripts/dev_session.sh",
+        "artifacts/source/scripts/launch_lane.py"
       ],
       "id": "codex-writing-lane-ready-private-pr",
       "requires_applied_compute": true
@@ -138,7 +168,8 @@
   },
   "review": {
     "head": "5c4006d18e65e0443dc7b22f48c099ad07ce1da9",
-    "observer": "github-pr-readback-and-pr-watch-receipt"
+    "observer": "github-pr-readback-and-pr-watch-receipt",
+    "repository": "https://github.com/topij/adk-codex-writing-evidence-20260830"
   },
   "runtime": {
     "applied_compute": {

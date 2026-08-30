@@ -103,11 +103,13 @@ historical observation it was and is not silently refreshed.
   6. Carried by PR `#651`: the repository-owned redacted evidence contract, hostile
      missing/altered/wrong-revision/claim-relabel mutations, and tracked positive
      control now refuse promotion when the retained bytes, complete claim-to-artifact
-     map, or binding are absent. A persistent Codex
+     map, independently expected applied compute, review provenance, or binding are
+     absent. A persistent Codex
      writing lane at source revision
      `bdfd6ee702a630f0575f0c186f51b3bbbcd1810a` produced descriptor-scoped worktree and
      state output, a ready private pull request, and an exact-head cockpit review
-     receipt; the promotion is bound to synthetic head
+     receipt; the promotion retains the exact source bytes those claims depend on and
+     is bound to the synthetic repository and head
      `5c4006d18e65e0443dc7b22f48c099ad07ce1da9` and the runtime-owned applied-compute
      attestation. The 2026-08-27 record stays historical and unpromoted. The retained
      record is
@@ -384,10 +386,11 @@ degraded, held, resume, authority, and completion paths under shared definitions
   stay bounded to that client and revision.
 - [x] Rerun the Codex writing lane through the durable redacted bundle contract
   (`#621`; PR `#651`). The retained promotion binds the source revision, reviewed
-  synthetic head, client, persistent applied-compute attestation, authoritative
-  observers, destination digests, and exact-head review receipt. It promotes only the
-  complete independently expected claim objects in the receipt and refuses absent,
-  altered, ephemeral, wrong-revision, relabeled, or evidence-thinned carriers.
+  synthetic repository and head, client, persistent applied-compute attestation,
+  independent redaction reviewer, authoritative observers, exact source bytes,
+  destination digests, and exact-head review receipt. It promotes only the complete
+  independently expected claim objects in the receipt and refuses absent, altered,
+  ephemeral, wrong-revision, relabeled, or evidence-thinned carriers.
 - [x] Calibrate both runtimes' neutral tiers and mechanically pass supported model/effort
   keys to fallback-review lenses (`#605`, `#255`).
 - [x] Use the generalised launcher for the first real headless task only after those slices

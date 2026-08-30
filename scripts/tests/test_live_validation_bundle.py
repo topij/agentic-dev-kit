@@ -27,10 +27,35 @@ FIXTURE_EXPECTATIONS = {
     "authority": "docs/agentic-dev-kit/runtime-parity.md",
     "source_repository": "https://github.com/example/source",
     "source_revision": SOURCE,
+    "review_repository": "https://github.com/example/review",
     "reviewed_head": REVIEWED,
+    "redaction_reviewer": "fixture-reviewer",
     "runtime": "codex",
     "client_version": "codex-cli example",
 }
+FIXTURE_EXPECTED_COMPUTE = {
+    "model": "gpt-example",
+    "effort": "max",
+    "cwd": "/private/tmp/synthetic/repo",
+    "session_id": "session-example",
+    "attestation": "artifacts/runtime-attestation.json",
+}
+CODEX_WRITING_EXPECTED_COMPUTE = {
+    "model": "gpt-5.6-sol",
+    "effort": "max",
+    "cwd": "/private/tmp/adk-codex-writing-20260830/sessions/write/wt",
+    "session_id": "01a04fb1-0b63-7921-982b-23ff66c200be",
+    "attestation": "artifacts/runtime-attestation.json",
+}
+DEFAULT_EXPECTED_COMPUTE = object()
+CODEX_WRITING_SOURCE_PATHS = (
+    "config/dev-model.yaml",
+    "scripts/dev_session.sh",
+    "scripts/launch_lane.py",
+)
+CODEX_WRITING_SOURCE_EVIDENCE = [
+    f"artifacts/source/{path}" for path in CODEX_WRITING_SOURCE_PATHS
+]
 FIXTURE_EXPECTED_CLAIMS = [
     {
         "id": "applied-compute-and-reviewed-head",
@@ -50,6 +75,7 @@ CODEX_WRITING_EXPECTED_CLAIMS = [
             "artifacts/filesystem-readback.txt",
             "artifacts/git-readback.txt",
             "artifacts/source-digests.txt",
+            *CODEX_WRITING_SOURCE_EVIDENCE,
         ],
         "id": "codex-writing-lane-scoped-write-and-state",
         "requires_applied_compute": True,
@@ -63,6 +89,7 @@ CODEX_WRITING_EXPECTED_CLAIMS = [
             "artifacts/forge-readback.json",
             "artifacts/git-readback.txt",
             "artifacts/source-digests.txt",
+            *CODEX_WRITING_SOURCE_EVIDENCE,
         ],
         "id": "codex-writing-lane-ready-private-pr",
         "requires_applied_compute": True,
@@ -145,6 +172,14 @@ CODEX_WRITING_EXPECTED_ARTIFACT_BINDINGS = {
         "git object readback and SHA-256 of each source path enumerated in "
         "artifacts/source-digests.txt at bdfd6ee702a630f0575f0c186f51b3bbbcd1810a",
     ),
+    **{
+        f"artifacts/source/{path}": (
+            "source-file",
+            "retained-git-object-bytes",
+            f"git show bdfd6ee702a630f0575f0c186f51b3bbbcd1810a:{path}",
+        )
+        for path in CODEX_WRITING_SOURCE_PATHS
+    },
 }
 
 
@@ -184,7 +219,11 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
             "repository": "https://github.com/example/source",
             "revision": SOURCE,
         },
-        "review": {"head": REVIEWED, "observer": "forge-pr-readback"},
+        "review": {
+            "repository": "https://github.com/example/review",
+            "head": REVIEWED,
+            "observer": "forge-pr-readback",
+        },
         "runtime": {
             "name": "codex",
             "client_version": "codex-cli example",
@@ -245,8 +284,14 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
         "manifest_sha256": _sha(manifest_path),
         "authority": "docs/agentic-dev-kit/runtime-parity.md",
         "source_revision": SOURCE,
+        "review_repository": "https://github.com/example/review",
         "reviewed_head": REVIEWED,
-        "runtime": {"name": "codex", "client_version": "codex-cli example"},
+        "redaction_reviewer": "fixture-reviewer",
+        "runtime": {
+            "name": "codex",
+            "client_version": "codex-cli example",
+            "applied_compute": FIXTURE_EXPECTED_COMPUTE,
+        },
         "claims": ["applied-compute-and-reviewed-head"],
     }
     promotion_path = root / "promotion.json"
@@ -260,6 +305,8 @@ def _run(
     *,
     expectations: dict[str, str] | None = None,
     expected_claims: list[dict[str, object]] | None = None,
+    expected_compute: dict[str, object] | None | object = DEFAULT_EXPECTED_COMPUTE,
+    timeout: float = 10,
 ) -> subprocess.CompletedProcess[str]:
     argv = [sys.executable, str(ENGINE), str(manifest), "--json"]
     if promotion is not None:
@@ -270,7 +317,22 @@ def _run(
         claims = FIXTURE_EXPECTED_CLAIMS if expected_claims is None else expected_claims
         for claim in claims:
             argv.extend(["--expect-claim", json.dumps(claim, separators=(",", ":"))])
-    return subprocess.run(argv, capture_output=True, text=True, check=False)
+        compute = (
+            FIXTURE_EXPECTED_COMPUTE
+            if expected_compute is DEFAULT_EXPECTED_COMPUTE
+            else expected_compute
+        )
+        if compute is not None:
+            argv.extend(
+                ["--expect-applied-compute", json.dumps(compute, separators=(",", ":"))]
+            )
+    return subprocess.run(
+        argv,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=timeout,
+    )
 
 
 def _refresh_promotion_digest(manifest: Path, promotion: Path) -> None:
@@ -367,7 +429,15 @@ def test_self_consistent_claim_relabeling_cannot_promote(
 
 @pytest.mark.parametrize(
     "field",
-    ["source_revision", "reviewed_head", "runtime", "client_version"],
+    [
+        "source_revision",
+        "review_repository",
+        "reviewed_head",
+        "redaction_reviewer",
+        "runtime",
+        "client_version",
+        "applied_compute",
+    ],
 )
 def test_promotion_receipt_repeated_fields_must_match_the_manifest(
     tmp_path: Path,
@@ -377,10 +447,16 @@ def test_promotion_receipt_repeated_fields_must_match_the_manifest(
     promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
     if field == "source_revision":
         promotion_value["source_revision"] = "3" * 40
+    elif field == "review_repository":
+        promotion_value["review_repository"] = "https://github.com/example/foreign"
     elif field == "reviewed_head":
         promotion_value["reviewed_head"] = "4" * 40
+    elif field == "redaction_reviewer":
+        promotion_value["redaction_reviewer"] = "self-asserted-reviewer"
     elif field == "runtime":
         promotion_value["runtime"]["name"] = "claude"
+    elif field == "applied_compute":
+        promotion_value["runtime"]["applied_compute"]["model"] = "gpt-fabricated"
     else:
         promotion_value["runtime"]["client_version"] = "codex-cli fabricated"
     _write_json(promotion, promotion_value)
@@ -396,7 +472,9 @@ def test_promotion_receipt_repeated_fields_must_match_the_manifest(
     [
         ("authority", "docs/foreign-authority.md"),
         ("source_repository", "https://github.com/example/foreign"),
+        ("review_repository", "https://github.com/example/foreign-review"),
         ("reviewed_head", "4" * 40),
+        ("redaction_reviewer", "self-asserted-reviewer"),
         ("runtime", "claude"),
         ("client_version", "codex-cli fabricated"),
     ],
@@ -413,9 +491,15 @@ def test_other_self_consistent_promotion_relabeling_is_refused(
         promotion_value["authority"] = replacement
     elif field == "source_repository":
         manifest_value["source"]["repository"] = replacement
+    elif field == "review_repository":
+        manifest_value["review"]["repository"] = replacement
+        promotion_value["review_repository"] = replacement
     elif field == "reviewed_head":
         manifest_value["review"]["head"] = replacement
         promotion_value["reviewed_head"] = replacement
+    elif field == "redaction_reviewer":
+        manifest_value["redaction"]["reviewer"] = replacement
+        promotion_value["redaction_reviewer"] = replacement
     elif field == "runtime":
         manifest_value["runtime"]["name"] = replacement
         promotion_value["runtime"]["name"] = replacement
@@ -431,6 +515,42 @@ def test_other_self_consistent_promotion_relabeling_is_refused(
     assert result.returncode == 2
     assert f"promotion {field.replace('_', ' ')}" in result.stderr
     assert "independent expectation" in result.stderr
+
+
+def test_self_consistent_applied_compute_relabeling_is_refused(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
+    attestation = manifest.parent / "artifacts" / "runtime-attestation.json"
+    fabricated = {
+        "model": "gpt-fabricated",
+        "effort": "low",
+        "cwd": "/private/tmp/fabricated/repo",
+        "session_id": "session-fabricated",
+        "attestation": "artifacts/runtime-attestation.json",
+    }
+    _write_json(
+        attestation,
+        {
+            "session_id": fabricated["session_id"],
+            "turn_context": {
+                "model": fabricated["model"],
+                "effort": fabricated["effort"],
+                "cwd": fabricated["cwd"],
+            },
+        },
+    )
+    manifest_value["runtime"]["applied_compute"] = fabricated
+    manifest_value["artifacts"][0]["sha256"] = _sha(attestation)
+    promotion_value["runtime"]["applied_compute"] = fabricated
+    _write_json(manifest, manifest_value)
+    promotion_value["manifest_sha256"] = _sha(manifest)
+    _write_json(promotion, promotion_value)
+
+    result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "applied compute does not match the independent expectation" in result.stderr
 
 
 def test_a_promotion_without_independent_expected_bindings_is_refused(tmp_path: Path) -> None:
@@ -450,6 +570,17 @@ def test_a_promotion_without_independent_expected_bindings_is_refused(tmp_path: 
     )
     assert result.returncode == 2
     assert "promotion requires independent expected bindings" in result.stderr
+
+
+def test_an_applied_compute_claim_requires_an_independent_compute_expectation(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+
+    result = _run(manifest, promotion, expected_compute=None)
+
+    assert result.returncode == 2
+    assert "independent expected bindings: applied_compute" in result.stderr
 
 
 def test_extreme_json_nesting_uses_the_documented_refusal_exit(tmp_path: Path) -> None:
@@ -967,6 +1098,8 @@ def test_bundle_directory_itself_cannot_be_a_symlink(tmp_path: Path) -> None:
 
 def test_a_bundle_path_cannot_traverse_an_ancestor_symlink(tmp_path: Path) -> None:
     manifest, _ = _fixture(tmp_path / "source")
+    manifest.unlink()
+    os.mkfifo(manifest)
     alias = tmp_path / "alias"
     alias.symlink_to(manifest.parent.parent, target_is_directory=True)
 
@@ -980,9 +1113,8 @@ def test_an_artifact_path_cannot_traverse_an_ancestor_symlink(tmp_path: Path) ->
     manifest, promotion = _fixture(tmp_path / "source")
     outside = tmp_path / "outside"
     outside.mkdir()
-    source_artifact = manifest.parent / "artifacts" / "forge-readback.json"
     outside_artifact = outside / "forge-readback.json"
-    outside_artifact.write_bytes(source_artifact.read_bytes())
+    os.mkfifo(outside_artifact)
     escape = manifest.parent / "artifacts" / "escape"
     escape.symlink_to(outside, target_is_directory=True)
     value = json.loads(manifest.read_text(encoding="utf-8"))
@@ -992,6 +1124,20 @@ def test_an_artifact_path_cannot_traverse_an_ancestor_symlink(tmp_path: Path) ->
     _refresh_promotion_digest(manifest, promotion)
 
     result = _run(manifest, promotion)
+
+    assert result.returncode == 2
+    assert "must not traverse a symlink" in result.stderr
+
+
+def test_a_promotion_path_cannot_traverse_an_ancestor_symlink(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path / "source")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "promotion.json").write_bytes(promotion.read_bytes())
+    alias = tmp_path / "alias"
+    alias.symlink_to(outside, target_is_directory=True)
+
+    result = _run(manifest, alias / "promotion.json")
 
     assert result.returncode == 2
     assert "must not traverse a symlink" in result.stderr
@@ -1014,11 +1160,62 @@ def test_manifest_envelope_bytes_are_bounded_before_parsing(tmp_path: Path) -> N
     value["redaction"]["reviewer"] = "r" * 8_500_000
     _write_json(manifest, value)
     _refresh_promotion_digest(manifest, promotion)
+    manifest.chmod(0)
+    try:
+        result = _run(manifest, promotion)
+    finally:
+        manifest.chmod(0o600)
+
+    assert result.returncode == 2
+    assert "bundle manifest exceeds its byte limit" in result.stderr
+
+
+def test_artifact_bytes_are_bounded_before_hashing_or_scanning(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    artifact = manifest.parent / "artifacts" / "forge-readback.json"
+    artifact.write_text("x" * 1_100_000, encoding="utf-8")
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    value["artifacts"][1]["sha256"] = _sha(artifact)
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
+    artifact.chmod(0)
+    try:
+        result = _run(manifest, promotion)
+    finally:
+        artifact.chmod(0o600)
+
+    assert result.returncode == 2
+    assert "artifacts[1] exceeds its byte limit" in result.stderr
+    assert "unreadable" not in result.stderr
+
+
+def test_combined_artifact_bytes_are_bounded_by_the_bundle_envelope(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    artifacts = manifest.parent / "artifacts"
+    payload = "x" * 1_000_000
+    for index in range(9):
+        path = artifacts / f"aggregate-{index}.txt"
+        path.write_text(payload, encoding="utf-8")
+        value["artifacts"].append(
+            {
+                "capture_request": f"synthetic aggregate envelope probe {index}",
+                "captured_on": "2026-08-30",
+                "path": f"artifacts/{path.name}",
+                "sha256": _sha(path),
+                "kind": "command-capture",
+                "observer": "hostile-envelope-probe",
+            }
+        )
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
 
     result = _run(manifest, promotion)
 
     assert result.returncode == 2
-    assert "byte limit" in result.stderr
+    assert "bundle envelope exceeds the bundle byte limit" in result.stderr
 
 
 def test_artifact_count_is_bounded_before_artifact_io(tmp_path: Path) -> None:
@@ -1116,11 +1313,16 @@ def test_the_promoted_codex_writing_lane_bundle_remains_structurally_verifiable(
             "authority": "docs/agentic-dev-kit/runtime-parity.md",
             "source_repository": "https://github.com/topij/agentic-dev-kit",
             "source_revision": "bdfd6ee702a630f0575f0c186f51b3bbbcd1810a",
+            "review_repository": (
+                "https://github.com/topij/adk-codex-writing-evidence-20260830"
+            ),
             "reviewed_head": "5c4006d18e65e0443dc7b22f48c099ad07ce1da9",
+            "redaction_reviewer": "codex-cockpit-gpt-5-6-sol-max",
             "runtime": "codex",
             "client_version": "codex-cli 0.149.1",
         },
         expected_claims=CODEX_WRITING_EXPECTED_CLAIMS,
+        expected_compute=CODEX_WRITING_EXPECTED_COMPUTE,
     )
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout) == {
@@ -1159,7 +1361,20 @@ def test_the_promoted_codex_writing_lane_claims_remain_independently_recomputabl
     assert manifest["review"] == {
         "head": "5c4006d18e65e0443dc7b22f48c099ad07ce1da9",
         "observer": "github-pr-readback-and-pr-watch-receipt",
+        "repository": "https://github.com/topij/adk-codex-writing-evidence-20260830",
     }
+    assert manifest["redaction"] == {
+        "excluded": [
+            "authentication-material",
+            "credentials",
+            "tokens",
+            "unrelated-user-data",
+            "unrelated-workspace-data",
+        ],
+        "reviewed": True,
+        "reviewer": "codex-cockpit-gpt-5-6-sol-max",
+    }
+    assert manifest["runtime"]["applied_compute"] == CODEX_WRITING_EXPECTED_COMPUTE
     assert manifest["claims"] == CODEX_WRITING_EXPECTED_CLAIMS
     assert {
         artifact["path"]: (
@@ -1175,15 +1390,66 @@ def test_the_promoted_codex_writing_lane_claims_remain_independently_recomputabl
     assert (artifacts / "client-version.txt").read_text(encoding="utf-8") == (
         manifest["runtime"]["client_version"] + "\n"
     )
+    assert descriptor == {
+        "base": "main",
+        "base_oid": "83d3b623305a691dd874df44ca92270daa62ade9",
+        "branch": "dev/write",
+        "descriptor_id": "ec07f5b3-14fb-4203-8e82-9ef62bfde785",
+        "expires_at": "2026-08-29T22:57:27.674451Z",
+        "issued_at": "2026-08-29T22:42:27.674451Z",
+        "lane_oid": "83d3b623305a691dd874df44ca92270daa62ade9",
+        "merge_class": "operator",
+        "origin_url": "git@github.com:topij/adk-codex-writing-evidence-20260830.git",
+        "repo_root": "/private/tmp/adk-codex-writing-20260830/repo",
+        "runtime": "codex",
+        "schema_version": 1,
+        "scope": "write",
+        "state_root": "/private/tmp/adk-codex-writing-20260830/sessions/write/state",
+        "worktree": "/private/tmp/adk-codex-writing-20260830/sessions/write/wt",
+    }
     assert descriptor["scope"] == "write"
     assert descriptor["runtime"] == "codex"
     assert descriptor["merge_class"] == "operator"
     assert descriptor["branch"] == "dev/write"
+    assert descriptor["origin_url"] == (
+        "git@github.com:topij/adk-codex-writing-evidence-20260830.git"
+    )
     assert descriptor["worktree"] == launcher["observed"]["worktree"]
     assert descriptor["state_root"] == launcher["observed"]["state_root"]
     assert descriptor["worktree"] == manifest["runtime"]["applied_compute"]["cwd"]
     assert descriptor["descriptor_id"] == launcher["descriptor_id"]
     assert launcher["request"]["runtime"] == "codex"
+    assert launcher["request"]["configured_command"] == [
+        "/opt/homebrew/bin/codex",
+        "exec",
+    ]
+    assert launcher["observed"] == {
+        "argv": [
+            "/opt/homebrew/bin/codex",
+            "exec",
+            "--sandbox",
+            "workspace-write",
+            "--cd",
+            "/private/tmp/adk-codex-writing-20260830/sessions/write/wt",
+            "--output-last-message",
+            "/private/tmp/adk-codex-writing-20260830/sessions/write/launch-final-ec07f5b3-14fb-4203-8e82-9ef62bfde785.txt",
+            "-",
+        ],
+        "base": "main",
+        "base_oid": "83d3b623305a691dd874df44ca92270daa62ade9",
+        "branch": "dev/write",
+        "git_top": "/private/tmp/adk-codex-writing-20260830/sessions/write/wt",
+        "lane_oid": "83d3b623305a691dd874df44ca92270daa62ade9",
+        "merge_class": "operator",
+        "origin_url": "git@github.com:topij/adk-codex-writing-evidence-20260830.git",
+        "repo_root": "/private/tmp/adk-codex-writing-20260830/repo",
+        "repository_overrides_present": [],
+        "scope": "write",
+        "state_root": "/private/tmp/adk-codex-writing-20260830/sessions/write/state",
+        "worktree": "/private/tmp/adk-codex-writing-20260830/sessions/write/wt",
+    }
+    assert launcher["observed"]["argv"][0] == launcher["request"]["configured_command"][0]
+    assert launcher["observed"]["origin_url"] == descriptor["origin_url"]
     assert launcher["observed"]["base_oid"] == descriptor["base_oid"]
     assert launcher["status"] == "completed"
     assert launcher["observed"]["branch"] == "dev/write"
@@ -1194,6 +1460,10 @@ def test_the_promoted_codex_writing_lane_claims_remain_independently_recomputabl
     assert forge["repository"]["name"] == "topij/adk-codex-writing-evidence-20260830"
     assert forge["repository"]["url"] == (
         "https://github.com/topij/adk-codex-writing-evidence-20260830"
+    )
+    assert descriptor["origin_url"] == (
+        forge["repository"]["url"].replace("https://github.com/", "git@github.com:")
+        + ".git"
     )
     assert forge["pull_request"]["state"] == "OPEN"
     assert forge["pull_request"]["is_draft"] is False
@@ -1223,6 +1493,11 @@ def test_the_promoted_codex_writing_lane_claims_remain_independently_recomputabl
         "source": "fallback:codex",
         "valid": True,
     }
+    final_message = (artifacts / "final-message.txt").read_text(encoding="utf-8")
+    assert f"- Branch: `{descriptor['branch']}`" in final_message
+    assert f"- Commit: `{reviewed_head}`" in final_message
+    assert f"- PR: {forge['pull_request']['url']} — open and ready" in final_message
+    assert "- Changed path: `notes/codex-writing-lane.md`" in final_message
     assert attestation == {
         "session_id": manifest["runtime"]["applied_compute"]["session_id"],
         "turn_context": {
@@ -1245,7 +1520,14 @@ def test_the_promoted_codex_writing_lane_claims_remain_independently_recomputabl
     assert source_digests == """source revision: bdfd6ee702a630f0575f0c186f51b3bbbcd1810a
 7787079163e9d678284db5df15311f059a519a61db6301980784864ab02ad9e6  scripts/launch_lane.py
 2ae9af83f182fa726bdc2102d65820242b873aa9d6749f9a450c4b1afd55e4ba  scripts/dev_session.sh
-e765c250d0eaa95063bb0045d75daff759ebf06829c5c0c1208a26be96507b7a  scripts/pr_watch.py
-8c024807d6613117a6cf7294cd8ded7145c0b5ddb636373994a8099db0384c6e  scripts/verify_live_validation_bundle.py
 32d9e7b285a54438975c2aa2d9813adc5d017cef077b6df71564b1ae418a6d92  config/dev-model.yaml
 """
+    retained_source_digests = {
+        path: digest
+        for digest, path in (
+            line.split("  ", 1) for line in source_digests.splitlines()[1:]
+        )
+    }
+    assert set(retained_source_digests) == set(CODEX_WRITING_SOURCE_PATHS)
+    for path, digest in retained_source_digests.items():
+        assert _sha(artifacts / "source" / path) == digest

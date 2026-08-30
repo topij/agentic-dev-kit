@@ -22,9 +22,12 @@ Usage:
       --expect-authority docs/agentic-dev-kit/runtime-parity.md \
       --expect-source-repository https://github.com/example/source \
       --expect-source-revision <full-source-sha> \
+      --expect-review-repository https://github.com/example/review \
       --expect-reviewed-head <full-reviewed-head-sha> \
+      --expect-redaction-reviewer <independent-reviewer> \
       --expect-runtime codex \
       --expect-client-version "codex-cli <version>" \
+      --expect-applied-compute '<exact-applied-compute-json>' \
       --expect-claim '<exact-claim-json>'
 
 The command exits 0 only when every requested check passes and exits 2 for an
@@ -63,9 +66,12 @@ ALLOWED_ARTIFACT_KINDS = frozenset(
         "review-receipt",
         "runtime-attestation",
         "source-digest",
+        "source-file",
     }
 )
-ALLOWED_SUFFIXES = frozenset({".diff", ".json", ".md", ".patch", ".txt"})
+ALLOWED_SUFFIXES = frozenset(
+    {".diff", ".json", ".md", ".patch", ".py", ".sh", ".txt", ".yaml", ".yml"}
+)
 REQUIRED_EXCLUSIONS = frozenset(
     {
         "authentication-material",
@@ -451,7 +457,8 @@ def validate_bundle(manifest_path: Path) -> dict[str, Any]:
     _validate_revision(source["revision"], "source.revision")
 
     review = _object(manifest["review"], "review")
-    _exact_keys(review, {"head", "observer"}, "review")
+    _exact_keys(review, {"repository", "head", "observer"}, "review")
+    _string(review["repository"], "review.repository")
     _validate_revision(review["head"], "review.head")
     _string(review["observer"], "review.observer")
 
@@ -593,6 +600,7 @@ def validate_promotion(
     *,
     expected: dict[str, str],
     expected_claims: list[dict[str, Any]],
+    expected_applied_compute: dict[str, Any] | None,
 ) -> dict[str, Any]:
     """Validate a capability-promotion receipt against a valid bundle."""
 
@@ -614,7 +622,9 @@ def validate_promotion(
             "manifest_sha256",
             "authority",
             "source_revision",
+            "review_repository",
             "reviewed_head",
+            "redaction_reviewer",
             "runtime",
             "claims",
         },
@@ -654,13 +664,22 @@ def validate_promotion(
     _safe_relative_path(promotion["authority"], "promotion.authority")
     if promotion["source_revision"] != manifest["source"]["revision"]:
         raise BundleError("promotion source revision does not match the bundle")
+    if promotion["review_repository"] != manifest["review"]["repository"]:
+        raise BundleError("promotion review repository does not match the bundle")
     if promotion["reviewed_head"] != manifest["review"]["head"]:
         raise BundleError("promotion reviewed head does not match the bundle")
+    if promotion["redaction_reviewer"] != manifest["redaction"]["reviewer"]:
+        raise BundleError("promotion redaction reviewer does not match the bundle")
     runtime = _object(promotion["runtime"], "promotion.runtime")
-    _exact_keys(runtime, {"name", "client_version"}, "promotion.runtime")
+    _exact_keys(
+        runtime,
+        {"name", "client_version", "applied_compute"},
+        "promotion.runtime",
+    )
     expected_runtime = {
         "name": manifest["runtime"]["name"],
         "client_version": manifest["runtime"]["client_version"],
+        "applied_compute": manifest["runtime"]["applied_compute"],
     }
     if runtime != expected_runtime:
         raise BundleError("promotion runtime does not match the bundle")
@@ -675,12 +694,29 @@ def validate_promotion(
         raise BundleError("bundle claims do not match the independent expectation")
     if promoted_claims != [claim["id"] for claim in expected_claims]:
         raise BundleError("promotion claims do not match the independent expectation")
+    compute_required = any(
+        claim["requires_applied_compute"] for claim in expected_claims
+    )
+    if compute_required and expected_applied_compute is None:
+        raise BundleError(
+            "applied-compute claims require an independent applied-compute expectation"
+        )
+    if not compute_required and expected_applied_compute is not None:
+        raise BundleError(
+            "an applied-compute expectation requires an applied-compute claim"
+        )
+    if runtime["applied_compute"] != expected_applied_compute:
+        raise BundleError(
+            "promotion applied compute does not match the independent expectation"
+        )
 
     actual_binding = {
         "authority": promotion["authority"],
         "source_repository": manifest["source"]["repository"],
         "source_revision": promotion["source_revision"],
+        "review_repository": promotion["review_repository"],
         "reviewed_head": promotion["reviewed_head"],
+        "redaction_reviewer": promotion["redaction_reviewer"],
         "runtime": runtime["name"],
         "client_version": runtime["client_version"],
     }
@@ -712,10 +748,25 @@ def _parser() -> argparse.ArgumentParser:
         "--expect-reviewed-head",
         help="independently observed full reviewed-head Git sha",
     )
+    parser.add_argument(
+        "--expect-review-repository",
+        help="independently observed repository containing the reviewed head",
+    )
+    parser.add_argument(
+        "--expect-redaction-reviewer",
+        help="independently selected redaction reviewer identity",
+    )
     parser.add_argument("--expect-runtime", help="independently observed runtime name")
     parser.add_argument(
         "--expect-client-version",
         help="independently observed exact runtime client version",
+    )
+    parser.add_argument(
+        "--expect-applied-compute",
+        help=(
+            "compact JSON object fixing model, effort, cwd, session_id, and attestation "
+            "for promoted claims that depend on applied compute"
+        ),
     )
     parser.add_argument(
         "--expect-claim",
@@ -739,7 +790,9 @@ def main(argv: list[str] | None = None) -> int:
             "authority": args.expect_authority,
             "source_repository": args.expect_source_repository,
             "source_revision": args.expect_source_revision,
+            "review_repository": args.expect_review_repository,
             "reviewed_head": args.expect_reviewed_head,
+            "redaction_reviewer": args.expect_redaction_reviewer,
             "runtime": args.expect_runtime,
             "client_version": args.expect_client_version,
         }
@@ -782,17 +835,61 @@ def main(argv: list[str] | None = None) -> int:
                 if not isinstance(claim["requires_applied_compute"], bool):
                     raise BundleError(f"{label}.requires_applied_compute must be boolean")
                 expected_claims.append(claim)
+            compute_required = any(
+                claim["requires_applied_compute"] for claim in expected_claims
+            )
+            expected_applied_compute = None
+            if args.expect_applied_compute is not None:
+                label = "expected applied compute"
+                if len(args.expect_applied_compute.encode("utf-8")) > MAX_ARTIFACT_BYTES:
+                    raise BundleError(f"{label} exceeds the byte limit")
+                expected_applied_compute = _object(
+                    _parse_json(
+                        args.expect_applied_compute,
+                        label,
+                        Path("<command-line>"),
+                    ),
+                    label,
+                )
+                _exact_keys(
+                    expected_applied_compute,
+                    {"model", "effort", "cwd", "session_id", "attestation"},
+                    label,
+                )
+                for key in ("model", "effort", "cwd", "session_id"):
+                    _string_without_controls(
+                        expected_applied_compute[key],
+                        f"{label}.{key}",
+                    )
+                _safe_relative_path(
+                    expected_applied_compute["attestation"],
+                    f"{label}.attestation",
+                    beneath="artifacts",
+                )
+            if compute_required and expected_applied_compute is None:
+                raise BundleError(
+                    "promotion requires independent expected bindings: applied_compute"
+                )
+            if not compute_required and expected_applied_compute is not None:
+                raise BundleError(
+                    "an applied-compute expectation requires an applied-compute claim"
+                )
             promoted = validate_promotion(
                 args.promotion,
                 args.manifest,
                 expected=expected_values,
                 expected_claims=expected_claims,
+                expected_applied_compute=expected_applied_compute,
             )
         elif (args.manifest.parent / "promotion.json").exists():
             raise BundleError(
                 "a retained promotion.json requires --promotion and independent expected bindings"
             )
-        elif any(value is not None for value in expected.values()) or args.expect_claim:
+        elif (
+            any(value is not None for value in expected.values())
+            or args.expect_claim
+            or args.expect_applied_compute is not None
+        ):
             raise BundleError("expected promotion bindings require --promotion")
     except BundleError as exc:
         print(f"live-validation evidence refused: {exc}", file=sys.stderr)

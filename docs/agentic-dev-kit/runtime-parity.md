@@ -108,7 +108,8 @@ Client-dependent capability promotion follows
 whose named bytes were cleaned up, or a carrier that cannot retain the authoritative
 applied-compute observation stays historical. `verify_live_validation_bundle.py`
 checks the closed bundle and promotion shapes, destination digests, independently
-supplied source/review/runtime and complete claim-object promotion expectations,
+supplied source/review/redaction/runtime/applied-compute and complete claim-object
+promotion expectations,
 artifact inventory, capture request/date stamps, bounded input envelopes and trees,
 redaction backstops, and persistent minimal `turn_context` attestation when a claim
 depends on model, effort, or cwd. The named
@@ -184,8 +185,9 @@ outcomes, GitHub pull-request read-back, and the cockpit review receipt. Its raw
 fixture evidence was temporary and removed under that run's cleanup contract, so the
 narrative and its unresolvable digests remain historical. The durable rerun uses the
 repository-owned verifier and a promotion receipt bound to the retained destination
-bytes, source revision, reviewed synthetic head, runtime, client, persistent applied
-compute and claim IDs. It promotes only the scoped write/state, ready private PR,
+bytes, exact retained source files, source revision, review repository, reviewed
+synthetic head, redaction reviewer, runtime, client, persistent applied compute and
+claim IDs. It promotes only the scoped write/state, ready private PR,
 exact-head review-receipt, and applied-compute claims enumerated in that receipt. Both
 runs preserve the transport gap: Codex described denial/approval behavior in final
 prose while the completed last-message receipt carried

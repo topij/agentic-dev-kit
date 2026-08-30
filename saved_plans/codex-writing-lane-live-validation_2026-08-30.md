@@ -59,7 +59,8 @@ The retained artifacts are deliberately minimized:
 - the exact last-message bytes whose digest the launcher receipt carries;
 - bounded filesystem, Git remote/object, GitHub repository/PR, and PR-watch receipt
   read-backs;
-- source-file SHA-256 readings from the stamped source revision.
+- a source-file SHA-256 ledger and the exact retained bytes for the configuration,
+  descriptor issuer, and launcher that the promoted lane claims depend on.
 
 Each manifest artifact record binds those bytes to its authoritative observer, exact
 capture request, and capture date; the manifest source revision and reviewed head
@@ -104,31 +105,36 @@ UV_CACHE_DIR=/private/tmp/adk-651-uv-cache uv run --python 3.12 \
   --expect-authority docs/agentic-dev-kit/runtime-parity.md \
   --expect-source-repository https://github.com/topij/agentic-dev-kit \
   --expect-source-revision bdfd6ee702a630f0575f0c186f51b3bbbcd1810a \
+  --expect-review-repository https://github.com/topij/adk-codex-writing-evidence-20260830 \
   --expect-reviewed-head 5c4006d18e65e0443dc7b22f48c099ad07ce1da9 \
+  --expect-redaction-reviewer codex-cockpit-gpt-5-6-sol-max \
   --expect-runtime codex \
   --expect-client-version "codex-cli 0.149.1" \
-  --expect-claim '{"evidence":["artifacts/runtime-attestation.json","artifacts/descriptor.json","artifacts/launcher-receipt.json","artifacts/filesystem-readback.txt","artifacts/git-readback.txt","artifacts/source-digests.txt"],"id":"codex-writing-lane-scoped-write-and-state","requires_applied_compute":true}' \
-  --expect-claim '{"evidence":["artifacts/runtime-attestation.json","artifacts/descriptor.json","artifacts/launcher-receipt.json","artifacts/final-message.txt","artifacts/forge-readback.json","artifacts/git-readback.txt","artifacts/source-digests.txt"],"id":"codex-writing-lane-ready-private-pr","requires_applied_compute":true}' \
+  --expect-applied-compute '{"model":"gpt-5.6-sol","effort":"max","cwd":"/private/tmp/adk-codex-writing-20260830/sessions/write/wt","session_id":"01a04fb1-0b63-7921-982b-23ff66c200be","attestation":"artifacts/runtime-attestation.json"}' \
+  --expect-claim '{"evidence":["artifacts/runtime-attestation.json","artifacts/descriptor.json","artifacts/launcher-receipt.json","artifacts/filesystem-readback.txt","artifacts/git-readback.txt","artifacts/source-digests.txt","artifacts/source/config/dev-model.yaml","artifacts/source/scripts/dev_session.sh","artifacts/source/scripts/launch_lane.py"],"id":"codex-writing-lane-scoped-write-and-state","requires_applied_compute":true}' \
+  --expect-claim '{"evidence":["artifacts/runtime-attestation.json","artifacts/descriptor.json","artifacts/launcher-receipt.json","artifacts/final-message.txt","artifacts/forge-readback.json","artifacts/git-readback.txt","artifacts/source-digests.txt","artifacts/source/config/dev-model.yaml","artifacts/source/scripts/dev_session.sh","artifacts/source/scripts/launch_lane.py"],"id":"codex-writing-lane-ready-private-pr","requires_applied_compute":true}' \
   --expect-claim '{"evidence":["artifacts/forge-readback.json","artifacts/review-receipt.json"],"id":"codex-writing-lane-exact-head-review-receipt","requires_applied_compute":false}' \
   --expect-claim '{"evidence":["artifacts/client-version.txt","artifacts/runtime-attestation.json"],"id":"codex-writing-lane-applied-compute","requires_applied_compute":true}' \
   --json
 ```
 
-That command in `/Users/topi/Coding/agentic-dev-kit`, using the verifier at
-`620b588b6a91d6cadceec04c51802edc6c4404e1` on 2026-08-30, returned
-`status: verified`, `promotion: true`, and the claim IDs enumerated above. The first
-review pass had shown that comparing only the manifest and receipt let a
-self-consistently relabeled pair pass; a later hostile pass also showed that preserving
-a claim ID while thinning its artifact links remained self-consistent. The independent
-binding and complete claim-object arguments above are the resulting trust root.
+The first review pass showed that comparing only the manifest and receipt let a
+self-consistently relabeled pair pass; later hostile passes showed that preserving a
+claim ID while thinning its artifact links, fabricating applied compute and lane
+identity together, relabeling review provenance, or retaining source hashes without
+their bytes remained self-consistent. The independent bindings, complete claim objects,
+retained source bytes, and exact semantic controls above are the resulting trust root.
+A fresh exact-head verification stamp follows after the reviewed correction is
+committed.
 
 The repository suite drives the same public CLI through hostile mutations. It refuses:
 
 - surviving prose or a surviving declared digest when the named artifact is absent or
   altered;
-- a self-consistent bundle and promotion receipt relabeled to another source revision,
-  reviewed head, runtime, client, source repository, capability authority, claim ID, or
-  thinner claim-to-artifact relationship;
+- a self-consistent bundle and promotion receipt relabeled to another source or review
+  repository, source revision, reviewed head, redaction reviewer, runtime, client,
+  applied-compute object, capability authority, claim ID, or thinner
+  claim-to-artifact relationship;
 - an ephemeral carrier for an applied-compute claim;
 - a compute-dependent claim that omits the minimal runtime attestation;
 - a retained runtime attestation that disagrees with any applied-compute binding;
@@ -139,15 +145,17 @@ The repository suite drives the same public CLI through hostile mutations. It re
   symlink loops, and unreadable artifact bytes without a traceback;
 - a promotion receipt whose manifest digest no longer matches.
 - a retained promotion receipt omitted from the invocation, an ancestor-symlinked
-  bundle or artifact path, unstamped artifact metadata, common passphrase, Basic-auth,
+  bundle, artifact, or promotion path, unstamped artifact metadata, common passphrase, Basic-auth,
   Slack-token, password-assignment, and AWS credential shapes, duplicate artifact
-  paths, and an input envelope or artifact tree beyond the declared bounds.
+  paths, and either a per-artifact or aggregate input envelope or artifact tree beyond
+  the declared bounds.
 
 The kit-only structural control re-verifies this tracked bundle and promotion receipt.
 The claim-semantic control independently asserts the complete claim-to-artifact map and
-the load-bearing relationships among the client-version capture, descriptor, launcher,
-final-message digest, destination and source-digest read-backs, private ready pull
-request, exact-head review receipt, and persistent runtime attestation.
+the load-bearing literal identities and relationships among the client-version capture,
+descriptor, launcher, final-message, destination and retained source-file read-backs,
+private ready pull request, exact-head review receipt, redaction reviewer, and
+persistent runtime attestation.
 
 ## Cleanup result
 
