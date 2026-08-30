@@ -123,7 +123,8 @@ _FORBIDDEN_VALUE_PATTERNS = (
     re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{20,}\b"),
     re.compile(
         r"\b(?:aws_?secret_?access_?key|client_?secret|auth_?token|password|"
-        r"pass_?phrase|api_?key|access_?token|secret|token)\s*[:=]\s*(?:"
+        r"pass_?phrase|api_?key|access_?token|secret|token)\s*[:=]\s*"
+        r"(?:![^\s\"']+[ \t]+)*(?:"
         r'\$?"(?:[^"\r\n]|\\\r?\n){6,}"|'
         r"\$?'(?:[^'\r\n]|\\\r?\n){6,}'|[^\s\"\']{6,})",
         re.IGNORECASE,
@@ -131,7 +132,7 @@ _FORBIDDEN_VALUE_PATTERNS = (
     re.compile(
         r"\b(?:aws_?secret_?access_?key|client_?secret|auth_?token|password|"
         r"pass_?phrase|api_?key|access_?token|secret|token)\s*:\s*"
-        r"[|>][0-9+-]{0,2}[^\r\n]*\r?\n[ \t]+[^\r\n]{6,}",
+        r"(?:![^\s\"']+[ \t]+)*[|>][0-9+-]{0,2}[^\r\n]*\r?\n[ \t]+[^\r\n]{6,}",
         re.IGNORECASE,
     ),
 )
@@ -740,9 +741,10 @@ def _validate_source_evidence(
         if row_count == 0:
             raise BundleError(f"source-digest ledger must name source-file bytes: {ledger_path}")
         namespaces = {namespace for namespace, _, _ in ledger_rows}
-        if source_proof_headers != (1 if "source" in namespaces else 0):
+        if "source" not in namespaces or source_proof_headers != 1:
             raise BundleError(
-                f"source-digest ledger has an invalid source proof header: {ledger_path}"
+                "source-digest ledger must retain source-revision bytes and exactly one "
+                f"source proof: {ledger_path}"
             )
         fixture_expected = "fixture" in namespaces
         if fixture_headers != (1 if fixture_expected else 0) or fixture_proof_headers != (

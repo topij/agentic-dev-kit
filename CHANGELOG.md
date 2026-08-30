@@ -67,9 +67,11 @@ starts.
   capture request and UTC date; a `source-digest` ledger used by a promoted claim must
   begin with the manifest's source revision and be accompanied by the exact
   `source-file` bytes it names plus `source-git-proof` commit/tree metadata that
-  recomputes each mandatory Git blob's membership in that revision; a fixture-base
-  header and proof are supplementary and bind only `fixture/` rows. Unknown fields,
-  missing observers, and Unicode control or format characters are invalid. A retained
+  recomputes each mandatory Git blob's membership in that revision. Every such ledger
+  must retain source-revision bytes and their proof; a fixture-base header and proof
+  are supplementary and bind only `fixture/` rows. Unknown fields, missing observers,
+  YAML-tagged credential scalars, and Unicode control or format characters are
+  invalid. A retained
   `promotion.json`
   requires `--promotion` and all independent expectations; bundle-only verification
   refuses it. A runtime applied-compute object needs an independent expectation only

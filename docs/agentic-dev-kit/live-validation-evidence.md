@@ -162,7 +162,8 @@ verifier admits these kinds:
 
 A source-digest ledger is not a substitute for its source bytes. It has exactly one
 `source revision: <sha>` header matching the manifest. Every `source/` row requires a
-`source proof: artifacts/<file>.json` header. A fixture ledger may add one
+`source proof: artifacts/<file>.json` header, and every ledger must retain at least one
+`source/` row plus that proof. A fixture ledger may add one
 `fixture base revision: <sha>` and one `fixture proof: artifacts/<file>.json` header,
 but those never replace the source revision and bind only `fixture/` rows. Each data
 row is `<sha256><two spaces><source-or-fixture/path><two spaces>git-blob:<sha>`.
@@ -208,9 +209,10 @@ redaction boundary; these exclusions apply before committing its artifacts too.
 Prefer structural minimization over replacement strings. Extract only the fields the
 claim needs into a new artifact, inspect those destination bytes, and digest those
 bytes. The verifier rejects credential-like JSON keys, raw credential-key assignments,
-YAML credential block scalars, and common secret encodings in raw text and decoded JSON
-strings as a backstop. It repeats those scans after removing Unicode control and format
-characters so an invisible separator cannot split a credential marker.
+YAML-tagged credential scalars, YAML credential block scalars, and common secret
+encodings in raw text and decoded JSON strings as a backstop. It repeats those scans
+after removing Unicode control and format characters so an invisible separator cannot
+split a credential marker.
 `redaction.reviewed: true` records the required semantic review; it is not a claim that
 the scanner can prove absence of every secret.
 

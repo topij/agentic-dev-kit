@@ -654,6 +654,71 @@ def test_a_fixture_header_cannot_replace_the_bundle_source_revision(
     assert "must begin with source revision" in result.stderr
 
 
+def test_fixture_only_bytes_cannot_replace_source_revision_evidence(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+    )
+    artifacts = manifest.parent / "artifacts"
+    source_file = artifacts / "source/scripts/example.py"
+    fixture_file = artifacts / "fixture/scripts/example.py"
+    fixture_file.parent.mkdir(parents=True)
+    source_file.rename(fixture_file)
+    source_file.parent.rmdir()
+    source_file.parent.parent.rmdir()
+
+    source_proof = artifacts / "source-proof.json"
+    fixture_proof = artifacts / "fixture-proof.json"
+    proof_value = json.loads(source_proof.read_text(encoding="utf-8"))
+    proof_value["namespace"] = "fixture"
+    _write_json(fixture_proof, proof_value)
+    source_proof.unlink()
+
+    ledger = artifacts / "source-digests.txt"
+    ledger.write_text(
+        ledger.read_text(encoding="utf-8")
+        .replace(
+            "source proof: artifacts/source-proof.json",
+            f"fixture base revision: {SOURCE}\nfixture proof: artifacts/fixture-proof.json",
+        )
+        .replace("source/scripts/example.py", "fixture/scripts/example.py"),
+        encoding="utf-8",
+    )
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    for artifact in manifest_value["artifacts"]:
+        path = artifact["path"]
+        if path == "artifacts/source-digests.txt":
+            artifact["sha256"] = _sha(ledger)
+        elif path == "artifacts/source-proof.json":
+            artifact["path"] = "artifacts/fixture-proof.json"
+            artifact["sha256"] = _sha(fixture_proof)
+        elif path == "artifacts/source/scripts/example.py":
+            artifact["path"] = "artifacts/fixture/scripts/example.py"
+    manifest_value["claims"][0]["evidence"] = [
+        path.replace("artifacts/source-proof.json", "artifacts/fixture-proof.json").replace(
+            "artifacts/source/scripts/example.py",
+            "artifacts/fixture/scripts/example.py",
+        )
+        for path in manifest_value["claims"][0]["evidence"]
+    ]
+    _write_json(manifest, manifest_value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(
+        manifest,
+        promotion,
+        expected_claims=manifest_value["claims"],
+    )
+
+    assert result.returncode == 2
+    assert "must retain source-revision bytes" in result.stderr
+
+
 def test_a_source_digest_must_begin_with_the_bundle_source_revision(
     tmp_path: Path,
 ) -> None:
@@ -1238,11 +1303,29 @@ def test_unknown_manifest_fields_are_refused(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     "target",
-    ["source", "artifact", "claim", "promotion", "attestation", "proof", "tree", "tree-entry"],
+    [
+        "source",
+        "review",
+        "runtime",
+        "applied-compute",
+        "redaction",
+        "artifact",
+        "claim",
+        "promotion",
+        "promotion-runtime",
+        "expected-claim",
+        "expected-applied-compute",
+        "attestation",
+        "attestation-context",
+        "proof",
+        "tree",
+        "tree-entry",
+    ],
 )
 def test_unknown_nested_fields_are_refused(tmp_path: Path, target: str) -> None:
     manifest, promotion = _fixture(tmp_path)
     expected_claims = None
+    expected_compute: dict[str, object] | None | object = DEFAULT_EXPECTED_COMPUTE
     if target in {"proof", "tree", "tree-entry"}:
         expected_claims = _add_source_ledger(
             manifest,
@@ -1253,6 +1336,14 @@ def test_unknown_nested_fields_are_refused(tmp_path: Path, target: str) -> None:
     manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
     if target == "source":
         manifest_value["source"]["unreviewed_extension"] = "plausible"
+    elif target == "review":
+        manifest_value["review"]["unreviewed_extension"] = "plausible"
+    elif target == "runtime":
+        manifest_value["runtime"]["unreviewed_extension"] = "plausible"
+    elif target == "applied-compute":
+        manifest_value["runtime"]["applied_compute"]["unreviewed_extension"] = "plausible"
+    elif target == "redaction":
+        manifest_value["redaction"]["unreviewed_extension"] = "plausible"
     elif target == "artifact":
         manifest_value["artifacts"][1]["unreviewed_extension"] = "plausible"
     elif target == "claim":
@@ -1261,10 +1352,26 @@ def test_unknown_nested_fields_are_refused(tmp_path: Path, target: str) -> None:
         promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
         promotion_value["unreviewed_extension"] = "plausible"
         _write_json(promotion, promotion_value)
+    elif target == "promotion-runtime":
+        promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
+        promotion_value["runtime"]["unreviewed_extension"] = "plausible"
+        _write_json(promotion, promotion_value)
+    elif target == "expected-claim":
+        expected_claims = json.loads(json.dumps(FIXTURE_EXPECTED_CLAIMS))
+        expected_claims[0]["unreviewed_extension"] = "plausible"
+    elif target == "expected-applied-compute":
+        expected_compute = dict(FIXTURE_EXPECTED_COMPUTE)
+        expected_compute["unreviewed_extension"] = "plausible"
     elif target == "attestation":
         attestation = manifest.parent / "artifacts/runtime-attestation.json"
         artifact_value = json.loads(attestation.read_text(encoding="utf-8"))
         artifact_value["unreviewed_extension"] = "plausible"
+        _write_json(attestation, artifact_value)
+        manifest_value["artifacts"][0]["sha256"] = _sha(attestation)
+    elif target == "attestation-context":
+        attestation = manifest.parent / "artifacts/runtime-attestation.json"
+        artifact_value = json.loads(attestation.read_text(encoding="utf-8"))
+        artifact_value["turn_context"]["unreviewed_extension"] = "plausible"
         _write_json(attestation, artifact_value)
         manifest_value["artifacts"][0]["sha256"] = _sha(attestation)
     else:
@@ -1282,7 +1389,7 @@ def test_unknown_nested_fields_are_refused(tmp_path: Path, target: str) -> None:
             for artifact in manifest_value["artifacts"]
             if artifact["path"] == "artifacts/source-proof.json"
         )["sha256"] = _sha(proof)
-    if target != "promotion":
+    if target not in {"promotion", "promotion-runtime"}:
         _write_json(manifest, manifest_value)
         _refresh_promotion_digest(manifest, promotion)
 
@@ -1290,6 +1397,7 @@ def test_unknown_nested_fields_are_refused(tmp_path: Path, target: str) -> None:
         manifest,
         promotion,
         expected_claims=expected_claims,
+        expected_compute=expected_compute,
     )
 
     assert result.returncode == 2
@@ -1496,12 +1604,15 @@ def test_common_aws_access_key_value_shape_is_refused(tmp_path: Path) -> None:
         "password=hunter2",
         'password="hunter2"',
         "password='hunter2'",
+        'password: !!str "hunter2-secret"',
+        "password: !<tag:yaml.org,2002:str> hunter2-secret",
         'password=$"hunter2"',
         "password=$'hunter2'",
         'password="hunter' + "\\\n" + '2"',
         "client_secret: supersecretvalue",
         "auth_token=supersecretvalue",
         "password: |\n  supersecretvalue",
+        "password: !!str |\n  supersecretvalue",
         "xoxb-" + "123456789012-123456789012-abcdefghijklmnopqrstuvwx",
         "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
     ],
