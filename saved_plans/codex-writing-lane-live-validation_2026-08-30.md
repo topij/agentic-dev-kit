@@ -157,7 +157,7 @@ compute comparison, mandatory first-line source identity, schema-wide Unicode-co
 refusal, and raw credential-key and YAML-block-scalar refusal are the resulting
 corrections.
 That command in `/Users/topi/Coding/agentic-dev-kit`, using the verifier at
-`a8a5edd5f855aaa0683008ec559ab834283df582` on 2026-08-30, returned
+`c946c32129b12e13b9ff32014c944a3a8d1dc149` on 2026-08-30, returned
 `status: verified`, `promotion: true`, and the claim IDs enumerated above.
 
 The repository suite drives the same public CLI through hostile mutations. It refuses:
