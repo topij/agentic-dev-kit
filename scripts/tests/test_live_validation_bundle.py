@@ -822,7 +822,7 @@ def test_a_self_consistently_relabelled_source_revision_is_refused(tmp_path: Pat
 
 
 @pytest.mark.parametrize("revision", ["not-a-git-object-id", "4" * 64])
-def test_only_full_git_sha1_revision_ids_can_promote(
+def test_only_full_git_sha1_source_revision_ids_can_promote(
     tmp_path: Path,
     revision: str,
 ) -> None:
@@ -838,6 +838,24 @@ def test_only_full_git_sha1_revision_ids_can_promote(
     expectations["source_revision"] = revision
 
     result = _run(manifest, promotion, expectations=expectations)
+
+    assert result.returncode == 2
+    assert "must be a full lowercase Git SHA-1 object id" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize("revision", ["not-a-git-object-id", "4" * 64])
+def test_only_full_git_sha1_reviewed_heads_validate_structurally(
+    tmp_path: Path,
+    revision: str,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    promotion.unlink()
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    manifest_value["review"]["head"] = revision
+    _write_json(manifest, manifest_value)
+
+    result = _run(manifest)
 
     assert result.returncode == 2
     assert "must be a full lowercase Git SHA-1 object id" in result.stderr
@@ -2454,6 +2472,7 @@ def test_common_aws_access_key_value_shape_is_refused(tmp_path: Path) -> None:
         "api-key: hunter2-secret",
         "auth_token=supersecretvalue",
         "password: |\n  supersecretvalue",
+        "password: |\n\n  supersecretvalue",
         "password: !!str |\n  supersecretvalue",
         "xoxb-" + "123456789012-123456789012-abcdefghijklmnopqrstuvwx",
         "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",

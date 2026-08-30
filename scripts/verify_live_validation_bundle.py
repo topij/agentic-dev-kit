@@ -140,7 +140,8 @@ _FORBIDDEN_VALUE_PATTERNS = (
     ),
     re.compile(
         r"(?<![A-Za-z0-9])" + _FORBIDDEN_ASSIGNMENT_LABEL + r"\s*:\s*"
-        r"(?:![^\s\"']+[ \t]+)*[|>][0-9+-]{0,2}[^\r\n]*\r?\n[ \t]+[^\r\n]{6,}",
+        r"(?:![^\s\"']+[ \t]+)*[|>][0-9+-]{0,2}[^\r\n]*\r?\n"
+        r"(?:[ \t]*\r?\n)*[ \t]+[^\r\n]{6,}",
         re.IGNORECASE,
     ),
 )
