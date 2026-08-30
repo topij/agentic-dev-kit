@@ -440,6 +440,32 @@ def _artifact_inventory(
     return files, directories
 
 
+def _validate_artifact_inventory(
+    artifact_root: Path,
+    bundle_root: Path,
+    declared_paths: set[str],
+) -> None:
+    actual_paths, actual_directories = _artifact_inventory(artifact_root, bundle_root)
+    if actual_paths != declared_paths:
+        raise BundleError(
+            "artifact inventory differs: "
+            f"undeclared={sorted(actual_paths - declared_paths)}, "
+            f"missing={sorted(declared_paths - actual_paths)}"
+        )
+    declared_directories = {"artifacts"}
+    for rel in declared_paths:
+        parent = PurePosixPath(rel).parent
+        while parent != PurePosixPath("."):
+            declared_directories.add(parent.as_posix())
+            parent = parent.parent
+    if actual_directories != declared_directories:
+        raise BundleError(
+            "artifact directory inventory differs: "
+            f"undeclared={sorted(actual_directories - declared_directories)}, "
+            f"missing={sorted(declared_directories - actual_directories)}"
+        )
+
+
 def _scan_json_content(value: Any, label: str, path: Path) -> None:
     if isinstance(value, dict):
         for key, child in value.items():
@@ -1047,26 +1073,8 @@ def _validate_bundle(
     artifact_root = bundle_root / "artifacts"
     if artifact_root.is_symlink() or not artifact_root.is_dir():
         raise BundleError("bundle must contain a regular artifacts/ directory")
-    actual_paths, actual_directories = _artifact_inventory(artifact_root, bundle_root)
     declared_paths = set(artifact_by_path)
-    if actual_paths != declared_paths:
-        raise BundleError(
-            "artifact inventory differs: "
-            f"undeclared={sorted(actual_paths - declared_paths)}, "
-            f"missing={sorted(declared_paths - actual_paths)}"
-        )
-    declared_directories = {"artifacts"}
-    for rel in declared_paths:
-        parent = PurePosixPath(rel).parent
-        while parent != PurePosixPath("."):
-            declared_directories.add(parent.as_posix())
-            parent = parent.parent
-    if actual_directories != declared_directories:
-        raise BundleError(
-            "artifact directory inventory differs: "
-            f"undeclared={sorted(actual_directories - declared_directories)}, "
-            f"missing={sorted(declared_directories - actual_directories)}"
-        )
+    _validate_artifact_inventory(artifact_root, bundle_root, declared_paths)
 
     source_files_by_ledger = _validate_source_evidence(
         bundle_root=bundle_root,
@@ -1127,6 +1135,8 @@ def _validate_bundle(
             raw,
             limit=MAX_ARTIFACT_BYTES,
         )
+    _validate_bundle_root(manifest_path)
+    _validate_artifact_inventory(artifact_root, bundle_root, declared_paths)
     return manifest, total_bytes, artifact_bytes_by_path
 
 
@@ -1296,6 +1306,12 @@ def validate_promotion(
             raw,
             limit=MAX_ARTIFACT_BYTES,
         )
+    _validate_bundle_root(manifest_path)
+    _validate_artifact_inventory(
+        manifest_path.parent / "artifacts",
+        manifest_path.parent,
+        set(artifact_bytes_by_path),
+    )
     return promotion
 
 

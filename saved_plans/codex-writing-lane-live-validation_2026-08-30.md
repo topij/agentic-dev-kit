@@ -257,6 +257,16 @@ shape while keeping applied-compute equality and carrier checks conditional. Pub
 hostiles inject manifest and artifact changes during descriptor reads and promote a
 malformed non-compute attestation. The changed head still requires a fresh complete
 panel.
+A fresh correctness lens at `bad1cdd884de9026c402d62115ce59c8d7b425dd` on
+2026-08-30 replaced the final byte-confirmation helper with a no-op; the complete
+`make mutation-test` gate still passed, showing that the descriptor-read hostile
+exercised only the initial snapshot. A separately launched adversarial session built a
+scratch probe that added an undeclared artifact immediately after the inventory walk,
+then stopped under its security-content filter before producing a review receipt.
+Public-CLI hostiles now change the manifest, an artifact, and the promotion
+receipt after their initial snapshots, and add undeclared bytes after the earlier
+inventory walks. Final bundle-root, artifact-inventory, and byte confirmations refuse
+those mutations. The changed head still requires a fresh complete panel.
 The documented verifier command above in `/Users/topi/Coding/agentic-dev-kit` at
 `62a8f372d34fbb9fed6d49abd08d8bc7f477ad6d` on 2026-08-30 returned
 `status: verified`, `promotion: true`, and the claim IDs enumerated above.

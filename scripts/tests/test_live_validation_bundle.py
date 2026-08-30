@@ -22,6 +22,56 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _repo_layout import engine_dir, find_repo_root  # noqa: E402
 
 ENGINE = engine_dir(Path(__file__).resolve()) / "verify_live_validation_bundle.py"
+SCANDIR_MUTATION_HOOK = '''\
+import os
+
+_target = os.environ["LIVE_EVIDENCE_SCAN_TARGET"]
+_scan_number = int(os.environ["LIVE_EVIDENCE_SCAN_NUMBER"])
+_append_target = os.environ.get("LIVE_EVIDENCE_APPEND_TARGET")
+_add_target = os.environ.get("LIVE_EVIDENCE_ADD_TARGET")
+_original_scandir = os.scandir
+_scan_count = 0
+_triggered = False
+
+
+class _WrappedScandir:
+    def __init__(self, path):
+        self._path = os.fspath(path)
+        self._context = _original_scandir(path)
+
+    def __enter__(self):
+        self._iterator = self._context.__enter__()
+        return self
+
+    def __exit__(self, *args):
+        return self._context.__exit__(*args)
+
+    def close(self):
+        return self._context.close()
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        global _scan_count, _triggered
+        try:
+            return next(self._iterator)
+        except StopIteration:
+            if self._path == _target:
+                _scan_count += 1
+                if _scan_count == _scan_number and not _triggered:
+                    _triggered = True
+                    if _append_target is not None:
+                        with open(_append_target, "ab") as stream:
+                            stream.write(b" ")
+                    else:
+                        with open(_add_target, "w") as stream:
+                            stream.write("late undeclared bytes\\n")
+            raise
+
+
+os.scandir = _WrappedScandir
+'''
 
 
 def _git_oid(kind: str, data: bytes) -> str:
@@ -1315,10 +1365,19 @@ def test_prose_or_a_digest_cannot_outlive_the_artifact(tmp_path: Path, mutation:
     )
 
 
-@pytest.mark.parametrize("target", ["manifest", "artifact"])
+@pytest.mark.parametrize(
+    ("target", "read_number"),
+    [
+        ("manifest", 1),
+        ("artifact", 1),
+        ("manifest", 2),
+        ("artifact", 2),
+    ],
+)
 def test_a_file_changed_during_its_descriptor_read_is_refused(
     tmp_path: Path,
     target: str,
+    read_number: int,
 ) -> None:
     manifest, promotion = _fixture(tmp_path)
     race_target = (
@@ -1336,13 +1395,17 @@ _target = os.environ["LIVE_EVIDENCE_RACE_TARGET"]
 _original_open = os.open
 _original_read = os.read
 _tracked = set()
+_open_count = 0
 _triggered = False
 
 
 def _open(path, flags, *args, **kwargs):
+    global _open_count
     descriptor = _original_open(path, flags, *args, **kwargs)
     if os.fspath(path) == _target and flags & os.O_ACCMODE == os.O_RDONLY:
-        _tracked.add(descriptor)
+        _open_count += 1
+        if _open_count == int(os.environ["LIVE_EVIDENCE_RACE_READ_NUMBER"]):
+            _tracked.add(descriptor)
     return descriptor
 
 
@@ -1368,12 +1431,81 @@ os.read = _read
         env={
             **os.environ,
             "LIVE_EVIDENCE_RACE_TARGET": str(race_target),
+            "LIVE_EVIDENCE_RACE_READ_NUMBER": str(read_number),
             "PYTHONPATH": str(hook),
         },
     )
 
     assert result.returncode == 2
     assert "changed while it was being read" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize("target", ["manifest", "artifact", "promotion"])
+def test_a_file_changed_after_snapshot_before_confirmation_is_refused(
+    tmp_path: Path,
+    target: str,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    artifacts = manifest.parent / "artifacts"
+    mutation_target = {
+        "manifest": manifest,
+        "artifact": artifacts / "forge-readback.json",
+        "promotion": promotion,
+    }[target]
+    hook = tmp_path / "confirmation-hook"
+    hook.mkdir()
+    (hook / "sitecustomize.py").write_text(
+        SCANDIR_MUTATION_HOOK,
+        encoding="utf-8",
+    )
+
+    result = _run(
+        manifest,
+        promotion,
+        env={
+            **os.environ,
+            "LIVE_EVIDENCE_SCAN_TARGET": str(artifacts),
+            "LIVE_EVIDENCE_SCAN_NUMBER": "3" if target == "promotion" else "1",
+            "LIVE_EVIDENCE_APPEND_TARGET": str(mutation_target),
+            "PYTHONPATH": str(hook),
+        },
+    )
+
+    assert result.returncode == 2
+    assert "changed during verification" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize("inventory_number", [1, 2])
+def test_an_undeclared_artifact_added_after_inventory_is_refused(
+    tmp_path: Path,
+    inventory_number: int,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    artifacts = manifest.parent / "artifacts"
+    hook = tmp_path / "inventory-hook"
+    hook.mkdir()
+    (hook / "sitecustomize.py").write_text(
+        SCANDIR_MUTATION_HOOK,
+        encoding="utf-8",
+    )
+
+    result = _run(
+        manifest,
+        promotion,
+        env={
+            **os.environ,
+            "LIVE_EVIDENCE_SCAN_TARGET": str(artifacts),
+            "LIVE_EVIDENCE_SCAN_NUMBER": str(inventory_number),
+            "LIVE_EVIDENCE_ADD_TARGET": str(artifacts / "late-undeclared.txt"),
+            "PYTHONPATH": str(hook),
+        },
+    )
+
+    assert (artifacts / "late-undeclared.txt").is_file()
+    assert result.returncode == 2
+    assert "artifact inventory differs" in result.stderr
     assert "Traceback" not in result.stderr
 
 

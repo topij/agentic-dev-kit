@@ -65,8 +65,8 @@ starts.
   markers, unsupported numbers, symlink traversal, and undeclared, unreadable, or
   non-regular bundle entries are invalid. Artifact records must carry their exact
   capture request and UTC date. Digest, scanning, parsing, source-proof, and promotion
-  checks use a stable descriptor-read snapshot and refuse a file changed during
-  verification. Every `runtime-attestation` has the documented closed shape and
+  checks use a stable descriptor-read snapshot and refuse a file or inventory changed
+  during verification. Every `runtime-attestation` has the documented closed shape and
   runtime-session observer even when a promoted claim does not depend on applied
   compute. A `source-digest` ledger used by a promoted claim must
   begin with the manifest's source revision and be accompanied by the exact

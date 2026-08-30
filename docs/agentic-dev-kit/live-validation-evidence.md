@@ -203,10 +203,10 @@ entry; artifact bytes are not opened through an ancestor symlink before refusal.
 Each file is opened through a non-symlink-following descriptor and read into a bounded
 snapshot. Size, digest, credential scanning, JSON parsing, source-proof recomputation,
 and claim validation use those same bytes. The verifier compares descriptor identity
-and metadata before and after the read, then confirms the manifest, promotion receipt,
-and artifact bytes again before returning success. A promotion therefore validates the
-exact manifest snapshot named by its digest rather than reopening that path as a new
-observation.
+and metadata before and after the read, then confirms the bundle-root and artifact-tree
+inventories, manifest, promotion receipt, and artifact bytes again before returning
+success. A promotion therefore validates the exact manifest snapshot named by its
+digest rather than reopening that path as a new observation.
 
 ## Excluded material and redaction
 
