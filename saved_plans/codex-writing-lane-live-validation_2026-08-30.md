@@ -176,8 +176,17 @@ then the reviewer route stopped under its security-content filter and produced n
 receipt. Bidirectional source-evidence closure, ordinary-observer and nested-schema
 hostiles, and credential scanning after control/format removal are the resulting
 corrections; the changed head still requires a fresh complete panel.
+A fresh fallback panel at `15a40c86c20659789cae15d7e746832ea9ef23b1` on
+2026-08-30 found that a source-digest ledger could promote with fixture-only bytes,
+YAML type tags could hide a credential scalar from the redaction backstop, and the
+nested closed-schema hostile set omitted enforced objects. Mandatory source rows and
+source proof in every source-digest ledger, tagged-scalar refusal, and hostile
+unknown-field coverage across the manifest source, review, runtime, applied-compute,
+redaction, artifact, and claim objects; the promotion and its runtime; the attestation
+and its turn context; Git proofs, trees, and tree entries; and the expected claim and
+applied-compute objects are the resulting corrections.
 That command in `/Users/topi/Coding/agentic-dev-kit`, using the verifier at
-`3e3e8bde6915b66af75ff2e3c60b252fdb61c964` on 2026-08-30, returned
+`d276f80de1368b46149e26d1f29eb41485c180de` on 2026-08-30, returned
 `status: verified`, `promotion: true`, and the claim IDs enumerated above.
 
 The repository suite drives the same public CLI through hostile mutations. It refuses:
