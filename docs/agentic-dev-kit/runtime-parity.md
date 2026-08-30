@@ -189,10 +189,12 @@ narrative and its unresolvable digests remain historical. The durable rerun uses
 repository-owned verifier and a promotion receipt bound to the retained destination
 bytes, exact upstream and fixture source files, source revision, synthetic fixture
 revision, review repository, reviewed synthetic head, redaction reviewer, runtime,
-client, and claim IDs. It promotes the scoped write/state, ready private PR, and
-exact-head review-receipt claims enumerated in that receipt. The retained runtime
-attestation is outside the promoted claim map because it does not correlate its session
-to the launcher invocation. Both
+client, and claim IDs. It promotes launcher-reported write/state output independently
+matched by cockpit read-backs, the ready private PR, and the exact-head review-receipt
+claims enumerated in that receipt. The task prompt is neither retained nor bound, so
+the promotion does not claim that the observed output matched a pre-run request. The
+retained runtime attestation is outside the promoted claim map because it does not
+correlate its session to the launcher invocation. Both
 runs preserve the transport gap: Codex described denial/approval behavior in final
 prose while the completed last-message receipt carried
 `terminal.permission_denials: null`. The shipped default remains read-only.

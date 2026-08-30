@@ -113,12 +113,13 @@ CODEX_WRITING_EXPECTED_CLAIMS = [
         "evidence": [
             "artifacts/descriptor.json",
             "artifacts/launcher-receipt.json",
+            "artifacts/final-message.txt",
             "artifacts/filesystem-readback.txt",
             "artifacts/git-readback.txt",
             "artifacts/source-digests.txt",
             *CODEX_WRITING_EXECUTION_SOURCE_EVIDENCE,
         ],
-        "id": "codex-writing-lane-scoped-write-and-state",
+        "id": "codex-writing-lane-observed-write-and-state",
         "requires_applied_compute": False,
     },
     {
@@ -741,6 +742,61 @@ def test_a_self_consistently_relabelled_source_revision_is_refused(tmp_path: Pat
 
     assert result.returncode == 2
     assert "commit does not match its revision" in result.stderr
+
+
+def test_a_source_proof_commit_without_a_header_boundary_is_refused_cleanly(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+    )
+    commit_lines = [
+        f"tree {TEST_ROOT_TREE}",
+        "author Evidence Fixture <evidence@example.invalid> 0 +0000",
+        "committer Evidence Fixture <evidence@example.invalid> 0 +0000",
+        "retained source fixture without a header boundary",
+    ]
+    revision = _git_oid("commit", ("\n".join(commit_lines) + "\n").encode())
+    artifacts = manifest.parent / "artifacts"
+    proof = artifacts / "source-proof.json"
+    proof_value = json.loads(proof.read_text(encoding="utf-8"))
+    proof_value["revision"] = revision
+    proof_value["commit_lines"] = commit_lines
+    _write_json(proof, proof_value)
+    ledger = artifacts / "source-digests.txt"
+    ledger.write_text(
+        ledger.read_text(encoding="utf-8").replace(SOURCE, revision),
+        encoding="utf-8",
+    )
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    manifest_value["source"]["revision"] = revision
+    for artifact in manifest_value["artifacts"]:
+        if artifact["path"] == "artifacts/source-digests.txt":
+            artifact["sha256"] = _sha(ledger)
+        elif artifact["path"] == "artifacts/source-proof.json":
+            artifact["sha256"] = _sha(proof)
+    _write_json(manifest, manifest_value)
+    promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
+    promotion_value["source_revision"] = revision
+    promotion_value["manifest_sha256"] = _sha(manifest)
+    _write_json(promotion, promotion_value)
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = revision
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 2
+    assert "source Git proof commit has no header boundary" in result.stderr
+    assert "Traceback" not in result.stderr
 
 
 def test_retained_source_bytes_absent_from_the_revision_tree_are_refused(
@@ -2562,7 +2618,7 @@ def test_the_promoted_codex_writing_lane_bundle_remains_structurally_verifiable(
     assert json.loads(result.stdout) == {
         "bundle_id": "codex-writing-lane-2026-08-30",
         "claims": [
-            "codex-writing-lane-scoped-write-and-state",
+            "codex-writing-lane-observed-write-and-state",
             "codex-writing-lane-ready-private-pr",
             "codex-writing-lane-exact-head-review-receipt",
         ],

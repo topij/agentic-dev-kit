@@ -159,6 +159,7 @@
       "evidence": [
         "artifacts/descriptor.json",
         "artifacts/launcher-receipt.json",
+        "artifacts/final-message.txt",
         "artifacts/filesystem-readback.txt",
         "artifacts/git-readback.txt",
         "artifacts/source-digests.txt",
@@ -172,7 +173,7 @@
         "artifacts/source/scripts/lib/kitconfig.py",
         "artifacts/source/scripts/lib/repo_root.sh"
       ],
-      "id": "codex-writing-lane-scoped-write-and-state",
+      "id": "codex-writing-lane-observed-write-and-state",
       "requires_applied_compute": false
     },
     {

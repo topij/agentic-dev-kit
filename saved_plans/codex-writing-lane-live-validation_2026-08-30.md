@@ -48,12 +48,15 @@ property of the lane run.
 
 ## Independently retained observations
 
-The lane created the requested repository note and descriptor-state probe, committed
-only the note, pushed `dev/write`, opened a ready private pull request, read the pull
-request and patch back, and stopped without merging. The cockpit then read the remote
-branch, Git object, worktree, descriptor state, GitHub repository and pull request
-independently. It recorded a `fallback:codex` correctness receipt against synthetic
-head `5c4006d18e65e0443dc7b22f48c099ad07ce1da9` and re-read the settled PR-watch state.
+The launcher's digest-bound final output reports that the lane created the repository
+note and descriptor-state probe, committed only the note, pushed `dev/write`, opened a
+ready private pull request, read the pull request and patch back, and stopped without
+merging. The cockpit independently matched the reported note, state bytes, remote
+branch, Git object, descriptor state, GitHub repository and pull request. It recorded a
+`fallback:codex` correctness receipt against synthetic head
+`5c4006d18e65e0443dc7b22f48c099ad07ce1da9` and re-read the settled PR-watch state.
+Because the minimized bundle does not retain or bind the task prompt, the promotion
+does not assert that those observed outputs matched a pre-run request.
 
 The retained artifacts are deliberately minimized:
 
@@ -85,8 +88,9 @@ and user/workspace data outside the synthetic fixture.
 
 The promotion receipt names these recomputable claims:
 
-- `codex-writing-lane-scoped-write-and-state` — the descriptor-bound lane produced the
-  requested worktree note and exact descriptor-state probe;
+- `codex-writing-lane-observed-write-and-state` — the launcher's digest-bound final
+  output reports the descriptor-bound worktree note and state probe, and the cockpit's
+  retained filesystem and Git read-backs independently match those output bytes;
 - `codex-writing-lane-ready-private-pr` — the lane commit reached the remote and an
   independently read-back private pull request that was open and ready;
 - `codex-writing-lane-exact-head-review-receipt` — the cockpit's receipt and settled
@@ -121,7 +125,7 @@ UV_CACHE_DIR=/private/tmp/adk-651-uv-cache uv run --python 3.12 \
   --expect-runtime codex \
   --expect-client-version "codex-cli 0.149.1" \
   --expect-session-persistence persistent \
-  --expect-claim '{"evidence":["artifacts/descriptor.json","artifacts/launcher-receipt.json","artifacts/filesystem-readback.txt","artifacts/git-readback.txt","artifacts/source-digests.txt","artifacts/execution-source-digests.txt","artifacts/source-proof.json","artifacts/fixture-proof.json","artifacts/fixture/config/dev-model.yaml","artifacts/source/config/dev-model.yaml","artifacts/source/scripts/dev_session.sh","artifacts/source/scripts/launch_lane.py","artifacts/source/scripts/lib/kitconfig.py","artifacts/source/scripts/lib/repo_root.sh"],"id":"codex-writing-lane-scoped-write-and-state","requires_applied_compute":false}' \
+  --expect-claim '{"evidence":["artifacts/descriptor.json","artifacts/launcher-receipt.json","artifacts/final-message.txt","artifacts/filesystem-readback.txt","artifacts/git-readback.txt","artifacts/source-digests.txt","artifacts/execution-source-digests.txt","artifacts/source-proof.json","artifacts/fixture-proof.json","artifacts/fixture/config/dev-model.yaml","artifacts/source/config/dev-model.yaml","artifacts/source/scripts/dev_session.sh","artifacts/source/scripts/launch_lane.py","artifacts/source/scripts/lib/kitconfig.py","artifacts/source/scripts/lib/repo_root.sh"],"id":"codex-writing-lane-observed-write-and-state","requires_applied_compute":false}' \
   --expect-claim '{"evidence":["artifacts/descriptor.json","artifacts/launcher-receipt.json","artifacts/final-message.txt","artifacts/forge-readback.json","artifacts/git-readback.txt","artifacts/source-digests.txt","artifacts/execution-source-digests.txt","artifacts/source-proof.json","artifacts/fixture-proof.json","artifacts/fixture/config/dev-model.yaml","artifacts/source/config/dev-model.yaml","artifacts/source/scripts/dev_session.sh","artifacts/source/scripts/launch_lane.py","artifacts/source/scripts/lib/kitconfig.py","artifacts/source/scripts/lib/repo_root.sh"],"id":"codex-writing-lane-ready-private-pr","requires_applied_compute":false}' \
   --expect-claim '{"evidence":["artifacts/forge-readback.json","artifacts/review-receipt.json"],"id":"codex-writing-lane-exact-head-review-receipt","requires_applied_compute":false}' \
   --json
@@ -224,6 +228,16 @@ approval, exact exclusion declaration, and source-proof leaf/blob comparison wer
 behaviorally pinned. Credential-key scanning now uses the normalized collapsed form,
 and public-CLI hostiles pin the redaction gates and a hash-valid proof whose requested
 path points to the wrong blob. The changed head still requires a fresh complete panel.
+A fresh correctness lens at `a2d7ee5367b2ae557176abbb61ced8b12ab29d58` on
+2026-08-30 found that the retained prompt was neither minimized nor bound, so the
+promotion could establish observed output but not that it satisfied a pre-run request.
+It also showed that the clean refusal for a Git commit proof without a header boundary
+was not mutation-pinned. The promoted claim is now explicitly limited to
+launcher-reported output independently matched by cockpit read-backs and includes the
+digest-bound final message in its evidence; a public-CLI no-header hostile pins the
+refusal path. The separately launched adversarial lens stopped under its
+security-content filter while probing credential syntax and produced no receipt. The
+changed head still requires a fresh complete panel.
 The documented verifier command above in `/Users/topi/Coding/agentic-dev-kit` at
 `62a8f372d34fbb9fed6d49abd08d8bc7f477ad6d` on 2026-08-30 returned
 `status: verified`, `promotion: true`, and the claim IDs enumerated above.
