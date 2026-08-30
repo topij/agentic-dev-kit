@@ -21,6 +21,7 @@ uv run <engine-dir>/verify_live_validation_bundle.py <bundle>/bundle.json \
   --expect-redaction-reviewer <reviewer-identity> \
   --expect-runtime <runtime> \
   --expect-client-version <exact-client-version> \
+  --expect-session-persistence <persistent|not-applicable|ephemeral> \
   --expect-applied-compute \
   '{"model":"<model>","effort":"<effort>","cwd":"<cwd>","session_id":"<id>","attestation":"artifacts/runtime-attestation.json"}' \
   --expect-claim \
@@ -82,7 +83,7 @@ before artifact I/O.
   "artifacts": [
     {
       "capture_request": "<exact observer command or request>",
-      "captured_on": "<YYYY-MM-DD>",
+      "captured_on": "<UTC YYYY-MM-DD>",
       "path": "artifacts/<file>",
       "sha256": "<digest of the retained destination bytes>",
       "kind": "<permitted kind>",
@@ -102,7 +103,7 @@ before artifact I/O.
 The manifest is the binding surface: its source revision, reviewed head, runtime and
 client apply to every artifact digest and every claim-to-evidence link it contains.
 An artifact record adds the authoritative observer, exact capture command or request,
-and capture date for those exact retained bytes. Together with the manifest source
+and UTC capture date for those exact retained bytes. Together with the manifest source
 revision and reviewed head, those fields stamp each retained reading rather than
 leaving its age or provenance to narrative inference.
 The verifier refuses unknown fields so an unimplemented assertion cannot hide beside
@@ -115,9 +116,10 @@ head, redaction reviewer, and complete runtime object, names the parity authorit
 changed, and enumerates the promoted claim IDs. The verifier compares every repeated
 field and, for promotion, requires the reviewer to supply independently selected
 expected authority, source repository, source revision, review repository, reviewed
-head, redaction reviewer, runtime, client, and complete promoted claim objects. When a
-claim depends on applied compute, the caller must also supply the complete expected
-applied-compute object with `--expect-applied-compute`. Supply each claim with
+head, redaction reviewer, runtime, client, session-persistence carrier, and complete
+promoted claim objects. When a claim depends on applied compute, the caller must also
+supply the complete expected applied-compute object with `--expect-applied-compute`.
+Supply each claim with
 repeatable `--expect-claim` compact JSON, including its ordered evidence paths and
 applied-compute dependency. Obtain those expectations from the review target and
 authoritative observer before reading the bundle labels; a self-consistent manifest and
@@ -149,6 +151,13 @@ verifier admits these kinds:
 - `source-digest` for a bounded ledger of copied engine/config bytes at the stamped
   source revision, and `source-file` for each exact retained byte sequence the ledger
   names and a promoted claim depends on.
+
+A source-digest ledger is not a substitute for its source bytes. After exactly one
+`source revision: <sha>` or `synthetic base revision: <sha>` header, each data row is
+`<sha256><two spaces><path relative to artifacts/>`, optionally followed by `<two
+spaces>git-blob:<sha>`. An optional `captured on: <UTC YYYY-MM-DD>` header must match
+the artifact record. Retain every row's path as a `source-file` with the same SHA-256;
+the verifier also refuses an unlisted `source-file`.
 
 A wrapper-attributed claim retains the exact fixture configuration and direct
 repository source dependencies used by the issuer and launcher, not only their

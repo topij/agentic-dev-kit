@@ -52,9 +52,10 @@ starts.
   IDs, and `--json` returns the machine-readable verdict.
   Promotion now requires `--expect-authority`, `--expect-source-repository`,
   `--expect-source-revision`, `--expect-review-repository`,
-  `--expect-reviewed-head`, `--expect-redaction-reviewer`, `--expect-runtime`, and
-  `--expect-client-version`, plus repeatable `--expect-claim` JSON fixing each claim's
-  ID, evidence paths, and applied-compute dependency. A promoted applied-compute claim
+  `--expect-reviewed-head`, `--expect-redaction-reviewer`, `--expect-runtime`,
+  `--expect-client-version`, and `--expect-session-persistence`, plus repeatable
+  `--expect-claim` JSON fixing each claim's ID, evidence paths, and applied-compute
+  dependency. A promoted applied-compute claim
   additionally requires `--expect-applied-compute` with its complete independently
   observed object; source every expectation from the review target and authoritative
   observers before trusting the bundle's own labels.**
@@ -63,8 +64,8 @@ starts.
   `2` as an invalid bundle or promotion; duplicate JSON members, decoded credential
   markers, unsupported numbers, symlink traversal, and undeclared, unreadable, or
   non-regular bundle entries are invalid. Artifact records must carry their exact
-  capture request and date; a `source-digest` ledger used by a promoted claim must be
-  accompanied by the exact `source-file` bytes it names. A retained `promotion.json`
+  capture request and UTC date; a `source-digest` ledger used by a promoted claim must
+  be accompanied by the exact `source-file` bytes it names. A retained `promotion.json`
   requires `--promotion` and all independent expectations; bundle-only verification
   refuses it. The declared per-artifact, aggregate, artifact-count, and
   artifact-tree-entry ceilings apply before unbounded input work.

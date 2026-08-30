@@ -27,6 +27,7 @@ Usage:
       --expect-redaction-reviewer <independent-reviewer> \
       --expect-runtime codex \
       --expect-client-version "codex-cli <version>" \
+      --expect-session-persistence persistent \
       --expect-applied-compute '<exact-applied-compute-json>' \
       --expect-claim '<exact-claim-json>'
 
@@ -43,7 +44,7 @@ import math
 import os
 import re
 import sys
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -86,6 +87,16 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 _SLUG = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
 _CAPTURE_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_SOURCE_LEDGER_REVISION = re.compile(
+    r"^(?P<label>source revision|synthetic base revision): "
+    r"(?P<revision>[0-9a-f]{40})$"
+)
+_SOURCE_LEDGER_CAPTURE = re.compile(r"^captured on: (?P<captured_on>\d{4}-\d{2}-\d{2})$")
+_SOURCE_LEDGER_ROW = re.compile(
+    r"^(?P<sha256>[0-9a-f]{64})  "
+    r"(?P<path>[A-Za-z0-9][A-Za-z0-9._/-]*)"
+    r"(?:  git-blob:(?P<git_blob>[0-9a-f]{40}))?$"
+)
 _FORBIDDEN_JSON_KEY = re.compile(
     r"(?:^|_)(?:(?:api|access|private)_?keys?|auths?|authentications?|"
     r"authorizations?|bearers?|cookies?|credentials?|pass_?phrases?|passwords?|"
@@ -124,6 +135,15 @@ def _sha256(path: Path) -> str:
     except OSError as exc:
         raise BundleError(f"evidence bytes are unreadable: {path}: {exc}") from exc
     return digest.hexdigest()
+
+
+def _git_blob_id(path: Path) -> str:
+    try:
+        data = path.read_bytes()
+    except OSError as exc:
+        raise BundleError(f"source-file bytes are unreadable: {path}: {exc}") from exc
+    payload = f"blob {len(data)}\0".encode() + data
+    return hashlib.sha1(payload, usedforsecurity=False).hexdigest()
 
 
 def _object(value: Any, label: str) -> dict[str, Any]:
@@ -423,6 +443,110 @@ def _validate_attestation(
         raise BundleError("runtime attestation disagrees with runtime.applied_compute")
 
 
+def _validate_source_evidence(
+    *,
+    bundle_root: Path,
+    source_revision: str,
+    artifact_by_path: dict[str, dict[str, Any]],
+) -> dict[str, set[str]]:
+    source_files = {
+        path for path, record in artifact_by_path.items() if record["kind"] == "source-file"
+    }
+    ledgers = {
+        path for path, record in artifact_by_path.items() if record["kind"] == "source-digest"
+    }
+    named_source_files: set[str] = set()
+    source_files_by_ledger: dict[str, set[str]] = {}
+    for ledger_path in sorted(ledgers):
+        record = artifact_by_path[ledger_path]
+        try:
+            lines = (bundle_root / ledger_path).read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeDecodeError) as exc:
+            raise BundleError(f"source-digest ledger is unreadable: {ledger_path}: {exc}") from exc
+        revision_headers = 0
+        capture_headers = 0
+        row_count = 0
+        ledger_paths: set[str] = set()
+        for line_number, line in enumerate(lines, start=1):
+            revision_match = _SOURCE_LEDGER_REVISION.fullmatch(line)
+            if revision_match:
+                revision_headers += 1
+                if (
+                    revision_match.group("label") == "source revision"
+                    and revision_match.group("revision") != source_revision
+                ):
+                    raise BundleError(
+                        "source-digest ledger source revision differs from the bundle: "
+                        f"{ledger_path}:{line_number}"
+                    )
+                continue
+            capture_match = _SOURCE_LEDGER_CAPTURE.fullmatch(line)
+            if capture_match:
+                capture_headers += 1
+                if capture_match.group("captured_on") != record["captured_on"]:
+                    raise BundleError(
+                        "source-digest ledger capture date differs from its artifact record: "
+                        f"{ledger_path}:{line_number}"
+                    )
+                continue
+            row = _SOURCE_LEDGER_ROW.fullmatch(line)
+            if row is None:
+                raise BundleError(
+                    "source-digest ledger has an unsupported line: "
+                    f"{ledger_path}:{line_number}"
+                )
+            row_count += 1
+            source_file = _safe_relative_path(
+                f"artifacts/{row.group('path')}",
+                f"source-digest ledger {ledger_path}:{line_number}",
+                beneath="artifacts",
+            )
+            if source_file in ledger_paths:
+                raise BundleError(
+                    f"source-digest ledger repeats a source-file path: {source_file}"
+                )
+            ledger_paths.add(source_file)
+            source_record = artifact_by_path.get(source_file)
+            if source_record is None or source_record["kind"] != "source-file":
+                raise BundleError(
+                    "source-digest ledger names bytes without a declared source-file: "
+                    f"{source_file}"
+                )
+            if source_record["sha256"] != row.group("sha256"):
+                raise BundleError(
+                    "source-digest ledger does not match its source-file digest: "
+                    f"{source_file}"
+                )
+            expected_git_blob = row.group("git_blob")
+            if (
+                expected_git_blob is not None
+                and _git_blob_id(bundle_root / source_file) != expected_git_blob
+            ):
+                raise BundleError(
+                    "source-digest ledger does not match its source-file Git blob: "
+                    f"{source_file}"
+                )
+        if revision_headers != 1:
+            raise BundleError(
+                f"source-digest ledger must contain exactly one revision header: {ledger_path}"
+            )
+        if capture_headers > 1:
+            raise BundleError(
+                f"source-digest ledger repeats its capture-date header: {ledger_path}"
+            )
+        if row_count == 0:
+            raise BundleError(f"source-digest ledger must name source-file bytes: {ledger_path}")
+        named_source_files.update(ledger_paths)
+        source_files_by_ledger[ledger_path] = ledger_paths
+    if source_files != named_source_files:
+        raise BundleError(
+            "source-file inventory differs from the source-digest ledgers: "
+            f"unlisted={sorted(source_files - named_source_files)}, "
+            f"missing={sorted(named_source_files - source_files)}"
+        )
+    return source_files_by_ledger
+
+
 def validate_bundle(manifest_path: Path) -> dict[str, Any]:
     """Return the parsed manifest only after its complete bundle validates."""
 
@@ -524,7 +648,7 @@ def validate_bundle(manifest_path: Path) -> dict[str, Any]:
             capture_date = date.fromisoformat(captured_on)
         except ValueError as exc:
             raise BundleError(f"{label}.captured_on must be a calendar date") from exc
-        if capture_date > date.today():
+        if capture_date > datetime.now(timezone.utc).date():
             raise BundleError(f"{label}.captured_on must not be in the future")
         path = bundle_root / rel
         _reject_symlink_traversal(path, label)
@@ -562,6 +686,12 @@ def validate_bundle(manifest_path: Path) -> dict[str, Any]:
             f"missing={sorted(declared_directories - actual_directories)}"
         )
 
+    source_files_by_ledger = _validate_source_evidence(
+        bundle_root=bundle_root,
+        source_revision=source["revision"],
+        artifact_by_path=artifact_by_path,
+    )
+
     claims = _list(manifest["claims"], "claims")
     if not claims:
         raise BundleError("claims must not be empty")
@@ -578,10 +708,17 @@ def validate_bundle(manifest_path: Path) -> dict[str, Any]:
         evidence = _string_list(claim["evidence"], f"{label}.evidence")
         if not evidence or len(set(evidence)) != len(evidence):
             raise BundleError(f"{label}.evidence must contain unique artifact paths")
+        evidence_paths = set(evidence)
         for path in evidence:
             rel = _safe_relative_path(path, f"{label}.evidence", beneath="artifacts")
             if rel not in artifact_by_path:
                 raise BundleError(f"{label} names undeclared evidence: {rel}")
+        for ledger_path, source_paths in source_files_by_ledger.items():
+            if ledger_path in evidence_paths and not source_paths.issubset(evidence_paths):
+                raise BundleError(
+                    f"{label} names a source-digest ledger without all of its source-file "
+                    f"evidence: {sorted(source_paths - evidence_paths)}"
+                )
         if not isinstance(claim["requires_applied_compute"], bool):
             raise BundleError(f"{label}.requires_applied_compute must be boolean")
         if claim["requires_applied_compute"]:
@@ -680,12 +817,13 @@ def validate_promotion(
     runtime = _object(promotion["runtime"], "promotion.runtime")
     _exact_keys(
         runtime,
-        {"name", "client_version", "applied_compute"},
+        {"name", "client_version", "session_persistence", "applied_compute"},
         "promotion.runtime",
     )
     expected_runtime = {
         "name": manifest["runtime"]["name"],
         "client_version": manifest["runtime"]["client_version"],
+        "session_persistence": manifest["runtime"]["session_persistence"],
         "applied_compute": manifest["runtime"]["applied_compute"],
     }
     if runtime != expected_runtime:
@@ -726,6 +864,7 @@ def validate_promotion(
         "redaction_reviewer": promotion["redaction_reviewer"],
         "runtime": runtime["name"],
         "client_version": runtime["client_version"],
+        "session_persistence": runtime["session_persistence"],
     }
     for field, expected_value in expected.items():
         if actual_binding[field] != expected_value:
@@ -769,6 +908,11 @@ def _parser() -> argparse.ArgumentParser:
         help="independently observed exact runtime client version",
     )
     parser.add_argument(
+        "--expect-session-persistence",
+        choices=("persistent", "not-applicable", "ephemeral"),
+        help="independently observed runtime session-persistence carrier",
+    )
+    parser.add_argument(
         "--expect-applied-compute",
         help=(
             "compact JSON object fixing model, effort, cwd, session_id, and attestation "
@@ -802,6 +946,7 @@ def main(argv: list[str] | None = None) -> int:
             "redaction_reviewer": args.expect_redaction_reviewer,
             "runtime": args.expect_runtime,
             "client_version": args.expect_client_version,
+            "session_persistence": args.expect_session_persistence,
         }
         if args.promotion is not None:
             missing = sorted(field for field, value in expected.items() if value is None)

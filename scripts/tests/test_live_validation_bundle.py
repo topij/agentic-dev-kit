@@ -13,6 +13,7 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -32,6 +33,7 @@ FIXTURE_EXPECTATIONS = {
     "redaction_reviewer": "fixture-reviewer",
     "runtime": "codex",
     "client_version": "codex-cli example",
+    "session_persistence": "persistent",
 }
 FIXTURE_EXPECTED_COMPUTE = {
     "model": "gpt-example",
@@ -202,7 +204,7 @@ CODEX_WRITING_EXPECTED_ARTIFACT_SHA256 = {
     "artifacts/launcher-receipt.json": "06be15394a823fedf6abee96cd38746f8a6c1f951abbef7a9b4f8f2b92e839cc",
     "artifacts/review-receipt.json": "e71819c7a767c94adcee86c67f683045d7547af3a7a1f96792c8ae645f8c76b4",
     "artifacts/runtime-attestation.json": "95271b822394dd24e9f5d2fdb2ae3c3b5a380a74f0c49bbefd71d8f59fd2deaa",
-    "artifacts/source-digests.txt": "c922a945d0c461d948862b0dd827116b5d132fa5d043264b775b83a70817dbd4",
+    "artifacts/source-digests.txt": "079c325ee9f2c80222d4441826f1f19c0509d5d2a4c1f3b5f1af8541bbb166ad",
     "artifacts/source/config/dev-model.yaml": "32d9e7b285a54438975c2aa2d9813adc5d017cef077b6df71564b1ae418a6d92",
     "artifacts/source/scripts/dev_session.sh": "2ae9af83f182fa726bdc2102d65820242b873aa9d6749f9a450c4b1afd55e4ba",
     "artifacts/source/scripts/launch_lane.py": "7787079163e9d678284db5df15311f059a519a61db6301980784864ab02ad9e6",
@@ -318,6 +320,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path]:
         "runtime": {
             "name": "codex",
             "client_version": "codex-cli example",
+            "session_persistence": "persistent",
             "applied_compute": FIXTURE_EXPECTED_COMPUTE,
         },
         "claims": ["applied-compute-and-reviewed-head"],
@@ -334,6 +337,7 @@ def _run(
     expectations: dict[str, str] | None = None,
     expected_claims: list[dict[str, object]] | None = None,
     expected_compute: dict[str, object] | None | object = DEFAULT_EXPECTED_COMPUTE,
+    env: dict[str, str] | None = None,
     timeout: float = 10,
 ) -> subprocess.CompletedProcess[str]:
     argv = [sys.executable, str(ENGINE), str(manifest), "--json"]
@@ -359,6 +363,7 @@ def _run(
         capture_output=True,
         text=True,
         check=False,
+        env=env,
         timeout=timeout,
     )
 
@@ -367,6 +372,62 @@ def _refresh_promotion_digest(manifest: Path, promotion: Path) -> None:
     value = json.loads(promotion.read_text(encoding="utf-8"))
     value["manifest_sha256"] = _sha(manifest)
     _write_json(promotion, value)
+
+
+def _add_source_ledger(
+    manifest: Path,
+    promotion: Path,
+    *,
+    include_source_file: bool,
+    claim_source_file: bool,
+    ledger_digest: str | None = None,
+    ledger_git_blob: str | None = None,
+) -> list[dict[str, object]]:
+    artifacts = manifest.parent / "artifacts"
+    source_file = artifacts / "source" / "scripts" / "example.py"
+    source_bytes = b"print('retained source')\n"
+    source_digest = hashlib.sha256(source_bytes).hexdigest()
+    ledger = artifacts / "source-digests.txt"
+    ledger.write_text(
+        f"source revision: {SOURCE}\n"
+        f"{source_digest if ledger_digest is None else ledger_digest}  "
+        "source/scripts/example.py"
+        f"{'  git-blob:' + ledger_git_blob if ledger_git_blob is not None else ''}\n",
+        encoding="utf-8",
+    )
+    if include_source_file:
+        source_file.parent.mkdir(parents=True)
+        source_file.write_bytes(source_bytes)
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    value["artifacts"].append(
+        {
+            "capture_request": "git object readback and SHA-256 ledger",
+            "captured_on": "2026-08-30",
+            "path": "artifacts/source-digests.txt",
+            "sha256": _sha(ledger),
+            "kind": "source-digest",
+            "observer": "git-object-source-readback",
+        }
+    )
+    value["claims"][0]["evidence"].append("artifacts/source-digests.txt")
+    if include_source_file:
+        value["artifacts"].append(
+            {
+                "capture_request": f"git show {SOURCE}:scripts/example.py",
+                "captured_on": "2026-08-30",
+                "path": "artifacts/source/scripts/example.py",
+                "sha256": source_digest,
+                "kind": "source-file",
+                "observer": "retained-git-object-bytes",
+            }
+        )
+        if claim_source_file:
+            value["claims"][0]["evidence"].append(
+                "artifacts/source/scripts/example.py"
+            )
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
+    return json.loads(json.dumps(value["claims"]))
 
 
 def test_a_complete_bundle_and_promotion_receipt_verify(tmp_path: Path) -> None:
@@ -379,6 +440,84 @@ def test_a_complete_bundle_and_promotion_receipt_verify(tmp_path: Path) -> None:
         "promotion": True,
         "status": "verified",
     }
+
+
+def test_a_source_digest_and_its_named_source_file_can_promote(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+    )
+
+    result = _run(manifest, promotion, expected_claims=expected_claims)
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_a_source_digest_without_its_named_source_file_is_refused(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=False,
+        claim_source_file=False,
+    )
+
+    result = _run(manifest, promotion, expected_claims=expected_claims)
+
+    assert result.returncode == 2
+    assert "source-file" in result.stderr
+
+
+def test_a_source_digest_must_match_its_named_source_file(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+        ledger_digest="0" * 64,
+    )
+
+    result = _run(manifest, promotion, expected_claims=expected_claims)
+
+    assert result.returncode == 2
+    assert "does not match its source-file digest" in result.stderr
+
+
+def test_a_source_digest_git_blob_must_match_its_named_source_file(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+        ledger_git_blob="0" * 40,
+    )
+
+    result = _run(manifest, promotion, expected_claims=expected_claims)
+
+    assert result.returncode == 2
+    assert "does not match its source-file Git blob" in result.stderr
+
+
+def test_a_source_digest_claim_must_link_every_named_source_file(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=False,
+    )
+
+    result = _run(manifest, promotion, expected_claims=expected_claims)
+
+    assert result.returncode == 2
+    assert "without all of its source-file evidence" in result.stderr
 
 
 def test_a_bundle_without_a_promotion_receipt_verifies_structurally(tmp_path: Path) -> None:
@@ -464,6 +603,7 @@ def test_self_consistent_claim_relabeling_cannot_promote(
         "redaction_reviewer",
         "runtime",
         "client_version",
+        "session_persistence",
         "applied_compute",
     ],
 )
@@ -483,6 +623,8 @@ def test_promotion_receipt_repeated_fields_must_match_the_manifest(
         promotion_value["redaction_reviewer"] = "self-asserted-reviewer"
     elif field == "runtime":
         promotion_value["runtime"]["name"] = "claude"
+    elif field == "session_persistence":
+        promotion_value["runtime"]["session_persistence"] = "ephemeral"
     elif field == "applied_compute":
         promotion_value["runtime"]["applied_compute"]["model"] = "gpt-fabricated"
     else:
@@ -543,6 +685,41 @@ def test_other_self_consistent_promotion_relabeling_is_refused(
     assert result.returncode == 2
     assert f"promotion {field.replace('_', ' ')}" in result.stderr
     assert "independent expectation" in result.stderr
+
+
+def test_self_consistent_session_persistence_relabeling_is_refused(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
+    attestation = manifest.parent / "artifacts" / "runtime-attestation.json"
+    attestation.unlink()
+    manifest_value["runtime"]["session_persistence"] = "ephemeral"
+    manifest_value["runtime"]["applied_compute"] = None
+    manifest_value["artifacts"] = [manifest_value["artifacts"][1]]
+    claim = {
+        "id": "reviewed-head",
+        "evidence": ["artifacts/forge-readback.json"],
+        "requires_applied_compute": False,
+    }
+    manifest_value["claims"] = [claim]
+    promotion_value["runtime"]["session_persistence"] = "ephemeral"
+    promotion_value["runtime"]["applied_compute"] = None
+    promotion_value["claims"] = ["reviewed-head"]
+    _write_json(manifest, manifest_value)
+    promotion_value["manifest_sha256"] = _sha(manifest)
+    _write_json(promotion, promotion_value)
+
+    result = _run(
+        manifest,
+        promotion,
+        expected_claims=[claim],
+        expected_compute=None,
+    )
+
+    assert result.returncode == 2
+    assert "session persistence does not match the independent expectation" in result.stderr
 
 
 def test_self_consistent_applied_compute_relabeling_is_refused(tmp_path: Path) -> None:
@@ -726,6 +903,33 @@ def test_artifact_measurement_stamps_are_required(
 
     assert result.returncode == 2
     assert message in result.stderr
+
+
+@pytest.mark.parametrize("zone", ["Etc/GMT+12", "Pacific/Kiritimati"])
+@pytest.mark.parametrize(("day_offset", "expected_status"), [(0, 0), (1, 2)])
+def test_capture_date_future_check_uses_utc(
+    tmp_path: Path,
+    zone: str,
+    day_offset: int,
+    expected_status: int,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    captured_on = (
+        datetime.now(timezone.utc).date() + timedelta(days=day_offset)
+    ).isoformat()
+    value = json.loads(manifest.read_text(encoding="utf-8"))
+    for artifact in value["artifacts"]:
+        artifact["captured_on"] = captured_on
+    _write_json(manifest, value)
+    _refresh_promotion_digest(manifest, promotion)
+
+    result = _run(
+        manifest,
+        promotion,
+        env={**os.environ, "TZ": zone},
+    )
+
+    assert result.returncode == expected_status, result.stderr
 
 
 @pytest.mark.parametrize("number", ["NaN", "1e9999"])
@@ -1409,6 +1613,7 @@ def test_the_promoted_codex_writing_lane_bundle_remains_structurally_verifiable(
             "redaction_reviewer": "codex-cockpit-gpt-5-6-sol-max",
             "runtime": "codex",
             "client_version": "codex-cli 0.149.1",
+            "session_persistence": "persistent",
         },
         expected_claims=CODEX_WRITING_EXPECTED_CLAIMS,
         expected_compute=None,
@@ -1434,6 +1639,7 @@ def test_the_promoted_codex_writing_lane_claims_remain_independently_recomputabl
     root = find_repo_root(ENGINE.parent)
     bundle = root / "saved_plans/codex-writing-lane-evidence_2026-08-30"
     manifest = json.loads((bundle / "bundle.json").read_text(encoding="utf-8"))
+    promotion = json.loads((bundle / "promotion.json").read_text(encoding="utf-8"))
     artifacts = bundle / "artifacts"
     descriptor = json.loads((artifacts / "descriptor.json").read_text(encoding="utf-8"))
     launcher = json.loads((artifacts / "launcher-receipt.json").read_text(encoding="utf-8"))
@@ -1462,7 +1668,13 @@ def test_the_promoted_codex_writing_lane_claims_remain_independently_recomputabl
         "reviewed": True,
         "reviewer": "codex-cockpit-gpt-5-6-sol-max",
     }
-    assert manifest["runtime"]["applied_compute"] is None
+    assert manifest["runtime"] == {
+        "applied_compute": None,
+        "client_version": "codex-cli 0.149.1",
+        "name": "codex",
+        "session_persistence": "persistent",
+    }
+    assert promotion["runtime"] == manifest["runtime"]
     assert manifest["claims"] == CODEX_WRITING_EXPECTED_CLAIMS
     assert {
         artifact["path"]: (
@@ -1613,11 +1825,11 @@ def test_the_promoted_codex_writing_lane_claims_remain_independently_recomputabl
     assert "Codex writing lane\ndurable evidence validation" in git_readback
     source_digests = (artifacts / "source-digests.txt").read_text(encoding="utf-8")
     assert source_digests == """source revision: bdfd6ee702a630f0575f0c186f51b3bbbcd1810a
-7787079163e9d678284db5df15311f059a519a61db6301980784864ab02ad9e6  scripts/launch_lane.py
-2ae9af83f182fa726bdc2102d65820242b873aa9d6749f9a450c4b1afd55e4ba  scripts/dev_session.sh
-4ab496661883d8f4ad590a6612a48b31f8cbf770283bb09794096149276634e6  scripts/lib/kitconfig.py
-980cbf5596cea67033a5dd02d53630f2a92c24afd693ba7727d5fc50303ff555  scripts/lib/repo_root.sh
-32d9e7b285a54438975c2aa2d9813adc5d017cef077b6df71564b1ae418a6d92  config/dev-model.yaml
+7787079163e9d678284db5df15311f059a519a61db6301980784864ab02ad9e6  source/scripts/launch_lane.py
+2ae9af83f182fa726bdc2102d65820242b873aa9d6749f9a450c4b1afd55e4ba  source/scripts/dev_session.sh
+4ab496661883d8f4ad590a6612a48b31f8cbf770283bb09794096149276634e6  source/scripts/lib/kitconfig.py
+980cbf5596cea67033a5dd02d53630f2a92c24afd693ba7727d5fc50303ff555  source/scripts/lib/repo_root.sh
+32d9e7b285a54438975c2aa2d9813adc5d017cef077b6df71564b1ae418a6d92  source/config/dev-model.yaml
 """
     retained_source_digests = {
         path: digest
@@ -1625,9 +1837,11 @@ def test_the_promoted_codex_writing_lane_claims_remain_independently_recomputabl
             line.split("  ", 1) for line in source_digests.splitlines()[1:]
         )
     }
-    assert set(retained_source_digests) == set(CODEX_WRITING_SOURCE_PATHS)
+    assert set(retained_source_digests) == {
+        f"source/{path}" for path in CODEX_WRITING_SOURCE_PATHS
+    }
     for path, digest in retained_source_digests.items():
-        assert _sha(artifacts / "source" / path) == digest
+        assert _sha(artifacts / path) == digest
     execution_source_digests = (artifacts / "execution-source-digests.txt").read_text(
         encoding="utf-8"
     )

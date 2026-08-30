@@ -6,14 +6,15 @@
     "codex-writing-lane-exact-head-review-receipt"
   ],
   "manifest": "bundle.json",
-  "manifest_sha256": "78632403361d1bde82e599992562a9289aa6ed1777144d163e60a323b58293e3",
+  "manifest_sha256": "03a763b560b30a6fd2c4dc4340aa6b1b4af880bab67a81008cf447b54a4696fa",
   "redaction_reviewer": "codex-cockpit-gpt-5-6-sol-max",
   "review_repository": "https://github.com/topij/adk-codex-writing-evidence-20260830",
   "reviewed_head": "5c4006d18e65e0443dc7b22f48c099ad07ce1da9",
   "runtime": {
     "applied_compute": null,
     "client_version": "codex-cli 0.149.1",
-    "name": "codex"
+    "name": "codex",
+    "session_persistence": "persistent"
   },
   "schema_version": 1,
   "source_revision": "bdfd6ee702a630f0575f0c186f51b3bbbcd1810a"
