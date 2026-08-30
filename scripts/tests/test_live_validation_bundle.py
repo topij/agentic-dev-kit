@@ -182,7 +182,7 @@ CODEX_WRITING_EXPECTED_CLAIMS = [
             "artifacts/source-digests.txt",
             *CODEX_WRITING_EXECUTION_SOURCE_EVIDENCE,
         ],
-        "id": "codex-writing-lane-ready-private-pr",
+        "id": "codex-writing-lane-open-nondraft-clean-private-pr",
         "requires_applied_compute": False,
     },
     {
@@ -741,6 +741,7 @@ def test_manifest_claim_count_is_bounded_before_claim_validation(tmp_path: Path)
         }
         for index in range(256)
     )
+    manifest_value["claims"][0] = "invalid-before-count-limit"
     _write_json(manifest, manifest_value)
     _refresh_promotion_digest(manifest, promotion)
 
@@ -1477,7 +1478,7 @@ def test_a_file_changed_after_snapshot_before_confirmation_is_refused(
     assert "Traceback" not in result.stderr
 
 
-@pytest.mark.parametrize("inventory_number", [1, 2])
+@pytest.mark.parametrize("inventory_number", [1, 2, 4])
 def test_an_undeclared_artifact_added_after_inventory_is_refused(
     tmp_path: Path,
     inventory_number: int,
@@ -1505,7 +1506,98 @@ def test_an_undeclared_artifact_added_after_inventory_is_refused(
 
     assert (artifacts / "late-undeclared.txt").is_file()
     assert result.returncode == 2
-    assert "artifact inventory differs" in result.stderr
+    assert "artifact directory changed during inventory" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_a_late_undeclared_artifact_during_final_inventory_is_refused(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    artifacts = manifest.parent / "artifacts"
+    hook = tmp_path / "final-inventory-hook"
+    hook.mkdir()
+    (hook / "sitecustomize.py").write_text(
+        SCANDIR_MUTATION_HOOK,
+        encoding="utf-8",
+    )
+
+    result = _run(
+        manifest,
+        promotion,
+        env={
+            **os.environ,
+            "LIVE_EVIDENCE_SCAN_TARGET": str(artifacts),
+            "LIVE_EVIDENCE_SCAN_NUMBER": "5",
+            "LIVE_EVIDENCE_ADD_TARGET": str(artifacts / "late-undeclared.txt"),
+            "PYTHONPATH": str(hook),
+        },
+    )
+
+    assert (artifacts / "late-undeclared.txt").is_file()
+    assert result.returncode == 2
+    assert "changed during inventory" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_an_artifact_changed_during_final_inventory_is_refused(tmp_path: Path) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    artifacts = manifest.parent / "artifacts"
+    mutation_target = artifacts / "forge-readback.json"
+    original = mutation_target.read_bytes()
+    hook = tmp_path / "final-inventory-hook"
+    hook.mkdir()
+    (hook / "sitecustomize.py").write_text(
+        SCANDIR_MUTATION_HOOK,
+        encoding="utf-8",
+    )
+
+    result = _run(
+        manifest,
+        promotion,
+        env={
+            **os.environ,
+            "LIVE_EVIDENCE_SCAN_TARGET": str(artifacts),
+            "LIVE_EVIDENCE_SCAN_NUMBER": "5",
+            "LIVE_EVIDENCE_APPEND_TARGET": str(mutation_target),
+            "PYTHONPATH": str(hook),
+        },
+    )
+
+    assert mutation_target.read_bytes() == original + b" "
+    assert result.returncode == 2
+    assert "changed during verification" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_a_late_bundle_root_entry_during_final_inventory_is_refused(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    bundle_root = manifest.parent
+    mutation_target = bundle_root / "late-root.txt"
+    hook = tmp_path / "final-root-inventory-hook"
+    hook.mkdir()
+    (hook / "sitecustomize.py").write_text(
+        SCANDIR_MUTATION_HOOK,
+        encoding="utf-8",
+    )
+
+    result = _run(
+        manifest,
+        promotion,
+        env={
+            **os.environ,
+            "LIVE_EVIDENCE_SCAN_TARGET": str(bundle_root),
+            "LIVE_EVIDENCE_SCAN_NUMBER": "5",
+            "LIVE_EVIDENCE_ADD_TARGET": str(mutation_target),
+            "PYTHONPATH": str(hook),
+        },
+    )
+
+    assert mutation_target.is_file()
+    assert result.returncode == 2
+    assert "bundle root changed during inventory" in result.stderr
     assert "Traceback" not in result.stderr
 
 
@@ -2937,7 +3029,7 @@ def test_the_promoted_codex_writing_lane_bundle_remains_structurally_verifiable(
         "bundle_id": "codex-writing-lane-2026-08-30",
         "claims": [
             "codex-writing-lane-observed-write-and-state",
-            "codex-writing-lane-ready-private-pr",
+            "codex-writing-lane-open-nondraft-clean-private-pr",
             "codex-writing-lane-exact-head-review-receipt",
         ],
         "promotion": True,

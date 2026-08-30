@@ -376,6 +376,9 @@ def _validate_bundle_root(manifest_path: Path) -> None:
     allowed = {"artifacts", "bundle.json", "promotion.json"}
     seen: set[str] = set()
     try:
+        initial = os.stat(manifest_path.parent, follow_symlinks=False)
+        if not stat.S_ISDIR(initial.st_mode):
+            raise BundleError("bundle root must be a retained directory")
         with os.scandir(manifest_path.parent) as entries:
             for entry in entries:
                 seen.add(entry.name)
@@ -388,8 +391,11 @@ def _validate_bundle_root(manifest_path: Path) -> None:
                         raise BundleError("bundle root artifacts entry must be a directory")
                 elif not entry.is_file(follow_symlinks=False):
                     raise BundleError(f"bundle root entry must be a regular file: {entry.name}")
+        current = os.stat(manifest_path.parent, follow_symlinks=False)
     except OSError as exc:
         raise BundleError(f"bundle root is unreadable: {manifest_path.parent}: {exc}") from exc
+    if _stat_identity(initial) != _stat_identity(current):
+        raise BundleError("bundle root changed during inventory")
     missing = {"artifacts", "bundle.json"} - seen
     if missing:
         raise BundleError(f"bundle root is missing required entries: {sorted(missing)}")
@@ -412,10 +418,15 @@ def _artifact_inventory(
     files: set[str] = set()
     directories = {artifact_root.relative_to(bundle_root).as_posix()}
     pending = [artifact_root]
+    directory_identities: dict[Path, tuple[int, int, int, int, int, int]] = {}
     observed_entries = 0
     while pending:
         current = pending.pop()
         try:
+            initial = os.stat(current, follow_symlinks=False)
+            if not stat.S_ISDIR(initial.st_mode):
+                relative = current.relative_to(bundle_root).as_posix()
+                raise BundleError(f"artifact tree contains a non-directory: {relative}")
             with os.scandir(current) as entries:
                 for entry in entries:
                     observed_entries += 1
@@ -434,9 +445,25 @@ def _artifact_inventory(
                         files.add(relative)
                     else:
                         raise BundleError(f"artifact tree contains a non-regular entry: {relative}")
+            after = os.stat(current, follow_symlinks=False)
         except OSError as exc:
             relative = current.relative_to(bundle_root).as_posix()
             raise BundleError(f"artifact directory is unreadable: {relative}: {exc}") from exc
+        if _stat_identity(initial) != _stat_identity(after):
+            relative = current.relative_to(bundle_root).as_posix()
+            raise BundleError(f"artifact directory changed during inventory: {relative}")
+        directory_identities[current] = _stat_identity(after)
+    for path, expected in directory_identities.items():
+        try:
+            current = os.stat(path, follow_symlinks=False)
+        except OSError as exc:
+            relative = path.relative_to(bundle_root).as_posix()
+            raise BundleError(
+                f"artifact directory changed during inventory: {relative}: {exc}"
+            ) from exc
+        if _stat_identity(current) != expected:
+            relative = path.relative_to(bundle_root).as_posix()
+            raise BundleError(f"artifact directory changed during inventory: {relative}")
     return files, directories
 
 
@@ -1122,6 +1149,8 @@ def _validate_bundle(
         artifact_bytes_by_path=artifact_bytes_by_path,
         compute_claims=compute_claims,
     )
+    _validate_bundle_root(manifest_path)
+    _validate_artifact_inventory(artifact_root, bundle_root, declared_paths)
     _confirm_unchanged(
         manifest_path,
         "bundle manifest",
@@ -1135,8 +1164,6 @@ def _validate_bundle(
             raw,
             limit=MAX_ARTIFACT_BYTES,
         )
-    _validate_bundle_root(manifest_path)
-    _validate_artifact_inventory(artifact_root, bundle_root, declared_paths)
     return manifest, total_bytes, artifact_bytes_by_path
 
 
@@ -1287,6 +1314,12 @@ def validate_promotion(
             raise BundleError(
                 f"promotion {field.replace('_', ' ')} does not match the independent expectation"
             )
+    _validate_bundle_root(manifest_path)
+    _validate_artifact_inventory(
+        manifest_path.parent / "artifacts",
+        manifest_path.parent,
+        set(artifact_bytes_by_path),
+    )
     _confirm_unchanged(
         manifest_path,
         "bundle manifest",
@@ -1306,12 +1339,6 @@ def validate_promotion(
             raw,
             limit=MAX_ARTIFACT_BYTES,
         )
-    _validate_bundle_root(manifest_path)
-    _validate_artifact_inventory(
-        manifest_path.parent / "artifacts",
-        manifest_path.parent,
-        set(artifact_bytes_by_path),
-    )
     return promotion
 
 

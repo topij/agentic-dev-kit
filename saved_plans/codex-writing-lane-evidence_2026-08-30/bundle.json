@@ -194,7 +194,7 @@
         "artifacts/source/scripts/lib/kitconfig.py",
         "artifacts/source/scripts/lib/repo_root.sh"
       ],
-      "id": "codex-writing-lane-ready-private-pr",
+      "id": "codex-writing-lane-open-nondraft-clean-private-pr",
       "requires_applied_compute": false
     },
     {

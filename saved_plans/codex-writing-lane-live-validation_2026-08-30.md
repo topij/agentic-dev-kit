@@ -50,7 +50,7 @@ property of the lane run.
 
 The launcher's digest-bound final output reports that the lane created the repository
 note and descriptor-state probe, committed only the note, pushed `dev/write`, opened a
-ready private pull request, read the pull request and patch back, and stopped without
+non-draft private pull request, read the pull request and patch back, and stopped without
 merging. The cockpit independently matched the reported note, state bytes, remote
 branch, Git object, descriptor state, GitHub repository and pull request. It recorded a
 `fallback:codex` correctness receipt against synthetic head
@@ -91,8 +91,10 @@ The promotion receipt names these recomputable claims:
 - `codex-writing-lane-observed-write-and-state` — the launcher's digest-bound final
   output reports the descriptor-bound worktree note and state probe, and the cockpit's
   retained filesystem and Git read-backs independently match those output bytes;
-- `codex-writing-lane-ready-private-pr` — the lane commit reached the remote and an
-  independently read-back private pull request that was open and ready;
+- `codex-writing-lane-open-nondraft-clean-private-pr` — the lane commit reached the
+  remote and an independently read-back private pull request was open, non-draft, and
+  reported GitHub merge state `CLEAN`; this does not claim the kit's separate
+  review-and-settling gate had passed;
 - `codex-writing-lane-exact-head-review-receipt` — the cockpit's receipt and settled
   poll bind the review evidence to the synthetic head.
 
@@ -126,7 +128,7 @@ UV_CACHE_DIR=/private/tmp/adk-651-uv-cache uv run --python 3.12 \
   --expect-client-version "codex-cli 0.149.1" \
   --expect-session-persistence persistent \
   --expect-claim '{"evidence":["artifacts/descriptor.json","artifacts/launcher-receipt.json","artifacts/final-message.txt","artifacts/filesystem-readback.txt","artifacts/git-readback.txt","artifacts/source-digests.txt","artifacts/execution-source-digests.txt","artifacts/source-proof.json","artifacts/fixture-proof.json","artifacts/fixture/config/dev-model.yaml","artifacts/source/config/dev-model.yaml","artifacts/source/scripts/dev_session.sh","artifacts/source/scripts/launch_lane.py","artifacts/source/scripts/lib/kitconfig.py","artifacts/source/scripts/lib/repo_root.sh"],"id":"codex-writing-lane-observed-write-and-state","requires_applied_compute":false}' \
-  --expect-claim '{"evidence":["artifacts/descriptor.json","artifacts/launcher-receipt.json","artifacts/final-message.txt","artifacts/forge-readback.json","artifacts/git-readback.txt","artifacts/source-digests.txt","artifacts/execution-source-digests.txt","artifacts/source-proof.json","artifacts/fixture-proof.json","artifacts/fixture/config/dev-model.yaml","artifacts/source/config/dev-model.yaml","artifacts/source/scripts/dev_session.sh","artifacts/source/scripts/launch_lane.py","artifacts/source/scripts/lib/kitconfig.py","artifacts/source/scripts/lib/repo_root.sh"],"id":"codex-writing-lane-ready-private-pr","requires_applied_compute":false}' \
+  --expect-claim '{"evidence":["artifacts/descriptor.json","artifacts/launcher-receipt.json","artifacts/final-message.txt","artifacts/forge-readback.json","artifacts/git-readback.txt","artifacts/source-digests.txt","artifacts/execution-source-digests.txt","artifacts/source-proof.json","artifacts/fixture-proof.json","artifacts/fixture/config/dev-model.yaml","artifacts/source/config/dev-model.yaml","artifacts/source/scripts/dev_session.sh","artifacts/source/scripts/launch_lane.py","artifacts/source/scripts/lib/kitconfig.py","artifacts/source/scripts/lib/repo_root.sh"],"id":"codex-writing-lane-open-nondraft-clean-private-pr","requires_applied_compute":false}' \
   --expect-claim '{"evidence":["artifacts/forge-readback.json","artifacts/review-receipt.json"],"id":"codex-writing-lane-exact-head-review-receipt","requires_applied_compute":false}' \
   --json
 ```
@@ -267,16 +269,36 @@ Public-CLI hostiles now change the manifest, an artifact, and the promotion
 receipt after their initial snapshots, and add undeclared bytes after the earlier
 inventory walks. Final bundle-root, artifact-inventory, and byte confirmations refuse
 those mutations. The changed head still requires a fresh complete panel.
+A fresh adversarial lens at `e69b76bc02aa2255372518cd2671cda6c7232672` on
+2026-08-30 altered a declared artifact and added an undeclared artifact as the final
+promotion inventory iterator reached exhaustion; the public CLI returned
+`status: verified` for each hostile. A separately launched correctness lens at the
+same head found that the promoted “ready” claim exceeded the retained forge read-back,
+which establishes only that the private pull request was open, non-draft, and reported
+GitHub merge state `CLEAN`. It also moved the manifest claim-count guard after
+per-claim validation; `make mutation-test` in its isolated scratch checkout at that
+revision on 2026-08-30 reported `2289 passed, 1 deselected, 3 warnings in 382.21s`.
+Directory walks now compare their descriptor identity across and after traversal,
+retained bytes are confirmed after the final inventory, the promoted claim is narrowed
+to the forge properties, and the count-order hostile makes an over-limit entry
+malformed. The changed head still requires a fresh complete panel.
 The documented verifier command above in `/Users/topi/Coding/agentic-dev-kit` at
 `62a8f372d34fbb9fed6d49abd08d8bc7f477ad6d` on 2026-08-30 returned
-`status: verified`, `promotion: true`, and the claim IDs enumerated above.
+`status: verified`, `promotion: true`, and
+`codex-writing-lane-observed-write-and-state`,
+`codex-writing-lane-ready-private-pr`, and
+`codex-writing-lane-exact-head-review-receipt`. The middle historical claim ID was
+later narrowed and renamed by the review response recorded above.
 `UV_CACHE_DIR=/private/tmp/adk-651-uv-cache UV_PYTHON=3.12 make test` in that
 directory at the same revision and date reported `2256 passed, 3 warnings in
 368.47s`.
 An earlier run of that command in `/Users/topi/Coding/agentic-dev-kit`, using the
 verifier at
 `d276f80de1368b46149e26d1f29eb41485c180de` on 2026-08-30, returned
-`status: verified`, `promotion: true`, and the claim IDs enumerated above.
+`status: verified`, `promotion: true`, and
+`codex-writing-lane-observed-write-and-state`,
+`codex-writing-lane-ready-private-pr`, and
+`codex-writing-lane-exact-head-review-receipt`.
 
 The repository suite drives the same public CLI through hostile mutations. It refuses:
 
@@ -299,6 +321,9 @@ The repository suite drives the same public CLI through hostile mutations. It re
   variants, secret markers hidden by JSON escaping, invalid UTF-8, non-finite or
   oversized JSON numbers, non-string persistence values, non-integer schema versions,
   symlink loops, and unreadable artifact bytes without a traceback;
+- a bundle root or artifact directory changed during its inventory, an undeclared
+  artifact added as the final inventory exhausts, or a declared artifact changed
+  before the post-inventory byte confirmation;
 - a promotion receipt whose manifest digest no longer matches.
 - a retained promotion receipt omitted from the invocation, an ancestor-symlinked
   bundle, artifact, or promotion path, unstamped artifact metadata, common passphrase,
@@ -312,7 +337,8 @@ The kit-only structural control re-verifies this tracked bundle and promotion re
 The claim-semantic control independently asserts the complete claim-to-artifact map and
 the load-bearing literal identities and relationships among the client-version capture,
 descriptor, launcher, final-message, destination and retained source-file read-backs,
-private ready pull request, exact-head review receipt, and redaction reviewer. It pins
+private open/non-draft/`CLEAN` pull request, exact-head review receipt, and redaction
+reviewer. It pins
 every retained artifact byte independently of the manifest and keeps the uncorrelated
 runtime attestation outside the promoted claim map.
 

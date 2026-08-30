@@ -107,7 +107,8 @@ historical observation it was and is not silently refreshed.
      review provenance, or binding are absent. A persistent Codex
      writing lane at source revision
      `bdfd6ee702a630f0575f0c186f51b3bbbcd1810a` produced descriptor-scoped worktree and
-     state output, a ready private pull request, and an exact-head cockpit review
+     state output, an open non-draft private pull request with GitHub `CLEAN` state,
+     and an exact-head cockpit review
      receipt; the promotion retains the exact upstream and fixture source bytes those
      claims depend on and is bound to synthetic fixture revision
      `83d3b623305a691dd874df44ca92270daa62ade9`, repository, and head

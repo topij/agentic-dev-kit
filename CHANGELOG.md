@@ -65,10 +65,11 @@ starts.
   markers, unsupported numbers, symlink traversal, and undeclared, unreadable, or
   non-regular bundle entries are invalid. Artifact records must carry their exact
   capture request and UTC date. Digest, scanning, parsing, source-proof, and promotion
-  checks use a stable descriptor-read snapshot and refuse a file or inventory changed
-  during verification. Every `runtime-attestation` has the documented closed shape and
-  runtime-session observer even when a promoted claim does not depend on applied
-  compute. A `source-digest` ledger used by a promoted claim must
+  checks use stable descriptor-read and directory-inventory snapshots, then reconfirm
+  every retained byte after the final inventory; a file, bundle root, or artifact
+  directory changed during verification is refused. Every `runtime-attestation` has
+  the documented closed shape and runtime-session observer even when a promoted claim
+  does not depend on applied compute. A `source-digest` ledger used by a promoted claim must
   begin with the manifest's source revision and be accompanied by the exact
   `source-file` bytes it names plus `source-git-proof` commit/tree metadata that
   recomputes each mandatory Git blob's membership in that revision. Every such ledger

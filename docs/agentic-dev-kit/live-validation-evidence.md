@@ -42,6 +42,13 @@ must fit the verifier's declared digit bound; parser ambiguity is not evidence. 
 must supply `--promotion` and every independent expected binding. The byte ceiling
 covers the manifest, receipt, and artifacts, and the artifact- and claim-count
 ceilings apply before per-entry validation or artifact I/O.
+Directory inventories are stable snapshots: the verifier refuses a bundle root or
+artifact directory whose descriptor identity changes during its walk, then confirms
+the manifest, promotion receipt, and every declared artifact against the retained
+bytes after the final inventory. A concurrent writer is therefore not a permitted
+evidence carrier: the verifier does not lock the filesystem, so run it against a
+private destination with no writer and treat any later change as invalidating the
+verification.
 `bundle.json` has this closed shape:
 
 ```json
