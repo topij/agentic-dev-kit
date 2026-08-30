@@ -107,7 +107,7 @@ UV_CACHE_DIR=/private/tmp/session-start-uv-cache uv run \
 ```
 
 That command in `/Users/topi/Coding/agentic-dev-kit`, using the verifier at
-`ab70fe7628d61bf2993128acee52642d00a31d20` on 2026-08-30, returned
+`ba0755dc50f47f6967a7f8bd4fd89e12f8df20de` on 2026-08-30, returned
 `status: verified`, `promotion: true`, and the claim IDs enumerated above. The first
 review pass had shown that comparing only the manifest and receipt let a
 self-consistently relabeled pair pass; the independent expectation arguments above are
