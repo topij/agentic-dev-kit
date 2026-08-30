@@ -96,7 +96,7 @@ The public CLI owns the promotion check. The reviewer fixes the expected values 
 the review target and authoritative observers before reading the bundle's own labels:
 
 ```text
-UV_CACHE_DIR=/private/tmp/session-start-uv-cache uv run \
+UV_CACHE_DIR=/private/tmp/adk-651-uv-cache uv run --python 3.12 \
   scripts/verify_live_validation_bundle.py \
   saved_plans/codex-writing-lane-evidence_2026-08-30/bundle.json \
   --promotion \
@@ -114,9 +114,10 @@ UV_CACHE_DIR=/private/tmp/session-start-uv-cache uv run \
   --json
 ```
 
-The independent reviewer runs that command against the committed verifier and records
-its revision, date, and actual result before promotion. The first review pass had shown
-that comparing only the manifest and receipt let a
+That command in `/Users/topi/Coding/agentic-dev-kit`, using the verifier at
+`620b588b6a91d6cadceec04c51802edc6c4404e1` on 2026-08-30, returned
+`status: verified`, `promotion: true`, and the claim IDs enumerated above. The first
+review pass had shown that comparing only the manifest and receipt let a
 self-consistently relabeled pair pass; a later hostile pass also showed that preserving
 a claim ID while thinning its artifact links remained self-consistent. The independent
 binding and complete claim-object arguments above are the resulting trust root.
