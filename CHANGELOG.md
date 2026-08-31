@@ -49,10 +49,13 @@ starts.
   carries no draft bit, so every successful creation requires an authoritative
   `isDraft` check. Ready acknowledgements also require repository and host identity to
   match the current checkout before a repository-local watcher runs. Creation, ready,
-  and draft acknowledgements take the same non-mutating live-state route without
-  reconstructing shell syntax. Missing output or an indirect action receives a
-  separate fail-loud warning with no mutation or watch authority; read-only commands
-  and unrelated pull-request URLs never receive the full lifecycle instruction.**
+  and draft acknowledgements receive the full lifecycle instruction only when a
+  literal `gh pr ready` action corroborates them. Creation URLs, missing output,
+  indirect actions, read-only lookalikes, and response-only state acknowledgements
+  receive a separate fail-loud warning with no mutation or watch authority until
+  authoritative forge state independently confirms the event. Constructed shell argv
+  is not reconstructed; response-only URLs remain silent because they are not specific
+  enough to identify a lifecycle event.**
   **Refresh
   `scripts/hooks/pr_followup_hook.py` and `init.sh`; in Claude's `PostToolUse`
   registration, set the command hook's `if` field to `Bash(*)` so the shared hook —

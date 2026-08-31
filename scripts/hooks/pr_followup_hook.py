@@ -5,8 +5,9 @@ Registered on BOTH runtimes, and told which one it is running under via
 `--runtime claude|codex` (#301):
 
   - `.claude/settings.json` — `hooks.PostToolUse`, matcher `Bash`, plus an
-    `if: "Bash(*)"` tool-level filter. Lifecycle candidates may be wrapped or
-    interpreter-fed, so the shared hook applies the response-backed policy.
+    `if: "Bash(*)"` tool-level filter. The broad binding lets the shared hook
+    warn on response-only state acknowledgements; it does not reconstruct
+    constructed executables or argv from shell text.
   - `.codex/hooks.json` — `hooks.PostToolUse`, matcher `^Bash$`. Codex's matcher
     filters the TOOL NAME only, with no equivalent of Claude's `if`, so this
     script is invoked on every Bash call there and does all the narrowing itself.
@@ -51,16 +52,17 @@ import re
 import sys
 from pathlib import Path
 
-# A literal ``gh pr`` prefix and response evidence corroborate a lifecycle
-# event; the action token may remain indirect. The action-specific regex is only
-# needed to distinguish a creation URL from read-only URL output. Both match
-# anywhere, so anchoring to the start does not miss ``cd x && <command>``.
+# A literal ``gh pr ready`` action plus GitHub CLI's state acknowledgement is
+# the only evidence strong enough for the full lifecycle instruction. Creation
+# URLs, indirect actions, and acknowledgement-shaped read-only output take the
+# non-mutating warning instead. The regex matches anywhere, so anchoring to the
+# start does not miss ``cd x && <command>``.
 #
-# Authoritative-looking `tool_response` evidence fires without reconstructing
-# shell syntax. Command text only selects the conservative fallback when output
-# is absent or unusable. Both runtimes supply PostToolUse response data, and
-# every Bash command reaches this shared policy so a runtime adapter cannot
-# narrow away valid wrappers.
+# Both runtimes supply PostToolUse response data, and every Bash command reaches
+# this shared policy. Constructed executables and argv cannot be recovered from
+# command text without rebuilding a shell parser; a response-only state
+# acknowledgement still gets the warning, while a response-only URL stays
+# silent because it is ordinary read-only output too often to be lifecycle proof.
 # Repository-qualified inherited options are candidates too, whether they sit
 # before or after ``pr`` and whether ``-R`` is joined to its value. This regex
 # does not interpret their values or select a lifecycle; authoritative forge
@@ -330,19 +332,19 @@ def _without_existing_pr_diagnostics(response: str) -> str:
 
 
 def _lifecycle_instruction(engines_dir: str) -> str:
-    """Instruct a repository-bound live query for every lifecycle event.
+    """Instruct a repository-bound live query for a corroborated state change.
 
-    Creation URLs carry no draft bit. Ready acknowledgements carry an owner/repo
-    name, but turning that text into a repository-local numeric ``pr_watch`` call
-    would discard identity. Shell wrappers, ``GH_REPO``, ``-R`` and PR URLs can
-    all make the acknowledged pull request belong to another repository. The
-    hook therefore requires a literal ``gh pr`` prefix plus response evidence
-    before emitting this instruction. Response text alone grants no mutation.
+    Ready acknowledgements carry an owner/repo name, but turning that text into
+    a repository-local numeric ``pr_watch`` call would discard identity. Shell
+    wrappers, ``GH_REPO``, ``-R`` and PR URLs can all make the acknowledged pull
+    request belong to another repository. The hook therefore requires a literal
+    ``gh pr ready`` action plus response evidence before emitting this
+    instruction. Response text alone grants no mutation.
     """
     # Response text never selects a mutating lifecycle route from that evidence.
     return (
-        "A Bash result produced pull-request lifecycle evidence or ambiguous "
-        "lifecycle evidence from a command candidate. If the just-completed "
+        "A Bash result corroborated a pull-request review-state change. If the "
+        "just-completed "
         "operation only mentioned or "
         "searched for a lifecycle command and did not actually create a pull "
         "request or change its review state, stop immediately without querying "
@@ -396,23 +398,25 @@ def build_reminder(
 def build_unresolved_warning(runtime: str = _DEFAULT_RUNTIME) -> str:
     """Fail loud without granting lifecycle mutation authority.
 
-    Missing output and an indirect action cannot be distinguished safely from a
-    read-only command or a command that only mentions ``gh pr``. The warning
-    therefore surfaces the gap while forbidding the full lifecycle route until
-    the session establishes that a lifecycle event actually occurred.
+    Creation URLs, missing output, indirect actions, and acknowledgement-shaped
+    read-only output do not prove one specific lifecycle action. The warning
+    surfaces the gap while forbidding the full route until authoritative forge
+    state establishes that an event actually occurred.
     """
     engines_dir = _load_review_config(runtime)[2]
     return (
-        "A `gh pr` command produced no corroborated lifecycle event. Stop before "
-        "changing draft state or starting a watch loop; this warning grants no "
-        "mutation authority. If the operation was read-only or only mentioned the "
-        "command, no follow-through is owed. If it actually created a pull request "
-        "or changed ready/draft state through indirection or redirected output, the "
-        "PR follow-through obligation remains: resolve the exact pull request from "
-        "authoritative forge state, confirm that its repository and host match the "
-        "current checkout, inspect `gh pr view <PR#> --json isDraft`, and then invoke "
+        "A command or response produced unresolved pull-request lifecycle evidence. "
+        "This warning grants no mutation authority from that text alone, including "
+        "no draft-state change or watch loop. If the operation was read-only or only "
+        "mentioned the command, "
+        "no follow-through is owed. If it actually created a pull request or changed "
+        "ready/draft state through indirection or redirected output, first establish "
+        "that event from authoritative forge state: resolve the exact pull request, "
+        "confirm that its repository and host match the current checkout, and inspect "
+        "`gh pr view <PR#> --json isDraft`. Only after that independent confirmation "
+        "does the PR follow-through obligation apply; invoke "
         f"`uv run {engines_dir}/pr_watch.py <PR#> --json` under the shared `pr-watch` "
-        "policy. Do not infer the event or a state transition from shell text."
+        "policy. Do not infer an event or state transition from shell or response text."
     )
 
 
@@ -501,10 +505,9 @@ def _response_text(data: dict) -> str | None:
 def should_fire(command: object, response: str | None) -> bool:
     """Whether this Bash result requires lifecycle follow-through context.
 
-    A ``gh pr`` prefix plus a ready/draft acknowledgement is corroboration. A
-    creation URL additionally needs a literal create/new action so read-only URL
-    output cannot receive mutation instructions. Indeterminate results are
-    handled separately by :func:`should_warn_unresolved`.
+    Only a literal ``gh pr ready`` action plus a ready/draft acknowledgement is
+    corroboration. Creation URLs and indirect/read-only lookalikes are handled
+    separately by :func:`should_warn_unresolved`.
     """
     if (
         response is None
@@ -512,24 +515,23 @@ def should_fire(command: object, response: str | None) -> bool:
         or not _GH_PR_PREFIX.search(command)
     ):
         return False
-    if _READY_ACK.search(response) or _DRAFT_ACK.search(response):
-        return True
-    return bool(
-        _TRIGGER.search(command)
-        and _PR_URL.search(_without_existing_pr_diagnostics(response))
+    actions = {match.group(1) for match in _TRIGGER.finditer(command)}
+    return "ready" in actions and bool(
+        _READY_ACK.search(response) or _DRAFT_ACK.search(response)
     )
 
 
 def should_warn_unresolved(command: object, response: str | None) -> bool:
     """Whether an indeterminate ``gh pr`` result needs a non-mutating warning."""
+    if should_fire(command, response):
+        return False
+    if response is not None and (_READY_ACK.search(response) or _DRAFT_ACK.search(response)):
+        return True
     if not isinstance(command, str) or not _GH_PR_PREFIX.search(command):
         return False
     if response is None:
         return True
-    return bool(
-        not _TRIGGER.search(command)
-        and _PR_URL.search(_without_existing_pr_diagnostics(response))
-    )
+    return bool(_PR_URL.search(_without_existing_pr_diagnostics(response)))
 
 
 def main() -> int:

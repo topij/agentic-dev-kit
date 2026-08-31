@@ -1,8 +1,9 @@
 """Tests for scripts/hooks/pr_followup_hook.py — the PostToolUse PR follow-through nag.
 
-Covers the contract the hook must hold regardless of config state: it only fires on
-`gh pr create` / `gh pr ready`, never in a cron/CI context (`JOB_NAME` set), and it
-always exits 0 — a malformed stdin payload must never fail the hosting session.
+Covers the contract the hook must hold regardless of config state: only a literal
+`gh pr ready` plus its acknowledgement gets the full lifecycle reminder; unresolved
+evidence gets a non-mutating warning. It never emits in a cron/CI context (`JOB_NAME`
+set), and always exits 0 — malformed stdin must never fail the hosting session.
 """
 
 from __future__ import annotations
@@ -73,18 +74,18 @@ def _no_job_name(monkeypatch):
     monkeypatch.delenv("JOB_NAME", raising=False)
 
 
-def test_successful_draft_create_instruction_orders_live_state_before_mutation(
+def test_direct_draft_ack_instruction_orders_live_state_before_mutation(
     monkeypatch, capsys
 ):
     hook = _load_hook()
-    command = "gh pr create --draft --title x"
-    response = "https://github.com/owner/repo/pull/42\n"
-    exit_code, out = _run(hook, monkeypatch, capsys, _payload_with(command, stdout=response))
+    command = "gh pr ready --undo 42"
+    response = 'Pull request owner/repo#42 is converted to "draft"\n'
+    exit_code, out = _run(hook, monkeypatch, capsys, _payload_with(command, stderr=response))
     assert exit_code == 0
     body = json.loads(out)
     assert body["hookSpecificOutput"]["hookEventName"] == "PostToolUse"
     context = body["hookSpecificOutput"]["additionalContext"]
-    assert "ambiguous lifecycle evidence" in context
+    assert "corroborated a pull-request review-state change" in context
     assert "current workflow state" in context
     assert "--assert-draft" in context
     mention_stop = context.index("stop immediately without querying the forge")
@@ -107,16 +108,16 @@ def test_successful_draft_create_instruction_orders_live_state_before_mutation(
     )
 
 
-def test_successful_ready_create_instruction_orders_live_state_before_watch(
+def test_direct_ready_ack_instruction_orders_live_state_before_watch(
     monkeypatch, capsys
 ):
     hook = _load_hook()
-    command = "gh pr create --fill"
-    response = "https://github.com/owner/repo/pull/42\n"
-    exit_code, out = _run(hook, monkeypatch, capsys, _payload_with(command, stdout=response))
+    command = "gh pr ready 42"
+    response = 'Pull request owner/repo#42 is marked as "ready for review"\n'
+    exit_code, out = _run(hook, monkeypatch, capsys, _payload_with(command, stderr=response))
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "ambiguous lifecycle evidence" in context
+    assert "corroborated a pull-request review-state change" in context
     assert context.index("--assert-ready") < context.index("watch-and-fix loop")
 
 
@@ -129,25 +130,27 @@ def test_triggers_on_gh_pr_ready(monkeypatch, capsys):
     body = json.loads(out)
     assert body["hookSpecificOutput"]["hookEventName"] == "PostToolUse"
     context = body["hookSpecificOutput"]["additionalContext"]
-    assert "ambiguous lifecycle evidence" in context
+    assert "corroborated a pull-request review-state change" in context
     assert "match the current checkout's authoritative forge identity" in context
 
 
 @pytest.mark.parametrize(
-    "command,stderr",
+    "command,stderr,full_lifecycle",
     (
         (
             "gh pr ready --undo 42",
             'Pull request owner/repo#42 is converted to "draft"\n',
+            True,
         ),
         (
             'action=ready; gh pr "$action" --undo 42',
             'Pull request owner/repo#42 is already "in draft"\n',
+            False,
         ),
     ),
 )
-def test_draft_acknowledgement_requires_live_state_without_parsing_shell_action(
-    monkeypatch, capsys, command, stderr
+def test_draft_acknowledgement_requires_action_corroboration(
+    monkeypatch, capsys, command, stderr, full_lifecycle
 ):
     hook = _load_hook()
 
@@ -156,7 +159,8 @@ def test_draft_acknowledgement_requires_live_state_without_parsing_shell_action(
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
     assert "inspect `gh pr view <PR#> --json isDraft`" in context
-    assert "current workflow state" in context
+    assert ("MANDATORY" in context) is full_lifecycle
+    assert ("grants no mutation authority" in context) is (not full_lifecycle)
 
 
 def test_compound_create_and_ready_acknowledgement_still_requires_live_state(
@@ -176,16 +180,15 @@ def test_compound_create_and_ready_acknowledgement_still_requires_live_state(
     )
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "ambiguous lifecycle evidence" in context
+    assert "corroborated a pull-request review-state change" in context
 
 
 def test_compound_shell_text_is_never_used_for_a_mutating_lifecycle():
     hook = _load_hook()
     command = "gh pr create --draft --fill && echo gh pr ready"
     response = "https://github.com/owner/repo/pull/42\n"
-    assert hook.should_fire(command, response) is True
-    context = hook.build_reminder()
-    assert "ready for review or marked ready" not in context
+    assert hook.should_fire(command, response) is False
+    assert hook.should_warn_unresolved(command, response) is True
 
 
 @pytest.mark.parametrize(
@@ -199,8 +202,8 @@ def test_compound_shell_text_is_never_used_for_a_mutating_lifecycle():
 def test_creation_output_never_selects_lifecycle_from_argument_text(command):
     hook = _load_hook()
     response = "https://github.com/owner/repo/pull/42\n"
-    assert hook.should_fire(command, response) is True
-    assert "ready for review or marked ready" not in hook.build_reminder()
+    assert hook.should_fire(command, response) is False
+    assert hook.should_warn_unresolved(command, response) is True
 
 
 @pytest.mark.parametrize(
@@ -226,9 +229,10 @@ def test_uncertain_shell_forms_take_the_nonmutating_live_state_route(monkeypatch
     )
 
     assert exit_code == 0
-    assert hook.should_fire(command, response) is True
+    assert hook.should_fire(command, response) is False
+    assert hook.should_warn_unresolved(command, response) is True
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "ambiguous lifecycle evidence" in context
+    assert "grants no mutation authority" in context
     assert "A draft pull request was just opened" not in context
 
 
@@ -290,8 +294,8 @@ def test_supported_successful_creation_syntax_uses_live_state(monkeypatch, capsy
 
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "ambiguous lifecycle evidence" in context
-    assert "current workflow state" in context
+    assert "grants no mutation authority" in context
+    assert "MANDATORY" not in context
 
 
 @pytest.mark.parametrize(
@@ -318,9 +322,11 @@ def test_repository_qualified_commands_require_repository_bound_live_state(
     )
 
     assert exit_code == 0
-    assert hook.should_fire(command, response) is True
+    assert hook.should_fire(command, response) is False
+    assert hook.should_warn_unresolved(command, response) is True
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "match the current checkout's authoritative forge identity" in context
+    assert "repository and host match the current checkout" in context
+    assert "MANDATORY" not in context
 
 
 @pytest.mark.parametrize(
@@ -353,11 +359,12 @@ def test_repository_scoped_candidates_never_select_a_numeric_lifecycle(
     )
 
     assert exit_code == 0
-    assert hook.should_fire(command, response) is True
+    is_creation = "create" in command
+    assert hook.should_fire(command, response) is (not is_creation)
+    assert hook.should_warn_unresolved(command, response) is is_creation
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "ready for review or marked ready" not in context
-    assert "match the current checkout's authoritative forge identity" in context
-    assert "does not match, stop without changing or watching any pull request" in context
+    assert "repository and host match the current checkout" in context
+    assert ("MANDATORY" in context) is (not is_creation)
 
 
 def test_silent_candidate_with_empty_response_takes_safe_live_state_route(
@@ -424,8 +431,8 @@ def test_direct_short_web_cluster_never_selects_a_mutating_lifecycle():
     command = "gh pr create -dw"
     response = "https://github.com/owner/repo/pull/42\n"
 
-    assert hook.should_fire(command, response) is True
-    assert "ready for review or marked ready" not in hook.build_reminder()
+    assert hook.should_fire(command, response) is False
+    assert hook.should_warn_unresolved(command, response) is True
 
 
 def test_output_free_gh_pr_view_gets_only_the_nonmutating_warning(monkeypatch, capsys):
@@ -550,8 +557,7 @@ def test_reminder_names_configured_bots_on_the_panel_branch_too(monkeypatch):
 
 
 def test_reminder_points_at_the_panel_not_the_degraded_one_lens_mode(monkeypatch):
-    """This hook fires on every `gh pr create`/`ready`, so it is the most-read
-    statement of the fallback policy in the kit.
+    """The full lifecycle route is a high-impact fallback-policy surface.
 
     Pointing it at `fallback_commands` — a single command in the author's own
     context — taught the wrong habit every time it fired, against
@@ -1109,7 +1115,7 @@ def test_load_review_config_threads_the_runtime_into_lens_compute_too(monkeypatc
 
 
 # ── #302: specific response evidence or a conservative command fallback ─────
-# Every shape below was observed live, firing a MANDATORY watch-loop mandate
+# Every shape below was observed live, firing lifecycle output
 # with zero open PRs. Two are self-referential: one is the commit that documented
 # the bug, the other is a review lens that had never heard of it.
 
@@ -1153,7 +1159,7 @@ def test_a_command_that_merely_mentions_the_phrase_stays_silent(
     assert out == "", f"spurious mandate for a command that only mentions it: {command}"
 
 
-def test_a_real_pr_create_still_fires_on_the_url_it_printed(monkeypatch, capsys):
+def test_a_creation_url_gets_only_the_nonmutating_warning(monkeypatch, capsys):
     hook = _load_hook()
     exit_code, out = _run(
         hook,
@@ -1166,7 +1172,28 @@ def test_a_real_pr_create_still_fires_on_the_url_it_printed(monkeypatch, capsys)
     )
 
     assert exit_code == 0
-    assert "MANDATORY" in json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "grants no mutation authority" in context
+    assert "MANDATORY" not in context
+
+
+def test_dry_run_body_url_never_gets_the_full_lifecycle(monkeypatch, capsys):
+    hook = _load_hook()
+    command = "gh pr create --dry-run --title x --body URL"
+    output = (
+        "Would have created a Pull Request with:\n"
+        "body:\n"
+        "https://github.com/owner/repo/pull/9\n"
+    )
+
+    exit_code, out = _run(hook, monkeypatch, capsys, _payload_with(command, stdout=output))
+
+    assert exit_code == 0
+    assert hook.should_fire(command, output) is False
+    assert hook.should_warn_unresolved(command, output) is True
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "grants no mutation authority" in context
+    assert "MANDATORY" not in context
 
 
 @pytest.mark.parametrize(
@@ -1222,8 +1249,8 @@ def test_a_response_that_cannot_be_serialised_is_treated_as_unreadable(monkeypat
     assert hook._response_text({"tool_response": {"k": {1, 2}}}) is None
 
 
-def test_response_evidence_fires_without_shell_action_reconstruction(monkeypatch, capsys):
-    """Specific state acknowledgements do not need shell-action reconstruction."""
+def test_response_evidence_warns_without_shell_action_reconstruction(monkeypatch, capsys):
+    """Specific state acknowledgements warn without reconstructing shell actions."""
     hook = _load_hook()
     url = "https://github.com/topij/agentic-dev-kit/pull/306"
     ack = 'Pull request topij/agentic-dev-kit#306 is marked as "ready for review"'
@@ -1231,9 +1258,43 @@ def test_response_evidence_fires_without_shell_action_reconstruction(monkeypatch
     indirect_create = 'action=create; gh pr "$action" --fill'
     assert hook.should_fire(indirect_create, url) is False
     assert hook.should_warn_unresolved(indirect_create, url) is True
-    assert hook.should_fire('action=ready; gh pr "$action" 306', ack) is True
+    indirect_ready = 'action=ready; gh pr "$action" 306'
+    assert hook.should_fire(indirect_ready, ack) is False
+    assert hook.should_warn_unresolved(indirect_ready, ack) is True
     assert hook.should_fire(None, "https://github.com/x/y/pull/1") is False
     assert hook.should_fire("printf 'ready output'", ack) is False
+    assert hook.should_warn_unresolved("printf 'ready output'", ack) is True
+
+
+def test_read_only_ack_output_never_gets_lifecycle_mutation_context(monkeypatch, capsys):
+    hook = _load_hook()
+    command = "gh pr view 306 --json body --jq .body"
+    ack = 'Pull request owner/repo#306 is marked as "ready for review"\n'
+
+    exit_code, out = _run(hook, monkeypatch, capsys, _payload_with(command, stdout=ack))
+
+    assert exit_code == 0
+    assert hook.should_fire(command, ack) is False
+    assert hook.should_warn_unresolved(command, ack) is True
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "grants no mutation authority" in context
+    assert "MANDATORY" not in context
+    assert "--assert-ready" not in context
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        'tool=gh; "$tool" pr ready 42',
+        "python3 -c \"import subprocess; subprocess.run(['gh','pr','ready','42'])\"",
+    ),
+)
+def test_constructed_ready_invocation_gets_response_only_warning(command):
+    hook = _load_hook()
+    ack = 'Pull request owner/repo#42 is marked as "ready for review"\n'
+
+    assert hook.should_fire(command, ack) is False
+    assert hook.should_warn_unresolved(command, ack) is True
 
 
 def test_read_only_url_output_never_gets_lifecycle_mutation_context(monkeypatch, capsys):
@@ -1271,16 +1332,19 @@ def test_indirect_creation_never_fails_silent_or_receives_mutation_authority(
     assert "MANDATORY" not in context
 
 
-def test_one_command_doing_both_fires_on_either_signal_alone(monkeypatch, capsys):
+def test_one_command_doing_both_needs_the_ready_ack_for_the_full_route(
+    monkeypatch, capsys
+):
     """`gh pr create --draft && gh pr ready` is one command with two actions.
 
-    ANY, not ALL: a runtime that drops stderr carries only the URL, and
-    requiring both would go silent on a PR that was genuinely just opened.
+    The URL alone cannot distinguish creation from dry-run or read-only content.
     """
     hook = _load_hook()
     both = "gh pr create --draft --fill && gh pr ready"
 
-    assert hook.should_fire(both, "https://github.com/topij/agentic-dev-kit/pull/306") is True
+    url = "https://github.com/topij/agentic-dev-kit/pull/306"
+    assert hook.should_fire(both, url) is False
+    assert hook.should_warn_unresolved(both, url) is True
     assert hook.should_fire(both, 'Pull request x#1 is marked as "ready for review"') is True
     assert hook.should_fire(both, "nothing relevant here") is False
 
@@ -1309,14 +1373,20 @@ def test_a_pr_url_buried_in_other_output_is_not_a_pr_being_opened(monkeypatch, c
     )
     # a URL mentioned mid-sentence is not one either
     assert hook.should_fire("gh pr create --fill", "see https://x/pull/1 for details") is False
-    # but the real thing, alone on its line, still fires — with or without noise around it
-    assert hook.should_fire("gh pr create --fill", "https://github.com/o/r/pull/306\n") is True
+    # A standalone URL is preserved as unresolved evidence, not lifecycle proof.
+    url = "https://github.com/o/r/pull/306\n"
+    assert hook.should_fire("gh pr create --fill", url) is False
+    assert hook.should_warn_unresolved("gh pr create --fill", url) is True
     assert (
         hook.should_fire(
             "gh pr create --fill",
             "Warning: 3 uncommitted changes\nhttps://github.com/o/r/pull/306\n",
         )
-        is True
+        is False
+    )
+    assert hook.should_warn_unresolved(
+        "gh pr create --fill",
+        "Warning: 3 uncommitted changes\nhttps://github.com/o/r/pull/306\n",
     )
 
 
@@ -1326,7 +1396,7 @@ def test_a_pr_url_buried_in_other_output_is_not_a_pr_being_opened(monkeypatch, c
 # anything else with `json.dumps`, which escapes newlines, so the line-anchored
 # URL match could never fire on a serialised payload: a genuine `gh pr create`
 # under an unrecognised shape went SILENT. Every shape below carries the same
-# real PR URL and every one must fire.
+# PR URL and every one must produce the non-mutating warning.
 
 _URL = "https://github.com/topij/agentic-dev-kit/pull/306"
 
@@ -1343,7 +1413,7 @@ _SHAPES = [
 
 
 @pytest.mark.parametrize("response", _SHAPES)
-def test_a_real_pr_create_fires_whatever_shape_the_runtime_reports_it_in(
+def test_a_creation_url_warns_whatever_shape_the_runtime_reports_it_in(
     monkeypatch, capsys, response
 ):
     hook = _load_hook()
@@ -1354,7 +1424,9 @@ def test_a_real_pr_create_fires_whatever_shape_the_runtime_reports_it_in(
     exit_code, out = _run(hook, monkeypatch, capsys, payload)
 
     assert exit_code == 0
-    assert out != "", "a real PR was opened and the reminder was silently dropped"
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "grants no mutation authority" in context
+    assert "MANDATORY" not in context
     # …and it fired because the URL was FOUND, not because the payload was
     # unreadable and fail-loud caught it. A round-2 lens showed this test passed
     # either way: cutting the depth bound to 1, and deleting list handling
