@@ -1772,6 +1772,181 @@ def test_parallel_adapter_policy_contradictions_are_rejected() -> None:
                 _assert_parallel_adapter_is_translation_only(hostile)
 
 
+def _assert_ready_draft_policy(policy: str) -> None:
+    flattened = " ".join(policy.split())
+    assert "Open pull requests **ready for review by default**" in flattened
+    assert (
+        "Ready status invites review; it does not grant merge authority" in flattened
+    )
+    assert "material unfinished-work window" in flattened
+    assert (
+        "If the branch can be completed and validated locally first, finish it and "
+        "open ready" in flattened
+    )
+    assert (
+        "Do not use draft merely to signal risk, broad scope, human review, or "
+        "operator-held merge authority" in flattened
+    )
+    assert "create with `--draft`, run `--assert-draft`" in flattened
+    assert "`gh pr ready` and `--assert-ready`" in flattened
+    assert "only when the same run can perform the ready transition" in flattened
+
+
+@pytest.mark.kit_repo_only(
+    "AGENTS.md",
+    "README.md",
+    "config/dev-model.yaml",
+    "docs/AGENTS-sections.md",
+    "docs/CLAUDE-sections.md",
+    "docs/autonomous-session-playbook.md",
+    "docs/templates/AGENTS.md.tmpl",
+    "docs/templates/CLAUDE.md.tmpl",
+    "docs/agentic-dev-kit/workflows/adopt.md",
+    "docs/agentic-dev-kit/workflows/parallel.md",
+    "docs/agentic-dev-kit/workflows/post-merge-systemize.md",
+    "docs/agentic-dev-kit/workflows/pr-watch.md",
+    "docs/agentic-dev-kit/workflows/triage-friction-log.md",
+    "docs/agentic-dev-kit/workflows/upgrade.md",
+    "docs/agentic-dev-kit/workflows/wrap-up.md",
+    "init.sh",
+    "scripts/dev_session.sh",
+)
+def test_pull_request_visibility_is_ready_by_default_with_a_bounded_draft_exception(
+) -> None:
+    workflow_root = REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows"
+    policy = (workflow_root / "pr-watch.md").read_text(encoding="utf-8")
+    _assert_ready_draft_policy(policy)
+
+    mutations = (
+        policy.replace("ready for review by default", "draft by default", 1),
+        policy.replace(
+            "does not grant merge authority",
+            "grants merge authority",
+            1,
+        ),
+        policy.replace(
+            "only when the same run can perform the ready\ntransition",
+            "even when no run can perform the ready transition",
+            1,
+        ),
+    )
+    for mutated in mutations:
+        assert mutated != policy
+        with pytest.raises(AssertionError):
+            _assert_ready_draft_policy(mutated)
+
+    playbook = (
+        REPO_ROOT / "docs" / "autonomous-session-playbook.md"
+    ).read_text(encoding="utf-8")
+    lifecycle = playbook.split("### Validate → open ready", 1)[1].split(
+        "### Watch-and-fix loop", 1
+    )[0]
+    assert "open the completed pull request **ready for review**" in lifecycle
+    assert "`gh pr create`\n  without `--draft`" in lifecycle
+    assert "bounded draft exception" in lifecycle
+    assert "required forge-hosted validation" in lifecycle
+
+    adopter_workflows = {
+        name: (workflow_root / f"{name}.md").read_text(encoding="utf-8")
+        for name in ("adopt", "upgrade")
+    }
+    for workflow in adopter_workflows.values():
+        assert "**ready-for-review PR**" in workflow
+        assert (
+            "material unfinished-work exception in `pr-watch` does not apply"
+            in workflow
+        )
+        assert "open a **draft PR**" not in workflow
+
+    shared_workflows = {
+        name: (workflow_root / f"{name}.md").read_text(encoding="utf-8")
+        for name in ("parallel", "wrap-up")
+    }
+    assert "open ready by default → watch-and-fix" in shared_workflows["parallel"]
+    assert "open the completed work **ready for review**" in shared_workflows["wrap-up"]
+
+    configured_workflows = {
+        name: (workflow_root / f"{name}.md").read_text(encoding="utf-8")
+        for name in ("triage-friction-log", "post-merge-systemize")
+    }
+    assert "create the pull request with\n`triage.pr_draft`" in configured_workflows[
+        "triage-friction-log"
+    ]
+    assert "create the\npull request using `systemize.pr_draft`" in configured_workflows[
+        "post-merge-systemize"
+    ]
+
+    baseline_paths = (
+        REPO_ROOT / "AGENTS.md",
+        REPO_ROOT / "docs" / "AGENTS-sections.md",
+        REPO_ROOT / "docs" / "CLAUDE-sections.md",
+        REPO_ROOT / "docs" / "templates" / "AGENTS.md.tmpl",
+    )
+    for path in baseline_paths:
+        baseline = " ".join(path.read_text(encoding="utf-8").split())
+        assert "ready for review by default" in baseline
+        assert "material unfinished-work window" in baseline
+        assert (
+            "does not authorize merge" in baseline
+            or "does not grant merge authority" in baseline
+        )
+
+    claude_template = (
+        REPO_ROOT / "docs" / "templates" / "CLAUDE.md.tmpl"
+    ).read_text(encoding="utf-8")
+    assert "@AGENTS.md" in claude_template
+    assert "ready for review by default" not in claude_template
+
+    config = yaml.safe_load(
+        (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
+    )
+    assert config["triage"]["pr_draft"] is False
+    assert config["systemize"]["pr_draft"] is False
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    assert (
+        "ready-by-default PRs with a bounded material unfinished-work draft exception"
+        in readme
+    )
+    installer = (REPO_ROOT / "init.sh").read_text(encoding="utf-8")
+    assert "ensure_triage_key pr_draft '  pr_draft: false'" in installer
+    systemize_seed = installer.split(
+        'insert_before_section "tracker:" \'systemize:', 1
+    )[1].split("\n'\n    echo \"added systemize workflow config", 1)[0]
+    assert "  pr_draft: false" in systemize_seed
+
+    lane_contract = (ENGINE_DIR / "dev_session.sh").read_text(
+        encoding="utf-8"
+    )
+    assert (
+        "Draft is ONLY for the window in which you are still pushing commits"
+        in lane_contract
+    )
+    assert "after `gh pr create --draft`" in lane_contract
+    assert "after `gh pr ready` run `--assert-ready`" in lane_contract
+
+    adapter_names = (
+        "adopt",
+        "parallel",
+        "post-merge-systemize",
+        "pr-watch",
+        "triage-friction-log",
+        "upgrade",
+        "wrap-up",
+    )
+    for name in adapter_names:
+        shared_path = f"docs/agentic-dev-kit/workflows/{name}.md"
+        adapters = (
+            REPO_ROOT / ".claude" / "commands" / f"{name}.md",
+            REPO_ROOT / ".agents" / "skills" / name / "SKILL.md",
+        )
+        for path in adapters:
+            adapter = path.read_text(encoding="utf-8")
+            assert shared_path in adapter
+            body = adapter.split("---", 2)[2].lower()
+            assert "draft" not in body
+            assert "ready for review" not in body
+
+
 def _assert_upgrade_verifies_only_installed_test_modules(workflow: str) -> None:
     step = workflow.split("## Step 5 — Verify", 1)[1].split("## Step 6", 1)[0]
     assert "/run_installed_tests.py" in step

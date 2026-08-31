@@ -431,7 +431,8 @@ worktree path (handy for `cd "$(<engine-dir>/dev_session.sh path <scope>)"`).
   lets two sessions run data skills concurrently without corrupting `state/cache/`.
   See Principle #3 in `PRINCIPLES.md`.
 - **Pairs with** `session-start` (orient within one session) and your project's
-  branching convention (draft PR → ready → watch-and-fix). `parallel` is the
+  branching convention (open ready by default → watch-and-fix; use draft → ready only
+  for `pr-watch`'s bounded material unfinished-work exception). `parallel` is the
   *across-sessions* view; `session-start` is the *within-session* one.
 - Read-only by default (`list`; `plan` is read-only until the operator confirms a
   batch). `new`/`rm` mutate worktrees only — never the repo's own tree, never prod

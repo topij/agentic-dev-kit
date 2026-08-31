@@ -5,14 +5,17 @@
 > autonomously", "autonomous chore sprint"). It does **not** govern normal interactive
 > sessions, where the operator drives PR review and merge.
 >
-> Your CLAUDE.md's Branching + PR-follow-through rules (see
-> [`CLAUDE-sections.md`](CLAUDE-sections.md)) are the always-on baseline; this is the
-> autonomous **superset**. Its distinguishing behaviors are **self-merging low-risk work**
-> and **not yielding the turn until the work is merged**. The always-on guardrails still
-> hold — pause before security-sensitive changes, and respect whatever data-handling /
-> PII confirmation rules your project's CLAUDE.md defines; a broad-but-sensitive config
-> file (a customer/contact roster, a secrets manifest, anything similar) is never for
-> unsupervised bulk migration by an autonomous pass.
+> Your always-loaded agent guide's branching and PR-follow-through rules are the
+> always-on baseline; the shipped [`AGENTS.md` template](templates/AGENTS.md.tmpl)
+> carries the cross-runtime version, Claude imports that file, and
+> [`CLAUDE-sections.md`](CLAUDE-sections.md) is ready-to-paste material for an existing
+> guide. This contract is the autonomous **superset**. Its distinguishing behaviors are
+> **self-merging low-risk work** and **not yielding the turn until the work is merged**.
+> The always-on guardrails still hold — pause before security-sensitive changes, and
+> respect whatever data-handling / PII confirmation rules your project's agent guide
+> defines; a broad-but-sensitive config file (a customer/contact roster, a secrets
+> manifest, anything similar) is never for unsupervised bulk migration by an autonomous
+> pass.
 
 Follow this top to bottom, per ticket.
 
@@ -46,16 +49,24 @@ Follow this top to bottom, per ticket.
 - If a package/module has its own stricter gate (a typecheck pass, an integration-test
   suite), run that too whenever you touch it.
 
-### Open → validate → ready
+### Validate → open ready
 
-- Push `-u`, open a **draft**: `gh pr create --draft`.
-- **Risk gate:**
+- **Risk gate, before opening the pull request:**
   - Low-risk display / derivation change → straight to ready (self-merge path).
   - A change to a cache shape, a data fetcher, or anything that touches shared/production
     state → **live-validate against the real target first**: write a throwaway harness
     that exercises the changed function directly against production-shaped input before
     trusting it. Do **not** commit regenerated artifacts produced only for validation.
-- Then `gh pr ready <PR#>`.
+- Push `-u` and open the completed pull request **ready for review**: `gh pr create`
+  without `--draft`.
+- Take the bounded draft exception from
+  [`pr-watch`](agentic-dev-kit/workflows/pr-watch.md#ready-and-draft-policy) only when a
+  material unfinished-work window must already be on the remote pull request — for
+  example, required forge-hosted validation that cannot run before the pull request
+  exists. That run creates with `--draft`, confirms `--assert-draft`, and owns the
+  `gh pr ready` plus `--assert-ready` transition as soon as the work and body are
+  complete. Risk, operator-held merge authority, and a desire for human review are not
+  draft reasons by themselves.
 
 ### Watch-and-fix loop (do NOT yield until green + clean)
 

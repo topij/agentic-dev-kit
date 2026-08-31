@@ -147,6 +147,11 @@ change to one is a reason to read the other.
   `scripts/hooks/pre-push` refuses any push from a `dev/*` branch that touches
   `docs/kit-handoff.md` or `docs/kit-friction-log.md`. A wrap-up commit on a `dev/*`
   branch is blocked by the repo's own hook.
+- **Open completed work ready for review by default.** Ready status invites review;
+  it does not authorize merge. Draft is only for `pr-watch`'s bounded exception where
+  a material unfinished-work window must already exist on the remote pull request. The
+  run that opens it owns the ready transition; risk, broad scope, human review, and
+  operator-held merge authority are not draft reasons by themselves.
 - **Behavioral changes to `scripts/pr_watch.py`, `scripts/dev_session.sh`,
   `scripts/launch_lane.py`, or the profile named by
   `parallel.claude_settings_profile` (`config/claude-lane-settings.json` in this

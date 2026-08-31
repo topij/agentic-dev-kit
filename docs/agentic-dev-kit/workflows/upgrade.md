@@ -870,7 +870,9 @@ couldn't classify. Tag `[kit]` on anything that is a kit-side fix and open an is
 upstream. That is Principle #2 applied to the kit itself, and it is how the four shapes
 this skill handles were discovered in the first place.
 
-Open a **draft PR** summarizing: schema version before → after, which engines were
-refreshed / diffed / deliberately skipped, and any local-edit-vs-config resolution you
-made. Leave the merge to the operator — an upgrade touches the machinery every other
-workflow runs on.
+Open the completed work as a **ready-for-review PR** summarizing: schema version before
+→ after, which engines were refreshed / diffed / deliberately skipped, and any
+local-edit-vs-config resolution you made. Leave the merge to the operator — an upgrade
+touches the machinery every other workflow runs on. Ready status invites review and
+does not authorize merge. This step runs after the upgrade and PR body are complete, so
+the material unfinished-work exception in `pr-watch` does not apply.

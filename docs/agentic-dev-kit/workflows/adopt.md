@@ -508,9 +508,11 @@ log (Step 1 classified it `IN_USE`), write to it directly — `init.sh` will lea
 
 ## Step 6 — Summarize + hand off
 
-Report what was **installed / skipped / config-pointed**, open a **draft PR**, and
-leave the merge to the operator — an adoption touches a lot of the repo and deserves a
-human review pass.
+Report what was **installed / skipped / config-pointed**, open the completed work as a
+**ready-for-review PR**, and leave the merge to the operator — an adoption touches a lot
+of the repo and deserves a human review pass. Ready status invites that review; it does
+not authorize merge. This handoff happens after the adoption changes and PR body are
+complete, so the material unfinished-work exception in `pr-watch` does not apply.
 
 **Then repeat Step 3c's handoff as the last thing you say**, because it is the one action
 still outstanding and the adoption is not finished without it:
