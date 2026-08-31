@@ -1816,6 +1816,26 @@ def _assert_configured_workflow_opens_ready(workflow: str, key: str) -> None:
     assert "do not run `gh pr ready`" not in flattened
 
 
+def _assert_baseline_ready_policy(baseline: str) -> None:
+    flattened = _flatten_prose(baseline)
+    assert "ready for review by default" in flattened
+    assert "material unfinished-work window" in flattened
+    assert (
+        "does not authorize merge" in flattened
+        or "does not grant merge authority" in flattened
+    )
+    assert "pr-watch --assert-ready" in flattened
+    assert any(
+        exclusive in flattened
+        for exclusive in (
+            "Draft is only for `pr-watch`'s bounded exception",
+            "Draft is only for a bounded material unfinished-work window",
+            "Use draft only for the bounded exception",
+            "Draft is only for the bounded exception",
+        )
+    )
+
+
 @pytest.mark.kit_repo_only(
     "AGENTS.md",
     "README.md",
@@ -1837,6 +1857,7 @@ def _assert_configured_workflow_opens_ready(workflow: str, key: str) -> None:
     "docs/agentic-dev-kit/workflows/wrap-up.md",
     "init.sh",
     "scripts/dev_session.sh",
+    "scripts/hooks/pr_followup_hook.py",
     "scripts/pr_watch.py",
 )
 def test_pull_request_visibility_is_ready_by_default_with_a_bounded_draft_exception(
@@ -1938,14 +1959,28 @@ def test_pull_request_visibility_is_ready_by_default_with_a_bounded_draft_except
         REPO_ROOT / "docs" / "templates" / "AGENTS.md.tmpl",
     )
     for path in baseline_paths:
-        baseline = _flatten_prose(path.read_text(encoding="utf-8"))
-        assert "ready for review by default" in baseline
-        assert "material unfinished-work window" in baseline
-        assert (
-            "does not authorize merge" in baseline
-            or "does not grant merge authority" in baseline
+        baseline = path.read_text(encoding="utf-8")
+        _assert_baseline_ready_policy(baseline)
+        hostile = baseline.replace(
+            "Draft is only for a bounded material unfinished-work window",
+            "Draft is also permitted whenever convenient, including a material "
+            "unfinished-work window",
+            1,
         )
-        assert "pr-watch --assert-ready" in baseline
+        if hostile == baseline:
+            hostile = baseline.replace("Draft is only for", "Draft is also permitted for", 1)
+        if hostile == baseline:
+            hostile = baseline.replace("Use draft only for", "Use draft whenever convenient for", 1)
+        assert hostile != baseline
+        with pytest.raises(AssertionError):
+            _assert_baseline_ready_policy(hostile)
+
+    hook_source = (
+        ENGINE_DIR / "hooks" / "pr_followup_hook.py"
+    ).read_text(encoding="utf-8")
+    assert "--assert-draft" in hook_source
+    assert "Do not start review polling or the watch-and-fix loop yet" in hook_source
+    assert "--assert-ready` before review" in hook_source
 
     claude_template = (
         REPO_ROOT / "docs" / "templates" / "CLAUDE.md.tmpl"

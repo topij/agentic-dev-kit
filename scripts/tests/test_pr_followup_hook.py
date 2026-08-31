@@ -79,8 +79,20 @@ def test_triggers_on_gh_pr_create(monkeypatch, capsys):
     assert exit_code == 0
     body = json.loads(out)
     assert body["hookSpecificOutput"]["hookEventName"] == "PostToolUse"
-    assert "additionalContext" in body["hookSpecificOutput"]
-    assert "pr-watch" in body["hookSpecificOutput"]["additionalContext"]
+    context = body["hookSpecificOutput"]["additionalContext"]
+    assert "--assert-draft" in context
+    assert "Do not start review polling or the watch-and-fix loop yet" in context
+    assert context.index("--assert-draft") < context.index("gh pr ready")
+    assert context.index("gh pr ready") < context.index("--assert-ready")
+
+
+def test_ready_create_asserts_ready_before_watch(monkeypatch, capsys):
+    hook = _load_hook()
+    exit_code, out = _run(hook, monkeypatch, capsys, _payload("gh pr create --fill"))
+    assert exit_code == 0
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "--assert-draft" not in context
+    assert context.index("--assert-ready") < context.index("watch-and-fix loop")
 
 
 def test_triggers_on_gh_pr_ready(monkeypatch, capsys):
@@ -89,6 +101,38 @@ def test_triggers_on_gh_pr_ready(monkeypatch, capsys):
     assert exit_code == 0
     body = json.loads(out)
     assert body["hookSpecificOutput"]["hookEventName"] == "PostToolUse"
+    context = body["hookSpecificOutput"]["additionalContext"]
+    assert "--assert-draft" not in context
+    assert context.index("--assert-ready") < context.index("watch-and-fix loop")
+
+
+def test_compound_draft_create_and_ready_takes_ready_route(monkeypatch, capsys):
+    hook = _load_hook()
+    command = "gh pr create --draft --fill && gh pr ready 42"
+    exit_code, out = _run(hook, monkeypatch, capsys, _payload(command))
+    assert exit_code == 0
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "--assert-draft" not in context
+    assert context.index("--assert-ready") < context.index("watch-and-fix loop")
+
+
+def test_echoed_ready_after_draft_create_does_not_change_draft_lifecycle():
+    hook = _load_hook()
+    command = "gh pr create --draft --fill && echo gh pr ready"
+    assert hook._pr_lifecycle(command) == "draft"
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        "gh pr create --fill --body 'example: --draft'",
+        "gh pr create --fill --body 'run gh pr ready later'",
+        "gh pr create --draft=false --fill",
+    ),
+)
+def test_quoted_or_false_draft_text_does_not_change_ready_lifecycle(command):
+    hook = _load_hook()
+    assert hook._pr_lifecycle(command) == "ready"
 
 
 def test_does_not_trigger_on_gh_pr_view(monkeypatch, capsys):

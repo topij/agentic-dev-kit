@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PostToolUse hook: after a PR is opened / marked ready, mandate the watch-fix loop.
+"""PostToolUse hook: enforce PR state, then mandate the watch-fix loop.
 
 Registered on BOTH runtimes, and told which one it is running under via
 `--runtime claude|codex` (#301):
@@ -10,11 +10,12 @@ Registered on BOTH runtimes, and told which one it is running under via
     filters the TOOL NAME only, with no equivalent of Claude's `if`, so this
     script is invoked on every Bash call there and does all the narrowing itself.
 
-Either way it narrows to `gh pr create` / `gh pr ready` (the moments a PR goes
-live for review) and injects an `additionalContext` instruction so the session
-runs the kit's PR follow-through loop (Principle #5 in `PRINCIPLES.md`) without
-being asked. Both runtimes honour the same `hookSpecificOutput.additionalContext`
-contract.
+Either way it narrows to `gh pr create` / `gh pr ready` and injects an
+`additionalContext` instruction so the session enforces the matching lifecycle
+without being asked: ready creation / transition asserts ready before the kit's
+PR follow-through loop, while bounded draft creation asserts draft and defers
+that loop until the same run finishes and marks ready. Both runtimes honour the
+same `hookSpecificOutput.additionalContext` contract.
 This closes the gap where the kit only had prose asking the agent to run `/pr-watch`
 unasked (Principle #8: "a rule that lives only in a doc is a wish").
 
@@ -46,6 +47,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import sys
 from pathlib import Path
 
@@ -60,6 +62,7 @@ from pathlib import Path
 # fire. Both runtimes supply it on PostToolUse. The surface is wider under Codex,
 # whose matcher filters the tool name only, so every Bash command reaches here.
 _TRIGGER = re.compile(r"\bgh\s+pr\s+(create|ready)\b")
+_SHELL_CONTROL_CHARS = frozenset(";&|()")
 
 # What a real invocation leaves in the response, established from `gh`'s source
 # rather than assumed — the issue asked for that specifically, and the two
@@ -284,7 +287,95 @@ def _fallback_instruction(
     )
 
 
-def build_reminder(runtime: str = _DEFAULT_RUNTIME) -> str:
+def _pr_lifecycle(command: object) -> str:
+    """Return ``draft`` only for an actual draft create with no ready action.
+
+    Tokenizing keeps a quoted PR body such as ``'run gh pr ready later'`` or
+    ``'example: --draft'`` from changing the lifecycle. A compound command that
+    creates draft and then marks ready has already completed the exception, so it
+    takes the ready route.
+    """
+    if not isinstance(command, str):
+        return "ready"
+    try:
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|()")
+        lexer.whitespace_split = True
+        lexer.commenters = ""
+        tokens = list(lexer)
+    except (TypeError, ValueError):
+        return "ready"
+
+    commands: list[list[str]] = [[]]
+    for token in tokens:
+        if token and set(token) <= _SHELL_CONTROL_CHARS:
+            if commands[-1]:
+                commands.append([])
+            continue
+        commands[-1].append(token)
+
+    def invocation_index(shell_command: list[str], action: str) -> int | None:
+        for candidate in (
+            index
+            for index in range(len(shell_command) - 2)
+            if shell_command[index : index + 3] == ["gh", "pr", action]
+        ):
+            prefix = shell_command[:candidate]
+            prefix_is_assignment = all(
+                "=" in token and not token.startswith("=") for token in prefix
+            )
+            prefix_is_wrapper = prefix == ["command"] or (
+                bool(prefix)
+                and prefix[0] == "env"
+                and all(
+                    "=" in token and not token.startswith("=") for token in prefix[1:]
+                )
+            )
+            if not prefix or prefix_is_assignment or prefix_is_wrapper:
+                return candidate
+        return None
+
+    saw_ready = False
+    saw_draft_create = False
+    for shell_command in commands:
+        if invocation_index(shell_command, "ready") is not None:
+            saw_ready = True
+            continue
+        gh_index = invocation_index(shell_command, "create")
+        if gh_index is None:
+            continue
+        for token in shell_command[gh_index + 3 :]:
+            if token == "--draft":
+                saw_draft_create = True
+                break
+            if token.startswith("--draft="):
+                value = token.split("=", 1)[1].strip().casefold()
+                if value not in {"false", "0", "no", "off"}:
+                    saw_draft_create = True
+                break
+    return "draft" if saw_draft_create and not saw_ready else "ready"
+
+
+def _lifecycle_instruction(command: object, engines_dir: str) -> str:
+    if _pr_lifecycle(command) == "draft":
+        return (
+            "A draft pull request was just opened under the bounded material "
+            "unfinished-work exception. Immediately run "
+            f"`uv run {engines_dir}/pr_watch.py <PR#> --assert-draft`. "
+            "Do not start review polling or the watch-and-fix loop yet. Finish and "
+            "push the material work, complete the PR body, run `gh pr ready <PR#>`, "
+            f"then run `uv run {engines_dir}/pr_watch.py <PR#> --assert-ready`. "
+            "Only after that ready assertion passes may the watch-and-fix loop start. "
+        )
+    return (
+        "A pull request was just opened ready for review or marked ready. Immediately "
+        f"run `uv run {engines_dir}/pr_watch.py <PR#> --assert-ready` before review "
+        "polling, then start the watch-and-fix loop. "
+    )
+
+
+def build_reminder(
+    runtime: str = _DEFAULT_RUNTIME, command: object = None
+) -> str:
     (
         bots,
         fallback_command,
@@ -295,10 +386,10 @@ def build_reminder(runtime: str = _DEFAULT_RUNTIME) -> str:
     ) = _load_review_config(runtime)
     bot_desc = _bot_description(bots)
     return (
-        "A pull request was just opened or marked ready for review. Per the kit's "
-        '"PR follow-through" policy (PRINCIPLES.md #5/#8) this step is MANDATORY and '
-        "you should start it now without being asked: run the watch-and-fix loop for "
-        "this PR — invoke `/pr-watch` (or poll "
+        _lifecycle_instruction(command, engines_dir)
+        + "Per the kit's \"PR follow-through\" policy (PRINCIPLES.md #5/#8), "
+        "this lifecycle is MANDATORY; complete it in the current run without being "
+        "asked. When it reaches review polling, invoke `/pr-watch` (or poll "
         f"`uv run {engines_dir}/pr_watch.py <PR#> --json`) and do NOT yield this turn "
         f"until CI is fully green AND every {bot_desc} finding is fixed or "
         "replied-to with a reason. Fix real findings, reply-with-reason to nitpicks "
@@ -442,7 +533,7 @@ def main() -> int:
                 {
                     "hookSpecificOutput": {
                         "hookEventName": "PostToolUse",
-                        "additionalContext": build_reminder(runtime),
+                        "additionalContext": build_reminder(runtime, command),
                     }
                 }
             )
