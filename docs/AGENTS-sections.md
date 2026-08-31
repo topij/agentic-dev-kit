@@ -15,7 +15,8 @@ status in the configured handoff, not in `AGENTS.md`.
 - Open completed work ready for review by default. Draft is only for a bounded
   material unfinished-work window that must already exist on the remote pull request;
   the run that opens it owns the ready transition. Ready status invites review and does
-  not grant merge authority. Follow the shared policy in
+  not grant merge authority. Run `pr-watch --assert-ready` after ready creation or
+  transition, before review polling. Follow the shared policy in
   `docs/agentic-dev-kit/workflows/pr-watch.md`.
 - Use `parallel` only for lanes with disjoint source-file footprints. The cockpit
   owns the configured handoff and friction log; lanes report through their PR bodies.

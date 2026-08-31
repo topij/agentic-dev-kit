@@ -44,7 +44,7 @@
     },
     "docs/agentic-dev-kit/workflows/adopt.md": {
       "role": "workflow",
-      "sha256": "2b62b3643abbf0dfe0479867b183b4235ef88931fdf757bf9e87cc4f2c318919"
+      "sha256": "0c9ecd9d694a30b107b24d174e2ac3e9c666c9ab592be227de32c8dcc40999bd"
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
@@ -52,15 +52,15 @@
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
-      "sha256": "a66a7f06e0b5fd1e4e98c478def40611e5bd25367947797e6c2defe1e7958815"
+      "sha256": "6b1d4246ce89999a900e34a2986cb1d0047d738684f33c45ce82bb13c4f8689a"
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
-      "sha256": "7e92eea6a74bfd393f0c9380d6d279063aa982bf2e511ef78053cfd9bad3159d"
+      "sha256": "0995bc61338fd3c4919b74f1bdad72823bd4fc1224bd81a9dcfdb6faad40364b"
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "44009f93de31e97157fdf2cedad10795dcf27f3b0cf8e7a48ad0ce21ddebb99d"
+      "sha256": "dce70b7a027c9b86090bd29fd9a696f71780c02e551c7163593a87d70d7adb3c"
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
@@ -68,19 +68,19 @@
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
-      "sha256": "02f1a9e3ee4b0cdb526c1891846367cfde119ad19ba07300ba5fbba66de5bf1a"
+      "sha256": "af4b843d896063084139d77193e8435f761b979afd57cf396d5e47bbec14e3a7"
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
-      "sha256": "6b9a2564f8b1bf5a996877c5e3315f238b7a331e7cb614939692251e7f545689"
+      "sha256": "b8220a6eff9e7f90ac97ee63d090eced5392e0b7c851f687d22ede246bcc6370"
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "916191002a5a8fb07edf5104a0351de0662227d81bd8d1a705c08395dbd4e46c"
+      "sha256": "e88cf927424dfe861e34a0ca6661149c882058015f112f29dbd0d335b78368e7"
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
-      "sha256": "3f15ea608f0941144489cce761ce27eb3828c30a9043b07bf37b8b98bee3d483"
+      "sha256": "e3794b399331a16138e72c62ee74d7085bd6a5fe14e10e45e4c40ef91cf41a6b"
     },
     "docs/templates/CLAUDE.md.tmpl": {
       "role": "template",
@@ -104,7 +104,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "5be888c9fe28eab3b2cdb520eaea5e88836291ee7beb915bcf3607bb71389ecb"
+      "sha256": "8f839e1328ab4f9010d90a2380326f97d44db4a328a19bc9753f2b1714db635c"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -124,7 +124,7 @@
     },
     "scripts/dev_session.sh": {
       "role": "engine",
-      "sha256": "559327a0ef349885121861d3cb64e76ce381d4fc3b7cc3400135d6175741a8f5"
+      "sha256": "f696372d912ba5f9ab9bbbbd3ea2a14689ea8c9fdda57e1c00aa5962d376012f"
     },
     "scripts/hooks/pr_followup_hook.py": {
       "role": "hook",
@@ -218,7 +218,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "e765c250d0eaa95063bb0045d75daff759ebf06829c5c0c1208a26be96507b7a"
+      "sha256": "432fe654b1635a2b6ea45131e58c9d45d7c87d05dc52e721d6418193ba574b60"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
@@ -250,7 +250,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "86511d3ff0fc820cf46e096455ceec35ae1732d335142d706fa843e3a7f27a84"
+      "sha256": "d621a479fd4588b5b7b68bc1712af3b920f466cad0e7878e3178724914d3c319"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -278,7 +278,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "a80c010df102497f6957e47aef7e743273bc33354d96b76ac30e860e843a7d3f"
+      "sha256": "7eace41cd76182d18caa79e9e70462fe0089fd24586384b102566ef03fff3feb"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

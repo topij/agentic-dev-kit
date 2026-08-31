@@ -151,7 +151,8 @@ change to one is a reason to read the other.
   it does not authorize merge. Draft is only for `pr-watch`'s bounded exception where
   a material unfinished-work window must already exist on the remote pull request. The
   run that opens it owns the ready transition; risk, broad scope, human review, and
-  operator-held merge authority are not draft reasons by themselves.
+  operator-held merge authority are not draft reasons by themselves. Run
+  `pr-watch --assert-ready` after ready creation or transition, before review polling.
 - **Behavioral changes to `scripts/pr_watch.py`, `scripts/dev_session.sh`,
   `scripts/launch_lane.py`, or the profile named by
   `parallel.claude_settings_profile` (`config/claude-lane-settings.json` in this

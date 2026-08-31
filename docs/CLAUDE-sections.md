@@ -26,6 +26,7 @@ All changes go through branches and pull requests — never commit directly to
   the draft state, finish and push the work, complete the body, then mark it ready
   (`gh pr ready`) and confirm ready before the watch-and-fix loop. Risk, broad scope,
   human review, and operator-held merge authority are not draft reasons by themselves.
+  After ready creation or transition, run `pr-watch --assert-ready` before review polling.
 - `<vcs.protected_branch>` is protected; direct pushes should be rejected by your forge
   (branch protection rules).
 - PRs require an external reviewer before merge (a human, or the review-bot pass below).

@@ -43,7 +43,8 @@ doctrine into this runtime; it does not fork it.
   such as required forge-hosted validation that cannot run before the PR exists.
   The run that opens a draft owns the ready transition as soon as the work and body
   are complete; risk, broad scope, human review, and operator-held merge authority
-  are not draft reasons by themselves. The executable lifecycle is in
+  are not draft reasons by themselves. Run `pr-watch --assert-ready` after ready
+  creation or transition, before review polling. The executable lifecycle is in
   [`docs/agentic-dev-kit/workflows/pr-watch.md`](docs/agentic-dev-kit/workflows/pr-watch.md).
 - **Opening or pushing a PR is not completion: follow it through CI and
   review.** The `pr-watch` skill is that loop — poll, fix, acknowledge,

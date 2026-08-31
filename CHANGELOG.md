@@ -12,7 +12,7 @@ things that break a repo pinning the old contract.
 |---|---|
 | report / return shape | keys and values an engine's report or a function's return grew, lost, or changed meaning |
 | gate semantics | when `converged` / `mergeable` / `done` / a hook's exit code flips |
-| config keys | a `config/dev-model.yaml` key added, removed, renamed, or given a new default |
+| config keys | a `config/dev-model.yaml` key added, removed, renamed, given a new default, or restricted to new accepted values |
 | engine CLI surface | a flag, argument, or exit code an adopter or CI invokes |
 
 Each line names the issue(s) and states **what you must do**. Nothing else belongs
@@ -41,6 +41,15 @@ observable but compatible. `ADDED` — new surface you may adopt or ignore.
 starts.
 
 ---
+
+## #653 — 2026-08-31
+
+- **CHANGED (config keys) — `triage.pr_draft` and `systemize.pr_draft` now accept
+  only `false`; completed workflow patches open ready for review and correct the ready
+  bit before review polling.** **Set `triage.pr_draft` and `systemize.pr_draft` to the
+  plain boolean `false` before running `triage-friction-log` or
+  `post-merge-systemize`. Refresh their shared workflow files and `pr-watch`; the
+  additive `init.sh` migration preserves an existing value instead of replacing it.**
 
 ## #651 — 2026-08-30
 

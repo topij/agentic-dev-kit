@@ -381,8 +381,9 @@ path by name, and prove the staged path set equals the intended destination set 
 Any pre-existing change, extra staged path, or missing intended path stops the route.
 Commit with `systemize.commit_subject`; never commit derived output. Push and create the
 pull request ready for review by binding the validated `false` `systemize.pr_draft`
-directly, and require the read-back draft bit to be `false` before invoking `pr-watch`;
-a failed, ambiguous, or draft response stops the route operator-held.
+directly. Immediately run the native `pr-watch --assert-ready` correction, then require
+the read-back draft bit to be `false` before the normal `pr-watch` loop; a failed
+assertion or a failed, ambiguous, or draft response stops the route operator-held.
 
 The pull-request body gives each pattern's shape, evidence pull requests, review sources,
 and exact shared rule location. It makes no merge claim. After creation, invoke the

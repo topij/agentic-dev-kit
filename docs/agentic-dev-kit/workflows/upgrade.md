@@ -442,10 +442,12 @@ anchors, aliases, block scalars, and block children. Partial-`triage` string fie
 reject double-quoted backslash escapes. Normalize `review.bots` and
 `systemize.operator_logins` to complete same-line flow sequences; normalize every other
 prompted value to a same-line scalar, never a flow mapping. Quote a string whose plain
-spelling YAML could resolve as a non-string; string fields must be non-empty, and
-`triage.pr_draft` must be the plain boolean `true` or `false`. Block YAML on other fields can still be refused
-when its continuation resembles migrator-owned structure; normalize any refused value
-to an ordinary same-line form. Do not retain or create a separate
+spelling YAML could resolve as a non-string; string fields must be non-empty. The
+additive migrator preserves existing values, so require `triage.pr_draft` and
+`systemize.pr_draft` to be the plain boolean `false` before running their workflows; a
+carried `true` now hard-stops rather than creating a completed draft PR. Block YAML on
+other fields can still be refused when its continuation resembles migrator-owned
+structure; normalize any refused value to an ordinary same-line form. Do not retain or create a separate
 `config/friction-triage.yaml`: `paths`, `tracker`, `notify`, `state`, `vcs`, and
 `models` remain the authoritative shared sections. After this step, verify that
 `triage.state_path` and `triage.gate_path` separate live/test mode, the recovery-bundle
@@ -874,5 +876,6 @@ Open the completed work as a **ready-for-review PR** summarizing: schema version
 → after, which engines were refreshed / diffed / deliberately skipped, and any
 local-edit-vs-config resolution you made. Leave the merge to the operator — an upgrade
 touches the machinery every other workflow runs on. Ready status invites review and
-does not authorize merge. This step runs after the upgrade and PR body are complete, so
-the material unfinished-work exception in `pr-watch` does not apply.
+does not authorize merge. Run `pr-watch --assert-ready` immediately after creation,
+before its normal watch-and-fix loop. This step runs after the upgrade and PR body are
+complete, so the material unfinished-work exception in `pr-watch` does not apply.

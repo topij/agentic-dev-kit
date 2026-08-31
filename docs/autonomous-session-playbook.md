@@ -61,6 +61,8 @@ Follow this top to bottom, per ticket.
     trusting it. Do **not** commit regenerated artifacts produced only for validation.
 - Push `-u` and open the completed pull request **ready for review**: `gh pr create`
   without `--draft`.
+- Immediately run `uv run <engine-dir>/pr_watch.py <PR#> --assert-ready` before the
+  watch-and-fix loop so a silently drifted draft bit cannot starve review.
 - Take the bounded draft exception from
   [`pr-watch`](agentic-dev-kit/workflows/pr-watch.md#ready-and-draft-policy) only when a
   material unfinished-work window must already be on the remote pull request — for

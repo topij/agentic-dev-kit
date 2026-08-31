@@ -136,9 +136,10 @@ LANE CONTRACT (binding):
 - Actively poll your PR's CI at a bounded cadence (e.g. `gh pr checks <PR#>` every few minutes, capped around 30 min) until it is fully green. Never stop to idly wait on a "monitor", a timer, or someone else's watcher — you are the one polling.
 - Your run ends ONLY at the terminal state. Never stop early to wait for a watcher, monitor, or timer of any kind — if you need to wait on anything, poll it yourself with a bounded until-loop.
 - Open completed work ready for review by default. Draft is ONLY for a material unfinished-work window that must already exist on the remote pull request because required forge-hosted validation cannot run before the pull request exists. If the branch can be completed and validated locally first, finish it and open ready.
+- Immediately after a ready creation, run `uv run @ENGINE_DIR@/pr_watch.py <pr> --assert-ready` before the watch-and-fix loop so a silently drifted draft bit cannot starve review.
 - If that exception applies, after `gh pr create --draft` run `uv run @ENGINE_DIR@/pr_watch.py <pr> --assert-draft`, finish the required remote work and body, then run `gh pr ready <pr>` and `--assert-ready` before the watch-and-fix loop. A finished PR left in draft is a PR that never gets reviewed.
 - Do NOT merge. That is the one authority the cockpit keeps — marking ready is yours, landing it is not.
-- `gh`'s draft bit is flaky in both directions, which is why the bounded exception owns both assertions instead of trusting either transition.
+- `gh`'s draft bit is flaky in both directions, so neither route trusts the transition: the ready path owns `--assert-ready`, and the bounded exception also owns `--assert-draft`.
 - Report every finding, decision, and open question in your FINAL TEXT response — that is the durable channel back to the cockpit. Never rely exclusively on a runtime-specific peer-message mechanism.
 - If you spawn sub-agents of your own, hold them to the same rule: they return findings in their final text rather than relying exclusively on peer messages.
 - Never edit @HANDOFF@ or @FRICTION_LOG@ — those are cockpit-owned shared narrative files. Put your handoff (what shipped, lessons, deferrals) in the PR body instead.

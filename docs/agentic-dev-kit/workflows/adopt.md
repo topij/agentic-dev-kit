@@ -193,7 +193,7 @@ doesn't already exist**:
 - **`docs/templates/`** — the six `.md.tmpl` files, **unless the Step-2 plan declined them**. They are **manifest-tracked**, so omitting them is not merely a missed convenience: `kit_doctor` then reports six extra `missing` entries tagged `[template]` (measured). Read that cost the right way round, because stated bare it pushes the wrong way: `missing` entries are the *expected* reporting shape for a piece the operator declined, and Step 3b records exactly those as `not_installed` so later runs say "intact for this adoption" rather than counting them forever. Six `missing` lines are not a reason to install six files the plan dropped — installing them to quiet the count converts a decision into an install, which is `#398`'s shape one workflow over. They are also what `init.sh` renders from when the operator runs it, so a repo whose narrative docs are all already in use needs them only if it wants future seeding.
 - **`init.sh`** — copy it to the adopter root. It is manifest-**tracked** (`#362`), so it must be in place *before* Step 3b's `--record-install`, and `kit_doctor` reports drift on it afterwards — `STALE` once the kit moves on, `LOCALLY EDITED` if someone changes it. (This line used to say the opposite, and the instruction it produced was "don't check the installer" — the exact check `#360` was closed to make possible; `#382`.) **If the adopter already has a root `init.sh`, STOP.** The copy-only-if-absent rule would silently skip it, and Step 3c would then tell the operator to run *their* script — `init.sh` is a common name for an unrelated bootstrap. Diff the two, and let the operator choose: keep the kit's under another name and hand off that path explicitly, or confirm theirs is a stale kit copy safe to replace. Never hand off a bare `./init.sh` you did not put there.
 - **The friction log (`paths.friction_log`)** — do not hand-copy it. `init.sh` seeds it from the template, at the configured path, when the operator runs it.
-- **`config/*.local.yaml` → `.gitignore`**, now, by hand — the one `.gitignore` entry that cannot wait for `init.sh`. `kitconfig.load_config()` merges a gitignored `config/dev-model.local.yaml` over the tracked config, and `docs/getting-started.md` tells the operator to put their Slack DM id there. Step 6 opens the PR *before* the operator runs `init.sh` (Step 3c), so anyone who creates that file in the gap — routine for someone who already knows the kit's local-override pattern — has an identity sitting untracked-but-not-ignored in an open PR. `init.sh` appends the full set later; this one entry is proactive because its window is the hazard.
+- **`config/*.local.yaml` → `.gitignore`**, now, by hand — the one `.gitignore` entry that cannot wait for `init.sh`. `kitconfig.load_config()` merges a gitignored `config/dev-model.local.yaml` over the tracked config, and `docs/getting-started.md` tells the operator to put their Slack DM id there. Anyone who creates that file before the operator runs `init.sh` — routine for someone who already knows the kit's local-override pattern — otherwise has an identity sitting untracked-but-not-ignored when the later PR opens. `init.sh` appends the full set later; this one entry is proactive because its pre-PR window is the hazard.
 - Copy `PRINCIPLES.md`, `docs/parallel-dev.md`, and the shared workflow/safety docs under `docs/agentic-dev-kit/` for reference.
 
 **Never overwrite an existing file.** If something you didn't anticipate collides, stop
@@ -316,7 +316,7 @@ in; the flag is what makes guessing wrong survivable.
 
 **Report to them, in these words:**
 
-> The adoption is staged on this branch. The last step is `./init.sh --no-clobber`, and you
+> The adoption is staged on this branch. The next step is `./init.sh --no-clobber`, and you
 > should run it yourself so you see and confirm each prompt.
 >
 > **Run it with `--no-clobber`.** With that flag it writes only files that are genuinely
@@ -343,6 +343,12 @@ in; the flag is what makes guessing wrong survivable.
 > Once it has run, move the adoption-friction entries from this PR's body into the seeded
 > `paths.friction_log` — they are in the PR because the file did not exist while the
 > adoption was staged.
+
+Do not open a pull request while this operator step is pending. When the operator
+returns, resume at Step 4, verify and commit the resulting adoption, and only then
+continue to the ready-for-review creation in Step 6. The work can be completed locally,
+so creating a remote draft here would manufacture rather than contain the bounded
+exception.
 
 State the six paths **resolved from their config**, not as the defaults above, and say
 which ones Step 1 found carrying a marker. That is the whole value `/adopt` adds here: it
@@ -511,19 +517,13 @@ log (Step 1 classified it `IN_USE`), write to it directly — `init.sh` will lea
 Report what was **installed / skipped / config-pointed**, open the completed work as a
 **ready-for-review PR**, and leave the merge to the operator — an adoption touches a lot
 of the repo and deserves a human review pass. Ready status invites that review; it does
-not authorize merge. This handoff happens after the adoption changes and PR body are
-complete, so the material unfinished-work exception in `pr-watch` does not apply.
+not authorize merge. Run `pr-watch --assert-ready` immediately after creation, before
+its normal watch-and-fix loop. This handoff happens only after the operator completed
+Step 3c, the adoption was verified, and the changes and PR body are complete, so the
+material unfinished-work exception in `pr-watch` does not apply.
 
-**Then repeat Step 3c's handoff as the last thing you say**, because it is the one action
-still outstanding and the adoption is not finished without it:
-
-1. the six seedable paths, resolved from *their* config, with the state Step 1 found for
-   each — and any `MARKED` one named explicitly, with what deleting line 1 does
-2. `./init.sh --no-clobber`, run by them, interactively
-3. `/session-start` (Claude) or `$session-start` (Codex) afterwards
-
-Do not describe the adoption as complete before they have run `init.sh`: until then any
-entry point they lacked is still missing, the pre-push hook is not installed, and the kit's
-`.gitignore` entries are absent apart from the `config/*.local.yaml` line Step 3 added.
-Say it that way rather than "the repo has no entry
-points" — a repo with its own `AGENTS.md` has one, and `init.sh` will leave it alone.
+The final report names the resolved seedable paths, what `init.sh --no-clobber` actually
+did to each, any `MARKED` path the operator intentionally retained, and the PR URL. Leave
+`/session-start` (Claude) or `$session-start` (Codex) as the adopter's next step after
+merge. If Step 3c is still pending, stop there instead: do not open or describe the
+adoption as review-ready.

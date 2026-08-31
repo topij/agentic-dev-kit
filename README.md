@@ -400,7 +400,9 @@ string fields also reject double-quoted backslash escapes. Keep `review.bots`
 and `systemize.operator_logins` as complete same-line flow sequences; every other
 prompted value must be a same-line scalar, and flow mappings are unsupported. Quote a
 string whose plain spelling YAML could resolve as a non-string; string fields must be
-non-empty, and `triage.pr_draft` must be the plain boolean `true` or `false`. Block YAML
+non-empty. The migrator preserves existing values, so set `triage.pr_draft` and
+`systemize.pr_draft` to the plain boolean `false` before running their workflows; a
+carried `true` now hard-stops rather than opening completed work as a draft. Block YAML
 on other fields can still be refused when its continuation resembles migrator-owned
 structure; normalize any refused value to an ordinary same-line form before retrying.
 
@@ -420,9 +422,10 @@ edited by both (the sandbox prevents *state* collisions, not *source* merge conf
 The flow: `parallel plan` clusters candidate work by footprint → launch a lane per
 disjoint cluster (`scripts/dev_session.sh new … --merge-class self|operator`) → each
 lane works to a green, ready-for-review PR → the cockpit reconciles every lane and completes
-the recorded merge path. **Lanes mark their own PRs ready but never merge**: a `self`-class
-lane is closed out by the cockpit through `scripts/dev_session.sh merge` (no operator
-sign-off needed), an `operator`-class one only by an explicit operator decision.
+the recorded merge path. **Lanes assert their own ready state but never merge**: a
+`self`-class lane is closed out by the cockpit through `scripts/dev_session.sh merge`
+(no operator sign-off needed), an `operator`-class one only by an explicit operator
+decision.
 
 Full walkthrough — the lane contract, the live board, reconciliation, and a worked
 example — in **[`docs/parallel-dev.md`](docs/parallel-dev.md)**. For step-by-step

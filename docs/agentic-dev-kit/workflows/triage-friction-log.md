@@ -1027,10 +1027,11 @@ permitted fast-forward advance still must pass the byte-identical frozen-block c
 otherwise remain operator-held. Require a clean index, stage only `<friction-log>` and
 `<friction-log-archive>`, and prove the staged path set equals that pair exactly. Commit
 with `triage.commit_subject`, push, and create the pull request ready for review by
-binding the validated `false` `triage.pr_draft` directly. Read back repository, base,
-branch, commit, head, draft bit, PR URL, and changed paths, and require the read-back
-draft bit to be `false` before invoking `pr-watch`. A failed, ambiguous, or draft
-response triggers read-back before retry and otherwise remains operator-held.
+binding the validated `false` `triage.pr_draft` directly. Immediately run the native
+`pr-watch --assert-ready` correction, then read back repository, base, branch, commit,
+head, draft bit, PR URL, and changed paths, and require the read-back draft bit to be
+`false` before the normal `pr-watch` loop. A failed assertion or a failed, ambiguous, or
+draft response triggers read-back before retry and otherwise remains operator-held.
 
 Run `pr-watch` for the exact head and persist an `unsettled` review observation whenever
 it has not reached terminal exact-head evidence. This workflow never merges the sweep pull request.
