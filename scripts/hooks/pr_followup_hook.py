@@ -380,20 +380,43 @@ def _heredoc_specs(line: str) -> list[tuple[str, bool]]:
             cursor += 1
         while cursor < len(line) and line[cursor] in " \t":
             cursor += 1
-        delimiter_quote = line[cursor] if cursor < len(line) and line[cursor] in {"'", '"'} else None
-        if delimiter_quote is not None:
+        delimiter_chars: list[str] = []
+        delimiter_quote: str | None = None
+        while cursor < len(line):
+            char = line[cursor]
+            if delimiter_quote is not None:
+                if char == delimiter_quote:
+                    delimiter_quote = None
+                    cursor += 1
+                    continue
+                if (
+                    char == "\\"
+                    and delimiter_quote == '"'
+                    and cursor + 1 < len(line)
+                    and line[cursor + 1] in '$`"\\'
+                ):
+                    delimiter_chars.append(line[cursor + 1])
+                    cursor += 2
+                    continue
+                delimiter_chars.append(char)
+                cursor += 1
+                continue
+            if char in {"'", '"'}:
+                delimiter_quote = char
+                cursor += 1
+                continue
+            if char == "\\" and cursor + 1 < len(line):
+                delimiter_chars.append(line[cursor + 1])
+                cursor += 2
+                continue
+            if char in " \t\r\n;&|()<>":
+                break
+            delimiter_chars.append(char)
             cursor += 1
-            end = line.find(delimiter_quote, cursor)
-            if end == -1:
-                return specs
-            delimiter = line[cursor:end]
-            index = end + 1
-        else:
-            end = cursor
-            while end < len(line) and line[end] not in " \t\r\n;&|()<>":
-                end += 1
-            delimiter = line[cursor:end]
-            index = end
+        if delimiter_quote is not None:
+            return specs
+        delimiter = "".join(delimiter_chars)
+        index = cursor
         if delimiter:
             specs.append((delimiter, strip_tabs))
     return specs
@@ -415,6 +438,81 @@ def _without_heredoc_bodies(command: str) -> str:
             continue
         kept.append(line)
         pending.extend(_heredoc_specs(line))
+    return "".join(kept)
+
+
+def _without_line_continuations(command: str) -> str:
+    """Apply shell backslash-newline removal outside single quotes."""
+    kept: list[str] = []
+    quote: str | None = None
+    index = 0
+    while index < len(command):
+        char = command[index]
+        if char == "'":
+            if quote is None:
+                quote = "'"
+            elif quote == "'":
+                quote = None
+            kept.append(char)
+            index += 1
+            continue
+        if char == '"' and quote != "'":
+            quote = None if quote == '"' else '"'
+            kept.append(char)
+            index += 1
+            continue
+        if char == "\\" and quote != "'":
+            if command.startswith("\\\r\n", index):
+                index += 3
+                continue
+            if command.startswith("\\\n", index):
+                index += 2
+                continue
+            kept.append(char)
+            if index + 1 < len(command):
+                kept.append(command[index + 1])
+                index += 2
+            else:
+                index += 1
+            continue
+        kept.append(char)
+        index += 1
+    return "".join(kept)
+
+
+def _starts_shell_comment(command: str, index: int) -> bool:
+    """Whether ``#`` starts a shell comment rather than an ordinary word."""
+    return index == 0 or command[index - 1].isspace() or command[index - 1] in ";&|()"
+
+
+def _without_shell_comments(command: str) -> str:
+    """Remove shell comments while preserving quoted text and line boundaries."""
+    kept = list(command)
+    quote: str | None = None
+    index = 0
+    while index < len(command):
+        char = command[index]
+        if quote is not None:
+            if char == "\\" and quote != "'":
+                index += 2
+                continue
+            if char == quote:
+                quote = None
+            index += 1
+            continue
+        if char in {"'", '"', "`"}:
+            quote = char
+            index += 1
+            continue
+        if char == "\\":
+            index += 2
+            continue
+        if char == "#" and _starts_shell_comment(command, index):
+            while index < len(command) and command[index] != "\n":
+                kept[index] = " "
+                index += 1
+            continue
+        index += 1
     return "".join(kept)
 
 
@@ -448,7 +546,7 @@ def _shell_syntax_mask(command: str) -> str:
                 masked[index + 1] = " "
             index += 2
             continue
-        if char == "#" and (index == 0 or command[index - 1].isspace()):
+        if char == "#" and _starts_shell_comment(command, index):
             while index < len(command) and command[index] != "\n":
                 masked[index] = " "
                 index += 1
@@ -527,7 +625,7 @@ def _command_substitutions(command: str) -> tuple[str, list[str]]:
             if end >= len(command):
                 break
             substitutions.append(command[index + 1 : end])
-            mutable[index : end + 1] = " " * (end + 1 - index)
+            mutable[index : end + 1] = "$" + " " * (end - index)
             index = end + 1
             continue
         if command.startswith("$(", index) and not command.startswith("$((", index):
@@ -557,7 +655,7 @@ def _command_substitutions(command: str) -> tuple[str, list[str]]:
             if depth:
                 break
             substitutions.append(command[index + 2 : end - 1])
-            mutable[index:end] = " " * (end - index)
+            mutable[index:end] = "$" + " " * (end - index - 1)
             index = end
             continue
         index += 1
@@ -571,6 +669,8 @@ def _shell_commands(command: object, _depth: int = 0) -> list[list[str]]:
     if _depth > 4:
         return []
     command = _without_heredoc_bodies(command)
+    command = _without_line_continuations(command)
+    command = _without_shell_comments(command)
     command, definitions = _without_function_definitions(command)
     command, substitutions = _command_substitutions(command)
     try:
@@ -606,7 +706,13 @@ def _shell_commands(command: object, _depth: int = 0) -> list[list[str]]:
 
 
 def _is_assignment(token: str) -> bool:
-    return "=" in token and not token.startswith("=")
+    name, separator, _value = token.partition("=")
+    return bool(
+        separator
+        and name
+        and (name[0].isalpha() or name[0] == "_")
+        and all(char.isalnum() or char == "_" for char in name[1:])
+    )
 
 
 def _redirection_span(shell_command: list[str], index: int) -> int:
@@ -633,8 +739,15 @@ def _shell_executable_index(shell_command: list[str]) -> int | None:
             continue
         if token == "command":
             index += 1
-            if index < len(shell_command) and shell_command[index] == "--":
-                index += 1
+            while index < len(shell_command):
+                if shell_command[index] == "-p":
+                    index += 1
+                    continue
+                if shell_command[index] in {"-v", "-V"}:
+                    return None
+                if shell_command[index] == "--":
+                    index += 1
+                break
             continue
         if token == "env":
             index += 1
@@ -649,9 +762,34 @@ def _shell_executable_index(shell_command: list[str]) -> int | None:
                 if token.startswith("--unset="):
                     index += 1
                     continue
+                if token in {"-S", "--split-string"}:
+                    if index + 1 >= len(shell_command):
+                        return None
+                    try:
+                        split_tokens = shlex.split(shell_command[index + 1])
+                    except ValueError:
+                        return None
+                    if not split_tokens:
+                        return None
+                    shell_command[index : index + 2] = split_tokens
+                    continue
+                if token.startswith("--split-string="):
+                    try:
+                        split_tokens = shlex.split(token.split("=", 1)[1])
+                    except ValueError:
+                        return None
+                    if not split_tokens:
+                        return None
+                    shell_command[index : index + 1] = split_tokens
+                    continue
                 if token == "--":
                     index += 1
                 break
+            continue
+        if Path(token).name == "nohup":
+            index += 1
+            if index < len(shell_command) and shell_command[index] == "--":
+                index += 1
             continue
         if Path(token).name == "time":
             index += 1
@@ -721,6 +859,60 @@ def _gh_invocations(
     return invocations
 
 
+def _syntactic_lifecycle_actions(command: object) -> set[str]:
+    """Find lifecycle action syntax even behind an unsupported shell wrapper."""
+    actions: set[str] = set()
+    for shell_command in _shell_commands(command):
+        for gh_index, token in enumerate(shell_command):
+            if Path(token).name != "gh":
+                continue
+            index = _skip_gh_global_options(shell_command, gh_index + 1)
+            if index is None or index >= len(shell_command) or shell_command[index] != "pr":
+                continue
+            index = _skip_gh_global_options(shell_command, index + 1)
+            if index is None or index >= len(shell_command):
+                continue
+            action = shell_command[index]
+            if action == "new":
+                action = "create"
+            if action in {"create", "ready"}:
+                actions.add(action)
+    return actions
+
+
+def _has_dynamic_shell_values(command: object) -> bool:
+    """Whether executed shell tokens depend on expansion this parser cannot resolve."""
+    if not isinstance(command, str):
+        return False
+    source = _without_shell_comments(
+        _without_line_continuations(_without_heredoc_bodies(command))
+    )
+    quote: str | None = None
+    index = 0
+    while index < len(source):
+        char = source[index]
+        if quote == "'":
+            if char == "'":
+                quote = None
+            index += 1
+            continue
+        if char == "\\":
+            index += 2
+            continue
+        if char == "'" and quote is None:
+            quote = "'"
+            index += 1
+            continue
+        if char == '"':
+            quote = None if quote == '"' else '"'
+            index += 1
+            continue
+        if char in {"$", "`"}:
+            return True
+        index += 1
+    return False
+
+
 def _skip_gh_global_options(tokens: list[str], index: int) -> int | None:
     """Consume inherited options before a Cobra subcommand, or reject no-op flags."""
     while index < len(tokens):
@@ -745,8 +937,8 @@ def _skip_gh_global_options(tokens: list[str], index: int) -> int | None:
     return index
 
 
-def _create_is_draft(arguments: list[str]) -> bool:
-    """Interpret the documented draft spellings without reading option values as flags."""
+def _create_is_draft(arguments: list[str]) -> bool | None:
+    """Return draft intent, or ``None`` when shell expansion can change it."""
     index = 0
     while index < len(arguments):
         token = arguments[index]
@@ -779,6 +971,8 @@ def _create_is_draft(arguments: list[str]) -> bool:
                     break
                 if short_flag not in _CREATE_BOOLEAN_SHORT_FLAGS:
                     break
+        if "$" in token or "`" in token:
+            return None
         index += 1
     return False
 
@@ -936,7 +1130,7 @@ def _pr_lifecycle(command: object, response: str | None = None) -> str:
         return "unknown"
     if len(create_states) > 1:
         return "unknown"
-    if create_states == {True} and normal_ready:
+    if real_creates and normal_ready:
         if len(real_creates) != 1 or len(normal_ready) != 1:
             return "unknown"
         create_ids = _response_identities(
@@ -1103,6 +1297,7 @@ def should_fire(command: object, response: str | None) -> bool:
     if not isinstance(command, str):
         return False
     invocations = _gh_invocations(command)
+    parsed_actions = {action for action, _arguments in invocations}
     real_creates = [
         arguments
         for action, arguments in invocations
@@ -1114,6 +1309,17 @@ def should_fire(command: object, response: str | None) -> bool:
         if action == "ready" and not _ready_is_undo(arguments)
     ]
     if not real_creates and not normal_ready:
+        if response is None:
+            return False
+        unparsed_actions = _syntactic_lifecycle_actions(command) - parsed_actions
+        if "create" in unparsed_actions:
+            diagnostic_count = _existing_pr_diagnostic_count(response)
+            if diagnostic_count == 0 and _PR_URL.search(response):
+                return True
+        if "ready" in unparsed_actions and _READY_ACK.search(response):
+            return True
+        if _has_dynamic_shell_values(command):
+            return bool(_PR_URL.search(response) or _READY_ACK.search(response))
         return False
     if response is None:
         return True  # nothing readable — fail loud

@@ -382,6 +382,115 @@ def test_executing_wrappers_and_substitutions_reach_the_lifecycle_hook(
 @pytest.mark.parametrize(
     "command",
     (
+        "gh pr create \\\n  --draft \\\n  --fill",
+        "gh pr \\\n  create --draft --fill",
+    ),
+)
+def test_line_continuations_preserve_draft_lifecycle(
+    monkeypatch, capsys, command
+):
+    hook = _load_hook()
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command, stdout="https://github.com/owner/repo/pull/42\n"),
+    )
+
+    assert exit_code == 0
+    assert hook._pr_lifecycle(
+        command, "https://github.com/owner/repo/pull/42\n"
+    ) == "draft"
+    assert "--assert-draft" in json.loads(out)["hookSpecificOutput"][
+        "additionalContext"
+    ]
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        "DRAFT=--draft; gh pr create $DRAFT --fill",
+        "flags=--draft; gh pr create ${flags} --fill",
+        'open_pr(){ gh pr create "$@"; }; open_pr --draft',
+        'set -- --draft; gh pr create "$@"',
+        "gh pr create $(printf %s --draft) --fill",
+        "GH=gh; $GH pr create --draft --fill",
+    ),
+)
+def test_dynamic_create_arguments_require_live_state(
+    monkeypatch, capsys, command
+):
+    hook = _load_hook()
+    response = "https://github.com/owner/repo/pull/42\n"
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command, stdout=response),
+    )
+
+    assert exit_code == 0
+    assert hook._pr_lifecycle(command, response) == "unknown"
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "ambiguous lifecycle evidence" in context
+    assert "gh pr view <PR#> --json isDraft" in context
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        "command -p gh pr create --draft --fill",
+        "env -S gh pr create --draft --fill",
+        "env --split-string=gh pr create --draft --fill",
+        "nohup gh pr create --draft --fill",
+    ),
+)
+def test_supported_execution_wrappers_preserve_draft_lifecycle(
+    monkeypatch, capsys, command
+):
+    hook = _load_hook()
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command, stdout="https://github.com/owner/repo/pull/42\n"),
+    )
+
+    assert exit_code == 0
+    assert "--assert-draft" in json.loads(out)["hookSpecificOutput"][
+        "additionalContext"
+    ]
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        "timeout 30 gh pr create --fill",
+        "/usr/bin/time -o timing gh pr create --fill",
+    ),
+)
+def test_unmodelled_wrapper_with_success_evidence_requires_live_state(
+    monkeypatch, capsys, command
+):
+    hook = _load_hook()
+    response = "https://github.com/owner/repo/pull/42\n"
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command, stdout=response),
+    )
+
+    assert exit_code == 0
+    assert hook._pr_lifecycle(command, response) == "unknown"
+    assert "ambiguous lifecycle evidence" in json.loads(out)["hookSpecificOutput"][
+        "additionalContext"
+    ]
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
         "echo '$(gh pr create --draft --fill)'",
         "echo '`gh pr create --draft --fill`'",
     ),
@@ -619,6 +728,44 @@ def test_heredoc_body_cannot_forge_a_ready_transition(monkeypatch, capsys):
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
     assert "--assert-draft" in context
     assert "ambiguous lifecycle evidence" not in context
+
+
+@pytest.mark.parametrize("opener", (r"<<\EOF", "<<'E'O\"F\""))
+def test_quote_removed_heredoc_delimiter_does_not_hide_later_create(
+    monkeypatch, capsys, opener
+):
+    hook = _load_hook()
+    command = f"cat {opener}\nbody\nEOF\ngh pr create --draft --fill"
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command, stdout="https://github.com/owner/repo/pull/42\n"),
+    )
+
+    assert exit_code == 0
+    assert "--assert-draft" in json.loads(out)["hookSpecificOutput"][
+        "additionalContext"
+    ]
+
+
+def test_shell_comment_cannot_borrow_an_unrelated_pr_url(monkeypatch, capsys):
+    hook = _load_hook()
+    command = (
+        'printf "https://github.com/owner/repo/pull/42\\n" '
+        "# ; gh pr create --draft --fill"
+    )
+    response = "https://github.com/owner/repo/pull/42\n"
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command, stdout=response),
+    )
+
+    assert exit_code == 0
+    assert hook.should_fire(command, response) is False
+    assert out == ""
 
 
 def test_dry_run_body_url_is_not_creation_evidence(monkeypatch, capsys):
