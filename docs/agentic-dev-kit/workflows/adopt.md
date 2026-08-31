@@ -340,9 +340,9 @@ in; the flag is what makes guessing wrong survivable.
 > installs the hook, or adds the rest of those ignores. Read what it prints — the
 > conditionals above are reported per file.
 >
-> Once it has run, move the adoption-friction entries from this PR's body into the seeded
-> `paths.friction_log` — they are in the PR because the file did not exist while the
-> adoption was staged.
+> Once it has run, move any adoption-friction entries from your temporary adoption notes
+> into the seeded `paths.friction_log`. No pull request exists yet because creation waits
+> for this run and the verification that follows it.
 
 Do not open a pull request while this operator step is pending. When the operator
 returns, resume at Step 4, verify and commit the resulting adoption, and only then
@@ -502,14 +502,14 @@ action.
 
 Step 3c has now run. Write the entries directly into the resolved `paths.friction_log`
 when that path is usable — whether `init.sh` seeded it or Step 1 classified the adopter's
-file as `IN_USE`. If the entries were held temporarily in the PR body while Step 3c was
+file as `IN_USE`. If the entries were held temporarily in adoption notes while Step 3c was
 pending, move them now.
 
 If the operator intentionally retained a `MARKED` friction-log path and no usable log
-exists yet, keep the entries in the PR body, name that declined path in the final report,
-and leave the explicit reconciliation step with the operator. Do not hand-write a
-replacement: a markerless stub would become `IN_USE` and prevent a later `init.sh` run
-from rendering the seeded structure.
+exists yet, carry the entries into the PR body when Step 6 opens it, name that declined
+path in the final report, and leave the explicit reconciliation step with the operator.
+Do not hand-write a replacement: a markerless stub would become `IN_USE` and prevent a
+later `init.sh` run from rendering the seeded structure.
 
 ## Step 6 — Summarize + hand off
 

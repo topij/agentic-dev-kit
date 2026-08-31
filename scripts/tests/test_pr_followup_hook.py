@@ -544,11 +544,33 @@ def test_assignment_fed_create_with_success_evidence_cannot_fail_open(
     assert "actually created or readied" in context
 
 
+def test_assignment_fed_eval_with_success_evidence_cannot_fail_open(
+    monkeypatch, capsys
+):
+    hook = _load_hook()
+    command = 'open_pr="gh pr create --draft"; eval "$open_pr"'
+    response = "https://github.com/owner/repo/pull/42\n"
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command, stdout=response),
+    )
+
+    assert exit_code == 0
+    assert hook.should_fire(command, response) is True
+    assert hook._pr_lifecycle(command, response) == "unknown"
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "ambiguous lifecycle evidence" in context
+    assert "actually created or readied" in context
+
+
 @pytest.mark.parametrize(
     "command",
     (
         "command -p gh pr create --draft --fill",
         "env -S gh pr create --draft --fill",
+        "/usr/bin/env gh pr create --draft --fill",
         "env --split-string=gh pr create --draft --fill",
         "nohup gh pr create --draft --fill",
     ),
@@ -557,17 +579,19 @@ def test_supported_execution_wrappers_preserve_draft_lifecycle(
     monkeypatch, capsys, command
 ):
     hook = _load_hook()
+    response = "https://github.com/owner/repo/pull/42\n"
     exit_code, out = _run(
         hook,
         monkeypatch,
         capsys,
-        _payload_with(command, stdout="https://github.com/owner/repo/pull/42\n"),
+        _payload_with(command, stdout=response),
     )
 
     assert exit_code == 0
-    assert "--assert-draft" in json.loads(out)["hookSpecificOutput"][
-        "additionalContext"
-    ]
+    assert hook._pr_lifecycle(command, response) == "draft"
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "A draft pull request was just opened" in context
+    assert "ambiguous lifecycle evidence" not in context
 
 
 @pytest.mark.parametrize(
@@ -575,6 +599,8 @@ def test_supported_execution_wrappers_preserve_draft_lifecycle(
     (
         "timeout 30 gh pr create --fill",
         "/usr/bin/time -o timing gh pr create --fill",
+        "nice gh pr create --fill",
+        "sudo gh pr create --fill",
     ),
 )
 def test_unmodelled_wrapper_with_success_evidence_requires_live_state(
@@ -732,6 +758,34 @@ def test_repeated_noncreating_flags_follow_the_cli_last_value(
     hook = _load_hook()
 
     assert hook._create_can_complete(arguments) is can_complete
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        'gh pr create --draft="$PR_DRAFT" --fill',
+        'gh pr create --dry-run="$PR_DRY" --fill',
+        'gh pr create --web="$PR_WEB" --fill',
+        'gh pr create "$PR_FLAGS" --fill',
+        "gh pr create --{draft,fill}",
+    ),
+)
+def test_expandable_create_options_require_live_state(monkeypatch, capsys, command):
+    hook = _load_hook()
+    response = "https://github.com/owner/repo/pull/42\n"
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command, stdout=response),
+    )
+
+    assert exit_code == 0
+    assert hook.should_fire(command, response) is True
+    assert hook._pr_lifecycle(command, response) == "unknown"
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "ambiguous lifecycle evidence" in context
+    assert "A draft pull request was just opened" not in context
 
 
 def test_mixed_create_branches_inspect_live_state_before_any_correction(
@@ -1037,6 +1091,30 @@ def test_ready_undo_false_remains_a_ready_transition(monkeypatch, capsys):
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
     assert "--assert-ready" in context
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        'gh pr ready 42 --undo="$PR_UNDO"',
+        'gh pr ready 42 "$PR_FLAGS"',
+    ),
+)
+def test_expandable_ready_undo_requires_live_state(monkeypatch, capsys, command):
+    hook = _load_hook()
+    response = 'Pull request owner/repo#42 is marked as "ready for review"\n'
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command, stderr=response),
+    )
+
+    assert exit_code == 0
+    assert hook.should_fire(command, response) is True
+    assert hook._pr_lifecycle(command, response) == "unknown"
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "ambiguous lifecycle evidence" in context
 
 
 @pytest.mark.parametrize(
@@ -1899,6 +1977,26 @@ def test_lifecycle_words_in_argument_position_cannot_borrow_a_later_view_url():
     assert hook.should_fire(command, response) is False
 
 
+def test_function_definition_scan_builds_the_syntax_mask_once(monkeypatch):
+    hook = _load_hook()
+    original = hook._shell_syntax_mask
+    calls = []
+
+    def counted(command):
+        calls.append(command)
+        return original(command)
+
+    monkeypatch.setattr(hook, "_shell_syntax_mask", counted)
+    command = "; ".join(f"f{index}() {{ :; }}" for index in range(200))
+    command += "; gh pr create --draft --fill"
+
+    remaining, definitions = hook._without_function_definitions(command)
+
+    assert calls == [command]
+    assert len(definitions) == 200
+    assert "gh pr create --draft --fill" in remaining
+
+
 def test_each_action_is_matched_against_its_own_evidence(monkeypatch, capsys):
     """CodeRabbit on `#306`: accepting either signal for either action let a
     command merely mentioning `gh pr ready` fire on any PR URL in its output."""
@@ -2024,13 +2122,12 @@ def test_a_payload_carrying_no_readable_text_still_fails_loud(monkeypatch, capsy
 
 
 def test_a_payload_too_deep_for_json_load_still_exits_zero(monkeypatch, capsys):
-    """`json.load` raises RecursionError before this module sees the payload.
+    """A deeply nested payload exits zero across stdlib parser implementations.
 
-    A lens ran the real script on a 200k-deep array and got exit 1, against a
-    docstring promising a hook never fails a session. `_iter_strings`'s depth
-    bound cannot help — the parse never completes. Pre-existing, and the
-    previous version of this test asserted the property in its docstring while
-    exercising a path `json.load` can never reach.
+    Some interpreters raise `RecursionError` during `json.load`; others parse
+    the input and let `_iter_strings` reject it as unreadable. The former can
+    safely stay silent because no payload was decoded. The latter must use the
+    normal fail-loud route rather than mistake a truncated walk for evidence.
     """
     hook = _load_hook()
     text = '{"tool_input": {"command": "gh pr create"}, "tool_response": '
@@ -2039,7 +2136,9 @@ def test_a_payload_too_deep_for_json_load_still_exits_zero(monkeypatch, capsys):
     exit_code, out = _run(hook, monkeypatch, capsys, text)
 
     assert exit_code == 0
-    assert out == ""
+    if out:
+        context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+        assert "ambiguous lifecycle evidence" in context
 
 
 def test_walking_for_strings_is_depth_bounded(monkeypatch, capsys):

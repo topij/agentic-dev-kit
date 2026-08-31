@@ -583,9 +583,13 @@ def _without_function_definitions(command: str) -> tuple[str, dict[str, str]]:
     """Remove function declarations and retain their bodies for actual calls."""
     definitions: dict[str, str] = {}
     mutable = list(command)
+    # The mask depends only on the original shell source. Rebuilding it after
+    # blanking each definition makes a command with many inert definitions
+    # quadratic and can consume the runtimes' whole hook deadline before the
+    # lifecycle command at the end is inspected.
+    mask = _shell_syntax_mask(command)
     cursor = 0
     while True:
-        mask = _shell_syntax_mask("".join(mutable))
         match = _SHELL_FUNCTION_SIGNATURE.search(mask, cursor)
         if match is None:
             break
@@ -739,6 +743,17 @@ def _is_assignment(token: str) -> bool:
     )
 
 
+def _dynamic_variable_name(token: str) -> str | None:
+    """Return the name from an exact ``$name`` / ``${name}`` reference."""
+    if token.startswith("${") and token.endswith("}"):
+        name = token[2:-1]
+    elif token.startswith("$"):
+        name = token[1:]
+    else:
+        return None
+    return name if name and all(char.isalnum() or char == "_" for char in name) else None
+
+
 def _redirection_span(shell_command: list[str], index: int) -> int:
     """Tokens occupied by one leading shell redirection, or zero."""
     match = _LEADING_REDIRECTION.match(shell_command[index])
@@ -773,7 +788,7 @@ def _shell_executable_index(shell_command: list[str]) -> int | None:
                     index += 1
                 break
             continue
-        if token == "env":
+        if Path(token).name == "env":
             index += 1
             while index < len(shell_command):
                 token = shell_command[index]
@@ -959,11 +974,7 @@ def _syntactic_lifecycle_actions(
         executable_index = _shell_executable_index(shell_command)
         if executable_index is not None:
             executable = shell_command[executable_index]
-            dynamic_name = None
-            if executable.startswith("${") and executable.endswith("}"):
-                dynamic_name = executable[2:-1]
-            elif executable.startswith("$"):
-                dynamic_name = executable[1:]
+            dynamic_name = _dynamic_variable_name(executable)
             if dynamic_name and dynamic_name in assigned_actions:
                 actions.update(assigned_actions[dynamic_name])
             if "$" in executable or "`" in executable:
@@ -984,33 +995,36 @@ def _syntactic_lifecycle_actions(
                 arguments = shell_command[executable_index + 1 :]
                 if arguments[:1] == ["--"]:
                     arguments = arguments[1:]
+                for argument in arguments:
+                    dynamic_name = _dynamic_variable_name(argument)
+                    if dynamic_name and dynamic_name in assigned_actions:
+                        actions.update(assigned_actions[dynamic_name])
                 actions.update(
                     _syntactic_lifecycle_actions(" ".join(arguments), _depth + 1)
                 )
-            gh_index = executable_index if Path(executable).name == "gh" else None
-            wrapper_names = {Path(executable).name, Path(shell_command[0]).name}
-            if gh_index is None and wrapper_names & {"time", "timeout"}:
-                gh_index = next(
-                    (
-                        index
-                        for index in range(executable_index + 1, len(shell_command))
-                        if Path(shell_command[index]).name == "gh"
-                    ),
-                    None,
-                )
-            if gh_index is None:
-                continue
-            index = _skip_gh_global_options(shell_command, gh_index + 1)
-            if index is None or index >= len(shell_command) or shell_command[index] != "pr":
-                continue
-            index = _skip_gh_global_options(shell_command, index + 1)
-            if index is None or index >= len(shell_command):
-                continue
-            action = shell_command[index]
-            if action == "new":
-                action = "create"
-            if action in {"create", "ready"}:
-                actions.add(action)
+            # This is the conservative candidate scan, not the exact parser.
+            # A wrapper whose option grammar we do not model (for example
+            # `nice` or `sudo`) must reach the live-state route rather than go
+            # silent. Requiring separate gh/pr/action tokens avoids treating a
+            # quoted prose argument such as "gh pr create" as execution proof.
+            for gh_index, token in enumerate(shell_command):
+                if Path(token).name != "gh":
+                    continue
+                index = _skip_gh_global_options(shell_command, gh_index + 1)
+                if (
+                    index is None
+                    or index >= len(shell_command)
+                    or shell_command[index] != "pr"
+                ):
+                    continue
+                index = _skip_gh_global_options(shell_command, index + 1)
+                if index is None or index >= len(shell_command):
+                    continue
+                action = shell_command[index]
+                if action == "new":
+                    action = "create"
+                if action in {"create", "ready"}:
+                    actions.add(action)
     for opener, spec_index, body in _heredoc_inputs(command):
         program_flags = _heredoc_program_flags(opener)
         if spec_index < len(program_flags) and program_flags[spec_index]:
@@ -1056,6 +1070,19 @@ def _skip_gh_global_options(tokens: list[str], index: int) -> int | None:
     return index
 
 
+def _shell_expands_option(token: str) -> bool:
+    """Whether shell expansion can change an option token before ``gh`` sees it."""
+    return any(char in token for char in ("$", "`", "{", "}", "*", "?", "[", "]"))
+
+
+def _boolean_option_value(token: str) -> bool | None:
+    """Parse a pflag boolean value, preserving pre-expansion uncertainty."""
+    value = token.split("=", 1)[1]
+    if _shell_expands_option(value):
+        return None
+    return value.strip().casefold() not in {"false", "0", "no", "off"}
+
+
 def _create_is_draft(arguments: list[str]) -> bool | None:
     """Return draft intent, or ``None`` when shell expansion can change it."""
     is_draft = False
@@ -1079,10 +1106,11 @@ def _create_is_draft(arguments: list[str]) -> bool | None:
             index += 1
             continue
         if token.startswith("--draft=") or token.startswith("-d="):
-            value = token.split("=", 1)[1].strip().casefold()
-            is_draft = value not in {"false", "0", "no", "off"}
+            is_draft = _boolean_option_value(token)
             index += 1
             continue
+        if _shell_expands_option(token):
+            return None
         if token.startswith("-") and not token.startswith("--"):
             # Cobra/pflag walks a short-option cluster left to right. A boolean
             # `d` is draft wherever it is reached, but a value-taking option
@@ -1096,14 +1124,12 @@ def _create_is_draft(arguments: list[str]) -> bool | None:
                     break
                 if short_flag not in _CREATE_BOOLEAN_SHORT_FLAGS:
                     break
-        if "$" in token or "`" in token:
-            return None
         index += 1
     return is_draft
 
 
-def _create_is_dry_run(arguments: list[str]) -> bool:
-    """Whether ``create`` only reports what it would do instead of creating."""
+def _create_is_dry_run(arguments: list[str]) -> bool | None:
+    """Whether ``create`` is non-creating, or expansion leaves that unsettled."""
     is_dry_run = False
     index = 0
     while index < len(arguments):
@@ -1125,14 +1151,17 @@ def _create_is_dry_run(arguments: list[str]) -> bool:
             index += 1
             continue
         if token.startswith("--dry-run="):
-            value = token.split("=", 1)[1].strip().casefold()
-            is_dry_run = value not in {"false", "0", "no", "off"}
+            is_dry_run = _boolean_option_value(token)
+            index += 1
+            continue
+        if _shell_expands_option(token):
+            return None
         index += 1
     return is_dry_run
 
 
-def _create_opens_browser(arguments: list[str]) -> bool:
-    """Whether ``create`` only hands authoring off to a web browser."""
+def _create_opens_browser(arguments: list[str]) -> bool | None:
+    """Whether ``create`` opens a browser, or expansion leaves that unsettled."""
     opens_browser = False
     index = 0
     while index < len(arguments):
@@ -1154,10 +1183,11 @@ def _create_opens_browser(arguments: list[str]) -> bool:
             index += 1
             continue
         if token.startswith("--web=") or token.startswith("-w="):
-            value = token.split("=", 1)[1].strip().casefold()
-            opens_browser = value not in {"false", "0", "no", "off"}
+            opens_browser = _boolean_option_value(token)
             index += 1
             continue
+        if _shell_expands_option(token):
+            return None
         if token.startswith("-") and not token.startswith("--"):
             for short_flag in token[1:]:
                 if short_flag == "w":
@@ -1173,11 +1203,14 @@ def _create_opens_browser(arguments: list[str]) -> bool:
 
 def _create_can_complete(arguments: list[str]) -> bool:
     """Whether this CLI invocation itself can establish PR creation."""
-    return not _create_is_dry_run(arguments) and not _create_opens_browser(arguments)
+    return (
+        _create_is_dry_run(arguments) is not True
+        and _create_opens_browser(arguments) is not True
+    )
 
 
-def _ready_is_undo(arguments: list[str]) -> bool:
-    """Whether ``ready`` intentionally converts the target back to draft."""
+def _ready_is_undo(arguments: list[str]) -> bool | None:
+    """Whether ``ready`` converts to draft, or expansion leaves that unsettled."""
     is_undo = False
     for token in arguments:
         if token == "--":
@@ -1186,8 +1219,10 @@ def _ready_is_undo(arguments: list[str]) -> bool:
             is_undo = True
             continue
         if token.startswith("--undo="):
-            value = token.split("=", 1)[1].strip().casefold()
-            is_undo = value not in {"false", "0", "no", "off"}
+            is_undo = _boolean_option_value(token)
+            continue
+        if _shell_expands_option(token):
+            return None
     return is_undo
 
 
@@ -1230,19 +1265,28 @@ def _pr_lifecycle(command: object, response: str | None = None) -> str:
     ]
     real_creates = [arguments for arguments in create_arguments if _create_can_complete(arguments)]
     dry_run_creates = [
-        arguments for arguments in create_arguments if _create_is_dry_run(arguments)
+        arguments for arguments in create_arguments if _create_is_dry_run(arguments) is True
     ]
     browser_creates = [
-        arguments for arguments in create_arguments if _create_opens_browser(arguments)
+        arguments for arguments in create_arguments if _create_opens_browser(arguments) is True
+    ]
+    ambiguous_creates = [
+        arguments
+        for arguments in create_arguments
+        if _create_is_dry_run(arguments) is None
+        or _create_opens_browser(arguments) is None
     ]
     ready_arguments = [
         arguments for action, arguments in invocations if action == "ready"
     ]
     normal_ready = [
-        arguments for arguments in ready_arguments if not _ready_is_undo(arguments)
+        arguments for arguments in ready_arguments if _ready_is_undo(arguments) is not True
     ]
     undo_ready = [
-        arguments for arguments in ready_arguments if _ready_is_undo(arguments)
+        arguments for arguments in ready_arguments if _ready_is_undo(arguments) is True
+    ]
+    ambiguous_ready = [
+        arguments for arguments in ready_arguments if _ready_is_undo(arguments) is None
     ]
     create_states = {
         _create_is_draft(arguments)
@@ -1255,6 +1299,11 @@ def _pr_lifecycle(command: object, response: str | None = None) -> str:
     if (dry_run_creates or browser_creates) and (real_creates or normal_ready):
         # Aggregate output cannot say whether evidence came from a non-creating
         # handoff or the real invocation. Inspect live state first.
+        return "unknown"
+    if ambiguous_creates or ambiguous_ready:
+        # The observed output may belong to a lifecycle command, but the shell
+        # can change its boolean flags before gh sees them. Never choose a
+        # mutating correction from the unexpanded source.
         return "unknown"
     if response is not None and real_creates and _existing_pr_diagnostic_count(response):
         # Output from failed and successful/fallback commands is aggregated.
@@ -1451,7 +1500,7 @@ def should_fire(command: object, response: str | None) -> bool:
     normal_ready = [
         arguments
         for action, arguments in invocations
-        if action == "ready" and not _ready_is_undo(arguments)
+        if action == "ready" and _ready_is_undo(arguments) is not True
     ]
     if not real_creates and not normal_ready:
         if response is None:
