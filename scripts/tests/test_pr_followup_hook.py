@@ -227,6 +227,9 @@ def test_existing_pr_diagnostic_is_not_creation_evidence(monkeypatch, capsys):
     "command",
     (
         "gh pr new --draft --fill",
+        "gh pr create -d --fill",
+        "gh pr create -df",
+        "gh pr create -fd",
         "gh -R owner/repo pr create --draft --fill",
         "gh --repo=owner/repo pr create --draft --fill",
     ),
@@ -247,6 +250,14 @@ def test_direct_alias_and_global_options_keep_exact_draft_lifecycle(monkeypatch,
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
     assert "A draft pull request was just opened" in context
     assert "ambiguous lifecycle evidence" not in context
+
+
+def test_direct_short_web_cluster_never_selects_a_mutating_lifecycle():
+    hook = _load_hook()
+    command = "gh pr create -dw"
+    response = "https://github.com/owner/repo/pull/42\n"
+
+    assert hook._pr_lifecycle(command, response) == "unknown"
 
 
 def test_does_not_trigger_on_gh_pr_view(monkeypatch, capsys):

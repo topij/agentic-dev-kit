@@ -68,6 +68,7 @@ _TRIGGER = re.compile(
 )
 _SHELL_CONTROL_CHARS = frozenset(";&|()\n")
 _GH_GLOBAL_OPTIONS_WITH_VALUE = frozenset({"-R", "--repo", "--hostname", "--config-dir"})
+_CREATE_BOOLEAN_SHORT_FLAGS = frozenset("defw")
 
 # What a real invocation leaves in the response, established from `gh`'s source
 # rather than assumed — the issue asked for that specifically, and the two
@@ -347,7 +348,13 @@ def _without_existing_pr_diagnostics(response: str) -> str:
 
 def _draft_flag(arguments: list[str]) -> bool | None:
     """Return the literal final draft flag, or ``None`` when it is uncertain."""
-    draft = False
+    draft = any(
+        token.startswith("-")
+        and not token.startswith("--")
+        and set(token[1:]) <= _CREATE_BOOLEAN_SHORT_FLAGS
+        and "d" in token[1:]
+        for token in arguments
+    )
     for token in arguments:
         if token == "--draft":
             draft = True
@@ -374,7 +381,14 @@ def _pr_lifecycle(command: object, response: str | None = None) -> str:
         if any(token == "--undo" or token.startswith("--undo=") for token in arguments):
             return "unknown"
         return "ready" if _READY_ACK.search(response) else "unknown"
-    if any(token in {"--dry-run", "--web", "-w"} for token in arguments):
+    short_web = any(
+        token.startswith("-")
+        and not token.startswith("--")
+        and set(token[1:]) <= _CREATE_BOOLEAN_SHORT_FLAGS
+        and "w" in token[1:]
+        for token in arguments
+    )
+    if short_web or any(token in {"--dry-run", "--web"} for token in arguments):
         return "unknown"
     if not _PR_URL.search(_without_existing_pr_diagnostics(response)):
         return "unknown"
