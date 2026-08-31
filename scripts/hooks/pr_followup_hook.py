@@ -60,13 +60,15 @@ from pathlib import Path
 # So the command decides whether to LOOK, and `tool_response` decides whether to
 # fire. Both runtimes supply it on PostToolUse, and every Bash command reaches
 # this shared policy so a runtime adapter cannot narrow away valid wrappers.
-# Repository-qualified global options are candidates too. This regex does not
-# interpret their values or select a lifecycle; authoritative forge state later
-# proves that the resolved repository and host match the current checkout before
-# the repository-local watcher can act.
+# Repository-qualified inherited options are candidates too, whether they sit
+# before or after ``pr`` and whether ``-R`` is joined to its value. This regex
+# does not interpret their values or select a lifecycle; authoritative forge
+# state later proves that the resolved repository and host match the current
+# checkout before the repository-local watcher can act.
+_REPOSITORY_OPTION = r"(?:-R(?:\S+|\s+\S+)|--repo(?:=\S+|\s+\S+))"
 _TRIGGER = re.compile(
-    r"\bgh(?:\s+(?:-R|--repo|--hostname|--config-dir)(?:=\S+|\s+\S+))*"
-    r"\s+pr\s+(create|new|ready)\b"
+    rf"\bgh(?:\s+{_REPOSITORY_OPTION})*\s+pr"
+    rf"(?:\s+{_REPOSITORY_OPTION})*\s+(create|new|ready)\b"
 )
 
 # What a real invocation leaves in the response, established from `gh`'s source
@@ -427,12 +429,12 @@ def _iter_strings(value: object, depth: int = 0):
 def _response_text(data: dict) -> str | None:
     """Everything the tool reported, flattened — or None when it is unreadable.
 
-    No strings at all, or a payload too deep to walk, means "cannot settle it"
-    and returns None so the hook fails loud. At least one captured string means
-    the response shape was readable; it returns ``""`` when all those strings
-    were empty. That distinction keeps a successful output-free command that
-    merely mentions the trigger phrase silent without treating an absent or
-    unrecognised runtime response as proof that no pull request exists.
+    No strings, only empty strings, or a payload too deep to walk means "cannot
+    settle it" and returns None so the hook fails loud. A real PR command whose
+    output was redirected is indistinguishable here from a silent command that
+    merely mentions the trigger phrase. The conservative reminder does not
+    mutate anything: it requires exact forge identity and live draft state, and
+    stops when no matching pull request exists.
     """
     try:
         captured_strings = list(_iter_strings(data.get("tool_response")))
@@ -440,7 +442,7 @@ def _response_text(data: dict) -> str | None:
         return None
     if not captured_strings:
         return None
-    return "\n".join(captured_strings).strip()
+    return "\n".join(captured_strings).strip() or None
 
 
 def should_fire(command: object, response: str | None) -> bool:

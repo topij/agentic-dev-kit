@@ -85,10 +85,22 @@ def test_successful_draft_create_resolves_live_state_before_mutation(monkeypatch
     assert "ambiguous lifecycle evidence" in context
     assert "current workflow state" in context
     assert "--assert-draft" in context
+    identity_resolution = context.index("First resolve the exact pull-request identity")
+    identity_confirmation = context.index(
+        "Confirm that its repository and host match the current checkout"
+    )
+    live_draft_state = context.index("inspect `gh pr view <PR#> --json isDraft`")
     draft_assertion = context.index("--assert-draft")
     ready_transition = context.index("gh pr ready", draft_assertion)
     ready_assertion = context.index("--assert-ready", ready_transition)
-    assert draft_assertion < ready_transition < ready_assertion
+    assert (
+        identity_resolution
+        < identity_confirmation
+        < live_draft_state
+        < draft_assertion
+        < ready_transition
+        < ready_assertion
+    )
 
 
 def test_successful_ready_create_resolves_live_state_before_watch(monkeypatch, capsys):
@@ -253,8 +265,10 @@ def test_supported_successful_creation_syntax_uses_live_state(monkeypatch, capsy
     "command",
     (
         "gh -R foreign/project pr create --draft --fill",
+        "gh -Rforeign/project pr create --draft --fill",
         "gh --repo=foreign/project pr create --draft --fill",
-        "gh --hostname enterprise.example pr create --draft --fill",
+        "gh pr -R foreign/project create --draft --fill",
+        "gh pr --repo=foreign/project create --draft --fill",
     ),
 )
 def test_repository_qualified_commands_require_repository_bound_live_state(
@@ -313,17 +327,43 @@ def test_repository_scoped_candidates_never_select_a_numeric_lifecycle(
     assert "does not match, stop without changing or watching any pull request" in context
 
 
-def test_silent_command_that_only_mentions_create_stays_silent(monkeypatch, capsys):
+def test_silent_candidate_with_empty_response_takes_safe_live_state_route(
+    monkeypatch, capsys
+):
     hook = _load_hook()
     command = "grep -q 'gh pr create' README.md"
 
     exit_code, out = _run(hook, monkeypatch, capsys, _payload_with(command))
 
     assert exit_code == 0
-    assert hook._response_text({"tool_response": ""}) == ""
-    assert hook._response_text(json.loads(_payload_with(command))) == ""
-    assert hook.should_fire(command, "") is False
-    assert out == ""
+    assert hook._response_text({"tool_response": ""}) is None
+    assert hook._response_text(json.loads(_payload_with(command))) is None
+    assert hook.should_fire(command, None) is True
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "resolve the exact pull-request identity" in context
+    assert "if no pull request exists" in context
+    assert "stop without changing or watching any pull request" in context
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        "gh pr create --fill >/dev/null 2>&1",
+        "gh pr ready 42 >/dev/null 2>&1",
+    ),
+)
+def test_suppressed_real_pr_output_fails_loud_without_selecting_a_mutation(
+    monkeypatch, capsys, command
+):
+    hook = _load_hook()
+
+    exit_code, out = _run(hook, monkeypatch, capsys, _payload_with(command))
+
+    assert exit_code == 0
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    live_draft_state = context.index("inspect `gh pr view <PR#> --json isDraft`")
+    assert live_draft_state < context.index("--assert-ready")
+    assert live_draft_state < context.index("gh pr ready")
 
 
 def test_direct_short_web_cluster_never_selects_a_mutating_lifecycle():
