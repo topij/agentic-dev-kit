@@ -44,6 +44,13 @@ starts.
 
 ## #653 — 2026-08-31
 
+- **CHANGED (gate semantics) — the PR follow-through hook now distinguishes a
+  successful creation URL from GitHub CLI's existing-PR diagnostic, recognizes the
+  documented `gh pr new` alias and supported shell prefixes, and reads live `isDraft`
+  before correcting mixed create intent.** **Refresh
+  `scripts/hooks/pr_followup_hook.py` and `init.sh`; in Claude's `PostToolUse`
+  registration, set the command hook's `if` field to `Bash(*)` so the shared hook —
+  rather than a runtime-only prefix filter — decides which Bash calls apply.**
 - **CHANGED (config keys) — `triage.pr_draft` and `systemize.pr_draft` now accept
   only `false`; completed workflow patches open ready for review and correct the ready
   bit before review polling.** **Set `triage.pr_draft` and `systemize.pr_draft` to the

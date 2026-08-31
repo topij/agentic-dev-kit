@@ -2036,7 +2036,7 @@ register_pr_hook() {
   echo "      Claude — .claude/settings.json, under hooks.PostToolUse, matcher \"Bash\"."
   echo "      \`if\` goes on the hook entry beside \`command\`, not next to \`matcher\`:"
   echo "        python3 \"\$CLAUDE_PROJECT_DIR/${_hook_src}\" --runtime claude"
-  echo "        with if: \"Bash(gh pr *)\""
+  echo "        with if: \"Bash(*)\""
 }
 
 # ── SessionStart budget tripwires (#380) ─────────────────────────────────

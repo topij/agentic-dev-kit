@@ -4,8 +4,10 @@
 Registered on BOTH runtimes, and told which one it is running under via
 `--runtime claude|codex` (#301):
 
-  - `.claude/settings.json` — `hooks.PostToolUse`, matcher `Bash`, plus an
-    `if: "Bash(gh pr *)"` config-level pre-filter.
+  - `.claude/settings.json` — `hooks.PostToolUse`, matcher `Bash`, plus a broad
+    `if: "Bash(*)"` tool-level filter. The hook itself must narrow the command:
+    valid shell wrappers and inherited `gh` options do not start with literal
+    `gh pr`, so a narrower runtime adapter silently changes the shared policy.
   - `.codex/hooks.json` — `hooks.PostToolUse`, matcher `^Bash$`. Codex's matcher
     filters the TOOL NAME only, with no equivalent of Claude's `if`, so this
     script is invoked on every Bash call there and does all the narrowing itself.
@@ -89,6 +91,11 @@ _CREATE_OPTIONS_WITH_VALUE = frozenset(
     }
 )
 _CREATE_BOOLEAN_SHORT_FLAGS = frozenset("defw")
+_CREATE_SHORT_OPTIONS_WITH_VALUE = frozenset("aBbFHlmprTt")
+_SHELL_COMMAND_PREFIXES = frozenset(
+    {"!", "{", "elif", "else", "exec", "if", "then", "until", "while", "do"}
+)
+_LEADING_REDIRECTION = re.compile(r"^\d*(?:<>|>>|>|<<|<)(.*)$")
 
 # What a real invocation leaves in the response, established from `gh`'s source
 # rather than assumed — the issue asked for that specifically, and the two
@@ -107,6 +114,17 @@ _CREATE_BOOLEAN_SHORT_FLAGS = frozenset("defw")
 # own response carried `…/pull/306#discussion_r…`. The bare-substring form could
 # not tell that from a PR being opened.
 _PR_URL = re.compile(r"^\s*https://\S+/pull/\d+/?\s*$", re.MULTILINE)
+
+# `gh pr create` also prints an existing PR's URL on its own line when creation
+# FAILS because that head/base pair already has a PR. A URL alone therefore is
+# not success evidence when it belongs to this diagnostic. Acting on it is
+# unsafe: a failed `--draft` retry against an existing ready PR would otherwise
+# make the hook issue the mutating `--assert-draft` correction.
+_EXISTING_PR_ERROR = re.compile(
+    r"a pull request for branch .+ already exists:\s*\n\s*"
+    r"https://\S+/pull/\d+/?\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 # The optional backslash tolerates a runtime that hands us already-escaped text.
 # It is NOT load-bearing for anything this module does: nothing serialises the
@@ -343,32 +361,51 @@ def _is_assignment(token: str) -> bool:
     return "=" in token and not token.startswith("=")
 
 
+def _redirection_span(shell_command: list[str], index: int) -> int:
+    """Tokens occupied by one leading shell redirection, or zero."""
+    match = _LEADING_REDIRECTION.match(shell_command[index])
+    if match is None:
+        return 0
+    if match.group(1):
+        return 1
+    return 2 if index + 1 < len(shell_command) else 1
+
+
 def _gh_command_index(shell_command: list[str]) -> int | None:
     """Locate a direct ``gh`` command after supported shell wrappers."""
     index = 0
-    while index < len(shell_command) and _is_assignment(shell_command[index]):
-        index += 1
-
-    if index < len(shell_command) and shell_command[index] == "command":
-        index += 1
-        if index < len(shell_command) and shell_command[index] == "--":
+    while index < len(shell_command):
+        token = shell_command[index]
+        if token in _SHELL_COMMAND_PREFIXES or _is_assignment(token):
             index += 1
-    elif index < len(shell_command) and shell_command[index] == "env":
-        index += 1
-        while index < len(shell_command):
-            token = shell_command[index]
-            if _is_assignment(token) or token in {"-i", "--ignore-environment"}:
+            continue
+        redirection_span = _redirection_span(shell_command, index)
+        if redirection_span:
+            index += redirection_span
+            continue
+        if token == "command":
+            index += 1
+            if index < len(shell_command) and shell_command[index] == "--":
                 index += 1
-                continue
-            if token in {"-u", "--unset"} and index + 1 < len(shell_command):
-                index += 2
-                continue
-            if token.startswith("--unset="):
-                index += 1
-                continue
-            if token == "--":
-                index += 1
-            break
+            continue
+        if token == "env":
+            index += 1
+            while index < len(shell_command):
+                token = shell_command[index]
+                if _is_assignment(token) or token in {"-i", "--ignore-environment"}:
+                    index += 1
+                    continue
+                if token in {"-u", "--unset"} and index + 1 < len(shell_command):
+                    index += 2
+                    continue
+                if token.startswith("--unset="):
+                    index += 1
+                    continue
+                if token == "--":
+                    index += 1
+                break
+            continue
+        break
 
     if index >= len(shell_command) or Path(shell_command[index]).name != "gh":
         return None
@@ -404,6 +441,8 @@ def _gh_invocations(command: object) -> list[tuple[str, list[str]]]:
         if index + 1 >= len(shell_command) or shell_command[index] != "pr":
             continue
         action = shell_command[index + 1]
+        if action == "new":
+            action = "create"
         if action in {"create", "ready"}:
             invocations.append((action, shell_command[index + 2 :]))
     return invocations
@@ -431,43 +470,58 @@ def _create_is_draft(arguments: list[str]) -> bool:
         if token.startswith("--draft=") or token.startswith("-d="):
             value = token.split("=", 1)[1].strip().casefold()
             return value not in {"false", "0", "no", "off"}
-        if (
-            token.startswith("-")
-            and not token.startswith("--")
-            and set(token[1:]) <= _CREATE_BOOLEAN_SHORT_FLAGS
-            and "d" in token[1:]
-        ):
-            return True
+        if token.startswith("-") and not token.startswith("--"):
+            # Cobra/pflag walks a short-option cluster left to right. A boolean
+            # `d` is draft wherever it is reached, but a value-taking option
+            # consumes the rest of the token: `-dFbody.md` is draft while `-Fd`
+            # gives `d` to `--body-file` and is ready.
+            for short_flag in token[1:]:
+                if short_flag == "d":
+                    return True
+                if short_flag in _CREATE_SHORT_OPTIONS_WITH_VALUE:
+                    break
+                if short_flag not in _CREATE_BOOLEAN_SHORT_FLAGS:
+                    break
         index += 1
     return False
 
 
 def _pr_lifecycle(command: object, response: str | None = None) -> str:
-    """Return ``draft`` for a draft create until execution proves it became ready.
+    """Return the evidenced lifecycle, or ``unknown`` for mixed create intent.
 
     Command text proves creation intent, including ``-d`` and inherited global
     ``gh`` flags. It does *not* prove that a later ready command executed: an
     ``||`` branch, failed intervening validation, or heredoc body may contain the
-    same words. Only GitHub CLI's ready acknowledgement in the PostToolUse response
-    settles that transition. Ambiguous evidence therefore preserves the intentional
-    draft instead of running the mutating ``--assert-ready`` correction early.
+    same words. Only GitHub CLI's ready acknowledgement paired with a parsed ready
+    invocation settles that transition. A draft-only create therefore preserves
+    the intentional draft, while mixed create intent requires a live-state read
+    before either mutating assertion.
     """
     invocations = _gh_invocations(command)
-    saw_draft_create = any(
-        action == "create" and _create_is_draft(arguments)
+    create_states = {
+        _create_is_draft(arguments)
         for action, arguments in invocations
-    )
-    if not saw_draft_create:
+        if action == "create"
+    }
+    saw_ready_action = any(action == "ready" for action, _arguments in invocations)
+    if saw_ready_action and response is not None and _READY_ACK.search(response):
         return "ready"
-    if response is not None and _READY_ACK.search(response):
+    if create_states == {True}:
+        return "draft"
+    if len(create_states) > 1:
+        # Aggregate output cannot identify which side of `ready-create ||
+        # draft-create` produced the URL. Neither mutating assertion is safe.
+        return "unknown"
+    if create_states == {False} or saw_ready_action:
         return "ready"
-    return "draft"
+    return "unknown"
 
 
 def _lifecycle_instruction(
     command: object, engines_dir: str, response: str | None = None
 ) -> str:
-    if _pr_lifecycle(command, response) == "draft":
+    lifecycle = _pr_lifecycle(command, response)
+    if lifecycle == "draft":
         return (
             "A draft pull request was just opened under the bounded material "
             "unfinished-work exception. Immediately run "
@@ -476,6 +530,16 @@ def _lifecycle_instruction(
             "push the material work, complete the PR body, run `gh pr ready <PR#>`, "
             f"then run `uv run {engines_dir}/pr_watch.py <PR#> --assert-ready`. "
             "Only after that ready assertion passes may the watch-and-fix loop start. "
+        )
+    if lifecycle == "unknown":
+        return (
+            "A pull-request command produced ambiguous lifecycle evidence. Do not "
+            "change its draft state from command text alone. Immediately inspect "
+            "`gh pr view <PR#> --json isDraft`; run "
+            f"`uv run {engines_dir}/pr_watch.py <PR#> --assert-draft` only when "
+            "that field is true, otherwise run "
+            f"`uv run {engines_dir}/pr_watch.py <PR#> --assert-ready`. Start the "
+            "watch-and-fix loop only after the ready assertion passes. "
         )
     return (
         "A pull request was just opened ready for review or marked ready. Immediately "
@@ -614,7 +678,11 @@ def should_fire(command: object, response: str | None) -> bool:
     # both actions, and its response may carry only the URL if the runtime drops
     # stderr. Requiring every action's evidence would go silent on a PR that was
     # genuinely just opened, which is the failure this hook exists to prevent.
-    if "create" in actions and _PR_URL.search(response):
+    if (
+        "create" in actions
+        and _PR_URL.search(response)
+        and not _EXISTING_PR_ERROR.search(response)
+    ):
         return True
     return bool("ready" in actions and _READY_ACK.search(response))
 

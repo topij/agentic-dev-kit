@@ -104,7 +104,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "8f839e1328ab4f9010d90a2380326f97d44db4a328a19bc9753f2b1714db635c"
+      "sha256": "a97c8be9c7754cdc7c49937e5a0f251ea63126666baae8b9539791c16072ed3d"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -128,7 +128,7 @@
     },
     "scripts/hooks/pr_followup_hook.py": {
       "role": "hook",
-      "sha256": "bd3ba4a3dae4cc164bd6f872eb8748d5e8db21e911e2d8dee3a1a990f2cc41ca"
+      "sha256": "290f255bed2d298747aafb363d10c797bdd6b44aacfa3238b0d6e0d6982fd1fc"
     },
     "scripts/hooks/pre-push": {
       "role": "hook",
@@ -246,7 +246,7 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "25dd2161b1015af32b5db45ba518572ff90315df935c10f4ff9285dffd224c09"
+      "sha256": "aedfbb3286b04a9b019fb653d0a82751e88f99f3374d033cb0663733cc231fd6"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
@@ -282,7 +282,7 @@
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
-      "sha256": "88c66c6169a16cdd49151586a5f4fd38a2b492cb7bb997892087104850fbf4c0"
+      "sha256": "ffdcd06eec92389148fc316a5fae0eabdb48761ad3ba3f52ffd80b7cc75d3b5a"
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
