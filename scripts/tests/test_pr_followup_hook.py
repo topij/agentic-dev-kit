@@ -147,6 +147,31 @@ def test_compound_draft_create_and_ready_takes_ready_route(monkeypatch, capsys):
     assert context.index("--assert-ready") < context.index("watch-and-fix loop")
 
 
+def test_ready_ack_for_another_pr_never_settles_the_created_pr(monkeypatch, capsys):
+    hook = _load_hook()
+    command = "gh pr ready 7; gh pr create --draft --fill"
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(
+            command,
+            stdout="https://github.com/owner/repo/pull/42\n",
+            stderr='Pull request owner/repo#7 is marked as "ready for review"\n',
+        ),
+    )
+
+    assert exit_code == 0
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert hook._pr_lifecycle(
+        command,
+        "https://github.com/owner/repo/pull/42\n"
+        'Pull request owner/repo#7 is marked as "ready for review"\n',
+    ) == "unknown"
+    assert "ambiguous lifecycle evidence" in context
+    assert "gh pr view <PR#> --json isDraft" in context
+
+
 def test_ready_ack_only_settles_a_parsed_ready_invocation(monkeypatch, capsys):
     """Output text cannot turn a draft create into an executed ready transition."""
     hook = _load_hook()
@@ -191,7 +216,7 @@ def test_echoed_ready_after_draft_create_does_not_change_draft_lifecycle():
         ),
     ),
 )
-def test_unexecuted_ready_text_preserves_draft_lifecycle(
+def test_distinct_unsettled_lifecycle_invocations_require_live_state(
     monkeypatch, capsys, command, stderr
 ):
     hook = _load_hook()
@@ -207,7 +232,8 @@ def test_unexecuted_ready_text_preserves_draft_lifecycle(
     )
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "--assert-draft" in context
+    assert "ambiguous lifecycle evidence" in context
+    assert "gh pr view <PR#> --json isDraft" in context
 
 
 @pytest.mark.parametrize(
@@ -231,6 +257,49 @@ def test_global_repo_flag_and_gh_path_still_trigger_draft_lifecycle(
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
     assert "--assert-draft" in context
+
+
+@pytest.mark.parametrize(
+    "inherited",
+    ("-R owner/repo", "-Rowner/repo", "--repo owner/repo", "--repo=owner/repo"),
+)
+@pytest.mark.parametrize(
+    "action,stdout,stderr,assertion",
+    (
+        (
+            "create --draft --fill",
+            "https://github.com/owner/repo/pull/42\n",
+            "",
+            "--assert-draft",
+        ),
+        (
+            "new --draft --fill",
+            "https://github.com/owner/repo/pull/42\n",
+            "",
+            "--assert-draft",
+        ),
+        (
+            "ready 42",
+            "",
+            'Pull request owner/repo#42 is marked as "ready for review"\n',
+            "--assert-ready",
+        ),
+    ),
+)
+def test_inherited_repo_flags_after_pr_reach_each_lifecycle_action(
+    monkeypatch, capsys, inherited, action, stdout, stderr, assertion
+):
+    hook = _load_hook()
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(f"gh pr {inherited} {action}", stdout=stdout, stderr=stderr),
+    )
+
+    assert exit_code == 0
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert assertion in context
 
 
 @pytest.mark.parametrize(
@@ -261,6 +330,29 @@ def test_shell_prefixes_and_wrappers_reach_the_shared_lifecycle_hook(
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
     assert "--assert-draft" in context
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        "open_pr(){ gh pr create --draft --fill; }",
+        "function open_pr { gh pr create --draft --fill; }",
+        "open_pr() { gh pr create --draft --fill; }; echo defined",
+    ),
+)
+def test_nonexecuting_function_definition_stays_silent(
+    monkeypatch, capsys, command
+):
+    hook = _load_hook()
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command),
+    )
+
+    assert exit_code == 0
+    assert out == ""
 
 
 def test_gh_pr_new_alias_reaches_the_create_lifecycle(monkeypatch, capsys):
@@ -333,6 +425,126 @@ def test_existing_pr_error_url_is_not_successful_creation(monkeypatch, capsys):
 
     assert exit_code == 0
     assert out == ""
+
+
+@pytest.mark.parametrize(
+    "response",
+    (
+        (
+            "https://github.com/owner/repo/pull/42\n"
+            'a pull request for branch "other" into branch "main" already exists:\n'
+            "https://github.com/owner/repo/pull/9\n"
+        ),
+        (
+            'a pull request for branch "other" into branch "main" already exists:\n'
+            "https://github.com/owner/repo/pull/9\n"
+            "https://github.com/owner/repo/pull/42\n"
+        ),
+    ),
+)
+def test_existing_pr_diagnostic_does_not_hide_a_separate_success(
+    monkeypatch, capsys, response
+):
+    hook = _load_hook()
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(
+            "gh pr create --fill; gh pr create --fill",
+            stdout=response,
+        ),
+    )
+
+    assert exit_code == 0
+    assert "MANDATORY" in json.loads(out)["hookSpecificOutput"]["additionalContext"]
+
+
+def test_dry_run_body_url_is_not_creation_evidence(monkeypatch, capsys):
+    hook = _load_hook()
+    dry_run_output = (
+        "Would have created a Pull Request with:\n"
+        "title: Example\n"
+        "draft: false\n"
+        "base: main\n"
+        "head: topic\n"
+        "maintainerCanModify: true\n"
+        "body:\n"
+        "https://github.com/owner/repo/pull/42\n"
+    )
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(
+            "gh pr create --dry-run --body https://github.com/owner/repo/pull/42",
+            stdout=dry_run_output,
+        ),
+    )
+
+    assert exit_code == 0
+    assert out == ""
+
+
+def test_dry_run_and_real_create_require_live_state(monkeypatch, capsys):
+    hook = _load_hook()
+    command = "gh pr create --dry-run --fill; gh pr create --fill"
+    response = (
+        "Would have created a Pull Request with:\n"
+        "body:\n"
+        "https://github.com/owner/repo/pull/7\n"
+        "https://github.com/owner/repo/pull/42\n"
+    )
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command, stdout=response),
+    )
+
+    assert exit_code == 0
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert hook._pr_lifecycle(command, response) == "unknown"
+    assert "ambiguous lifecycle evidence" in context
+    assert "gh pr view <PR#> --json isDraft" in context
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        "gh pr ready --undo 42 >/dev/null 2>&1",
+        "gh pr ready 42 --undo >/dev/null 2>&1",
+    ),
+)
+@pytest.mark.parametrize("tool_response", ({"stdout": "", "stderr": ""}, ""))
+def test_ready_undo_never_injects_a_ready_assertion(
+    monkeypatch, capsys, command, tool_response
+):
+    hook = _load_hook()
+    payload = json.dumps(
+        {"tool_input": {"command": command}, "tool_response": tool_response}
+    )
+    exit_code, out = _run(hook, monkeypatch, capsys, payload)
+
+    assert exit_code == 0
+    assert out == ""
+
+
+def test_ready_undo_false_remains_a_ready_transition(monkeypatch, capsys):
+    hook = _load_hook()
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(
+            "gh pr ready 42 --undo=false",
+            stderr='Pull request owner/repo#42 is marked as "ready for review"\n',
+        ),
+    )
+
+    assert exit_code == 0
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "--assert-ready" in context
 
 
 def test_does_not_trigger_on_gh_pr_view(monkeypatch, capsys):
@@ -1162,7 +1374,7 @@ def test_one_command_doing_both_fires_on_either_signal_alone(monkeypatch, capsys
     both = "gh pr create --draft --fill && gh pr ready"
 
     assert hook.should_fire(both, "https://github.com/topij/agentic-dev-kit/pull/306") is True
-    assert hook.should_fire(both, 'Pull request x#1 is marked as "ready for review"') is True
+    assert hook.should_fire(both, 'Pull request x/y#1 is marked as "ready for review"') is True
     assert hook.should_fire(both, "nothing relevant here") is False
 
 

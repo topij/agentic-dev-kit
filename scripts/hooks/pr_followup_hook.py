@@ -113,7 +113,11 @@ _LEADING_REDIRECTION = re.compile(r"^\d*(?:<>|>>|>|<<|<)(.*)$")
 # this hook, because the command text quoted the trigger phrase and the API's
 # own response carried `…/pull/306#discussion_r…`. The bare-substring form could
 # not tell that from a PR being opened.
-_PR_URL = re.compile(r"^\s*https://\S+/pull/\d+/?\s*$", re.MULTILINE)
+_PR_URL = re.compile(
+    r"^\s*https://(?P<host>[^/\s]+)/(?P<owner>[^/\s]+)/(?P<repo>[^/\s]+)/pull/"
+    r"(?P<number>\d+)/?\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 # `gh pr create` also prints an existing PR's URL on its own line when creation
 # FAILS because that head/base pair already has a PR. A URL alone therefore is
@@ -129,7 +133,13 @@ _EXISTING_PR_ERROR = re.compile(
 # The optional backslash tolerates a runtime that hands us already-escaped text.
 # It is NOT load-bearing for anything this module does: nothing serialises the
 # response any more, because doing so was what broke `_PR_URL`'s line anchor.
-_READY_ACK = re.compile(r'is (?:marked as|already) \\?"ready for review')
+_READY_ACK = re.compile(
+    r"Pull request (?P<owner>[^/\s#]+)/(?P<repo>[^/\s#]+)#(?P<number>\d+) "
+    r'is (?:marked as|already) \\?"ready for review',
+    re.IGNORECASE,
+)
+
+_SHELL_FUNCTION_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 # What the two registered runtimes actually send, established from their own
 # sources by a review lens rather than assumed — an earlier version of this
@@ -347,6 +357,13 @@ def _shell_commands(command: object) -> list[list[str]]:
     except (TypeError, ValueError):
         return []
 
+    # A function definition does not execute its body. Reject the whole compound
+    # payload instead of pretending to interpret Bash well enough to determine
+    # whether and where that function is later called. A brace group has no
+    # ``name()`` / ``function name`` signature and remains supported.
+    if _contains_function_definition(tokens):
+        return []
+
     commands: list[list[str]] = [[]]
     for token in tokens:
         if token and set(token) <= _SHELL_CONTROL_CHARS:
@@ -355,6 +372,39 @@ def _shell_commands(command: object) -> list[list[str]]:
             continue
         commands[-1].append(token)
     return [shell_command for shell_command in commands if shell_command]
+
+
+def _contains_function_definition(tokens: list[str]) -> bool:
+    """Recognise common Bash function signatures without parsing their bodies."""
+
+    def _after_newlines(index: int) -> int:
+        while index < len(tokens) and tokens[index] and set(tokens[index]) == {"\n"}:
+            index += 1
+        return index
+
+    for index, token in enumerate(tokens):
+        if token == "function" and index + 1 < len(tokens):
+            name_index = _after_newlines(index + 1)
+            if name_index >= len(tokens) or not _SHELL_FUNCTION_NAME.fullmatch(
+                tokens[name_index]
+            ):
+                continue
+            brace_index = _after_newlines(name_index + 1)
+            if brace_index < len(tokens) and tokens[brace_index].replace("\n", "") == "()":
+                brace_index = _after_newlines(brace_index + 1)
+            if brace_index < len(tokens) and tokens[brace_index] == "{":
+                return True
+            continue
+
+        if not _SHELL_FUNCTION_NAME.fullmatch(token) or index + 1 >= len(tokens):
+            continue
+        parens = tokens[index + 1]
+        if parens.replace("\n", "") != "()":
+            continue
+        brace_index = _after_newlines(index + 2)
+        if brace_index < len(tokens) and tokens[brace_index] == "{":
+            return True
+    return False
 
 
 def _is_assignment(token: str) -> bool:
@@ -419,33 +469,42 @@ def _gh_invocations(command: object) -> list[tuple[str, list[str]]]:
         gh_index = _gh_command_index(shell_command)
         if gh_index is None:
             continue
-        index = gh_index + 1
-        while index < len(shell_command):
-            token = shell_command[index]
-            if token == "pr":
-                break
-            if token in _GH_GLOBAL_OPTIONS_WITH_VALUE:
-                index += 2
-                continue
-            if any(
-                token.startswith(f"{option}=")
-                for option in _GH_GLOBAL_OPTIONS_WITH_VALUE
-                if option.startswith("--")
-            ) or (token.startswith("-R") and token != "-R"):
-                index += 1
-                continue
-            if token in _GH_GLOBAL_OPTIONS_WITHOUT_VALUE:
-                index += 1
-                continue
-            break
-        if index + 1 >= len(shell_command) or shell_command[index] != "pr":
+        index = _skip_gh_global_options(shell_command, gh_index + 1)
+        if index is None or index >= len(shell_command) or shell_command[index] != "pr":
             continue
-        action = shell_command[index + 1]
+        index = _skip_gh_global_options(shell_command, index + 1)
+        if index is None or index >= len(shell_command):
+            continue
+        action = shell_command[index]
         if action == "new":
             action = "create"
         if action in {"create", "ready"}:
-            invocations.append((action, shell_command[index + 2 :]))
+            invocations.append((action, shell_command[index + 1 :]))
     return invocations
+
+
+def _skip_gh_global_options(tokens: list[str], index: int) -> int | None:
+    """Consume inherited options before a Cobra subcommand, or reject no-op flags."""
+    while index < len(tokens):
+        token = tokens[index]
+        if token in _GH_GLOBAL_OPTIONS_WITH_VALUE:
+            if index + 1 >= len(tokens):
+                return None
+            index += 2
+            continue
+        if any(
+            token.startswith(f"{option}=")
+            for option in _GH_GLOBAL_OPTIONS_WITH_VALUE
+            if option.startswith("--")
+        ) or (token.startswith("-R") and token != "-R"):
+            index += 1
+            continue
+        if token in _GH_GLOBAL_OPTIONS_WITHOUT_VALUE:
+            # Help/version terminate execution instead of selecting the later
+            # lifecycle subcommand, wherever Cobra accepts their placement.
+            return None
+        return index
+    return index
 
 
 def _create_is_draft(arguments: list[str]) -> bool:
@@ -486,6 +545,62 @@ def _create_is_draft(arguments: list[str]) -> bool:
     return False
 
 
+def _create_is_dry_run(arguments: list[str]) -> bool:
+    """Whether ``create`` only reports what it would do instead of creating."""
+    index = 0
+    while index < len(arguments):
+        token = arguments[index]
+        if token == "--":
+            return False
+        if token in _CREATE_OPTIONS_WITH_VALUE:
+            index += 2
+            continue
+        if any(
+            token.startswith(f"{option}=")
+            for option in _CREATE_OPTIONS_WITH_VALUE
+            if option.startswith("--")
+        ):
+            index += 1
+            continue
+        if token == "--dry-run":
+            return True
+        if token.startswith("--dry-run="):
+            value = token.split("=", 1)[1].strip().casefold()
+            return value not in {"false", "0", "no", "off"}
+        index += 1
+    return False
+
+
+def _ready_is_undo(arguments: list[str]) -> bool:
+    """Whether ``ready`` intentionally converts the target back to draft."""
+    for token in arguments:
+        if token == "--":
+            return False
+        if token == "--undo":
+            return True
+        if token.startswith("--undo="):
+            value = token.split("=", 1)[1].strip().casefold()
+            return value not in {"false", "0", "no", "off"}
+    return False
+
+
+def _without_existing_pr_diagnostics(response: str) -> str:
+    """Remove failed-create diagnostics while preserving separate success URLs."""
+    return _EXISTING_PR_ERROR.sub("", response)
+
+
+def _response_identities(pattern: re.Pattern[str], response: str) -> set[tuple[str, str, int]]:
+    """Return case-insensitive repository/PR identities captured by ``pattern``."""
+    return {
+        (
+            match.group("owner").casefold(),
+            match.group("repo").casefold(),
+            int(match.group("number")),
+        )
+        for match in pattern.finditer(response)
+    }
+
+
 def _pr_lifecycle(command: object, response: str | None = None) -> str:
     """Return the evidenced lifecycle, or ``unknown`` for mixed create intent.
 
@@ -498,21 +613,51 @@ def _pr_lifecycle(command: object, response: str | None = None) -> str:
     before either mutating assertion.
     """
     invocations = _gh_invocations(command)
+    create_arguments = [
+        arguments for action, arguments in invocations if action == "create"
+    ]
+    real_creates = [
+        arguments for arguments in create_arguments if not _create_is_dry_run(arguments)
+    ]
+    dry_run_creates = [
+        arguments for arguments in create_arguments if _create_is_dry_run(arguments)
+    ]
+    ready_arguments = [
+        arguments for action, arguments in invocations if action == "ready"
+    ]
+    normal_ready = [
+        arguments for arguments in ready_arguments if not _ready_is_undo(arguments)
+    ]
+    undo_ready = [
+        arguments for arguments in ready_arguments if _ready_is_undo(arguments)
+    ]
     create_states = {
         _create_is_draft(arguments)
-        for action, arguments in invocations
-        if action == "create"
+        for arguments in real_creates
     }
-    saw_ready_action = any(action == "ready" for action, _arguments in invocations)
-    if saw_ready_action and response is not None and _READY_ACK.search(response):
-        return "ready"
+    if dry_run_creates and (real_creates or normal_ready):
+        # Aggregate output cannot say whether a URL came from a dry-run body or
+        # the real invocation. Inspect live state before choosing a correction.
+        return "unknown"
+    if undo_ready and (real_creates or normal_ready):
+        # Distinct ready/draft transitions in one aggregate response are not
+        # safe grounds for a mutating assertion.
+        return "unknown"
+    if len(create_states) > 1:
+        return "unknown"
+    if create_states == {True} and normal_ready:
+        if response is None or len(real_creates) != 1 or len(normal_ready) != 1:
+            return "unknown"
+        create_ids = _response_identities(
+            _PR_URL, _without_existing_pr_diagnostics(response)
+        )
+        ready_ids = _response_identities(_READY_ACK, response)
+        if len(create_ids) == 1 and create_ids == ready_ids:
+            return "ready"
+        return "unknown"
     if create_states == {True}:
         return "draft"
-    if len(create_states) > 1:
-        # Aggregate output cannot identify which side of `ready-create ||
-        # draft-create` produced the URL. Neither mutating assertion is safe.
-        return "unknown"
-    if create_states == {False} or saw_ready_action:
+    if create_states == {False} or normal_ready:
         return "ready"
     return "unknown"
 
@@ -664,8 +809,18 @@ def should_fire(command: object, response: str | None) -> bool:
     """
     if not isinstance(command, str):
         return False
-    actions = {action for action, _arguments in _gh_invocations(command)}
-    if not actions:
+    invocations = _gh_invocations(command)
+    real_creates = [
+        arguments
+        for action, arguments in invocations
+        if action == "create" and not _create_is_dry_run(arguments)
+    ]
+    normal_ready = [
+        arguments
+        for action, arguments in invocations
+        if action == "ready" and not _ready_is_undo(arguments)
+    ]
+    if not real_creates and not normal_ready:
         return False
     if response is None:
         return True  # nothing readable — fail loud
@@ -678,13 +833,9 @@ def should_fire(command: object, response: str | None) -> bool:
     # both actions, and its response may carry only the URL if the runtime drops
     # stderr. Requiring every action's evidence would go silent on a PR that was
     # genuinely just opened, which is the failure this hook exists to prevent.
-    if (
-        "create" in actions
-        and _PR_URL.search(response)
-        and not _EXISTING_PR_ERROR.search(response)
-    ):
+    if real_creates and _PR_URL.search(_without_existing_pr_diagnostics(response)):
         return True
-    return bool("ready" in actions and _READY_ACK.search(response))
+    return bool(normal_ready and _READY_ACK.search(response))
 
 
 def main() -> int:
