@@ -47,8 +47,9 @@ starts.
 - **CHANGED (gate semantics) — the PR follow-through hook now distinguishes a
   successful creation URL from GitHub CLI's existing-PR diagnostic. Creation output
   carries no draft bit, so every successful creation requires an authoritative
-  `isDraft` check; only GitHub CLI's explicit ready acknowledgement selects ready state
-  directly. No lifecycle mutation is inferred from shell text.** **Refresh
+  `isDraft` check. Ready acknowledgements also require repository and host identity to
+  match the current checkout before a repository-local watcher runs; no lifecycle
+  mutation is inferred from shell text or response text.** **Refresh
   `scripts/hooks/pr_followup_hook.py` and `init.sh`; in Claude's `PostToolUse`
   registration, set the command hook's `if` field to `Bash(*)` so the shared hook —
   rather than a runtime-only prefix filter — decides which Bash calls apply.**

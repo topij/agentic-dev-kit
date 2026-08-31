@@ -1995,7 +1995,10 @@ def test_pull_request_visibility_is_ready_by_default_with_a_bounded_draft_except
     ).read_text(encoding="utf-8")
     assert "--assert-draft" in hook_source
     assert "only then start the watch-and-fix loop" in hook_source
-    assert "--assert-ready` before review" in hook_source
+    assert "match the current checkout's " in hook_source
+    assert "authoritative forge identity" in hook_source
+    assert "inspect `gh pr view <PR#> --json isDraft`" in hook_source
+    assert "never selects a mutating lifecycle route from that evidence" in hook_source
 
     claude_template = (
         REPO_ROOT / "docs" / "templates" / "CLAUDE.md.tmpl"

@@ -12,10 +12,9 @@ Registered on BOTH runtimes, and told which one it is running under via
     script is invoked on every Bash call there and does all the narrowing itself.
 
 Either way it narrows to `gh pr create` / `gh pr ready` and injects an
-`additionalContext` instruction so the session enforces the matching lifecycle
-without being asked: ready creation / transition asserts ready before the kit's
-PR follow-through loop, while bounded draft creation asserts draft and defers
-that loop until the same run finishes and marks ready. Both runtimes honour the
+`additionalContext` instruction so the session resolves the exact pull request,
+confirms that it belongs to the current checkout, reads live draft state, and
+enforces the matching lifecycle without being asked. Both runtimes honour the
 same `hookSpecificOutput.additionalContext` contract.
 This closes the gap where the kit only had prose asking the agent to run `/pr-watch`
 unasked (Principle #8: "a rule that lives only in a doc is a wish").
@@ -61,10 +60,14 @@ from pathlib import Path
 # So the command decides whether to LOOK, and `tool_response` decides whether to
 # fire. Both runtimes supply it on PostToolUse, and every Bash command reaches
 # this shared policy so a runtime adapter cannot narrow away valid wrappers.
-# Repository-qualified global options are deliberately outside this candidate:
-# pr_watch.py is bound to the current checkout, so discarding their repository or
-# host identity could inspect or mutate a same-number PR in the wrong repository.
-_TRIGGER = re.compile(r"\bgh\s+pr\s+(create|new|ready)\b")
+# Repository-qualified global options are candidates too. This regex does not
+# interpret their values or select a lifecycle; authoritative forge state later
+# proves that the resolved repository and host match the current checkout before
+# the repository-local watcher can act.
+_TRIGGER = re.compile(
+    r"\bgh(?:\s+(?:-R|--repo|--hostname|--config-dir)(?:=\S+|\s+\S+))*"
+    r"\s+pr\s+(create|new|ready)\b"
+)
 
 # What a real invocation leaves in the response, established from `gh`'s source
 # rather than assumed — the issue asked for that specifically, and the two
@@ -108,9 +111,10 @@ _READY_ACK = re.compile(r'is (?:marked as|already) \\?"ready for review')
 #                 already concatenates stdout and stderr.
 #
 # Both are handled, and so is anything else, because `_iter_strings` below walks
-# for strings instead of naming keys. An EMPTY response still counts as
-# unreadable and fires: neither runtime promises a shape in its schema (Codex's
-# types `tool_response` as `true`), and a missed reminder is the costly failure.
+# for strings instead of naming keys. A response with no readable strings still
+# fails loud: neither runtime promises a shape in its schema (Codex's types
+# `tool_response` as `true`). A readable response whose strings are merely empty
+# is settled evidence and stays silent without PR output.
 
 _DEFAULT_FALLBACK_COMMAND = "/code-review"
 # Which runtime's `review.*` keys to read. Both registrations pass it explicitly;
@@ -303,44 +307,38 @@ def _without_existing_pr_diagnostics(response: str) -> str:
     return _EXISTING_PR_ERROR.sub("", response)
 
 
-def _pr_lifecycle(command: object, response: str | None = None) -> str:
-    """Trust only the ready acknowledgement; creation output carries no draft bit."""
-    if response is None or not isinstance(command, str):
-        return "unknown"
-    actions = {match.group(1) for match in _TRIGGER.finditer(command)}
-    return "ready" if "ready" in actions and _READY_ACK.search(response) else "unknown"
+def _lifecycle_instruction(engines_dir: str) -> str:
+    """Require a repository-bound live query for every lifecycle candidate.
 
-
-def _lifecycle_instruction(command: object, engines_dir: str, response: str | None = None) -> str:
-    lifecycle = _pr_lifecycle(command, response)
-    if lifecycle == "unknown":
-        return (
-            "A pull-request command produced ambiguous lifecycle evidence. Do not "
-            "change its draft state or start a watch loop from command text alone. "
-            "First resolve the exact pull-request identity from authoritative forge "
-            "state; if none exists, stop without changing any pull request. Then "
-            "inspect `gh pr view <PR#> --json isDraft`. If it is ready, run "
-            f"`uv run {engines_dir}/pr_watch.py <PR#> --assert-ready` and start the "
-            "watch-and-fix loop. If it is draft, use the current workflow state — "
-            "never parsed shell text — to decide whether this run intentionally took "
-            "the bounded material unfinished-work exception. For that intentional "
-            f"route, run `uv run {engines_dir}/pr_watch.py <PR#> --assert-draft`, "
-            "finish and push the material work, complete the body, run "
-            f"`gh pr ready <PR#>` and then `uv run {engines_dir}/pr_watch.py <PR#> "
-            "--assert-ready`; only then start the watch-and-fix loop. Otherwise "
-            "correct the unexpected draft with `--assert-ready` before polling. "
-        )
+    Creation URLs carry no draft bit. Ready acknowledgements carry an owner/repo
+    name, but turning that text into a repository-local numeric ``pr_watch`` call
+    would discard identity. Shell wrappers, ``GH_REPO``, ``-R`` and PR URLs can
+    all make the acknowledged pull request belong to another repository. The
+    hook therefore uses response evidence only to decide whether to fire; it
+    never selects a mutating lifecycle route from that evidence.
+    """
     return (
-        "A pull request was just opened ready for review or marked ready. Immediately "
-        f"run `uv run {engines_dir}/pr_watch.py <PR#> --assert-ready` before review "
-        "polling, then start the watch-and-fix loop. "
+        "A pull-request command produced ambiguous lifecycle evidence. Do not "
+        "change its draft state or start a watch loop from command text alone. "
+        "First resolve the exact pull-request identity from authoritative forge "
+        "state. Confirm that its repository and host match the current checkout's "
+        "authoritative forge identity; if no pull request exists or the identity "
+        "does not match, stop without changing or watching any pull request. Then "
+        "inspect `gh pr view <PR#> --json isDraft`. If it is ready, run "
+        f"`uv run {engines_dir}/pr_watch.py <PR#> --assert-ready` and start the "
+        "watch-and-fix loop. If it is draft, use the current workflow state — "
+        "never parsed shell text — to decide whether this run intentionally took "
+        "the bounded material unfinished-work exception. For that intentional "
+        f"route, run `uv run {engines_dir}/pr_watch.py <PR#> --assert-draft`, "
+        "finish and push the material work, complete the body, run "
+        f"`gh pr ready <PR#>` and then `uv run {engines_dir}/pr_watch.py <PR#> "
+        "--assert-ready`; only then start the watch-and-fix loop. Otherwise "
+        "correct the unexpected draft with `--assert-ready` before polling. "
     )
 
 
 def build_reminder(
     runtime: str = _DEFAULT_RUNTIME,
-    command: object = None,
-    response: str | None = None,
 ) -> str:
     (
         bots,
@@ -352,7 +350,7 @@ def build_reminder(
     ) = _load_review_config(runtime)
     bot_desc = _bot_description(bots)
     return (
-        _lifecycle_instruction(command, engines_dir, response)
+        _lifecycle_instruction(engines_dir)
         + 'Per the kit\'s "PR follow-through" policy (PRINCIPLES.md #5/#8), '
         "this lifecycle is MANDATORY; complete it in the current run without being "
         "asked. When it reaches review polling, invoke `/pr-watch` (or poll "
@@ -427,20 +425,22 @@ def _iter_strings(value: object, depth: int = 0):
 
 
 def _response_text(data: dict) -> str | None:
-    """Everything the tool reported, flattened — or None when the payload cannot
-    settle whether a PR was opened.
+    """Everything the tool reported, flattened — or None when it is unreadable.
 
-    None means "cannot settle it", and every such case fires: no strings at all,
-    and now also a payload too deep to walk. A runtime that does not capture
-    stderr renders `gh pr ready` indistinguishable from a command that printed
-    nothing, and a missed reminder costs the follow-through this hook exists to
-    guarantee while a spurious one costs a paragraph.
+    No strings at all, or a payload too deep to walk, means "cannot settle it"
+    and returns None so the hook fails loud. At least one captured string means
+    the response shape was readable; it returns ``""`` when all those strings
+    were empty. That distinction keeps a successful output-free command that
+    merely mentions the trigger phrase silent without treating an absent or
+    unrecognised runtime response as proof that no pull request exists.
     """
     try:
-        captured = "\n".join(_iter_strings(data.get("tool_response")))
+        captured_strings = list(_iter_strings(data.get("tool_response")))
     except (_Unreadable, RecursionError):
         return None
-    return captured.strip() or None
+    if not captured_strings:
+        return None
+    return "\n".join(captured_strings).strip()
 
 
 def should_fire(command: object, response: str | None) -> bool:
@@ -501,7 +501,7 @@ def main() -> int:
                 {
                     "hookSpecificOutput": {
                         "hookEventName": "PostToolUse",
-                        "additionalContext": build_reminder(runtime, command, response),
+                        "additionalContext": build_reminder(runtime),
                     }
                 }
             )
