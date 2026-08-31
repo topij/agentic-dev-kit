@@ -687,7 +687,7 @@ def _command_substitutions(command: str) -> tuple[str, list[str]]:
 
 
 def _shell_commands(command: object, _depth: int = 0) -> list[list[str]]:
-    """Tokenize executed command starts while excluding inert shell source."""
+    """Tokenize syntactic command segments while excluding inert shell source."""
     if not isinstance(command, str):
         return []
     if _depth > 4:
@@ -947,10 +947,25 @@ def _syntactic_lifecycle_actions(
     if _depth > 4 or not isinstance(command, str):
         return set()
     actions: set[str] = set()
+    assigned_actions: dict[str, set[str]] = {}
     for shell_command in _shell_commands(command):
+        for token in shell_command:
+            if not _is_assignment(token):
+                continue
+            name, _separator, value = token.partition("=")
+            assigned_actions[name] = _syntactic_lifecycle_actions(
+                value, _depth + 1
+            )
         executable_index = _shell_executable_index(shell_command)
         if executable_index is not None:
             executable = shell_command[executable_index]
+            dynamic_name = None
+            if executable.startswith("${") and executable.endswith("}"):
+                dynamic_name = executable[2:-1]
+            elif executable.startswith("$"):
+                dynamic_name = executable[1:]
+            if dynamic_name and dynamic_name in assigned_actions:
+                actions.update(assigned_actions[dynamic_name])
             if "$" in executable or "`" in executable:
                 index = _skip_gh_global_options(shell_command, executable_index + 1)
                 if (
@@ -972,8 +987,18 @@ def _syntactic_lifecycle_actions(
                 actions.update(
                     _syntactic_lifecycle_actions(" ".join(arguments), _depth + 1)
                 )
-        for gh_index, token in enumerate(shell_command):
-            if Path(token).name != "gh":
+            gh_index = executable_index if Path(executable).name == "gh" else None
+            wrapper_names = {Path(executable).name, Path(shell_command[0]).name}
+            if gh_index is None and wrapper_names & {"time", "timeout"}:
+                gh_index = next(
+                    (
+                        index
+                        for index in range(executable_index + 1, len(shell_command))
+                        if Path(shell_command[index]).name == "gh"
+                    ),
+                    None,
+                )
+            if gh_index is None:
                 continue
             index = _skip_gh_global_options(shell_command, gh_index + 1)
             if index is None or index >= len(shell_command) or shell_command[index] != "pr":
@@ -991,6 +1016,20 @@ def _syntactic_lifecycle_actions(
         if spec_index < len(program_flags) and program_flags[spec_index]:
             actions.update(_syntactic_lifecycle_actions(body, _depth + 1))
     return actions
+
+
+def _lifecycle_command_is_direct(command: object, _depth: int = 0) -> bool:
+    """Whether aggregate output can be attributed to one direct lifecycle call."""
+    if _depth > 4:
+        return False
+    shell_commands = _shell_commands(command)
+    if len(shell_commands) != 1:
+        return False
+    shell_command = shell_commands[0]
+    if _gh_command_index(shell_command) is not None:
+        return True
+    script = _interpreter_script(shell_command)
+    return script is not None and _lifecycle_command_is_direct(script, _depth + 1)
 
 
 def _skip_gh_global_options(tokens: list[str], index: int) -> int | None:
@@ -1237,6 +1276,11 @@ def _pr_lifecycle(command: object, response: str | None = None) -> str:
         if len(create_ids) == 1 and create_ids == ready_ids:
             return "ready"
         return "unknown"
+    if (real_creates or normal_ready) and not _lifecycle_command_is_direct(command):
+        # Shell segments are syntactic candidates, not proof of execution. A
+        # skipped create must not borrow a URL printed by a later `gh pr view`
+        # and turn it into a mutating draft correction.
+        return "unknown"
     if create_states == {True}:
         return "draft"
     if create_states == {False} or normal_ready:
@@ -1261,9 +1305,13 @@ def _lifecycle_instruction(
     if lifecycle == "unknown":
         return (
             "A pull-request command produced ambiguous lifecycle evidence. Do not "
-            "change its draft state from command text alone. First resolve the exact "
-            "pull-request identity from authoritative forge state; if none exists, "
-            "stop without changing any pull request. Then inspect "
+            "change its draft state or start a watch loop from command text alone. "
+            "First resolve the exact pull-request identity from authoritative forge "
+            "state; if none exists, stop without changing any pull request. Then "
+            "prove from action-bound output that this Bash call actually created or "
+            "readied it; a URL printed by another command is not proof. Bind the "
+            "identity to this call's head or transition; if you cannot, stop without "
+            "changing or watching any pull request. Then inspect "
             "`gh pr view <PR#> --json isDraft`; run "
             f"`uv run {engines_dir}/pr_watch.py <PR#> --assert-draft` only when "
             "that field is true, otherwise run "

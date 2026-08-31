@@ -215,14 +215,15 @@ def test_ready_ack_only_settles_a_parsed_ready_invocation(monkeypatch, capsys):
 
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "Immediately run `uv run scripts/pr_watch.py <PR#> --assert-draft`" in context
+    assert "ambiguous lifecycle evidence" in context
+    assert "--assert-ready` before review polling" not in context
 
 
-def test_echoed_ready_after_draft_create_does_not_change_draft_lifecycle():
+def test_compound_draft_create_with_echoed_ready_requires_live_state():
     hook = _load_hook()
     command = "gh pr create --draft --fill && echo gh pr ready"
     response = "https://github.com/owner/repo/pull/42\n"
-    assert hook._pr_lifecycle(command, response) == "draft"
+    assert hook._pr_lifecycle(command, response) == "unknown"
 
 
 @pytest.mark.parametrize(
@@ -522,6 +523,27 @@ def test_dynamic_ready_executable_with_acknowledgement_requires_live_state(
     ]
 
 
+def test_assignment_fed_create_with_success_evidence_cannot_fail_open(
+    monkeypatch, capsys
+):
+    hook = _load_hook()
+    command = 'open_pr="gh pr create --draft"; $open_pr'
+    response = "https://github.com/owner/repo/pull/42\n"
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command, stdout=response),
+    )
+
+    assert exit_code == 0
+    assert hook.should_fire(command, response) is True
+    assert hook._pr_lifecycle(command, response) == "unknown"
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "ambiguous lifecycle evidence" in context
+    assert "actually created or readied" in context
+
+
 @pytest.mark.parametrize(
     "command",
     (
@@ -731,6 +753,36 @@ def test_mixed_create_branches_inspect_live_state_before_any_correction(
     assert "gh pr view <PR#> --json isDraft" in context
     assert "only when that field is true" in context
     assert "Start the watch-and-fix loop only after the ready assertion passes" in context
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        "false && gh pr create --draft --fill; "
+        "gh pr view 42 --json url --jq .url",
+        "if false; then gh pr create --draft --fill; fi; "
+        "gh pr view 42 --json url --jq .url",
+    ),
+)
+def test_unexecuted_create_cannot_borrow_a_later_view_url(
+    monkeypatch, capsys, command
+):
+    hook = _load_hook()
+    response = "https://github.com/owner/repo/pull/42\n"
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command, stdout=response),
+    )
+
+    assert exit_code == 0
+    assert hook.should_fire(command, response) is True
+    assert hook._pr_lifecycle(command, response) == "unknown"
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "ambiguous lifecycle evidence" in context
+    assert "a URL printed by another command is not proof" in context
+    assert "A draft pull request was just opened" not in context
 
 
 def test_existing_pr_error_url_is_not_successful_creation(monkeypatch, capsys):
@@ -1831,6 +1883,17 @@ def test_should_fire_needs_the_command_first_whatever_the_response_says(monkeypa
 )
 def test_unrelated_shell_expansion_cannot_turn_a_view_into_a_lifecycle_event(command):
     hook = _load_hook()
+    response = "https://github.com/owner/repo/pull/42\n"
+
+    assert hook.should_fire(command, response) is False
+
+
+def test_lifecycle_words_in_argument_position_cannot_borrow_a_later_view_url():
+    hook = _load_hook()
+    command = (
+        "printf '%s\\n' 'gh pr create --draft'; "
+        "gh pr view 42 --json url --jq .url"
+    )
     response = "https://github.com/owner/repo/pull/42\n"
 
     assert hook.should_fire(command, response) is False
