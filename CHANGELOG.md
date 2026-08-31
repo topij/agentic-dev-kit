@@ -45,12 +45,11 @@ starts.
 ## #653 — 2026-08-31
 
 - **CHANGED (gate semantics) — the PR follow-through hook now distinguishes a
-  successful creation URL from GitHub CLI's existing-PR diagnostic, recognizes the
-  documented `gh pr new` alias, inherited repository flags, executed function calls,
-  and interpreter, substitution, and timing wrappers. It reads live `isDraft` before
-  correcting mixed, unreadable, or unbound lifecycle evidence, and ignores non-creating
-  dry runs, browser authoring handoffs, inert function definitions and here-document
-  bodies, and the intentional `gh pr ready --undo` transition.** **Refresh
+  successful creation URL from GitHub CLI's existing-PR diagnostic and recognizes the
+  documented `gh pr new` alias plus inherited repository flags. It asserts a lifecycle
+  directly only for a corroborated, literal `gh` invocation; wrapped, compound,
+  expanded, or unreadable candidates require an authoritative `isDraft` check and
+  never mutate state from shell text alone.** **Refresh
   `scripts/hooks/pr_followup_hook.py` and `init.sh`; in Claude's `PostToolUse`
   registration, set the command hook's `if` field to `Bash(*)` so the shared hook —
   rather than a runtime-only prefix filter — decides which Bash calls apply.**

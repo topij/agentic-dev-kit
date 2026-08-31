@@ -4,10 +4,9 @@
 Registered on BOTH runtimes, and told which one it is running under via
 `--runtime claude|codex` (#301):
 
-  - `.claude/settings.json` — `hooks.PostToolUse`, matcher `Bash`, plus a broad
-    `if: "Bash(*)"` tool-level filter. The hook itself must narrow the command:
-    valid shell wrappers and inherited `gh` options do not start with literal
-    `gh pr`, so a narrower runtime adapter silently changes the shared policy.
+  - `.claude/settings.json` — `hooks.PostToolUse`, matcher `Bash`, plus an
+    `if: "Bash(*)"` tool-level filter. Lifecycle candidates may be wrapped or
+    interpreter-fed, so the shared hook applies the response-backed policy.
   - `.codex/hooks.json` — `hooks.PostToolUse`, matcher `^Bash$`. Codex's matcher
     filters the TOOL NAME only, with no equivalent of Claude's `if`, so this
     script is invoked on every Bash call there and does all the narrowing itself.
@@ -53,51 +52,22 @@ import shlex
 import sys
 from pathlib import Path
 
-# The command is a NECESSARY condition, never a sufficient one (#302). Parse
-# actual shell-command starts instead of searching for a phrase: a PR body can
-# quote ``gh pr ready``, while GitHub CLI's inherited ``-R/--repo`` option can
-# legitimately sit between ``gh`` and ``pr``. The response below remains the
-# sufficient evidence that the selected command actually changed a PR.
+# The command is a NECESSARY condition, never a sufficient one (#302). It matches
+# the phrase anywhere, so a command that merely quotes, echoes, greps for or
+# documents it matches too — observed five times while wiring the Codex
+# registration, once from the comment documenting this very behaviour and once
+# from a review lens that had never heard of it. Anchoring to the start would
+# miss the ordinary `cd x && <the command>` form.
+#
+# So the command decides whether to LOOK, and `tool_response` decides whether to
+# fire. Both runtimes supply it on PostToolUse, and every Bash command reaches
+# this shared policy so a runtime adapter cannot narrow away valid wrappers.
+_TRIGGER = re.compile(
+    r"\bgh(?:\s+(?:-R|--repo|--hostname|--config-dir)(?:=\S+|\s+\S+))*"
+    r"\s+pr\s+(create|new|ready)\b"
+)
 _SHELL_CONTROL_CHARS = frozenset(";&|()\n")
-_GH_GLOBAL_OPTIONS_WITH_VALUE = frozenset(
-    {"-R", "--repo", "--hostname", "--config-dir"}
-)
-_GH_GLOBAL_OPTIONS_WITHOUT_VALUE = frozenset({"--help", "--version"})
-_CREATE_OPTIONS_WITH_VALUE = frozenset(
-    {
-        "-a",
-        "--assignee",
-        "-B",
-        "--base",
-        "-b",
-        "--body",
-        "-F",
-        "--body-file",
-        "-H",
-        "--head",
-        "-l",
-        "--label",
-        "-m",
-        "--milestone",
-        "-p",
-        "--project",
-        "--recover",
-        "-r",
-        "--reviewer",
-        "-T",
-        "--template",
-        "-t",
-        "--title",
-    }
-)
-_CREATE_BOOLEAN_SHORT_FLAGS = frozenset("defw")
-_CREATE_SHORT_OPTIONS_WITH_VALUE = frozenset("aBbFHlmprTt")
-_SHELL_COMMAND_PREFIXES = frozenset(
-    {"!", "{", "elif", "else", "exec", "if", "then", "until", "while", "do"}
-)
-_SHELL_INTERPRETERS = frozenset({"bash", "dash", "ksh", "sh", "zsh"})
-_LEADING_REDIRECTION = re.compile(r"^\d*(?:<>|>>|>|<<|<)(.*)$")
-_HEREDOC_REDIRECTION = re.compile(r"^(?P<fd>\d*)<<-?(?!<)")
+_GH_GLOBAL_OPTIONS_WITH_VALUE = frozenset({"-R", "--repo", "--hostname", "--config-dir"})
 
 # What a real invocation leaves in the response, established from `gh`'s source
 # rather than assumed — the issue asked for that specifically, and the two
@@ -115,17 +85,11 @@ _HEREDOC_REDIRECTION = re.compile(r"^(?P<fd>\d*)<<-?(?!<)")
 # this hook, because the command text quoted the trigger phrase and the API's
 # own response carried `…/pull/306#discussion_r…`. The bare-substring form could
 # not tell that from a PR being opened.
-_PR_URL = re.compile(
-    r"^\s*https://(?P<host>[^/\s]+)/(?P<owner>[^/\s]+)/(?P<repo>[^/\s]+)/pull/"
-    r"(?P<number>\d+)/?\s*$",
-    re.IGNORECASE | re.MULTILINE,
-)
+_PR_URL = re.compile(r"^\s*https://\S+/pull/\d+/?\s*$", re.MULTILINE)
 
-# `gh pr create` also prints an existing PR's URL on its own line when creation
-# FAILS because that head/base pair already has a PR. A URL alone therefore is
-# not success evidence when it belongs to this diagnostic. Acting on it is
-# unsafe: a failed `--draft` retry against an existing ready PR would otherwise
-# make the hook issue the mutating `--assert-draft` correction.
+# `gh pr create` reports an existing PR by printing a diagnostic followed by
+# that PR's URL. Remove those pairs before treating a remaining URL as creation
+# evidence; otherwise a failed draft retry could be mistaken for a new draft.
 _EXISTING_PR_ERROR = re.compile(
     r"a pull request for branch .+ already exists:\s*\n\s*"
     r"https://\S+/pull/\d+/?\s*$",
@@ -135,17 +99,7 @@ _EXISTING_PR_ERROR = re.compile(
 # The optional backslash tolerates a runtime that hands us already-escaped text.
 # It is NOT load-bearing for anything this module does: nothing serialises the
 # response any more, because doing so was what broke `_PR_URL`'s line anchor.
-_READY_ACK = re.compile(
-    r"Pull request (?P<owner>[^/\s#]+)/(?P<repo>[^/\s#]+)#(?P<number>\d+) "
-    r'is (?:marked as|already) \\?"ready for review',
-    re.IGNORECASE,
-)
-
-_SHELL_FUNCTION_SIGNATURE = re.compile(
-    r"(?:\bfunction\s+(?P<keyword_name>[A-Za-z_][A-Za-z0-9_]*)"
-    r"(?:\s*\(\s*\))?|\b(?P<plain_name>[A-Za-z_][A-Za-z0-9_]*)"
-    r"\s*\(\s*\))\s*\{"
-)
+_READY_ACK = re.compile(r'is (?:marked as|already) \\?"ready for review')
 
 # What the two registered runtimes actually send, established from their own
 # sources by a review lens rather than assumed — an earlier version of this
@@ -213,7 +167,9 @@ def _lens_compute_phrase(config, kitconfig, runtime: str = _DEFAULT_RUNTIME) -> 
     return f" Run each lens at {' and '.join(parts)}, per review.fallback_panel.lens_compute."
 
 
-def _load_review_config(runtime: str = _DEFAULT_RUNTIME) -> tuple[list[str], str, str, list[str], str, str]:
+def _load_review_config(
+    runtime: str = _DEFAULT_RUNTIME,
+) -> tuple[list[str], str, str, list[str], str, str]:
     """Read ``(review.bots, review.fallback_commands.<runtime>, paths.engines,
     review.fallback_panel lens names, review.fallback_panel.receipt_source,
     rendered review.fallback_panel.lens_compute.<runtime> clause)``.
@@ -335,11 +291,10 @@ def _fallback_instruction(
             "docs/agentic-dev-kit/fallback-review-panel.md — and record it with "
             f"`uv run {engines_dir}/pr_watch.py <PR#> "
             f'--record-review "{panel_source}" --lenses <names> --head <polled-sha>`. '
-            "Never treat the outage as a review waiver."
+            "Never treat the outage as a review waiver." + lens_compute
             # Appended only for the PANEL branch: the degraded one-lens fallback
             # runs in the cockpit's own context, so there is no separate lens to
             # give a model or an effort level to.
-            + lens_compute
         )
     return (
         f"If a review bot is unavailable, run the configured fallback "
@@ -347,999 +302,89 @@ def _fallback_instruction(
     )
 
 
-def _heredoc_specs(line: str) -> list[tuple[str, bool]]:
-    """Return here-document delimiters opened by one shell source line."""
-    specs: list[tuple[str, bool]] = []
-    index = 0
-    quote: str | None = None
-    while index < len(line):
-        char = line[index]
-        if quote is not None:
-            if char == "\\" and quote == '"':
-                index += 2
-                continue
-            if char == quote:
-                quote = None
-            index += 1
-            continue
-        if char in {"'", '"'}:
-            quote = char
-            index += 1
-            continue
-        if char == "\\":
-            index += 2
-            continue
-        if char == "#" and (index == 0 or line[index - 1].isspace()):
-            break
-        if not line.startswith("<<", index) or line.startswith("<<<", index):
-            index += 1
-            continue
+def _direct_lifecycle_invocation(command: object) -> tuple[str, list[str]] | None:
+    """Return one directly understood ``gh pr`` lifecycle invocation.
 
-        cursor = index + 2
-        strip_tabs = cursor < len(line) and line[cursor] == "-"
-        if strip_tabs:
-            cursor += 1
-        while cursor < len(line) and line[cursor] in " \t":
-            cursor += 1
-        delimiter_chars: list[str] = []
-        delimiter_quote: str | None = None
-        while cursor < len(line):
-            char = line[cursor]
-            if delimiter_quote is not None:
-                if char == delimiter_quote:
-                    delimiter_quote = None
-                    cursor += 1
-                    continue
-                if (
-                    char == "\\"
-                    and delimiter_quote == '"'
-                    and cursor + 1 < len(line)
-                    and line[cursor + 1] in '$`"\\'
-                ):
-                    delimiter_chars.append(line[cursor + 1])
-                    cursor += 2
-                    continue
-                delimiter_chars.append(char)
-                cursor += 1
-                continue
-            if char in {"'", '"'}:
-                delimiter_quote = char
-                cursor += 1
-                continue
-            if char == "\\" and cursor + 1 < len(line):
-                delimiter_chars.append(line[cursor + 1])
-                cursor += 2
-                continue
-            if char in " \t\r\n;&|()<>":
-                break
-            delimiter_chars.append(char)
-            cursor += 1
-        if delimiter_quote is not None:
-            return specs
-        delimiter = "".join(delimiter_chars)
-        index = cursor
-        if delimiter:
-            specs.append((delimiter, strip_tabs))
-    return specs
-
-
-def _without_heredoc_bodies(command: str) -> str:
-    """Remove here-document data while preserving the executable opener lines."""
-    pending: list[tuple[str, bool]] = []
-    kept: list[str] = []
-    for line in command.splitlines(keepends=True):
-        if pending:
-            delimiter, strip_tabs = pending[0]
-            candidate = line.rstrip("\r\n")
-            if strip_tabs:
-                candidate = candidate.lstrip("\t")
-            if candidate == delimiter:
-                pending.pop(0)
-            kept.append("\n" if line.endswith(("\n", "\r")) else "")
-            continue
-        kept.append(line)
-        pending.extend(_heredoc_specs(line))
-    return "".join(kept)
-
-
-def _heredoc_inputs(command: str) -> list[tuple[str, int, str]]:
-    """Return each heredoc opener and its quote-removed input body."""
-    pending: list[tuple[str, int, str, bool, list[str]]] = []
-    inputs: list[tuple[str, int, str]] = []
-    for line in command.splitlines(keepends=True):
-        if pending:
-            opener, spec_index, delimiter, strip_tabs, body = pending[0]
-            candidate = line.rstrip("\r\n")
-            if strip_tabs:
-                candidate = candidate.lstrip("\t")
-            if candidate == delimiter:
-                inputs.append((opener, spec_index, "".join(body)))
-                pending.pop(0)
-            else:
-                body.append(line)
-            continue
-        pending.extend(
-            (line, spec_index, delimiter, strip_tabs, [])
-            for spec_index, (delimiter, strip_tabs) in enumerate(_heredoc_specs(line))
-        )
-    return inputs
-
-
-def _without_line_continuations(command: str) -> str:
-    """Apply shell backslash-newline removal outside single quotes."""
-    kept: list[str] = []
-    quote: str | None = None
-    index = 0
-    while index < len(command):
-        char = command[index]
-        if char == "'":
-            if quote is None:
-                quote = "'"
-            elif quote == "'":
-                quote = None
-            kept.append(char)
-            index += 1
-            continue
-        if char == '"' and quote != "'":
-            quote = None if quote == '"' else '"'
-            kept.append(char)
-            index += 1
-            continue
-        if char == "\\" and quote != "'":
-            if command.startswith("\\\r\n", index):
-                index += 3
-                continue
-            if command.startswith("\\\n", index):
-                index += 2
-                continue
-            kept.append(char)
-            if index + 1 < len(command):
-                kept.append(command[index + 1])
-                index += 2
-            else:
-                index += 1
-            continue
-        kept.append(char)
-        index += 1
-    return "".join(kept)
-
-
-def _starts_shell_comment(command: str, index: int) -> bool:
-    """Whether ``#`` starts a shell comment rather than an ordinary word."""
-    return index == 0 or command[index - 1].isspace() or command[index - 1] in ";&|()"
-
-
-def _without_shell_comments(command: str) -> str:
-    """Remove shell comments while preserving quoted text and line boundaries."""
-    kept = list(command)
-    quote: str | None = None
-    index = 0
-    while index < len(command):
-        char = command[index]
-        if quote is not None:
-            if char == "\\" and quote != "'":
-                index += 2
-                continue
-            if char == quote:
-                quote = None
-            index += 1
-            continue
-        if char in {"'", '"', "`"}:
-            quote = char
-            index += 1
-            continue
-        if char == "\\":
-            index += 2
-            continue
-        if char == "#" and _starts_shell_comment(command, index):
-            while index < len(command) and command[index] != "\n":
-                kept[index] = " "
-                index += 1
-            continue
-        index += 1
-    return "".join(kept)
-
-
-def _shell_syntax_mask(command: str) -> str:
-    """Mask quoted/comment text while retaining shell grammar positions."""
-    masked = list(command)
-    quote: str | None = None
-    index = 0
-    while index < len(command):
-        char = command[index]
-        if quote is not None:
-            if char == "\\" and quote != "'":
-                masked[index] = " "
-                if index + 1 < len(masked):
-                    masked[index + 1] = " "
-                index += 2
-                continue
-            masked[index] = "\n" if char == "\n" else " "
-            if char == quote:
-                quote = None
-            index += 1
-            continue
-        if char in {"'", '"', "`"}:
-            quote = char
-            masked[index] = " "
-            index += 1
-            continue
-        if char == "\\":
-            masked[index] = " "
-            if index + 1 < len(masked):
-                masked[index + 1] = " "
-            index += 2
-            continue
-        if char == "#" and _starts_shell_comment(command, index):
-            while index < len(command) and command[index] != "\n":
-                masked[index] = " "
-                index += 1
-            continue
-        index += 1
-    return "".join(masked)
-
-
-def _without_function_definitions(command: str) -> tuple[str, dict[str, str]]:
-    """Remove function declarations and retain their bodies for actual calls."""
-    definitions: dict[str, str] = {}
-    mutable = list(command)
-    # The mask depends only on the original shell source. Rebuilding it after
-    # blanking each definition makes a command with many inert definitions
-    # quadratic and can consume the runtimes' whole hook deadline before the
-    # lifecycle command at the end is inspected.
-    mask = _shell_syntax_mask(command)
-    cursor = 0
-    while True:
-        match = _SHELL_FUNCTION_SIGNATURE.search(mask, cursor)
-        if match is None:
-            break
-        open_brace = match.end() - 1
-        depth = 1
-        close_brace = open_brace + 1
-        while close_brace < len(mask) and depth:
-            if mask[close_brace] == "{":
-                depth += 1
-            elif mask[close_brace] == "}":
-                depth -= 1
-            close_brace += 1
-        if depth:
-            # An incomplete definition is not safely executable evidence.
-            for index in range(match.start(), len(mutable)):
-                if mutable[index] != "\n":
-                    mutable[index] = " "
-            break
-        name = match.group("keyword_name") or match.group("plain_name")
-        definitions[name] = command[open_brace + 1 : close_brace - 1]
-        for index in range(match.start(), close_brace):
-            if mutable[index] != "\n":
-                mutable[index] = " "
-        cursor = close_brace
-    return "".join(mutable), definitions
-
-
-def _command_substitutions(command: str) -> tuple[str, list[str]]:
-    """Extract executable backtick and ``$(...)`` regions from shell source."""
-    substitutions: list[str] = []
-    mutable = list(command)
-    index = 0
-    quote: str | None = None
-    while index < len(command):
-        char = command[index]
-        if quote == "'":
-            if char == "'":
-                quote = None
-            index += 1
-            continue
-        if char == "\\":
-            index += 2
-            continue
-        if char == '"':
-            quote = None if quote == '"' else '"'
-            index += 1
-            continue
-        if char == "'" and quote is None:
-            quote = "'"
-            index += 1
-            continue
-        if char == "`":
-            end = index + 1
-            while end < len(command):
-                if command[end] == "\\":
-                    end += 2
-                    continue
-                if command[end] == "`":
-                    break
-                end += 1
-            if end >= len(command):
-                break
-            substitutions.append(command[index + 1 : end])
-            mutable[index : end + 1] = "$" + " " * (end - index)
-            index = end + 1
-            continue
-        if command.startswith("$(", index) and not command.startswith("$((", index):
-            depth = 1
-            end = index + 2
-            quote: str | None = None
-            while end < len(command) and depth:
-                nested = command[end]
-                if quote is not None:
-                    if nested == "\\" and quote != "'":
-                        end += 2
-                        continue
-                    if nested == quote:
-                        quote = None
-                    end += 1
-                    continue
-                if nested in {"'", '"', "`"}:
-                    quote = nested
-                elif nested == "\\":
-                    end += 2
-                    continue
-                elif nested == "(":
-                    depth += 1
-                elif nested == ")":
-                    depth -= 1
-                end += 1
-            if depth:
-                break
-            substitutions.append(command[index + 2 : end - 1])
-            mutable[index:end] = "$" + " " * (end - index - 1)
-            index = end
-            continue
-        index += 1
-    return "".join(mutable), substitutions
-
-
-def _shell_commands(command: object, _depth: int = 0) -> list[list[str]]:
-    """Tokenize syntactic command segments while excluding inert shell source."""
-    if not isinstance(command, str):
-        return []
-    if _depth > 4:
-        return []
-    command = _without_heredoc_bodies(command)
-    command = _without_line_continuations(command)
-    command = _without_shell_comments(command)
-    command, definitions = _without_function_definitions(command)
-    command, substitutions = _command_substitutions(command)
+    This is intentionally not a shell parser. Wrapped, compound, expanded, or
+    interpreter-fed source remains a trigger candidate, but it is classified as
+    unknown and routed through authoritative live PR state instead of a mutating
+    draft/ready assertion inferred from shell text.
+    """
+    if not isinstance(command, str) or any(char in command for char in _SHELL_CONTROL_CHARS):
+        return None
     try:
-        lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|()\n")
-        # Newlines are control tokens, not generic whitespace. This prevents the
-        # first word of a later command from becoming an argument to the earlier
-        # one, while quoted newlines remain inside their quoted token.
-        lexer.whitespace = " \t\r"
-        lexer.whitespace_split = True
-        lexer.commenters = ""
-        tokens = list(lexer)
+        tokens = shlex.split(command, posix=True)
     except (TypeError, ValueError):
-        return []
-
-    commands: list[list[str]] = [[]]
-    for token in tokens:
-        if token and set(token) <= _SHELL_CONTROL_CHARS:
-            if commands[-1]:
-                commands.append([])
-            continue
-        commands[-1].append(token)
-    executed = [shell_command for shell_command in commands if shell_command]
-    for substitution in substitutions:
-        executed.extend(_shell_commands(substitution, _depth + 1))
-    for shell_command in tuple(executed):
-        executable_index = _shell_executable_index(shell_command)
-        if executable_index is None:
-            continue
-        body = definitions.get(shell_command[executable_index])
-        if body is not None:
-            executed.extend(_shell_commands(body, _depth + 1))
-    return executed
-
-
-def _is_assignment(token: str) -> bool:
-    name, separator, _value = token.partition("=")
-    return bool(
-        separator
-        and name
-        and (name[0].isalpha() or name[0] == "_")
-        and all(char.isalnum() or char == "_" for char in name[1:])
-    )
-
-
-def _dynamic_variable_name(token: str) -> str | None:
-    """Return the name from an exact ``$name`` / ``${name}`` reference."""
-    if token.startswith("${") and token.endswith("}"):
-        name = token[2:-1]
-    elif token.startswith("$"):
-        name = token[1:]
-    else:
         return None
-    return name if name and all(char.isalnum() or char == "_" for char in name) else None
-
-
-def _redirection_span(shell_command: list[str], index: int) -> int:
-    """Tokens occupied by one leading shell redirection, or zero."""
-    match = _LEADING_REDIRECTION.match(shell_command[index])
-    if match is None:
-        return 0
-    if match.group(1):
-        return 1
-    return 2 if index + 1 < len(shell_command) else 1
-
-
-def _shell_executable_index(shell_command: list[str]) -> int | None:
-    """Locate the executable after supported shell prefixes and wrappers."""
-    index = 0
-    while index < len(shell_command):
-        token = shell_command[index]
-        if token in _SHELL_COMMAND_PREFIXES or _is_assignment(token):
-            index += 1
-            continue
-        redirection_span = _redirection_span(shell_command, index)
-        if redirection_span:
-            index += redirection_span
-            continue
-        if token == "command":
-            index += 1
-            while index < len(shell_command):
-                if shell_command[index] == "-p":
-                    index += 1
-                    continue
-                if shell_command[index] in {"-v", "-V"}:
-                    return None
-                if shell_command[index] == "--":
-                    index += 1
-                break
-            continue
-        if Path(token).name == "env":
-            index += 1
-            while index < len(shell_command):
-                token = shell_command[index]
-                if _is_assignment(token) or token in {"-i", "--ignore-environment"}:
-                    index += 1
-                    continue
-                if token in {"-u", "--unset"} and index + 1 < len(shell_command):
-                    index += 2
-                    continue
-                if token.startswith("--unset="):
-                    index += 1
-                    continue
-                if token in {"-S", "--split-string"}:
-                    if index + 1 >= len(shell_command):
-                        return None
-                    try:
-                        split_tokens = shlex.split(shell_command[index + 1])
-                    except ValueError:
-                        return None
-                    if not split_tokens:
-                        return None
-                    shell_command[index : index + 2] = split_tokens
-                    continue
-                if token.startswith("--split-string="):
-                    try:
-                        split_tokens = shlex.split(token.split("=", 1)[1])
-                    except ValueError:
-                        return None
-                    if not split_tokens:
-                        return None
-                    shell_command[index : index + 1] = split_tokens
-                    continue
-                if token == "--":
-                    index += 1
-                break
-            continue
-        if Path(token).name == "nohup":
-            index += 1
-            if index < len(shell_command) and shell_command[index] == "--":
-                index += 1
-            continue
-        if Path(token).name == "time":
-            index += 1
-            if index < len(shell_command) and shell_command[index] == "-p":
-                index += 1
-            continue
-        break
-    return index if index < len(shell_command) else None
-
-
-def _gh_command_index(shell_command: list[str]) -> int | None:
-    """Locate a direct ``gh`` command after supported shell wrappers."""
-    index = _shell_executable_index(shell_command)
-
-    if index is None or Path(shell_command[index]).name != "gh":
+    if not tokens or tokens[0] != "gh":
         return None
-    return index
-
-
-def _interpreter_script(shell_command: list[str]) -> str | None:
-    """Return the source passed to a supported shell's ``-c`` option."""
-    executable_index = _shell_executable_index(shell_command)
-    if executable_index is None:
+    if any(any(marker in token for marker in ("$", "`", "{", "}", "*", "?")) for token in tokens):
         return None
-    if Path(shell_command[executable_index]).name not in _SHELL_INTERPRETERS:
-        return None
-    index = executable_index + 1
-    while index < len(shell_command):
-        token = shell_command[index]
-        if token == "-c" or (
-            token.startswith("-")
-            and not token.startswith("--")
-            and "c" in token[1:]
-        ):
-            return shell_command[index + 1] if index + 1 < len(shell_command) else None
-        if token == "--" or not token.startswith("-"):
-            return None
-        index += 1
-    return None
 
-
-def _gh_invocations(
-    command: object, _depth: int = 0
-) -> list[tuple[str, list[str]]]:
-    """Return supported ``gh pr create|ready`` invocations and their arguments."""
-    if _depth > 4:
-        return []
-    invocations: list[tuple[str, list[str]]] = []
-    for shell_command in _shell_commands(command):
-        gh_index = _gh_command_index(shell_command)
-        if gh_index is None:
-            script = _interpreter_script(shell_command)
-            if script is not None:
-                invocations.extend(_gh_invocations(script, _depth + 1))
-            continue
-        index = _skip_gh_global_options(shell_command, gh_index + 1)
-        if index is None or index >= len(shell_command) or shell_command[index] != "pr":
-            continue
-        index = _skip_gh_global_options(shell_command, index + 1)
-        if index is None or index >= len(shell_command):
-            continue
-        action = shell_command[index]
-        if action == "new":
-            action = "create"
-        if action in {"create", "ready"}:
-            invocations.append((action, shell_command[index + 1 :]))
-    return invocations
-
-
-def _shell_reads_stdin_as_program(shell_command: list[str]) -> bool:
-    """Whether this shell reads program source, rather than data, from stdin."""
-    executable_index = _shell_executable_index(shell_command)
-    if executable_index is None:
-        return False
-    if Path(shell_command[executable_index]).name not in _SHELL_INTERPRETERS:
-        return False
-    reads_stdin_option = False
-    index = executable_index + 1
-    while index < len(shell_command):
-        token = shell_command[index]
-        redirection_span = _redirection_span(shell_command, index)
-        if redirection_span:
-            index += redirection_span
-            continue
-        if token == "--":
-            index += 1
-            continue
-        if token.startswith("-"):
-            if "c" in token[1:]:
-                return False
-            reads_stdin_option = reads_stdin_option or "s" in token[1:]
-            index += 1
-            continue
-        if reads_stdin_option:
-            # With `-s`, remaining operands become positional parameters while
-            # stdin remains the program source.
-            index += 1
-            continue
-        # With a script operand, stdin is data for that script rather than the
-        # shell program itself.
-        return False
-    return True
-
-
-def _heredoc_program_flags(opener: str) -> list[bool]:
-    """Map an opener's heredocs to those that actually feed shell source."""
-    flags: list[bool] = []
-    for shell_command in _shell_commands(opener):
-        command_flags: list[bool] = []
-        stdin_heredocs: list[int] = []
-        for token in shell_command:
-            match = _HEREDOC_REDIRECTION.match(token)
-            if match is None:
-                continue
-            command_flags.append(False)
-            if match.group("fd") in {"", "0"}:
-                stdin_heredocs.append(len(command_flags) - 1)
-        if stdin_heredocs and _shell_reads_stdin_as_program(shell_command):
-            # Shell redirections are applied left to right, so only the final
-            # stdin heredoc supplies the program. Earlier inputs are consumed
-            # while setting up redirections but are not executed.
-            command_flags[stdin_heredocs[-1]] = True
-        flags.extend(command_flags)
-    return flags
-
-
-def _syntactic_lifecycle_actions(
-    command: object, _depth: int = 0
-) -> set[str]:
-    """Find lifecycle syntax behind supported, dynamic, or literal wrappers."""
-    if _depth > 4 or not isinstance(command, str):
-        return set()
-    actions: set[str] = set()
-    assigned_actions: dict[str, set[str]] = {}
-    for shell_command in _shell_commands(command):
-        for token in shell_command:
-            if not _is_assignment(token):
-                continue
-            name, _separator, value = token.partition("=")
-            assigned_actions[name] = _syntactic_lifecycle_actions(
-                value, _depth + 1
-            )
-        executable_index = _shell_executable_index(shell_command)
-        if executable_index is not None:
-            executable = shell_command[executable_index]
-            dynamic_name = _dynamic_variable_name(executable)
-            if dynamic_name and dynamic_name in assigned_actions:
-                actions.update(assigned_actions[dynamic_name])
-            if "$" in executable or "`" in executable:
-                index = _skip_gh_global_options(shell_command, executable_index + 1)
-                if (
-                    index is not None
-                    and index < len(shell_command)
-                    and shell_command[index] == "pr"
-                ):
-                    index = _skip_gh_global_options(shell_command, index + 1)
-                    if index is not None and index < len(shell_command):
-                        action = shell_command[index]
-                        if action == "new":
-                            action = "create"
-                        if action in {"create", "ready"}:
-                            actions.add(action)
-            if Path(executable).name == "eval":
-                arguments = shell_command[executable_index + 1 :]
-                if arguments[:1] == ["--"]:
-                    arguments = arguments[1:]
-                for argument in arguments:
-                    dynamic_name = _dynamic_variable_name(argument)
-                    if dynamic_name and dynamic_name in assigned_actions:
-                        actions.update(assigned_actions[dynamic_name])
-                actions.update(
-                    _syntactic_lifecycle_actions(" ".join(arguments), _depth + 1)
-                )
-            # This is the conservative candidate scan, not the exact parser.
-            # A wrapper whose option grammar we do not model (for example
-            # `nice` or `sudo`) must reach the live-state route rather than go
-            # silent. Requiring separate gh/pr/action tokens avoids treating a
-            # quoted prose argument such as "gh pr create" as execution proof.
-            for gh_index, token in enumerate(shell_command):
-                if Path(token).name != "gh":
-                    continue
-                index = _skip_gh_global_options(shell_command, gh_index + 1)
-                if (
-                    index is None
-                    or index >= len(shell_command)
-                    or shell_command[index] != "pr"
-                ):
-                    continue
-                index = _skip_gh_global_options(shell_command, index + 1)
-                if index is None or index >= len(shell_command):
-                    continue
-                action = shell_command[index]
-                if action == "new":
-                    action = "create"
-                if action in {"create", "ready"}:
-                    actions.add(action)
-    for opener, spec_index, body in _heredoc_inputs(command):
-        program_flags = _heredoc_program_flags(opener)
-        if spec_index < len(program_flags) and program_flags[spec_index]:
-            actions.update(_syntactic_lifecycle_actions(body, _depth + 1))
-    return actions
-
-
-def _lifecycle_command_is_direct(command: object, _depth: int = 0) -> bool:
-    """Whether aggregate output can be attributed to one direct lifecycle call."""
-    if _depth > 4:
-        return False
-    shell_commands = _shell_commands(command)
-    if len(shell_commands) != 1:
-        return False
-    shell_command = shell_commands[0]
-    if _gh_command_index(shell_command) is not None:
-        return True
-    script = _interpreter_script(shell_command)
-    return script is not None and _lifecycle_command_is_direct(script, _depth + 1)
-
-
-def _skip_gh_global_options(tokens: list[str], index: int) -> int | None:
-    """Consume inherited options before a Cobra subcommand, or reject no-op flags."""
-    while index < len(tokens):
+    index = 1
+    while index < len(tokens) and tokens[index] != "pr":
         token = tokens[index]
         if token in _GH_GLOBAL_OPTIONS_WITH_VALUE:
-            if index + 1 >= len(tokens):
-                return None
             index += 2
             continue
-        if any(
-            token.startswith(f"{option}=")
-            for option in _GH_GLOBAL_OPTIONS_WITH_VALUE
-            if option.startswith("--")
-        ) or (token.startswith("-R") and token != "-R"):
+        if any(token.startswith(f"{option}=") for option in _GH_GLOBAL_OPTIONS_WITH_VALUE):
             index += 1
             continue
-        if token in _GH_GLOBAL_OPTIONS_WITHOUT_VALUE:
-            # Help/version terminate execution instead of selecting the later
-            # lifecycle subcommand, wherever Cobra accepts their placement.
-            return None
-        return index
-    return index
-
-
-def _shell_expands_option(token: str) -> bool:
-    """Whether shell expansion can change an option token before ``gh`` sees it."""
-    return any(char in token for char in ("$", "`", "{", "}", "*", "?", "[", "]"))
-
-
-def _boolean_option_value(token: str) -> bool | None:
-    """Parse a pflag boolean value, preserving pre-expansion uncertainty."""
-    value = token.split("=", 1)[1]
-    if _shell_expands_option(value):
         return None
-    return value.strip().casefold() not in {"false", "0", "no", "off"}
-
-
-def _create_is_draft(arguments: list[str]) -> bool | None:
-    """Return draft intent, or ``None`` when shell expansion can change it."""
-    is_draft = False
-    index = 0
-    while index < len(arguments):
-        token = arguments[index]
-        if token == "--":
-            return is_draft
-        if token in _CREATE_OPTIONS_WITH_VALUE:
-            index += 2
-            continue
-        if any(
-            token.startswith(f"{option}=")
-            for option in _CREATE_OPTIONS_WITH_VALUE
-            if option.startswith("--")
-        ):
-            index += 1
-            continue
-        if token in {"--draft", "-d"}:
-            is_draft = True
-            index += 1
-            continue
-        if token.startswith("--draft=") or token.startswith("-d="):
-            is_draft = _boolean_option_value(token)
-            index += 1
-            continue
-        if _shell_expands_option(token):
-            return None
-        if token.startswith("-") and not token.startswith("--"):
-            # Cobra/pflag walks a short-option cluster left to right. A boolean
-            # `d` is draft wherever it is reached, but a value-taking option
-            # consumes the rest of the token: `-dFbody.md` is draft while `-Fd`
-            # gives `d` to `--body-file` and is ready.
-            for short_flag in token[1:]:
-                if short_flag == "d":
-                    is_draft = True
-                    continue
-                if short_flag in _CREATE_SHORT_OPTIONS_WITH_VALUE:
-                    break
-                if short_flag not in _CREATE_BOOLEAN_SHORT_FLAGS:
-                    break
-        index += 1
-    return is_draft
-
-
-def _create_is_dry_run(arguments: list[str]) -> bool | None:
-    """Whether ``create`` is non-creating, or expansion leaves that unsettled."""
-    is_dry_run = False
-    index = 0
-    while index < len(arguments):
-        token = arguments[index]
-        if token == "--":
-            return is_dry_run
-        if token in _CREATE_OPTIONS_WITH_VALUE:
-            index += 2
-            continue
-        if any(
-            token.startswith(f"{option}=")
-            for option in _CREATE_OPTIONS_WITH_VALUE
-            if option.startswith("--")
-        ):
-            index += 1
-            continue
-        if token == "--dry-run":
-            is_dry_run = True
-            index += 1
-            continue
-        if token.startswith("--dry-run="):
-            is_dry_run = _boolean_option_value(token)
-            index += 1
-            continue
-        if _shell_expands_option(token):
-            return None
-        index += 1
-    return is_dry_run
-
-
-def _create_opens_browser(arguments: list[str]) -> bool | None:
-    """Whether ``create`` opens a browser, or expansion leaves that unsettled."""
-    opens_browser = False
-    index = 0
-    while index < len(arguments):
-        token = arguments[index]
-        if token == "--":
-            return opens_browser
-        if token in _CREATE_OPTIONS_WITH_VALUE:
-            index += 2
-            continue
-        if any(
-            token.startswith(f"{option}=")
-            for option in _CREATE_OPTIONS_WITH_VALUE
-            if option.startswith("--")
-        ):
-            index += 1
-            continue
-        if token in {"--web", "-w"}:
-            opens_browser = True
-            index += 1
-            continue
-        if token.startswith("--web=") or token.startswith("-w="):
-            opens_browser = _boolean_option_value(token)
-            index += 1
-            continue
-        if _shell_expands_option(token):
-            return None
-        if token.startswith("-") and not token.startswith("--"):
-            for short_flag in token[1:]:
-                if short_flag == "w":
-                    opens_browser = True
-                    continue
-                if short_flag in _CREATE_SHORT_OPTIONS_WITH_VALUE:
-                    break
-                if short_flag not in _CREATE_BOOLEAN_SHORT_FLAGS:
-                    break
-        index += 1
-    return opens_browser
-
-
-def _create_can_complete(arguments: list[str]) -> bool:
-    """Whether this CLI invocation itself can establish PR creation."""
-    return (
-        _create_is_dry_run(arguments) is not True
-        and _create_opens_browser(arguments) is not True
-    )
-
-
-def _ready_is_undo(arguments: list[str]) -> bool | None:
-    """Whether ``ready`` converts to draft, or expansion leaves that unsettled."""
-    is_undo = False
-    for token in arguments:
-        if token == "--":
-            return is_undo
-        if token == "--undo":
-            is_undo = True
-            continue
-        if token.startswith("--undo="):
-            is_undo = _boolean_option_value(token)
-            continue
-        if _shell_expands_option(token):
-            return None
-    return is_undo
+    if index + 1 >= len(tokens) or tokens[index] != "pr":
+        return None
+    action = tokens[index + 1]
+    if action == "new":
+        action = "create"
+    if action not in {"create", "ready"}:
+        return None
+    return action, tokens[index + 2 :]
 
 
 def _without_existing_pr_diagnostics(response: str) -> str:
-    """Remove failed-create diagnostics while preserving separate success URLs."""
     return _EXISTING_PR_ERROR.sub("", response)
 
 
-def _existing_pr_diagnostic_count(response: str) -> int:
-    """Count failed-create diagnostics in aggregate tool output."""
-    return sum(1 for _match in _EXISTING_PR_ERROR.finditer(response))
-
-
-def _response_identities(pattern: re.Pattern[str], response: str) -> set[tuple[str, str, int]]:
-    """Return case-insensitive repository/PR identities captured by ``pattern``."""
-    return {
-        (
-            match.group("owner").casefold(),
-            match.group("repo").casefold(),
-            int(match.group("number")),
-        )
-        for match in pattern.finditer(response)
-    }
+def _draft_flag(arguments: list[str]) -> bool | None:
+    """Return the literal final draft flag, or ``None`` when it is uncertain."""
+    draft = False
+    for token in arguments:
+        if token == "--draft":
+            draft = True
+        elif token.startswith("--draft="):
+            value = token.split("=", 1)[1].strip().casefold()
+            if value in {"true", "1", "yes", "on"}:
+                draft = True
+            elif value in {"false", "0", "no", "off"}:
+                draft = False
+            else:
+                return None
+    return draft
 
 
 def _pr_lifecycle(command: object, response: str | None = None) -> str:
-    """Return the evidenced lifecycle, or ``unknown`` for mixed create intent.
-
-    Command text proves creation intent, including ``-d`` and inherited global
-    ``gh`` flags. It does *not* prove that a later ready command executed: an
-    ``||`` branch, failed intervening validation, or heredoc body may contain the
-    same words. Only GitHub CLI's ready acknowledgement paired with a parsed ready
-    invocation settles that transition. A draft-only create therefore preserves
-    the intentional draft, while mixed create intent requires a live-state read
-    before either mutating assertion.
-    """
-    invocations = _gh_invocations(command)
-    create_arguments = [
-        arguments for action, arguments in invocations if action == "create"
-    ]
-    real_creates = [arguments for arguments in create_arguments if _create_can_complete(arguments)]
-    dry_run_creates = [
-        arguments for arguments in create_arguments if _create_is_dry_run(arguments) is True
-    ]
-    browser_creates = [
-        arguments for arguments in create_arguments if _create_opens_browser(arguments) is True
-    ]
-    ambiguous_creates = [
-        arguments
-        for arguments in create_arguments
-        if _create_is_dry_run(arguments) is None
-        or _create_opens_browser(arguments) is None
-    ]
-    ready_arguments = [
-        arguments for action, arguments in invocations if action == "ready"
-    ]
-    normal_ready = [
-        arguments for arguments in ready_arguments if _ready_is_undo(arguments) is not True
-    ]
-    undo_ready = [
-        arguments for arguments in ready_arguments if _ready_is_undo(arguments) is True
-    ]
-    ambiguous_ready = [
-        arguments for arguments in ready_arguments if _ready_is_undo(arguments) is None
-    ]
-    create_states = {
-        _create_is_draft(arguments)
-        for arguments in real_creates
-    }
-    if response is None and (real_creates or normal_ready):
-        # No success output or PR identity is available. Fail loud, but never
-        # choose a mutating correction from command intent alone.
+    """Classify only a corroborated direct invocation; otherwise return unknown."""
+    if response is None:
         return "unknown"
-    if (dry_run_creates or browser_creates) and (real_creates or normal_ready):
-        # Aggregate output cannot say whether evidence came from a non-creating
-        # handoff or the real invocation. Inspect live state first.
+    direct = _direct_lifecycle_invocation(command)
+    if direct is None:
         return "unknown"
-    if ambiguous_creates or ambiguous_ready:
-        # The observed output may belong to a lifecycle command, but the shell
-        # can change its boolean flags before gh sees them. Never choose a
-        # mutating correction from the unexpanded source.
-        return "unknown"
-    if response is not None and real_creates and _existing_pr_diagnostic_count(response):
-        # Output from failed and successful/fallback commands is aggregated.
-        # A remaining URL cannot safely be assigned to one create invocation.
-        return "unknown"
-    if undo_ready and (real_creates or normal_ready):
-        # Distinct ready/draft transitions in one aggregate response are not
-        # safe grounds for a mutating assertion.
-        return "unknown"
-    if len(create_states) > 1:
-        return "unknown"
-    if real_creates and normal_ready:
-        if len(real_creates) != 1 or len(normal_ready) != 1:
+    action, arguments = direct
+    if action == "ready":
+        if any(token == "--undo" or token.startswith("--undo=") for token in arguments):
             return "unknown"
-        create_ids = _response_identities(
-            _PR_URL, _without_existing_pr_diagnostics(response)
-        )
-        ready_ids = _response_identities(_READY_ACK, response)
-        if len(create_ids) == 1 and create_ids == ready_ids:
-            return "ready"
+        return "ready" if _READY_ACK.search(response) else "unknown"
+    if any(token in {"--dry-run", "--web", "-w"} for token in arguments):
         return "unknown"
-    if (real_creates or normal_ready) and not _lifecycle_command_is_direct(command):
-        # Shell segments are syntactic candidates, not proof of execution. A
-        # skipped create must not borrow a URL printed by a later `gh pr view`
-        # and turn it into a mutating draft correction.
+    if not _PR_URL.search(_without_existing_pr_diagnostics(response)):
         return "unknown"
-    if create_states == {True}:
-        return "draft"
-    if create_states == {False} or normal_ready:
-        return "ready"
-    return "unknown"
+    draft = _draft_flag(arguments)
+    if draft is None:
+        return "unknown"
+    return "draft" if draft else "ready"
 
 
-def _lifecycle_instruction(
-    command: object, engines_dir: str, response: str | None = None
-) -> str:
+def _lifecycle_instruction(command: object, engines_dir: str, response: str | None = None) -> str:
     lifecycle = _pr_lifecycle(command, response)
     if lifecycle == "draft":
         return (
@@ -1357,11 +402,7 @@ def _lifecycle_instruction(
             "change its draft state or start a watch loop from command text alone. "
             "First resolve the exact pull-request identity from authoritative forge "
             "state; if none exists, stop without changing any pull request. Then "
-            "prove from action-bound output that this Bash call actually created or "
-            "readied it; a URL printed by another command is not proof. Bind the "
-            "identity to this call's head or transition; if you cannot, stop without "
-            "changing or watching any pull request. Then inspect "
-            "`gh pr view <PR#> --json isDraft`; run "
+            "inspect `gh pr view <PR#> --json isDraft`; run "
             f"`uv run {engines_dir}/pr_watch.py <PR#> --assert-draft` only when "
             "that field is true, otherwise run "
             f"`uv run {engines_dir}/pr_watch.py <PR#> --assert-ready`. Start the "
@@ -1390,7 +431,7 @@ def build_reminder(
     bot_desc = _bot_description(bots)
     return (
         _lifecycle_instruction(command, engines_dir, response)
-        + "Per the kit's \"PR follow-through\" policy (PRINCIPLES.md #5/#8), "
+        + 'Per the kit\'s "PR follow-through" policy (PRINCIPLES.md #5/#8), '
         "this lifecycle is MANDATORY; complete it in the current run without being "
         "asked. When it reaches review polling, invoke `/pr-watch` (or poll "
         f"`uv run {engines_dir}/pr_watch.py <PR#> --json`) and do NOT yield this turn "
@@ -1398,9 +439,7 @@ def build_reminder(
         "replied-to with a reason. Fix real findings, reply-with-reason to nitpicks "
         "you disagree with, `--mark-seen` each handled round, and keep polling (CI "
         "can take 20-30 min). "
-        + _fallback_instruction(
-            fallback_command, lenses, panel_source, engines_dir, lens_compute
-        )
+        + _fallback_instruction(fallback_command, lenses, panel_source, engines_dir, lens_compute)
         + " Only stop early if you hit something that genuinely needs an "
         "operator decision."
     )
@@ -1490,27 +529,12 @@ def should_fire(command: object, response: str | None) -> bool:
     """
     if not isinstance(command, str):
         return False
-    invocations = _gh_invocations(command)
-    parsed_actions = {action for action, _arguments in invocations}
-    real_creates = [
-        arguments
-        for action, arguments in invocations
-        if action == "create" and _create_can_complete(arguments)
-    ]
-    normal_ready = [
-        arguments
-        for action, arguments in invocations
-        if action == "ready" and _ready_is_undo(arguments) is not True
-    ]
-    if not real_creates and not normal_ready:
-        if response is None:
-            return False
-        unparsed_actions = _syntactic_lifecycle_actions(command) - parsed_actions
-        if "create" in unparsed_actions:
-            diagnostic_count = _existing_pr_diagnostic_count(response)
-            if diagnostic_count == 0 and _PR_URL.search(response):
-                return True
-        return bool("ready" in unparsed_actions and _READY_ACK.search(response))
+    actions = {
+        "create" if match.group(1) == "new" else match.group(1)
+        for match in _TRIGGER.finditer(command)
+    }
+    if not actions:
+        return False
     if response is None:
         return True  # nothing readable — fail loud
 
@@ -1522,15 +546,9 @@ def should_fire(command: object, response: str | None) -> bool:
     # both actions, and its response may carry only the URL if the runtime drops
     # stderr. Requiring every action's evidence would go silent on a PR that was
     # genuinely just opened, which is the failure this hook exists to prevent.
-    if real_creates:
-        diagnostic_count = _existing_pr_diagnostic_count(response)
-        if diagnostic_count >= len(real_creates):
-            # A failed create followed by `gh pr view` (or any other URL-producing
-            # command) must not borrow that later URL as creation evidence.
-            return False
-        if _PR_URL.search(_without_existing_pr_diagnostics(response)):
-            return True
-    return bool(normal_ready and _READY_ACK.search(response))
+    if "create" in actions and _PR_URL.search(_without_existing_pr_diagnostics(response)):
+        return True
+    return bool("ready" in actions and _READY_ACK.search(response))
 
 
 def main() -> int:
