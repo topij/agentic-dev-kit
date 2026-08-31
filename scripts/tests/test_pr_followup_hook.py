@@ -86,6 +86,25 @@ def test_triggers_on_gh_pr_create(monkeypatch, capsys):
     assert context.index("gh pr ready") < context.index("--assert-ready")
 
 
+@pytest.mark.parametrize("draft_flag", ("-d", "-df", "--draft", "--draft=true"))
+def test_supported_draft_flags_take_draft_lifecycle(
+    monkeypatch, capsys, draft_flag
+):
+    hook = _load_hook()
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(
+            f"gh pr create {draft_flag} --fill",
+            stdout="https://github.com/owner/repo/pull/42\n",
+        ),
+    )
+    assert exit_code == 0
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "--assert-draft" in context
+
+
 def test_ready_create_asserts_ready_before_watch(monkeypatch, capsys):
     hook = _load_hook()
     exit_code, out = _run(hook, monkeypatch, capsys, _payload("gh pr create --fill"))
@@ -109,7 +128,16 @@ def test_triggers_on_gh_pr_ready(monkeypatch, capsys):
 def test_compound_draft_create_and_ready_takes_ready_route(monkeypatch, capsys):
     hook = _load_hook()
     command = "gh pr create --draft --fill && gh pr ready 42"
-    exit_code, out = _run(hook, monkeypatch, capsys, _payload(command))
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(
+            command,
+            stdout="https://github.com/owner/repo/pull/42\n",
+            stderr='Pull request owner/repo#42 is marked as "ready for review"\n',
+        ),
+    )
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
     assert "--assert-draft" not in context
@@ -123,11 +151,71 @@ def test_echoed_ready_after_draft_create_does_not_change_draft_lifecycle():
 
 
 @pytest.mark.parametrize(
+    "command,stderr",
+    (
+        ("gh pr create --draft --fill || gh pr ready 42", ""),
+        (
+            "gh pr create --draft --fill && run-required-validation && gh pr ready 42",
+            "run-required-validation: failed\n",
+        ),
+        (
+            "gh pr create --draft --body-file - <<EOF\n"
+            "Do not run && gh pr ready yet\n"
+            "EOF",
+            "",
+        ),
+    ),
+)
+def test_unexecuted_ready_text_preserves_draft_lifecycle(
+    monkeypatch, capsys, command, stderr
+):
+    hook = _load_hook()
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(
+            command,
+            stdout="https://github.com/owner/repo/pull/42\n",
+            stderr=stderr,
+        ),
+    )
+    assert exit_code == 0
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "--assert-draft" in context
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        "gh -R owner/repo pr create --draft --fill",
+        "gh --repo=owner/repo pr create --draft --fill",
+        "/usr/local/bin/gh -Rowner/repo pr create --draft --fill",
+    ),
+)
+def test_global_repo_flag_and_gh_path_still_trigger_draft_lifecycle(
+    monkeypatch, capsys, command
+):
+    hook = _load_hook()
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command, stdout="https://github.com/owner/repo/pull/42\n"),
+    )
+    assert exit_code == 0
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "--assert-draft" in context
+
+
+@pytest.mark.parametrize(
     "command",
     (
         "gh pr create --fill --body 'example: --draft'",
         "gh pr create --fill --body 'run gh pr ready later'",
+        "gh pr create --body -d --fill",
         "gh pr create --draft=false --fill",
+        "gh pr create -d=false --fill",
     ),
 )
 def test_quoted_or_false_draft_text_does_not_change_ready_lifecycle(command):

@@ -51,18 +51,44 @@ import shlex
 import sys
 from pathlib import Path
 
-# The command is a NECESSARY condition, never a sufficient one (#302). It matches
-# the phrase anywhere, so a command that merely quotes, echoes, greps for or
-# documents it matches too — observed five times while wiring the Codex
-# registration, once from the comment documenting this very behaviour and once
-# from a review lens that had never heard of it. Anchoring to the start would
-# miss the ordinary `cd x && <the command>` form.
-#
-# So the command decides whether to LOOK, and `tool_response` decides whether to
-# fire. Both runtimes supply it on PostToolUse. The surface is wider under Codex,
-# whose matcher filters the tool name only, so every Bash command reaches here.
-_TRIGGER = re.compile(r"\bgh\s+pr\s+(create|ready)\b")
-_SHELL_CONTROL_CHARS = frozenset(";&|()")
+# The command is a NECESSARY condition, never a sufficient one (#302). Parse
+# actual shell-command starts instead of searching for a phrase: a PR body can
+# quote ``gh pr ready``, while GitHub CLI's inherited ``-R/--repo`` option can
+# legitimately sit between ``gh`` and ``pr``. The response below remains the
+# sufficient evidence that the selected command actually changed a PR.
+_SHELL_CONTROL_CHARS = frozenset(";&|()\n")
+_GH_GLOBAL_OPTIONS_WITH_VALUE = frozenset(
+    {"-R", "--repo", "--hostname", "--config-dir"}
+)
+_GH_GLOBAL_OPTIONS_WITHOUT_VALUE = frozenset({"--help", "--version"})
+_CREATE_OPTIONS_WITH_VALUE = frozenset(
+    {
+        "-a",
+        "--assignee",
+        "-B",
+        "--base",
+        "-b",
+        "--body",
+        "-F",
+        "--body-file",
+        "-H",
+        "--head",
+        "-l",
+        "--label",
+        "-m",
+        "--milestone",
+        "-p",
+        "--project",
+        "--recover",
+        "-r",
+        "--reviewer",
+        "-T",
+        "--template",
+        "-t",
+        "--title",
+    }
+)
+_CREATE_BOOLEAN_SHORT_FLAGS = frozenset("defw")
 
 # What a real invocation leaves in the response, established from `gh`'s source
 # rather than assumed — the issue asked for that specifically, and the two
@@ -287,23 +313,21 @@ def _fallback_instruction(
     )
 
 
-def _pr_lifecycle(command: object) -> str:
-    """Return ``draft`` only for an actual draft create with no ready action.
-
-    Tokenizing keeps a quoted PR body such as ``'run gh pr ready later'`` or
-    ``'example: --draft'`` from changing the lifecycle. A compound command that
-    creates draft and then marks ready has already completed the exception, so it
-    takes the ready route.
-    """
+def _shell_commands(command: object) -> list[list[str]]:
+    """Tokenize command starts while preserving newlines as shell boundaries."""
     if not isinstance(command, str):
-        return "ready"
+        return []
     try:
-        lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|()")
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|()\n")
+        # Newlines are control tokens, not generic whitespace. This prevents the
+        # first word of a later command from becoming an argument to the earlier
+        # one, while quoted newlines remain inside their quoted token.
+        lexer.whitespace = " \t\r"
         lexer.whitespace_split = True
         lexer.commenters = ""
         tokens = list(lexer)
     except (TypeError, ValueError):
-        return "ready"
+        return []
 
     commands: list[list[str]] = [[]]
     for token in tokens:
@@ -312,51 +336,138 @@ def _pr_lifecycle(command: object) -> str:
                 commands.append([])
             continue
         commands[-1].append(token)
+    return [shell_command for shell_command in commands if shell_command]
 
-    def invocation_index(shell_command: list[str], action: str) -> int | None:
-        for candidate in (
-            index
-            for index in range(len(shell_command) - 2)
-            if shell_command[index : index + 3] == ["gh", "pr", action]
-        ):
-            prefix = shell_command[:candidate]
-            prefix_is_assignment = all(
-                "=" in token and not token.startswith("=") for token in prefix
-            )
-            prefix_is_wrapper = prefix == ["command"] or (
-                bool(prefix)
-                and prefix[0] == "env"
-                and all(
-                    "=" in token and not token.startswith("=") for token in prefix[1:]
-                )
-            )
-            if not prefix or prefix_is_assignment or prefix_is_wrapper:
-                return candidate
+
+def _is_assignment(token: str) -> bool:
+    return "=" in token and not token.startswith("=")
+
+
+def _gh_command_index(shell_command: list[str]) -> int | None:
+    """Locate a direct ``gh`` command after supported shell wrappers."""
+    index = 0
+    while index < len(shell_command) and _is_assignment(shell_command[index]):
+        index += 1
+
+    if index < len(shell_command) and shell_command[index] == "command":
+        index += 1
+        if index < len(shell_command) and shell_command[index] == "--":
+            index += 1
+    elif index < len(shell_command) and shell_command[index] == "env":
+        index += 1
+        while index < len(shell_command):
+            token = shell_command[index]
+            if _is_assignment(token) or token in {"-i", "--ignore-environment"}:
+                index += 1
+                continue
+            if token in {"-u", "--unset"} and index + 1 < len(shell_command):
+                index += 2
+                continue
+            if token.startswith("--unset="):
+                index += 1
+                continue
+            if token == "--":
+                index += 1
+            break
+
+    if index >= len(shell_command) or Path(shell_command[index]).name != "gh":
         return None
+    return index
 
-    saw_ready = False
-    saw_draft_create = False
-    for shell_command in commands:
-        if invocation_index(shell_command, "ready") is not None:
-            saw_ready = True
-            continue
-        gh_index = invocation_index(shell_command, "create")
+
+def _gh_invocations(command: object) -> list[tuple[str, list[str]]]:
+    """Return supported ``gh pr create|ready`` invocations and their arguments."""
+    invocations: list[tuple[str, list[str]]] = []
+    for shell_command in _shell_commands(command):
+        gh_index = _gh_command_index(shell_command)
         if gh_index is None:
             continue
-        for token in shell_command[gh_index + 3 :]:
-            if token == "--draft":
-                saw_draft_create = True
+        index = gh_index + 1
+        while index < len(shell_command):
+            token = shell_command[index]
+            if token == "pr":
                 break
-            if token.startswith("--draft="):
-                value = token.split("=", 1)[1].strip().casefold()
-                if value not in {"false", "0", "no", "off"}:
-                    saw_draft_create = True
-                break
-    return "draft" if saw_draft_create and not saw_ready else "ready"
+            if token in _GH_GLOBAL_OPTIONS_WITH_VALUE:
+                index += 2
+                continue
+            if any(
+                token.startswith(f"{option}=")
+                for option in _GH_GLOBAL_OPTIONS_WITH_VALUE
+                if option.startswith("--")
+            ) or (token.startswith("-R") and token != "-R"):
+                index += 1
+                continue
+            if token in _GH_GLOBAL_OPTIONS_WITHOUT_VALUE:
+                index += 1
+                continue
+            break
+        if index + 1 >= len(shell_command) or shell_command[index] != "pr":
+            continue
+        action = shell_command[index + 1]
+        if action in {"create", "ready"}:
+            invocations.append((action, shell_command[index + 2 :]))
+    return invocations
 
 
-def _lifecycle_instruction(command: object, engines_dir: str) -> str:
-    if _pr_lifecycle(command) == "draft":
+def _create_is_draft(arguments: list[str]) -> bool:
+    """Interpret the documented draft spellings without reading option values as flags."""
+    index = 0
+    while index < len(arguments):
+        token = arguments[index]
+        if token == "--":
+            return False
+        if token in _CREATE_OPTIONS_WITH_VALUE:
+            index += 2
+            continue
+        if any(
+            token.startswith(f"{option}=")
+            for option in _CREATE_OPTIONS_WITH_VALUE
+            if option.startswith("--")
+        ):
+            index += 1
+            continue
+        if token in {"--draft", "-d"}:
+            return True
+        if token.startswith("--draft=") or token.startswith("-d="):
+            value = token.split("=", 1)[1].strip().casefold()
+            return value not in {"false", "0", "no", "off"}
+        if (
+            token.startswith("-")
+            and not token.startswith("--")
+            and set(token[1:]) <= _CREATE_BOOLEAN_SHORT_FLAGS
+            and "d" in token[1:]
+        ):
+            return True
+        index += 1
+    return False
+
+
+def _pr_lifecycle(command: object, response: str | None = None) -> str:
+    """Return ``draft`` for a draft create until execution proves it became ready.
+
+    Command text proves creation intent, including ``-d`` and inherited global
+    ``gh`` flags. It does *not* prove that a later ready command executed: an
+    ``||`` branch, failed intervening validation, or heredoc body may contain the
+    same words. Only GitHub CLI's ready acknowledgement in the PostToolUse response
+    settles that transition. Ambiguous evidence therefore preserves the intentional
+    draft instead of running the mutating ``--assert-ready`` correction early.
+    """
+    invocations = _gh_invocations(command)
+    saw_draft_create = any(
+        action == "create" and _create_is_draft(arguments)
+        for action, arguments in invocations
+    )
+    if not saw_draft_create:
+        return "ready"
+    if response is not None and _READY_ACK.search(response):
+        return "ready"
+    return "draft"
+
+
+def _lifecycle_instruction(
+    command: object, engines_dir: str, response: str | None = None
+) -> str:
+    if _pr_lifecycle(command, response) == "draft":
         return (
             "A draft pull request was just opened under the bounded material "
             "unfinished-work exception. Immediately run "
@@ -374,7 +485,9 @@ def _lifecycle_instruction(command: object, engines_dir: str) -> str:
 
 
 def build_reminder(
-    runtime: str = _DEFAULT_RUNTIME, command: object = None
+    runtime: str = _DEFAULT_RUNTIME,
+    command: object = None,
+    response: str | None = None,
 ) -> str:
     (
         bots,
@@ -386,7 +499,7 @@ def build_reminder(
     ) = _load_review_config(runtime)
     bot_desc = _bot_description(bots)
     return (
-        _lifecycle_instruction(command, engines_dir)
+        _lifecycle_instruction(command, engines_dir, response)
         + "Per the kit's \"PR follow-through\" policy (PRINCIPLES.md #5/#8), "
         "this lifecycle is MANDATORY; complete it in the current run without being "
         "asked. When it reaches review polling, invoke `/pr-watch` (or poll "
@@ -487,7 +600,7 @@ def should_fire(command: object, response: str | None) -> bool:
     """
     if not isinstance(command, str):
         return False
-    actions = {match.group(1) for match in _TRIGGER.finditer(command)}
+    actions = {action for action, _arguments in _gh_invocations(command)}
     if not actions:
         return False
     if response is None:
@@ -527,13 +640,14 @@ def main() -> int:
 
     tool_input = data.get("tool_input")
     command = tool_input.get("command") if isinstance(tool_input, dict) else None
-    if should_fire(command, _response_text(data)):
+    response = _response_text(data)
+    if should_fire(command, response):
         print(
             json.dumps(
                 {
                     "hookSpecificOutput": {
                         "hookEventName": "PostToolUse",
-                        "additionalContext": build_reminder(runtime, command),
+                        "additionalContext": build_reminder(runtime, command, response),
                     }
                 }
             )
