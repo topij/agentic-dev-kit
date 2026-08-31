@@ -73,7 +73,7 @@ def _no_job_name(monkeypatch):
     monkeypatch.delenv("JOB_NAME", raising=False)
 
 
-def test_triggers_on_gh_pr_create(monkeypatch, capsys):
+def test_successful_draft_create_resolves_live_state_before_mutation(monkeypatch, capsys):
     hook = _load_hook()
     command = "gh pr create --draft --title x"
     response = "https://github.com/owner/repo/pull/42\n"
@@ -82,25 +82,25 @@ def test_triggers_on_gh_pr_create(monkeypatch, capsys):
     body = json.loads(out)
     assert body["hookSpecificOutput"]["hookEventName"] == "PostToolUse"
     context = body["hookSpecificOutput"]["additionalContext"]
-    assert hook._pr_lifecycle(command, response) == "draft"
-    assert "A draft pull request was just opened" in context
-    assert "ambiguous lifecycle evidence" not in context
+    assert hook._pr_lifecycle(command, response) == "unknown"
+    assert "ambiguous lifecycle evidence" in context
+    assert "current workflow state" in context
     assert "--assert-draft" in context
-    assert "Do not start review polling or the watch-and-fix loop yet" in context
-    assert context.index("--assert-draft") < context.index("gh pr ready")
-    assert context.index("gh pr ready") < context.index("--assert-ready")
+    draft_assertion = context.index("--assert-draft")
+    ready_transition = context.index("gh pr ready", draft_assertion)
+    ready_assertion = context.index("--assert-ready", ready_transition)
+    assert draft_assertion < ready_transition < ready_assertion
 
 
-def test_ready_create_asserts_ready_before_watch(monkeypatch, capsys):
+def test_successful_ready_create_resolves_live_state_before_watch(monkeypatch, capsys):
     hook = _load_hook()
     command = "gh pr create --fill"
     response = "https://github.com/owner/repo/pull/42\n"
     exit_code, out = _run(hook, monkeypatch, capsys, _payload_with(command, stdout=response))
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert hook._pr_lifecycle(command, response) == "ready"
-    assert "opened ready for review" in context
-    assert "--assert-draft" not in context
+    assert hook._pr_lifecycle(command, response) == "unknown"
+    assert "ambiguous lifecycle evidence" in context
     assert context.index("--assert-ready") < context.index("watch-and-fix loop")
 
 
@@ -118,7 +118,7 @@ def test_triggers_on_gh_pr_ready(monkeypatch, capsys):
     assert context.index("--assert-ready") < context.index("watch-and-fix loop")
 
 
-def test_compound_draft_create_and_ready_takes_live_state_route(monkeypatch, capsys):
+def test_compound_create_and_ready_acknowledgement_takes_ready_route(monkeypatch, capsys):
     hook = _load_hook()
     command = "gh pr create --draft --fill && gh pr ready 42"
     response = (
@@ -133,8 +133,8 @@ def test_compound_draft_create_and_ready_takes_live_state_route(monkeypatch, cap
     )
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert hook._pr_lifecycle(command, response) == "unknown"
-    assert "ambiguous lifecycle evidence" in context
+    assert hook._pr_lifecycle(command, response) == "ready"
+    assert "ambiguous lifecycle evidence" not in context
 
 
 def test_compound_shell_text_is_never_used_for_a_mutating_lifecycle():
@@ -152,10 +152,10 @@ def test_compound_shell_text_is_never_used_for_a_mutating_lifecycle():
         "gh pr create --draft=false --fill",
     ),
 )
-def test_quoted_or_false_draft_text_does_not_change_ready_lifecycle(command):
+def test_creation_output_never_selects_lifecycle_from_argument_text(command):
     hook = _load_hook()
     response = "https://github.com/owner/repo/pull/42\n"
-    assert hook._pr_lifecycle(command, response) == "ready"
+    assert hook._pr_lifecycle(command, response) == "unknown"
 
 
 @pytest.mark.parametrize(
@@ -230,11 +230,12 @@ def test_existing_pr_diagnostic_is_not_creation_evidence(monkeypatch, capsys):
         "gh pr create -d --fill",
         "gh pr create -df",
         "gh pr create -fd",
+        "gh pr create --body --draft --title x",
         "gh -R owner/repo pr create --draft --fill",
         "gh --repo=owner/repo pr create --draft --fill",
     ),
 )
-def test_direct_alias_and_global_options_keep_exact_draft_lifecycle(monkeypatch, capsys, command):
+def test_all_successful_creation_syntax_uses_live_state(monkeypatch, capsys, command):
     hook = _load_hook()
     response = "https://github.com/owner/repo/pull/42\n"
 
@@ -246,10 +247,10 @@ def test_direct_alias_and_global_options_keep_exact_draft_lifecycle(monkeypatch,
     )
 
     assert exit_code == 0
-    assert hook._pr_lifecycle(command, response) == "draft"
+    assert hook._pr_lifecycle(command, response) == "unknown"
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "A draft pull request was just opened" in context
-    assert "ambiguous lifecycle evidence" not in context
+    assert "ambiguous lifecycle evidence" in context
+    assert "current workflow state" in context
 
 
 def test_direct_short_web_cluster_never_selects_a_mutating_lifecycle():

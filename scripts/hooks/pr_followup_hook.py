@@ -48,7 +48,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shlex
 import sys
 from pathlib import Path
 
@@ -66,9 +65,6 @@ _TRIGGER = re.compile(
     r"\bgh(?:\s+(?:-R|--repo|--hostname|--config-dir)(?:=\S+|\s+\S+))*"
     r"\s+pr\s+(create|new|ready)\b"
 )
-_SHELL_CONTROL_CHARS = frozenset(";&|()\n")
-_GH_GLOBAL_OPTIONS_WITH_VALUE = frozenset({"-R", "--repo", "--hostname", "--config-dir"})
-_CREATE_BOOLEAN_SHORT_FLAGS = frozenset("defw")
 
 # What a real invocation leaves in the response, established from `gh`'s source
 # rather than assumed — the issue asked for that specifically, and the two
@@ -303,124 +299,36 @@ def _fallback_instruction(
     )
 
 
-def _direct_lifecycle_invocation(command: object) -> tuple[str, list[str]] | None:
-    """Return one directly understood ``gh pr`` lifecycle invocation.
-
-    This is intentionally not a shell parser. Wrapped, compound, expanded, or
-    interpreter-fed source remains a trigger candidate, but it is classified as
-    unknown and routed through authoritative live PR state instead of a mutating
-    draft/ready assertion inferred from shell text.
-    """
-    if not isinstance(command, str) or any(char in command for char in _SHELL_CONTROL_CHARS):
-        return None
-    try:
-        tokens = shlex.split(command, posix=True)
-    except (TypeError, ValueError):
-        return None
-    if not tokens or tokens[0] != "gh":
-        return None
-    if any(any(marker in token for marker in ("$", "`", "{", "}", "*", "?")) for token in tokens):
-        return None
-
-    index = 1
-    while index < len(tokens) and tokens[index] != "pr":
-        token = tokens[index]
-        if token in _GH_GLOBAL_OPTIONS_WITH_VALUE:
-            index += 2
-            continue
-        if any(token.startswith(f"{option}=") for option in _GH_GLOBAL_OPTIONS_WITH_VALUE):
-            index += 1
-            continue
-        return None
-    if index + 1 >= len(tokens) or tokens[index] != "pr":
-        return None
-    action = tokens[index + 1]
-    if action == "new":
-        action = "create"
-    if action not in {"create", "ready"}:
-        return None
-    return action, tokens[index + 2 :]
-
-
 def _without_existing_pr_diagnostics(response: str) -> str:
     return _EXISTING_PR_ERROR.sub("", response)
 
 
-def _draft_flag(arguments: list[str]) -> bool | None:
-    """Return the literal final draft flag, or ``None`` when it is uncertain."""
-    draft = any(
-        token.startswith("-")
-        and not token.startswith("--")
-        and set(token[1:]) <= _CREATE_BOOLEAN_SHORT_FLAGS
-        and "d" in token[1:]
-        for token in arguments
-    )
-    for token in arguments:
-        if token == "--draft":
-            draft = True
-        elif token.startswith("--draft="):
-            value = token.split("=", 1)[1].strip().casefold()
-            if value in {"true", "1", "yes", "on"}:
-                draft = True
-            elif value in {"false", "0", "no", "off"}:
-                draft = False
-            else:
-                return None
-    return draft
-
-
 def _pr_lifecycle(command: object, response: str | None = None) -> str:
-    """Classify only a corroborated direct invocation; otherwise return unknown."""
-    if response is None:
+    """Trust only the ready acknowledgement; creation output carries no draft bit."""
+    if response is None or not isinstance(command, str):
         return "unknown"
-    direct = _direct_lifecycle_invocation(command)
-    if direct is None:
-        return "unknown"
-    action, arguments = direct
-    if action == "ready":
-        if any(token == "--undo" or token.startswith("--undo=") for token in arguments):
-            return "unknown"
-        return "ready" if _READY_ACK.search(response) else "unknown"
-    short_web = any(
-        token.startswith("-")
-        and not token.startswith("--")
-        and set(token[1:]) <= _CREATE_BOOLEAN_SHORT_FLAGS
-        and "w" in token[1:]
-        for token in arguments
-    )
-    if short_web or any(token in {"--dry-run", "--web"} for token in arguments):
-        return "unknown"
-    if not _PR_URL.search(_without_existing_pr_diagnostics(response)):
-        return "unknown"
-    draft = _draft_flag(arguments)
-    if draft is None:
-        return "unknown"
-    return "draft" if draft else "ready"
+    actions = {match.group(1) for match in _TRIGGER.finditer(command)}
+    return "ready" if "ready" in actions and _READY_ACK.search(response) else "unknown"
 
 
 def _lifecycle_instruction(command: object, engines_dir: str, response: str | None = None) -> str:
     lifecycle = _pr_lifecycle(command, response)
-    if lifecycle == "draft":
-        return (
-            "A draft pull request was just opened under the bounded material "
-            "unfinished-work exception. Immediately run "
-            f"`uv run {engines_dir}/pr_watch.py <PR#> --assert-draft`. "
-            "Do not start review polling or the watch-and-fix loop yet. Finish and "
-            "push the material work, complete the PR body, run `gh pr ready <PR#>`, "
-            f"then run `uv run {engines_dir}/pr_watch.py <PR#> --assert-ready`. "
-            "Only after that ready assertion passes may the watch-and-fix loop start. "
-        )
     if lifecycle == "unknown":
         return (
             "A pull-request command produced ambiguous lifecycle evidence. Do not "
             "change its draft state or start a watch loop from command text alone. "
             "First resolve the exact pull-request identity from authoritative forge "
             "state; if none exists, stop without changing any pull request. Then "
-            "inspect `gh pr view <PR#> --json isDraft`; run "
-            f"`uv run {engines_dir}/pr_watch.py <PR#> --assert-draft` only when "
-            "that field is true, otherwise run "
-            f"`uv run {engines_dir}/pr_watch.py <PR#> --assert-ready`. Start the "
-            "watch-and-fix loop only after the ready assertion passes. "
+            "inspect `gh pr view <PR#> --json isDraft`. If it is ready, run "
+            f"`uv run {engines_dir}/pr_watch.py <PR#> --assert-ready` and start the "
+            "watch-and-fix loop. If it is draft, use the current workflow state — "
+            "never parsed shell text — to decide whether this run intentionally took "
+            "the bounded material unfinished-work exception. For that intentional "
+            f"route, run `uv run {engines_dir}/pr_watch.py <PR#> --assert-draft`, "
+            "finish and push the material work, complete the body, run "
+            f"`gh pr ready <PR#>` and then `uv run {engines_dir}/pr_watch.py <PR#> "
+            "--assert-ready`; only then start the watch-and-fix loop. Otherwise "
+            "correct the unexpected draft with `--assert-ready` before polling. "
         )
     return (
         "A pull request was just opened ready for review or marked ready. Immediately "
