@@ -382,6 +382,71 @@ def test_executing_wrappers_and_substitutions_reach_the_lifecycle_hook(
 @pytest.mark.parametrize(
     "command",
     (
+        "eval 'gh pr create --draft --fill'",
+        "bash <<'EOF'\ngh pr create --draft --fill\nEOF",
+        "bash -s positional <<'EOF'\ngh pr create --draft --fill\nEOF",
+        "env GH_HOST=github.example sh <<\\EOF\ngh pr create --draft --fill\nEOF",
+    ),
+)
+def test_literal_executed_source_with_success_evidence_requires_live_state(
+    monkeypatch, capsys, command
+):
+    hook = _load_hook()
+    response = "https://github.com/owner/repo/pull/42\n"
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command, stdout=response),
+    )
+
+    assert exit_code == 0
+    assert hook.should_fire(command, response) is True
+    assert hook._pr_lifecycle(command, response) == "unknown"
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "ambiguous lifecycle evidence" in context
+    assert "gh pr view <PR#> --json isDraft" in context
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        (
+            "cat <<CAT; bash <<SHELL\n"
+            "gh pr create --draft --fill\n"
+            "https://github.com/owner/repo/pull/42\n"
+            "CAT\n:\nSHELL"
+        ),
+        (
+            "bash <<FIRST <<SECOND\n"
+            "gh pr create --draft --fill\n"
+            "FIRST\n:\nSECOND"
+        ),
+    ),
+)
+def test_only_the_effective_shell_stdin_heredoc_is_treated_as_program(
+    monkeypatch, capsys, command
+):
+    hook = _load_hook()
+    response = (
+        "gh pr create --draft --fill\n"
+        "https://github.com/owner/repo/pull/42\n"
+    )
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command, stdout=response),
+    )
+
+    assert exit_code == 0
+    assert hook.should_fire(command, response) is False
+    assert out == ""
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
         "gh pr create \\\n  --draft \\\n  --fill",
         "gh pr \\\n  create --draft --fill",
     ),
@@ -434,6 +499,27 @@ def test_dynamic_create_arguments_require_live_state(
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
     assert "ambiguous lifecycle evidence" in context
     assert "gh pr view <PR#> --json isDraft" in context
+
+
+def test_dynamic_ready_executable_with_acknowledgement_requires_live_state(
+    monkeypatch, capsys
+):
+    hook = _load_hook()
+    command = "GH=gh; $GH pr ready 42"
+    response = 'Pull request owner/repo#42 is marked as "ready for review"\n'
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command, stderr=response),
+    )
+
+    assert exit_code == 0
+    assert hook.should_fire(command, response) is True
+    assert hook._pr_lifecycle(command, response) == "unknown"
+    assert "ambiguous lifecycle evidence" in json.loads(out)["hookSpecificOutput"][
+        "additionalContext"
+    ]
 
 
 @pytest.mark.parametrize(
@@ -591,6 +677,39 @@ def test_quoted_or_false_draft_text_does_not_change_ready_lifecycle(command):
     hook = _load_hook()
     response = "https://github.com/owner/repo/pull/42\n"
     assert hook._pr_lifecycle(command, response) == "ready"
+
+
+@pytest.mark.parametrize(
+    "command,expected",
+    (
+        ("gh pr create --draft --draft=false --fill", "ready"),
+        ("gh pr create --draft=false --draft --fill", "draft"),
+        ("gh pr create -d --draft=false --fill", "ready"),
+        ("gh pr create --draft=false -d --fill", "draft"),
+    ),
+)
+def test_repeated_draft_flags_follow_the_cli_last_value(command, expected):
+    hook = _load_hook()
+    response = "https://github.com/owner/repo/pull/42\n"
+
+    assert hook._pr_lifecycle(command, response) == expected
+
+
+@pytest.mark.parametrize(
+    "arguments,can_complete",
+    (
+        (["--dry-run", "--dry-run=false", "--fill"], True),
+        (["--dry-run=false", "--dry-run", "--fill"], False),
+        (["--web", "--web=false", "--fill"], True),
+        (["--web=false", "--web", "--fill"], False),
+    ),
+)
+def test_repeated_noncreating_flags_follow_the_cli_last_value(
+    arguments, can_complete
+):
+    hook = _load_hook()
+
+    assert hook._create_can_complete(arguments) is can_complete
 
 
 def test_mixed_create_branches_inspect_live_state_before_any_correction(
@@ -866,6 +985,30 @@ def test_ready_undo_false_remains_a_ready_transition(monkeypatch, capsys):
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
     assert "--assert-ready" in context
+
+
+@pytest.mark.parametrize(
+    "command,should_fire",
+    (
+        ("gh pr ready 42 --undo --undo=false", True),
+        ("gh pr ready 42 --undo=false --undo", False),
+    ),
+)
+def test_repeated_ready_undo_flags_follow_the_cli_last_value(
+    monkeypatch, capsys, command, should_fire
+):
+    hook = _load_hook()
+    response = 'Pull request owner/repo#42 is marked as "ready for review"\n'
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command, stderr=response),
+    )
+
+    assert exit_code == 0
+    assert hook.should_fire(command, response) is should_fire
+    assert bool(out) is should_fire
 
 
 def test_does_not_trigger_on_gh_pr_view(monkeypatch, capsys):
@@ -1677,6 +1820,20 @@ def test_should_fire_needs_the_command_first_whatever_the_response_says(monkeypa
         is False
     )
     assert hook.should_fire(None, "https://github.com/x/y/pull/1") is False
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        'gh pr view "$PR" --json url --jq .url',
+        'printf "%s\\n" "$NOTE"; gh pr view 42 --json url --jq .url',
+    ),
+)
+def test_unrelated_shell_expansion_cannot_turn_a_view_into_a_lifecycle_event(command):
+    hook = _load_hook()
+    response = "https://github.com/owner/repo/pull/42\n"
+
+    assert hook.should_fire(command, response) is False
 
 
 def test_each_action_is_matched_against_its_own_evidence(monkeypatch, capsys):

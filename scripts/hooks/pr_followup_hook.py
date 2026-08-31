@@ -97,6 +97,7 @@ _SHELL_COMMAND_PREFIXES = frozenset(
 )
 _SHELL_INTERPRETERS = frozenset({"bash", "dash", "ksh", "sh", "zsh"})
 _LEADING_REDIRECTION = re.compile(r"^\d*(?:<>|>>|>|<<|<)(.*)$")
+_HEREDOC_REDIRECTION = re.compile(r"^(?P<fd>\d*)<<-?(?!<)")
 
 # What a real invocation leaves in the response, established from `gh`'s source
 # rather than assumed — the issue asked for that specifically, and the two
@@ -439,6 +440,29 @@ def _without_heredoc_bodies(command: str) -> str:
         kept.append(line)
         pending.extend(_heredoc_specs(line))
     return "".join(kept)
+
+
+def _heredoc_inputs(command: str) -> list[tuple[str, int, str]]:
+    """Return each heredoc opener and its quote-removed input body."""
+    pending: list[tuple[str, int, str, bool, list[str]]] = []
+    inputs: list[tuple[str, int, str]] = []
+    for line in command.splitlines(keepends=True):
+        if pending:
+            opener, spec_index, delimiter, strip_tabs, body = pending[0]
+            candidate = line.rstrip("\r\n")
+            if strip_tabs:
+                candidate = candidate.lstrip("\t")
+            if candidate == delimiter:
+                inputs.append((opener, spec_index, "".join(body)))
+                pending.pop(0)
+            else:
+                body.append(line)
+            continue
+        pending.extend(
+            (line, spec_index, delimiter, strip_tabs, [])
+            for spec_index, (delimiter, strip_tabs) in enumerate(_heredoc_specs(line))
+        )
+    return inputs
 
 
 def _without_line_continuations(command: str) -> str:
@@ -859,10 +883,95 @@ def _gh_invocations(
     return invocations
 
 
-def _syntactic_lifecycle_actions(command: object) -> set[str]:
-    """Find lifecycle action syntax even behind an unsupported shell wrapper."""
+def _shell_reads_stdin_as_program(shell_command: list[str]) -> bool:
+    """Whether this shell reads program source, rather than data, from stdin."""
+    executable_index = _shell_executable_index(shell_command)
+    if executable_index is None:
+        return False
+    if Path(shell_command[executable_index]).name not in _SHELL_INTERPRETERS:
+        return False
+    reads_stdin_option = False
+    index = executable_index + 1
+    while index < len(shell_command):
+        token = shell_command[index]
+        redirection_span = _redirection_span(shell_command, index)
+        if redirection_span:
+            index += redirection_span
+            continue
+        if token == "--":
+            index += 1
+            continue
+        if token.startswith("-"):
+            if "c" in token[1:]:
+                return False
+            reads_stdin_option = reads_stdin_option or "s" in token[1:]
+            index += 1
+            continue
+        if reads_stdin_option:
+            # With `-s`, remaining operands become positional parameters while
+            # stdin remains the program source.
+            index += 1
+            continue
+        # With a script operand, stdin is data for that script rather than the
+        # shell program itself.
+        return False
+    return True
+
+
+def _heredoc_program_flags(opener: str) -> list[bool]:
+    """Map an opener's heredocs to those that actually feed shell source."""
+    flags: list[bool] = []
+    for shell_command in _shell_commands(opener):
+        command_flags: list[bool] = []
+        stdin_heredocs: list[int] = []
+        for token in shell_command:
+            match = _HEREDOC_REDIRECTION.match(token)
+            if match is None:
+                continue
+            command_flags.append(False)
+            if match.group("fd") in {"", "0"}:
+                stdin_heredocs.append(len(command_flags) - 1)
+        if stdin_heredocs and _shell_reads_stdin_as_program(shell_command):
+            # Shell redirections are applied left to right, so only the final
+            # stdin heredoc supplies the program. Earlier inputs are consumed
+            # while setting up redirections but are not executed.
+            command_flags[stdin_heredocs[-1]] = True
+        flags.extend(command_flags)
+    return flags
+
+
+def _syntactic_lifecycle_actions(
+    command: object, _depth: int = 0
+) -> set[str]:
+    """Find lifecycle syntax behind supported, dynamic, or literal wrappers."""
+    if _depth > 4 or not isinstance(command, str):
+        return set()
     actions: set[str] = set()
     for shell_command in _shell_commands(command):
+        executable_index = _shell_executable_index(shell_command)
+        if executable_index is not None:
+            executable = shell_command[executable_index]
+            if "$" in executable or "`" in executable:
+                index = _skip_gh_global_options(shell_command, executable_index + 1)
+                if (
+                    index is not None
+                    and index < len(shell_command)
+                    and shell_command[index] == "pr"
+                ):
+                    index = _skip_gh_global_options(shell_command, index + 1)
+                    if index is not None and index < len(shell_command):
+                        action = shell_command[index]
+                        if action == "new":
+                            action = "create"
+                        if action in {"create", "ready"}:
+                            actions.add(action)
+            if Path(executable).name == "eval":
+                arguments = shell_command[executable_index + 1 :]
+                if arguments[:1] == ["--"]:
+                    arguments = arguments[1:]
+                actions.update(
+                    _syntactic_lifecycle_actions(" ".join(arguments), _depth + 1)
+                )
         for gh_index, token in enumerate(shell_command):
             if Path(token).name != "gh":
                 continue
@@ -877,40 +986,11 @@ def _syntactic_lifecycle_actions(command: object) -> set[str]:
                 action = "create"
             if action in {"create", "ready"}:
                 actions.add(action)
+    for opener, spec_index, body in _heredoc_inputs(command):
+        program_flags = _heredoc_program_flags(opener)
+        if spec_index < len(program_flags) and program_flags[spec_index]:
+            actions.update(_syntactic_lifecycle_actions(body, _depth + 1))
     return actions
-
-
-def _has_dynamic_shell_values(command: object) -> bool:
-    """Whether executed shell tokens depend on expansion this parser cannot resolve."""
-    if not isinstance(command, str):
-        return False
-    source = _without_shell_comments(
-        _without_line_continuations(_without_heredoc_bodies(command))
-    )
-    quote: str | None = None
-    index = 0
-    while index < len(source):
-        char = source[index]
-        if quote == "'":
-            if char == "'":
-                quote = None
-            index += 1
-            continue
-        if char == "\\":
-            index += 2
-            continue
-        if char == "'" and quote is None:
-            quote = "'"
-            index += 1
-            continue
-        if char == '"':
-            quote = None if quote == '"' else '"'
-            index += 1
-            continue
-        if char in {"$", "`"}:
-            return True
-        index += 1
-    return False
 
 
 def _skip_gh_global_options(tokens: list[str], index: int) -> int | None:
@@ -939,11 +1019,12 @@ def _skip_gh_global_options(tokens: list[str], index: int) -> int | None:
 
 def _create_is_draft(arguments: list[str]) -> bool | None:
     """Return draft intent, or ``None`` when shell expansion can change it."""
+    is_draft = False
     index = 0
     while index < len(arguments):
         token = arguments[index]
         if token == "--":
-            return False
+            return is_draft
         if token in _CREATE_OPTIONS_WITH_VALUE:
             index += 2
             continue
@@ -955,10 +1036,14 @@ def _create_is_draft(arguments: list[str]) -> bool | None:
             index += 1
             continue
         if token in {"--draft", "-d"}:
-            return True
+            is_draft = True
+            index += 1
+            continue
         if token.startswith("--draft=") or token.startswith("-d="):
             value = token.split("=", 1)[1].strip().casefold()
-            return value not in {"false", "0", "no", "off"}
+            is_draft = value not in {"false", "0", "no", "off"}
+            index += 1
+            continue
         if token.startswith("-") and not token.startswith("--"):
             # Cobra/pflag walks a short-option cluster left to right. A boolean
             # `d` is draft wherever it is reached, but a value-taking option
@@ -966,7 +1051,8 @@ def _create_is_draft(arguments: list[str]) -> bool | None:
             # gives `d` to `--body-file` and is ready.
             for short_flag in token[1:]:
                 if short_flag == "d":
-                    return True
+                    is_draft = True
+                    continue
                 if short_flag in _CREATE_SHORT_OPTIONS_WITH_VALUE:
                     break
                 if short_flag not in _CREATE_BOOLEAN_SHORT_FLAGS:
@@ -974,16 +1060,17 @@ def _create_is_draft(arguments: list[str]) -> bool | None:
         if "$" in token or "`" in token:
             return None
         index += 1
-    return False
+    return is_draft
 
 
 def _create_is_dry_run(arguments: list[str]) -> bool:
     """Whether ``create`` only reports what it would do instead of creating."""
+    is_dry_run = False
     index = 0
     while index < len(arguments):
         token = arguments[index]
         if token == "--":
-            return False
+            return is_dry_run
         if token in _CREATE_OPTIONS_WITH_VALUE:
             index += 2
             continue
@@ -995,21 +1082,24 @@ def _create_is_dry_run(arguments: list[str]) -> bool:
             index += 1
             continue
         if token == "--dry-run":
-            return True
+            is_dry_run = True
+            index += 1
+            continue
         if token.startswith("--dry-run="):
             value = token.split("=", 1)[1].strip().casefold()
-            return value not in {"false", "0", "no", "off"}
+            is_dry_run = value not in {"false", "0", "no", "off"}
         index += 1
-    return False
+    return is_dry_run
 
 
 def _create_opens_browser(arguments: list[str]) -> bool:
     """Whether ``create`` only hands authoring off to a web browser."""
+    opens_browser = False
     index = 0
     while index < len(arguments):
         token = arguments[index]
         if token == "--":
-            return False
+            return opens_browser
         if token in _CREATE_OPTIONS_WITH_VALUE:
             index += 2
             continue
@@ -1021,20 +1111,25 @@ def _create_opens_browser(arguments: list[str]) -> bool:
             index += 1
             continue
         if token in {"--web", "-w"}:
-            return True
+            opens_browser = True
+            index += 1
+            continue
         if token.startswith("--web=") or token.startswith("-w="):
             value = token.split("=", 1)[1].strip().casefold()
-            return value not in {"false", "0", "no", "off"}
+            opens_browser = value not in {"false", "0", "no", "off"}
+            index += 1
+            continue
         if token.startswith("-") and not token.startswith("--"):
             for short_flag in token[1:]:
                 if short_flag == "w":
-                    return True
+                    opens_browser = True
+                    continue
                 if short_flag in _CREATE_SHORT_OPTIONS_WITH_VALUE:
                     break
                 if short_flag not in _CREATE_BOOLEAN_SHORT_FLAGS:
                     break
         index += 1
-    return False
+    return opens_browser
 
 
 def _create_can_complete(arguments: list[str]) -> bool:
@@ -1044,15 +1139,17 @@ def _create_can_complete(arguments: list[str]) -> bool:
 
 def _ready_is_undo(arguments: list[str]) -> bool:
     """Whether ``ready`` intentionally converts the target back to draft."""
+    is_undo = False
     for token in arguments:
         if token == "--":
-            return False
+            return is_undo
         if token == "--undo":
-            return True
+            is_undo = True
+            continue
         if token.startswith("--undo="):
             value = token.split("=", 1)[1].strip().casefold()
-            return value not in {"false", "0", "no", "off"}
-    return False
+            is_undo = value not in {"false", "0", "no", "off"}
+    return is_undo
 
 
 def _without_existing_pr_diagnostics(response: str) -> str:
@@ -1316,11 +1413,7 @@ def should_fire(command: object, response: str | None) -> bool:
             diagnostic_count = _existing_pr_diagnostic_count(response)
             if diagnostic_count == 0 and _PR_URL.search(response):
                 return True
-        if "ready" in unparsed_actions and _READY_ACK.search(response):
-            return True
-        if _has_dynamic_shell_values(command):
-            return bool(_PR_URL.search(response) or _READY_ACK.search(response))
-        return False
+        return bool("ready" in unparsed_actions and _READY_ACK.search(response))
     if response is None:
         return True  # nothing readable — fail loud
 
