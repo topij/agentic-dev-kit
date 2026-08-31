@@ -87,6 +87,7 @@ def test_successful_draft_create_instruction_orders_live_state_before_mutation(
     assert "ambiguous lifecycle evidence" in context
     assert "current workflow state" in context
     assert "--assert-draft" in context
+    mention_stop = context.index("stop immediately without querying the forge")
     identity_resolution = context.index("First resolve the exact pull-request identity")
     identity_confirmation = context.index(
         "Confirm that its repository and host match the current checkout"
@@ -96,7 +97,8 @@ def test_successful_draft_create_instruction_orders_live_state_before_mutation(
     ready_transition = context.index("gh pr ready", draft_assertion)
     ready_assertion = context.index("--assert-ready", ready_transition)
     assert (
-        identity_resolution
+        mention_stop
+        < identity_resolution
         < identity_confirmation
         < live_draft_state
         < draft_assertion
@@ -239,9 +241,10 @@ def test_uncertain_candidate_with_unreadable_response_fails_loud_without_mutatio
     exit_code, out = _run(hook, monkeypatch, capsys, _payload(command))
 
     assert exit_code == 0
-    assert hook.should_fire(command, None) is True
+    assert hook.should_fire(command, None) is False
+    assert hook.should_warn_unresolved(command, None) is True
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "ambiguous lifecycle evidence" in context
+    assert "grants no mutation authority" in context
 
 
 def test_existing_pr_diagnostic_is_not_creation_evidence(monkeypatch, capsys):
@@ -368,12 +371,13 @@ def test_silent_candidate_with_empty_response_takes_safe_live_state_route(
     assert exit_code == 0
     assert hook._response_text({"tool_response": ""}) is None
     assert hook._response_text(json.loads(_payload_with(command))) is None
-    assert hook.should_fire(command, None) is True
+    assert hook.should_fire(command, None) is False
+    assert hook.should_warn_unresolved(command, None) is True
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "stop immediately without querying the forge" in context
-    assert "resolve the exact pull-request identity" in context
-    assert "if no pull request exists" in context
-    assert "stop without changing or watching any pull request" in context
+    assert "grants no mutation authority" in context
+    assert "resolve the exact pull request" in context
+    assert "--assert-ready" not in context
+    assert "watch-and-fix loop" not in context
 
 
 @pytest.mark.parametrize(
@@ -392,9 +396,10 @@ def test_suppressed_real_pr_output_fails_loud_without_selecting_a_mutation(
 
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    live_draft_state = context.index("inspect `gh pr view <PR#> --json isDraft`")
-    assert live_draft_state < context.index("--assert-ready")
-    assert live_draft_state < context.index("gh pr ready")
+    assert "grants no mutation authority" in context
+    assert "inspect `gh pr view <PR#> --json isDraft`" in context
+    assert "--assert-ready" not in context
+    assert "watch-and-fix loop" not in context
 
 
 def test_empty_output_with_status_metadata_still_takes_the_safe_route(
@@ -410,6 +415,7 @@ def test_empty_output_with_status_metadata_still_takes_the_safe_route(
 
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "grants no mutation authority" in context
     assert "inspect `gh pr view <PR#> --json isDraft`" in context
 
 
@@ -422,11 +428,14 @@ def test_direct_short_web_cluster_never_selects_a_mutating_lifecycle():
     assert "ready for review or marked ready" not in hook.build_reminder()
 
 
-def test_does_not_trigger_on_gh_pr_view(monkeypatch, capsys):
+def test_output_free_gh_pr_view_gets_only_the_nonmutating_warning(monkeypatch, capsys):
     hook = _load_hook()
     exit_code, out = _run(hook, monkeypatch, capsys, _payload("gh pr view 42"))
     assert exit_code == 0
-    assert out == ""
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "grants no mutation authority" in context
+    assert "--assert-ready" not in context
+    assert "watch-and-fix loop" not in context
 
 
 def test_does_not_trigger_on_unrelated_bash_command(monkeypatch, capsys):
@@ -994,15 +1003,22 @@ def test_main_threads_the_parsed_runtime_all_the_way_to_the_reminder(monkeypatch
     monkeypatch.setattr(
         hook,
         "_load_review_config",
-        lambda runtime="claude": ([], f"/{runtime}-sentinel", "scripts", [], "src", ""),
+        lambda runtime="claude": (
+            [],
+            f"/{runtime}-sentinel",
+            f"{runtime}-engines",
+            [],
+            "src",
+            "",
+        ),
     )
     monkeypatch.setattr("sys.argv", ["pr_followup_hook.py", "--runtime", "codex"])
     monkeypatch.setattr("sys.stdin", io.StringIO(_payload("gh pr create")))
 
     assert hook.main() == 0
     emitted = json.loads(capsys.readouterr().out)["hookSpecificOutput"]["additionalContext"]
-    assert "/codex-sentinel" in emitted
-    assert "/claude-sentinel" not in emitted
+    assert "codex-engines/pr_watch.py" in emitted
+    assert "claude-engines/pr_watch.py" not in emitted
 
 
 def test_load_review_config_reads_the_key_for_the_runtime_it_was_given(monkeypatch, tmp_path):
@@ -1193,25 +1209,66 @@ def test_an_unreadable_response_fires_rather_than_risking_a_missed_reminder(
     exit_code, out = _run(hook, monkeypatch, capsys, json.dumps(payload))
 
     assert exit_code == 0
-    assert "MANDATORY" in json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "grants no mutation authority" in context
+    assert "MANDATORY" not in context
 
 
 def test_a_response_that_cannot_be_serialised_is_treated_as_unreadable(monkeypatch, capsys):
     hook = _load_hook()
     # a dict pytest can build but json cannot render — unreadable, so fail loud
-    assert hook.should_fire("gh pr create", None) is True
+    assert hook.should_fire("gh pr create", None) is False
+    assert hook.should_warn_unresolved("gh pr create", None) is True
     assert hook._response_text({"tool_response": {"k": {1, 2}}}) is None
 
 
 def test_response_evidence_fires_without_shell_action_reconstruction(monkeypatch, capsys):
-    """Specific PR evidence reaches the safe instruction through indirect syntax."""
+    """Specific state acknowledgements do not need shell-action reconstruction."""
     hook = _load_hook()
     url = "https://github.com/topij/agentic-dev-kit/pull/306"
     ack = 'Pull request topij/agentic-dev-kit#306 is marked as "ready for review"'
 
-    assert hook.should_fire('action=create; gh pr "$action" --fill', url) is True
+    indirect_create = 'action=create; gh pr "$action" --fill'
+    assert hook.should_fire(indirect_create, url) is False
+    assert hook.should_warn_unresolved(indirect_create, url) is True
     assert hook.should_fire('action=ready; gh pr "$action" 306', ack) is True
-    assert hook.should_fire(None, "https://github.com/x/y/pull/1") is True
+    assert hook.should_fire(None, "https://github.com/x/y/pull/1") is False
+    assert hook.should_fire("printf 'ready output'", ack) is False
+
+
+def test_read_only_url_output_never_gets_lifecycle_mutation_context(monkeypatch, capsys):
+    hook = _load_hook()
+    command = "gh pr view 306 --json url --jq .url"
+    url = "https://github.com/topij/agentic-dev-kit/pull/306\n"
+
+    exit_code, out = _run(hook, monkeypatch, capsys, _payload_with(command, stdout=url))
+
+    assert exit_code == 0
+    assert hook.should_fire(command, url) is False
+    assert hook.should_warn_unresolved(command, url) is True
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "grants no mutation authority" in context
+    assert "MANDATORY" not in context
+    assert "--assert-ready" not in context
+    assert "watch-and-fix loop" not in context
+
+
+@pytest.mark.parametrize("response", [None, "https://github.com/o/r/pull/42\n"])
+def test_indirect_creation_never_fails_silent_or_receives_mutation_authority(
+    monkeypatch, capsys, response
+):
+    hook = _load_hook()
+    command = 'action=create; gh pr "$action" --fill >/dev/null 2>&1'
+    payload = {"tool_input": {"command": command}}
+    if response is not None:
+        payload["tool_response"] = response
+
+    exit_code, out = _run(hook, monkeypatch, capsys, json.dumps(payload))
+
+    assert exit_code == 0
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "grants no mutation authority" in context
+    assert "MANDATORY" not in context
 
 
 def test_one_command_doing_both_fires_on_either_signal_alone(monkeypatch, capsys):
@@ -1352,7 +1409,8 @@ def test_walking_for_strings_is_depth_bounded(monkeypatch, capsys):
         deep = {"nested": deep}
 
     assert hook._response_text({"tool_response": deep}) is None  # past the bound
-    assert hook.should_fire("gh pr create", None) is True
+    assert hook.should_fire("gh pr create", None) is False
+    assert hook.should_warn_unresolved("gh pr create", None) is True
 
 
 def test_shallow_noise_beside_deep_evidence_does_not_buy_silence(monkeypatch, capsys):
@@ -1362,7 +1420,7 @@ def test_shallow_noise_beside_deep_evidence_does_not_buy_silence(monkeypatch, ca
     with an irrelevant shallow string beside evidence nested past the bound used
     to read as "readable, and the evidence is not in it" — silence, on a PR that
     really was readied. The bound now raises instead of truncating, so a payload
-    that cannot be walked in full settles nothing and fires.
+    that cannot be walked in full settles nothing and warns without mutation.
     """
     hook = _load_hook()
     ack = 'Pull request o/r#1 is marked as "ready for review"'
@@ -1372,7 +1430,9 @@ def test_shallow_noise_beside_deep_evidence_does_not_buy_silence(monkeypatch, ca
 
     payload = {"noise": "duration_ms=12", "buried": buried}
     assert hook._response_text({"tool_response": payload}) is None
-    assert hook.should_fire("gh pr ready 1", hook._response_text({"tool_response": payload}))
+    response = hook._response_text({"tool_response": payload})
+    assert hook.should_fire("gh pr ready 1", response) is False
+    assert hook.should_warn_unresolved("gh pr ready 1", response) is True
 
     # and the same shape inside the bound is walked rather than abandoned
     shallow: object = ack

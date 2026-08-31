@@ -50,9 +50,10 @@ starts.
   `isDraft` check. Ready acknowledgements also require repository and host identity to
   match the current checkout before a repository-local watcher runs. Creation, ready,
   and draft acknowledgements take the same non-mutating live-state route without
-  reconstructing shell syntax. Empty or unusable hook output from a command candidate
-  takes the conservative route; no lifecycle mutation is inferred from shell text or
-  response text.** **Refresh
+  reconstructing shell syntax. Missing output or an indirect action receives a
+  separate fail-loud warning with no mutation or watch authority; read-only commands
+  and unrelated pull-request URLs never receive the full lifecycle instruction.**
+  **Refresh
   `scripts/hooks/pr_followup_hook.py` and `init.sh`; in Claude's `PostToolUse`
   registration, set the command hook's `if` field to `Bash(*)` so the shared hook —
   rather than a runtime-only prefix filter — decides which Bash calls apply.**
