@@ -231,11 +231,9 @@ def test_existing_pr_diagnostic_is_not_creation_evidence(monkeypatch, capsys):
         "gh pr create -df",
         "gh pr create -fd",
         "gh pr create --body --draft --title x",
-        "gh -R owner/repo pr create --draft --fill",
-        "gh --repo=owner/repo pr create --draft --fill",
     ),
 )
-def test_all_successful_creation_syntax_uses_live_state(monkeypatch, capsys, command):
+def test_supported_successful_creation_syntax_uses_live_state(monkeypatch, capsys, command):
     hook = _load_hook()
     response = "https://github.com/owner/repo/pull/42\n"
 
@@ -251,6 +249,32 @@ def test_all_successful_creation_syntax_uses_live_state(monkeypatch, capsys, com
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
     assert "ambiguous lifecycle evidence" in context
     assert "current workflow state" in context
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        "gh -R foreign/project pr create --draft --fill",
+        "gh --repo=foreign/project pr create --draft --fill",
+        "gh --hostname enterprise.example pr create --draft --fill",
+    ),
+)
+def test_repository_qualified_commands_cannot_target_the_current_repo(
+    monkeypatch, capsys, command
+):
+    hook = _load_hook()
+    response = "https://github.com/foreign/project/pull/42\n"
+
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command, stdout=response),
+    )
+
+    assert exit_code == 0
+    assert hook.should_fire(command, response) is False
+    assert out == ""
 
 
 def test_direct_short_web_cluster_never_selects_a_mutating_lifecycle():

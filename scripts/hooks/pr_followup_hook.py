@@ -61,10 +61,10 @@ from pathlib import Path
 # So the command decides whether to LOOK, and `tool_response` decides whether to
 # fire. Both runtimes supply it on PostToolUse, and every Bash command reaches
 # this shared policy so a runtime adapter cannot narrow away valid wrappers.
-_TRIGGER = re.compile(
-    r"\bgh(?:\s+(?:-R|--repo|--hostname|--config-dir)(?:=\S+|\s+\S+))*"
-    r"\s+pr\s+(create|new|ready)\b"
-)
+# Repository-qualified global options are deliberately outside this candidate:
+# pr_watch.py is bound to the current checkout, so discarding their repository or
+# host identity could inspect or mutate a same-number PR in the wrong repository.
+_TRIGGER = re.compile(r"\bgh\s+pr\s+(create|new|ready)\b")
 
 # What a real invocation leaves in the response, established from `gh`'s source
 # rather than assumed — the issue asked for that specifically, and the two
