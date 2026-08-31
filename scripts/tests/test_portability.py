@@ -1926,6 +1926,21 @@ def test_pull_request_visibility_is_ready_by_default_with_a_bounded_draft_except
     adopt = adopter_workflows["adopt"]
     assert "Do not open a pull request while this operator step is pending" in adopt
     assert "If Step 3c is still pending, stop there instead" in adopt
+    step_3c = adopt.index("### Step 3c")
+    step_4 = adopt.index("## Step 4")
+    step_5 = adopt.index("## Step 5")
+    step_6 = adopt.index("## Step 6")
+    assert step_3c < step_4 < step_5 < step_6
+    verification = _flatten_prose(adopt[step_4:step_5])
+    friction = _flatten_prose(adopt[step_5:step_6])
+    assert "operator's completed Step 3c `init.sh` run" in verification
+    assert "operator runs afterwards (Step 3c)" not in verification
+    assert "Step 3c has now run" in friction
+    assert (
+        "write the entries directly into the resolved `paths.friction_log`"
+        in friction.casefold()
+    )
+    assert "Step 3c, after everything here" not in friction
 
     shared_workflows = {
         name: (workflow_root / f"{name}.md").read_text(encoding="utf-8")

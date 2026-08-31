@@ -75,7 +75,15 @@ def _no_job_name(monkeypatch):
 
 def test_triggers_on_gh_pr_create(monkeypatch, capsys):
     hook = _load_hook()
-    exit_code, out = _run(hook, monkeypatch, capsys, _payload("gh pr create --draft --title x"))
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(
+            "gh pr create --draft --title x",
+            stdout="https://github.com/owner/repo/pull/42\n",
+        ),
+    )
     assert exit_code == 0
     body = json.loads(out)
     assert body["hookSpecificOutput"]["hookEventName"] == "PostToolUse"
@@ -110,7 +118,15 @@ def test_supported_draft_flags_take_draft_lifecycle(
 
 def test_ready_create_asserts_ready_before_watch(monkeypatch, capsys):
     hook = _load_hook()
-    exit_code, out = _run(hook, monkeypatch, capsys, _payload("gh pr create --fill"))
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(
+            "gh pr create --fill",
+            stdout="https://github.com/owner/repo/pull/42\n",
+        ),
+    )
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
     assert "--assert-draft" not in context
@@ -119,7 +135,15 @@ def test_ready_create_asserts_ready_before_watch(monkeypatch, capsys):
 
 def test_triggers_on_gh_pr_ready(monkeypatch, capsys):
     hook = _load_hook()
-    exit_code, out = _run(hook, monkeypatch, capsys, _payload("gh pr ready 42"))
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(
+            "gh pr ready 42",
+            stderr='Pull request owner/repo#42 is marked as "ready for review"\n',
+        ),
+    )
     assert exit_code == 0
     body = json.loads(out)
     assert body["hookSpecificOutput"]["hookEventName"] == "PostToolUse"
@@ -197,7 +221,8 @@ def test_ready_ack_only_settles_a_parsed_ready_invocation(monkeypatch, capsys):
 def test_echoed_ready_after_draft_create_does_not_change_draft_lifecycle():
     hook = _load_hook()
     command = "gh pr create --draft --fill && echo gh pr ready"
-    assert hook._pr_lifecycle(command) == "draft"
+    response = "https://github.com/owner/repo/pull/42\n"
+    assert hook._pr_lifecycle(command, response) == "draft"
 
 
 @pytest.mark.parametrize(
@@ -207,12 +232,6 @@ def test_echoed_ready_after_draft_create_does_not_change_draft_lifecycle():
         (
             "gh pr create --draft --fill && run-required-validation && gh pr ready 42",
             "run-required-validation: failed\n",
-        ),
-        (
-            "gh pr create --draft --body-file - <<EOF\n"
-            "Do not run && gh pr ready yet\n"
-            "EOF",
-            "",
         ),
     ),
 )
@@ -335,6 +354,56 @@ def test_shell_prefixes_and_wrappers_reach_the_shared_lifecycle_hook(
 @pytest.mark.parametrize(
     "command",
     (
+        "time gh pr create --draft --fill",
+        "sh -c 'gh pr create --draft --fill'",
+        "bash -lc 'gh pr create --draft --fill'",
+        "created=`gh pr create --draft --fill`",
+        "created=$(gh pr create --draft --fill)",
+        'created="it\'s $(gh pr create --draft --fill)"',
+    ),
+)
+def test_executing_wrappers_and_substitutions_reach_the_lifecycle_hook(
+    monkeypatch, capsys, command
+):
+    hook = _load_hook()
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command, stdout="https://github.com/owner/repo/pull/42\n"),
+    )
+
+    assert exit_code == 0
+    assert "--assert-draft" in json.loads(out)["hookSpecificOutput"][
+        "additionalContext"
+    ]
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        "echo '$(gh pr create --draft --fill)'",
+        "echo '`gh pr create --draft --fill`'",
+    ),
+)
+def test_single_quoted_substitution_text_stays_inert(
+    monkeypatch, capsys, command
+):
+    hook = _load_hook()
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command, stdout="https://github.com/owner/repo/pull/42\n"),
+    )
+
+    assert exit_code == 0
+    assert out == ""
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
         "open_pr(){ gh pr create --draft --fill; }",
         "function open_pr { gh pr create --draft --fill; }",
         "open_pr() { gh pr create --draft --fill; }; echo defined",
@@ -353,6 +422,31 @@ def test_nonexecuting_function_definition_stays_silent(
 
     assert exit_code == 0
     assert out == ""
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        "helper(){ :; }; gh pr create --draft --fill",
+        "helper(){ gh pr create --draft --fill; }; helper",
+        'helper(){ printf "%s\\n" "}"; gh pr create --draft --fill; }; helper',
+    ),
+)
+def test_executed_commands_are_not_hidden_by_function_definitions(
+    monkeypatch, capsys, command
+):
+    hook = _load_hook()
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command, stdout="https://github.com/owner/repo/pull/42\n"),
+    )
+
+    assert exit_code == 0
+    assert "--assert-draft" in json.loads(out)["hookSpecificOutput"][
+        "additionalContext"
+    ]
 
 
 def test_gh_pr_new_alias_reaches_the_create_lifecycle(monkeypatch, capsys):
@@ -386,7 +480,8 @@ def test_gh_pr_new_alias_reaches_the_create_lifecycle(monkeypatch, capsys):
 )
 def test_quoted_or_false_draft_text_does_not_change_ready_lifecycle(command):
     hook = _load_hook()
-    assert hook._pr_lifecycle(command) == "ready"
+    response = "https://github.com/owner/repo/pull/42\n"
+    assert hook._pr_lifecycle(command, response) == "ready"
 
 
 def test_mixed_create_branches_inspect_live_state_before_any_correction(
@@ -427,6 +522,26 @@ def test_existing_pr_error_url_is_not_successful_creation(monkeypatch, capsys):
     assert out == ""
 
 
+def test_failed_create_cannot_borrow_a_later_view_url(monkeypatch, capsys):
+    hook = _load_hook()
+    command = "gh pr create --draft --fill || gh pr view --json url --jq .url"
+    response = (
+        'a pull request for branch "topic" into branch "main" already exists:\n'
+        "https://github.com/owner/repo/pull/42\n"
+        "https://github.com/owner/repo/pull/42\n"
+    )
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command, stderr=response),
+    )
+
+    assert exit_code == 0
+    assert hook.should_fire(command, response) is False
+    assert out == ""
+
+
 @pytest.mark.parametrize(
     "response",
     (
@@ -457,7 +572,53 @@ def test_existing_pr_diagnostic_does_not_hide_a_separate_success(
     )
 
     assert exit_code == 0
-    assert "MANDATORY" in json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "MANDATORY" in context
+    assert "ambiguous lifecycle evidence" in context
+
+
+def test_heredoc_body_is_not_treated_as_executed_shell(monkeypatch, capsys):
+    hook = _load_hook()
+    command = (
+        "cat <<'EOF'\n"
+        "gh pr create --draft --fill\n"
+        "https://github.com/owner/repo/pull/42\n"
+        "EOF"
+    )
+    response = (
+        "gh pr create --draft --fill\n"
+        "https://github.com/owner/repo/pull/42\n"
+    )
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command, stdout=response),
+    )
+
+    assert exit_code == 0
+    assert hook.should_fire(command, response) is False
+    assert out == ""
+
+
+def test_heredoc_body_cannot_forge_a_ready_transition(monkeypatch, capsys):
+    hook = _load_hook()
+    command = (
+        "gh pr create --draft --body-file - <<EOF\n"
+        "Do not run && gh pr ready yet\n"
+        "EOF"
+    )
+    exit_code, out = _run(
+        hook,
+        monkeypatch,
+        capsys,
+        _payload_with(command, stdout="https://github.com/owner/repo/pull/42\n"),
+    )
+
+    assert exit_code == 0
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "--assert-draft" in context
+    assert "ambiguous lifecycle evidence" not in context
 
 
 def test_dry_run_body_url_is_not_creation_evidence(monkeypatch, capsys):
@@ -483,6 +644,19 @@ def test_dry_run_body_url_is_not_creation_evidence(monkeypatch, capsys):
     )
 
     assert exit_code == 0
+    assert out == ""
+
+
+@pytest.mark.parametrize("web_flag", ("--web", "-w", "-dw"))
+def test_browser_handoff_is_not_completed_creation(
+    monkeypatch, capsys, web_flag
+):
+    hook = _load_hook()
+    command = f"gh pr create {web_flag}"
+    exit_code, out = _run(hook, monkeypatch, capsys, _payload(command))
+
+    assert exit_code == 0
+    assert hook.should_fire(command, None) is False
     assert out == ""
 
 
@@ -1309,8 +1483,12 @@ def test_pr_ready_fires_on_its_stderr_ack_since_it_prints_no_url(monkeypatch, ca
         pytest.param({"stdout": "", "stderr": ""}, id="captured_nothing"),
     ],
 )
+@pytest.mark.parametrize(
+    "command",
+    ("gh pr create --fill", "gh pr create --draft --fill", "gh pr ready 42"),
+)
 def test_an_unreadable_response_fires_rather_than_risking_a_missed_reminder(
-    monkeypatch, capsys, response
+    monkeypatch, capsys, response, command
 ):
     """The direction stays fail-loud where the payload cannot settle it.
 
@@ -1320,14 +1498,19 @@ def test_an_unreadable_response_fires_rather_than_risking_a_missed_reminder(
     guarantee.
     """
     hook = _load_hook()
-    payload = {"tool_input": {"command": "gh pr create --fill"}}
+    payload = {"tool_input": {"command": command}}
     if response is not None:
         payload["tool_response"] = response
 
     exit_code, out = _run(hook, monkeypatch, capsys, json.dumps(payload))
 
     assert exit_code == 0
-    assert "MANDATORY" in json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "MANDATORY" in context
+    assert "ambiguous lifecycle evidence" in context
+    assert "resolve the exact pull-request identity" in context
+    assert "if none exists, stop without changing any pull request" in context
+    assert hook._pr_lifecycle(command, None) == "unknown"
 
 
 def test_a_response_that_cannot_be_serialised_is_treated_as_unreadable(monkeypatch, capsys):

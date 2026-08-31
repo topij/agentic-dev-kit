@@ -367,8 +367,8 @@ Two things to warn them about, both measured, because neither is obvious from th
 
 ## Step 4 — Verify
 
-**These checks cover the staged adoption — the copies and the config. They do not cover
-`init.sh`, which the operator runs afterwards (Step 3c) and verifies from what it prints.**
+**These checks cover the staged adoption — the copies, config, and the operator's
+completed Step 3c `init.sh` run. Verify that run from what it printed.**
 
 - **After the operator has run `init.sh`, go through its output with them.** It reports
   every decision per file, so read it rather than re-deriving it:
@@ -500,17 +500,16 @@ tracker mismatch, a CI-scope surprise, a review-bot detection miss. Tag `[kit]` 
 anything that's a kit-side fix and open an issue upstream. This *is* Principle #2 in
 action.
 
-**Put it in the PR body, not in the friction log.** At this point the friction log
-usually does not exist: `/adopt` no longer creates it, and `init.sh` seeds it from the
-template when the operator runs it — which is Step 3c, after everything here. Hand-writing
-the file now would be actively harmful, not merely early: a hand-written file carries no
-kit marker, so `_seedable` reads it as `IN_USE` and `init.sh` will *never* render the
-template into it. You would permanently trade the seeded structure for a stub, through the
-exact clobber-avoidance property this skill exists to preserve.
+Step 3c has now run. Write the entries directly into the resolved `paths.friction_log`
+when that path is usable — whether `init.sh` seeded it or Step 1 classified the adopter's
+file as `IN_USE`. If the entries were held temporarily in the PR body while Step 3c was
+pending, move them now.
 
-So: the entries go in the PR body, and the Step 3c handoff tells the operator to move them
-into `paths.friction_log` once they have run `init.sh`. If the repo already *had* a friction
-log (Step 1 classified it `IN_USE`), write to it directly — `init.sh` will leave it alone.
+If the operator intentionally retained a `MARKED` friction-log path and no usable log
+exists yet, keep the entries in the PR body, name that declined path in the final report,
+and leave the explicit reconciliation step with the operator. Do not hand-write a
+replacement: a markerless stub would become `IN_USE` and prevent a later `init.sh` run
+from rendering the seeded structure.
 
 ## Step 6 — Summarize + hand off
 
