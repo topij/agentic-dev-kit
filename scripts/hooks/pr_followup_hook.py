@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PostToolUse hook: enforce PR state, then mandate the watch-fix loop.
+"""PostToolUse hook: require PR-state verification, then the watch-fix loop.
 
 Registered on BOTH runtimes, and told which one it is running under via
 `--runtime claude|codex` (#301):
@@ -11,11 +11,12 @@ Registered on BOTH runtimes, and told which one it is running under via
     filters the TOOL NAME only, with no equivalent of Claude's `if`, so this
     script is invoked on every Bash call there and does all the narrowing itself.
 
-Either way it narrows to `gh pr create` / `gh pr ready` and injects an
-`additionalContext` instruction so the session resolves the exact pull request,
-confirms that it belongs to the current checkout, reads live draft state, and
-enforces the matching lifecycle without being asked. Both runtimes honour the
-same `hookSpecificOutput.additionalContext` contract.
+Either way it narrows to specific PR lifecycle response evidence or a literal
+`gh pr create` / `gh pr ready` candidate with unusable output. It injects an
+`additionalContext` instruction requiring the session to resolve the exact pull
+request, confirm that it belongs to the current checkout, read live draft state,
+and perform the matching lifecycle without being asked. Both runtimes honour
+the same `hookSpecificOutput.additionalContext` contract.
 This closes the gap where the kit only had prose asking the agent to run `/pr-watch`
 unasked (Principle #8: "a rule that lives only in a doc is a wish").
 
@@ -50,16 +51,17 @@ import re
 import sys
 from pathlib import Path
 
-# The command is a NECESSARY condition, never a sufficient one (#302). It matches
-# the phrase anywhere, so a command that merely quotes, echoes, greps for or
-# documents it matches too — observed five times while wiring the Codex
-# registration, once from the comment documenting this very behaviour and once
-# from a review lens that had never heard of it. Anchoring to the start would
-# miss the ordinary `cd x && <the command>` form.
+# A literal command candidate is only the fallback for unusable output; specific
+# response evidence does not need it. The candidate regex matches the phrase
+# anywhere, so a command that merely quotes, echoes, greps for or documents it
+# matches too — observed while wiring the Codex registration and in review.
+# Anchoring to the start would miss the ordinary `cd x && <the command>` form.
 #
-# So the command decides whether to LOOK, and `tool_response` decides whether to
-# fire. Both runtimes supply it on PostToolUse, and every Bash command reaches
-# this shared policy so a runtime adapter cannot narrow away valid wrappers.
+# Authoritative-looking `tool_response` evidence fires without reconstructing
+# shell syntax. Command text only selects the conservative fallback when output
+# is absent or unusable. Both runtimes supply PostToolUse response data, and
+# every Bash command reaches this shared policy so a runtime adapter cannot
+# narrow away valid wrappers.
 # Repository-qualified inherited options are candidates too, whether they sit
 # before or after ``pr`` and whether ``-R`` is joined to its value. This regex
 # does not interpret their values or select a lifecycle; authoritative forge
@@ -102,6 +104,7 @@ _EXISTING_PR_ERROR = re.compile(
 # It is NOT load-bearing for anything this module does: nothing serialises the
 # response any more, because doing so was what broke `_PR_URL`'s line anchor.
 _READY_ACK = re.compile(r'is (?:marked as|already) \\?"ready for review')
+_DRAFT_ACK = re.compile(r'is (?:converted to \\?"draft|already \\?"in draft)')
 
 # What the two registered runtimes actually send, established from their own
 # sources by a review lens rather than assumed — an earlier version of this
@@ -113,10 +116,27 @@ _READY_ACK = re.compile(r'is (?:marked as|already) \\?"ready for review')
 #                 already concatenates stdout and stderr.
 #
 # Both are handled, and so is anything else, because `_iter_strings` below walks
-# for strings instead of naming keys. A response with no readable strings still
-# fails loud: neither runtime promises a shape in its schema (Codex's types
-# `tool_response` as `true`). A readable response whose strings are merely empty
-# is settled evidence and stays silent without PR output.
+# output values rather than assuming one response shape. A response with no
+# usable output strings still fails loud: neither runtime promises a shape in
+# its schema (Codex's types `tool_response` as `true`). Empty output plus common
+# execution metadata is still empty output, not evidence that no PR changed.
+
+_NON_OUTPUT_KEYS = frozenset(
+    {
+        "command",
+        "cmd",
+        "duration",
+        "duration_ms",
+        "event",
+        "event_name",
+        "name",
+        "state",
+        "status",
+        "tool",
+        "tool_name",
+        "type",
+    }
+)
 
 _DEFAULT_FALLBACK_COMMAND = "/code-review"
 # Which runtime's `review.*` keys to read. Both registrations pass it explicitly;
@@ -310,7 +330,7 @@ def _without_existing_pr_diagnostics(response: str) -> str:
 
 
 def _lifecycle_instruction(engines_dir: str) -> str:
-    """Require a repository-bound live query for every lifecycle candidate.
+    """Instruct a repository-bound live query for every lifecycle event.
 
     Creation URLs carry no draft bit. Ready acknowledgements carry an owner/repo
     name, but turning that text into a repository-local numeric ``pr_watch`` call
@@ -320,7 +340,12 @@ def _lifecycle_instruction(engines_dir: str) -> str:
     never selects a mutating lifecycle route from that evidence.
     """
     return (
-        "A pull-request command produced ambiguous lifecycle evidence. Do not "
+        "A Bash result produced pull-request lifecycle evidence or ambiguous "
+        "lifecycle evidence from a command candidate. If the just-completed "
+        "operation only mentioned or "
+        "searched for a lifecycle command and did not actually create a pull "
+        "request or change its review state, stop immediately without querying "
+        "the forge. Otherwise, do not "
         "change its draft state or start a watch loop from command text alone. "
         "First resolve the exact pull-request identity from authoritative forge "
         "state. Confirm that its repository and host match the current checkout's "
@@ -394,7 +419,7 @@ _MAX_DEPTH = 6
 
 
 def _iter_strings(value: object, depth: int = 0):
-    """Every string anywhere in a response payload, whatever shape it arrived in.
+    """Every usable output string in a response payload, whatever its shape.
 
     Deliberately shape-agnostic. An earlier version read six hardcoded keys and
     fell back to `json.dumps` for anything else — and `json.dumps` escapes real
@@ -412,14 +437,18 @@ def _iter_strings(value: object, depth: int = 0):
     quiet where the code this replaced would have fired.
 
     Values only, not keys — no runtime shape puts content in a key, and walking
-    keys would let an arbitrary label masquerade as tool output.
+    keys would let an arbitrary label masquerade as tool output. Common metadata
+    fields are skipped because a status such as ``success`` does not make empty
+    stdout/stderr into usable PR evidence.
     """
     if depth > _MAX_DEPTH:
         raise _Unreadable
     if isinstance(value, str):
         yield value
     elif isinstance(value, dict):
-        for item in value.values():
+        for key, item in value.items():
+            if isinstance(key, str) and key.casefold() in _NON_OUTPUT_KEYS:
+                continue
             yield from _iter_strings(item, depth + 1)
     elif isinstance(value, (list, tuple)):
         for item in value:
@@ -427,7 +456,7 @@ def _iter_strings(value: object, depth: int = 0):
 
 
 def _response_text(data: dict) -> str | None:
-    """Everything the tool reported, flattened — or None when it is unreadable.
+    """Usable tool output, flattened — or None when it is unreadable or empty.
 
     No strings, only empty strings, or a payload too deep to walk means "cannot
     settle it" and returns None so the hook fails loud. A real PR command whose
@@ -446,33 +475,21 @@ def _response_text(data: dict) -> str | None:
 
 
 def should_fire(command: object, response: str | None) -> bool:
-    """Whether this Bash call actually opened or readied a PR.
+    """Whether this Bash result requires lifecycle follow-through context.
 
-    The command alone was the old gate and it mandated a watch loop for PRs that
-    did not exist. Now it only selects candidates; the response decides.
+    Specific response evidence is sufficient and never selects a mutating route.
+    Command text only selects the fail-loud fallback for unusable output; the
+    emitted instruction first stops silent mentions before any forge query.
     """
-    if not isinstance(command, str):
-        return False
-    actions = {
-        "create" if match.group(1) == "new" else match.group(1)
-        for match in _TRIGGER.finditer(command)
-    }
-    if not actions:
-        return False
-    if response is None:
-        return True  # nothing readable — fail loud
+    if response is not None:
+        if _PR_URL.search(_without_existing_pr_diagnostics(response)):
+            return True
+        if _READY_ACK.search(response) or _DRAFT_ACK.search(response):
+            return True
 
-    # Each action is matched against ITS OWN evidence. Accepting either signal
-    # for either action let a command that merely mentions `gh pr ready` fire on
-    # any PR URL in its output, and vice versa — CodeRabbit found that.
-    #
-    # ANY, not ALL: `gh pr create --draft && gh pr ready` is one command with
-    # both actions, and its response may carry only the URL if the runtime drops
-    # stderr. Requiring every action's evidence would go silent on a PR that was
-    # genuinely just opened, which is the failure this hook exists to prevent.
-    if "create" in actions and _PR_URL.search(_without_existing_pr_diagnostics(response)):
-        return True
-    return bool("ready" in actions and _READY_ACK.search(response))
+    return bool(
+        response is None and isinstance(command, str) and _TRIGGER.search(command)
+    )
 
 
 def main() -> int:

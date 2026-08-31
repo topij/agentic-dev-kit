@@ -73,7 +73,9 @@ def _no_job_name(monkeypatch):
     monkeypatch.delenv("JOB_NAME", raising=False)
 
 
-def test_successful_draft_create_resolves_live_state_before_mutation(monkeypatch, capsys):
+def test_successful_draft_create_instruction_orders_live_state_before_mutation(
+    monkeypatch, capsys
+):
     hook = _load_hook()
     command = "gh pr create --draft --title x"
     response = "https://github.com/owner/repo/pull/42\n"
@@ -103,7 +105,9 @@ def test_successful_draft_create_resolves_live_state_before_mutation(monkeypatch
     )
 
 
-def test_successful_ready_create_resolves_live_state_before_watch(monkeypatch, capsys):
+def test_successful_ready_create_instruction_orders_live_state_before_watch(
+    monkeypatch, capsys
+):
     hook = _load_hook()
     command = "gh pr create --fill"
     response = "https://github.com/owner/repo/pull/42\n"
@@ -125,6 +129,32 @@ def test_triggers_on_gh_pr_ready(monkeypatch, capsys):
     context = body["hookSpecificOutput"]["additionalContext"]
     assert "ambiguous lifecycle evidence" in context
     assert "match the current checkout's authoritative forge identity" in context
+
+
+@pytest.mark.parametrize(
+    "command,stderr",
+    (
+        (
+            "gh pr ready --undo 42",
+            'Pull request owner/repo#42 is converted to "draft"\n',
+        ),
+        (
+            'action=ready; gh pr "$action" --undo 42',
+            'Pull request owner/repo#42 is already "in draft"\n',
+        ),
+    ),
+)
+def test_draft_acknowledgement_requires_live_state_without_parsing_shell_action(
+    monkeypatch, capsys, command, stderr
+):
+    hook = _load_hook()
+
+    exit_code, out = _run(hook, monkeypatch, capsys, _payload_with(command, stderr=stderr))
+
+    assert exit_code == 0
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "inspect `gh pr view <PR#> --json isDraft`" in context
+    assert "current workflow state" in context
 
 
 def test_compound_create_and_ready_acknowledgement_still_requires_live_state(
@@ -340,6 +370,7 @@ def test_silent_candidate_with_empty_response_takes_safe_live_state_route(
     assert hook._response_text(json.loads(_payload_with(command))) is None
     assert hook.should_fire(command, None) is True
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "stop immediately without querying the forge" in context
     assert "resolve the exact pull-request identity" in context
     assert "if no pull request exists" in context
     assert "stop without changing or watching any pull request" in context
@@ -364,6 +395,22 @@ def test_suppressed_real_pr_output_fails_loud_without_selecting_a_mutation(
     live_draft_state = context.index("inspect `gh pr view <PR#> --json isDraft`")
     assert live_draft_state < context.index("--assert-ready")
     assert live_draft_state < context.index("gh pr ready")
+
+
+def test_empty_output_with_status_metadata_still_takes_the_safe_route(
+    monkeypatch, capsys
+):
+    hook = _load_hook()
+    command = "gh pr create --fill >/dev/null 2>&1"
+    response = {"stdout": "", "stderr": "", "status": "success"}
+    payload = json.dumps({"tool_input": {"command": command}, "tool_response": response})
+
+    assert hook._response_text({"tool_response": response}) is None
+    exit_code, out = _run(hook, monkeypatch, capsys, payload)
+
+    assert exit_code == 0
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "inspect `gh pr view <PR#> --json isDraft`" in context
 
 
 def test_direct_short_web_cluster_never_selects_a_mutating_lifecycle():
@@ -1045,7 +1092,7 @@ def test_load_review_config_threads_the_runtime_into_lens_compute_too(monkeypatc
     assert "codex-sentinel-effort" not in claude_clause
 
 
-# ── #302: the command selects candidates, the response decides ───────────────
+# ── #302: specific response evidence or a conservative command fallback ─────
 # Every shape below was observed live, firing a MANDATORY watch-loop mandate
 # with zero open PRs. Two are self-referential: one is the commit that documented
 # the bug, the other is a review lens that had never heard of it.
@@ -1156,29 +1203,15 @@ def test_a_response_that_cannot_be_serialised_is_treated_as_unreadable(monkeypat
     assert hook._response_text({"tool_response": {"k": {1, 2}}}) is None
 
 
-def test_should_fire_needs_the_command_first_whatever_the_response_says(monkeypatch, capsys):
-    """A PR URL in the output of an unrelated command must not fire it."""
-    hook = _load_hook()
-    assert (
-        hook.should_fire("gh pr view 306", "https://github.com/topij/agentic-dev-kit/pull/306")
-        is False
-    )
-    assert hook.should_fire(None, "https://github.com/x/y/pull/1") is False
-
-
-def test_each_action_is_matched_against_its_own_evidence(monkeypatch, capsys):
-    """CodeRabbit on `#306`: accepting either signal for either action let a
-    command merely mentioning `gh pr ready` fire on any PR URL in its output."""
+def test_response_evidence_fires_without_shell_action_reconstruction(monkeypatch, capsys):
+    """Specific PR evidence reaches the safe instruction through indirect syntax."""
     hook = _load_hook()
     url = "https://github.com/topij/agentic-dev-kit/pull/306"
     ack = 'Pull request topij/agentic-dev-kit#306 is marked as "ready for review"'
 
-    # mismatched pairs stay silent
-    assert hook.should_fire("echo 'next: gh pr ready 306'", url) is False
-    assert hook.should_fire("echo 'next: gh pr create'", ack) is False
-    # matched pairs fire
-    assert hook.should_fire("gh pr create --fill", url) is True
-    assert hook.should_fire("gh pr ready 306", ack) is True
+    assert hook.should_fire('action=create; gh pr "$action" --fill', url) is True
+    assert hook.should_fire('action=ready; gh pr "$action" 306', ack) is True
+    assert hook.should_fire(None, "https://github.com/x/y/pull/1") is True
 
 
 def test_one_command_doing_both_fires_on_either_signal_alone(monkeypatch, capsys):

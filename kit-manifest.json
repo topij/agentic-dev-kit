@@ -128,7 +128,7 @@
     },
     "scripts/hooks/pr_followup_hook.py": {
       "role": "hook",
-      "sha256": "a83f01703d1abbcf9f99ef6e95cd4df3d2c0daeb83a893b4c613b7a993c2a9c7"
+      "sha256": "0ab1fb9a84d27e1db2811cdee9672bb8495ef226ba9152c3c111a705ced7b198"
     },
     "scripts/hooks/pre-push": {
       "role": "hook",
@@ -282,7 +282,7 @@
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
-      "sha256": "d478a00af12a38471d2cde061b4a40a2eef3d05b5b585e50aa6d60c23c993a3f"
+      "sha256": "6b1356975b9837b4bf4f8ff9931b697293ad9824991ca28c8271e08a5ccc2d4a"
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
