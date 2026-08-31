@@ -1994,7 +1994,7 @@ def test_pull_request_visibility_is_ready_by_default_with_a_bounded_draft_except
         ENGINE_DIR / "hooks" / "pr_followup_hook.py"
     ).read_text(encoding="utf-8")
     assert "--assert-draft" in hook_source
-    assert "Do not start review polling or the watch-and-fix loop yet" in hook_source
+    assert "only then start the watch-and-fix loop" in hook_source
     assert "--assert-ready` before review" in hook_source
 
     claude_template = (
