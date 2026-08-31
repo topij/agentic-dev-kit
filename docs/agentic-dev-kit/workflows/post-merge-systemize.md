@@ -62,7 +62,10 @@ Validate values as well as presence:
 - cache, digest, and report patterns are non-empty repository-relative paths;
   `report_root` is a non-empty repository-relative directory other than the repository
   root; configured engine names and `commit_subject` are non-empty strings; and
-  `pr_draft` is a boolean.
+  `systemize.pr_draft` must be `false`. This workflow completes the proposed patch before
+  pull-request creation, so it has no material unfinished-work window that must already
+  exist remotely. A `true` value hard-stops before any artifact or forge write instead
+  of manufacturing a draft window.
 
 Before any derived write, substitute the selected date, `{window}` as the selected
 lookback followed by `d`, and `{mode}` as `live` or `test`. Require all three placeholders
@@ -377,7 +380,9 @@ fresh base. Before committing, require a clean index before staging, stage each 
 path by name, and prove the staged path set equals the intended destination set exactly.
 Any pre-existing change, extra staged path, or missing intended path stops the route.
 Commit with `systemize.commit_subject`; never commit derived output. Push and create the
-pull request using `systemize.pr_draft`.
+pull request ready for review by binding the validated `false` `systemize.pr_draft`
+directly, and require the read-back draft bit to be `false` before invoking `pr-watch`;
+a failed, ambiguous, or draft response stops the route operator-held.
 
 The pull-request body gives each pattern's shape, evidence pull requests, review sources,
 and exact shared rule location. It makes no merge claim. After creation, invoke the

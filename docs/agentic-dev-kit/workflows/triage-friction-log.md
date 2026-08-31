@@ -34,8 +34,11 @@ contract.
 
 `triage.analysis_tier` must name a key under `models.tiers`. Apply a runtime mapping
 only when the current runtime mechanically exposes that control; otherwise label it
-instructed guidance. `triage.pr_draft` is a boolean. Engine names and the commit subject
-are non-empty strings. Each engine name is a relative path fragment with no `..`
+instructed guidance. `triage.pr_draft` must be `false`: this workflow completes the
+proposed patch before pull-request creation, so it has no material unfinished-work
+window that must already exist remotely. A `true` value hard-stops before any artifact
+or forge write instead of manufacturing a draft window. Engine names and the commit
+subject are non-empty strings. Each engine name is a relative path fragment with no `..`
 component. Resolve it beneath the canonical `<engine-dir>` and require any existing
 target to remain canonically contained there, including through symlinks, and to be a
 regular file. An absolute, traversing, escaping, or non-regular engine target hard-stops
@@ -1023,10 +1026,11 @@ head, persist it as `finalize_base_head`, and never rewrite the draft run identi
 permitted fast-forward advance still must pass the byte-identical frozen-block check;
 otherwise remain operator-held. Require a clean index, stage only `<friction-log>` and
 `<friction-log-archive>`, and prove the staged path set equals that pair exactly. Commit
-with `triage.commit_subject`, push, and create the pull request with
-`triage.pr_draft`. Read back repository, base, branch, commit, head, draft bit, PR URL,
-and changed paths. A failed or ambiguous response triggers read-back before retry and
-otherwise remains operator-held.
+with `triage.commit_subject`, push, and create the pull request ready for review by
+binding the validated `false` `triage.pr_draft` directly. Read back repository, base,
+branch, commit, head, draft bit, PR URL, and changed paths, and require the read-back
+draft bit to be `false` before invoking `pr-watch`. A failed, ambiguous, or draft
+response triggers read-back before retry and otherwise remains operator-held.
 
 Run `pr-watch` for the exact head and persist an `unsettled` review observation whenever
 it has not reached terminal exact-head evidence. This workflow never merges the sweep pull request.

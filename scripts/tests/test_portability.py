@@ -1772,24 +1772,45 @@ def test_parallel_adapter_policy_contradictions_are_rejected() -> None:
                 _assert_parallel_adapter_is_translation_only(hostile)
 
 
+def _flatten_prose(text: str) -> str:
+    return " ".join(text.split())
+
+
 def _assert_ready_draft_policy(policy: str) -> None:
-    flattened = " ".join(policy.split())
-    assert "Open pull requests **ready for review by default**" in flattened
-    assert (
-        "Ready status invites review; it does not grant merge authority" in flattened
+    section = policy.split("## Ready and draft policy", 1)[1].split(
+        "Read `config/dev-model.yaml` first.", 1
+    )[0]
+    assert _flatten_prose(section) == _flatten_prose(
+        """
+        Open pull requests **ready for review by default**. Ready status invites review;
+        it does not grant merge authority. A workflow that reserves merge for the
+        operator still opens its completed work ready.
+
+        Draft is the bounded exception for a **material unfinished-work window** that
+        must exist on the remote pull request before the work can be completed — for
+        example, when a required forge-hosted validation cannot run until the pull
+        request exists. If the branch can be completed and validated locally first,
+        finish it and open ready. Do not use draft merely to signal risk, broad scope,
+        human review, or operator-held merge authority.
+
+        The run that takes the exception owns both ends of it: create with `--draft`,
+        run `--assert-draft`, finish and push the material work, complete the body, then
+        run `gh pr ready` and `--assert-ready` before starting the watch-and-fix loop. A
+        scheduled or unattended run may take that route only when the same run can
+        perform the ready transition; a hook that deliberately skips unattended
+        execution is not a substitute.
+        """
     )
-    assert "material unfinished-work window" in flattened
-    assert (
-        "If the branch can be completed and validated locally first, finish it and "
-        "open ready" in flattened
-    )
-    assert (
-        "Do not use draft merely to signal risk, broad scope, human review, or "
-        "operator-held merge authority" in flattened
-    )
-    assert "create with `--draft`, run `--assert-draft`" in flattened
-    assert "`gh pr ready` and `--assert-ready`" in flattened
-    assert "only when the same run can perform the ready transition" in flattened
+
+
+def _assert_configured_workflow_opens_ready(workflow: str, key: str) -> None:
+    flattened = _flatten_prose(workflow)
+    assert f"`{key}` must be `false`" in flattened
+    assert "A `true` value hard-stops before any artifact or forge write" in flattened
+    assert f"binding the validated `false` `{key}` directly" in flattened
+    assert "require the read-back draft bit to be `false`" in flattened
+    assert "leave the pull request in draft" not in flattened
+    assert "do not run `gh pr ready`" not in flattened
 
 
 @pytest.mark.kit_repo_only(
@@ -1817,32 +1838,41 @@ def test_pull_request_visibility_is_ready_by_default_with_a_bounded_draft_except
     policy = (workflow_root / "pr-watch.md").read_text(encoding="utf-8")
     _assert_ready_draft_policy(policy)
 
+    flattened_policy = _flatten_prose(policy)
     mutations = (
-        policy.replace("ready for review by default", "draft by default", 1),
-        policy.replace(
+        flattened_policy.replace("ready for review by default", "draft by default", 1),
+        flattened_policy.replace(
             "does not grant merge authority",
             "grants merge authority",
             1,
         ),
-        policy.replace(
-            "only when the same run can perform the ready\ntransition",
+        flattened_policy.replace(
+            "only when the same run can perform the ready transition",
             "even when no run can perform the ready transition",
+            1,
+        ),
+        flattened_policy.replace(
+            "operator-held merge authority.",
+            "operator-held merge authority. Even when no material unfinished-work "
+            "window exists, open the first push as a draft.",
             1,
         ),
     )
     for mutated in mutations:
-        assert mutated != policy
+        assert mutated != flattened_policy
         with pytest.raises(AssertionError):
             _assert_ready_draft_policy(mutated)
 
     playbook = (
         REPO_ROOT / "docs" / "autonomous-session-playbook.md"
     ).read_text(encoding="utf-8")
-    lifecycle = playbook.split("### Validate → open ready", 1)[1].split(
-        "### Watch-and-fix loop", 1
-    )[0]
+    lifecycle = _flatten_prose(
+        playbook.split("### Validate → open ready", 1)[1].split(
+            "### Watch-and-fix loop", 1
+        )[0]
+    )
     assert "open the completed pull request **ready for review**" in lifecycle
-    assert "`gh pr create`\n  without `--draft`" in lifecycle
+    assert "`gh pr create` without `--draft`" in lifecycle
     assert "bounded draft exception" in lifecycle
     assert "required forge-hosted validation" in lifecycle
 
@@ -1866,15 +1896,21 @@ def test_pull_request_visibility_is_ready_by_default_with_a_bounded_draft_except
     assert "open the completed work **ready for review**" in shared_workflows["wrap-up"]
 
     configured_workflows = {
-        name: (workflow_root / f"{name}.md").read_text(encoding="utf-8")
-        for name in ("triage-friction-log", "post-merge-systemize")
+        "triage.pr_draft": (workflow_root / "triage-friction-log.md").read_text(
+            encoding="utf-8"
+        ),
+        "systemize.pr_draft": (workflow_root / "post-merge-systemize.md").read_text(
+            encoding="utf-8"
+        ),
     }
-    assert "create the pull request with\n`triage.pr_draft`" in configured_workflows[
-        "triage-friction-log"
-    ]
-    assert "create the\npull request using `systemize.pr_draft`" in configured_workflows[
-        "post-merge-systemize"
-    ]
+    for key, workflow in configured_workflows.items():
+        _assert_configured_workflow_opens_ready(workflow, key)
+        hostile = workflow + (
+            f"\nWhen `{key}` is true, leave the pull request in draft and do not run "
+            "`gh pr ready` or `--assert-ready`.\n"
+        )
+        with pytest.raises(AssertionError):
+            _assert_configured_workflow_opens_ready(hostile, key)
 
     baseline_paths = (
         REPO_ROOT / "AGENTS.md",
@@ -1883,7 +1919,7 @@ def test_pull_request_visibility_is_ready_by_default_with_a_bounded_draft_except
         REPO_ROOT / "docs" / "templates" / "AGENTS.md.tmpl",
     )
     for path in baseline_paths:
-        baseline = " ".join(path.read_text(encoding="utf-8").split())
+        baseline = _flatten_prose(path.read_text(encoding="utf-8"))
         assert "ready for review by default" in baseline
         assert "material unfinished-work window" in baseline
         assert (
@@ -1914,15 +1950,41 @@ def test_pull_request_visibility_is_ready_by_default_with_a_bounded_draft_except
     )[1].split("\n'\n    echo \"added systemize workflow config", 1)[0]
     assert "  pr_draft: false" in systemize_seed
 
-    lane_contract = (ENGINE_DIR / "dev_session.sh").read_text(
-        encoding="utf-8"
+    lane_source = (ENGINE_DIR / "dev_session.sh").read_text(encoding="utf-8")
+    lane_contract = lane_source.split("LANE CONTRACT (binding):", 1)[1].split(
+        "\nCONTRACT", 1
+    )[0]
+    lane_draft_lines = tuple(
+        _flatten_prose(line)
+        for line in lane_contract.splitlines()
+        if "draft" in line.casefold()
     )
-    assert (
-        "Draft is ONLY for the window in which you are still pushing commits"
-        in lane_contract
+    assert lane_draft_lines == (
+        _flatten_prose(
+            """
+            - Open completed work ready for review by default. Draft is ONLY for a
+            material unfinished-work window that must already exist on the remote pull
+            request because required forge-hosted validation cannot run before the pull
+            request exists. If the branch can be completed and validated locally first,
+            finish it and open ready.
+            """
+        ),
+        _flatten_prose(
+            """
+            - If that exception applies, after `gh pr create --draft` run `uv run
+            @ENGINE_DIR@/pr_watch.py <pr> --assert-draft`, finish the required remote
+            work and body, then run `gh pr ready <pr>` and `--assert-ready` before the
+            watch-and-fix loop. A finished PR left in draft is a PR that never gets
+            reviewed.
+            """
+        ),
+        _flatten_prose(
+            """
+            - `gh`'s draft bit is flaky in both directions, which is why the bounded
+            exception owns both assertions instead of trusting either transition.
+            """
+        ),
     )
-    assert "after `gh pr create --draft`" in lane_contract
-    assert "after `gh pr ready` run `--assert-ready`" in lane_contract
 
     adapter_names = (
         "adopt",

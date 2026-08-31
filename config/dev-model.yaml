@@ -176,8 +176,8 @@ triage:
   draft_engine: triage_friction_log.py
   finalize_engine: finalize_triage.py
   commit_subject: "docs(triage): graduate friction-log entries"
-  # False is the ready-for-review default. True is an explicit exception for a
-  # bounded material unfinished-work window whose run owns the ready transition.
+  # This workflow completes its patch before PR creation, so false is the only
+  # valid value. True hard-stops instead of manufacturing a draft window.
   pr_draft: false
 
 systemize:
@@ -210,10 +210,10 @@ systemize:
   digest_engine: digest_merged_prs.py
   heartbeat_engine: heartbeat_cli.py
   commit_subject: "docs(systemize): promote recurring review patterns"
-  # False opens the rule PR ready for configured review. True is an explicit
-  # exception for a bounded material unfinished-work window whose run owns the
-  # ready transition. The workflow never merges it; pr-watch supplies review
-  # follow-through and the operator decides.
+  # This workflow completes its patch before PR creation, so false is the only
+  # valid value. True hard-stops instead of manufacturing a draft window. The
+  # workflow never merges the PR; pr-watch supplies review follow-through and
+  # the operator decides.
   pr_draft: false
 
 tracker:

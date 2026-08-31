@@ -6,8 +6,10 @@
 > sessions, where the operator drives PR review and merge.
 >
 > Your always-loaded agent guide's branching and PR-follow-through rules are the
-> always-on baseline; the shipped [`AGENTS.md` template](templates/AGENTS.md.tmpl)
-> carries the cross-runtime version, Claude imports that file, and
+> always-on baseline; the generated root [`AGENTS.md`](../AGENTS.md) carries the
+> cross-runtime version, is rendered from the shipped
+> [`AGENTS.md` template](templates/AGENTS.md.tmpl), and Claude imports the generated
+> root file through `@AGENTS.md`.
 > [`CLAUDE-sections.md`](CLAUDE-sections.md) is ready-to-paste material for an existing
 > guide. This contract is the autonomous **superset**. Its distinguishing behaviors are
 > **self-merging low-risk work** and **not yielding the turn until the work is merged**.
