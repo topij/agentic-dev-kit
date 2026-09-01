@@ -146,7 +146,7 @@ def test_lens_definition_inspection_reports_missing_current_and_stale(tmp_path, 
         )
     )
     assert "inspect and regenerate it" in rendered
-    assert "this check never writes them" in rendered
+    assert "this check never executes the command or writes the definitions" in rendered
     assert "> .claude/agents/<name>.md" in rendered
 
     with definition.open("wb") as output:
@@ -188,41 +188,6 @@ def test_a_configured_compute_change_makes_the_definition_stale(tmp_path):
     assert [(item.lens, item.state) for item in statuses] == [("adversarial", "stale")]
 
 
-@pytest.mark.parametrize(
-    "missing_rel",
-    [
-        "scripts/panel_prompt.py",
-        "scripts/kit_doctor.py",
-        "scripts/lib/kitconfig.py",
-    ],
-)
-def test_a_missing_lens_generator_or_dependency_is_reported_without_aborting(
-    tmp_path, missing_rel
-):
-    root = _lens_repo(tmp_path)
-    (root / missing_rel).unlink()
-    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
-
-    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
-
-    assert [(item.lens, item.state) for item in statuses] == [
-        ("adversarial", "unverifiable")
-    ]
-    assert "is not installed" in statuses[0].detail
-    rendered = kit_doctor.render(
-        kit_doctor.Report(
-            kit_version_config=2,
-            kit_version_manifest=2,
-            engines_dir="scripts",
-            engines_dir_ok=True,
-            hooks_installed=True,
-            narrative_rendered={},
-            lens_definitions=statuses,
-        )
-    )
-    assert "regenerate with" not in rendered
-
-
 def test_lens_inspection_does_not_execute_the_adopter_generator(tmp_path):
     root = _lens_repo(tmp_path)
     sentinel = root / "doctor-executed-generator"
@@ -235,18 +200,9 @@ def test_lens_inspection_does_not_execute_the_adopter_generator(tmp_path):
     statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
 
     assert [(item.lens, item.state) for item in statuses] == [
-        ("adversarial", "unverifiable")
+        ("adversarial", "missing")
     ]
-    assert "differs from the renderer bundle pinned by the running doctor" in (
-        statuses[0].detail
-    )
     assert not sentinel.exists()
-
-
-def test_the_running_doctor_pins_the_exact_shipped_generator():
-    assert kit_doctor.sha256_of(
-        ENGINE_DIR / "panel_prompt.py"
-    ) == kit_doctor.PANEL_PROMPT_SHA256
 
 
 def test_a_malformed_lens_roster_is_unverifiable(tmp_path):
@@ -322,61 +278,6 @@ def test_an_unreadable_lens_definition_is_reported_and_rendered(
     assert "unreadable — definition denied" in rendered
 
 
-@pytest.mark.parametrize(
-    "drifted_rel",
-    [
-        "scripts/panel_prompt.py",
-        "scripts/kit_doctor.py",
-        "scripts/lib/kitconfig.py",
-    ],
-)
-def test_a_drifted_generator_or_dependency_is_unverifiable(tmp_path, drifted_rel):
-    root = _lens_repo(tmp_path)
-    definition = root / ".claude" / "agents" / "adversarial.md"
-    _write(definition, panel_prompt.agent_definition(root, "adversarial", "claude"))
-    sentinel = root / "doctor-executed-drifted-lens-engine"
-    drifted = root / drifted_rel
-    drifted.write_text(
-        drifted.read_text(encoding="utf-8")
-        + f"\nfrom pathlib import Path\nPath({str(sentinel)!r}).write_text('ran')\n",
-        encoding="utf-8",
-    )
-    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
-
-    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
-
-    assert [(item.lens, item.state) for item in statuses] == [
-        ("adversarial", "unverifiable")
-    ]
-    assert f"{drifted_rel} differs from the renderer bundle" in statuses[0].detail
-    assert not sentinel.exists()
-
-
-@pytest.mark.parametrize(
-    "symlinked_rel",
-    [
-        "scripts/panel_prompt.py",
-        "scripts/kit_doctor.py",
-        "scripts/lib/kitconfig.py",
-    ],
-)
-def test_a_symlinked_renderer_bundle_member_is_unverifiable(tmp_path, symlinked_rel):
-    root = _lens_repo(tmp_path)
-    target = root / symlinked_rel
-    external = root / "external-renderer-bundle" / target.name
-    _write(external, target.read_text(encoding="utf-8"))
-    target.unlink()
-    target.symlink_to(external)
-    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
-
-    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
-
-    assert [(item.lens, item.state) for item in statuses] == [
-        ("adversarial", "unverifiable")
-    ]
-    assert f"{symlinked_rel} is a symlink" in statuses[0].detail
-
-
 def test_regeneration_imports_the_sibling_doctor_before_a_lib_shadow(tmp_path):
     root = _lens_repo(tmp_path)
     sentinel = root / "shadow-doctor-executed"
@@ -412,63 +313,6 @@ def render_agent_definition(*_args):
     assert generated.stdout == panel_prompt.agent_definition(
         root, "adversarial", "claude"
     )
-    assert not sentinel.exists()
-
-
-def test_a_self_attested_install_baseline_cannot_authorize_generator(tmp_path, capsys):
-    root = _lens_repo(tmp_path)
-    definition = root / ".claude" / "agents" / "adversarial.md"
-    _write(definition, panel_prompt.agent_definition(root, "adversarial", "claude"))
-    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
-    sentinel = root / "doctor-executed-self-attested-generator"
-    generator = root / "scripts" / "panel_prompt.py"
-    generator.write_text(
-        generator.read_text(encoding="utf-8")
-        + f"\nfrom pathlib import Path\nPath({str(sentinel)!r}).write_text('ran')\n",
-        encoding="utf-8",
-    )
-    baseline, unverified = kit_doctor.record_install_manifest(
-        root, config, 2, None
-    )
-    assert not unverified
-    assert baseline["files"]["scripts/panel_prompt.py"]["sha256"] == (
-        kit_doctor.sha256_of(generator)
-    )
-    (root / "kit-manifest.json").write_text(json.dumps(baseline), encoding="utf-8")
-
-    code = kit_doctor.main(["--json", "--root", str(root)])
-    payload = json.loads(capsys.readouterr().out)
-
-    assert code == 0
-    assert payload["lens_definitions"][0]["state"] == "unverifiable"
-    assert "renderer bundle pinned by the running doctor" in (
-        payload["lens_definitions"][0]["detail"]
-    )
-    assert not sentinel.exists()
-
-
-def test_a_generator_changed_after_hashing_is_not_executed(tmp_path, monkeypatch):
-    root = _lens_repo(tmp_path)
-    definition = root / ".claude" / "agents" / "adversarial.md"
-    _write(definition, panel_prompt.agent_definition(root, "adversarial", "claude"))
-    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
-    sentinel = root / "doctor-executed-after-generator-hash"
-    generator = root / "scripts" / "panel_prompt.py"
-    original_read_bytes = Path.read_bytes
-
-    def mutate_after_read(path):
-        source = original_read_bytes(path)
-        if path == generator:
-            generator.write_text(
-                f"from pathlib import Path\nPath({str(sentinel)!r}).write_text('ran')\n",
-                encoding="utf-8",
-            )
-        return source
-
-    monkeypatch.setattr(Path, "read_bytes", mutate_after_read)
-    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
-
-    assert [(item.lens, item.state) for item in statuses] == [("adversarial", "current")]
     assert not sentinel.exists()
 
 

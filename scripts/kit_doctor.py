@@ -201,22 +201,7 @@ _REGISTRATION_PARSE_ERRORS = (
 ) + _TOML_DECODE_ERRORS
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
-import kitconfig as _running_kitconfig  # noqa: E402
 from kitconfig import get, load_config, repo_root  # noqa: E402
-
-try:
-    # Capture the source bundle while the running doctor starts. A later check
-    # must compare an inspected installation to the bytes whose code is already
-    # running, not re-read paths that may have changed since import.
-    _RUNNING_DOCTOR_BYTES: bytes | None = Path(__file__).read_bytes()
-    _RUNNING_KITCONFIG_BYTES: bytes | None = Path(
-        _running_kitconfig.__file__
-    ).read_bytes()
-    _RUNNING_RENDERER_CAPTURE_ERROR: str | None = None
-except (OSError, TypeError) as exc:
-    _RUNNING_DOCTOR_BYTES = None
-    _RUNNING_KITCONFIG_BYTES = None
-    _RUNNING_RENDERER_CAPTURE_ERROR = str(exc)
 
 MANIFEST_NAME = "kit-manifest.json"
 
@@ -640,33 +625,6 @@ def _derive_engine_names(kit_owned: tuple[tuple[str, str], ...]) -> tuple[str, .
 
 
 _ENGINE_NAMES: tuple[str, ...] = _derive_engine_names(KIT_OWNED)
-
-PANEL_PROMPT_REL = next(
-    (
-        rel
-        for rel, role in KIT_OWNED
-        if role == "engine" and PurePosixPath(rel).name == "panel_prompt.py"
-    ),
-    "",
-)
-
-KIT_DOCTOR_REL = next(
-    (
-        rel
-        for rel, role in KIT_OWNED
-        if role == "engine" and PurePosixPath(rel).name == "kit_doctor.py"
-    ),
-    "",
-)
-
-KITCONFIG_REL = next(
-    (
-        rel
-        for rel, role in KIT_OWNED
-        if role == "engine" and PurePosixPath(rel).name == "kitconfig.py"
-    ),
-    "",
-)
 
 # Import statements in a file Python cannot parse. Applied ONLY to `engine` and
 # `hook` roles, never to docs or templates: markdown cannot import anything, and
@@ -2455,16 +2413,6 @@ AGENT_DEFINITION_RUNTIME = "claude"
 LENS_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 CLAUDE_EFFORT_LEVELS: tuple[str, ...] = ("low", "medium", "high", "xhigh", "max")
 
-# This digest binds the installed regeneration command to the renderer already
-# executing inside the doctor. A comparison manifest cannot be the trust anchor:
-# ``--record-install`` intentionally hashes adopter files as found, so a locally
-# edited generator can legitimately match that manifest. ``panel_prompt.py`` is
-# a thin caller of :func:`render_agent_definition`; requiring its exact shipped
-# bytes proves that invoking the displayed remedy reaches this implementation,
-# without importing or executing any additional file from the inspected tree.
-PANEL_PROMPT_SHA256 = "f596c5f4bb4eb2d403ba0d2c9365808b01c771ff8d38b9b9d98cc563fd1bdca4"
-
-
 class LensDefinitionError(ValueError):
     """Configuration that cannot produce a faithful agent definition."""
 
@@ -2569,53 +2517,16 @@ focus; follow it exactly, and report what you reviewed before any finding.
     return "\n".join(front) + "\n" + body
 
 
-def _lens_renderer_trust_failure(root: Path, engines_dir: str) -> str | None:
-    """Bind the displayed regeneration command to the running renderer bundle."""
-    captured = {
-        KIT_DOCTOR_REL: _RUNNING_DOCTOR_BYTES,
-        KITCONFIG_REL: _RUNNING_KITCONFIG_BYTES,
-    }
-    if _RUNNING_RENDERER_CAPTURE_ERROR is not None:
-        return (
-            "the running doctor could not capture its renderer dependencies: "
-            f"{_RUNNING_RENDERER_CAPTURE_ERROR}"
-        )
-
-    for rel in (PANEL_PROMPT_REL, KIT_DOCTOR_REL, KITCONFIG_REL):
-        local_rel = _remap(rel, engines_dir)
-        target = root / local_rel
-        if target.is_symlink():
-            return f"{local_rel} is a symlink rather than an installed regular file"
-        if not target.is_file():
-            return f"{local_rel} is not installed"
-        try:
-            target_bytes = target.read_bytes()
-        except OSError as exc:
-            return f"{local_rel} cannot be read: {exc}"
-        if rel == PANEL_PROMPT_REL:
-            if hashlib.sha256(target_bytes).hexdigest() != PANEL_PROMPT_SHA256:
-                return (
-                    f"{local_rel} differs from the renderer bundle pinned by the "
-                    "running doctor"
-                )
-            continue
-        if target_bytes != captured[rel]:
-            return (
-                f"{local_rel} differs from the renderer bundle pinned by the "
-                "running doctor"
-            )
-    return None
-
-
 def inspect_lens_definitions(
     root: Path, config: dict, engines_dir: str
 ) -> list[LensDefinitionStatus]:
-    """Compare configured Claude agent definitions with generator output.
+    """Compare configured Claude agent definitions with current doctor output.
 
-    The renderer lives in this already-running doctor and ``panel_prompt.py`` is
-    an exact-hash-pinned thin caller. The inspected repository therefore cannot
-    authorize additional code execution through a self-attested manifest, and a
-    changed generator is reported before the remedy can be called verifiable.
+    The already-running doctor supplies the canonical expected bytes and never
+    imports or executes a renderer from ``root``. Installed engine drift remains
+    a separate axis in the file report: this check answers whether the
+    adopter-owned definition matches the current doctor and config, not whether
+    every installed regeneration engine is current.
 
     Every non-current state is advisory. ``init.sh`` seeds these files only when
     absent and never owns them afterwards, and the kit supports an adopter that
@@ -2652,20 +2563,6 @@ def inspect_lens_definitions(
         name = entry["name"]
         if name not in names:
             names.append(name)
-
-    trust_failure = _lens_renderer_trust_failure(root, engines_dir)
-    if trust_failure is not None:
-        return [
-            LensDefinitionStatus(
-                "claude",
-                name,
-                config_surface,
-                "unverifiable",
-                f"{trust_failure}, so expected bytes cannot be attributed to the "
-                "installed generator",
-            )
-            for name in names
-        ]
 
     statuses: list[LensDefinitionStatus] = []
     for name in names:
@@ -2704,9 +2601,9 @@ def inspect_lens_definitions(
             continue
         state = "current" if actual == expected else "stale"
         detail = (
-            "matches generator output"
+            "matches the running doctor's expected output"
             if state == "current"
-            else "differs from generator output"
+            else "differs from the running doctor's expected output"
         )
         statuses.append(LensDefinitionStatus("claude", name, rel, state, detail))
     return statuses
@@ -3134,11 +3031,11 @@ def render(report: Report) -> str:
         for definition in report.lens_definitions
     ):
         lines.append(
-            f"    (lens definitions are adopter-owned — inspect the target, then regenerate "
-            "one with "
+            f"    (lens definitions are adopter-owned — first resolve any kit engine "
+            "drift reported below, then inspect the target and regenerate one with "
             f"uv run {report.engines_dir}/panel_prompt.py --lens <name> "
             "--agent-definition > .claude/agents/<name>.md; "
-            "this check never writes them)"
+            "this check never executes the command or writes the definitions)"
         )
     for doc, rendered in report.narrative_rendered.items():
         # An entry point that is still the KIT's own is a different fact from a

@@ -52,12 +52,11 @@ starts.
   `lens_definitions` array and inspect any advisory `missing`, `stale`,
   `unreadable`, or `unverifiable` entry. Regenerate the named adopter-owned file
   with `uv run <engine-dir>/panel_prompt.py --lens <name> --agent-definition >
-  .claude/agents/<name>.md`; the doctor reports these states without executing or
-  rewriting the inspected generator or definitions. The already-running doctor
-  owns the shared renderer and compares the installed generator, sibling doctor,
-  and config reader to source buffers captured at startup; a changed or
-  self-attested renderer bundle therefore reports `unverifiable` instead of being
-  loaded. These advisory states do not change the doctor's exit status.
+  .claude/agents/<name>.md` after resolving any kit engine drift reported by the
+  existing file section. The already-running doctor computes the expected bytes
+  without importing, executing, or rewriting code from the inspected tree; engine
+  drift remains a separate report axis. These advisory states do not change the
+  doctor's exit status.
 
 ## #653 — 2026-08-31
 
