@@ -314,7 +314,7 @@ def test_an_unreadable_lens_definition_is_reported_and_rendered(
     "drifted_rel",
     ["scripts/panel_prompt.py"],
 )
-def test_a_drifted_generator_or_dependency_is_unverifiable(tmp_path, drifted_rel):
+def test_a_drifted_generator_is_unverifiable(tmp_path, drifted_rel):
     root = _lens_repo(tmp_path)
     definition = root / ".claude" / "agents" / "adversarial.md"
     _write(definition, panel_prompt.agent_definition(root, "adversarial", "claude"))
@@ -335,6 +335,44 @@ def test_a_drifted_generator_or_dependency_is_unverifiable(tmp_path, drifted_rel
     assert (
         f"{drifted_rel} differs from the generator pinned by the running doctor"
         in statuses[0].detail
+    )
+    assert not sentinel.exists()
+
+
+def test_regeneration_imports_the_sibling_doctor_before_a_lib_shadow(tmp_path):
+    root = _lens_repo(tmp_path)
+    sentinel = root / "shadow-doctor-executed"
+    _write(
+        root / "scripts" / "lib" / "kit_doctor.py",
+        f"""from pathlib import Path
+Path({str(sentinel)!r}).write_text("ran")
+AGENT_DEFINITION_RUNTIME = "claude"
+class LensDefinitionError(ValueError):
+    pass
+def render_agent_definition(*_args):
+    return "shadow output"
+""",
+    )
+
+    generated = subprocess.run(
+        [
+            sys.executable,
+            str(root / "scripts" / "panel_prompt.py"),
+            "--root",
+            str(root),
+            "--lens",
+            "adversarial",
+            "--agent-definition",
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert generated.returncode == 0, generated.stderr
+    assert generated.stdout == panel_prompt.agent_definition(
+        root, "adversarial", "claude"
     )
     assert not sentinel.exists()
 

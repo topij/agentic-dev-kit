@@ -2429,7 +2429,7 @@ CLAUDE_EFFORT_LEVELS: tuple[str, ...] = ("low", "medium", "high", "xhigh", "max"
 # a thin caller of :func:`render_agent_definition`; requiring its exact shipped
 # bytes proves that invoking the displayed remedy reaches this implementation,
 # without importing or executing any additional file from the inspected tree.
-PANEL_PROMPT_SHA256 = "e02fdeb13a7451872718d4c0b1b3ca5904ed974e6c4d7ac82cb5b6a28ae4af5a"
+PANEL_PROMPT_SHA256 = "f596c5f4bb4eb2d403ba0d2c9365808b01c771ff8d38b9b9d98cc563fd1bdca4"
 
 
 class LensDefinitionError(ValueError):

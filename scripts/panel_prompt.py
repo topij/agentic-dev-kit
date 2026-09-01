@@ -68,12 +68,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from kit_doctor import (  # noqa: E402
     AGENT_DEFINITION_RUNTIME,
     LensDefinitionError,
     render_agent_definition,
 )
+
+# Import the sibling doctor before prepending ``lib``. The advertised
+# regeneration command must reach the exact engine that owns the renderer, not
+# an untracked ``lib/kit_doctor.py`` that happens to shadow it on ``sys.path``.
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from kitconfig import get, load_config, repo_root  # noqa: E402
 
 REPO_ROOT = repo_root(Path(__file__).resolve())

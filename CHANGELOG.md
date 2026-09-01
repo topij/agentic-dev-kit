@@ -44,6 +44,10 @@ starts.
 
 ## #655 — 2026-09-01
 
+- **BREAKING (engine CLI, #255):** Refresh or install `scripts/kit_doctor.py`
+  together with `scripts/panel_prompt.py`; the latter now imports its sibling
+  doctor as the shared definition renderer and no longer runs in an installation
+  that carries only `panel_prompt.py` and `lib/kitconfig.py`.
 - **ADDED (`kit_doctor.py` report and `--json`, #255):** Read the new
   `lens_definitions` array and inspect any advisory `missing`, `stale`,
   `unreadable`, or `unverifiable` entry. Regenerate the named adopter-owned file
