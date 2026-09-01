@@ -1,9 +1,9 @@
 # Review-process learnings — 2026-08-24
 
 Status: evidence record from the Codex–Claude parity work in PR `#595`, PR `#596`, PR
-`#599`, PR `#609`, PR `#611`, PR `#614`, and PR `#620`. This is not shared gate
-doctrine. Promote a lesson to `docs/agentic-dev-kit/` only after a later change defines
-and tests the reusable contract.
+`#599`, PR `#609`, PR `#611`, PR `#614`, PR `#620`, and PR `#653`. This is not shared
+gate doctrine. Promote a lesson to `docs/agentic-dev-kit/` only after a later change
+defines and tests the reusable contract.
 
 ## What paid off
 
@@ -572,3 +572,57 @@ and 7 each found something anyway, so this is also the clearest local instance o
   in a scratch directory, and the next relative-path edit failed. `AGENTS.md` documents
   the hazard for verification clones and adopter checkouts; both instances here were
   throwaway probes, which is not where that rule tells you to expect it.
+
+## Draft-policy correction additions from PR `#653`
+
+- **Freeze the trust boundary and hostile corpus before implementing a classifier.**
+  Command text and tool responses are untrusted candidate evidence. They may select
+  non-mutating guidance, but exact pull-request identity, host/repository equality and
+  live draft state come from the forge. The actual-operation assessment remains a
+  separate prerequisite because a returned pull-request URL can come from a read-only
+  query or dry run.
+
+- **Do not build a shell parser for a follow-through reminder.** Quoting, redirection,
+  pipelines, aliases, functions, API calls and transformed output make reconstructed
+  execution an open-ended language problem. The review converged after the design
+  accepted harmless warning false positives and prohibited mutation or watching until
+  independent authoritative confirmation. A new finding that asks the classifier to
+  understand more shell semantics should trigger a return to that boundary, not another
+  parsing branch.
+
+- **Weak and strong candidate routes need the complete conditional lifecycle.** A
+  warning that merely says to query live state still loses the ready assertion, bounded
+  draft assertion/transition and watch-to-settlement obligation. Tests should pin the
+  order: deny authority, stop read-only operations, resolve exact identity, compare
+  host/repository, read `isDraft`, assess authorization, assert the matching route, then
+  watch.
+
+- **A creation URL identifies a candidate, not a draft bit or an event.** Response-only
+  URLs from aliases and API JSON should fail loud without reconstructing the action.
+  Fragments and deeper paths such as review discussions should remain outside that
+  candidate shape. Response-only ready/draft acknowledgements likewise warn but never
+  authorize.
+
+- **Test outcomes and ordering instead of vocabulary.** The hostile set should include
+  read-only output, quoted action text, suppressed native output, replacement and
+  transformed output, existing-pull-request diagnostics, aliases, API JSON, foreign
+  repositories and response-only acknowledgements. Mutation probes must target the
+  behavioral assertion with `-m 'not driftcheck'`; a manifest failure is not evidence
+  that the behavior guard killed the mutant.
+
+- **Delete inert distinctions.** A helper or documented category that no reachable
+  branch uses adds reviewer surface without adding safety. Mutation-testing the branch
+  selection exposed the successful-create/existing-pull-request distinction as dead;
+  collapsing it made the actual authority boundary easier to inspect.
+
+- **Keep review infrastructure outside the evidence tree.** Verify cwd, exact head,
+  origin, live base and a non-empty diff before review; use a fresh no-hardlink clone
+  for destructive mutation probes; restore it; attest that the supplied worktree is
+  clean. Use unique existing temp directories, keep PR comments in body files, read
+  complete reviewer reports before editing, regenerate the manifest after final
+  kit-owned test edits, and use Python 3.12 when comparing with CI.
+
+- **Review duration is design feedback.** This correction expanded into a long session
+  while successive fixes tried to infer shell execution. The stopping rule became
+  effective only after the implementation chose the deterministic boundary above and
+  the exact-head lenses could attack that contract rather than another parser revision.
