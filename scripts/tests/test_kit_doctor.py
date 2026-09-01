@@ -28,7 +28,6 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path, PurePosixPath
-from types import SimpleNamespace
 
 import pytest
 from _repo_layout import engine_dir, find_repo_root
@@ -42,10 +41,6 @@ import kit_doctor  # noqa: E402
 import panel_prompt  # noqa: E402
 import run_installed_tests  # noqa: E402
 import runtime_adapters  # noqa: E402
-
-SHIPPED_MANIFEST_FILES = json.loads(
-    (REPO_ROOT / "kit-manifest.json").read_text(encoding="utf-8")
-)["files"]
 
 LEGACY_CODEX_SHA256 = {
     "adopt": "fee749f57477fc21ced59027209d48eac22fafc44b15307bfff209028897def9",
@@ -103,6 +98,7 @@ review:
     )
     engine = root / engines
     shutil.copy2(ENGINE_DIR / "panel_prompt.py", engine / "panel_prompt.py")
+    shutil.copy2(ENGINE_DIR / "kit_doctor.py", engine / "kit_doctor.py")
     shutil.copytree(ENGINE_DIR / "lib", engine / "lib")
     return root
 
@@ -112,9 +108,7 @@ def test_lens_definition_inspection_reports_missing_current_and_stale(tmp_path, 
     root = _lens_repo(tmp_path, engines=engines)
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
 
-    missing = kit_doctor.inspect_lens_definitions(
-        root, config, engines, SHIPPED_MANIFEST_FILES
-    )
+    missing = kit_doctor.inspect_lens_definitions(root, config, engines)
     assert [(item.lens, item.state) for item in missing] == [("adversarial", "missing")]
     missing_rendered = kit_doctor.render(
         kit_doctor.Report(
@@ -132,17 +126,13 @@ def test_lens_definition_inspection_reports_missing_current_and_stale(tmp_path, 
 
     definition = root / ".claude" / "agents" / "adversarial.md"
     _write(definition, panel_prompt.agent_definition(root, "adversarial", "claude"))
-    current = kit_doctor.inspect_lens_definitions(
-        root, config, engines, SHIPPED_MANIFEST_FILES
-    )
+    current = kit_doctor.inspect_lens_definitions(root, config, engines)
     assert [(item.lens, item.state) for item in current] == [("adversarial", "current")]
 
     definition.write_text(
         definition.read_text(encoding="utf-8") + "Hand edit.\n", encoding="utf-8"
     )
-    stale = kit_doctor.inspect_lens_definitions(
-        root, config, engines, SHIPPED_MANIFEST_FILES
-    )
+    stale = kit_doctor.inspect_lens_definitions(root, config, engines)
     assert [(item.lens, item.state) for item in stale] == [("adversarial", "stale")]
     rendered = kit_doctor.render(
         kit_doctor.Report(
@@ -176,9 +166,7 @@ def test_lens_definition_inspection_reports_missing_current_and_stale(tmp_path, 
             check=False,
         )
     assert regenerated.returncode == 0, regenerated.stderr.decode("utf-8", "replace")
-    refreshed = kit_doctor.inspect_lens_definitions(
-        root, config, engines, SHIPPED_MANIFEST_FILES
-    )
+    refreshed = kit_doctor.inspect_lens_definitions(root, config, engines)
     assert [(item.lens, item.state) for item in refreshed] == [
         ("adversarial", "current")
     ]
@@ -195,9 +183,7 @@ def test_a_configured_compute_change_makes_the_definition_stale(tmp_path):
     )
     config = kit_doctor.load_config(config_path)
 
-    statuses = kit_doctor.inspect_lens_definitions(
-        root, config, "scripts", SHIPPED_MANIFEST_FILES
-    )
+    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
 
     assert [(item.lens, item.state) for item in statuses] == [("adversarial", "stale")]
 
@@ -207,9 +193,7 @@ def test_a_missing_lens_generator_is_reported_without_aborting(tmp_path):
     (root / "scripts" / "panel_prompt.py").unlink()
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
 
-    statuses = kit_doctor.inspect_lens_definitions(
-        root, config, "scripts", SHIPPED_MANIFEST_FILES
-    )
+    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
 
     assert [(item.lens, item.state) for item in statuses] == [
         ("adversarial", "unverifiable")
@@ -238,15 +222,19 @@ def test_lens_inspection_does_not_execute_the_adopter_generator(tmp_path):
     )
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
 
-    statuses = kit_doctor.inspect_lens_definitions(
-        root, config, "scripts", SHIPPED_MANIFEST_FILES
-    )
+    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
 
     assert [(item.lens, item.state) for item in statuses] == [
         ("adversarial", "unverifiable")
     ]
-    assert "differs from the comparison manifest" in statuses[0].detail
+    assert "differs from the generator pinned by the running doctor" in statuses[0].detail
     assert not sentinel.exists()
+
+
+def test_the_running_doctor_pins_the_exact_shipped_generator():
+    assert kit_doctor.sha256_of(
+        ENGINE_DIR / "panel_prompt.py"
+    ) == kit_doctor.PANEL_PROMPT_SHA256
 
 
 def test_a_malformed_lens_roster_is_unverifiable(tmp_path):
@@ -263,9 +251,7 @@ def test_a_malformed_lens_roster_is_unverifiable(tmp_path):
     )
     config = kit_doctor.load_config(config_path)
 
-    statuses = kit_doctor.inspect_lens_definitions(
-        root, config, "scripts", SHIPPED_MANIFEST_FILES
-    )
+    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
 
     assert [(item.lens, item.state) for item in statuses] == [("", "unverifiable")]
     assert "roster is not a list" in statuses[0].detail
@@ -283,40 +269,10 @@ def test_a_malformed_lens_roster_entry_is_unverifiable(tmp_path):
     )
     config = kit_doctor.load_config(config_path)
 
-    statuses = kit_doctor.inspect_lens_definitions(
-        root, config, "scripts", SHIPPED_MANIFEST_FILES
-    )
+    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
 
     assert [(item.lens, item.state) for item in statuses] == [("", "unverifiable")]
     assert "entry has no string name" in statuses[0].detail
-
-
-def test_a_renderer_error_is_unverifiable(tmp_path, monkeypatch):
-    root = _lens_repo(tmp_path)
-    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
-
-    class RendererError(ValueError):
-        pass
-
-    def fail_render(*_args, **_kwargs):
-        raise RendererError("renderer rejected the lens")
-
-    monkeypatch.setattr(
-        kit_doctor,
-        "_load_verified_lens_renderer",
-        lambda *_args: SimpleNamespace(
-            render_agent_definition=fail_render,
-            LensDefinitionError=RendererError,
-        ),
-    )
-    statuses = kit_doctor.inspect_lens_definitions(
-        root, config, "scripts", SHIPPED_MANIFEST_FILES
-    )
-
-    assert [(item.lens, item.state) for item in statuses] == [
-        ("adversarial", "unverifiable")
-    ]
-    assert statuses[0].detail == "renderer rejected the lens"
 
 
 def test_an_unreadable_lens_definition_is_reported_and_rendered(
@@ -334,9 +290,7 @@ def test_an_unreadable_lens_definition_is_reported_and_rendered(
         return original_read_bytes(path)
 
     monkeypatch.setattr(Path, "read_bytes", fail_target_read)
-    statuses = kit_doctor.inspect_lens_definitions(
-        root, config, "scripts", SHIPPED_MANIFEST_FILES
-    )
+    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
 
     assert [(item.lens, item.state) for item in statuses] == [
         ("adversarial", "unreadable")
@@ -358,7 +312,7 @@ def test_an_unreadable_lens_definition_is_reported_and_rendered(
 
 @pytest.mark.parametrize(
     "drifted_rel",
-    ["scripts/panel_prompt.py", "scripts/lib/panel_definition.py"],
+    ["scripts/panel_prompt.py"],
 )
 def test_a_drifted_generator_or_dependency_is_unverifiable(tmp_path, drifted_rel):
     root = _lens_repo(tmp_path)
@@ -373,41 +327,71 @@ def test_a_drifted_generator_or_dependency_is_unverifiable(tmp_path, drifted_rel
     )
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
 
-    statuses = kit_doctor.inspect_lens_definitions(
-        root, config, "scripts", SHIPPED_MANIFEST_FILES
-    )
+    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
 
     assert [(item.lens, item.state) for item in statuses] == [
         ("adversarial", "unverifiable")
     ]
-    assert f"{drifted_rel} differs from the comparison manifest" in statuses[0].detail
+    assert (
+        f"{drifted_rel} differs from the generator pinned by the running doctor"
+        in statuses[0].detail
+    )
     assert not sentinel.exists()
 
 
-def test_a_recorded_install_baseline_still_checks_generator_dependencies(tmp_path):
+def test_a_self_attested_install_baseline_cannot_authorize_generator(tmp_path, capsys):
     root = _lens_repo(tmp_path)
     definition = root / ".claude" / "agents" / "adversarial.md"
     _write(definition, panel_prompt.agent_definition(root, "adversarial", "claude"))
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    sentinel = root / "doctor-executed-self-attested-generator"
+    generator = root / "scripts" / "panel_prompt.py"
+    generator.write_text(
+        generator.read_text(encoding="utf-8")
+        + f"\nfrom pathlib import Path\nPath({str(sentinel)!r}).write_text('ran')\n",
+        encoding="utf-8",
+    )
     baseline, unverified = kit_doctor.record_install_manifest(
         root, config, 2, None
     )
     assert not unverified
-    assert "required_by" not in baseline["files"]["scripts/panel_prompt.py"]
-    renderer = root / "scripts" / "lib" / "panel_definition.py"
-    renderer.write_text(
-        renderer.read_text(encoding="utf-8") + "\n# adopter edit\n",
-        encoding="utf-8",
+    assert baseline["files"]["scripts/panel_prompt.py"]["sha256"] == (
+        kit_doctor.sha256_of(generator)
     )
+    (root / "kit-manifest.json").write_text(json.dumps(baseline), encoding="utf-8")
 
-    statuses = kit_doctor.inspect_lens_definitions(
-        root, config, "scripts", baseline["files"]
-    )
+    code = kit_doctor.main(["--json", "--root", str(root)])
+    payload = json.loads(capsys.readouterr().out)
 
-    assert [(item.lens, item.state) for item in statuses] == [
-        ("adversarial", "unverifiable")
-    ]
-    assert "panel_definition.py differs from the comparison manifest" in statuses[0].detail
+    assert code == 0
+    assert payload["lens_definitions"][0]["state"] == "unverifiable"
+    assert "generator pinned by the running doctor" in payload["lens_definitions"][0]["detail"]
+    assert not sentinel.exists()
+
+
+def test_a_generator_changed_after_hashing_is_not_executed(tmp_path, monkeypatch):
+    root = _lens_repo(tmp_path)
+    definition = root / ".claude" / "agents" / "adversarial.md"
+    _write(definition, panel_prompt.agent_definition(root, "adversarial", "claude"))
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    sentinel = root / "doctor-executed-after-generator-hash"
+    generator = root / "scripts" / "panel_prompt.py"
+    original_sha256 = kit_doctor.sha256_of
+
+    def mutate_after_hash(path):
+        digest = original_sha256(path)
+        if path == generator:
+            generator.write_text(
+                f"from pathlib import Path\nPath({str(sentinel)!r}).write_text('ran')\n",
+                encoding="utf-8",
+            )
+        return digest
+
+    monkeypatch.setattr(kit_doctor, "sha256_of", mutate_after_hash)
+    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
+
+    assert [(item.lens, item.state) for item in statuses] == [("adversarial", "current")]
+    assert not sentinel.exists()
 
 
 def test_json_reports_missing_lens_definitions_as_advisory(tmp_path, capsys):
@@ -1772,7 +1756,6 @@ def test_dependency_graph_of_the_real_kit_names_kitconfigs_importers():
         "scripts/hooks/pre-push",
         "scripts/kit_doctor.py",
         "scripts/launch_lane.py",
-        "scripts/lib/panel_definition.py",
         "scripts/panel_prompt.py",
         "scripts/pr_watch.py",
     }
@@ -1826,7 +1809,7 @@ def test_the_shell_source_dependency_is_a_KNOWN_GAP_not_an_oversight():
     assert set(graph) == {
         "scripts/lib/atomic_write.py",
         "scripts/lib/kitconfig.py",
-        "scripts/lib/panel_definition.py",
+        "scripts/kit_doctor.py",
         "scripts/lib/runtime_adapters.py",
         "scripts/lib/state_paths/paths.py",
         "scripts/lib/state_paths/repo_root.py",

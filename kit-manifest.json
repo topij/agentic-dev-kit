@@ -135,8 +135,11 @@
       "sha256": "c469700ff61a1506fa5951b4d5ab3ac95f3213227d8838efa95eef0492516fba"
     },
     "scripts/kit_doctor.py": {
+      "required_by": [
+        "scripts/panel_prompt.py"
+      ],
       "role": "engine",
-      "sha256": "087ca4a4ca715eade027d5e3fdeeb2df20e538fa0ef0356f7358508dc35816b9"
+      "sha256": "d55451368fe2e73b4c72ba7ebb6639337551a2f893ef60b5a99622a407a4f23c"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -162,20 +165,11 @@
         "scripts/hooks/pre-push",
         "scripts/kit_doctor.py",
         "scripts/launch_lane.py",
-        "scripts/lib/panel_definition.py",
         "scripts/panel_prompt.py",
         "scripts/pr_watch.py"
       ],
       "role": "engine",
       "sha256": "4ab496661883d8f4ad590a6612a48b31f8cbf770283bb09794096149276634e6"
-    },
-    "scripts/lib/panel_definition.py": {
-      "required_by": [
-        "scripts/kit_doctor.py",
-        "scripts/panel_prompt.py"
-      ],
-      "role": "engine",
-      "sha256": "740c3a246d3b09b639b77e6c6ac68602fbac89444ac891de042c6c2a501e0b7c"
     },
     "scripts/lib/repo_root.sh": {
       "role": "engine",
@@ -223,7 +217,7 @@
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
-      "sha256": "c5f0164399da426d49f5d6b3ae579a4875fa274ccaafef31212df226397fa338"
+      "sha256": "e02fdeb13a7451872718d4c0b1b3ca5904ed974e6c4d7ac82cb5b6a28ae4af5a"
     },
     "scripts/pr_watch.py": {
       "role": "engine",
@@ -259,7 +253,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "4699de18cc9a9f30fe8d5d165f13873e658127968a5db8bd26b8ad58c002c949"
+      "sha256": "d01168d934f6aaf95b77bfb31b43c89dc34bfc33f94b42f6b42a9d52bae9bb0f"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",

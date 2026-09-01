@@ -69,12 +69,12 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
-from kitconfig import get, load_config, repo_root  # noqa: E402
-from panel_definition import (  # noqa: E402
+from kit_doctor import (  # noqa: E402
     AGENT_DEFINITION_RUNTIME,
     LensDefinitionError,
     render_agent_definition,
 )
+from kitconfig import get, load_config, repo_root  # noqa: E402
 
 REPO_ROOT = repo_root(Path(__file__).resolve())
 DOCTRINE = "docs/agentic-dev-kit/fallback-review-panel.md"

@@ -179,7 +179,6 @@ from __future__ import annotations
 import argparse
 import ast
 import hashlib
-import importlib.util
 import json
 import os
 import re
@@ -187,8 +186,6 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from types import ModuleType
-from typing import TYPE_CHECKING
 
 try:
     import tomllib
@@ -205,11 +202,6 @@ _REGISTRATION_PARSE_ERRORS = (
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from kitconfig import get, load_config, repo_root  # noqa: E402
-
-if TYPE_CHECKING:
-    # Keep the dynamic runtime dependency visible to ``derive_dependencies``
-    # without executing the renderer before its installed bytes are verified.
-    from panel_definition import LensDefinitionError, render_agent_definition  # noqa: F401
 
 MANIFEST_NAME = "kit-manifest.json"
 
@@ -243,7 +235,6 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/run_installed_tests.py", "engine"),
     ("scripts/conftest.py", "engine"),
     ("scripts/lib/kitconfig.py", "engine"),
-    ("scripts/lib/panel_definition.py", "engine"),
     ("scripts/lib/runtime_adapters.py", "engine"),
     ("scripts/lib/atomic_write.py", "engine"),
     ("scripts/lib/devmodel_config.py", "engine"),
@@ -644,24 +635,6 @@ PANEL_PROMPT_REL = next(
     "",
 )
 
-PANEL_DEFINITION_REL = next(
-    (
-        rel
-        for rel, role in KIT_OWNED
-        if role == "engine" and PurePosixPath(rel).name == "panel_definition.py"
-    ),
-    "",
-)
-
-KITCONFIG_REL = next(
-    (
-        rel
-        for rel, role in KIT_OWNED
-        if role == "engine" and PurePosixPath(rel).name == "kitconfig.py"
-    ),
-    "",
-)
-
 # Import statements in a file Python cannot parse. Applied ONLY to `engine` and
 # `hook` roles, never to docs or templates: markdown cannot import anything, and
 # a doctrine file quoting `from kitconfig import get` inside a code fence would
@@ -728,12 +701,13 @@ def derive_dependencies(
     matters to a repo that installed an engine and does not matter to one that
     installed none, and both are supported adoptions.
 
-    Resolution mirrors what the engines actually do at run time: every Python
-    one does ``sys.path.insert(0, <engine-dir>/"lib")`` before importing, so an
-    absolute import resolves against ``scripts/lib``. Relative imports resolve
-    against the importing file's own package, which is what keeps the
-    `state_paths` package's internal edges (``from .resolver import …``) in the
-    graph rather than only its top-level name.
+    Resolution mirrors what the engines actually do at run time: the script's
+    directory is already on ``sys.path``, and every Python engine inserts its
+    ``lib`` child ahead of it. Absolute imports therefore probe ``scripts/lib``
+    and then ``scripts``; relative imports resolve against the importing file's
+    own package, which is what keeps the `state_paths` package's internal edges
+    (``from .resolver import …``) in the graph rather than only its top-level
+    name.
 
     **Shell `source` is NOT scanned, and this is the one real gap.**
     `dev_session.sh` and `reconcile_sessions.sh` both
@@ -805,11 +779,15 @@ def derive_dependencies(
                 package = PurePosixPath(rel).parent
                 for _ in range(level - 1):
                     package = package.parent
-                package_dir = str(package)
+                package_dirs = (str(package),)
             else:
-                package_dir = f"{KIT_ENGINE_PREFIX}/lib"
-            for candidate in _module_targets(module, package_dir):
-                record(candidate, rel)
+                package_dirs = (
+                    f"{KIT_ENGINE_PREFIX}/lib",
+                    KIT_ENGINE_PREFIX,
+                )
+            for package_dir in package_dirs:
+                for candidate in _module_targets(module, package_dir):
+                    record(candidate, rel)
     return {path: sorted(deps) for path, deps in sorted(dependents.items())}
 
 
@@ -2440,91 +2418,133 @@ def _drift_state(actual: str, expected: str, recorded: str | None) -> tuple[str,
     )
 
 
-def _generator_trust_failure(
-    root: Path, manifest_files: dict, engines_dir: str
-) -> str | None:
-    """Explain why the installed generator cannot be tied to the renderer.
+AGENT_DEFINITION_RUNTIME = "claude"
+LENS_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+CLAUDE_EFFORT_LEVELS: tuple[str, ...] = ("low", "medium", "high", "xhigh", "max")
 
-    The doctor must not execute adopter code, but calling a definition
-    ``current`` still promises that its bytes agree with the installed
-    generator. The comparison manifest supplies the trust boundary: the
-    generator and every manifest-owned transitive dependency must match before
-    the pure in-process renderer may stand in for that executable.
-    """
-    owned = {rel for rel, _role in KIT_OWNED}
-    pending = [PANEL_PROMPT_REL]
-    visited: set[str] = set()
-    while pending:
-        rel = pending.pop()
-        if not rel or rel in visited:
-            continue
-        visited.add(rel)
-        entry = manifest_files.get(rel)
-        expected = entry.get("sha256") if isinstance(entry, dict) else None
-        local_rel = _remap(rel, engines_dir)
-        target = root / local_rel
-        if not target.is_file():
-            return f"{local_rel} is not installed"
-        if not isinstance(expected, str) or not expected:
-            return f"the comparison manifest has no trusted hash for {rel}"
-        try:
-            actual = sha256_of(target)
-        except OSError as exc:
-            return f"{local_rel} cannot be read: {exc}"
-        if actual != expected:
-            return f"{local_rel} differs from the comparison manifest"
-        try:
-            source = target.read_text(encoding="utf-8", errors="replace")
-        except OSError as exc:
-            return f"{local_rel} cannot be read: {exc}"
-        for level, module in _imported_modules(source):
-            if level:
-                package = PurePosixPath(rel).parent
-                for _ in range(level - 1):
-                    package = package.parent
-                package_dir = str(package)
-            else:
-                package_dir = f"{KIT_ENGINE_PREFIX}/lib"
-            for candidate in _module_targets(module, package_dir):
-                if candidate in owned and candidate not in visited:
-                    pending.append(candidate)
-    return None
+# This digest binds the installed regeneration command to the renderer already
+# executing inside the doctor. A comparison manifest cannot be the trust anchor:
+# ``--record-install`` intentionally hashes adopter files as found, so a locally
+# edited generator can legitimately match that manifest. ``panel_prompt.py`` is
+# a thin caller of :func:`render_agent_definition`; requiring its exact shipped
+# bytes proves that invoking the displayed remedy reaches this implementation,
+# without importing or executing any additional file from the inspected tree.
+PANEL_PROMPT_SHA256 = "e02fdeb13a7451872718d4c0b1b3ca5904ed974e6c4d7ac82cb5b6a28ae4af5a"
 
 
-def _load_verified_lens_renderer(root: Path, engines_dir: str) -> ModuleType:
-    """Load the already-hash-verified renderer without trusting import order."""
+class LensDefinitionError(ValueError):
+    """Configuration that cannot produce a faithful agent definition."""
 
-    def load(name: str, rel: str) -> ModuleType:
-        path = root / _remap(rel, engines_dir)
-        spec = importlib.util.spec_from_file_location(name, path)
-        if spec is None or spec.loader is None:
-            raise ImportError(f"cannot load {path}")
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
 
-    verified_kitconfig = load("_kit_doctor_verified_kitconfig", KITCONFIG_REL)
-    previous_kitconfig = sys.modules.get("kitconfig")
-    sys.modules["kitconfig"] = verified_kitconfig
-    try:
-        return load("_kit_doctor_verified_panel_definition", PANEL_DEFINITION_REL)
-    finally:
-        if previous_kitconfig is None:
-            sys.modules.pop("kitconfig", None)
-        else:
-            sys.modules["kitconfig"] = previous_kitconfig
+def _lens_compute_value(compute: dict, key: str, runtime: str) -> str | None:
+    if key not in compute:
+        return None
+    value = compute.get(key)
+    if not isinstance(value, str) or not value.strip() or not any(
+        char.isalnum() for char in value
+    ):
+        raise LensDefinitionError(
+            f"review.fallback_panel.lens_compute.{runtime}.{key} is {value!r}, which is "
+            "not a usable value; omit the key to inherit, or set a real one"
+        )
+    return value.strip()
+
+
+def render_agent_definition(config: dict, lens: str, runtime: str) -> str:
+    """Render one configured Claude lens definition without filesystem access."""
+    if runtime != AGENT_DEFINITION_RUNTIME:
+        raise LensDefinitionError(
+            f"--agent-definition renders a {AGENT_DEFINITION_RUNTIME!r} agent definition; "
+            f"runtime {runtime!r} carries lens compute on its launch argv, not in a "
+            "definition file (see the doctrine's compute section)"
+        )
+
+    lenses = get(config, "review.fallback_panel.lenses", [])
+    if not isinstance(lenses, list) or any(not isinstance(entry, dict) for entry in lenses):
+        raise LensDefinitionError(
+            "review.fallback_panel.lenses is not a list of maps, so no definition "
+            "can be rendered"
+        )
+    roster = {
+        entry["name"]: entry.get("focus", "")
+        for entry in lenses
+        if isinstance(entry.get("name"), str)
+    }
+    if lens not in roster:
+        raise LensDefinitionError(
+            f"lens {lens!r} is not in review.fallback_panel.lenses "
+            f"({', '.join(sorted(roster)) or 'roster is empty'}). The doctrine requires "
+            "lenses be drawn from the configured roster, not minted for the occasion."
+        )
+    if not LENS_NAME.match(lens):
+        raise LensDefinitionError(
+            f"lens name {lens!r} cannot be an agent definition: it becomes the file name, "
+            "the frontmatter `name:`, and the subagent type, so it must match "
+            f"{LENS_NAME.pattern}"
+        )
+
+    engines = get(config, "paths.engines", "scripts") or "scripts"
+    compute = get(config, f"review.fallback_panel.lens_compute.{runtime}", {}) or {}
+    if not isinstance(compute, dict):
+        raise LensDefinitionError(
+            f"review.fallback_panel.lens_compute.{runtime} is {compute!r}, not a map"
+        )
+    model = _lens_compute_value(compute, "model", runtime)
+    effort = _lens_compute_value(compute, "effort", runtime)
+    if effort is not None and effort not in CLAUDE_EFFORT_LEVELS:
+        raise LensDefinitionError(
+            f"review.fallback_panel.lens_compute.{runtime}.effort is {effort!r}; Claude Code "
+            f"accepts {', '.join(CLAUDE_EFFORT_LEVELS)} and would run this lens at the "
+            "cockpit's effort while logging the rejection only under --debug"
+        )
+
+    description = json.dumps(
+        f"Fallback review panel lens {lens}: {roster[lens]}. Launch it only with a prompt "
+        f"assembled by {engines}/panel_prompt.py; it is not a general-purpose agent.",
+        ensure_ascii=False,
+    )
+    front = ["---", f"name: {lens}", f"description: {description}"]
+    if model is not None:
+        front.append(f"model: {json.dumps(model, ensure_ascii=False)}")
+    if effort is not None:
+        front.append(f"effort: {effort}")
+    front.append("---")
+    pinned = (
+        "The frontmatter is what makes the configured compute mechanical: Claude Code\n"
+        "applies its `model` and `effort` when the cockpit launches the agent named\n"
+        f"`{lens}`. It lists this file at session start; a file written mid-session was\n"
+        "not launchable in the turn it was written and appeared in the roster later, so\n"
+        "count on it from the next session and treat an earlier listing as a bonus."
+        if model is not None or effort is not None
+        else "No `model` or `effort` is pinned here because\n"
+        f"`review.fallback_panel.lens_compute.{runtime}` carries neither; the lens\n"
+        "inherits the cockpit session's compute."
+    )
+    body = f"""
+Generated from `config/dev-model.yaml` (`review.fallback_panel.lenses` and
+`review.fallback_panel.lens_compute.{runtime}`) by
+`{engines}/panel_prompt.py --lens {lens} --agent-definition`. Regenerate it after
+changing either key; do not edit it by hand.
+
+{pinned}
+
+You are the **{lens}** lens of the fallback review panel
+(`docs/agentic-dev-kit/fallback-review-panel.md`). You did NOT write the change under
+review. Your launch prompt carries the contract, the revision, the diff, and your
+focus; follow it exactly, and report what you reviewed before any finding.
+"""
+    return "\n".join(front) + "\n" + body
 
 
 def inspect_lens_definitions(
-    root: Path, config: dict, engines_dir: str, manifest_files: dict
+    root: Path, config: dict, engines_dir: str
 ) -> list[LensDefinitionStatus]:
     """Compare configured Claude agent definitions with generator output.
 
-    The pure renderer shared with ``panel_prompt.py`` supplies expected bytes.
-    Executing the generator from ``root`` would run code from the adopter tree
-    before this diagnostic had reported whether that engine was stale or locally
-    edited. The generator still has to be installed before the definition can be
-    called verifiable, because it is the operator's regeneration route.
+    The renderer lives in this already-running doctor and ``panel_prompt.py`` is
+    an exact-hash-pinned thin caller. The inspected repository therefore cannot
+    authorize additional code execution through a self-attested manifest, and a
+    changed generator is reported before the remedy can be called verifiable.
 
     Every non-current state is advisory. ``init.sh`` seeds these files only when
     absent and never owns them afterwards, and the kit supports an adopter that
@@ -2562,31 +2582,43 @@ def inspect_lens_definitions(
         if name not in names:
             names.append(name)
 
-    trust_failure = _generator_trust_failure(root, manifest_files, engines_dir)
-    if trust_failure is not None:
+    generator_rel = _remap(PANEL_PROMPT_REL, engines_dir)
+    generator = root / generator_rel
+    if not generator.is_file():
         return [
             LensDefinitionStatus(
                 "claude",
                 name,
                 config_surface,
                 "unverifiable",
-                f"{trust_failure}, so expected bytes cannot be attributed to the installed generator",
+                f"{generator_rel} is not installed, so expected bytes cannot be "
+                "attributed to the installed generator",
             )
             for name in names
         ]
-
     try:
-        renderer = _load_verified_lens_renderer(root, engines_dir)
-        render_definition = renderer.render_agent_definition
-        lens_definition_error = renderer.LensDefinitionError
-    except (AttributeError, ImportError, OSError, SyntaxError) as exc:
+        generator_sha256 = sha256_of(generator)
+    except OSError as exc:
         return [
             LensDefinitionStatus(
                 "claude",
                 name,
                 config_surface,
                 "unverifiable",
-                f"the verified renderer could not be loaded: {exc}",
+                f"{generator_rel} cannot be read: {exc}, so expected bytes cannot be "
+                "attributed to the installed generator",
+            )
+            for name in names
+        ]
+    if generator_sha256 != PANEL_PROMPT_SHA256:
+        return [
+            LensDefinitionStatus(
+                "claude",
+                name,
+                config_surface,
+                "unverifiable",
+                f"{generator_rel} differs from the generator pinned by the running "
+                "doctor, so expected bytes cannot be attributed to the installed generator",
             )
             for name in names
         ]
@@ -2594,8 +2626,8 @@ def inspect_lens_definitions(
     statuses: list[LensDefinitionStatus] = []
     for name in names:
         try:
-            expected = render_definition(config, name, "claude").encode("utf-8")
-        except lens_definition_error as exc:
+            expected = render_agent_definition(config, name, "claude").encode("utf-8")
+        except LensDefinitionError as exc:
             statuses.append(
                 LensDefinitionStatus(
                     "claude",
@@ -2848,7 +2880,7 @@ def inspect(
         hooks_installed=hooks_installed,
         hooks_state=hooks_state,
         registrations=inspect_registrations(root, engines_dir),
-        lens_definitions=inspect_lens_definitions(root, config, engines_dir, manifest_files),
+        lens_definitions=inspect_lens_definitions(root, config, engines_dir),
         narrative_rendered=narrative,
         baseline_trusted=trusted,
         declared_scope_known=declared_scope is not None,

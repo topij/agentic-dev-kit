@@ -49,10 +49,10 @@ starts.
   `unreadable`, or `unverifiable` entry. Regenerate the named adopter-owned file
   with `uv run <engine-dir>/panel_prompt.py --lens <name> --agent-definition >
   .claude/agents/<name>.md`; the doctor reports these states without executing or
-  rewriting the inspected generator or definitions. It verifies the installed
-  generator and its imported kit-owned dependencies before loading the renderer,
-  and reports `unverifiable` instead of `current` when that trust check fails.
-  These advisory states do not change the doctor's exit status.
+  rewriting the inspected generator or definitions. The already-running doctor
+  owns the shared renderer and pins the exact thin generator that calls it; a
+  changed or self-attested generator therefore reports `unverifiable` instead of
+  being loaded. These advisory states do not change the doctor's exit status.
 
 ## #653 — 2026-08-31
 
