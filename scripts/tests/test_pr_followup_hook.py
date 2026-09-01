@@ -69,6 +69,28 @@ def _payload_with(command: str, stdout: str = "", stderr: str = "") -> str:
     )
 
 
+def _assert_conditional_warning_followthrough(context: str) -> None:
+    """A warning stays non-authoritative but owns the confirmed lifecycle."""
+    no_authority = context.index("grants no mutation authority")
+    read_only_stop = context.index("stop immediately without querying the forge")
+    identity_resolution = context.index("First resolve the exact pull-request identity")
+    live_draft_state = context.index("inspect `gh pr view <PR#> --json isDraft`")
+    authority = context.index("Only after the operation assessment")
+    ready_assertion = context.index("--assert-ready", authority)
+    watch_loop = context.index("watch-and-fix loop", ready_assertion)
+    assert (
+        no_authority
+        < read_only_stop
+        < identity_resolution
+        < live_draft_state
+        < authority
+        < ready_assertion
+        < watch_loop
+    )
+    assert "shared PR follow-through policy MUST be completed" in context
+    assert "MANDATORY" not in context
+
+
 @pytest.fixture(autouse=True)
 def _no_job_name(monkeypatch):
     """Every test runs outside cron/CI unless it explicitly sets JOB_NAME."""
@@ -99,18 +121,16 @@ def test_direct_draft_ack_instruction_orders_live_state_before_mutation(
     draft_assertion = context.index("--assert-draft")
     ready_transition = context.index("gh pr ready", draft_assertion)
     ready_assertion = context.index("--assert-ready", ready_transition)
-    conditional_mandate = context.index(
-        "Only if the operation was lifecycle-changing"
-    )
+    conditional_mandate = context.index("Only after the operation assessment")
     assert (
         mention_stop
         < identity_resolution
         < identity_confirmation
         < live_draft_state
+        < conditional_mandate
         < draft_assertion
         < ready_transition
         < ready_assertion
-        < conditional_mandate
     )
 
 
@@ -124,7 +144,7 @@ def test_direct_ready_ack_instruction_orders_live_state_before_watch(
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
     assert "matched a pull-request lifecycle candidate" in context
-    assert "Only if the operation was lifecycle-changing" in context
+    assert "Only after the operation assessment" in context
     assert context.index("--assert-ready") < context.index("watch-and-fix loop")
 
 
@@ -213,11 +233,9 @@ def test_quoted_ready_search_with_ack_shaped_output_never_grants_authority(
     no_authority = context.index("grant no mutation or watch authority")
     read_only_stop = context.index("stop immediately without querying the forge")
     forge_resolution = context.index("First resolve the exact pull-request identity")
-    conditional_mandate = context.index(
-        "Only if the operation was lifecycle-changing"
-    )
+    conditional_mandate = context.index("Only after the operation assessment")
     assert no_authority < read_only_stop < forge_resolution < conditional_mandate
-    assert "does this lifecycle become MANDATORY" in context
+    assert "independently confirmed lifecycle is MANDATORY" in context
 
 
 def test_compound_shell_text_is_never_used_for_a_mutating_lifecycle():
@@ -285,10 +303,12 @@ def test_uncertain_candidate_with_unreadable_response_fails_loud_without_mutatio
     assert hook.should_fire(command, None) is False
     assert hook.should_warn_unresolved(command, None) is True
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "grants no mutation authority" in context
+    _assert_conditional_warning_followthrough(context)
 
 
-def test_existing_pr_diagnostic_is_not_creation_evidence(monkeypatch, capsys):
+def test_existing_pr_diagnostic_uses_the_same_conditional_warning_as_creation(
+    monkeypatch, capsys
+):
     hook = _load_hook()
     command = "gh pr create --draft --fill"
     response = (
@@ -307,8 +327,7 @@ def test_existing_pr_diagnostic_is_not_creation_evidence(monkeypatch, capsys):
     assert hook.should_fire(command, response) is False
     assert hook.should_warn_unresolved(command, response) is True
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "grants no mutation authority" in context
-    assert "MANDATORY" not in context
+    _assert_conditional_warning_followthrough(context)
 
 
 @pytest.mark.parametrize(
@@ -334,8 +353,7 @@ def test_supported_successful_creation_syntax_uses_live_state(monkeypatch, capsy
 
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "grants no mutation authority" in context
-    assert "MANDATORY" not in context
+    _assert_conditional_warning_followthrough(context)
 
 
 @pytest.mark.parametrize(
@@ -366,7 +384,7 @@ def test_repository_qualified_commands_require_repository_bound_live_state(
     assert hook.should_warn_unresolved(command, response) is True
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
     assert "repository and host match the current checkout" in context
-    assert "MANDATORY" not in context
+    _assert_conditional_warning_followthrough(context)
 
 
 @pytest.mark.parametrize(
@@ -421,10 +439,7 @@ def test_silent_candidate_with_empty_response_takes_safe_live_state_route(
     assert hook.should_fire(command, None) is False
     assert hook.should_warn_unresolved(command, None) is True
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "grants no mutation authority" in context
-    assert "resolve the exact pull request" in context
-    assert "--assert-ready" not in context
-    assert "watch-and-fix loop" not in context
+    _assert_conditional_warning_followthrough(context)
 
 
 @pytest.mark.parametrize(
@@ -443,10 +458,7 @@ def test_suppressed_real_pr_output_fails_loud_without_selecting_a_mutation(
 
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "grants no mutation authority" in context
-    assert "inspect `gh pr view <PR#> --json isDraft`" in context
-    assert "--assert-ready" not in context
-    assert "watch-and-fix loop" not in context
+    _assert_conditional_warning_followthrough(context)
 
 
 def test_empty_output_with_status_metadata_still_takes_the_safe_route(
@@ -462,8 +474,7 @@ def test_empty_output_with_status_metadata_still_takes_the_safe_route(
 
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "grants no mutation authority" in context
-    assert "inspect `gh pr view <PR#> --json isDraft`" in context
+    _assert_conditional_warning_followthrough(context)
 
 
 def test_direct_short_web_cluster_never_selects_a_mutating_lifecycle():
@@ -480,9 +491,7 @@ def test_output_free_gh_pr_view_gets_only_the_nonmutating_warning(monkeypatch, c
     exit_code, out = _run(hook, monkeypatch, capsys, _payload("gh pr view 42"))
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "grants no mutation authority" in context
-    assert "--assert-ready" not in context
-    assert "watch-and-fix loop" not in context
+    _assert_conditional_warning_followthrough(context)
 
 
 def test_does_not_trigger_on_unrelated_bash_command(monkeypatch, capsys):
@@ -1197,8 +1206,7 @@ def test_a_command_that_merely_mentions_the_phrase_gets_only_a_safe_warning(
 
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "grants no mutation authority" in context
-    assert "MANDATORY" not in context
+    _assert_conditional_warning_followthrough(context)
 
 
 @pytest.mark.parametrize(
@@ -1225,8 +1233,7 @@ def test_lifecycle_candidate_with_replaced_native_output_fails_loud_without_auth
     assert hook.should_fire(command, replacement) is False
     assert hook.should_warn_unresolved(command, replacement) is True
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "grants no mutation authority" in context
-    assert "MANDATORY" not in context
+    _assert_conditional_warning_followthrough(context)
 
 
 def test_a_creation_url_gets_only_the_nonmutating_warning(monkeypatch, capsys):
@@ -1243,8 +1250,7 @@ def test_a_creation_url_gets_only_the_nonmutating_warning(monkeypatch, capsys):
 
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "grants no mutation authority" in context
-    assert "MANDATORY" not in context
+    _assert_conditional_warning_followthrough(context)
 
 
 def test_dry_run_body_url_never_gets_the_full_lifecycle(monkeypatch, capsys):
@@ -1262,8 +1268,7 @@ def test_dry_run_body_url_never_gets_the_full_lifecycle(monkeypatch, capsys):
     assert hook.should_fire(command, output) is False
     assert hook.should_warn_unresolved(command, output) is True
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "grants no mutation authority" in context
-    assert "MANDATORY" not in context
+    _assert_conditional_warning_followthrough(context)
 
 
 @pytest.mark.parametrize(
@@ -1307,8 +1312,7 @@ def test_an_unreadable_response_fires_rather_than_risking_a_missed_reminder(
 
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "grants no mutation authority" in context
-    assert "MANDATORY" not in context
+    _assert_conditional_warning_followthrough(context)
 
 
 def test_a_response_that_cannot_be_serialised_is_treated_as_unreadable(monkeypatch, capsys):
@@ -1332,8 +1336,39 @@ def test_response_evidence_warns_without_shell_action_reconstruction(monkeypatch
     assert hook.should_fire(indirect_ready, ack) is False
     assert hook.should_warn_unresolved(indirect_ready, ack) is True
     assert hook.should_fire(None, "https://github.com/x/y/pull/1") is False
+    assert hook.should_warn_unresolved(None, url) is True
     assert hook.should_fire("printf 'ready output'", ack) is False
     assert hook.should_warn_unresolved("printf 'ready output'", ack) is True
+
+
+@pytest.mark.parametrize(
+    "command,response",
+    (
+        ("gh co --fill", "https://github.com/o/r/pull/42\n"),
+        (
+            "gh api repos/o/r/pulls -f head=topic -f base=main -f title=x",
+            '{"html_url":"https://github.com/o/r/pull/42"}',
+        ),
+        (
+            "printf 'https://github.com/o/r/pull/42\\n'",
+            "https://github.com/o/r/pull/42\n",
+        ),
+    ),
+)
+def test_response_only_pr_url_warns_without_reconstructing_the_action(
+    monkeypatch, capsys, command, response
+):
+    hook = _load_hook()
+
+    exit_code, out = _run(
+        hook, monkeypatch, capsys, _payload_with(command, stdout=response)
+    )
+
+    assert exit_code == 0
+    assert hook.should_fire(command, response) is False
+    assert hook.should_warn_unresolved(command, response) is True
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    _assert_conditional_warning_followthrough(context)
 
 
 def test_read_only_ack_output_never_gets_lifecycle_mutation_context(monkeypatch, capsys):
@@ -1347,9 +1382,7 @@ def test_read_only_ack_output_never_gets_lifecycle_mutation_context(monkeypatch,
     assert hook.should_fire(command, ack) is False
     assert hook.should_warn_unresolved(command, ack) is True
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "grants no mutation authority" in context
-    assert "MANDATORY" not in context
-    assert "--assert-ready" not in context
+    _assert_conditional_warning_followthrough(context)
 
 
 @pytest.mark.parametrize(
@@ -1378,10 +1411,7 @@ def test_read_only_url_output_never_gets_lifecycle_mutation_context(monkeypatch,
     assert hook.should_fire(command, url) is False
     assert hook.should_warn_unresolved(command, url) is True
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "grants no mutation authority" in context
-    assert "MANDATORY" not in context
-    assert "--assert-ready" not in context
-    assert "watch-and-fix loop" not in context
+    _assert_conditional_warning_followthrough(context)
 
 
 @pytest.mark.parametrize("response", [None, "https://github.com/o/r/pull/42\n"])
@@ -1398,8 +1428,7 @@ def test_indirect_creation_never_fails_silent_or_receives_mutation_authority(
 
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "grants no mutation authority" in context
-    assert "MANDATORY" not in context
+    _assert_conditional_warning_followthrough(context)
 
 
 def test_one_command_doing_both_needs_the_ready_ack_for_the_full_route(
@@ -1428,8 +1457,7 @@ def test_a_pr_url_buried_in_other_output_is_not_a_pr_being_opened(monkeypatch, c
     `https://github.com/…/pull/306#discussion_r…`. Command matched, URL matched,
     no PR opened.
 
-    `gh pr create` prints the URL alone on its line and nothing else, so
-    anchoring costs no real invocation.
+    A PR URL with a discussion fragment is not a PR URL result.
     """
     hook = _load_hook()
     quoting = "gh api repos/o/r/pulls/306/comments/1/replies -f body='use gh pr create'"
@@ -1441,6 +1469,13 @@ def test_a_pr_url_buried_in_other_output_is_not_a_pr_being_opened(monkeypatch, c
         )
         is False
     )
+    discussion_response = (
+        '{"html_url": "https://github.com/topij/agentic-dev-kit/'
+        'pull/306#discussion_r37"}'
+    )
+    assert hook._PR_URL.search(discussion_response) is None
+    # The quoted lifecycle token still gets harmless unresolved guidance.
+    assert hook.should_warn_unresolved(quoting, discussion_response) is True
     # a URL mentioned mid-sentence is not one either
     assert hook.should_fire("gh pr create --fill", "see https://x/pull/1 for details") is False
     # A standalone URL is preserved as unresolved evidence, not lifecycle proof.
@@ -1495,8 +1530,7 @@ def test_a_creation_url_warns_whatever_shape_the_runtime_reports_it_in(
 
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "grants no mutation authority" in context
-    assert "MANDATORY" not in context
+    _assert_conditional_warning_followthrough(context)
     # …and it fired because the URL was FOUND, not because the payload was
     # unreadable and fail-loud caught it. A round-2 lens showed this test passed
     # either way: cutting the depth bound to 1, and deleting list handling

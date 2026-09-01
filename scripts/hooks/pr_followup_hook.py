@@ -66,8 +66,9 @@ from pathlib import Path
 # Both runtimes supply PostToolUse response data, and every Bash command reaches
 # this shared policy. Constructed executables and argv cannot be recovered from
 # command text without rebuilding a shell parser; a response-only state
-# acknowledgement still gets the warning, while a response-only URL stays
-# silent because it is ordinary read-only output too often to be lifecycle proof.
+# acknowledgement and a response-only PR URL still get the warning. That can be
+# harmlessly noisy for read-only output, but the instruction grants no authority
+# and catches aliases or API calls whose lifecycle action is absent from shell text.
 # Repository-qualified inherited options are candidates too, whether they sit
 # before or after ``pr`` and whether ``-R`` is joined to its value. This regex
 # does not interpret their values or select a lifecycle; authoritative forge
@@ -90,22 +91,12 @@ _GH_PR_PREFIX = re.compile(rf"\bgh(?:\s+{_REPOSITORY_OPTION})*\s+pr\b")
 #                  says `is already "ready for review"` — which still means a
 #                  real PR exists and still deserves the reminder.
 #
-# The URL must be ALONE ON ITS LINE. `gh pr create` prints it and nothing else,
-# so this still matches every real invocation — while a URL embedded in prose or
-# JSON does not. Found live: replying to a review comment with `gh api` fired
-# this hook, because the command text quoted the trigger phrase and the API's
-# own response carried `…/pull/306#discussion_r…`. The bare-substring form could
-# not tell that from a PR being opened.
-_PR_URL = re.compile(r"^\s*https://\S+/pull/\d+/?\s*$", re.MULTILINE)
-
-# `gh pr create` reports an existing PR by printing a diagnostic followed by
-# that PR's URL. Remove those pairs before treating a remaining URL as creation
-# evidence; otherwise a failed draft retry could be mistaken for a new draft.
-_EXISTING_PR_ERROR = re.compile(
-    r"a pull request for branch .+ already exists:\s*\n\s*"
-    r"https://\S+/pull/\d+/?\s*$",
-    re.IGNORECASE | re.MULTILINE,
-)
+# A PR URL anywhere in response output is enough for the non-authoritative
+# warning, including a URL in API JSON. It deliberately excludes a fragment or
+# deeper path after the PR number: a review-comment response such as
+# ``…/pull/306#discussion_r…`` is not lifecycle evidence. Read-only PR URLs can
+# still warn, harmlessly, because the instruction stops before forge access.
+_PR_URL = re.compile(r"https://[^\s\"']+/pull/\d+/?(?=$|[\s\"',}\]])")
 
 # The optional backslash tolerates a runtime that hands us already-escaped text.
 # It is NOT load-bearing for anything this module does: nothing serialises the
@@ -332,35 +323,30 @@ def _fallback_instruction(
     )
 
 
-def _without_existing_pr_diagnostics(response: str) -> str:
-    return _EXISTING_PR_ERROR.sub("", response)
-
-
 def _lifecycle_instruction(engines_dir: str) -> str:
-    """Instruct a repository-bound live query for a stronger candidate.
+    """Resolve a candidate before granting lifecycle authority.
 
     Ready acknowledgements carry an owner/repo name, but turning that text into
     a repository-local numeric ``pr_watch`` call would discard identity. Shell
     wrappers, ``GH_REPO``, ``-R`` and PR URLs can all make the acknowledged pull
-    request belong to another repository. A literal ``gh pr ready`` token plus
-    response evidence selects this detailed instruction, but neither proves an
-    action. The instruction preserves that trust boundary explicitly.
+    request belong to another repository. Stronger and unresolved candidates
+    therefore share this instruction; neither candidate class proves an action.
+    The instruction preserves that trust boundary explicitly.
     """
-    # Response text never selects a mutating lifecycle route from that evidence.
     return (
-        "A Bash result matched a pull-request lifecycle candidate. This match "
-        "and its output grant no mutation or watch authority. If the "
-        "just-completed "
-        "operation only mentioned or "
+        "If the just-completed operation was read-only, only mentioned, or "
         "searched for a lifecycle command and did not actually create a pull "
         "request or change its review state, stop immediately without querying "
-        "the forge. Otherwise, do not "
-        "change its draft state or start a watch loop from command text alone. "
+        "the forge. Otherwise, do not change draft state or start a watch loop "
+        "from command or response text. "
         "First resolve the exact pull-request identity from authoritative forge "
         "state. Confirm that its repository and host match the current checkout's "
         "authoritative forge identity; if no pull request exists or the identity "
-        "does not match, stop without changing or watching any pull request. Then "
-        "inspect `gh pr view <PR#> --json isDraft`. If it is ready, run "
+        "does not match, stop without changing or watching any pull request. "
+        "Next, inspect `gh pr view <PR#> --json isDraft`. Only after the operation "
+        "assessment and those authoritative checks confirm a lifecycle-changing "
+        "operation on the affected pull request does follow-through apply. If it "
+        "is ready, run "
         f"`uv run {engines_dir}/pr_watch.py <PR#> --assert-ready` and start the "
         "watch-and-fix loop. If it is draft, use the current workflow state — "
         "never parsed shell text — to decide whether this run intentionally took "
@@ -370,6 +356,38 @@ def _lifecycle_instruction(engines_dir: str) -> str:
         f"`gh pr ready <PR#>` and then `uv run {engines_dir}/pr_watch.py <PR#> "
         "--assert-ready`; only then start the watch-and-fix loop. Otherwise "
         "correct the unexpected draft with `--assert-ready` before polling. "
+    )
+
+
+def _watch_instruction(
+    *,
+    engines_dir: str,
+    bot_desc: str,
+    fallback_command: str,
+    lenses: list[str],
+    panel_source: str,
+    lens_compute: str,
+    mandate: str,
+) -> str:
+    """Complete the shared watch policy after candidate resolution."""
+    return (
+        mandate
+        + " complete it in the current run without being asked. When it reaches "
+        "review polling, invoke `/pr-watch` (or poll "
+        f"`uv run {engines_dir}/pr_watch.py <PR#> --json`) and do NOT yield this turn "
+        f"until CI is fully green AND findings from {bot_desc} are fixed or "
+        "replied-to with a reason. Fix real findings, reply-with-reason to nitpicks "
+        "you disagree with, `--mark-seen` each handled round, and keep polling (CI "
+        "can take 20-30 min). "
+        + _fallback_instruction(
+            fallback_command,
+            lenses,
+            panel_source,
+            engines_dir,
+            lens_compute,
+        )
+        + " Only stop early if you hit something that genuinely needs an "
+        "operator decision."
     )
 
 
@@ -386,20 +404,21 @@ def build_reminder(
     ) = _load_review_config(runtime)
     bot_desc = _bot_description(bots)
     return (
-        _lifecycle_instruction(engines_dir)
-        + "Only if the operation was lifecycle-changing and the authoritative "
-        "resolution above confirms the affected pull request does this lifecycle "
-        "become MANDATORY. Then, per the kit's PR follow-through policy "
-        "(PRINCIPLES.md #5/#8), complete it in the current run without being "
-        "asked. When it reaches review polling, invoke `/pr-watch` (or poll "
-        f"`uv run {engines_dir}/pr_watch.py <PR#> --json`) and do NOT yield this turn "
-        f"until CI is fully green AND every {bot_desc} finding is fixed or "
-        "replied-to with a reason. Fix real findings, reply-with-reason to nitpicks "
-        "you disagree with, `--mark-seen` each handled round, and keep polling (CI "
-        "can take 20-30 min). "
-        + _fallback_instruction(fallback_command, lenses, panel_source, engines_dir, lens_compute)
-        + " Only stop early if you hit something that genuinely needs an "
-        "operator decision."
+        "A Bash result matched a pull-request lifecycle candidate. This match "
+        "and its output grant no mutation or watch authority. "
+        + _lifecycle_instruction(engines_dir)
+        + _watch_instruction(
+            engines_dir=engines_dir,
+            bot_desc=bot_desc,
+            fallback_command=fallback_command,
+            lenses=lenses,
+            panel_source=panel_source,
+            lens_compute=lens_compute,
+            mandate=(
+                "That independently confirmed lifecycle is MANDATORY under the "
+                "kit's PR follow-through policy (PRINCIPLES.md #5/#8);"
+            ),
+        )
     )
 
 
@@ -411,20 +430,33 @@ def build_unresolved_warning(runtime: str = _DEFAULT_RUNTIME) -> str:
     surfaces the gap while forbidding the full route until authoritative forge
     state establishes that an event actually occurred.
     """
-    engines_dir = _load_review_config(runtime)[2]
+    (
+        bots,
+        fallback_command,
+        engines_dir,
+        lenses,
+        panel_source,
+        lens_compute,
+    ) = _load_review_config(runtime)
+    bot_desc = _bot_description(bots)
     return (
         "A command or response produced unresolved pull-request lifecycle evidence. "
         "This warning grants no mutation authority from that text alone, including "
-        "no draft-state change or watch loop. If the operation was read-only or only "
-        "mentioned the command, "
-        "no follow-through is owed. If it actually created a pull request or changed "
-        "ready/draft state through indirection or redirected output, first establish "
-        "that event from authoritative forge state: resolve the exact pull request, "
-        "confirm that its repository and host match the current checkout, and inspect "
-        "`gh pr view <PR#> --json isDraft`. Only after that independent confirmation "
-        "does the PR follow-through obligation apply; invoke "
-        f"`uv run {engines_dir}/pr_watch.py <PR#> --json` under the shared `pr-watch` "
-        "policy. Do not infer an event or state transition from shell or response text."
+        "no draft-state change or watch loop. "
+        + _lifecycle_instruction(engines_dir)
+        + _watch_instruction(
+            engines_dir=engines_dir,
+            bot_desc=bot_desc,
+            fallback_command=fallback_command,
+            lenses=lenses,
+            panel_source=panel_source,
+            lens_compute=lens_compute,
+            mandate=(
+                "For that independently confirmed lifecycle, the shared PR "
+                "follow-through policy MUST be completed;"
+            ),
+        )
+        + " Do not infer an event or state transition from shell or response text."
     )
 
 
@@ -537,6 +569,8 @@ def should_warn_unresolved(command: object, response: str | None) -> bool:
         return False
     if response is not None and (_READY_ACK.search(response) or _DRAFT_ACK.search(response)):
         return True
+    if response is not None and _PR_URL.search(response):
+        return True
     if not isinstance(command, str):
         return False
     # Any lifecycle-looking command whose native evidence is absent, replaced,
@@ -547,9 +581,7 @@ def should_warn_unresolved(command: object, response: str | None) -> bool:
         return True
     if not _GH_PR_PREFIX.search(command):
         return False
-    if response is None:
-        return True
-    return bool(_PR_URL.search(_without_existing_pr_diagnostics(response)))
+    return response is None
 
 
 def main() -> int:

@@ -44,19 +44,20 @@ starts.
 
 ## #653 — 2026-08-31
 
-- **CHANGED (gate semantics) — the PR follow-through hook now distinguishes a
-  successful creation URL from GitHub CLI's existing-PR diagnostic. Creation output
-  carries no draft bit, so every successful creation requires an authoritative
+- **CHANGED (gate semantics) — the PR follow-through hook treats creation URLs and
+  GitHub CLI's existing-PR diagnostic as unresolved lifecycle candidates. Creation
+  output carries no draft bit, so a successful creation requires an authoritative
   `isDraft` check. Ready acknowledgements also require repository and host identity to
   match the current checkout before a repository-local watcher runs. Shell and response
   matches are candidates only: even the expanded instruction selected by a literal
   `gh pr ready` token plus a ready/draft acknowledgement grants no mutation authority
   until the operation and authoritative forge state are established separately.
   Creation URLs, missing, replaced, or transformed output, indirect actions, read-only
-  lookalikes, quoted/search mentions, and response-only state acknowledgements fail loud
-  without granting mutation or watch authority. Constructed shell argv is not
-  reconstructed; response-only URLs remain silent because they are not specific enough
-  to identify a lifecycle event.**
+  lookalikes, quoted/search mentions, and response-only state acknowledgements or PR
+  URLs fail loud without granting mutation or watch authority. After
+  independent confirmation, the candidate routes assert the matching ready or bounded
+  draft state and complete the shared watch policy. Constructed shell argv is not
+  reconstructed; harmless warning false positives replace shell parsing.**
   **Refresh
   `scripts/hooks/pr_followup_hook.py` and `init.sh`; in Claude's `PostToolUse`
   registration, set the command hook's `if` field to `Bash(*)` so the shared hook —

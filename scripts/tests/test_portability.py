@@ -1998,7 +1998,7 @@ def test_pull_request_visibility_is_ready_by_default_with_a_bounded_draft_except
     assert "match the current checkout's " in hook_source
     assert "authoritative forge identity" in hook_source
     assert "inspect `gh pr view <PR#> --json isDraft`" in hook_source
-    assert "never selects a mutating lifecycle route from that evidence" in hook_source
+    assert "grant no mutation or watch authority" in hook_source
 
     claude_template = (
         REPO_ROOT / "docs" / "templates" / "CLAUDE.md.tmpl"
