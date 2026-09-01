@@ -916,25 +916,28 @@ def _dynamic_python_literals(value: ast.expr, names: list[str]) -> list[str]:
             for part in value.values
             if isinstance(part, ast.Constant) and isinstance(part.value, str)
         ]
-        if (
+        formatted_parts = [
+            part for part in value.values if isinstance(part, ast.FormattedValue)
+        ]
+        authorization_runtime_value = (
             any(name.casefold() == "authorization" for name in names)
             and literals in (["Bearer "], ["Basic "])
-            and any(isinstance(part, ast.FormattedValue) for part in value.values)
-        ):
-            return [
-                literal
-                for part in value.values
-                if isinstance(part, ast.FormattedValue)
-                and not expression_path(part.value)
-                for literal in _dynamic_python_literals(part.value, names)
-            ]
+            and bool(formatted_parts)
+        )
+        formatted_values = [
+            part.value
+            for part in formatted_parts
+            if not authorization_runtime_value or not expression_path(part.value)
+        ]
+        formatted_values.extend(
+            part.format_spec for part in formatted_parts if part.format_spec is not None
+        )
         return [
-            *literals,
+            *([] if authorization_runtime_value else literals),
             *(
                 literal
-                for part in value.values
-                if isinstance(part, ast.FormattedValue)
-                for literal in _dynamic_python_literals(part.value, names)
+                for formatted_value in formatted_values
+                for literal in _dynamic_python_literals(formatted_value, names)
             ),
         ]
     if isinstance(value, ast.Call):

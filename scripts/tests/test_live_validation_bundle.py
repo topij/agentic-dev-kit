@@ -806,6 +806,7 @@ def test_git_bound_python_source_refuses_a_static_credential_alias(
         b'authorization = f"Bearer {123456}"\n',
         b'authorization = f"Basic {helper(123456)}"\n',
         b'authorization = f"Bearer {("hunter2-secret")}"\n',
+        b'authorization = f"Bearer {runtime_token:hunter2-secret}"\n',
     ],
     ids=[
         "integer",
@@ -818,6 +819,7 @@ def test_git_bound_python_source_refuses_a_static_credential_alias(
         "authorization-numeric-field",
         "authorization-nested-numeric-call",
         "authorization-static-string-field",
+        "authorization-static-format-spec",
     ],
 )
 def test_git_bound_python_source_refuses_a_newly_traversed_static_credential(
