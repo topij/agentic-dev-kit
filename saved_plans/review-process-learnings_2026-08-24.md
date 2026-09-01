@@ -670,4 +670,6 @@ and 7 each found something anyway, so this is also the clearest local instance o
   worked at the repository root still targeted the wrong tree when the doctor was
   invoked from a subdirectory. The behavioral fixture now runs the single generated
   command from outside the inspected root and supplies only the external executable it
-  needs, keeping command construction and command verification separate and DRY.
+  needs. Paths supplied by the inspected configuration are shell-quoted and exercised
+  with shell metacharacters, keeping command construction and command verification
+  separate and DRY.

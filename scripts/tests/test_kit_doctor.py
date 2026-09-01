@@ -105,7 +105,7 @@ review:
     return root
 
 
-@pytest.mark.parametrize("engines", ["scripts", "scripts/devkit"])
+@pytest.mark.parametrize("engines", ["scripts", "scripts/devkit", "scr&ipts"])
 def test_lens_definition_inspection_reports_missing_current_and_stale(tmp_path, engines):
     root = _lens_repo(tmp_path, engines=engines)
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")

@@ -2872,9 +2872,10 @@ def inspect(
 
 def _lens_definition_regeneration_command(root: Path, engines_dir: str) -> str:
     """Return the adopter-visible command template used by the text report."""
+    generator = shlex.quote(str(PurePosixPath(engines_dir) / "panel_prompt.py"))
     return (
         f"cd {shlex.quote(str(root.resolve()))} && mkdir -p .claude/agents && "
-        f"uv run {engines_dir}/panel_prompt.py --root . --lens <name> "
+        f"uv run {generator} --root . --lens <name> "
         "--agent-definition > .claude/agents/<name>.md"
     )
 
