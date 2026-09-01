@@ -767,6 +767,43 @@ def test_git_bound_python_source_refuses_a_credential_literal_in_an_expression(
     assert "credential-like content" in result.stderr
 
 
+@pytest.mark.parametrize(
+    "source_bytes",
+    [
+        b'def f(token="hunter2-secret"):\n    pass\n',
+        b'def f(*, token="hunter2-secret"):\n    pass\n',
+        b'f = lambda token="hunter2-secret": None\n',
+    ],
+    ids=["positional", "keyword-only", "lambda"],
+)
+def test_git_bound_python_source_refuses_a_credential_parameter_default(
+    tmp_path: Path,
+    source_bytes: bytes,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+        source_bytes=source_bytes,
+    )
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = json.loads(
+        manifest.read_text(encoding="utf-8")
+    )["source"]["revision"]
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 2
+    assert "credential-like content" in result.stderr
+
+
 def test_a_fixture_proof_must_bind_retained_execution_sources(tmp_path: Path) -> None:
     manifest, promotion = _fixture(tmp_path)
     _add_source_ledger(
@@ -3457,6 +3494,7 @@ def test_the_promoted_codex_parallel_batch_remains_independently_recomputable() 
         )
     )
     manifest = json.loads((bundle / "bundle.json").read_text(encoding="utf-8"))
+    promotion = json.loads((bundle / "promotion.json").read_text(encoding="utf-8"))
     result = _run(
         bundle / "bundle.json",
         bundle / "promotion.json",
@@ -3503,6 +3541,9 @@ def test_the_promoted_codex_parallel_batch_remains_independently_recomputable() 
         "alpha": "59ad80980fb3c9d609c41c6ffc7f7fed0e12db97",
         "beta": "57e4209a79080d7605cd8e42cb53fe8bdc5d3f38",
     }
+    reviewed_heads = [lane_heads[lane] for lane in ("alpha", "beta")]
+    assert manifest["review"]["heads"] == reviewed_heads
+    assert promotion["reviewed_heads"] == reviewed_heads
     scopes = {"alpha": "parallel-alpha", "beta": "parallel-beta"}
     pull_requests = {"alpha": 2, "beta": 1}
     identities: dict[str, tuple[str, str]] = {}

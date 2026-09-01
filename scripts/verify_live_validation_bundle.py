@@ -833,6 +833,29 @@ def _python_assignment_names(target: ast.expr) -> list[str]:
     return []
 
 
+def _python_default_assignments(
+    arguments: ast.arguments,
+) -> list[tuple[list[str], ast.expr]]:
+    """Return parameter names paired with their statically declared defaults."""
+
+    positional = [*arguments.posonlyargs, *arguments.args]
+    positional_with_defaults = positional[len(positional) - len(arguments.defaults) :]
+    assignments = [
+        ([argument.arg], default)
+        for argument, default in zip(
+            positional_with_defaults, arguments.defaults, strict=True
+        )
+    ]
+    assignments.extend(
+        ([argument.arg], default)
+        for argument, default in zip(
+            arguments.kwonlyargs, arguments.kw_defaults, strict=True
+        )
+        if default is not None
+    )
+    return assignments
+
+
 def _static_python_values(value: ast.expr) -> list[str]:
     try:
         resolved = ast.literal_eval(value)
@@ -979,6 +1002,8 @@ def _reject_credential_like_python_source(text: str, label: str, path: Path) -> 
                 assignments.append((_python_assignment_names(node.target), node.value))
         elif isinstance(node, ast.NamedExpr):
             assignments.append((_python_assignment_names(node.target), node.value))
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            assignments.extend(_python_default_assignments(node.args))
         elif isinstance(node, ast.keyword) and node.arg is not None:
             assignments.append(([node.arg], node.value))
         elif isinstance(node, ast.Dict):

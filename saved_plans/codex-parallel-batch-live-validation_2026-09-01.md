@@ -123,6 +123,16 @@ literal fragments while allowing the structural authorization scheme used by the
 retained review engine. The bundle, promotion receipt, CLI expectation, external
 fixture, and semantic control now bind the complete ordered reviewed-head set.
 
+A fresh adversarial lens at `e600eba2d04241ddc069c4e19f090544540be2c8` on
+2026-09-01 then demonstrated that a coordinated relabeling of the manifest,
+promotion receipt, and external fixture could still replace that set without changing
+the retained lane evidence. It also demonstrated that the Python-source exception
+admitted credential-bearing function and lambda defaults. The findings were accepted.
+The semantic control now derives the ordered global set from the lane heads it checks
+against the filesystem, forge, and exact-head review receipts. The source-ledger path
+now treats positional, keyword-only, and lambda defaults as assignments and refuses
+statically recoverable credential values there.
+
 `UV_CACHE_DIR=/private/tmp/adk-codex-parallel-20260901.xlAufG/full-test-cache uv
 run --with pytest --with pyyaml pytest scripts/tests/test_live_validation_bundle.py
 -q` at `d3243e780d93078148fa890520e59247b37e2e42` on 2026-09-01 printed `211
