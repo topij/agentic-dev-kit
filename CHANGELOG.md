@@ -51,7 +51,7 @@ starts.
 - **ADDED (`kit_doctor.py` report and `--json`, #255):** Read the new
   `lens_definitions` array and inspect any advisory `missing`, `stale`,
   `unreadable`, or `unverifiable` entry. Regenerate the named adopter-owned file
-  with `mkdir -p .claude/agents && uv run
+  with `cd <repo-root> && mkdir -p .claude/agents && uv run
   <engine-dir>/panel_prompt.py --root . --lens <name> --agent-definition >
   .claude/agents/<name>.md` after resolving any kit engine drift reported by the
   existing file section. The already-running doctor computes the expected bytes

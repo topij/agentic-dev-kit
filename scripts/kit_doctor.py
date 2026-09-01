@@ -182,6 +182,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -846,6 +847,7 @@ class Report:
     engines_dir_ok: bool
     hooks_installed: bool
     narrative_rendered: dict[str, bool]
+    inspection_root: Path = Path(".")
     # The version values as they were actually written, so the report can tell
     # "a version key that is not a number" (a typo — do not migrate) apart from
     # "no usable version" (pre-v2 — do migrate). Both leave the parsed field at
@@ -2820,6 +2822,7 @@ def inspect(
         engines_dir_ok=engines_probe,
         hooks_installed=hooks_installed,
         hooks_state=hooks_state,
+        inspection_root=root,
         registrations=inspect_registrations(root, engines_dir),
         lens_definitions=inspect_lens_definitions(root, config, engines_dir),
         narrative_rendered=narrative,
@@ -2867,10 +2870,10 @@ def inspect(
     )
 
 
-def _lens_definition_regeneration_command(engines_dir: str) -> str:
+def _lens_definition_regeneration_command(root: Path, engines_dir: str) -> str:
     """Return the adopter-visible command template used by the text report."""
     return (
-        "mkdir -p .claude/agents && "
+        f"cd {shlex.quote(str(root.resolve()))} && mkdir -p .claude/agents && "
         f"uv run {engines_dir}/panel_prompt.py --root . --lens <name> "
         "--agent-definition > .claude/agents/<name>.md"
     )
@@ -3042,7 +3045,7 @@ def render(report: Report) -> str:
         lines.append(
             f"    (lens definitions are adopter-owned — first resolve any kit engine "
             "drift reported below, then inspect the target and regenerate one with "
-            f"{_lens_definition_regeneration_command(report.engines_dir)}; "
+            f"{_lens_definition_regeneration_command(report.inspection_root, report.engines_dir)}; "
             "this check never executes the command or writes the definitions)"
         )
     for doc, rendered in report.narrative_rendered.items():

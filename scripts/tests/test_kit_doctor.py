@@ -23,7 +23,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -118,6 +120,7 @@ def test_lens_definition_inspection_reports_missing_current_and_stale(tmp_path, 
             engines_dir_ok=True,
             hooks_installed=True,
             narrative_rendered={},
+            inspection_root=root,
             lens_definitions=missing,
         )
     )
@@ -125,12 +128,26 @@ def test_lens_definition_inspection_reports_missing_current_and_stale(tmp_path, 
     assert "not present — generate it before the next session" in missing_rendered
 
     definition = root / ".claude" / "agents" / "adversarial.md"
-    remedy = kit_doctor._lens_definition_regeneration_command(engines).replace(
-        "<name>", "adversarial"
+    remedy_template = kit_doctor._lens_definition_regeneration_command(root, engines)
+    assert remedy_template in missing_rendered
+    remedy = remedy_template.replace("<name>", "adversarial")
+    uv_stub = tmp_path / "bin" / "uv"
+    _write(
+        uv_stub,
+        "#!/bin/sh\n"
+        '[ "$1" = run ] || exit 64\n'
+        "shift\n"
+        f"exec {shlex.quote(sys.executable)} \"$@\"\n",
     )
+    uv_stub.chmod(0o755)
+    env = os.environ.copy()
+    env["PATH"] = f"{uv_stub.parent}{os.pathsep}{env.get('PATH', '')}"
+    caller = root / "docs" / "probe"
+    caller.mkdir(parents=True)
     regenerated = subprocess.run(
         ["sh", "-c", remedy],
-        cwd=root,
+        cwd=caller,
+        env=env,
         capture_output=True,
         check=False,
     )
@@ -151,12 +168,13 @@ def test_lens_definition_inspection_reports_missing_current_and_stale(tmp_path, 
             engines_dir_ok=True,
             hooks_installed=True,
             narrative_rendered={},
+            inspection_root=root,
             lens_definitions=stale,
         )
     )
     assert "inspect and regenerate it" in rendered
     assert "this check never executes the command or writes the definitions" in rendered
-    assert kit_doctor._lens_definition_regeneration_command(engines) in rendered
+    assert kit_doctor._lens_definition_regeneration_command(root, engines) in rendered
 
     with definition.open("wb") as output:
         regenerated = subprocess.run(
