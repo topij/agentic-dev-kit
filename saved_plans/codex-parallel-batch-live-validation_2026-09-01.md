@@ -133,6 +133,15 @@ against the filesystem, forge, and exact-head review receipts. The source-ledger
 now treats positional, keyword-only, and lambda defaults as assignments and refuses
 statically recoverable credential values there.
 
+`UV_PYTHON=3.12
+UV_CACHE_DIR=/private/tmp/adk-codex-parallel-20260901.xlAufG/post-review-py312-cache
+UV_TOOL_DIR=/private/tmp/adk-codex-parallel-20260901.xlAufG/post-review-py312-tools
+make test` in the clean detached worktree
+`/private/tmp/adk-codex-parallel-20260901.xlAufG/final-c9a3cda` at
+`c9a3cda743c95287d56af2f8197b4de8a827ea5b` on 2026-09-01 printed `2387
+passed, 3 warnings in 410.07s` and returned exit `0`. The warnings are pytest
+cleanup warnings for its own temporary hostile trees.
+
 `UV_CACHE_DIR=/private/tmp/adk-codex-parallel-20260901.xlAufG/full-test-cache uv
 run --with pytest --with pyyaml pytest scripts/tests/test_live_validation_bundle.py
 -q` at `d3243e780d93078148fa890520e59247b37e2e42` on 2026-09-01 printed `211
