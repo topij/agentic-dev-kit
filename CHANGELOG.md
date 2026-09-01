@@ -55,6 +55,11 @@ starts.
   result. Those source expressions no longer trip the raw assignment backstop;
   statically recoverable credential assignments and known secret shapes remain
   refused.
+- **ADDED (engine CLI surface):** For a promoted claim spanning distinct review heads,
+  use `review.heads` in the bundle and `reviewed_heads` in the promotion receipt, then
+  repeat `--expect-reviewed-head` once per entry in the same order. Continue using
+  singular `review.head` and `reviewed_head` for a single-head bundle. Mixed shapes,
+  duplicate heads, and incomplete independent expectations are refused.
 
 ## #655 — 2026-09-01
 

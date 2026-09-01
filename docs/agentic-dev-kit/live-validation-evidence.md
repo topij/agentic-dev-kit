@@ -135,11 +135,19 @@ of the changed directory.
 }
 ```
 
-The manifest is the binding surface: its source revision, reviewed head, runtime and
-client apply to every artifact digest and every claim-to-evidence link it contains.
+For one reviewed revision, `review.head` carries its full object ID. A batch whose
+claims span distinct reviewed revisions replaces that field with an ordered,
+duplicate-free `review.heads` array. Its promotion receipt uses the matching
+`reviewed_head` or `reviewed_heads` shape, and the operator repeats
+`--expect-reviewed-head` in the same order so the complete set is independently
+supplied. Mixing the singular and plural shapes is refused.
+
+The manifest is the binding surface: its source revision, complete reviewed-head set,
+runtime and client apply to every artifact digest and every claim-to-evidence link it
+contains.
 An artifact record adds the authoritative observer, exact capture command or request,
 and UTC capture date for those exact retained bytes. Together with the manifest source
-revision and reviewed head, those fields stamp each retained reading rather than
+revision and reviewed-head set, those fields stamp each retained reading rather than
 leaving its age or provenance to narrative inference.
 The verifier refuses unknown fields so an unimplemented assertion cannot hide beside
 the enforced contract.
@@ -147,12 +155,13 @@ the enforced contract.
 `promotion.json` is a separate, closed receipt stored beside the `bundle.json` it
 names; an external receipt cannot replace the bundle's own copy. It carries the digest
 of the manifest's exact bytes, repeats the source revision, review repository, reviewed
-head, redaction reviewer, and complete runtime object, names the parity authority being
-changed, and enumerates the promoted claim IDs. The verifier compares every repeated
-field and, for promotion, requires the reviewer to supply independently selected
-expected authority, source repository, source revision, review repository, reviewed
-head, redaction reviewer, runtime, client, session-persistence carrier, and complete
-promoted claim objects. When a claim depends on applied compute, the caller must also
+head or complete ordered head set, redaction reviewer, and complete runtime object,
+names the parity authority being changed, and enumerates the promoted claim IDs. The
+verifier compares every repeated field and, for promotion, requires the reviewer to
+supply independently selected expected authority, source repository, source revision,
+review repository, every reviewed head in manifest order, redaction reviewer, runtime,
+client, session-persistence carrier, and complete promoted claim objects. When a claim
+depends on applied compute, the caller must also
 supply the complete expected applied-compute object with `--expect-applied-compute`.
 The bundle may retain validated claims that are not promoted. Only the IDs enumerated
 by `promotion.json` are selected and compared with the independent expected claim
@@ -165,7 +174,7 @@ repeatable `--expect-claim` compact JSON, including its ordered evidence paths a
 applied-compute dependency. Obtain those expectations from the review target and
 authoritative observer before reading the bundle labels; a self-consistent manifest and
 receipt are not their own trust root. This refuses a valid-looking pair relabeled to the
-wrong source or review repository, revision, reviewed head, reviewer, or applied
+wrong source or review repository, revision, reviewed-head set, reviewer, or applied
 compute; a claim renamed to imply a broader capability; and a claim whose evidence
 links were thinned.
 

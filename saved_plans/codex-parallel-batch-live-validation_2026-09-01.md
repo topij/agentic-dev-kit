@@ -43,10 +43,10 @@ lane, session, review-decision, and reconciliation dependency to the promoted so
   and printed a `held` row for each scope. The final GitHub read-back still showed
   both pull requests open and unmerged.
 
-The manifest's schema-level review anchor is the alpha head because schema version
-`1` has one `review.head`. The beta head is not inferred from that anchor: it is
-separately fixed by the Git, forge, scope receipt, panel-run, external artifact-map,
-and semantic-control bytes.
+The manifest carries the ordered `review.heads` set for alpha and beta. The promotion
+receipt repeats that complete set, and the independent verifier invocation supplies
+each head separately in the same order. Git, forge, scope receipt, panel-run, external
+artifact-map, and semantic-control bytes bind each set member to its lane.
 
 ## Review disposition and caveats
 
@@ -114,6 +114,14 @@ parses assignments so a runtime value carried by a credential-named local variab
 not mistaken for retained credential material; statically recoverable credential
 assignments and known secret shapes remain refused. The EOF regression now covers a
 falsey non-boolean value.
+
+The next fresh adversarial lens found that the Python-source exception still admitted
+a credential literal embedded in a dynamic expression, and that the batch promotion
+used the singular reviewed-head schema while its exact-head claim spanned alpha and
+beta. Both findings were accepted. Credential-target expressions now inspect embedded
+literal fragments while allowing the structural authorization scheme used by the
+retained review engine. The bundle, promotion receipt, CLI expectation, external
+fixture, and semantic control now bind the complete ordered reviewed-head set.
 
 `UV_CACHE_DIR=/private/tmp/adk-codex-parallel-20260901.xlAufG/full-test-cache uv
 run --with pytest --with pyyaml pytest scripts/tests/test_live_validation_bundle.py

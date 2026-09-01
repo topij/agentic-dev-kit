@@ -23,7 +23,7 @@ Usage:
       --expect-source-repository https://github.com/example/source \
       --expect-source-revision <full-source-sha1> \
       --expect-review-repository https://github.com/example/review \
-      --expect-reviewed-head <full-reviewed-head-sha1> \
+      --expect-reviewed-head <full-reviewed-head-sha1> [--expect-reviewed-head <sha1> ...] \
       --expect-redaction-reviewer <independent-reviewer> \
       --expect-runtime codex \
       --expect-client-version "codex-cli <version>" \
@@ -862,6 +862,90 @@ def _static_python_values(value: ast.expr) -> list[str]:
     return scalars(resolved)
 
 
+def _dynamic_python_literals(value: ast.expr, names: list[str]) -> list[str]:
+    """Return literal fragments that make a credential expression unsafe to retain."""
+
+    def expression_path(node: ast.expr) -> str:
+        if isinstance(node, ast.Name):
+            return node.id
+        if isinstance(node, ast.Attribute):
+            prefix = expression_path(node.value)
+            return f"{prefix}.{node.attr}" if prefix else node.attr
+        return ""
+
+    if isinstance(value, ast.Constant):
+        if isinstance(value.value, bytes):
+            return [value.value.decode("utf-8", errors="replace")]
+        return [value.value] if isinstance(value.value, str) else []
+    if isinstance(value, ast.JoinedStr):
+        literals = [
+            part.value
+            for part in value.values
+            if isinstance(part, ast.Constant) and isinstance(part.value, str)
+        ]
+        if (
+            any(name.casefold() == "authorization" for name in names)
+            and literals in (["Bearer "], ["Basic "])
+            and any(isinstance(part, ast.FormattedValue) for part in value.values)
+        ):
+            return []
+        return literals
+    if isinstance(value, ast.Call):
+        env_lookup = expression_path(value.func) in {"os.getenv", "os.environ.get"}
+        return [
+            literal
+            for child in (*value.args, *(keyword.value for keyword in value.keywords))
+            for literal in _dynamic_python_literals(child, names)
+            if not (
+                env_lookup and re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", literal)
+            )
+        ]
+    if isinstance(value, ast.Subscript):
+        literals = _dynamic_python_literals(value.slice, names)
+        if expression_path(value.value) == "os.environ":
+            return [
+                literal
+                for literal in literals
+                if not re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", literal)
+            ]
+        return literals
+    if isinstance(value, ast.BinOp):
+        return [
+            *_dynamic_python_literals(value.left, names),
+            *_dynamic_python_literals(value.right, names),
+        ]
+    if isinstance(value, ast.BoolOp):
+        return [
+            literal
+            for child in value.values
+            for literal in _dynamic_python_literals(child, names)
+        ]
+    if isinstance(value, ast.IfExp):
+        return [
+            *_dynamic_python_literals(value.body, names),
+            *_dynamic_python_literals(value.orelse, names),
+        ]
+    if isinstance(value, (ast.List, ast.Tuple, ast.Set)):
+        return [
+            literal
+            for child in value.elts
+            for literal in _dynamic_python_literals(child, names)
+        ]
+    if isinstance(value, ast.Dict):
+        return [
+            literal
+            for key, child in zip(value.keys, value.values, strict=True)
+            for part in ([child] if key is None else [key, child])
+            for literal in _dynamic_python_literals(part, names)
+        ]
+    return [
+        literal
+        for child in ast.iter_child_nodes(value)
+        if isinstance(child, ast.expr)
+        for literal in _dynamic_python_literals(child, names)
+    ]
+
+
 def _reject_credential_like_python_source(text: str, label: str, path: Path) -> None:
     """Scan exact retained Python while permitting names that carry runtime values.
 
@@ -906,7 +990,8 @@ def _reject_credential_like_python_source(text: str, label: str, path: Path) -> 
         if not any(_credential_key_name(name) for name in names):
             continue
         static_values = _static_python_values(value)
-        if any(len(static_value.strip()) >= 6 for static_value in static_values):
+        candidate_values = static_values or _dynamic_python_literals(value, names)
+        if any(len(static_value.strip()) >= 6 for static_value in candidate_values):
             raise BundleError(f"{label} contains credential-like content: {path}")
 
 
@@ -932,6 +1017,29 @@ def _scan_artifact(path: Path, label: str, raw: bytes, *, kind: str) -> int:
     else:
         _reject_credential_like_text(text, label, path)
     return len(raw)
+
+
+def _review_heads(review: dict[str, Any], label: str) -> list[str]:
+    shared = {"repository", "observer"}
+    keys = set(review)
+    if keys == shared | {"head"}:
+        heads = [_validate_revision(review["head"], f"{label}.head")]
+    elif keys == shared | {"heads"}:
+        heads = _string_list(review["heads"], f"{label}.heads")
+        if not heads or len(heads) != len(set(heads)):
+            raise BundleError(f"{label}.heads must contain unique reviewed revisions")
+        if len(heads) > MAX_ARTIFACT_COUNT:
+            raise BundleError(f"{label}.heads exceeds the reviewed-head limit")
+        for index, head in enumerate(heads):
+            _validate_revision(head, f"{label}.heads[{index}]")
+    else:
+        raise BundleError(
+            f"{label} keys differ: must contain repository, observer, and exactly one "
+            "of head or heads"
+        )
+    _string(review["repository"], f"{label}.repository")
+    _string(review["observer"], f"{label}.observer")
+    return heads
 
 
 def _validate_revision(value: Any, label: str) -> str:
@@ -1430,10 +1538,7 @@ def _validate_bundle(
     _validate_revision(source["revision"], "source.revision")
 
     review = _object(manifest["review"], "review")
-    _exact_keys(review, {"repository", "head", "observer"}, "review")
-    _string(review["repository"], "review.repository")
-    _validate_revision(review["head"], "review.head")
-    _string(review["observer"], "review.observer")
+    _review_heads(review, "review")
 
     runtime = _object(manifest["runtime"], "runtime")
     _exact_keys(
@@ -1576,7 +1681,7 @@ def validate_promotion(
     promotion_path: Path,
     manifest_path: Path,
     *,
-    expected: dict[str, str],
+    expected: dict[str, Any],
     expected_claims: list[dict[str, Any]],
     expected_applied_compute: dict[str, Any] | None,
     snapshot: BundleSnapshot | None = None,
@@ -1595,22 +1700,41 @@ def validate_promotion(
     except KeyError as exc:
         raise BundleError("bundle snapshot is missing promotion.json") from exc
     promotion = _read_json(promotion_path, "promotion receipt", raw=promotion_bytes)
-    _exact_keys(
-        promotion,
-        {
-            "schema_version",
-            "manifest",
-            "manifest_sha256",
-            "authority",
-            "source_revision",
-            "review_repository",
-            "reviewed_head",
-            "redaction_reviewer",
-            "runtime",
-            "claims",
-        },
-        "promotion receipt",
-    )
+    promotion_shared_keys = {
+        "schema_version",
+        "manifest",
+        "manifest_sha256",
+        "authority",
+        "source_revision",
+        "review_repository",
+        "redaction_reviewer",
+        "runtime",
+        "claims",
+    }
+    promotion_keys = set(promotion)
+    if promotion_keys == promotion_shared_keys | {"reviewed_head"}:
+        promotion_heads = [
+            _validate_revision(promotion["reviewed_head"], "promotion.reviewed_head")
+        ]
+        promotion_head_field = "reviewed_head"
+    elif promotion_keys == promotion_shared_keys | {"reviewed_heads"}:
+        promotion_heads = _string_list(
+            promotion["reviewed_heads"], "promotion.reviewed_heads"
+        )
+        if not promotion_heads or len(promotion_heads) != len(set(promotion_heads)):
+            raise BundleError(
+                "promotion.reviewed_heads must contain unique reviewed revisions"
+            )
+        if len(promotion_heads) > MAX_ARTIFACT_COUNT:
+            raise BundleError("promotion.reviewed_heads exceeds the reviewed-head limit")
+        for index, head in enumerate(promotion_heads):
+            _validate_revision(head, f"promotion.reviewed_heads[{index}]")
+        promotion_head_field = "reviewed_heads"
+    else:
+        raise BundleError(
+            "promotion receipt keys differ: must contain exactly one of reviewed_head "
+            "or reviewed_heads"
+        )
     if (
         type(promotion["schema_version"]) is not int
         or promotion["schema_version"] != SCHEMA_VERSION
@@ -1650,8 +1774,15 @@ def validate_promotion(
         raise BundleError("promotion source revision does not match the bundle")
     if promotion["review_repository"] != manifest["review"]["repository"]:
         raise BundleError("promotion review repository does not match the bundle")
-    if promotion["reviewed_head"] != manifest["review"]["head"]:
-        raise BundleError("promotion reviewed head does not match the bundle")
+    manifest_review = _object(manifest["review"], "review")
+    manifest_heads = _review_heads(manifest_review, "review")
+    expected_promotion_head_field = (
+        "reviewed_head" if "head" in manifest_review else "reviewed_heads"
+    )
+    if promotion_head_field != expected_promotion_head_field:
+        raise BundleError("promotion reviewed-head shape does not match the bundle")
+    if promotion_heads != manifest_heads:
+        raise BundleError("promotion reviewed-head binding does not match the bundle")
     if promotion["redaction_reviewer"] != manifest["redaction"]["reviewer"]:
         raise BundleError("promotion redaction reviewer does not match the bundle")
     runtime = _object(promotion["runtime"], "promotion.runtime")
@@ -1699,12 +1830,20 @@ def validate_promotion(
         "source_repository": manifest["source"]["repository"],
         "source_revision": promotion["source_revision"],
         "review_repository": promotion["review_repository"],
-        "reviewed_head": promotion["reviewed_head"],
+        promotion_head_field: (
+            promotion_heads[0]
+            if promotion_head_field == "reviewed_head"
+            else promotion_heads
+        ),
         "redaction_reviewer": promotion["redaction_reviewer"],
         "runtime": runtime["name"],
         "client_version": runtime["client_version"],
         "session_persistence": runtime["session_persistence"],
     }
+    if set(actual_binding) != set(expected):
+        raise BundleError(
+            "promotion reviewed-head shape does not match the independent expectation"
+        )
     for field, expected_value in expected.items():
         if actual_binding[field] != expected_value:
             raise BundleError(
@@ -1731,7 +1870,11 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--expect-reviewed-head",
-        help="independently observed full reviewed-head Git SHA-1 object id",
+        action="append",
+        help=(
+            "independently observed full reviewed-head Git SHA-1 object id; repeat "
+            "in manifest order to bind a complete multi-head promotion"
+        ),
     )
     parser.add_argument(
         "--expect-review-repository",
@@ -1786,17 +1929,22 @@ def main(
         )
         manifest, _, _ = _validate_bundle(args.manifest, snapshot=snapshot)
         promoted = None
-        expected = {
+        expected: dict[str, Any] = {
             "authority": args.expect_authority,
             "source_repository": args.expect_source_repository,
             "source_revision": args.expect_source_revision,
             "review_repository": args.expect_review_repository,
-            "reviewed_head": args.expect_reviewed_head,
             "redaction_reviewer": args.expect_redaction_reviewer,
             "runtime": args.expect_runtime,
             "client_version": args.expect_client_version,
             "session_persistence": args.expect_session_persistence,
         }
+        if args.expect_reviewed_head is None:
+            expected["reviewed_head"] = None
+        elif len(args.expect_reviewed_head) == 1:
+            expected["reviewed_head"] = args.expect_reviewed_head[0]
+        else:
+            expected["reviewed_heads"] = args.expect_reviewed_head
         if args.promotion is not None:
             missing = sorted(field for field, value in expected.items() if value is None)
             if not args.expect_claim:
@@ -1805,12 +1953,24 @@ def main(
                 raise BundleError(
                     "promotion requires independent expected bindings: " + ", ".join(missing)
                 )
-            expected_values = {
-                field: _string(value, f"expected {field}") for field, value in expected.items()
-            }
+            expected_values: dict[str, Any] = {}
+            for field, value in expected.items():
+                if field == "reviewed_heads":
+                    heads = _string_list(value, "expected reviewed_heads")
+                    if len(heads) != len(set(heads)):
+                        raise BundleError(
+                            "expected reviewed_heads must contain unique revisions"
+                        )
+                    expected_values[field] = heads
+                else:
+                    expected_values[field] = _string(value, f"expected {field}")
             _safe_relative_path(expected_values["authority"], "expected authority")
             _validate_revision(expected_values["source_revision"], "expected source revision")
-            _validate_revision(expected_values["reviewed_head"], "expected reviewed head")
+            if "reviewed_head" in expected_values:
+                _validate_revision(expected_values["reviewed_head"], "expected reviewed head")
+            else:
+                for index, head in enumerate(expected_values["reviewed_heads"]):
+                    _validate_revision(head, f"expected reviewed heads[{index}]")
             if len(args.expect_claim) > MAX_ARTIFACT_COUNT:
                 raise BundleError("expected claims exceeds the claim-count limit")
             expected_claims: list[dict[str, Any]] = []

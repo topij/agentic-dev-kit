@@ -586,7 +586,10 @@
     "reviewer": "codex-cockpit-gpt-5-6-sol"
   },
   "review": {
-    "head": "59ad80980fb3c9d609c41c6ffc7f7fed0e12db97",
+    "heads": [
+      "59ad80980fb3c9d609c41c6ffc7f7fed0e12db97",
+      "57e4209a79080d7605cd8e42cb53fe8bdc5d3f38"
+    ],
     "observer": "github-pr-readback-and-two-scope-pr-watch-receipts",
     "repository": "https://github.com/topij/adk-codex-parallel-evidence-20260901"
   },

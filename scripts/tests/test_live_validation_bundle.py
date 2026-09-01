@@ -411,7 +411,7 @@ def _argv(
     manifest: Path,
     promotion: Path | None = None,
     *,
-    expectations: dict[str, str] | None = None,
+    expectations: dict[str, object] | None = None,
     expected_claims: list[dict[str, object]] | None = None,
     expected_compute: dict[str, object] | None | object = DEFAULT_EXPECTED_COMPUTE,
 ) -> list[str]:
@@ -420,7 +420,12 @@ def _argv(
         argv.extend(["--promotion", str(promotion)])
         bindings = FIXTURE_EXPECTATIONS if expectations is None else expectations
         for field, value in bindings.items():
-            argv.extend([f"--expect-{field.replace('_', '-')}", value])
+            flag = f"--expect-{field.replace('_', '-')}"
+            if field == "reviewed_head" and isinstance(value, list):
+                for head in value:
+                    argv.extend([flag, str(head)])
+            else:
+                argv.extend([flag, str(value)])
         claims = FIXTURE_EXPECTED_CLAIMS if expected_claims is None else expected_claims
         for claim in claims:
             argv.extend(["--expect-claim", json.dumps(claim, separators=(",", ":"))])
@@ -440,7 +445,7 @@ def _run(
     manifest: Path,
     promotion: Path | None = None,
     *,
-    expectations: dict[str, str] | None = None,
+    expectations: dict[str, object] | None = None,
     expected_claims: list[dict[str, object]] | None = None,
     expected_compute: dict[str, object] | None | object = DEFAULT_EXPECTED_COMPUTE,
     env: dict[str, str] | None = None,
@@ -735,6 +740,33 @@ def test_git_bound_python_source_refuses_a_static_credential_assignment(
     assert "credential-like content" in result.stderr
 
 
+def test_git_bound_python_source_refuses_a_credential_literal_in_an_expression(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+        source_bytes=b'token = "hunter2" + suffix\n',
+    )
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = json.loads(
+        manifest.read_text(encoding="utf-8")
+    )["source"]["revision"]
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 2
+    assert "credential-like content" in result.stderr
+
+
 def test_a_fixture_proof_must_bind_retained_execution_sources(tmp_path: Path) -> None:
     manifest, promotion = _fixture(tmp_path)
     _add_source_ledger(
@@ -989,6 +1021,37 @@ def test_only_full_git_sha1_reviewed_heads_validate_structurally(
     assert result.returncode == 2
     assert "must be a full lowercase Git SHA-1 object id" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+def test_a_multi_head_promotion_requires_the_complete_independent_head_set(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    second_head = "3" * 40
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    manifest_value["review"].pop("head")
+    manifest_value["review"]["heads"] = [REVIEWED, second_head]
+    _write_json(manifest, manifest_value)
+    promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
+    promotion_value.pop("reviewed_head")
+    promotion_value["reviewed_heads"] = [REVIEWED, second_head]
+    promotion_value["manifest_sha256"] = _sha(manifest)
+    _write_json(promotion, promotion_value)
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["reviewed_head"] = [REVIEWED, second_head]
+
+    result = _run(manifest, promotion, expectations=expectations)
+    assert result.returncode == 0, result.stderr
+
+    expectations["reviewed_head"] = [REVIEWED]
+    result = _run(manifest, promotion, expectations=expectations)
+    assert result.returncode == 2
+    assert "reviewed-head shape does not match" in result.stderr
+
+    expectations["reviewed_head"] = [REVIEWED, "4" * 40]
+    result = _run(manifest, promotion, expectations=expectations)
+    assert result.returncode == 2
+    assert "reviewed heads does not match" in result.stderr
 
 
 def test_a_source_proof_commit_without_a_header_boundary_is_refused_cleanly(
@@ -3402,7 +3465,7 @@ def test_the_promoted_codex_parallel_batch_remains_independently_recomputable() 
             "source_repository": expected["source"]["repository"],
             "source_revision": expected["source"]["revision"],
             "review_repository": expected["review"]["repository"],
-            "reviewed_head": expected["review"]["head"],
+            "reviewed_head": expected["review"]["heads"],
             "redaction_reviewer": expected["redaction"]["reviewer"],
             "runtime": expected["runtime"]["name"],
             "client_version": expected["runtime"]["client_version"],
