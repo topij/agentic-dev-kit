@@ -28,6 +28,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path, PurePosixPath
+from types import SimpleNamespace
 
 import pytest
 from _repo_layout import engine_dir, find_repo_root
@@ -294,10 +295,20 @@ def test_a_renderer_error_is_unverifiable(tmp_path, monkeypatch):
     root = _lens_repo(tmp_path)
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
 
-    def fail_render(*_args, **_kwargs):
-        raise kit_doctor.LensDefinitionError("renderer rejected the lens")
+    class RendererError(ValueError):
+        pass
 
-    monkeypatch.setattr(kit_doctor, "render_agent_definition", fail_render)
+    def fail_render(*_args, **_kwargs):
+        raise RendererError("renderer rejected the lens")
+
+    monkeypatch.setattr(
+        kit_doctor,
+        "_load_verified_lens_renderer",
+        lambda *_args: SimpleNamespace(
+            render_agent_definition=fail_render,
+            LensDefinitionError=RendererError,
+        ),
+    )
     statuses = kit_doctor.inspect_lens_definitions(
         root, config, "scripts", SHIPPED_MANIFEST_FILES
     )
@@ -353,9 +364,11 @@ def test_a_drifted_generator_or_dependency_is_unverifiable(tmp_path, drifted_rel
     root = _lens_repo(tmp_path)
     definition = root / ".claude" / "agents" / "adversarial.md"
     _write(definition, panel_prompt.agent_definition(root, "adversarial", "claude"))
+    sentinel = root / "doctor-executed-drifted-lens-engine"
     drifted = root / drifted_rel
     drifted.write_text(
-        drifted.read_text(encoding="utf-8") + "\n# adopter edit\n",
+        drifted.read_text(encoding="utf-8")
+        + f"\nfrom pathlib import Path\nPath({str(sentinel)!r}).write_text('ran')\n",
         encoding="utf-8",
     )
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
@@ -368,6 +381,33 @@ def test_a_drifted_generator_or_dependency_is_unverifiable(tmp_path, drifted_rel
         ("adversarial", "unverifiable")
     ]
     assert f"{drifted_rel} differs from the comparison manifest" in statuses[0].detail
+    assert not sentinel.exists()
+
+
+def test_a_recorded_install_baseline_still_checks_generator_dependencies(tmp_path):
+    root = _lens_repo(tmp_path)
+    definition = root / ".claude" / "agents" / "adversarial.md"
+    _write(definition, panel_prompt.agent_definition(root, "adversarial", "claude"))
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    baseline, unverified = kit_doctor.record_install_manifest(
+        root, config, 2, None
+    )
+    assert not unverified
+    assert "required_by" not in baseline["files"]["scripts/panel_prompt.py"]
+    renderer = root / "scripts" / "lib" / "panel_definition.py"
+    renderer.write_text(
+        renderer.read_text(encoding="utf-8") + "\n# adopter edit\n",
+        encoding="utf-8",
+    )
+
+    statuses = kit_doctor.inspect_lens_definitions(
+        root, config, "scripts", baseline["files"]
+    )
+
+    assert [(item.lens, item.state) for item in statuses] == [
+        ("adversarial", "unverifiable")
+    ]
+    assert "panel_definition.py differs from the comparison manifest" in statuses[0].detail
 
 
 def test_json_reports_missing_lens_definitions_as_advisory(tmp_path, capsys):

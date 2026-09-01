@@ -179,6 +179,7 @@ from __future__ import annotations
 import argparse
 import ast
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -186,6 +187,8 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
+from types import ModuleType
+from typing import TYPE_CHECKING
 
 try:
     import tomllib
@@ -202,7 +205,11 @@ _REGISTRATION_PARSE_ERRORS = (
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from kitconfig import get, load_config, repo_root  # noqa: E402
-from panel_definition import LensDefinitionError, render_agent_definition  # noqa: E402
+
+if TYPE_CHECKING:
+    # Keep the dynamic runtime dependency visible to ``derive_dependencies``
+    # without executing the renderer before its installed bytes are verified.
+    from panel_definition import LensDefinitionError, render_agent_definition  # noqa: F401
 
 MANIFEST_NAME = "kit-manifest.json"
 
@@ -633,6 +640,24 @@ PANEL_PROMPT_REL = next(
         rel
         for rel, role in KIT_OWNED
         if role == "engine" and PurePosixPath(rel).name == "panel_prompt.py"
+    ),
+    "",
+)
+
+PANEL_DEFINITION_REL = next(
+    (
+        rel
+        for rel, role in KIT_OWNED
+        if role == "engine" and PurePosixPath(rel).name == "panel_definition.py"
+    ),
+    "",
+)
+
+KITCONFIG_REL = next(
+    (
+        rel
+        for rel, role in KIT_OWNED
+        if role == "engine" and PurePosixPath(rel).name == "kitconfig.py"
     ),
     "",
 )
@@ -2426,6 +2451,7 @@ def _generator_trust_failure(
     generator and every manifest-owned transitive dependency must match before
     the pure in-process renderer may stand in for that executable.
     """
+    owned = {rel for rel, _role in KIT_OWNED}
     pending = [PANEL_PROMPT_REL]
     visited: set[str] = set()
     while pending:
@@ -2447,21 +2473,46 @@ def _generator_trust_failure(
             return f"{local_rel} cannot be read: {exc}"
         if actual != expected:
             return f"{local_rel} differs from the comparison manifest"
-
-        for dependency_rel, raw_dependency in manifest_files.items():
-            if not isinstance(raw_dependency, dict):
-                return "the comparison manifest has a malformed file entry"
-            required_by = raw_dependency.get("required_by", [])
-            if not isinstance(required_by, list) or not all(
-                isinstance(dependent, str) for dependent in required_by
-            ):
-                return (
-                    "the comparison manifest has malformed dependency metadata "
-                    f"for {dependency_rel}"
-                )
-            if rel in required_by and dependency_rel not in visited:
-                pending.append(dependency_rel)
+        try:
+            source = target.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            return f"{local_rel} cannot be read: {exc}"
+        for level, module in _imported_modules(source):
+            if level:
+                package = PurePosixPath(rel).parent
+                for _ in range(level - 1):
+                    package = package.parent
+                package_dir = str(package)
+            else:
+                package_dir = f"{KIT_ENGINE_PREFIX}/lib"
+            for candidate in _module_targets(module, package_dir):
+                if candidate in owned and candidate not in visited:
+                    pending.append(candidate)
     return None
+
+
+def _load_verified_lens_renderer(root: Path, engines_dir: str) -> ModuleType:
+    """Load the already-hash-verified renderer without trusting import order."""
+
+    def load(name: str, rel: str) -> ModuleType:
+        path = root / _remap(rel, engines_dir)
+        spec = importlib.util.spec_from_file_location(name, path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"cannot load {path}")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    verified_kitconfig = load("_kit_doctor_verified_kitconfig", KITCONFIG_REL)
+    previous_kitconfig = sys.modules.get("kitconfig")
+    sys.modules["kitconfig"] = verified_kitconfig
+    try:
+        return load("_kit_doctor_verified_panel_definition", PANEL_DEFINITION_REL)
+    finally:
+        if previous_kitconfig is None:
+            sys.modules.pop("kitconfig", None)
+        else:
+            sys.modules["kitconfig"] = previous_kitconfig
 
 
 def inspect_lens_definitions(
@@ -2524,11 +2575,27 @@ def inspect_lens_definitions(
             for name in names
         ]
 
+    try:
+        renderer = _load_verified_lens_renderer(root, engines_dir)
+        render_definition = renderer.render_agent_definition
+        lens_definition_error = renderer.LensDefinitionError
+    except (AttributeError, ImportError, OSError, SyntaxError) as exc:
+        return [
+            LensDefinitionStatus(
+                "claude",
+                name,
+                config_surface,
+                "unverifiable",
+                f"the verified renderer could not be loaded: {exc}",
+            )
+            for name in names
+        ]
+
     statuses: list[LensDefinitionStatus] = []
     for name in names:
         try:
-            expected = render_agent_definition(config, name, "claude").encode("utf-8")
-        except LensDefinitionError as exc:
+            expected = render_definition(config, name, "claude").encode("utf-8")
+        except lens_definition_error as exc:
             statuses.append(
                 LensDefinitionStatus(
                     "claude",
