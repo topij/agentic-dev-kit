@@ -54,9 +54,10 @@ starts.
   with `uv run <engine-dir>/panel_prompt.py --lens <name> --agent-definition >
   .claude/agents/<name>.md`; the doctor reports these states without executing or
   rewriting the inspected generator or definitions. The already-running doctor
-  owns the shared renderer and pins the exact thin generator that calls it; a
-  changed or self-attested generator therefore reports `unverifiable` instead of
-  being loaded. These advisory states do not change the doctor's exit status.
+  owns the shared renderer and compares the installed generator, sibling doctor,
+  and config reader to source buffers captured at startup; a changed or
+  self-attested renderer bundle therefore reports `unverifiable` instead of being
+  loaded. These advisory states do not change the doctor's exit status.
 
 ## #653 — 2026-08-31
 

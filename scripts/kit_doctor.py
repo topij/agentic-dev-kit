@@ -201,7 +201,22 @@ _REGISTRATION_PARSE_ERRORS = (
 ) + _TOML_DECODE_ERRORS
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+import kitconfig as _running_kitconfig  # noqa: E402
 from kitconfig import get, load_config, repo_root  # noqa: E402
+
+try:
+    # Capture the source bundle while the running doctor starts. A later check
+    # must compare an inspected installation to the bytes whose code is already
+    # running, not re-read paths that may have changed since import.
+    _RUNNING_DOCTOR_BYTES: bytes | None = Path(__file__).read_bytes()
+    _RUNNING_KITCONFIG_BYTES: bytes | None = Path(
+        _running_kitconfig.__file__
+    ).read_bytes()
+    _RUNNING_RENDERER_CAPTURE_ERROR: str | None = None
+except (OSError, TypeError) as exc:
+    _RUNNING_DOCTOR_BYTES = None
+    _RUNNING_KITCONFIG_BYTES = None
+    _RUNNING_RENDERER_CAPTURE_ERROR = str(exc)
 
 MANIFEST_NAME = "kit-manifest.json"
 
@@ -631,6 +646,24 @@ PANEL_PROMPT_REL = next(
         rel
         for rel, role in KIT_OWNED
         if role == "engine" and PurePosixPath(rel).name == "panel_prompt.py"
+    ),
+    "",
+)
+
+KIT_DOCTOR_REL = next(
+    (
+        rel
+        for rel, role in KIT_OWNED
+        if role == "engine" and PurePosixPath(rel).name == "kit_doctor.py"
+    ),
+    "",
+)
+
+KITCONFIG_REL = next(
+    (
+        rel
+        for rel, role in KIT_OWNED
+        if role == "engine" and PurePosixPath(rel).name == "kitconfig.py"
     ),
     "",
 )
@@ -2536,6 +2569,44 @@ focus; follow it exactly, and report what you reviewed before any finding.
     return "\n".join(front) + "\n" + body
 
 
+def _lens_renderer_trust_failure(root: Path, engines_dir: str) -> str | None:
+    """Bind the displayed regeneration command to the running renderer bundle."""
+    captured = {
+        KIT_DOCTOR_REL: _RUNNING_DOCTOR_BYTES,
+        KITCONFIG_REL: _RUNNING_KITCONFIG_BYTES,
+    }
+    if _RUNNING_RENDERER_CAPTURE_ERROR is not None:
+        return (
+            "the running doctor could not capture its renderer dependencies: "
+            f"{_RUNNING_RENDERER_CAPTURE_ERROR}"
+        )
+
+    for rel in (PANEL_PROMPT_REL, KIT_DOCTOR_REL, KITCONFIG_REL):
+        local_rel = _remap(rel, engines_dir)
+        target = root / local_rel
+        if target.is_symlink():
+            return f"{local_rel} is a symlink rather than an installed regular file"
+        if not target.is_file():
+            return f"{local_rel} is not installed"
+        try:
+            target_bytes = target.read_bytes()
+        except OSError as exc:
+            return f"{local_rel} cannot be read: {exc}"
+        if rel == PANEL_PROMPT_REL:
+            if hashlib.sha256(target_bytes).hexdigest() != PANEL_PROMPT_SHA256:
+                return (
+                    f"{local_rel} differs from the renderer bundle pinned by the "
+                    "running doctor"
+                )
+            continue
+        if target_bytes != captured[rel]:
+            return (
+                f"{local_rel} differs from the renderer bundle pinned by the "
+                "running doctor"
+            )
+    return None
+
+
 def inspect_lens_definitions(
     root: Path, config: dict, engines_dir: str
 ) -> list[LensDefinitionStatus]:
@@ -2582,43 +2653,16 @@ def inspect_lens_definitions(
         if name not in names:
             names.append(name)
 
-    generator_rel = _remap(PANEL_PROMPT_REL, engines_dir)
-    generator = root / generator_rel
-    if not generator.is_file():
+    trust_failure = _lens_renderer_trust_failure(root, engines_dir)
+    if trust_failure is not None:
         return [
             LensDefinitionStatus(
                 "claude",
                 name,
                 config_surface,
                 "unverifiable",
-                f"{generator_rel} is not installed, so expected bytes cannot be "
-                "attributed to the installed generator",
-            )
-            for name in names
-        ]
-    try:
-        generator_sha256 = sha256_of(generator)
-    except OSError as exc:
-        return [
-            LensDefinitionStatus(
-                "claude",
-                name,
-                config_surface,
-                "unverifiable",
-                f"{generator_rel} cannot be read: {exc}, so expected bytes cannot be "
-                "attributed to the installed generator",
-            )
-            for name in names
-        ]
-    if generator_sha256 != PANEL_PROMPT_SHA256:
-        return [
-            LensDefinitionStatus(
-                "claude",
-                name,
-                config_surface,
-                "unverifiable",
-                f"{generator_rel} differs from the generator pinned by the running "
-                "doctor, so expected bytes cannot be attributed to the installed generator",
+                f"{trust_failure}, so expected bytes cannot be attributed to the "
+                "installed generator",
             )
             for name in names
         ]

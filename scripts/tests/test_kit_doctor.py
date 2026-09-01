@@ -188,9 +188,19 @@ def test_a_configured_compute_change_makes_the_definition_stale(tmp_path):
     assert [(item.lens, item.state) for item in statuses] == [("adversarial", "stale")]
 
 
-def test_a_missing_lens_generator_is_reported_without_aborting(tmp_path):
+@pytest.mark.parametrize(
+    "missing_rel",
+    [
+        "scripts/panel_prompt.py",
+        "scripts/kit_doctor.py",
+        "scripts/lib/kitconfig.py",
+    ],
+)
+def test_a_missing_lens_generator_or_dependency_is_reported_without_aborting(
+    tmp_path, missing_rel
+):
     root = _lens_repo(tmp_path)
-    (root / "scripts" / "panel_prompt.py").unlink()
+    (root / missing_rel).unlink()
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
 
     statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
@@ -227,7 +237,9 @@ def test_lens_inspection_does_not_execute_the_adopter_generator(tmp_path):
     assert [(item.lens, item.state) for item in statuses] == [
         ("adversarial", "unverifiable")
     ]
-    assert "differs from the generator pinned by the running doctor" in statuses[0].detail
+    assert "differs from the renderer bundle pinned by the running doctor" in (
+        statuses[0].detail
+    )
     assert not sentinel.exists()
 
 
@@ -312,9 +324,13 @@ def test_an_unreadable_lens_definition_is_reported_and_rendered(
 
 @pytest.mark.parametrize(
     "drifted_rel",
-    ["scripts/panel_prompt.py"],
+    [
+        "scripts/panel_prompt.py",
+        "scripts/kit_doctor.py",
+        "scripts/lib/kitconfig.py",
+    ],
 )
-def test_a_drifted_generator_is_unverifiable(tmp_path, drifted_rel):
+def test_a_drifted_generator_or_dependency_is_unverifiable(tmp_path, drifted_rel):
     root = _lens_repo(tmp_path)
     definition = root / ".claude" / "agents" / "adversarial.md"
     _write(definition, panel_prompt.agent_definition(root, "adversarial", "claude"))
@@ -332,11 +348,33 @@ def test_a_drifted_generator_is_unverifiable(tmp_path, drifted_rel):
     assert [(item.lens, item.state) for item in statuses] == [
         ("adversarial", "unverifiable")
     ]
-    assert (
-        f"{drifted_rel} differs from the generator pinned by the running doctor"
-        in statuses[0].detail
-    )
+    assert f"{drifted_rel} differs from the renderer bundle" in statuses[0].detail
     assert not sentinel.exists()
+
+
+@pytest.mark.parametrize(
+    "symlinked_rel",
+    [
+        "scripts/panel_prompt.py",
+        "scripts/kit_doctor.py",
+        "scripts/lib/kitconfig.py",
+    ],
+)
+def test_a_symlinked_renderer_bundle_member_is_unverifiable(tmp_path, symlinked_rel):
+    root = _lens_repo(tmp_path)
+    target = root / symlinked_rel
+    external = root / "external-renderer-bundle" / target.name
+    _write(external, target.read_text(encoding="utf-8"))
+    target.unlink()
+    target.symlink_to(external)
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+
+    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
+
+    assert [(item.lens, item.state) for item in statuses] == [
+        ("adversarial", "unverifiable")
+    ]
+    assert f"{symlinked_rel} is a symlink" in statuses[0].detail
 
 
 def test_regeneration_imports_the_sibling_doctor_before_a_lib_shadow(tmp_path):
@@ -403,7 +441,9 @@ def test_a_self_attested_install_baseline_cannot_authorize_generator(tmp_path, c
 
     assert code == 0
     assert payload["lens_definitions"][0]["state"] == "unverifiable"
-    assert "generator pinned by the running doctor" in payload["lens_definitions"][0]["detail"]
+    assert "renderer bundle pinned by the running doctor" in (
+        payload["lens_definitions"][0]["detail"]
+    )
     assert not sentinel.exists()
 
 
@@ -414,18 +454,18 @@ def test_a_generator_changed_after_hashing_is_not_executed(tmp_path, monkeypatch
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
     sentinel = root / "doctor-executed-after-generator-hash"
     generator = root / "scripts" / "panel_prompt.py"
-    original_sha256 = kit_doctor.sha256_of
+    original_read_bytes = Path.read_bytes
 
-    def mutate_after_hash(path):
-        digest = original_sha256(path)
+    def mutate_after_read(path):
+        source = original_read_bytes(path)
         if path == generator:
             generator.write_text(
                 f"from pathlib import Path\nPath({str(sentinel)!r}).write_text('ran')\n",
                 encoding="utf-8",
             )
-        return digest
+        return source
 
-    monkeypatch.setattr(kit_doctor, "sha256_of", mutate_after_hash)
+    monkeypatch.setattr(Path, "read_bytes", mutate_after_read)
     statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
 
     assert [(item.lens, item.state) for item in statuses] == [("adversarial", "current")]
