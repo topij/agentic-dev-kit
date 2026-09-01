@@ -14,10 +14,54 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-08-31 — PR `#651` (squash `8e81293`) merged the durable
-live-validation evidence verifier and its retained Codex writing-lane bundle.
+Last updated: 2026-09-01 — PR `#653` (squash `dd536ee`) merged the
+ready-for-review-by-default pull-request policy correction.
 
-## Latest session — 2026-08-31 (durable live-validation evidence, in a Codex session)
+## Latest session — 2026-09-01 (draft-policy correction, in a Codex session)
+
+**Theme —** PR `#653` made completed pull requests ready for review by default across
+shared doctrine, adopter workflows, shipped baselines, runtime bindings, configured
+workflows and automatic follow-through. Draft remains only for a bounded material
+unfinished-work window that already needs a remote pull request; its creating run owns
+the ready transition.
+
+- **Runtime —** Codex desktop, assigned model `gpt-5.6-sol`, main reasoning effort
+  `xhigh`.
+
+- **The hook stops at an authority boundary.** Shell and response text select
+  non-authoritative candidate guidance; they do not prove that a lifecycle event ran,
+  identify its target, or authorize a mutation. After operation assessment,
+  authoritative forge identity and live draft state decide the conditional route. A
+  shell parser was deliberately abandoned in favour of harmless warning false
+  positives and fail-closed follow-through.
+
+- **The adopter contract moved with the policy.** Adopt stays local until its
+  operator-run initialization is complete; upgrade names the required
+  `triage.pr_draft: false` and `systemize.pr_draft: false` migration; the playbook,
+  lane contract, baseline templates and shared workflows carry the same bounded draft
+  exception.
+
+- **The review evidence is attached to the change.** PR `#653` carries the exact-head
+  Python 3.12 verification stamp, the superseded-head dispositions, and the final fresh
+  adversarial/correctness fallback-panel receipt for
+  `239de40fb09faae1bfb6e3b1c6af8464f8e67414`; squash
+  `dd536eee3e562fd806a4b90c8377ec532ebf6925` is the merge event.
+
+- **The sprint boundary was preserved.** This session did not start `#631` or the
+  retained Codex parallel-batch Phase 4 exit. `#621` kept the operator-set boundary,
+  and `saved_plans/claude-side-assessment_2026-08-26.md` remained operator-owned and
+  unstaged.
+
+- **The process lesson is durable.** The authority-boundary, hostile-corpus and
+  mutation lessons from this review are recorded in
+  [`review-process-learnings_2026-08-24.md`](../saved_plans/review-process-learnings_2026-08-24.md).
+
+▶ Next: `session-start` — re-read the live tracker and sprint boundary before choosing
+a slice; do not infer issue closure from PR `#653`'s merge.
+
+______________________________________________________________________
+
+## Session — 2026-08-31 (durable live-validation evidence, in a Codex session)
 
 **Theme —** PR `#651` settled the retained-bundle verifier around an explicit object:
 a descriptor-rooted immutable byte snapshot whose digest and semantic checks derive
@@ -324,70 +368,6 @@ filesystem shapes fail closed.
 startup-only `SessionStart` matcher, and the missing `kit_doctor` check for the
 permissions block. Keep `#621`, `#631`, and `#633` open; use `#243` for the remaining
 runtime-specific workflow field exercises.
-
-______________________________________________________________________
-
-## Session — 2026-08-28 (Claude's shipped lane permissions as repository policy)
-
-**Theme —** PR `#632` (squash `e04e8ff`) took Phase 5's first slice: `#606`, decided as
-three separate questions about `config/claude-lane-settings.json` rather than one bundle.
-The record is
-[`lane-permission-policy_2026-08-28.md`](../saved_plans/lane-permission-policy_2026-08-28.md)
-with a committed evidence bundle beside it, every probe run under the lane's own trust
-route against the pinned client.
-
-- **The two grantable questions were granted, and the third is not grantable.** A lane
-  gets `Bash(make test:*)` — `AGENTS.md` makes that the verification command and a lane
-  was structurally refused it, so its first verification was always CI — and
-  `kit_doctor.py` in both engine spellings, without which a lane editing any kit-owned
-  file cannot refresh the manifest and its PR is deterministically red. `#627`'s
-  `.claude/` guard is the client's own and no allow-list entry reaches it, so the
-  decision is what the kit *says*: a lane doing kit-owned Claude-adapter work is not a
-  supported case, and a parity change is split — lane for the runtime-neutral half and
-  the Codex adapter, cockpit for `.claude/`.
-
-- **Measuring the objection to the first grant is what reframed the slice.** `make` runs
-  what the worktree's `Makefile` says and `Edit(**)` lets a lane write it — so the grant
-  looked like unrestricted execution. It is, and so is what already shipped: under the
-  shipped bytes with nothing added, a lane rewrote `scripts/pr_watch.py` and ran it,
-  writing outside the worktree with an empty denial list. `Edit(**)` bounds file edits,
-  not a process. The profile is now documented as task-scoping — fail-closed for a
-  *confused* lane — rather than a security boundary, with the mechanism filed as `#631`
-  rather than built here.
-
-- **The mirror to Codex is the doctrine, not the grants.** `--sandbox` has no per-command
-  list to receive one, and bounds the process rather than the command name — narrower
-  exactly where the prefix list is weakest. `runtime-parity.md`'s "Command permissions"
-  row carries that, and that the `.claude/` asymmetry is permanent rather than a gap to
-  close.
-
-- **The panel found a false claim of ours in each round, both times in prose beside
-  correct work.** Round 1 killed "the grant is bounded to the one target" by running
-  `make test mutation-test`; the delta pass then showed the *replacement* wording still
-  invited a substring reading, the real bound being argv tokens. It also caught readings
-  stated without their client and date in the document that argues for stamping them.
-  One HIGH was declined by measuring the case the lens's own evidence could not supply.
-  Dispositions are on the PR and the lessons in
-  [`review-process-learnings_2026-08-24.md`](../saved_plans/review-process-learnings_2026-08-24.md).
-
-- **Filed this session:** `#631` (the profile grants execution it cannot bound),
-  `#633` (is the profile a safety-critical file — the two lenses split on it).
-  Occurrences added to `#510` (a wrapper reported exit 0 for a `make test` that failed,
-  the pipeline's status being `tail`'s) and `#628` (the lane contract should carry this
-  slice's two outcomes alongside that issue's own item, as one change to a
-  safety-critical engine).
-
-- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
-  `7a5ffe2eb8681ec78057d6bb6f74b1b9a682622e` on 2026-08-28 printed `2007 passed, 3
-  warnings in 358.77s` on a quiet tree; the merged squash is `e04e8ff`. A delta-pass
-  correctness lens reproduced that run independently in its own clone.
-
-▶ Next: Phase 5 continues with `#236` and the `#243` narrowing — `#243`'s extraction has
-landed (every workflow has a shared doc, adapters are thin on both runtimes), so what
-remains is its residual and the rendered-adapter comparison `#236`'s adapter half needs.
-`#606` stays open for its `.claude/settings.json` half: engine-path templating, the
-`SessionStart` matcher, and the missing `kit_doctor` check for the permissions block.
-`#621` stays open.
 
 ______________________________________________________________________
 

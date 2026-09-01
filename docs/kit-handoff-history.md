@@ -5,6 +5,68 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-08-28 (Claude's shipped lane permissions as repository policy)
+
+**Theme —** PR `#632` (squash `e04e8ff`) took Phase 5's first slice: `#606`, decided as
+three separate questions about `config/claude-lane-settings.json` rather than one bundle.
+The record is
+[`lane-permission-policy_2026-08-28.md`](../saved_plans/lane-permission-policy_2026-08-28.md)
+with a committed evidence bundle beside it, every probe run under the lane's own trust
+route against the pinned client.
+
+- **The two grantable questions were granted, and the third is not grantable.** A lane
+  gets `Bash(make test:*)` — `AGENTS.md` makes that the verification command and a lane
+  was structurally refused it, so its first verification was always CI — and
+  `kit_doctor.py` in both engine spellings, without which a lane editing any kit-owned
+  file cannot refresh the manifest and its PR is deterministically red. `#627`'s
+  `.claude/` guard is the client's own and no allow-list entry reaches it, so the
+  decision is what the kit *says*: a lane doing kit-owned Claude-adapter work is not a
+  supported case, and a parity change is split — lane for the runtime-neutral half and
+  the Codex adapter, cockpit for `.claude/`.
+
+- **Measuring the objection to the first grant is what reframed the slice.** `make` runs
+  what the worktree's `Makefile` says and `Edit(**)` lets a lane write it — so the grant
+  looked like unrestricted execution. It is, and so is what already shipped: under the
+  shipped bytes with nothing added, a lane rewrote `scripts/pr_watch.py` and ran it,
+  writing outside the worktree with an empty denial list. `Edit(**)` bounds file edits,
+  not a process. The profile is now documented as task-scoping — fail-closed for a
+  *confused* lane — rather than a security boundary, with the mechanism filed as `#631`
+  rather than built here.
+
+- **The mirror to Codex is the doctrine, not the grants.** `--sandbox` has no per-command
+  list to receive one, and bounds the process rather than the command name — narrower
+  exactly where the prefix list is weakest. `runtime-parity.md`'s "Command permissions"
+  row carries that, and that the `.claude/` asymmetry is permanent rather than a gap to
+  close.
+
+- **The panel found a false claim of ours in each round, both times in prose beside
+  correct work.** Round 1 killed "the grant is bounded to the one target" by running
+  `make test mutation-test`; the delta pass then showed the *replacement* wording still
+  invited a substring reading, the real bound being argv tokens. It also caught readings
+  stated without their client and date in the document that argues for stamping them.
+  One HIGH was declined by measuring the case the lens's own evidence could not supply.
+  Dispositions are on the PR and the lessons in
+  [`review-process-learnings_2026-08-24.md`](../saved_plans/review-process-learnings_2026-08-24.md).
+
+- **Filed this session:** `#631` (the profile grants execution it cannot bound),
+  `#633` (is the profile a safety-critical file — the two lenses split on it).
+  Occurrences added to `#510` (a wrapper reported exit 0 for a `make test` that failed,
+  the pipeline's status being `tail`'s) and `#628` (the lane contract should carry this
+  slice's two outcomes alongside that issue's own item, as one change to a
+  safety-critical engine).
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `7a5ffe2eb8681ec78057d6bb6f74b1b9a682622e` on 2026-08-28 printed `2007 passed, 3
+  warnings in 358.77s` on a quiet tree; the merged squash is `e04e8ff`. A delta-pass
+  correctness lens reproduced that run independently in its own clone.
+
+▶ Next: Phase 5 continues with `#236` and the `#243` narrowing — `#243`'s extraction has
+landed (every workflow has a shared doc, adapters are thin on both runtimes), so what
+remains is its residual and the rendered-adapter comparison `#236`'s adapter half needs.
+`#606` stays open for its `.claude/settings.json` half: engine-path templating, the
+`SessionStart` matcher, and the missing `kit_doctor` check for the permissions block.
+`#621` stays open.
+
 ## Session — 2026-08-28 (first real headless lane on this repository)
 
 **Theme —** PR `#626` (squash `2de16ed`) recorded the first headless lane run on this
