@@ -821,14 +821,14 @@ class RegistrationStatus:
 
 @dataclass
 class LensDefinitionStatus:
-    """One configured Claude lens definition compared with its generator.
+    """One configured Claude lens definition compared with the running doctor.
 
     These files are adopter-owned: the doctor may say that one no longer
     represents the adopter's config, but it must never fold that difference into
     kit-owned file drift or prescribe overwriting it without inspection. The
-    generator is the authority because it is also the documented regeneration
-    route; duplicating its renderer here would create a second definition of
-    "current" that could itself drift.
+    doctor owns the pure renderer; ``panel_prompt.py`` is the documented
+    regeneration route, while its installed-file drift remains on the existing
+    manifest-backed report axis.
     """
 
     runtime: str
@@ -2867,6 +2867,15 @@ def inspect(
     )
 
 
+def _lens_definition_regeneration_command(engines_dir: str) -> str:
+    """Return the adopter-visible command template used by the text report."""
+    return (
+        "mkdir -p .claude/agents && "
+        f"uv run {engines_dir}/panel_prompt.py --root . --lens <name> "
+        "--agent-definition > .claude/agents/<name>.md"
+    )
+
+
 def render(report: Report) -> str:
     lines: list[str] = ["kit-doctor — installation report", ""]
 
@@ -3033,8 +3042,7 @@ def render(report: Report) -> str:
         lines.append(
             f"    (lens definitions are adopter-owned — first resolve any kit engine "
             "drift reported below, then inspect the target and regenerate one with "
-            f"uv run {report.engines_dir}/panel_prompt.py --lens <name> "
-            "--agent-definition > .claude/agents/<name>.md; "
+            f"{_lens_definition_regeneration_command(report.engines_dir)}; "
             "this check never executes the command or writes the definitions)"
         )
     for doc, rendered in report.narrative_rendered.items():
@@ -3831,8 +3839,8 @@ def main(argv: list[str] | None = None) -> int:
                     ],
                     # #255. These files are adopter-owned and therefore cannot
                     # appear on the manifest-backed `files` axis. Their state is
-                    # derived from the configured roster and the installed
-                    # generator, and remains advisory rather than an exit gate.
+                    # derived from the configured roster and the running doctor's
+                    # renderer, and remains advisory rather than an exit gate.
                     "lens_definitions": [
                         {
                             "runtime": d.runtime,

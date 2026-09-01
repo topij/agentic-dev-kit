@@ -125,7 +125,16 @@ def test_lens_definition_inspection_reports_missing_current_and_stale(tmp_path, 
     assert "not present — generate it before the next session" in missing_rendered
 
     definition = root / ".claude" / "agents" / "adversarial.md"
-    _write(definition, panel_prompt.agent_definition(root, "adversarial", "claude"))
+    remedy = kit_doctor._lens_definition_regeneration_command(engines).replace(
+        "<name>", "adversarial"
+    )
+    regenerated = subprocess.run(
+        ["sh", "-c", remedy],
+        cwd=root,
+        capture_output=True,
+        check=False,
+    )
+    assert regenerated.returncode == 0, regenerated.stderr.decode("utf-8", "replace")
     current = kit_doctor.inspect_lens_definitions(root, config, engines)
     assert [(item.lens, item.state) for item in current] == [("adversarial", "current")]
 
@@ -147,7 +156,7 @@ def test_lens_definition_inspection_reports_missing_current_and_stale(tmp_path, 
     )
     assert "inspect and regenerate it" in rendered
     assert "this check never executes the command or writes the definitions" in rendered
-    assert "> .claude/agents/<name>.md" in rendered
+    assert kit_doctor._lens_definition_regeneration_command(engines) in rendered
 
     with definition.open("wb") as output:
         regenerated = subprocess.run(
