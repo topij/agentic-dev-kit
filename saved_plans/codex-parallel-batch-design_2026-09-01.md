@@ -63,8 +63,7 @@ fixture Git read-back that:
 - worktree paths differ across lanes;
 - state-root paths differ across lanes;
 - each worktree is linked to the same fixture repository and starts at the declared
-  fixture base;
-- each lane changes only its declared file footprint.
+  fixture base.
 
 ### `codex-parallel-batch-exact-head-review`
 
@@ -97,8 +96,8 @@ The bundle will retain:
   review, configuration, and bundle-verifier dependency used by a promoted claim;
 - each descriptor, task prompt, combined-prompt digest, launcher receipt, final
   message, session metadata, activation marker, and sandbox marker;
-- filesystem and Git read-back covering both worktrees, state roots, branches,
-  changed paths, and remote heads;
+- filesystem and Git read-back covering both worktrees, state roots, branches, and
+  remote heads;
 - GitHub repository and pull-request read-back at reviewed and final capture points;
 - exact-head review receipts and the commands/results that established them;
 - merge-wrapper refusal captures and batch reconciliation output;

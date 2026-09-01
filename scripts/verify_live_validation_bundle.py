@@ -893,9 +893,11 @@ def _dynamic_python_literals(value: ast.expr, names: list[str]) -> list[str]:
             return node.id
         if isinstance(node, ast.Attribute):
             prefix = expression_path(node.value)
-            return f"{prefix}.{node.attr}" if prefix else node.attr
+            return f"{prefix}.{node.attr}" if prefix else ""
         return ""
 
+    if isinstance(value, ast.Name):
+        return [value.id]
     if isinstance(value, ast.Constant):
         if isinstance(value.value, bytes):
             return [value.value.decode("utf-8", errors="replace")]
@@ -915,7 +917,7 @@ def _dynamic_python_literals(value: ast.expr, names: list[str]) -> list[str]:
         return literals
     if isinstance(value, ast.Call):
         env_lookup = expression_path(value.func) in {"os.getenv", "os.environ.get"}
-        children = [(value.func, False)]
+        children = [] if expression_path(value.func) else [(value.func, False)]
         children.extend(
             (child, env_lookup and index == 0)
             for index, child in enumerate(value.args)

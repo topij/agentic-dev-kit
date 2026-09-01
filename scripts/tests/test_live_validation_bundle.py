@@ -766,6 +766,33 @@ def test_git_bound_python_source_refuses_a_static_credential_assignment(
     assert "credential-like content" in result.stderr
 
 
+def test_git_bound_python_source_refuses_a_static_credential_alias(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+        source_bytes=b'LONG_VALUE = "hunter2-secret"\ntoken = LONG_VALUE\n',
+    )
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = json.loads(
+        manifest.read_text(encoding="utf-8")
+    )["source"]["revision"]
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 2
+    assert "credential-like content" in result.stderr
+
+
 def test_git_bound_python_source_refuses_a_credential_literal_in_an_expression(
     tmp_path: Path,
 ) -> None:
@@ -3715,7 +3742,6 @@ def test_the_promoted_codex_parallel_batch_remains_independently_recomputable() 
         }
         note_path = f"notes/parallel-{lane}.md"
         assert git_lane["branch"] == descriptor["branch"]
-        assert git_lane["changed_paths"] == [f"A\t{note_path}"]
         assert git_lane["head"] == lane_heads[lane]
         assert git_lane["note_path"] == note_path
         assert git_lane["note_sha256"] == _sha(lane_root / "lane-output.md")

@@ -173,9 +173,16 @@ The next blast-radius adversarial lens at
 subscript expression could still hide a credential literal because only its slice
 was inspected. It also showed that coordinated digest updates could add a path outside
 a lane's declared footprint to the retained Git readback without failing semantic
-recomputation. The findings were accepted. Subscript scanning now inspects both value
-and slice, while the semantic control recomputes the lane commit identities, remote
-refs, note digests, and exact changed paths from the retained Git readback.
+recomputation. Subscript scanning now inspects both value and slice. The later lens at
+`52a903cdab21a965873affa93720d6f9ca61e67c` on 2026-09-01 established that exact
+path recomputation would require retained lane tree objects. That extra promotion
+claim and its copied-readback assertion were removed instead of widening the bundle;
+the semantic control continues to recompute lane commit identities, remote refs, and
+note digests.
+
+That same later lens demonstrated that a static name could hide credential material
+from the Python-source exception. The scanner now fails closed on a direct name used
+as a credential value while continuing to allow named runtime helper calls.
 
 `UV_CACHE_DIR=/private/tmp/adk-codex-parallel-20260901.xlAufG/full-test-cache uv
 run --with pytest --with pyyaml pytest scripts/tests/test_live_validation_bundle.py
