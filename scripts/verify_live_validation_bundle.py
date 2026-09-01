@@ -921,7 +921,13 @@ def _dynamic_python_literals(value: ast.expr, names: list[str]) -> list[str]:
             and literals in (["Bearer "], ["Basic "])
             and any(isinstance(part, ast.FormattedValue) for part in value.values)
         ):
-            return []
+            return [
+                literal
+                for part in value.values
+                if isinstance(part, ast.FormattedValue)
+                and not expression_path(part.value)
+                for literal in _dynamic_python_literals(part.value, names)
+            ]
         return [
             *literals,
             *(
