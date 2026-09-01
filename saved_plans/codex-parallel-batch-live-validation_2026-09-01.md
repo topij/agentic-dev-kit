@@ -127,3 +127,18 @@ The independently parameterized verifier command at
 `bf417bebff866a4fac9e34d37ea9b14047b53a9e3df61283d43709a0a601a205`. That
 snapshot is recomputed from the bundle's directory and file bytes rather than read
 from its manifest.
+
+After the accepted descriptor, review-source, and malformed-field findings were
+repaired, `UV_PYTHON=3.12
+UV_CACHE_DIR=/private/tmp/adk-codex-parallel-20260901.xlAufG/post-review-py312-cache
+UV_TOOL_DIR=/private/tmp/adk-codex-parallel-20260901.xlAufG/post-review-py312-tools
+make test` in the clean detached worktree
+`/private/tmp/adk-codex-parallel-20260901.xlAufG/final-45f8db3` at
+`45f8db3312cec3300f6dacea90b2306462cb3c93` on 2026-09-01 printed `2382 passed,
+3 warnings in 367.56s` and returned exit `0`. The warnings are pytest cleanup
+warnings for its own temporary hostile trees.
+
+The independently parameterized verifier command in that same worktree at
+`45f8db3312cec3300f6dacea90b2306462cb3c93` on 2026-09-01 returned status
+`verified` with retained snapshot SHA-256
+`990c3788d41c346ab70096f89459db4df77c5834628418b833cfa665ce9be447`.
