@@ -933,14 +933,15 @@ def _dynamic_python_literals(value: ast.expr, names: list[str]) -> list[str]:
             )
         ]
     if isinstance(value, ast.Subscript):
-        literals = _dynamic_python_literals(value.slice, names)
+        value_literals = _dynamic_python_literals(value.value, names)
+        slice_literals = _dynamic_python_literals(value.slice, names)
         if expression_path(value.value) == "os.environ":
-            return [
+            slice_literals = [
                 literal
-                for literal in literals
+                for literal in slice_literals
                 if not re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", literal)
             ]
-        return literals
+        return [*value_literals, *slice_literals]
     if isinstance(value, ast.BinOp):
         return [
             *_dynamic_python_literals(value.left, names),

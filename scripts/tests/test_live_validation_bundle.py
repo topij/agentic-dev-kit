@@ -793,6 +793,33 @@ def test_git_bound_python_source_refuses_a_credential_literal_in_an_expression(
     assert "credential-like content" in result.stderr
 
 
+def test_git_bound_python_source_refuses_a_subscripted_credential_literal(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+        source_bytes=b'token = "hunter2-secret"[::-1]\n',
+    )
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = json.loads(
+        manifest.read_text(encoding="utf-8")
+    )["source"]["revision"]
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 2
+    assert "credential-like content" in result.stderr
+
+
 def test_git_bound_python_source_refuses_a_credential_literal_in_a_callable(
     tmp_path: Path,
 ) -> None:
@@ -3626,7 +3653,9 @@ def test_the_promoted_codex_parallel_batch_remains_independently_recomputable() 
     artifacts = bundle / "artifacts"
     filesystem = json.loads((artifacts / "filesystem-readback.json").read_text())
     forge = json.loads((artifacts / "forge-readback.json").read_text())
+    git_readback = json.loads((artifacts / "git-readback.json").read_text())
     reconciliation = json.loads((artifacts / "reconciliation.json").read_text())
+    fixture_base = "f13b3e995558ee2f14b656bba2e1a0f74d2254c2"
     lane_heads = {
         "alpha": "59ad80980fb3c9d609c41c6ffc7f7fed0e12db97",
         "beta": "57e4209a79080d7605cd8e42cb53fe8bdc5d3f38",
@@ -3634,6 +3663,12 @@ def test_the_promoted_codex_parallel_batch_remains_independently_recomputable() 
     reviewed_heads = [lane_heads[lane] for lane in ("alpha", "beta")]
     assert manifest["review"]["heads"] == reviewed_heads
     assert promotion["reviewed_heads"] == reviewed_heads
+    assert git_readback["fixture_base"] == fixture_base
+    assert git_readback["remote_refs"] == {
+        "refs/heads/dev/parallel-alpha": lane_heads["alpha"],
+        "refs/heads/dev/parallel-beta": lane_heads["beta"],
+        "refs/heads/main": fixture_base,
+    }
     scopes = {"alpha": "parallel-alpha", "beta": "parallel-beta"}
     pull_requests = {"alpha": 2, "beta": 1}
     identities: dict[str, tuple[str, str]] = {}
@@ -3647,14 +3682,13 @@ def test_the_promoted_codex_parallel_batch_remains_independently_recomputable() 
         review = json.loads((lane_root / "review-receipt.json").read_text())
         refusal = json.loads((lane_root / "merge-refusal.json").read_text())
         pr = forge["pull_requests"][lane]
+        git_lane = git_readback["lanes"][lane]
         observed = filesystem["lanes"][lane]
 
         assert descriptor["scope"] == scopes[lane]
         assert descriptor["runtime"] == "codex"
         assert descriptor["merge_class"] == "operator"
-        assert descriptor["base_oid"] == descriptor["lane_oid"] == (
-            "f13b3e995558ee2f14b656bba2e1a0f74d2254c2"
-        )
+        assert descriptor["base_oid"] == descriptor["lane_oid"] == fixture_base
         assert authority == {
             "descriptor_id": descriptor["descriptor_id"],
             "descriptor_sha256": _sha(lane_root / "descriptor.json"),
@@ -3679,6 +3713,16 @@ def test_the_promoted_codex_parallel_batch_remains_independently_recomputable() 
             "merge_class": "operator",
             "scope": scopes[lane],
         }
+        note_path = f"notes/parallel-{lane}.md"
+        assert git_lane["branch"] == descriptor["branch"]
+        assert git_lane["changed_paths"] == [f"A\t{note_path}"]
+        assert git_lane["head"] == lane_heads[lane]
+        assert git_lane["note_path"] == note_path
+        assert git_lane["note_sha256"] == _sha(lane_root / "lane-output.md")
+        assert git_lane["commit_lines"][1] == f"parent {fixture_base}"
+        assert _git_oid(
+            "commit", ("\n".join(git_lane["commit_lines"]) + "\n").encode()
+        ) == lane_heads[lane]
         assert observed["descriptor_worktree"] == observed["git_top"] == (
             descriptor["worktree"]
         )

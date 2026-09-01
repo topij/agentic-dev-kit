@@ -168,6 +168,15 @@ semantic control. The findings were accepted. Environment lookup scanning now ex
 only the positional or named key argument, and the semantic control compares each
 persisted session record exactly with its lane identity and operator authority.
 
+The next blast-radius adversarial lens at
+`7c46295e73f0dd7a55bb8004ecd9e1ef681f5b15` on 2026-09-01 demonstrated that a
+subscript expression could still hide a credential literal because only its slice
+was inspected. It also showed that coordinated digest updates could add a path outside
+a lane's declared footprint to the retained Git readback without failing semantic
+recomputation. The findings were accepted. Subscript scanning now inspects both value
+and slice, while the semantic control recomputes the lane commit identities, remote
+refs, note digests, and exact changed paths from the retained Git readback.
+
 `UV_CACHE_DIR=/private/tmp/adk-codex-parallel-20260901.xlAufG/full-test-cache uv
 run --with pytest --with pyyaml pytest scripts/tests/test_live_validation_bundle.py
 -q` at `d3243e780d93078148fa890520e59247b37e2e42` on 2026-09-01 printed `211

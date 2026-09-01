@@ -269,7 +269,7 @@
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "test",
-      "sha256": "9e0341082136d84ddce633523217baacac0f5e9fa2e51f5519275234ceaa46b4"
+      "sha256": "90c3088753d18f7470977a3c82ac7fe336c492326f7136e1e29f60d522d5ce62"
     },
     "scripts/tests/test_mutation_gate.py": {
       "role": "test",
@@ -305,7 +305,7 @@
     },
     "scripts/verify_live_validation_bundle.py": {
       "role": "engine",
-      "sha256": "0a348e24af7fa87eec141c08ff90b35f99e3d9825b103b5e1bab05ee7538b13f"
+      "sha256": "bf60d05dbe12a02622287263e76081b4b0fabcf7849f328c6f7d433723fb12f4"
     }
   },
   "kit_version": 2
