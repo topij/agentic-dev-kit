@@ -96,15 +96,22 @@ and recomputes the actual EOF form while remaining backward-compatible with exis
 proofs. The regression test uses a real recomputed Git object ID rather than a mocked
 verdict.
 
+The root PR's adversarial lens then found that the first bundle had retained the old
+source-revision verifier as an execution dependency even though that verifier could
+not accept the new EOF field. The finding was accepted: the corrected bundle removes
+that file from both source ledgers and the complete claim map, while the PR-versioned
+verifier remains the promotion mechanism rather than being mislabeled as lane-run
+source.
+
 `UV_CACHE_DIR=/private/tmp/adk-codex-parallel-20260901.xlAufG/full-test-cache uv
 run --with pytest --with pyyaml pytest scripts/tests/test_live_validation_bundle.py
--q` at `3534e93e806edd605facdd3bc08fe86302fcd750` on 2026-09-01 printed `211
-passed, 3 warnings in 10.64s`. The warnings are pytest cleanup warnings for its own
+-q` at `d3243e780d93078148fa890520e59247b37e2e42` on 2026-09-01 printed `211
+passed, 3 warnings in 10.60s`. The warnings are pytest cleanup warnings for its own
 temporary hostile trees; the test command returned exit `0`.
 
 The independently parameterized verifier command at
-`3534e93e806edd605facdd3bc08fe86302fcd750` on 2026-09-01 returned status
+`d3243e780d93078148fa890520e59247b37e2e42` on 2026-09-01 returned status
 `verified` with retained snapshot SHA-256
-`abb797907e8358366bf8124d3592cf1887e990b36e333c523e58c27ea2d2d2d4`. That
+`bf417bebff866a4fac9e34d37ea9b14047b53a9e3df61283d43709a0a601a205`. That
 snapshot is recomputed from the bundle's directory and file bytes rather than read
 from its manifest.
