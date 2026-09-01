@@ -815,6 +815,25 @@ class RegistrationStatus:
 
 
 @dataclass
+class LensDefinitionStatus:
+    """One configured Claude lens definition compared with its generator.
+
+    These files are adopter-owned: the doctor may say that one no longer
+    represents the adopter's config, but it must never fold that difference into
+    kit-owned file drift or prescribe overwriting it without inspection. The
+    generator is the authority because it is also the documented regeneration
+    route; duplicating its renderer here would create a second definition of
+    "current" that could itself drift.
+    """
+
+    runtime: str
+    lens: str
+    surface: str
+    state: str
+    detail: str = ""
+
+
+@dataclass
 class Report:
     kit_version_config: int | None
     kit_version_manifest: int | None
@@ -865,6 +884,7 @@ class Report:
     # it — so the third state arrives beside it rather than inside it.
     hooks_state: str = "not-installed"
     registrations: list[RegistrationStatus] = field(default_factory=list)
+    lens_definitions: list[LensDefinitionStatus] = field(default_factory=list)
     files: list[FileStatus] = field(default_factory=list)
 
     @property
@@ -2384,6 +2404,142 @@ def _drift_state(actual: str, expected: str, recorded: str | None) -> tuple[str,
     )
 
 
+def inspect_lens_definitions(
+    root: Path, config: dict, engines_dir: str
+) -> list[LensDefinitionStatus]:
+    """Compare configured Claude agent definitions with generator output.
+
+    The installed generator is invoked rather than imported. A sized-down
+    adoption may omit it, and importing a sibling at module load would make the
+    entire doctor unavailable in exactly that supported state. Invocation also
+    keeps the comparison honest when ``paths.engines`` is remapped: the bytes are
+    produced by the generator this adopter would actually run, from this
+    adopter's merged config.
+
+    Every non-current state is advisory. ``init.sh`` seeds these files only when
+    absent and never owns them afterwards, and the kit supports an adopter that
+    has not wired one runtime. A warning makes the parity gap visible without
+    turning that supported choice into a permanently failing doctor gate.
+    """
+    raw_roster = get(config, "review.fallback_panel.lenses", [])
+    if raw_roster in (None, []):
+        return []
+    config_surface = "review.fallback_panel.lenses"
+    if not isinstance(raw_roster, list):
+        return [
+            LensDefinitionStatus(
+                "claude",
+                "",
+                config_surface,
+                "unverifiable",
+                "configured roster is not a list, so no definition can be rendered",
+            )
+        ]
+
+    names: list[str] = []
+    for entry in raw_roster:
+        if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
+            return [
+                LensDefinitionStatus(
+                    "claude",
+                    "",
+                    config_surface,
+                    "unverifiable",
+                    "a roster entry has no string name, so the generator cannot render it",
+                )
+            ]
+        name = entry["name"]
+        if name not in names:
+            names.append(name)
+
+    generator_rel = f"{engines_dir}/panel_prompt.py"
+    generator = root / generator_rel
+    if not generator.is_file():
+        return [
+            LensDefinitionStatus(
+                "claude",
+                name,
+                config_surface,
+                "unverifiable",
+                f"{generator_rel} is not installed, so expected bytes cannot be rendered",
+            )
+            for name in names
+        ]
+
+    statuses: list[LensDefinitionStatus] = []
+    for name in names:
+        command = [
+            sys.executable,
+            str(generator),
+            "--root",
+            str(root),
+            "--lens",
+            name,
+            "--runtime",
+            "claude",
+            "--agent-definition",
+        ]
+        try:
+            generated = subprocess.run(
+                command,
+                cwd=root,
+                capture_output=True,
+                check=False,
+                timeout=10,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            statuses.append(
+                LensDefinitionStatus(
+                    "claude",
+                    name,
+                    config_surface,
+                    "unverifiable",
+                    f"generator could not run: {exc}",
+                )
+            )
+            continue
+        if generated.returncode != 0:
+            error = generated.stderr.decode("utf-8", "replace").strip()
+            statuses.append(
+                LensDefinitionStatus(
+                    "claude",
+                    name,
+                    config_surface,
+                    "unverifiable",
+                    error or f"generator exited {generated.returncode}",
+                )
+            )
+            continue
+
+        # Successful generation validates the name as a filename slug before it
+        # emits bytes, so only then is it safe to construct the adopter path.
+        rel = f".claude/agents/{name}.md"
+        target = root / rel
+        if not target.is_file():
+            detail = (
+                "not a regular file"
+                if target.exists() or target.is_symlink()
+                else "not present"
+            )
+            statuses.append(LensDefinitionStatus("claude", name, rel, "missing", detail))
+            continue
+        try:
+            actual = target.read_bytes()
+        except OSError as exc:
+            statuses.append(
+                LensDefinitionStatus("claude", name, rel, "unreadable", str(exc))
+            )
+            continue
+        state = "current" if actual == generated.stdout else "stale"
+        detail = (
+            "matches generator output"
+            if state == "current"
+            else "differs from generator output"
+        )
+        statuses.append(LensDefinitionStatus("claude", name, rel, state, detail))
+    return statuses
+
+
 def inspect(
     root: Path,
     manifest: dict,
@@ -2596,6 +2752,7 @@ def inspect(
         hooks_installed=hooks_installed,
         hooks_state=hooks_state,
         registrations=inspect_registrations(root, engines_dir),
+        lens_definitions=inspect_lens_definitions(root, config, engines_dir),
         narrative_rendered=narrative,
         baseline_trusted=trusted,
         declared_scope_known=declared_scope is not None,
@@ -2787,6 +2944,25 @@ def render(report: Report) -> str:
         lines.append(
             "    (the cockpit allow-list is hand-written — ./init.sh prints the "
             "rule for your engines dir; this check never writes it)"
+        )
+    for definition in report.lens_definitions:
+        mark, text = {
+            "current": ("✓", definition.detail),
+            "missing": ("⚠", f"{definition.detail} — generate it before the next session"),
+            "stale": ("⚠", f"{definition.detail} — inspect and regenerate it"),
+            "unreadable": ("⚠", f"unreadable — {definition.detail}"),
+            "unverifiable": ("⚠", f"not checkable — {definition.detail}"),
+        }.get(definition.state, ("⚠", definition.state))
+        lens = f" lens={definition.lens}" if definition.lens else ""
+        lines.append(
+            f"  {mark} {definition.surface} [{definition.runtime}{lens}]: {text}"
+        )
+    if any(definition.state != "current" for definition in report.lens_definitions):
+        lines.append(
+            f"    (lens definitions are adopter-owned — regenerate with "
+            f"uv run {report.engines_dir}/panel_prompt.py --lens <name> "
+            "--agent-definition; "
+            "this check never writes them)"
         )
     for doc, rendered in report.narrative_rendered.items():
         # An entry point that is still the KIT's own is a different fact from a
@@ -3579,6 +3755,20 @@ def main(argv: list[str] | None = None) -> int:
                             "detail": r.detail,
                         }
                         for r in report.registrations
+                    ],
+                    # #255. These files are adopter-owned and therefore cannot
+                    # appear on the manifest-backed `files` axis. Their state is
+                    # derived from the configured roster and the installed
+                    # generator, and remains advisory rather than an exit gate.
+                    "lens_definitions": [
+                        {
+                            "runtime": d.runtime,
+                            "lens": d.lens,
+                            "surface": d.surface,
+                            "state": d.state,
+                            "detail": d.detail,
+                        }
+                        for d in report.lens_definitions
                     ],
                     "narrative_rendered": report.narrative_rendered,
                     # Both emitted, because a consumer cannot derive either from

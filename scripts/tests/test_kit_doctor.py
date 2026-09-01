@@ -38,6 +38,7 @@ sys.path.insert(0, str(ENGINE_DIR))
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
 import kit_doctor  # noqa: E402
+import panel_prompt  # noqa: E402
 import run_installed_tests  # noqa: E402
 import runtime_adapters  # noqa: E402
 
@@ -72,6 +73,119 @@ def _manifest(entries: dict[str, str | None], version: int = 2) -> dict:
         "kit_version": version,
         "files": {p: {"sha256": h, "role": "engine"} for p, h in entries.items()},
     }
+
+
+def _lens_repo(tmp_path: Path, *, engines: str = "scripts") -> Path:
+    root = _fake_repo(tmp_path, engines=engines)
+    _write(
+        root / "config" / "dev-model.yaml",
+        f"""kit:
+  version: 2
+paths:
+  handoff: docs/handoff.md
+  friction_log: docs/friction-log.md
+  engines: {engines}
+review:
+  fallback_panel:
+    lenses:
+      - name: adversarial
+        focus: Try to prove the change wrong.
+    lens_compute:
+      claude:
+        model: sonnet
+        effort: high
+""",
+    )
+    engine = root / engines
+    shutil.copy2(ENGINE_DIR / "panel_prompt.py", engine / "panel_prompt.py")
+    shutil.copytree(ENGINE_DIR / "lib", engine / "lib")
+    return root
+
+
+@pytest.mark.parametrize("engines", ["scripts", "scripts/devkit"])
+def test_lens_definition_inspection_reports_missing_current_and_stale(tmp_path, engines):
+    root = _lens_repo(tmp_path, engines=engines)
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+
+    missing = kit_doctor.inspect_lens_definitions(root, config, engines)
+    assert [(item.lens, item.state) for item in missing] == [("adversarial", "missing")]
+
+    definition = root / ".claude" / "agents" / "adversarial.md"
+    _write(definition, panel_prompt.agent_definition(root, "adversarial", "claude"))
+    current = kit_doctor.inspect_lens_definitions(root, config, engines)
+    assert [(item.lens, item.state) for item in current] == [("adversarial", "current")]
+
+    definition.write_text(
+        definition.read_text(encoding="utf-8") + "Hand edit.\n", encoding="utf-8"
+    )
+    stale = kit_doctor.inspect_lens_definitions(root, config, engines)
+    assert [(item.lens, item.state) for item in stale] == [("adversarial", "stale")]
+    rendered = kit_doctor.render(
+        kit_doctor.Report(
+            kit_version_config=2,
+            kit_version_manifest=2,
+            engines_dir=engines,
+            engines_dir_ok=True,
+            hooks_installed=True,
+            narrative_rendered={},
+            lens_definitions=stale,
+        )
+    )
+    assert "inspect and regenerate it" in rendered
+    assert "this check never writes them" in rendered
+
+
+def test_a_configured_compute_change_makes_the_definition_stale(tmp_path):
+    root = _lens_repo(tmp_path)
+    definition = root / ".claude" / "agents" / "adversarial.md"
+    _write(definition, panel_prompt.agent_definition(root, "adversarial", "claude"))
+    config_path = root / "config" / "dev-model.yaml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8").replace("model: sonnet", "model: opus"),
+        encoding="utf-8",
+    )
+    config = kit_doctor.load_config(config_path)
+
+    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
+
+    assert [(item.lens, item.state) for item in statuses] == [("adversarial", "stale")]
+
+
+def test_a_missing_lens_generator_is_reported_without_aborting(tmp_path):
+    root = _lens_repo(tmp_path)
+    (root / "scripts" / "panel_prompt.py").unlink()
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+
+    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
+
+    assert [(item.lens, item.state) for item in statuses] == [
+        ("adversarial", "unverifiable")
+    ]
+    assert "is not installed" in statuses[0].detail
+
+
+def test_json_reports_missing_lens_definitions_as_advisory(tmp_path, capsys):
+    root = _lens_repo(tmp_path)
+    manifest_path = tmp_path / "comparison.json"
+    manifest_path.write_text(
+        json.dumps(kit_doctor.generate_manifest(root, 2)), encoding="utf-8"
+    )
+
+    code = kit_doctor.main(
+        ["--json", "--root", str(root), "--manifest", str(manifest_path)]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert code == 0
+    assert payload["lens_definitions"] == [
+        {
+            "runtime": "claude",
+            "lens": "adversarial",
+            "surface": ".claude/agents/adversarial.md",
+            "state": "missing",
+            "detail": "not present",
+        }
+    ]
 
 
 def test_shipped_runtime_adapters_equal_the_renderer_for_both_runtimes():
