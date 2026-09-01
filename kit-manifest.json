@@ -32,11 +32,11 @@
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "doctrine",
-      "sha256": "7def2b9351b96c5c704abe9bc4bcaebeadbdbb62e10307038b3af86d13d0d11f"
+      "sha256": "4d9072247f215b3dd61883cf4a6ab11bb353a909fe9bb4569505670e92cb0f6b"
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
-      "sha256": "6a41f5b08e5add3528f124f6ab78332c3af45087cd726f40badf1448bdc13fde"
+      "sha256": "c94c57d7e2f38d406496b3cc0cadfa77b072401d56a1122ca204325adeb8880f"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
@@ -269,7 +269,7 @@
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "test",
-      "sha256": "9812167da615adcbc560a8e2fa3fea2481f680c2675df66f742c92bb8ba32ddb"
+      "sha256": "c84db1469e363628bbaac15cb0f7412e23a8240532ec003901ac2c039b4442c7"
     },
     "scripts/tests/test_mutation_gate.py": {
       "role": "test",
@@ -305,7 +305,7 @@
     },
     "scripts/verify_live_validation_bundle.py": {
       "role": "engine",
-      "sha256": "1940ef1de9ac493edb4d19580c8c2c644d9a5acbdf634cb717c5ca43745f455e"
+      "sha256": "99dee623c937cd6374b978fd77ac3dbd582ab759bc79b26e91e697cfb329b494"
     }
   },
   "kit_version": 2

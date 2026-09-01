@@ -1,0 +1,70 @@
+{
+  "pull_requests": {
+    "alpha": {
+      "base": "main",
+      "comments": [
+        {
+          "author": "topij",
+          "body": "Panel disposition: acknowledged as record-prose imprecision below HIGH, not a regression. `notes/parallel-alpha.md` is only the lane-output marker; the retained descriptor, `.devkit_state_root`, launcher receipt, and cockpit filesystem read-backs\u2014not this note alone\u2014will substantiate the disjoint worktree/state-root claim. This fixture change has no executed behavior and is outside the safety-critical paths. No fix commit is made, so the reviewed head remains unchanged. This pull request remains open and unmerged.",
+          "created_at": "2026-09-01T15:05:07Z",
+          "url": "https://github.com/topij/adk-codex-parallel-evidence-20260901/pull/2#issuecomment-5496011520"
+        }
+      ],
+      "commits": [
+        {
+          "headline": "test fixture: add parallel alpha evidence note",
+          "oid": "59ad80980fb3c9d609c41c6ffc7f7fed0e12db97"
+        }
+      ],
+      "files": [
+        {
+          "additions": 5,
+          "change_type": "ADDED",
+          "deletions": 0,
+          "path": "notes/parallel-alpha.md"
+        }
+      ],
+      "head": "dev/parallel-alpha",
+      "head_oid": "59ad80980fb3c9d609c41c6ffc7f7fed0e12db97",
+      "is_draft": false,
+      "merge_commit": null,
+      "merge_state": "CLEAN",
+      "number": 2,
+      "state": "OPEN",
+      "url": "https://github.com/topij/adk-codex-parallel-evidence-20260901/pull/2"
+    },
+    "beta": {
+      "base": "main",
+      "comments": [],
+      "commits": [
+        {
+          "headline": "test fixture: add parallel beta evidence note",
+          "oid": "57e4209a79080d7605cd8e42cb53fe8bdc5d3f38"
+        }
+      ],
+      "files": [
+        {
+          "additions": 5,
+          "change_type": "ADDED",
+          "deletions": 0,
+          "path": "notes/parallel-beta.md"
+        }
+      ],
+      "head": "dev/parallel-beta",
+      "head_oid": "57e4209a79080d7605cd8e42cb53fe8bdc5d3f38",
+      "is_draft": false,
+      "merge_commit": null,
+      "merge_state": "CLEAN",
+      "number": 1,
+      "state": "OPEN",
+      "url": "https://github.com/topij/adk-codex-parallel-evidence-20260901/pull/1"
+    }
+  },
+  "repository": {
+    "default_branch": "main",
+    "is_private": true,
+    "name": "topij/adk-codex-parallel-evidence-20260901",
+    "url": "https://github.com/topij/adk-codex-parallel-evidence-20260901",
+    "visibility": "PRIVATE"
+  }
+}

@@ -34,7 +34,7 @@ historical observation it was and is not silently refreshed.
   `wrap-up`. PR `#599` merged the config-owned draft/approve/finalize matrix and the
   independently observed forge-provenance chain for `triage-friction-log`, closing the
   remaining structural exit.
-- [ ] **Phase 4 — Make delegation and parallel lanes equivalent.** PR `#598` delivered
+- [x] **Phase 4 — Make delegation and parallel lanes equivalent.** PR `#598` delivered
   the kit-owned engine boundary; PR `#609` delivered the Codex wrapper, its live record,
   and the declared Claude gap; PR `#611` generalised the wrapper to Claude
   (`claude -p`) with a Claude-produced live record and moved the parity row's Claude
@@ -123,6 +123,13 @@ historical observation it was and is not silently refreshed.
      retained, independently recomputable Codex parallel-batch run that demonstrates
      disjoint worktree and state-root identities, exact-head review evidence, and
      operator merge authority without merging.
+  7. Done in PR `#659`: the Codex-produced parallel batch retains both descriptor and
+     launcher identity chains, independent filesystem and Git read-backs, both exact
+     reviewed heads and dual-lens receipts, operator merge refusals, reconciliation's
+     held outcome, final open/unmerged forge state, exact source bytes and Git-object
+     proofs, and a complete external path/provenance/digest control. The promoted
+     claims and caveats are in
+     [`codex-parallel-batch-live-validation_2026-09-01.md`](codex-parallel-batch-live-validation_2026-09-01.md).
 - [ ] **Phase 5 — Align permissions, installation, and upgrades.** Merged deliveries
   now include PR `#632` for the measured Claude lane policy and permanent adapter-write
   asymmetry; PR `#635` for generated adapter refresh plus manifest-selected installed

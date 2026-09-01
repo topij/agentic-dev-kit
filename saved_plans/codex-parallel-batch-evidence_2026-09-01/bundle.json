@@ -1,0 +1,607 @@
+{
+  "artifacts": [
+    {
+      "capture_request": "/opt/homebrew/bin/codex --version",
+      "captured_on": "2026-09-01",
+      "kind": "command-capture",
+      "observer": "codex-cli",
+      "path": "artifacts/client-version.txt",
+      "sha256": "ca4fe30a68dd82c6a7af75eeb683f763cfb6554840590a9e345692269ae744f0"
+    },
+    {
+      "capture_request": "git object readback and SHA-256 of each execution source path enumerated in artifacts/execution-source-digests.txt at f13b3e995558ee2f14b656bba2e1a0f74d2254c2",
+      "captured_on": "2026-09-01",
+      "kind": "source-digest",
+      "observer": "synthetic-git-object-readback",
+      "path": "artifacts/execution-source-digests.txt",
+      "sha256": "b90a9a859019f5c4a96303fe3b19018db3423eac172708ca4a1ccda90ab4f763"
+    },
+    {
+      "capture_request": "cockpit readback of both descriptor-bound worktrees and state roots",
+      "captured_on": "2026-09-01",
+      "kind": "filesystem-readback",
+      "observer": "cockpit-filesystem-readback",
+      "path": "artifacts/filesystem-readback.json",
+      "sha256": "8d07c39063b7cb5d61ae7c037341f9111616b08e2132fd853529ebf66bb909a3"
+    },
+    {
+      "capture_request": "git cat-file commit and tree-object readback for f13b3e995558ee2f14b656bba2e1a0f74d2254c2",
+      "captured_on": "2026-09-01",
+      "kind": "source-git-proof",
+      "observer": "synthetic-git-object-readback",
+      "path": "artifacts/fixture-proof.json",
+      "sha256": "a7dd5692909fd451461050edaf69e39a9987336266999ffdf981820775b34e3f"
+    },
+    {
+      "capture_request": "git show f13b3e995558ee2f14b656bba2e1a0f74d2254c2:config/dev-model.yaml",
+      "captured_on": "2026-09-01",
+      "kind": "source-file",
+      "observer": "retained-synthetic-git-object-bytes",
+      "path": "artifacts/fixture/config/dev-model.yaml",
+      "sha256": "228eb2ff7d4ee0524b862867fbb23b1b9b92e5f1287ee30e037f73bce26821a1"
+    },
+    {
+      "capture_request": "gh repo view topij/adk-codex-parallel-evidence-20260901; gh pr view 1 and 2 with state, draft, merge, head, base, commits, files, comments",
+      "captured_on": "2026-09-01",
+      "kind": "forge-readback",
+      "observer": "github-api",
+      "path": "artifacts/forge-readback.json",
+      "sha256": "c30c49bbac557ff51e6c29c218ba023aaf1b5dbb29e1f857d2a87bfe9a1e1630"
+    },
+    {
+      "capture_request": "git ls-remote origin refs/heads/main refs/heads/dev/parallel-alpha refs/heads/dev/parallel-beta; git diff-tree and git cat-file for both heads",
+      "captured_on": "2026-09-01",
+      "kind": "git-readback",
+      "observer": "git-remote-and-object-readback",
+      "path": "artifacts/git-readback.json",
+      "sha256": "c4a29b418103798adf4bc84350157de9f9d2ba1c3ec88ca43c70182ec0f835b7"
+    },
+    {
+      "capture_request": "scripts/dev_session.sh new parallel-alpha --headless --runtime codex --merge-class operator",
+      "captured_on": "2026-09-01",
+      "kind": "descriptor",
+      "observer": "dev-session-durable-descriptor",
+      "path": "artifacts/lanes/alpha/descriptor.json",
+      "sha256": "dc6d5c5fa06139c2d28c310b299af5b13fde9b4762a4ef02fafeca578c37a213"
+    },
+    {
+      "capture_request": "scripts/launch_lane.py final-message readback for 71b0b7c6-53b3-468d-b009-61bf6ca99eb6",
+      "captured_on": "2026-09-01",
+      "kind": "final-message",
+      "observer": "codex-last-message-file",
+      "path": "artifacts/lanes/alpha/final-message.txt",
+      "sha256": "ca3d3631a3188c90866d623c8266c21a488f20f1f643c02873824281dc7f07ab"
+    },
+    {
+      "capture_request": "git show 59ad80980fb3c9d609c41c6ffc7f7fed0e12db97:notes/parallel-alpha.md",
+      "captured_on": "2026-09-01",
+      "kind": "git-readback",
+      "observer": "fixture-git-object-readback",
+      "path": "artifacts/lanes/alpha/lane-output.md",
+      "sha256": "c9e9523c9ce0d47d70d02830fa9febe62b6c1131c3ae6276ac8c8db808ae5bfb"
+    },
+    {
+      "capture_request": "launch attempt readback for descriptor 71b0b7c6-53b3-468d-b009-61bf6ca99eb6",
+      "captured_on": "2026-09-01",
+      "kind": "command-capture",
+      "observer": "launch-lane-exclusive-attempt",
+      "path": "artifacts/lanes/alpha/launch-attempt.json",
+      "sha256": "256f8499b1284292e9eb5ab3c47308234a2a130a9087dcdea04b77c2075de69f"
+    },
+    {
+      "capture_request": "launch authority readback for descriptor 71b0b7c6-53b3-468d-b009-61bf6ca99eb6",
+      "captured_on": "2026-09-01",
+      "kind": "command-capture",
+      "observer": "launch-lane-authority-seal",
+      "path": "artifacts/lanes/alpha/launch-authority.json",
+      "sha256": "c8e0cf786e98a831c0083f14846eb8cbf6feafbb249fcec8ca7601c4201a7726"
+    },
+    {
+      "capture_request": "launch_lane receipt readback for descriptor 71b0b7c6-53b3-468d-b009-61bf6ca99eb6",
+      "captured_on": "2026-09-01",
+      "kind": "launcher-receipt",
+      "observer": "launch-lane-receipt",
+      "path": "artifacts/lanes/alpha/launcher-receipt.json",
+      "sha256": "5f1df7ddca29b6b89af83e75da919c4e705492224ced991fbdd57dcb6683c71c"
+    },
+    {
+      "capture_request": "scripts/dev_session.sh merge parallel-alpha",
+      "captured_on": "2026-09-01",
+      "kind": "command-capture",
+      "observer": "dev-session-merge-class-gate",
+      "path": "artifacts/lanes/alpha/merge-refusal.json",
+      "sha256": "7e6bac4ced77961a68cd568bcdf4cc885746c6478ea086b514adbfa3d3d2e4f1"
+    },
+    {
+      "capture_request": "scripts/dev_session.sh pr-watch parallel-alpha --json --no-persist",
+      "captured_on": "2026-09-01",
+      "kind": "review-receipt",
+      "observer": "scope-pr-watch-state-and-forge-readback",
+      "path": "artifacts/lanes/alpha/review-receipt.json",
+      "sha256": "99a986092773317ecb5cb856f65de495ee7dfd3091578fa869807028594278fc"
+    },
+    {
+      "capture_request": "read parallel-alpha base, branch, and merge_class session files",
+      "captured_on": "2026-09-01",
+      "kind": "filesystem-readback",
+      "observer": "cockpit-session-metadata-readback",
+      "path": "artifacts/lanes/alpha/session-metadata.json",
+      "sha256": "cd7144eb0743721ad099e46bebe62bb9789fff060624b7491ca445c6b9726d30"
+    },
+    {
+      "capture_request": "read parallel-alpha worktree .devkit_state_root",
+      "captured_on": "2026-09-01",
+      "kind": "filesystem-readback",
+      "observer": "cockpit-worktree-marker-readback",
+      "path": "artifacts/lanes/alpha/state-root-marker.txt",
+      "sha256": "859fc0da899c61c3272f2bb4a907cbeb0cb35ae6dc19333fe884484f45ddc8e7"
+    },
+    {
+      "capture_request": "cockpit task prompt supplied to descriptor 71b0b7c6-53b3-468d-b009-61bf6ca99eb6",
+      "captured_on": "2026-09-01",
+      "kind": "command-capture",
+      "observer": "cockpit-task-prompt",
+      "path": "artifacts/lanes/alpha/task-prompt.md",
+      "sha256": "f7d8c2f30cca7a4ac191ccf9322313204a8db1bad150f5274bd7cb31e6f000df"
+    },
+    {
+      "capture_request": "scripts/dev_session.sh new parallel-beta --headless --runtime codex --merge-class operator",
+      "captured_on": "2026-09-01",
+      "kind": "descriptor",
+      "observer": "dev-session-durable-descriptor",
+      "path": "artifacts/lanes/beta/descriptor.json",
+      "sha256": "60d9c11486418b0ec8015d2e28ad4b142eaf3d4eef363674ccaeabb216601371"
+    },
+    {
+      "capture_request": "scripts/launch_lane.py final-message readback for f12df437-e875-41d1-9a5f-e2355b9d53e3",
+      "captured_on": "2026-09-01",
+      "kind": "final-message",
+      "observer": "codex-last-message-file",
+      "path": "artifacts/lanes/beta/final-message.txt",
+      "sha256": "d7eaef338c6d0cec6644ee524c423db289671b87696087d5558a7cbb0fbfab68"
+    },
+    {
+      "capture_request": "git show 57e4209a79080d7605cd8e42cb53fe8bdc5d3f38:notes/parallel-beta.md",
+      "captured_on": "2026-09-01",
+      "kind": "git-readback",
+      "observer": "fixture-git-object-readback",
+      "path": "artifacts/lanes/beta/lane-output.md",
+      "sha256": "9463c5b0e8de96005b6f98574ece35e01195a2626560dad3233b096db4545beb"
+    },
+    {
+      "capture_request": "launch attempt readback for descriptor f12df437-e875-41d1-9a5f-e2355b9d53e3",
+      "captured_on": "2026-09-01",
+      "kind": "command-capture",
+      "observer": "launch-lane-exclusive-attempt",
+      "path": "artifacts/lanes/beta/launch-attempt.json",
+      "sha256": "2b220665244ac11031fb5c18e636105e666cb765665c1de9c62614328a5138b8"
+    },
+    {
+      "capture_request": "launch authority readback for descriptor f12df437-e875-41d1-9a5f-e2355b9d53e3",
+      "captured_on": "2026-09-01",
+      "kind": "command-capture",
+      "observer": "launch-lane-authority-seal",
+      "path": "artifacts/lanes/beta/launch-authority.json",
+      "sha256": "fff7fbc2e1d42f8050e257c17310710d0190ec1f085b40a4b842e20d71fd77ff"
+    },
+    {
+      "capture_request": "launch_lane receipt readback for descriptor f12df437-e875-41d1-9a5f-e2355b9d53e3",
+      "captured_on": "2026-09-01",
+      "kind": "launcher-receipt",
+      "observer": "launch-lane-receipt",
+      "path": "artifacts/lanes/beta/launcher-receipt.json",
+      "sha256": "d1d209efd71752e7a896c892146a81d045b657438d5eb5ef89353c4f08ad8e30"
+    },
+    {
+      "capture_request": "scripts/dev_session.sh merge parallel-beta",
+      "captured_on": "2026-09-01",
+      "kind": "command-capture",
+      "observer": "dev-session-merge-class-gate",
+      "path": "artifacts/lanes/beta/merge-refusal.json",
+      "sha256": "5612c577176f0af7e1dd20a3a3342de185f10c84e3ca60606f50524604ebe7c9"
+    },
+    {
+      "capture_request": "scripts/dev_session.sh pr-watch parallel-beta --json --no-persist",
+      "captured_on": "2026-09-01",
+      "kind": "review-receipt",
+      "observer": "scope-pr-watch-state-and-forge-readback",
+      "path": "artifacts/lanes/beta/review-receipt.json",
+      "sha256": "b768359c7ad1a9369ef2e64327d760feb6a50a7c29300f9a0ae0b74887374908"
+    },
+    {
+      "capture_request": "read parallel-beta base, branch, and merge_class session files",
+      "captured_on": "2026-09-01",
+      "kind": "filesystem-readback",
+      "observer": "cockpit-session-metadata-readback",
+      "path": "artifacts/lanes/beta/session-metadata.json",
+      "sha256": "95fbae93e1889b67ae354359a5d17b661def82c230a3442888082cd140c31386"
+    },
+    {
+      "capture_request": "read parallel-beta worktree .devkit_state_root",
+      "captured_on": "2026-09-01",
+      "kind": "filesystem-readback",
+      "observer": "cockpit-worktree-marker-readback",
+      "path": "artifacts/lanes/beta/state-root-marker.txt",
+      "sha256": "f98f8dcc5ee0a60f8b2b70dbe34cdfa940080a69475132e93d830ccb1a4300d9"
+    },
+    {
+      "capture_request": "cockpit task prompt supplied to descriptor f12df437-e875-41d1-9a5f-e2355b9d53e3",
+      "captured_on": "2026-09-01",
+      "kind": "command-capture",
+      "observer": "cockpit-task-prompt",
+      "path": "artifacts/lanes/beta/task-prompt.md",
+      "sha256": "97d7ffcf7897d09f3140e17002cf4cd295b280ab49ce5578a7abda417b034458"
+    },
+    {
+      "capture_request": "scripts/reconcile_sessions.sh parallel-alpha parallel-beta",
+      "captured_on": "2026-09-01",
+      "kind": "command-capture",
+      "observer": "reconcile-sessions-batch-readback",
+      "path": "artifacts/reconciliation.json",
+      "sha256": "d0eea5a439ec45fea4c977f5a9ec2d5cb3bd37e1cff5dad91e98309c00f8340f"
+    },
+    {
+      "capture_request": "uv run scripts/panel_prompt.py --runtime codex --lens adversarial --head 59ad80980fb3c9d609c41c6ffc7f7fed0e12db97 --branch dev/parallel-alpha",
+      "captured_on": "2026-09-01",
+      "kind": "command-capture",
+      "observer": "panel-prompt-render",
+      "path": "artifacts/reviews/alpha/adversarial-prompt.txt",
+      "sha256": "f4539e7cba92226ead4adc05420bf245c5fb9e930f352d69c638264fb67b0437"
+    },
+    {
+      "capture_request": "codex exec exact-head adversarial lens for parallel-alpha",
+      "captured_on": "2026-09-01",
+      "kind": "review-receipt",
+      "observer": "independent-codex-review-lens",
+      "path": "artifacts/reviews/alpha/adversarial-report.md",
+      "sha256": "60721e47fabb80bf8c8dd75682e17e96d4c1ad94db760ff360060ee64d061aa5"
+    },
+    {
+      "capture_request": "fresh persistent codex exec run for parallel-alpha adversarial",
+      "captured_on": "2026-09-01",
+      "kind": "command-capture",
+      "observer": "codex-exec-run-record",
+      "path": "artifacts/reviews/alpha/adversarial-run.json",
+      "sha256": "03b80ea2d61a81cfbf80cc2226441df8acc4ae031f6cd5789f514caaffef0c25"
+    },
+    {
+      "capture_request": "uv run scripts/panel_prompt.py --runtime codex --lens correctness --head 59ad80980fb3c9d609c41c6ffc7f7fed0e12db97 --branch dev/parallel-alpha",
+      "captured_on": "2026-09-01",
+      "kind": "command-capture",
+      "observer": "panel-prompt-render",
+      "path": "artifacts/reviews/alpha/correctness-prompt.txt",
+      "sha256": "e90b78b8e283357b905d819acf9300ad1538b5f4e6d2a16e3d88259a851dc99c"
+    },
+    {
+      "capture_request": "codex exec exact-head correctness lens for parallel-alpha",
+      "captured_on": "2026-09-01",
+      "kind": "review-receipt",
+      "observer": "independent-codex-review-lens",
+      "path": "artifacts/reviews/alpha/correctness-report.md",
+      "sha256": "13ac78cd9b97c41f53b6438111ac6dd63bc650474779c6b7f434df78f30c3c0c"
+    },
+    {
+      "capture_request": "fresh persistent codex exec run for parallel-alpha correctness",
+      "captured_on": "2026-09-01",
+      "kind": "command-capture",
+      "observer": "codex-exec-run-record",
+      "path": "artifacts/reviews/alpha/correctness-run.json",
+      "sha256": "b64abe9d0172b45dc1cd53122775be9f8579422b21964e0286c72ea649d82ae3"
+    },
+    {
+      "capture_request": "uv run scripts/panel_prompt.py --runtime codex --lens adversarial --head 57e4209a79080d7605cd8e42cb53fe8bdc5d3f38 --branch dev/parallel-beta",
+      "captured_on": "2026-09-01",
+      "kind": "command-capture",
+      "observer": "panel-prompt-render",
+      "path": "artifacts/reviews/beta/adversarial-prompt.txt",
+      "sha256": "4fede5c71518d2244a5772ab6c91a44b3ce89fb484bd8bd623dc94b232204d06"
+    },
+    {
+      "capture_request": "codex exec exact-head adversarial lens for parallel-beta",
+      "captured_on": "2026-09-01",
+      "kind": "review-receipt",
+      "observer": "independent-codex-review-lens",
+      "path": "artifacts/reviews/beta/adversarial-report.md",
+      "sha256": "79dba2b00b15a4cb552e9287c00351d3b699cfa291fd5c8fcd0ef130f39915d2"
+    },
+    {
+      "capture_request": "fresh persistent codex exec run for parallel-beta adversarial",
+      "captured_on": "2026-09-01",
+      "kind": "command-capture",
+      "observer": "codex-exec-run-record",
+      "path": "artifacts/reviews/beta/adversarial-run.json",
+      "sha256": "98d7241fe8397fc0dab754b3e5e0b7065f0116235052775a67baec83d6624d92"
+    },
+    {
+      "capture_request": "uv run scripts/panel_prompt.py --runtime codex --lens correctness --head 57e4209a79080d7605cd8e42cb53fe8bdc5d3f38 --branch dev/parallel-beta",
+      "captured_on": "2026-09-01",
+      "kind": "command-capture",
+      "observer": "panel-prompt-render",
+      "path": "artifacts/reviews/beta/correctness-prompt.txt",
+      "sha256": "fcd856e83b0f7d4d469f364250562f8ce517d17b0dbccdfe17e2c7a9f08ff9da"
+    },
+    {
+      "capture_request": "codex exec exact-head correctness lens for parallel-beta",
+      "captured_on": "2026-09-01",
+      "kind": "review-receipt",
+      "observer": "independent-codex-review-lens",
+      "path": "artifacts/reviews/beta/correctness-report.md",
+      "sha256": "ab3596e531b8d79495d3abcad6d2e26cf66258b750114eeca8497403dfad6a50"
+    },
+    {
+      "capture_request": "fresh persistent codex exec run for parallel-beta correctness",
+      "captured_on": "2026-09-01",
+      "kind": "command-capture",
+      "observer": "codex-exec-run-record",
+      "path": "artifacts/reviews/beta/correctness-run.json",
+      "sha256": "1dd413fb24fa0da4cf3cc0fa615f0f51b15c042b6533a46d2ce1a02796c6328c"
+    },
+    {
+      "capture_request": "git object readback and SHA-256 of each source path enumerated in artifacts/source-digests.txt at 6679856f7c9f14eac921f3b033c0077729bb17e1",
+      "captured_on": "2026-09-01",
+      "kind": "source-digest",
+      "observer": "git-object-source-readback",
+      "path": "artifacts/source-digests.txt",
+      "sha256": "895b6a1a4c49cfb82035983b31676f8f3c8320c0e7e0c70f91389bd472f3fad9"
+    },
+    {
+      "capture_request": "git cat-file commit and tree-object readback for 6679856f7c9f14eac921f3b033c0077729bb17e1",
+      "captured_on": "2026-09-01",
+      "kind": "source-git-proof",
+      "observer": "git-object-source-readback",
+      "path": "artifacts/source-proof.json",
+      "sha256": "42554ad56787ad242d0bb1af3f3b18a1f4cabc52bef54efb81575bb4f7ec8297"
+    },
+    {
+      "capture_request": "git show 6679856f7c9f14eac921f3b033c0077729bb17e1:config/dev-model.yaml",
+      "captured_on": "2026-09-01",
+      "kind": "source-file",
+      "observer": "retained-git-object-bytes",
+      "path": "artifacts/source/config/dev-model.yaml",
+      "sha256": "7c626b397eb47d3162af78ed9b9288f9f4511c8180fab52e0b0c903cb7570710"
+    },
+    {
+      "capture_request": "git show 6679856f7c9f14eac921f3b033c0077729bb17e1:scripts/dev_session.sh",
+      "captured_on": "2026-09-01",
+      "kind": "source-file",
+      "observer": "retained-git-object-bytes",
+      "path": "artifacts/source/scripts/dev_session.sh",
+      "sha256": "f696372d912ba5f9ab9bbbbd3ea2a14689ea8c9fdda57e1c00aa5962d376012f"
+    },
+    {
+      "capture_request": "git show 6679856f7c9f14eac921f3b033c0077729bb17e1:scripts/launch_lane.py",
+      "captured_on": "2026-09-01",
+      "kind": "source-file",
+      "observer": "retained-git-object-bytes",
+      "path": "artifacts/source/scripts/launch_lane.py",
+      "sha256": "7787079163e9d678284db5df15311f059a519a61db6301980784864ab02ad9e6"
+    },
+    {
+      "capture_request": "git show 6679856f7c9f14eac921f3b033c0077729bb17e1:scripts/lib/kitconfig.py",
+      "captured_on": "2026-09-01",
+      "kind": "source-file",
+      "observer": "retained-git-object-bytes",
+      "path": "artifacts/source/scripts/lib/kitconfig.py",
+      "sha256": "4ab496661883d8f4ad590a6612a48b31f8cbf770283bb09794096149276634e6"
+    },
+    {
+      "capture_request": "git show 6679856f7c9f14eac921f3b033c0077729bb17e1:scripts/lib/repo_root.sh",
+      "captured_on": "2026-09-01",
+      "kind": "source-file",
+      "observer": "retained-git-object-bytes",
+      "path": "artifacts/source/scripts/lib/repo_root.sh",
+      "sha256": "980cbf5596cea67033a5dd02d53630f2a92c24afd693ba7727d5fc50303ff555"
+    },
+    {
+      "capture_request": "git show 6679856f7c9f14eac921f3b033c0077729bb17e1:scripts/pr_watch.py",
+      "captured_on": "2026-09-01",
+      "kind": "source-file",
+      "observer": "retained-git-object-bytes",
+      "path": "artifacts/source/scripts/pr_watch.py",
+      "sha256": "432fe654b1635a2b6ea45131e58c9d45d7c87d05dc52e721d6418193ba574b60"
+    },
+    {
+      "capture_request": "git show 6679856f7c9f14eac921f3b033c0077729bb17e1:scripts/reconcile_sessions.sh",
+      "captured_on": "2026-09-01",
+      "kind": "source-file",
+      "observer": "retained-git-object-bytes",
+      "path": "artifacts/source/scripts/reconcile_sessions.sh",
+      "sha256": "75d29491cf65b61d385bb7bbb1c2cd39b3f557bef05b1dfa4a049737e8937573"
+    }
+  ],
+  "bundle_id": "codex-parallel-batch-2026-09-01",
+  "claims": [
+    {
+      "evidence": [
+        "artifacts/lanes/alpha/descriptor.json",
+        "artifacts/lanes/alpha/launch-authority.json",
+        "artifacts/lanes/alpha/launch-attempt.json",
+        "artifacts/lanes/alpha/launcher-receipt.json",
+        "artifacts/lanes/alpha/final-message.txt",
+        "artifacts/lanes/alpha/task-prompt.md",
+        "artifacts/lanes/alpha/session-metadata.json",
+        "artifacts/lanes/alpha/state-root-marker.txt",
+        "artifacts/lanes/alpha/lane-output.md",
+        "artifacts/lanes/alpha/review-receipt.json",
+        "artifacts/lanes/alpha/merge-refusal.json",
+        "artifacts/lanes/beta/descriptor.json",
+        "artifacts/lanes/beta/launch-authority.json",
+        "artifacts/lanes/beta/launch-attempt.json",
+        "artifacts/lanes/beta/launcher-receipt.json",
+        "artifacts/lanes/beta/final-message.txt",
+        "artifacts/lanes/beta/task-prompt.md",
+        "artifacts/lanes/beta/session-metadata.json",
+        "artifacts/lanes/beta/state-root-marker.txt",
+        "artifacts/lanes/beta/lane-output.md",
+        "artifacts/lanes/beta/review-receipt.json",
+        "artifacts/lanes/beta/merge-refusal.json",
+        "artifacts/filesystem-readback.json",
+        "artifacts/git-readback.json",
+        "artifacts/forge-readback.json",
+        "artifacts/source-digests.txt",
+        "artifacts/source-proof.json",
+        "artifacts/execution-source-digests.txt",
+        "artifacts/fixture-proof.json",
+        "artifacts/fixture/config/dev-model.yaml",
+        "artifacts/source/config/dev-model.yaml",
+        "artifacts/source/scripts/dev_session.sh",
+        "artifacts/source/scripts/launch_lane.py",
+        "artifacts/source/scripts/pr_watch.py",
+        "artifacts/source/scripts/reconcile_sessions.sh",
+        "artifacts/source/scripts/lib/kitconfig.py",
+        "artifacts/source/scripts/lib/repo_root.sh"
+      ],
+      "id": "codex-parallel-batch-disjoint-identities",
+      "requires_applied_compute": false
+    },
+    {
+      "evidence": [
+        "artifacts/git-readback.json",
+        "artifacts/forge-readback.json",
+        "artifacts/lanes/alpha/review-receipt.json",
+        "artifacts/lanes/beta/review-receipt.json",
+        "artifacts/reviews/alpha/adversarial-prompt.txt",
+        "artifacts/reviews/alpha/adversarial-run.json",
+        "artifacts/reviews/alpha/adversarial-report.md",
+        "artifacts/reviews/alpha/correctness-prompt.txt",
+        "artifacts/reviews/alpha/correctness-run.json",
+        "artifacts/reviews/alpha/correctness-report.md",
+        "artifacts/reviews/beta/adversarial-prompt.txt",
+        "artifacts/reviews/beta/adversarial-run.json",
+        "artifacts/reviews/beta/adversarial-report.md",
+        "artifacts/reviews/beta/correctness-prompt.txt",
+        "artifacts/reviews/beta/correctness-run.json",
+        "artifacts/reviews/beta/correctness-report.md",
+        "artifacts/source-digests.txt",
+        "artifacts/source-proof.json",
+        "artifacts/execution-source-digests.txt",
+        "artifacts/fixture-proof.json",
+        "artifacts/fixture/config/dev-model.yaml",
+        "artifacts/source/config/dev-model.yaml",
+        "artifacts/source/scripts/dev_session.sh",
+        "artifacts/source/scripts/launch_lane.py",
+        "artifacts/source/scripts/pr_watch.py",
+        "artifacts/source/scripts/reconcile_sessions.sh",
+        "artifacts/source/scripts/lib/kitconfig.py",
+        "artifacts/source/scripts/lib/repo_root.sh"
+      ],
+      "id": "codex-parallel-batch-exact-head-review",
+      "requires_applied_compute": false
+    },
+    {
+      "evidence": [
+        "artifacts/lanes/alpha/descriptor.json",
+        "artifacts/lanes/alpha/launcher-receipt.json",
+        "artifacts/lanes/alpha/session-metadata.json",
+        "artifacts/lanes/alpha/merge-refusal.json",
+        "artifacts/lanes/beta/descriptor.json",
+        "artifacts/lanes/beta/launcher-receipt.json",
+        "artifacts/lanes/beta/session-metadata.json",
+        "artifacts/lanes/beta/merge-refusal.json",
+        "artifacts/forge-readback.json",
+        "artifacts/reconciliation.json",
+        "artifacts/source-digests.txt",
+        "artifacts/source-proof.json",
+        "artifacts/execution-source-digests.txt",
+        "artifacts/fixture-proof.json",
+        "artifacts/fixture/config/dev-model.yaml",
+        "artifacts/source/config/dev-model.yaml",
+        "artifacts/source/scripts/dev_session.sh",
+        "artifacts/source/scripts/launch_lane.py",
+        "artifacts/source/scripts/pr_watch.py",
+        "artifacts/source/scripts/reconcile_sessions.sh",
+        "artifacts/source/scripts/lib/kitconfig.py",
+        "artifacts/source/scripts/lib/repo_root.sh"
+      ],
+      "id": "codex-parallel-batch-operator-authority-without-merge",
+      "requires_applied_compute": false
+    },
+    {
+      "evidence": [
+        "artifacts/client-version.txt",
+        "artifacts/execution-source-digests.txt",
+        "artifacts/filesystem-readback.json",
+        "artifacts/fixture-proof.json",
+        "artifacts/fixture/config/dev-model.yaml",
+        "artifacts/forge-readback.json",
+        "artifacts/git-readback.json",
+        "artifacts/lanes/alpha/descriptor.json",
+        "artifacts/lanes/alpha/final-message.txt",
+        "artifacts/lanes/alpha/lane-output.md",
+        "artifacts/lanes/alpha/launch-attempt.json",
+        "artifacts/lanes/alpha/launch-authority.json",
+        "artifacts/lanes/alpha/launcher-receipt.json",
+        "artifacts/lanes/alpha/merge-refusal.json",
+        "artifacts/lanes/alpha/review-receipt.json",
+        "artifacts/lanes/alpha/session-metadata.json",
+        "artifacts/lanes/alpha/state-root-marker.txt",
+        "artifacts/lanes/alpha/task-prompt.md",
+        "artifacts/lanes/beta/descriptor.json",
+        "artifacts/lanes/beta/final-message.txt",
+        "artifacts/lanes/beta/lane-output.md",
+        "artifacts/lanes/beta/launch-attempt.json",
+        "artifacts/lanes/beta/launch-authority.json",
+        "artifacts/lanes/beta/launcher-receipt.json",
+        "artifacts/lanes/beta/merge-refusal.json",
+        "artifacts/lanes/beta/review-receipt.json",
+        "artifacts/lanes/beta/session-metadata.json",
+        "artifacts/lanes/beta/state-root-marker.txt",
+        "artifacts/lanes/beta/task-prompt.md",
+        "artifacts/reconciliation.json",
+        "artifacts/reviews/alpha/adversarial-prompt.txt",
+        "artifacts/reviews/alpha/adversarial-report.md",
+        "artifacts/reviews/alpha/adversarial-run.json",
+        "artifacts/reviews/alpha/correctness-prompt.txt",
+        "artifacts/reviews/alpha/correctness-report.md",
+        "artifacts/reviews/alpha/correctness-run.json",
+        "artifacts/reviews/beta/adversarial-prompt.txt",
+        "artifacts/reviews/beta/adversarial-report.md",
+        "artifacts/reviews/beta/adversarial-run.json",
+        "artifacts/reviews/beta/correctness-prompt.txt",
+        "artifacts/reviews/beta/correctness-report.md",
+        "artifacts/reviews/beta/correctness-run.json",
+        "artifacts/source-digests.txt",
+        "artifacts/source-proof.json",
+        "artifacts/source/config/dev-model.yaml",
+        "artifacts/source/scripts/dev_session.sh",
+        "artifacts/source/scripts/launch_lane.py",
+        "artifacts/source/scripts/lib/kitconfig.py",
+        "artifacts/source/scripts/lib/repo_root.sh",
+        "artifacts/source/scripts/pr_watch.py",
+        "artifacts/source/scripts/reconcile_sessions.sh"
+      ],
+      "id": "codex-parallel-batch-complete-claim-map",
+      "requires_applied_compute": false
+    }
+  ],
+  "redaction": {
+    "excluded": [
+      "authentication-material",
+      "credentials",
+      "tokens",
+      "unrelated-user-data",
+      "unrelated-workspace-data"
+    ],
+    "reviewed": true,
+    "reviewer": "codex-cockpit-gpt-5-6-sol"
+  },
+  "review": {
+    "heads": [
+      "59ad80980fb3c9d609c41c6ffc7f7fed0e12db97",
+      "57e4209a79080d7605cd8e42cb53fe8bdc5d3f38"
+    ],
+    "observer": "github-pr-readback-and-two-scope-pr-watch-receipts",
+    "repository": "https://github.com/topij/adk-codex-parallel-evidence-20260901"
+  },
+  "runtime": {
+    "applied_compute": null,
+    "client_version": "codex-cli 0.149.1",
+    "name": "codex",
+    "session_persistence": "persistent"
+  },
+  "schema_version": 1,
+  "source": {
+    "repository": "https://github.com/topij/agentic-dev-kit",
+    "revision": "6679856f7c9f14eac921f3b033c0077729bb17e1"
+  }
+}

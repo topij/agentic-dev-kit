@@ -42,6 +42,25 @@ starts.
 
 ---
 
+## #659 — 2026-09-01
+
+- **CHANGED (engine CLI surface):** Refresh
+  `scripts/verify_live_validation_bundle.py` before promoting source Git proofs for a
+  commit object that has no final newline. Emit
+  `"commit_trailing_newline": false` beside `commit_lines` for that object; omit the
+  field for the existing newline-terminated form. Existing schema-version `1` proofs
+  remain valid unchanged.
+- **CHANGED (engine CLI surface):** Refresh the verifier before retaining exact Python
+  `source-file` bytes that use a credential-named local variable for a runtime helper
+  result. Those source expressions no longer trip the raw assignment backstop;
+  statically recoverable credential assignments and known secret shapes remain
+  refused.
+- **ADDED (engine CLI surface):** For a promoted claim spanning distinct review heads,
+  use `review.heads` in the bundle and `reviewed_heads` in the promotion receipt, then
+  repeat `--expect-reviewed-head` once per entry in the same order. Continue using
+  singular `review.head` and `reviewed_head` for a single-head bundle. Mixed shapes,
+  duplicate heads, and incomplete independent expectations are refused.
+
 ## #655 — 2026-09-01
 
 - **BREAKING (engine CLI, #255):** Refresh or install `scripts/kit_doctor.py`

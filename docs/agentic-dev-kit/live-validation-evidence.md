@@ -135,11 +135,19 @@ of the changed directory.
 }
 ```
 
-The manifest is the binding surface: its source revision, reviewed head, runtime and
-client apply to every artifact digest and every claim-to-evidence link it contains.
+For one reviewed revision, `review.head` carries its full object ID. A batch whose
+claims span distinct reviewed revisions replaces that field with an ordered,
+duplicate-free `review.heads` array. Its promotion receipt uses the matching
+`reviewed_head` or `reviewed_heads` shape, and the operator repeats
+`--expect-reviewed-head` in the same order so the complete set is independently
+supplied. Mixing the singular and plural shapes is refused.
+
+The manifest is the binding surface: its source revision, complete reviewed-head set,
+runtime and client apply to every artifact digest and every claim-to-evidence link it
+contains.
 An artifact record adds the authoritative observer, exact capture command or request,
 and UTC capture date for those exact retained bytes. Together with the manifest source
-revision and reviewed head, those fields stamp each retained reading rather than
+revision and reviewed-head set, those fields stamp each retained reading rather than
 leaving its age or provenance to narrative inference.
 The verifier refuses unknown fields so an unimplemented assertion cannot hide beside
 the enforced contract.
@@ -147,12 +155,13 @@ the enforced contract.
 `promotion.json` is a separate, closed receipt stored beside the `bundle.json` it
 names; an external receipt cannot replace the bundle's own copy. It carries the digest
 of the manifest's exact bytes, repeats the source revision, review repository, reviewed
-head, redaction reviewer, and complete runtime object, names the parity authority being
-changed, and enumerates the promoted claim IDs. The verifier compares every repeated
-field and, for promotion, requires the reviewer to supply independently selected
-expected authority, source repository, source revision, review repository, reviewed
-head, redaction reviewer, runtime, client, session-persistence carrier, and complete
-promoted claim objects. When a claim depends on applied compute, the caller must also
+head or complete ordered head set, redaction reviewer, and complete runtime object,
+names the parity authority being changed, and enumerates the promoted claim IDs. The
+verifier compares every repeated field and, for promotion, requires the reviewer to
+supply independently selected expected authority, source repository, source revision,
+review repository, every reviewed head in manifest order, redaction reviewer, runtime,
+client, session-persistence carrier, and complete promoted claim objects. When a claim
+depends on applied compute, the caller must also
 supply the complete expected applied-compute object with `--expect-applied-compute`.
 The bundle may retain validated claims that are not promoted. Only the IDs enumerated
 by `promotion.json` are selected and compared with the independent expected claim
@@ -165,7 +174,7 @@ repeatable `--expect-claim` compact JSON, including its ordered evidence paths a
 applied-compute dependency. Obtain those expectations from the review target and
 authoritative observer before reading the bundle labels; a self-consistent manifest and
 receipt are not their own trust root. This refuses a valid-looking pair relabeled to the
-wrong source or review repository, revision, reviewed head, reviewer, or applied
+wrong source or review repository, revision, reviewed-head set, reviewer, or applied
 compute; a claim renamed to imply a broader capability; and a claim whose evidence
 links were thinned.
 
@@ -211,8 +220,10 @@ all named source files, and every used proof from the claim. The verifier refuse
 unlisted source file or proof.
 
 A source Git proof is closed JSON carrying its namespace, revision, exact commit lines,
-and the complete entries of only the tree objects needed for the ledger paths. The
-verifier reconstructs the Git commit and tree bytes, recomputes their object IDs,
+and the complete entries of only the tree objects needed for the ledger paths. A commit
+object that does not end in a newline adds `"commit_trailing_newline": false`; omission
+keeps the historical newline-terminated form. The verifier reconstructs the Git commit
+and tree bytes, recomputes their object IDs,
 walks from the commit's root tree to each path, and compares the reached blob with both
 the ledger and retained source-file bytes. Extra proof trees are invalid. This keeps
 revision membership independently recomputable from the redacted bundle after the
@@ -260,6 +271,11 @@ encodings in raw text and decoded JSON strings as a backstop. It rejects escaped
 Unicode surrogates, then repeats those scans after compatibility normalization and
 removing control, format, and combining-mark characters so an invisible separator
 cannot split a credential marker in either a value or a JSON key.
+Exact Python `source-file` artifacts are parsed before applying the generic assignment
+backstop. A credential-named target whose value is a runtime expression such as a
+helper call is source code, not retained credential material; a statically recoverable
+value assigned to that target remains forbidden. Known secret-value shapes are still
+scanned across the complete source text, including comments and docstrings.
 `redaction.reviewed: true` records the required semantic review; it is not a claim that
 the scanner can prove absence of every secret.
 

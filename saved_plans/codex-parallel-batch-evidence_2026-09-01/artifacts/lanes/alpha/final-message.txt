@@ -1,0 +1,15 @@
+Lane completed and left open/unmerged.
+
+- Branch: `dev/parallel-alpha`
+- Commit: `59ad80980fb3c9d609c41c6ffc7f7fed0e12db97`
+- PR: [#2](https://github.com/topij/adk-codex-parallel-evidence-20260901/pull/2)
+- Repository/base/head: `topij/adk-codex-parallel-evidence-20260901` / `main` / `dev/parallel-alpha`
+- Changed path: [notes/parallel-alpha.md](/private/tmp/adk-codex-parallel-20260901.xlAufG/dev-model-sessions/parallel-alpha/wt/notes/parallel-alpha.md)
+
+At that commit on 2026-09-01:
+
+- `uv run scripts/pr_watch.py 2 --assert-ready` returned `already ready-for-review (isDraft=False)`.
+- The single `--json` poll returned `checks.all_green: true`, `converged: true`, and `mergeable: false`. Merge blockers are the intentionally cockpit-owned independent review and the initial rollup baseline.
+- `git diff --check` succeeded.
+
+The initial push was blocked by sandbox DNS restrictions. The escalated retry succeeded; GitHub PR creation, identity reads, ready assertion, and JSON poll also used approved network escalation. No permission denial remains.

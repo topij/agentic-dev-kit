@@ -1,0 +1,33 @@
+{
+  "cross_lane": {
+    "state_roots_distinct": true,
+    "worktrees_distinct": true
+  },
+  "fixture_repo": "/private/tmp/adk-codex-parallel-20260901.xlAufG/repo",
+  "lanes": {
+    "alpha": {
+      "branch": "dev/parallel-alpha",
+      "descriptor_state_root": "/private/tmp/adk-codex-parallel-20260901.xlAufG/dev-model-sessions/parallel-alpha/state",
+      "descriptor_worktree": "/private/tmp/adk-codex-parallel-20260901.xlAufG/dev-model-sessions/parallel-alpha/wt",
+      "git_common_dir": "/private/tmp/adk-codex-parallel-20260901.xlAufG/repo/.git",
+      "git_top": "/private/tmp/adk-codex-parallel-20260901.xlAufG/dev-model-sessions/parallel-alpha/wt",
+      "head": "59ad80980fb3c9d609c41c6ffc7f7fed0e12db97",
+      "marker_state_root": "/private/tmp/adk-codex-parallel-20260901.xlAufG/dev-model-sessions/parallel-alpha/state",
+      "state_root_exists": true,
+      "status_short": [],
+      "worktree_realpath": "/private/tmp/adk-codex-parallel-20260901.xlAufG/dev-model-sessions/parallel-alpha/wt"
+    },
+    "beta": {
+      "branch": "dev/parallel-beta",
+      "descriptor_state_root": "/private/tmp/adk-codex-parallel-20260901.xlAufG/dev-model-sessions/parallel-beta/state",
+      "descriptor_worktree": "/private/tmp/adk-codex-parallel-20260901.xlAufG/dev-model-sessions/parallel-beta/wt",
+      "git_common_dir": "/private/tmp/adk-codex-parallel-20260901.xlAufG/repo/.git",
+      "git_top": "/private/tmp/adk-codex-parallel-20260901.xlAufG/dev-model-sessions/parallel-beta/wt",
+      "head": "57e4209a79080d7605cd8e42cb53fe8bdc5d3f38",
+      "marker_state_root": "/private/tmp/adk-codex-parallel-20260901.xlAufG/dev-model-sessions/parallel-beta/state",
+      "state_root_exists": true,
+      "status_short": [],
+      "worktree_realpath": "/private/tmp/adk-codex-parallel-20260901.xlAufG/dev-model-sessions/parallel-beta/wt"
+    }
+  }
+}

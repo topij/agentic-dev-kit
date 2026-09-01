@@ -1,0 +1,40 @@
+{
+  "poll": {
+    "checks": {
+      "all_green": true,
+      "pending": 0,
+      "total": 0
+    },
+    "converged": true,
+    "head": "59ad80980fb3c9d609c41c6ffc7f7fed0e12db97",
+    "is_draft": false,
+    "merge_blockers": [],
+    "merge_state": "CLEAN",
+    "mergeable": true,
+    "pr": 2,
+    "review_evidence": {
+      "bot_signal": null,
+      "bots": [],
+      "head": "59ad80980fb3c9d609c41c6ffc7f7fed0e12db97",
+      "lenses": [
+        "adversarial",
+        "correctness"
+      ],
+      "override": null,
+      "route": "receipt",
+      "source": "fallback:panel",
+      "valid": true
+    },
+    "state": "OPEN",
+    "url": "https://github.com/topij/adk-codex-parallel-evidence-20260901/pull/2"
+  },
+  "receipt": {
+    "head": "59ad80980fb3c9d609c41c6ffc7f7fed0e12db97",
+    "lenses": [
+      "adversarial",
+      "correctness"
+    ],
+    "recorded_at": "2026-09-01T15:25:04.052035+00:00",
+    "source": "fallback:panel"
+  }
+}

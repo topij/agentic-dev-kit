@@ -411,7 +411,7 @@ def _argv(
     manifest: Path,
     promotion: Path | None = None,
     *,
-    expectations: dict[str, str] | None = None,
+    expectations: dict[str, object] | None = None,
     expected_claims: list[dict[str, object]] | None = None,
     expected_compute: dict[str, object] | None | object = DEFAULT_EXPECTED_COMPUTE,
 ) -> list[str]:
@@ -420,7 +420,12 @@ def _argv(
         argv.extend(["--promotion", str(promotion)])
         bindings = FIXTURE_EXPECTATIONS if expectations is None else expectations
         for field, value in bindings.items():
-            argv.extend([f"--expect-{field.replace('_', '-')}", value])
+            flag = f"--expect-{field.replace('_', '-')}"
+            if field == "reviewed_head" and isinstance(value, list):
+                for head in value:
+                    argv.extend([flag, str(head)])
+            else:
+                argv.extend([flag, str(value)])
         claims = FIXTURE_EXPECTED_CLAIMS if expected_claims is None else expected_claims
         for claim in claims:
             argv.extend(["--expect-claim", json.dumps(claim, separators=(",", ":"))])
@@ -440,7 +445,7 @@ def _run(
     manifest: Path,
     promotion: Path | None = None,
     *,
-    expectations: dict[str, str] | None = None,
+    expectations: dict[str, object] | None = None,
     expected_claims: list[dict[str, object]] | None = None,
     expected_compute: dict[str, object] | None | object = DEFAULT_EXPECTED_COMPUTE,
     env: dict[str, str] | None = None,
@@ -555,10 +560,31 @@ def _add_source_ledger(
     claim_source_file: bool,
     ledger_digest: str | None = None,
     ledger_git_blob: str | None = None,
+    source_bytes: bytes = TEST_SOURCE_BYTES,
 ) -> list[dict[str, object]]:
     artifacts = manifest.parent / "artifacts"
     source_file = artifacts / "source" / "scripts" / "example.py"
-    source_bytes = TEST_SOURCE_BYTES
+    source_blob = _git_oid("blob", source_bytes)
+    scripts_tree_entries = [
+        {"mode": "100644", "name": "example.py", "oid": source_blob},
+    ]
+    scripts_tree_bytes = b"100644 example.py\0" + bytes.fromhex(source_blob)
+    scripts_tree = _git_oid("tree", scripts_tree_bytes)
+    root_tree_entries = [
+        {"mode": "40000", "name": "scripts", "oid": scripts_tree},
+    ]
+    root_tree_bytes = b"40000 scripts\0" + bytes.fromhex(scripts_tree)
+    root_tree = _git_oid("tree", root_tree_bytes)
+    commit_lines = [
+        f"tree {root_tree}",
+        "author Evidence Fixture <evidence@example.invalid> 0 +0000",
+        "committer Evidence Fixture <evidence@example.invalid> 0 +0000",
+        "",
+        "retained source fixture",
+    ]
+    source_revision = _git_oid(
+        "commit", ("\n".join(commit_lines) + "\n").encode()
+    )
     source_digest = hashlib.sha256(source_bytes).hexdigest()
     source_proof = artifacts / "source-proof.json"
     _write_json(
@@ -566,27 +592,28 @@ def _add_source_ledger(
         {
             "schema_version": 1,
             "namespace": "source",
-            "revision": SOURCE,
-            "commit_lines": TEST_COMMIT_LINES,
+            "revision": source_revision,
+            "commit_lines": commit_lines,
             "trees": [
-                {"oid": TEST_ROOT_TREE, "entries": TEST_ROOT_TREE_ENTRIES},
-                {"oid": TEST_SCRIPTS_TREE, "entries": TEST_SCRIPTS_TREE_ENTRIES},
+                {"oid": root_tree, "entries": root_tree_entries},
+                {"oid": scripts_tree, "entries": scripts_tree_entries},
             ],
         },
     )
     ledger = artifacts / "source-digests.txt"
     ledger.write_text(
-        f"source revision: {SOURCE}\n"
+        f"source revision: {source_revision}\n"
         "source proof: artifacts/source-proof.json\n"
         f"{source_digest if ledger_digest is None else ledger_digest}  "
         "source/scripts/example.py  "
-        f"git-blob:{TEST_SOURCE_BLOB if ledger_git_blob is None else ledger_git_blob}\n",
+        f"git-blob:{source_blob if ledger_git_blob is None else ledger_git_blob}\n",
         encoding="utf-8",
     )
     if include_source_file:
         source_file.parent.mkdir(parents=True)
         source_file.write_bytes(source_bytes)
     value = json.loads(manifest.read_text(encoding="utf-8"))
+    value["source"]["revision"] = source_revision
     value["artifacts"].append(
         {
             "capture_request": "git object readback and SHA-256 ledger",
@@ -599,7 +626,7 @@ def _add_source_ledger(
     )
     value["artifacts"].append(
         {
-            "capture_request": f"git cat-file commit/tree proof for {SOURCE}",
+                "capture_request": f"git cat-file commit/tree proof for {source_revision}",
             "captured_on": "2026-08-30",
             "path": "artifacts/source-proof.json",
             "sha256": _sha(source_proof),
@@ -611,7 +638,7 @@ def _add_source_ledger(
     if include_source_file:
         value["artifacts"].append(
             {
-                "capture_request": f"git show {SOURCE}:scripts/example.py",
+                "capture_request": f"git show {source_revision}:scripts/example.py",
                 "captured_on": "2026-08-30",
                 "path": "artifacts/source/scripts/example.py",
                 "sha256": source_digest,
@@ -625,6 +652,9 @@ def _add_source_ledger(
             )
             value["claims"][0]["evidence"].append("artifacts/source-proof.json")
     _write_json(manifest, value)
+    promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
+    promotion_value["source_revision"] = source_revision
+    _write_json(promotion, promotion_value)
     _refresh_promotion_digest(manifest, promotion)
     return json.loads(json.dumps(value["claims"]))
 
@@ -654,6 +684,325 @@ def test_a_source_digest_and_its_named_source_file_can_promote(tmp_path: Path) -
     result = _run(manifest, promotion, expected_claims=expected_claims)
 
     assert result.returncode == 0, result.stderr
+
+
+def test_git_bound_python_source_may_carry_a_runtime_token_value(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    source_bytes = b"def _github_token():\n    return None\n\ntoken = _github_token()\n"
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+        source_bytes=source_bytes,
+    )
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = json.loads(
+        manifest.read_text(encoding="utf-8")
+    )["source"]["revision"]
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_git_bound_python_source_may_read_a_runtime_token_from_the_environment(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+        source_bytes=b'import os\n\ntoken = os.getenv("GITHUB_TOKEN")\n',
+    )
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = json.loads(
+        manifest.read_text(encoding="utf-8")
+    )["source"]["revision"]
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_git_bound_python_source_refuses_a_static_credential_assignment(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+        source_bytes=b'token = "hunter2-secret"\n',
+    )
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = json.loads(
+        manifest.read_text(encoding="utf-8")
+    )["source"]["revision"]
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 2
+    assert "credential-like content" in result.stderr
+
+
+def test_git_bound_python_source_refuses_a_static_credential_alias(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+        source_bytes=b'LONG_VALUE = "hunter2-secret"\ntoken = LONG_VALUE\n',
+    )
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = json.loads(
+        manifest.read_text(encoding="utf-8")
+    )["source"]["revision"]
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 2
+    assert "credential-like content" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "source_bytes",
+    [
+        b"token = 123456\n",
+        b"password = 123456.0\n",
+        b"secret = 123456j\n",
+        b'token = next(value for value in ["hunter2-secret"])\n',
+        b"token = helper(123456)\n",
+        b'token = f"{123456}"\n',
+        b"token = next(value for value in [123456])\n",
+        b'authorization = f"Bearer {123456}"\n',
+        b'authorization = f"Basic {helper(123456)}"\n',
+        b'authorization = f"Bearer {("hunter2-secret")}"\n',
+        b'authorization = f"Bearer {runtime_token:hunter2-secret}"\n',
+    ],
+    ids=[
+        "integer",
+        "float",
+        "complex",
+        "string-comprehension",
+        "numeric-call",
+        "numeric-formatted-value",
+        "numeric-comprehension",
+        "authorization-numeric-field",
+        "authorization-nested-numeric-call",
+        "authorization-static-string-field",
+        "authorization-static-format-spec",
+    ],
+)
+def test_git_bound_python_source_refuses_a_newly_traversed_static_credential(
+    tmp_path: Path,
+    source_bytes: bytes,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+        source_bytes=source_bytes,
+    )
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = json.loads(
+        manifest.read_text(encoding="utf-8")
+    )["source"]["revision"]
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 2
+    assert "credential-like content" in result.stderr
+
+
+def test_git_bound_python_source_refuses_a_credential_literal_in_an_expression(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+        source_bytes=b'token = "hunter2" + suffix\n',
+    )
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = json.loads(
+        manifest.read_text(encoding="utf-8")
+    )["source"]["revision"]
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 2
+    assert "credential-like content" in result.stderr
+
+
+def test_git_bound_python_source_refuses_a_subscripted_credential_literal(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+        source_bytes=b'token = "hunter2-secret"[::-1]\n',
+    )
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = json.loads(
+        manifest.read_text(encoding="utf-8")
+    )["source"]["revision"]
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 2
+    assert "credential-like content" in result.stderr
+
+
+def test_git_bound_python_source_refuses_a_credential_literal_in_a_callable(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+        source_bytes=b'token = (lambda: "hunter2-secret")()\n',
+    )
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = json.loads(
+        manifest.read_text(encoding="utf-8")
+    )["source"]["revision"]
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 2
+    assert "credential-like content" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "source_bytes",
+    [
+        b'import os\n\ntoken = os.getenv("TOKEN", "HUNTERSECRET")\n',
+        b'import os\n\ntoken = os.getenv("TOKEN", default="HUNTERSECRET")\n',
+    ],
+    ids=["positional-default", "keyword-default"],
+)
+def test_git_bound_python_source_refuses_an_environment_credential_default(
+    tmp_path: Path,
+    source_bytes: bytes,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+        source_bytes=source_bytes,
+    )
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = json.loads(
+        manifest.read_text(encoding="utf-8")
+    )["source"]["revision"]
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 2
+    assert "credential-like content" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "source_bytes",
+    [
+        b'def f(token="hunter2-secret"):\n    pass\n',
+        b'def f(*, token="hunter2-secret"):\n    pass\n',
+        b'f = lambda token="hunter2-secret": None\n',
+        b'def f(token=(lambda: "hunter2-secret")()):\n    pass\n',
+    ],
+    ids=["positional", "keyword-only", "lambda", "callable"],
+)
+def test_git_bound_python_source_refuses_a_credential_parameter_default(
+    tmp_path: Path,
+    source_bytes: bytes,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+        source_bytes=source_bytes,
+    )
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = json.loads(
+        manifest.read_text(encoding="utf-8")
+    )["source"]["revision"]
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 2
+    assert "credential-like content" in result.stderr
 
 
 def test_a_fixture_proof_must_bind_retained_execution_sources(tmp_path: Path) -> None:
@@ -912,6 +1261,37 @@ def test_only_full_git_sha1_reviewed_heads_validate_structurally(
     assert "Traceback" not in result.stderr
 
 
+def test_a_multi_head_promotion_requires_the_complete_independent_head_set(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    second_head = "3" * 40
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    manifest_value["review"].pop("head")
+    manifest_value["review"]["heads"] = [REVIEWED, second_head]
+    _write_json(manifest, manifest_value)
+    promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
+    promotion_value.pop("reviewed_head")
+    promotion_value["reviewed_heads"] = [REVIEWED, second_head]
+    promotion_value["manifest_sha256"] = _sha(manifest)
+    _write_json(promotion, promotion_value)
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["reviewed_head"] = [REVIEWED, second_head]
+
+    result = _run(manifest, promotion, expectations=expectations)
+    assert result.returncode == 0, result.stderr
+
+    expectations["reviewed_head"] = [REVIEWED]
+    result = _run(manifest, promotion, expectations=expectations)
+    assert result.returncode == 2
+    assert "reviewed-head shape does not match" in result.stderr
+
+    expectations["reviewed_head"] = [REVIEWED, "4" * 40]
+    result = _run(manifest, promotion, expectations=expectations)
+    assert result.returncode == 2
+    assert "reviewed heads does not match" in result.stderr
+
+
 def test_a_source_proof_commit_without_a_header_boundary_is_refused_cleanly(
     tmp_path: Path,
 ) -> None:
@@ -965,6 +1345,101 @@ def test_a_source_proof_commit_without_a_header_boundary_is_refused_cleanly(
     assert result.returncode == 2
     assert "source Git proof commit has no header boundary" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+def test_a_source_proof_preserves_a_commit_without_a_trailing_newline(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+    )
+    revision = _git_oid("commit", "\n".join(TEST_COMMIT_LINES).encode())
+    artifacts = manifest.parent / "artifacts"
+    proof = artifacts / "source-proof.json"
+    proof_value = json.loads(proof.read_text(encoding="utf-8"))
+    proof_value["revision"] = revision
+    proof_value["commit_trailing_newline"] = False
+    _write_json(proof, proof_value)
+    ledger = artifacts / "source-digests.txt"
+    ledger.write_text(
+        ledger.read_text(encoding="utf-8").replace(SOURCE, revision),
+        encoding="utf-8",
+    )
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    manifest_value["source"]["revision"] = revision
+    for artifact in manifest_value["artifacts"]:
+        if artifact["path"] == "artifacts/source-digests.txt":
+            artifact["sha256"] = _sha(ledger)
+        elif artifact["path"] == "artifacts/source-proof.json":
+            artifact["sha256"] = _sha(proof)
+    _write_json(manifest, manifest_value)
+    promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
+    promotion_value["source_revision"] = revision
+    promotion_value["manifest_sha256"] = _sha(manifest)
+    _write_json(promotion, promotion_value)
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = revision
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_a_source_proof_rejects_a_non_boolean_commit_eof_field(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+    )
+    revision = _git_oid("commit", "\n".join(TEST_COMMIT_LINES).encode())
+    artifacts = manifest.parent / "artifacts"
+    proof = artifacts / "source-proof.json"
+    proof_value = json.loads(proof.read_text(encoding="utf-8"))
+    proof_value["revision"] = revision
+    proof_value["commit_trailing_newline"] = None
+    _write_json(proof, proof_value)
+    ledger = artifacts / "source-digests.txt"
+    ledger.write_text(
+        ledger.read_text(encoding="utf-8").replace(SOURCE, revision),
+        encoding="utf-8",
+    )
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    manifest_value["source"]["revision"] = revision
+    for artifact in manifest_value["artifacts"]:
+        if artifact["path"] == "artifacts/source-digests.txt":
+            artifact["sha256"] = _sha(ledger)
+        elif artifact["path"] == "artifacts/source-proof.json":
+            artifact["sha256"] = _sha(proof)
+    _write_json(manifest, manifest_value)
+    promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
+    promotion_value["source_revision"] = revision
+    promotion_value["manifest_sha256"] = _sha(manifest)
+    _write_json(promotion, promotion_value)
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = revision
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 2
+    assert "commit_trailing_newline must be a boolean" in result.stderr
 
 
 def test_retained_source_bytes_absent_from_the_revision_tree_are_refused(
@@ -3204,6 +3679,211 @@ def test_the_promotion_receipt_is_bound_to_the_manifest_bytes(tmp_path: Path) ->
     result = _run(manifest, promotion)
     assert result.returncode == 2
     assert "manifest digest does not match" in result.stderr
+
+
+@pytest.mark.kit_repo_only(
+    "saved_plans/codex-parallel-batch-evidence_2026-09-01/bundle.json",
+    "saved_plans/codex-parallel-batch-evidence_2026-09-01/promotion.json",
+    "scripts/tests/fixtures/codex_parallel_batch_expected.json",
+)
+def test_the_promoted_codex_parallel_batch_remains_independently_recomputable() -> None:
+    root = find_repo_root(ENGINE.parent)
+    bundle = root / "saved_plans/codex-parallel-batch-evidence_2026-09-01"
+    expected = json.loads(
+        (root / "scripts/tests/fixtures/codex_parallel_batch_expected.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    manifest = json.loads((bundle / "bundle.json").read_text(encoding="utf-8"))
+    promotion = json.loads((bundle / "promotion.json").read_text(encoding="utf-8"))
+    result = _run(
+        bundle / "bundle.json",
+        bundle / "promotion.json",
+        expectations={
+            "authority": "docs/agentic-dev-kit/runtime-parity.md",
+            "source_repository": expected["source"]["repository"],
+            "source_revision": expected["source"]["revision"],
+            "review_repository": expected["review"]["repository"],
+            "reviewed_head": expected["review"]["heads"],
+            "redaction_reviewer": expected["redaction"]["reviewer"],
+            "runtime": expected["runtime"]["name"],
+            "client_version": expected["runtime"]["client_version"],
+            "session_persistence": expected["runtime"]["session_persistence"],
+        },
+        expected_claims=expected["claims"],
+        expected_compute=None,
+    )
+    assert result.returncode == 0, result.stderr
+
+    assert manifest["claims"] == expected["claims"]
+    assert manifest["source"] == expected["source"]
+    assert manifest["review"] == expected["review"]
+    assert manifest["redaction"] == expected["redaction"]
+    assert manifest["runtime"] == expected["runtime"]
+    assert {
+        artifact["path"]: {
+            key: artifact[key]
+            for key in ("kind", "observer", "capture_request", "sha256")
+        }
+        for artifact in manifest["artifacts"]
+    } == expected["artifact_bindings"]
+    assert {
+        path: _sha(bundle / path) for path in expected["artifact_bindings"]
+    } == {
+        path: binding["sha256"]
+        for path, binding in expected["artifact_bindings"].items()
+    }
+
+    artifacts = bundle / "artifacts"
+    filesystem = json.loads((artifacts / "filesystem-readback.json").read_text())
+    forge = json.loads((artifacts / "forge-readback.json").read_text())
+    git_readback = json.loads((artifacts / "git-readback.json").read_text())
+    reconciliation = json.loads((artifacts / "reconciliation.json").read_text())
+    fixture_base = "f13b3e995558ee2f14b656bba2e1a0f74d2254c2"
+    lane_heads = {
+        "alpha": "59ad80980fb3c9d609c41c6ffc7f7fed0e12db97",
+        "beta": "57e4209a79080d7605cd8e42cb53fe8bdc5d3f38",
+    }
+    reviewed_heads = [lane_heads[lane] for lane in ("alpha", "beta")]
+    assert manifest["review"]["heads"] == reviewed_heads
+    assert promotion["reviewed_heads"] == reviewed_heads
+    assert git_readback["fixture_base"] == fixture_base
+    assert git_readback["remote_refs"] == {
+        "refs/heads/dev/parallel-alpha": lane_heads["alpha"],
+        "refs/heads/dev/parallel-beta": lane_heads["beta"],
+        "refs/heads/main": fixture_base,
+    }
+    scopes = {"alpha": "parallel-alpha", "beta": "parallel-beta"}
+    pull_requests = {"alpha": 2, "beta": 1}
+    identities: dict[str, tuple[str, str]] = {}
+    for lane in ("alpha", "beta"):
+        lane_root = artifacts / "lanes" / lane
+        descriptor = json.loads((lane_root / "descriptor.json").read_text())
+        authority = json.loads((lane_root / "launch-authority.json").read_text())
+        attempt = json.loads((lane_root / "launch-attempt.json").read_text())
+        launcher = json.loads((lane_root / "launcher-receipt.json").read_text())
+        session_metadata = json.loads((lane_root / "session-metadata.json").read_text())
+        review = json.loads((lane_root / "review-receipt.json").read_text())
+        refusal = json.loads((lane_root / "merge-refusal.json").read_text())
+        pr = forge["pull_requests"][lane]
+        git_lane = git_readback["lanes"][lane]
+        observed = filesystem["lanes"][lane]
+
+        assert descriptor["scope"] == scopes[lane]
+        assert descriptor["runtime"] == "codex"
+        assert descriptor["merge_class"] == "operator"
+        assert descriptor["base_oid"] == descriptor["lane_oid"] == fixture_base
+        assert authority == {
+            "descriptor_id": descriptor["descriptor_id"],
+            "descriptor_sha256": _sha(lane_root / "descriptor.json"),
+            "schema_version": 1,
+        }
+        assert attempt["descriptor_id"] == descriptor["descriptor_id"]
+        assert attempt["request"]["descriptor_sha256"] == authority["descriptor_sha256"]
+        assert launcher["descriptor_id"] == descriptor["descriptor_id"]
+        assert launcher["status"] == "completed"
+        assert launcher["terminal"]["returncode"] == 0
+        assert launcher["terminal"]["final_text_sha256"] == _sha(
+            lane_root / "final-message.txt"
+        )
+        for key in ("scope", "branch", "base_oid", "lane_oid", "merge_class"):
+            assert launcher["observed"][key] == descriptor[key]
+        assert launcher["observed"]["worktree"] == descriptor["worktree"]
+        assert launcher["observed"]["state_root"] == descriptor["state_root"]
+        assert launcher["observed"]["marker_state_root"] == descriptor["state_root"]
+        assert session_metadata == {
+            "base": "main",
+            "branch": descriptor["branch"],
+            "merge_class": "operator",
+            "scope": scopes[lane],
+        }
+        note_path = f"notes/parallel-{lane}.md"
+        assert git_lane["branch"] == descriptor["branch"]
+        assert git_lane["head"] == lane_heads[lane]
+        assert git_lane["note_path"] == note_path
+        assert git_lane["note_sha256"] == _sha(lane_root / "lane-output.md")
+        assert git_lane["commit_lines"][1] == f"parent {fixture_base}"
+        assert _git_oid(
+            "commit", ("\n".join(git_lane["commit_lines"]) + "\n").encode()
+        ) == lane_heads[lane]
+        assert observed["descriptor_worktree"] == observed["git_top"] == (
+            descriptor["worktree"]
+        )
+        assert observed["descriptor_state_root"] == observed["marker_state_root"] == (
+            descriptor["state_root"]
+        )
+        assert observed["state_root_exists"] is True
+        assert observed["status_short"] == []
+        assert observed["head"] == lane_heads[lane]
+        identities[lane] = (descriptor["worktree"], descriptor["state_root"])
+
+        assert pr["number"] == pull_requests[lane]
+        assert pr["head_oid"] == lane_heads[lane]
+        assert pr["state"] == "OPEN"
+        assert pr["is_draft"] is False
+        assert pr["merge_commit"] is None
+        assert review["receipt"] == {
+            "head": lane_heads[lane],
+            "lenses": ["adversarial", "correctness"],
+            "recorded_at": review["receipt"]["recorded_at"],
+            "source": "fallback:panel",
+        }
+        assert review["poll"]["head"] == lane_heads[lane]
+        assert review["poll"]["pr"] == pull_requests[lane]
+        assert review["poll"]["converged"] is True
+        assert review["poll"]["mergeable"] is True
+        assert refusal["exit_code"] == 1
+        assert refusal["scope"] == scopes[lane]
+        assert "autonomous merge refused" in refusal["stderr"]
+
+        for lens in ("adversarial", "correctness"):
+            review_root = artifacts / "reviews" / lane
+            run_record = json.loads((review_root / f"{lens}-run.json").read_text())
+            prompt = (review_root / f"{lens}-prompt.txt").read_text()
+            report = (review_root / f"{lens}-report.md").read_text()
+            assert run_record["lane"] == scopes[lane]
+            assert run_record["lens"] == lens
+            assert run_record["head"] == lane_heads[lane]
+            assert run_record["exit_code"] == 0
+            assert run_record["prompt_sha256"] == _sha(
+                review_root / f"{lens}-prompt.txt"
+            )
+            assert run_record["report_sha256"] == _sha(
+                review_root / f"{lens}-report.md"
+            )
+            assert f"**{lens}** —" in prompt
+            assert run_record["codex_argv"][2:4] == ["-C", run_record["worktree"]]
+            assert f"{lane}-{lens}-" in Path(run_record["worktree"]).name
+            assert f"**Branch:** {descriptor['branch']}" in prompt
+            assert f"**PR:** #{pull_requests[lane]}" in prompt
+            assert f"**Head sha under review:** `{lane_heads[lane]}`" in prompt
+            assert f"**Base:** `{fixture_base}`" in prompt
+            assert run_record["worktree"] in prompt
+            assert lane_heads[lane] in report
+            assert run_record["worktree"] in report
+
+    assert identities["alpha"][0] != identities["beta"][0]
+    assert identities["alpha"][1] != identities["beta"][1]
+    assert filesystem["cross_lane"] == {
+        "state_roots_distinct": True,
+        "worktrees_distinct": True,
+    }
+    assert forge["repository"]["is_private"] is True
+    assert forge["repository"]["visibility"] == "PRIVATE"
+    assert "record-prose imprecision below HIGH" in (
+        forge["pull_requests"]["alpha"]["comments"][0]["body"]
+    )
+    assert reconciliation["exit_code"] == 4
+    assert "parallel-alpha               held" in reconciliation["stdout"]
+    assert "parallel-beta                held" in reconciliation["stdout"]
+    source_proof = json.loads((artifacts / "source-proof.json").read_text())
+    assert source_proof["revision"] == expected["source"]["revision"]
+    assert source_proof["commit_trailing_newline"] is False
+    execution_source_digests = (
+        artifacts / "execution-source-digests.txt"
+    ).read_text(encoding="utf-8")
+    assert "source/scripts/pr_watch.py" in execution_source_digests
+    assert _sha(artifacts / "source/scripts/pr_watch.py") in execution_source_digests
 
 
 @pytest.mark.kit_repo_only(

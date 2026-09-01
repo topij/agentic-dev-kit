@@ -1,0 +1,6 @@
+{
+  "base": "main",
+  "branch": "dev/parallel-beta",
+  "merge_class": "operator",
+  "scope": "parallel-beta"
+}

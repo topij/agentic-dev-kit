@@ -1,0 +1,27 @@
+{
+  "base": "f13b3e995558ee2f14b656bba2e1a0f74d2254c2",
+  "branch": "dev/parallel-alpha",
+  "codex_argv": [
+    "codex",
+    "exec",
+    "-C",
+    "/private/tmp/adk-codex-parallel-20260901.xlAufG/review-worktrees/alpha-adversarial-59ad809-attempt2",
+    "--sandbox",
+    "read-only",
+    "-c",
+    "model_reasoning_effort=high",
+    "--output-last-message",
+    "/private/tmp/adk-codex-parallel-20260901.xlAufG/reviews/alpha-adversarial-attempt2/report.md",
+    "-"
+  ],
+  "ended_at": "2026-09-01T15:01:04.433618+00:00",
+  "exit_code": 0,
+  "head": "59ad80980fb3c9d609c41c6ffc7f7fed0e12db97",
+  "lane": "parallel-alpha",
+  "lens": "adversarial",
+  "pr": 2,
+  "prompt_sha256": "f4539e7cba92226ead4adc05420bf245c5fb9e930f352d69c638264fb67b0437",
+  "report_sha256": "60721e47fabb80bf8c8dd75682e17e96d4c1ad94db760ff360060ee64d061aa5",
+  "started_at": "2026-09-01T14:51:12.725456+00:00",
+  "worktree": "/private/tmp/adk-codex-parallel-20260901.xlAufG/review-worktrees/alpha-adversarial-59ad809-attempt2"
+}

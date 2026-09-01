@@ -1,0 +1,27 @@
+{
+  "base": "f13b3e995558ee2f14b656bba2e1a0f74d2254c2",
+  "branch": "dev/parallel-alpha",
+  "codex_argv": [
+    "codex",
+    "exec",
+    "-C",
+    "/private/tmp/adk-codex-parallel-20260901.xlAufG/review-worktrees/alpha-correctness-59ad809",
+    "--sandbox",
+    "read-only",
+    "-c",
+    "model_reasoning_effort=high",
+    "--output-last-message",
+    "/private/tmp/adk-codex-parallel-20260901.xlAufG/reviews/alpha-correctness/report.md",
+    "-"
+  ],
+  "ended_at": "2026-09-01T15:04:14.265763+00:00",
+  "exit_code": 0,
+  "head": "59ad80980fb3c9d609c41c6ffc7f7fed0e12db97",
+  "lane": "parallel-alpha",
+  "lens": "correctness",
+  "pr": 2,
+  "prompt_sha256": "e90b78b8e283357b905d819acf9300ad1538b5f4e6d2a16e3d88259a851dc99c",
+  "report_sha256": "13ac78cd9b97c41f53b6438111ac6dd63bc650474779c6b7f434df78f30c3c0c",
+  "started_at": "2026-09-01T15:01:22.291434+00:00",
+  "worktree": "/private/tmp/adk-codex-parallel-20260901.xlAufG/review-worktrees/alpha-correctness-59ad809"
+}

@@ -1,0 +1,27 @@
+{
+  "base": "f13b3e995558ee2f14b656bba2e1a0f74d2254c2",
+  "branch": "dev/parallel-beta",
+  "codex_argv": [
+    "codex",
+    "exec",
+    "-C",
+    "/private/tmp/adk-codex-parallel-20260901.xlAufG/review-worktrees/beta-correctness-57e4209",
+    "--sandbox",
+    "read-only",
+    "-c",
+    "model_reasoning_effort=high",
+    "--output-last-message",
+    "/private/tmp/adk-codex-parallel-20260901.xlAufG/reviews/beta-correctness/report.md",
+    "-"
+  ],
+  "ended_at": "2026-09-01T15:24:36.670622+00:00",
+  "exit_code": 0,
+  "head": "57e4209a79080d7605cd8e42cb53fe8bdc5d3f38",
+  "lane": "parallel-beta",
+  "lens": "correctness",
+  "pr": 1,
+  "prompt_sha256": "fcd856e83b0f7d4d469f364250562f8ce517d17b0dbccdfe17e2c7a9f08ff9da",
+  "report_sha256": "ab3596e531b8d79495d3abcad6d2e26cf66258b750114eeca8497403dfad6a50",
+  "started_at": "2026-09-01T15:14:44.954772+00:00",
+  "worktree": "/private/tmp/adk-codex-parallel-20260901.xlAufG/review-worktrees/beta-correctness-57e4209"
+}
