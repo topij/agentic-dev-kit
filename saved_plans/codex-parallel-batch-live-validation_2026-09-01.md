@@ -94,5 +94,15 @@ and recomputes the actual EOF form while remaining backward-compatible with exis
 proofs. The regression test uses a real recomputed Git object ID rather than a mocked
 verdict.
 
-The final repository verification and retained snapshot observation are added at the
-committed candidate revision, after the tree is quiet.
+`UV_CACHE_DIR=/private/tmp/adk-codex-parallel-20260901.xlAufG/full-test-cache uv
+run --with pytest --with pyyaml pytest scripts/tests/test_live_validation_bundle.py
+-q` at `3534e93e806edd605facdd3bc08fe86302fcd750` on 2026-09-01 printed `211
+passed, 3 warnings in 10.64s`. The warnings are pytest cleanup warnings for its own
+temporary hostile trees; the test command returned exit `0`.
+
+The independently parameterized verifier command at
+`3534e93e806edd605facdd3bc08fe86302fcd750` on 2026-09-01 returned status
+`verified` with retained snapshot SHA-256
+`abb797907e8358366bf8124d3592cf1887e990b36e333c523e58c27ea2d2d2d4`. That
+snapshot is recomputed from the bundle's directory and file bytes rather than read
+from its manifest.
