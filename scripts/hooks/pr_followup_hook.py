@@ -60,8 +60,8 @@ from pathlib import Path
 # does not miss ``cd x && <command>``, and therefore also sees quoted/search
 # text. The emitted instruction owns that ambiguity and grants no authority
 # until the operation and authoritative forge state are established separately.
-# Creation URLs, indirect actions, and every lifecycle-looking command whose
-# native evidence was hidden or transformed take the non-mutating warning.
+# Creation URLs, indirect actions, and lifecycle-looking commands whose native
+# evidence was hidden or transformed take the non-mutating warning.
 #
 # Both runtimes supply PostToolUse response data, and every Bash command reaches
 # this shared policy. Constructed executables and argv cannot be recovered from
