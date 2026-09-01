@@ -31,7 +31,7 @@ lane, session, review-decision, and reconciliation dependency to the promoted so
 - The cockpit filesystem read-back shows distinct canonical worktree paths and
   distinct canonical state-root paths. Each worktree marker agrees with its
   descriptor and launcher observation. Git object and remote read-backs bind each
-  head to only its declared note path.
+  head and branch to the fixture repository.
 - Each ready pull request remains `OPEN` with no merge commit. Its scope-local
   `pr-watch` receipt is bound to that pull request's exact head and records the
   independently run `adversarial` and `correctness` lenses through
@@ -183,6 +183,16 @@ note digests.
 That same later lens demonstrated that a static name could hide credential material
 from the Python-source exception. The scanner now fails closed on a direct name used
 as a credential value while continuing to allow named runtime helper calls.
+
+The convergence lens at `a4563dca9d8d91b0ff57942281dbc4d1686c2c65` on
+2026-09-01 demonstrated that recoverable numeric scalars and literals inside
+comprehension clauses could bypass the Python-source backstop. It also demonstrated
+that reviewer prompt and report bytes from one lane could be placed under the other
+lane's run record while coordinated digests kept the semantic control green. Numeric
+scalars and comprehension inputs now reach the same credential-value classifier as
+other static values. The semantic control now binds each retained prompt to its lane
+branch, pull request, head, base, and review worktree, and binds each report to that
+head and worktree.
 
 `UV_CACHE_DIR=/private/tmp/adk-codex-parallel-20260901.xlAufG/full-test-cache uv
 run --with pytest --with pyyaml pytest scripts/tests/test_live_validation_bundle.py

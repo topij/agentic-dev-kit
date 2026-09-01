@@ -872,6 +872,8 @@ def _static_python_values(value: ast.expr) -> list[str]:
             return [item.decode("utf-8", errors="replace")]
         if isinstance(item, str):
             return [item]
+        if isinstance(item, (int, float, complex)) and not isinstance(item, bool):
+            return [str(item)]
         if isinstance(item, dict):
             return [
                 scalar
@@ -972,6 +974,21 @@ def _dynamic_python_literals(value: ast.expr, names: list[str]) -> list[str]:
             for key, child in zip(value.keys, value.values, strict=True)
             for part in ([child] if key is None else [key, child])
             for literal in _dynamic_python_literals(part, names)
+        ]
+    if isinstance(value, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)):
+        children = (
+            [value.key, value.value]
+            if isinstance(value, ast.DictComp)
+            else [value.elt]
+        )
+        children.extend(generator.iter for generator in value.generators)
+        children.extend(
+            condition for generator in value.generators for condition in generator.ifs
+        )
+        return [
+            literal
+            for child in children
+            for literal in _dynamic_python_literals(child, names)
         ]
     return [
         literal

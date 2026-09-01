@@ -793,6 +793,44 @@ def test_git_bound_python_source_refuses_a_static_credential_alias(
     assert "credential-like content" in result.stderr
 
 
+@pytest.mark.parametrize(
+    "source_bytes",
+    [
+        b"token = 123456\n",
+        b"password = 123456.0\n",
+        b"secret = 123456j\n",
+        b'token = next(value for value in ["hunter2-secret"])\n',
+    ],
+    ids=["integer", "float", "complex", "comprehension"],
+)
+def test_git_bound_python_source_refuses_a_newly_traversed_static_credential(
+    tmp_path: Path,
+    source_bytes: bytes,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+        source_bytes=source_bytes,
+    )
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = json.loads(
+        manifest.read_text(encoding="utf-8")
+    )["source"]["revision"]
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 2
+    assert "credential-like content" in result.stderr
+
+
 def test_git_bound_python_source_refuses_a_credential_literal_in_an_expression(
     tmp_path: Path,
 ) -> None:
@@ -3782,6 +3820,8 @@ def test_the_promoted_codex_parallel_batch_remains_independently_recomputable() 
         for lens in ("adversarial", "correctness"):
             review_root = artifacts / "reviews" / lane
             run_record = json.loads((review_root / f"{lens}-run.json").read_text())
+            prompt = (review_root / f"{lens}-prompt.txt").read_text()
+            report = (review_root / f"{lens}-report.md").read_text()
             assert run_record["lane"] == scopes[lane]
             assert run_record["lens"] == lens
             assert run_record["head"] == lane_heads[lane]
@@ -3792,6 +3832,13 @@ def test_the_promoted_codex_parallel_batch_remains_independently_recomputable() 
             assert run_record["report_sha256"] == _sha(
                 review_root / f"{lens}-report.md"
             )
+            assert f"**Branch:** {descriptor['branch']}" in prompt
+            assert f"**PR:** #{pull_requests[lane]}" in prompt
+            assert f"**Head sha under review:** `{lane_heads[lane]}`" in prompt
+            assert f"**Base:** `{fixture_base}`" in prompt
+            assert run_record["worktree"] in prompt
+            assert lane_heads[lane] in report
+            assert run_record["worktree"] in report
 
     assert identities["alpha"][0] != identities["beta"][0]
     assert identities["alpha"][1] != identities["beta"][1]
