@@ -800,8 +800,19 @@ def test_git_bound_python_source_refuses_a_static_credential_alias(
         b"password = 123456.0\n",
         b"secret = 123456j\n",
         b'token = next(value for value in ["hunter2-secret"])\n',
+        b"token = helper(123456)\n",
+        b'token = f"{123456}"\n',
+        b"token = next(value for value in [123456])\n",
     ],
-    ids=["integer", "float", "complex", "comprehension"],
+    ids=[
+        "integer",
+        "float",
+        "complex",
+        "string-comprehension",
+        "numeric-call",
+        "numeric-formatted-value",
+        "numeric-comprehension",
+    ],
 )
 def test_git_bound_python_source_refuses_a_newly_traversed_static_credential(
     tmp_path: Path,
@@ -3832,6 +3843,9 @@ def test_the_promoted_codex_parallel_batch_remains_independently_recomputable() 
             assert run_record["report_sha256"] == _sha(
                 review_root / f"{lens}-report.md"
             )
+            assert f"**{lens}** —" in prompt
+            assert run_record["codex_argv"][2:4] == ["-C", run_record["worktree"]]
+            assert f"{lane}-{lens}-" in Path(run_record["worktree"]).name
             assert f"**Branch:** {descriptor['branch']}" in prompt
             assert f"**PR:** #{pull_requests[lane]}" in prompt
             assert f"**Head sha under review:** `{lane_heads[lane]}`" in prompt

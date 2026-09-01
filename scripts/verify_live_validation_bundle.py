@@ -903,7 +903,13 @@ def _dynamic_python_literals(value: ast.expr, names: list[str]) -> list[str]:
     if isinstance(value, ast.Constant):
         if isinstance(value.value, bytes):
             return [value.value.decode("utf-8", errors="replace")]
-        return [value.value] if isinstance(value.value, str) else []
+        if isinstance(value.value, str):
+            return [value.value]
+        if isinstance(value.value, (int, float, complex)) and not isinstance(
+            value.value, bool
+        ):
+            return [str(value.value)]
+        return []
     if isinstance(value, ast.JoinedStr):
         literals = [
             part.value
@@ -916,7 +922,15 @@ def _dynamic_python_literals(value: ast.expr, names: list[str]) -> list[str]:
             and any(isinstance(part, ast.FormattedValue) for part in value.values)
         ):
             return []
-        return literals
+        return [
+            *literals,
+            *(
+                literal
+                for part in value.values
+                if isinstance(part, ast.FormattedValue)
+                for literal in _dynamic_python_literals(part.value, names)
+            ),
+        ]
     if isinstance(value, ast.Call):
         env_lookup = expression_path(value.func) in {"os.getenv", "os.environ.get"}
         children = [] if expression_path(value.func) else [(value.func, False)]

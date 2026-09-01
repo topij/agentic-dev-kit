@@ -194,6 +194,11 @@ other static values. The semantic control now binds each retained prompt to its 
 branch, pull request, head, base, and review worktree, and binds each report to that
 head and worktree.
 
+The later lens at `587b8391afdd4d9b27fdbec1f6f8f5454e98649a` on 2026-09-01
+reproduced nested numeric forms and a within-lane lens relabel. Dynamic numeric
+constants and formatted fields now reach the classifier. The semantic control binds
+the prompt focus and the launch argv's review worktree to the declared lens.
+
 `UV_CACHE_DIR=/private/tmp/adk-codex-parallel-20260901.xlAufG/full-test-cache uv
 run --with pytest --with pyyaml pytest scripts/tests/test_live_validation_bundle.py
 -q` at `d3243e780d93078148fa890520e59247b37e2e42` on 2026-09-01 printed `211
