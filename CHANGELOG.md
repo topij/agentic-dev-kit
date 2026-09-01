@@ -48,14 +48,15 @@ starts.
   successful creation URL from GitHub CLI's existing-PR diagnostic. Creation output
   carries no draft bit, so every successful creation requires an authoritative
   `isDraft` check. Ready acknowledgements also require repository and host identity to
-  match the current checkout before a repository-local watcher runs. Creation, ready,
-  and draft acknowledgements receive the full lifecycle instruction only when a
-  literal `gh pr ready` action corroborates them. Creation URLs, missing output,
-  indirect actions, read-only lookalikes, and response-only state acknowledgements
-  receive a separate fail-loud warning with no mutation or watch authority until
-  authoritative forge state independently confirms the event. Constructed shell argv
-  is not reconstructed; response-only URLs remain silent because they are not specific
-  enough to identify a lifecycle event.**
+  match the current checkout before a repository-local watcher runs. Shell and response
+  matches are candidates only: even the expanded instruction selected by a literal
+  `gh pr ready` token plus a ready/draft acknowledgement grants no mutation authority
+  until the operation and authoritative forge state are established separately.
+  Creation URLs, missing, replaced, or transformed output, indirect actions, read-only
+  lookalikes, quoted/search mentions, and response-only state acknowledgements fail loud
+  without granting mutation or watch authority. Constructed shell argv is not
+  reconstructed; response-only URLs remain silent because they are not specific enough
+  to identify a lifecycle event.**
   **Refresh
   `scripts/hooks/pr_followup_hook.py` and `init.sh`; in Claude's `PostToolUse`
   registration, set the command hook's `if` field to `Bash(*)` so the shared hook —

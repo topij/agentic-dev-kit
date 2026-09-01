@@ -1,9 +1,10 @@
 """Tests for scripts/hooks/pr_followup_hook.py — the PostToolUse PR follow-through nag.
 
-Covers the contract the hook must hold regardless of config state: only a literal
-`gh pr ready` plus its acknowledgement gets the full lifecycle reminder; unresolved
-evidence gets a non-mutating warning. It never emits in a cron/CI context (`JOB_NAME`
-set), and always exits 0 — malformed stdin must never fail the hosting session.
+Covers the contract the hook must hold regardless of config state: shell and response
+matches are candidates, never mutation authority. A literal `gh pr ready` token plus
+its acknowledgement gets expanded conditional guidance; unresolved evidence gets a
+non-mutating warning. It never emits in a cron/CI context (`JOB_NAME` set), and always
+exits 0 — malformed stdin must never fail the hosting session.
 """
 
 from __future__ import annotations
@@ -85,7 +86,8 @@ def test_direct_draft_ack_instruction_orders_live_state_before_mutation(
     body = json.loads(out)
     assert body["hookSpecificOutput"]["hookEventName"] == "PostToolUse"
     context = body["hookSpecificOutput"]["additionalContext"]
-    assert "corroborated a pull-request review-state change" in context
+    assert "matched a pull-request lifecycle candidate" in context
+    assert "grant no mutation or watch authority" in context
     assert "current workflow state" in context
     assert "--assert-draft" in context
     mention_stop = context.index("stop immediately without querying the forge")
@@ -97,6 +99,9 @@ def test_direct_draft_ack_instruction_orders_live_state_before_mutation(
     draft_assertion = context.index("--assert-draft")
     ready_transition = context.index("gh pr ready", draft_assertion)
     ready_assertion = context.index("--assert-ready", ready_transition)
+    conditional_mandate = context.index(
+        "Only if the operation was lifecycle-changing"
+    )
     assert (
         mention_stop
         < identity_resolution
@@ -105,6 +110,7 @@ def test_direct_draft_ack_instruction_orders_live_state_before_mutation(
         < draft_assertion
         < ready_transition
         < ready_assertion
+        < conditional_mandate
     )
 
 
@@ -117,7 +123,8 @@ def test_direct_ready_ack_instruction_orders_live_state_before_watch(
     exit_code, out = _run(hook, monkeypatch, capsys, _payload_with(command, stderr=response))
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "corroborated a pull-request review-state change" in context
+    assert "matched a pull-request lifecycle candidate" in context
+    assert "Only if the operation was lifecycle-changing" in context
     assert context.index("--assert-ready") < context.index("watch-and-fix loop")
 
 
@@ -130,7 +137,7 @@ def test_triggers_on_gh_pr_ready(monkeypatch, capsys):
     body = json.loads(out)
     assert body["hookSpecificOutput"]["hookEventName"] == "PostToolUse"
     context = body["hookSpecificOutput"]["additionalContext"]
-    assert "corroborated a pull-request review-state change" in context
+    assert "matched a pull-request lifecycle candidate" in context
     assert "match the current checkout's authoritative forge identity" in context
 
 
@@ -160,7 +167,10 @@ def test_draft_acknowledgement_requires_action_corroboration(
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
     assert "inspect `gh pr view <PR#> --json isDraft`" in context
     assert ("MANDATORY" in context) is full_lifecycle
-    assert ("grants no mutation authority" in context) is (not full_lifecycle)
+    if full_lifecycle:
+        assert "grant no mutation or watch authority" in context
+    else:
+        assert "grants no mutation authority" in context
 
 
 def test_compound_create_and_ready_acknowledgement_still_requires_live_state(
@@ -180,7 +190,34 @@ def test_compound_create_and_ready_acknowledgement_still_requires_live_state(
     )
     assert exit_code == 0
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "corroborated a pull-request review-state change" in context
+    assert "matched a pull-request lifecycle candidate" in context
+
+
+def test_quoted_ready_search_with_ack_shaped_output_never_grants_authority(
+    monkeypatch, capsys
+):
+    hook = _load_hook()
+    command = "gh pr view 42 --json body --jq .body | grep 'gh pr ready'"
+    response = (
+        "documentation: gh pr ready 42; "
+        'Pull request owner/repo#42 is marked as "ready for review"'
+    )
+
+    exit_code, out = _run(
+        hook, monkeypatch, capsys, _payload_with(command, stdout=response)
+    )
+
+    assert exit_code == 0
+    assert hook.should_fire(command, response) is True
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    no_authority = context.index("grant no mutation or watch authority")
+    read_only_stop = context.index("stop immediately without querying the forge")
+    forge_resolution = context.index("First resolve the exact pull-request identity")
+    conditional_mandate = context.index(
+        "Only if the operation was lifecycle-changing"
+    )
+    assert no_authority < read_only_stop < forge_resolution < conditional_mandate
+    assert "does this lifecycle become MANDATORY" in context
 
 
 def test_compound_shell_text_is_never_used_for_a_mutating_lifecycle():
@@ -268,7 +305,10 @@ def test_existing_pr_diagnostic_is_not_creation_evidence(monkeypatch, capsys):
 
     assert exit_code == 0
     assert hook.should_fire(command, response) is False
-    assert out == ""
+    assert hook.should_warn_unresolved(command, response) is True
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "grants no mutation authority" in context
+    assert "MANDATORY" not in context
 
 
 @pytest.mark.parametrize(
@@ -1149,14 +1189,44 @@ _MENTIONS = [
 
 
 @pytest.mark.parametrize("command,stdout", _MENTIONS)
-def test_a_command_that_merely_mentions_the_phrase_stays_silent(
+def test_a_command_that_merely_mentions_the_phrase_gets_only_a_safe_warning(
     monkeypatch, capsys, command, stdout
 ):
     hook = _load_hook()
     exit_code, out = _run(hook, monkeypatch, capsys, _payload_with(command, stdout=stdout))
 
     assert exit_code == 0
-    assert out == "", f"spurious mandate for a command that only mentions it: {command}"
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "grants no mutation authority" in context
+    assert "MANDATORY" not in context
+
+
+@pytest.mark.parametrize(
+    "command,replacement",
+    (
+        ("gh pr create --fill >/dev/null && printf created", "created"),
+        ("gh pr ready 42 2>/dev/null && printf transitioned", "transitioned"),
+        (
+            "gh pr create --fill | sed s#https://#created:#",
+            "created:github.com/o/r/pull/42",
+        ),
+    ),
+)
+def test_lifecycle_candidate_with_replaced_native_output_fails_loud_without_authority(
+    monkeypatch, capsys, command, replacement
+):
+    hook = _load_hook()
+
+    exit_code, out = _run(
+        hook, monkeypatch, capsys, _payload_with(command, stdout=replacement)
+    )
+
+    assert exit_code == 0
+    assert hook.should_fire(command, replacement) is False
+    assert hook.should_warn_unresolved(command, replacement) is True
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "grants no mutation authority" in context
+    assert "MANDATORY" not in context
 
 
 def test_a_creation_url_gets_only_the_nonmutating_warning(monkeypatch, capsys):

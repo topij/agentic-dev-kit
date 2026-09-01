@@ -12,12 +12,14 @@ Registered on BOTH runtimes, and told which one it is running under via
     filters the TOOL NAME only, with no equivalent of Claude's `if`, so this
     script is invoked on every Bash call there and does all the narrowing itself.
 
-Either way it narrows corroborated PR lifecycle events into a mandatory
+Either way it narrows stronger PR lifecycle candidates into a conditional
 `additionalContext` instruction and indeterminate `gh pr` results into a
-separate non-mutating warning. The lifecycle instruction requires the session
-to resolve the exact pull request, confirm that it belongs to the current
-checkout, read live draft state, and perform the matching lifecycle without
-being asked. Both runtimes honour the same output contract.
+separate non-mutating warning. Neither route treats shell or response text as
+proof of an event. The lifecycle instruction requires the session to establish
+that the operation was lifecycle-changing, resolve the exact pull request,
+confirm that it belongs to the current checkout, and read live draft state
+before the matching lifecycle becomes mandatory. Both runtimes honour the same
+output contract.
 This closes the gap where the kit only had prose asking the agent to run `/pr-watch`
 unasked (Principle #8: "a rule that lives only in a doc is a wish").
 
@@ -52,11 +54,14 @@ import re
 import sys
 from pathlib import Path
 
-# A literal ``gh pr ready`` action plus GitHub CLI's state acknowledgement is
-# the only evidence strong enough for the full lifecycle instruction. Creation
-# URLs, indirect actions, and acknowledgement-shaped read-only output take the
-# non-mutating warning instead. The regex matches anywhere, so anchoring to the
-# start does not miss ``cd x && <command>``.
+# A literal ``gh pr ready`` token plus GitHub CLI's state acknowledgement
+# selects the expanded conditional lifecycle instruction. It does not prove
+# that the token was executed: the regex deliberately matches anywhere so it
+# does not miss ``cd x && <command>``, and therefore also sees quoted/search
+# text. The emitted instruction owns that ambiguity and grants no authority
+# until the operation and authoritative forge state are established separately.
+# Creation URLs, indirect actions, and every lifecycle-looking command whose
+# native evidence was hidden or transformed take the non-mutating warning.
 #
 # Both runtimes supply PostToolUse response data, and every Bash command reaches
 # this shared policy. Constructed executables and argv cannot be recovered from
@@ -332,18 +337,19 @@ def _without_existing_pr_diagnostics(response: str) -> str:
 
 
 def _lifecycle_instruction(engines_dir: str) -> str:
-    """Instruct a repository-bound live query for a corroborated state change.
+    """Instruct a repository-bound live query for a stronger candidate.
 
     Ready acknowledgements carry an owner/repo name, but turning that text into
     a repository-local numeric ``pr_watch`` call would discard identity. Shell
     wrappers, ``GH_REPO``, ``-R`` and PR URLs can all make the acknowledged pull
-    request belong to another repository. The hook therefore requires a literal
-    ``gh pr ready`` action plus response evidence before emitting this
-    instruction. Response text alone grants no mutation.
+    request belong to another repository. A literal ``gh pr ready`` token plus
+    response evidence selects this detailed instruction, but neither proves an
+    action. The instruction preserves that trust boundary explicitly.
     """
     # Response text never selects a mutating lifecycle route from that evidence.
     return (
-        "A Bash result corroborated a pull-request review-state change. If the "
+        "A Bash result matched a pull-request lifecycle candidate. This match "
+        "and its output grant no mutation or watch authority. If the "
         "just-completed "
         "operation only mentioned or "
         "searched for a lifecycle command and did not actually create a pull "
@@ -381,8 +387,10 @@ def build_reminder(
     bot_desc = _bot_description(bots)
     return (
         _lifecycle_instruction(engines_dir)
-        + 'Per the kit\'s "PR follow-through" policy (PRINCIPLES.md #5/#8), '
-        "this lifecycle is MANDATORY; complete it in the current run without being "
+        + "Only if the operation was lifecycle-changing and the authoritative "
+        "resolution above confirms the affected pull request does this lifecycle "
+        "become MANDATORY. Then, per the kit's PR follow-through policy "
+        "(PRINCIPLES.md #5/#8), complete it in the current run without being "
         "asked. When it reaches review polling, invoke `/pr-watch` (or poll "
         f"`uv run {engines_dir}/pr_watch.py <PR#> --json`) and do NOT yield this turn "
         f"until CI is fully green AND every {bot_desc} finding is fixed or "
@@ -503,11 +511,13 @@ def _response_text(data: dict) -> str | None:
 
 
 def should_fire(command: object, response: str | None) -> bool:
-    """Whether this Bash result requires lifecycle follow-through context.
+    """Whether this Bash result gets expanded conditional lifecycle context.
 
-    Only a literal ``gh pr ready`` action plus a ready/draft acknowledgement is
-    corroboration. Creation URLs and indirect/read-only lookalikes are handled
-    separately by :func:`should_warn_unresolved`.
+    A literal ``gh pr ready`` token plus a ready/draft acknowledgement selects
+    detailed guidance, not mutation authority. Quoted/search text can satisfy
+    this deliberately parser-free candidate check, so the guidance itself must
+    require a separate operation assessment and authoritative forge state.
+    Other candidates are handled by :func:`should_warn_unresolved`.
     """
     if (
         response is None
@@ -527,7 +537,15 @@ def should_warn_unresolved(command: object, response: str | None) -> bool:
         return False
     if response is not None and (_READY_ACK.search(response) or _DRAFT_ACK.search(response)):
         return True
-    if not isinstance(command, str) or not _GH_PR_PREFIX.search(command):
+    if not isinstance(command, str):
+        return False
+    # Any lifecycle-looking command whose native evidence is absent, replaced,
+    # or transformed must fail loud. Determining whether the token was executed
+    # would require parsing shell syntax; the warning is intentionally harmless
+    # for a quoted/search mention and explicitly grants no mutation authority.
+    if _TRIGGER.search(command):
+        return True
+    if not _GH_PR_PREFIX.search(command):
         return False
     if response is None:
         return True
