@@ -1011,19 +1011,31 @@ migrate_runtime_schema() {
     # `models` comment carries the record). An adopter whose account lacks
     # `fable` sets `opus`; the migration never rewrites an existing value.
     [ -n "$old_expensive" ] || old_expensive="fable"
-    append_to_section "models:" "  tiers:
+    # The STATUS line below is EMITTED into the adopter's config, unlike the
+    # shell comment above it. #255 asks a compute-selecting key to declare
+    # mechanical-vs-advisory per runtime at the config surface, and for a
+    # migrating adopter this migration IS that surface. Single-quoted so the
+    # backticks stay literal; the three carried values are the only
+    # interpolation.
+    append_to_section "models:" '  tiers:
     cheap: mechanical
     default: standard
     expensive: judgment
+  # STATUS, per runtime: ADVISORY on both. The kit carries this map through no
+  # engine, so a workflow tier reaches a session only when the cockpit or the
+  # operator applies it by hand: the delegation tool `model` parameter,
+  # `claude -p --model/--effort`, `codex -m`, `-c model_reasoning_effort=`.
+  # The values name controls each client accepted when the tiers were
+  # calibrated (Claude Code 2.1.247, codex-cli 0.149.1, probed live 2026-08-27).
   runtime_mappings:
     claude:
-      cheap: $old_cheap
-      default: $old_default
-      expensive: $old_expensive
+      cheap: '"$old_cheap"'
+      default: '"$old_default"'
+      expensive: '"$old_expensive"'
     codex:
       cheap: low
       default: medium
-      expensive: xhigh"
+      expensive: xhigh'
     echo "added runtime model mappings to config/dev-model.yaml"
   fi
 }

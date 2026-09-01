@@ -3104,9 +3104,57 @@ def test_both_lens_compute_comments_declare_the_carrier_per_key_per_runtime():
         )
 
 
-def _runtime_mappings_block(text: str) -> str:
+def _runtime_mappings_comment(text: str) -> str:
+    """Return the run of `#` lines directly above `runtime_mappings` in `text`.
+
+    Walked backwards from the key rather than anchored on a marker, so a surface
+    carrying no comment at all yields `""` and the pin below fails on its own
+    assertion instead of on a lookup for the string it is checking for.
+    """
     start = text.index("  runtime_mappings:")
-    return text[start : text.index("\n\n", start)] if "\n\n" in text[start:] else text[start:]
+    comment = []
+    for line in reversed(text[:start].splitlines(keepends=True)):
+        if not line.lstrip().startswith("#"):
+            break
+        comment.append(line)
+    return "".join(reversed(comment))
+
+
+def test_both_runtime_mappings_comments_declare_the_status_per_runtime():
+    """The sibling of `lens_compute`'s carrier pin, for the other compute key.
+
+    `#255` asks a compute-selecting key to declare mechanical-vs-advisory per
+    runtime *at the config surface*, and there are two such surfaces: the
+    reference config an existing adopter reads, and this migration, which is the
+    config surface a migrating adopter gets. The declaration reached only the
+    reference one — the same asymmetry `lens_compute`'s pin above exists to
+    catch, which its own docstring records as having shipped a retracted wording
+    to every new adopter. This is `#149`'s rule ("when a claim is corrected,
+    enumerate every surface it was published to") applied to the sibling key.
+
+    Kills: dropping the declaration from either surface, and softening it to a
+    status that does not say the map is applied by hand.
+    """
+    surfaces = (
+        ("init.sh", _runtime_mappings_comment((REPO_ROOT / "init.sh").read_text(encoding="utf-8"))),
+        (
+            "config/dev-model.yaml",
+            _runtime_mappings_comment(
+                (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
+            ),
+        ),
+    )
+    for surface, comment in surfaces:
+        assert "STATUS, per runtime" in comment, (
+            f"{surface} must declare the status of `runtime_mappings` per runtime"
+        )
+        assert "ADVISORY on both" in comment, (
+            f"{surface} must say the map is advisory on BOTH runtimes, not one"
+        )
+        assert "by hand" in comment, (
+            f"{surface} must say who applies the value, or `advisory` tells an adopter "
+            "the status without telling them what to do about it"
+        )
 
 
 def test_init_sh_stamps_the_same_tier_mapping_defaults_as_the_reference_config(
