@@ -7,7 +7,7 @@
     "codex-parallel-batch-complete-claim-map"
   ],
   "manifest": "bundle.json",
-  "manifest_sha256": "d89b866f8723e0c34dd1edaed08a161163101ab6e59e9937505dfa9b2782d2e5",
+  "manifest_sha256": "900ffa822b860d4226fd2f59e818db81ce3051459a070d0720a752b88469b93f",
   "redaction_reviewer": "codex-cockpit-gpt-5-6-sol",
   "review_repository": "https://github.com/topij/adk-codex-parallel-evidence-20260901",
   "reviewed_head": "59ad80980fb3c9d609c41c6ffc7f7fed0e12db97",

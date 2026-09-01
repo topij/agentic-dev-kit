@@ -75,9 +75,11 @@ rerun from a fresh context. Only the completed rerun is retained.
 The source closure deliberately excludes review-helper implementation bytes whose
 ordinary `token = …` local-variable text triggers the bundle's credential backstop.
 The exact rendered prompts, run records, reports, scope receipts, and review heads
-are retained. The source closure covers the behavior under validation: configuration,
-lane session and launcher engines, reconciliation, state/config libraries, and the
-bundle verifier.
+are retained. The source closure covers the behavior under validation:
+configuration, lane session and launcher engines, reconciliation, and state/config
+libraries. The repository-owned verifier that promotes the bundle is reviewed and
+versioned by this PR; it is not mislabeled as an execution dependency of the older
+source revision that the lane run exercised.
 
 ## Promotion verification
 

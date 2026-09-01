@@ -14,7 +14,7 @@
       "kind": "source-digest",
       "observer": "synthetic-git-object-readback",
       "path": "artifacts/execution-source-digests.txt",
-      "sha256": "389ef553766e891915be9480c89cc0d9e72d7b9f63e6d4f00a66389604ff8352"
+      "sha256": "e958795a20946ddbe36cbcb85eb2329e2ac1a122b577b30373912daf9fd37dbf"
     },
     {
       "capture_request": "cockpit readback of both descriptor-bound worktrees and state roots",
@@ -342,7 +342,7 @@
       "kind": "source-digest",
       "observer": "git-object-source-readback",
       "path": "artifacts/source-digests.txt",
-      "sha256": "cbc0f2b8b477317b76c401b4926ca760e68bec9ce63f226291588ba0200eb860"
+      "sha256": "8a3b398765af128c2cea2519b5b7f5a145b02ee71c99e0db35e8adcdca9a5452"
     },
     {
       "capture_request": "git cat-file commit and tree-object readback for 6679856f7c9f14eac921f3b033c0077729bb17e1",
@@ -399,14 +399,6 @@
       "observer": "retained-git-object-bytes",
       "path": "artifacts/source/scripts/reconcile_sessions.sh",
       "sha256": "75d29491cf65b61d385bb7bbb1c2cd39b3f557bef05b1dfa4a049737e8937573"
-    },
-    {
-      "capture_request": "git show 6679856f7c9f14eac921f3b033c0077729bb17e1:scripts/verify_live_validation_bundle.py",
-      "captured_on": "2026-09-01",
-      "kind": "source-file",
-      "observer": "retained-git-object-bytes",
-      "path": "artifacts/source/scripts/verify_live_validation_bundle.py",
-      "sha256": "1940ef1de9ac493edb4d19580c8c2c644d9a5acbdf634cb717c5ca43745f455e"
     }
   ],
   "bundle_id": "codex-parallel-batch-2026-09-01",
@@ -447,7 +439,6 @@
         "artifacts/source/scripts/dev_session.sh",
         "artifacts/source/scripts/launch_lane.py",
         "artifacts/source/scripts/reconcile_sessions.sh",
-        "artifacts/source/scripts/verify_live_validation_bundle.py",
         "artifacts/source/scripts/lib/kitconfig.py",
         "artifacts/source/scripts/lib/repo_root.sh"
       ],
@@ -481,7 +472,6 @@
         "artifacts/source/scripts/dev_session.sh",
         "artifacts/source/scripts/launch_lane.py",
         "artifacts/source/scripts/reconcile_sessions.sh",
-        "artifacts/source/scripts/verify_live_validation_bundle.py",
         "artifacts/source/scripts/lib/kitconfig.py",
         "artifacts/source/scripts/lib/repo_root.sh"
       ],
@@ -509,7 +499,6 @@
         "artifacts/source/scripts/dev_session.sh",
         "artifacts/source/scripts/launch_lane.py",
         "artifacts/source/scripts/reconcile_sessions.sh",
-        "artifacts/source/scripts/verify_live_validation_bundle.py",
         "artifacts/source/scripts/lib/kitconfig.py",
         "artifacts/source/scripts/lib/repo_root.sh"
       ],
@@ -567,8 +556,7 @@
         "artifacts/source/scripts/launch_lane.py",
         "artifacts/source/scripts/lib/kitconfig.py",
         "artifacts/source/scripts/lib/repo_root.sh",
-        "artifacts/source/scripts/reconcile_sessions.sh",
-        "artifacts/source/scripts/verify_live_validation_bundle.py"
+        "artifacts/source/scripts/reconcile_sessions.sh"
       ],
       "id": "codex-parallel-batch-complete-claim-map",
       "requires_applied_compute": false
