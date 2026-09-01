@@ -150,3 +150,18 @@ The independently parameterized verifier command in that same worktree at
 `45f8db3312cec3300f6dacea90b2306462cb3c93` on 2026-09-01 returned status
 `verified` with retained snapshot SHA-256
 `990c3788d41c346ab70096f89459db4df77c5834628418b833cfa665ce9be447`.
+
+After the credential-expression and reviewed-head-set findings were repaired,
+`UV_PYTHON=3.12
+UV_CACHE_DIR=/private/tmp/adk-codex-parallel-20260901.xlAufG/post-review-py312-cache
+UV_TOOL_DIR=/private/tmp/adk-codex-parallel-20260901.xlAufG/post-review-py312-tools
+make test` in the clean detached worktree
+`/private/tmp/adk-codex-parallel-20260901.xlAufG/final-1374e65` at
+`1374e658aca81928fbda2d5081a4e2b0af150d02` on 2026-09-01 printed `2384 passed,
+3 warnings in 369.55s` and returned exit `0`. The warnings are pytest cleanup
+warnings for its own temporary hostile trees.
+
+The independently parameterized verifier command in that same worktree at
+`1374e658aca81928fbda2d5081a4e2b0af150d02` on 2026-09-01 returned status
+`verified` with retained snapshot SHA-256
+`473bf7058b2bb6d3957b3ec042c1899ed5e02d86c2389da848980bb749c576e5`.
