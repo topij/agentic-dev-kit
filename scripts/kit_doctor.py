@@ -182,6 +182,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -692,12 +693,13 @@ def derive_dependencies(
     matters to a repo that installed an engine and does not matter to one that
     installed none, and both are supported adoptions.
 
-    Resolution mirrors what the engines actually do at run time: every Python
-    one does ``sys.path.insert(0, <engine-dir>/"lib")`` before importing, so an
-    absolute import resolves against ``scripts/lib``. Relative imports resolve
-    against the importing file's own package, which is what keeps the
-    `state_paths` package's internal edges (``from .resolver import …``) in the
-    graph rather than only its top-level name.
+    Resolution mirrors what the engines actually do at run time: the script's
+    directory is already on ``sys.path``, and every Python engine inserts its
+    ``lib`` child ahead of it. Absolute imports therefore probe ``scripts/lib``
+    and then ``scripts``; relative imports resolve against the importing file's
+    own package, which is what keeps the `state_paths` package's internal edges
+    (``from .resolver import …``) in the graph rather than only its top-level
+    name.
 
     **Shell `source` is NOT scanned, and this is the one real gap.**
     `dev_session.sh` and `reconcile_sessions.sh` both
@@ -769,11 +771,15 @@ def derive_dependencies(
                 package = PurePosixPath(rel).parent
                 for _ in range(level - 1):
                     package = package.parent
-                package_dir = str(package)
+                package_dirs = (str(package),)
             else:
-                package_dir = f"{KIT_ENGINE_PREFIX}/lib"
-            for candidate in _module_targets(module, package_dir):
-                record(candidate, rel)
+                package_dirs = (
+                    f"{KIT_ENGINE_PREFIX}/lib",
+                    KIT_ENGINE_PREFIX,
+                )
+            for package_dir in package_dirs:
+                for candidate in _module_targets(module, package_dir):
+                    record(candidate, rel)
     return {path: sorted(deps) for path, deps in sorted(dependents.items())}
 
 
@@ -815,6 +821,25 @@ class RegistrationStatus:
 
 
 @dataclass
+class LensDefinitionStatus:
+    """One configured Claude lens definition compared with the running doctor.
+
+    These files are adopter-owned: the doctor may say that one no longer
+    represents the adopter's config, but it must never fold that difference into
+    kit-owned file drift or prescribe overwriting it without inspection. The
+    doctor owns the pure renderer; ``panel_prompt.py`` is the documented
+    regeneration route, while its installed-file drift remains on the existing
+    manifest-backed report axis.
+    """
+
+    runtime: str
+    lens: str
+    surface: str
+    state: str
+    detail: str = ""
+
+
+@dataclass
 class Report:
     kit_version_config: int | None
     kit_version_manifest: int | None
@@ -822,6 +847,7 @@ class Report:
     engines_dir_ok: bool
     hooks_installed: bool
     narrative_rendered: dict[str, bool]
+    inspection_root: Path = Path(".")
     # The version values as they were actually written, so the report can tell
     # "a version key that is not a number" (a typo — do not migrate) apart from
     # "no usable version" (pre-v2 — do migrate). Both leave the parsed field at
@@ -865,6 +891,7 @@ class Report:
     # it — so the third state arrives beside it rather than inside it.
     hooks_state: str = "not-installed"
     registrations: list[RegistrationStatus] = field(default_factory=list)
+    lens_definitions: list[LensDefinitionStatus] = field(default_factory=list)
     files: list[FileStatus] = field(default_factory=list)
 
     @property
@@ -2384,6 +2411,206 @@ def _drift_state(actual: str, expected: str, recorded: str | None) -> tuple[str,
     )
 
 
+AGENT_DEFINITION_RUNTIME = "claude"
+LENS_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+CLAUDE_EFFORT_LEVELS: tuple[str, ...] = ("low", "medium", "high", "xhigh", "max")
+
+class LensDefinitionError(ValueError):
+    """Configuration that cannot produce a faithful agent definition."""
+
+
+def _lens_compute_value(compute: dict, key: str, runtime: str) -> str | None:
+    if key not in compute:
+        return None
+    value = compute.get(key)
+    if not isinstance(value, str) or not value.strip() or not any(
+        char.isalnum() for char in value
+    ):
+        raise LensDefinitionError(
+            f"review.fallback_panel.lens_compute.{runtime}.{key} is {value!r}, which is "
+            "not a usable value; omit the key to inherit, or set a real one"
+        )
+    return value.strip()
+
+
+def render_agent_definition(config: dict, lens: str, runtime: str) -> str:
+    """Render one configured Claude lens definition without filesystem access."""
+    if runtime != AGENT_DEFINITION_RUNTIME:
+        raise LensDefinitionError(
+            f"--agent-definition renders a {AGENT_DEFINITION_RUNTIME!r} agent definition; "
+            f"runtime {runtime!r} carries lens compute on its launch argv, not in a "
+            "definition file (see the doctrine's compute section)"
+        )
+
+    lenses = get(config, "review.fallback_panel.lenses", [])
+    if not isinstance(lenses, list) or any(not isinstance(entry, dict) for entry in lenses):
+        raise LensDefinitionError(
+            "review.fallback_panel.lenses is not a list of maps, so no definition "
+            "can be rendered"
+        )
+    roster = {
+        entry["name"]: entry.get("focus", "")
+        for entry in lenses
+        if isinstance(entry.get("name"), str)
+    }
+    if lens not in roster:
+        raise LensDefinitionError(
+            f"lens {lens!r} is not in review.fallback_panel.lenses "
+            f"({', '.join(sorted(roster)) or 'roster is empty'}). The doctrine requires "
+            "lenses be drawn from the configured roster, not minted for the occasion."
+        )
+    if not LENS_NAME.match(lens):
+        raise LensDefinitionError(
+            f"lens name {lens!r} cannot be an agent definition: it becomes the file name, "
+            "the frontmatter `name:`, and the subagent type, so it must match "
+            f"{LENS_NAME.pattern}"
+        )
+
+    engines = get(config, "paths.engines", "scripts") or "scripts"
+    compute = get(config, f"review.fallback_panel.lens_compute.{runtime}", {}) or {}
+    if not isinstance(compute, dict):
+        raise LensDefinitionError(
+            f"review.fallback_panel.lens_compute.{runtime} is {compute!r}, not a map"
+        )
+    model = _lens_compute_value(compute, "model", runtime)
+    effort = _lens_compute_value(compute, "effort", runtime)
+    if effort is not None and effort not in CLAUDE_EFFORT_LEVELS:
+        raise LensDefinitionError(
+            f"review.fallback_panel.lens_compute.{runtime}.effort is {effort!r}; Claude Code "
+            f"accepts {', '.join(CLAUDE_EFFORT_LEVELS)} and would run this lens at the "
+            "cockpit's effort while logging the rejection only under --debug"
+        )
+
+    description = json.dumps(
+        f"Fallback review panel lens {lens}: {roster[lens]}. Launch it only with a prompt "
+        f"assembled by {engines}/panel_prompt.py; it is not a general-purpose agent.",
+        ensure_ascii=False,
+    )
+    front = ["---", f"name: {lens}", f"description: {description}"]
+    if model is not None:
+        front.append(f"model: {json.dumps(model, ensure_ascii=False)}")
+    if effort is not None:
+        front.append(f"effort: {effort}")
+    front.append("---")
+    pinned = (
+        "The frontmatter is what makes the configured compute mechanical: Claude Code\n"
+        "applies its `model` and `effort` when the cockpit launches the agent named\n"
+        f"`{lens}`. It lists this file at session start; a file written mid-session was\n"
+        "not launchable in the turn it was written and appeared in the roster later, so\n"
+        "count on it from the next session and treat an earlier listing as a bonus."
+        if model is not None or effort is not None
+        else "No `model` or `effort` is pinned here because\n"
+        f"`review.fallback_panel.lens_compute.{runtime}` carries neither; the lens\n"
+        "inherits the cockpit session's compute."
+    )
+    body = f"""
+Generated from `config/dev-model.yaml` (`review.fallback_panel.lenses` and
+`review.fallback_panel.lens_compute.{runtime}`) by
+`{engines}/panel_prompt.py --lens {lens} --agent-definition`. Regenerate it after
+changing either key; do not edit it by hand.
+
+{pinned}
+
+You are the **{lens}** lens of the fallback review panel
+(`docs/agentic-dev-kit/fallback-review-panel.md`). You did NOT write the change under
+review. Your launch prompt carries the contract, the revision, the diff, and your
+focus; follow it exactly, and report what you reviewed before any finding.
+"""
+    return "\n".join(front) + "\n" + body
+
+
+def inspect_lens_definitions(
+    root: Path, config: dict, engines_dir: str
+) -> list[LensDefinitionStatus]:
+    """Compare configured Claude agent definitions with current doctor output.
+
+    The already-running doctor supplies the canonical expected bytes and never
+    imports or executes a renderer from ``root``. Installed engine drift remains
+    a separate axis in the file report: this check answers whether the
+    adopter-owned definition matches the current doctor and config, not whether
+    every installed regeneration engine is current.
+
+    Every non-current state is advisory. ``init.sh`` seeds these files only when
+    absent and never owns them afterwards, and the kit supports an adopter that
+    has not wired one runtime. A warning makes the parity gap visible without
+    turning that supported choice into a permanently failing doctor gate.
+    """
+    raw_roster = get(config, "review.fallback_panel.lenses", [])
+    if raw_roster in (None, []):
+        return []
+    config_surface = "review.fallback_panel.lenses"
+    if not isinstance(raw_roster, list):
+        return [
+            LensDefinitionStatus(
+                "claude",
+                "",
+                config_surface,
+                "unverifiable",
+                "configured roster is not a list, so no definition can be rendered",
+            )
+        ]
+
+    names: list[str] = []
+    for entry in raw_roster:
+        if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
+            return [
+                LensDefinitionStatus(
+                    "claude",
+                    "",
+                    config_surface,
+                    "unverifiable",
+                    "a roster entry has no string name, so the generator cannot render it",
+                )
+            ]
+        name = entry["name"]
+        if name not in names:
+            names.append(name)
+
+    statuses: list[LensDefinitionStatus] = []
+    for name in names:
+        try:
+            expected = render_agent_definition(config, name, "claude").encode("utf-8")
+        except LensDefinitionError as exc:
+            statuses.append(
+                LensDefinitionStatus(
+                    "claude",
+                    name,
+                    config_surface,
+                    "unverifiable",
+                    str(exc),
+                )
+            )
+            continue
+
+        # Successful rendering validates the name as a filename slug before it
+        # emits bytes, so only then is it safe to construct the adopter path.
+        rel = f".claude/agents/{name}.md"
+        target = root / rel
+        if not target.is_file():
+            detail = (
+                "not a regular file"
+                if target.exists() or target.is_symlink()
+                else "not present"
+            )
+            statuses.append(LensDefinitionStatus("claude", name, rel, "missing", detail))
+            continue
+        try:
+            actual = target.read_bytes()
+        except OSError as exc:
+            statuses.append(
+                LensDefinitionStatus("claude", name, rel, "unreadable", str(exc))
+            )
+            continue
+        state = "current" if actual == expected else "stale"
+        detail = (
+            "matches the running doctor's expected output"
+            if state == "current"
+            else "differs from the running doctor's expected output"
+        )
+        statuses.append(LensDefinitionStatus("claude", name, rel, state, detail))
+    return statuses
+
+
 def inspect(
     root: Path,
     manifest: dict,
@@ -2595,7 +2822,9 @@ def inspect(
         engines_dir_ok=engines_probe,
         hooks_installed=hooks_installed,
         hooks_state=hooks_state,
+        inspection_root=root,
         registrations=inspect_registrations(root, engines_dir),
+        lens_definitions=inspect_lens_definitions(root, config, engines_dir),
         narrative_rendered=narrative,
         baseline_trusted=trusted,
         declared_scope_known=declared_scope is not None,
@@ -2638,6 +2867,16 @@ def inspect(
             else None
         ),
         files=statuses,
+    )
+
+
+def _lens_definition_regeneration_command(root: Path, engines_dir: str) -> str:
+    """Return the adopter-visible command template used by the text report."""
+    generator = shlex.quote(str(PurePosixPath(engines_dir) / "panel_prompt.py"))
+    return (
+        f"cd {shlex.quote(str(root.resolve()))} && mkdir -p .claude/agents && "
+        f"uv run {generator} --root . --lens <name> "
+        "--agent-definition > .claude/agents/<name>.md"
     )
 
 
@@ -2787,6 +3026,28 @@ def render(report: Report) -> str:
         lines.append(
             "    (the cockpit allow-list is hand-written — ./init.sh prints the "
             "rule for your engines dir; this check never writes it)"
+        )
+    for definition in report.lens_definitions:
+        mark, text = {
+            "current": ("✓", definition.detail),
+            "missing": ("⚠", f"{definition.detail} — generate it before the next session"),
+            "stale": ("⚠", f"{definition.detail} — inspect and regenerate it"),
+            "unreadable": ("⚠", f"unreadable — {definition.detail}"),
+            "unverifiable": ("⚠", f"not checkable — {definition.detail}"),
+        }.get(definition.state, ("⚠", definition.state))
+        lens = f" lens={definition.lens}" if definition.lens else ""
+        lines.append(
+            f"  {mark} {definition.surface} [{definition.runtime}{lens}]: {text}"
+        )
+    if any(
+        definition.state in ("missing", "stale", "unreadable")
+        for definition in report.lens_definitions
+    ):
+        lines.append(
+            f"    (lens definitions are adopter-owned — first resolve any kit engine "
+            "drift reported below, then inspect the target and regenerate one with "
+            f"{_lens_definition_regeneration_command(report.inspection_root, report.engines_dir)}; "
+            "this check never executes the command or writes the definitions)"
         )
     for doc, rendered in report.narrative_rendered.items():
         # An entry point that is still the KIT's own is a different fact from a
@@ -3579,6 +3840,20 @@ def main(argv: list[str] | None = None) -> int:
                             "detail": r.detail,
                         }
                         for r in report.registrations
+                    ],
+                    # #255. These files are adopter-owned and therefore cannot
+                    # appear on the manifest-backed `files` axis. Their state is
+                    # derived from the configured roster and the running doctor's
+                    # renderer, and remains advisory rather than an exit gate.
+                    "lens_definitions": [
+                        {
+                            "runtime": d.runtime,
+                            "lens": d.lens,
+                            "surface": d.surface,
+                            "state": d.state,
+                            "detail": d.detail,
+                        }
+                        for d in report.lens_definitions
                     ],
                     "narrative_rendered": report.narrative_rendered,
                     # Both emitted, because a consumer cannot derive either from

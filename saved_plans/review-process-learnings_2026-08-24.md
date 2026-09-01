@@ -1,9 +1,9 @@
 # Review-process learnings — 2026-08-24
 
 Status: evidence record from the Codex–Claude parity work in PR `#595`, PR `#596`, PR
-`#599`, PR `#609`, PR `#611`, PR `#614`, PR `#620`, and PR `#653`. This is not shared
-gate doctrine. Promote a lesson to `docs/agentic-dev-kit/` only after a later change
-defines and tests the reusable contract.
+`#599`, PR `#609`, PR `#611`, PR `#614`, PR `#620`, PR `#653`, and PR `#655`.
+This is not shared gate doctrine. Promote a lesson to `docs/agentic-dev-kit/` only after
+a later change defines and tests the reusable contract.
 
 ## What paid off
 
@@ -626,3 +626,50 @@ and 7 each found something anyway, so this is also the clearest local instance o
   while successive fixes tried to infer shell execution. The stopping rule became
   effective only after the implementation chose the deterministic boundary above and
   the exact-head lenses could attack that contract rather than another parser revision.
+
+## Lens-definition diagnostic additions from PR `#655`
+
+- **Accepted review findings can still reveal that the implementation owns the wrong
+  problem.** Executable probes demonstrated self-attested code loading, import
+  shadowing, an altered sibling renderer, and symlink-dependent resolution. Each was a
+  real defect in the mitigation as written. Together they showed that the diagnostic
+  had expanded from comparing an adopter-owned definition into authenticating a future
+  regeneration command — work already owned by the file-drift report.
+
+- **When fixes keep moving the trust boundary, re-check responsibility before adding
+  another guard.** The simpler contract lets the already-running doctor compute
+  canonical expected bytes without executing the inspected tree. Definition parity and
+  installed-engine drift remain separate report axes. The remedy tells the operator to
+  resolve engine drift first instead of claiming that a read-only check authenticated
+  code the operator may run later.
+
+- **Apply DRY to responsibility, not only to code.** When an existing report or engine
+  owns a concern, route the finding there instead of rebuilding its checks inside the
+  feature under review. If the owning mechanism lacks a needed contract, propose that
+  gap as separately scoped tracker work; do not make the current slice carry a second
+  implementation of the same responsibility.
+
+- **A long review is useful only while it changes the decision.** The concrete probes
+  justified rejecting the trust-bundle design; continuing to harden that abandoned
+  design would have converted review effort into sunk-cost defense. Once the ownership
+  mistake was visible, the active panel was interrupted and the candidate simplified
+  before another exact-head review.
+
+- **Keep the compatible pieces that proved their own value.** The generator still
+  imports its sibling doctor before prepending `lib`, its dependency is derived into the
+  manifest, the changelog tells adopters to refresh the pair, and the behavioral fixture
+  preserves the import-resolution regression. Simplification removes the misplaced
+  authentication mechanism, not the independently demonstrated runtime fixes.
+
+- **Test names should follow the surviving contract.** Tests promising generator,
+  dependency, digest, or symlink authentication were removed with that responsibility.
+  The remaining diagnostic tests name definition states and the no-execution boundary;
+  engine drift continues to be exercised by the existing file-report suite.
+
+- **Execute printed remedies from every supported invocation context.** A command that
+  worked at the repository root still targeted the wrong tree when the doctor was
+  invoked from a subdirectory. The behavioral fixture now runs the single generated
+  command from outside the inspected root and supplies only the external executable it
+  needs. Paths supplied by the inspected configuration are shell-quoted and exercised
+  with shell metacharacters, keeping command construction and command verification
+  separate and DRY.

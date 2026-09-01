@@ -23,7 +23,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -38,6 +40,7 @@ sys.path.insert(0, str(ENGINE_DIR))
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
 import kit_doctor  # noqa: E402
+import panel_prompt  # noqa: E402
 import run_installed_tests  # noqa: E402
 import runtime_adapters  # noqa: E402
 
@@ -72,6 +75,296 @@ def _manifest(entries: dict[str, str | None], version: int = 2) -> dict:
         "kit_version": version,
         "files": {p: {"sha256": h, "role": "engine"} for p, h in entries.items()},
     }
+
+
+def _lens_repo(tmp_path: Path, *, engines: str = "scripts") -> Path:
+    root = _fake_repo(tmp_path, engines=engines)
+    _write(
+        root / "config" / "dev-model.yaml",
+        f"""kit:
+  version: 2
+paths:
+  handoff: docs/handoff.md
+  friction_log: docs/friction-log.md
+  engines: {engines}
+review:
+  fallback_panel:
+    lenses:
+      - name: adversarial
+        focus: Try to prove the change wrong.
+    lens_compute:
+      claude:
+        model: sonnet
+        effort: high
+""",
+    )
+    engine = root / engines
+    shutil.copy2(ENGINE_DIR / "panel_prompt.py", engine / "panel_prompt.py")
+    shutil.copy2(ENGINE_DIR / "kit_doctor.py", engine / "kit_doctor.py")
+    shutil.copytree(ENGINE_DIR / "lib", engine / "lib")
+    return root
+
+
+@pytest.mark.parametrize("engines", ["scripts", "scripts/devkit", "scr&ipts"])
+def test_lens_definition_inspection_reports_missing_current_and_stale(tmp_path, engines):
+    root = _lens_repo(tmp_path, engines=engines)
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+
+    missing = kit_doctor.inspect_lens_definitions(root, config, engines)
+    assert [(item.lens, item.state) for item in missing] == [("adversarial", "missing")]
+    missing_rendered = kit_doctor.render(
+        kit_doctor.Report(
+            kit_version_config=2,
+            kit_version_manifest=2,
+            engines_dir=engines,
+            engines_dir_ok=True,
+            hooks_installed=True,
+            narrative_rendered={},
+            inspection_root=root,
+            lens_definitions=missing,
+        )
+    )
+    assert "⚠ .claude/agents/adversarial.md [claude lens=adversarial]" in missing_rendered
+    assert "not present — generate it before the next session" in missing_rendered
+
+    definition = root / ".claude" / "agents" / "adversarial.md"
+    remedy_template = kit_doctor._lens_definition_regeneration_command(root, engines)
+    assert remedy_template in missing_rendered
+    remedy = remedy_template.replace("<name>", "adversarial")
+    uv_stub = tmp_path / "bin" / "uv"
+    _write(
+        uv_stub,
+        "#!/bin/sh\n"
+        '[ "$1" = run ] || exit 64\n'
+        "shift\n"
+        f"exec {shlex.quote(sys.executable)} \"$@\"\n",
+    )
+    uv_stub.chmod(0o755)
+    env = os.environ.copy()
+    env["PATH"] = f"{uv_stub.parent}{os.pathsep}{env.get('PATH', '')}"
+    caller = root / "docs" / "probe"
+    caller.mkdir(parents=True)
+    regenerated = subprocess.run(
+        ["sh", "-c", remedy],
+        cwd=caller,
+        env=env,
+        capture_output=True,
+        check=False,
+    )
+    assert regenerated.returncode == 0, regenerated.stderr.decode("utf-8", "replace")
+    current = kit_doctor.inspect_lens_definitions(root, config, engines)
+    assert [(item.lens, item.state) for item in current] == [("adversarial", "current")]
+
+    definition.write_text(
+        definition.read_text(encoding="utf-8") + "Hand edit.\n", encoding="utf-8"
+    )
+    stale = kit_doctor.inspect_lens_definitions(root, config, engines)
+    assert [(item.lens, item.state) for item in stale] == [("adversarial", "stale")]
+    rendered = kit_doctor.render(
+        kit_doctor.Report(
+            kit_version_config=2,
+            kit_version_manifest=2,
+            engines_dir=engines,
+            engines_dir_ok=True,
+            hooks_installed=True,
+            narrative_rendered={},
+            inspection_root=root,
+            lens_definitions=stale,
+        )
+    )
+    assert "inspect and regenerate it" in rendered
+    assert "this check never executes the command or writes the definitions" in rendered
+    assert kit_doctor._lens_definition_regeneration_command(root, engines) in rendered
+
+    with definition.open("wb") as output:
+        regenerated = subprocess.run(
+            [
+                sys.executable,
+                str(root / engines / "panel_prompt.py"),
+                "--root",
+                str(root),
+                "--lens",
+                "adversarial",
+                "--agent-definition",
+            ],
+            cwd=root,
+            stdout=output,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+    assert regenerated.returncode == 0, regenerated.stderr.decode("utf-8", "replace")
+    refreshed = kit_doctor.inspect_lens_definitions(root, config, engines)
+    assert [(item.lens, item.state) for item in refreshed] == [
+        ("adversarial", "current")
+    ]
+
+
+def test_a_configured_compute_change_makes_the_definition_stale(tmp_path):
+    root = _lens_repo(tmp_path)
+    definition = root / ".claude" / "agents" / "adversarial.md"
+    _write(definition, panel_prompt.agent_definition(root, "adversarial", "claude"))
+    config_path = root / "config" / "dev-model.yaml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8").replace("model: sonnet", "model: opus"),
+        encoding="utf-8",
+    )
+    config = kit_doctor.load_config(config_path)
+
+    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
+
+    assert [(item.lens, item.state) for item in statuses] == [("adversarial", "stale")]
+
+
+def test_lens_inspection_does_not_execute_the_adopter_generator(tmp_path):
+    root = _lens_repo(tmp_path)
+    sentinel = root / "doctor-executed-generator"
+    _write(
+        root / "scripts" / "panel_prompt.py",
+        f"from pathlib import Path\nPath({str(sentinel)!r}).write_text('ran')\n",
+    )
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+
+    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
+
+    assert [(item.lens, item.state) for item in statuses] == [
+        ("adversarial", "missing")
+    ]
+    assert not sentinel.exists()
+
+
+def test_a_malformed_lens_roster_is_unverifiable(tmp_path):
+    root = _lens_repo(tmp_path)
+    config_path = root / "config" / "dev-model.yaml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8").replace(
+            "    lenses:\n"
+            "      - name: adversarial\n"
+            "        focus: Try to prove the change wrong.\n",
+            "    lenses: malformed\n",
+        ),
+        encoding="utf-8",
+    )
+    config = kit_doctor.load_config(config_path)
+
+    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
+
+    assert [(item.lens, item.state) for item in statuses] == [("", "unverifiable")]
+    assert "roster is not a list" in statuses[0].detail
+
+
+def test_a_malformed_lens_roster_entry_is_unverifiable(tmp_path):
+    root = _lens_repo(tmp_path)
+    config_path = root / "config" / "dev-model.yaml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8").replace(
+            "      - name: adversarial\n        focus: Try to prove the change wrong.\n",
+            "      - focus: Try to prove the change wrong.\n",
+        ),
+        encoding="utf-8",
+    )
+    config = kit_doctor.load_config(config_path)
+
+    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
+
+    assert [(item.lens, item.state) for item in statuses] == [("", "unverifiable")]
+    assert "entry has no string name" in statuses[0].detail
+
+
+def test_an_unreadable_lens_definition_is_reported_and_rendered(
+    tmp_path, monkeypatch
+):
+    root = _lens_repo(tmp_path)
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    definition = root / ".claude" / "agents" / "adversarial.md"
+    _write(definition, panel_prompt.agent_definition(root, "adversarial", "claude"))
+    original_read_bytes = Path.read_bytes
+
+    def fail_target_read(path):
+        if path == definition:
+            raise PermissionError("definition denied")
+        return original_read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", fail_target_read)
+    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
+
+    assert [(item.lens, item.state) for item in statuses] == [
+        ("adversarial", "unreadable")
+    ]
+    rendered = kit_doctor.render(
+        kit_doctor.Report(
+            kit_version_config=2,
+            kit_version_manifest=2,
+            engines_dir="scripts",
+            engines_dir_ok=True,
+            hooks_installed=True,
+            narrative_rendered={},
+            lens_definitions=statuses,
+        )
+    )
+    assert "⚠ .claude/agents/adversarial.md [claude lens=adversarial]" in rendered
+    assert "unreadable — definition denied" in rendered
+
+
+def test_regeneration_imports_the_sibling_doctor_before_a_lib_shadow(tmp_path):
+    root = _lens_repo(tmp_path)
+    sentinel = root / "shadow-doctor-executed"
+    _write(
+        root / "scripts" / "lib" / "kit_doctor.py",
+        f"""from pathlib import Path
+Path({str(sentinel)!r}).write_text("ran")
+AGENT_DEFINITION_RUNTIME = "claude"
+class LensDefinitionError(ValueError):
+    pass
+def render_agent_definition(*_args):
+    return "shadow output"
+""",
+    )
+
+    generated = subprocess.run(
+        [
+            sys.executable,
+            str(root / "scripts" / "panel_prompt.py"),
+            "--root",
+            str(root),
+            "--lens",
+            "adversarial",
+            "--agent-definition",
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert generated.returncode == 0, generated.stderr
+    assert generated.stdout == panel_prompt.agent_definition(
+        root, "adversarial", "claude"
+    )
+    assert not sentinel.exists()
+
+
+def test_json_reports_missing_lens_definitions_as_advisory(tmp_path, capsys):
+    root = _lens_repo(tmp_path)
+    manifest_path = tmp_path / "comparison.json"
+    manifest_path.write_text(
+        json.dumps(kit_doctor.generate_manifest(root, 2)), encoding="utf-8"
+    )
+
+    code = kit_doctor.main(
+        ["--json", "--root", str(root), "--manifest", str(manifest_path)]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert code == 0
+    assert payload["lens_definitions"] == [
+        {
+            "runtime": "claude",
+            "lens": "adversarial",
+            "surface": ".claude/agents/adversarial.md",
+            "state": "missing",
+            "detail": "not present",
+        }
+    ]
 
 
 def test_shipped_runtime_adapters_equal_the_renderer_for_both_runtimes():
@@ -1465,6 +1758,7 @@ def test_the_shell_source_dependency_is_a_KNOWN_GAP_not_an_oversight():
     assert set(graph) == {
         "scripts/lib/atomic_write.py",
         "scripts/lib/kitconfig.py",
+        "scripts/kit_doctor.py",
         "scripts/lib/runtime_adapters.py",
         "scripts/lib/state_paths/paths.py",
         "scripts/lib/state_paths/repo_root.py",
