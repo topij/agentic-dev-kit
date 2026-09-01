@@ -2692,7 +2692,7 @@ _KNOWN_PRE_EXISTING_HARDCODED_ENGINE_PATHS: dict[str, list[str]] = {
         r"uv run scripts/pr_watch.py --mark-seen      # ack exactly what the last poll reported",
         r'uv run scripts/pr_watch.py 916 --record-review "fallback:codex" --head <polled-sha>',
         r"uv run scripts/pr_watch.py 916 --assert-draft  # correct a drifted draft bit after `gh pr create --draft`",
-        r"uv run scripts/pr_watch.py 916 --assert-ready  # correct a drifted draft bit before `gh pr merge`",
+        r"uv run scripts/pr_watch.py 916 --assert-ready  # correct after ready creation/transition, and before merge",
     ],
     "scripts/check_doc_budget.py": [
         r"python3 scripts/check_doc_budget.py            # report every tracked doc",

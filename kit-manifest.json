@@ -44,7 +44,7 @@
     },
     "docs/agentic-dev-kit/workflows/adopt.md": {
       "role": "workflow",
-      "sha256": "d88f7a2adc347ef6d1296df01a6fbac0de012c069f2d55092d59a61a19dcf3d7"
+      "sha256": "b1f9a36d85e57f111f44ab46b0e3f7ccacd190864e149cc2d18481322f1c0bf5"
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
@@ -52,15 +52,15 @@
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
-      "sha256": "b0220c3d3180ab1f64657003ff7d94a188d2bc1ad5fd45e43a48cd9b5f830af7"
+      "sha256": "6b1d4246ce89999a900e34a2986cb1d0047d738684f33c45ce82bb13c4f8689a"
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
-      "sha256": "c88864e9810ba45ba825d0c258b77ae1327ce01d4417fbd49893f5895238a973"
+      "sha256": "0995bc61338fd3c4919b74f1bdad72823bd4fc1224bd81a9dcfdb6faad40364b"
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "7920aa44be97944fcb9a02ff9953c6d62161fa7f4c4e6e0b6f2bfcb1122bd764"
+      "sha256": "dce70b7a027c9b86090bd29fd9a696f71780c02e551c7163593a87d70d7adb3c"
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
@@ -68,19 +68,19 @@
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
-      "sha256": "6697d73f2f418ad72ac07988521f03e73418c31730fd6381028d4e3e89761eae"
+      "sha256": "af4b843d896063084139d77193e8435f761b979afd57cf396d5e47bbec14e3a7"
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
-      "sha256": "44d7f0714b3086815ed68804719d476c00bb8d052e0f05db2b2aebb872d08b25"
+      "sha256": "b8220a6eff9e7f90ac97ee63d090eced5392e0b7c851f687d22ede246bcc6370"
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "1b264f4640541deaaf776fc494497d9f2e90b2051e5e953057d22e1404a00ef5"
+      "sha256": "e88cf927424dfe861e34a0ca6661149c882058015f112f29dbd0d335b78368e7"
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
-      "sha256": "c424b26fa394671fed9a1834f792f40b43323555254536e9c0348a1c057e13e4"
+      "sha256": "e3794b399331a16138e72c62ee74d7085bd6a5fe14e10e45e4c40ef91cf41a6b"
     },
     "docs/templates/CLAUDE.md.tmpl": {
       "role": "template",
@@ -104,7 +104,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "5be888c9fe28eab3b2cdb520eaea5e88836291ee7beb915bcf3607bb71389ecb"
+      "sha256": "a97c8be9c7754cdc7c49937e5a0f251ea63126666baae8b9539791c16072ed3d"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -124,11 +124,11 @@
     },
     "scripts/dev_session.sh": {
       "role": "engine",
-      "sha256": "2ae9af83f182fa726bdc2102d65820242b873aa9d6749f9a450c4b1afd55e4ba"
+      "sha256": "f696372d912ba5f9ab9bbbbd3ea2a14689ea8c9fdda57e1c00aa5962d376012f"
     },
     "scripts/hooks/pr_followup_hook.py": {
       "role": "hook",
-      "sha256": "29cd7d1de96dcc9bf5c2bc9161b3da8016afd681644f387cb177d9a8b4fcac4f"
+      "sha256": "23bfa71eb732a12ac73976fff7c6b3baec28cb94e99e8ef9408b856d304dd879"
     },
     "scripts/hooks/pre-push": {
       "role": "hook",
@@ -218,7 +218,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "e765c250d0eaa95063bb0045d75daff759ebf06829c5c0c1208a26be96507b7a"
+      "sha256": "432fe654b1635a2b6ea45131e58c9d45d7c87d05dc52e721d6418193ba574b60"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
@@ -246,11 +246,11 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "25dd2161b1015af32b5db45ba518572ff90315df935c10f4ff9285dffd224c09"
+      "sha256": "aedfbb3286b04a9b019fb653d0a82751e88f99f3374d033cb0663733cc231fd6"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "86511d3ff0fc820cf46e096455ceec35ae1732d335142d706fa843e3a7f27a84"
+      "sha256": "d621a479fd4588b5b7b68bc1712af3b920f466cad0e7878e3178724914d3c319"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -278,11 +278,11 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "86615814ed98bda5a50693009104a1fc532a24d2858c8deef96351bc5cf0838b"
+      "sha256": "4d73f3ee031f770e0770cd1361527fa1bf5d3e94db645a1d3ad09eaf0c1047fa"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
-      "sha256": "dc6d69cfa537ed494402fda2ee39a5e5b8add2440abea9b70c5ab8f58071cd33"
+      "sha256": "15fb412eb3023612988c09e44efa8c90afacb9e099822936fa2606567c888d07"
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",

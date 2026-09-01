@@ -272,10 +272,10 @@ Each piece maps to one or more of the ten principles in
 | `docs/agentic-dev-kit/workflows/parallel-headless.md` | #3 Cockpit + isolated lanes | Unattended/headless lane launch mechanics split out of `parallel.md` — the one-shot descriptor, lane-contract preamble, supported Codex wrapper, and observed/terminal receipt. |
 | `.claude/commands/` + `.agents/skills/` | #1, #2, #3, #5 | Thin Claude and Codex adapters over the shared workflows. The authoritative inventory and explicit exceptions live in `docs/agentic-dev-kit/runtime-parity.md`. |
 | `scripts/check_memory_budget.py` | #1, #8 Mechanism over memory | A `SessionStart` hook (wired in `.claude/settings.json`) that warns when an agent-memory file outgrows its budget — the memory-side counterpart to `check_doc_budget.py`. |
-| `scripts/hooks/pr_followup_hook.py` | #5 PR follow-through | A `PostToolUse` hook that fires the mandatory watch-to-green loop the moment a PR is opened or readied — gated on `tool_response` carrying the PR URL or `gh`'s ready acknowledgement, so a command that merely quotes the trigger phrase no longer mandates a watch loop for a PR that does not exist, while an unreadable response still fires, so following through is a mechanism rather than a thing the agent has to remember. Registered for Claude in `.claude/settings.json` and Codex in `.codex/hooks.json`, each passing `--runtime`; `init.sh` prints the registrations and writes neither, having no way to tell a real registration from a mention of one. Codex command definitions must be reviewed through `/hooks`; `kit_doctor` assigns lifecycle semantics only to exact repository-owned command strings across the additive project `hooks.json` and inline `config.toml` sources. Altered strings retain generic path diagnostics, and repository checks cannot assert that the client trusted or loaded them. The engine reads `review.bots`, `review.fallback_commands.<runtime>`, `paths.engines`, `review.fallback_panel.lenses`, `review.fallback_panel.receipt_source` and `review.fallback_panel.lens_compute.<runtime>`. |
+| `scripts/hooks/pr_followup_hook.py` | #5 PR follow-through | A `PostToolUse` hook that treats shell and response matches only as lifecycle candidates, never as proof or mutation authority. A literal `gh pr ready` token plus GitHub CLI's ready/draft acknowledgement selects the stronger candidate heading; creation URLs, existing-PR diagnostics, missing or transformed output, indirect actions, read-only lookalikes, lifecycle tokens in quoted/search text, and response-only ready/draft acknowledgements or PR URLs take the unresolved heading. The routes are non-authoritative and carry the same conditional lifecycle: establish that the operation was lifecycle-changing, resolve the exact pull request, require its repository and host to match the current checkout, read live draft state, assert the matching ready or bounded-draft route, and complete the watch policy. Constructed executables and argv are not reconstructed from shell text. This deliberately accepts harmless false-positive guidance for read-only URL output instead of embedding a shell parser or leaving alias/API creation silent. Registered for Claude in `.claude/settings.json` and Codex in `.codex/hooks.json`, each passing `--runtime`; `init.sh` prints the registrations and writes neither, having no way to tell a real registration from a mention of one. Codex command definitions must be reviewed through `/hooks`; `kit_doctor` assigns lifecycle semantics only to exact repository-owned command strings across the additive project `hooks.json` and inline `config.toml` sources. Altered strings retain generic path diagnostics, and repository checks cannot assert that the client trusted or loaded them. The engine reads `review.bots`, `review.fallback_commands.<runtime>`, `paths.engines`, `review.fallback_panel.lenses`, `review.fallback_panel.receipt_source` and `review.fallback_panel.lens_compute.<runtime>`. |
 | `docs/AGENTS-sections.md` | #4, #5, #6 | Ready-to-merge persistent instructions for Codex adopters. |
 | `docs/CLAUDE-sections.md` | #4 Merge classes, #5 PR follow-through | Ready-to-paste CLAUDE.md sections: risk-based PR splitting, the mandatory watch-to-green loop, execution rules, the rules-layout convention. |
-| `docs/autonomous-session-playbook.md` | #4, #5, #7 | The full operating contract for operator-requested autonomous sessions — branch hygiene, sequencing, local gate, draft→ready, watch-and-fix to merge, self-merge policy. |
+| `docs/autonomous-session-playbook.md` | #4, #5, #7 | The full operating contract for operator-requested autonomous sessions — branch hygiene, sequencing, local gate, ready-by-default PRs with a bounded material unfinished-work draft exception, watch-and-fix to merge, self-merge policy. |
 | `docs/agentic-dev-kit/safety-critical-changes.md` | #6 Safety-critical doctrine | Shared doctrine for send-gates, destructive operations, and kill/recovery paths; bound through the Claude rule and precise root `AGENTS.md` routing without a runtime-specific copy. |
 | `docs/agentic-dev-kit/runtime-parity.md` | Runtime parity | Machine-readable workflow inventory and capability matrix for Claude Code and Codex; structural adapter tests derive their expected set from this contract. |
 | `config/dev-model.yaml` | #10 No hardcoding | The single config surface every skill and script reads instead of hardcoding a value. |
@@ -400,7 +400,9 @@ string fields also reject double-quoted backslash escapes. Keep `review.bots`
 and `systemize.operator_logins` as complete same-line flow sequences; every other
 prompted value must be a same-line scalar, and flow mappings are unsupported. Quote a
 string whose plain spelling YAML could resolve as a non-string; string fields must be
-non-empty, and `triage.pr_draft` must be the plain boolean `true` or `false`. Block YAML
+non-empty. The migrator preserves existing values, so set `triage.pr_draft` and
+`systemize.pr_draft` to the plain boolean `false` before running their workflows; a
+carried `true` now hard-stops rather than opening completed work as a draft. Block YAML
 on other fields can still be refused when its continuation resembles migrator-owned
 structure; normalize any refused value to an ordinary same-line form before retrying.
 
@@ -420,9 +422,10 @@ edited by both (the sandbox prevents *state* collisions, not *source* merge conf
 The flow: `parallel plan` clusters candidate work by footprint → launch a lane per
 disjoint cluster (`scripts/dev_session.sh new … --merge-class self|operator`) → each
 lane works to a green, ready-for-review PR → the cockpit reconciles every lane and completes
-the recorded merge path. **Lanes mark their own PRs ready but never merge**: a `self`-class
-lane is closed out by the cockpit through `scripts/dev_session.sh merge` (no operator
-sign-off needed), an `operator`-class one only by an explicit operator decision.
+the recorded merge path. **Lanes assert their own ready state but never merge**: a
+`self`-class lane is closed out by the cockpit through `scripts/dev_session.sh merge`
+(no operator sign-off needed), an `operator`-class one only by an explicit operator
+decision.
 
 Full walkthrough — the lane contract, the live board, reconciliation, and a worked
 example — in **[`docs/parallel-dev.md`](docs/parallel-dev.md)**. For step-by-step

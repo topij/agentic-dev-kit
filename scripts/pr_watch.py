@@ -80,7 +80,7 @@ Usage:
     uv run scripts/pr_watch.py 916 --record-review "fallback:codex" --head <polled-sha>
     uv run <engine-dir>/pr_watch.py 916 --record-review "fallback:delta" --compose-parent <reviewed-parent> --head <polled-sha>
     uv run scripts/pr_watch.py 916 --assert-draft  # correct a drifted draft bit after `gh pr create --draft`
-    uv run scripts/pr_watch.py 916 --assert-ready  # correct a drifted draft bit before `gh pr merge`
+    uv run scripts/pr_watch.py 916 --assert-ready  # correct after ready creation/transition, and before merge
 
 `gh`'s draft bit is flaky in both directions (observed on gh 2.89.0): a
 `--draft` create can silently land non-draft (a review bot auto-reviews and
@@ -88,8 +88,9 @@ burns rate-limit budget before the lane can re-draft), and a ready PR can
 silently revert to draft (a later `gh pr merge` fails with "Pull Request is
 still a draft"). `--assert-draft` / `--assert-ready` read `isDraft` and issue
 the one corrective `gh pr ready [--undo]` call if it drifted, then re-read to
-confirm — call the former right after `gh pr create --draft`, the latter
-right before `gh pr merge`. Both REFUSE on the REST backend: they mutate the PR,
+confirm — call the former right after `gh pr create --draft`, and call the latter
+after ready creation or transition before review polling, then again before
+`gh pr merge`. Both REFUSE on the REST backend: they mutate the PR,
 and REST is read-only here (see `require_gh_backend`).
 
 Exit codes:
@@ -5142,7 +5143,8 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help=(
             "assert the PR is ready-for-review, correcting a drifted bit — "
-            "call right before `gh pr merge` to catch a ready PR that silently reverted to draft"
+            "call after ready creation/transition before review polling, then again before "
+            "`gh pr merge`"
         ),
     )
     args = parser.parse_args(argv)

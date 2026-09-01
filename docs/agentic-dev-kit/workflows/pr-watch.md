@@ -7,6 +7,26 @@ run it without being asked.
 
 **Input:** an optional PR number. With none, the current branch's open PR is used.
 
+## Ready and draft policy
+
+Open pull requests **ready for review by default**. Ready status invites review; it
+does not grant merge authority. A workflow that reserves merge for the operator still
+opens its completed work ready. Immediately after ready creation, run `--assert-ready`
+before the watch-and-fix loop; it corrects a silently drifted draft bit before review
+bots are expected to start.
+
+Draft is the bounded exception for a **material unfinished-work window** that must
+exist on the remote pull request before the work can be completed — for example, when a
+required forge-hosted validation cannot run until the pull request exists. If the branch
+can be completed and validated locally first, finish it and open ready. Do not use draft
+merely to signal risk, broad scope, human review, or operator-held merge authority.
+
+The run that takes the exception owns both ends of it: create with `--draft`, run
+`--assert-draft`, finish and push the material work, complete the body, then run
+`gh pr ready` and `--assert-ready` before starting the watch-and-fix loop. A scheduled
+or unattended run may take that route only when the same run can perform the ready
+transition; a hook that deliberately skips unattended execution is not a substitute.
+
 Read `config/dev-model.yaml` first. Resolve `<engine-dir>` from `paths.engines`.
 When a configured review bot is unavailable, the substitute pass is the
 **panel** in `review.fallback_panel` — read
@@ -270,9 +290,9 @@ check, after the normal watch-and-acknowledge loop has finished.
 
 ## The draft-bit flags — they CORRECT, they do not check
 
-`--assert-draft` and `--assert-ready` are documented in `pr_watch.py`'s own docstring and
-noted under the REST backend in the Notes section below, but nothing says **when** to reach for them,
-and their names badly undersell what they do. Read this before using either.
+`--assert-draft` and `--assert-ready` are documented in `pr_watch.py`'s own docstring,
+used by the ready/draft policy above, and noted under the REST backend in the Notes
+section below. Their names badly undersell what they do. Read this before using either.
 
 **Both mutate the PR.** Despite "assert", neither is a read-only check. Each reads
 `isDraft`, and if it does not match, issues the corrective `gh pr ready` (for
@@ -281,7 +301,7 @@ confirm. So:
 
 ```sh
 uv run <engine-dir>/pr_watch.py 916 --assert-draft   # right after `gh pr create --draft`
-uv run <engine-dir>/pr_watch.py 916 --assert-ready   # right before `gh pr merge`
+uv run <engine-dir>/pr_watch.py 916 --assert-ready   # after ready creation/transition, and before merge
 ```
 
 Running `--assert-ready` on a PR you *deliberately* left as a draft will **flip it to

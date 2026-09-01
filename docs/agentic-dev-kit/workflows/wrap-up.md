@@ -460,8 +460,11 @@ failure makes the overall outcome `incomplete-resumable`.
    session's feature branch — branching from the feature branch would carry
    its already-reviewed commits into the new PR too, defeating the point of
    keeping the handoff separate. Branch first (`chore/update-handoff-<date>`)
-   before committing, then push and open a PR. Either way, once there's
-   nothing left to push, **mark the PR ready** so it gets reviewed. For an isolated
+   before committing, then push and open the completed work **ready for review**. Ready
+   status invites review and does not authorize merge. Immediately run
+   `pr-watch --assert-ready` before the normal watch-and-fix loop. If a material
+   unfinished-work window required the bounded draft exception in `pr-watch`, the same
+   run must finish the work and body, push them, and **mark the PR ready** before continuing. For an isolated
    lane, the cockpit runs `<engine-dir>/dev_session.sh pr-watch <scope>` until the exact
    head is settled, keeping the receipt in the lane sandbox; for a non-lane PR, run the
    normal watch-and-fix loop (`pr-watch`). Then resolve

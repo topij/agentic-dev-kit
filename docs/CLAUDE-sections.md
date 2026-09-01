@@ -18,14 +18,15 @@ All changes go through branches and pull requests — never commit directly to
 
 - Branch from `<vcs.protected_branch>` with a descriptive name (e.g. `feat/lifecycle-metrics`,
   `chore/update-dashboard`).
-- **Open the PR as a draft on first push, and mark it ready (`gh pr ready`) the moment the
-  branch is complete** — i.e. there's nothing more to commit or push. A finished PR must
-  never sit in draft: ready-for-review is what triggers your review bots' (`review.bots`)
-  full review pass, so leaving completed work in draft starves it of review. Keep a PR in
-  draft *only* while you're still actively pushing commits to it; flip it to ready as soon
-  as the work is done and the body is complete, then run the watch-and-fix loop. Re-draft
-  (`gh pr ready --undo`) only if you discover the PR needs material follow-up commits
-  before review.
+- **Open completed work ready for review by default.** Ready status invites your review
+  bots' (`review.bots`) full pass; it does not authorize merge. Use draft only for the
+  bounded exception where a material unfinished-work window must already exist on the
+  remote pull request, such as required forge-hosted validation that cannot run before
+  the pull request exists. The run that opens that draft owns the transition: confirm
+  the draft state, finish and push the work, complete the body, then mark it ready
+  (`gh pr ready`) and confirm ready before the watch-and-fix loop. Risk, broad scope,
+  human review, and operator-held merge authority are not draft reasons by themselves.
+  After ready creation or transition, run `pr-watch --assert-ready` before review polling.
 - `<vcs.protected_branch>` is protected; direct pushes should be rejected by your forge
   (branch protection rules).
 - PRs require an external reviewer before merge (a human, or the review-bot pass below).

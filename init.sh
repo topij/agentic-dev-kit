@@ -438,8 +438,10 @@ ensure_parallel_key() {
 }
 
 # Add one flat `triage:` key if the section does not already define it. Existing
-# values are adopter policy and remain untouched; preflight proves the section is
-# a shape this line-oriented writer can extend without changing its meaning.
+# values remain untouched so an additive migration cannot silently rewrite adopter
+# policy; preservation is not semantic validation, and the upgraded workflow names
+# any now-invalid value the operator must change. Preflight proves the section is a
+# shape this line-oriented writer can extend without changing its meaning.
 ensure_triage_key() {
   key="$1"
   block="$2"
@@ -2034,7 +2036,7 @@ register_pr_hook() {
   echo "      Claude — .claude/settings.json, under hooks.PostToolUse, matcher \"Bash\"."
   echo "      \`if\` goes on the hook entry beside \`command\`, not next to \`matcher\`:"
   echo "        python3 \"\$CLAUDE_PROJECT_DIR/${_hook_src}\" --runtime claude"
-  echo "        with if: \"Bash(gh pr *)\""
+  echo "        with if: \"Bash(*)\""
 }
 
 # ── SessionStart budget tripwires (#380) ─────────────────────────────────

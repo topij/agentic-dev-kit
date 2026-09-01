@@ -3426,7 +3426,7 @@ def test_the_printed_commands_are_pasteable_verbatim(tmp_path: Path) -> None:
     )
     # the matcher an adopter must reproduce exactly, quotes and anchors included
     assert 'matcher "^Bash$"' in result.stdout
-    assert 'with if: "Bash(gh pr *)"' in result.stdout
+    assert 'with if: "Bash(*)"' in result.stdout
     # nothing expanded: no absolute path from THIS machine leaked into the paste
     assert str(repo) not in result.stdout.split("note: the PR follow-through")[-1]
 
@@ -3576,6 +3576,17 @@ def test_both_shipped_registrations_name_their_own_runtime() -> None:
     assert "pr_followup_hook.py" in codex
     assert "--runtime codex" in codex
     assert "--runtime claude" not in codex
+
+    claude_parsed = json.loads(claude)
+    claude_pr_entry = next(
+        e
+        for e in claude_parsed["hooks"]["PostToolUse"]
+        if any("pr_followup_hook" in h.get("command", "") for h in e["hooks"])
+    )
+    claude_pr_hook = next(
+        h for h in claude_pr_entry["hooks"] if "pr_followup_hook" in h.get("command", "")
+    )
+    assert claude_pr_hook["if"] == "Bash(*)"
 
     # and the Codex registration must be valid JSON with the tool-name matcher,
     # since Codex has no config-level `if:` and this is the only narrowing

@@ -1772,6 +1772,360 @@ def test_parallel_adapter_policy_contradictions_are_rejected() -> None:
                 _assert_parallel_adapter_is_translation_only(hostile)
 
 
+def _flatten_prose(text: str) -> str:
+    return " ".join(text.split())
+
+
+def _assert_ready_draft_policy(policy: str) -> None:
+    section = policy.split("## Ready and draft policy", 1)[1].split(
+        "Read `config/dev-model.yaml` first.", 1
+    )[0]
+    assert _flatten_prose(section) == _flatten_prose(
+        """
+        Open pull requests **ready for review by default**. Ready status invites review;
+        it does not grant merge authority. A workflow that reserves merge for the
+        operator still opens its completed work ready. Immediately after ready creation,
+        run `--assert-ready` before the watch-and-fix loop; it corrects a silently drifted
+        draft bit before review bots are expected to start.
+
+        Draft is the bounded exception for a **material unfinished-work window** that
+        must exist on the remote pull request before the work can be completed — for
+        example, when a required forge-hosted validation cannot run until the pull
+        request exists. If the branch can be completed and validated locally first,
+        finish it and open ready. Do not use draft merely to signal risk, broad scope,
+        human review, or operator-held merge authority.
+
+        The run that takes the exception owns both ends of it: create with `--draft`,
+        run `--assert-draft`, finish and push the material work, complete the body, then
+        run `gh pr ready` and `--assert-ready` before starting the watch-and-fix loop. A
+        scheduled or unattended run may take that route only when the same run can
+        perform the ready transition; a hook that deliberately skips unattended
+        execution is not a substitute.
+        """
+    )
+
+
+def _assert_configured_workflow_opens_ready(workflow: str, key: str) -> None:
+    flattened = _flatten_prose(workflow)
+    assert f"`{key}` must be `false`" in flattened
+    assert "A `true` value hard-stops before any artifact or forge write" in flattened
+    assert f"binding the validated `false` `{key}` directly" in flattened
+    assert "run the native `pr-watch --assert-ready` correction" in flattened
+    assert "require the read-back draft bit to be `false`" in flattened
+    assert "leave the pull request in draft" not in flattened
+    assert "do not run `gh pr ready`" not in flattened
+
+
+def _assert_baseline_ready_policy(baseline: str) -> None:
+    flattened = _flatten_prose(baseline)
+    assert "ready for review by default" in flattened
+    assert "material unfinished-work window" in flattened
+    assert (
+        "does not authorize merge" in flattened
+        or "does not grant merge authority" in flattened
+    )
+    assert "pr-watch --assert-ready" in flattened
+    assert any(
+        exclusive in flattened
+        for exclusive in (
+            "Draft is only for `pr-watch`'s bounded exception",
+            "Draft is only for a bounded material unfinished-work window",
+            "Use draft only for the bounded exception",
+            "Draft is only for the bounded exception",
+        )
+    )
+
+
+@pytest.mark.kit_repo_only(
+    "AGENTS.md",
+    "README.md",
+    "CHANGELOG.md",
+    "config/dev-model.yaml",
+    "docs/AGENTS-sections.md",
+    "docs/CLAUDE-sections.md",
+    "docs/autonomous-session-playbook.md",
+    "docs/parallel-dev.md",
+    "docs/parallel-howto.md",
+    "docs/templates/AGENTS.md.tmpl",
+    "docs/templates/CLAUDE.md.tmpl",
+    "docs/agentic-dev-kit/workflows/adopt.md",
+    "docs/agentic-dev-kit/workflows/parallel.md",
+    "docs/agentic-dev-kit/workflows/post-merge-systemize.md",
+    "docs/agentic-dev-kit/workflows/pr-watch.md",
+    "docs/agentic-dev-kit/workflows/triage-friction-log.md",
+    "docs/agentic-dev-kit/workflows/upgrade.md",
+    "docs/agentic-dev-kit/workflows/wrap-up.md",
+    "init.sh",
+    "scripts/dev_session.sh",
+    "scripts/hooks/pr_followup_hook.py",
+    "scripts/pr_watch.py",
+)
+def test_pull_request_visibility_is_ready_by_default_with_a_bounded_draft_exception(
+) -> None:
+    workflow_root = REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows"
+    policy = (workflow_root / "pr-watch.md").read_text(encoding="utf-8")
+    _assert_ready_draft_policy(policy)
+
+    flattened_policy = _flatten_prose(policy)
+    mutations = (
+        flattened_policy.replace("ready for review by default", "draft by default", 1),
+        flattened_policy.replace(
+            "does not grant merge authority",
+            "grants merge authority",
+            1,
+        ),
+        flattened_policy.replace(
+            "only when the same run can perform the ready transition",
+            "even when no run can perform the ready transition",
+            1,
+        ),
+        flattened_policy.replace(
+            "operator-held merge authority.",
+            "operator-held merge authority. Even when no material unfinished-work "
+            "window exists, open the first push as a draft.",
+            1,
+        ),
+        flattened_policy.replace(
+            "Immediately after ready creation, run `--assert-ready`",
+            "After ready creation, trust the response and skip `--assert-ready`",
+            1,
+        ),
+    )
+    for mutated in mutations:
+        assert mutated != flattened_policy
+        with pytest.raises(AssertionError):
+            _assert_ready_draft_policy(mutated)
+
+    playbook = (
+        REPO_ROOT / "docs" / "autonomous-session-playbook.md"
+    ).read_text(encoding="utf-8")
+    lifecycle = _flatten_prose(
+        playbook.split("### Validate → open ready", 1)[1].split(
+            "### Watch-and-fix loop", 1
+        )[0]
+    )
+    assert "open the completed pull request **ready for review**" in lifecycle
+    assert "`gh pr create` without `--draft`" in lifecycle
+    assert "--assert-ready` before the watch-and-fix loop" in lifecycle
+    assert "bounded draft exception" in lifecycle
+    assert "required forge-hosted validation" in lifecycle
+
+    adopter_workflows = {
+        name: (workflow_root / f"{name}.md").read_text(encoding="utf-8")
+        for name in ("adopt", "upgrade")
+    }
+    for workflow in adopter_workflows.values():
+        assert "**ready-for-review PR**" in workflow
+        assert (
+            "material unfinished-work exception in `pr-watch` does not apply"
+            in workflow
+        )
+        assert "open a **draft PR**" not in workflow
+        assert "`pr-watch --assert-ready` immediately after creation" in workflow
+
+    adopt = adopter_workflows["adopt"]
+    assert "Do not open a pull request while this operator step is pending" in adopt
+    assert "If Step 3c is still pending, stop there instead" in adopt
+    step_3c = adopt.index("### Step 3c")
+    step_4 = adopt.index("## Step 4")
+    step_5 = adopt.index("## Step 5")
+    step_6 = adopt.index("## Step 6")
+    assert step_3c < step_4 < step_5 < step_6
+    verification = _flatten_prose(adopt[step_4:step_5])
+    friction = _flatten_prose(adopt[step_5:step_6])
+    assert "operator's completed Step 3c `init.sh` run" in verification
+    assert "operator runs afterwards (Step 3c)" not in verification
+    assert "Step 3c has now run" in friction
+    assert (
+        "write the entries directly into the resolved `paths.friction_log`"
+        in friction.casefold()
+    )
+    assert "Step 3c, after everything here" not in friction
+
+    shared_workflows = {
+        name: (workflow_root / f"{name}.md").read_text(encoding="utf-8")
+        for name in ("parallel", "wrap-up")
+    }
+    assert "open ready by default → assert ready → watch-and-fix" in shared_workflows["parallel"]
+    assert "open the completed work **ready for review**" in shared_workflows["wrap-up"]
+    assert "`pr-watch --assert-ready` before the normal watch-and-fix loop" in shared_workflows["wrap-up"]
+
+    configured_workflows = {
+        "triage.pr_draft": (workflow_root / "triage-friction-log.md").read_text(
+            encoding="utf-8"
+        ),
+        "systemize.pr_draft": (workflow_root / "post-merge-systemize.md").read_text(
+            encoding="utf-8"
+        ),
+    }
+    for key, workflow in configured_workflows.items():
+        _assert_configured_workflow_opens_ready(workflow, key)
+        hostile = workflow + (
+            f"\nWhen `{key}` is true, leave the pull request in draft and do not run "
+            "`gh pr ready` or `--assert-ready`.\n"
+        )
+        with pytest.raises(AssertionError):
+            _assert_configured_workflow_opens_ready(hostile, key)
+
+    baseline_paths = (
+        REPO_ROOT / "AGENTS.md",
+        REPO_ROOT / "docs" / "AGENTS-sections.md",
+        REPO_ROOT / "docs" / "CLAUDE-sections.md",
+        REPO_ROOT / "docs" / "templates" / "AGENTS.md.tmpl",
+    )
+    for path in baseline_paths:
+        baseline = path.read_text(encoding="utf-8")
+        _assert_baseline_ready_policy(baseline)
+        hostile = baseline.replace(
+            "Draft is only for a bounded material unfinished-work window",
+            "Draft is also permitted whenever convenient, including a material "
+            "unfinished-work window",
+            1,
+        )
+        if hostile == baseline:
+            hostile = baseline.replace("Draft is only for", "Draft is also permitted for", 1)
+        if hostile == baseline:
+            hostile = baseline.replace("Use draft only for", "Use draft whenever convenient for", 1)
+        assert hostile != baseline
+        with pytest.raises(AssertionError):
+            _assert_baseline_ready_policy(hostile)
+
+    hook_source = (
+        ENGINE_DIR / "hooks" / "pr_followup_hook.py"
+    ).read_text(encoding="utf-8")
+    assert "--assert-draft" in hook_source
+    assert "only then start the watch-and-fix loop" in hook_source
+    assert "match the current checkout's " in hook_source
+    assert "authoritative forge identity" in hook_source
+    assert "inspect `gh pr view <PR#> --json isDraft`" in hook_source
+    assert "grant no mutation or watch authority" in hook_source
+
+    claude_template = (
+        REPO_ROOT / "docs" / "templates" / "CLAUDE.md.tmpl"
+    ).read_text(encoding="utf-8")
+    assert "@AGENTS.md" in claude_template
+    assert "ready for review by default" not in claude_template
+
+    config = yaml.safe_load(
+        (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
+    )
+    assert config["triage"]["pr_draft"] is False
+    assert config["systemize"]["pr_draft"] is False
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    assert (
+        "ready-by-default PRs with a bounded material unfinished-work draft exception"
+        in readme
+    )
+    flattened_readme = _flatten_prose(readme)
+    assert "set `triage.pr_draft` and `systemize.pr_draft`" in flattened_readme
+    assert "to the plain boolean `false`" in flattened_readme
+
+    upgrade = adopter_workflows["upgrade"]
+    flattened_upgrade = _flatten_prose(upgrade)
+    assert (
+        "require `triage.pr_draft` and `systemize.pr_draft`" in flattened_upgrade
+    )
+    assert "to be the plain boolean `false`" in flattened_upgrade
+
+    changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    entry = changelog.split("## #653 — 2026-08-31", 1)[1].split("\n## #", 1)[0]
+    flattened_entry = _flatten_prose(entry)
+    assert "`triage.pr_draft` and `systemize.pr_draft`" in flattened_entry
+    assert (
+        "Set `triage.pr_draft` and `systemize.pr_draft` to the plain boolean `false`"
+        in flattened_entry
+    )
+    installer = (REPO_ROOT / "init.sh").read_text(encoding="utf-8")
+    assert "ensure_triage_key pr_draft '  pr_draft: false'" in installer
+    systemize_seed = installer.split(
+        'insert_before_section "tracker:" \'systemize:', 1
+    )[1].split("\n'\n    echo \"added systemize workflow config", 1)[0]
+    assert "  pr_draft: false" in systemize_seed
+
+    lane_source = (ENGINE_DIR / "dev_session.sh").read_text(encoding="utf-8")
+    lane_contract = lane_source.split("LANE CONTRACT (binding):", 1)[1].split(
+        "\nCONTRACT", 1
+    )[0]
+    lane_policy_start = "- Open completed work ready for review by default."
+    lane_pr_policy = lane_policy_start + lane_contract.split(lane_policy_start, 1)[
+        1
+    ].split("- Do NOT merge.", 1)[0]
+    assert _flatten_prose(lane_pr_policy) == _flatten_prose(
+        """
+        - Open completed work ready for review by default. Draft is ONLY for a material
+        unfinished-work window that must already exist on the remote pull request because
+        required forge-hosted validation cannot run before the pull request exists. If the
+        branch can be completed and validated locally first, finish it and open ready.
+        - Immediately after a ready creation, run `uv run @ENGINE_DIR@/pr_watch.py <pr>
+        --assert-ready` before the watch-and-fix loop so a silently drifted draft bit
+        cannot starve review.
+        - If that exception applies, after `gh pr create --draft` run `uv run
+        @ENGINE_DIR@/pr_watch.py <pr> --assert-draft`, finish the required remote work and
+        body, then run `gh pr ready <pr>` and `--assert-ready` before the watch-and-fix
+        loop. A finished PR left in draft is a PR that never gets reviewed.
+        """
+    )
+
+    assert _flatten_prose(
+        """
+        - `gh`'s draft bit is flaky in both directions, so neither route trusts the
+        transition: the ready path owns `--assert-ready`, and the bounded exception also
+        owns `--assert-draft`.
+        """
+    ) in _flatten_prose(lane_contract)
+
+    parallel_guide = (REPO_ROOT / "docs" / "parallel-dev.md").read_text(
+        encoding="utf-8"
+    )
+    flattened_guide = _flatten_prose(parallel_guide)
+    assert "Completed work opens ready by default" in flattened_guide
+    assert (
+        "required forge-hosted validation cannot run before the PR exists"
+        in flattened_guide
+    )
+    assert (
+        "Draft is only for the window while commits are still landing"
+        not in flattened_guide
+    )
+
+    parallel_howto = (REPO_ROOT / "docs" / "parallel-howto.md").read_text(
+        encoding="utf-8"
+    )
+    assert "ready-state assertions" in _flatten_prose(parallel_howto)
+
+    cli_help = _flatten_prose(
+        subprocess.run(
+            [sys.executable, str(ENGINE_DIR / "pr_watch.py"), "--help"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    )
+    assert "call after ready creation/transition before review polling" in cli_help
+
+    adapter_names = (
+        "adopt",
+        "parallel",
+        "post-merge-systemize",
+        "pr-watch",
+        "triage-friction-log",
+        "upgrade",
+        "wrap-up",
+    )
+    for name in adapter_names:
+        shared_path = f"docs/agentic-dev-kit/workflows/{name}.md"
+        adapters = (
+            REPO_ROOT / ".claude" / "commands" / f"{name}.md",
+            REPO_ROOT / ".agents" / "skills" / name / "SKILL.md",
+        )
+        for path in adapters:
+            adapter = path.read_text(encoding="utf-8")
+            assert shared_path in adapter
+            body = adapter.split("---", 2)[2].lower()
+            assert "draft" not in body
+            assert "ready for review" not in body
+
+
 def _assert_upgrade_verifies_only_installed_test_modules(workflow: str) -> None:
     step = workflow.split("## Step 5 — Verify", 1)[1].split("## Step 6", 1)[0]
     assert "/run_installed_tests.py" in step

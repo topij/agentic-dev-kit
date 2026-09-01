@@ -189,8 +189,9 @@ python3 scripts/launch_lane.py \
   --prompt-file <task-prompt>
 ```
 
-The contract covers draft PR, active CI polling, narrative ownership, and branch
-checks. See the exact contract text with:
+The contract covers ready-by-default PRs, the bounded draft exception, ready-state
+assertions, active CI polling, narrative ownership, and branch checks. See the exact
+contract text with:
 
 ```bash
 scripts/dev_session.sh print-contract

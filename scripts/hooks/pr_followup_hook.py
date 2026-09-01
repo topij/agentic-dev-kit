@@ -1,20 +1,25 @@
 #!/usr/bin/env python3
-"""PostToolUse hook: after a PR is opened / marked ready, mandate the watch-fix loop.
+"""PostToolUse hook: require PR-state verification, then the watch-fix loop.
 
 Registered on BOTH runtimes, and told which one it is running under via
 `--runtime claude|codex` (#301):
 
   - `.claude/settings.json` — `hooks.PostToolUse`, matcher `Bash`, plus an
-    `if: "Bash(gh pr *)"` config-level pre-filter.
+    `if: "Bash(*)"` tool-level filter. The broad binding lets the shared hook
+    warn on response-only state acknowledgements; it does not reconstruct
+    constructed executables or argv from shell text.
   - `.codex/hooks.json` — `hooks.PostToolUse`, matcher `^Bash$`. Codex's matcher
     filters the TOOL NAME only, with no equivalent of Claude's `if`, so this
     script is invoked on every Bash call there and does all the narrowing itself.
 
-Either way it narrows to `gh pr create` / `gh pr ready` (the moments a PR goes
-live for review) and injects an `additionalContext` instruction so the session
-runs the kit's PR follow-through loop (Principle #5 in `PRINCIPLES.md`) without
-being asked. Both runtimes honour the same `hookSpecificOutput.additionalContext`
-contract.
+Either way it narrows stronger PR lifecycle candidates into a conditional
+`additionalContext` instruction and indeterminate `gh pr` results into a
+separate non-mutating warning. Neither route treats shell or response text as
+proof of an event. The lifecycle instruction requires the session to establish
+that the operation was lifecycle-changing, resolve the exact pull request,
+confirm that it belongs to the current checkout, and read live draft state
+before the matching lifecycle becomes mandatory. Both runtimes honour the same
+output contract.
 This closes the gap where the kit only had prose asking the agent to run `/pr-watch`
 unasked (Principle #8: "a rule that lives only in a doc is a wish").
 
@@ -49,17 +54,32 @@ import re
 import sys
 from pathlib import Path
 
-# The command is a NECESSARY condition, never a sufficient one (#302). It matches
-# the phrase anywhere, so a command that merely quotes, echoes, greps for or
-# documents it matches too — observed five times while wiring the Codex
-# registration, once from the comment documenting this very behaviour and once
-# from a review lens that had never heard of it. Anchoring to the start would
-# miss the ordinary `cd x && <the command>` form.
+# A literal ``gh pr ready`` token plus GitHub CLI's state acknowledgement
+# selects the expanded conditional lifecycle instruction. It does not prove
+# that the token was executed: the regex deliberately matches anywhere so it
+# does not miss ``cd x && <command>``, and therefore also sees quoted/search
+# text. The emitted instruction owns that ambiguity and grants no authority
+# until the operation and authoritative forge state are established separately.
+# Creation URLs, indirect actions, and lifecycle-looking commands whose native
+# evidence was hidden or transformed take the non-mutating warning.
 #
-# So the command decides whether to LOOK, and `tool_response` decides whether to
-# fire. Both runtimes supply it on PostToolUse. The surface is wider under Codex,
-# whose matcher filters the tool name only, so every Bash command reaches here.
-_TRIGGER = re.compile(r"\bgh\s+pr\s+(create|ready)\b")
+# Both runtimes supply PostToolUse response data, and every Bash command reaches
+# this shared policy. Constructed executables and argv cannot be recovered from
+# command text without rebuilding a shell parser; a response-only state
+# acknowledgement and a response-only PR URL still get the warning. That can be
+# harmlessly noisy for read-only output, but the instruction grants no authority
+# and catches aliases or API calls whose lifecycle action is absent from shell text.
+# Repository-qualified inherited options are candidates too, whether they sit
+# before or after ``pr`` and whether ``-R`` is joined to its value. This regex
+# does not interpret their values or select a lifecycle; authoritative forge
+# state later proves that the resolved repository and host match the current
+# checkout before the repository-local watcher can act.
+_REPOSITORY_OPTION = r"(?:-R(?:\S+|\s+\S+)|--repo(?:=\S+|\s+\S+))"
+_TRIGGER = re.compile(
+    rf"\bgh(?:\s+{_REPOSITORY_OPTION})*\s+pr"
+    rf"(?:\s+{_REPOSITORY_OPTION})*\s+(create|new|ready)\b"
+)
+_GH_PR_PREFIX = re.compile(rf"\bgh(?:\s+{_REPOSITORY_OPTION})*\s+pr\b")
 
 # What a real invocation leaves in the response, established from `gh`'s source
 # rather than assumed — the issue asked for that specifically, and the two
@@ -71,18 +91,18 @@ _TRIGGER = re.compile(r"\bgh\s+pr\s+(create|ready)\b")
 #                  says `is already "ready for review"` — which still means a
 #                  real PR exists and still deserves the reminder.
 #
-# The URL must be ALONE ON ITS LINE. `gh pr create` prints it and nothing else,
-# so this still matches every real invocation — while a URL embedded in prose or
-# JSON does not. Found live: replying to a review comment with `gh api` fired
-# this hook, because the command text quoted the trigger phrase and the API's
-# own response carried `…/pull/306#discussion_r…`. The bare-substring form could
-# not tell that from a PR being opened.
-_PR_URL = re.compile(r"^\s*https://\S+/pull/\d+/?\s*$", re.MULTILINE)
+# A PR URL anywhere in response output is enough for the non-authoritative
+# warning, including a URL in API JSON. It deliberately excludes a fragment or
+# deeper path after the PR number: a review-comment response such as
+# ``…/pull/306#discussion_r…`` is not lifecycle evidence. Read-only PR URLs can
+# still warn, harmlessly, because the instruction stops before forge access.
+_PR_URL = re.compile(r"https://[^\s\"']+/pull/\d+/?(?=$|[\s\"',}\]])")
 
 # The optional backslash tolerates a runtime that hands us already-escaped text.
 # It is NOT load-bearing for anything this module does: nothing serialises the
 # response any more, because doing so was what broke `_PR_URL`'s line anchor.
 _READY_ACK = re.compile(r'is (?:marked as|already) \\?"ready for review')
+_DRAFT_ACK = re.compile(r'is (?:converted to \\?"draft|already \\?"in draft)')
 
 # What the two registered runtimes actually send, established from their own
 # sources by a review lens rather than assumed — an earlier version of this
@@ -94,9 +114,27 @@ _READY_ACK = re.compile(r'is (?:marked as|already) \\?"ready for review')
 #                 already concatenates stdout and stderr.
 #
 # Both are handled, and so is anything else, because `_iter_strings` below walks
-# for strings instead of naming keys. An EMPTY response still counts as
-# unreadable and fires: neither runtime promises a shape in its schema (Codex's
-# types `tool_response` as `true`), and a missed reminder is the costly failure.
+# output values rather than assuming one response shape. A response with no
+# usable output strings still fails loud: neither runtime promises a shape in
+# its schema (Codex's types `tool_response` as `true`). Empty output plus common
+# execution metadata is still empty output, not evidence that no PR changed.
+
+_NON_OUTPUT_KEYS = frozenset(
+    {
+        "command",
+        "cmd",
+        "duration",
+        "duration_ms",
+        "event",
+        "event_name",
+        "name",
+        "state",
+        "status",
+        "tool",
+        "tool_name",
+        "type",
+    }
+)
 
 _DEFAULT_FALLBACK_COMMAND = "/code-review"
 # Which runtime's `review.*` keys to read. Both registrations pass it explicitly;
@@ -150,7 +188,9 @@ def _lens_compute_phrase(config, kitconfig, runtime: str = _DEFAULT_RUNTIME) -> 
     return f" Run each lens at {' and '.join(parts)}, per review.fallback_panel.lens_compute."
 
 
-def _load_review_config(runtime: str = _DEFAULT_RUNTIME) -> tuple[list[str], str, str, list[str], str, str]:
+def _load_review_config(
+    runtime: str = _DEFAULT_RUNTIME,
+) -> tuple[list[str], str, str, list[str], str, str]:
     """Read ``(review.bots, review.fallback_commands.<runtime>, paths.engines,
     review.fallback_panel lens names, review.fallback_panel.receipt_source,
     rendered review.fallback_panel.lens_compute.<runtime> clause)``.
@@ -272,11 +312,10 @@ def _fallback_instruction(
             "docs/agentic-dev-kit/fallback-review-panel.md — and record it with "
             f"`uv run {engines_dir}/pr_watch.py <PR#> "
             f'--record-review "{panel_source}" --lenses <names> --head <polled-sha>`. '
-            "Never treat the outage as a review waiver."
+            "Never treat the outage as a review waiver." + lens_compute
             # Appended only for the PANEL branch: the degraded one-lens fallback
             # runs in the cockpit's own context, so there is no separate lens to
             # give a model or an effort level to.
-            + lens_compute
         )
     return (
         f"If a review bot is unavailable, run the configured fallback "
@@ -284,7 +323,77 @@ def _fallback_instruction(
     )
 
 
-def build_reminder(runtime: str = _DEFAULT_RUNTIME) -> str:
+def _lifecycle_instruction(engines_dir: str) -> str:
+    """Resolve a candidate before granting lifecycle authority.
+
+    Ready acknowledgements carry an owner/repo name, but turning that text into
+    a repository-local numeric ``pr_watch`` call would discard identity. Shell
+    wrappers, ``GH_REPO``, ``-R`` and PR URLs can all make the acknowledged pull
+    request belong to another repository. Stronger and unresolved candidates
+    therefore share this instruction; neither candidate class proves an action.
+    The instruction preserves that trust boundary explicitly.
+    """
+    return (
+        "If the just-completed operation was read-only, only mentioned, or "
+        "searched for a lifecycle command and did not actually create a pull "
+        "request or change its review state, stop immediately without querying "
+        "the forge. Otherwise, do not change draft state or start a watch loop "
+        "from command or response text. "
+        "First resolve the exact pull-request identity from authoritative forge "
+        "state. Confirm that its repository and host match the current checkout's "
+        "authoritative forge identity; if no pull request exists or the identity "
+        "does not match, stop without changing or watching any pull request. "
+        "Next, inspect `gh pr view <PR#> --json isDraft`. Only after the operation "
+        "assessment and those authoritative checks confirm a lifecycle-changing "
+        "operation on the affected pull request does follow-through apply. If it "
+        "is ready, run "
+        f"`uv run {engines_dir}/pr_watch.py <PR#> --assert-ready` and start the "
+        "watch-and-fix loop. If it is draft, use the current workflow state — "
+        "never parsed shell text — to decide whether this run intentionally took "
+        "the bounded material unfinished-work exception. For that intentional "
+        f"route, run `uv run {engines_dir}/pr_watch.py <PR#> --assert-draft`, "
+        "finish and push the material work, complete the body, run "
+        f"`gh pr ready <PR#>` and then `uv run {engines_dir}/pr_watch.py <PR#> "
+        "--assert-ready`; only then start the watch-and-fix loop. Otherwise "
+        "correct the unexpected draft with `--assert-ready` before polling. "
+    )
+
+
+def _watch_instruction(
+    *,
+    engines_dir: str,
+    bot_desc: str,
+    fallback_command: str,
+    lenses: list[str],
+    panel_source: str,
+    lens_compute: str,
+    mandate: str,
+) -> str:
+    """Complete the shared watch policy after candidate resolution."""
+    return (
+        mandate
+        + " complete it in the current run without being asked. When it reaches "
+        "review polling, invoke `/pr-watch` (or poll "
+        f"`uv run {engines_dir}/pr_watch.py <PR#> --json`) and do NOT yield this turn "
+        f"until CI is fully green AND findings from {bot_desc} are fixed or "
+        "replied-to with a reason. Fix real findings, reply-with-reason to nitpicks "
+        "you disagree with, `--mark-seen` each handled round, and keep polling (CI "
+        "can take 20-30 min). "
+        + _fallback_instruction(
+            fallback_command,
+            lenses,
+            panel_source,
+            engines_dir,
+            lens_compute,
+        )
+        + " Only stop early if you hit something that genuinely needs an "
+        "operator decision."
+    )
+
+
+def build_reminder(
+    runtime: str = _DEFAULT_RUNTIME,
+) -> str:
     (
         bots,
         fallback_command,
@@ -295,20 +404,59 @@ def build_reminder(runtime: str = _DEFAULT_RUNTIME) -> str:
     ) = _load_review_config(runtime)
     bot_desc = _bot_description(bots)
     return (
-        "A pull request was just opened or marked ready for review. Per the kit's "
-        '"PR follow-through" policy (PRINCIPLES.md #5/#8) this step is MANDATORY and '
-        "you should start it now without being asked: run the watch-and-fix loop for "
-        "this PR — invoke `/pr-watch` (or poll "
-        f"`uv run {engines_dir}/pr_watch.py <PR#> --json`) and do NOT yield this turn "
-        f"until CI is fully green AND every {bot_desc} finding is fixed or "
-        "replied-to with a reason. Fix real findings, reply-with-reason to nitpicks "
-        "you disagree with, `--mark-seen` each handled round, and keep polling (CI "
-        "can take 20-30 min). "
-        + _fallback_instruction(
-            fallback_command, lenses, panel_source, engines_dir, lens_compute
+        "A Bash result matched a pull-request lifecycle candidate. This match "
+        "and its output grant no mutation or watch authority. "
+        + _lifecycle_instruction(engines_dir)
+        + _watch_instruction(
+            engines_dir=engines_dir,
+            bot_desc=bot_desc,
+            fallback_command=fallback_command,
+            lenses=lenses,
+            panel_source=panel_source,
+            lens_compute=lens_compute,
+            mandate=(
+                "That independently confirmed lifecycle is MANDATORY under the "
+                "kit's PR follow-through policy (PRINCIPLES.md #5/#8);"
+            ),
         )
-        + " Only stop early if you hit something that genuinely needs an "
-        "operator decision."
+    )
+
+
+def build_unresolved_warning(runtime: str = _DEFAULT_RUNTIME) -> str:
+    """Fail loud without granting lifecycle mutation authority.
+
+    Creation URLs, missing output, indirect actions, and acknowledgement-shaped
+    read-only output do not prove one specific lifecycle action. The warning
+    surfaces the gap while forbidding the full route until authoritative forge
+    state establishes that an event actually occurred.
+    """
+    (
+        bots,
+        fallback_command,
+        engines_dir,
+        lenses,
+        panel_source,
+        lens_compute,
+    ) = _load_review_config(runtime)
+    bot_desc = _bot_description(bots)
+    return (
+        "A command or response produced unresolved pull-request lifecycle evidence. "
+        "This warning grants no mutation authority from that text alone, including "
+        "no draft-state change or watch loop. "
+        + _lifecycle_instruction(engines_dir)
+        + _watch_instruction(
+            engines_dir=engines_dir,
+            bot_desc=bot_desc,
+            fallback_command=fallback_command,
+            lenses=lenses,
+            panel_source=panel_source,
+            lens_compute=lens_compute,
+            mandate=(
+                "For that independently confirmed lifecycle, the shared PR "
+                "follow-through policy MUST be completed;"
+            ),
+        )
+        + " Do not infer an event or state transition from shell or response text."
     )
 
 
@@ -339,7 +487,7 @@ _MAX_DEPTH = 6
 
 
 def _iter_strings(value: object, depth: int = 0):
-    """Every string anywhere in a response payload, whatever shape it arrived in.
+    """Every usable output string in a response payload, whatever its shape.
 
     Deliberately shape-agnostic. An earlier version read six hardcoded keys and
     fell back to `json.dumps` for anything else — and `json.dumps` escapes real
@@ -357,14 +505,18 @@ def _iter_strings(value: object, depth: int = 0):
     quiet where the code this replaced would have fired.
 
     Values only, not keys — no runtime shape puts content in a key, and walking
-    keys would let an arbitrary label masquerade as tool output.
+    keys would let an arbitrary label masquerade as tool output. Common metadata
+    fields are skipped because a status such as ``success`` does not make empty
+    stdout/stderr into usable PR evidence.
     """
     if depth > _MAX_DEPTH:
         raise _Unreadable
     if isinstance(value, str):
         yield value
     elif isinstance(value, dict):
-        for item in value.values():
+        for key, item in value.items():
+            if isinstance(key, str) and key.casefold() in _NON_OUTPUT_KEYS:
+                continue
             yield from _iter_strings(item, depth + 1)
     elif isinstance(value, (list, tuple)):
         for item in value:
@@ -372,47 +524,64 @@ def _iter_strings(value: object, depth: int = 0):
 
 
 def _response_text(data: dict) -> str | None:
-    """Everything the tool reported, flattened — or None when the payload cannot
-    settle whether a PR was opened.
+    """Usable tool output, flattened — or None when it is unreadable or empty.
 
-    None means "cannot settle it", and every such case fires: no strings at all,
-    and now also a payload too deep to walk. A runtime that does not capture
-    stderr renders `gh pr ready` indistinguishable from a command that printed
-    nothing, and a missed reminder costs the follow-through this hook exists to
-    guarantee while a spurious one costs a paragraph.
+    No strings, only empty strings, or a payload too deep to walk means "cannot
+    settle it" and returns None so the hook fails loud. A real PR command whose
+    output was redirected is indistinguishable here from a silent command that
+    merely mentions the trigger phrase. The conservative reminder does not
+    mutate anything: it requires exact forge identity and live draft state, and
+    stops when no matching pull request exists.
     """
     try:
-        captured = "\n".join(_iter_strings(data.get("tool_response")))
+        captured_strings = list(_iter_strings(data.get("tool_response")))
     except (_Unreadable, RecursionError):
         return None
-    return captured.strip() or None
+    if not captured_strings:
+        return None
+    return "\n".join(captured_strings).strip() or None
 
 
 def should_fire(command: object, response: str | None) -> bool:
-    """Whether this Bash call actually opened or readied a PR.
+    """Whether this Bash result gets expanded conditional lifecycle context.
 
-    The command alone was the old gate and it mandated a watch loop for PRs that
-    did not exist. Now it only selects candidates; the response decides.
+    A literal ``gh pr ready`` token plus a ready/draft acknowledgement selects
+    detailed guidance, not mutation authority. Quoted/search text can satisfy
+    this deliberately parser-free candidate check, so the guidance itself must
+    require a separate operation assessment and authoritative forge state.
+    Other candidates are handled by :func:`should_warn_unresolved`.
     """
-    if not isinstance(command, str):
+    if (
+        response is None
+        or not isinstance(command, str)
+        or not _GH_PR_PREFIX.search(command)
+    ):
         return False
     actions = {match.group(1) for match in _TRIGGER.finditer(command)}
-    if not actions:
-        return False
-    if response is None:
-        return True  # nothing readable — fail loud
+    return "ready" in actions and bool(
+        _READY_ACK.search(response) or _DRAFT_ACK.search(response)
+    )
 
-    # Each action is matched against ITS OWN evidence. Accepting either signal
-    # for either action let a command that merely mentions `gh pr ready` fire on
-    # any PR URL in its output, and vice versa — CodeRabbit found that.
-    #
-    # ANY, not ALL: `gh pr create --draft && gh pr ready` is one command with
-    # both actions, and its response may carry only the URL if the runtime drops
-    # stderr. Requiring every action's evidence would go silent on a PR that was
-    # genuinely just opened, which is the failure this hook exists to prevent.
-    if "create" in actions and _PR_URL.search(response):
+
+def should_warn_unresolved(command: object, response: str | None) -> bool:
+    """Whether an indeterminate ``gh pr`` result needs a non-mutating warning."""
+    if should_fire(command, response):
+        return False
+    if response is not None and (_READY_ACK.search(response) or _DRAFT_ACK.search(response)):
         return True
-    return bool("ready" in actions and _READY_ACK.search(response))
+    if response is not None and _PR_URL.search(response):
+        return True
+    if not isinstance(command, str):
+        return False
+    # Any lifecycle-looking command whose native evidence is absent, replaced,
+    # or transformed must fail loud. Determining whether the token was executed
+    # would require parsing shell syntax; the warning is intentionally harmless
+    # for a quoted/search mention and explicitly grants no mutation authority.
+    if _TRIGGER.search(command):
+        return True
+    if not _GH_PR_PREFIX.search(command):
+        return False
+    return response is None
 
 
 def main() -> int:
@@ -436,13 +605,19 @@ def main() -> int:
 
     tool_input = data.get("tool_input")
     command = tool_input.get("command") if isinstance(tool_input, dict) else None
-    if should_fire(command, _response_text(data)):
+    response = _response_text(data)
+    context = None
+    if should_fire(command, response):
+        context = build_reminder(runtime)
+    elif should_warn_unresolved(command, response):
+        context = build_unresolved_warning(runtime)
+    if context is not None:
         print(
             json.dumps(
                 {
                     "hookSpecificOutput": {
                         "hookEventName": "PostToolUse",
-                        "additionalContext": build_reminder(runtime),
+                        "additionalContext": context,
                     }
                 }
             )

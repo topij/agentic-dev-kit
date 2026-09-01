@@ -107,15 +107,16 @@ The exact command, every flag, and the headless JSON descriptor are in
 ### 3 · Each lane works to a green, ready-for-review PR
 
 A lane's job ends at **green-and-ready**, not at merge — bound by the same **lane
-contract** every launch mechanism injects verbatim into the lane's prompt (mark ready the
-moment the branch is complete, active CI polling, never touching the narrative files,
-branch hygiene, never merging). Draft is only for the window while commits are still
-landing: a finished PR left in draft never triggers the review bots, so it starves itself
-of the independent pass the merge gate then demands. **Marking ready is the lane's; landing
-it is the cockpit's.** Fetch the contract yourself with `dev_session.sh print-contract`, or
-read it in
+contract** every launch mechanism injects verbatim into the lane's prompt. Completed work
+opens ready by default, and the lane immediately runs `--assert-ready` before review
+polling. Draft is reserved for material unfinished work that must already exist remotely
+because required forge-hosted validation cannot run before the PR exists; that lane owns
+the draft assertion, completion, ready transition, and ready assertion. Active CI
+polling, narrative ownership, branch hygiene, and the no-merge boundary remain in the
+same contract. **Marking ready is the lane's; landing it is the cockpit's.** Fetch the
+contract yourself with `dev_session.sh print-contract`, or read it in
 [`workflows/parallel-headless.md`](agentic-dev-kit/workflows/parallel-headless.md#the-lane-contract-preamble-inject-this-verbatim)
-— this doc intentionally doesn't restate it, so the two copies can't drift apart.
+— this guide summarizes the lifecycle without copying the verbatim contract.
 
 ### 4 · Watch the board — `list --watch`
 

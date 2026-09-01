@@ -12,7 +12,7 @@ things that break a repo pinning the old contract.
 |---|---|
 | report / return shape | keys and values an engine's report or a function's return grew, lost, or changed meaning |
 | gate semantics | when `converged` / `mergeable` / `done` / a hook's exit code flips |
-| config keys | a `config/dev-model.yaml` key added, removed, renamed, or given a new default |
+| config keys | a `config/dev-model.yaml` key added, removed, renamed, given a new default, or restricted to new accepted values |
 | engine CLI surface | a flag, argument, or exit code an adopter or CI invokes |
 
 Each line names the issue(s) and states **what you must do**. Nothing else belongs
@@ -41,6 +41,33 @@ observable but compatible. `ADDED` — new surface you may adopt or ignore.
 starts.
 
 ---
+
+## #653 — 2026-08-31
+
+- **CHANGED (gate semantics) — the PR follow-through hook treats creation URLs and
+  GitHub CLI's existing-PR diagnostic as unresolved lifecycle candidates. Creation
+  output carries no draft bit, so a successful creation requires an authoritative
+  `isDraft` check. Ready acknowledgements also require repository and host identity to
+  match the current checkout before a repository-local watcher runs. Shell and response
+  matches are candidates only: even the expanded instruction selected by a literal
+  `gh pr ready` token plus a ready/draft acknowledgement grants no mutation authority
+  until the operation and authoritative forge state are established separately.
+  Creation URLs, missing, replaced, or transformed output, indirect actions, read-only
+  lookalikes, quoted/search mentions, and response-only state acknowledgements or PR
+  URLs fail loud without granting mutation or watch authority. After
+  independent confirmation, the candidate routes assert the matching ready or bounded
+  draft state and complete the shared watch policy. Constructed shell argv is not
+  reconstructed; harmless warning false positives replace shell parsing.**
+  **Refresh
+  `scripts/hooks/pr_followup_hook.py` and `init.sh`; in Claude's `PostToolUse`
+  registration, set the command hook's `if` field to `Bash(*)` so the shared hook —
+  rather than a runtime-only prefix filter — decides which Bash calls apply.**
+- **CHANGED (config keys) — `triage.pr_draft` and `systemize.pr_draft` now accept
+  only `false`; completed workflow patches open ready for review and correct the ready
+  bit before review polling.** **Set `triage.pr_draft` and `systemize.pr_draft` to the
+  plain boolean `false` before running `triage-friction-log` or
+  `post-merge-systemize`. Refresh their shared workflow files and `pr-watch`; the
+  additive `init.sh` migration preserves an existing value instead of replacing it.**
 
 ## #651 — 2026-08-30
 
