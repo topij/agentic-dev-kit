@@ -39,11 +39,14 @@ exact-head reviews and operator-held merge authority can be recomputed from prom
   to its declared lens.
 
 - **The review stopped at the demonstrated boundary.** Exact-head adversarial and
-  correctness rechecks reproduced the hostile cases and compatibility controls; no
-  general dataflow mechanism or new schema was added. PR `#659` carries the resulting
-  `fallback:panel` receipt at `d0eac77185d808ef822ba7fefe3247de902927da`.
+  correctness rechecks reproduced the hostile cases and compatibility controls. The
+  scanner repairs stayed at the demonstrated expression shapes instead of adding a
+  general dataflow mechanism; the retained batch uses PR `#659`'s explicit plural
+  reviewed-head evidence shape. PR `#659` carries the resulting `fallback:panel`
+  receipt at `d0eac77185d808ef822ba7fefe3247de902927da`.
 
-- **Verified:** `make test` in a quiet fresh clone at
+- **Verified:** `make test` in
+  `/private/tmp/adk-codex-parallel-20260901.xlAufG/root-final-test-d0eac77` at
   `d0eac77185d808ef822ba7fefe3247de902927da` on 2026-09-02 printed
   `2405 passed in 367.84s (0:06:07)`; the merged squash is `4e63fd8`.
 
