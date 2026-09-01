@@ -24,6 +24,23 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-09-01
+
+- **Two fallback-panel lenses each running the full suite concurrently produced a
+  failure neither reproduces alone.** Both lenses' `make test` runs at
+  `da142620a02d16d31e3231249d627b8fd194daa9` on 2026-09-01 failed
+  `scripts/tests/test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero`,
+  a file outside the reviewed diff, and both saw it pass standalone; the adversarial
+  lens saw the same failure at the base revision. The cockpit's own quiet-tree run at
+  the same head printed `2374 passed in 514.92s (0:08:34)` with nothing failing. One
+  lens reported `pytest-of-topi` tmp-dir cleanup races and two concurrent `make test`
+  process chains in the same window. **M** — the correlation with concurrency is
+  strong, but no mechanism is identified and a shared tmp-dir root is a guess rather
+  than an observation. Parked for accumulation: this is `#623`'s quiet-tree class seen
+  from the lens side rather than the cockpit's, and it recurs whenever a panel asks
+  both lenses to verify. If it recurs, keep both lenses' full pytest output and their
+  tmp-dir paths before re-running.
+
 ## 2026-08-29 — Backlog migrated to GitHub Issues (#641–#645)
 
 Swept in **LLM-only mode**: both engines named by `triage.draft_engine` and

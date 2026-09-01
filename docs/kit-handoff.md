@@ -14,10 +14,62 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-01 — PR `#655` (squash `48311ff`) merged the
-adopter-side fallback-lens definition diagnostic.
+Last updated: 2026-09-01 — PR `#657` (squash `b5bc17a`) carried `#255`'s measured
+residue: the `runtime_mappings` status declaration now reaches both install surfaces.
 
-## Latest session — 2026-09-01 (parity reconciliation and lens diagnostics, in a Codex session)
+## Latest session — 2026-09-01 (runtime_mappings status declaration, in a Claude Code session)
+
+**Theme —** `#255`'s disposition was settled against the tree rather than against the
+plan's summary of it, and the one measured residue shipped. The session then found its
+own disposition had been drawn too wide.
+
+- **Runtime —** Claude Code 2.1.252, assigned model `claude-opus-5`, effort `xhigh`,
+  read from this session's own transcript rather than from the prompt or argv.
+
+- **PR `#657` (squash `b5bc17a`) closed the gap between `#255`'s proposal and its
+  delivery.** `lens_compute` carried the per-runtime mechanical/advisory declaration on
+  both install surfaces; `models.runtime_mappings` carried it on the reference config
+  only, so a migrating adopter's config surface stated the values without their status.
+  `init.sh` now emits it, and `_runtime_mappings_block` — written for that pin and
+  wired to no assertion — became `_runtime_mappings_comment` behind a pin holding both
+  surfaces. The emitted block moved to single quotes because the added comment text
+  carries backticks.
+
+- **`Makefile`'s mutation guidance was inverted for the files that PR touched.** It
+  named `scripts/tests/` and `init.sh` as paths a mutation never trips the drift check
+  on; both are in `kit-manifest.json`, so a mutation to either read as killed under
+  plain `make test` with nothing behavioural catching it. Corrected to send a
+  contributor to the manifest rather than to the comment's own list.
+
+- **`#255` stays open, and the disposition comment that implied otherwise was too
+  wide.** Both halves of its *Proposed* section are delivered for the two keys the
+  issue's own comments name, but the Proposed states a general rule over every
+  compute- or capability-selecting key. Enumerating those found two carrying no
+  per-runtime status: `review.fallback_commands` (consumed by `pr_followup_hook.py`,
+  agent-executed and so advisory — the issue's own "real consumer, zero mechanism"
+  shape) and `runtime.launchers` (consumed by `dev_session.sh`). A correction comment
+  is owed on the issue and was not posted this session.
+
+- **The panel's convergence was not corroboration.** Both lenses filed no finding
+  against the diff and both drew the same overstated conclusion from the same probe.
+  Recorded with the enumeration lesson in
+  [`review-process-learnings_2026-08-24.md`](../saved_plans/review-process-learnings_2026-08-24.md).
+
+- **The sprint boundary held.** This session did not start `#631` or the retained Codex
+  parallel-batch Phase 4 run, and `saved_plans/claude-side-assessment_2026-08-26.md`
+  stayed operator-owned and unstaged.
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `da142620a02d16d31e3231249d627b8fd194daa9` on 2026-09-01 printed
+  `2374 passed in 514.92s (0:08:34)` on a quiet tree; the merged squash is `b5bc17a`.
+
+▶ Next: `session-start` — then take `#243`'s Claude-side field exercise of `adopt`,
+`parallel`, `triage-friction-log` and `post-merge-systemize` as the opening slice, and
+settle `#255`'s two remaining undeclared keys.
+
+______________________________________________________________________
+
+## Session — 2026-09-01 (parity reconciliation and lens diagnostics, in a Codex session)
 
 **Theme —** The session reconciled the parity plan and tracker against live repository
 state, then PR `#655` delivered `#255`'s adopter-side lens-definition diagnostic without
@@ -294,74 +346,6 @@ grant every command, the one behavioural claim in `#637` that shipped without a 
 ▶ Next: `session-start` — `#606` remains open on its own scope, `#621`, `#631` and
 `#633` are untouched, and the friction-log inbox is over its budget with entries from
 today, so the next session has several threads rather than one.
-
-______________________________________________________________________
-
-## Session — 2026-08-29 (cockpit settings policy, in a Claude Code session)
-
-**Theme —** In a Claude Code session, PR `#637` (squash `83b959e`) took Phase 5's
-remaining `#606` slice, on `.claude/settings.json`. Its three questions were answered
-separately, and most of the change's value came from the review rather than the first
-draft.
-
-- **The engine path is templated, and `init.sh` prints it rather than writing it.** The
-  allow rule baked in `scripts` and no permissions advisory existed at all, so an
-  adopter vendoring under `scripts/devkit/` had no route to a correct rule. The advisory
-  follows `#303`'s print-never-write doctrine, and the reason is sharper here than for
-  hooks: an allow-list is policy about what may run unattended.
-
-- **The `SessionStart` matcher was ours, not the runtime's.** `"startup"` was read as a
-  limit until it was measured; a resumed session had been starting with both budget
-  tripwires silent. Both runtimes now omit the matcher. The runs, the fixture hash and
-  what was *not* exercised are in
-  [`claude-sessionstart-matcher-live-validation_2026-08-29.md`](../saved_plans/claude-sessionstart-matcher-live-validation_2026-08-29.md).
-
-- **The grant check was wrong in each direction available to it, always toward false
-  reassurance.** It counted an exact-form rule that pre-approves one argument-less
-  invocation; it counted any rule merely *naming* the engine — `cat`, `ruff check`,
-  `rm`; and it missed `Bash(uv run:*)`, which covers every poll. It now asks whether a
-  rule's tokens open the command the workflow issues. Rounds 5 and 6 each finding a
-  defect in the same function was the signal its predicate was wrong rather than its
-  cases incomplete.
-
-- **CI caught a defect no local run could.** `Path.resolve()` reports a symlink
-  loop as `RuntimeError` on Python 3.12 and returns the path unresolved on 3.14, and
-  `make test` pins no interpreter — so three independent local suites passed and CI went
-  red. The panel's redundancy is across reviewers, not across environments.
-
-- **Filed this session:** occurrence comments on `#393` (a second test resting on
-  `json.load` raising `RecursionError`, and the first observed failure of that shape,
-  which falsifies that issue's "latent" framing), `#292` (the interpreter axis of its
-  local-gate-weaker-than-CI thesis), and `#606` (the residual measurement task below).
-  Review lessons are in
-  [`review-process-learnings_2026-08-24.md`](../saved_plans/review-process-learnings_2026-08-24.md).
-
-- **Left deliberately open:** `_bash_allow_prefixes` asserts that `Bash`, `Bash(*)` and
-  `Bash(:*)` each grant every command, and that assertion carries no stamp while every
-  other behavioural claim in the change does. A cockpit deny-side probe and a lens
-  allow-side probe disagree on two of the three. The check is advisory and the kit never
-  emits `Bash(:*)`, so this was disclosed on the PR and on `#606` rather than fixed
-  under a stopping rule the operator set at one review round on the rewrite.
-
-- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
-  `52d25e5b95e2e7d8cb188c7bbeced43fbfcaffc7` on 2026-08-29 reported one failure, in
-  `test_pr_followup_hook.py` — the intermittent test recorded on `#393`, untouched by
-  this change — and the full suite at that revision printed `2081 passed` under both
-  `--python 3.12` and `--python 3.14`. At the tree that merged,
-  `5c5527ce58637d8165fefa1054e109dd9c84389c`, `uv run --python 3.12 … pytest` printed
-  `2091 passed` on 2026-08-29, and CI was green on the squash `83b959e`. **Read any one
-  of those counts as a reading of a suite with known intermittency, not as a property
-  of it:** review lenses reproducing the same commands in their own clones hit a
-  *different* intermittent failure at both revisions and under both interpreters, and
-  CI's own run of the merged head reported three skips where the local runs reported
-  none.
-  Both review lenses reproduced the suite independently in their own clones.
-
-▶ Next: measure the allow side of `Bash`, `Bash(*)` and `Bash(:*)` under a configuration
-that gates on `allow`, then drop or stamp the unmeasured entries in
-`_bash_allow_prefixes` and move `test_a_whole_tool_bash_grant_covers_every_engine` with
-the result — `#606` carries the task. `#621`, `#631` and `#633` stay open; use `#243`
-for the remaining runtime-specific workflow field exercises.
 
 ______________________________________________________________________
 
