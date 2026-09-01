@@ -76,9 +76,7 @@ historical observation it was and is not silently refreshed.
      [`capability-tier-calibration-live-validation_2026-08-27.md`](capability-tier-calibration-live-validation_2026-08-27.md).
      PR `#655` later delivered the adopter-side `kit_doctor` check for stale lens
      definitions. The already-running doctor owns expected rendering while the
-     existing file report owns installed-engine drift. The wrapper still carries no
-     model or effort control, and a Claude lane under the trust route runs the product
-     default.
+     existing file report owns installed-engine drift.
   5. Done, as a fail-closed run: the first real headless task on the generalised
      launcher (no tracker item; `#602` was the task the lane performed, not the slice).
      The lane ran on this repository with the launcher and every shipped configuration

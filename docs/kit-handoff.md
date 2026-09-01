@@ -28,14 +28,13 @@ duplicating the existing engine-drift responsibility.
 
 - **The tracker now follows delivered contracts.** The 2026-09-01 reconciliation
   closed `#365`, `#169`, `#466`, `#601`, `#605`, and `#606` after read-back of their
-  merged repository evidence. It found the direct workflow adapters aligned and left
-  Phase 1, Phase 2, and Phase 3 complete.
+  merged repository evidence.
 
-- **PR `#655` keeps one owner per responsibility.** The already-running doctor renders
-  the expected adopter-owned Claude definition; the existing manifest-backed file
-  report continues to own installed-engine drift. The regeneration remedy changes to
-  the inspected root, creates the target directory, and quotes configured paths. The
-  generator imports its sibling doctor before `lib`, and the manifest derives that
+- **PR `#655` keeps the responsibilities separate.** The already-running doctor
+  renders the expected adopter-owned Claude definition; the existing manifest-backed
+  file report continues to own installed-engine drift. The regeneration remedy changes
+  to the inspected root, creates the target directory, and quotes configured paths.
+  The generator imports its sibling doctor before `lib`, and the manifest derives that
   dependency.
 
 - **Review changed the design rather than merely adding guards.** The renderer-bundle
@@ -50,11 +49,6 @@ duplicating the existing engine-drift responsibility.
   implementation. Phase 6 retains adoption fixtures, trusted runtime smoke tests,
   maintained parity reporting, `#607`, and `#608`. This session did not start `#631`
   or the Phase 4 run.
-
-- **The merged evidence stays on the change.** PR `#655` binds the final clean
-  adversarial/correctness fallback-panel receipt and CI result at reviewed head
-  `a0ed4c32d484ceb72d41bacc46c7761fb7aafeb6` to squash
-  `48311ff41137ceb2530cf919c563c66fe7aea241`.
 
 ▶ Next: `session-start` — verify PR `#655` and `#255` live, present the exact proposed
 tracker disposition for `#255`, then recommend the next parity slice without starting
