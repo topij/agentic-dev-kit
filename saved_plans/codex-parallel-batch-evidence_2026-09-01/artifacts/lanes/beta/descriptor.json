@@ -1,0 +1,17 @@
+{
+  "base": "main",
+  "base_oid": "f13b3e995558ee2f14b656bba2e1a0f74d2254c2",
+  "branch": "dev/parallel-beta",
+  "descriptor_id": "f12df437-e875-41d1-9a5f-e2355b9d53e3",
+  "expires_at": "2026-09-01T13:45:38.411052Z",
+  "issued_at": "2026-09-01T13:30:38.411052Z",
+  "lane_oid": "f13b3e995558ee2f14b656bba2e1a0f74d2254c2",
+  "merge_class": "operator",
+  "origin_url": "https://github.com/topij/adk-codex-parallel-evidence-20260901.git",
+  "repo_root": "/private/tmp/adk-codex-parallel-20260901.xlAufG/repo",
+  "runtime": "codex",
+  "schema_version": 1,
+  "scope": "parallel-beta",
+  "state_root": "/private/tmp/adk-codex-parallel-20260901.xlAufG/dev-model-sessions/parallel-beta/state",
+  "worktree": "/private/tmp/adk-codex-parallel-20260901.xlAufG/dev-model-sessions/parallel-beta/wt"
+}

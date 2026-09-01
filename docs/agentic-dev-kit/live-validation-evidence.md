@@ -211,8 +211,10 @@ all named source files, and every used proof from the claim. The verifier refuse
 unlisted source file or proof.
 
 A source Git proof is closed JSON carrying its namespace, revision, exact commit lines,
-and the complete entries of only the tree objects needed for the ledger paths. The
-verifier reconstructs the Git commit and tree bytes, recomputes their object IDs,
+and the complete entries of only the tree objects needed for the ledger paths. A commit
+object that does not end in a newline adds `"commit_trailing_newline": false`; omission
+keeps the historical newline-terminated form. The verifier reconstructs the Git commit
+and tree bytes, recomputes their object IDs,
 walks from the commit's root tree to each path, and compares the reached blob with both
 the ledger and retained source-file bytes. Extra proof trees are invalid. This keeps
 revision membership independently recomputable from the redacted bundle after the

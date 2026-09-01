@@ -1,0 +1,9 @@
+- Branch: `dev/parallel-beta`
+- Commit: `57e4209a79080d7605cd8e42cb53fe8bdc5d3f38`
+- Pull request: [#1](https://github.com/topij/adk-codex-parallel-evidence-20260901/pull/1)
+- Changed path: `notes/parallel-beta.md`
+- Identity confirmed: repository `topij/adk-codex-parallel-evidence-20260901`, base `main`, head `dev/parallel-beta`, state `OPEN`, ready.
+- Ready assertion: `uv run scripts/pr_watch.py 1 --assert-ready` at the commit above on 2026-09-01 returned `already ready-for-review`.
+- JSON poll: `converged: true`, `checks.all_green: true`, `pending: 0`, `failing: []`, `new_comments: []`. `mergeable: false` because cockpit-owned independent review evidence is absent and the merge-only settle gate has not elapsed.
+- `git diff --check` at parent `f13b3e995558ee2f14b656bba2e1a0f74d2254c2` with the note staged on 2026-09-01 succeeded.
+- The initial PR-create call was denied sandbox network access; the approved escalation succeeded. No review receipt was recorded and no merge was attempted.

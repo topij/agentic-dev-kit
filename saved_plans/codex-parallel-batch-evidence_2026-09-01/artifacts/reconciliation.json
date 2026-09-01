@@ -1,0 +1,10 @@
+{
+  "argv": [
+    "scripts/reconcile_sessions.sh",
+    "parallel-alpha",
+    "parallel-beta"
+  ],
+  "exit_code": 4,
+  "stderr": "",
+  "stdout": "LANE                         STATUS   PR     DETAIL\n---------------------------- -------- ------ ------\nparallel-alpha               held     #2     awaiting operator merge \u2014 test fixture: add parallel alpha evidence note\nparallel-beta                held     #1     awaiting operator merge \u2014 test fixture: add parallel beta evidence note\n\nlaunched 2, merged 0, parked 0, held 2\n\u2192 held for operator sign-off \u2014 green, review-clean, receipt bound to head.\n  Nothing left for the batch; merge or park each, and name it in the block:\n  \u2022 parallel-alpha: PR #2 \u2014 test fixture: add parallel alpha evidence note\n  \u2022 parallel-beta: PR #1 \u2014 test fixture: add parallel beta evidence note\n"
+}

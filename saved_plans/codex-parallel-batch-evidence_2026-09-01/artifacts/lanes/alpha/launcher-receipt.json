@@ -1,0 +1,59 @@
+{
+  "descriptor_id": "71b0b7c6-53b3-468d-b009-61bf6ca99eb6",
+  "observed": {
+    "argv": [
+      "/opt/homebrew/bin/codex",
+      "exec",
+      "--sandbox",
+      "workspace-write",
+      "--cd",
+      "/private/tmp/adk-codex-parallel-20260901.xlAufG/dev-model-sessions/parallel-alpha/wt",
+      "--output-last-message",
+      "/private/tmp/adk-codex-parallel-20260901.xlAufG/dev-model-sessions/parallel-alpha/launch-final-71b0b7c6-53b3-468d-b009-61bf6ca99eb6.txt",
+      "-"
+    ],
+    "base": "main",
+    "base_oid": "f13b3e995558ee2f14b656bba2e1a0f74d2254c2",
+    "branch": "dev/parallel-alpha",
+    "git_top": "/private/tmp/adk-codex-parallel-20260901.xlAufG/dev-model-sessions/parallel-alpha/wt",
+    "lane_oid": "f13b3e995558ee2f14b656bba2e1a0f74d2254c2",
+    "marker_state_root": "/private/tmp/adk-codex-parallel-20260901.xlAufG/dev-model-sessions/parallel-alpha/state",
+    "merge_class": "operator",
+    "origin_url": "https://github.com/topij/adk-codex-parallel-evidence-20260901.git",
+    "repo_root": "/private/tmp/adk-codex-parallel-20260901.xlAufG/repo",
+    "repository_overrides_present": [],
+    "scope": "parallel-alpha",
+    "state_root": "/private/tmp/adk-codex-parallel-20260901.xlAufG/dev-model-sessions/parallel-alpha/state",
+    "worktree": "/private/tmp/adk-codex-parallel-20260901.xlAufG/dev-model-sessions/parallel-alpha/wt"
+  },
+  "request": {
+    "approval_policy": {
+      "argv": [
+        "--sandbox",
+        "workspace-write"
+      ],
+      "declared": "workspace-write"
+    },
+    "configured_command": [
+      "/opt/homebrew/bin/codex",
+      "exec"
+    ],
+    "runtime": "codex",
+    "transports": {
+      "final_text": "last-message-file",
+      "prompt": "stdin-dash",
+      "worktree": "cd-flag"
+    }
+  },
+  "schema_version": 1,
+  "status": "completed",
+  "terminal": {
+    "error": null,
+    "final_text_sha256": "ca3d3631a3188c90866d623c8266c21a488f20f1f643c02873824281dc7f07ab",
+    "final_text_transport": "last-message-file",
+    "finished_at": "2026-09-01T13:34:05.184805Z",
+    "permission_denials": null,
+    "returncode": 0,
+    "signal": null
+  }
+}

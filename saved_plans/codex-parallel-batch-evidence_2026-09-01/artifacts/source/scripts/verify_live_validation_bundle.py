@@ -929,10 +929,11 @@ def _validate_git_source_proof(
         f"source Git proof {proof_path}",
         raw=artifact_bytes_by_path[proof_path],
     )
-    proof_keys = {"schema_version", "namespace", "revision", "commit_lines", "trees"}
-    if "commit_trailing_newline" in proof:
-        proof_keys.add("commit_trailing_newline")
-    _exact_keys(proof, proof_keys, f"source Git proof {proof_path}")
+    _exact_keys(
+        proof,
+        {"schema_version", "namespace", "revision", "commit_lines", "trees"},
+        f"source Git proof {proof_path}",
+    )
     if type(proof["schema_version"]) is not int or proof["schema_version"] != SCHEMA_VERSION:
         raise BundleError(f"source Git proof has an unsupported schema version: {proof_path}")
     if _string(proof["namespace"], f"source Git proof {proof_path}.namespace") != namespace:
@@ -950,15 +951,7 @@ def _validate_git_source_proof(
         _git_text_line(line, f"source Git proof {proof_path}.commit_lines[{index}]")
         for index, line in enumerate(commit_lines)
     ]
-    trailing_newline = proof.get("commit_trailing_newline", True)
-    if type(trailing_newline) is not bool:
-        raise BundleError(
-            f"source Git proof commit_trailing_newline must be a boolean: {proof_path}"
-        )
-    commit_text = "\n".join(normalized_lines)
-    if trailing_newline:
-        commit_text += "\n"
-    commit_bytes = commit_text.encode("utf-8")
+    commit_bytes = ("\n".join(normalized_lines) + "\n").encode("utf-8")
     if _git_object_id("commit", commit_bytes) != revision:
         raise BundleError(f"source Git proof commit does not match its revision: {proof_path}")
     try:

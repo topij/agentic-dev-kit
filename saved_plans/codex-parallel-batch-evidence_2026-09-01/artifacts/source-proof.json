@@ -1,0 +1,293 @@
+{
+  "commit_lines": [
+    "tree b4c37d02c35cc87cbaee59792d0e6a01aa40a810",
+    "parent b5bc17a9f2e9c06d2ba7dfcf8d62c83cc6ccb5c8",
+    "author Topi J\u00e4rvinen <topi.jarvinen@gmail.com> 1788268052 +0300",
+    "committer GitHub <noreply@github.com> 1788268052 +0300",
+    "gpgsig -----BEGIN PGP SIGNATURE-----",
+    " ",
+    " wsFcBAABCAAQBQJqls4UCRC1aQ7uu5UhlAAASOQQAI6ggfoGIgnljIqt/1ILqJum",
+    " eA9O+H0+sLWyDArg9TdebeaeTgU441T53TgmIdy5BjXrXO5r7BbTQVI1fAvhycad",
+    " GILqODmUm0LG30Z9+osJyyygp5VuJhlxSvAZOyYS3kozTnqG5GsaqSHn3aqhJQaC",
+    " dlktEO3xUsM9uxT7lKwSd22yo7CNlF/BSmTEsDHt0cPHt5EqrmEneqDkUOVNcrk2",
+    " Wq+RyaxHjup4SnEVkMAWNtfQ7G4TSjSa3jwC+Uco1vKZlE2HCdmlMT04cX7E9Dd+",
+    " Oq5Xp81fMBwuJNzZEiTb4tcwXFy4LNwE2LmcZ2WjNgnlzCViNvq61WBAoNQpKpX4",
+    " rb+rIuQBqQapJYEluPsBauEMfxUjcQYkQPzusBPLsIw702yDN5kgMPeMWrz0IyQO",
+    " Q0m+H18HfFDAMRZ4lwrEsAKPWiDheRFNdFw3nXsc1oh6fb6AMFw5/UwNenUOgEGO",
+    " AE13HQf+fzNcBOmVdFa2XDIUMLvJGq4onrKF5BiPLzks3EU6D5bZEVOA4FJOFPQe",
+    " rjMfudW6j0SOTns8/sM13F6G9pBwjcFXSovlFydIPkhRZSwCJRnR7qkZyvMqaBNO",
+    " INiL+JL5+XqEKW7s+4lmaKA+bSa7Ueit2uDv5/ZCgcZsN0m78og8u5JE7tCQ7Dxm",
+    " /spIf9mfpk4iihTttMzZ",
+    " =n9tl",
+    " -----END PGP SIGNATURE-----",
+    " ",
+    "",
+    "chore: update handoff \u2014 runtime_mappings status declaration (#658)",
+    "",
+    "Records the session that carried the config-key status declaration to the",
+    "migration install surface, corrects the mutation-guidance comment that was",
+    "inverted for the files that change touched, and notes that the tracker",
+    "disposition written earlier in that session was drawn wider than the evidence",
+    "supported.",
+    "",
+    "Adds the panel-convergence section to the review-process learnings: two lenses",
+    "agreeing is not two observations when both reached the conclusion through the",
+    "same probe, and an enumeration is only as wide as the search that produced it.",
+    "",
+    "Parks one friction entry \u2014 two panel lenses each running the full suite",
+    "concurrently produced a failure neither reproduces alone \u2014 for accumulation",
+    "rather than filing, since the concurrency correlation is strong but no",
+    "mechanism is identified. The friction log is over its line budget; graduating",
+    "the inbox is the triage workflow's write, not this one's.",
+    "",
+    "Reconciles the parity plan's Phase 5 paragraph, which said the config-key work",
+    "needed tracker disposition rather than implementation.",
+    "",
+    "The archive sweep moved one session block into the history file.",
+    "",
+    "Reviewed by the fallback panel at the merged head: adversarial filed nothing,",
+    "correctness filed one Low on the friction-log budget which was declined with a",
+    "reason on the pull request."
+  ],
+  "commit_trailing_newline": false,
+  "namespace": "source",
+  "revision": "6679856f7c9f14eac921f3b033c0077729bb17e1",
+  "schema_version": 1,
+  "trees": [
+    {
+      "entries": [
+        {
+          "mode": "40000",
+          "name": ".agents",
+          "oid": "e78540ef2bf2ba62f81100a2a76686ceb46d3888"
+        },
+        {
+          "mode": "40000",
+          "name": ".claude",
+          "oid": "f1003610d46a12d3a83a99286eaff42015763610"
+        },
+        {
+          "mode": "100644",
+          "name": ".coderabbit.yaml",
+          "oid": "86308c608f61efdbdeaba4273661685a1a3a59c1"
+        },
+        {
+          "mode": "40000",
+          "name": ".codex",
+          "oid": "58f49deb25491f8fd94a04c6a879d96523a52e06"
+        },
+        {
+          "mode": "40000",
+          "name": ".github",
+          "oid": "1988467b011ab83b799a331865d65684519bd8be"
+        },
+        {
+          "mode": "100644",
+          "name": ".gitignore",
+          "oid": "206981b9f199a53d7e755bf38368ecb5a7227e71"
+        },
+        {
+          "mode": "100644",
+          "name": "AGENTS.md",
+          "oid": "7de64b9eecfb5cf5aa87c1e246c97c3cc43f1f70"
+        },
+        {
+          "mode": "100644",
+          "name": "CHANGELOG.md",
+          "oid": "f625ab860c45773965ecb04c8d632324ad08536a"
+        },
+        {
+          "mode": "100644",
+          "name": "CLAUDE.md",
+          "oid": "0777198cf6458d51ee32843d07b0900b2239d9a0"
+        },
+        {
+          "mode": "100644",
+          "name": "LICENSE",
+          "oid": "ae34caf988733ff31bc04c7fc77abf7da70b55ee"
+        },
+        {
+          "mode": "100644",
+          "name": "Makefile",
+          "oid": "43958e744063d9cb11e8487ceb98bc263764731c"
+        },
+        {
+          "mode": "100644",
+          "name": "PRINCIPLES.md",
+          "oid": "5ddd8e14a984d680d79de4ade460afffc40a4da6"
+        },
+        {
+          "mode": "100644",
+          "name": "README.md",
+          "oid": "3c9492e24e7da1a3ab600155f90e040bd7d4eafa"
+        },
+        {
+          "mode": "40000",
+          "name": "config",
+          "oid": "f90ea67a3f3a6e93e83e2b7112615be6ed984424"
+        },
+        {
+          "mode": "40000",
+          "name": "docs",
+          "oid": "ee832c3f67d0d144e134c273e2d0262d5809bd07"
+        },
+        {
+          "mode": "100755",
+          "name": "init.sh",
+          "oid": "0d248ccd0cfed454b950ae3b9742976fc3ef2eab"
+        },
+        {
+          "mode": "100644",
+          "name": "kit-manifest.json",
+          "oid": "86bc9ad540dca34e5756398fe710f16e405be847"
+        },
+        {
+          "mode": "100644",
+          "name": "ruff.toml",
+          "oid": "f8f90fbd82e17e62a8a9a3b5be1ef73d4cfa8258"
+        },
+        {
+          "mode": "40000",
+          "name": "saved_plans",
+          "oid": "5eb853afc0c826d51a21229960db600806368933"
+        },
+        {
+          "mode": "40000",
+          "name": "scripts",
+          "oid": "663dfc098127644c3f1c1bc616ad358e3d786505"
+        }
+      ],
+      "oid": "b4c37d02c35cc87cbaee59792d0e6a01aa40a810"
+    },
+    {
+      "entries": [
+        {
+          "mode": "100644",
+          "name": "claude-lane-settings.json",
+          "oid": "9ec92ad04d6866e99607e91beb930161c7064d16"
+        },
+        {
+          "mode": "100644",
+          "name": "dev-model.yaml",
+          "oid": "5827a517031140e7a206622b127ce880ce787a7f"
+        }
+      ],
+      "oid": "f90ea67a3f3a6e93e83e2b7112615be6ed984424"
+    },
+    {
+      "entries": [
+        {
+          "mode": "100755",
+          "name": "archive_plan_sessions.py",
+          "oid": "b9e585da8dc9305f696276e2726e7b00855538f5"
+        },
+        {
+          "mode": "100755",
+          "name": "check_doc_budget.py",
+          "oid": "c1b97f726b89746cf6919de45d045d0e4f61bb65"
+        },
+        {
+          "mode": "100755",
+          "name": "check_memory_budget.py",
+          "oid": "1967f83458122a443e75d3297f359c9cdfc05aa4"
+        },
+        {
+          "mode": "100644",
+          "name": "conftest.py",
+          "oid": "ce8d8494efc88ce6eda8ba474c69cb277682a562"
+        },
+        {
+          "mode": "100755",
+          "name": "dev_session.sh",
+          "oid": "f52afcc31ca8f8e0732a380698dec106524fadf7"
+        },
+        {
+          "mode": "40000",
+          "name": "hooks",
+          "oid": "08d1b9b60b1a0e17674c1b1e46885acf736169d0"
+        },
+        {
+          "mode": "100755",
+          "name": "kit_doctor.py",
+          "oid": "05f9b96f806b41c5a6de1cbcdd6f4a70cb3770c1"
+        },
+        {
+          "mode": "100755",
+          "name": "launch_lane.py",
+          "oid": "43f71791b519ac3d479f74099769f893a50fb585"
+        },
+        {
+          "mode": "40000",
+          "name": "lib",
+          "oid": "995b11f8a961b6cdcc37161f3209afd5b4ad8af8"
+        },
+        {
+          "mode": "100644",
+          "name": "panel_prompt.py",
+          "oid": "72429d2be48782268ff3ae92c00e64b03869df41"
+        },
+        {
+          "mode": "100755",
+          "name": "pr_watch.py",
+          "oid": "2e89fd37328c4f78e2f4e726b586189a54234c84"
+        },
+        {
+          "mode": "100755",
+          "name": "reconcile_sessions.sh",
+          "oid": "f0e43c5995fc2fe3203a58793615281b249f33a6"
+        },
+        {
+          "mode": "100755",
+          "name": "run_installed_tests.py",
+          "oid": "f0442d1b4fa563eb522be51e817bc234e0946f89"
+        },
+        {
+          "mode": "40000",
+          "name": "tests",
+          "oid": "bd17bd1af88561966f7cd196663c36347a2fed12"
+        },
+        {
+          "mode": "100644",
+          "name": "verify_live_validation_bundle.py",
+          "oid": "08fa15a53b6ba79e51339feae8bea0347821d733"
+        }
+      ],
+      "oid": "663dfc098127644c3f1c1bc616ad358e3d786505"
+    },
+    {
+      "entries": [
+        {
+          "mode": "100644",
+          "name": "atomic_write.py",
+          "oid": "12f7994088ab66a22c6f8f3bfa37c0c80414c141"
+        },
+        {
+          "mode": "100644",
+          "name": "devmodel_config.py",
+          "oid": "51d86a0bbb7b312ca1db4aa0c2e4f8a66c729030"
+        },
+        {
+          "mode": "100644",
+          "name": "kitconfig.py",
+          "oid": "499ddcd2f7be6b3d78ef9dab1a108fb0ffbf5cf1"
+        },
+        {
+          "mode": "100644",
+          "name": "repo_root.sh",
+          "oid": "ba0c2e0f2a1b99de58872f4fdd6cc7f2a2279063"
+        },
+        {
+          "mode": "100644",
+          "name": "runtime_adapters.py",
+          "oid": "cd4b74ebe2e57fec07fd6d73135be39249420d13"
+        },
+        {
+          "mode": "40000",
+          "name": "state_paths",
+          "oid": "8570a470ce366535983d3ccd3eced799d90d496a"
+        }
+      ],
+      "oid": "995b11f8a961b6cdcc37161f3209afd5b4ad8af8"
+    }
+  ]
+}

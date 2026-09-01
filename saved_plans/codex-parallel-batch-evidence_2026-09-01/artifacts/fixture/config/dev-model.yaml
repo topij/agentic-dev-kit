@@ -1,0 +1,606 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# dev-model.yaml — the single config surface for agentic-dev-kit.
+#
+# `init.sh` stamps your project's values here once at adoption; every kit skill
+# and engine script reads this file instead of hardcoding a value. If you ever
+# find yourself editing a literal inside a skill or script, that literal belongs
+# here instead (Principle #10 — "No hardcoding").
+#
+# Run `./init.sh` to be prompted through the main values, or edit this file
+# directly. NOTE: this is also the kit's OWN config, so some blocks hold this
+# repo's real values rather than placeholders — each says which in its comment.
+# Adopters should read every block before assuming a value is a default.
+# ─────────────────────────────────────────────────────────────────────────────
+
+kit:
+  # Which generation of the kit's config schema this repo is on. `init.sh` stamps
+  # it and migrates an older config forward in place, so re-running `./init.sh`
+  # after pulling a kit update is the supported upgrade path. Never edit by hand:
+  # lowering it re-runs migrations that are already applied.
+  #   1 — original single-runtime schema (no `runtime:`, no `models.tiers`)
+  #   2 — runtime adapters + capability tiers + engine-facing review/CI config
+  version: 2
+
+project:
+  # Human-readable project name, used in skill prompts and doc headers.
+  # Set for this repo. `paths:` and `doc_budgets:` below are likewise this repo's
+  # own (the `kit-*.md` names, explained in the `paths:` comment); `tracker:` and
+  # `notify:` are NOT — see their comments for where this repo's values live.
+  name: agentic-dev-kit
+
+paths:
+  # The two canonical narrative files (Principles #1 and #2). The kit ships these
+  # as docs/handoff.md and docs/friction-log.md; repoint them if your repo already
+  # keeps a plan / inbox under different names.
+  # THIS repo is the kit's own workspace, so its narrative files are named
+  # kit-*.md. docs/handoff.md and docs/friction-log.md are the SKELETONS shipped
+  # to adopters (rendered from docs/templates/ by init.sh) — if the kit pointed
+  # its own plan at those, every session block would ship to adopters and the
+  # unrendered marker would be gone. An adopter's own config uses the plain
+  # names; only the template repo needs this indirection.
+  handoff: docs/kit-handoff.md                    # the living plan / session handoff
+  handoff_history: docs/kit-handoff-history.md    # swept older session blocks
+  friction_log: docs/kit-friction-log.md          # the friction inbox
+  friction_log_archive: docs/kit-friction-log-archive.md
+  playbook: docs/autonomous-session-playbook.md   # the autonomous operating contract
+  # Directory containing the deterministic kit engines. Mature repos can vendor
+  # them under scripts/devkit without rewriting every workflow.
+  engines: scripts
+
+runtime:
+  # Agent-specific adapters map the shared workflows onto their own command and
+  # skill surfaces. `none` prints activation instructions without an agent command.
+  default: claude                     # claude | codex | none | another configured key
+  launchers:
+    claude: claude
+    codex: codex
+
+parallel:
+  # The supported unattended path for either runtime is one kit-owned wrapper
+  # (scripts/launch_lane.py) around that runtime's stable non-interactive CLI.
+  # Keep each command an argv sequence: the wrapper never invokes a shell, so a
+  # launcher value cannot smuggle shell syntax into the child. A user-local
+  # install (~/.local/bin, for example) is outside the wrapper's trusted lookup
+  # path by design; name the absolute binary here instead.
+  #
+  # The three *_transport keys per runtime are DECLARATIONS the wrapper checks,
+  # not free choices: it owns the vocabulary and refuses a transport the named
+  # runtime does not implement. Codex: `--cd <worktree>`, prompt on stdin behind a
+  # `-` argument, final text via `--output-last-message`. Claude: cwd from the
+  # process, prompt on stdin, one JSON result object on stdout from
+  # `--output-format json`.
+  codex_headless_command: [codex, exec]
+  codex_worktree_transport: cd-flag
+  codex_prompt_transport: stdin-dash
+  codex_final_text_transport: last-message-file
+  claude_headless_command: [claude, -p]
+  claude_worktree_transport: process-cwd
+  claude_prompt_transport: stdin
+  claude_final_text_transport: json-stdout
+  # Approval/sandbox policy per runtime — a DECLARATION from the wrapper's
+  # vocabulary, passed mechanically as argv. Codex: `read-only` | `workspace-write`
+  # (`--sandbox <value>`; the argv is validated and passed, its behaviour is not
+  # claimed until the Codex writing-lane record exists). Claude: `dont-ask` |
+  # `accept-edits` (`--permission-mode dontAsk|acceptEdits`). Under `dont-ask`
+  # the profile's allow list bounds every call the runtime does not accept on its
+  # own: at 2.1.247 the runtime still auto-accepts a read-only Bash class (pwd,
+  # whoami, cat, grep, find, bare `git remote -v` were observed live) with no
+  # entry in `permission_denials`, and denies every other unlisted call. The
+  # profile grants file editing through `Edit(**)`, which the runtime keeps inside
+  # the worktree. `accept-edits` is declarable but NOT the default: the runtime
+  # then also auto-accepts its own file-system class inside the worktree (rm, mv,
+  # redirection writes were observed live) whatever the allow list says. Every
+  # unrestricted spelling (bypassPermissions, danger-full-access, the
+  # dangerously-* flags) is a non-member the wrapper refuses.
+  codex_approval_policy: workspace-write
+  claude_approval_policy: dont-ask
+  # The Claude trust route. A freshly issued lane worktree is an untrusted
+  # workspace, so the checked-out branch's `.claude/settings.json` never supplies
+  # policy (its allow list is ignored there and its hooks would otherwise still
+  # run) and the operator's user settings must not either. The wrapper passes
+  # `--setting-sources ""` plus this cockpit-owned profile through `--settings`;
+  # it is the ONE settings source a lane loads. Path relative to the repo root or
+  # absolute; seeded by init.sh when absent and adopter-owned afterwards. The
+  # wrapper refuses a profile whose `permissions` object carries any key other
+  # than `allow`, `deny`, `ask` (`defaultMode`, `additionalDirectories`, an
+  # unrecognised key) or a whole-tool Bash allowance.
+  claude_settings_profile: config/claude-lane-settings.json
+  # A descriptor is a one-shot launch authority, not standing permission. The
+  # issuer stamps this lifetime into the descriptor and the wrapper rejects an
+  # expired value before starting a child.
+  descriptor_ttl_seconds: 900
+  # The parent waits only this long for the child-side Git/filesystem/process
+  # observation to become durable before refusing the launch.
+  observation_timeout_seconds: 30
+  # An interrupted or rejected launch gets this bounded graceful-stop window
+  # before the wrapper escalates to forced process-group termination.
+  termination_grace_seconds: 5
+
+doc_budgets:
+  # Line-count tripwires (the archival mechanism of Principle #1). A file over budget
+  # is a housekeeping nudge: check_doc_budget.py exits 0 by default even when one is
+  # over, and returns 1 only under --strict. It exits 2 on a usage or CONFIG error
+  # regardless of flags — including a `path:` here that no longer exists — so a renamed
+  # doc gates any pipeline running it, however it is invoked.
+  - path: docs/kit-handoff.md
+    budget: 400
+    archive: docs/kit-handoff-history.md
+    # This budget is in LINES; archive_plan_sessions.py's --keep is in BLOCKS, so
+    # --keep at its default can be a no-op against this budget (issue #74: 5 blocks
+    # under --keep 6 while still over on lines). --target-lines closes that gap by
+    # sweeping to a line count directly — name it here, not --keep.
+    # `{budget}` is substituted by check_doc_budget.py from the `budget:` above.
+    # Write the placeholder, never the literal: a restated number goes stale the
+    # moment the budget moves, and the warning would then prescribe the old target.
+    remedy: "run the wrap-up workflow to sweep old session blocks into the history file (archive_plan_sessions.py --target-lines {budget}, not --keep — this budget is in lines, not blocks)"
+  - path: docs/kit-friction-log.md
+    budget: 150
+    archive: docs/kit-friction-log-archive.md
+    remedy: "run the triage-friction-log workflow to graduate the inbox to the tracker"
+
+vcs:
+  forge: github                  # github | gitlab | other — some skills branch on this
+  protected_branch: main         # never committed to directly; PRs target this
+  # Prefix for ISOLATED LANE branches (<prefix>/<scope>) — not for cockpit work.
+  # scripts/hooks/pre-push refuses a push from <prefix>/* that touches the narrative
+  # files. Cockpit branches are anything outside that prefix — chore/*, feat/*, a
+  # hand-named PR branch; the hook skips them all, it does not require a name.
+  dev_branch_prefix: dev
+  # {date} expands to today's ISO date at skill runtime.
+  triage_branch_pattern: "chore/triage-{date}"
+  systemize_branch_pattern: "chore/systemize-{date}"
+
+triage:
+  # Shared triage-friction-log workflow settings. Runtime adapters translate
+  # invocation and available mechanisms only; approval and write policy stays in
+  # the shared workflow.
+  analysis_tier: default
+  # Live and test approval sessions never share state. Frozen inputs and reports
+  # also carry a generated session id so a later same-day run cannot replace the
+  # evidence an earlier approval bound.
+  state_path: "state/triage/triage-pipeline-state_{mode}.json"
+  # The single-writer gate is a separate, mode-specific logical state path.
+  # Resolve it through state_paths exactly like state_path; never derive or
+  # hardcode a worktree-local lock location.
+  gate_path: "state/triage/triage-pipeline-gate_{mode}.lock"
+  # Deterministic recovery evidence locator. gate_digest is SHA-256 over the
+  # exact complete gate bytes, so a crash-resuming invocation never scans for
+  # a matching bundle or confuses it with another gate's evidence.
+  recovery_bundle_pattern: "state/triage/recovery-bundle_{mode}_{gate_digest}.json"
+  frozen_inbox_pattern: "state/triage/frozen-inbox_{mode}_{date}_{session}.json"
+  report_root: reports
+  report_pattern: "reports/triage_{mode}_{date}_{session}.md"
+  # Optional deterministic integration, resolved beneath paths.engines. Both
+  # present selects engine-backed mode, both absent selects honest LLM-only mode,
+  # and a partial pair is a configuration failure.
+  draft_engine: triage_friction_log.py
+  finalize_engine: finalize_triage.py
+  commit_subject: "docs(triage): graduate friction-log entries"
+  # This workflow completes its patch before PR creation, so false is the only
+  # valid value. True hard-stops instead of manufacturing a draft window.
+  pr_draft: false
+
+systemize:
+  # Shared post-merge-systemize workflow settings. The runtime adapter selects
+  # no policy: Claude and Codex both read this block and the shared workflow.
+  analysis_tier: expensive
+  # Exact forge logins trusted as operator review-finding sources. Empty is the
+  # adopter-safe default; ./init.sh prompts rather than trusting a foreign identity.
+  operator_logins: []
+  lookback_days: 7
+  backfill_days: 28
+  pattern_threshold: 2
+  tracker_severity: high
+  batch_size: 25
+  single_pass_max_prs: 60
+  max_findings_prs_per_run: 75
+  # {window} is the selected lookback in days (for example 7d); {mode} is
+  # live or test. Together they keep same-day entry points from sharing state.
+  cache_pattern: "state/cache/merged-prs_{window}_{mode}_{date}.json"
+  digest_cache_pattern: "state/cache/merged-prs-digest_{window}_{mode}_{date}.json"
+  # Separate trusted root lets preflight reject a mistaken report_pattern that
+  # points at source or config while keeping the filename configurable.
+  report_root: reports
+  report_pattern: "reports/post-merge-systemize_{window}_{mode}_{date}.md"
+  # Optional deterministic integration, resolved beneath paths.engines. The
+  # shipped kit does not vendor these yet: all absent selects the documented
+  # LLM-only path, all present selects engine-backed mode, and a partial set
+  # stops rather than mixing incompatible artifacts.
+  fetch_engine: fetch_merged_prs.py
+  digest_engine: digest_merged_prs.py
+  heartbeat_engine: heartbeat_cli.py
+  commit_subject: "docs(systemize): promote recurring review patterns"
+  # This workflow completes its patch before PR creation, so false is the only
+  # valid value. True hard-stops instead of manufacturing a draft window. The
+  # workflow never merges the PR; pr-watch supplies review follow-through and
+  # the operator decides.
+  pr_draft: false
+
+tracker:
+  # This repo's real values, not placeholders. ADOPTERS: replace all three.
+  # `init.sh` prompts with these as defaults and refuses, on a non-interactive run,
+  # to keep a project_name that does not match your origin remote.
+  backend: github-issues         # linear | github-issues | jira | none
+  project_name: "topij/agentic-dev-kit"
+  url: "https://github.com/topij/agentic-dev-kit/issues"
+  # Linear-only ids. Kept blank rather than removed: `init.sh` writes into this
+  # sub-map when an adopter selects `linear`, and only rewrites existing lines.
+  linear:
+    team_id: ""
+    project_id: ""
+    label_name: ""
+review:
+  # Independent review present on this repo (Principle #5). A down bot is not a
+  # review waiver; select the current runtime's substitute pass instead.
+  # Also read by pr_watch.py to identify which status checks and comment authors
+  # belong to a reviewer, so its outage/pending state can reach the merge gate.
+  # Matched case-insensitively: as a SUBSTRING of a check name (your own CI and
+  # bot config, so `Review / CodeRabbit` still matches), and as the exact
+  # normalized login of a comment author plus explicitly trusted service aliases
+  # (`coderabbit` covers `coderabbitai` and `coderabbitai[bot]`). Anyone may
+  # comment on a public PR, so prefix matching would let a lookalike login speak
+  # for the reviewer. Keep entries specific enough not to collide with a CI job
+  # name.
+  bots: []
+  # Exact GitHub logins trusted to speak for each configured reviewer. Keep
+  # aliases explicit: prefix inference lets a lookalike account impersonate a
+  # reviewer. Custom bots whose check name and author login differ belong here.
+  bot_author_aliases:
+    coderabbit: [coderabbitai, "coderabbitai[bot]"]
+  # Extra CREATOR identities trusted to announce an OUTAGE for a bot (#95).
+  #
+  # A check's NAME is chosen by whoever created the check, and on a same-repo PR
+  # that can be the PR's own workflow (`checks: write` / `statuses: write`). A
+  # check called `coderabbit-shim` whose description matched an
+  # `unavailable_markers` entry used to cancel the real reviewer's pending block
+  # and open the merge gate mid-review. So the CANCEL now requires the creator
+  # identity GitHub records — `app.slug` on a check run, `creator.login` on a
+  # status context — which a workflow cannot forge: its GITHUB_TOKEN
+  # authenticates as `github-actions`, never as the reviewer's app. The outage is
+  # still REPORTED either way, so the signal to run the fallback panel survives.
+  #
+  # Ordinarily leave this empty. pr_watch already derives the common case from
+  # `bot_author_aliases` above, since an app's slug and its `<slug>[bot]` login
+  # are conventionally the same string — verified on this repo, whose real
+  # CodeRabbit status contexts carry `creator.login: coderabbitai[bot]` while the
+  # aliases already list `coderabbitai`. Set it only for a bot whose app slug
+  # genuinely differs from the login it comments under.
+  #
+  # Same "enumerate, never infer" rule as the aliases: entries are matched
+  # EXACTLY, never as a prefix or substring. A prefix rule here would let
+  # `coderabbit-impersonator` announce CodeRabbit's outage, which is the defect
+  # this key exists to close, one namespace over.
+  #
+  # Left ABSENT rather than written as an empty `{}`: the kit's own config reader
+  # (`scripts/lib/kitconfig`) supports flow SEQUENCES but not flow MAPPINGS, so
+  # `bot_app_slugs: {}` parses to the *string* `"{}"` there while PyYAML reads an
+  # empty dict — the two disagree, which `test_matches_pyyaml_on_the_shipped_config`
+  # catches. An absent key takes the same built-in empty default. When you do need
+  # it, write it in block form, which both parsers agree on:
+  #
+  #   bot_app_slugs:
+  #     coderabbit: [some-other-app-slug]
+  # The independent pass to run when a configured bot can't review. TWO shapes,
+  # and the difference is whether the reviewer is independent of the author:
+  #
+  #   fallback_panel     one isolated, fresh-context reviewer PER LENS. This is
+  #                      the real substitute — `safety-critical-changes.md`
+  #                      rule 2 wants two disjoint lenses, which a single
+  #                      command cannot be.
+  #   fallback_commands  one command in the cockpit's own context. When the
+  #                      cockpit authored the diff that is the author
+  #                      re-reading their own work — kept as the DEGRADED mode
+  #                      for a runtime with no way to isolate a reviewer.
+  #
+  # Which lenses is adopter knowledge and lives here; how a lens must be run
+  # (fresh context, raw diff, no author framing, execute rather than only read,
+  # mutation-test new branches) is kit doctrine and lives in
+  # docs/agentic-dev-kit/fallback-review-panel.md.
+  #
+  # Three receipt literals exist, one per pass: `fallback:panel` (the
+  # receipt_source below), `fallback:<runtime>` (the Degraded-mode
+  # author-context run of fallback_commands — e.g. `fallback:claude`), and
+  # `fallback:delta` (the record-prose delta pass defined in that doctrine
+  # file's stopping section — one lens ordinarily, both lenses for a change
+  # under safety-critical-changes.md; `--lenses` records which form ran).
+  # The last two are literals the recording agent writes on the receipt, not
+  # config keys — never set receipt_source to either.
+  #
+  # A FOURTH literal exists and is not a fallback pass at all:
+  # `<bot>:comment-verdict` (#44), for a reviewer that announced a clean review
+  # in a comment and created no review object, so the gate cannot see it. It
+  # takes no `--lenses` because no lens ran, and it is deliberately outside the
+  # `fallback:` namespace — those stand for a substitute review, and this one
+  # stands for the real reviewer on a surface the gate cannot read. Also never a
+  # receipt_source. See `comment_verdict_markers` below and the
+  # "When the reviewer answered and the gate cannot see it" section of
+  # docs/agentic-dev-kit/fallback-review-panel.md.
+  fallback_panel:
+    receipt_source: "fallback:panel"   # never the same as a single-lens receipt
+    # Compute for each panel lens, keyed by runtime — the same per-runtime shape
+    # `models.runtime_mappings` uses, because the panel runs under whichever
+    # runtime the cockpit is.
+    #
+    # `model` selects the model, `effort` the reasoning level. BOTH ARE OPTIONAL
+    # and independent: set either, both, or neither. A runtime exposing only one
+    # control carries only that key; omitting a runtime entirely means its lenses
+    # inherit the cockpit session's own compute, which is the pre-existing
+    # behaviour and stays the default for anyone who does not set this.
+    #
+    # HOW FAR EACH KEY REACHES is declared per runtime, from live probes of the
+    # pinned clients (Claude Code 2.1.247 and codex-cli 0.149.1 on 2026-08-27;
+    # saved_plans/capability-tier-calibration-live-validation_2026-08-27.md is
+    # the record, with the commands and the observer fields):
+    #
+    #   claude.model   MECHANICAL — the cockpit passes it as the delegation
+    #                  tool's `model` parameter, or the kit-owned agent
+    #                  definition `.claude/agents/<lens>.md` carries it; the
+    #                  runtime applies it and the session transcript reads the
+    #                  resolved model id back. The tool's parameter overrides the
+    #                  definition's value.
+    #   claude.effort  MECHANICAL through the agent definition only. The
+    #                  delegation tool has no effort parameter, so a lens launched
+    #                  as a plain subagent inherits the cockpit's effort and this
+    #                  key is ADVISORY there (prompt text). Launch the agent named
+    #                  after the lens; `scripts/panel_prompt.py --agent-definition`
+    #                  renders it from this block and refuses a level the runtime
+    #                  would silently drop (an invalid frontmatter effort is logged
+    #                  only under --debug and runs at the parent's effort).
+    #   codex.effort   MECHANICAL — passed as `-c model_reasoning_effort=<level>`
+    #                  on the `codex exec` argv and read back from the rollout's
+    #                  `turn_context`. A misspelled `-c` KEY is accepted silently
+    #                  at the config default (exit 0), so copy the key exactly; an
+    #                  invalid LEVEL is refused by the API (exit 1).
+    #   codex.model    MECHANICAL when set (`-m <model>`); absent here on purpose,
+    #                  so a lens runs the model in the user's Codex config, which
+    #                  is the one their account is known to have.
+    #
+    # The `Run at:` line panel_prompt.py renders into a prompt restates these and
+    # enforces nothing on either runtime; it names the carrier beside the value.
+    #
+    # Why sonnet rather than the `expensive` tier: measured 2026-08-01 over two
+    # real panels on this repo — a docs PR (~196k output tokens) and a code PR
+    # (~167k). Both produced findings the cockpit had missed, including a stale
+    # verified-output claim and a root-container run the cockpit had declared
+    # impossible. Lens work is bounded and adversarial rather than open-ended, so
+    # it does not need the judgment tier; `effort: high` is what carries it.
+    # Re-measure before assuming this holds for your repo — cost tracked CLAIM
+    # DENSITY, not code complexity, and the docs PR was the expensive one.
+    lens_compute:
+      claude:
+        model: sonnet
+        effort: high
+      codex:
+        effort: high
+    lenses:
+      - name: adversarial
+        focus: "assume the change is wrong and try to prove it — bypasses, fail-open paths, wedges, and whether the new guard actually guards"
+      - name: correctness
+        focus: "assume it works and ask what it says — stale comments, claims that overstate what is verified, tests whose names promise more than their bodies check"
+  fallback_commands:
+    claude: "/code-review"
+    codex: "/review"
+  # Everything below is read by scripts/pr_watch.py. It used to live as literals
+  # inside that engine, which meant adopting the kit required *editing the
+  # engine* — and an edited engine can never be replaced by a kit update. Keeping
+  # it here is what makes engines kit-owned and upgradable (Principle #10).
+  #
+  # Comment bodies matching any of these are auto-noise, not findings to act on.
+  # Matched case-insensitively as substrings. Keep the list tight — over-filtering
+  # hides a real review. `is_noise()` does NOT check the author, so every entry
+  # here also discards a HUMAN comment that happens to contain the text: prefer a
+  # structural marker (an HTML comment the bot emits) over the bot's prose.
+  #
+  # `"actionable comments posted: 0"` used to sit here and was retired under
+  # #468. A sweep of every comment body on every PR this repo has ever had found
+  # it matched nothing, ever: CodeRabbit writes "Actionable comments posted: N"
+  # only on the review-submission surface and only when N >= 1, and delivers the
+  # zero case as a sentence inside the summary comment instead. That sentence is
+  # deliberately NOT added in its place — see
+  # `test_a_human_quoting_the_clean_verdict_is_not_noise` in
+  # scripts/tests/test_pr_watch.py, which is the tripwire against re-adding it.
+  noise_markers:
+    - "<!-- this is an auto-generated comment: summarize by coderabbit"
+    - "<!-- this is an auto-generated comment: review in progress"
+    - "<!-- walkthrough_start -->"
+    - "<!-- linear-linkback -->"
+  # Text signalling the reviewer could not run — a blocked bot is an action
+  # signal (run the configured fallback), never a silent review waiver. Matched
+  # against two surfaces, which behave differently on purpose:
+  #   - a COMMENT body: deliberately not noise, so it surfaces as a new comment
+  #     and blocks `converged` until acknowledged.
+  #   - a configured bot's STATUS-CHECK description: surfaced and reported, but
+  #     blocks nothing — there is no comment to acknowledge, so blocking on it
+  #     would wedge the loop. It is the surface that carried the outage on #22
+  #     and made a rate-limited bot read as a clean review (issue #23).
+  # The same outage is worded differently on each, which is why matching only
+  # comments made detection depend on which one the bot happened to use.
+  unavailable_markers:
+    - "bugbot needs on-demand usage enabled"
+    - "review limit reached"
+    - "rate limited by coderabbit"
+    - "review rate limited"       # the status-check wording of "review limit reached"
+    - "couldn't start this review"
+    - "review skipped"
+    - "no review credits"
+  # Text in a configured bot's COMMENT that announces a COMPLETED review (#44).
+  #
+  # Some reviewers deliver a clean verdict as an issue comment and create no
+  # review object, so `review_bots.coverage` — which reads review objects — sees
+  # nothing, and a PR that WAS independently reviewed is indistinguishable from
+  # one that never was. Measured on this repo: whether a review object exists
+  # tracks whether the review found anything, so the clean pass is exactly the
+  # one the merge gate cannot see.
+  #
+  # What these markers do is REPORT that, as `review_bots.comment_verdicts`.
+  # They do NOT satisfy the merge gate. That is the ruling on #44 (2026-08-17)
+  # and the reason this key is safe to key on prose at all: the failure of a
+  # marker that stops matching is a missing report line, never an authorized
+  # merge. `bot_review_coverage`'s docstring is the standing argument for why
+  # the other direction is not available — treating a comment-shaped verdict as
+  # coverage would authorize merges on a prose match.
+  #
+  # Matched case-insensitively as substrings, and ONLY as one term of a
+  # conjunction (see `bot_comment_verdicts`): the comment must also CONTAIN the
+  # current head — a bare case-insensitive substring test, with no length, hex,
+  # or word-boundary condition — and must NOT match any `unavailable_markers`
+  # entry. This used to say "must carry the current head's full SHA", which
+  # described the caller rather than the check: every production caller passes
+  # `headRefOid`, but nothing in the matching logic verifies it (#536).
+  # That last term is not decoration — on #263 a rate-limited bot posted a
+  # comment naming the commit range it WOULD have reviewed, so a rule keyed on
+  # the SHA alone would have manufactured evidence for a review that never ran.
+  #
+  # `actionable comments posted:` is deliberately open-ended — it matches
+  # `N >= 1` too. A review that found things is still a review that happened,
+  # and its findings arrive through `new_comments` regardless.
+  comment_verdict_markers:
+    - "no actionable comments were generated"
+    - "actionable comments posted:"
+  # Status checks that are advisory only and must never block `converged` — this
+  # is the anti-wedge property: a review bot's check can sit PENDING forever after
+  # a trivial follow-up commit, and the watch loop must still be able to finish.
+  # Its real findings arrive as comments (which DO block). Matched
+  # case-insensitively against the check name.
+  #
+  # Note the deliberate overlap with `bots` above: SAME value, DIFFERENT purpose.
+  # This list is a blocking policy ("this check never blocks the watch loop");
+  # `bots` is an identity ("this check belongs to a reviewer whose state the
+  # merge gate cares about"). Splitting them is what lets a bot's check stay
+  # non-blocking for `converged` while its pending/unavailable state still
+  # reaches `mergeable`.
+  informational_checks: [coderabbit]
+  # How long a configured review bot's own check may sit pending before the merge
+  # gate stops waiting for it. BELOW this, a pending bot blocks `mergeable`: a
+  # review is genuinely coming, and a receipt recorded now would bind to a review
+  # that has not happened (issue #19 — a receipt taken against a merely queued
+  # bot let four valid findings land post-merge). ABOVE it, the bot is treated as
+  # never going to report and stops blocking, which is what keeps a dead bot from
+  # wedging the merge gate. Never affects `converged`.
+  bot_pending_grace_minutes: 15
+  # How long the check rollup must STOP CHANGING SIZE, for the
+  # current head, before the
+  # merge gate believes it is complete. Guards the two routes by which a partial
+  # rollup used to read as a finished one (issues #190 and #39): a lost or
+  # first-run state file, which leaves no baseline to compare against — a fresh
+  # clone reaches that with no failed write anywhere — and a head change, which
+  # rebaselines to the new commit's PARTIAL count so the next poll compares it
+  # against itself. Neither is detectable from a count: the rollup never says how
+  # many checks are still coming, so 2-of-5 and 2-of-2 are the same number.
+  #
+  # The clock runs from when the rollup last MOVED, not from the push, so it
+  # elapses concurrently with CI rather than after it — on a repo whose checks
+  # take longer than this to finish, it adds no merge latency at all. Blocks
+  # `mergeable` only, NEVER `converged`: the watch loop must stay runnable.
+  #
+  # 0 drops the time requirement but still requires a baseline to exist, so a
+  # fresh clone blocks for the single poll it takes to record one. Re-measure
+  # against your own CI's check-registration spread before tuning; this repo runs
+  # one check, so it has no spread to measure.
+  #
+  # IF YOU SET `require_ci: false` ABOVE, read this. Your rollup is permanently
+  # empty, so this guard buys you nothing and still costs one extra poll plus the
+  # grace before a merge. `0` is the setting for you: it keeps the one-poll
+  # baseline (so a lost state file still cannot authorize a merge) and drops the
+  # wait. The engine deliberately does NOT skip the guard on an empty rollup by
+  # itself — a first poll looks identical whether there are no checks or the
+  # checks have not registered yet, and guessing there is the fail-open the guard
+  # exists to prevent.
+  settle_grace_minutes: 0
+  # Whether a PR must have at least one real (non-informational) CI check before
+  # pr_watch will report green. True is the safe default: it stops an autonomous
+  # merge on a PR whose CI never ran. Set false for a repo with no CI at all —
+  # otherwise pr-watch can never converge and `dev_session.sh merge` always
+  # refuses. With false, `mergeable` still requires current-head independent-review
+  # EVIDENCE — either a recorded receipt or a configured bot's own review of that
+  # head (#350) — and that evidence becomes the only quality gate, so set this
+  # deliberately. Note what the two settings compose into: `require_ci: false` on a
+  # repo with `bots: []` leaves the receipt as the single gate, since the
+  # bot-coverage route needs a configured bot to exist.
+  require_ci: false
+
+notify:
+  backend: slack                 # slack | none — where skills DM the operator
+  # Blank ON PURPOSE. This is an identity: put it in the gitignored
+  # `config/dev-model.local.yaml`, which is merged over this file. See
+  # docs/getting-started.md.
+  user_key: ""
+models:
+  # Runtime-neutral capability tiers (Principle #7). Workflows assign a tier; an
+  # adapter may translate it to a model, effort level, or leave it as guidance when
+  # the runtime cannot select compute per delegated task.
+  tiers:
+    cheap: mechanical
+    default: standard
+    expensive: judgment
+  # STATUS, per runtime: ADVISORY on both. No engine reads this map:
+  # `grep -rn runtime_mappings scripts/ init.sh` finds init.sh's migration write
+  # and test pins, never an engine (read at 16b07d6 and re-read at e128cdc, where
+  # this PR's own tests had joined the pins — the panel's correctness lens caught
+  # two earlier versions of this parenthetical enumerating too few files, which
+  # is why it now names the kinds and not the files). So a workflow's tier
+  # reaches a session only when the
+  # cockpit or the operator applies the value by hand — the delegation tool's
+  # `model` parameter, `claude -p --model/--effort`, `codex -m` and
+  # `-c model_reasoning_effort=`. The VALUES below name controls each client was
+  # observed to accept (Claude Code 2.1.247, codex-cli 0.149.1, 2026-08-27;
+  # saved_plans/capability-tier-calibration-live-validation_2026-08-27.md):
+  #
+  #   claude — model aliases the client resolved and reported back in the
+  #            result's `modelUsage`: haiku, sonnet, opus, fable. A model the
+  #            account lacks fails at exit 1 naming it, so an account without
+  #            `fable` sets `expensive: opus` here. Effort is inherited unless a
+  #            `.claude/agents/*.md` definition or `--effort` sets it; `--effort`
+  #            with an unknown level WARNS on stderr and runs at the default.
+  #   codex  — reasoning-effort levels `-c model_reasoning_effort=<level>` applied
+  #            and read back from the rollout: low, medium, high, xhigh, max, and
+  #            none; `minimal` was refused by the API for the probed model. The
+  #            model is inherited from the user's Codex config unless `-m` is
+  #            passed; a model the account lacks fails at exit 1.
+  #
+  # `expensive` points at the top of what each client exposed on that date:
+  # `fable` resolved to the runtime's latest top model, and `xhigh` is the
+  # highest Codex level short of `max`. Claude's judgment tier moves the MODEL
+  # and inherits effort; Codex's moves EFFORT on the user's model. Parity is the
+  # tier outcome, not the same knob.
+  #
+  # A tier's value may be EITHER a scalar or a `{model, effort}` map.
+  #
+  # The scalar form is the original and stays valid — it means "the one compute
+  # control this runtime exposes", which is why the two runtimes below
+  # read as different things: `claude` names models, `codex` names effort levels.
+  # That ambiguity is the reason the map form exists. Prefer it when a runtime
+  # exposes both controls and you want to pin them independently — both clients
+  # accept the same effort spellings low, medium, high, xhigh, max, so a map's
+  # `effort` reads the same under either:
+  #
+  #   claude:
+  #     expensive: { model: fable, effort: high }
+  #     cheap:     { effort: low }          # model inherited
+  #
+  # Either key may be omitted; an omitted key inherits the session's own value.
+  # Kept as scalars here because that is what this repo actually uses — see
+  # `review.fallback_panel.lens_compute` for the map form in live use.
+  runtime_mappings:
+    claude:
+      cheap: haiku
+      default: sonnet
+      expensive: fable
+    codex:
+      cheap: low
+      default: medium
+      expensive: xhigh
+
+state:
+  # The per-lane state sandbox (Principle #3) is driven by FIXED, project-neutral env
+  # vars (DEVKIT_STATE_ROOT / DEVKIT_ROOT) and a `.devkit_state_root` marker file —
+  # see scripts/lib/state_paths/. Those are kit constants, not adopter config; listed
+  # here only so the convention is discoverable. `dirname` is the top-level state dir.
+  dirname: state
+  # The unsandboxed-write guard skips a legitimate scheduled/CI writer, detected by
+  # env var. state_paths stays import-free (it must work from a git hook), so this is
+  # an ENV contract, not a value it reads from here — documented here for
+  # discoverability only:
+  #   DEVKIT_CI_ENV_VARS  comma-separated var names whose presence means "cron/CI".
+  #                       Default: JOB_NAME,CI,GITHUB_ACTIONS,GITLAB_CI,BUILDKITE
+  # Set it in your runner if your scheduler exports something else.

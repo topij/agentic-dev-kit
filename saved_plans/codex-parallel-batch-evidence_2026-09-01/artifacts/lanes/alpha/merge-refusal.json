@@ -1,0 +1,11 @@
+{
+  "argv": [
+    "scripts/dev_session.sh",
+    "merge",
+    "parallel-alpha"
+  ],
+  "exit_code": 1,
+  "scope": "parallel-alpha",
+  "stderr": "[dev-session] error: lane 'parallel-alpha' is operator-merge (or missing metadata); autonomous merge refused\n",
+  "stdout": ""
+}

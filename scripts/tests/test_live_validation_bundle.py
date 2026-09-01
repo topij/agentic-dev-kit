@@ -967,6 +967,53 @@ def test_a_source_proof_commit_without_a_header_boundary_is_refused_cleanly(
     assert "Traceback" not in result.stderr
 
 
+def test_a_source_proof_preserves_a_commit_without_a_trailing_newline(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+    )
+    revision = _git_oid("commit", "\n".join(TEST_COMMIT_LINES).encode())
+    artifacts = manifest.parent / "artifacts"
+    proof = artifacts / "source-proof.json"
+    proof_value = json.loads(proof.read_text(encoding="utf-8"))
+    proof_value["revision"] = revision
+    proof_value["commit_trailing_newline"] = False
+    _write_json(proof, proof_value)
+    ledger = artifacts / "source-digests.txt"
+    ledger.write_text(
+        ledger.read_text(encoding="utf-8").replace(SOURCE, revision),
+        encoding="utf-8",
+    )
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    manifest_value["source"]["revision"] = revision
+    for artifact in manifest_value["artifacts"]:
+        if artifact["path"] == "artifacts/source-digests.txt":
+            artifact["sha256"] = _sha(ledger)
+        elif artifact["path"] == "artifacts/source-proof.json":
+            artifact["sha256"] = _sha(proof)
+    _write_json(manifest, manifest_value)
+    promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
+    promotion_value["source_revision"] = revision
+    promotion_value["manifest_sha256"] = _sha(manifest)
+    _write_json(promotion, promotion_value)
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = revision
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
 def test_retained_source_bytes_absent_from_the_revision_tree_are_refused(
     tmp_path: Path,
 ) -> None:
@@ -3204,6 +3251,158 @@ def test_the_promotion_receipt_is_bound_to_the_manifest_bytes(tmp_path: Path) ->
     result = _run(manifest, promotion)
     assert result.returncode == 2
     assert "manifest digest does not match" in result.stderr
+
+
+@pytest.mark.kit_repo_only(
+    "saved_plans/codex-parallel-batch-evidence_2026-09-01/bundle.json",
+    "saved_plans/codex-parallel-batch-evidence_2026-09-01/promotion.json",
+    "scripts/tests/fixtures/codex_parallel_batch_expected.json",
+)
+def test_the_promoted_codex_parallel_batch_remains_independently_recomputable() -> None:
+    root = find_repo_root(ENGINE.parent)
+    bundle = root / "saved_plans/codex-parallel-batch-evidence_2026-09-01"
+    expected = json.loads(
+        (root / "scripts/tests/fixtures/codex_parallel_batch_expected.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    manifest = json.loads((bundle / "bundle.json").read_text(encoding="utf-8"))
+    result = _run(
+        bundle / "bundle.json",
+        bundle / "promotion.json",
+        expectations={
+            "authority": "docs/agentic-dev-kit/runtime-parity.md",
+            "source_repository": expected["source"]["repository"],
+            "source_revision": expected["source"]["revision"],
+            "review_repository": expected["review"]["repository"],
+            "reviewed_head": expected["review"]["head"],
+            "redaction_reviewer": expected["redaction"]["reviewer"],
+            "runtime": expected["runtime"]["name"],
+            "client_version": expected["runtime"]["client_version"],
+            "session_persistence": expected["runtime"]["session_persistence"],
+        },
+        expected_claims=expected["claims"],
+        expected_compute=None,
+    )
+    assert result.returncode == 0, result.stderr
+
+    assert manifest["claims"] == expected["claims"]
+    assert manifest["source"] == expected["source"]
+    assert manifest["review"] == expected["review"]
+    assert manifest["redaction"] == expected["redaction"]
+    assert manifest["runtime"] == expected["runtime"]
+    assert {
+        artifact["path"]: {
+            key: artifact[key]
+            for key in ("kind", "observer", "capture_request", "sha256")
+        }
+        for artifact in manifest["artifacts"]
+    } == expected["artifact_bindings"]
+    assert {
+        path: _sha(bundle / path) for path in expected["artifact_bindings"]
+    } == {
+        path: binding["sha256"]
+        for path, binding in expected["artifact_bindings"].items()
+    }
+
+    artifacts = bundle / "artifacts"
+    filesystem = json.loads((artifacts / "filesystem-readback.json").read_text())
+    forge = json.loads((artifacts / "forge-readback.json").read_text())
+    reconciliation = json.loads((artifacts / "reconciliation.json").read_text())
+    lane_heads = {
+        "alpha": "59ad80980fb3c9d609c41c6ffc7f7fed0e12db97",
+        "beta": "57e4209a79080d7605cd8e42cb53fe8bdc5d3f38",
+    }
+    scopes = {"alpha": "parallel-alpha", "beta": "parallel-beta"}
+    pull_requests = {"alpha": 2, "beta": 1}
+    identities: dict[str, tuple[str, str]] = {}
+    for lane in ("alpha", "beta"):
+        lane_root = artifacts / "lanes" / lane
+        descriptor = json.loads((lane_root / "descriptor.json").read_text())
+        launcher = json.loads((lane_root / "launcher-receipt.json").read_text())
+        review = json.loads((lane_root / "review-receipt.json").read_text())
+        refusal = json.loads((lane_root / "merge-refusal.json").read_text())
+        pr = forge["pull_requests"][lane]
+        observed = filesystem["lanes"][lane]
+
+        assert descriptor["scope"] == scopes[lane]
+        assert descriptor["runtime"] == "codex"
+        assert descriptor["merge_class"] == "operator"
+        assert descriptor["base_oid"] == descriptor["lane_oid"] == (
+            "f13b3e995558ee2f14b656bba2e1a0f74d2254c2"
+        )
+        assert launcher["descriptor_id"] == descriptor["descriptor_id"]
+        assert launcher["status"] == "completed"
+        assert launcher["terminal"]["returncode"] == 0
+        assert launcher["terminal"]["final_text_sha256"] == _sha(
+            lane_root / "final-message.txt"
+        )
+        for key in ("scope", "branch", "base_oid", "lane_oid", "merge_class"):
+            assert launcher["observed"][key] == descriptor[key]
+        assert launcher["observed"]["worktree"] == descriptor["worktree"]
+        assert launcher["observed"]["state_root"] == descriptor["state_root"]
+        assert launcher["observed"]["marker_state_root"] == descriptor["state_root"]
+        assert observed["descriptor_worktree"] == observed["git_top"] == (
+            descriptor["worktree"]
+        )
+        assert observed["descriptor_state_root"] == observed["marker_state_root"] == (
+            descriptor["state_root"]
+        )
+        assert observed["state_root_exists"] is True
+        assert observed["status_short"] == []
+        assert observed["head"] == lane_heads[lane]
+        identities[lane] = (descriptor["worktree"], descriptor["state_root"])
+
+        assert pr["number"] == pull_requests[lane]
+        assert pr["head_oid"] == lane_heads[lane]
+        assert pr["state"] == "OPEN"
+        assert pr["is_draft"] is False
+        assert pr["merge_commit"] is None
+        assert review["receipt"] == {
+            "head": lane_heads[lane],
+            "lenses": ["adversarial", "correctness"],
+            "recorded_at": review["receipt"]["recorded_at"],
+            "source": "fallback:panel",
+        }
+        assert review["poll"]["head"] == lane_heads[lane]
+        assert review["poll"]["pr"] == pull_requests[lane]
+        assert review["poll"]["converged"] is True
+        assert review["poll"]["mergeable"] is True
+        assert refusal["exit_code"] == 1
+        assert refusal["scope"] == scopes[lane]
+        assert "autonomous merge refused" in refusal["stderr"]
+
+        for lens in ("adversarial", "correctness"):
+            review_root = artifacts / "reviews" / lane
+            run_record = json.loads((review_root / f"{lens}-run.json").read_text())
+            assert run_record["lane"] == scopes[lane]
+            assert run_record["lens"] == lens
+            assert run_record["head"] == lane_heads[lane]
+            assert run_record["exit_code"] == 0
+            assert run_record["prompt_sha256"] == _sha(
+                review_root / f"{lens}-prompt.txt"
+            )
+            assert run_record["report_sha256"] == _sha(
+                review_root / f"{lens}-report.md"
+            )
+
+    assert identities["alpha"][0] != identities["beta"][0]
+    assert identities["alpha"][1] != identities["beta"][1]
+    assert filesystem["cross_lane"] == {
+        "state_roots_distinct": True,
+        "worktrees_distinct": True,
+    }
+    assert forge["repository"]["is_private"] is True
+    assert forge["repository"]["visibility"] == "PRIVATE"
+    assert "record-prose imprecision below HIGH" in (
+        forge["pull_requests"]["alpha"]["comments"][0]["body"]
+    )
+    assert reconciliation["exit_code"] == 4
+    assert "parallel-alpha               held" in reconciliation["stdout"]
+    assert "parallel-beta                held" in reconciliation["stdout"]
+    source_proof = json.loads((artifacts / "source-proof.json").read_text())
+    assert source_proof["revision"] == expected["source"]["revision"]
+    assert source_proof["commit_trailing_newline"] is False
 
 
 @pytest.mark.kit_repo_only(

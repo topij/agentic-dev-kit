@@ -1,0 +1,22 @@
+{
+  "authority": "docs/agentic-dev-kit/runtime-parity.md",
+  "claims": [
+    "codex-parallel-batch-disjoint-identities",
+    "codex-parallel-batch-exact-head-review",
+    "codex-parallel-batch-operator-authority-without-merge",
+    "codex-parallel-batch-complete-claim-map"
+  ],
+  "manifest": "bundle.json",
+  "manifest_sha256": "d89b866f8723e0c34dd1edaed08a161163101ab6e59e9937505dfa9b2782d2e5",
+  "redaction_reviewer": "codex-cockpit-gpt-5-6-sol",
+  "review_repository": "https://github.com/topij/adk-codex-parallel-evidence-20260901",
+  "reviewed_head": "59ad80980fb3c9d609c41c6ffc7f7fed0e12db97",
+  "runtime": {
+    "applied_compute": null,
+    "client_version": "codex-cli 0.149.1",
+    "name": "codex",
+    "session_persistence": "persistent"
+  },
+  "schema_version": 1,
+  "source_revision": "6679856f7c9f14eac921f3b033c0077729bb17e1"
+}
