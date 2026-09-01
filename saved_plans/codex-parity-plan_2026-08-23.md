@@ -134,8 +134,12 @@ historical observation it was and is not silently refreshed.
   same-function-different-path survey, `#243` retains field exercises for `adopt`,
   `parallel`, `triage-friction-log`, and `post-merge-systemize`, and `#631` retains the
   lane execution-boundary decision. The 2026-09-01 tracker reconciliation closed
-  `#606`; PR `#655` delivered `#255`'s implementation, leaving tracker disposition
-  rather than additional implementation.
+  `#606`. `#255` needed implementation after all: PR `#657` carried the
+  `runtime_mappings` status declaration to `init.sh`'s migration surface, which the
+  reference config alone had carried. `#255` stays open on the general rule its
+  *Proposed* section states rather than on the two keys its comments name —
+  `review.fallback_commands` and `runtime.launchers` still declare no per-runtime
+  status, and no mechanism yet prevents the next such key.
 - [ ] **Phase 6 — Gate parity and roll it out.** Adoption fixtures, trusted smoke
   coverage, maintained parity reporting, the `#607` downstream adopter work, and the
   `#608` interactive-TUI gap remain planned.

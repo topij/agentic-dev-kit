@@ -673,3 +673,55 @@ and 7 each found something anyway, so this is also the clearest local instance o
   needs. Paths supplied by the inspected configuration are shell-quoted and exercised
   with shell metacharacters, keeping command construction and command verification
   separate and DRY.
+
+## Panel-convergence additions from PR `#657`
+
+One round, both lenses, neither filing a finding against the diff. The lesson is not in
+what they found but in what they agreed on.
+
+- **Two lenses agreeing is not two observations.** Both ran the same probe — backticks
+  inside a double-quoted shell string fire as command substitution — and both drew the
+  same conclusion from it: that the PR *removes* a latent hazard, correctness calling
+  it "the fix that prevents this migration from executing `claude -p --model/--effort`
+  for real during an adopter's install". The probe was sound and the attribution was
+  not. The pre-diff string held no backticks — a `grep -c` for one over that block at
+  the base revision, run on 2026-09-01, printed `0` — so the backticks arrive with the
+  comment the PR *adds*, and the quoting declines to create a hazard rather than
+  removing one. The existing rule covers lenses that **split**; this is the converse,
+  and it is the more dangerous shape because agreement reads as corroboration.
+  Convergence corroborates only when the lenses reached it by independent routes: ask
+  what each one *ran*, not what each concluded. Accepting it would have credited the
+  change with fixing a bug that never shipped, and sent a later reader hunting for the
+  vulnerable released version.
+
+- **The cockpit's own disposition is a claim, and it survives longest unfalsified.**
+  The session wrote "nothing else in this issue's *Proposed* section is outstanding"
+  after checking the two config keys the issue's comments happen to name, while the
+  Proposed states a general rule over every compute- or capability-selecting key.
+  Enumerating them afterwards found two undeclared. Neither lens caught this, and
+  correctly so — it is a claim about a tracker item's scope, not about the diff — which
+  is exactly what leaves the cockpit the only reviewer of its own tracker prose. A
+  disposition that generalises from the instances an issue names deserves the same
+  enumeration a record claim gets.
+
+- **An enumeration is only as wide as its search.** The first consumer survey used
+  `grep -rn ... scripts/ --include="*.py"` and found no reader for `runtime.launchers`,
+  which would have reclassified it as a key read by no code. It is read by
+  `scripts/dev_session.sh`. Widening before reporting is what caught it: a kit whose
+  engines are part Python and part shell has no single-extension search, and the
+  wrong answer here was the confident one.
+
+- **Asking both lenses to run the full suite has a cost the stamp makes visible.** The
+  cockpit's quiet-tree run at `da142620a02d16d31e3231249d627b8fd194daa9` on 2026-09-01
+  printed `2374 passed in 514.92s (0:08:34)` with nothing failing. Both lenses, running
+  full suites concurrently with each other, each hit `1 failed, 2372 passed, 1 skipped`
+  — the failure in a file outside the diff, passing standalone for both, and present at
+  the base for the one lens that checked. `#623`'s quiet-tree rule was written from the
+  cockpit's side; this is the same effect from the lenses', and it means a panel round
+  can manufacture a failure that costs a reviewer real time to dismiss.
+
+- **A lens reporting its own contaminated run is worth more than a clean one.** The
+  adversarial lens recorded, unprompted, that its first suite run showed a drift-check
+  failure caused by its concurrently mutating `init.sh` in the same clone, re-verified
+  the file against the manifest, and reran before reporting the result it stood behind.
+  That self-report is what let the cockpit read its later figures at face value.

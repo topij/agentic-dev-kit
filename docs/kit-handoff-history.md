@@ -5,6 +5,72 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-08-29 (cockpit settings policy, in a Claude Code session)
+
+**Theme —** In a Claude Code session, PR `#637` (squash `83b959e`) took Phase 5's
+remaining `#606` slice, on `.claude/settings.json`. Its three questions were answered
+separately, and most of the change's value came from the review rather than the first
+draft.
+
+- **The engine path is templated, and `init.sh` prints it rather than writing it.** The
+  allow rule baked in `scripts` and no permissions advisory existed at all, so an
+  adopter vendoring under `scripts/devkit/` had no route to a correct rule. The advisory
+  follows `#303`'s print-never-write doctrine, and the reason is sharper here than for
+  hooks: an allow-list is policy about what may run unattended.
+
+- **The `SessionStart` matcher was ours, not the runtime's.** `"startup"` was read as a
+  limit until it was measured; a resumed session had been starting with both budget
+  tripwires silent. Both runtimes now omit the matcher. The runs, the fixture hash and
+  what was *not* exercised are in
+  [`claude-sessionstart-matcher-live-validation_2026-08-29.md`](../saved_plans/claude-sessionstart-matcher-live-validation_2026-08-29.md).
+
+- **The grant check was wrong in each direction available to it, always toward false
+  reassurance.** It counted an exact-form rule that pre-approves one argument-less
+  invocation; it counted any rule merely *naming* the engine — `cat`, `ruff check`,
+  `rm`; and it missed `Bash(uv run:*)`, which covers every poll. It now asks whether a
+  rule's tokens open the command the workflow issues. Rounds 5 and 6 each finding a
+  defect in the same function was the signal its predicate was wrong rather than its
+  cases incomplete.
+
+- **CI caught a defect no local run could.** `Path.resolve()` reports a symlink
+  loop as `RuntimeError` on Python 3.12 and returns the path unresolved on 3.14, and
+  `make test` pins no interpreter — so three independent local suites passed and CI went
+  red. The panel's redundancy is across reviewers, not across environments.
+
+- **Filed this session:** occurrence comments on `#393` (a second test resting on
+  `json.load` raising `RecursionError`, and the first observed failure of that shape,
+  which falsifies that issue's "latent" framing), `#292` (the interpreter axis of its
+  local-gate-weaker-than-CI thesis), and `#606` (the residual measurement task below).
+  Review lessons are in
+  [`review-process-learnings_2026-08-24.md`](../saved_plans/review-process-learnings_2026-08-24.md).
+
+- **Left deliberately open:** `_bash_allow_prefixes` asserts that `Bash`, `Bash(*)` and
+  `Bash(:*)` each grant every command, and that assertion carries no stamp while every
+  other behavioural claim in the change does. A cockpit deny-side probe and a lens
+  allow-side probe disagree on two of the three. The check is advisory and the kit never
+  emits `Bash(:*)`, so this was disclosed on the PR and on `#606` rather than fixed
+  under a stopping rule the operator set at one review round on the rewrite.
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `52d25e5b95e2e7d8cb188c7bbeced43fbfcaffc7` on 2026-08-29 reported one failure, in
+  `test_pr_followup_hook.py` — the intermittent test recorded on `#393`, untouched by
+  this change — and the full suite at that revision printed `2081 passed` under both
+  `--python 3.12` and `--python 3.14`. At the tree that merged,
+  `5c5527ce58637d8165fefa1054e109dd9c84389c`, `uv run --python 3.12 … pytest` printed
+  `2091 passed` on 2026-08-29, and CI was green on the squash `83b959e`. **Read any one
+  of those counts as a reading of a suite with known intermittency, not as a property
+  of it:** review lenses reproducing the same commands in their own clones hit a
+  *different* intermittent failure at both revisions and under both interpreters, and
+  CI's own run of the merged head reported three skips where the local runs reported
+  none.
+  Both review lenses reproduced the suite independently in their own clones.
+
+▶ Next: measure the allow side of `Bash`, `Bash(*)` and `Bash(:*)` under a configuration
+that gates on `allow`, then drop or stamp the unmeasured entries in
+`_bash_allow_prefixes` and move `test_a_whole_tool_bash_grant_covers_every_engine` with
+the result — `#606` carries the task. `#621`, `#631` and `#633` stay open; use `#243`
+for the remaining runtime-specific workflow field exercises.
+
 ## Session — 2026-08-29 (runtime-adapter refresh, in a Codex session)
 
 **Theme —** In a Codex session, PR `#635` (squash `2f2561f`) took Phase 5's `#236`
