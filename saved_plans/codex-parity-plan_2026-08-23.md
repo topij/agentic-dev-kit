@@ -123,7 +123,7 @@ historical observation it was and is not silently refreshed.
      retained, independently recomputable Codex parallel-batch run that demonstrates
      disjoint worktree and state-root identities, exact-head review evidence, and
      operator merge authority without merging.
-  7. Done in this PR: the Codex-produced parallel batch retains both descriptor and
+  7. Done in PR `#659`: the Codex-produced parallel batch retains both descriptor and
      launcher identity chains, independent filesystem and Git read-backs, both exact
      reviewed heads and dual-lens receipts, operator merge refusals, reconciliation's
      held outcome, final open/unmerged forge state, exact source bytes and Git-object

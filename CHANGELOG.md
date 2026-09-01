@@ -42,6 +42,15 @@ starts.
 
 ---
 
+## #659 — 2026-09-01
+
+- **CHANGED (engine CLI surface):** Refresh
+  `scripts/verify_live_validation_bundle.py` before promoting source Git proofs for a
+  commit object that has no final newline. Emit
+  `"commit_trailing_newline": false` beside `commit_lines` for that object; omit the
+  field for the existing newline-terminated form. Existing schema-version `1` proofs
+  remain valid unchanged.
+
 ## #655 — 2026-09-01
 
 - **BREAKING (engine CLI, #255):** Refresh or install `scripts/kit_doctor.py`
