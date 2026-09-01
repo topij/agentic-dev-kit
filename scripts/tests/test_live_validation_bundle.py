@@ -767,14 +767,42 @@ def test_git_bound_python_source_refuses_a_credential_literal_in_an_expression(
     assert "credential-like content" in result.stderr
 
 
+def test_git_bound_python_source_refuses_a_credential_literal_in_a_callable(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+        source_bytes=b'token = (lambda: "hunter2-secret")()\n',
+    )
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = json.loads(
+        manifest.read_text(encoding="utf-8")
+    )["source"]["revision"]
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 2
+    assert "credential-like content" in result.stderr
+
+
 @pytest.mark.parametrize(
     "source_bytes",
     [
         b'def f(token="hunter2-secret"):\n    pass\n',
         b'def f(*, token="hunter2-secret"):\n    pass\n',
         b'f = lambda token="hunter2-secret": None\n',
+        b'def f(token=(lambda: "hunter2-secret")()):\n    pass\n',
     ],
-    ids=["positional", "keyword-only", "lambda"],
+    ids=["positional", "keyword-only", "lambda", "callable"],
 )
 def test_git_bound_python_source_refuses_a_credential_parameter_default(
     tmp_path: Path,

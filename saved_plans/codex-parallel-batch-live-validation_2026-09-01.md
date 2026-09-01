@@ -142,6 +142,14 @@ make test` in the clean detached worktree
 passed, 3 warnings in 410.07s` and returned exit `0`. The warnings are pytest
 cleanup warnings for its own temporary hostile trees.
 
+The next fresh adversarial lens at
+`d1632475dd235f4f04b794ef544e0919db582758` on 2026-09-01 demonstrated that an
+inline callable could still hide a credential literal from the new AST traversal.
+The finding was accepted without widening into credential-assignment forms that
+predate this PR. Call expressions now inspect the callable as well as its arguments,
+and the public source-ledger tests cover the demonstrated assignment and default
+forms.
+
 `UV_CACHE_DIR=/private/tmp/adk-codex-parallel-20260901.xlAufG/full-test-cache uv
 run --with pytest --with pyyaml pytest scripts/tests/test_live_validation_bundle.py
 -q` at `d3243e780d93078148fa890520e59247b37e2e42` on 2026-09-01 printed `211

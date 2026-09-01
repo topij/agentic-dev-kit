@@ -917,7 +917,11 @@ def _dynamic_python_literals(value: ast.expr, names: list[str]) -> list[str]:
         env_lookup = expression_path(value.func) in {"os.getenv", "os.environ.get"}
         return [
             literal
-            for child in (*value.args, *(keyword.value for keyword in value.keywords))
+            for child in (
+                value.func,
+                *value.args,
+                *(keyword.value for keyword in value.keywords),
+            )
             for literal in _dynamic_python_literals(child, names)
             if not (
                 env_lookup and re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", literal)
