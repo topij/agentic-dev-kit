@@ -628,6 +628,15 @@ def _derive_engine_names(kit_owned: tuple[tuple[str, str], ...]) -> tuple[str, .
 
 _ENGINE_NAMES: tuple[str, ...] = _derive_engine_names(KIT_OWNED)
 
+PANEL_PROMPT_REL = next(
+    (
+        rel
+        for rel, role in KIT_OWNED
+        if role == "engine" and PurePosixPath(rel).name == "panel_prompt.py"
+    ),
+    "",
+)
+
 # Import statements in a file Python cannot parse. Applied ONLY to `engine` and
 # `hook` roles, never to docs or templates: markdown cannot import anything, and
 # a doctrine file quoting `from kitconfig import get` inside a code fence would
@@ -2406,8 +2415,57 @@ def _drift_state(actual: str, expected: str, recorded: str | None) -> tuple[str,
     )
 
 
+def _generator_trust_failure(
+    root: Path, manifest_files: dict, engines_dir: str
+) -> str | None:
+    """Explain why the installed generator cannot be tied to the renderer.
+
+    The doctor must not execute adopter code, but calling a definition
+    ``current`` still promises that its bytes agree with the installed
+    generator. The comparison manifest supplies the trust boundary: the
+    generator and every manifest-owned transitive dependency must match before
+    the pure in-process renderer may stand in for that executable.
+    """
+    pending = [PANEL_PROMPT_REL]
+    visited: set[str] = set()
+    while pending:
+        rel = pending.pop()
+        if not rel or rel in visited:
+            continue
+        visited.add(rel)
+        entry = manifest_files.get(rel)
+        expected = entry.get("sha256") if isinstance(entry, dict) else None
+        local_rel = _remap(rel, engines_dir)
+        target = root / local_rel
+        if not target.is_file():
+            return f"{local_rel} is not installed"
+        if not isinstance(expected, str) or not expected:
+            return f"the comparison manifest has no trusted hash for {rel}"
+        try:
+            actual = sha256_of(target)
+        except OSError as exc:
+            return f"{local_rel} cannot be read: {exc}"
+        if actual != expected:
+            return f"{local_rel} differs from the comparison manifest"
+
+        for dependency_rel, raw_dependency in manifest_files.items():
+            if not isinstance(raw_dependency, dict):
+                return "the comparison manifest has a malformed file entry"
+            required_by = raw_dependency.get("required_by", [])
+            if not isinstance(required_by, list) or not all(
+                isinstance(dependent, str) for dependent in required_by
+            ):
+                return (
+                    "the comparison manifest has malformed dependency metadata "
+                    f"for {dependency_rel}"
+                )
+            if rel in required_by and dependency_rel not in visited:
+                pending.append(dependency_rel)
+    return None
+
+
 def inspect_lens_definitions(
-    root: Path, config: dict, engines_dir: str
+    root: Path, config: dict, engines_dir: str, manifest_files: dict
 ) -> list[LensDefinitionStatus]:
     """Compare configured Claude agent definitions with generator output.
 
@@ -2453,16 +2511,15 @@ def inspect_lens_definitions(
         if name not in names:
             names.append(name)
 
-    generator_rel = f"{engines_dir}/panel_prompt.py"
-    generator = root / generator_rel
-    if not generator.is_file():
+    trust_failure = _generator_trust_failure(root, manifest_files, engines_dir)
+    if trust_failure is not None:
         return [
             LensDefinitionStatus(
                 "claude",
                 name,
                 config_surface,
                 "unverifiable",
-                f"{generator_rel} is not installed, so expected bytes cannot be rendered",
+                f"{trust_failure}, so expected bytes cannot be attributed to the installed generator",
             )
             for name in names
         ]
@@ -2724,7 +2781,7 @@ def inspect(
         hooks_installed=hooks_installed,
         hooks_state=hooks_state,
         registrations=inspect_registrations(root, engines_dir),
-        lens_definitions=inspect_lens_definitions(root, config, engines_dir),
+        lens_definitions=inspect_lens_definitions(root, config, engines_dir, manifest_files),
         narrative_rendered=narrative,
         baseline_trusted=trusted,
         declared_scope_known=declared_scope is not None,

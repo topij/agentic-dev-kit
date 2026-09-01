@@ -49,8 +49,10 @@ starts.
   `unreadable`, or `unverifiable` entry. Regenerate the named adopter-owned file
   with `uv run <engine-dir>/panel_prompt.py --lens <name> --agent-definition >
   .claude/agents/<name>.md`; the doctor reports these states without executing or
-  rewriting adopter-owned engines or definitions, and without changing its exit
-  status.
+  rewriting adopter-owned engines or definitions. It reports `unverifiable`
+  instead of `current` when that installed generator or a manifest-owned
+  dependency differs from the comparison manifest. These advisory states do not
+  change the doctor's exit status.
 
 ## #653 — 2026-08-31
 

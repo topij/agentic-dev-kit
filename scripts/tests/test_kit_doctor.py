@@ -42,6 +42,10 @@ import panel_prompt  # noqa: E402
 import run_installed_tests  # noqa: E402
 import runtime_adapters  # noqa: E402
 
+SHIPPED_MANIFEST_FILES = json.loads(
+    (REPO_ROOT / "kit-manifest.json").read_text(encoding="utf-8")
+)["files"]
+
 LEGACY_CODEX_SHA256 = {
     "adopt": "fee749f57477fc21ced59027209d48eac22fafc44b15307bfff209028897def9",
     "parallel": "c5e34023e188965187727caa77939edbfe71cf762247e27afc0b7b6b9aa58882",
@@ -107,18 +111,37 @@ def test_lens_definition_inspection_reports_missing_current_and_stale(tmp_path, 
     root = _lens_repo(tmp_path, engines=engines)
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
 
-    missing = kit_doctor.inspect_lens_definitions(root, config, engines)
+    missing = kit_doctor.inspect_lens_definitions(
+        root, config, engines, SHIPPED_MANIFEST_FILES
+    )
     assert [(item.lens, item.state) for item in missing] == [("adversarial", "missing")]
+    missing_rendered = kit_doctor.render(
+        kit_doctor.Report(
+            kit_version_config=2,
+            kit_version_manifest=2,
+            engines_dir=engines,
+            engines_dir_ok=True,
+            hooks_installed=True,
+            narrative_rendered={},
+            lens_definitions=missing,
+        )
+    )
+    assert "⚠ .claude/agents/adversarial.md [claude lens=adversarial]" in missing_rendered
+    assert "not present — generate it before the next session" in missing_rendered
 
     definition = root / ".claude" / "agents" / "adversarial.md"
     _write(definition, panel_prompt.agent_definition(root, "adversarial", "claude"))
-    current = kit_doctor.inspect_lens_definitions(root, config, engines)
+    current = kit_doctor.inspect_lens_definitions(
+        root, config, engines, SHIPPED_MANIFEST_FILES
+    )
     assert [(item.lens, item.state) for item in current] == [("adversarial", "current")]
 
     definition.write_text(
         definition.read_text(encoding="utf-8") + "Hand edit.\n", encoding="utf-8"
     )
-    stale = kit_doctor.inspect_lens_definitions(root, config, engines)
+    stale = kit_doctor.inspect_lens_definitions(
+        root, config, engines, SHIPPED_MANIFEST_FILES
+    )
     assert [(item.lens, item.state) for item in stale] == [("adversarial", "stale")]
     rendered = kit_doctor.render(
         kit_doctor.Report(
@@ -152,7 +175,9 @@ def test_lens_definition_inspection_reports_missing_current_and_stale(tmp_path, 
             check=False,
         )
     assert regenerated.returncode == 0, regenerated.stderr.decode("utf-8", "replace")
-    refreshed = kit_doctor.inspect_lens_definitions(root, config, engines)
+    refreshed = kit_doctor.inspect_lens_definitions(
+        root, config, engines, SHIPPED_MANIFEST_FILES
+    )
     assert [(item.lens, item.state) for item in refreshed] == [
         ("adversarial", "current")
     ]
@@ -169,7 +194,9 @@ def test_a_configured_compute_change_makes_the_definition_stale(tmp_path):
     )
     config = kit_doctor.load_config(config_path)
 
-    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
+    statuses = kit_doctor.inspect_lens_definitions(
+        root, config, "scripts", SHIPPED_MANIFEST_FILES
+    )
 
     assert [(item.lens, item.state) for item in statuses] == [("adversarial", "stale")]
 
@@ -179,7 +206,9 @@ def test_a_missing_lens_generator_is_reported_without_aborting(tmp_path):
     (root / "scripts" / "panel_prompt.py").unlink()
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
 
-    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
+    statuses = kit_doctor.inspect_lens_definitions(
+        root, config, "scripts", SHIPPED_MANIFEST_FILES
+    )
 
     assert [(item.lens, item.state) for item in statuses] == [
         ("adversarial", "unverifiable")
@@ -208,11 +237,14 @@ def test_lens_inspection_does_not_execute_the_adopter_generator(tmp_path):
     )
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
 
-    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
+    statuses = kit_doctor.inspect_lens_definitions(
+        root, config, "scripts", SHIPPED_MANIFEST_FILES
+    )
 
     assert [(item.lens, item.state) for item in statuses] == [
-        ("adversarial", "missing")
+        ("adversarial", "unverifiable")
     ]
+    assert "differs from the comparison manifest" in statuses[0].detail
     assert not sentinel.exists()
 
 
@@ -230,10 +262,112 @@ def test_a_malformed_lens_roster_is_unverifiable(tmp_path):
     )
     config = kit_doctor.load_config(config_path)
 
-    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
+    statuses = kit_doctor.inspect_lens_definitions(
+        root, config, "scripts", SHIPPED_MANIFEST_FILES
+    )
 
     assert [(item.lens, item.state) for item in statuses] == [("", "unverifiable")]
     assert "roster is not a list" in statuses[0].detail
+
+
+def test_a_malformed_lens_roster_entry_is_unverifiable(tmp_path):
+    root = _lens_repo(tmp_path)
+    config_path = root / "config" / "dev-model.yaml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8").replace(
+            "      - name: adversarial\n        focus: Try to prove the change wrong.\n",
+            "      - focus: Try to prove the change wrong.\n",
+        ),
+        encoding="utf-8",
+    )
+    config = kit_doctor.load_config(config_path)
+
+    statuses = kit_doctor.inspect_lens_definitions(
+        root, config, "scripts", SHIPPED_MANIFEST_FILES
+    )
+
+    assert [(item.lens, item.state) for item in statuses] == [("", "unverifiable")]
+    assert "entry has no string name" in statuses[0].detail
+
+
+def test_a_renderer_error_is_unverifiable(tmp_path, monkeypatch):
+    root = _lens_repo(tmp_path)
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+
+    def fail_render(*_args, **_kwargs):
+        raise kit_doctor.LensDefinitionError("renderer rejected the lens")
+
+    monkeypatch.setattr(kit_doctor, "render_agent_definition", fail_render)
+    statuses = kit_doctor.inspect_lens_definitions(
+        root, config, "scripts", SHIPPED_MANIFEST_FILES
+    )
+
+    assert [(item.lens, item.state) for item in statuses] == [
+        ("adversarial", "unverifiable")
+    ]
+    assert statuses[0].detail == "renderer rejected the lens"
+
+
+def test_an_unreadable_lens_definition_is_reported_and_rendered(
+    tmp_path, monkeypatch
+):
+    root = _lens_repo(tmp_path)
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    definition = root / ".claude" / "agents" / "adversarial.md"
+    _write(definition, panel_prompt.agent_definition(root, "adversarial", "claude"))
+    original_read_bytes = Path.read_bytes
+
+    def fail_target_read(path):
+        if path == definition:
+            raise PermissionError("definition denied")
+        return original_read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", fail_target_read)
+    statuses = kit_doctor.inspect_lens_definitions(
+        root, config, "scripts", SHIPPED_MANIFEST_FILES
+    )
+
+    assert [(item.lens, item.state) for item in statuses] == [
+        ("adversarial", "unreadable")
+    ]
+    rendered = kit_doctor.render(
+        kit_doctor.Report(
+            kit_version_config=2,
+            kit_version_manifest=2,
+            engines_dir="scripts",
+            engines_dir_ok=True,
+            hooks_installed=True,
+            narrative_rendered={},
+            lens_definitions=statuses,
+        )
+    )
+    assert "⚠ .claude/agents/adversarial.md [claude lens=adversarial]" in rendered
+    assert "unreadable — definition denied" in rendered
+
+
+@pytest.mark.parametrize(
+    "drifted_rel",
+    ["scripts/panel_prompt.py", "scripts/lib/panel_definition.py"],
+)
+def test_a_drifted_generator_or_dependency_is_unverifiable(tmp_path, drifted_rel):
+    root = _lens_repo(tmp_path)
+    definition = root / ".claude" / "agents" / "adversarial.md"
+    _write(definition, panel_prompt.agent_definition(root, "adversarial", "claude"))
+    drifted = root / drifted_rel
+    drifted.write_text(
+        drifted.read_text(encoding="utf-8") + "\n# adopter edit\n",
+        encoding="utf-8",
+    )
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+
+    statuses = kit_doctor.inspect_lens_definitions(
+        root, config, "scripts", SHIPPED_MANIFEST_FILES
+    )
+
+    assert [(item.lens, item.state) for item in statuses] == [
+        ("adversarial", "unverifiable")
+    ]
+    assert f"{drifted_rel} differs from the comparison manifest" in statuses[0].detail
 
 
 def test_json_reports_missing_lens_definitions_as_advisory(tmp_path, capsys):
