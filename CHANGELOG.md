@@ -47,8 +47,9 @@ starts.
 - **ADDED (`kit_doctor.py` report and `--json`, #255):** Read the new
   `lens_definitions` array and inspect any advisory `missing`, `stale`,
   `unreadable`, or `unverifiable` entry. Regenerate the named adopter-owned file
-  with `uv run <engine-dir>/panel_prompt.py --lens <name> --agent-definition`;
-  the doctor reports these states without rewriting the file or changing its exit
+  with `uv run <engine-dir>/panel_prompt.py --lens <name> --agent-definition >
+  .claude/agents/<name>.md`; the doctor reports these states without executing or
+  rewriting adopter-owned engines or definitions, and without changing its exit
   status.
 
 ## #653 — 2026-08-31

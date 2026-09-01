@@ -133,6 +133,29 @@ def test_lens_definition_inspection_reports_missing_current_and_stale(tmp_path, 
     )
     assert "inspect and regenerate it" in rendered
     assert "this check never writes them" in rendered
+    assert "> .claude/agents/<name>.md" in rendered
+
+    with definition.open("wb") as output:
+        regenerated = subprocess.run(
+            [
+                sys.executable,
+                str(root / engines / "panel_prompt.py"),
+                "--root",
+                str(root),
+                "--lens",
+                "adversarial",
+                "--agent-definition",
+            ],
+            cwd=root,
+            stdout=output,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+    assert regenerated.returncode == 0, regenerated.stderr.decode("utf-8", "replace")
+    refreshed = kit_doctor.inspect_lens_definitions(root, config, engines)
+    assert [(item.lens, item.state) for item in refreshed] == [
+        ("adversarial", "current")
+    ]
 
 
 def test_a_configured_compute_change_makes_the_definition_stale(tmp_path):
@@ -162,6 +185,55 @@ def test_a_missing_lens_generator_is_reported_without_aborting(tmp_path):
         ("adversarial", "unverifiable")
     ]
     assert "is not installed" in statuses[0].detail
+    rendered = kit_doctor.render(
+        kit_doctor.Report(
+            kit_version_config=2,
+            kit_version_manifest=2,
+            engines_dir="scripts",
+            engines_dir_ok=True,
+            hooks_installed=True,
+            narrative_rendered={},
+            lens_definitions=statuses,
+        )
+    )
+    assert "regenerate with" not in rendered
+
+
+def test_lens_inspection_does_not_execute_the_adopter_generator(tmp_path):
+    root = _lens_repo(tmp_path)
+    sentinel = root / "doctor-executed-generator"
+    _write(
+        root / "scripts" / "panel_prompt.py",
+        f"from pathlib import Path\nPath({str(sentinel)!r}).write_text('ran')\n",
+    )
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+
+    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
+
+    assert [(item.lens, item.state) for item in statuses] == [
+        ("adversarial", "missing")
+    ]
+    assert not sentinel.exists()
+
+
+def test_a_malformed_lens_roster_is_unverifiable(tmp_path):
+    root = _lens_repo(tmp_path)
+    config_path = root / "config" / "dev-model.yaml"
+    config_path.write_text(
+        config_path.read_text(encoding="utf-8").replace(
+            "    lenses:\n"
+            "      - name: adversarial\n"
+            "        focus: Try to prove the change wrong.\n",
+            "    lenses: malformed\n",
+        ),
+        encoding="utf-8",
+    )
+    config = kit_doctor.load_config(config_path)
+
+    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
+
+    assert [(item.lens, item.state) for item in statuses] == [("", "unverifiable")]
+    assert "roster is not a list" in statuses[0].detail
 
 
 def test_json_reports_missing_lens_definitions_as_advisory(tmp_path, capsys):
@@ -1526,6 +1598,7 @@ def test_dependency_graph_of_the_real_kit_names_kitconfigs_importers():
         "scripts/hooks/pre-push",
         "scripts/kit_doctor.py",
         "scripts/launch_lane.py",
+        "scripts/lib/panel_definition.py",
         "scripts/panel_prompt.py",
         "scripts/pr_watch.py",
     }
@@ -1579,6 +1652,7 @@ def test_the_shell_source_dependency_is_a_KNOWN_GAP_not_an_oversight():
     assert set(graph) == {
         "scripts/lib/atomic_write.py",
         "scripts/lib/kitconfig.py",
+        "scripts/lib/panel_definition.py",
         "scripts/lib/runtime_adapters.py",
         "scripts/lib/state_paths/paths.py",
         "scripts/lib/state_paths/repo_root.py",

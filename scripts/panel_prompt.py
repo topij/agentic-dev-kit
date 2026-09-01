@@ -63,7 +63,6 @@ Exits 2 on any condition that would produce a misleading prompt.
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import subprocess
 import sys
@@ -71,6 +70,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from kitconfig import get, load_config, repo_root  # noqa: E402
+from panel_definition import (  # noqa: E402
+    AGENT_DEFINITION_RUNTIME,
+    LensDefinitionError,
+    render_agent_definition,
+)
 
 REPO_ROOT = repo_root(Path(__file__).resolve())
 DOCTRINE = "docs/agentic-dev-kit/fallback-review-panel.md"
@@ -107,26 +111,6 @@ COMPUTE_CARRIER: dict[str, str] = {
         "rollout `turn_context`"
     ),
 }
-
-# The runtime whose agent definitions `--agent-definition` renders. Codex carries
-# lens compute on its launch argv and has no per-lens definition file to render.
-AGENT_DEFINITION_RUNTIME = "claude"
-
-# A lens name is a filename, a frontmatter `name:`, and the `subagent_type` the
-# cockpit types, so it is held to a slug: anything else would need escaping on
-# three surfaces that each escape differently, and a `:` in it is the same YAML
-# break the `model` line guards against below.
-_LENS_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
-
-# `claude --help` at 2.1.247: "--effort <level>  Effort level for the current session
-# (low, medium, high, xhigh, max)". Validated HERE because the runtime does not
-# refuse a bad frontmatter level where anyone would see it: probed live, an agent
-# definition carrying `effort: bogus` logged "has invalid effort" only under
-# `--debug` and ran at the parent's effort — the silent-inherit shape a generator
-# must not hand on. Quoted from the client's own help, so a new level the client
-# grows is a one-line change here, never a guess.
-CLAUDE_EFFORT_LEVELS: tuple[str, ...] = ("low", "medium", "high", "xhigh", "max")
-
 
 class PromptError(Exception):
     """A condition that would make the emitted prompt misleading."""
@@ -557,114 +541,19 @@ def _lens_roster(config: dict, lens: str) -> dict[str, str]:
     return roster
 
 
-def _compute_value(compute: dict, key: str, runtime: str) -> str | None:
-    """One `lens_compute.<runtime>.<key>` value, or None when the key is absent.
-
-    Absent means "inherit", which is legitimate. Present-but-unusable is refused
-    rather than silently dropped: dropping it renders a definition that inherits
-    where the config asked for a pin, and the hook's silence rule (`#301`) exists for
-    a reminder clause, not for a file the runtime will apply.
-    """
-    if key not in compute:
-        return None
-    value = compute.get(key)
-    if not isinstance(value, str) or not value.strip() or not any(
-        ch.isalnum() for ch in value
-    ):
-        raise PromptError(
-            f"review.fallback_panel.lens_compute.{runtime}.{key} is {value!r}, which is "
-            "not a usable value; omit the key to inherit, or set a real one"
-        )
-    return value.strip()
-
-
 def agent_definition(root: Path, lens: str, runtime: str) -> str:
     """Render `.claude/agents/<lens>.md` from config so its frontmatter cannot drift.
 
     The frontmatter is the mechanical carrier for `lens_compute.claude` (see
-    :data:`COMPUTE_CARRIER`); the body is fixed. The file carries the command that
-    regenerates it, and the kit's own tests refuse a committed definition that this
-    function would render differently.
+    :data:`COMPUTE_CARRIER`); the body is fixed. The pure renderer is shared with
+    ``kit_doctor.py`` so that diagnostic can compare bytes without executing a
+    possibly edited generator from the adopter tree.
     """
-    if runtime != AGENT_DEFINITION_RUNTIME:
-        raise PromptError(
-            f"--agent-definition renders a {AGENT_DEFINITION_RUNTIME!r} agent definition; "
-            f"runtime {runtime!r} carries lens compute on its launch argv, not in a "
-            "definition file (see the doctrine's compute section)"
-        )
     config = load_config(root / "config" / "dev-model.yaml")
-    focus = _lens_roster(config, lens)[lens]
-    if not _LENS_NAME.match(lens):
-        raise PromptError(
-            f"lens name {lens!r} cannot be an agent definition: it becomes the file name, "
-            "the frontmatter `name:`, and the subagent type, so it must match "
-            f"{_LENS_NAME.pattern}"
-        )
-    # The regenerating command is rendered from `paths.engines`, never a literal
-    # `scripts/`: an adopter who vendored under `scripts/devkit/` would otherwise
-    # ship a definition naming a path that does not exist in their tree.
-    engines = get(config, "paths.engines", "scripts") or "scripts"
-    compute = get(config, f"review.fallback_panel.lens_compute.{runtime}", {}) or {}
-    if not isinstance(compute, dict):
-        raise PromptError(
-            f"review.fallback_panel.lens_compute.{runtime} is {compute!r}, not a map"
-        )
-    model = _compute_value(compute, "model", runtime)
-    effort = _compute_value(compute, "effort", runtime)
-    if effort is not None and effort not in CLAUDE_EFFORT_LEVELS:
-        raise PromptError(
-            f"review.fallback_panel.lens_compute.{runtime}.effort is {effort!r}; Claude Code "
-            f"accepts {', '.join(CLAUDE_EFFORT_LEVELS)} and would run this lens at the "
-            "cockpit's effort while logging the rejection only under --debug"
-        )
-    # JSON string syntax is valid YAML double-quoted syntax, which is what keeps a
-    # focus containing `: ` or `#` from breaking the frontmatter.
-    description = json.dumps(
-        f"Fallback review panel lens {lens}: {focus}. Launch it only with a prompt "
-        f"assembled by {engines}/panel_prompt.py; it is not a general-purpose agent.",
-        ensure_ascii=False,
-    )
-    front = ["---", f"name: {lens}", f"description: {description}"]
-    if model is not None:
-        # Quoted for the same reason `description` is. Bare, a value holding `: `
-        # (colon then space) ends the YAML mapping and the runtime gets an
-        # unparseable file at exit 0 — the panel's adversarial lens showed that
-        # with `sonnet: injected` — and a value holding ` #` is silently cut at
-        # the `#`. A colon with no space after it, the shape of a Bedrock id's
-        # `:0`, parses bare; the panel's correctness lens corrected an earlier
-        # version of this comment that claimed otherwise. Quoting covers every
-        # shape at once, and the runtime applies a quoted frontmatter value
-        # (probed live, C11 in the calibration record). `effort` stays bare: it
-        # is held to a bare-word enum.
-        front.append(f"model: {json.dumps(model, ensure_ascii=False)}")
-    if effort is not None:
-        front.append(f"effort: {effort}")
-    front.append("---")
-    pinned = (
-        "The frontmatter is what makes the configured compute mechanical: Claude Code\n"
-        "applies its `model` and `effort` when the cockpit launches the agent named\n"
-        f"`{lens}`. It lists this file at session start; a file written mid-session was\n"
-        "not launchable in the turn it was written and appeared in the roster later, so\n"
-        "count on it from the next session and treat an earlier listing as a bonus."
-        if model is not None or effort is not None
-        else "No `model` or `effort` is pinned here because\n"
-        f"`review.fallback_panel.lens_compute.{runtime}` carries neither; the lens\n"
-        "inherits the cockpit session's compute."
-    )
-    body = f"""
-Generated from `config/dev-model.yaml` (`review.fallback_panel.lenses` and
-`review.fallback_panel.lens_compute.{runtime}`) by
-`{engines}/panel_prompt.py --lens {lens} --agent-definition`. Regenerate it after
-changing either key; do not edit it by hand.
-
-{pinned}
-
-You are the **{lens}** lens of the fallback review panel
-(`docs/agentic-dev-kit/fallback-review-panel.md`). You did NOT write the change under
-review. Your launch prompt carries the contract, the revision, the diff, and your
-focus; follow it exactly, and report what you reviewed before any finding.
-"""
-    return "\n".join(front) + "\n" + body
+    try:
+        return render_agent_definition(config, lens, runtime)
+    except LensDefinitionError as exc:
+        raise PromptError(str(exc)) from exc
 
 
 def build(args: argparse.Namespace) -> str:

@@ -202,6 +202,7 @@ _REGISTRATION_PARSE_ERRORS = (
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from kitconfig import get, load_config, repo_root  # noqa: E402
+from panel_definition import LensDefinitionError, render_agent_definition  # noqa: E402
 
 MANIFEST_NAME = "kit-manifest.json"
 
@@ -235,6 +236,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/run_installed_tests.py", "engine"),
     ("scripts/conftest.py", "engine"),
     ("scripts/lib/kitconfig.py", "engine"),
+    ("scripts/lib/panel_definition.py", "engine"),
     ("scripts/lib/runtime_adapters.py", "engine"),
     ("scripts/lib/atomic_write.py", "engine"),
     ("scripts/lib/devmodel_config.py", "engine"),
@@ -2409,12 +2411,11 @@ def inspect_lens_definitions(
 ) -> list[LensDefinitionStatus]:
     """Compare configured Claude agent definitions with generator output.
 
-    The installed generator is invoked rather than imported. A sized-down
-    adoption may omit it, and importing a sibling at module load would make the
-    entire doctor unavailable in exactly that supported state. Invocation also
-    keeps the comparison honest when ``paths.engines`` is remapped: the bytes are
-    produced by the generator this adopter would actually run, from this
-    adopter's merged config.
+    The pure renderer shared with ``panel_prompt.py`` supplies expected bytes.
+    Executing the generator from ``root`` would run code from the adopter tree
+    before this diagnostic had reported whether that engine was stale or locally
+    edited. The generator still has to be installed before the definition can be
+    called verifiable, because it is the operator's regeneration route.
 
     Every non-current state is advisory. ``init.sh`` seeds these files only when
     absent and never owns them afterwards, and the kit supports an adopter that
@@ -2468,50 +2469,21 @@ def inspect_lens_definitions(
 
     statuses: list[LensDefinitionStatus] = []
     for name in names:
-        command = [
-            sys.executable,
-            str(generator),
-            "--root",
-            str(root),
-            "--lens",
-            name,
-            "--runtime",
-            "claude",
-            "--agent-definition",
-        ]
         try:
-            generated = subprocess.run(
-                command,
-                cwd=root,
-                capture_output=True,
-                check=False,
-                timeout=10,
-            )
-        except (OSError, subprocess.TimeoutExpired) as exc:
+            expected = render_agent_definition(config, name, "claude").encode("utf-8")
+        except LensDefinitionError as exc:
             statuses.append(
                 LensDefinitionStatus(
                     "claude",
                     name,
                     config_surface,
                     "unverifiable",
-                    f"generator could not run: {exc}",
-                )
-            )
-            continue
-        if generated.returncode != 0:
-            error = generated.stderr.decode("utf-8", "replace").strip()
-            statuses.append(
-                LensDefinitionStatus(
-                    "claude",
-                    name,
-                    config_surface,
-                    "unverifiable",
-                    error or f"generator exited {generated.returncode}",
+                    str(exc),
                 )
             )
             continue
 
-        # Successful generation validates the name as a filename slug before it
+        # Successful rendering validates the name as a filename slug before it
         # emits bytes, so only then is it safe to construct the adopter path.
         rel = f".claude/agents/{name}.md"
         target = root / rel
@@ -2530,7 +2502,7 @@ def inspect_lens_definitions(
                 LensDefinitionStatus("claude", name, rel, "unreadable", str(exc))
             )
             continue
-        state = "current" if actual == generated.stdout else "stale"
+        state = "current" if actual == expected else "stale"
         detail = (
             "matches generator output"
             if state == "current"
@@ -2957,11 +2929,15 @@ def render(report: Report) -> str:
         lines.append(
             f"  {mark} {definition.surface} [{definition.runtime}{lens}]: {text}"
         )
-    if any(definition.state != "current" for definition in report.lens_definitions):
+    if any(
+        definition.state in ("missing", "stale", "unreadable")
+        for definition in report.lens_definitions
+    ):
         lines.append(
-            f"    (lens definitions are adopter-owned — regenerate with "
+            f"    (lens definitions are adopter-owned — inspect the target, then regenerate "
+            "one with "
             f"uv run {report.engines_dir}/panel_prompt.py --lens <name> "
-            "--agent-definition; "
+            "--agent-definition > .claude/agents/<name>.md; "
             "this check never writes them)"
         )
     for doc, rendered in report.narrative_rendered.items():
