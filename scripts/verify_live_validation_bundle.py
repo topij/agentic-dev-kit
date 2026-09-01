@@ -915,16 +915,21 @@ def _dynamic_python_literals(value: ast.expr, names: list[str]) -> list[str]:
         return literals
     if isinstance(value, ast.Call):
         env_lookup = expression_path(value.func) in {"os.getenv", "os.environ.get"}
+        children = [(value.func, False)]
+        children.extend(
+            (child, env_lookup and index == 0)
+            for index, child in enumerate(value.args)
+        )
+        children.extend(
+            (keyword.value, env_lookup and keyword.arg == "key")
+            for keyword in value.keywords
+        )
         return [
             literal
-            for child in (
-                value.func,
-                *value.args,
-                *(keyword.value for keyword in value.keywords),
-            )
+            for child, is_env_key in children
             for literal in _dynamic_python_literals(child, names)
             if not (
-                env_lookup and re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", literal)
+                is_env_key and re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", literal)
             )
         ]
     if isinstance(value, ast.Subscript):

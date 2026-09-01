@@ -159,6 +159,15 @@ make test` in the clean detached worktree
 passed, 3 warnings in 395.39s` and returned exit `0`. The warnings are pytest
 cleanup warnings for its own temporary hostile trees.
 
+The convergence adversarial lens at
+`50f8a3d19bf6e2d38bb175ac5cfb9fc3fdf822d5` on 2026-09-01 then demonstrated
+that the environment-lookup exception ignored uppercase literal defaults as though
+they were lookup keys. It separately showed that coordinated digest updates could
+replace the persisted operator session metadata with `self` without failing the
+semantic control. The findings were accepted. Environment lookup scanning now exempts
+only the positional or named key argument, and the semantic control compares each
+persisted session record exactly with its lane identity and operator authority.
+
 `UV_CACHE_DIR=/private/tmp/adk-codex-parallel-20260901.xlAufG/full-test-cache uv
 run --with pytest --with pyyaml pytest scripts/tests/test_live_validation_bundle.py
 -q` at `d3243e780d93078148fa890520e59247b37e2e42` on 2026-09-01 printed `211

@@ -713,6 +713,32 @@ def test_git_bound_python_source_may_carry_a_runtime_token_value(
     assert result.returncode == 0, result.stderr
 
 
+def test_git_bound_python_source_may_read_a_runtime_token_from_the_environment(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+        source_bytes=b'import os\n\ntoken = os.getenv("GITHUB_TOKEN")\n',
+    )
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = json.loads(
+        manifest.read_text(encoding="utf-8")
+    )["source"]["revision"]
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
 def test_git_bound_python_source_refuses_a_static_credential_assignment(
     tmp_path: Path,
 ) -> None:
@@ -777,6 +803,42 @@ def test_git_bound_python_source_refuses_a_credential_literal_in_a_callable(
         include_source_file=True,
         claim_source_file=True,
         source_bytes=b'token = (lambda: "hunter2-secret")()\n',
+    )
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = json.loads(
+        manifest.read_text(encoding="utf-8")
+    )["source"]["revision"]
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 2
+    assert "credential-like content" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "source_bytes",
+    [
+        b'import os\n\ntoken = os.getenv("TOKEN", "HUNTERSECRET")\n',
+        b'import os\n\ntoken = os.getenv("TOKEN", default="HUNTERSECRET")\n',
+    ],
+    ids=["positional-default", "keyword-default"],
+)
+def test_git_bound_python_source_refuses_an_environment_credential_default(
+    tmp_path: Path,
+    source_bytes: bytes,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+        source_bytes=source_bytes,
     )
     expectations = dict(FIXTURE_EXPECTATIONS)
     expectations["source_revision"] = json.loads(
@@ -3581,6 +3643,7 @@ def test_the_promoted_codex_parallel_batch_remains_independently_recomputable() 
         authority = json.loads((lane_root / "launch-authority.json").read_text())
         attempt = json.loads((lane_root / "launch-attempt.json").read_text())
         launcher = json.loads((lane_root / "launcher-receipt.json").read_text())
+        session_metadata = json.loads((lane_root / "session-metadata.json").read_text())
         review = json.loads((lane_root / "review-receipt.json").read_text())
         refusal = json.loads((lane_root / "merge-refusal.json").read_text())
         pr = forge["pull_requests"][lane]
@@ -3610,6 +3673,12 @@ def test_the_promoted_codex_parallel_batch_remains_independently_recomputable() 
         assert launcher["observed"]["worktree"] == descriptor["worktree"]
         assert launcher["observed"]["state_root"] == descriptor["state_root"]
         assert launcher["observed"]["marker_state_root"] == descriptor["state_root"]
+        assert session_metadata == {
+            "base": "main",
+            "branch": descriptor["branch"],
+            "merge_class": "operator",
+            "scope": scopes[lane],
+        }
         assert observed["descriptor_worktree"] == observed["git_top"] == (
             descriptor["worktree"]
         )
