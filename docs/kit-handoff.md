@@ -14,10 +14,49 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-01 — PR `#653` (squash `dd536ee`) merged the
-ready-for-review-by-default pull-request policy correction.
+Last updated: 2026-09-01 — PR `#655` (squash `48311ff`) merged the
+adopter-side fallback-lens definition diagnostic.
 
-## Latest session — 2026-09-01 (draft-policy correction, in a Codex session)
+## Latest session — 2026-09-01 (parity reconciliation and lens diagnostics, in a Codex session)
+
+**Theme —** The session reconciled the parity plan and tracker against live repository
+state, then PR `#655` delivered `#255`'s adopter-side lens-definition diagnostic without
+duplicating the existing engine-drift responsibility.
+
+- **Runtime —** Codex desktop, assigned model `gpt-5.6-sol`, main reasoning effort
+  `high`.
+
+- **The tracker now follows delivered contracts.** The 2026-09-01 reconciliation
+  closed `#365`, `#169`, `#466`, `#601`, `#605`, and `#606` after read-back of their
+  merged repository evidence.
+
+- **PR `#655` keeps the responsibilities separate.** The already-running doctor
+  renders the expected adopter-owned Claude definition; the existing manifest-backed
+  file report continues to own installed-engine drift. The regeneration remedy changes
+  to the inspected root, creates the target directory, and quotes configured paths.
+  The generator imports its sibling doctor before `lib`, and the manifest derives that
+  dependency.
+
+- **Review changed the design rather than merely adding guards.** The renderer-bundle
+  authentication approach was removed when successive findings showed it duplicated
+  engine drift. The surviving boundary, command-context fixtures, and DRY ownership
+  lessons are recorded in
+  [`review-process-learnings_2026-08-24.md`](../saved_plans/review-process-learnings_2026-08-24.md).
+
+- **The remaining parity boundary is explicit.** Phase 4 still needs the separately
+  retained Codex parallel-batch evidence run; `#621` does not own it. Phase 5 retains
+  `#236`, `#243`, and `#631`; `#255` needs tracker disposition rather than more
+  implementation. Phase 6 retains adoption fixtures, trusted runtime smoke tests,
+  maintained parity reporting, `#607`, and `#608`. This session did not start `#631`
+  or the Phase 4 run.
+
+▶ Next: `session-start` — verify PR `#655` and `#255` live, present the exact proposed
+tracker disposition for `#255`, then recommend the next parity slice without starting
+`#631` or the retained Phase 4 Codex parallel-batch run.
+
+______________________________________________________________________
+
+## Session — 2026-09-01 (draft-policy correction, in a Codex session)
 
 **Theme —** PR `#653` made completed pull requests ready for review by default across
 shared doctrine, adopter workflows, shipped baselines, runtime bindings, configured
@@ -323,51 +362,6 @@ that gates on `allow`, then drop or stamp the unmeasured entries in
 `_bash_allow_prefixes` and move `test_a_whole_tool_bash_grant_covers_every_engine` with
 the result — `#606` carries the task. `#621`, `#631` and `#633` stay open; use `#243`
 for the remaining runtime-specific workflow field exercises.
-
-______________________________________________________________________
-
-## Session — 2026-08-29 (runtime-adapter refresh, in a Codex session)
-
-**Theme —** In a Codex session, PR `#635` (squash `2f2561f`) took Phase 5's `#236`
-adapter/verification slice and narrowed `#243`. Upgrade now classifies generated Claude
-and Codex bindings from their slug, description and shared workflow path; generated
-bindings refresh, adopter-authored bindings are reported and preserved, and unsafe
-filesystem shapes fail closed.
-
-- **The stale premise was measured in a real adopter before design.** The measurement,
-  premise correction and resulting scope are recorded on `#236`; design started from
-  that record rather than the issue's original diagnosis.
-
-- **Step 5 now follows the adopter's manifest.** `scripts/run_installed_tests.py`
-  selects declared installed tests, applies engine remapping, refuses missing or unsafe
-  paths, propagates pytest's status, and makes an empty declaration an explicit skip.
-  The workflow no longer treats a directory-shaped pytest invocation as proof of what
-  upgrade delivered.
-
-- **The `#243` residue is runtime translation, not duplicated workflow doctrine.** The
-  generated comparison covers the shipped adapters. The issue comment names the
-  remaining native context, lane/delegation, compute/isolation, bootstrap and
-  instruction-layer carriers. This session followed `session-start` and `upgrade`
-  through their shared documents without a Codex workaround; upgrade's cloned-workflow
-  re-read remained load-bearing.
-
-- **The fallback panel changed the implementation at the boundaries it challenged.**
-  It found unsafe link shapes, a selector that was not actually manifest-owned,
-  historical fixtures coupled to current metadata, CLI branches whose exit semantics
-  were unpinned, doctor-first import ordering, mixed-mode fail-open behavior, and
-  preservation assertions that could not distinguish unchanged bytes from a replaced
-  path. The exact-head dispositions and independent mutation evidence are on PR `#635`;
-  the reusable lessons are in
-  [`review-process-learnings_2026-08-24.md`](../saved_plans/review-process-learnings_2026-08-24.md).
-
-- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
-  `3032a2f47c2be34e49ea4148c0c5635ca99a83fd` on 2026-08-29 printed `2034 passed, 3
-  warnings in 352.43s`; the merged squash is `2f2561f`.
-
-▶ Next: take Phase 5's `#606` `.claude/settings.json` half: engine-path templating, the
-startup-only `SessionStart` matcher, and the missing `kit_doctor` check for the
-permissions block. Keep `#621`, `#631`, and `#633` open; use `#243` for the remaining
-runtime-specific workflow field exercises.
 
 ______________________________________________________________________
 

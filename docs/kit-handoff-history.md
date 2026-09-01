@@ -5,6 +5,49 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-08-29 (runtime-adapter refresh, in a Codex session)
+
+**Theme —** In a Codex session, PR `#635` (squash `2f2561f`) took Phase 5's `#236`
+adapter/verification slice and narrowed `#243`. Upgrade now classifies generated Claude
+and Codex bindings from their slug, description and shared workflow path; generated
+bindings refresh, adopter-authored bindings are reported and preserved, and unsafe
+filesystem shapes fail closed.
+
+- **The stale premise was measured in a real adopter before design.** The measurement,
+  premise correction and resulting scope are recorded on `#236`; design started from
+  that record rather than the issue's original diagnosis.
+
+- **Step 5 now follows the adopter's manifest.** `scripts/run_installed_tests.py`
+  selects declared installed tests, applies engine remapping, refuses missing or unsafe
+  paths, propagates pytest's status, and makes an empty declaration an explicit skip.
+  The workflow no longer treats a directory-shaped pytest invocation as proof of what
+  upgrade delivered.
+
+- **The `#243` residue is runtime translation, not duplicated workflow doctrine.** The
+  generated comparison covers the shipped adapters. The issue comment names the
+  remaining native context, lane/delegation, compute/isolation, bootstrap and
+  instruction-layer carriers. This session followed `session-start` and `upgrade`
+  through their shared documents without a Codex workaround; upgrade's cloned-workflow
+  re-read remained load-bearing.
+
+- **The fallback panel changed the implementation at the boundaries it challenged.**
+  It found unsafe link shapes, a selector that was not actually manifest-owned,
+  historical fixtures coupled to current metadata, CLI branches whose exit semantics
+  were unpinned, doctor-first import ordering, mixed-mode fail-open behavior, and
+  preservation assertions that could not distinguish unchanged bytes from a replaced
+  path. The exact-head dispositions and independent mutation evidence are on PR `#635`;
+  the reusable lessons are in
+  [`review-process-learnings_2026-08-24.md`](../saved_plans/review-process-learnings_2026-08-24.md).
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `3032a2f47c2be34e49ea4148c0c5635ca99a83fd` on 2026-08-29 printed `2034 passed, 3
+  warnings in 352.43s`; the merged squash is `2f2561f`.
+
+▶ Next: take Phase 5's `#606` `.claude/settings.json` half: engine-path templating, the
+startup-only `SessionStart` matcher, and the missing `kit_doctor` check for the
+permissions block. Keep `#621`, `#631`, and `#633` open; use `#243` for the remaining
+runtime-specific workflow field exercises.
+
 ## Session — 2026-08-28 (Claude's shipped lane permissions as repository policy)
 
 **Theme —** PR `#632` (squash `e04e8ff`) took Phase 5's first slice: `#606`, decided as

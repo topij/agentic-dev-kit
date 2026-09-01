@@ -7,7 +7,7 @@ safety guarantees, review evidence, lane isolation, and upgrade behavior as Clau
 Code. Runtime-specific files may differ in shape; their observable contract should
 not.
 
-## Sprint status — reconciled 2026-08-30
+## Sprint status — reconciled 2026-09-01
 
 The machine-readable inventory and current capability judgments live in
 [`runtime-parity.md`](../docs/agentic-dev-kit/runtime-parity.md); this plan supplies
@@ -74,9 +74,9 @@ historical observation it was and is not silently refreshed.
      on the one it was true on. Design and record:
      [`capability-tier-calibration-design_2026-08-27.md`](capability-tier-calibration-design_2026-08-27.md),
      [`capability-tier-calibration-live-validation_2026-08-27.md`](capability-tier-calibration-live-validation_2026-08-27.md).
-     Not built: the adopter-side `kit_doctor` check for a stale lens definition
-     (`#255` carries the occurrence); the wrapper still carries no model or effort
-     control, and a Claude lane under the trust route runs the product default.
+     PR `#655` later delivered the adopter-side `kit_doctor` check for stale lens
+     definitions. The already-running doctor owns expected rendering while the
+     existing file report owns installed-engine drift.
   5. Done, as a fail-closed run: the first real headless task on the generalised
      launcher (no tracker item; `#602` was the task the lane performed, not the slice).
      The lane ran on this repository with the launcher and every shipped configuration
@@ -98,7 +98,7 @@ historical observation it was and is not silently refreshed.
      another tier.
      Adopt now, mechanise later: the final verification stamp is a PR comment at the
      merged head, and a panel that ran leaves a disposition comment (`#603`, `#604`).
-     Phase 5 owns `#606`, `#236`, and the `#243` narrowing (adapter generation); Phase 6
+     Phase 5 owns `#236`, the `#243` narrowing (adapter generation), and `#631`; Phase 6
      takes `#607` as the adopter pilot and `#608`.
   6. Carried by PR `#651`: the repository-owned redacted evidence contract, hostile
      missing/altered/wrong-revision/claim-relabel mutations, and tracked positive
@@ -129,14 +129,16 @@ historical observation it was and is not silently refreshed.
   tests; PR `#637` for the templated cockpit grant advisory, open-ended SessionStart,
   and informational permission inspection; PR `#639` for the allow-side whole-tool
   rule measurement; and PR `#649` for the safety-critical classification of the
-  configured lane profile. The exit is not yet established. `#236` retains the
-  engine/doctrine same-function-different-path survey, `#243` retains field exercises
-  for `adopt`, `parallel`, `triage-friction-log`, and `post-merge-systemize`, `#255`
-  retains adopter-side stale lens-definition inspection, and `#631` retains the lane
-  execution-boundary decision. `#606` remains open for deliberate tracker disposition
-  after its merged policy, cockpit, matcher, inspection, and allow-side slices.
+  configured lane profile; and PR `#655` for adopter-side stale lens-definition
+  inspection. The exit is not yet established. `#236` retains the engine/doctrine
+  same-function-different-path survey, `#243` retains field exercises for `adopt`,
+  `parallel`, `triage-friction-log`, and `post-merge-systemize`, and `#631` retains the
+  lane execution-boundary decision. The 2026-09-01 tracker reconciliation closed
+  `#606`; PR `#655` delivered `#255`'s implementation, leaving tracker disposition
+  rather than additional implementation.
 - [ ] **Phase 6 — Gate parity and roll it out.** Adoption fixtures, trusted smoke
-  coverage, historical-status cleanup, and the adopter pilot remain planned.
+  coverage, maintained parity reporting, the `#607` downstream adopter work, and the
+  `#608` interactive-TUI gap remain planned.
 
 This plan records the pre-implementation baseline. Its repository observations were
 collected with `rg --files`, targeted `rg`, and
@@ -423,14 +425,15 @@ above.
 - [x] Template the cockpit permission advisory on `paths.engines`, remove the narrow
   SessionStart matcher on both runtimes, inspect cockpit grant coverage without failing
   healthy adopters, and replace the unmeasured whole-tool rule with allow-side evidence
-  (PRs `#637` and `#639`). `#606` remains open for deliberate tracker disposition.
+  (PRs `#637` and `#639`). The 2026-09-01 tracker reconciliation closed `#606`.
 - [x] Treat the configured Claude lane profile as safety-critical adopter-owned policy
   through the Codex root binding and Claude path-scoped binding (PR `#649`). `#346` and
   `#434` remain separate workflow/test binding-coverage decisions.
 - [ ] Exercise the remaining runtime-specific adapter translations through `adopt`,
   `parallel`, `triage-friction-log`, and `post-merge-systemize` (`#243`).
-- [ ] Inspect adopter-side generated lens definitions against their configured
-  mechanical compute carrier (`#255`).
+- [x] Inspect adopter-side generated lens definitions against their configured
+  mechanical compute carrier without duplicating installed-engine drift (PR `#655`;
+  `#255` retains tracker disposition only).
 - [ ] Settle `#631` from executable positive and hostile-negative evidence without
   treating the Claude prefix list and Codex sandbox syntax as interchangeable.
 
