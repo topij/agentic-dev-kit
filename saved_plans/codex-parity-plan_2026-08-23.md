@@ -420,8 +420,11 @@ not establish that exit. It retains source revision
 `bdfd6ee702a630f0575f0c186f51b3bbbcd1810a`, reviewed synthetic head
 `5c4006d18e65e0443dc7b22f48c099ad07ce1da9`, descriptor state, exact-head review
 evidence, and operator merge class without merging, but contains no parallel-batch or
-inter-lane observation. The remaining exit is the retained parallel-batch run described
-above.
+inter-lane observation. PR `#659` establishes the exit through the
+[retained 2026-09-01 parallel-batch run](codex-parallel-batch-live-validation_2026-09-01.md):
+its independently recomputable promotion binds disjoint lane worktrees and state roots,
+scope-local exact-head reviews, operator-class merge refusal, reconciliation-held state,
+and final open/unmerged fixture pull requests.
 
 ### Phase 5 — Align permissions, installation, and upgrades
 
