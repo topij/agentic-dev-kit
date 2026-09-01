@@ -38,6 +38,7 @@ invalid bundle, promotion receipt, or invocation.
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import math
@@ -810,12 +811,113 @@ def _scan_json_content(value: Any, label: str, path: Path) -> None:
         _reject_credential_like_text(value, label, path)
 
 
-def _scan_artifact(path: Path, label: str, raw: bytes) -> int:
+def _credential_key_name(value: str) -> bool:
+    key_text = _collapse_credential_text(value)
+    key_text = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", key_text)
+    key_text = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", key_text)
+    normalized_key = re.sub(r"[^A-Za-z0-9]+", "_", key_text)
+    return _FORBIDDEN_JSON_KEY.search(normalized_key) is not None
+
+
+def _python_assignment_names(target: ast.expr) -> list[str]:
+    if isinstance(target, ast.Name):
+        return [target.id]
+    if isinstance(target, ast.Attribute):
+        return [target.attr]
+    if isinstance(target, (ast.List, ast.Tuple)):
+        return [
+            name
+            for child in target.elts
+            for name in _python_assignment_names(child)
+        ]
+    return []
+
+
+def _static_python_values(value: ast.expr) -> list[str]:
+    try:
+        resolved = ast.literal_eval(value)
+    except (ValueError, TypeError):
+        if isinstance(value, ast.JoinedStr) and all(
+            isinstance(part, ast.Constant) and isinstance(part.value, str)
+            for part in value.values
+        ):
+            return "".join(part.value for part in value.values)
+        return []
+
+    def scalars(item: Any) -> list[str]:
+        if isinstance(item, bytes):
+            return [item.decode("utf-8", errors="replace")]
+        if isinstance(item, str):
+            return [item]
+        if isinstance(item, dict):
+            return [
+                scalar
+                for key, child in item.items()
+                for scalar in (*scalars(key), *scalars(child))
+            ]
+        if isinstance(item, (list, tuple, set, frozenset)):
+            return [scalar for child in item for scalar in scalars(child)]
+        return []
+
+    return scalars(resolved)
+
+
+def _reject_credential_like_python_source(text: str, label: str, path: Path) -> None:
+    """Scan exact retained Python while permitting names that carry runtime values.
+
+    The generic text backstop deliberately rejects ``token = <six characters>``.
+    That is right for logs and configuration but treats ``token = helper()`` as if
+    the helper call were credential material. Source artifacts are still Git-object
+    bound and independently redaction-reviewed, so parse them and reject credential
+    targets only when Python can statically recover the assigned value. Known token
+    value shapes remain forbidden everywhere, including comments and docstrings.
+    """
+
+    if any(unicodedata.category(character) == "Cs" for character in text):
+        raise BundleError(f"{label} contains an invalid Unicode surrogate: {path}")
+    for candidate in (text, _collapse_credential_text(text)):
+        for pattern in _FORBIDDEN_VALUE_PATTERNS[:-2]:
+            if pattern.search(candidate):
+                raise BundleError(f"{label} contains credential-like content: {path}")
+    try:
+        tree = ast.parse(text, filename=str(path))
+    except SyntaxError as exc:
+        raise BundleError(f"{label} contains invalid Python source: {path}: {exc}") from exc
+
+    assignments: list[tuple[list[str], ast.expr]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            assignments.extend(
+                (_python_assignment_names(target), node.value) for target in node.targets
+            )
+        elif isinstance(node, ast.AnnAssign):
+            if node.value is not None:
+                assignments.append((_python_assignment_names(node.target), node.value))
+        elif isinstance(node, ast.NamedExpr):
+            assignments.append((_python_assignment_names(node.target), node.value))
+        elif isinstance(node, ast.keyword) and node.arg is not None:
+            assignments.append(([node.arg], node.value))
+        elif isinstance(node, ast.Dict):
+            for key, value in zip(node.keys, node.values, strict=True):
+                if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                    assignments.append(([key.value], value))
+
+    for names, value in assignments:
+        if not any(_credential_key_name(name) for name in names):
+            continue
+        static_values = _static_python_values(value)
+        if any(len(static_value.strip()) >= 6 for static_value in static_values):
+            raise BundleError(f"{label} contains credential-like content: {path}")
+
+
+def _scan_artifact(path: Path, label: str, raw: bytes, *, kind: str) -> int:
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise BundleError(f"{label} must be readable UTF-8 text: {path}: {exc}") from exc
-    if path.suffix == ".json":
+    if kind == "source-file" and path.suffix == ".py":
+        _reject_credential_like_python_source(text, label, path)
+    elif path.suffix == ".json":
         try:
             value = _parse_json(text, label, path, scan_content=False)
         except BundleError:
@@ -1406,7 +1508,7 @@ def _validate_bundle(
             raise BundleError("bundle envelope exceeds the bundle byte limit")
         if _sha256_bytes(artifact_bytes) != digest:
             raise BundleError(f"artifact digest mismatch: {rel}")
-        _scan_artifact(path, label, artifact_bytes)
+        _scan_artifact(path, label, artifact_bytes, kind=kind)
         artifact_by_path[rel] = record
         artifact_bytes_by_path[rel] = artifact_bytes
 

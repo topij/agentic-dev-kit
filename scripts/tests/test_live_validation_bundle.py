@@ -555,10 +555,31 @@ def _add_source_ledger(
     claim_source_file: bool,
     ledger_digest: str | None = None,
     ledger_git_blob: str | None = None,
+    source_bytes: bytes = TEST_SOURCE_BYTES,
 ) -> list[dict[str, object]]:
     artifacts = manifest.parent / "artifacts"
     source_file = artifacts / "source" / "scripts" / "example.py"
-    source_bytes = TEST_SOURCE_BYTES
+    source_blob = _git_oid("blob", source_bytes)
+    scripts_tree_entries = [
+        {"mode": "100644", "name": "example.py", "oid": source_blob},
+    ]
+    scripts_tree_bytes = b"100644 example.py\0" + bytes.fromhex(source_blob)
+    scripts_tree = _git_oid("tree", scripts_tree_bytes)
+    root_tree_entries = [
+        {"mode": "40000", "name": "scripts", "oid": scripts_tree},
+    ]
+    root_tree_bytes = b"40000 scripts\0" + bytes.fromhex(scripts_tree)
+    root_tree = _git_oid("tree", root_tree_bytes)
+    commit_lines = [
+        f"tree {root_tree}",
+        "author Evidence Fixture <evidence@example.invalid> 0 +0000",
+        "committer Evidence Fixture <evidence@example.invalid> 0 +0000",
+        "",
+        "retained source fixture",
+    ]
+    source_revision = _git_oid(
+        "commit", ("\n".join(commit_lines) + "\n").encode()
+    )
     source_digest = hashlib.sha256(source_bytes).hexdigest()
     source_proof = artifacts / "source-proof.json"
     _write_json(
@@ -566,27 +587,28 @@ def _add_source_ledger(
         {
             "schema_version": 1,
             "namespace": "source",
-            "revision": SOURCE,
-            "commit_lines": TEST_COMMIT_LINES,
+            "revision": source_revision,
+            "commit_lines": commit_lines,
             "trees": [
-                {"oid": TEST_ROOT_TREE, "entries": TEST_ROOT_TREE_ENTRIES},
-                {"oid": TEST_SCRIPTS_TREE, "entries": TEST_SCRIPTS_TREE_ENTRIES},
+                {"oid": root_tree, "entries": root_tree_entries},
+                {"oid": scripts_tree, "entries": scripts_tree_entries},
             ],
         },
     )
     ledger = artifacts / "source-digests.txt"
     ledger.write_text(
-        f"source revision: {SOURCE}\n"
+        f"source revision: {source_revision}\n"
         "source proof: artifacts/source-proof.json\n"
         f"{source_digest if ledger_digest is None else ledger_digest}  "
         "source/scripts/example.py  "
-        f"git-blob:{TEST_SOURCE_BLOB if ledger_git_blob is None else ledger_git_blob}\n",
+        f"git-blob:{source_blob if ledger_git_blob is None else ledger_git_blob}\n",
         encoding="utf-8",
     )
     if include_source_file:
         source_file.parent.mkdir(parents=True)
         source_file.write_bytes(source_bytes)
     value = json.loads(manifest.read_text(encoding="utf-8"))
+    value["source"]["revision"] = source_revision
     value["artifacts"].append(
         {
             "capture_request": "git object readback and SHA-256 ledger",
@@ -599,7 +621,7 @@ def _add_source_ledger(
     )
     value["artifacts"].append(
         {
-            "capture_request": f"git cat-file commit/tree proof for {SOURCE}",
+                "capture_request": f"git cat-file commit/tree proof for {source_revision}",
             "captured_on": "2026-08-30",
             "path": "artifacts/source-proof.json",
             "sha256": _sha(source_proof),
@@ -611,7 +633,7 @@ def _add_source_ledger(
     if include_source_file:
         value["artifacts"].append(
             {
-                "capture_request": f"git show {SOURCE}:scripts/example.py",
+                "capture_request": f"git show {source_revision}:scripts/example.py",
                 "captured_on": "2026-08-30",
                 "path": "artifacts/source/scripts/example.py",
                 "sha256": source_digest,
@@ -625,6 +647,9 @@ def _add_source_ledger(
             )
             value["claims"][0]["evidence"].append("artifacts/source-proof.json")
     _write_json(manifest, value)
+    promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
+    promotion_value["source_revision"] = source_revision
+    _write_json(promotion, promotion_value)
     _refresh_promotion_digest(manifest, promotion)
     return json.loads(json.dumps(value["claims"]))
 
@@ -654,6 +679,60 @@ def test_a_source_digest_and_its_named_source_file_can_promote(tmp_path: Path) -
     result = _run(manifest, promotion, expected_claims=expected_claims)
 
     assert result.returncode == 0, result.stderr
+
+
+def test_git_bound_python_source_may_carry_a_runtime_token_value(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    source_bytes = b"def _github_token():\n    return None\n\ntoken = _github_token()\n"
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+        source_bytes=source_bytes,
+    )
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = json.loads(
+        manifest.read_text(encoding="utf-8")
+    )["source"]["revision"]
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_git_bound_python_source_refuses_a_static_credential_assignment(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+        source_bytes=b'token = "hunter2-secret"\n',
+    )
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = json.loads(
+        manifest.read_text(encoding="utf-8")
+    )["source"]["revision"]
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 2
+    assert "credential-like content" in result.stderr
 
 
 def test_a_fixture_proof_must_bind_retained_execution_sources(tmp_path: Path) -> None:
@@ -1012,6 +1091,54 @@ def test_a_source_proof_preserves_a_commit_without_a_trailing_newline(
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def test_a_source_proof_rejects_a_non_boolean_commit_eof_field(
+    tmp_path: Path,
+) -> None:
+    manifest, promotion = _fixture(tmp_path)
+    expected_claims = _add_source_ledger(
+        manifest,
+        promotion,
+        include_source_file=True,
+        claim_source_file=True,
+    )
+    revision = _git_oid("commit", "\n".join(TEST_COMMIT_LINES).encode())
+    artifacts = manifest.parent / "artifacts"
+    proof = artifacts / "source-proof.json"
+    proof_value = json.loads(proof.read_text(encoding="utf-8"))
+    proof_value["revision"] = revision
+    proof_value["commit_trailing_newline"] = None
+    _write_json(proof, proof_value)
+    ledger = artifacts / "source-digests.txt"
+    ledger.write_text(
+        ledger.read_text(encoding="utf-8").replace(SOURCE, revision),
+        encoding="utf-8",
+    )
+    manifest_value = json.loads(manifest.read_text(encoding="utf-8"))
+    manifest_value["source"]["revision"] = revision
+    for artifact in manifest_value["artifacts"]:
+        if artifact["path"] == "artifacts/source-digests.txt":
+            artifact["sha256"] = _sha(ledger)
+        elif artifact["path"] == "artifacts/source-proof.json":
+            artifact["sha256"] = _sha(proof)
+    _write_json(manifest, manifest_value)
+    promotion_value = json.loads(promotion.read_text(encoding="utf-8"))
+    promotion_value["source_revision"] = revision
+    promotion_value["manifest_sha256"] = _sha(manifest)
+    _write_json(promotion, promotion_value)
+    expectations = dict(FIXTURE_EXPECTATIONS)
+    expectations["source_revision"] = revision
+
+    result = _run(
+        manifest,
+        promotion,
+        expectations=expectations,
+        expected_claims=expected_claims,
+    )
+
+    assert result.returncode == 2
+    assert "commit_trailing_newline must be a boolean" in result.stderr
 
 
 def test_retained_source_bytes_absent_from_the_revision_tree_are_refused(
@@ -3319,6 +3446,8 @@ def test_the_promoted_codex_parallel_batch_remains_independently_recomputable() 
     for lane in ("alpha", "beta"):
         lane_root = artifacts / "lanes" / lane
         descriptor = json.loads((lane_root / "descriptor.json").read_text())
+        authority = json.loads((lane_root / "launch-authority.json").read_text())
+        attempt = json.loads((lane_root / "launch-attempt.json").read_text())
         launcher = json.loads((lane_root / "launcher-receipt.json").read_text())
         review = json.loads((lane_root / "review-receipt.json").read_text())
         refusal = json.loads((lane_root / "merge-refusal.json").read_text())
@@ -3331,6 +3460,13 @@ def test_the_promoted_codex_parallel_batch_remains_independently_recomputable() 
         assert descriptor["base_oid"] == descriptor["lane_oid"] == (
             "f13b3e995558ee2f14b656bba2e1a0f74d2254c2"
         )
+        assert authority == {
+            "descriptor_id": descriptor["descriptor_id"],
+            "descriptor_sha256": _sha(lane_root / "descriptor.json"),
+            "schema_version": 1,
+        }
+        assert attempt["descriptor_id"] == descriptor["descriptor_id"]
+        assert attempt["request"]["descriptor_sha256"] == authority["descriptor_sha256"]
         assert launcher["descriptor_id"] == descriptor["descriptor_id"]
         assert launcher["status"] == "completed"
         assert launcher["terminal"]["returncode"] == 0
@@ -3403,6 +3539,11 @@ def test_the_promoted_codex_parallel_batch_remains_independently_recomputable() 
     source_proof = json.loads((artifacts / "source-proof.json").read_text())
     assert source_proof["revision"] == expected["source"]["revision"]
     assert source_proof["commit_trailing_newline"] is False
+    execution_source_digests = (
+        artifacts / "execution-source-digests.txt"
+    ).read_text(encoding="utf-8")
+    assert "source/scripts/pr_watch.py" in execution_source_digests
+    assert _sha(artifacts / "source/scripts/pr_watch.py") in execution_source_digests
 
 
 @pytest.mark.kit_repo_only(

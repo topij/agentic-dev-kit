@@ -14,7 +14,7 @@
       "kind": "source-digest",
       "observer": "synthetic-git-object-readback",
       "path": "artifacts/execution-source-digests.txt",
-      "sha256": "e958795a20946ddbe36cbcb85eb2329e2ac1a122b577b30373912daf9fd37dbf"
+      "sha256": "b90a9a859019f5c4a96303fe3b19018db3423eac172708ca4a1ccda90ab4f763"
     },
     {
       "capture_request": "cockpit readback of both descriptor-bound worktrees and state roots",
@@ -62,7 +62,7 @@
       "kind": "descriptor",
       "observer": "dev-session-durable-descriptor",
       "path": "artifacts/lanes/alpha/descriptor.json",
-      "sha256": "568e347869bb07a7d2919f7d1ff61f0ee4eccf9a062a4cc4328294dd2d042a05"
+      "sha256": "dc6d5c5fa06139c2d28c310b299af5b13fde9b4762a4ef02fafeca578c37a213"
     },
     {
       "capture_request": "scripts/launch_lane.py final-message readback for 71b0b7c6-53b3-468d-b009-61bf6ca99eb6",
@@ -150,7 +150,7 @@
       "kind": "descriptor",
       "observer": "dev-session-durable-descriptor",
       "path": "artifacts/lanes/beta/descriptor.json",
-      "sha256": "09a3f85508a2b6ae117a15ee6d2fd49d51232cb35a0893e174329ef81f3ab2cc"
+      "sha256": "60d9c11486418b0ec8015d2e28ad4b142eaf3d4eef363674ccaeabb216601371"
     },
     {
       "capture_request": "scripts/launch_lane.py final-message readback for f12df437-e875-41d1-9a5f-e2355b9d53e3",
@@ -342,7 +342,7 @@
       "kind": "source-digest",
       "observer": "git-object-source-readback",
       "path": "artifacts/source-digests.txt",
-      "sha256": "8a3b398765af128c2cea2519b5b7f5a145b02ee71c99e0db35e8adcdca9a5452"
+      "sha256": "895b6a1a4c49cfb82035983b31676f8f3c8320c0e7e0c70f91389bd472f3fad9"
     },
     {
       "capture_request": "git cat-file commit and tree-object readback for 6679856f7c9f14eac921f3b033c0077729bb17e1",
@@ -393,6 +393,14 @@
       "sha256": "980cbf5596cea67033a5dd02d53630f2a92c24afd693ba7727d5fc50303ff555"
     },
     {
+      "capture_request": "git show 6679856f7c9f14eac921f3b033c0077729bb17e1:scripts/pr_watch.py",
+      "captured_on": "2026-09-01",
+      "kind": "source-file",
+      "observer": "retained-git-object-bytes",
+      "path": "artifacts/source/scripts/pr_watch.py",
+      "sha256": "432fe654b1635a2b6ea45131e58c9d45d7c87d05dc52e721d6418193ba574b60"
+    },
+    {
       "capture_request": "git show 6679856f7c9f14eac921f3b033c0077729bb17e1:scripts/reconcile_sessions.sh",
       "captured_on": "2026-09-01",
       "kind": "source-file",
@@ -438,6 +446,7 @@
         "artifacts/source/config/dev-model.yaml",
         "artifacts/source/scripts/dev_session.sh",
         "artifacts/source/scripts/launch_lane.py",
+        "artifacts/source/scripts/pr_watch.py",
         "artifacts/source/scripts/reconcile_sessions.sh",
         "artifacts/source/scripts/lib/kitconfig.py",
         "artifacts/source/scripts/lib/repo_root.sh"
@@ -471,6 +480,7 @@
         "artifacts/source/config/dev-model.yaml",
         "artifacts/source/scripts/dev_session.sh",
         "artifacts/source/scripts/launch_lane.py",
+        "artifacts/source/scripts/pr_watch.py",
         "artifacts/source/scripts/reconcile_sessions.sh",
         "artifacts/source/scripts/lib/kitconfig.py",
         "artifacts/source/scripts/lib/repo_root.sh"
@@ -498,6 +508,7 @@
         "artifacts/source/config/dev-model.yaml",
         "artifacts/source/scripts/dev_session.sh",
         "artifacts/source/scripts/launch_lane.py",
+        "artifacts/source/scripts/pr_watch.py",
         "artifacts/source/scripts/reconcile_sessions.sh",
         "artifacts/source/scripts/lib/kitconfig.py",
         "artifacts/source/scripts/lib/repo_root.sh"
@@ -556,6 +567,7 @@
         "artifacts/source/scripts/launch_lane.py",
         "artifacts/source/scripts/lib/kitconfig.py",
         "artifacts/source/scripts/lib/repo_root.sh",
+        "artifacts/source/scripts/pr_watch.py",
         "artifacts/source/scripts/reconcile_sessions.sh"
       ],
       "id": "codex-parallel-batch-complete-claim-map",

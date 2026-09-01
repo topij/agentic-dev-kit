@@ -262,6 +262,11 @@ encodings in raw text and decoded JSON strings as a backstop. It rejects escaped
 Unicode surrogates, then repeats those scans after compatibility normalization and
 removing control, format, and combining-mark characters so an invisible separator
 cannot split a credential marker in either a value or a JSON key.
+Exact Python `source-file` artifacts are parsed before applying the generic assignment
+backstop. A credential-named target whose value is a runtime expression such as a
+helper call is source code, not retained credential material; a statically recoverable
+value assigned to that target remains forbidden. Known secret-value shapes are still
+scanned across the complete source text, including comments and docstrings.
 `redaction.reviewed: true` records the required semantic review; it is not a claim that
 the scanner can prove absence of every secret.
 

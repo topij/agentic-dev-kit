@@ -16,7 +16,7 @@ The promoted source revision is
 `f13b3e995558ee2f14b656bba2e1a0f74d2254c2` in the private repository
 `topij/adk-codex-parallel-evidence-20260901`. The fixture carries only its declared
 test configuration differences; the execution ledger byte-matches every retained
-lane, session, reconciliation, and verifier dependency to the promoted source.
+lane, session, review-decision, and reconciliation dependency to the promoted source.
 
 ## Retained observations
 
@@ -72,12 +72,12 @@ bundle and are not counted as lane observations. The first alpha adversarial len
 was interrupted when the operator closed the host; it produced no report and was
 rerun from a fresh context. Only the completed rerun is retained.
 
-The source closure deliberately excludes review-helper implementation bytes whose
-ordinary `token = …` local-variable text triggers the bundle's credential backstop.
-The exact rendered prompts, run records, reports, scope receipts, and review heads
-are retained. The source closure covers the behavior under validation:
-configuration, lane session and launcher engines, reconciliation, and state/config
-libraries. The repository-owned verifier that promotes the bundle is reviewed and
+The source closure retains the exact `pr_watch.py` bytes that decided the scope
+receipts and reconciliation's `held` outcome. Its Git proof and the fixture proof
+bind those bytes to the promoted source and the synthetic fixture base. The exact
+rendered prompts, run records, reports, scope receipts, and review heads are retained;
+the prompt renderer need not be replayed to recover the prompt bytes supplied to a
+lens. The repository-owned verifier that promotes the bundle is reviewed and
 versioned by this PR; it is not mislabeled as an execution dependency of the older
 source revision that the lane run exercised.
 
@@ -102,6 +102,18 @@ not accept the new EOF field. The finding was accepted: the corrected bundle rem
 that file from both source ledgers and the complete claim map, while the PR-versioned
 verifier remains the promotion mechanism rather than being mislabeled as lane-run
 source.
+
+A fresh adversarial lens at the corrected root-PR head found that the retained
+descriptors were reduced projections whose bytes did not match their durable launch
+authority digests, that the review-decision source closure omitted `pr_watch.py`, and
+that the new commit-EOF boolean guard lacked a malformed-value test. Each finding was
+accepted. The regenerated bundle retains each authentic descriptor byte-for-byte,
+retains and Git-proves the executed review engine, and the semantic control checks the
+descriptor-authority hashes directly. The verifier's Python-source redaction backstop
+parses assignments so a runtime value carried by a credential-named local variable is
+not mistaken for retained credential material; statically recoverable credential
+assignments and known secret shapes remain refused. The EOF regression now covers a
+falsey non-boolean value.
 
 `UV_CACHE_DIR=/private/tmp/adk-codex-parallel-20260901.xlAufG/full-test-cache uv
 run --with pytest --with pyyaml pytest scripts/tests/test_live_validation_bundle.py

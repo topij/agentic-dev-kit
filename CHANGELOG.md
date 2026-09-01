@@ -50,6 +50,11 @@ starts.
   `"commit_trailing_newline": false` beside `commit_lines` for that object; omit the
   field for the existing newline-terminated form. Existing schema-version `1` proofs
   remain valid unchanged.
+- **CHANGED (engine CLI surface):** Refresh the verifier before retaining exact Python
+  `source-file` bytes that use a credential-named local variable for a runtime helper
+  result. Those source expressions no longer trip the raw assignment backstop;
+  statically recoverable credential assignments and known secret shapes remain
+  refused.
 
 ## #655 — 2026-09-01
 
