@@ -5,6 +5,98 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-08-29 (safety-critical profile binding, in a Codex session)
+
+**Theme —** In a Codex session, PR `#649` (squash `1976923`) made the answer to `#633`
+explicit and checkable: changing the policy profile can change unattended authority while
+`launch_lane.py` remains byte-identical, so a behavioral profile change takes the shared
+safety-critical review and operator-merge route.
+
+- **Codex and Claude bind the same doctrine through runtime-native mechanisms.** The root
+  `AGENTS.md` names the profile resolved by `parallel.claude_settings_profile`; Claude's
+  path-scoped rule names the shipped path and tells adopters to move that entry when they
+  relocate the profile. The shared workflow carries the decision and its boundary rather
+  than either adapter restating the doctrine.
+
+- **The boundary is the dedicated policy file, not every configuration leaf.**
+  `config/dev-model.yaml` stays outside Claude's file-path trigger because that trigger
+  cannot select authority-bearing `parallel.*` keys without sweeping unrelated config.
+  `#346` still owns the workflow-document gap, `#434` still owns the test-side merge guard,
+  and `#621` and `#631` stay open. No lane grant from `#631` was built here.
+
+- **The CHANGELOG entry is intentional adopter guidance.** The change alters when the
+  operator-merge authorization gate applies, while `init.sh --no-clobber` preserves the
+  adopter-owned Codex and Claude bindings that need a manual update.
+
+- **Review turned the check from vocabulary matching into a semantic guard.** Negated
+  runtime instructions, inverted relocation remedies and a config-only profile move all
+  survived earlier substring checks. The merged test sentence-scopes the positive runtime,
+  workflow, Claude-comment and CHANGELOG obligations; a supported relocation updates the
+  config, Codex binding and Claude path while keeping shipped-default prose unchanged.
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `9926741668117bec53eb9e08534c0bcd83f5cbe3` on 2026-08-29 ended at `#393`'s known
+  `test_a_payload_too_deep_for_json_load_still_exits_zero` intermittent; that exact node
+  passed when `uv run --python 3.12 --with pytest --with pyyaml python -m pytest
+  scripts/tests/test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero
+  -q` ran in the same directory at the same revision and date. `gh pr checks 649`, run in
+  the same directory at that revision and date, reported the `toolkit` check successful.
+  `scripts/pr_watch.py 649 --json --no-persist`, run in the same directory at that revision
+  and date, reported it mergeable before the authorized squash merge.
+
+▶ Next: `session-start` — re-read `#621`, `#631`, `#346` and `#434` with live repository
+and tracker state before choosing the next slice.
+
+## Session — 2026-08-29 (friction-log triage, in a Claude Code session)
+
+**Theme —** In a Claude Code session, `triage-friction-log` ran end to end in LLM-only mode —
+both configured engines are absent, which is the state that selects that mode, so every result
+is `agent-executed` and `#6` still tracks vendoring them.
+
+- **Filed from the inbox:** `#641` (`launch_lane.py`'s `Bash(:*)` refusal — parked last
+  session, and filed here as its own issue rather than the `#631` comment that block offered,
+  on the operator's approval of the triage payload), `#642` (a lens asserting a base-currency relationship its own command did not
+  establish), `#643` (`panel_prompt.py` renders to a file while a Claude Code lens launch needs
+  inline text), `#644` (a second intermittent test, beside `#109`), `#645` (the scope of the
+  two-tree `cd` rule). The `#428`-guard entry was archived unfiled, because its own text records
+  that occurrence on `#467`.
+
+- **Three entries were kept active rather than swept, and the new marker says so in prose.**
+  Each parks itself for accumulation, and an archived entry reaches no later triage pass — the
+  distinction `#575` raises. Position alone cannot carry it, which is `#224`.
+
+- **The run ended `operator-held`, not complete, and that is this session's real finding.**
+  CodeRabbit reviewed `cf33e5e` cleanly, but its verdict arrived as an issue comment, so
+  `qualifying_bot_coverage` could not see it (`#44`) and `pr_watch` never bound a review
+  receipt. The operator merged on their own authority, which the workflow explicitly permits —
+  but completion requires the merged head to equal a retained `reviewed_head`, and no
+  completion route is reachable without one. The state was left valid, correct and
+  uncompletable, and a later resume would have hit the same wall. Filed as `#647`.
+
+- **No `--record-review` receipt was written, deliberately.** The receipt vocabulary names
+  fallback passes only and no fallback panel ran, so recording one would assert a review that
+  did not happen. `reviewed_head` was not inferred from the merged and reviewed heads being the
+  same commit; that inference is the thing the receipt exists to prevent.
+
+- **The uncompletable state was quarantined on the operator's go-ahead** to
+  `state/triage/quarantined-uncompletable_live_2026-08-29_281cfd4f574f3256_issue-647.json`,
+  preserved as `#647`'s evidence rather than deleted, so a later run starts a clean draft.
+
+- **Occurrence comments filed:** on `#491` (the poll prescribed the fallback panel for a bot
+  configured off rather than down — one `@coderabbitai review` got a real review of the merging
+  head) and on `#187`, closed 2026-08-09, whose mechanism recurred: the marker's first draft
+  left the inbox *longer* than before the sweep, and `triage-friction-log.md`'s finalize step
+  never mentions the budget.
+
+- **Verified:** the sweep was checked against the merged tree rather than the worktree that
+  wrote it — `git show ded3933:docs/kit-friction-log.md` and the archive, run in
+  `/Users/topi/Coding/agentic-dev-kit`, showed every swept block verbatim in the archive and
+  absent from the inbox, and every parked block still in the inbox and unarchived. `make test`
+  was not run: the change is two markdown documents, and `#646`'s `toolkit` check ran the suite.
+
+▶ Next: `session-start` — `#647` is new and unowned, `#606`, `#621`, `#631` and `#633` are
+untouched, and the parked inbox entries are waiting on recurrence rather than on a pass.
+
 ## Session — 2026-08-29 (whole-tool Bash allow grants, in a Claude Code session)
 
 **Theme —** In a Claude Code session, PR `#639` (squash `56c0eb3`) took `#606`'s
