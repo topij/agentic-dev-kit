@@ -14,10 +14,65 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-02 — PR `#659` (squash `4e63fd8`) retained the independently
-recomputable Codex parallel-batch evidence and completed the Phase 4 exit.
+Last updated: 2026-09-02 — the parity sprint was reviewed against the tree, the tracker
+and the cs-toolkit adopter, and Phases 5 and 6 were re-sequenced in the plan.
 
-## Latest session — 2026-09-02 (retained Codex parallel-batch evidence, in a Codex session)
+## Latest session — 2026-09-02 (parity sprint review, in a Claude Code session)
+
+**Theme —** A review-only session: the Codex parity sprint was read against the tree, the
+tracker, the merged pull requests and the cs-toolkit checkout, and the plan was
+re-sequenced so the adopter pilot is the next slice rather than the last.
+
+- **Runtime —** Claude Code, model `claude-fable-5-1` as the session's own system prompt
+  names it; effort not read.
+
+- **The review lives in the plan, not here.**
+  [`codex-parity-plan_2026-08-23.md`](../saved_plans/codex-parity-plan_2026-08-23.md)
+  gained a *Sprint review — 2026-09-02* section carrying the stamped readings, and its
+  *Sprint status*, Phase 5 and Phase 6 lists and next starter were rewritten from it.
+  No code changed; nothing was committed to `main`.
+
+- **What the review found, each with its command in the plan:** the live-validation
+  verifier and its test ship to adopters as manifest engine and test while nothing they
+  verify ships; cs-toolkit is pinned at the 2026-08-22 kit and `kit_doctor` misreports it
+  as broken because `required_by` is filtered on the dependent's presence rather than
+  its installed version; review evidence for PR `#659` is recoverable only from
+  gitignored state, the `#603` / `#604` shape recurring on the sprint's own exit
+  evidence; pull-request data is fetched by hand in `session-start.md` and by engine in
+  `pr_watch.py`; the same status facts are restated across the plan, the handoff and
+  the parity matrix, with the matrix's headless-lane row a single table cell.
+
+- **Re-sequencing decided in the plan:** the cs-toolkit adopter pilot moves from the end
+  of Phase 6 to Phase 5's exit test, read-only pass first; withdrawing the verifier from
+  the shipped manifest and putting review evidence on the pull request join Phase 5;
+  `#631`, `#608` and `#255` are taken as declarations rather than mechanisms; the
+  proportional opening pass (`#585`), suite marking and the learnings-memo distillation
+  lead Phase 6.
+
+- **Filed on the operator's approval of each exact payload, in this session:** `#661`
+  (`kit_doctor`'s false "broken, not sized down" verdict), `#662` (the verifier ships
+  with nothing to verify), `#663` (pull-request data fetched by hand and by engine), and
+  occurrence comments on `#603`, `#604`, `#585` and `#243`. Each create and comment was
+  read back from the tracker after landing — state, title, labels and body — against
+  its approved payload. Nothing was parked; the friction inbox is unchanged and its
+  graduation is still `triage-friction-log`'s sweep.
+
+- **Verified:** `make test` was not run; the change is one `saved_plans/` document and
+  this handoff. The plan's tables were checked for cell count and escaped pipes and the
+  whole file for a closing keyword beside an issue number, by a script in the session
+  scratchpad, in `/Users/topi/Coding/agentic-dev-kit` at
+  `89dbb3e67497586254e913dc3f5fdf7f648746bd` on 2026-09-02.
+  `uv run scripts/archive_plan_sessions.py --target-lines 400`, run in the same
+  directory on the same date over that revision plus this session's uncommitted edits,
+  moved the 2026-08-29 whole-tool Bash allow grants block into
+  `kit-handoff-history.md`; `check_doc_budget.py` prints the live figures.
+
+▶ Next: `session-start` — then the plan's next starter: the cs-toolkit adopter pilot,
+read-only pass first, with `$REPO` and `$KIT` bound before anything else.
+
+______________________________________________________________________
+
+## Session — 2026-09-02 (retained Codex parallel-batch evidence, in a Codex session)
 
 **Theme —** The Codex-only Phase 4 exit shipped as retained evidence: disjoint lanes,
 exact-head reviews and operator-held merge authority can be recomputed from promoted bytes.
@@ -333,63 +388,6 @@ is `agent-executed` and `#6` still tracks vendoring them.
 
 ▶ Next: `session-start` — `#647` is new and unowned, `#606`, `#621`, `#631` and `#633` are
 untouched, and the parked inbox entries are waiting on recurrence rather than on a pass.
-
-______________________________________________________________________
-
-## Session — 2026-08-29 (whole-tool Bash allow grants, in a Claude Code session)
-
-**Theme —** In a Claude Code session, PR `#639` (squash `56c0eb3`) took `#606`'s
-residual: `_bash_allow_prefixes` asserted that `Bash`, `Bash(*)` and `Bash(:*)` each
-grant every command, the one behavioural claim in `#637` that shipped without a stamp.
-
-- **The hard part was the configuration, not the spellings.** Headless `-p` does not
-  gate on the absence of an `allow` rule, so the earlier cockpit probe could only ever
-  reach the deny matcher. `--restricted` ignores the user, project and local settings
-  files, which makes the rule under test the only rule in play; `--tools Bash` leaves
-  the model no non-Bash route to the observable.
-
-- **The control is what makes the readings mean anything.** An empty allow list refused
-  the probe command and the client recorded a `permission_denials` entry for it, so the
-  configuration is *shown* to gate on `allow` rather than assumed to. Two dead ends are
-  worth knowing: redirecting `CLAUDE_CONFIG_DIR` for isolation removes the credentials
-  with the settings, and `Not logged in` scored as a refusal until the harness learned
-  to report it separately.
-
-- **`Bash(:*)` grants nothing, and needed no compensating branch.** It still matches the
-  rule regex, contributes the empty prefix, lexes to no words, and `_grants_invocation`
-  rejects an empty word list. The exact-vs-prefix pair was re-measured on the allow side
-  at the same time, so that claim no longer rests on `allow` and `deny` sharing a
-  grammar. Runs, harness and its hash are in
-  [`claude-bash-allow-grants-live-validation_2026-08-29.md`](../saved_plans/claude-bash-allow-grants-live-validation_2026-08-29.md).
-
-- **The panel found the defect in the fix, not in the change.** CodeRabbit skipped, so
-  the fallback panel carried the review across three rounds. Round 1's adversarial lens
-  re-ran the committed harness against the live client and matched every documented row.
-  Round 2 found that the test *added in round 1* had a docstring naming the wrong
-  mutation — it claimed to pin the match-anything repair, which a sibling test catches,
-  when what it pins is short-circuit resistance. Prose beside a passing test is the
-  shape this repo's own rules are about, and it survived a round.
-
-- **Nothing was filed to the tracker this session.** Both lenses independently reached
-  `scripts/launch_lane.py`'s own `Bash(:*)` classifier, which refuses the rule from a
-  lane profile on its *shape*; this measurement says the client grants nothing under it,
-  so the refusal is more conservative than it needs to be. Neither lens proposed a fix
-  and both called it out of scope, so it is parked in the friction log rather than
-  filed — an occurrence comment on `#631` is available on the operator's go-ahead.
-
-- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
-  `061a85c89ae3e97b8b7a3fea033c6794dcc74144` on 2026-08-29 reported one failure,
-  `test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero` —
-  `#393`'s intermittent, in a file this change does not touch — which passed on an
-  isolated re-run at that revision. `uv run --python 3.12 … pytest` at the same revision
-  printed `2091 passed`. Both round-1 lenses independently ran the full suite in their
-  own clones at `d272a5a` and each reported `1 failed, 2089 passed, 1 skipped` with the
-  same test failing — unlike `#637`, where the cockpit and the lenses hit *different*
-  intermittents at the same revision.
-
-▶ Next: `session-start` — `#606` remains open on its own scope, `#621`, `#631` and
-`#633` are untouched, and the friction-log inbox is over its budget with entries from
-today, so the next session has several threads rather than one.
 
 ______________________________________________________________________
 
