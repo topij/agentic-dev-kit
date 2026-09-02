@@ -277,8 +277,9 @@ Repeat until the report says **converged**:
    review evidence does not survive the merge (`#604`). The flag takes the text,
    or `-` to read it from stdin, and posts it as one comment bound to the
    recorded head, under a heading the engine fixes so the next poll can find it
-   again. One comment per round is enough. A failed post refuses the whole
-   command and records no receipt: re-run it.
+   again, and acknowledges that comment in the same write so it does not come
+   back as a finding to address. One comment per round is enough. A failed post
+   refuses the whole command and records no receipt: re-run it.
 
 1. **Pace the next poll** (see below), then go to step 1.
 

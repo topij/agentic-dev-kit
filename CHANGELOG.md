@@ -58,11 +58,13 @@ starts.
   A consumer asserting the exact top-level key set of a `--json` poll must add it.
   **Neither entry gates**: `converged`, `mergeable`, `done` and `merge_blockers[]`
   are unchanged by both, so a repo reading only those needs no edit.
-- **CHANGED (engine behaviour, `#604`):** A comment carrying the engine's
-  disposition marker no longer appears in `new_comments[]` and no longer holds
-  `converged` false. If your tooling expects to acknowledge that comment through
-  `--mark-seen`, it no longer needs to; the comment still appears in
-  `all_comment_keys[]` and `all_seen_keys[]`.
+- **CHANGED (per-PR state, `#604`):** `--record-review --disposition` adds the
+  posted comment's content key to `state["seen"]` in the same write as the
+  receipt, so the comment it just posted is already acknowledged and does not
+  hold `converged` false on the next poll. A consumer that treats `seen` as
+  written only by `--mark-seen` must accept this second writer. Nothing is
+  filtered by comment text: a comment carrying the disposition marker but posted
+  by anyone else is actionable exactly as before.
 - **CHANGED (engine behaviour, `#603`):** Both transports now fetch the pull
   request `body` (`gh pr view --json …,body`; `body` in the REST view). A test
   double that pins the exact `--json` field list, or a fake REST payload asserted

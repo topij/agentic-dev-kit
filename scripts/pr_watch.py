@@ -2310,15 +2310,26 @@ def new_actionable(comments: list[dict], seen: set[str]) -> list[dict]:
     finding under a fresh id (or an edit that bumps ``updated_at`` / re-homes
     the line) is recognized as already handled instead of read twice.
 
-    **This engine's own disposition comment is excluded**, and that is not a
-    convenience. ``--record-review --disposition`` posts it at the moment the
-    loop is finishing, so the very next poll — including the ``--no-persist``
-    act-time authorization poll — would read the engine's own record as a fresh
-    finding, drop ``converged`` back to false and take ``mergeable`` with it.
-    The loop would then need another acknowledge round to get back to where it
-    already was. Keyed on the machine marker :func:`is_own_disposition` reads,
-    not on ``is_noise`` — the noise markers are adopter-configured and must not
-    have to know about an engine artifact.
+    **The engine's own disposition comment is handled through ``seen``, not
+    here**, and the difference is a merge-gate property rather than style. That
+    comment has to stay out of ``fresh``: ``--record-review --disposition``
+    posts it as the loop is finishing, so the next poll — the ``--no-persist``
+    act-time authorization poll included — would read the engine's own record as
+    a fresh finding, drop ``converged`` and take ``mergeable`` with it. The first
+    version of this excluded any body carrying the engine's disposition MARKER,
+    and the panel's adversarial lens showed what that costs: the marker is
+    public, unauthenticated and zero-configuration, so any commenter could put it
+    in front of a real finding and make that finding invisible to a predicate
+    ``dev_session.sh merge`` reads. GitHub's own "quote reply" reaches the same
+    end by accident, since it copies the quoted body's HTML comments verbatim.
+
+    So :func:`record_review` writes the posted comment's content key into
+    ``seen`` at post time instead — the deterministic artifact
+    `safety-critical-changes.md` rule 1 asks for, written at decision time by
+    the party that made the decision. A forger cannot pre-seed that set, and if
+    the key ever fails to match (a forge that spells the poster's login
+    differently on the two surfaces), the comment surfaces once and is acked
+    like any other. Noisy, never silencing — the safe direction.
     """
     return [
         c
@@ -2326,7 +2337,6 @@ def new_actionable(comments: list[dict], seen: set[str]) -> list[dict]:
         if c["key"] not in seen
         and c["content_key"] not in seen
         and not is_noise(c["body"], author=c["author"])
-        and not is_own_disposition(c["body"])
     ]
 
 
@@ -3629,11 +3639,22 @@ def mark_seen(pr: int) -> dict:
 # The heading is for the human reading the pull request, the marker for the
 # engine reading it back.
 #
-# **The marker is not an authenticity claim.** Anyone who can comment on the
-# pull request can write one, exactly as anyone who can run this engine can
-# write a receipt. It answers "is the review evidence ON the pull request",
-# never "is that evidence honest" — the second question is `#32`'s, and needs
-# each lens to record from its own context.
+# **The marker is not an authenticity claim, and NOTHING GATES ON IT.** Anyone
+# who can comment on the pull request can write one, exactly as anyone who can
+# run this engine can write a receipt. Nor is the body the engine posts scrubbed
+# of markers: the caller's disposition prose goes out verbatim because it is the
+# evidence, and a marker quoted inside it — a previous round's disposition pasted
+# into a new one, say — is indistinguishable from this engine's. So the marker
+# answers "is the review evidence ON the pull request", never "is that evidence
+# honest"; the second question is `#32`'s, and needs each lens to record from its
+# own context.
+#
+# That is exactly why the only consumer is a REPORT. An earlier version of this
+# change also used the marker to keep the engine's own comment out of
+# `new_actionable`, which put an unauthenticated public string in front of a
+# predicate the merge gate reads; the panel's adversarial lens named it, and
+# `record_review` now writes a `seen` key instead. Do not add a second consumer
+# that decides anything.
 _DISPOSITION_HEADING = "## Review disposition"
 _DISPOSITION_MARKER_RE = re.compile(
     r"<!--\s*pr-watch:disposition\s+head=([0-9a-f]{7,40})\s*-->", re.IGNORECASE
@@ -3642,11 +3663,6 @@ _DISPOSITION_MARKER_RE = re.compile(
 
 def _disposition_marker(head: str) -> str:
     return f"<!-- pr-watch:disposition head={head} -->"
-
-
-def is_own_disposition(body: str) -> bool:
-    """True for a disposition comment written under this engine's marker."""
-    return _DISPOSITION_MARKER_RE.search(body or "") is not None
 
 
 def disposition_heads(comments: list[dict]) -> set[str]:
@@ -3686,13 +3702,43 @@ def disposition_body(receipt: dict, disposition: str) -> str:
     )
 
 
-def _post_disposition_comment(pr: int, body: str) -> str:
-    """Post one disposition comment on ``pr``; return the URL `gh` prints.
+def _post_disposition_comment(pr: int, body: str) -> tuple[str, str | None]:
+    """Post one disposition comment on ``pr``; return ``(url, content_key)``.
 
-    ``--body-file -`` rather than ``--body``: the body is multi-line Markdown of
-    unbounded length, which is what stdin is for.
+    The REST create endpoint rather than ``gh pr comment``, which prints a URL
+    and nothing else. What the caller needs back is the identity the *poll* will
+    read for this comment, so that :func:`record_review` can acknowledge the
+    engine's own record deterministically instead of matching its text later —
+    and only the created object carries the login the forge attributed it to.
+
+    The body travels on stdin as JSON: it is multi-line Markdown of unbounded
+    length chosen by the caller, and :mod:`json` is the encoder that cannot be
+    confused by whatever is in it.
+
+    ``content_key`` is ``None`` when the response carries no usable login. That
+    is the benign direction — the comment surfaces on the next poll and is acked
+    like any other, rather than being silently suppressed.
     """
-    return _gh(["pr", "comment", str(pr), "--body-file", "-"], stdin_text=body).strip()
+    created = json.loads(
+        _gh(
+            [
+                "api",
+                "--method",
+                "POST",
+                f"repos/{{owner}}/{{repo}}/issues/{pr}/comments",
+                "--input",
+                "-",
+            ],
+            stdin_text=json.dumps({"body": body}),
+        )
+    )
+    url = str(created.get("html_url") or "")
+    login = _author(created)
+    # `_author` returns "?" for a payload with no usable author, which is not a
+    # login and must not be keyed on: it would match any other authorless
+    # comment with the same text.
+    content_key = _content_key("issue", login, body) if login != "?" else None
+    return url, content_key
 
 
 # The stamp `AGENTS.md` prescribes for a measured claim: a command, `at <sha>`,
@@ -3853,7 +3899,11 @@ def record_review(
     posted as a comment on the pull request under this engine's fixed heading
     and bound to the recorded head (`#604`). The state file it would otherwise
     live beside is gitignored, so without this the reviewed revision and the
-    lens names survive and the review itself does not.
+    lens names survive and the review itself does not. The posted comment's own
+    ``seen`` key is written here, in the same save, so the next poll does not
+    read this engine's record as a finding to address — see
+    :func:`new_actionable` for why that acknowledgement is written at post time
+    rather than matched back out of the comment's text.
 
     **A failed post refuses the whole call, and no receipt is written.** The
     sequence is: every refusal above, then the receipt dict, then the comment,
@@ -3976,9 +4026,23 @@ def record_review(
         # for a review the gate does not have.
         if not disposition.strip():
             raise ValueError("--disposition must not be empty")
-        receipt["disposition_comment"] = _post_disposition_comment(
+        url, content_key = _post_disposition_comment(
             pr, disposition_body(receipt, disposition)
         )
+        receipt["disposition_comment"] = url
+        if content_key:
+            # Acknowledge the engine's own record, here, where the exact posted
+            # body is known. Without this the next poll reads it as a fresh
+            # finding and `converged` — and with it `mergeable` — drops for a
+            # comment this engine just wrote. Matching it back by its text on
+            # every later poll was the alternative, and it hands any commenter a
+            # public string that suppresses a finding from the merge gate; see
+            # :func:`new_actionable`.
+            previous_seen = state.get("seen")
+            state["seen"] = sorted(
+                set(previous_seen if isinstance(previous_seen, list) else [])
+                | {content_key}
+            )
     state["review_receipt"] = receipt
     save_state(pr, state)
     return {"pr": pr, "recorded_review": True, "review_receipt": receipt}

@@ -5640,6 +5640,7 @@ def _record_composed(
     paths: list[str] | None = None,
     lenses: str = "correctness",
     allow_pending_bot: bool = False,
+    disposition: str | None = None,
 ) -> tuple[dict, dict]:
     monkeypatch.setattr(pr_watch, "require_gh_backend", lambda operation: None)
     monkeypatch.setattr(
@@ -5665,6 +5666,7 @@ def _record_composed(
         allow_pending_bot=allow_pending_bot,
         lenses=lenses,
         compose_parent=parent,
+        disposition=disposition,
         now=NOW,
     )
     return recorded[0]["review_receipt"], report
@@ -9492,30 +9494,112 @@ def test_bot_coverage_evidence_is_not_asked_for_a_disposition() -> None:
     assert _finding(report, "review_disposition_missing") is None
 
 
-def test_the_engines_own_disposition_comment_is_not_a_new_finding() -> None:
-    """`--record-review --disposition` posts as the loop is finishing, so the very
-    next poll — including the `--no-persist` act-time authorization poll — would
-    read the engine's own record as a fresh finding, drop `converged` and take
-    `mergeable` with it. That is a regression on the merge path, not cosmetics."""
+def test_a_marker_in_someone_elses_comment_does_not_silence_it() -> None:
+    """The panel's adversarial finding, as a regression test.
+
+    The first version of this change kept the engine's own comment out of
+    `new_actionable` by matching its marker in any body. The marker is public,
+    unauthenticated and documented in this repo — so any commenter could put it
+    in front of a real finding and make that finding invisible to `converged`,
+    which is what `dev_session.sh merge` gates on. GitHub's "quote reply" does it
+    by accident: it copies the quoted body's HTML comments verbatim.
+    """
     pr_watch = _load_pr_watch()
 
     view = _reviewed_view(
         pr_watch,
         comments=[
             _issue_comment(
-                f"<!-- pr-watch:disposition head={HEAD_SHA} -->\n"
-                "## Review disposition\n\nadversarial: one MED, fixed in the push above."
+                f"> <!-- pr-watch:disposition head={HEAD_SHA} -->\n"
+                "> ## Review disposition\n\n"
+                "This still crashes on an empty body — please fix before merging.",
+                author="a-human-reviewer",
             )
         ],
     )
     report = _reviewed_report(pr_watch, view)
 
+    assert [c["author"] for c in report["new_comments"]] == ["a-human-reviewer"]
+    assert report["converged"] is False
+    assert report["mergeable"] is False
+
+
+def test_the_engines_own_disposition_is_acked_where_it_is_posted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The whole loop, because the halves are worthless apart.
+
+    `--record-review --disposition` posts as the loop is finishing, so without an
+    acknowledgement the next poll — the `--no-persist` act-time authorization
+    poll included — reads the engine's own record as a fresh finding, drops
+    `converged` and takes `mergeable` with it. The acknowledgement is written at
+    post time, from the body the engine actually sent, which is why nothing has
+    to recognise that comment by its text afterwards.
+    """
+    pr_watch = _load_pr_watch()
+    posts: list[tuple[list[str], str | None]] = []
+    _stub_gh_for_record(pr_watch, monkeypatch, tmp_path, posts=posts)
+
+    pr_watch.record_review(
+        9, "fallback:panel", HEAD_SHA, disposition="both lenses converged."
+    )
+    posted_body = json.loads(posts[0][1])["body"]
+    seen = set(pr_watch.load_state(9)["seen"])
+
+    view = _reviewed_view(
+        pr_watch, comments=[_issue_comment(posted_body, author="the-recorder")]
+    )
+    report = pr_watch.build_report(
+        view,
+        [],
+        seen,
+        review_receipt={"head": HEAD_SHA, "source": "fallback:panel"},
+        **_settled(view),
+    )
+
+    assert seen  # the ack exists at all
     assert report["new_comments"] == []
     assert report["converged"] is True
     assert report["mergeable"] is True
-    # Still counted for acknowledgement bookkeeping — excluded from `actionable`,
-    # not from the comment set.
+    # Acknowledged, not hidden: it is still in the comment set the next
+    # `--mark-seen` would carry.
     assert report["all_comment_keys"] != []
+
+
+def test_a_created_comment_with_no_usable_author_still_records_the_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No login on the create response means no ack key, and that must degrade
+    toward noise rather than toward silence: the receipt is written, the comment
+    surfaces on the next poll, and it is acked like any other. Keying on
+    `_author`'s `"?"` placeholder instead would match every other authorless
+    comment carrying the same text."""
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path)
+    monkeypatch.setattr(
+        pr_watch,
+        "_gh_json",
+        lambda _args: {"number": 9, "headRefOid": HEAD_SHA, "reviews": []},
+    )
+    monkeypatch.setattr(
+        pr_watch,
+        "fetch_check_details",
+        lambda pr, **kw: pr_watch.CheckDetails([], "skipped"),
+    )
+    monkeypatch.setattr(
+        pr_watch,
+        "_gh",
+        lambda args, *, timeout=60, stdin_text=None: json.dumps(
+            {"html_url": "https://example.test/c/1", "id": 1}
+        ),
+    )
+
+    report = pr_watch.record_review(
+        9, "fallback:panel", HEAD_SHA, disposition="findings"
+    )
+
+    assert report["review_receipt"]["disposition_comment"] == "https://example.test/c/1"
+    assert pr_watch.load_state(9).get("seen", []) == []
 
 
 def _stub_gh_for_record(
@@ -9541,8 +9625,17 @@ def _stub_gh_for_record(
     def fake_gh(args, *, timeout=60, stdin_text=None):
         posts.append((args, stdin_text))
         if fail:
-            raise RuntimeError("gh pr comment failed (exit 1): could not post")
-        return "https://example.test/pr/9#issuecomment-1\n"
+            raise RuntimeError("gh api issues/9/comments failed (exit 1): could not post")
+        # The shape the create endpoint actually returns, because the engine
+        # reads the author back out of it to acknowledge its own comment.
+        return json.dumps(
+            {
+                "html_url": "https://example.test/pr/9#issuecomment-1",
+                "id": 1,
+                "user": {"login": "the-recorder"},
+                "body": json.loads(stdin_text)["body"],
+            }
+        )
 
     monkeypatch.setattr(pr_watch, "_gh", fake_gh)
 
@@ -9566,9 +9659,10 @@ def test_record_review_posts_the_disposition_under_the_fixed_heading(
         disposition="adversarial: one HIGH on the gate, fixed. correctness: clean.",
     )
 
-    (args, body) = posts[0]
-    assert args[:2] == ["pr", "comment"]
-    assert "--body-file" in args and "-" in args
+    (args, payload) = posts[0]
+    assert args[0] == "api" and args[1:3] == ["--method", "POST"]
+    assert args[3].endswith("/issues/9/comments")
+    body = json.loads(payload)["body"]
     assert f"<!-- pr-watch:disposition head={HEAD_SHA} -->" in body
     assert "## Review disposition" in body
     assert "fallback:panel" in body
@@ -9598,13 +9692,17 @@ def test_the_comment_the_engine_writes_is_the_one_it_reads_back(
         lenses="adversarial,correctness",
         disposition="both lenses converged; nothing outstanding.",
     )
-    posted_body = posts[0][1]
+    posted_body = json.loads(posts[0][1])["body"]
 
-    view = _reviewed_view(pr_watch, comments=[_issue_comment(posted_body)])
+    view = _reviewed_view(
+        pr_watch, comments=[_issue_comment(posted_body, author="the-recorder")]
+    )
     report = _reviewed_report(pr_watch, view)
 
     assert _finding(report, "review_disposition_missing") is None
-    assert report["new_comments"] == []
+    # Only the marker round trip is this test's subject. Keeping the engine's own
+    # comment out of `new_comments` is the `seen` ack's job and has its own test —
+    # this report deliberately polls with an empty seen-set.
 
 
 def test_a_failed_disposition_post_records_no_receipt(
@@ -9623,6 +9721,7 @@ def test_a_failed_disposition_post_records_no_receipt(
         )
 
     assert "review_receipt" not in pr_watch.load_state(9)
+    assert pr_watch.load_state(9).get("seen", []) == []
 
 
 def test_an_empty_disposition_is_refused_before_anything_is_posted(
@@ -9847,3 +9946,34 @@ def test_both_transports_fetch_the_body_the_stamp_check_reads(
     monkeypatch.setattr(pr_watch, "_rest_repo_slug", lambda: ("o", "r"))
     rest_view, _ = pr_watch.rest_pr_view(9, token="t")
     assert pr_watch.stamped_shas(rest_view["body"]) == ["deadbeef1234567"]
+
+
+def test_a_composed_delta_receipt_stays_valid_with_a_disposition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`disposition_comment` is a receipt key, and a composed receipt is
+    revalidated against its own caveats on every poll. If it were ever counted as
+    a caveat, the top-level receipt and its final delta would stop matching and
+    every composed receipt carrying a disposition would read as invalid merge
+    evidence — a wedge, arriving from a key that describes a URL."""
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(
+        pr_watch,
+        "_gh",
+        lambda args, *, timeout=60, stdin_text=None: json.dumps(
+            {"html_url": "https://example.test/c/2", "user": {"login": "the-recorder"}}
+        ),
+    )
+    previous = {
+        "head": "parent-head",
+        "source": "fallback:panel",
+        "lenses": ["adversarial", "correctness"],
+    }
+
+    receipt, _report = _record_composed(
+        monkeypatch, pr_watch, previous, disposition="the delta lens found nothing."
+    )
+
+    assert receipt["disposition_comment"] == "https://example.test/c/2"
+    valid, error = pr_watch._validate_composed_coverage(receipt, "final-head")
+    assert (valid, error) == (True, None)
