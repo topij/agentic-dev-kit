@@ -139,7 +139,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "47b0ca1e83984dc3ed0d0d9f547907077cc631b1b69049adb5916977b94e75b5"
+      "sha256": "77c3e37c76616cc863b5e07c2213a7de0c242e3fc27cbee22f60a10024055a81"
     },
     "scripts/launch_lane.py": {
       "role": "engine",

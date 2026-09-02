@@ -2686,6 +2686,19 @@ def inspect(
         to the manifest, which the same run reports as `differs` / `stale` /
         `locally-edited` / `unknown-version` — all of them exit 1. The report
         stops naming a remedy it cannot justify; it does not go green.
+
+        THE LIMIT, stated rather than engineered around: a dependent installed
+        at the kit's version and then hand-EDITED fails the byte check like any
+        other, so a library it still imports loses its `missing-required` line
+        and reads as `declined` or `new-upstream`. The baseline could sharpen
+        that — a recorded install sha equal to the manifest's would say the
+        adopter did take the version carrying the import — and it is
+        deliberately not consulted. The case needs an adopter who edited a
+        kit-owned engine AND lacks a library that engine imports; the same run
+        already reports that engine `locally-edited` and exits 1, telling them
+        to move the edit into config and take the kit's copy, after which the
+        next run names the requirement. Machinery for a LOW with no reachable
+        consequence is the trade this file declines elsewhere too.
         """
         if dep not in _edge_holds:
             recorded = manifest_files.get(dep)
