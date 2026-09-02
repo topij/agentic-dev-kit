@@ -104,9 +104,17 @@ repo-owned forks living **outside** `paths.engines`:
 | `scripts/dev_session.sh` | 1019 lines | `scripts/dev_session.sh`, 1073 lines |
 | `scripts/reconcile_sessions.sh` | 472 lines | `scripts/reconcile_sessions.sh`, 823 lines |
 
-`wc -l` on each path supplies those. The adopter's `kit-manifest.json` holds 21 file
-entries and mentions neither path, and `paths.engines` is `scripts/devkit`, so
-`kit_doctor` never inspects either file and `/upgrade` never offers them. `#598` is
+`wc -l` on each path supplies those. What the manifest does with them is worse than
+absence. `paths.engines` is `scripts/devkit`, and `_remap`
+(`scripts/kit_doctor.py:2101`) rewrites a kit-layout `scripts/<x>` onto it, so the
+doctor looks for kit `scripts/dev_session.sh` at `scripts/devkit/dev_session.sh` —
+which `ls` reports absent. The adopter's `kit-manifest.json` then records the
+**un-remapped** path in its `not_installed` array: `git show <pin>:kit-manifest.json
+| grep -n` returns `scripts/dev_session.sh` and `scripts/reconcile_sessions.sh` at
+lines 108 and 109. So the manifest names those two paths as not installed while
+`ls -l` shows a live executable fork at each one. The lookup and the record disagree
+about what the path means, the fork is inspected by neither, and `/upgrade` never
+offers them. `#598` is
 **BREAKING** for exactly this pair — the exit `64` unknown-forge hard stop — and
 `grep -n 'exit 64'` returns one site in the adopter's `reconcile_sessions.sh` against
 two in the kit's. The drift is real, it is in a gate contract, and every instrument
