@@ -68,13 +68,17 @@ contradict its parked hypothesis.
 - **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
   `679b197efc24e31a66e94f6d52b6b3e5f2a47855` on 2026-09-02 printed
   `1 failed, 2403 passed, 1 skipped, 3 warnings in 458.08s (0:07:38)` with `make`
-  exiting `2`. **That stamp names the parent commit, not this PR's head** — the
-  commits after it are this handoff block and the friction entry, and `make test`
-  carries no gate over either file's content, so the run's scope is stated rather
-  than extended. The failure is the pre-existing one above: that commit's footprint
-  is one `saved_plans/` file, that path is absent from `kit-manifest.json`, and no
-  test reads it. It is also platform-dependent, not merely intermittent: the GitHub
-  Actions `toolkit` job in run `33611571274`, at
+  exiting `2`. **That stamp names the commit it ran at, not this PR's head.**
+  What it does not cover is prose — this handoff file and the friction entry —
+  over which `make test` carries no gate, so the run's scope is stated rather
+  than extended. Deliberately no count of the commits in between: this sentence
+  enumerated them once, later commits falsified the enumeration, and a review
+  lens caught it — *Numbers in prose*'s own failure, met inside the paragraph
+  policing stamps. The failure is the pre-existing one above: that commit's
+  footprint is one `saved_plans/` file, that path is absent from
+  `kit-manifest.json`, and no test reads it. It is also platform-dependent,
+  not merely intermittent: the GitHub Actions `toolkit` job in run
+  `33611571274`, at
   `53a40386e772e9dc0b7ad077bbff40369cfbc8d5` on 2026-09-02, printed
   `2402 passed, 3 skipped` with nothing failing, and the test that fails locally
   can be skipped by nothing — `grep -n 'pytest.skip\|skipif\|@pytest.mark.skip'`
