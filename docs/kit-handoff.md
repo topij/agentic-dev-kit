@@ -68,9 +68,14 @@ contradict its parked hypothesis.
 - **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
   `679b197efc24e31a66e94f6d52b6b3e5f2a47855` on 2026-09-02 printed
   `1 failed, 2403 passed, 1 skipped, 3 warnings in 458.08s (0:07:38)` with `make`
-  exiting `2`. The failure is the pre-existing one above: this commit's footprint is
-  one `saved_plans/` file, that path is absent from `kit-manifest.json`, and no test
-  reads it. Nothing was filed to the tracker.
+  exiting `2`. **That stamp names the parent commit, not this PR's head** — the
+  commits after it are this handoff block and the friction entry, and `make test`
+  carries no gate over either file's content, so the run's scope is stated rather
+  than extended. The failure is the pre-existing one above: that commit's footprint
+  is one `saved_plans/` file, that path is absent from `kit-manifest.json`, and no
+  test reads it. It is also platform-dependent, not merely intermittent: the GitHub
+  Actions `toolkit` job for PR `#665` printed `2402 passed, 3 skipped in 229.89s`
+  with the same test carrying no skip marker. Nothing was filed to the tracker.
 
 ▶ Next: `session-start` — then bring the pilot's write pass to the adopter operator
 for approval, and decide whether the recurrence above graduates `#393` or opens its own
