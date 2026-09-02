@@ -7,7 +7,265 @@ safety guarantees, review evidence, lane isolation, and upgrade behavior as Clau
 Code. Runtime-specific files may differ in shape; their observable contract should
 not.
 
-## Sprint status — reconciled 2026-09-01
+## Sprint review — 2026-09-02
+
+Read in a Claude Code session (model `claude-fable-5-1`) at
+`89dbb3e67497586254e913dc3f5fdf7f648746bd` on 2026-09-02 against the tree, the
+tracker, the merged pull requests, the cs-toolkit checkout at
+`/Users/topi/Coding/in-parallel/cs-toolkit` (`$CS` below), and the untracked
+[`claude-side-assessment_2026-08-26.md`](claude-side-assessment_2026-08-26.md). No
+code changed. Every figure below is a reading, names its command, and was taken at that
+revision on that date unless the row says otherwise. The re-sequencing it recommends is
+applied to *Sprint status* and *Delivery plan* below; the readings themselves are
+history from the moment they were written and are not to be refreshed in place.
+
+### Verdict
+
+Phases 1 through 4 delivered what the goal asked for, in the shape it asked for: one
+shared definition per workflow, thin bindings on both runtimes, policy in
+`config/dev-model.yaml`, tests derived from the parity declaration, and a Phase 4 exit a
+reader can recompute from retained bytes. The method is the sprint's real asset: a claim
+about what a runtime does is probed against the pinned client before it is written, and
+the probes overturned the "no per-agent effort" sentence, the `Bash(:*)` reading and the
+`.claude/` write assumption. What has gone wrong is proportion. The two closing slices
+spent their bytes on evidence-retention machinery rather than on parity; that machinery
+now ships to adopters as a kit engine although nothing in an adopter's tree is verifiable
+by it; the review process that made the work trustworthy buys a full dual-lens panel for
+every wrap-up record; and the one adopter the sprint exists for has received none of it.
+Phases 5 and 6 are re-sequenced below so that the adopter pilot is the next slice rather
+than the last.
+
+### What is strong
+
+- **The shape held.** Every workflow in the front matter of
+  [`runtime-parity.md`](../docs/agentic-dev-kit/runtime-parity.md) is `aligned` or
+  `companion`; `scripts/tests/test_kit_doctor.py`'s renderer test holds the shipped
+  adapters byte-equal to what `scripts/lib/runtime_adapters.py` renders; and
+  `session-start`, `wrap-up`, `parallel`, `triage-friction-log` and
+  `post-merge-systemize` each carry an independently written second copy of their
+  adapter body under appended-contrary-instruction mutations in
+  `scripts/tests/test_portability.py`.
+- **Live measurement before prose.** Each slice since `#609` produced its record from
+  the runtime under test, and the record overturned a written claim more than once: the
+  frontmatter `effort` carrier (`#623`), `Bash(:*)` granting nothing (`#639`), the
+  `.claude/` refusal being neither a glob nor a dot-directory effect (`#626`), the
+  accept-form probe that established nothing (`#632`). The lesson list in
+  [`review-process-learnings_2026-08-24.md`](review-process-learnings_2026-08-24.md) is
+  specific enough to be a test plan.
+- **Deferrals became tracker items.** The 2026-08-26 memo found a tracker that had
+  received nothing from the sprint. Since then every deferral named in a merged slice
+  has an issue (`#601`–`#608`, `#615`–`#618`, `#627`–`#631`, `#641`–`#647`), and the
+  2026-09-01 reconciliation retired `#365`, `#169`, `#466`, `#601`, `#605` and `#606`
+  against merged evidence rather than against the plan.
+- **Parity was dogfooded, not asserted.** The live handoff names the runtime each
+  session ran in: Codex sessions shipped `#649`, `#651`, `#653`, `#655` and `#659`;
+  Claude sessions shipped `#639`, `#646` and `#657`; all through the same shared
+  workflows and the same `pr-watch` gate.
+- **The Phase 4 exit is the right kind of evidence.** The parallel-batch promotion is
+  bound to retained bytes and a fixture revision, and the bundle-walking test recomputes
+  it on every `make test` in this repository.
+
+### What is burning
+
+**1. Evidence weight has overtaken parity work.**
+
+| reading | command | value |
+|---|---|---|
+| tracked files under `saved_plans/`; tracked files in the repository | `git ls-files saved_plans \| wc -l`; `git ls-files \| wc -l` | 136; 262 |
+| sprint pull requests; those that wrote to `saved_plans/` | `git log --oneline 9c49696..HEAD \| wc -l`; `git log --format=%h 9c49696..HEAD -- saved_plans \| wc -l` | 48; 36 |
+| verifier engine; its test | `wc -l scripts/verify_live_validation_bundle.py scripts/tests/test_live_validation_bundle.py` | 2154; 4238 |
+| additions in the two evidence slices | `gh pr view 651 --json additions`; `gh pr view 659 --json additions` | 11406; 15388 |
+
+`scripts/verify_live_validation_bundle.py` and `scripts/tests/test_live_validation_bundle.py`
+are `engine` and `test` in `kit-manifest.json`, so `/upgrade` offers them to every
+adopter, while no `saved_plans/**` path and no `scripts/tests/fixtures/**` path is in the
+manifest. An adopter receives the verifier and its bundle-walking tests
+(`kit_repo_only`-marked, so they skip) and nothing for either to verify. The verifier is
+sprint tooling for this repository; shipping it is a manifest decision that was never
+made.
+
+**2. The adopter has received nothing.**
+
+| reading | command | value |
+|---|---|---|
+| cs-toolkit's recorded kit pin | `kit_commit` in `$CS/kit-manifest.json`; `git log -1 --date=short df32eb2` | `df32eb25a765…`, dated 2026-08-22 |
+| kit commits on `main` since that pin | `git log --oneline df32eb2..HEAD \| wc -l` | 53 |
+| kit_doctor against the adopter | `uv run scripts/kit_doctor.py --root $CS --manifest kit-manifest.json` | `6 unchanged, 15 differ, 1 missing`; `NOT intact … this install is broken, not sized down` |
+| adapter report against the adopter | `uv run scripts/kit_doctor.py --root $CS --adapter-report --adapter-source .` | claude: `adopt` kit-current; `parallel`, `post-merge-systemize`, `pr-watch`, `session-start`, `triage-friction-log`, `upgrade`, `wrap-up` adopter-owned. codex: `adopt`, `parallel`, `pr-watch`, `session-start`, `upgrade`, `wrap-up` adopter-owned; `post-merge-systemize`, `triage-friction-log` missing |
+
+The `broken` verdict is a false reading. The missing file is
+`scripts/devkit/lib/runtime_adapters.py`, which the kit manifest declares as required by
+`kit_doctor.py`, but `grep -c runtime_adapters $CS/scripts/devkit/kit_doctor.py` prints
+`0`: the dependency check reads the kit's *current* dependency graph against the
+adopter's *older* engine. That is an occurrence of `#236`'s shape (the upgrade instrument
+misjudging the executed surface) and the first thing the pilot will meet. `#607` is
+unscheduled, and Phase 6 still listed the pilot last.
+
+**3. Verification and review cost.**
+
+| reading | command | value |
+|---|---|---|
+| sprint commits that are handoff updates | `git log --format=%s 9c49696..HEAD \| grep -c handoff` | 20 of the 48 above |
+| suite at sprint start, as the handoff history stamped it | `make test` at `d03bcf3` on 2026-08-23 | `1367 passed in 166.51s` |
+| suite at sprint end, as the live handoff stamped it | `make test` at `d0eac77` on 2026-09-02 | `2405 passed in 367.84s` |
+| learnings memo | `wc -l saved_plans/review-process-learnings_2026-08-24.md`; `grep -c '^## ' …` | 727; 18 |
+
+The doctrine gives each of those handoff pull requests the full dual-lens opening panel
+(`fallback-review-panel.md`: an initial review never takes a delta pass), and `#585`'s
+2026-09-01 occurrence records `#658` doing exactly that beside the engine change it
+followed. Every verification stamp is a serial quiet-tree run (`#623`'s rule), and two
+lenses running the suite concurrently now produce a failure the cockpit does not (inbox
+entry of 2026-09-01; `#644`). The learnings memo appends a section per pull request and
+has promoted nothing to `docs/agentic-dev-kit/` since it was opened on 2026-08-24, which
+its own header names as the condition for keeping it.
+
+**4. Evidence hygiene regressed on the capstone.** `gh pr view 659 --json
+body,headRefOid,reviews,comments` on 2026-09-02: the body stamps `make test` at
+`0aab6d1`, the head is `d0eac77`, `reviews` is empty, and the only comment is the review
+bot's auto-summary. The `fallback:panel` receipt for `d0eac77` exists in
+`state/pr-watch/659.json`, which is gitignored, with `head`, `lenses`, `source` and
+`recorded_at` and no findings. That is `#603` and `#604`, filed on 2026-08-26 from the
+same shape on `#596` and `#599`, recurring on the sprint's own exit evidence. The
+handoff's "PR `#659` carries the resulting receipt" is true of the local state directory
+and not of the pull request.
+
+**5. Both budgets are at the wall.** `uv run scripts/check_doc_budget.py` printed
+`docs/kit-handoff.md 399/400 lines` and `docs/kit-friction-log.md is 165 lines (budget
+~150)`. The next wrap-up archives before it can write, and the inbox graduation needs a
+`triage-friction-log` run with exact tracker-payload approval.
+
+**6. Status prose is written on every surface.** The `#659` fact is in this plan twice
+(*Sprint status* item 7 and the Phase 4 exit paragraph), in the matrix's headless row,
+and in the handoff's `Last updated` line, its 2026-09-02 theme line and that block's
+first bullet. The `.claude/` refusal is on the matrix, this plan, `parallel-headless.md`
+and `CHANGELOG.md`. `wc -c` on the matrix's headless-lane row prints `5724`: one table
+cell carrying the whole evidence narrative. This plan's own *Phase 3 integration
+inventory* restates the capability tables the three workflow docs carry, and its
+preserved "next sprint starter" named `feat/codex-environment-capable-launcher`, merged
+as `#609` on 2026-08-26.
+
+### Duplication and DRY
+
+**Forge reads.** There is no forge client under `scripts/lib/`. Wrappers with differing
+failure contracts exist instead: `scripts/pr_watch.py:609` (`_gh`, raises on non-zero),
+`scripts/dev_session.sh:166` (`_gh`, swallows stderr and status),
+`scripts/reconcile_sessions.sh:211` (`_gh`, preserves status). Where the same pull
+request is fetched twice:
+
+- `docs/agentic-dev-kit/workflows/session-start.md:117` and `:136-138` send the agent to
+  `gh pr list` and then, per open pull request, to `gh api` for `/reviews`,
+  `/issues/<n>/comments` and `/pulls/<n>/comments`; `:240` then sends the red ones to
+  `pr-watch`, whose `fetch_pr_view` (`scripts/pr_watch.py:1960`, `:1969`) reads the same
+  surfaces again. The doc's reason (evidence must be independent of seen state) is
+  right; the fetch is still done twice, once by hand and once by engine.
+- `scripts/dev_session.sh:765` and `:780` spend `gh repo view` and `gh pr list`
+  (including `headRefOid`) before every `pr-watch` and `merge`, then hand off to
+  `pr_watch.py`, which re-reads `headRefOid` (`:1622`); `_collect_board` at `:529` reads
+  `number,state,isDraft,reviewDecision,statusCheckRollup` per lane per frame, each also
+  in `fetch_pr_view`'s list, with no plumbing between them. `cmd_merge` at `:900`
+  consumes `pr_watch`'s `mergeable` rather than re-deriving it, so the discipline exists
+  at the decision layer and not at the fetch layer.
+- On the REST backend, `rest_pr_view` (`:1417`, `:1421`) and `fetch_check_details`
+  (`:1778`, `:1782`) each fetch `pulls/{n}`, `commits/{sha}/check-runs` and
+  `commits/{sha}/status` in one poll, and each re-runs `git remote get-url origin`. The
+  `gh` branch avoids this by threading `head_sha=`; the REST branch declines that at
+  `:1717-1721`.
+- `scripts/hooks/pr_followup_hook.py:346` tells the agent to run
+  `gh pr view <n> --json isDraft`, the read `_read_is_draft` (`scripts/pr_watch.py:1992`)
+  performs inside the `--assert-draft` / `--assert-ready` the same message prescribes.
+
+Not duplication, and not to be collapsed: inside one `gh`-backend poll, the
+`statusCheckRollup` read beside `gh pr checks` and the second `headRefOid` read are
+recorded correctness decisions (the comments at `scripts/pr_watch.py:1723-1735` and
+`:1905-1934` name the incidents). `state/pr-watch/<n>.json` holds watch bookkeeping and
+the receipt, never the report, so nothing downstream *could* read a persisted view
+instead of fetching.
+
+**Adapters.** Thin, with `post-merge-systemize`, `pr-watch` and `upgrade` carrying an
+extra paragraph that restates the shared layer: the tier sentence at
+`.claude/commands/post-merge-systemize.md:9-11` restates
+`workflows/post-merge-systemize.md:110-113`; each runtime's `pr-watch` binding restates
+its half of `fallback-review-panel.md:175-182`; `upgrade`'s is deliberate
+(`workflows/upgrade.md:193-195` says not to delete it). The renderer is one template
+frame over one hand-written context string per workflow per runtime in
+`scripts/lib/runtime_adapters.py` (`_CURRENT_CONTEXTS`, `:41-122`) plus a frozen legacy
+generation, so the frame is DRY and the bodies are Python string literals a Markdown
+author will not find. `adopt`, `upgrade` and `pr-watch` have no appended-contrary-
+instruction test of their own; they are pinned only through the renderer, so a
+coordinated edit to adapter and renderer passes. Each skill's `description` is
+duplicated between the two frontmatters and hand-written again in
+`.agents/skills/<n>/agents/openai.yaml`. `fallback-review-panel.md:135` still cites
+"`SKILL.md` step 5", which has not existed since the thinning. The lens definitions under
+`.claude/agents/` are generated by `panel_prompt.py --agent-definition`, pinned by
+`test_panel_prompt.py:1075`, and copied again as heredocs at `init.sh:1227-1272` pinned
+by `test_init_sh.py:3189`.
+
+**Status prose.** Item 6 above. The remedy is ownership, not deletion: the matrix owns
+the capability claim and its evidence links, the handoff owns the session narrative,
+this plan owns exits and order, and a fact appears once with pointers.
+
+### Opportunities
+
+Each is one slice. The order is the recommendation, and it is what *Sprint status* and
+*Delivery plan* below now carry.
+
+1. **Run the adopter pilot now, as Phase 5's exit test.** The Phase 5 exit ("an existing
+   Codex adopter can upgrade without retaining stale runtime behaviour or losing local
+   policy") can only be established by an upgrade run, and cs-toolkit is that adopter:
+   dual-runtime, and pinned at the 2026-08-22 revision in the table above. A read-only
+   pass first (`kit_doctor` in both modes, `/upgrade` Steps 0–3 with `$REPO` and `$KIT`
+   bound), a stamped record of what the instrument gets wrong (the `broken` verdict),
+   then the writes on the adopter operator's approval. This is `#607`, `#236` and
+   `#243`'s field exercise in one session, and it pulls Phase 6's pilot forward.
+2. **Stop shipping sprint tooling.** Give `verify_live_validation_bundle.py`, its test
+   and `live-validation-evidence.md` a repo-only role, or drop them from the manifest's
+   `files`, so `/upgrade` stops offering an adopter an engine with nothing to verify. A
+   `CHANGELOG.md` entry is required: an adopter who took it needs to know it is
+   withdrawn.
+3. **Put review evidence on the pull request, once.** `pr_watch.py --record-review`
+   posts a fixed-heading disposition comment at the head it records, and the merge gate
+   reports a receipt with no matching comment (`#604`) and a body stamp whose sha is not
+   `headRefOid` (`#603`), reported and not gating. `gh pr view <n> --json comments` on
+   `#637`, `#651` and `#653` on 2026-09-02 showed a different heading on each, so the
+   check cannot be built until the heading is fixed by the engine that writes it.
+4. **A proportional opening pass for record prose (`#585`).** A diff whose changed
+   paths are all `paths.handoff`, `paths.handoff_history`, `paths.friction_log`,
+   `saved_plans/**` and `CHANGELOG.md` opens with the deterministic checks (budgets,
+   links, closing keywords, stamp sha) and one correctness lens; the adversarial lens is
+   for executed change. That is the pass the handoff pull requests above would have
+   taken.
+5. **Measure the suite before splitting it.** `pytest --durations=30` on a quiet tree,
+   stamped; then a registered `evidence` marker for the bundle-walkers and the copytree
+   fixture tests, and a `make test-fast` that excludes them, with `make test` unchanged
+   as the verification command. `pytest-xdist` is a separate decision; the
+   intermittents (`#393`, `#644`, the 2026-09-01 inbox entry) argue against it until the
+   tmp-dir mechanism is known.
+6. **Session-start reads through the engine.** Replace the hand-rolled `gh api` trio in
+   `session-start.md:136-138` with `pr_watch.py <n> --json --no-persist` per open pull
+   request, if the engine's report exposes unfiltered review evidence; if it does not,
+   that is the enhancement, and the doc keeps its seen-state independence either way.
+   Leave the `gh`-backend poll alone; fold only the REST branch's repeated fetch.
+7. **Decide rather than build.** `#631`: declare that the Claude lane profile is
+   task-scoping, that the boundary is the worktree plus branch protection, and that the
+   Codex mirror is `--sandbox workspace-write`, then take the tracker disposition; the
+   alternative is a lane-side execution guard nobody has asked for. `#608`: a "not
+   observed, not load-bearing" matrix row. `#255`: one test that enumerates config keys
+   with a per-runtime sub-map and requires a status declaration, which is the mechanism
+   the issue's *Proposed* section asks for.
+8. **Distill the learnings memo.** Promote the rules that recurred (stamp at the merged
+   head, design matrix before the panel, probe before prose, positive construction plus
+   recomputed mutation per accepted finding) into `fallback-review-panel.md` as doctrine;
+   archive the per-PR sections; stop appending one per pull request.
+9. **Give every fact one owner.** Split the matrix's headless-lane cell into a
+   per-runtime sub-table whose cells link to the records; cut this plan's *Sprint
+   status* to exits, owners and order; drop the *Phase 3 integration inventory* from
+   this plan (the workflow docs own it).
+10. **Adapter bodies as Markdown, not Python.** Move `_CURRENT_CONTEXTS` to one template
+    file per runtime under `docs/templates/` and render from there, so the body an
+    author edits is the one the renderer ships; add the appended-instruction mutation
+    for `adopt`, `upgrade` and `pr-watch`.
+
+## Sprint status — reconciled 2026-09-01, re-sequenced 2026-09-02
 
 The machine-readable inventory and current capability judgments live in
 [`runtime-parity.md`](../docs/agentic-dev-kit/runtime-parity.md); this plan supplies
@@ -146,10 +404,30 @@ historical observation it was and is not silently refreshed.
   reference config alone had carried. `#255` stays open on the general rule its
   *Proposed* section states rather than on the two keys its comments name —
   `review.fallback_commands` and `runtime.launchers` still declare no per-runtime
-  status, and no mechanism yet prevents the next such key.
-- [ ] **Phase 6 — Gate parity and roll it out.** Adoption fixtures, trusted smoke
-  coverage, maintained parity reporting, the `#607` downstream adopter work, and the
-  `#608` interactive-TUI gap remain planned.
+  status, and no mechanism yet prevents the next such key. **Re-sequenced on
+  2026-09-02** (*Sprint review* above): the cs-toolkit adopter pilot moves from Phase 6
+  into this phase as its exit test, because the exit is only establishable by an
+  upgrade run; withdrawing the live-validation verifier from the shipped manifest and
+  putting review evidence on the pull request (`#603`, `#604`) join the phase; `#631`,
+  `#608` and `#255` are taken as declarations rather than mechanisms. Delivery order:
+  1. Adopter pilot, read-only pass first (`#607`, `#236`, `#243`).
+  2. Verifier and its test withdrawn from `kit-manifest.json`'s shipped set, with the
+     `CHANGELOG.md` entry.
+  3. `pr_watch.py --record-review` posting the disposition comment; stamp/head and
+     receipt/comment mismatches reported.
+  4. `#631`, `#608`, `#255` decided on the tracker and the matrix.
+  5. The pilot's write pass, on the adopter operator's approval; then the exit is
+     either established or the residue is filed.
+- [ ] **Phase 6 — Gate parity and roll it out.** With the pilot pulled into Phase 5,
+  this phase holds the cost and hygiene work the review found burning, then the gate:
+  the proportional opening pass for record prose (`#585`); the suite measured and
+  marked (`make test-fast` beside an unchanged `make test`); the learnings memo
+  distilled into `fallback-review-panel.md`; the matrix's headless-lane cell split per
+  runtime and this plan cut to exits and order; `session-start`'s forge reads routed
+  through the engine; adapter bodies moved from `_CURRENT_CONTEXTS` to per-runtime
+  templates with the missing hostile mutations; and only then adoption fixtures,
+  trusted smoke coverage, maintained parity reporting, and the convergence plan
+  archived behind the matrix.
 
 This plan records the pre-implementation baseline. Its repository observations were
 collected with `rg --files`, targeted `rg`, and
@@ -267,16 +545,20 @@ merge policy or `CS_TOOLKIT_*` namespace. The downstream checkout remains unchan
 its repo-owned engines require a later explicit reconciliation PR rather than a normal
 kit upgrade.
 
-PR `#599` delivered the Phase 3 starter and closed the declared structural exit.
-Preserve the next sprint starter:
+PR `#599` delivered the Phase 3 starter and closed the declared structural exit. The
+starter it preserved (`feat/codex-environment-capable-launcher`) was consumed by PR
+`#609` on 2026-08-26. The next sprint starter, set by the 2026-09-02 review:
 
 ```text
-Create feat/codex-environment-capable-launcher from current origin/main. Inventory the
-supported Codex launch surfaces against the existing absolute descriptor and environment
-replacement contract, choose one mechanism that can apply worktree plus environment
-without weakening lane identity, and add live isolation evidence before changing the
-shared parallel launcher guidance. Keep model/effort calibration and downstream
-cs-toolkit adaptation in separate later slices.
+In a Claude Code session, run the cs-toolkit adopter pilot read-only first. Bind
+REPO=/Users/topi/Coding/in-parallel/cs-toolkit and KIT=<fresh clone of this repo at a
+pinned sha> before anything else and assert pwd before every write. Run kit_doctor in
+both modes from $KIT against $REPO and record the output stamped, including the false
+"broken, not sized down" verdict on scripts/devkit/lib/runtime_adapters.py. Walk
+/upgrade Steps 0-3 without writing. File what the instrument gets wrong as occurrences
+on #236 and what the adapters need as occurrences on #243, on the operator's approval
+of each payload. Stop before any write to $REPO; the write pass is its own session on
+the adopter operator's go-ahead. Do not widen the kit in the same session.
 ```
 
 ## Pre-implementation assessment
@@ -439,7 +721,7 @@ and final open/unmerged fixture pull requests.
 - [x] Template the cockpit permission advisory on `paths.engines`, remove the narrow
   SessionStart matcher on both runtimes, inspect cockpit grant coverage without failing
   healthy adopters, and replace the unmeasured whole-tool rule with allow-side evidence
-  (PRs `#637` and `#639`). The 2026-09-01 tracker reconciliation closed `#606`.
+  (PRs `#637` and `#639`). The 2026-09-01 tracker reconciliation retired `#606`.
 - [x] Treat the configured Claude lane profile as safety-critical adopter-owned policy
   through the Codex root binding and Claude path-scoped binding (PR `#649`). `#346` and
   `#434` remain separate workflow/test binding-coverage decisions.
@@ -448,27 +730,63 @@ and final open/unmerged fixture pull requests.
 - [x] Inspect adopter-side generated lens definitions against their configured
   mechanical compute carrier without duplicating installed-engine drift (PR `#655`;
   `#255` retains tracker disposition only).
-- [ ] Settle `#631` from executable positive and hostile-negative evidence without
-  treating the Claude prefix list and Codex sandbox syntax as interchangeable.
+- [ ] Decide `#631` as a declaration: the Claude lane profile is task-scoping, the
+  boundary is the worktree plus branch protection, and the Codex mirror is
+  `--sandbox workspace-write`; the Claude prefix list and Codex sandbox syntax are not
+  interchangeable and no lane-side execution guard is built without a request for one
+  (re-sequenced 2026-09-02; the earlier wording asked for executable evidence first).
+- [ ] Run the cs-toolkit adopter pilot as this phase's exit test: a read-only pass
+  from a pinned kit clone with `$REPO` and `$KIT` bound, a stamped record of every
+  instrument misreading (the false `broken` verdict on `lib/runtime_adapters.py`
+  first), then the write pass on the adopter operator's approval (`#607`, `#236`,
+  `#243`; added 2026-09-02).
+- [ ] Withdraw `scripts/verify_live_validation_bundle.py`, its test and
+  `live-validation-evidence.md` from the shipped manifest set with a `CHANGELOG.md`
+  entry, so an adopter is not offered an engine that verifies nothing in their tree
+  (added 2026-09-02).
+- [ ] Have `pr_watch.py --record-review` post a fixed-heading disposition comment at
+  the recorded head, and report a receipt without that comment and a body stamp whose
+  sha is not `headRefOid` (`#603`, `#604`; added 2026-09-02).
+- [ ] Declare `#608` as a matrix row and deliver `#255`'s general mechanism as one
+  test over per-runtime config keys (added 2026-09-02).
 
 Done when an existing Codex adopter can upgrade without retaining stale runtime
-behavior or losing local policy. That exit remains open on the unchecked items above
-and on `#236`'s engine/doctrine survey; merged delivery slices are not used as a
-reassuring substitute for the exit.
+behavior or losing local policy. That exit is established by the pilot's write pass
+and by nothing else; merged delivery slices are not used as a reassuring substitute
+for it.
 
 ### Phase 6 — Gate parity and roll it out
 
+Re-sequenced 2026-09-02: the pilot moved to Phase 5, and the cost and hygiene work the
+review found burning comes before the gate, because the gate would otherwise inherit
+the cost.
+
+- Add the proportional opening pass for record-prose pull requests (`#585`):
+  deterministic checks plus one correctness lens when every changed path is a record
+  surface.
+- Measure the suite (`pytest --durations`, stamped), register an `evidence` marker for
+  the bundle-walking and copytree fixture tests, add `make test-fast`, keep `make test`
+  as the verification command.
+- Distill `review-process-learnings_2026-08-24.md` into `fallback-review-panel.md`
+  doctrine and archive its per-PR sections.
+- Split the matrix's headless-lane cell into a per-runtime sub-table linking to the
+  records; cut this plan's *Sprint status* to exits, owners and order; drop the
+  *Phase 3 integration inventory* from this plan.
+- Route `session-start`'s open-pull-request reads through `pr_watch.py --json
+  --no-persist`; fold the REST backend's repeated fetch inside `pr_watch.py`.
+- Move adapter bodies from `_CURRENT_CONTEXTS` to per-runtime templates and add the
+  appended-instruction mutation for `adopt`, `upgrade` and `pr-watch`.
 - Add fresh-repository fixtures for Codex-only, Claude-only, and dual-runtime
   adoption.
 - Add trusted Codex smoke tests for instruction discovery, skill discovery,
-  SessionStart, PostToolUse, `/review`, fallback panels, and parallel lanes.
+  SessionStart, PostToolUse, `/review`, fallback panels, and parallel lanes, run on
+  demand with a stamped record rather than in pull-request CI.
 - Keep Claude integration smoke tests beside them where automation credentials permit.
 - Replace the historical convergence status with the maintained parity matrix and
   move historical analysis to an archive.
-- Pilot the completed path in a real adopter before declaring Codex first-class.
 
-Done when the parity matrix is enforced by deterministic checks and confirmed by an
-adopter run.
+Done when the parity matrix is enforced by deterministic checks and confirmed by the
+Phase 5 adopter run.
 
 ## Completed review and shared-integration slices
 
