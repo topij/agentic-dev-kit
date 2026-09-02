@@ -41,6 +41,22 @@
   both lenses to verify. If it recurs, keep both lenses' full pytest output and their
   tmp-dir paths before re-running.
 
+- **Recurrence 2026-09-02 — the concurrency hypothesis above did not survive it.** The
+  same test failed twice in a row in
+  `/Users/topi/Coding/agentic-dev-kit` at
+  `679b197efc24e31a66e94f6d52b6b3e5f2a47855`, on a quiet tree with nothing running
+  alongside either run, and passed standalone after each. The second run retained full
+  output: the assertion that fails is `out == ""`, not the exit code, so the hook
+  emitted its lifecycle warning because `json.load` **succeeded** inside the suite.
+  Probed in the suite's own interpreter (Python 3.14.7), `json.loads` on the test's
+  exact input raises `RecursionError: Stack overflow (used 8144 kB)` — the precondition
+  holds in isolation and not in the suite, which is `#393`'s shape rather than a
+  tmp-dir race. `test_init_sh.py:5100` already names `#393` and measures its own
+  precondition for this reason; this sibling asserts it instead. The `pytest-of-topi`
+  `garbage-*` cleanup warnings appear in both runs and are unrelated to the assertion
+  that fails. **This is now issue-shaped** — reproduction, mechanism and a named sibling
+  guard — and belongs on the tracker rather than here.
+
 ## 2026-08-29 — Backlog migrated to GitHub Issues (#641–#645)
 
 Swept in **LLM-only mode**: both engines named by `triage.draft_engine` and
