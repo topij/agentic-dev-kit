@@ -9363,3 +9363,487 @@ def test_a_check_row_carrying_neither_bucket_nor_state_reads_as_pending() -> Non
     # And a genuinely terminal row still reads as finished.
     assert pr_watch._check_is_pending({"name": "CodeRabbit", "state": "SUCCESS"}) is False
     assert pr_watch._check_is_pending({"name": "CodeRabbit", "bucket": "pass"}) is False
+
+
+# --------------------------------------------------------------------------- #
+# review evidence on the PR itself: the disposition comment (#604) and the
+# verification stamp's revision (#603). Both REPORT and neither gates, so every
+# test here that asserts a finding also asserts the gate did not move.
+# --------------------------------------------------------------------------- #
+
+# Real 40-hex SHAs. `_green_view`'s `abc123` is below the seven-character floor
+# `_sha_covers` enforces, so a fixture using it could never match a stamp or a
+# disposition marker and every test here would pass for the wrong reason.
+HEAD_SHA = "01fc4e7c9ff4c0c2e6827f3d016694bdaebcb91e"
+OLDER_SHA = "679b197efc24e31a66e94f6d52b6b3e5f2a47855"
+
+
+def _reviewed_view(pr_watch: ModuleType, **overrides):
+    """A green, receipt-backed view at ``HEAD_SHA`` — the state #604 is about."""
+    view = _green_view(headRefOid=HEAD_SHA, reviewDecision="")
+    view.update(overrides)
+    return view
+
+
+def _reviewed_report(pr_watch: ModuleType, view: dict, **kwargs):
+    return pr_watch.build_report(
+        view,
+        [],
+        set(),
+        review_receipt={"head": HEAD_SHA, "source": "fallback:panel"},
+        **_settled(view),
+        **kwargs,
+    )
+
+
+def _finding(report: dict, kind: str) -> dict | None:
+    return next(
+        (f for f in report["evidence_findings"] if f["kind"] == kind),
+        None,
+    )
+
+
+def _issue_comment(body: str, author: str = "topij") -> dict:
+    return {"id": f"IC_{abs(hash(body))}", "author": {"login": author}, "body": body}
+
+
+def test_a_receipt_with_no_disposition_comment_is_reported_but_gates_nothing() -> None:
+    """PR #665's exact shape: a `fallback:panel` receipt at the merged head, five
+    panel rounds' worth of findings, and no comment on the PR carrying any of it.
+
+    The receipt lives in gitignored `state/pr-watch/<n>.json`, so after the merge
+    the review is unrecoverable. Reporting it is the whole of #604's cheap half —
+    and it must stay reporting: blocking here would refuse a merge the gate has
+    correctly authorized, over prose.
+    """
+    pr_watch = _load_pr_watch()
+
+    report = _reviewed_report(pr_watch, _reviewed_view(pr_watch))
+
+    finding = _finding(report, "review_disposition_missing")
+    assert finding is not None
+    assert finding["head"] == HEAD_SHA
+    assert finding["source"] == "fallback:panel"
+    assert report["mergeable"] is True
+    assert report["converged"] is True
+    assert not [b for b in report["merge_blockers"] if "disposition" in b]
+    assert "no disposition comment" in pr_watch.render(report)
+
+
+def test_a_disposition_comment_at_the_receipt_head_clears_the_report() -> None:
+    pr_watch = _load_pr_watch()
+
+    view = _reviewed_view(
+        pr_watch,
+        comments=[
+            _issue_comment(
+                f"<!-- pr-watch:disposition head={HEAD_SHA} -->\n"
+                "## Review disposition\n\nadversarial: nothing outstanding."
+            )
+        ],
+    )
+    report = _reviewed_report(pr_watch, view)
+
+    assert _finding(report, "review_disposition_missing") is None
+
+
+def test_a_disposition_comment_for_another_head_does_not_count() -> None:
+    """The hostile case the check exists for. A round ran, its disposition was
+    posted, and then the PR was pushed to — so the disposition on the PR
+    describes a diff that is no longer the one being merged. Matching on the
+    heading alone (or on "some disposition exists") reads that as covered."""
+    pr_watch = _load_pr_watch()
+
+    view = _reviewed_view(
+        pr_watch,
+        comments=[
+            _issue_comment(
+                f"<!-- pr-watch:disposition head={OLDER_SHA} -->\n"
+                "## Review disposition\n\nround 1: two findings, both fixed."
+            )
+        ],
+    )
+    report = _reviewed_report(pr_watch, view)
+
+    assert _finding(report, "review_disposition_missing") is not None
+
+
+def test_bot_coverage_evidence_is_not_asked_for_a_disposition() -> None:
+    """On the `bot-coverage` route the reviewer's own review objects are already
+    on the PR, so there is no off-PR evidence to report. Firing here would put a
+    permanent warning on every PR a real reviewer reviewed."""
+    pr_watch = _load_pr_watch()
+
+    view = _reviewed_view(
+        pr_watch,
+        reviews=[
+            {
+                "author": {"login": "coderabbitai"},
+                "state": "APPROVED",
+                "commit": {"oid": HEAD_SHA},
+                "submittedAt": "2026-07-25T11:00:00Z",
+                "body": "",
+            }
+        ],
+    )
+    report = pr_watch.build_report(view, [], set(), **_settled(view))
+
+    assert report["review_evidence"]["route"] == "bot-coverage"
+    assert _finding(report, "review_disposition_missing") is None
+
+
+def test_the_engines_own_disposition_comment_is_not_a_new_finding() -> None:
+    """`--record-review --disposition` posts as the loop is finishing, so the very
+    next poll — including the `--no-persist` act-time authorization poll — would
+    read the engine's own record as a fresh finding, drop `converged` and take
+    `mergeable` with it. That is a regression on the merge path, not cosmetics."""
+    pr_watch = _load_pr_watch()
+
+    view = _reviewed_view(
+        pr_watch,
+        comments=[
+            _issue_comment(
+                f"<!-- pr-watch:disposition head={HEAD_SHA} -->\n"
+                "## Review disposition\n\nadversarial: one MED, fixed in the push above."
+            )
+        ],
+    )
+    report = _reviewed_report(pr_watch, view)
+
+    assert report["new_comments"] == []
+    assert report["converged"] is True
+    assert report["mergeable"] is True
+    # Still counted for acknowledgement bookkeeping — excluded from `actionable`,
+    # not from the comment set.
+    assert report["all_comment_keys"] != []
+
+
+def _stub_gh_for_record(
+    pr_watch: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    *,
+    posts: list[tuple[list[str], str | None]],
+    fail: bool = False,
+):
+    monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path)
+    monkeypatch.setattr(
+        pr_watch,
+        "_gh_json",
+        lambda _args: {"number": 9, "headRefOid": HEAD_SHA, "reviews": []},
+    )
+    monkeypatch.setattr(
+        pr_watch,
+        "fetch_check_details",
+        lambda pr, **kw: pr_watch.CheckDetails([], "skipped"),
+    )
+
+    def fake_gh(args, *, timeout=60, stdin_text=None):
+        posts.append((args, stdin_text))
+        if fail:
+            raise RuntimeError("gh pr comment failed (exit 1): could not post")
+        return "https://example.test/pr/9#issuecomment-1\n"
+
+    monkeypatch.setattr(pr_watch, "_gh", fake_gh)
+
+
+def test_record_review_posts_the_disposition_under_the_fixed_heading(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The heading has to be fixed BY THE ENGINE for any check to exist. Reading
+    this repository's own PRs on 2026-09-02 found a different hand-written
+    heading on each one, which is why #604 could not be a check until the engine
+    wrote the comment."""
+    pr_watch = _load_pr_watch()
+    posts: list[tuple[list[str], str | None]] = []
+    _stub_gh_for_record(pr_watch, monkeypatch, tmp_path, posts=posts)
+
+    report = pr_watch.record_review(
+        9,
+        "fallback:panel",
+        HEAD_SHA,
+        lenses="adversarial,correctness",
+        disposition="adversarial: one HIGH on the gate, fixed. correctness: clean.",
+    )
+
+    (args, body) = posts[0]
+    assert args[:2] == ["pr", "comment"]
+    assert "--body-file" in args and "-" in args
+    assert f"<!-- pr-watch:disposition head={HEAD_SHA} -->" in body
+    assert "## Review disposition" in body
+    assert "fallback:panel" in body
+    assert "adversarial, correctness" in body
+    assert "one HIGH on the gate, fixed" in body
+    assert report["review_receipt"]["disposition_comment"].endswith("issuecomment-1")
+    assert (
+        pr_watch.load_state(9)["review_receipt"]["disposition_comment"]
+        == "https://example.test/pr/9#issuecomment-1"
+    )
+
+
+def test_the_comment_the_engine_writes_is_the_one_it_reads_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The round trip, and the reason #604 asks one engine to do both halves. A
+    writer and a reader that agree only by inspection drift the first time either
+    is edited; here the posted body IS the fixture the poll consumes."""
+    pr_watch = _load_pr_watch()
+    posts: list[tuple[list[str], str | None]] = []
+    _stub_gh_for_record(pr_watch, monkeypatch, tmp_path, posts=posts)
+
+    pr_watch.record_review(
+        9,
+        "fallback:panel",
+        HEAD_SHA,
+        lenses="adversarial,correctness",
+        disposition="both lenses converged; nothing outstanding.",
+    )
+    posted_body = posts[0][1]
+
+    view = _reviewed_view(pr_watch, comments=[_issue_comment(posted_body)])
+    report = _reviewed_report(pr_watch, view)
+
+    assert _finding(report, "review_disposition_missing") is None
+    assert report["new_comments"] == []
+
+
+def test_a_failed_disposition_post_records_no_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fail closed. Persisting the receipt and warning about the comment opens the
+    merge gate while the evidence the operator asked to publish is nowhere — the
+    exact state #604 is filed about, reached by the flag meant to prevent it."""
+    pr_watch = _load_pr_watch()
+    posts: list[tuple[list[str], str | None]] = []
+    _stub_gh_for_record(pr_watch, monkeypatch, tmp_path, posts=posts, fail=True)
+
+    with pytest.raises(RuntimeError, match="could not post"):
+        pr_watch.record_review(
+            9, "fallback:panel", HEAD_SHA, disposition="findings and dispositions"
+        )
+
+    assert "review_receipt" not in pr_watch.load_state(9)
+
+
+def test_an_empty_disposition_is_refused_before_anything_is_posted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pr_watch = _load_pr_watch()
+    posts: list[tuple[list[str], str | None]] = []
+    _stub_gh_for_record(pr_watch, monkeypatch, tmp_path, posts=posts)
+
+    with pytest.raises(ValueError, match="--disposition must not be empty"):
+        pr_watch.record_review(9, "fallback:panel", HEAD_SHA, disposition="   \n ")
+
+    assert posts == []
+    assert "review_receipt" not in pr_watch.load_state(9)
+
+
+def test_recording_without_a_disposition_posts_nothing_and_says_so(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The flag is opt-in, so the pre-#604 invocation must keep working unchanged —
+    an adopter's pinned command line does not suddenly start writing to their PR."""
+    pr_watch = _load_pr_watch()
+    posts: list[tuple[list[str], str | None]] = []
+    _stub_gh_for_record(pr_watch, monkeypatch, tmp_path, posts=posts)
+
+    report = pr_watch.record_review(9, "fallback:panel", HEAD_SHA)
+
+    assert posts == []
+    assert "disposition_comment" not in report["review_receipt"]
+    assert "no disposition comment posted" in pr_watch.render_record_review(report)
+
+
+def test_the_disposition_flag_is_only_valid_with_record_review(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    pr_watch = _load_pr_watch()
+
+    with pytest.raises(SystemExit):
+        pr_watch.main(["9", "--disposition", "findings"])
+
+    assert "--disposition is only valid with --record-review" in capsys.readouterr().err
+
+
+def test_a_body_stamp_naming_an_earlier_commit_is_reported_not_gated() -> None:
+    """#596's reading: the body stamps the PR's FIRST commit, the merged head is
+    several `fix:` commits later, and nothing compared them. Reported on the same
+    footing as `bots_behind_head` — the merge stays authorized."""
+    pr_watch = _load_pr_watch()
+
+    view = _reviewed_view(
+        pr_watch,
+        body=f"**Verification.** `make test` at `{OLDER_SHA}` on 2026-09-02 printed "
+        "`2405 passed`.",
+    )
+    report = _reviewed_report(pr_watch, view)
+
+    finding = _finding(report, "verification_stamp_behind_head")
+    assert finding is not None
+    assert finding["stamped"] == [OLDER_SHA]
+    assert finding["head"] == HEAD_SHA
+    assert report["mergeable"] is True
+    assert not [b for b in report["merge_blockers"] if "stamp" in b]
+    assert "verification stamp" in pr_watch.render(report)
+
+
+def test_a_body_stamping_the_head_reports_nothing() -> None:
+    pr_watch = _load_pr_watch()
+
+    view = _reviewed_view(
+        pr_watch,
+        body=f"`make test` at `{HEAD_SHA}` on 2026-09-02 printed `2405 passed`.",
+    )
+
+    assert _finding(_reviewed_report(pr_watch, view), "verification_stamp_behind_head") is None
+
+
+def test_an_abbreviated_stamp_still_names_the_head() -> None:
+    """Stamps are written abbreviated and `headRefOid` is full length, so an
+    exact-equality comparison would report every correctly-stamped PR."""
+    pr_watch = _load_pr_watch()
+
+    view = _reviewed_view(
+        pr_watch,
+        body=f"`make test` at `{HEAD_SHA[:7]}` on 2026-09-02 printed `2405 passed`.",
+    )
+
+    assert _finding(_reviewed_report(pr_watch, view), "verification_stamp_behind_head") is None
+
+
+def test_a_body_with_no_stamp_at_all_reports_no_mismatch() -> None:
+    """An absent stamp is a different complaint (#600's shape) and not this one.
+    Reporting it here would fire on every PR whose diff needs no run, which is
+    how a report line becomes something its reader skims."""
+    pr_watch = _load_pr_watch()
+
+    view = _reviewed_view(
+        pr_watch,
+        body="Three Markdown documents. `make test` was not run; the diff is prose.",
+    )
+
+    assert _finding(_reviewed_report(pr_watch, view), "verification_stamp_behind_head") is None
+
+
+def test_a_commit_named_without_a_date_is_not_a_stamp() -> None:
+    """The false positive the date anchor exists to refuse. PR #665's body says a
+    clone was "pinned at `3c06e70`" — a commit named in passing, claiming nothing
+    about a run. A bare `at <sha>` matcher reports it and teaches its reader that
+    this line is noise."""
+    pr_watch = _load_pr_watch()
+
+    view = _reviewed_view(
+        pr_watch,
+        body=f"Run against a kit clone pinned at `{OLDER_SHA}`, with `$REPO` bound.",
+    )
+
+    assert _finding(_reviewed_report(pr_watch, view), "verification_stamp_behind_head") is None
+
+
+def test_a_stamp_posted_as_a_comment_at_the_head_satisfies_it() -> None:
+    """#598 is the form that did it right: no stamp in the body, and a final
+    comment at the merged head carrying the printed result. Reading the body
+    alone would report the one PR in the batch that got this correct."""
+    pr_watch = _load_pr_watch()
+
+    view = _reviewed_view(
+        pr_watch,
+        body=f"`make test` at `{OLDER_SHA}` on 2026-08-26 printed `2126 passed`.",
+        comments=[
+            _issue_comment(
+                f"Re-run at the merged head: `make test` at `{HEAD_SHA}` on "
+                "2026-09-02 printed `2405 passed`."
+            )
+        ],
+    )
+
+    assert _finding(_reviewed_report(pr_watch, view), "verification_stamp_behind_head") is None
+
+
+def test_a_stamp_naming_a_commit_that_is_not_on_this_pr_is_reported() -> None:
+    """A sha nobody pushed here is still not the head, and the finding says so.
+    The comparison is deliberately against `headRefOid` alone rather than against
+    the commit list: "not the head" is the claim, and it holds for a typo, a sha
+    from another branch, and a stamp taken in the wrong checkout alike."""
+    pr_watch = _load_pr_watch()
+    foreign = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+
+    view = _reviewed_view(
+        pr_watch,
+        body=f"`make test` at `{foreign}` on 2026-09-02 printed `2405 passed`.",
+    )
+    finding = _finding(_reviewed_report(pr_watch, view), "verification_stamp_behind_head")
+
+    assert finding is not None
+    assert finding["stamped"] == [foreign]
+
+
+def test_one_stamp_at_the_head_among_several_is_enough() -> None:
+    """#659 carries three stamps for three different commands. The question is
+    whether THIS head was verified, not whether every stamp names it."""
+    pr_watch = _load_pr_watch()
+
+    view = _reviewed_view(
+        pr_watch,
+        body=(
+            f"- `make test` at `{OLDER_SHA}` on 2026-09-01 printed `2379 passed`\n"
+            f"- the retained-bundle verifier at `{HEAD_SHA}` on 2026-09-02 returned `verified`"
+        ),
+    )
+
+    assert _finding(_reviewed_report(pr_watch, view), "verification_stamp_behind_head") is None
+
+
+def test_a_stamp_that_wraps_across_a_line_is_still_one_stamp() -> None:
+    """Bodies wrap. #637's stamp breaks between `at` and its sha, and a
+    line-scoped read would miss it and report a correctly stamped PR."""
+    pr_watch = _load_pr_watch()
+
+    view = _reviewed_view(
+        pr_watch,
+        body=f"`make test` in `/Users/topi/Coding/agentic-dev-kit` at\n`{HEAD_SHA}` on\n2026-09-02 printed `2405 passed`.",
+    )
+
+    assert _finding(_reviewed_report(pr_watch, view), "verification_stamp_behind_head") is None
+
+
+def test_both_transports_fetch_the_body_the_stamp_check_reads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The precondition, pinned where #535's lesson says it has to be. Every test
+    above hands `build_report` a view directly, so dropping `body` from the fetch
+    would leave all of them green while the stamp check saw an empty body on
+    every real poll and reported nothing, forever."""
+    pr_watch = _load_pr_watch()
+
+    asked: list[list[str]] = []
+
+    def fake_gh_json(args):
+        asked.append(args)
+        return {} if args[0] == "pr" else []
+
+    monkeypatch.setattr(pr_watch, "_gh_json", fake_gh_json)
+    pr_watch.fetch_pr_view(9)
+    fields = asked[0][asked[0].index("--json") + 1].split(",")
+    assert "body" in fields
+
+    monkeypatch.setattr(
+        pr_watch,
+        "_http_get",
+        lambda url, token, **kw: (
+            {
+                "number": 9,
+                "head": {"sha": HEAD_SHA},
+                "body": "`make test` at `deadbeef1234567` on 2026-09-02 printed ok",
+            },
+            None,
+        ),
+    )
+    monkeypatch.setattr(pr_watch, "_http_get_all", lambda url, token, **kw: [])
+    monkeypatch.setattr(
+        pr_watch, "_rest_fetch_checks", lambda sha, **kw: ([], [])
+    )
+    monkeypatch.setattr(pr_watch, "_rest_repo_slug", lambda: ("o", "r"))
+    rest_view, _ = pr_watch.rest_pr_view(9, token="t")
+    assert pr_watch.stamped_shas(rest_view["body"]) == ["deadbeef1234567"]

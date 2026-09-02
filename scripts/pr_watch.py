@@ -40,6 +40,14 @@ reply to the new comments -> `--mark-seen` -> wait -> run again. `converged`
 flips true once CI is green and every finding has been handled; `mergeable`
 additionally waits on `--record-review`.
 
+It also REPORTS, in `evidence_findings`, review evidence that is missing from
+the pull request while the merge gate is satisfied: a receipt with no
+disposition comment at this head, and a verification stamp naming a revision the
+head has moved past. Neither gates anything. The receipt lives in a gitignored
+state file, so what a review found survives the merge only where somebody wrote
+it onto the pull request — `--record-review --disposition` is the engine writing
+it, under a fixed heading the same engine reads back.
+
 `--mark-seen` NEVER re-polls `gh`. Every plain poll (any invocation without
 `--mark-seen`) persists the exact ``all_seen_keys`` it just reported into a
 per-PR "pending" slot (`state["pending_seen"]`). `--mark-seen` promotes THAT
@@ -78,6 +86,7 @@ Usage:
     uv run scripts/pr_watch.py 916 --json       # explicit PR, machine-readable
     uv run scripts/pr_watch.py --mark-seen      # ack exactly what the last poll reported
     uv run scripts/pr_watch.py 916 --record-review "fallback:codex" --head <polled-sha>
+    uv run <engine-dir>/pr_watch.py 916 --record-review "fallback:panel" --head <polled-sha> --disposition -  # findings on stdin
     uv run <engine-dir>/pr_watch.py 916 --record-review "fallback:delta" --compose-parent <reviewed-parent> --head <polled-sha>
     uv run scripts/pr_watch.py 916 --assert-draft  # correct a drifted draft bit after `gh pr create --draft`
     uv run scripts/pr_watch.py 916 --assert-ready  # correct after ready creation/transition, and before merge
@@ -606,7 +615,16 @@ _SETTLE_GRACE_MINUTES = _REVIEW_CONFIG.settle_grace_minutes
 # --------------------------------------------------------------------------- gh
 
 
-def _gh(args: list[str], *, timeout: int = 60) -> str:
+def _gh(args: list[str], *, timeout: int = 60, stdin_text: str | None = None) -> str:
+    """Run one `gh` call, returning stdout. Raises RuntimeError on failure.
+
+    ``stdin_text`` feeds the child's stdin, for the one call that needs it:
+    ``gh pr comment --body-file -``. A comment body is arbitrary multi-line
+    Markdown chosen by the caller, and passing it as an ARGV element would put
+    it through the shell-free but still length-bounded argument list, and would
+    put its content in this process's command line. Default ``None`` closes
+    stdin as before, so every existing call site is byte-identical.
+    """
     cmd = ["gh", *args]
     try:
         result = subprocess.run(  # noqa: S603
@@ -616,6 +634,7 @@ def _gh(args: list[str], *, timeout: int = 60) -> str:
             check=False,
             cwd=str(REPO_ROOT),
             timeout=timeout,
+            input=stdin_text,
         )
     except subprocess.TimeoutExpired as exc:
         # A hung gh call must not wedge the watch loop — surface it as an error
@@ -1426,6 +1445,9 @@ def rest_pr_view(pr: int, *, token: str) -> tuple[dict, list[dict]]:
         "number": pr_data.get("number"),
         "title": pr_data.get("title"),
         "url": pr_data.get("html_url"),
+        # Same field, same spelling, both transports — `evidence_findings` reads
+        # it and must not see a stamp on one backend and no body on the other.
+        "body": pr_data.get("body"),
         # REST spells a merged PR `state: "closed"` + `merged: true`, where
         # GraphQL says `MERGED`. `build_report` blocks on any non-OPEN state
         # either way, so this is about the blocker naming the right reason
@@ -1963,7 +1985,10 @@ def fetch_pr_view(pr: int) -> tuple[dict, list[dict]]:
             "view",
             str(pr),
             "--json",
-            "number,title,url,state,isDraft,baseRefName,mergeStateStatus,reviewDecision,headRefOid,statusCheckRollup,reviews,comments",
+            # `body` rides along for `evidence_findings`: the verification stamp
+            # `#603` compares against the head is written in the PR body as often
+            # as in a comment.
+            "number,title,url,state,isDraft,baseRefName,mergeStateStatus,reviewDecision,headRefOid,statusCheckRollup,reviews,comments,body",
         ]
     )
     inline = _gh_json(
@@ -2284,6 +2309,16 @@ def new_actionable(comments: list[dict], seen: set[str]) -> list[dict]:
     absent from ``seen`` — so a review bot's re-review that re-posts the same
     finding under a fresh id (or an edit that bumps ``updated_at`` / re-homes
     the line) is recognized as already handled instead of read twice.
+
+    **This engine's own disposition comment is excluded**, and that is not a
+    convenience. ``--record-review --disposition`` posts it at the moment the
+    loop is finishing, so the very next poll — including the ``--no-persist``
+    act-time authorization poll — would read the engine's own record as a fresh
+    finding, drop ``converged`` back to false and take ``mergeable`` with it.
+    The loop would then need another acknowledge round to get back to where it
+    already was. Keyed on the machine marker :func:`is_own_disposition` reads,
+    not on ``is_noise`` — the noise markers are adopter-configured and must not
+    have to know about an engine artifact.
     """
     return [
         c
@@ -2291,6 +2326,7 @@ def new_actionable(comments: list[dict], seen: set[str]) -> list[dict]:
         if c["key"] not in seen
         and c["content_key"] not in seen
         and not is_noise(c["body"], author=c["author"])
+        and not is_own_disposition(c["body"])
     ]
 
 
@@ -3573,6 +3609,196 @@ def mark_seen(pr: int) -> dict:
     return {"pr": pr, "marked_seen": True, "marked_seen_keys": sorted(pending)}
 
 
+# --------------------------------------------- review evidence ON the PR itself
+#
+# A receipt lives in the per-PR state file, which is gitignored, so WHAT a review
+# found and how each finding was disposed survives only where someone also wrote
+# it onto the pull request. `#604` is the occurrence: panel rounds ran, each
+# receipt recorded `source`/`lenses`/`head`, and the findings were recoverable
+# from an untracked file or not at all.
+#
+# The heading being fixed BY THIS ENGINE is the half that makes any check
+# possible. Hand-written dispositions on this repository's own pull requests
+# carried a different heading each time (`#604` enumerates the readings), so no
+# matcher could have found them — which is why the issue asks the engine that
+# writes the receipt to write the comment too.
+#
+# What the check keys on is the HTML MARKER, not the visible heading.
+# `safety-critical-changes.md` rule 1 wants a deterministic artifact written at
+# decision time and verified at act time; prose under a heading is a matcher.
+# The heading is for the human reading the pull request, the marker for the
+# engine reading it back.
+#
+# **The marker is not an authenticity claim.** Anyone who can comment on the
+# pull request can write one, exactly as anyone who can run this engine can
+# write a receipt. It answers "is the review evidence ON the pull request",
+# never "is that evidence honest" — the second question is `#32`'s, and needs
+# each lens to record from its own context.
+_DISPOSITION_HEADING = "## Review disposition"
+_DISPOSITION_MARKER_RE = re.compile(
+    r"<!--\s*pr-watch:disposition\s+head=([0-9a-f]{7,40})\s*-->", re.IGNORECASE
+)
+
+
+def _disposition_marker(head: str) -> str:
+    return f"<!-- pr-watch:disposition head={head} -->"
+
+
+def is_own_disposition(body: str) -> bool:
+    """True for a disposition comment written under this engine's marker."""
+    return _DISPOSITION_MARKER_RE.search(body or "") is not None
+
+
+def disposition_heads(comments: list[dict]) -> set[str]:
+    """Every head SHA a disposition comment on this PR declares itself bound to."""
+    heads: set[str] = set()
+    for comment in comments:
+        if not isinstance(comment, dict):
+            continue
+        for match in _DISPOSITION_MARKER_RE.finditer(comment.get("body") or ""):
+            heads.add(match.group(1).lower())
+    return heads
+
+
+def disposition_body(receipt: dict, disposition: str) -> str:
+    """The comment `--record-review --disposition` posts, under the fixed heading.
+
+    Every interpolated field goes through :func:`_flat`: ``source`` and the lens
+    names are free text whoever ran `--record-review` typed, and this is the one
+    place in the engine that publishes them somewhere other people read. The
+    caller's own disposition prose is posted verbatim — it is the evidence, and
+    reformatting it would be the engine editing the record.
+    """
+    head = str(receipt.get("head") or "")
+    lenses = ", ".join(_flat(lens, 40) for lens in _receipt_lenses(receipt))
+    return "\n".join(
+        [
+            _disposition_marker(head),
+            f"{_DISPOSITION_HEADING} — {head[:7] or '(unknown head)'}",
+            "",
+            f"- reviewed head: `{_flat(head, 60)}`",
+            f"- review source: `{_flat(receipt.get('source'))}`",
+            f"- lenses: {lenses or '(none named)'}",
+            "",
+            disposition.strip(),
+            "",
+        ]
+    )
+
+
+def _post_disposition_comment(pr: int, body: str) -> str:
+    """Post one disposition comment on ``pr``; return the URL `gh` prints.
+
+    ``--body-file -`` rather than ``--body``: the body is multi-line Markdown of
+    unbounded length, which is what stdin is for.
+    """
+    return _gh(["pr", "comment", str(pr), "--body-file", "-"], stdin_text=body).strip()
+
+
+# The stamp `AGENTS.md` prescribes for a measured claim: a command, `at <sha>`,
+# `on <date>`. **Anchored on the date**, which is what separates a stamp from
+# ordinary English containing the same two words — a body saying a clone was
+# "pinned at `3c06e70`, with …" names a commit and claims nothing about a run,
+# and a reporter that flags it trains its reader to skim the line. Matched over
+# whitespace-collapsed text so a stamp that wraps between `at` and its sha, or
+# between its sha and its date, is still one stamp.
+#
+# A HEURISTIC over prose, and therefore a REPORTER and never a gate — the
+# distinction `safety-critical-changes.md` rule 1 draws. What it can do is name
+# a stamp that has fallen behind the head, which is `#603`: the readings there
+# are of pull requests whose body stamped the first commit while the merged head
+# was several fix commits later, with nothing comparing the two.
+_VERIFICATION_STAMP_RE = re.compile(
+    r"\bat\s+`?([0-9a-f]{7,40})`?\s+on\s+\d{4}-\d{2}-\d{2}\b", re.IGNORECASE
+)
+
+
+def stamped_shas(text: str) -> list[str]:
+    """Revisions named by a verification stamp in ``text``, in order of appearance."""
+    flat = " ".join((text or "").split())
+    out: list[str] = []
+    for match in _VERIFICATION_STAMP_RE.finditer(flat):
+        sha = match.group(1).lower()
+        if sha not in out:
+            out.append(sha)
+    return out
+
+
+def _sha_covers(candidate: str, head: str) -> bool:
+    """True when ``candidate`` names ``head`` — either may be abbreviated.
+
+    Both directions, because the head comes from the forge at full length while
+    a stamp is usually written abbreviated. The seven-character floor is the
+    same one the stamp pattern enforces: fewer digits is not a revision, it is a
+    number that happens to be hex.
+    """
+    a = str(candidate or "").strip().lower()
+    b = str(head or "").strip().lower()
+    if len(a) < 7 or len(b) < 7:
+        return False
+    return a.startswith(b) or b.startswith(a)
+
+
+def evidence_findings(
+    head: str | None,
+    body: str,
+    comments: list[dict],
+    review_evidence: dict,
+) -> list[dict]:
+    """Report-only findings about where this PR's review evidence lives.
+
+    Two of them, and **neither gates anything** — they are on the footing
+    `truncated_reads` has and the footing `#603` asks for, beside
+    `bots_behind_head`. Both describe evidence that is missing from the pull
+    request while the merge gate is already satisfied, so making either a
+    blocker would refuse merges the gate has correctly authorized, on a
+    judgement drawn from prose.
+
+    - ``review_disposition_missing`` (`#604`) — a receipt is standing at this
+      head and no comment on the pull request is bound to it. The receipt says a
+      review happened; nothing on the pull request says what it found.
+    - ``verification_stamp_behind_head`` (`#603`) — the pull request carries at
+      least one verification stamp and none of them names this head. Silent when
+      no stamp exists at all: an absent stamp is a different complaint, and this
+      one is specifically that a stamp SAYS it covers the change while naming a
+      revision the head has moved past.
+
+    Stamps are read from the body AND from every comment, which is what makes
+    `#598`'s form — no stamp in the body, the final stamp posted as a comment at
+    the merged head — read as satisfied rather than as a mismatch.
+    """
+    findings: list[dict] = []
+    if not head:
+        return findings
+    # `route == "receipt"` is exactly `receipt_valid` — a receipt standing at
+    # THIS head. On the `bot-coverage` route the reviewer's own review objects
+    # are on the pull request already, so there is nothing off-PR to report.
+    if review_evidence.get("route") == "receipt" and not any(
+        _sha_covers(sha, head) for sha in disposition_heads(comments)
+    ):
+        findings.append(
+            {
+                "kind": "review_disposition_missing",
+                "head": head,
+                "source": review_evidence.get("source"),
+            }
+        )
+    stamped: list[str] = list(stamped_shas(body))
+    for comment in comments:
+        for sha in stamped_shas(comment.get("body") or ""):
+            if sha not in stamped:
+                stamped.append(sha)
+    if stamped and not any(_sha_covers(sha, head) for sha in stamped):
+        findings.append(
+            {
+                "kind": "verification_stamp_behind_head",
+                "head": head,
+                "stamped": stamped,
+            }
+        )
+    return findings
+
+
 def record_review(
     pr: int,
     source: str,
@@ -3581,6 +3807,7 @@ def record_review(
     allow_pending_bot: bool = False,
     lenses: str | None = None,
     compose_parent: str | None = None,
+    disposition: str | None = None,
     now: datetime | None = None,
 ) -> dict:
     """Persist independent-review evidence bound to the PR's current head SHA.
@@ -3621,6 +3848,20 @@ def record_review(
     ``fallback:delta`` pass extends. The engine preserves that full parent,
     appends the reviewed boundary and paths, and validates the complete chain
     against Git before replacing the top-level current-head receipt.
+
+    ``disposition`` is what the review FOUND and how each finding was disposed,
+    posted as a comment on the pull request under this engine's fixed heading
+    and bound to the recorded head (`#604`). The state file it would otherwise
+    live beside is gitignored, so without this the reviewed revision and the
+    lens names survive and the review itself does not.
+
+    **A failed post refuses the whole call, and no receipt is written.** The
+    sequence is: every refusal above, then the receipt dict, then the comment,
+    then the save — so a `gh` failure leaves the pull request and the state file
+    exactly as they were, and the retry is the same command. Recording the
+    receipt anyway and warning about the comment was the alternative, and it
+    fails in the direction this argument exists to close: the merge gate opens
+    while the evidence the operator asked to publish is nowhere.
     """
     require_gh_backend("--record-review")
     source = source.strip()
@@ -3728,6 +3969,16 @@ def record_review(
         if not isinstance(previous, dict):
             raise ValueError("no standing review receipt exists to compose with")
         receipt["coverage"] = _compose_coverage(previous, parent_head, receipt)
+    if disposition is not None:
+        # Last, after every refusal and after the receipt is fully assembled, so
+        # the comment can never describe a receipt that was then refused — and
+        # so a refusal never leaves a disposition standing on the pull request
+        # for a review the gate does not have.
+        if not disposition.strip():
+            raise ValueError("--disposition must not be empty")
+        receipt["disposition_comment"] = _post_disposition_comment(
+            pr, disposition_body(receipt, disposition)
+        )
     state["review_receipt"] = receipt
     save_state(pr, state)
     return {"pr": pr, "recorded_review": True, "review_receipt": receipt}
@@ -4131,6 +4382,11 @@ def build_report(
       to satisfy the merge gate's independent-review requirement without a
       receipt, and ``objections`` is what :func:`objecting_bot_coverage` reads to
       refuse it.
+    - ``evidence_findings`` — :func:`evidence_findings`: review evidence that is
+      missing from the pull request itself while the gate is already satisfied —
+      a receipt with no disposition comment at this head (`#604`), a
+      verification stamp naming a revision the head has moved past (`#603`).
+      **Reported, gating nothing**, on the footing ``truncated_reads`` has.
     - ``merge_blockers`` — deterministic reasons the PR is not currently safe to
       merge (draft, blocked/unknown merge state, requested changes, non-open PR,
       missing current-head review evidence, a configured review bot whose own
@@ -4437,6 +4693,15 @@ def build_report(
         "review_decision": review_decision,
         "review_evidence": review_evidence,
         "review_bots": review_bots,
+        # Reported, never gating — see :func:`evidence_findings` for why a
+        # judgement drawn from prose must not close a gate the deterministic
+        # checks above have opened.
+        "evidence_findings": evidence_findings(
+            head,
+            view.get("body") or "",
+            comments,
+            review_evidence,
+        ),
         "merge_blockers": merge_blockers,
         "head": head,
         "head_changed": head_changed,
@@ -4875,6 +5140,31 @@ def render(report: dict) -> str:
                 f"    ⚠ review-bot state was unreadable ({_flat(evidence['bot_signal'])}) "
                 "when this receipt was taken"
             )
+    # Where the review evidence ISN'T. Printed beside the evidence lines above
+    # rather than among the merge blockers below, because these gate nothing and
+    # a reader who cannot tell "this refuses your merge" from "this will be
+    # unrecoverable after the merge" will act on the wrong one. Each line names
+    # the remedy, for the reason the coverage warning above does: the fact alone
+    # does not say what to do about it.
+    for finding in report.get("evidence_findings") or []:
+        kind = finding.get("kind")
+        if kind == "review_disposition_missing":
+            lines.append(
+                "  ⚠ review disposition: the receipt for "
+                f"{_flat(finding.get('head'), 12)} has no disposition comment on this "
+                "PR — what the review found and how each finding was disposed exists "
+                "only in the untracked per-PR state file, so the merge loses it. Post "
+                "it: --record-review … --disposition <what was found and how it was "
+                "disposed>"
+            )
+        elif kind == "verification_stamp_behind_head":
+            named = ", ".join(_flat(sha, 12) for sha in finding.get("stamped") or [])
+            lines.append(
+                f"  ⚠ verification stamp: this PR stamps {named}, and none of those is "
+                f"the current head {_flat(finding.get('head'), 12)} — the run it names "
+                "did not see the commits since. Re-run the verification at this head "
+                "and stamp it in a comment here"
+            )
     for blocker in report.get("merge_blockers") or []:
         lines.append(f"  ✗ merge blocker: {blocker}")
     if report["new_comments"]:
@@ -4958,6 +5248,19 @@ def render_record_review(report: dict) -> str:
         lines.append(
             f"  ⚠ {bot}'s last review was of {_flat(sha, 12)}, not this head — this receipt "
             "does not stand for its review of this design"
+        )
+    if receipt.get("disposition_comment"):
+        lines.append(
+            f"  disposition posted: {_flat(receipt['disposition_comment'], 200)}"
+        )
+    else:
+        # The prompt for the thing `#604` is about, at the one moment the
+        # operator is holding the findings. The poll render says the same later,
+        # every poll; this says it while acting on it is still cheap.
+        lines.append(
+            "  ⚠ no disposition comment posted — what this review found lives only "
+            "in the untracked state file. Re-run with --disposition to put it on "
+            "the PR"
         )
     return "\n".join(lines)
 
@@ -5113,6 +5416,16 @@ def main(argv: list[str] | None = None) -> int:
             "and preserved as composed coverage"
         ),
     )
+    parser.add_argument(
+        "--disposition",
+        metavar="TEXT",
+        help=(
+            "with --record-review: post what the review FOUND and how each finding "
+            "was disposed as a comment on the PR, under this engine's fixed heading "
+            "and bound to the recorded head. The receipt is gitignored; this is the "
+            "half that survives the merge. Pass `-` to read the text from stdin"
+        ),
+    )
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument(
         "--mark-seen",
@@ -5160,6 +5473,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--compose-parent is only valid with --record-review")
     if args.compose_parent and args.record_review != "fallback:delta":
         parser.error("--compose-parent requires --record-review fallback:delta")
+    if args.disposition is not None and args.record_review is None:
+        parser.error("--disposition is only valid with --record-review")
     if args.no_persist and (
         args.mark_seen
         or args.record_review is not None
@@ -5186,6 +5501,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.record_review is not None:
+        disposition = args.disposition
+        if disposition == "-":
+            # A disposition is multi-line prose about several findings, which is
+            # awkward to pass as one shell argument and easy to mangle. `-` is
+            # the same stdin convention `gh --body-file` uses.
+            disposition = sys.stdin.read()
         try:
             review_report = record_review(
                 pr,
@@ -5194,6 +5515,7 @@ def main(argv: list[str] | None = None) -> int:
                 allow_pending_bot=args.allow_pending_bot_review,
                 lenses=args.lenses,
                 compose_parent=args.compose_parent,
+                disposition=disposition,
             )
         except (RuntimeError, KeyError, ValueError) as exc:
             print(f"error: {exc}", file=sys.stderr)
