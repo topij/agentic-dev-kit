@@ -76,8 +76,10 @@ contradict its parked hypothesis.
   test reads it. It is also platform-dependent, not merely intermittent: the GitHub
   Actions `toolkit` job in run `33611571274`, at
   `53a40386e772e9dc0b7ad077bbff40369cfbc8d5` on 2026-09-02, printed
-  `2402 passed, 3 skipped`, and the test that fails locally carries no skip marker
-  — so it ran there and passed. Nothing was filed to the tracker.
+  `2402 passed, 3 skipped` with nothing failing, and the test that fails locally
+  can be skipped by nothing — `grep -n 'pytest.skip\|skipif\|@pytest.mark.skip'`
+  over `scripts/tests/test_pr_followup_hook.py` returns no rows — so it ran there
+  and passed. Nothing was filed to the tracker.
 
 ▶ Next: `session-start` — then bring the pilot's write pass to the adopter operator
 for approval, and decide whether the recurrence above graduates `#393` or opens its own
