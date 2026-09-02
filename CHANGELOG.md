@@ -42,6 +42,32 @@ starts.
 
 ---
 
+## #667 — 2026-09-02
+
+- **ADDED (engine CLI surface, `#604`):** `scripts/pr_watch.py --record-review`
+  accepts `--disposition <text>` (or `-` to read the text from stdin). It posts one
+  comment on the pull request, bound to the recorded head, under a heading the
+  engine fixes, and records its URL on the receipt as `disposition_comment`. Add it
+  to your record-review invocation and pass what the review found and how each
+  finding was disposed. A failed post refuses the whole command and writes no
+  receipt, so re-run it; without the flag nothing is posted and the receipt is
+  unchanged from before.
+- **ADDED (report shape, `#604` / `#603`):** Every plain poll's report grows
+  `evidence_findings[]`. Entries are `{"kind": "review_disposition_missing", "head",
+  "source"}` and `{"kind": "verification_stamp_behind_head", "head", "stamped": [...]}`.
+  A consumer asserting the exact top-level key set of a `--json` poll must add it.
+  **Neither entry gates**: `converged`, `mergeable`, `done` and `merge_blockers[]`
+  are unchanged by both, so a repo reading only those needs no edit.
+- **CHANGED (engine behaviour, `#604`):** A comment carrying the engine's
+  disposition marker no longer appears in `new_comments[]` and no longer holds
+  `converged` false. If your tooling expects to acknowledge that comment through
+  `--mark-seen`, it no longer needs to; the comment still appears in
+  `all_comment_keys[]` and `all_seen_keys[]`.
+- **CHANGED (engine behaviour, `#603`):** Both transports now fetch the pull
+  request `body` (`gh pr view --json …,body`; `body` in the REST view). A test
+  double that pins the exact `--json` field list, or a fake REST payload asserted
+  key-by-key, must be refreshed.
+
 ## #659 — 2026-09-01
 
 - **CHANGED (engine CLI surface):** Refresh
