@@ -73,6 +73,17 @@ verifies it still holds. Per kit-owned file it reports one of:
     ``--generate-manifest`` time from the PYTHON import graph, not restated by
     hand. Shell ``source`` is deliberately NOT scanned — see
     `derive_dependencies` for the gap that leaves and why it is left open.
+
+    That derivation runs against the KIT, so the edge describes the version the
+    kit ships and this state requires the dependent to BE that version —
+    byte-identical to the comparison manifest, not merely present. A dependent
+    installed at an older sha is present without running the imports that
+    produced the edge, and reading presence as agreement reported a healthy
+    sized-down adopter as broken (#661). Every dependent that fails the byte
+    check is reported on the drift axis by the same run, so this narrowing moves
+    a file to `new-upstream`/`declined`/`removed`/`missing` — it never turns a
+    finding into silence. See `inspect`'s
+    `dependent_runs_the_derived_imports`.
 ``stale``
     Byte-identical to what THIS repo installed (per its baseline — see
     ``--record-install``), and different from what the kit ships. Nothing was
@@ -751,6 +762,11 @@ def derive_dependencies(
       adopter their working install is broken and to install something they do
       not need. `missing-required` firing wrongly is worse than it not firing,
       and that asymmetry is what decided the shell-scan question above.
+
+    The graph is of THIS checkout, which is the kit's. It says nothing about an
+    adopter whose copy of a dependent is at another sha, and #661 is what
+    happens when a consumer forgets that — so `inspect` re-checks the version
+    before it trusts an edge, under the same asymmetry stated here.
     """
     owned = {rel for rel, _ in kit_owned}
     dependents: dict[str, set[str]] = {}
@@ -2638,6 +2654,61 @@ def inspect(
     # its dependents, and those can sit anywhere in KIT_OWNED order.
     present = {rel: (root / _remap(rel, engines_dir)).is_file() for rel, _ in KIT_OWNED}
 
+    _edge_holds: dict[str, bool] = {}
+
+    def dependent_runs_the_derived_imports(dep: str) -> bool:
+        """Whether `dep`'s installed copy is the one `required_by` describes.
+
+        `required_by` is derived at ``--generate-manifest`` time from the KIT's
+        import graph, so every edge is a statement about the version the kit
+        ships — not about whichever version an adopter installed. Presence alone
+        cannot carry that statement across a version gap: the dependent is
+        equally present at the sha before the import was added, and reading the
+        edge as if it were current turns a dependency the kit gained AFTER an
+        adopter's baseline into `missing-required` on a healthy sized-down tree
+        (#661). One reproduction printed "this install is broken, not sized
+        down" over `lib/runtime_adapters.py` in a repo whose installed
+        `kit_doctor.py` predates the import entirely.
+
+        A byte match against the comparison manifest is what closes that gap: it
+        does not resemble the version whose imports were scanned, it IS that
+        version, so the edge transfers exactly. Anything else — an older sha, a
+        local edit, a manifest with no hash to compare — leaves the installed
+        dependent's imports unknown, and unknown resolves to NO edge. That is
+        the asymmetry `derive_dependencies` already states and decided the
+        shell-scan question by: a dropped edge degrades the file to the ordinary
+        absent-file split (`new-upstream` carries the refresh remedy that
+        actually applies), while a false one tells a working adopter their
+        install is broken and to go install something nothing needs.
+
+        Dropping the edge never buys silence, either. Every case that reaches
+        the unknown branch is a dependent that is present and NOT byte-identical
+        to the manifest, which the same run reports as `differs` / `stale` /
+        `locally-edited` / `unknown-version` — all of them exit 1. The report
+        stops naming a remedy it cannot justify; it does not go green.
+
+        THE LIMIT, stated rather than engineered around: a dependent installed
+        at the kit's version and then hand-EDITED fails the byte check like any
+        other, so a library it still imports loses its `missing-required` line
+        and reads as `declined` or `new-upstream`. The baseline could sharpen
+        that — a recorded install sha equal to the manifest's would say the
+        adopter did take the version carrying the import — and it is
+        deliberately not consulted. The case needs an adopter who edited a
+        kit-owned engine AND lacks a library that engine imports; the same run
+        already reports that engine `locally-edited` and exits 1, telling them
+        to move the edit into config and take the kit's copy, after which the
+        next run names the requirement. Machinery for a LOW with no reachable
+        consequence is the trade this file declines elsewhere too.
+        """
+        if dep not in _edge_holds:
+            recorded = manifest_files.get(dep)
+            shipped = recorded.get("sha256") if isinstance(recorded, dict) else None
+            installed = root / _remap(dep, engines_dir)
+            _edge_holds[dep] = (
+                isinstance(shipped, str) and installed.is_file() and sha256_of(installed) == shipped
+            )
+        return _edge_holds[dep]
+
     statuses: list[FileStatus] = []
     for rel, role in KIT_OWNED:
         local_rel = _remap(rel, engines_dir)
@@ -2645,11 +2716,19 @@ def inspect(
         entry = manifest_files.get(rel) or {}
         expected = entry.get("sha256")
         if not target.is_file():
-            # Filtered to INSTALLED dependents. A repo that installed no engine
-            # is a supported sized-down adoption and must not be told its
+            # Filtered to INSTALLED dependents, and then to those installed at
+            # the version the edge was derived from. A repo that installed no
+            # engine is a supported sized-down adoption and must not be told its
             # missing library breaks it — the same distinction `_ENGINE_NAMES`
-            # exists to keep the engines probe from getting wrong (#59).
-            needed_by = [dep for dep in (entry.get("required_by") or []) if present.get(dep)]
+            # exists to keep the engines probe from getting wrong (#59); a repo
+            # whose engine sits at an OLDER sha than the one whose imports were
+            # scanned is the same claim made across a version gap, which is what
+            # `dependent_runs_the_derived_imports` is for (#661).
+            needed_by = [
+                dep
+                for dep in (entry.get("required_by") or [])
+                if present.get(dep) and dependent_runs_the_derived_imports(dep)
+            ]
             if needed_by:
                 # FIRST, ahead of the declared set: an engine that is installed
                 # needs this file, so the install is broken whatever the record
@@ -2880,6 +2959,59 @@ def _lens_definition_regeneration_command(root: Path, engines_dir: str) -> str:
     )
 
 
+def _lens_definition_regeneration_from_a_kit_checkout(root: Path) -> str:
+    """The same regeneration, driven from a kit checkout instead of this tree.
+
+    `<kit checkout>` stays a placeholder because nothing here knows one: the
+    read path is given a manifest, not a source tree, and inventing a path an
+    operator has not cloned would be worse than asking for it. `/upgrade`'s
+    Step 0 clone is the ordinary answer. The kit's OWN layout is used for the
+    engine — a checkout is not an adoption, so `paths.engines` does not apply
+    to it.
+    """
+    return (
+        f"cd {shlex.quote(str(root.resolve()))} && mkdir -p .claude/agents && "
+        f"uv run <kit checkout>/{KIT_ENGINE_PREFIX}/panel_prompt.py --root . --lens <name> "
+        "--agent-definition > .claude/agents/<name>.md"
+    )
+
+
+def _lens_definition_remedy(root: Path, engines_dir: str) -> str:
+    """The remedy sentence, chosen by whether the generator is installed HERE.
+
+    #661's second occurrence, and the same defect as its first: a check written
+    against the KIT's dependency graph rather than against the adopter's
+    installed surface. The verdict above this line is right — the definitions
+    really are missing — but the command was printed unconditionally, so a repo
+    that never installed `panel_prompt.py` was handed a remedy that cannot run,
+    naming an engine no path in that tree resolves to. One adopter got both
+    halves of this issue in a single report.
+
+    Presence of the engine is the whole test, deliberately: whether the
+    definitions can be regenerated FROM THIS TREE is a question about this tree,
+    and it has a file-system answer. A declined engine is a supported
+    sized-down state (`declined` is not a finding), so the alternative must be a
+    route that works rather than an instruction to install something the
+    operator already decided against — hence naming both routes and letting
+    them choose.
+    """
+    if (root / engines_dir / "panel_prompt.py").is_file():
+        return (
+            "    (lens definitions are adopter-owned — first resolve any kit engine "
+            "drift reported below, then inspect the target and regenerate one with "
+            f"{_lens_definition_regeneration_command(root, engines_dir)}; "
+            "this check never executes the command or writes the definitions)"
+        )
+    return (
+        "    (lens definitions are adopter-owned, and the engine that renders them — "
+        f"{PurePosixPath(engines_dir) / 'panel_prompt.py'} — is NOT installed here, so they "
+        "cannot be regenerated from this tree. Install that engine (/upgrade offers it) and "
+        "re-run, or render them from a kit checkout with "
+        f"{_lens_definition_regeneration_from_a_kit_checkout(root)}; "
+        "this check never executes the command or writes the definitions)"
+    )
+
+
 def render(report: Report) -> str:
     lines: list[str] = ["kit-doctor — installation report", ""]
 
@@ -3043,12 +3175,7 @@ def render(report: Report) -> str:
         definition.state in ("missing", "stale", "unreadable")
         for definition in report.lens_definitions
     ):
-        lines.append(
-            f"    (lens definitions are adopter-owned — first resolve any kit engine "
-            "drift reported below, then inspect the target and regenerate one with "
-            f"{_lens_definition_regeneration_command(report.inspection_root, report.engines_dir)}; "
-            "this check never executes the command or writes the definitions)"
-        )
+        lines.append(_lens_definition_remedy(report.inspection_root, report.engines_dir))
     for doc, rendered in report.narrative_rendered.items():
         # An entry point that is still the KIT's own is a different fact from a
         # narrative skeleton that was never rendered, and the remedy reads

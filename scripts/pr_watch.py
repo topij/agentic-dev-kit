@@ -619,7 +619,9 @@ def _gh(args: list[str], *, timeout: int = 60, stdin_text: str | None = None) ->
     """Run one `gh` call, returning stdout. Raises RuntimeError on failure.
 
     ``stdin_text`` feeds the child's stdin, for the one call that needs it:
-    ``gh pr comment --body-file -``. A comment body is arbitrary multi-line
+    :func:`_post_disposition_comment`'s ``gh api --input -``. That function's own
+    docstring says why it posts through the REST endpoint rather than
+    ``gh pr comment``. A comment body is arbitrary multi-line
     Markdown chosen by the caller, and passing it as an ARGV element would put
     it through the shell-free but still length-bounded argument list, and would
     put its content in this process's command line. Default ``None`` closes
@@ -3905,13 +3907,23 @@ def record_review(
     :func:`new_actionable` for why that acknowledgement is written at post time
     rather than matched back out of the comment's text.
 
-    **A failed post refuses the whole call, and no receipt is written.** The
-    sequence is: every refusal above, then the receipt dict, then the comment,
-    then the save — so a `gh` failure leaves the pull request and the state file
-    exactly as they were, and the retry is the same command. Recording the
-    receipt anyway and warning about the comment was the alternative, and it
-    fails in the direction this argument exists to close: the merge gate opens
-    while the evidence the operator asked to publish is nowhere.
+    **A post this call sees fail writes no receipt.** The sequence is: every
+    refusal above, then the receipt dict, then the comment, then the save — so a
+    `gh` failure this process observes leaves the state file exactly as it was,
+    and the retry is the same command. Recording the receipt anyway and warning
+    about the comment was the alternative, and it fails in the direction this
+    argument exists to close: the merge gate opens while the evidence the
+    operator asked to publish is nowhere.
+
+    **That is exactly-once on the receipt and at-least-once on the comment, and
+    the gap is not closable here.** A timeout reading the response after GitHub
+    has already created the comment is indistinguishable, from this process, from
+    a post that never landed; the receipt is correctly withheld either way, and
+    the prescribed retry then posts a second comment. There is no idempotency key
+    on the create, so the duplicate is the cost of never leaving the gate open on
+    unpublished evidence. Two disposition comments read as noise a human resolves;
+    a receipt with no comment is the failure this whole argument exists to
+    prevent. Do not "fix" the duplicate by persisting the receipt first.
     """
     require_gh_backend("--record-review")
     source = source.strip()

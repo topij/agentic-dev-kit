@@ -49,9 +49,11 @@ starts.
   comment on the pull request, bound to the recorded head, under a heading the
   engine fixes, and records its URL on the receipt as `disposition_comment`. Add it
   to your record-review invocation and pass what the review found and how each
-  finding was disposed. A failed post refuses the whole command and writes no
-  receipt, so re-run it; without the flag nothing is posted and the receipt is
-  unchanged from before.
+  finding was disposed. A post this engine sees fail refuses the whole command and
+  writes no receipt — but a failure it cannot distinguish from a timed-out success
+  may already have created the comment, so a re-run can leave two: the receipt is
+  written at most once, the comment at least once. Without the flag nothing is
+  posted and the receipt is unchanged from before.
 - **ADDED (report shape, `#604` / `#603`):** Every plain poll's report grows
   `evidence_findings[]`. Entries are `{"kind": "review_disposition_missing", "head",
   "source"}` and `{"kind": "verification_stamp_behind_head", "head", "stamped": [...]}`.
@@ -69,6 +71,24 @@ starts.
   request `body` (`gh pr view --json …,body`; `body` in the REST view). A test
   double that pins the exact `--json` field list, or a fake REST payload asserted
   key-by-key, must be refreshed.
+## #668 — 2026-09-02
+
+- **CHANGED (gate semantics, #661) — `kit_doctor.py` reports `missing-required` only
+  where the installed dependent is byte-identical to the comparison manifest, not merely
+  present.** Refresh `scripts/kit_doctor.py`. An absent file whose only dependent sits at
+  another sha now lands in the ordinary absent-file split — `new-upstream`, `declined`,
+  `removed`, or `missing` — instead of `missing-required`, so a repo that gated CI on
+  exit `1` for that case sees exit `0` wherever the rest of the report is clean, and
+  `/upgrade`'s install-these-first list loses those entries. **Re-run the report after
+  *refreshing* an engine, not only after installing one:** bringing a stale dependent up
+  to the kit's version is now what reveals its new requirements. An absent file the
+  baseline records as installed is still `removed` and still fails the gate.
+- **CHANGED (report shape, #661) — the lens-definition remedy line now branches on
+  whether `<engine-dir>/panel_prompt.py` is installed.** Refresh
+  `scripts/kit_doctor.py`. A tree without that engine is told so and given the
+  kit-checkout form (`uv run <kit checkout>/scripts/panel_prompt.py --root . …`) in place
+  of a command that cannot run there. The `lens_definitions` states, the `--json`
+  payload, and the exit status are unchanged, so nothing reading those needs a change.
 
 ## #659 — 2026-09-01
 
