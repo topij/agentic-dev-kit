@@ -199,6 +199,44 @@ def test_lens_definition_inspection_reports_missing_current_and_stale(tmp_path, 
     ]
 
 
+def test_the_lens_remedy_does_not_prescribe_an_engine_this_tree_lacks(tmp_path):
+    """#661's second occurrence: the remedy was printed unconditionally, against
+    the KIT's dependency graph rather than the adopter's installed surface. One
+    surveyed repo had no `panel_prompt.py` anywhere and was told to run it.
+
+    The VERDICT is untouched — the definitions really are missing, and this
+    tests only which remedy is named. The alternative has to be runnable, so it
+    is asserted as such rather than as the absence of the first one: an
+    empty parenthetical would pass a `not in` check while telling the operator
+    nothing.
+    """
+    root = _lens_repo(tmp_path)
+    (root / "scripts" / "panel_prompt.py").unlink()
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+
+    statuses = kit_doctor.inspect_lens_definitions(root, config, "scripts")
+    assert [(item.lens, item.state) for item in statuses] == [("adversarial", "missing")]
+
+    rendered = kit_doctor.render(
+        kit_doctor.Report(
+            kit_version_config=2,
+            kit_version_manifest=2,
+            engines_dir="scripts",
+            engines_dir_ok=True,
+            hooks_installed=True,
+            narrative_rendered={},
+            inspection_root=root,
+            lens_definitions=statuses,
+        )
+    )
+
+    assert kit_doctor._lens_definition_regeneration_command(root, "scripts") not in rendered
+    assert "scripts/panel_prompt.py — is NOT installed here" in rendered
+    assert "<kit checkout>/scripts/panel_prompt.py --root . --lens <name>" in rendered
+    # The invariant holds on both branches: naming a command is not running one.
+    assert "this check never executes the command or writes the definitions" in rendered
+
+
 def test_a_configured_compute_change_makes_the_definition_stale(tmp_path):
     root = _lens_repo(tmp_path)
     definition = root / ".claude" / "agents" / "adversarial.md"
@@ -1835,8 +1873,17 @@ def test_doctrine_prose_quoting_an_import_is_not_scanned(tmp_path):
 
 
 def test_a_missing_library_an_installed_engine_imports_is_broken_not_sized_down(tmp_path):
+    """The dependent carries its REAL hash, which is what makes it the version
+    the edge was derived from. `_manifest`'s default `None` used to stand here
+    and the assertion passed on presence alone — the confound #661 is about."""
     root = _fake_repo(tmp_path)  # installs scripts/check_doc_budget.py, no lib/
-    manifest = _manifest({"scripts/check_doc_budget.py": None, "scripts/lib/kitconfig.py": None})
+    target = root / "scripts" / "check_doc_budget.py"
+    manifest = _manifest(
+        {
+            "scripts/check_doc_budget.py": kit_doctor.sha256_of(target),
+            "scripts/lib/kitconfig.py": None,
+        }
+    )
     manifest["files"]["scripts/lib/kitconfig.py"]["required_by"] = ["scripts/check_doc_budget.py"]
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
     report = kit_doctor.inspect(root, manifest, config)
@@ -1868,12 +1915,23 @@ def test_the_dependent_is_looked_up_through_the_engines_remap(tmp_path):
     vendored engines under `scripts/devkit/` looks like it installed nothing and
     a genuinely broken install reports as sized-down."""
     root = _fake_repo(tmp_path, engines="scripts/devkit")
-    manifest = _manifest({"scripts/check_doc_budget.py": None, "scripts/lib/kitconfig.py": None})
+    target = root / "scripts" / "devkit" / "check_doc_budget.py"
+    manifest = _manifest(
+        {
+            "scripts/check_doc_budget.py": kit_doctor.sha256_of(target),
+            "scripts/lib/kitconfig.py": None,
+        }
+    )
     manifest["files"]["scripts/lib/kitconfig.py"]["required_by"] = ["scripts/check_doc_budget.py"]
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
     report = kit_doctor.inspect(root, manifest, config)
     states = {f.path: f.state for f in report.files}
     assert states["scripts/devkit/lib/kitconfig.py"] == "missing-required"
+    # The version check reads the dependent through the SAME remap. Comparing
+    # the vendored copy against `scripts/check_doc_budget.py` in the kit's own
+    # layout would find no file and drop the edge, restoring the sized-down
+    # misreading this test exists to catch, one lookup over.
+    assert [f.path for f in report.broken] == ["scripts/devkit/lib/kitconfig.py"]
 
 
 def test_a_manifest_without_the_field_degrades_to_the_old_report(tmp_path):
@@ -1886,6 +1944,55 @@ def test_a_manifest_without_the_field_degrades_to_the_old_report(tmp_path):
     states = {f.path: f.state for f in report.files}
     assert states["scripts/lib/kitconfig.py"] == "missing"
     assert report.broken == []
+
+
+def test_a_dependent_at_another_sha_does_not_make_a_new_dependency_broken(tmp_path):
+    """#661's mechanism at its smallest. The edge is derived from the KIT's
+    imports, so it describes the version the kit ships; the installed dependent
+    is at a different sha and its imports are therefore unknown. Presence alone
+    used to carry the edge across that gap and print "this install is broken,
+    not sized down" over a library nothing installed here imports.
+
+    The second half is what makes the narrowing safe rather than merely quieter:
+    the dependent whose version could not be confirmed is reported as drift by
+    the same run, so the report stops naming a remedy it cannot justify without
+    going silent about the tree.
+    """
+    root = _fake_repo(tmp_path)
+    lib = "scripts/lib/kitconfig.py"
+    manifest = _manifest({"scripts/check_doc_budget.py": _sha("what the kit ships"), lib: None})
+    manifest["files"][lib]["required_by"] = ["scripts/check_doc_budget.py"]
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(root, manifest, config)
+    states = {f.path: f.state for f in report.files}
+
+    assert states[lib] == "missing"
+    assert report.broken == []
+    assert states["scripts/check_doc_budget.py"] == "differs"
+    assert [f.path for f in report.drifted] == ["scripts/check_doc_budget.py"]
+
+
+def test_a_dependent_the_manifest_cannot_hash_drops_the_edge(tmp_path):
+    """The third answer to "is this dependent the version the edge describes" is
+    "unknown", and unknown resolves to NO edge — `derive_dependencies` states
+    that asymmetry and this is the version axis obeying it.
+
+    A manifest with no hash for the dependent is a manifest that cannot answer
+    the question at all. It also cannot judge that dependent's drift, which is
+    why the file lands `unknown-version` and the run still exits 1.
+    """
+    root = _fake_repo(tmp_path)
+    lib = "scripts/lib/kitconfig.py"
+    manifest = _manifest({"scripts/check_doc_budget.py": None, lib: None})
+    manifest["files"][lib]["required_by"] = ["scripts/check_doc_budget.py"]
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(root, manifest, config)
+    states = {f.path: f.state for f in report.files}
+
+    assert states[lib] == "missing"
+    assert report.broken == []
+    assert states["scripts/check_doc_budget.py"] == "unknown-version"
+    assert [f.path for f in report.drifted] == ["scripts/check_doc_budget.py"]
 
 
 def test_a_broken_install_is_not_a_green_exit(tmp_path, capsys):
@@ -3291,6 +3398,67 @@ def test_a_declared_absence_an_installed_engine_needs_is_still_broken(tmp_path):
     report = kit_doctor.inspect(root, manifest, config, baseline)
 
     assert _states(report)[lib] == "missing-required"
+    assert [f.path for f in report.broken] == [lib]
+
+
+def test_a_dependency_the_kit_gained_after_this_baseline_is_never_offered_not_broken(
+    tmp_path, capsys
+):
+    """#661's reproduction, in the shape the adopter hit it. The dependent is
+    installed and STALE — exactly what it hashes to in that repo's own baseline,
+    and not what the kit now ships — and the kit gained the library it imports
+    after the baseline was written, so the baseline mentions it in neither map.
+
+    The old filter read the stale dependent as agreement with the current import
+    graph and printed the hard verdict, directly above the `/upgrade` line that
+    is the real remedy. Both halves are pinned: the state, and the words an
+    operator actually reads.
+    """
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    lib = "scripts/lib/kitconfig.py"
+    baseline = _scoped_baseline({ENGINE: kit_doctor.sha256_of(target)}, unrecorded=(lib,))
+    assert lib not in baseline["not_installed"], "fixture is confounded: the lib was declined"
+
+    # The kit has moved the dependent on since this baseline; the library is one
+    # the moved version imports and the installed version does not.
+    manifest = _manifest({ENGINE: _sha("the kit's newer engine"), lib: None})
+    manifest["files"][lib]["required_by"] = [ENGINE]
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(root, manifest, config, baseline)
+
+    assert _states(report)[lib] == "new-upstream"
+    assert report.broken == []
+    assert [f.path for f in report.new_upstream] == [lib]
+    # The dependent is not excused: it is stale against the kit and says so.
+    assert _states(report)[ENGINE] == "stale"
+
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+    assert "this install is broken, not sized down" not in out
+    assert "✓ intact for this adoption" in out or "⚠ intact for this adoption" in out
+    assert "Run /upgrade to accept or decline them." in out
+
+
+def test_dropping_a_version_gap_edge_still_reports_a_deletion(tmp_path):
+    """The narrowing must not buy silence anywhere it applies. Same stale
+    dependent as above, but this baseline records the library AS installed — so
+    the absence is a deletion, and the fall-through the dropped edge exposes is
+    what has to say so. `missing-required` is checked FIRST, ahead of the
+    declared set, so dropping it is exactly where a real finding could be lost.
+    """
+    root = _fake_repo(tmp_path)
+    target = root / "scripts" / "check_doc_budget.py"
+    lib = "scripts/lib/kitconfig.py"
+    baseline = _scoped_baseline(
+        {ENGINE: kit_doctor.sha256_of(target), lib: _sha("the library, when it was installed")}
+    )
+    manifest = _manifest({ENGINE: _sha("the kit's newer engine"), lib: None})
+    manifest["files"][lib]["required_by"] = [ENGINE]
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(root, manifest, config, baseline)
+
+    assert _states(report)[lib] == "removed"
     assert [f.path for f in report.broken] == [lib]
 
 

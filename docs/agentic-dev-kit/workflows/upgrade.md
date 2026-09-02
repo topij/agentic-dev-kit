@@ -641,12 +641,18 @@ built-in defaults, leaving the adopter's entire `review.*` config inert. `kit_do
 derives this set from the Python import graph, so it is answering "what do *this*
 tree's installed components need", not a fixed list.
 
-**Then re-run `kit_doctor` after installing anything.** The set is computed against the
-components present *when the report ran*: a file is `missing-required` only if something
-that depends on it is already installed. So installing a previously-`missing` engine or
-hook can introduce requirements the first report had no reason to classify. Re-run
-before you rely on the list again, and treat the report as converged only when a run
-that installed nothing still shows no `missing-required`.
+**Then re-run `kit_doctor` after installing anything, and after refreshing anything.**
+The set is computed against the components present *when the report ran*, and against the
+**version** each of them is at: a file is `missing-required` only if something that
+depends on it is installed here **and is byte-identical to what the kit ships**. The
+import graph is derived from the kit's own tree, so it describes the kit's copy of an
+engine, and an older copy is present without running those imports — reading presence as
+agreement reported a healthy sized-down adopter as broken (`#661`). Two consequences for
+this step: installing a previously-`missing` engine or hook can introduce requirements
+the first report had no reason to classify, and so can **refreshing a `stale` one**, which
+is the more likely of the two here. Re-run before you rely on the list again, and treat
+the report as converged only when a run that changed nothing still shows no
+`missing-required`.
 
 - **`missing-required`** → install it. This is the one absent-file case that is **not**
   an operator decision: an installed component depends on it, and the report names
