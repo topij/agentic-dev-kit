@@ -14,10 +14,42 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-03 — two lanes landed the pilot's first two instrument fixes,
-and a lane's own panel caught a merge-gate bypass before it left the branch.
+Last updated: 2026-09-03 — the live-validation verifier is repo-only, the friction
+inbox was triaged, and the adopter pilot's Codex write pass is next.
 
-## Latest session — 2026-09-03 (two parallel lanes, in a Claude Code session)
+## Latest session — 2026-09-03 (`#662` and friction triage, in a Codex session)
+
+**Theme —** The shipped set now matches the intended adopter offer, and the session
+completed the operator-scoped friction triage before handing Phase 5 to its exit test.
+
+- **Runtime —** Codex desktop. This was the parity-sensitive implementation session
+  after the preceding Claude Code sessions; the shared workflow definitions were
+  sufficient to deliver and review the change.
+
+- **PR `#670` delivered `#662`'s repo-only route.** It assigned the verifier, its test,
+  and its evidence page a manifest role that keeps their hashes in the kit checkout's
+  self-check but excludes them from adopter inspection, install baselines, and upgrade
+  offers. The stale saved-plan link was removed in the same PR.
+
+- **The approved friction entries graduated through PR `#673`.** `TRI-01` and
+  `TRI-02` became `#671` and `#672`; `TRI-03`, `TRI-04`, and `TRI-05` remain parked.
+  The entries already accounted for by `#393` stayed active. The triage run used the
+  LLM-only, agent-executed route and retained its completed merge receipt.
+
+- **Runtime choice for the exit test is deliberate.** The pilot's read-only pass ran
+  in Claude Code; its write pass should run through Codex's `$upgrade` binding so the
+  Phase 5 claim is tested at the existing Codex adopter. Writes to cs-toolkit still
+  require that repository operator's explicit approval, and its pull request keeps
+  separate merge authority.
+
+▶ Next: `$session-start` — then, with explicit cs-toolkit write approval, run the
+adopter pilot write pass in Codex from a fresh current-main kit clone; preserve the
+repo-owned lane forks and runtime-neutral local policy, open the adopter PR ready, and
+do not merge without separate authority.
+
+______________________________________________________________________
+
+## Session — 2026-09-03 (two parallel lanes, in a Claude Code session)
 
 **Theme —** The pilot's findings became changes. Two isolated lanes fixed the instrument
 defects the read-only pass found, and the review that landed them cost more rounds than
@@ -348,52 +380,7 @@ tracker disposition for `#255`, then recommend the next parity slice without sta
 
 ______________________________________________________________________
 
-## Session — 2026-09-01 (draft-policy correction, in a Codex session)
-
-**Theme —** PR `#653` made completed pull requests ready for review by default across
-shared doctrine, adopter workflows, shipped baselines, runtime bindings, configured
-workflows and automatic follow-through. Draft remains only for a bounded material
-unfinished-work window that already needs a remote pull request; its creating run owns
-the ready transition.
-
-- **Runtime —** Codex desktop, assigned model `gpt-5.6-sol`, main reasoning effort
-  `xhigh`.
-
-- **The hook stops at an authority boundary.** Shell and response text select
-  non-authoritative candidate guidance; they do not prove that a lifecycle event ran,
-  identify its target, or authorize a mutation. After operation assessment,
-  authoritative forge identity and live draft state decide the conditional route. A
-  shell parser was deliberately abandoned in favour of harmless warning false
-  positives and fail-closed follow-through.
-
-- **The adopter contract moved with the policy.** Adopt stays local until its
-  operator-run initialization is complete; upgrade names the required
-  `triage.pr_draft: false` and `systemize.pr_draft: false` migration; the playbook,
-  lane contract, baseline templates and shared workflows carry the same bounded draft
-  exception.
-
-- **The review evidence is attached to the change.** PR `#653` carries the exact-head
-  Python 3.12 verification stamp, the superseded-head dispositions, and the final fresh
-  adversarial/correctness fallback-panel receipt for
-  `239de40fb09faae1bfb6e3b1c6af8464f8e67414`; squash
-  `dd536eee3e562fd806a4b90c8377ec532ebf6925` is the merge event.
-
-- **The sprint boundary was preserved.** This session did not start `#631` or the
-  retained Codex parallel-batch Phase 4 exit. `#621` kept the operator-set boundary,
-  and `saved_plans/claude-side-assessment_2026-08-26.md` remained operator-owned and
-  unstaged.
-
-- **The process lesson is durable.** The authority-boundary, hostile-corpus and
-  mutation lessons from this review are recorded in
-  [`review-process-learnings_2026-08-24.md`](../saved_plans/review-process-learnings_2026-08-24.md).
-
-▶ Next: `session-start` — re-read the live tracker and sprint boundary before choosing
-a slice; do not infer issue closure from PR `#653`'s merge.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Active open items from them are folded into the "Open for next session" lists above.
 
 ______________________________________________________________________
-
