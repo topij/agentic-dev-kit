@@ -19,12 +19,12 @@ inbox was triaged, and the adopter pilot's Codex write pass is next.
 
 ## Latest session — 2026-09-03 (`#662` and friction triage, in a Codex session)
 
-**Theme —** The shipped set now matches the intended adopter offer, and the session
-completed the operator-scoped friction triage before handing Phase 5 to its exit test.
+**Theme —** The verifier received its repo-only manifest role, the approved friction
+entries graduated, and Phase 5 passed to its exit test.
 
 - **Runtime —** Codex desktop. This was the parity-sensitive implementation session
-  after the preceding Claude Code sessions; the shared workflow definitions were
-  sufficient to deliver and review the change.
+  after the preceding Claude Code sessions. It applied the shared workflow definitions
+  through implementation and review without adding a runtime-specific workflow change.
 
 - **PR `#670` delivered `#662`'s repo-only route.** It assigned the verifier, its test,
   and its evidence page a manifest role that keeps their hashes in the kit checkout's

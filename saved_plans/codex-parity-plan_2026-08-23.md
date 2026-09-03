@@ -409,15 +409,16 @@ historical observation it was and is not silently refreshed.
   into this phase as its exit test, because the exit is only establishable by an
   upgrade run; withdrawing the live-validation verifier from the shipped manifest and
   putting review evidence on the pull request (`#603`, `#604`) join the phase; `#631`,
-  `#608` and `#255` are taken as declarations rather than mechanisms. Delivery order:
+  `#608` and `#255` are taken as declarations rather than mechanisms. Delivery order,
+  updated on 2026-09-03 by operator direction after the repo-only delivery:
   1. Adopter pilot, read-only pass first (`#607`, `#236`, `#243`).
-  2. Verifier and its test withdrawn from `kit-manifest.json`'s shipped set, with the
-     `CHANGELOG.md` entry.
-  3. `pr_watch.py --record-review` posting the disposition comment; stamp/head and
+  2. `pr_watch.py --record-review` posting the disposition comment; stamp/head and
      receipt/comment mismatches reported.
-  4. `#631`, `#608`, `#255` decided on the tracker and the matrix.
-  5. The pilot's write pass, on the adopter operator's approval; then the exit is
+  3. Verifier, its test, and its evidence page assigned the repo-only manifest role,
+     with the `CHANGELOG.md` entry.
+  4. The pilot's write pass, on the adopter operator's approval; then the exit is
      either established or the residue is filed.
+  5. `#631`, `#608`, and `#255` decided on the tracker and the matrix.
 - [ ] **Phase 6 — Gate parity and roll it out.** With the pilot pulled into Phase 5,
   this phase holds the cost and hygiene work the review found burning, then the gate:
   the proportional opening pass for record prose (`#585`); the suite measured and
@@ -730,11 +731,6 @@ and final open/unmerged fixture pull requests.
 - [x] Inspect adopter-side generated lens definitions against their configured
   mechanical compute carrier without duplicating installed-engine drift (PR `#655`;
   `#255` retains tracker disposition only).
-- [ ] Decide `#631` as a declaration: the Claude lane profile is task-scoping, the
-  boundary is the worktree plus branch protection, and the Codex mirror is
-  `--sandbox workspace-write`; the Claude prefix list and Codex sandbox syntax are not
-  interchangeable and no lane-side execution guard is built without a request for one
-  (re-sequenced 2026-09-02; the earlier wording asked for executable evidence first).
 - [ ] Run the cs-toolkit adopter pilot as this phase's exit test: a read-only pass
   from a pinned kit clone with `$REPO` and `$KIT` bound, a stamped record of every
   instrument misreading (the false `broken` verdict on `lib/runtime_adapters.py`
@@ -744,9 +740,14 @@ and final open/unmerged fixture pull requests.
   `live-validation-evidence.md` the repo-only role: retain release-manifest hashing
   and the kit checkout's drift check while omitting them from adopter inspection,
   install baselines, and `/upgrade` offers (`#662`, PR `#670`; added 2026-09-02).
-- [ ] Have `pr_watch.py --record-review` post a fixed-heading disposition comment at
+- [x] Have `pr_watch.py --record-review` post a fixed-heading disposition comment at
   the recorded head, and report a receipt without that comment and a body stamp whose
-  sha is not `headRefOid` (`#603`, `#604`; added 2026-09-02).
+  sha is not `headRefOid` (`#603`, `#604`, PR `#667`; added 2026-09-02).
+- [ ] Decide `#631` as a declaration: the Claude lane profile is task-scoping, the
+  boundary is the worktree plus branch protection, and the Codex mirror is
+  `--sandbox workspace-write`; the Claude prefix list and Codex sandbox syntax are not
+  interchangeable and no lane-side execution guard is built without a request for one
+  (re-sequenced 2026-09-02; the earlier wording asked for executable evidence first).
 - [ ] Declare `#608` as a matrix row and deliver `#255`'s general mechanism as one
   test over per-runtime config keys (added 2026-09-02).
 
