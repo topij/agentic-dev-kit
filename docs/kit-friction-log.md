@@ -24,29 +24,30 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
-## 2026-09-03
+## 2026-09-03 — Backlog migrated to GitHub Issues (#671–#672)
 
-- **A review lens that backgrounds a long verification loses its entire report, and the
-  failure presents as silence.** A panel lens on PR `#668` started `make test` in the
-  background and its turn ended while waiting; it returned no report at all, twice in a
-  row, each time saying only that it was waiting. To the cockpit reading agent output,
-  no-report is indistinguishable from a clean pass — the same shape as a bot outage read
-  as an approval. It was recovered by resuming the agent with an explicit prohibition on
-  blocking, after which it reported normally and disclosed the suite run as incomplete.
-  **M** — reproduction and mechanism are both clear, and the remedy is one line in the
-  lens prompt (`panel_prompt.py` could carry it, since every lens gets that contract),
-  so this is issue-shaped rather than inbox-shaped. Parked here only because it arose in
-  an unattended session with no route to exact-payload approval; it should be filed
-  rather than accumulated.
+Swept in **LLM-only mode** because the configured draft and finalize engines are absent;
+the results are **agent-executed**, not engine-verified. Graduated:
+[#671](https://github.com/topij/agentic-dev-kit/issues/671) and
+[#672](https://github.com/topij/agentic-dev-kit/issues/672). Each issue was searched by
+its exact idempotency marker before creation and re-read afterward for its approved
+title, body, project, labels, marker, and payload digest.
 
-- **A mutation that silently fails to apply reads as a clean kill.** While pinning
-  `#667`'s stdin branch, the cockpit's first mutation anchored on text that a comment
-  block interrupted, so the edit never landed and the suite reported `304 passed` against
-  unmutated code. Taken at face value that is a survivor read as a kill, in the direction
-  that matters. Caught by asserting the byte actually changed before trusting the run,
-  which is the practice `#33` and `#112` already argue for from the false-kill side.
-  **S** — a known class seen from a new angle (the mutation not applying, rather than the
-  drift check over-killing); recorded as an occurrence rather than as a new defect.
+**Kept active below this marker:** `TRI-03`, `TRI-04`, and `TRI-05`, exactly as the
+operator decided. The 2026-09-01 entry and its recurrence are already recorded on
+[#393](https://github.com/topij/agentic-dev-kit/issues/393); they were excluded from the
+proposal set and remain byte-identical below rather than being swept without an explicit
+archive decision. Content added after the frozen draft also remains active verbatim.
+
+**Approval.** The exact payloads were presented in the current Codex session. The
+operator replied on 2026-09-03: `approve TRI-01 TRI-02` and `park TRI-03 TRI-04 TRI-05`.
+
+**Frozen inbox.** `shasum -a 256
+state/triage/frozen-inbox_live_2026-09-03_triage-1565b7bfdf11475f9a92f06002f463d4.json`
+at `e78c215c9bd1bd3e007a7d3c9753b2013e5a8221` on 2026-09-03 printed
+`03de6ef926e190a5800b939ee652c7c9607be58f3e95362ece4365ac3bc6ebef`. Finalization
+re-read the active inbox and admitted only the byte-identical frozen blocks for
+`TRI-01` and `TRI-02` to this sweep.
 
 ## 2026-09-01
 

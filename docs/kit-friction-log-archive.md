@@ -3,6 +3,46 @@
 Graduated friction entries live here after they have been routed to the tracker
 (GitHub Issues on this repo) or promoted into a repeated-pattern rule.
 
+## Graduated 2026-09-03 — GitHub Issues (#671–#672)
+
+Swept by the `triage-friction-log` workflow in LLM-only mode; every result is
+agent-executed rather than engine-verified. The entries below graduated into
+[#671](https://github.com/topij/agentic-dev-kit/issues/671) and
+[#672](https://github.com/topij/agentic-dev-kit/issues/672) after exact-payload approval,
+pre-create marker search, creation, and authoritative read-back. The approval record and
+frozen-snapshot provenance are in this sweep's graduation marker in
+`kit-friction-log.md`.
+
+Entries `TRI-03`, `TRI-04`, and `TRI-05` remain parked in `kit-friction-log.md`. The
+already-accounted [#393](https://github.com/topij/agentic-dev-kit/issues/393) blocks and
+content outside the approved frozen sweep remain there too.
+
+Below, verbatim, with the heading demoted one level.
+
+### 2026-09-03
+
+- **A review lens that backgrounds a long verification loses its entire report, and the
+  failure presents as silence.** A panel lens on PR `#668` started `make test` in the
+  background and its turn ended while waiting; it returned no report at all, twice in a
+  row, each time saying only that it was waiting. To the cockpit reading agent output,
+  no-report is indistinguishable from a clean pass — the same shape as a bot outage read
+  as an approval. It was recovered by resuming the agent with an explicit prohibition on
+  blocking, after which it reported normally and disclosed the suite run as incomplete.
+  **M** — reproduction and mechanism are both clear, and the remedy is one line in the
+  lens prompt (`panel_prompt.py` could carry it, since every lens gets that contract),
+  so this is issue-shaped rather than inbox-shaped. Parked here only because it arose in
+  an unattended session with no route to exact-payload approval; it should be filed
+  rather than accumulated.
+
+- **A mutation that silently fails to apply reads as a clean kill.** While pinning
+  `#667`'s stdin branch, the cockpit's first mutation anchored on text that a comment
+  block interrupted, so the edit never landed and the suite reported `304 passed` against
+  unmutated code. Taken at face value that is a survivor read as a kill, in the direction
+  that matters. Caught by asserting the byte actually changed before trusting the run,
+  which is the practice `#33` and `#112` already argue for from the false-kill side.
+  **S** — a known class seen from a new angle (the mutation not applying, rather than the
+  drift check over-killing); recorded as an occurrence rather than as a new defect.
+
 ## Graduated 2026-08-29 — GitHub Issues (#641–#645)
 
 Swept by the `triage-friction-log` workflow in LLM-only mode (the engine tracked in
