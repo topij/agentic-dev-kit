@@ -12,8 +12,8 @@ not.
 Read in a Claude Code session (model `claude-fable-5-1`) at
 `89dbb3e67497586254e913dc3f5fdf7f648746bd` on 2026-09-02 against the tree, the
 tracker, the merged pull requests, the cs-toolkit checkout at
-`/Users/topi/Coding/in-parallel/cs-toolkit` (`$CS` below), and the untracked
-[`claude-side-assessment_2026-08-26.md`](claude-side-assessment_2026-08-26.md). No
+`/Users/topi/Coding/in-parallel/cs-toolkit` (`$CS` below), and the since-deleted
+`claude-side-assessment_2026-08-26.md`. No
 code changed. Every figure below is a reading, names its command, and was taken at that
 revision on that date unless the row says otherwise. The re-sequencing it recommends is
 applied to *Sprint status* and *Delivery plan* below; the readings themselves are

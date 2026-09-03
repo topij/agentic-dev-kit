@@ -31,7 +31,7 @@
       "sha256": "dae81c349468e6eef6e42e44251e6df39a95176a3f0b2203dd20b75443ce83d0"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
-      "role": "doctrine",
+      "role": "repo-only",
       "sha256": "4d9072247f215b3dd61883cf4a6ab11bb353a909fe9bb4569505670e92cb0f6b"
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
@@ -72,7 +72,7 @@
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
-      "sha256": "528bf5d6e7bac0010a5f37e5443f5a28d3bd616f4b0a2da6fa7da7c946a94dae"
+      "sha256": "2cad70fa094ebc01f78e835784b2f84ee9ffd6b56a42d3d039c5995e42d4bf37"
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
@@ -139,7 +139,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "77c3e37c76616cc863b5e07c2213a7de0c242e3fc27cbee22f60a10024055a81"
+      "sha256": "46cacb21690996d943709b457dce2d979aec42ebdde1c8b60c721fee122fc201"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -253,7 +253,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "539ae7d0b5bbb5e7c462a1e2ec32c284cac56548603f6810a3b6793c000486c9"
+      "sha256": "03a926518cfa1fc30290600b1b29302c2bb1ff9a8c43590a2458e514930ffc0d"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -268,7 +268,7 @@
       "sha256": "2fa95d6708194c57d5d4f4efb1e6f7a563633786f344d3478e3345c478ddbd3c"
     },
     "scripts/tests/test_live_validation_bundle.py": {
-      "role": "test",
+      "role": "repo-only",
       "sha256": "c84db1469e363628bbaac15cb0f7412e23a8240532ec003901ac2c039b4442c7"
     },
     "scripts/tests/test_mutation_gate.py": {
@@ -304,7 +304,7 @@
       "sha256": "915aae52d1b6fe38be757589d836c0f1198b79a4e20ba2a438aa2ef6fbf04bd9"
     },
     "scripts/verify_live_validation_bundle.py": {
-      "role": "engine",
+      "role": "repo-only",
       "sha256": "99dee623c937cd6374b978fd77ac3dbd582ab759bc79b26e91e697cfb329b494"
     }
   },
