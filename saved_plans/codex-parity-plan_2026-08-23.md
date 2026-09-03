@@ -17,7 +17,9 @@ tracker, the merged pull requests, the cs-toolkit checkout at
 code changed. Every figure below is a reading, names its command, and was taken at that
 revision on that date unless the row says otherwise. The re-sequencing it recommends is
 applied to *Sprint status* and *Delivery plan* below; the readings themselves are
-history from the moment they were written and are not to be refreshed in place.
+history from the moment they were written and are not to be refreshed in place. Their
+ordering and starter prose is likewise historical; only the maintained *Sprint status*
+and *Delivery plan* sections are executable after the later updates recorded there.
 
 ### Verdict
 
@@ -206,8 +208,8 @@ this plan owns exits and order, and a fact appears once with pointers.
 
 ### Opportunities
 
-Each is one slice. The order is the recommendation, and it is what *Sprint status* and
-*Delivery plan* below now carry.
+This is the 2026-09-02 recommendation as written. Its order is superseded by the
+maintained *Sprint status* and *Delivery plan* sections below.
 
 1. **Run the adopter pilot now, as Phase 5's exit test.** The Phase 5 exit ("an existing
    Codex adopter can upgrade without retaining stale runtime behaviour or losing local
@@ -407,17 +409,49 @@ historical observation it was and is not silently refreshed.
   status, and no mechanism yet prevents the next such key. **Re-sequenced on
   2026-09-02** (*Sprint review* above): the cs-toolkit adopter pilot moves from Phase 6
   into this phase as its exit test, because the exit is only establishable by an
-  upgrade run; withdrawing the live-validation verifier from the shipped manifest and
-  putting review evidence on the pull request (`#603`, `#604`) join the phase; `#631`,
-  `#608` and `#255` are taken as declarations rather than mechanisms. Delivery order:
-  1. Adopter pilot, read-only pass first (`#607`, `#236`, `#243`).
-  2. Verifier and its test withdrawn from `kit-manifest.json`'s shipped set, with the
-     `CHANGELOG.md` entry.
-  3. `pr_watch.py --record-review` posting the disposition comment; stamp/head and
+  upgrade run; assigning the live-validation verifier a repo-only role and withdrawing
+  it from the adopter-shipped set, plus putting review evidence on the pull request
+  (`#603`, `#604`), join the phase; `#631` and `#608` are taken as declarations rather
+  than mechanisms, while `#255` retains its general enforcement mechanism. Delivery
+  order, updated on 2026-09-03 by operator direction after the repo-only delivery:
+  1. [x] Adopter pilot, read-only pass first (`#607`, `#236`, `#243`).
+  2. [x] `pr_watch.py --record-review` posting the disposition comment; stamp/head and
      receipt/comment mismatches reported.
-  4. `#631`, `#608`, `#255` decided on the tracker and the matrix.
-  5. The pilot's write pass, on the adopter operator's approval; then the exit is
-     either established or the residue is filed.
+  3. [x] Verifier, its test, and its evidence page assigned the repo-only manifest role,
+     with the `CHANGELOG.md` entry.
+  4. [ ] The initial pilot write pass, on the adopter operator's approval, followed by a
+     separate fork-reconciliation stage based on the upgrade branch. Bind `$REPO` to the
+     adopter checkout, require its canonical origin to match the approved remote, and
+     bind `$KIT` to its fresh clone at `/tmp/agentic-dev-kit`; assert the working
+     directory is in `$REPO` immediately before every write. Record the kit source SHA
+     plus every created PR identity, base name, and head. For a
+     no-change stage, record its exact invocation, successful no-change output, input
+     and output SHA, tree equality, clean status, and input linkage to the preceding
+     stage instead of manufacturing a PR. File any residue. This pass does not establish
+     the phase exit.
+  5. [ ] The remaining `#243` field exercises completed, `#631` and `#608` decided on the
+     tracker and matrix, and `#255`'s general mechanism delivered.
+  6. [ ] Replay the write pass and fork reconciliation from the then-current kit source,
+     using the same `$REPO` origin check, `$KIT` path, and immediately-before-every-write
+     directory assertion as the initial pass. For a stage with a diff, bind its PR
+     identity, base name and head and require the protected → upgrade → reconciliation chain
+     for the PRs that exist. For a
+     no-change stage, record its exact invocation, successful no-change output, input
+     and output SHA, tree equality, clean status, and input linkage to the preceding
+     stage; never manufacture an empty PR. Verify the resulting adopter head against
+     the adopter condition below. Movement of a bound adopter ref before the exit
+     read-back invalidates the evidence. Capture one
+     authoritative tuple containing the kit source and protected head, the adopter
+     repository's canonical origin URL, adopter protected head, exact resulting adopter
+     head, every created adopter PR's identity, base name and head, and each no-change stage's
+     invocation, output, input/output equality, tree-equality check, clean status, and
+     preceding-stage linkage. Require the origin URL to match the approved cs-toolkit
+     remote and the kit source to equal the protected head in both snapshots. Verify
+     every ancestry edge and the adopter condition against those immutable SHAs, then
+     capture the full tuple again and require it to be byte-identical. A mismatch
+     requires replay. Publish both snapshots and the stamped verification result on the
+     kit wrap-up PR before it merges. Later ref movement is a separate event; wrap-up
+     records the observation without treating its own commit as the replay source.
 - [ ] **Phase 6 — Gate parity and roll it out.** With the pilot pulled into Phase 5,
   this phase holds the cost and hygiene work the review found burning, then the gate:
   the proportional opening pass for record prose (`#585`); the suite measured and
@@ -547,7 +581,8 @@ kit upgrade.
 
 PR `#599` delivered the Phase 3 starter and closed the declared structural exit. The
 starter it preserved (`feat/codex-environment-capable-launcher`) was consumed by PR
-`#609` on 2026-08-26. The next sprint starter, set by the 2026-09-02 review:
+`#609` on 2026-08-26. The next sprint starter set by the 2026-09-02 review was consumed
+by the read-only adopter pass later that day:
 
 ```text
 In a Claude Code session, run the cs-toolkit adopter pilot read-only first. Bind
@@ -729,31 +764,95 @@ and final open/unmerged fixture pull requests.
   `parallel`, `triage-friction-log`, and `post-merge-systemize` (`#243`).
 - [x] Inspect adopter-side generated lens definitions against their configured
   mechanical compute carrier without duplicating installed-engine drift (PR `#655`;
-  `#255` retains tracker disposition only).
+  `#255`'s general enforcement mechanism remains separate).
+- [x] Complete the cs-toolkit adopter pilot's read-only pass from a pinned kit clone
+  with `$REPO` and `$KIT` bound; its stamped instrument readings live in
+  [`cs-toolkit-adopter-pilot-readonly_2026-09-02.md`](cs-toolkit-adopter-pilot-readonly_2026-09-02.md)
+  (`#607`, `#236`; added 2026-09-02).
+- [ ] Run the initial write pass on the adopter operator's approval and a separate
+  fork-reconciliation stage based on its branch. Bind `$REPO` to the adopter and `$KIT`
+  to the fresh kit clone at `/tmp/agentic-dev-kit`, the path used by Upgrade Step 5.
+  Record `$REPO`'s canonical origin URL and require it to match the approved cs-toolkit
+  remote; assert `pwd` is in `$REPO` immediately before every write. Invoke `$upgrade`
+  in `$REPO` while following `$KIT`'s workflow. Record the kit source SHA plus every
+  created PR identity, base name, and head. For a no-change stage, record its exact
+  invocation, successful no-change output, input and output SHA, tree equality, clean
+  status, and input linkage to the preceding stage instead of manufacturing a PR. Do
+  not close the phase.
+- [x] Give `scripts/verify_live_validation_bundle.py`, its test and
+  `live-validation-evidence.md` the repo-only role: retain release-manifest hashing
+  and the kit checkout's drift check while omitting them from adopter inspection,
+  install baselines, and `/upgrade` offers (`#662`, PR `#670`; added 2026-09-02).
+- [x] Have `pr_watch.py --record-review` post a fixed-heading disposition comment at
+  the recorded head, and report a receipt without that comment and a body stamp whose
+  sha is not `headRefOid` (`#603`, `#604`, PR `#667`; added 2026-09-02).
 - [ ] Decide `#631` as a declaration: the Claude lane profile is task-scoping, the
   boundary is the worktree plus branch protection, and the Codex mirror is
   `--sandbox workspace-write`; the Claude prefix list and Codex sandbox syntax are not
   interchangeable and no lane-side execution guard is built without a request for one
   (re-sequenced 2026-09-02; the earlier wording asked for executable evidence first).
-- [ ] Run the cs-toolkit adopter pilot as this phase's exit test: a read-only pass
-  from a pinned kit clone with `$REPO` and `$KIT` bound, a stamped record of every
-  instrument misreading (the false `broken` verdict on `lib/runtime_adapters.py`
-  first), then the write pass on the adopter operator's approval (`#607`, `#236`,
-  `#243`; added 2026-09-02).
-- [x] Give `scripts/verify_live_validation_bundle.py`, its test and
-  `live-validation-evidence.md` the repo-only role: retain release-manifest hashing
-  and the kit checkout's drift check while omitting them from adopter inspection,
-  install baselines, and `/upgrade` offers (`#662`, PR `#670`; added 2026-09-02).
-- [ ] Have `pr_watch.py --record-review` post a fixed-heading disposition comment at
-  the recorded head, and report a receipt without that comment and a body stamp whose
-  sha is not `headRefOid` (`#603`, `#604`; added 2026-09-02).
 - [ ] Declare `#608` as a matrix row and deliver `#255`'s general mechanism as one
   test over per-runtime config keys (added 2026-09-02).
+- [ ] Replay the adopter write pass and fork reconciliation from the current kit
+  protected-branch head, using the same `$REPO` origin check, `$KIT` path, and
+  immediately-before-every-write directory assertion as the initial pass. Bind every
+  created PR's identity, base name and head and require the protected → upgrade →
+  reconciliation ancestry for the PRs that exist. For a
+  no-change stage, record its exact invocation, successful no-change output, input and
+  output SHA, tree equality, clean status, and input linkage to the preceding stage
+  instead of manufacturing an empty PR. Verify the resulting adopter head against the
+  adopter condition below. Movement of a bound adopter ref before the exit read-back
+  invalidates the evidence. Capture one
+  authoritative tuple containing the kit source and protected head, the adopter
+  repository's canonical origin URL, adopter protected head, exact resulting adopter
+  head, every created adopter PR's identity, base name and head, and each no-change stage's
+  invocation, output, input/output equality, tree-equality check, clean status, and
+  preceding-stage linkage. Require the origin URL to match the approved cs-toolkit
+  remote and the kit source to equal the protected head in both snapshots. Verify every
+  ancestry edge and the adopter condition against those immutable SHAs, then capture
+  the full tuple again and require it to be byte-identical. A mismatch requires replay.
+  Publish both snapshots and the stamped verification result on the kit wrap-up PR
+  before it merges. Later ref movement is a separate event; wrap-up records the
+  observation without treating its own commit as the replay source.
+
+The **adopter condition** is a reproducible set of assertions at the resulting adopter
+head:
+
+- Run the fresh kit clone's Upgrade Step 5 commands against the adopter. The current-kit
+  doctor report must satisfy that step's mismatch, declared-install-set,
+  deliberate-local-patch, and baseline-SHA assertions; the installed-test runner and
+  document-budget command must succeed.
+- Run the adopter's `make test`.
+- Derive an evidence matrix from the upstream changes between the adopter's kit baseline
+  and the bound kit source for `scripts/dev_session.sh` and
+  `scripts/reconcile_sessions.sh`, plus the reconciliation diff for those repo-owned
+  forks and their runtime-neutral local-policy files. Map every diff hunk to a passing
+  exact test node or a reviewed not-applicable disposition. The matrix must also record
+  the adapter report and show no required Claude or Codex binding missing.
+- Require `git status --short` to print no output at the resulting adopter head.
 
 Done when an existing Codex adopter can upgrade without retaining stale runtime
-behavior or losing local policy. That exit is established by the pilot's write pass
-and by nothing else; merged delivery slices are not used as a reassuring substitute
-for it.
+behavior or losing local policy, the remaining `#243` field exercises are complete,
+`#631` and `#608` carry their declarations, and `#255`'s general mechanism is delivered.
+The final adopter replay binds the kit protected-branch head to its source SHA; binds
+every created adopter PR identity, base name, and head; records any no-change stage's
+exact invocation, successful no-change output, input and output SHA, tree equality,
+clean status, and preceding-stage linkage; proves the ancestry chain for the PRs that
+exist; and verifies the resulting adopter head against the adopter condition above.
+Movement or retargeting of a bound adopter ref invalidates the evidence when it occurs
+before the exit read-back. Capture the full authoritative tuple of kit and adopter
+protected heads, the adopter repository's canonical origin URL, the exact resulting
+adopter head, every created adopter PR's identity, base name and head, and each no-change
+stage's invocation, output, input/output equality, tree-equality check, clean status,
+and preceding-stage linkage. Require the origin URL to match the approved cs-toolkit
+remote and the kit source to equal the protected head in both snapshots; verify the
+ancestry edges and adopter condition against those immutable SHAs; then capture the
+tuple again and require a byte-identical result. Publish both snapshots and the stamped
+verification result on the kit wrap-up PR before it merges.
+That stable bundle establishes the exit at the refs it names. Later work carries its
+own verification obligation rather than rewriting the observation; wrap-up records the
+event without treating its own commit as the replay source. Nothing else establishes
+the exit; merged delivery slices are not used as a reassuring substitute for it.
 
 ### Phase 6 — Gate parity and roll it out
 

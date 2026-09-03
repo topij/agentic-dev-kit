@@ -5,6 +5,85 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-09-01 (parity reconciliation and lens diagnostics, in a Codex session)
+
+**Theme —** The session reconciled the parity plan and tracker against live repository
+state, then PR `#655` delivered `#255`'s adopter-side lens-definition diagnostic without
+duplicating the existing engine-drift responsibility.
+
+- **Runtime —** Codex desktop, assigned model `gpt-5.6-sol`, main reasoning effort
+  `high`.
+
+- **The tracker now follows delivered contracts.** The 2026-09-01 reconciliation
+  closed `#365`, `#169`, `#466`, `#601`, `#605`, and `#606` after read-back of their
+  merged repository evidence.
+
+- **PR `#655` keeps the responsibilities separate.** The already-running doctor
+  renders the expected adopter-owned Claude definition; the existing manifest-backed
+  file report continues to own installed-engine drift. The regeneration remedy changes
+  to the inspected root, creates the target directory, and quotes configured paths.
+  The generator imports its sibling doctor before `lib`, and the manifest derives that
+  dependency.
+
+- **Review changed the design rather than merely adding guards.** The renderer-bundle
+  authentication approach was removed when successive findings showed it duplicated
+  engine drift. The surviving boundary, command-context fixtures, and DRY ownership
+  lessons are recorded in
+  [`review-process-learnings_2026-08-24.md`](../saved_plans/review-process-learnings_2026-08-24.md).
+
+- **The remaining parity boundary is explicit.** Phase 4 still needs the separately
+  retained Codex parallel-batch evidence run; `#621` does not own it. Phase 5 retains
+  `#236`, `#243`, and `#631`; `#255` needs tracker disposition rather than more
+  implementation. Phase 6 retains adoption fixtures, trusted runtime smoke tests,
+  maintained parity reporting, `#607`, and `#608`. This session did not start `#631`
+  or the Phase 4 run.
+
+▶ Next: `session-start` — verify PR `#655` and `#255` live, present the exact proposed
+tracker disposition for `#255`, then recommend the next parity slice without starting
+`#631` or the retained Phase 4 Codex parallel-batch run.
+
+## Session — 2026-09-01 (draft-policy correction, in a Codex session)
+
+**Theme —** PR `#653` made completed pull requests ready for review by default across
+shared doctrine, adopter workflows, shipped baselines, runtime bindings, configured
+workflows and automatic follow-through. Draft remains only for a bounded material
+unfinished-work window that already needs a remote pull request; its creating run owns
+the ready transition.
+
+- **Runtime —** Codex desktop, assigned model `gpt-5.6-sol`, main reasoning effort
+  `xhigh`.
+
+- **The hook stops at an authority boundary.** Shell and response text select
+  non-authoritative candidate guidance; they do not prove that a lifecycle event ran,
+  identify its target, or authorize a mutation. After operation assessment,
+  authoritative forge identity and live draft state decide the conditional route. A
+  shell parser was deliberately abandoned in favour of harmless warning false
+  positives and fail-closed follow-through.
+
+- **The adopter contract moved with the policy.** Adopt stays local until its
+  operator-run initialization is complete; upgrade names the required
+  `triage.pr_draft: false` and `systemize.pr_draft: false` migration; the playbook,
+  lane contract, baseline templates and shared workflows carry the same bounded draft
+  exception.
+
+- **The review evidence is attached to the change.** PR `#653` carries the exact-head
+  Python 3.12 verification stamp, the superseded-head dispositions, and the final fresh
+  adversarial/correctness fallback-panel receipt for
+  `239de40fb09faae1bfb6e3b1c6af8464f8e67414`; squash
+  `dd536eee3e562fd806a4b90c8377ec532ebf6925` is the merge event.
+
+- **The sprint boundary was preserved.** This session did not start `#631` or the
+  retained Codex parallel-batch Phase 4 exit. `#621` kept the operator-set boundary,
+  and `saved_plans/claude-side-assessment_2026-08-26.md` remained operator-owned and
+  unstaged.
+
+- **The process lesson is durable.** The authority-boundary, hostile-corpus and
+  mutation lessons from this review are recorded in
+  [`review-process-learnings_2026-08-24.md`](../saved_plans/review-process-learnings_2026-08-24.md).
+
+▶ Next: `session-start` — re-read the live tracker and sprint boundary before choosing
+a slice; do not infer issue closure from PR `#653`'s merge.
+
 ## Session — 2026-08-31 (durable live-validation evidence, in a Codex session)
 
 **Theme —** PR `#651` settled the retained-bundle verifier around an explicit object:

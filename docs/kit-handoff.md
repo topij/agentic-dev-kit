@@ -14,10 +14,72 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-03 — two lanes landed the pilot's first two instrument fixes,
-and a lane's own panel caught a merge-gate bypass before it left the branch.
+Last updated: 2026-09-03 — the live-validation verifier is repo-only, the friction
+inbox was triaged, and the adopter pilot's Codex write pass is next.
 
-## Latest session — 2026-09-03 (two parallel lanes, in a Claude Code session)
+## Latest session — 2026-09-03 (`#662` and friction triage, in a Codex session)
+
+**Theme —** The verifier received its repo-only manifest role, the approved friction
+entries graduated, and Phase 5 passed to its initial adopter write rehearsal.
+
+- **Runtime —** Codex desktop. This was the parity-sensitive implementation session
+  after the preceding Claude Code sessions. It applied the shared workflow definitions
+  through implementation and review without adding a runtime-specific workflow change.
+
+- **PR `#670` delivered `#662`'s repo-only route.** It assigned the verifier, its test,
+  and its evidence page a manifest role that keeps their hashes in the kit checkout's
+  self-check but excludes them from adopter inspection, install baselines, and upgrade
+  offers. The stale saved-plan link was removed in the same PR.
+
+- **The approved friction entries graduated through PR `#673`.** `TRI-01` and
+  `TRI-02` became `#671` and `#672`; `TRI-03`, `TRI-04`, and `TRI-05` remain parked.
+  The entries already accounted for by `#393` stayed active. The triage run used the
+  LLM-only, agent-executed route and retained its completed merge receipt.
+
+- **The parked inbox still needs a later disposition pass.**
+  `uv run scripts/check_doc_budget.py` at
+  `e55ae691d948b525ffba0919acd6f960c16b98f2` on 2026-09-03 prescribed
+  `triage-friction-log`; a future run must preserve the parked decisions unless the
+  operator supplies fresh exact dispositions.
+
+- **Runtime choice for the initial write pass is deliberate.** The pilot's read-only
+  pass ran in Claude Code; its write pass should run through Codex's `$upgrade` binding
+  so the Phase 5 claim is tested at the existing Codex adopter. Writes to cs-toolkit
+  still require that repository operator's explicit approval, and its pull request
+  keeps separate merge authority.
+
+▶ Next: `$session-start` — then, with explicit cs-toolkit write approval, run the
+initial adopter pilot write pass in Codex. Bind `$REPO` to cs-toolkit and `$KIT` to a
+fresh clone of the kit's configured protected branch at `/tmp/agentic-dev-kit`, the path
+used by Upgrade Step 5. Record `$REPO`'s canonical origin URL and require it to match the
+approved cs-toolkit remote; assert `pwd` is in `$REPO` immediately before every write.
+Invoke `$upgrade` in `$REPO` while following `$KIT`'s workflow; it must leave the
+repo-owned lane forks untouched. Separately run reconciliation based on the upgrade
+branch; preserve runtime-neutral local policy and open a PR when that stage has a diff.
+Record the kit source SHA plus every created PR identity, base name, and head.
+For a no-change stage, record its exact invocation, successful no-change output, input
+and output SHA, tree equality, and clean status; its input must equal the preceding
+stage's output. Do not manufacture an empty PR. Do not claim the Phase 5 exit: `#243`,
+`#631`, `#608`, and `#255` remain. After those land, the final replay must use the
+then-current kit source, confirm each created PR's base-name and ancestry chain, record
+any no-change stage, and verify the final adopter head.
+At the exit decision, capture one authoritative tuple containing the kit source and
+configured protected head, the adopter repository's canonical origin URL, adopter
+protected head, exact resulting adopter head, and every created adopter PR's identity,
+base name and head. Require the origin URL to match the approved cs-toolkit remote and the
+kit source to equal the configured protected head in that tuple. Include each no-change
+stage's invocation, output, input/output equality, tree-equality check, clean status,
+and preceding-stage linkage. Verify every ancestry edge and the adopter condition
+defined in the maintained parity plan against those immutable SHAs, then capture the
+full tuple again and require it to be byte-identical.
+A mismatch requires replay. Publish both snapshots and the stamped verification result
+before the kit wrap-up PR merges; later ref movement is a separate event and does not
+rewrite the observation. The wrap-up records that event without treating its own commit
+as the replay source. Do not merge any created adopter PR without separate authority.
+
+______________________________________________________________________
+
+## Session — 2026-09-03 (two parallel lanes, in a Claude Code session)
 
 **Theme —** The pilot's findings became changes. Two isolated lanes fixed the instrument
 defects the read-only pass found, and the review that landed them cost more rounds than
@@ -309,91 +371,7 @@ settle `#255`'s two remaining undeclared keys.
 
 ______________________________________________________________________
 
-## Session — 2026-09-01 (parity reconciliation and lens diagnostics, in a Codex session)
-
-**Theme —** The session reconciled the parity plan and tracker against live repository
-state, then PR `#655` delivered `#255`'s adopter-side lens-definition diagnostic without
-duplicating the existing engine-drift responsibility.
-
-- **Runtime —** Codex desktop, assigned model `gpt-5.6-sol`, main reasoning effort
-  `high`.
-
-- **The tracker now follows delivered contracts.** The 2026-09-01 reconciliation
-  closed `#365`, `#169`, `#466`, `#601`, `#605`, and `#606` after read-back of their
-  merged repository evidence.
-
-- **PR `#655` keeps the responsibilities separate.** The already-running doctor
-  renders the expected adopter-owned Claude definition; the existing manifest-backed
-  file report continues to own installed-engine drift. The regeneration remedy changes
-  to the inspected root, creates the target directory, and quotes configured paths.
-  The generator imports its sibling doctor before `lib`, and the manifest derives that
-  dependency.
-
-- **Review changed the design rather than merely adding guards.** The renderer-bundle
-  authentication approach was removed when successive findings showed it duplicated
-  engine drift. The surviving boundary, command-context fixtures, and DRY ownership
-  lessons are recorded in
-  [`review-process-learnings_2026-08-24.md`](../saved_plans/review-process-learnings_2026-08-24.md).
-
-- **The remaining parity boundary is explicit.** Phase 4 still needs the separately
-  retained Codex parallel-batch evidence run; `#621` does not own it. Phase 5 retains
-  `#236`, `#243`, and `#631`; `#255` needs tracker disposition rather than more
-  implementation. Phase 6 retains adoption fixtures, trusted runtime smoke tests,
-  maintained parity reporting, `#607`, and `#608`. This session did not start `#631`
-  or the Phase 4 run.
-
-▶ Next: `session-start` — verify PR `#655` and `#255` live, present the exact proposed
-tracker disposition for `#255`, then recommend the next parity slice without starting
-`#631` or the retained Phase 4 Codex parallel-batch run.
-
-______________________________________________________________________
-
-## Session — 2026-09-01 (draft-policy correction, in a Codex session)
-
-**Theme —** PR `#653` made completed pull requests ready for review by default across
-shared doctrine, adopter workflows, shipped baselines, runtime bindings, configured
-workflows and automatic follow-through. Draft remains only for a bounded material
-unfinished-work window that already needs a remote pull request; its creating run owns
-the ready transition.
-
-- **Runtime —** Codex desktop, assigned model `gpt-5.6-sol`, main reasoning effort
-  `xhigh`.
-
-- **The hook stops at an authority boundary.** Shell and response text select
-  non-authoritative candidate guidance; they do not prove that a lifecycle event ran,
-  identify its target, or authorize a mutation. After operation assessment,
-  authoritative forge identity and live draft state decide the conditional route. A
-  shell parser was deliberately abandoned in favour of harmless warning false
-  positives and fail-closed follow-through.
-
-- **The adopter contract moved with the policy.** Adopt stays local until its
-  operator-run initialization is complete; upgrade names the required
-  `triage.pr_draft: false` and `systemize.pr_draft: false` migration; the playbook,
-  lane contract, baseline templates and shared workflows carry the same bounded draft
-  exception.
-
-- **The review evidence is attached to the change.** PR `#653` carries the exact-head
-  Python 3.12 verification stamp, the superseded-head dispositions, and the final fresh
-  adversarial/correctness fallback-panel receipt for
-  `239de40fb09faae1bfb6e3b1c6af8464f8e67414`; squash
-  `dd536eee3e562fd806a4b90c8377ec532ebf6925` is the merge event.
-
-- **The sprint boundary was preserved.** This session did not start `#631` or the
-  retained Codex parallel-batch Phase 4 exit. `#621` kept the operator-set boundary,
-  and `saved_plans/claude-side-assessment_2026-08-26.md` remained operator-owned and
-  unstaged.
-
-- **The process lesson is durable.** The authority-boundary, hostile-corpus and
-  mutation lessons from this review are recorded in
-  [`review-process-learnings_2026-08-24.md`](../saved_plans/review-process-learnings_2026-08-24.md).
-
-▶ Next: `session-start` — re-read the live tracker and sprint boundary before choosing
-a slice; do not infer issue closure from PR `#653`'s merge.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Active open items from them are folded into the "Open for next session" lists above.
 
 ______________________________________________________________________
-
