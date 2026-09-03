@@ -418,11 +418,12 @@ historical observation it was and is not silently refreshed.
   3. Verifier, its test, and its evidence page assigned the repo-only manifest role,
      with the `CHANGELOG.md` entry.
   4. The pilot's write pass, on the adopter operator's approval, followed by a separate
-     fork-reconciliation PR based on the upgrade branch. At the exit decision, read
-     both current PR heads, require the upgrade head to be an ancestor of the
-     reconciliation head, and verify that reconciliation head against the exit
-     condition. A later push to either PR invalidates that evidence; otherwise file the
-     residue and leave the exit open.
+     fork-reconciliation PR based on the upgrade branch. At the exit-test decision,
+     read the current adopter protected-branch head and both current PR heads; require
+     protected branch → upgrade → reconciliation ancestry, then verify the
+     reconciliation head against the adopter condition. Movement of any head
+     invalidates that evidence. Record whether the condition holds, but leave the phase
+     open for the remaining delivery below; otherwise file the residue.
   5. `#631` and `#608` decided on the tracker and matrix, and `#255`'s general
      mechanism delivered.
 - [ ] **Phase 6 — Gate parity and roll it out.** With the pilot pulled into Phase 5,
@@ -741,10 +742,11 @@ and final open/unmerged fixture pull requests.
   from a pinned kit clone with `$REPO` and `$KIT` bound, a stamped record of every
   instrument misreading (the false `broken` verdict on `lib/runtime_adapters.py`
   first), then the write pass on the adopter operator's approval and a separate
-  fork-reconciliation PR based on its branch. At the exit decision, read both current
-  PR heads, require the upgrade head to be an ancestor of the reconciliation head, and
-  verify the reconciliation head against the exit condition. A later push to either
-  PR invalidates that evidence (`#607`, `#236`, `#243`; added 2026-09-02).
+  fork-reconciliation PR based on its branch. At the exit-test decision, read the
+  current adopter protected-branch head and both current PR heads; require protected
+  branch → upgrade → reconciliation ancestry, then verify the reconciliation head
+  against the adopter condition. Movement of any head invalidates that evidence. Record
+  the result without closing the phase (`#607`, `#236`, `#243`; added 2026-09-02).
 - [x] Give `scripts/verify_live_validation_bundle.py`, its test and
   `live-validation-evidence.md` the repo-only role: retain release-manifest hashing
   and the kit checkout's drift check while omitting them from adopter inspection,
@@ -761,11 +763,13 @@ and final open/unmerged fixture pull requests.
   test over per-runtime config keys (added 2026-09-02).
 
 Done when an existing Codex adopter can upgrade without retaining stale runtime
-behavior or losing local policy. At the exit decision, the current upgrade PR head must
-be an ancestor of the current fork-reconciliation PR head, and verification of that
-reconciliation head must establish the condition. A later push invalidates the
-evidence. Nothing else establishes the exit; merged delivery slices are not used as a
-reassuring substitute for it.
+behavior or losing local policy, `#631` and `#608` carry their declarations, and
+`#255`'s general mechanism is delivered. At the exit decision, the current adopter
+protected-branch head must be an ancestor of the current upgrade PR head, which must be
+an ancestor of the current fork-reconciliation PR head; verification of that
+reconciliation head must establish the adopter condition. Movement of any head
+invalidates the evidence. Nothing else establishes the exit; merged delivery slices
+are not used as a reassuring substitute for it.
 
 ### Phase 6 — Gate parity and roll it out
 
