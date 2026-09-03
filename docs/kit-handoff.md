@@ -57,14 +57,13 @@ plus both PR identities, base names, and heads, but do not claim the Phase 5 exi
 `#243`, `#631`, `#608`, and `#255` remain. After those land, the final replay must use
 the then-current kit source, confirm the configured protected branch → upgrade PR →
 reconciliation PR base-name and ancestry chain, and verify the reconciliation head.
-Movement or retargeting of any bound adopter ref invalidates the evidence. After the
-replay, write the completion record on a branch based on the bound kit SHA and take its
-exact head through `pr-watch`. Limit that PR to this plan, the handoff, and its history,
-and target the kit's configured protected branch. Immediately before merging it,
-authoritatively re-read the kit protected head plus every bound adopter protected head,
-PR base, PR head, and ancestry edge. Any kit or adopter movement requires replay; only a
-changed record head requires renewed review. The record merge is the Phase 5 completion
-event. Do not merge either adopter PR without separate authority.
+At the exit decision, authoritatively re-read and stamp the kit source and configured
+protected head, the adopter protected head, both adopter PR identities, bases and heads,
+every required ancestry edge, and the verification result. Movement from the replay's
+bound inputs before that read-back requires replay. Publish the stamped bundle before
+the kit wrap-up PR merges; later ref movement is a separate event and does not rewrite
+the observation. The wrap-up records that event without treating its own commit as the
+replay source. Do not merge either adopter PR without separate authority.
 
 ______________________________________________________________________
 

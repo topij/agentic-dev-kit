@@ -431,14 +431,13 @@ historical observation it was and is not silently refreshed.
      reconciliation PR to target the upgrade branch; require current adopter protected
      branch → upgrade → reconciliation ancestry; then verify the current
      reconciliation head against the adopter condition. Movement or retargeting of a
-     bound adopter ref invalidates the evidence. After replay, write the truthful kit
-     completion record on a branch based on the bound kit SHA and take its exact head
-     through `pr-watch`. Limit that PR to this plan, the handoff, and its history, and
-     target the configured kit protected branch. Immediately before merging it,
-     authoritatively re-read the kit protected head plus every bound adopter protected
-     head, PR base, PR head, and ancestry edge. Any kit or adopter movement requires
-     replay; only a changed record head requires renewed review. The record merge is the
-     phase-completion event, not an invalidation of the stamped replay.
+     bound adopter ref before the exit read-back invalidates the evidence. Publish one
+     stamped bundle containing authoritative reads of the kit source and protected head,
+     the adopter protected head, both adopter PR identities, bases and heads, every
+     ancestry edge, and the verification result. That bundle establishes the exit at
+     the refs it names and is published on the kit wrap-up PR before it merges. Later
+     ref movement is a separate event; wrap-up records the stamped observation without
+     treating its own commit as the replay source.
 - [ ] **Phase 6 — Gate parity and roll it out.** With the pilot pulled into Phase 5,
   this phase holds the cost and hygiene work the review found burning, then the gate:
   the proportional opening pass for record prose (`#585`); the suite measured and
@@ -778,13 +777,13 @@ and final open/unmerged fixture pull requests.
   protected branch, the reconciliation PR to target the upgrade branch, and current
   adopter protected branch → upgrade → reconciliation ancestry. Verify the current
   reconciliation head against the adopter condition. Movement or retargeting of a
-  bound adopter ref invalidates the evidence. After replay, write the kit completion
-  record on a branch based on the bound kit SHA and take its exact head through
-  `pr-watch`. Limit that PR to this plan, the handoff, and its history, and target the
-  configured kit protected branch. Immediately before merging it, authoritatively
-  re-read the kit protected head plus every bound adopter protected head, PR base, PR
-  head, and ancestry edge. Any kit or adopter movement requires replay; only a changed
-  record head requires renewed review. The record merge completes this phase.
+  bound adopter ref before the exit read-back invalidates the evidence. Publish one
+  stamped bundle containing authoritative reads of the kit source and protected head,
+  the adopter protected head, both adopter PR identities, bases and heads, every
+  ancestry edge, and the verification result. That bundle establishes the exit at the
+  refs it names and is published on the kit wrap-up PR before it merges. Later ref
+  movement is a separate event; wrap-up records the stamped observation without
+  treating its own commit as the replay source.
 
 Done when an existing Codex adopter can upgrade without retaining stale runtime
 behavior or losing local policy, the remaining `#243` field exercises are complete,
@@ -793,16 +792,14 @@ The final adopter replay binds the kit protected-branch head to its source SHA; 
 both adopter PR identities, base names, and heads; proves the current adopter protected
 branch → upgrade → reconciliation ancestry; and verifies the reconciliation head
 against the adopter condition. Movement or retargeting of a bound adopter ref
-invalidates the evidence. The final completion record is written afterward on a branch
-based on the bound kit SHA and completes the phase only after its exact head passes
-`pr-watch`. It is limited to this plan, the handoff, and its history; targets the
-configured kit protected branch; and merges only after authoritative read-back confirms
-the bound kit and adopter protected heads, both adopter PR bases and heads, every
-required ancestry edge, and the reviewed record head. Kit or adopter movement before
-that merge requires replay; only record-head movement requires renewed review. The
-record merge preserves the stamped event, and later work carries its own verification
-obligation rather than rewriting it. Nothing else establishes the exit; merged delivery
-slices are not used as a reassuring substitute for it.
+invalidates the evidence when it occurs before the exit read-back. One stamped bundle
+must contain authoritative reads of the kit source and protected head, the adopter
+protected head, both adopter PR identities, bases and heads, every required ancestry
+edge, and the verification result. That bundle establishes the exit at the refs it
+names and is published on the kit wrap-up PR before it merges. Later work carries its
+own verification obligation rather than rewriting the observation; wrap-up records the
+event without treating its own commit as the replay source. Nothing else establishes
+the exit; merged delivery slices are not used as a reassuring substitute for it.
 
 ### Phase 6 — Gate parity and roll it out
 
