@@ -50,11 +50,13 @@ entries graduated, and Phase 5 passed to its initial adopter write rehearsal.
 
 ▶ Next: `$session-start` — then, with explicit cs-toolkit write approval, run the
 initial adopter pilot write pass in Codex. Bind `$REPO` to cs-toolkit and `$KIT` to a
-fresh clone of the kit's configured protected branch; assert `pwd` is in `$REPO` before
-the first write. Invoke `$upgrade` in `$REPO` while following `$KIT`'s workflow; it must
-leave the repo-owned lane forks untouched. Separately run reconciliation based on the
-upgrade branch; preserve runtime-neutral local policy and open a PR when that stage has
-a diff. Record the kit source SHA plus every created PR identity, base name, and head.
+fresh clone of the kit's configured protected branch at `/tmp/agentic-dev-kit`, the path
+used by Upgrade Step 5. Record `$REPO`'s canonical origin URL and require it to match the
+approved cs-toolkit remote; assert `pwd` is in `$REPO` immediately before every write.
+Invoke `$upgrade` in `$REPO` while following `$KIT`'s workflow; it must leave the
+repo-owned lane forks untouched. Separately run reconciliation based on the upgrade
+branch; preserve runtime-neutral local policy and open a PR when that stage has a diff.
+Record the kit source SHA plus every created PR identity, base name, and head.
 For a no-change stage, record its exact invocation, successful no-change output, input
 and output SHA, tree equality, and clean status; its input must equal the preceding
 stage's output. Do not manufacture an empty PR. Do not claim the Phase 5 exit: `#243`,
@@ -62,12 +64,14 @@ stage's output. Do not manufacture an empty PR. Do not claim the Phase 5 exit: `
 then-current kit source, confirm each created PR's base-name and ancestry chain, record
 any no-change stage, and verify the final adopter head.
 At the exit decision, capture one authoritative tuple containing the kit source and
-configured protected head, the adopter protected head, and every created adopter PR's
-identity, base and head. Require the kit source to equal the configured protected head
-in that tuple. Include each no-change stage's invocation, output, input/output equality,
-tree-equality check, clean status, and preceding-stage linkage. Verify every ancestry
-edge and the adopter condition defined in the maintained parity plan against those
-immutable SHAs, then capture the full tuple again and require it to be byte-identical.
+configured protected head, the adopter repository's canonical origin URL, adopter
+protected head, exact resulting adopter head, and every created adopter PR's identity,
+base and head. Require the origin URL to match the approved cs-toolkit remote and the
+kit source to equal the configured protected head in that tuple. Include each no-change
+stage's invocation, output, input/output equality, tree-equality check, clean status,
+and preceding-stage linkage. Verify every ancestry edge and the adopter condition
+defined in the maintained parity plan against those immutable SHAs, then capture the
+full tuple again and require it to be byte-identical.
 A mismatch requires replay. Publish both snapshots and the stamped verification result
 before the kit wrap-up PR merges; later ref movement is a separate event and does not
 rewrite the observation. The wrap-up records that event without treating its own commit

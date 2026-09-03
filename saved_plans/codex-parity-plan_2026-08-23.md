@@ -420,31 +420,38 @@ historical observation it was and is not silently refreshed.
   3. [x] Verifier, its test, and its evidence page assigned the repo-only manifest role,
      with the `CHANGELOG.md` entry.
   4. [ ] The initial pilot write pass, on the adopter operator's approval, followed by a
-     separate fork-reconciliation stage based on the upgrade branch. Record the kit source
-     SHA plus every created PR identity, base name, and head. For a no-change stage,
-     record its exact invocation, successful no-change output, input and output SHA,
-     tree equality, clean status, and input linkage to the preceding stage instead of
-     manufacturing a PR. File any residue. This pass does not establish the phase exit.
+     separate fork-reconciliation stage based on the upgrade branch. Bind `$REPO` to the
+     adopter checkout, require its canonical origin to match the approved remote, and
+     bind `$KIT` to its fresh clone at `/tmp/agentic-dev-kit`; assert the working
+     directory is in `$REPO` immediately before every write. Record the kit source SHA
+     plus every created PR identity, base name, and head. For a
+     no-change stage, record its exact invocation, successful no-change output, input
+     and output SHA, tree equality, clean status, and input linkage to the preceding
+     stage instead of manufacturing a PR. File any residue. This pass does not establish
+     the phase exit.
   5. [ ] The remaining `#243` field exercises completed, `#631` and `#608` decided on the
      tracker and matrix, and `#255`'s general mechanism delivered.
-  6. [ ] Replay the write pass and fork reconciliation from the then-current kit source.
-     For a stage with a diff, bind its PR identity, base and head and require the
-     protected → upgrade → reconciliation chain for the PRs that exist. For a
+  6. [ ] Replay the write pass and fork reconciliation from the then-current kit source,
+     using the same `$REPO` origin check, `$KIT` path, and immediately-before-every-write
+     directory assertion as the initial pass. For a stage with a diff, bind its PR
+     identity, base and head and require the protected → upgrade → reconciliation chain
+     for the PRs that exist. For a
      no-change stage, record its exact invocation, successful no-change output, input
      and output SHA, tree equality, clean status, and input linkage to the preceding
      stage; never manufacture an empty PR. Verify the resulting adopter head against
      the adopter condition below. Movement of a bound adopter ref before the exit
      read-back invalidates the evidence. Capture one
      authoritative tuple containing the kit source and protected head, the adopter
-     protected head, every created adopter PR's identity, base and head, and each
-     no-change stage's invocation, output, input/output equality, tree-equality check,
-     clean status, and preceding-stage linkage.
-     Require the kit source to equal the protected head in both snapshots. Verify every
-     ancestry edge and the adopter condition against those immutable SHAs, then capture
-     the full tuple again and require it to be byte-identical. A mismatch requires
-     replay. Publish both snapshots and the stamped verification result on the kit
-     wrap-up PR before it merges. Later ref movement is a separate event; wrap-up records
-     the observation without treating its own commit as the replay source.
+     repository's canonical origin URL, adopter protected head, exact resulting adopter
+     head, every created adopter PR's identity, base and head, and each no-change stage's
+     invocation, output, input/output equality, tree-equality check, clean status, and
+     preceding-stage linkage. Require the origin URL to match the approved cs-toolkit
+     remote and the kit source to equal the protected head in both snapshots. Verify
+     every ancestry edge and the adopter condition against those immutable SHAs, then
+     capture the full tuple again and require it to be byte-identical. A mismatch
+     requires replay. Publish both snapshots and the stamped verification result on the
+     kit wrap-up PR before it merges. Later ref movement is a separate event; wrap-up
+     records the observation without treating its own commit as the replay source.
 - [ ] **Phase 6 — Gate parity and roll it out.** With the pilot pulled into Phase 5,
   this phase holds the cost and hygiene work the review found burning, then the gate:
   the proportional opening pass for record prose (`#585`); the suite measured and
@@ -764,9 +771,11 @@ and final open/unmerged fixture pull requests.
   (`#607`, `#236`; added 2026-09-02).
 - [ ] Run the initial write pass on the adopter operator's approval and a separate
   fork-reconciliation stage based on its branch. Bind `$REPO` to the adopter and `$KIT`
-  to the fresh kit clone, assert `pwd` is in `$REPO` before the first write, and invoke
-  `$upgrade` in `$REPO` while following `$KIT`'s workflow. Record the kit source SHA plus
-  every created PR identity, base name, and head. For a no-change stage, record its exact
+  to the fresh kit clone at `/tmp/agentic-dev-kit`, the path used by Upgrade Step 5.
+  Record `$REPO`'s canonical origin URL and require it to match the approved cs-toolkit
+  remote; assert `pwd` is in `$REPO` immediately before every write. Invoke `$upgrade`
+  in `$REPO` while following `$KIT`'s workflow. Record the kit source SHA plus every
+  created PR identity, base name, and head. For a no-change stage, record its exact
   invocation, successful no-change output, input and output SHA, tree equality, clean
   status, and input linkage to the preceding stage instead of manufacturing a PR. Do
   not close the phase.
@@ -785,22 +794,26 @@ and final open/unmerged fixture pull requests.
 - [ ] Declare `#608` as a matrix row and deliver `#255`'s general mechanism as one
   test over per-runtime config keys (added 2026-09-02).
 - [ ] Replay the adopter write pass and fork reconciliation from the current kit
-  protected-branch head. Bind every created PR's identity, base and head and require the
-  protected → upgrade → reconciliation ancestry for the PRs that exist. For a
+  protected-branch head, using the same `$REPO` origin check, `$KIT` path, and
+  immediately-before-every-write directory assertion as the initial pass. Bind every
+  created PR's identity, base and head and require the protected → upgrade →
+  reconciliation ancestry for the PRs that exist. For a
   no-change stage, record its exact invocation, successful no-change output, input and
   output SHA, tree equality, clean status, and input linkage to the preceding stage
   instead of manufacturing an empty PR. Verify the resulting adopter head against the
   adopter condition below. Movement of a bound adopter ref before the exit read-back
   invalidates the evidence. Capture one
   authoritative tuple containing the kit source and protected head, the adopter
-  protected head, every created adopter PR's identity, base and head, and each no-change
-  stage's invocation, output, input/output equality, tree-equality check, clean status,
-  and preceding-stage linkage. Require the kit source to equal the protected head in
-  both snapshots. Verify every ancestry edge and the adopter condition against those
-  immutable SHAs, then capture the full tuple again and require it to be byte-identical.
-  A mismatch requires replay. Publish both snapshots and the stamped verification result
-  on the kit wrap-up PR before it merges. Later ref movement is a separate event; wrap-up
-  records the observation without treating its own commit as the replay source.
+  repository's canonical origin URL, adopter protected head, exact resulting adopter
+  head, every created adopter PR's identity, base and head, and each no-change stage's
+  invocation, output, input/output equality, tree-equality check, clean status, and
+  preceding-stage linkage. Require the origin URL to match the approved cs-toolkit
+  remote and the kit source to equal the protected head in both snapshots. Verify every
+  ancestry edge and the adopter condition against those immutable SHAs, then capture
+  the full tuple again and require it to be byte-identical. A mismatch requires replay.
+  Publish both snapshots and the stamped verification result on the kit wrap-up PR
+  before it merges. Later ref movement is a separate event; wrap-up records the
+  observation without treating its own commit as the replay source.
 
 The **adopter condition** is a reproducible set of assertions at the resulting adopter
 head:
@@ -828,12 +841,14 @@ clean status, and preceding-stage linkage; proves the ancestry chain for the PRs
 exist; and verifies the resulting adopter head against the adopter condition above.
 Movement or retargeting of a bound adopter ref invalidates the evidence when it occurs
 before the exit read-back. Capture the full authoritative tuple of kit and adopter
-protected heads plus every created adopter PR's identity, base and head and each
-no-change stage's invocation, output, input/output equality, tree-equality check, clean
-status, and preceding-stage linkage. Require the kit source to equal the protected head
-in both snapshots; verify the ancestry edges and adopter condition against those
-immutable SHAs; then capture the tuple again and require a byte-identical result. Publish both
-snapshots and the stamped verification result on the kit wrap-up PR before it merges.
+protected heads, the adopter repository's canonical origin URL, the exact resulting
+adopter head, every created adopter PR's identity, base and head, and each no-change
+stage's invocation, output, input/output equality, tree-equality check, clean status,
+and preceding-stage linkage. Require the origin URL to match the approved cs-toolkit
+remote and the kit source to equal the protected head in both snapshots; verify the
+ancestry edges and adopter condition against those immutable SHAs; then capture the
+tuple again and require a byte-identical result. Publish both snapshots and the stamped
+verification result on the kit wrap-up PR before it merges.
 That stable bundle establishes the exit at the refs it names. Later work carries its
 own verification obligation rather than rewriting the observation; wrap-up records the
 event without treating its own commit as the replay source. Nothing else establishes
