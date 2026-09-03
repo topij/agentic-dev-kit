@@ -53,17 +53,20 @@ initial adopter pilot write pass in Codex from a fresh clone of the kit's config
 protected branch. Run `$upgrade`, which must leave the repo-owned lane forks untouched.
 Separately create a reconciliation PR based on the upgrade branch; preserve
 runtime-neutral local policy and open each adopter PR ready. Record the kit source SHA
-plus both PR identities, base names, and heads, but do not claim the Phase 5 exit:
-`#243`, `#631`, `#608`, and `#255` remain. After those land, the final replay must use
-the then-current kit source, confirm the configured protected branch → upgrade PR →
-reconciliation PR base-name and ancestry chain, and verify the reconciliation head.
-At the exit decision, authoritatively re-read and stamp the kit source and configured
-protected head, the adopter protected head, both adopter PR identities, bases and heads,
-every required ancestry edge, and the verification result. Movement from the replay's
-bound inputs before that read-back requires replay. Publish the stamped bundle before
-the kit wrap-up PR merges; later ref movement is a separate event and does not rewrite
-the observation. The wrap-up records that event without treating its own commit as the
-replay source. Do not merge either adopter PR without separate authority.
+plus every created PR identity, base name, and head; for a no-change stage, record its
+output and protected-head equality instead of manufacturing a PR. Do not claim the
+Phase 5 exit: `#243`, `#631`, `#608`, and `#255` remain. After those land, the final
+replay must use the then-current kit source, confirm each created PR's base-name and
+ancestry chain, record any no-change stage, and verify the final adopter head.
+At the exit decision, capture one authoritative tuple containing the kit source and
+configured protected head, the adopter protected head, and every created adopter PR's
+identity, base and head. Include each no-change stage's protected-head equality. Verify
+every ancestry edge and the adopter condition against those immutable SHAs, then capture
+the full tuple again and require it to be byte-identical.
+A mismatch requires replay. Publish both snapshots and the stamped verification result
+before the kit wrap-up PR merges; later ref movement is a separate event and does not
+rewrite the observation. The wrap-up records that event without treating its own commit
+as the replay source. Do not merge either adopter PR without separate authority.
 
 ______________________________________________________________________
 

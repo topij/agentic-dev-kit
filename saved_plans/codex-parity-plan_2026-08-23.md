@@ -414,30 +414,32 @@ historical observation it was and is not silently refreshed.
   (`#603`, `#604`), join the phase; `#631` and `#608` are taken as declarations rather
   than mechanisms, while `#255` retains its general enforcement mechanism. Delivery
   order, updated on 2026-09-03 by operator direction after the repo-only delivery:
-  1. Adopter pilot, read-only pass first (`#607`, `#236`, `#243`).
-  2. `pr_watch.py --record-review` posting the disposition comment; stamp/head and
+  1. [x] Adopter pilot, read-only pass first (`#607`, `#236`, `#243`).
+  2. [x] `pr_watch.py --record-review` posting the disposition comment; stamp/head and
      receipt/comment mismatches reported.
-  3. Verifier, its test, and its evidence page assigned the repo-only manifest role,
+  3. [x] Verifier, its test, and its evidence page assigned the repo-only manifest role,
      with the `CHANGELOG.md` entry.
-  4. The initial pilot write pass, on the adopter operator's approval, followed by a
+  4. [ ] The initial pilot write pass, on the adopter operator's approval, followed by a
      separate fork-reconciliation PR based on the upgrade branch. Record the kit source
-     SHA plus both PR identities, base names, and heads, and file any residue. This pass
-     does not establish the phase exit.
-  5. The remaining `#243` field exercises completed, `#631` and `#608` decided on the
+     SHA plus every created PR identity, base name, and head; record a no-change stage's
+     output and protected-head equality instead of manufacturing a PR. File any residue.
+     This pass does not establish the phase exit.
+  5. [ ] The remaining `#243` field exercises completed, `#631` and `#608` decided on the
      tracker and matrix, and `#255`'s general mechanism delivered.
-  6. Replay the write pass and fork reconciliation from the then-current kit source. At
-     the exit decision, bind the kit source SHA to the kit protected-branch head;
-     require the adopter upgrade PR to target its configured protected branch and the
-     reconciliation PR to target the upgrade branch; require current adopter protected
-     branch → upgrade → reconciliation ancestry; then verify the current
-     reconciliation head against the adopter condition. Movement or retargeting of a
-     bound adopter ref before the exit read-back invalidates the evidence. Publish one
-     stamped bundle containing authoritative reads of the kit source and protected head,
-     the adopter protected head, both adopter PR identities, bases and heads, every
-     ancestry edge, and the verification result. That bundle establishes the exit at
-     the refs it names and is published on the kit wrap-up PR before it merges. Later
-     ref movement is a separate event; wrap-up records the stamped observation without
-     treating its own commit as the replay source.
+  6. [ ] Replay the write pass and fork reconciliation from the then-current kit source.
+     For a stage with a diff, bind its PR identity, base and head and require the
+     protected → upgrade → reconciliation chain for the PRs that exist. For a
+     no-change stage, stamp its output and protected-head equality; never manufacture an
+     empty PR. Verify the resulting adopter head against the condition. Movement of a
+     bound adopter ref before the exit read-back invalidates the evidence. Capture one
+     authoritative tuple containing the kit source and protected head, the adopter
+     protected head, every created adopter PR's identity, base and head, and each
+     no-change stage's protected-head equality. Verify every ancestry edge and the
+     adopter condition against those immutable SHAs, then capture the full tuple again
+     and require it to be byte-identical. A mismatch requires replay. Publish both
+     snapshots and the stamped verification result on the kit
+     wrap-up PR before it merges. Later ref movement is a separate event; wrap-up
+     records the observation without treating its own commit as the replay source.
 - [ ] **Phase 6 — Gate parity and roll it out.** With the pilot pulled into Phase 5,
   this phase holds the cost and hygiene work the review found burning, then the gate:
   the proportional opening pass for record prose (`#585`); the suite measured and
@@ -751,13 +753,14 @@ and final open/unmerged fixture pull requests.
 - [x] Inspect adopter-side generated lens definitions against their configured
   mechanical compute carrier without duplicating installed-engine drift (PR `#655`;
   `#255`'s general enforcement mechanism remains separate).
-- [ ] Run the cs-toolkit adopter pilot's initial rehearsal: a read-only pass
-  from a pinned kit clone with `$REPO` and `$KIT` bound, a stamped record of every
-  instrument misreading (the false `broken` verdict on `lib/runtime_adapters.py`
-  first), then an initial write pass on the adopter operator's approval and a separate
-  fork-reconciliation PR based on its branch. Record the kit source SHA plus both PR
-  identities, base names, and heads without closing the phase (`#607`, `#236`; added
-  2026-09-02).
+- [x] Complete the cs-toolkit adopter pilot's read-only pass from a pinned kit clone
+  with `$REPO` and `$KIT` bound; its stamped instrument readings live in
+  [`cs-toolkit-adopter-pilot-readonly_2026-09-02.md`](cs-toolkit-adopter-pilot-readonly_2026-09-02.md)
+  (`#607`, `#236`; added 2026-09-02).
+- [ ] Run the initial write pass on the adopter operator's approval and a separate
+  fork-reconciliation stage based on its branch. Record the kit source SHA plus every
+  created PR identity, base name, and head; record a no-change stage's output and
+  protected-head equality instead of manufacturing a PR. Do not close the phase.
 - [x] Give `scripts/verify_live_validation_bundle.py`, its test and
   `live-validation-evidence.md` the repo-only role: retain release-manifest hashing
   and the kit checkout's drift check while omitting them from adopter inspection,
@@ -773,30 +776,35 @@ and final open/unmerged fixture pull requests.
 - [ ] Declare `#608` as a matrix row and deliver `#255`'s general mechanism as one
   test over per-runtime config keys (added 2026-09-02).
 - [ ] Replay the adopter write pass and fork reconciliation from the current kit
-  protected-branch head. Require the upgrade PR to target the configured adopter
-  protected branch, the reconciliation PR to target the upgrade branch, and current
-  adopter protected branch → upgrade → reconciliation ancestry. Verify the current
-  reconciliation head against the adopter condition. Movement or retargeting of a
-  bound adopter ref before the exit read-back invalidates the evidence. Publish one
-  stamped bundle containing authoritative reads of the kit source and protected head,
-  the adopter protected head, both adopter PR identities, bases and heads, every
-  ancestry edge, and the verification result. That bundle establishes the exit at the
-  refs it names and is published on the kit wrap-up PR before it merges. Later ref
-  movement is a separate event; wrap-up records the stamped observation without
-  treating its own commit as the replay source.
+  protected-branch head. Bind every created PR's identity, base and head and require the
+  protected → upgrade → reconciliation ancestry for the PRs that exist. For a
+  no-change stage, stamp its output and protected-head equality instead of manufacturing
+  an empty PR. Verify the resulting adopter head against the condition. Movement of a
+  bound adopter ref before the exit read-back invalidates the evidence. Capture one
+  authoritative tuple containing the kit source and protected head, the adopter
+  protected head, every created adopter PR's identity, base and head, and each no-change
+  stage's protected-head equality. Verify every ancestry edge and the adopter condition
+  against those immutable SHAs, then capture the full tuple again and require it to be
+  byte-identical. A mismatch requires replay. Publish both snapshots and the stamped
+  verification result on the kit wrap-up PR before it
+  merges. Later ref movement is a separate event; wrap-up records the observation
+  without treating its own commit as the replay source.
 
 Done when an existing Codex adopter can upgrade without retaining stale runtime
 behavior or losing local policy, the remaining `#243` field exercises are complete,
 `#631` and `#608` carry their declarations, and `#255`'s general mechanism is delivered.
 The final adopter replay binds the kit protected-branch head to its source SHA; binds
-both adopter PR identities, base names, and heads; proves the current adopter protected
-branch → upgrade → reconciliation ancestry; and verifies the reconciliation head
-against the adopter condition. Movement or retargeting of a bound adopter ref
-invalidates the evidence when it occurs before the exit read-back. One stamped bundle
-must contain authoritative reads of the kit source and protected head, the adopter
-protected head, both adopter PR identities, bases and heads, every required ancestry
-edge, and the verification result. That bundle establishes the exit at the refs it
-names and is published on the kit wrap-up PR before it merges. Later work carries its
+every created adopter PR identity, base name, and head; records any no-change stage's
+output and protected-head equality; proves the ancestry chain for the PRs that exist;
+and verifies the resulting adopter head against the condition. Movement or retargeting
+of a bound adopter ref invalidates the evidence when it occurs before the exit
+read-back. Capture the full
+authoritative tuple of kit and adopter protected heads plus every created adopter PR's
+identity, base and head and each no-change stage's protected-head equality; verify the
+ancestry edges and adopter condition against those immutable SHAs; then capture the
+tuple again and require a byte-identical result. Publish both snapshots and the stamped
+verification result on the kit wrap-up PR before it merges.
+That stable bundle establishes the exit at the refs it names. Later work carries its
 own verification obligation rather than rewriting the observation; wrap-up records the
 event without treating its own commit as the replay source. Nothing else establishes
 the exit; merged delivery slices are not used as a reassuring substitute for it.
