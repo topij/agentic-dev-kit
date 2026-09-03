@@ -42,6 +42,35 @@ starts.
 
 ---
 
+## #667 — 2026-09-02
+
+- **ADDED (engine CLI surface, `#604`):** `scripts/pr_watch.py --record-review`
+  accepts `--disposition <text>` (or `-` to read the text from stdin). It posts one
+  comment on the pull request, bound to the recorded head, under a heading the
+  engine fixes, and records its URL on the receipt as `disposition_comment`. Add it
+  to your record-review invocation and pass what the review found and how each
+  finding was disposed. A post this engine sees fail refuses the whole command and
+  writes no receipt — but a failure it cannot distinguish from a timed-out success
+  may already have created the comment, so a re-run can leave two: the receipt is
+  written at most once, the comment at least once. Without the flag nothing is
+  posted and the receipt is unchanged from before.
+- **ADDED (report shape, `#604` / `#603`):** Every plain poll's report grows
+  `evidence_findings[]`. Entries are `{"kind": "review_disposition_missing", "head",
+  "source"}` and `{"kind": "verification_stamp_behind_head", "head", "stamped": [...]}`.
+  A consumer asserting the exact top-level key set of a `--json` poll must add it.
+  **Neither entry gates**: `converged`, `mergeable`, `done` and `merge_blockers[]`
+  are unchanged by both, so a repo reading only those needs no edit.
+- **CHANGED (per-PR state, `#604`):** `--record-review --disposition` adds the
+  posted comment's content key to `state["seen"]` in the same write as the
+  receipt, so the comment it just posted is already acknowledged and does not
+  hold `converged` false on the next poll. A consumer that treats `seen` as
+  written only by `--mark-seen` must accept this second writer. Nothing is
+  filtered by comment text: a comment carrying the disposition marker but posted
+  by anyone else is actionable exactly as before.
+- **CHANGED (engine behaviour, `#603`):** Both transports now fetch the pull
+  request `body` (`gh pr view --json …,body`; `body` in the REST view). A test
+  double that pins the exact `--json` field list, or a fake REST payload asserted
+  key-by-key, must be refreshed.
 ## #668 — 2026-09-02
 
 - **CHANGED (gate semantics, #661) — `kit_doctor.py` reports `missing-required` only

@@ -54,7 +54,8 @@ Repeat until the report says **converged**:
 
 1. **Poll.** `uv run <engine-dir>/pr_watch.py <PR#> --json` (omit `<PR#>` for the current
    branch). Read `converged`, `mergeable`, `checks` (`all_green`, `failing[]`, `pending`),
-   `merge_blockers[]`, `review_evidence`, `review_bots`, and `new_comments[]`.
+   `merge_blockers[]`, `review_evidence`, `review_bots`, `evidence_findings[]`, and
+   `new_comments[]`.
 
    The two predicates answer different questions and you need both:
 
@@ -212,7 +213,8 @@ Repeat until the report says **converged**:
      ```sh
      uv run <engine-dir>/pr_watch.py <PR#> \
        --record-review "<review.fallback_panel.receipt_source>" \
-       --lenses <names of the lenses that ran> --head <polled-sha>
+       --lenses <names of the lenses that ran> --head <polled-sha> \
+       --disposition -   # findings and how each was disposed, on stdin
      ```
 
      `--lenses` names what actually ran, so a degraded one-lens pass is
@@ -267,6 +269,17 @@ Repeat until the report says **converged**:
    requires another independent pass. A platform `APPROVED` state is still recorded
    explicitly so the engine never assumes that an approval predates no later push.
    Marking comments seen never creates review evidence.
+
+   **Pass `--disposition` with it, and pass what the review found.** The receipt
+   records `source`, `lenses`, `head` and `recorded_at` — the reviewed revision
+   and who looked, never the findings — and it is written into the per-PR state
+   file, which is gitignored. Without a disposition on the pull request, the
+   review evidence does not survive the merge (`#604`). The flag takes the text,
+   or `-` to read it from stdin, and posts it as one comment bound to the
+   recorded head, under a heading the engine fixes so the next poll can find it
+   again, and acknowledges that comment in the same write so it does not come
+   back as a finding to address. One comment per round is enough. A failed post
+   refuses the whole command and records no receipt: re-run it.
 
 1. **Pace the next poll** (see below), then go to step 1.
 
@@ -586,6 +599,36 @@ Self-pace on a bounded cadence — don't busy-wait:
     didn't run. (`skipped` is not flagged: nothing was unreadable.)
   - An *older* `pr_watch.py` polling the same PR drops the persisted grace clock,
     restarting the window. Merges wait longer; nothing fails open.
+- **`evidence_findings[]` says where the review evidence *isn't*.** Two entries,
+  both **reported and gating nothing** — the same footing `bots_behind_head` and
+  `truncated_reads` have. They describe evidence missing from the pull request
+  while the merge gate is already satisfied, so blocking on either would refuse a
+  merge the deterministic checks correctly authorized, on a judgement drawn from
+  prose.
+
+  ```
+  ⚠ review disposition: the receipt for 01fc4e7c9ff… has no disposition comment
+    on this PR — what the review found and how each finding was disposed exists
+    only in the untracked per-PR state file, so the merge loses it.
+  ⚠ verification stamp: this PR stamps 679b197efc…, and none of those is the
+    current head 01fc4e7c9ff… — the run it names did not see the commits since.
+  ```
+
+  - `review_disposition_missing` (`#604`) — a receipt is bound to this head and
+    no comment on the pull request is. Silent on the `bot-coverage` route, where
+    the reviewer's own review objects are on the pull request already. The
+    remedy is `--record-review --disposition`; a hand-written comment under some
+    other heading does not clear it, because the check reads the marker the
+    engine writes rather than matching prose.
+  - `verification_stamp_behind_head` (`#603`) — the pull request carries at least
+    one verification stamp in the `` `<command>` at `<sha>` on <date> `` form and
+    none of them names the current head. Stamps are read from the body **and**
+    from every comment, so a final stamp posted as a comment at the merged head
+    clears it — that is the form to use. Silent when there is no stamp at all: an
+    absent stamp is a different complaint, and firing on every prose-only pull
+    request is how a report line becomes something its reader skims past. The
+    matcher is anchored on the date, so a commit named in passing ("pinned at
+    `3c06e70`") is not read as a claim about a run.
 - **Without `gh`, the engine polls but cannot authorize a merge.** When the `gh`
   binary is absent it falls back to the GitHub REST API using
   `GH_TOKEN`/`GITHUB_TOKEN` (with neither, it exits 2 saying so). That fallback is
