@@ -14,10 +14,77 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-02 — the cs-toolkit adopter pilot's read-only pass ran, and a
-parked friction entry recurred deterministically on a quiet tree.
+Last updated: 2026-09-03 — two lanes landed the pilot's first two instrument fixes,
+and a lane's own panel caught a merge-gate bypass before it left the branch.
 
-## Latest session — 2026-09-02 (cs-toolkit adopter pilot, read-only pass, in a Claude Code session)
+## Latest session — 2026-09-03 (two parallel lanes, in a Claude Code session)
+
+**Theme —** The pilot's findings became changes. Two isolated lanes fixed the instrument
+defects the read-only pass found, and the review that landed them cost more rounds than
+the changes did — which is now its own tracker item.
+
+- **Runtime —** Claude Code, model `claude-opus-5[1m]` as this session's own system
+  prompt names it; effort not read. The session ran unattended from the operator's
+  "run the rest autonomously" onward.
+
+- **PR `#668` (squash `015908a`) fixed `#661` and its second occurrence.** `inspect`
+  trusts a `required_by` edge only where the installed dependent is byte-identical to
+  the comparison manifest, so a dependency the kit gained after an adopter's baseline
+  stops reading as a broken install. The lens-definition remedy now branches on whether
+  `panel_prompt.py` is installed rather than prescribing an engine the adopter lacks.
+  The narrowing buys no silence: a dependent failing the byte check still reports
+  `differs`/`stale`/`locally-edited` and still exits `1`.
+
+- **PR `#667` (squash `2aa1912`) delivered `#604` and `#603`.** `--record-review
+  --disposition` posts one comment at the recorded head under an engine-fixed heading,
+  and every poll's report grows `evidence_findings[]` for a receipt with no matching
+  comment and for a body stamp whose sha is not the head. Neither gates.
+
+- **The lane's own panel caught a merge-gate bypass, and the cockpit nearly lost it.**
+  `#667`'s first draft kept the engine's disposition out of `new_actionable` by matching
+  the public marker text — an unauthenticated string in front of a predicate
+  `dev_session.sh merge` reads, which GitHub's quote-reply reproduces by accident. The
+  lane fixed it with a `seen` key written at post time. Then a session rate limit killed
+  both lanes mid-task, and that fix was **committed but never pushed**: the forge held
+  the vulnerable version while the lane's own last words said it was about to re-run its
+  mutation battery. Reading the worktrees rather than the agents' final messages is what
+  recovered it.
+
+- **Review cost the session more than the code did.** `#665` took five panel rounds and
+  `#667` three, each round triggered by fixing the previous round's finding, which moved
+  the head and invalidated the evidence. `#666` was filed for that shape, including the
+  part that argues against simply capping rounds: `#665`'s fourth round found a false
+  claim in the pilot record that three earlier rounds had passed over.
+
+- **`#662` was started and deliberately abandoned.** Its two routes differ in
+  consequence — removing the three paths from `KIT_OWNED` drops them out of the drift
+  check the issue wants kept, while the repo-only role it prefers needs `inspect` to
+  distinguish its caller, since `test_kit_repo_self_check_is_clean` calls the same
+  function an adopter does. That is a design decision in the instrument that gates every
+  adopter's upgrade, so it was left for the operator with the analysis done rather than
+  invented overnight. The branch was deleted; nothing is half-built.
+
+- **Filed on the operator's approval of each exact payload:** occurrence comments on
+  `#661`, `#393`, `#643`, `#510` and `#571`, and `#666` opened for the review-round
+  loop. Each was read back from the tracker after landing. A later `#393` comment
+  recorded a review lens independently reproducing that flake in its own clone.
+
+- **Verified:** CI run `33700822303` at `912242eb1f96b85c6ebd3e88ff23323e9dff9958` on
+  2026-09-03 printed `2432 passed, 3 skipped` with nothing failing, and CI was green at
+  every merged head. Local `make test` on this machine reports one failure in
+  `test_pr_followup_hook.py` in every run — the `#393` flake, which passes in isolation
+  and which a lens reproduced and then failed to reproduce at the same sha. One local
+  run was killed by the harness at roughly half the suite and is reported as incomplete,
+  not green.
+
+▶ Next: `session-start` — then `#662`'s route is the operator's call (repo-only role
+versus dropping the three paths), and the adopter pilot's write pass still needs the
+cs-toolkit operator's approval. The friction log is over budget and its graduation
+still needs `triage-friction-log` with exact payload approval.
+
+______________________________________________________________________
+
+## Session — 2026-09-02 (cs-toolkit adopter pilot, read-only pass, in a Claude Code session)
 
 **Theme —** Phase 5's exit test, first half. `/upgrade` Steps 0 and 1 ran against the
 cs-toolkit adopter from a pinned kit clone. Nothing was written to the adopter. The
@@ -322,50 +389,6 @@ the ready transition.
 
 ▶ Next: `session-start` — re-read the live tracker and sprint boundary before choosing
 a slice; do not infer issue closure from PR `#653`'s merge.
-
-______________________________________________________________________
-
-## Session — 2026-08-31 (durable live-validation evidence, in a Codex session)
-
-**Theme —** PR `#651` settled the retained-bundle verifier around an explicit object:
-a descriptor-rooted immutable byte snapshot whose digest and semantic checks derive
-from the same captured bytes. It does not claim that a mutable multi-file directory has
-an atomic state at process return.
-
-- **Runtime —** Codex desktop, assigned model `gpt-5.6-sol`, reasoning effort `high`.
-  `jq` over the root rollout's final `turn_context`, run in
-  `/Users/topi/Coding/agentic-dev-kit` at `8e812936f8650589f6445a1761733a5f243a9cfb`
-  on 2026-08-31, read back those values and that directory.
-
-- **The race correction is descriptor-relative, not another path reread.** Validated
-  directory identities and no-follow opens anchor a captured-byte guarantee rather
-  than mutable on-disk state at return. The behavioral nodes
-  `test_an_earlier_artifact_changed_while_a_later_artifact_is_captured_binds_the_snapshot`
-  and `test_an_ancestor_swap_after_its_descriptor_opens_cannot_redirect_the_snapshot`
-  pin its race boundary. Their child processes receive an explicit observer callback
-  and install no Python startup module or `PYTHONPATH` override.
-
-- **The retained claim remains bounded.** The writing-lane bundle promotes its scoped
-  output, private open/non-draft/`CLEAN` pull request and exact-head review receipt.
-  Its uncorrelated runtime attestation remains outside the claim map. The synthetic
-  private repository `topij/adk-codex-writing-evidence-20260830` remains because the
-  available credential did not carry deletion authority.
-
-- **Phase 4 remains open.** The retained writing lane establishes `#621`'s bundle
-  mechanism but is not the independently recomputable Codex parallel-batch run named
-  by the phase exit. Under this sprint's operator-set boundary, `#621` remains open
-  without owning that run; `#631` remains a safety-critical execution-boundary decision.
-
-- **Review and merge evidence stays with PR `#651`.** Its
-  [exact-head panel disposition](https://github.com/topij/agentic-dev-kit/pull/651#issuecomment-5471285211)
-  carries the review commands and results; the merged PR binds that reviewed head to
-  squash `8e812936f8650589f6445a1761733a5f243a9cfb` without duplicating recomputable
-  command output here.
-
-▶ Next: `session-start` — take the draft-policy documentation correction as a fresh
-slice. Re-read `#365` and related `#169` against live repository and tracker state,
-choose one coherent ready-by-default rule only if the current surfaces support it,
-and do not start `#631` or the retained Codex parallel-batch Phase 4 exit.
 
 ______________________________________________________________________
 

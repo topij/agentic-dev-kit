@@ -24,6 +24,30 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-09-03
+
+- **A review lens that backgrounds a long verification loses its entire report, and the
+  failure presents as silence.** A panel lens on PR `#668` started `make test` in the
+  background and its turn ended while waiting; it returned no report at all, twice in a
+  row, each time saying only that it was waiting. To the cockpit reading agent output,
+  no-report is indistinguishable from a clean pass — the same shape as a bot outage read
+  as an approval. It was recovered by resuming the agent with an explicit prohibition on
+  blocking, after which it reported normally and disclosed the suite run as incomplete.
+  **M** — reproduction and mechanism are both clear, and the remedy is one line in the
+  lens prompt (`panel_prompt.py` could carry it, since every lens gets that contract),
+  so this is issue-shaped rather than inbox-shaped. Parked here only because it arose in
+  an unattended session with no route to exact-payload approval; it should be filed
+  rather than accumulated.
+
+- **A mutation that silently fails to apply reads as a clean kill.** While pinning
+  `#667`'s stdin branch, the cockpit's first mutation anchored on text that a comment
+  block interrupted, so the edit never landed and the suite reported `304 passed` against
+  unmutated code. Taken at face value that is a survivor read as a kill, in the direction
+  that matters. Caught by asserting the byte actually changed before trusting the run,
+  which is the practice `#33` and `#112` already argue for from the false-kill side.
+  **S** — a known class seen from a new angle (the mutation not applying, rather than the
+  drift check over-killing); recorded as an occurrence rather than as a new defect.
+
 ## 2026-09-01
 
 - **Two fallback-panel lenses each running the full suite concurrently produced a
