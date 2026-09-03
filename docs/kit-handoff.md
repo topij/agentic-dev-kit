@@ -66,7 +66,7 @@ any no-change stage, and verify the final adopter head.
 At the exit decision, capture one authoritative tuple containing the kit source and
 configured protected head, the adopter repository's canonical origin URL, adopter
 protected head, exact resulting adopter head, and every created adopter PR's identity,
-base and head. Require the origin URL to match the approved cs-toolkit remote and the
+base name and head. Require the origin URL to match the approved cs-toolkit remote and the
 kit source to equal the configured protected head in that tuple. Include each no-change
 stage's invocation, output, input/output equality, tree-equality check, clean status,
 and preceding-stage linkage. Verify every ancestry edge and the adopter condition

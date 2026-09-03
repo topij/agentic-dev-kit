@@ -434,7 +434,7 @@ historical observation it was and is not silently refreshed.
   6. [ ] Replay the write pass and fork reconciliation from the then-current kit source,
      using the same `$REPO` origin check, `$KIT` path, and immediately-before-every-write
      directory assertion as the initial pass. For a stage with a diff, bind its PR
-     identity, base and head and require the protected → upgrade → reconciliation chain
+     identity, base name and head and require the protected → upgrade → reconciliation chain
      for the PRs that exist. For a
      no-change stage, record its exact invocation, successful no-change output, input
      and output SHA, tree equality, clean status, and input linkage to the preceding
@@ -443,7 +443,7 @@ historical observation it was and is not silently refreshed.
      read-back invalidates the evidence. Capture one
      authoritative tuple containing the kit source and protected head, the adopter
      repository's canonical origin URL, adopter protected head, exact resulting adopter
-     head, every created adopter PR's identity, base and head, and each no-change stage's
+     head, every created adopter PR's identity, base name and head, and each no-change stage's
      invocation, output, input/output equality, tree-equality check, clean status, and
      preceding-stage linkage. Require the origin URL to match the approved cs-toolkit
      remote and the kit source to equal the protected head in both snapshots. Verify
@@ -796,7 +796,7 @@ and final open/unmerged fixture pull requests.
 - [ ] Replay the adopter write pass and fork reconciliation from the current kit
   protected-branch head, using the same `$REPO` origin check, `$KIT` path, and
   immediately-before-every-write directory assertion as the initial pass. Bind every
-  created PR's identity, base and head and require the protected → upgrade →
+  created PR's identity, base name and head and require the protected → upgrade →
   reconciliation ancestry for the PRs that exist. For a
   no-change stage, record its exact invocation, successful no-change output, input and
   output SHA, tree equality, clean status, and input linkage to the preceding stage
@@ -805,7 +805,7 @@ and final open/unmerged fixture pull requests.
   invalidates the evidence. Capture one
   authoritative tuple containing the kit source and protected head, the adopter
   repository's canonical origin URL, adopter protected head, exact resulting adopter
-  head, every created adopter PR's identity, base and head, and each no-change stage's
+  head, every created adopter PR's identity, base name and head, and each no-change stage's
   invocation, output, input/output equality, tree-equality check, clean status, and
   preceding-stage linkage. Require the origin URL to match the approved cs-toolkit
   remote and the kit source to equal the protected head in both snapshots. Verify every
@@ -842,7 +842,7 @@ exist; and verifies the resulting adopter head against the adopter condition abo
 Movement or retargeting of a bound adopter ref invalidates the evidence when it occurs
 before the exit read-back. Capture the full authoritative tuple of kit and adopter
 protected heads, the adopter repository's canonical origin URL, the exact resulting
-adopter head, every created adopter PR's identity, base and head, and each no-change
+adopter head, every created adopter PR's identity, base name and head, and each no-change
 stage's invocation, output, input/output equality, tree-equality check, clean status,
 and preceding-stage linkage. Require the origin URL to match the approved cs-toolkit
 remote and the kit source to equal the protected head in both snapshots; verify the
