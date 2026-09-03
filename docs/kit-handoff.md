@@ -49,20 +49,24 @@ entries graduated, and Phase 5 passed to its initial adopter write rehearsal.
   keeps separate merge authority.
 
 ▶ Next: `$session-start` — then, with explicit cs-toolkit write approval, run the
-initial adopter pilot write pass in Codex from a fresh clone of the kit's configured
-protected branch. Run `$upgrade`, which must leave the repo-owned lane forks untouched.
-Separately run reconciliation based on the upgrade branch; preserve runtime-neutral
-local policy and open a PR when that stage has a diff. Record the kit source SHA plus
-every created PR identity, base name, and head. For a no-change stage, bind its input and
-output SHA, prove tree equality and clean status, and do not manufacture a PR. Do not
-claim the Phase 5 exit: `#243`, `#631`, `#608`, and `#255` remain. After those land, the final
-replay must use the then-current kit source, confirm each created PR's base-name and
-ancestry chain, record any no-change stage, and verify the final adopter head.
+initial adopter pilot write pass in Codex. Bind `$REPO` to cs-toolkit and `$KIT` to a
+fresh clone of the kit's configured protected branch; assert `pwd` is in `$REPO` before
+the first write. Invoke `$upgrade` in `$REPO` while following `$KIT`'s workflow; it must
+leave the repo-owned lane forks untouched. Separately run reconciliation based on the
+upgrade branch; preserve runtime-neutral local policy and open a PR when that stage has
+a diff. Record the kit source SHA plus every created PR identity, base name, and head.
+For a no-change stage, record its exact invocation, successful no-change output, input
+and output SHA, tree equality, and clean status; its input must equal the preceding
+stage's output. Do not manufacture an empty PR. Do not claim the Phase 5 exit: `#243`,
+`#631`, `#608`, and `#255` remain. After those land, the final replay must use the
+then-current kit source, confirm each created PR's base-name and ancestry chain, record
+any no-change stage, and verify the final adopter head.
 At the exit decision, capture one authoritative tuple containing the kit source and
 configured protected head, the adopter protected head, and every created adopter PR's
 identity, base and head. Require the kit source to equal the configured protected head
-in that tuple. Include each no-change stage's input/output equality, tree-equality check,
-and clean status. Verify every ancestry edge and the adopter condition against those
+in that tuple. Include each no-change stage's invocation, output, input/output equality,
+tree-equality check, clean status, and preceding-stage linkage. Verify every ancestry
+edge and the adopter condition defined in the maintained parity plan against those
 immutable SHAs, then capture the full tuple again and require it to be byte-identical.
 A mismatch requires replay. Publish both snapshots and the stamped verification result
 before the kit wrap-up PR merges; later ref movement is a separate event and does not
