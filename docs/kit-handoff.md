@@ -36,6 +36,12 @@ entries graduated, and Phase 5 passed to its exit test.
   The entries already accounted for by `#393` stayed active. The triage run used the
   LLM-only, agent-executed route and retained its completed merge receipt.
 
+- **The parked inbox still needs a later disposition pass.**
+  `uv run scripts/check_doc_budget.py` at
+  `e55ae691d948b525ffba0919acd6f960c16b98f2` on 2026-09-03 prescribed
+  `triage-friction-log`; a future run must preserve the parked decisions unless the
+  operator supplies fresh exact dispositions.
+
 - **Runtime choice for the exit test is deliberate.** The pilot's read-only pass ran
   in Claude Code; its write pass should run through Codex's `$upgrade` binding so the
   Phase 5 claim is tested at the existing Codex adopter. Writes to cs-toolkit still
@@ -43,15 +49,19 @@ entries graduated, and Phase 5 passed to its exit test.
   separate merge authority.
 
 ▶ Next: `$session-start` — then, with explicit cs-toolkit write approval, run the
-initial adopter pilot write pass in Codex from a fresh current-main kit clone. Let
-`$upgrade` leave the repo-owned lane forks untouched and base their separate
-reconciliation PR on the upgrade branch; preserve runtime-neutral local policy and
-open each adopter PR ready. Record the kit source SHA plus both PR identities, base
+initial adopter pilot write pass in Codex from a fresh current-main kit clone. Run
+`$upgrade`, which must leave the repo-owned lane forks untouched. Separately create a
+reconciliation PR based on the upgrade branch; preserve runtime-neutral local policy
+and open each adopter PR ready. Record the kit source SHA plus both PR identities, base
 names, and heads, but do not claim the Phase 5 exit: `#243`, `#631`, `#608`, and `#255`
 remain. After those land, the final replay must use the then-current kit source, confirm
 the configured protected branch → upgrade PR → reconciliation PR base-name and ancestry
-chain, and verify the reconciliation head. Movement of any bound ref invalidates the
-evidence. Do not merge either adopter PR without separate authority.
+chain, and verify the reconciliation head. Movement or retargeting of any bound adopter
+ref invalidates the evidence. A later kit head may differ from the bound kit source only
+in the final record paths; verify that with `git diff --quiet <bound-kit-sha>..<record-head>
+-- . ':(exclude)docs/kit-handoff.md' ':(exclude)docs/kit-handoff-history.md'
+':(exclude)saved_plans/codex-parity-plan_2026-08-23.md'`. Any other kit change requires
+another replay. Do not merge either adopter PR without separate authority.
 
 ______________________________________________________________________
 
@@ -344,45 +354,6 @@ own disposition had been drawn too wide.
 ▶ Next: `session-start` — then take `#243`'s Claude-side field exercise of `adopt`,
 `parallel`, `triage-friction-log` and `post-merge-systemize` as the opening slice, and
 settle `#255`'s two remaining undeclared keys.
-
-______________________________________________________________________
-
-## Session — 2026-09-01 (parity reconciliation and lens diagnostics, in a Codex session)
-
-**Theme —** The session reconciled the parity plan and tracker against live repository
-state, then PR `#655` delivered `#255`'s adopter-side lens-definition diagnostic without
-duplicating the existing engine-drift responsibility.
-
-- **Runtime —** Codex desktop, assigned model `gpt-5.6-sol`, main reasoning effort
-  `high`.
-
-- **The tracker now follows delivered contracts.** The 2026-09-01 reconciliation
-  closed `#365`, `#169`, `#466`, `#601`, `#605`, and `#606` after read-back of their
-  merged repository evidence.
-
-- **PR `#655` keeps the responsibilities separate.** The already-running doctor
-  renders the expected adopter-owned Claude definition; the existing manifest-backed
-  file report continues to own installed-engine drift. The regeneration remedy changes
-  to the inspected root, creates the target directory, and quotes configured paths.
-  The generator imports its sibling doctor before `lib`, and the manifest derives that
-  dependency.
-
-- **Review changed the design rather than merely adding guards.** The renderer-bundle
-  authentication approach was removed when successive findings showed it duplicated
-  engine drift. The surviving boundary, command-context fixtures, and DRY ownership
-  lessons are recorded in
-  [`review-process-learnings_2026-08-24.md`](../saved_plans/review-process-learnings_2026-08-24.md).
-
-- **The remaining parity boundary is explicit.** Phase 4 still needs the separately
-  retained Codex parallel-batch evidence run; `#621` does not own it. Phase 5 retains
-  `#236`, `#243`, and `#631`; `#255` needs tracker disposition rather than more
-  implementation. Phase 6 retains adoption fixtures, trusted runtime smoke tests,
-  maintained parity reporting, `#607`, and `#608`. This session did not start `#631`
-  or the Phase 4 run.
-
-▶ Next: `session-start` — verify PR `#655` and `#255` live, present the exact proposed
-tracker disposition for `#255`, then recommend the next parity slice without starting
-`#631` or the retained Phase 4 Codex parallel-batch run.
 
 ______________________________________________________________________
 

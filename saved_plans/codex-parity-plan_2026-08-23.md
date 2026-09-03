@@ -17,7 +17,9 @@ tracker, the merged pull requests, the cs-toolkit checkout at
 code changed. Every figure below is a reading, names its command, and was taken at that
 revision on that date unless the row says otherwise. The re-sequencing it recommends is
 applied to *Sprint status* and *Delivery plan* below; the readings themselves are
-history from the moment they were written and are not to be refreshed in place.
+history from the moment they were written and are not to be refreshed in place. Their
+ordering and starter prose is likewise historical; only the maintained *Sprint status*
+and *Delivery plan* sections are executable after the later updates recorded there.
 
 ### Verdict
 
@@ -206,8 +208,8 @@ this plan owns exits and order, and a fact appears once with pointers.
 
 ### Opportunities
 
-Each is one slice. The order is the recommendation, and it is what *Sprint status* and
-*Delivery plan* below now carry.
+This is the 2026-09-02 recommendation as written. Its order is superseded by the
+maintained *Sprint status* and *Delivery plan* sections below.
 
 1. **Run the adopter pilot now, as Phase 5's exit test.** The Phase 5 exit ("an existing
    Codex adopter can upgrade without retaining stale runtime behaviour or losing local
@@ -407,11 +409,11 @@ historical observation it was and is not silently refreshed.
   status, and no mechanism yet prevents the next such key. **Re-sequenced on
   2026-09-02** (*Sprint review* above): the cs-toolkit adopter pilot moves from Phase 6
   into this phase as its exit test, because the exit is only establishable by an
-  upgrade run; withdrawing the live-validation verifier from the shipped manifest and
-  putting review evidence on the pull request (`#603`, `#604`) join the phase; `#631`
-  and `#608` are taken as declarations rather than mechanisms, while `#255` retains
-  its general enforcement mechanism. Delivery order, updated on 2026-09-03 by
-  operator direction after the repo-only delivery:
+  upgrade run; assigning the live-validation verifier a repo-only role and withdrawing
+  it from the adopter-shipped set, plus putting review evidence on the pull request
+  (`#603`, `#604`), join the phase; `#631` and `#608` are taken as declarations rather
+  than mechanisms, while `#255` retains its general enforcement mechanism. Delivery
+  order, updated on 2026-09-03 by operator direction after the repo-only delivery:
   1. Adopter pilot, read-only pass first (`#607`, `#236`, `#243`).
   2. `pr_watch.py --record-review` posting the disposition comment; stamp/head and
      receipt/comment mismatches reported.
@@ -424,12 +426,18 @@ historical observation it was and is not silently refreshed.
   5. The remaining `#243` field exercises completed, `#631` and `#608` decided on the
      tracker and matrix, and `#255`'s general mechanism delivered.
   6. Replay the write pass and fork reconciliation from the then-current kit source. At
-     the exit decision, bind the kit source SHA to the current kit protected-branch
-     head; require the adopter upgrade PR to target its configured protected branch and
-     the reconciliation PR to target the upgrade branch; require current adopter
-     protected branch → upgrade → reconciliation ancestry; then verify the current
-     reconciliation head against the adopter condition. Movement of any bound ref,
-     retargeting either PR, or a new kit head invalidates the evidence.
+     the exit decision, bind the kit source SHA to the kit protected-branch head;
+     require the adopter upgrade PR to target its configured protected branch and the
+     reconciliation PR to target the upgrade branch; require current adopter protected
+     branch → upgrade → reconciliation ancestry; then verify the current
+     reconciliation head against the adopter condition. Movement or retargeting of a
+     bound adopter ref invalidates the evidence. The later kit completion record may
+     advance the kit head only through `docs/kit-handoff.md`,
+     `docs/kit-handoff-history.md`, and this plan. Run `git diff --quiet
+     <bound-kit-sha>..<record-head> -- . ':(exclude)docs/kit-handoff.md'
+     ':(exclude)docs/kit-handoff-history.md'
+     ':(exclude)saved_plans/codex-parity-plan_2026-08-23.md'`; a non-zero result requires
+     another replay.
 - [ ] **Phase 6 — Gate parity and roll it out.** With the pilot pulled into Phase 5,
   this phase holds the cost and hygiene work the review found burning, then the gate:
   the proportional opening pass for record prose (`#585`); the suite measured and
@@ -559,7 +567,8 @@ kit upgrade.
 
 PR `#599` delivered the Phase 3 starter and closed the declared structural exit. The
 starter it preserved (`feat/codex-environment-capable-launcher`) was consumed by PR
-`#609` on 2026-08-26. The next sprint starter, set by the 2026-09-02 review:
+`#609` on 2026-08-26. The next sprint starter set by the 2026-09-02 review was consumed
+by the read-only adopter pass later that day:
 
 ```text
 In a Claude Code session, run the cs-toolkit adopter pilot read-only first. Bind
@@ -767,18 +776,28 @@ and final open/unmerged fixture pull requests.
   protected-branch head. Require the upgrade PR to target the configured adopter
   protected branch, the reconciliation PR to target the upgrade branch, and current
   adopter protected branch → upgrade → reconciliation ancestry. Verify the current
-  reconciliation head against the adopter condition; movement of any bound ref,
-  retargeting either PR, or a new kit head invalidates the evidence.
+  reconciliation head against the adopter condition. Movement or retargeting of a
+  bound adopter ref invalidates the evidence. After replay, allow the final kit record
+  to advance the kit head only through `docs/kit-handoff.md`,
+  `docs/kit-handoff-history.md`, and this plan. Require `git diff --quiet
+  <bound-kit-sha>..<record-head> -- . ':(exclude)docs/kit-handoff.md'
+  ':(exclude)docs/kit-handoff-history.md'
+  ':(exclude)saved_plans/codex-parity-plan_2026-08-23.md'` to succeed, or replay again.
 
 Done when an existing Codex adopter can upgrade without retaining stale runtime
 behavior or losing local policy, the remaining `#243` field exercises are complete,
 `#631` and `#608` carry their declarations, and `#255`'s general mechanism is delivered.
-The final adopter replay binds the current kit protected-branch head to its source SHA;
-binds both adopter PR identities, base names, and heads; proves the current adopter
-protected branch → upgrade → reconciliation ancestry; and verifies the reconciliation
-head against the adopter condition. Movement of a bound ref, retargeting either PR, or
-a new kit head invalidates the evidence. Nothing else establishes the exit; merged
-delivery slices are not used as a reassuring substitute for it.
+The final adopter replay binds the kit protected-branch head to its source SHA; binds
+both adopter PR identities, base names, and heads; proves the current adopter protected
+branch → upgrade → reconciliation ancestry; and verifies the reconciliation head
+against the adopter condition. Movement or retargeting of a bound adopter ref
+invalidates the evidence. The final kit completion record may advance the kit head only
+through `docs/kit-handoff.md`, `docs/kit-handoff-history.md`, and this plan. Require
+`git diff --quiet <bound-kit-sha>..<record-head> -- .
+':(exclude)docs/kit-handoff.md' ':(exclude)docs/kit-handoff-history.md'
+':(exclude)saved_plans/codex-parity-plan_2026-08-23.md'` to succeed, or replay is
+required again. Nothing else establishes the exit; merged delivery slices are not used
+as a reassuring substitute for it.
 
 ### Phase 6 — Gate parity and roll it out
 

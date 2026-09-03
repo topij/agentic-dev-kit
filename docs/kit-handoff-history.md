@@ -5,6 +5,43 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-09-01 (parity reconciliation and lens diagnostics, in a Codex session)
+
+**Theme —** The session reconciled the parity plan and tracker against live repository
+state, then PR `#655` delivered `#255`'s adopter-side lens-definition diagnostic without
+duplicating the existing engine-drift responsibility.
+
+- **Runtime —** Codex desktop, assigned model `gpt-5.6-sol`, main reasoning effort
+  `high`.
+
+- **The tracker now follows delivered contracts.** The 2026-09-01 reconciliation
+  closed `#365`, `#169`, `#466`, `#601`, `#605`, and `#606` after read-back of their
+  merged repository evidence.
+
+- **PR `#655` keeps the responsibilities separate.** The already-running doctor
+  renders the expected adopter-owned Claude definition; the existing manifest-backed
+  file report continues to own installed-engine drift. The regeneration remedy changes
+  to the inspected root, creates the target directory, and quotes configured paths.
+  The generator imports its sibling doctor before `lib`, and the manifest derives that
+  dependency.
+
+- **Review changed the design rather than merely adding guards.** The renderer-bundle
+  authentication approach was removed when successive findings showed it duplicated
+  engine drift. The surviving boundary, command-context fixtures, and DRY ownership
+  lessons are recorded in
+  [`review-process-learnings_2026-08-24.md`](../saved_plans/review-process-learnings_2026-08-24.md).
+
+- **The remaining parity boundary is explicit.** Phase 4 still needs the separately
+  retained Codex parallel-batch evidence run; `#621` does not own it. Phase 5 retains
+  `#236`, `#243`, and `#631`; `#255` needs tracker disposition rather than more
+  implementation. Phase 6 retains adoption fixtures, trusted runtime smoke tests,
+  maintained parity reporting, `#607`, and `#608`. This session did not start `#631`
+  or the Phase 4 run.
+
+▶ Next: `session-start` — verify PR `#655` and `#255` live, present the exact proposed
+tracker disposition for `#255`, then recommend the next parity slice without starting
+`#631` or the retained Phase 4 Codex parallel-batch run.
+
 ## Session — 2026-09-01 (draft-policy correction, in a Codex session)
 
 **Theme —** PR `#653` made completed pull requests ready for review by default across
