@@ -1234,7 +1234,7 @@ def test_kit_repo_self_check_is_clean():
     """
     manifest = json.loads((REPO_ROOT / kit_doctor.MANIFEST_NAME).read_text(encoding="utf-8"))
     config = kit_doctor.load_config(REPO_ROOT / "config" / "dev-model.yaml", overlay=False)
-    report = kit_doctor.inspect(REPO_ROOT, manifest, config)
+    report = kit_doctor.inspect(REPO_ROOT, manifest, config, include_repo_only=True)
     assert report.drifted == [], (
         "kit-owned files differ from kit-manifest.json: "
         + str([f"{f.path}: {f.state}" for f in report.drifted])
@@ -1246,6 +1246,59 @@ def test_kit_repo_self_check_is_clean():
         "manifest is stale: run `kit_doctor.py --generate-manifest` and commit "
         "it with your change."
     )
+
+
+def test_repo_only_paths_are_hashed_but_not_offered_to_an_adopter(tmp_path):
+    """Release hashing and kit drift coverage must not make these adopter files."""
+    repo_only = {
+        "scripts/verify_live_validation_bundle.py",
+        "scripts/tests/test_live_validation_bundle.py",
+        "docs/agentic-dev-kit/live-validation-evidence.md",
+    }
+    assert {
+        rel for rel, role in kit_doctor.KIT_OWNED if role == kit_doctor.REPO_ONLY_ROLE
+    } == repo_only
+
+    root = _fake_repo(tmp_path)
+    for rel in repo_only:
+        _write(root / rel, f"repo-only bytes for {rel}\n")
+    generated = kit_doctor.generate_manifest(root, 2)
+    assert {
+        rel for rel, entry in generated["files"].items() if entry["role"] == "repo-only"
+    } == repo_only
+    assert all(
+        generated["files"][rel]["sha256"] == kit_doctor.sha256_of(root / rel)
+        for rel in repo_only
+    )
+
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    adopter = kit_doctor.inspect(root, generated, config)
+    assert repo_only.isdisjoint(status.path for status in adopter.files)
+    assert "verify_live_validation_bundle.py" not in kit_doctor._invocable_kit_scripts()
+
+    kit = kit_doctor.inspect(root, generated, config, include_repo_only=True)
+    assert repo_only <= {status.path for status in kit.files}
+    changed = root / "scripts" / "verify_live_validation_bundle.py"
+    changed.write_text("drifted\n", encoding="utf-8")
+    kit = kit_doctor.inspect(root, generated, config, include_repo_only=True)
+    changed_rel = changed.relative_to(root).as_posix()
+    assert next(status for status in kit.files if status.path == changed_rel).state == "differs"
+
+    recorded, unverified = kit_doctor.record_install_manifest(root, config, 2, None)
+    assert unverified == []
+    assert repo_only.isdisjoint(recorded["files"])
+    assert repo_only.isdisjoint(recorded["not_installed"])
+
+    adopter_doctrine = {
+        rel: (REPO_ROOT / rel).read_text(encoding="utf-8")
+        for rel, _role in kit_doctor.ADOPTER_KIT_OWNED
+        if rel.endswith(".md")
+    }
+    for repo_only_path in repo_only:
+        basename = Path(repo_only_path).name
+        assert all(basename not in text for text in adopter_doctrine.values()), (
+            f"adopter-facing doctrine still refers to repo-only {basename}"
+        )
 
 
 @pytest.mark.parametrize("adopter_path", kit_doctor.ADOPTER_OWNED)
@@ -2049,7 +2102,7 @@ def test_a_healthy_report_does_not_grow_the_parenthetical(tmp_path, capsys):
     # Derived, not literal: a new KIT_OWNED entry would otherwise fail this test
     # for a reason unrelated to the property under test, which is only that the
     # parenthetical is absent. (CodeRabbit, PR #225.)
-    absent = len(kit_doctor.KIT_OWNED) - 1
+    absent = len(kit_doctor.ADOPTER_KIT_OWNED) - 1
     assert line == f"  files: 1 unchanged, 0 differ, {absent} missing, 0 unknown"
     assert "required by an installed engine" not in out
     assert "this install is broken" not in out
@@ -3195,14 +3248,14 @@ def _scoped_baseline(
     unrecorded: tuple[str, ...] = (),
     kit_commit: str = "d3faafb",
 ) -> dict:
-    """A baseline carrying `not_installed`, derived from the real KIT_OWNED.
+    """A baseline carrying `not_installed`, derived from adopter-facing entries.
 
     `installed` maps a kit-layout path to its recorded sha. `unrecorded` names
     paths left out of BOTH maps, which is how a file the kit gained after this
     baseline was written looks from here — the case no declared set can
     anticipate and the reason `new-upstream` exists.
     """
-    every = {rel for rel, _role in kit_doctor.KIT_OWNED}
+    every = {rel for rel, _role in kit_doctor.ADOPTER_KIT_OWNED}
     absent = sorted(every - set(installed) - set(unrecorded))
     return {
         "kit_version": 2,
@@ -3233,9 +3286,10 @@ def test_record_install_records_what_was_absent_not_only_what_was_there(tmp_path
 
     assert unverified == []
     assert set(written["files"]) == {ENGINE}
-    every = {rel for rel, _role in kit_doctor.KIT_OWNED}
-    # Derived from KIT_OWNED rather than listed: a new kit file must not fail
-    # this test, whose property is only that the two maps partition the set.
+    every = {rel for rel, _role in kit_doctor.ADOPTER_KIT_OWNED}
+    # Derived from the adopter-facing set rather than listed: a new installable
+    # kit file must not fail this test, whose property is only that the two maps
+    # partition that set.
     assert set(written["not_installed"]) == every - {ENGINE}
     assert set(written["files"]).isdisjoint(written["not_installed"])
 
@@ -3508,7 +3562,10 @@ def test_the_report_says_intact_and_stops_repeating_the_count(tmp_path, capsys):
 
     line = next(ln for ln in out.splitlines() if ln.startswith("  files:"))
     assert line == "  files: 1 unchanged, 0 differ, 0 missing, 0 unknown"
-    assert f"✓ intact for this adoption — {len(kit_doctor.KIT_OWNED) - 1} file(s) declined" in out
+    assert (
+        f"✓ intact for this adoption — {len(kit_doctor.ADOPTER_KIT_OWNED) - 1} "
+        "file(s) declined"
+    ) in out
     assert "sized-down adoption, or incomplete" not in out
     assert "scripts/pr_watch.py" not in out, "declined files were itemised"
 
@@ -3553,7 +3610,7 @@ def test_a_full_install_with_nothing_declined_does_not_carry_the_nudge(tmp_path,
     Reproducing #286's own noise in the fix's advice line would be its own
     joke."""
     root = _fake_repo(tmp_path)
-    every = {rel for rel, _role in kit_doctor.KIT_OWNED}
+    every = {rel for rel, _role in kit_doctor.ADOPTER_KIT_OWNED}
     for rel in every - {ENGINE}:
         _write(root / rel, f"content of {rel}\n")
     installed = {rel: kit_doctor.sha256_of(root / rel) for rel in every}
@@ -3860,7 +3917,7 @@ def test_an_empty_adoption_does_not_say_all_declined_when_some_were_never_offere
     """
     root = _fake_repo(tmp_path)
     (root / "scripts" / "check_doc_budget.py").unlink()
-    every = [rel for rel, _role in kit_doctor.KIT_OWNED]
+    every = [rel for rel, _role in kit_doctor.ADOPTER_KIT_OWNED]
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
     # Nothing installed, nothing declined, everything unmentioned.
     baseline = {"kit_version": 2, "kit_commit": "abc", "files": {}, "not_installed": []}

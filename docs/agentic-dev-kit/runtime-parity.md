@@ -103,21 +103,26 @@ records broader capability parity that cannot be expressed as an adapter path.
 
 ## Live promotion boundary
 
-Client-dependent capability promotion follows
-[`live-validation-evidence.md`](live-validation-evidence.md). A narrative, a digest
-whose named bytes were cleaned up, or a carrier that cannot retain the authoritative
-applied-compute observation stays historical. `verify_live_validation_bundle.py`
-checks the closed bundle and promotion shapes, destination digests, independently
-supplied source/review/redaction/runtime/applied-compute and complete claim-object
-promotion expectations, artifact inventory, capture request/date stamps, bounded input
-envelopes and trees, redaction backstops, and persistent minimal `turn_context`
-attestation when a claim depends on model, effort, or cwd. For a fixture ledger, the
-verifier also walks every retained source dependency at the fixture revision. The
-tracked semantic control adds a path-to-digest trust root outside the bundle, fixes the
-fixture identity, and asserts claim-specific observer relationships. The named
-redaction reviewer and capability reviewer still own semantic minimization and whether
-the retained observers establish the promoted claim; a structurally valid bundle is
-not a substitute for that claim-specific recomputation.
+Client-dependent capability promotion is kit-repository maintenance, not an adopter
+workflow. Its evidence contract, verifier, tests, and retained fixtures are
+release-hashed repository-only artifacts and are intentionally absent from adopter
+inspection and install baselines. Adopters receive the promoted capability claims in
+this document; they are not expected to reproduce the kit's evidence workflow from
+vendored files.
+
+A narrative, a digest whose named bytes were cleaned up, or a carrier that cannot
+retain the authoritative applied-compute observation stays historical. Promotion
+requires a closed bundle with destination digests, independently supplied
+source/review/redaction/runtime/applied-compute expectations, a complete claim map and
+artifact inventory, capture request/date stamps, bounded input envelopes and trees,
+redaction backstops, and persistent minimal `turn_context` attestation when a claim
+depends on model, effort, or cwd. A fixture ledger must also retain every source
+dependency at the fixture revision. A tracked semantic control supplies a
+path-to-digest trust root outside the bundle, fixes the fixture identity, and asserts
+claim-specific observer relationships. The named redaction reviewer and capability
+reviewer still own semantic minimization and whether the retained observers establish
+the promoted claim; structural validity is not a substitute for that claim-specific
+recomputation.
 
 ## Lifecycle validation boundary
 

@@ -131,9 +131,12 @@ undifferentiated `missing` where it does not. Plus four installation-level check
 
 **A `0 missing` (or a `missing`/`new-upstream` count that leaves a real file out) is
 not evidence there is nothing new — it is a property of what this run of `kit_doctor`
-knows how to look for, not of the kit.** `inspect()` walks the `KIT_OWNED` tuple
-compiled into the **running** script — your installed `<engine-dir>/kit_doctor.py` —
-and consults `--manifest` only to look up a hash for a path that tuple already names.
+knows how to look for, not of the kit.** `inspect()` walks the adopter-facing entries
+in the `KIT_OWNED` tuple compiled into the **running** script — your installed
+`<engine-dir>/kit_doctor.py` — and consults `--manifest` only to look up a hash for a
+path that tuple already names. Entries carrying the `repo-only` role stay hashed in
+the kit release manifest for the kit checkout's own drift gate, but this adopter run
+does not report or offer them.
 A file the kit gained after your installed copy was built sits outside that tuple, so
 this first run does not count it, name it, or hint at it anywhere in the report. It is
 self-correcting: the same run reports `<engine-dir>/kit_doctor.py` itself as `differs`
@@ -755,7 +758,9 @@ This rewrites `kit-manifest.json` **here** to record what this repo now has inst
 **and, as `not_installed`, what it deliberately does not** — stamped with the kit commit
 it came from. That second list is what carries Step 3's decisions forward: an absence in
 it reports as `declined` rather than as an open question, so the next upgrade stops
-asking. Skip this step and every decline you just made is re-asked next time, which is
+asking. Repo-only entries are omitted from both baseline maps because they were never
+install candidates; an older baseline may still name a withdrawn path, but inspection
+ignores it. Skip this step and every decline you just made is re-asked next time, which is
 the conversation the PR-body note was standing in for. Nothing else writes it: `/adopt` and `/upgrade`
 copied kit files in and left this file at whatever it was on the day it first arrived, so
 an adopter's baseline drifted further from its own tree with every upgrade. Measured on a

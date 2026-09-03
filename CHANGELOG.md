@@ -42,6 +42,19 @@ starts.
 
 ---
 
+## #670 — 2026-09-03
+
+- **CHANGED (report / return shape, `#662`):** Refresh `scripts/kit_doctor.py`,
+  `docs/agentic-dev-kit/workflows/upgrade.md`, and
+  `docs/agentic-dev-kit/runtime-parity.md`. Adopter inspection and
+  `--record-install` now omit `scripts/verify_live_validation_bundle.py`,
+  `scripts/tests/test_live_validation_bundle.py`, and
+  `docs/agentic-dev-kit/live-validation-evidence.md`; remove any copies you
+  previously installed. These repository-only promotion tools remain hashed in the
+  kit's release manifest and checked in the kit checkout, but `/upgrade` no longer
+  reports or offers them and an adopter baseline no longer records them in either
+  `files` or `not_installed`.
+
 ## #667 — 2026-09-02
 
 - **ADDED (engine CLI surface, `#604`):** `scripts/pr_watch.py --record-review`

@@ -15,7 +15,10 @@ v2 repo, and the template itself — and nothing could tell them apart. One repo
 
 So: **engines are kit-owned, config is adopter-owned.** That invariant is what
 makes an upgrade a file copy instead of a manual merge, and this script is what
-verifies it still holds. Per kit-owned file it reports one of:
+verifies it still holds. Repo-only files remain release-manifest hashed for the
+kit checkout's drift gate but are not adopter install candidates, so ordinary
+inspection and ``--record-install`` omit them. Per adopter-facing kit-owned file
+it reports one of:
 
 ``unchanged``
     Byte-identical to the manifest. Safe to replace outright on upgrade.
@@ -216,6 +219,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from kitconfig import get, load_config, repo_root  # noqa: E402
 
 MANIFEST_NAME = "kit-manifest.json"
+REPO_ONLY_ROLE = "repo-only"
 
 # Files the KIT owns, as they sit in the kit's own tree. An adopter should never
 # need to edit one of these — everything project-specific belongs in
@@ -230,12 +234,12 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/launch_lane.py", "engine"),
     ("scripts/reconcile_sessions.sh", "engine"),
     ("scripts/kit_doctor.py", "engine"),
-    # The executable half of live-validation-evidence.md. Track both: an
-    # upgrader receiving the doctrine without the verifier gets an instruction
-    # it cannot execute, while receiving the verifier without the doctrine
-    # loses the redaction and authoritative-observer boundary the CLI cannot
-    # infer from bytes alone.
-    ("scripts/verify_live_validation_bundle.py", "engine"),
+    # The executable half of live-validation-evidence.md. It, its test and its
+    # doctrine enforce this repository's retained-evidence promotion contract;
+    # an adopter receives none of the saved plans or fixtures they verify. Keep
+    # all of them hashed by --generate-manifest so the kit's own drift gate
+    # watches them, but omit them from adopter inspection and install baselines.
+    ("scripts/verify_live_validation_bundle.py", REPO_ONLY_ROLE),
     # Assembles panel launch prompts by QUOTING the contract out of
     # docs/agentic-dev-kit/fallback-review-panel.md at run time (#214). That
     # coupling is why it is tracked beside the doctrine rather than left
@@ -270,9 +274,9 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # `0 differ` while the suite it guarded wrote into a live `state/` — and
     # `_remap` already handles the `scripts/` prefix uniformly regardless of
     # role, so no new mechanism was needed, only these entries. Installable and
-    # declinable exactly like an engine: `--record-install` walks all of
-    # `KIT_OWNED` without filtering by role, so an adopter who does not vendor
-    # tests gets `declined`, not a silent gap.
+    # declinable exactly like an engine: `--record-install` walks every
+    # adopter-facing `KIT_OWNED` entry without filtering engine and test roles,
+    # so an adopter who does not vendor tests gets `declined`, not a silent gap.
     ("scripts/tests/_repo_layout.py", "test"),
     ("scripts/tests/conftest.py", "test"),
     ("scripts/tests/test_check_memory_budget.py", "test"),
@@ -290,7 +294,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/test_reconcile_sessions.py", "test"),
     ("scripts/tests/test_repo_layout.py", "test"),
     ("scripts/tests/test_state_guard.py", "test"),
-    ("scripts/tests/test_live_validation_bundle.py", "test"),
+    ("scripts/tests/test_live_validation_bundle.py", REPO_ONLY_ROLE),
     # `state_paths` is a package with its own `tests/`, hashed the same way for
     # the same reason: it sits under `scripts/lib/`, so `_remap` covers it
     # uniformly with everything else — no boundary to draw here.
@@ -344,7 +348,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # adopter cannot refresh the adapters or shared workflows while keeping an
     # older account of which ones are supposed to exist.
     ("docs/agentic-dev-kit/runtime-parity.md", "doctrine"),
-    ("docs/agentic-dev-kit/live-validation-evidence.md", "doctrine"),
+    ("docs/agentic-dev-kit/live-validation-evidence.md", REPO_ONLY_ROLE),
     ("docs/agentic-dev-kit/safety-critical-changes.md", "doctrine"),
     # Tracked because safety-critical-changes.md — which IS refreshed by
     # /upgrade — links to it from rules 2 and 3. An untracked target means an
@@ -475,6 +479,13 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # That exits 1 until they re-record with `--record-install`. Correct: their
     # installer really is unmeasured, and that is the whole finding.
     ("init.sh", "installer"),
+)
+
+# The adopter-facing scope is derived once from the release-manifest scope so
+# inspection and baseline recording cannot disagree about a newly repo-only
+# path. Manifest generation deliberately continues to use KIT_OWNED.
+ADOPTER_KIT_OWNED = tuple(
+    (rel, role) for rel, role in KIT_OWNED if role != REPO_ONLY_ROLE
 )
 
 # The kit-layout key for the pre-push hook, derived from KIT_OWNED rather than
@@ -1314,6 +1325,10 @@ def _invocable_kit_scripts() -> set[str]:
     `test_an_adopters_own_script_is_not_judged_as_a_kit_hook` closed for
     library modules, reopened by the new role (panel, both lenses, #527).
 
+    Repo-only scripts are excluded too: they do not ship into an adopter and
+    therefore cannot define whether an adopter-owned registration is a kit
+    registration.
+
     Defence in depth rather than the whole defence: the boundary check in
     `_match_word`'s basename comparison is what actually stops `env_paths.py`
     matching `paths.py`.
@@ -1322,7 +1337,9 @@ def _invocable_kit_scripts() -> set[str]:
     return {
         PurePosixPath(rel).name
         for rel, role in KIT_OWNED
-        if rel.endswith((".py", ".sh")) and "/lib/" not in rel and role not in ("template", "test")
+        if rel.endswith((".py", ".sh"))
+        and "/lib/" not in rel
+        and role not in ("template", "test", REPO_ONLY_ROLE)
     }
 
 
@@ -1758,9 +1775,10 @@ def _codex_registration_semantics(
 def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStatus]:
     """Whether each runtime's hook registration names a path that exists.
 
-    Derived from `KIT_OWNED` rather than from a list of hook names: an adopter
-    registering `check_doc_budget.py` on `SessionStart` gets the same check as
-    one registering `pr_followup_hook.py` on `PostToolUse`, and adding a kit
+    Derived from the adopter-facing `KIT_OWNED` entries rather than from a list
+    of hook names: an adopter registering `check_doc_budget.py` on
+    `SessionStart` gets the same check as one registering
+    `pr_followup_hook.py` on `PostToolUse`, and adding an adopter-facing kit
     script does not require remembering to add it here too.
     """
     # Scripts a registration could plausibly INVOKE, not every kit-owned file
@@ -1775,7 +1793,8 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
     engine_paths = {
         PurePosixPath(rel).name: _remap(rel, engines_dir)
         for rel, role in KIT_OWNED
-        if PurePosixPath(rel).name in kit_scripts and role not in ("template", "test")
+        if PurePosixPath(rel).name in kit_scripts
+        and role not in ("template", "test", REPO_ONLY_ROLE)
     }
     statuses: list[RegistrationStatus] = []
     codex_documents: dict[str, object] = {}
@@ -2288,13 +2307,13 @@ def record_install_manifest(
       out, so they stay unjudgeable rather than confidently wrong.
     - **Omitted**: retro-recording an existing install, where nothing matches
       current HEAD by construction and the operator is explicitly taking the
-      files as found. Everything installed is recorded.
+      files as found. Every installed adopter-facing file is recorded.
     """
     engines_dir = str(get(config, "paths.engines", KIT_ENGINE_PREFIX))
     files: dict[str, dict] = {}
     unverified: list[str] = []
     not_installed: list[str] = []
-    for rel, role in KIT_OWNED:
+    for rel, role in ADOPTER_KIT_OWNED:
         target = root / _remap(rel, engines_dir)
         # Keyed by the KIT-layout path even when the file lives somewhere else
         # locally, so this manifest and the kit's are keyed identically and
@@ -2634,7 +2653,16 @@ def inspect(
     baseline: dict | None = None,
     *,
     baseline_is_comparison: bool = False,
+    include_repo_only: bool = False,
 ) -> Report:
+    # Default to adopter behaviour. The kit's self-check opts in explicitly;
+    # inferring from `root` would make identical bytes mean different things
+    # depending on where a caller happened to inspect them.
+    inspected = (
+        KIT_OWNED
+        if include_repo_only
+        else ADOPTER_KIT_OWNED
+    )
     engines_dir = str(get(config, "paths.engines", KIT_ENGINE_PREFIX))
     manifest_files = manifest.get("files") or {}
     trusted = _baseline_trusted(baseline)
@@ -2649,10 +2677,11 @@ def inspect(
     baseline_files = raw_baseline_files if isinstance(raw_baseline_files, dict) else {}
     declared_scope = _declared_scope(baseline, trusted)
 
-    # Presence of EVERY kit-owned file, resolved before the status loop: whether
-    # a missing file is a broken install or a sized-down one is a question about
-    # its dependents, and those can sit anywhere in KIT_OWNED order.
-    present = {rel: (root / _remap(rel, engines_dir)).is_file() for rel, _ in KIT_OWNED}
+    # Presence of every file in this inspection scope, resolved before the
+    # status loop: whether a missing file is a broken install or a sized-down
+    # one is a question about its dependents, and those can sit anywhere in
+    # KIT_OWNED order.
+    present = {rel: (root / _remap(rel, engines_dir)).is_file() for rel, _ in inspected}
 
     _edge_holds: dict[str, bool] = {}
 
@@ -2710,7 +2739,7 @@ def inspect(
         return _edge_holds[dep]
 
     statuses: list[FileStatus] = []
-    for rel, role in KIT_OWNED:
+    for rel, role in inspected:
         local_rel = _remap(rel, engines_dir)
         target = root / local_rel
         entry = manifest_files.get(rel) or {}
