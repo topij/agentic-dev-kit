@@ -217,6 +217,9 @@ Each is one slice. The order is the recommendation, and it is what *Sprint statu
    bound), a stamped record of what the instrument gets wrong (the `broken` verdict),
    then the writes on the adopter operator's approval. This is `#607`, `#236` and
    `#243`'s field exercise in one session, and it pulls Phase 6's pilot forward.
+   `$upgrade` leaves the repo-owned lane forks untouched; base their separate
+   reconciliation PR on the upgrade branch and verify the exact adopter revision that
+   contains both changes before claiming the exit.
 2. **Stop shipping sprint tooling.** Give `verify_live_validation_bundle.py`, its test
    and `live-validation-evidence.md` a repo-only role, or drop them from the manifest's
    `files`, so `/upgrade` stops offering an adopter an engine with nothing to verify. A
@@ -356,8 +359,8 @@ historical observation it was and is not silently refreshed.
      another tier.
      Adopt now, mechanise later: the final verification stamp is a PR comment at the
      merged head, and a panel that ran leaves a disposition comment (`#603`, `#604`).
-     Phase 5 owns `#236`, the `#243` narrowing (adapter generation), and `#631`; Phase 6
-     takes `#607` as the adopter pilot and `#608`.
+     Phase 5 owns `#236`, the `#243` narrowing (adapter generation), `#631`, and `#607`
+     as the adopter pilot; Phase 6 takes `#608`.
   6. Carried by PR `#651`: the repository-owned redacted evidence contract, hostile
      missing/altered/wrong-revision/claim-relabel mutations, and tracked positive
      control now refuse promotion when the retained bytes, complete claim-to-artifact
@@ -417,8 +420,10 @@ historical observation it was and is not silently refreshed.
      receipt/comment mismatches reported.
   3. Verifier, its test, and its evidence page assigned the repo-only manifest role,
      with the `CHANGELOG.md` entry.
-  4. The pilot's write pass, on the adopter operator's approval; then the exit is
-     either established or the residue is filed.
+  4. The pilot's write pass, on the adopter operator's approval, followed by a separate
+     fork-reconciliation PR based on the upgrade branch. Establish the exit only from
+     an exact adopter revision containing both changes and verified against the exit
+     condition; otherwise file the residue and leave the exit open.
   5. `#631` and `#608` decided on the tracker and matrix, and `#255`'s general
      mechanism delivered.
 - [ ] **Phase 6 — Gate parity and roll it out.** With the pilot pulled into Phase 5,
@@ -732,11 +737,13 @@ and final open/unmerged fixture pull requests.
   `parallel`, `triage-friction-log`, and `post-merge-systemize` (`#243`).
 - [x] Inspect adopter-side generated lens definitions against their configured
   mechanical compute carrier without duplicating installed-engine drift (PR `#655`;
-  `#255` retains tracker disposition only).
+  `#255`'s general enforcement mechanism remains separate).
 - [ ] Run the cs-toolkit adopter pilot as this phase's exit test: a read-only pass
   from a pinned kit clone with `$REPO` and `$KIT` bound, a stamped record of every
   instrument misreading (the false `broken` verdict on `lib/runtime_adapters.py`
-  first), then the write pass on the adopter operator's approval (`#607`, `#236`,
+  first), then the write pass on the adopter operator's approval and a separate
+  fork-reconciliation PR based on its branch. Verify the exact revision containing
+  both changes against the exit condition before claiming the exit (`#607`, `#236`,
   `#243`; added 2026-09-02).
 - [x] Give `scripts/verify_live_validation_bundle.py`, its test and
   `live-validation-evidence.md` the repo-only role: retain release-manifest hashing
@@ -754,9 +761,9 @@ and final open/unmerged fixture pull requests.
   test over per-runtime config keys (added 2026-09-02).
 
 Done when an existing Codex adopter can upgrade without retaining stale runtime
-behavior or losing local policy. That exit is established by the pilot's write pass
-and by nothing else; merged delivery slices are not used as a reassuring substitute
-for it.
+behavior or losing local policy. That exit is established by verifying the exact
+adopter revision that combines the write pass with the fork reconciliation, and by
+nothing else; merged delivery slices are not used as a reassuring substitute for it.
 
 ### Phase 6 — Gate parity and roll it out
 
