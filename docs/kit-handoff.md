@@ -43,9 +43,11 @@ entries graduated, and Phase 5 passed to its exit test.
   separate merge authority.
 
 ▶ Next: `$session-start` — then, with explicit cs-toolkit write approval, run the
-adopter pilot write pass in Codex from a fresh current-main kit clone; preserve the
-repo-owned lane forks and runtime-neutral local policy, open the adopter PR ready, and
-do not merge without separate authority.
+adopter pilot write pass in Codex from a fresh current-main kit clone; leave the
+repo-owned lane forks untouched by `$upgrade` while routing their known stale behavior
+to a separate reconciliation PR, preserve runtime-neutral local policy, open each
+adopter PR ready, and do not claim the Phase 5 exit or merge either PR without
+separate authority.
 
 ______________________________________________________________________
 
