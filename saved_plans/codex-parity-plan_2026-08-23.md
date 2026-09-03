@@ -740,10 +740,10 @@ and final open/unmerged fixture pull requests.
   instrument misreading (the false `broken` verdict on `lib/runtime_adapters.py`
   first), then the write pass on the adopter operator's approval (`#607`, `#236`,
   `#243`; added 2026-09-02).
-- [ ] Withdraw `scripts/verify_live_validation_bundle.py`, its test and
-  `live-validation-evidence.md` from the shipped manifest set with a `CHANGELOG.md`
-  entry, so an adopter is not offered an engine that verifies nothing in their tree
-  (added 2026-09-02).
+- [x] Give `scripts/verify_live_validation_bundle.py`, its test and
+  `live-validation-evidence.md` the repo-only role: retain release-manifest hashing
+  and the kit checkout's drift check while omitting them from adopter inspection,
+  install baselines, and `/upgrade` offers (`#662`, PR `#670`; added 2026-09-02).
 - [ ] Have `pr_watch.py --record-review` post a fixed-heading disposition comment at
   the recorded head, and report a receipt without that comment and a body stamp whose
   sha is not `headRefOid` (`#603`, `#604`; added 2026-09-02).
