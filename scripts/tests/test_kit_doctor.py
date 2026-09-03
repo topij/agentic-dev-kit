@@ -1289,6 +1289,17 @@ def test_repo_only_paths_are_hashed_but_not_offered_to_an_adopter(tmp_path):
     assert repo_only.isdisjoint(recorded["files"])
     assert repo_only.isdisjoint(recorded["not_installed"])
 
+    adopter_doctrine = {
+        rel: (REPO_ROOT / rel).read_text(encoding="utf-8")
+        for rel, _role in kit_doctor.ADOPTER_KIT_OWNED
+        if rel.endswith(".md")
+    }
+    for repo_only_path in repo_only:
+        basename = Path(repo_only_path).name
+        assert all(basename not in text for text in adopter_doctrine.values()), (
+            f"adopter-facing doctrine still refers to repo-only {basename}"
+        )
+
 
 @pytest.mark.parametrize("adopter_path", kit_doctor.ADOPTER_OWNED)
 def test_adopter_owned_paths_are_never_compared(adopter_path):
@@ -3237,7 +3248,7 @@ def _scoped_baseline(
     unrecorded: tuple[str, ...] = (),
     kit_commit: str = "d3faafb",
 ) -> dict:
-    """A baseline carrying `not_installed`, derived from the real KIT_OWNED.
+    """A baseline carrying `not_installed`, derived from adopter-facing entries.
 
     `installed` maps a kit-layout path to its recorded sha. `unrecorded` names
     paths left out of BOTH maps, which is how a file the kit gained after this
@@ -3276,8 +3287,9 @@ def test_record_install_records_what_was_absent_not_only_what_was_there(tmp_path
     assert unverified == []
     assert set(written["files"]) == {ENGINE}
     every = {rel for rel, _role in kit_doctor.ADOPTER_KIT_OWNED}
-    # Derived from KIT_OWNED rather than listed: a new kit file must not fail
-    # this test, whose property is only that the two maps partition the set.
+    # Derived from the adopter-facing set rather than listed: a new installable
+    # kit file must not fail this test, whose property is only that the two maps
+    # partition that set.
     assert set(written["not_installed"]) == every - {ENGINE}
     assert set(written["files"]).isdisjoint(written["not_installed"])
 

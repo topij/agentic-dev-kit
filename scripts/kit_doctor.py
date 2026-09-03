@@ -274,9 +274,9 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # `0 differ` while the suite it guarded wrote into a live `state/` — and
     # `_remap` already handles the `scripts/` prefix uniformly regardless of
     # role, so no new mechanism was needed, only these entries. Installable and
-    # declinable exactly like an engine: `--record-install` walks all of
-    # `KIT_OWNED` without filtering by role, so an adopter who does not vendor
-    # tests gets `declined`, not a silent gap.
+    # declinable exactly like an engine: `--record-install` walks every
+    # adopter-facing `KIT_OWNED` entry without filtering engine and test roles,
+    # so an adopter who does not vendor tests gets `declined`, not a silent gap.
     ("scripts/tests/_repo_layout.py", "test"),
     ("scripts/tests/conftest.py", "test"),
     ("scripts/tests/test_check_memory_budget.py", "test"),
@@ -1775,9 +1775,10 @@ def _codex_registration_semantics(
 def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStatus]:
     """Whether each runtime's hook registration names a path that exists.
 
-    Derived from `KIT_OWNED` rather than from a list of hook names: an adopter
-    registering `check_doc_budget.py` on `SessionStart` gets the same check as
-    one registering `pr_followup_hook.py` on `PostToolUse`, and adding a kit
+    Derived from the adopter-facing `KIT_OWNED` entries rather than from a list
+    of hook names: an adopter registering `check_doc_budget.py` on
+    `SessionStart` gets the same check as one registering
+    `pr_followup_hook.py` on `PostToolUse`, and adding an adopter-facing kit
     script does not require remembering to add it here too.
     """
     # Scripts a registration could plausibly INVOKE, not every kit-owned file
