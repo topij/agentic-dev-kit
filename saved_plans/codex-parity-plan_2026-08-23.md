@@ -417,15 +417,19 @@ historical observation it was and is not silently refreshed.
      receipt/comment mismatches reported.
   3. Verifier, its test, and its evidence page assigned the repo-only manifest role,
      with the `CHANGELOG.md` entry.
-  4. The pilot's write pass, on the adopter operator's approval, followed by a separate
-     fork-reconciliation PR based on the upgrade branch. At the exit-test decision,
-     read the current adopter protected-branch head and both current PR heads; require
-     protected branch → upgrade → reconciliation ancestry, then verify the
-     reconciliation head against the adopter condition. Movement of any head
-     invalidates that evidence. Record whether the condition holds, but leave the phase
-     open for the remaining delivery below; otherwise file the residue.
-  5. `#631` and `#608` decided on the tracker and matrix, and `#255`'s general
-     mechanism delivered.
+  4. The initial pilot write pass, on the adopter operator's approval, followed by a
+     separate fork-reconciliation PR based on the upgrade branch. Record the kit source
+     SHA plus both PR identities, base names, and heads, and file any residue. This pass
+     does not establish the phase exit.
+  5. The remaining `#243` field exercises completed, `#631` and `#608` decided on the
+     tracker and matrix, and `#255`'s general mechanism delivered.
+  6. Replay the write pass and fork reconciliation from the then-current kit source. At
+     the exit decision, bind the kit source SHA to the current kit protected-branch
+     head; require the adopter upgrade PR to target its configured protected branch and
+     the reconciliation PR to target the upgrade branch; require current adopter
+     protected branch → upgrade → reconciliation ancestry; then verify the current
+     reconciliation head against the adopter condition. Movement of any bound ref,
+     retargeting either PR, or a new kit head invalidates the evidence.
 - [ ] **Phase 6 — Gate parity and roll it out.** With the pilot pulled into Phase 5,
   this phase holds the cost and hygiene work the review found burning, then the gate:
   the proportional opening pass for record prose (`#585`); the suite measured and
@@ -741,12 +745,10 @@ and final open/unmerged fixture pull requests.
 - [ ] Run the cs-toolkit adopter pilot as this phase's exit test: a read-only pass
   from a pinned kit clone with `$REPO` and `$KIT` bound, a stamped record of every
   instrument misreading (the false `broken` verdict on `lib/runtime_adapters.py`
-  first), then the write pass on the adopter operator's approval and a separate
-  fork-reconciliation PR based on its branch. At the exit-test decision, read the
-  current adopter protected-branch head and both current PR heads; require protected
-  branch → upgrade → reconciliation ancestry, then verify the reconciliation head
-  against the adopter condition. Movement of any head invalidates that evidence. Record
-  the result without closing the phase (`#607`, `#236`, `#243`; added 2026-09-02).
+  first), then an initial write pass on the adopter operator's approval and a separate
+  fork-reconciliation PR based on its branch. Record the kit source SHA plus both PR
+  identities, base names, and heads without closing the phase (`#607`, `#236`; added
+  2026-09-02).
 - [x] Give `scripts/verify_live_validation_bundle.py`, its test and
   `live-validation-evidence.md` the repo-only role: retain release-manifest hashing
   and the kit checkout's drift check while omitting them from adopter inspection,
@@ -761,15 +763,22 @@ and final open/unmerged fixture pull requests.
   (re-sequenced 2026-09-02; the earlier wording asked for executable evidence first).
 - [ ] Declare `#608` as a matrix row and deliver `#255`'s general mechanism as one
   test over per-runtime config keys (added 2026-09-02).
+- [ ] Replay the adopter write pass and fork reconciliation from the current kit
+  protected-branch head. Require the upgrade PR to target the configured adopter
+  protected branch, the reconciliation PR to target the upgrade branch, and current
+  adopter protected branch → upgrade → reconciliation ancestry. Verify the current
+  reconciliation head against the adopter condition; movement of any bound ref,
+  retargeting either PR, or a new kit head invalidates the evidence.
 
 Done when an existing Codex adopter can upgrade without retaining stale runtime
-behavior or losing local policy, `#631` and `#608` carry their declarations, and
-`#255`'s general mechanism is delivered. At the exit decision, the current adopter
-protected-branch head must be an ancestor of the current upgrade PR head, which must be
-an ancestor of the current fork-reconciliation PR head; verification of that
-reconciliation head must establish the adopter condition. Movement of any head
-invalidates the evidence. Nothing else establishes the exit; merged delivery slices
-are not used as a reassuring substitute for it.
+behavior or losing local policy, the remaining `#243` field exercises are complete,
+`#631` and `#608` carry their declarations, and `#255`'s general mechanism is delivered.
+The final adopter replay binds the current kit protected-branch head to its source SHA;
+binds both adopter PR identities, base names, and heads; proves the current adopter
+protected branch → upgrade → reconciliation ancestry; and verifies the reconciliation
+head against the adopter condition. Movement of a bound ref, retargeting either PR, or
+a new kit head invalidates the evidence. Nothing else establishes the exit; merged
+delivery slices are not used as a reassuring substitute for it.
 
 ### Phase 6 — Gate parity and roll it out
 

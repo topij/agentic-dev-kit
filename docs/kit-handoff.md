@@ -43,16 +43,15 @@ entries graduated, and Phase 5 passed to its exit test.
   separate merge authority.
 
 ▶ Next: `$session-start` — then, with explicit cs-toolkit write approval, run the
-adopter pilot write pass in Codex from a fresh current-main kit clone. Let `$upgrade`
-leave the repo-owned lane forks untouched, then base their separate reconciliation PR
-on the upgrade branch. Preserve runtime-neutral local policy and open each adopter PR
-ready. At the exit-test decision, read the current adopter protected-branch head and
-both current PR heads; require protected branch → upgrade → reconciliation ancestry,
-then verify that reconciliation head retains no stale runtime behavior and loses no
-local policy. Movement of any head invalidates that evidence. Record whether the
-condition holds, but leave Phase 5 open until the `#631` and `#608` declarations and
-`#255` mechanism are delivered. Otherwise file the residue; do not merge either PR
-without separate authority.
+initial adopter pilot write pass in Codex from a fresh current-main kit clone. Let
+`$upgrade` leave the repo-owned lane forks untouched and base their separate
+reconciliation PR on the upgrade branch; preserve runtime-neutral local policy and
+open each adopter PR ready. Record the kit source SHA plus both PR identities, base
+names, and heads, but do not claim the Phase 5 exit: `#243`, `#631`, `#608`, and `#255`
+remain. After those land, the final replay must use the then-current kit source, confirm
+the configured protected branch → upgrade PR → reconciliation PR base-name and ancestry
+chain, and verify the reconciliation head. Movement of any bound ref invalidates the
+evidence. Do not merge either adopter PR without separate authority.
 
 ______________________________________________________________________
 
