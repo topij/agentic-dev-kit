@@ -20,7 +20,7 @@ inbox was triaged, and the adopter pilot's Codex write pass is next.
 ## Latest session — 2026-09-03 (`#662` and friction triage, in a Codex session)
 
 **Theme —** The verifier received its repo-only manifest role, the approved friction
-entries graduated, and Phase 5 passed to its exit test.
+entries graduated, and Phase 5 passed to its initial adopter write rehearsal.
 
 - **Runtime —** Codex desktop. This was the parity-sensitive implementation session
   after the preceding Claude Code sessions. It applied the shared workflow definitions
@@ -42,11 +42,11 @@ entries graduated, and Phase 5 passed to its exit test.
   `triage-friction-log`; a future run must preserve the parked decisions unless the
   operator supplies fresh exact dispositions.
 
-- **Runtime choice for the exit test is deliberate.** The pilot's read-only pass ran
-  in Claude Code; its write pass should run through Codex's `$upgrade` binding so the
-  Phase 5 claim is tested at the existing Codex adopter. Writes to cs-toolkit still
-  require that repository operator's explicit approval, and its pull request keeps
-  separate merge authority.
+- **Runtime choice for the initial write pass is deliberate.** The pilot's read-only
+  pass ran in Claude Code; its write pass should run through Codex's `$upgrade` binding
+  so the Phase 5 claim is tested at the existing Codex adopter. Writes to cs-toolkit
+  still require that repository operator's explicit approval, and its pull request
+  keeps separate merge authority.
 
 ▶ Next: `$session-start` — then, with explicit cs-toolkit write approval, run the
 initial adopter pilot write pass in Codex from a fresh clone of the kit's configured
@@ -59,10 +59,12 @@ the then-current kit source, confirm the configured protected branch → upgrade
 reconciliation PR base-name and ancestry chain, and verify the reconciliation head.
 Movement or retargeting of any bound adopter ref invalidates the evidence. After the
 replay, write the completion record on a branch based on the bound kit SHA and take its
-exact head through `pr-watch`. Immediately before merging that record, require the kit's
-configured protected head still to equal the bound SHA and the reviewed record head to
-remain current; otherwise replay or re-review the changed surface. That record merge is
-the Phase 5 completion event. Do not merge either adopter PR without separate authority.
+exact head through `pr-watch`. Limit that PR to this plan, the handoff, and its history,
+and target the kit's configured protected branch. Immediately before merging it,
+authoritatively re-read the kit protected head plus every bound adopter protected head,
+PR base, PR head, and ancestry edge. Any kit or adopter movement requires replay; only a
+changed record head requires renewed review. The record merge is the Phase 5 completion
+event. Do not merge either adopter PR without separate authority.
 
 ______________________________________________________________________
 

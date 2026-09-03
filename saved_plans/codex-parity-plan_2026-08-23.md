@@ -433,10 +433,12 @@ historical observation it was and is not silently refreshed.
      reconciliation head against the adopter condition. Movement or retargeting of a
      bound adopter ref invalidates the evidence. After replay, write the truthful kit
      completion record on a branch based on the bound kit SHA and take its exact head
-     through `pr-watch`. Immediately before merging it, require the configured kit
-     protected head still to equal the bound SHA and the reviewed record head to remain
-     current; otherwise replay or re-review the changed surface. The record merge is
-     the phase-completion event, not an invalidation of the stamped replay.
+     through `pr-watch`. Limit that PR to this plan, the handoff, and its history, and
+     target the configured kit protected branch. Immediately before merging it,
+     authoritatively re-read the kit protected head plus every bound adopter protected
+     head, PR base, PR head, and ancestry edge. Any kit or adopter movement requires
+     replay; only a changed record head requires renewed review. The record merge is the
+     phase-completion event, not an invalidation of the stamped replay.
 - [ ] **Phase 6 — Gate parity and roll it out.** With the pilot pulled into Phase 5,
   this phase holds the cost and hygiene work the review found burning, then the gate:
   the proportional opening pass for record prose (`#585`); the suite measured and
@@ -750,7 +752,7 @@ and final open/unmerged fixture pull requests.
 - [x] Inspect adopter-side generated lens definitions against their configured
   mechanical compute carrier without duplicating installed-engine drift (PR `#655`;
   `#255`'s general enforcement mechanism remains separate).
-- [ ] Run the cs-toolkit adopter pilot as this phase's exit test: a read-only pass
+- [ ] Run the cs-toolkit adopter pilot's initial rehearsal: a read-only pass
   from a pinned kit clone with `$REPO` and `$KIT` bound, a stamped record of every
   instrument misreading (the false `broken` verdict on `lib/runtime_adapters.py`
   first), then an initial write pass on the adopter operator's approval and a separate
@@ -778,9 +780,11 @@ and final open/unmerged fixture pull requests.
   reconciliation head against the adopter condition. Movement or retargeting of a
   bound adopter ref invalidates the evidence. After replay, write the kit completion
   record on a branch based on the bound kit SHA and take its exact head through
-  `pr-watch`. Immediately before merging it, require the configured kit protected head
-  still to equal the bound SHA and the reviewed record head to remain current; otherwise
-  replay or re-review the changed surface. The record merge completes this phase.
+  `pr-watch`. Limit that PR to this plan, the handoff, and its history, and target the
+  configured kit protected branch. Immediately before merging it, authoritatively
+  re-read the kit protected head plus every bound adopter protected head, PR base, PR
+  head, and ancestry edge. Any kit or adopter movement requires replay; only a changed
+  record head requires renewed review. The record merge completes this phase.
 
 Done when an existing Codex adopter can upgrade without retaining stale runtime
 behavior or losing local policy, the remaining `#243` field exercises are complete,
@@ -791,12 +795,14 @@ branch → upgrade → reconciliation ancestry; and verifies the reconciliation 
 against the adopter condition. Movement or retargeting of a bound adopter ref
 invalidates the evidence. The final completion record is written afterward on a branch
 based on the bound kit SHA and completes the phase only after its exact head passes
-`pr-watch` and merges while that SHA is still the configured kit protected head. A
-kit-head change before that merge requires replay; a record-head change before it
-requires renewed review. The record merge preserves the stamped event, and later work
-carries its own verification obligation rather than rewriting it. Nothing else
-establishes the exit; merged delivery slices are not used as a reassuring substitute
-for it.
+`pr-watch`. It is limited to this plan, the handoff, and its history; targets the
+configured kit protected branch; and merges only after authoritative read-back confirms
+the bound kit and adopter protected heads, both adopter PR bases and heads, every
+required ancestry edge, and the reviewed record head. Kit or adopter movement before
+that merge requires replay; only record-head movement requires renewed review. The
+record merge preserves the stamped event, and later work carries its own verification
+obligation rather than rewriting it. Nothing else establishes the exit; merged delivery
+slices are not used as a reassuring substitute for it.
 
 ### Phase 6 — Gate parity and roll it out
 
