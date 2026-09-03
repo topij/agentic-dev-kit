@@ -408,9 +408,10 @@ historical observation it was and is not silently refreshed.
   2026-09-02** (*Sprint review* above): the cs-toolkit adopter pilot moves from Phase 6
   into this phase as its exit test, because the exit is only establishable by an
   upgrade run; withdrawing the live-validation verifier from the shipped manifest and
-  putting review evidence on the pull request (`#603`, `#604`) join the phase; `#631`,
-  `#608` and `#255` are taken as declarations rather than mechanisms. Delivery order,
-  updated on 2026-09-03 by operator direction after the repo-only delivery:
+  putting review evidence on the pull request (`#603`, `#604`) join the phase; `#631`
+  and `#608` are taken as declarations rather than mechanisms, while `#255` retains
+  its general enforcement mechanism. Delivery order, updated on 2026-09-03 by
+  operator direction after the repo-only delivery:
   1. Adopter pilot, read-only pass first (`#607`, `#236`, `#243`).
   2. `pr_watch.py --record-review` posting the disposition comment; stamp/head and
      receipt/comment mismatches reported.
@@ -418,7 +419,8 @@ historical observation it was and is not silently refreshed.
      with the `CHANGELOG.md` entry.
   4. The pilot's write pass, on the adopter operator's approval; then the exit is
      either established or the residue is filed.
-  5. `#631`, `#608`, and `#255` decided on the tracker and the matrix.
+  5. `#631` and `#608` decided on the tracker and matrix, and `#255`'s general
+     mechanism delivered.
 - [ ] **Phase 6 — Gate parity and roll it out.** With the pilot pulled into Phase 5,
   this phase holds the cost and hygiene work the review found burning, then the gate:
   the proportional opening pass for record prose (`#585`); the suite measured and
