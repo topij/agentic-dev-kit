@@ -431,13 +431,12 @@ historical observation it was and is not silently refreshed.
      reconciliation PR to target the upgrade branch; require current adopter protected
      branch → upgrade → reconciliation ancestry; then verify the current
      reconciliation head against the adopter condition. Movement or retargeting of a
-     bound adopter ref invalidates the evidence. The later kit completion record may
-     advance the kit head only through `docs/kit-handoff.md`,
-     `docs/kit-handoff-history.md`, and this plan. Run `git diff --quiet
-     <bound-kit-sha>..<record-head> -- . ':(exclude)docs/kit-handoff.md'
-     ':(exclude)docs/kit-handoff-history.md'
-     ':(exclude)saved_plans/codex-parity-plan_2026-08-23.md'`; a non-zero result requires
-     another replay.
+     bound adopter ref invalidates the evidence. After replay, write the truthful kit
+     completion record on a branch based on the bound kit SHA and take its exact head
+     through `pr-watch`. Immediately before merging it, require the configured kit
+     protected head still to equal the bound SHA and the reviewed record head to remain
+     current; otherwise replay or re-review the changed surface. The record merge is
+     the phase-completion event, not an invalidation of the stamped replay.
 - [ ] **Phase 6 — Gate parity and roll it out.** With the pilot pulled into Phase 5,
   this phase holds the cost and hygiene work the review found burning, then the gate:
   the proportional opening pass for record prose (`#585`); the suite measured and
@@ -777,12 +776,11 @@ and final open/unmerged fixture pull requests.
   protected branch, the reconciliation PR to target the upgrade branch, and current
   adopter protected branch → upgrade → reconciliation ancestry. Verify the current
   reconciliation head against the adopter condition. Movement or retargeting of a
-  bound adopter ref invalidates the evidence. After replay, allow the final kit record
-  to advance the kit head only through `docs/kit-handoff.md`,
-  `docs/kit-handoff-history.md`, and this plan. Require `git diff --quiet
-  <bound-kit-sha>..<record-head> -- . ':(exclude)docs/kit-handoff.md'
-  ':(exclude)docs/kit-handoff-history.md'
-  ':(exclude)saved_plans/codex-parity-plan_2026-08-23.md'` to succeed, or replay again.
+  bound adopter ref invalidates the evidence. After replay, write the kit completion
+  record on a branch based on the bound kit SHA and take its exact head through
+  `pr-watch`. Immediately before merging it, require the configured kit protected head
+  still to equal the bound SHA and the reviewed record head to remain current; otherwise
+  replay or re-review the changed surface. The record merge completes this phase.
 
 Done when an existing Codex adopter can upgrade without retaining stale runtime
 behavior or losing local policy, the remaining `#243` field exercises are complete,
@@ -791,13 +789,14 @@ The final adopter replay binds the kit protected-branch head to its source SHA; 
 both adopter PR identities, base names, and heads; proves the current adopter protected
 branch → upgrade → reconciliation ancestry; and verifies the reconciliation head
 against the adopter condition. Movement or retargeting of a bound adopter ref
-invalidates the evidence. The final kit completion record may advance the kit head only
-through `docs/kit-handoff.md`, `docs/kit-handoff-history.md`, and this plan. Require
-`git diff --quiet <bound-kit-sha>..<record-head> -- .
-':(exclude)docs/kit-handoff.md' ':(exclude)docs/kit-handoff-history.md'
-':(exclude)saved_plans/codex-parity-plan_2026-08-23.md'` to succeed, or replay is
-required again. Nothing else establishes the exit; merged delivery slices are not used
-as a reassuring substitute for it.
+invalidates the evidence. The final completion record is written afterward on a branch
+based on the bound kit SHA and completes the phase only after its exact head passes
+`pr-watch` and merges while that SHA is still the configured kit protected head. A
+kit-head change before that merge requires replay; a record-head change before it
+requires renewed review. The record merge preserves the stamped event, and later work
+carries its own verification obligation rather than rewriting it. Nothing else
+establishes the exit; merged delivery slices are not used as a reassuring substitute
+for it.
 
 ### Phase 6 — Gate parity and roll it out
 

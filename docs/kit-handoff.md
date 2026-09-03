@@ -49,19 +49,20 @@ entries graduated, and Phase 5 passed to its exit test.
   separate merge authority.
 
 ▶ Next: `$session-start` — then, with explicit cs-toolkit write approval, run the
-initial adopter pilot write pass in Codex from a fresh current-main kit clone. Run
-`$upgrade`, which must leave the repo-owned lane forks untouched. Separately create a
-reconciliation PR based on the upgrade branch; preserve runtime-neutral local policy
-and open each adopter PR ready. Record the kit source SHA plus both PR identities, base
-names, and heads, but do not claim the Phase 5 exit: `#243`, `#631`, `#608`, and `#255`
-remain. After those land, the final replay must use the then-current kit source, confirm
-the configured protected branch → upgrade PR → reconciliation PR base-name and ancestry
-chain, and verify the reconciliation head. Movement or retargeting of any bound adopter
-ref invalidates the evidence. A later kit head may differ from the bound kit source only
-in the final record paths; verify that with `git diff --quiet <bound-kit-sha>..<record-head>
--- . ':(exclude)docs/kit-handoff.md' ':(exclude)docs/kit-handoff-history.md'
-':(exclude)saved_plans/codex-parity-plan_2026-08-23.md'`. Any other kit change requires
-another replay. Do not merge either adopter PR without separate authority.
+initial adopter pilot write pass in Codex from a fresh clone of the kit's configured
+protected branch. Run `$upgrade`, which must leave the repo-owned lane forks untouched.
+Separately create a reconciliation PR based on the upgrade branch; preserve
+runtime-neutral local policy and open each adopter PR ready. Record the kit source SHA
+plus both PR identities, base names, and heads, but do not claim the Phase 5 exit:
+`#243`, `#631`, `#608`, and `#255` remain. After those land, the final replay must use
+the then-current kit source, confirm the configured protected branch → upgrade PR →
+reconciliation PR base-name and ancestry chain, and verify the reconciliation head.
+Movement or retargeting of any bound adopter ref invalidates the evidence. After the
+replay, write the completion record on a branch based on the bound kit SHA and take its
+exact head through `pr-watch`. Immediately before merging that record, require the kit's
+configured protected head still to equal the bound SHA and the reviewed record head to
+remain current; otherwise replay or re-review the changed surface. That record merge is
+the Phase 5 completion event. Do not merge either adopter PR without separate authority.
 
 ______________________________________________________________________
 
