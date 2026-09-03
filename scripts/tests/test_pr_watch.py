@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import re
 import shutil
@@ -9752,6 +9753,48 @@ def test_recording_without_a_disposition_posts_nothing_and_says_so(
     assert posts == []
     assert "disposition_comment" not in report["review_receipt"]
     assert "no disposition comment posted" in pr_watch.render_record_review(report)
+
+
+def test_the_stdin_disposition_reaches_the_posted_body(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`--disposition -` is public contract in two places — the module usage
+    banner and the argparse help — and nothing exercised it. A panel lens gutted
+    the `sys.stdin.read()` branch entirely and this file stayed green at 303
+    passed, so a later edit swapping `.read()` for `.readline()` would have
+    shipped a silently truncated disposition. Driven through `main()` rather than
+    `record_review` because the branch under test is argv handling, and a caller
+    piping findings is why the flag exists: a panel's disposition is multi-line
+    prose that does not belong in an argv element.
+    """
+    pr_watch = _load_pr_watch()
+    posts: list[tuple[list[str], str | None]] = []
+    _stub_gh_for_record(pr_watch, monkeypatch, tmp_path, posts=posts)
+    piped = "adversarial: one LOW, coverage gap, fixed.\ncorrectness: clean.\n"
+    monkeypatch.setattr("sys.stdin", io.StringIO(piped))
+
+    assert (
+        pr_watch.main(
+            [
+                "9",
+                "--record-review",
+                "fallback:panel",
+                "--head",
+                HEAD_SHA,
+                "--lenses",
+                "adversarial,correctness",
+                "--disposition",
+                "-",
+            ]
+        )
+        == 0
+    )
+
+    body = json.loads(posts[0][1])["body"]
+    # Every line of the piped text, not merely its first — the truncation the
+    # mutation above would have introduced passes a first-line-only assertion.
+    assert "adversarial: one LOW, coverage gap, fixed." in body
+    assert "correctness: clean." in body
 
 
 def test_the_disposition_flag_is_only_valid_with_record_review(

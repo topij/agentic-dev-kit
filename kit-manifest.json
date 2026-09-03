@@ -289,7 +289,7 @@
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "3e538690c47409c87685c85c4238ee9d90649d3966d809662cdf9124d29860d7"
+      "sha256": "3fcf1c8b11338d1424bb81525df8ee16180924037567bd9e83b02ea28f5b9a1d"
     },
     "scripts/tests/test_reconcile_sessions.py": {
       "role": "test",
