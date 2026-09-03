@@ -45,10 +45,11 @@ entries graduated, and Phase 5 passed to its exit test.
 ▶ Next: `$session-start` — then, with explicit cs-toolkit write approval, run the
 adopter pilot write pass in Codex from a fresh current-main kit clone. Let `$upgrade`
 leave the repo-owned lane forks untouched, then base their separate reconciliation PR
-on the upgrade branch so one exact adopter revision contains both changes. Preserve
-runtime-neutral local policy and open each adopter PR ready. Claim the Phase 5 exit only
-after that combined revision is verified to retain no stale runtime behavior and lose
-no local policy; otherwise file the residue and leave the exit open. Do not merge either
+on the upgrade branch. Preserve runtime-neutral local policy and open each adopter PR
+ready. At the exit decision, read both current PR heads, require the upgrade head to be
+an ancestor of the reconciliation head, and verify that reconciliation head retains no
+stale runtime behavior and loses no local policy. A later push to either PR invalidates
+that evidence; otherwise file the residue and leave the exit open. Do not merge either
 PR without separate authority.
 
 ______________________________________________________________________
