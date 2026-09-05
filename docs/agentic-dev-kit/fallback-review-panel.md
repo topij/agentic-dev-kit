@@ -215,10 +215,31 @@ author re-reading their own diff. **Cite them by name, never by number.**
    the changed paths against hostile input, not from reading them. A guard was
    dead code for the exact bot it was written for, because that bot reports a
    zero timestamp — no amount of re-reading surfaced it; one live poll did.
+
+   Keep verification foregrounded and actively poll yielded tool sessions to a
+   terminal result. Before returning, finish or stop your own verification
+   processes and retain their output and exit status. Always return a terminal
+   review report, including when verification failed or was interrupted; identify
+   incomplete commands and verification limits instead of reporting a clean pass.
+   A running-session handle, a progress update, or silence is not that report.
 5. **Mutation-test new branches.** Break the new behaviour deliberately and
    confirm a test fails. Repeatedly, properties were *named* by a test and
    pinned by nothing — hardwiring a branch to a constant still passed the whole
    suite.
+
+   **Prove the mutation landed before testing it.** Save the original target
+   bytes from the reviewed revision, apply the edit in your private copy, then
+   re-read the target and retain its diff against those original bytes. Verify
+   that the diff changes the intended behaviour: an edit command succeeding, or
+   an unrelated change producing a non-empty diff, is not enough. An empty or
+   unexpected diff means the intended mutation was not applied; repair the
+   mutation setup before interpreting test output as a kill or a survival.
+
+   After each mutation case, restore the original target bytes and verify byte
+   equality before starting another case or running the unmutated suite. Include
+   the mutation diff, test command and result, and restoration evidence in your
+   report. A failed restoration leaves verification incomplete; do not use the
+   contaminated copy for subsequent evidence.
 
    **Beware false kills.** If your repo has a checksum/drift test over the files
    you are mutating (this kit has one: `kit_doctor`'s self-check), *every*
@@ -424,6 +445,13 @@ author re-reading their own diff. **Cite them by name, never by number.**
    A lens reporting a clean pass over an empty or wrong diff looks exactly like a lens
    reporting a clean pass. A finding count of zero is a result only once you know what
    was in front of it.
+
+   Read each lens's terminal report before accepting its review evidence. A
+   missing report, a progress update, or a running-session handle cannot satisfy
+   the panel. Resume the lens to finish verification and report, or record the
+   verification gap; do not issue a clean-review receipt from silence or an
+   incomplete report. For mutation claims, check the retained target diff and
+   restoration evidence as well as the test result.
 4. Triage every finding against the *current* code — some go stale across
    rounds.
 5. Fix real findings, reply-with-reason to the rest.

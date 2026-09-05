@@ -5,6 +5,56 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-09-01 (runtime_mappings status declaration, in a Claude Code session)
+
+**Theme —** `#255`'s disposition was settled against the tree rather than against the
+plan's summary of it, and the one measured residue shipped. The session then found its
+own disposition had been drawn too wide.
+
+- **Runtime —** Claude Code 2.1.252, assigned model `claude-opus-5`, effort `xhigh`,
+  read from this session's own transcript rather than from the prompt or argv.
+
+- **PR `#657` (squash `b5bc17a`) closed the gap between `#255`'s proposal and its
+  delivery.** `lens_compute` carried the per-runtime mechanical/advisory declaration on
+  both install surfaces; `models.runtime_mappings` carried it on the reference config
+  only, so a migrating adopter's config surface stated the values without their status.
+  `init.sh` now emits it, and `_runtime_mappings_block` — written for that pin and
+  wired to no assertion — became `_runtime_mappings_comment` behind a pin holding both
+  surfaces. The emitted block moved to single quotes because the added comment text
+  carries backticks.
+
+- **`Makefile`'s mutation guidance was inverted for the files that PR touched.** It
+  named `scripts/tests/` and `init.sh` as paths a mutation never trips the drift check
+  on; both are in `kit-manifest.json`, so a mutation to either read as killed under
+  plain `make test` with nothing behavioural catching it. Corrected to send a
+  contributor to the manifest rather than to the comment's own list.
+
+- **`#255` stays open, and the disposition comment that implied otherwise was too
+  wide.** Both halves of its *Proposed* section are delivered for the two keys the
+  issue's own comments name, but the Proposed states a general rule over every
+  compute- or capability-selecting key. Enumerating those found two carrying no
+  per-runtime status: `review.fallback_commands` (consumed by `pr_followup_hook.py`,
+  agent-executed and so advisory — the issue's own "real consumer, zero mechanism"
+  shape) and `runtime.launchers` (consumed by `dev_session.sh`). A correction comment
+  is owed on the issue and was not posted this session.
+
+- **The panel's convergence was not corroboration.** Both lenses filed no finding
+  against the diff and both drew the same overstated conclusion from the same probe.
+  Recorded with the enumeration lesson in
+  [`review-process-learnings_2026-08-24.md`](../saved_plans/review-process-learnings_2026-08-24.md).
+
+- **The sprint boundary held.** This session did not start `#631` or the retained Codex
+  parallel-batch Phase 4 run, and `saved_plans/claude-side-assessment_2026-08-26.md`
+  stayed operator-owned and unstaged.
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `da142620a02d16d31e3231249d627b8fd194daa9` on 2026-09-01 printed
+  `2374 passed in 514.92s (0:08:34)` on a quiet tree; the merged squash is `b5bc17a`.
+
+▶ Next: `session-start` — then take `#243`'s Claude-side field exercise of `adopt`,
+`parallel`, `triage-friction-log` and `post-merge-systemize` as the opening slice, and
+settle `#255`'s two remaining undeclared keys.
+
 ## Session — 2026-09-01 (parity reconciliation and lens diagnostics, in a Codex session)
 
 **Theme —** The session reconciled the parity plan and tracker against live repository

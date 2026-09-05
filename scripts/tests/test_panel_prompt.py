@@ -158,14 +158,18 @@ def _run(root: Path, *args: str) -> subprocess.CompletedProcess:
 # --- the contract is quoted, never restated -------------------------------------
 
 
-def test_every_contract_item_in_the_doctrine_reaches_the_prompt(repo):
+@pytest.mark.parametrize("runtime", ["claude", "codex"])
+def test_every_contract_item_in_the_doctrine_reaches_the_prompt(repo, runtime):
     """The #214 defect in one assertion: an omitted item must be impossible."""
     pp = _load()
     section, names = pp.contract(repo / DOCTRINE)
     assert names, "doctrine parsed to zero contract items"
 
     base, head = _revs(repo)
-    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base)
+    out = _run(
+        repo, "--lens", "adversarial", "--head", head, "--base", base,
+        "--runtime", runtime,
+    )
     assert out.returncode == 0, out.stderr
     for name in names:
         assert name in out.stdout, f"contract item {name!r} never reached the prompt"
