@@ -199,9 +199,60 @@ doesn't already exist**:
 **Never overwrite an existing file.** If something you didn't anticipate collides, stop
 and ask the operator.
 
+### Step 3a — verify the serialized config through its consumer
+
+**Config staging is not complete until the installed reader sees the complete
+intended mapping.** Before serializing, retain the intended tracked mapping from the
+approved plan and the configuration being preserved. Keep that expectation separate
+from the file the writer produces; deriving it by re-reading the serialized output
+would certify any loss the writer introduced. Keep local-only values in their local
+file, not in the tracked expectation or tracked config.
+
+Write only representations supported by the installed `kitconfig` reader. Its
+supported subset is documented in `<engines-dir>/lib/kitconfig.py`: nested block
+mappings, supported scalar and list forms. Do not introduce wrapped or block multiline
+scalars, flow mappings, anchors, or other unsupported YAML forms. A general-purpose
+YAML serializer may emit those even when its input mapping looks ordinary. In
+particular, default scalar wrapping can truncate long lens `focus` values and budget
+`remedy` strings through `kitconfig` while a YAML parser returns the full values.
+Disabling wrapping addresses that serialization choice; it does not establish that
+other emitted forms or quote escapes are supported. Preserve the intended values;
+do not shorten them to make the comparison pass or expand the parser in this step.
+
+After the config and reader have landed, verify **at `$REPO`**, before Step 3b or
+Step 3c. Re-assert the working directory immediately before any corrective write
+sequence and use absolute destination paths, as in Step 0.
+
+- Load `<engines-dir>/lib/kitconfig.py` from the **installed destination**, resolved
+  from the approved engine placement under `$REPO`. Verify the loaded module's
+  `__file__` resolves to that path; importing the kit source or a cached module from
+  another checkout is not this check.
+- Pass the absolute destination `config/dev-model.yaml` path to
+  `kitconfig.load_config(..., overlay=False)`. Compare its complete result with the
+  separately retained intended tracked mapping, including every nested key, list,
+  scalar type and full scalar value. Check long values in full, not a prefix or a
+  selection of config keys. A successful copy, matching file hashes, YAML parse or
+  reader invocation alone is insufficient.
+- If a local override exists, retain its intended permitted leaf overrides separately
+  and also call `kitconfig.load_config(...)` with merging enabled at that same
+  destination. Compare the complete result with the intended merged mapping: the
+  override must take effect and unrelated tracked leaves must remain intact. Keep
+  the tracked-only comparison too, so the overlay cannot mask a damaged tracked
+  value. For disposable verification fixtures, exercise a differing local value in
+  a separate case; do not create or alter an adopter's local override just to test it.
+
+On a missing reader, refused overlay, load error or mapping mismatch, stop before
+recording the baseline or presenting staging as complete. Correct only the authorized
+serialization, then repeat the destination comparisons; an intended value that cannot
+be represented without changing its meaning needs an operator decision. Record the
+reader/config paths, comparison result and any unverified case without exposing local
+secrets. This is agent-executed verification, not an automatic gate in `kit_doctor`.
+It does not run `init.sh` or advance the operator initialization boundary.
+
 ### Step 3b — record the drift baseline
 
-**Once every copy above is done, and before the Step 3c handoff:**
+**Once every copy above is done and Step 3a's destination comparisons succeed, and
+before the Step 3c handoff:**
 
 ```bash
 uv run <engines-dir>/kit_doctor.py --record-install --from-kit "${KIT:?KIT is not set — re-run Step 0}"
