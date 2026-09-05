@@ -36,7 +36,7 @@
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
-      "sha256": "5312dbc6ad625895c8bc4e35b6cccb4a9ea84f477e0226bdc580469929ae5d6e"
+      "sha256": "3e4c37d655916c61f2accba8dcf10b5a0c76c69c10e33e505a554b629c4970f3"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
@@ -48,7 +48,7 @@
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
-      "sha256": "7c339479f3f5ecbbc9da0b5cf44cb0f898135c248b2ed234cd71ce36c0089e8b"
+      "sha256": "df833a5180da05983eb61d38253d2a663e4cbe8e75c7c0521f0df87c9d1fb4a4"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",

@@ -279,14 +279,21 @@ resolved from outside the lane-writable worktree — which is `#631`, not an edi
 this profile.
 
 **`#631` is decided as a declaration rather than a mechanism (2026-09-05).** Neither
-route above is adopted. **The boundary a lane runs inside is the worktree plus the
-forge's branch protection** — and it always was. The profile scopes the task, the
-worktree scopes the edits, and branch protection is what stands between a lane and the
-protected branch's history; the profile was never the third thing, so naming the
-boundary this way concedes nothing that was previously true. **The Codex mirror of
+route above is adopted. **What bounds a lane is the worktree and the forge's branch
+protection** — and it always was. Read that as naming what each one bounds, not as a
+containment guarantee: `Edit(**)` scopes the lane's tool-mediated file edits to the
+worktree, and branch protection scopes what can reach the protected branch's history.
+**Neither of them bounds the lane's process**, and the escape measured just above is
+exactly a process leaving the worktree — so a lane that rewrites a granted engine and
+runs it is outside both, and this declaration claims nothing the *confused lane*
+paragraph below withdraws. The profile was never a third thing standing beside them, so
+naming the pair concedes nothing that was previously true. **The Codex mirror of
 that boundary is `--sandbox workspace-write`**, the value already beside the shipped
 `read-only` in `launch_lane.py`'s engine-owned vocabulary. It mirrors because it
-bounds the same territory, not because it renders the allow list into another syntax:
+bounds the same territory, not because it renders the allow list into another syntax —
+and it bounds that territory by a *different* mechanism, since a sandbox does bound the
+process the paragraph above says nothing on the Claude side bounds. That makes the
+Codex side narrower here rather than equivalent:
 **the Claude prefix list and the Codex sandbox value are not interchangeable** and do
 not map entry-for-entry, which is `runtime-parity.md`'s "the mirror to Codex is the
 doctrine, not the grants" stated from this side. A Codex writing lane inherits the
