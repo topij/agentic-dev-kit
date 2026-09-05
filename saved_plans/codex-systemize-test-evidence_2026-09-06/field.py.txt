@@ -1,0 +1,147 @@
+import os, sys, json, hashlib, stat, subprocess, tempfile, datetime, concurrent.futures
+from pathlib import Path
+REPO=Path('/private/tmp/adk-systemize-field-20260905-hdhxe4ku/fixture')
+KIT=Path('/Users/topi/Coding/agentic-dev-kit')
+BASE=REPO.parent
+assert Path.cwd().resolve()==REPO
+sys.path.insert(0,str(REPO/'scripts/lib'))
+from kitconfig import load_config
+from state_paths.resolver import resolve_write_path, resolve_read_path, state_root, STATE_DIRNAME
+os.environ['DEVKIT_ROOT']=str(REPO)
+os.environ.pop('DEVKIT_STATE_ROOT',None)
+c=load_config(REPO/'config/dev-model.yaml'); s=c['systemize']
+def canon(x):
+    # This fixture uses no floating point numbers. Reject unsupported numbers,
+    # rather than claim Python float rendering is ECMAScript serialization.
+    def check(v):
+        if v is None or isinstance(v,(str,bool)): return
+        if type(v) is int and abs(v)<=9007199254740991:return
+        if isinstance(v,list):
+            for y in v:check(y)
+            return
+        if isinstance(v,dict):
+            for k,y in v.items():
+                if not isinstance(k,str) or not k.isascii():raise ValueError('canonicalizer requires ASCII mapping keys')
+                check(y)
+            return
+        raise ValueError('unsupported canonical scalar: '+repr(v))
+    check(x)
+    return json.dumps(x,ensure_ascii=False,sort_keys=True,separators=(',',':'),allow_nan=False).encode('utf-8')
+def digest(x):return 'sha256:'+hashlib.sha256(canon(x)).hexdigest()
+def gh(*args):
+    p=subprocess.run(['gh',*args],capture_output=True,text=True,timeout=120)
+    if p.returncode:raise RuntimeError(p.stderr)
+    return json.loads(p.stdout)
+def pages(endpoint):
+    p=gh('api','--paginate','--slurp',endpoint)
+    assert isinstance(p,list) and all(isinstance(x,list) for x in p)
+    return [r for page in p for r in page]
+keys='analysis_tier operator_logins lookback_days backfill_days pattern_threshold tracker_severity batch_size single_pass_max_prs max_findings_prs_per_run cache_pattern digest_cache_pattern report_root report_pattern fetch_engine digest_engine heartbeat_engine commit_subject pr_draft'.split()
+for k in keys:assert k in s,k
+for k in ['lookback_days','backfill_days','pattern_threshold','batch_size','single_pass_max_prs','max_findings_prs_per_run']:
+    assert type(s[k]) is int and s[k]>0,k
+assert s['pattern_threshold']>=2
+assert s['backfill_days']>=s['lookback_days']
+assert s['batch_size']<=s['single_pass_max_prs']<=s['max_findings_prs_per_run']
+assert s['pattern_threshold']<=s['max_findings_prs_per_run']
+assert s['tracker_severity'] in ['low','normal','high','critical']
+assert s['analysis_tier'] in c['models']['tiers']
+assert s['pr_draft'] is False
+for k in ['fetch_engine','digest_engine','heartbeat_engine','commit_subject']:assert isinstance(s[k],str) and s[k].strip()
+def norm(x):return x.strip(' \t\n\r\v\f').translate(str.maketrans('ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'))
+assert isinstance(s['operator_logins'],list)
+ops=[norm(x) for x in s['operator_logins']]; assert all(ops) and len(ops)==len(set(ops))
+trusted=set(ops)
+for bot in c['review']['bots']:
+    trusted.add(norm(bot));trusted.update(norm(a) for a in c['review']['bot_author_aliases'].get(bot,[]))
+assert trusted
+assert (REPO/c['paths']['friction_log']).is_file()
+assert subprocess.check_output(['git','-C',str(REPO),'rev-parse','--show-toplevel'],text=True).strip()==str(REPO)
+assert c['state']['dirname']==STATE_DIRNAME
+fingerprint=digest({'schema':'post-merge-systemize-config-v1','config':c})
+engine_presence=[(REPO/c['paths']['engines']/s[k]).is_file() for k in ['fetch_engine','digest_engine','heartbeat_engine']]
+assert not any(engine_presence),'unexpected engine set; this harness is LLM-only'
+repo=gh('api','repos/topij/agentic-dev-kit');assert repo['permissions']['pull']
+head=gh('api','repos/topij/agentic-dev-kit/commits/'+c['vcs']['protected_branch'])['sha']
+identity={'schema':'post-merge-systemize-run-v1','forge_repo':repo['full_name'],'window_days':s['lookback_days'],'protected_branch_head':head,'config_fingerprint':fingerprint,'execution_mode':'test'}
+identity_digest=digest(identity)
+date='2026-09-05'; since=(datetime.date.fromisoformat(date)-datetime.timedelta(days=s['lookback_days'])).isoformat()
+query='repo:'+repo['full_name']+' is:pr is:merged merged:>='+since
+search=[];page=1
+while True:
+    data=gh('api','--method','GET','search/issues','-f','q='+query,'-f','per_page=100','-f','page='+str(page))
+    assert not data['incomplete_results'] and data['total_count']<=1000
+    search.extend(data['items'])
+    if len(search)==data['total_count']:break
+    assert data['items'];page+=1
+assert len({r['number'] for r in search})==len(search)
+root=state_root().resolve(); assert root==BASE/'sandbox' and not root.exists()
+os.environ['DEVKIT_STATE_ROOT']=str(root)
+assert state_root().resolve()==root
+os.environ.pop('DEVKIT_STATE_ROOT')
+assert state_root().resolve()==root
+tracked=[REPO/p for p in subprocess.check_output(['git','-C',str(REPO),'ls-files','-z'],text=True).split('\0') if p]
+controls=tracked+[REPO/'config/dev-model.local.yaml',REPO/'.devkit_state_root',REPO/'.git/config']
+paths={}; kinds={'raw':'post-merge-systemize-raw','digest':'post-merge-systemize-digest','report':'post-merge-systemize-report'}
+rels={}
+for label,key in [('raw','cache_pattern'),('digest','digest_cache_pattern'),('report','report_pattern')]:
+    pattern=s[key];assert isinstance(pattern,str) and all('{'+p+'}' in pattern for p in ['date','window','mode'])
+    fragment=pattern.format(date=date,window=str(s['lookback_days'])+'d',mode='test')
+    assert not Path(fragment).is_absolute() and '..' not in Path(fragment).parts
+    if label=='report':
+        rr=Path(s['report_root']);assert str(rr) not in ['', '.'] and not rr.is_absolute() and '..' not in rr.parts
+        allowed=(REPO/rr).resolve();assert allowed.is_relative_to(REPO)
+        target=REPO/fragment
+    else:
+        assert fragment.startswith(STATE_DIRNAME+'/')
+        rel=fragment[len(STATE_DIRNAME)+1:];rels[label]=rel
+        target=resolve_write_path(rel,mkdir=False);allowed=root
+        read=resolve_read_path(rel)
+        assert not read.exists(),'unexpected existing read artifact'
+    resolved=target.resolve();assert resolved.is_relative_to(allowed)
+    assert resolved not in [x.resolve() for x in controls]
+    assert not target.is_symlink()
+    assert not target.exists(),'fresh fixture expected; reuse checks follow publication'
+    paths[label]=resolved
+assert len(set(paths.values()))==len(paths)
+assert not root.exists()
+def envelope(label):return {'artifact_kind':kinds[label],'schema_version':1,'run_identity':identity,'run_identity_digest':identity_digest}
+def validate_existing(path,label):
+    info=path.lstat();assert stat.S_ISREG(info.st_mode) and info.st_nlink==1
+    for other in controls+list(paths.values()):
+        if other==path or not other.exists():continue
+        oi=other.stat();assert (oi.st_dev,oi.st_ino)!=(info.st_dev,info.st_ino)
+    fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW)
+    with os.fdopen(fd) as f: text=f.read()
+    obj=json.loads(text.splitlines()[0][5:-4]) if label=='report' else json.loads(text)
+    assert obj['artifact_kind']==kinds[label] and obj['schema_version']==1
+    assert canon(obj['run_identity'])==canon(identity)
+    assert obj['run_identity_digest']==digest(obj['run_identity'])==identity_digest
+    return obj
+
+def publish(label,body):
+    path=paths[label]
+    for l,p in paths.items():
+        if p.exists():validate_existing(p,l)
+    assert Path.cwd().resolve()==REPO
+    path.parent.mkdir(parents=True,exist_ok=True)
+    fd,tmp=tempfile.mkstemp(prefix='.'+path.name+'.',dir=path.parent)
+    with os.fdopen(fd,'wb') as f:f.write(body)
+    os.replace(tmp,path)
+    assert path.read_bytes()==body
+    validate_existing(path,label)
+
+preflight={'repository_config':'ready: fixture root, tracked config plus permitted notify.user_key overlay, friction log, protected branch', 'forge_merged_pr_read':'ready: gh authenticated repository and complete bounded search pagination', 'state_resolver':'ready: installed shared resolver, marker and env selection, mkdir=False and missing-target read resolution', 'engines':'degraded: configured fetch/digest/heartbeat absent; LLM-only selected atomically', 'forge_git_pr_write':'not applicable: test mode prohibits route writes', 'pr_watch':'not applicable: no rule PR can be created in test mode', 'tracker_create':'degraded: write not probed or authorized; proposal only', 'notification':'degraded: synthetic empty target; no send attempted', 'configured_reviewer':'not applicable: no ready PR created', 'analysis_compute':'expensive tier / Codex xhigh is instructed guidance; current session controls were not switched'}
+raw={**envelope('raw'),'window':{'since':since,'through':date,'days':s['lookback_days'],'query':query},'forge_repo':repo['full_name'],'protected_branch_head':head,'config_fingerprint':fingerprint,'effective_config':c,'trusted_sources':sorted(trusted),'capability_preflight':preflight,'paths':{k:str(v) for k,v in paths.items()},'prs':[]}
+print('PREFLIGHT COMPLETE',json.dumps({'identity':identity,'paths':raw['paths'],'trusted':sorted(trusted)}),flush=True)
+def fetch(item):
+    n=item['number'];prefix='repos/'+repo['full_name']
+    pr=gh('api',prefix+'/pulls/'+str(n))
+    assert pr['merged_at'] and pr['merge_commit_sha']
+    result={'number':n,'identity':repo['full_name']+'#'+str(n),'title':pr['title'],'body':pr['body'],'merged_at':pr['merged_at'],'merge_revision':pr['merge_commit_sha'],'reviews':pages(prefix+'/pulls/'+str(n)+'/reviews?per_page=100'),'inline_comments':pages(prefix+'/pulls/'+str(n)+'/comments?per_page=100'),'issue_comments':pages(prefix+'/issues/'+str(n)+'/comments?per_page=100'),'files':pages(prefix+'/pulls/'+str(n)+'/files?per_page=100')}
+    print('fetched',n,flush=True);return result
+with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:raw['prs']=list(pool.map(fetch,search))
+raw['prs'].sort(key=lambda p:p['number'])
+raw['pagination']='gh --paginate --slurp for every review/comment/file endpoint; search pages checked against total_count, incomplete_results false'
+publish('raw',canon(raw)+b'\n')
+print('RAW PUBLISHED',str(paths['raw']),flush=True)
