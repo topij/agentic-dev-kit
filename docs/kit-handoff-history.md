@@ -5,6 +5,48 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-09-02 (retained Codex parallel-batch evidence, in a Codex session)
+
+**Theme —** The Codex-only Phase 4 exit shipped as retained evidence: disjoint lanes,
+exact-head reviews and operator-held merge authority can be recomputed from promoted bytes.
+
+- **Runtime —** Codex desktop, assigned model `gpt-5.6-sol`, main reasoning effort `high`.
+
+- **PR `#659` retained the parallel batch without merging its fixture work.** The
+  bundle binds each lane's worktree and state root, Git head, launcher receipt,
+  correctness and adversarial executions, forge readback, reconciliation refusal and
+  complete claim-to-artifact map. Fixture PR `#1` and `#2` remain open in the private
+  synthetic repository; the operator merge boundary is evidence, not exercised permission.
+
+- **The promotion contract is independently recomputable.** The public verifier derives
+  the retained source closure and semantic claims from Git-bound bytes, and the
+  promotion receipt binds the resulting manifest. Review repairs made numeric values,
+  formatted expressions and format specifications visible to the credential scanner,
+  while preserving named runtime helpers and direct `Authorization` carriers. The
+  review-lens regression guard also binds each retained prompt, worktree and launch argv
+  to its declared lens.
+
+- **The review stopped at the demonstrated boundary.** Exact-head adversarial and
+  correctness rechecks reproduced the hostile cases and compatibility controls. The
+  scanner repairs stayed at the demonstrated expression shapes instead of adding a
+  general dataflow mechanism; the retained batch uses PR `#659`'s explicit plural
+  reviewed-head evidence shape. PR `#659` carries the resulting `fallback:panel`
+  receipt at `d0eac77185d808ef822ba7fefe3247de902927da`.
+
+- **Verified:** `make test` in
+  `/private/tmp/adk-codex-parallel-20260901.xlAufG/root-final-test-d0eac77` at
+  `d0eac77185d808ef822ba7fefe3247de902927da` on 2026-09-02 printed
+  `2405 passed in 367.84s (0:06:07)`; the merged squash is `4e63fd8`.
+
+- **The session did not change tracker or friction state.** `#621`, `#631` and `#255`
+  retain their live disposition questions; the overdue friction-log graduation still
+  requires `triage-friction-log` and exact tracker-payload approval.
+
+▶ Next: `session-start` — in a Claude Code session take `#243`'s field exercise of
+`adopt`, `parallel`, `triage-friction-log` and `post-merge-systemize`; bind `$REPO` and
+`$KIT` before `adopt` writes, and obtain the workflow-specific approvals before any
+tracker or external write.
+
 ## Session — 2026-09-01 (runtime_mappings status declaration, in a Claude Code session)
 
 **Theme —** `#255`'s disposition was settled against the tree rather than against the
