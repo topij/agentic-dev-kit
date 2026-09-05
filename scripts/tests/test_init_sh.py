@@ -3046,29 +3046,36 @@ def test_per_runtime_config_maps_declare_status_on_each_install_surface(tmp_path
 
     # Pin discovery beyond the valid production examples. Narrowing the walker
     # to launcher registrations must not silently drop future capability maps.
+    # Exercise each registration so a first-only lookup cannot skip later names;
+    # the bare name on also exposes YAML boolean coercion.
     registration = """runtime:
   launchers:
     # runtime-status: advisory
     probe_runtime: probe
+    # runtime-status: advisory
+    on: custom-client
 """
     for prefix, indent in (
         ("future_capability:\n", "  "),
         ("future_capability:\n  rules:\n    - controls:\n", "        "),
     ):
-        for status in ("mechanical", "advisory", None, "unspecified"):
-            candidate = registration + prefix
-            if status is not None:
-                candidate += f"{indent}# runtime-status: {status}\n"
-            candidate += f"{indent}probe_runtime: probe\n"
-            if status in ("mechanical", "advisory"):
-                _assert_runtime_status_declarations(candidate, "future config")
-            else:
-                with pytest.raises(AssertionError, match="future_capability.*requires"):
+        for runtime in ("probe_runtime", "on"):
+            for status in ("mechanical", "advisory", None, "unspecified"):
+                candidate = registration + prefix
+                if status is not None:
+                    candidate += f"{indent}# runtime-status: {status}\n"
+                candidate += f"{indent}{runtime}: probe\n"
+                if status in ("mechanical", "advisory"):
                     _assert_runtime_status_declarations(candidate, "future config")
+                else:
+                    with pytest.raises(AssertionError, match="future_capability.*requires"):
+                        _assert_runtime_status_declarations(candidate, "future config")
 
 
 def _assert_runtime_status_declarations(text: str, surface: str) -> None:
-    config = yaml.safe_load(text)
+    # Keep registration names textual, like compose's node keys. SafeLoader
+    # coerces bare names such as on to booleans, hiding them from the walker.
+    config = yaml.load(text, Loader=yaml.BaseLoader)
     runtimes = set(config["runtime"]["launchers"])
     assert runtimes, f"{surface}: runtime.launchers must register runtimes"
     lines = text.splitlines()
