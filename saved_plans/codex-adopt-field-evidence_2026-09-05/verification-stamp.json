@@ -1,0 +1,10 @@
+{
+  "command": "make test",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "revision": "ab0a6d62308b298478b2f85fc961f14348f35365",
+  "started_at": "2026-09-05T19:59:05.458893+00:00",
+  "timeout_seconds": 1800,
+  "preflight_processes": [],
+  "exit_code": 2,
+  "finished_at": "2026-09-05T20:05:08.055245+00:00"
+}

@@ -1,0 +1,4 @@
+The initial uv run --with pyyaml invocation in the fixture returned exit 2 before any copies:
+error: Failed to initialize cache at `/Users/topi/.cache/uv`
+  Caused by: failed to open file `/Users/topi/.cache/uv/sdists-v9/.git`: Operation not permitted (os error 1)
+The branch creation before that invocation had succeeded. The retry used approved host cache access and completed the same staging operation.

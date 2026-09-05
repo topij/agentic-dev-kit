@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "uv",
+    "run",
+    "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture/scripts/devkit/kit_doctor.py",
+    "--record-install",
+    "--from-kit",
+    "/Users/topi/Coding/agentic-dev-kit"
+  ],
+  "cwd": "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+  "stdout": "",
+  "stderr": "wrote /private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture/kit-manifest.json (62 installed files, kit_version=2, kit_commit=ab0a6d62308b)\n",
+  "exit_code": 0
+}

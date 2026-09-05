@@ -1,0 +1,27 @@
+{
+  "date": "2026-09-05",
+  "kit_revision": "ab0a6d62308b298478b2f85fc961f14348f35365",
+  "fixture_revision": "08ac687f4ae14218a3861c6b8b143d8b86c4e3c2",
+  "cwd": "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+  "argv": [
+    "python3",
+    "-c",
+    "import sys,json;sys.path.insert(0,'/Users/topi/Coding/agentic-dev-kit/scripts/lib');import kitconfig;print(json.dumps(kitconfig.load_config('/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture/config/dev-model.yaml'),indent=2))"
+  ],
+  "stdout": "{\n  \"kit\": {\n    \"version\": 2\n  },\n  \"project\": {\n    \"name\": \"adopt-context-fixture\"\n  },\n  \"paths\": {\n    \"handoff\": \"ROADMAP.md\",\n    \"handoff_history\": \"notes/history.md\",\n    \"friction_log\": \"notes/friction.md\",\n    \"friction_log_archive\": \"notes/friction-archive.md\",\n    \"engines\": \"scripts/devkit\"\n  },\n  \"runtime\": {\n    \"default\": \"codex\"\n  },\n  \"tracker\": {\n    \"backend\": \"none\",\n    \"project_name\": \"\",\n    \"url\": \"\"\n  },\n  \"review\": {\n    \"bots\": []\n  },\n  \"notify\": {\n    \"backend\": \"none\",\n    \"user_key\": \"local-fixture-recipient\"\n  }\n}\n",
+  "stderr": "",
+  "exit_code": 0,
+  "status": "",
+  "preserved_input_sha256": {
+    "README.md": "6af27b579cc44964c52819a4e68e916acec81516ddeedcfe3973d4912e710828",
+    "AGENTS.md": "32b9c9228358dbdc623faf7e51bdf802d664ae02d796d9e2f7ec5343aecade85",
+    "CLAUDE.md": "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49",
+    "ROADMAP.md": "02b32402fb8bf0bf197e1473f3f88a4718f411c03e07686c829714063f0d6fd7",
+    "notes/history.md": "755b4349978cb4269cf89b6938427ee5e9da8475dc833f5cb2d10236dbea087a",
+    ".agents/skills/wrap-up/SKILL.md": "c5a267b53de07157cd69f035de68f662a634d469f71f99a9ddf4d2b0b0a93df7",
+    "scripts/local_task.py": "b98c3bf1a444b55b768580aae461d82b6da53e88fc7af4e49d3e0dacec12c646",
+    ".gitignore": "3e40bcef3da172549a7bed1c4a6ad8d9bffcfd316e83abd89ce990aafaa63ced",
+    "config/dev-model.yaml": "b6469059717d4e12a2abacb70d18625209666acfed9e58116fd7eaed5b29d5e5",
+    "config/dev-model.local.yaml": "1d7c76ab19a3c1f550cf398b52284bb12c8b662485734add5c30abc3870f5524"
+  }
+}
