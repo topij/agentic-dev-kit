@@ -832,8 +832,8 @@ citation remains in Phase 6's implementation scope.
 |---|---|---|
 | `parallel` | [Retained Codex batch](codex-parallel-batch-live-validation_2026-09-01.md), delivered by PR #659: lane identity, isolation, exact-head review, reconciliation and operator merge refusal. | Do not repeat that batch. Credit only its retained claim map, not every parallel mode. |
 | `triage-friction-log` | Codex's interactive LLM-only route completed through [PR #673](https://github.com/topij/agentic-dev-kit/pull/673); the committed graduation marker retains the approved and parked dispositions. The local run report and completed state were re-read in this session. | Do not repeat that graduation. Engine-backed and notification-service routes are not established by it; preserve TRI-03/TRI-04/TRI-05 for fresh exact decisions. |
-| `adopt` | [Bounded Codex context exercise](codex-adopt-field-exercise_2026-09-05.md): shared inspection, merged fixture config, approved staging, destination baseline, and Step 3c handoff. | Credit that bounded route only. Operator `init.sh`, post-init verification and fixture PR completion were not executed. |
-| `post-merge-systemize` | [Bounded Codex test exercise](codex-systemize-test-field-exercise_2026-09-06.md): merged-config read, capability preflight, trusted review inputs, digest validation, artifact checkpoints and proposed routing. | Credit test-mode analysis only. Live routing, engine-backed operation and full restart recovery were not exercised; do not repeat this test as if no field evidence exists. |
+| `adopt` | PR #682: [bounded Codex context exercise](codex-adopt-field-exercise_2026-09-05.md): shared inspection, merged fixture config, approved staging, destination baseline, and Step 3c handoff. | Credit that bounded route only. Operator `init.sh`, post-init verification and fixture PR completion were not executed. |
+| `post-merge-systemize` | PR #684: [bounded Codex test exercise](codex-systemize-test-field-exercise_2026-09-06.md): merged-config read, capability preflight, trusted review inputs, digest validation, artifact checkpoints and proposed routing. | Credit test-mode analysis only. Live routing, engine-backed operation and full restart recovery were not exercised; do not repeat this test as if no field evidence exists. |
 
 The local triage references inspected were
 `reports/triage_live_2026-09-03_triage-1565b7bfdf11475f9a92f06002f463d4.md` and
@@ -844,9 +844,21 @@ above; tracker dispositions and the final cs-toolkit replay remain operator work
 
 The 2026-09-06 record adds the bounded systemize test to this reconciliation.
 It does not complete the remaining field-coverage checklist or authorize live
-routes. The adopt serialization gap found in PR #682 is tracked separately by
-#683; its implementation and the later operator initialization boundary remain
-distinct from this test observation.
+routes. The #683 implementation adds Step 3a to the shared adopt workflow: supported
+serialization and complete tracked/merged mapping comparisons through the installed
+destination reader before baseline recording or the operator handoff. Its disposable
+fixture reproduced long-scalar loss and verified corrected serialization with a
+separate differing local override; the implementation PR retains the program and
+stamped read-backs. This does not exercise operator initialization, later adoption
+verification, fixture PR completion, or any remaining systemize route. Keep those
+boundaries and the Phase 5 exit unchecked; #243 stays open.
+
+PR #685's [fixture evidence](https://github.com/topij/agentic-dev-kit/pull/685#issuecomment-5555450011)
+and [full Codex panel record](https://github.com/topij/agentic-dev-kit/pull/685#issuecomment-5555538351)
+retain the executed probes, terminal suite failures, setup/runtime refusals, actual
+mutation diffs and restoration checks. The panel record distinguishes the stale
+pre-publication evidence observation from the subsequently retained artifacts;
+it does not establish automatic enforcement of the agent-executed comparison.
 
 The **adopter condition** is a reproducible set of assertions at the resulting adopter
 head:

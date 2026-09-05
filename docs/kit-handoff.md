@@ -14,10 +14,57 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-06 — bounded Codex systemize test recorded with its
-evidence limits; adopt serialization is the next implementation slice.
+Last updated: 2026-09-06 — adopt config writer/consumer compatibility implemented;
+remaining field routes and operator decisions stay separately scoped.
 
-## Latest session — 2026-09-06 (systemize test record, in Codex)
+## Latest session — 2026-09-06 (adopt config compatibility, in Codex)
+
+**Theme —** Implement #683 in the shared adopt workflow, before baseline recording
+and the Step 3c operator handoff.
+
+- Step 3a requires supported serialized representations and complete tracked and
+  merged mapping comparisons through the installed destination reader. Runtime
+  bindings and the parser are unchanged; this remains agent-executed verification.
+- [PR #685 fixture evidence](https://github.com/topij/agentic-dev-kit/pull/685#issuecomment-5555450011)
+  retains the disposable program and destination read-backs: default wrapping lost long focus/remedy tails; the corrected fixture
+  preserved the complete mapping and a separate differing long local override.
+  The fixture command `PYTHONDONTWRITEBYTECODE=1 uv run --with pyyaml python
+  /private/tmp/adk683-6cfcvcic/verify_staging.py /Users/topi/Coding/agentic-dev-kit`
+  in `/Users/topi/Coding/agentic-dev-kit` at
+  `5588c36008cb376a34dc10fe3d0d54ab79332a73` on 2026-09-05 UTC succeeded.
+- `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `5588c36008cb376a34dc10fe3d0d54ab79332a73` on 2026-09-05 UTC printed
+  `1 failed, 2436 passed, 1 skipped in 407.01s (0:06:47)` and make exited `2`.
+  The quiet-tree run used an extended timeout with no watcher in flight. The
+  failure was the recurring #393-shaped empty-output assertion in
+  `test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero`.
+  This run preceded the plan/handoff update; the PR carries later review evidence.
+- The [full Codex panel disposition](https://github.com/topij/agentic-dev-kit/pull/685#issuecomment-5555538351)
+  retains terminal reports, applied runtime read-backs, landed mutation diffs and
+  byte-verified restoration at `e417f281f12938dc517701287d5d667c4937ce32`.
+  The host CLI refused the configured model; the compatible installed runtime
+  completed the lenses. CodeRabbit refused the requested review due to its rate limit.
+  The correctness evidence-retention observation preceded the publication linked above.
+  The retained commands in the named lens directories on 2026-09-05 UTC show the
+  recurring hook failure, additional sandbox process-observation failures in the
+  correctness suite, and setup refusals separately. Removing Step 3a was not caught
+  behaviorally by the mutation runs; the workflow remains agent-executed prose.
+- PR #684 retains test-mode systemize analysis, not live routing or Phase 5 exit.
+  PR #682 retains approved adopt staging and the operator handoff, not adoption
+  completion. This implementation repeated neither field exercise.
+- Operator initialization, adoption completion, final Phase 5 exit, cs-toolkit replay
+  and other field routes were not run. #243 stays open. Preserve TRI-03/TRI-04/TRI-05
+  and the operator-held #608/#255 dispositions; no tracker or archive authority
+  follows from the budget reminder or test-mode proposals.
+
+▶ Next: `$session-start` — continue #243 from the maintained Phase 5 field-exercise
+reconciliation; select the next bounded untested route and obtain any fresh exact
+operator decisions it requires. Do not repeat credited exercises or treat #683 as
+adoption completion or Phase 5 exit.
+
+______________________________________________________________________
+
+## Session — 2026-09-06 (systemize test record, in Codex)
 
 **Theme —** Retain the bounded test observation and update the field-exercise
 reconciliation under the operator's separate record-and-wrap-up authorization.
@@ -308,80 +355,6 @@ the changes did — which is now its own tracker item.
 versus dropping the three paths), and the adopter pilot's write pass still needs the
 cs-toolkit operator's approval. The friction log is over budget and its graduation
 still needs `triage-friction-log` with exact payload approval.
-
-______________________________________________________________________
-
-## Session — 2026-09-02 (cs-toolkit adopter pilot, read-only pass, in a Claude Code session)
-
-**Theme —** Phase 5's exit test, first half. `/upgrade` Steps 0 and 1 ran against the
-cs-toolkit adopter from a pinned kit clone. Nothing was written to the adopter. The
-verification run then reproduced a parked friction entry under conditions that
-contradict its parked hypothesis.
-
-- **Runtime —** Claude Code, model `claude-opus-5[1m]` as this session's own system
-  prompt names it; effort not read.
-
-- **The pilot's findings live in the record, not here.**
-  [`cs-toolkit-adopter-pilot-readonly_2026-09-02.md`](../saved_plans/cs-toolkit-adopter-pilot-readonly_2026-09-02.md)
-  carries every reading with its command, the two tree bindings, and the three
-  revisions they were taken against. `#661` is confirmed with its line
-  (`scripts/kit_doctor.py:2652` filters `required_by` on the dependent's presence
-  rather than on the installed version's requirement), and the same root cause has a
-  second occurrence: `kit_doctor`'s lens-definition remedy prescribes
-  `scripts/devkit/panel_prompt.py`, which `find` locates nowhere in the adopter.
-
-- **What the pilot found that the sprint review did not predict:** `/upgrade` Step 1
-  sends you to the adopter's installed engine first, which reports `intact` and names
-  no new file, while the kit's engine reports `NOT intact` about the same tree — and
-  Step 1's documented remedy for that under-reporting is a write, so a read-only pass
-  cannot reach the complete view by the route the step names. `#607` is confirmed and
-  invisible to every instrument: the adopter's lane engines are forks outside
-  `paths.engines` and absent from its manifest, so `#598`'s BREAKING exit-`64` contract
-  drifted unreported. And the adopter has already invented the mechanism the kit lacks
-  — a repo-local runtime-neutral appendix, applied to `wrap-up` alone — while
-  `session-start`'s Claude appendix, including the `origin/main` rule the appendix says
-  cost that repo a duplicate ticket on 2026-08-10, reaches no Codex session.
-
-- **A parked friction entry recurred, and its hypothesis did not survive.** The
-  2026-09-01 inbox entry parked
-  `test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero`
-  on a concurrency correlation. It recurred here twice on a quiet tree with nothing
-  running alongside, and passed standalone both times. The measured precondition
-  (`json.loads` on the test's own input, in the suite's interpreter) raised
-  `RecursionError: Stack overflow (used 8144 kB)`, so the assertion that fails is
-  `out == ""` and not the exit code — the parse succeeded inside the suite where it
-  raises in isolation. `test_init_sh.py:5100` already names this as `#393`'s shape and
-  guards its own precondition by measuring it; the failing sibling does not.
-
-- **`#510` fired on the session that was verifying.** The first run was
-  `make test 2>&1 | tail -25`, so the harness reported exit `0` over an output ending
-  `make: *** [test] Error 1`, and the `tail` discarded the traceback the friction
-  entry's own recurrence instruction asks to keep. The second run retained full output
-  and captured `make`'s status directly.
-
-- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
-  `679b197efc24e31a66e94f6d52b6b3e5f2a47855` on 2026-09-02 printed
-  `1 failed, 2403 passed, 1 skipped, 3 warnings in 458.08s (0:07:38)` with `make`
-  exiting `2`. **That stamp names the commit it ran at, not this PR's head.**
-  What it does not cover is prose — this handoff file and the friction entry —
-  over which `make test` carries no gate, so the run's scope is stated rather
-  than extended. Deliberately no count of the commits in between: this sentence
-  enumerated them once, later commits falsified the enumeration, and a review
-  lens caught it — *Numbers in prose*'s own failure, met inside the paragraph
-  policing stamps. The failure is the pre-existing one above: that commit's
-  footprint is one `saved_plans/` file, that path is absent from
-  `kit-manifest.json`, and no test reads it. It is also platform-dependent,
-  not merely intermittent: the GitHub Actions `toolkit` job in run
-  `33611571274`, at
-  `53a40386e772e9dc0b7ad077bbff40369cfbc8d5` on 2026-09-02, printed
-  `2402 passed, 3 skipped` with nothing failing, and the test that fails locally
-  can be skipped by nothing — `grep -n 'pytest.skip\|skipif\|@pytest.mark.skip'`
-  over `scripts/tests/test_pr_followup_hook.py` returns no rows — so it ran there
-  and passed. Nothing was filed to the tracker.
-
-▶ Next: `session-start` — then bring the pilot's write pass to the adopter operator
-for approval, and decide whether the recurrence above graduates `#393` or opens its own
-issue.
 
 ______________________________________________________________________
 
