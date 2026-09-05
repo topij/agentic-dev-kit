@@ -5,6 +5,78 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-09-02 (cs-toolkit adopter pilot, read-only pass, in a Claude Code session)
+
+**Theme —** Phase 5's exit test, first half. `/upgrade` Steps 0 and 1 ran against the
+cs-toolkit adopter from a pinned kit clone. Nothing was written to the adopter. The
+verification run then reproduced a parked friction entry under conditions that
+contradict its parked hypothesis.
+
+- **Runtime —** Claude Code, model `claude-opus-5[1m]` as this session's own system
+  prompt names it; effort not read.
+
+- **The pilot's findings live in the record, not here.**
+  [`cs-toolkit-adopter-pilot-readonly_2026-09-02.md`](../saved_plans/cs-toolkit-adopter-pilot-readonly_2026-09-02.md)
+  carries every reading with its command, the two tree bindings, and the three
+  revisions they were taken against. `#661` is confirmed with its line
+  (`scripts/kit_doctor.py:2652` filters `required_by` on the dependent's presence
+  rather than on the installed version's requirement), and the same root cause has a
+  second occurrence: `kit_doctor`'s lens-definition remedy prescribes
+  `scripts/devkit/panel_prompt.py`, which `find` locates nowhere in the adopter.
+
+- **What the pilot found that the sprint review did not predict:** `/upgrade` Step 1
+  sends you to the adopter's installed engine first, which reports `intact` and names
+  no new file, while the kit's engine reports `NOT intact` about the same tree — and
+  Step 1's documented remedy for that under-reporting is a write, so a read-only pass
+  cannot reach the complete view by the route the step names. `#607` is confirmed and
+  invisible to every instrument: the adopter's lane engines are forks outside
+  `paths.engines` and absent from its manifest, so `#598`'s BREAKING exit-`64` contract
+  drifted unreported. And the adopter has already invented the mechanism the kit lacks
+  — a repo-local runtime-neutral appendix, applied to `wrap-up` alone — while
+  `session-start`'s Claude appendix, including the `origin/main` rule the appendix says
+  cost that repo a duplicate ticket on 2026-08-10, reaches no Codex session.
+
+- **A parked friction entry recurred, and its hypothesis did not survive.** The
+  2026-09-01 inbox entry parked
+  `test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero`
+  on a concurrency correlation. It recurred here twice on a quiet tree with nothing
+  running alongside, and passed standalone both times. The measured precondition
+  (`json.loads` on the test's own input, in the suite's interpreter) raised
+  `RecursionError: Stack overflow (used 8144 kB)`, so the assertion that fails is
+  `out == ""` and not the exit code — the parse succeeded inside the suite where it
+  raises in isolation. `test_init_sh.py:5100` already names this as `#393`'s shape and
+  guards its own precondition by measuring it; the failing sibling does not.
+
+- **`#510` fired on the session that was verifying.** The first run was
+  `make test 2>&1 | tail -25`, so the harness reported exit `0` over an output ending
+  `make: *** [test] Error 1`, and the `tail` discarded the traceback the friction
+  entry's own recurrence instruction asks to keep. The second run retained full output
+  and captured `make`'s status directly.
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `679b197efc24e31a66e94f6d52b6b3e5f2a47855` on 2026-09-02 printed
+  `1 failed, 2403 passed, 1 skipped, 3 warnings in 458.08s (0:07:38)` with `make`
+  exiting `2`. **That stamp names the commit it ran at, not this PR's head.**
+  What it does not cover is prose — this handoff file and the friction entry —
+  over which `make test` carries no gate, so the run's scope is stated rather
+  than extended. Deliberately no count of the commits in between: this sentence
+  enumerated them once, later commits falsified the enumeration, and a review
+  lens caught it — *Numbers in prose*'s own failure, met inside the paragraph
+  policing stamps. The failure is the pre-existing one above: that commit's
+  footprint is one `saved_plans/` file, that path is absent from
+  `kit-manifest.json`, and no test reads it. It is also platform-dependent,
+  not merely intermittent: the GitHub Actions `toolkit` job in run
+  `33611571274`, at
+  `53a40386e772e9dc0b7ad077bbff40369cfbc8d5` on 2026-09-02, printed
+  `2402 passed, 3 skipped` with nothing failing, and the test that fails locally
+  can be skipped by nothing — `grep -n 'pytest.skip\|skipif\|@pytest.mark.skip'`
+  over `scripts/tests/test_pr_followup_hook.py` returns no rows — so it ran there
+  and passed. Nothing was filed to the tracker.
+
+▶ Next: `session-start` — then bring the pilot's write pass to the adopter operator
+for approval, and decide whether the recurrence above graduates `#393` or opens its own
+issue.
+
 ## Session — 2026-09-02 (parity sprint review, in a Claude Code session)
 
 **Theme —** A review-only session: the Codex parity sprint was read against the tree, the
