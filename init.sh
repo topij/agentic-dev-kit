@@ -983,9 +983,17 @@ migrate_runtime_schema() {
 
   if ! grep -q '^runtime:' "$CONFIG_FILE"; then
     insert_before_section "doc_budgets:" 'runtime:
+  # Each mapping keyed by a registered launcher runtime declares its status
+  # immediately above each runtime entry: `# runtime-status: mechanical` or
+  # `# runtime-status: advisory`. The config-surface test discovers these maps,
+  # including newly added ones; it checks declarations, not their truth.
   default: claude
   launchers:
+    # dev_session.sh records this value and prints a copy-paste command;
+    # launching it is the operator action, not an engine-applied control.
+    # runtime-status: advisory
     claude: claude
+    # runtime-status: advisory
     codex: codex
 '
     echo "added runtime mappings to config/dev-model.yaml"
@@ -995,7 +1003,10 @@ migrate_runtime_schema() {
     old_fallback=$(get_field "review:" "" "^  fallback_command:")
     [ -n "$old_fallback" ] || old_fallback="/code-review"
     append_to_section "review:" "  fallback_commands:
+    # pr_followup_hook.py renders a reminder; the agent must run the command.
+    # runtime-status: advisory
     claude: $old_fallback
+    # runtime-status: advisory
     codex: \"/review\""
     echo "added runtime review fallbacks to config/dev-model.yaml"
   fi
@@ -1028,10 +1039,12 @@ migrate_runtime_schema() {
   # The values name controls each client accepted when the tiers were
   # calibrated (Claude Code 2.1.247, codex-cli 0.149.1, probed live 2026-08-27).
   runtime_mappings:
+    # runtime-status: advisory
     claude:
       cheap: '"$old_cheap"'
       default: '"$old_default"'
       expensive: '"$old_expensive"'
+    # runtime-status: advisory
     codex:
       cheap: low
       default: medium
@@ -1408,9 +1421,13 @@ migrate_kit_schema() {
     # The `Run at:` line in a prompt enforces nothing. See
     # docs/agentic-dev-kit/fallback-review-panel.md.
     lens_compute:
+      # Mechanical through the agent definition; plain-subagent effort is
+      # advisory, as the per-control carrier declaration above explains.
+      # runtime-status: mechanical
       claude:
         model: sonnet
         effort: high
+      # runtime-status: mechanical
       codex:
         effort: high
     lenses:

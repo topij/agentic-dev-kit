@@ -802,8 +802,12 @@ and final open/unmerged fixture pull requests.
   the non-interchangeability, and the refusal to build an unrequested guard. The
   tracker disposition on `#631` itself is an external write and is held for the
   operator's go-ahead.
-- [ ] Declare `#608` as a matrix row and deliver `#255`'s general mechanism as one
-  test over per-runtime config keys (added 2026-09-02).
+- [x] Declare `#608` as a matrix row and deliver `#255`'s general mechanism as one
+  test over per-runtime config keys (added 2026-09-02). The matrix declares interactive
+  hook-message presentation non-load-bearing without promoting a client guarantee.
+  `test_per_runtime_config_maps_declare_status_on_each_install_surface` discovers
+  runtime sub-maps in the reference and migrated config and requires a mechanical or
+  advisory declaration beside each runtime entry.
 - [ ] Replay the adopter write pass and fork reconciliation from the current kit
   protected-branch head, using the same `$REPO` origin check, `$KIT` path, and
   immediately-before-every-write directory assertion as the initial pass. Bind every

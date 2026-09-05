@@ -3024,6 +3024,57 @@ def test_non_interactive_run_is_unaffected_without_an_origin_remote(tmp_path: Pa
     assert yaml.safe_load(_config(repo))["tracker"]["project_name"] == "topij/agentic-dev-kit"
 
 
+def test_per_runtime_config_maps_declare_status_on_each_install_surface(tmp_path: Path):
+    """Discover runtime sub-maps, including future keys, and require declarations.
+
+    Runtime names come from runtime.launchers rather than a per-key allow list.
+    A map with any registered runtime child is in scope, including a map for a
+    runtime omitted by its siblings. Read the actual migrated YAML as well as
+    the reference config so shell comments cannot stand in for emitted ones.
+
+    This checks declaration presence and vocabulary, not whether a declared
+    carrier applies the value. The carrier-specific checks remain responsible
+    for that evidence. Flat runtime-prefixed keys are outside this sub-map rule.
+    """
+    repo = _fixture(tmp_path, config=V1_CONFIG)
+    _run_init(repo)
+    for surface, text in (
+        ("config/dev-model.yaml", shipped_config()),
+        ("init.sh migrated config", _config(repo)),
+    ):
+        config = yaml.safe_load(text)
+        runtimes = set(config["runtime"]["launchers"])
+        assert runtimes, f"{surface}: runtime.launchers must register runtimes"
+        lines = text.splitlines()
+        visited = set()
+
+        def inspect(node, path=()):
+            # Aliases can revisit a node or form a cycle; inspect its source once.
+            if id(node) in visited:
+                return
+            visited.add(id(node))
+            if isinstance(node, yaml.MappingNode):
+                for key, value in node.value:
+                    key_path = (*path, key.value)
+                    if key.value in runtimes:
+                        line = key.start_mark.line
+                        declaration = lines[line - 1] if line else ""
+                        indent = " " * key.start_mark.column
+                        assert re.fullmatch(
+                            rf"{indent}# runtime-status: (mechanical|advisory)",
+                            declaration,
+                        ), (
+                            f"{surface}: {'.'.join(key_path)} requires an adjacent "
+                            "runtime-status: mechanical or advisory declaration"
+                        )
+                    inspect(value, key_path)
+            elif isinstance(node, yaml.SequenceNode):
+                for index, value in enumerate(node.value):
+                    inspect(value, (*path, str(index)))
+
+        inspect(yaml.compose(text))
+
+
 def _lens_compute_block(text: str, *, unescape: bool = False) -> tuple[str, str]:
     """Return ``(comment, values)`` for the `lens_compute` block in `text`."""
     if unescape:

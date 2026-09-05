@@ -48,11 +48,19 @@ paths:
   engines: scripts
 
 runtime:
+  # Each mapping keyed by a registered launcher runtime declares its status
+  # immediately above each runtime entry: `# runtime-status: mechanical` or
+  # `# runtime-status: advisory`. The config-surface test discovers these maps,
+  # including newly added ones; it checks declarations, not their truth.
   # Agent-specific adapters map the shared workflows onto their own command and
   # skill surfaces. `none` prints activation instructions without an agent command.
   default: claude                     # claude | codex | none | another configured key
   launchers:
+    # dev_session.sh records this value and prints a copy-paste command;
+    # launching it is the operator's action, not an engine-applied control.
+    # runtime-status: advisory
     claude: claude
+    # runtime-status: advisory
     codex: codex
 
 parallel:
@@ -367,9 +375,13 @@ review:
     # Re-measure before assuming this holds for your repo — cost tracked CLAIM
     # DENSITY, not code complexity, and the docs PR was the expensive one.
     lens_compute:
+      # Mechanical through the agent definition; plain-subagent effort is
+      # advisory, as the per-control carrier declaration above explains.
+      # runtime-status: mechanical
       claude:
         model: sonnet
         effort: high
+      # runtime-status: mechanical
       codex:
         effort: high
     lenses:
@@ -378,7 +390,10 @@ review:
       - name: correctness
         focus: "assume it works and ask what it says — stale comments, claims that overstate what is verified, tests whose names promise more than their bodies check"
   fallback_commands:
+    # pr_followup_hook.py renders a reminder; the agent must run the command.
+    # runtime-status: advisory
     claude: "/code-review"
+    # runtime-status: advisory
     codex: "/review"
   # Everything below is read by scripts/pr_watch.py. It used to live as literals
   # inside that engine, which meant adopting the kit required *editing the
@@ -582,10 +597,12 @@ models:
   # Kept as scalars here because that is what this repo actually uses — see
   # `review.fallback_panel.lens_compute` for the map form in live use.
   runtime_mappings:
+    # runtime-status: advisory
     claude:
       cheap: haiku
       default: sonnet
       expensive: fable
+    # runtime-status: advisory
     codex:
       cheap: low
       default: medium
