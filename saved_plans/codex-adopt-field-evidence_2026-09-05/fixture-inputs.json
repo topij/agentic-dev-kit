@@ -1,0 +1,12 @@
+{
+  "README.md": "# Adopt context fixture\nDisposable local exercise; no external service is configured.\n",
+  "AGENTS.md": "<!-- devkit-source: kit-own -->\n# Fixture policy\nPreserve this fixture-specific policy.\n",
+  "CLAUDE.md": "@AGENTS.md\n",
+  "ROADMAP.md": "# Fixture roadmap\nKeep the existing plan at this path.\n",
+  "notes/history.md": "# Fixture history\n",
+  ".agents/skills/wrap-up/SKILL.md": "---\nname: wrap-up\ndescription: Fixture-owned wrap-up\n---\nPreserve this adapter.\n",
+  "scripts/local_task.py": "print(\"fixture task\")\n",
+  ".gitignore": "config/*.local.yaml\n",
+  "config/dev-model.yaml": "kit:\n  version: 2\nproject:\n  name: adopt-context-fixture\npaths:\n  handoff: ROADMAP.md\n  handoff_history: notes/history.md\n  friction_log: notes/friction.md\n  friction_log_archive: notes/friction-archive.md\n  engines: scripts/devkit\nruntime:\n  default: codex\ntracker:\n  backend: none\n  project_name: \"\"\n  url: \"\"\nreview:\n  bots: []\nnotify:\n  backend: none\n  user_key: tracked-fixture-recipient\n",
+  "config/dev-model.local.yaml": "notify:\n  user_key: local-fixture-recipient\n"
+}

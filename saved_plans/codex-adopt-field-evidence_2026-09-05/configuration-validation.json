@@ -1,0 +1,18 @@
+{
+  "kit_revision": "ab0a6d62308b298478b2f85fc961f14348f35365",
+  "record_revision": "65e333e1da7f27b5584e8482e6e883682aca2bbb",
+  "date": "2026-09-05",
+  "cwd": "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+  "argv": [
+    "uv",
+    "run",
+    "--with",
+    "pyyaml",
+    "python",
+    "-c",
+    "from pathlib import Path\nimport sys,yaml\nr=Path('/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture')\nsys.path.insert(0,str(r/'scripts/devkit/lib'))\nimport kitconfig\nexpected=yaml.safe_load((r.parent/'evidence/staged-config-initial.yaml').read_text())\nactual=kitconfig.load_config(r/'config/dev-model.yaml',overlay=False)\nassert actual==expected\nexpected['notify']['user_key']='local-fixture-recipient'\nassert kitconfig.load_config(r/'config/dev-model.yaml')==expected\nprint('PASS: complete intended mapping through installed kitconfig, including the merged local override')\n"
+  ],
+  "stdout": "PASS: complete intended mapping through installed kitconfig, including the merged local override\n",
+  "stderr": "",
+  "exit_code": 0
+}

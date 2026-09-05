@@ -1,0 +1,155 @@
+kit:
+  version: 2
+project:
+  name: adopt-context-fixture
+paths:
+  handoff: ROADMAP.md
+  handoff_history: notes/history.md
+  friction_log: notes/friction.md
+  friction_log_archive: notes/friction-archive.md
+  playbook: docs/autonomous-session-playbook.md
+  engines: scripts/devkit
+runtime:
+  default: codex
+  launchers:
+    claude: claude
+    codex: codex
+parallel:
+  codex_headless_command:
+  - codex
+  - exec
+  codex_worktree_transport: cd-flag
+  codex_prompt_transport: stdin-dash
+  codex_final_text_transport: last-message-file
+  claude_headless_command:
+  - claude
+  - -p
+  claude_worktree_transport: process-cwd
+  claude_prompt_transport: stdin
+  claude_final_text_transport: json-stdout
+  codex_approval_policy: read-only
+  claude_approval_policy: dont-ask
+  claude_settings_profile: config/claude-lane-settings.json
+  descriptor_ttl_seconds: 900
+  observation_timeout_seconds: 30
+  termination_grace_seconds: 5
+doc_budgets:
+- path: ROADMAP.md
+  budget: 400
+  archive: notes/history.md
+  remedy: run the wrap-up workflow to sweep old session blocks into the history file
+    (archive_plan_sessions.py --target-lines {budget}, not --keep — this budget is
+    in lines, not blocks)
+- path: notes/friction.md
+  budget: 150
+  archive: notes/friction-archive.md
+  remedy: run the triage-friction-log workflow to graduate the inbox to the tracker
+vcs:
+  forge: github
+  protected_branch: main
+  dev_branch_prefix: dev
+  triage_branch_pattern: chore/triage-{date}
+  systemize_branch_pattern: chore/systemize-{date}
+triage:
+  analysis_tier: default
+  state_path: state/triage/triage-pipeline-state_{mode}.json
+  gate_path: state/triage/triage-pipeline-gate_{mode}.lock
+  recovery_bundle_pattern: state/triage/recovery-bundle_{mode}_{gate_digest}.json
+  frozen_inbox_pattern: state/triage/frozen-inbox_{mode}_{date}_{session}.json
+  report_root: reports
+  report_pattern: reports/triage_{mode}_{date}_{session}.md
+  draft_engine: triage_friction_log.py
+  finalize_engine: finalize_triage.py
+  commit_subject: 'docs(triage): graduate friction-log entries'
+  pr_draft: false
+systemize:
+  analysis_tier: expensive
+  operator_logins: []
+  lookback_days: 7
+  backfill_days: 28
+  pattern_threshold: 2
+  tracker_severity: high
+  batch_size: 25
+  single_pass_max_prs: 60
+  max_findings_prs_per_run: 75
+  cache_pattern: state/cache/merged-prs_{window}_{mode}_{date}.json
+  digest_cache_pattern: state/cache/merged-prs-digest_{window}_{mode}_{date}.json
+  report_root: reports
+  report_pattern: reports/post-merge-systemize_{window}_{mode}_{date}.md
+  fetch_engine: fetch_merged_prs.py
+  digest_engine: digest_merged_prs.py
+  heartbeat_engine: heartbeat_cli.py
+  commit_subject: 'docs(systemize): promote recurring review patterns'
+  pr_draft: false
+tracker:
+  backend: none
+  project_name: ''
+  url: ''
+  linear:
+    team_id: ''
+    project_id: ''
+    label_name: ''
+review:
+  bots: []
+  bot_author_aliases:
+    coderabbit:
+    - coderabbitai
+    - coderabbitai[bot]
+  fallback_panel:
+    receipt_source: fallback:panel
+    lens_compute:
+      claude:
+        model: sonnet
+        effort: high
+      codex:
+        effort: high
+    lenses:
+    - name: adversarial
+      focus: assume the change is wrong and try to prove it — bypasses, fail-open
+        paths, wedges, and whether the new guard actually guards
+    - name: correctness
+      focus: assume it works and ask what it says — stale comments, claims that overstate
+        what is verified, tests whose names promise more than their bodies check
+  fallback_commands:
+    claude: /code-review
+    codex: /review
+  noise_markers:
+  - '<!-- this is an auto-generated comment: summarize by coderabbit'
+  - '<!-- this is an auto-generated comment: review in progress'
+  - <!-- walkthrough_start -->
+  - <!-- linear-linkback -->
+  unavailable_markers:
+  - bugbot needs on-demand usage enabled
+  - review limit reached
+  - rate limited by coderabbit
+  - review rate limited
+  - couldn't start this review
+  - review skipped
+  - no review credits
+  comment_verdict_markers:
+  - no actionable comments were generated
+  - 'actionable comments posted:'
+  informational_checks:
+  - coderabbit
+  bot_pending_grace_minutes: 15
+  settle_grace_minutes: 3
+  require_ci: true
+notify:
+  backend: none
+  user_key: tracked-fixture-recipient
+models:
+  tiers:
+    cheap: mechanical
+    default: standard
+    expensive: judgment
+  runtime_mappings:
+    claude:
+      cheap: haiku
+      default: sonnet
+      expensive: fable
+    codex:
+      cheap: low
+      default: medium
+      expensive: xhigh
+state:
+  dirname: state

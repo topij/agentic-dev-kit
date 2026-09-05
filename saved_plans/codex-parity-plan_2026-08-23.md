@@ -398,8 +398,8 @@ historical observation it was and is not silently refreshed.
   rule measurement; and PR `#649` for the safety-critical classification of the
   configured lane profile; and PR `#655` for adopter-side stale lens-definition
   inspection. The exit is not yet established. `#236` retains the engine/doctrine
-  same-function-different-path survey, and `#243` retains field exercises for `adopt`,
-  `parallel`, `triage-friction-log`, and `post-merge-systemize`. The Phase 5 checklist
+  same-function-different-path survey. The Phase 5 field-exercise reconciliation below
+  owns `#243` coverage and its remaining limits. The Phase 5 checklist
   below records the landed `#631` declaration, the joined `#608`/`#255` delivery in
   PR `#680`, and the initial adopter write pass. Tracker disposition for `#608` and
   `#255` remains an operator decision before the exit. **Re-sequenced on
@@ -749,8 +749,8 @@ and final open/unmerged fixture pull requests.
 - [x] Treat the configured Claude lane profile as safety-critical adopter-owned policy
   through the Codex root binding and Claude path-scoped binding (PR `#649`). `#346` and
   `#434` remain separate workflow/test binding-coverage decisions.
-- [ ] Exercise the remaining runtime-specific adapter translations through `adopt`,
-  `parallel`, `triage-friction-log`, and `post-merge-systemize` (`#243`).
+- [ ] Complete the remaining runtime-specific field coverage for `#243`, using the
+  reconciliation below rather than repeating the issue's older exercise list.
 - [x] Inspect adopter-side generated lens definitions against their configured
   mechanical compute carrier without duplicating installed-engine drift (PR `#655`;
   `#255`'s general enforcement mechanism remains separate).
@@ -817,6 +817,30 @@ and final open/unmerged fixture pull requests.
   Publish both snapshots and the stamped verification result on the kit wrap-up PR
   before it merges. Later ref movement is a separate event; wrap-up records the
   observation without treating its own commit as the replay source.
+
+#### Field-exercise reconciliation — 2026-09-05
+
+The [follow-up after PR #635](https://github.com/topij/agentic-dev-kit/issues/243#issuecomment-5458321655)
+credited `session-start` and `upgrade` and named a remaining exercise list. Later
+retained evidence changes that list. This reconciliation credits the routes below;
+it does not close the issue or promote untested branches. The
+[2026-09-02 residue note](https://github.com/topij/agentic-dev-kit/issues/243#issuecomment-5505909580)
+about adapter templates, hostile appended instructions, and the stale doctrine
+citation remains in Phase 6's implementation scope.
+
+| Workflow | Evidence credited | Boundary / next action |
+|---|---|---|
+| `parallel` | [Retained Codex batch](codex-parallel-batch-live-validation_2026-09-01.md), delivered by PR #659: lane identity, isolation, exact-head review, reconciliation and operator merge refusal. | Do not repeat that batch. Credit only its retained claim map, not every parallel mode. |
+| `triage-friction-log` | Codex's interactive LLM-only route completed through [PR #673](https://github.com/topij/agentic-dev-kit/pull/673); the committed graduation marker retains the approved and parked dispositions. The local run report and completed state were re-read in this session. | Do not repeat that graduation. Engine-backed and notification-service routes are not established by it; preserve TRI-03/TRI-04/TRI-05 for fresh exact decisions. |
+| `adopt` | [Bounded Codex context exercise](codex-adopt-field-exercise_2026-09-05.md): shared inspection, merged fixture config, approved staging, destination baseline, and Step 3c handoff. | Credit that bounded route only. Operator `init.sh`, post-init verification and fixture PR completion were not executed. |
+| `post-merge-systemize` | No field run is credited by this reconciliation; structural delivery is recorded in Phase 3. | Retain as a separate field exercise with its own approval boundaries. |
+
+The local triage references inspected were
+`reports/triage_live_2026-09-03_triage-1565b7bfdf11475f9a92f06002f463d4.md` and
+`state/triage/triage-pipeline-state_live.json`; these are gitignored supporting
+records, not a new durable-evidence promotion. The durable route pointers are the
+PR and committed graduation marker. PR #680's joined delivery remains recorded
+above; tracker dispositions and the final cs-toolkit replay remain operator work.
 
 The **adopter condition** is a reproducible set of assertions at the resulting adopter
 head:
