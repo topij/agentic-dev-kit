@@ -3042,37 +3042,41 @@ def test_per_runtime_config_maps_declare_status_on_each_install_surface(tmp_path
         ("config/dev-model.yaml", shipped_config()),
         ("init.sh migrated config", _config(repo)),
     ):
-        config = yaml.safe_load(text)
-        runtimes = set(config["runtime"]["launchers"])
-        assert runtimes, f"{surface}: runtime.launchers must register runtimes"
-        lines = text.splitlines()
-        visited = set()
+        _assert_runtime_status_declarations(text, surface)
 
-        def inspect(node, path=()):
-            # Aliases can revisit a node or form a cycle; inspect its source once.
-            if id(node) in visited:
-                return
-            visited.add(id(node))
-            if isinstance(node, yaml.MappingNode):
-                for key, value in node.value:
-                    key_path = (*path, key.value)
-                    if key.value in runtimes:
-                        line = key.start_mark.line
-                        declaration = lines[line - 1] if line else ""
-                        indent = " " * key.start_mark.column
-                        assert re.fullmatch(
-                            rf"{indent}# runtime-status: (mechanical|advisory)",
-                            declaration,
-                        ), (
-                            f"{surface}: {'.'.join(key_path)} requires an adjacent "
-                            "runtime-status: mechanical or advisory declaration"
-                        )
-                    inspect(value, key_path)
-            elif isinstance(node, yaml.SequenceNode):
-                for index, value in enumerate(node.value):
-                    inspect(value, (*path, str(index)))
 
-        inspect(yaml.compose(text))
+def _assert_runtime_status_declarations(text: str, surface: str) -> None:
+    config = yaml.safe_load(text)
+    runtimes = set(config["runtime"]["launchers"])
+    assert runtimes, f"{surface}: runtime.launchers must register runtimes"
+    lines = text.splitlines()
+    visited = set()
+
+    def inspect(node, path=()):
+        # Aliases can revisit a node or form a cycle; inspect its source once.
+        if id(node) in visited:
+            return
+        visited.add(id(node))
+        if isinstance(node, yaml.MappingNode):
+            for key, value in node.value:
+                key_path = (*path, key.value)
+                if key.value in runtimes:
+                    line = key.start_mark.line
+                    declaration = lines[line - 1] if line else ""
+                    indent = " " * key.start_mark.column
+                    assert re.fullmatch(
+                        rf"{indent}# runtime-status: (mechanical|advisory)",
+                        declaration,
+                    ), (
+                        f"{surface}: {'.'.join(key_path)} requires an adjacent "
+                        "runtime-status: mechanical or advisory declaration"
+                    )
+                inspect(value, key_path)
+        elif isinstance(node, yaml.SequenceNode):
+            for index, value in enumerate(node.value):
+                inspect(value, (*path, str(index)))
+
+    inspect(yaml.compose(text))
 
 
 def _lens_compute_block(text: str, *, unescape: bool = False) -> tuple[str, str]:
