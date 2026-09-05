@@ -290,10 +290,7 @@ paragraph below withdraws. The profile was never a third thing standing beside t
 naming the pair concedes nothing that was previously true. **The Codex mirror of
 that boundary is `--sandbox workspace-write`**, the value already beside the shipped
 `read-only` in `launch_lane.py`'s engine-owned vocabulary. It mirrors because it
-bounds the same territory, not because it renders the allow list into another syntax —
-and it bounds that territory by a *different* mechanism, since a sandbox does bound the
-process the paragraph above says nothing on the Claude side bounds. That makes the
-Codex side narrower here rather than equivalent:
+bounds the same territory, not because it renders the allow list into another syntax:
 **the Claude prefix list and the Codex sandbox value are not interchangeable** and do
 not map entry-for-entry, which is `runtime-parity.md`'s "the mirror to Codex is the
 doctrine, not the grants" stated from this side. A Codex writing lane inherits the
