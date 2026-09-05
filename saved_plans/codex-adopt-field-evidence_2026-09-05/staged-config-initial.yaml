@@ -37,7 +37,9 @@ doc_budgets:
 - path: ROADMAP.md
   budget: 400
   archive: notes/history.md
-  remedy: run the wrap-up workflow to sweep old session blocks into the history file (archive_plan_sessions.py --target-lines {budget}, not --keep — this budget is in lines, not blocks)
+  remedy: run the wrap-up workflow to sweep old session blocks into the history file
+    (archive_plan_sessions.py --target-lines {budget}, not --keep — this budget is
+    in lines, not blocks)
 - path: notes/friction.md
   budget: 150
   archive: notes/friction-archive.md
@@ -103,9 +105,11 @@ review:
         effort: high
     lenses:
     - name: adversarial
-      focus: assume the change is wrong and try to prove it — bypasses, fail-open paths, wedges, and whether the new guard actually guards
+      focus: assume the change is wrong and try to prove it — bypasses, fail-open
+        paths, wedges, and whether the new guard actually guards
     - name: correctness
-      focus: assume it works and ask what it says — stale comments, claims that overstate what is verified, tests whose names promise more than their bodies check
+      focus: assume it works and ask what it says — stale comments, claims that overstate
+        what is verified, tests whose names promise more than their bodies check
   fallback_commands:
     claude: /code-review
     codex: /review

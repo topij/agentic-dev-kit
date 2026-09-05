@@ -41,11 +41,15 @@ missing pieces, and stopping before `init.sh` or a fixture PR.
 
 Step 3 copied the non-repo-only manifest paths, missing runtime adapters and lens
 definitions, and reference files. Script destinations were remapped under
-`scripts/devkit/`. The existing Codex `wrap-up` was retained. The config gained
-missing defaults while preserving its prior values; its serialization did not
-retain the reference config's comments. No claim is made that this staged config
-retains runtime-status annotations. The marked `AGENTS.md` was preserved on the
-approved plan rather than merged with the safety sections.
+`scripts/devkit/`. The existing Codex `wrap-up` was retained. The marked
+`AGENTS.md` was preserved on the approved plan. The
+[initial config](codex-adopt-field-evidence_2026-09-05/staged-config-initial.yaml)
+was found in review to truncate wrapped defaults through the installed reader.
+The fixture was reserialized without scalar wrapping; the
+[terminal check](codex-adopt-field-evidence_2026-09-05/configuration-validation.json)
+compared the complete intended mapping through installed `kitconfig`, including
+its local override. Reference comments and runtime-status annotations were not
+retained.
 The [copy ledger](codex-adopt-field-evidence_2026-09-05/copy-ledger.json),
 [staged config](codex-adopt-field-evidence_2026-09-05/staged-config.yaml), and
 [destination read-back](codex-adopt-field-evidence_2026-09-05/staging-readback.json)
@@ -83,7 +87,7 @@ This is a baseline observation, not Step 4 verification of a completed adoption.
 The [stamp](codex-adopt-field-evidence_2026-09-05/verification-stamp.json) records
 an extended timeout and the preflight check for concurrent suite/watch processes;
 the tree had no pending changes, and no `pr_watch` invocation ran alongside it.
-The [retained output](codex-adopt-field-evidence_2026-09-05/make-test.log) identifies
+The [retained output](codex-adopt-field-evidence_2026-09-05/make-test-output.json) identifies
 `test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero`:
 its exit assertion passed, but the hook emitted output. This is the #393-shaped
 failure named by the preceding handoff stamp at
