@@ -273,10 +273,40 @@ from the probe's own account of itself, because a probe narrating success and a 
 that actually escaped are otherwise the same evidence — a delta-pass lens named that
 gap. No spelling of that entry
 closes it while the lane can write the file it names: a command-prefix allow list
-cannot constrain the *contents* of a file its prefix names. Closing it needs a
+cannot constrain the *contents* of a file its prefix names. Closing it would need a
 different mechanism — an OS sandbox around the child, or granting only scripts
 resolved from outside the lane-writable worktree — which is `#631`, not an edit to
 this profile.
+
+**`#631` is decided as a declaration rather than a mechanism (2026-09-05).** Neither
+route above is adopted. **What bounds a lane is the worktree and the forge's branch
+protection** — and it always was. Read that as naming what each one bounds, not as a
+containment guarantee: `Edit(**)` scopes the lane's tool-mediated file edits to the
+worktree, and branch protection scopes what can reach the protected branch's history.
+**Neither of them bounds the lane's process**, and the escape measured just above is
+exactly a process leaving the worktree — so a lane that rewrites a granted engine and
+runs it is outside both, and this declaration claims nothing the *confused lane*
+paragraph below withdraws. The profile was never a third thing standing beside them, so
+naming the pair concedes nothing that was previously true. **The Codex mirror of
+that boundary is `--sandbox workspace-write`**, the value already beside the shipped
+`read-only` in `launch_lane.py`'s engine-owned vocabulary. It mirrors because it
+bounds the same territory, not because it renders the allow list into another syntax:
+**the Claude prefix list and the Codex sandbox value are not interchangeable** and do
+not map entry-for-entry, which is `runtime-parity.md`'s "the mirror to Codex is the
+doctrine, not the grants" stated from this side. A Codex writing lane inherits the
+boundary and not the entries.
+
+**No lane-side execution guard is built without a request for one.** That is the
+operative half of the declaration, and the reason it is written here rather than left
+implicit: a session that reads the composition above is invited to close it, and
+closing it is an *addition* — `safety-critical-changes.md` rule 3's trap, on a file
+that gates launch authority, where three unrequested mechanisms each became a later
+HIGH. The composition is a documented limitation that fails **closed** for the
+confused lane this profile is for; a guard invented against it trades that for a
+fail-open surface nobody asked for and nobody scoped. A process-level boundary is
+available to an adopter who needs one, as a request: it gets its own issue, its own
+executable positive construction, and its own locally recomputed hostile mutation,
+not a fix round on this file.
 
 What the profile does deliver, and what the allow list should be read as bounding, is
 **fail-closed behaviour for a confused lane**: one that wanders off-task reaches for
