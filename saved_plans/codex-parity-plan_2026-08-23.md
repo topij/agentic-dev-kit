@@ -399,15 +399,10 @@ historical observation it was and is not silently refreshed.
   configured lane profile; and PR `#655` for adopter-side stale lens-definition
   inspection. The exit is not yet established. `#236` retains the engine/doctrine
   same-function-different-path survey, and `#243` retains field exercises for `adopt`,
-  `parallel`, `triage-friction-log`, and `post-merge-systemize`. `#631`'s lane
-  execution-boundary decision was taken as a declaration on 2026-09-05 and awaits only
-  its tracker disposition. The 2026-09-01 tracker reconciliation closed
-  `#606`. `#255` needed implementation after all: PR `#657` carried the
-  `runtime_mappings` status declaration to `init.sh`'s migration surface, which the
-  reference config alone had carried. `#255` stays open on the general rule its
-  *Proposed* section states rather than on the two keys its comments name —
-  `review.fallback_commands` and `runtime.launchers` still declare no per-runtime
-  status, and no mechanism yet prevents the next such key. **Re-sequenced on
+  `parallel`, `triage-friction-log`, and `post-merge-systemize`. The Phase 5 checklist
+  below records the landed `#631` declaration, the joined `#608`/`#255` delivery in
+  PR `#680`, and the initial adopter write pass. Tracker disposition for `#608` and
+  `#255` remains an operator decision before the exit. **Re-sequenced on
   2026-09-02** (*Sprint review* above): the cs-toolkit adopter pilot moves from Phase 6
   into this phase as its exit test, because the exit is only establishable by an
   upgrade run; assigning the live-validation verifier a repo-only role and withdrawing
@@ -420,18 +415,11 @@ historical observation it was and is not silently refreshed.
      receipt/comment mismatches reported.
   3. [x] Verifier, its test, and its evidence page assigned the repo-only manifest role,
      with the `CHANGELOG.md` entry.
-  4. [ ] The initial pilot write pass, on the adopter operator's approval, followed by a
-     separate fork-reconciliation stage based on the upgrade branch. Bind `$REPO` to the
-     adopter checkout, require its canonical origin to match the approved remote, and
-     bind `$KIT` to its fresh clone at `/tmp/agentic-dev-kit`; assert the working
-     directory is in `$REPO` immediately before every write. Record the kit source SHA
-     plus every created PR identity, base name, and head. For a
-     no-change stage, record its exact invocation, successful no-change output, input
-     and output SHA, tree equality, clean status, and input linkage to the preceding
-     stage instead of manufacturing a PR. File any residue. This pass does not establish
-     the phase exit.
-  5. [ ] The remaining `#243` field exercises completed, `#631` and `#608` decided on the
-     tracker and matrix, and `#255`'s general mechanism delivered.
+  4. [x] Initial pilot write pass and separate fork reconciliation, recorded with the
+     stage identities in the Phase 5 checklist below. This pass does not establish the
+     phase exit.
+  5. [ ] Complete the remaining `#243` field exercises and reconcile `#608`/`#255`
+     tracker dispositions with the landed work on the operator's decision.
   6. [ ] Replay the write pass and fork reconciliation from the then-current kit source,
      using the same `$REPO` origin check, `$KIT` path, and immediately-before-every-write
      directory assertion as the initial pass. For a stage with a diff, bind its PR
@@ -799,15 +787,15 @@ and final open/unmerged fixture pull requests.
   (re-sequenced 2026-09-02; the earlier wording asked for executable evidence first).
   Carried on 2026-09-05 by the shared lane contract's profile section and the
   `Command permissions` matrix row, which now state the boundary, the Codex mirror,
-  the non-interchangeability, and the refusal to build an unrequested guard. The
-  tracker disposition on `#631` itself is an external write and is held for the
-  operator's go-ahead.
+  the non-interchangeability, and the refusal to build an unrequested guard. Tracker
+  closure was recorded on 2026-09-05.
 - [x] Declare `#608` as a matrix row and deliver `#255`'s general mechanism as one
-  test over per-runtime config keys (added 2026-09-02). The matrix declares interactive
+  test over per-runtime config keys (added 2026-09-02; delivered by PR `#680` on
+  2026-09-05). The matrix declares interactive
   hook-message presentation non-load-bearing without promoting a client guarantee.
   `test_per_runtime_config_maps_declare_status_on_each_install_surface` discovers
-  runtime sub-maps in the reference and migrated config and requires a mechanical or
-  advisory declaration beside each runtime entry.
+  runtime sub-maps in the reference and newly emitted migration blocks and requires a
+  mechanical or advisory declaration beside each runtime entry.
 - [ ] Replay the adopter write pass and fork reconciliation from the current kit
   protected-branch head, using the same `$REPO` origin check, `$KIT` path, and
   immediately-before-every-write directory assertion as the initial pass. Bind every

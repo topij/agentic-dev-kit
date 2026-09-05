@@ -14,10 +14,41 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-05 — `#631`'s declaration boundary merged; `#608`, `#255` and
-`#243` remain before the Phase 5 adopter replay.
+Last updated: 2026-09-05 — the joined `#608`/`#255` change merged; continue with
+`#243`'s field exercises before the final Phase 5 adopter replay.
 
-## Latest session — 2026-09-05 (`#631`'s declaration boundary, in a Claude Code session)
+## Latest session — 2026-09-05 (runtime declarations, in Codex)
+
+**Theme —** Deliver the joined Phase 5 declaration and config-test scope, then hand
+the remaining field exercises to a fresh Codex session.
+
+- [PR #680](https://github.com/topij/agentic-dev-kit/pull/680) merged on 2026-09-05
+  as `3898204a00948ac5c73745dbb4bc551967b16e62`. It carries `#608`'s non-load-bearing
+  matrix row and `#255`'s general declaration-presence test together.
+- The first-hand Codex TUI observation is in that PR: `systemMessage` was displayed,
+  so the row does not repeat the planned "not observed" claim. This scoped observation
+  does not establish a general client guarantee. The config test covers the reference
+  and newly emitted migration blocks; it does not establish carrier truth or backfill
+  declarations into preserved existing blocks.
+- `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `bb27a58ae640a7541d34bc984333565e4a435166` on 2026-09-05 failed at
+  `test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero`.
+  The [review disposition](https://github.com/topij/agentic-dev-kit/pull/680#issuecomment-5553981033)
+  retains the verification limits, accepted fixes, and the logged P3 prose imprecision
+  on `#163`. Executed test-code fix rounds received full Codex panels.
+- The final Phase 5 exit and adopter replay were not attempted. Reconcile the tracker
+  dispositions for `#608` and `#255` with the landed work on the operator's decision.
+  Preserve `TRI-03`, `TRI-04`, and `TRI-05`; graduation still needs fresh exact
+  operator dispositions through `triage-friction-log`.
+
+▶ Next: In a fresh Codex session, run `$session-start` and follow
+`docs/kit-handoff.md`. Reconcile prior evidence against `#243`, then take a bounded
+`adopt` field exercise through the shared workflow in an isolated fixture. Keep the
+remaining field exercises and final adopter replay separate.
+
+______________________________________________________________________
+
+## Session — 2026-09-05 (`#631`'s declaration boundary, in a Claude Code session)
 
 **Theme —** The lane execution boundary was decided as a declaration rather than built as
 a mechanism, and the review that landed it exercised the new evidence contract end to end.
