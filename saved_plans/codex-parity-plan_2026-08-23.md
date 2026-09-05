@@ -769,16 +769,21 @@ and final open/unmerged fixture pull requests.
   with `$REPO` and `$KIT` bound; its stamped instrument readings live in
   [`cs-toolkit-adopter-pilot-readonly_2026-09-02.md`](cs-toolkit-adopter-pilot-readonly_2026-09-02.md)
   (`#607`, `#236`; added 2026-09-02).
-- [ ] Run the initial write pass on the adopter operator's approval and a separate
-  fork-reconciliation stage based on its branch. Bind `$REPO` to the adopter and `$KIT`
-  to the fresh kit clone at `/tmp/agentic-dev-kit`, the path used by Upgrade Step 5.
-  Record `$REPO`'s canonical origin URL and require it to match the approved cs-toolkit
-  remote; assert `pwd` is in `$REPO` immediately before every write. Invoke `$upgrade`
-  in `$REPO` while following `$KIT`'s workflow. Record the kit source SHA plus every
-  created PR identity, base name, and head. For a no-change stage, record its exact
-  invocation, successful no-change output, input and output SHA, tree equality, clean
-  status, and input linkage to the preceding stage instead of manufacturing a PR. Do
-  not close the phase.
+- [x] Run the operator-authorized initial write pass and separate fork reconciliation
+  through Codex's shared upgrade workflow. The stages merged on 2026-09-05; this event
+  does not establish the phase exit. The canonical adopter origin was
+  `https://github.com/in-parallel-oy/cs-toolkit.git`, the kit source was
+  `bde4c234eaa9005e90b987007101aba98281ce88`, and the adopter input was
+  `867883205c66f3564d70b2bb2793fad9ab80d51a`.
+  - Upgrade: [cs-toolkit #2222](https://github.com/in-parallel-oy/cs-toolkit/pull/2222),
+    base `main`, reviewed head `8ac6e5a1666fa198723014c52288e6c1b7502ddd`,
+    merge `f79797586ffd42fe40d178789d739d51176e42f3`.
+  - Fork reconciliation: [cs-toolkit #2223](https://github.com/in-parallel-oy/cs-toolkit/pull/2223),
+    based on the upgrade merge, PR base `main`, reviewed head
+    `c1e54941de9784d8e391751bdb02076172d7384e`,
+    merge `96cf647fb2f281f5a9f6b0957a3d90c0a98ab399`.
+    The [review disposition](https://github.com/in-parallel-oy/cs-toolkit/pull/2223#issuecomment-5551628933)
+    records the reviewed scope and accepted verification limits.
 - [x] Give `scripts/verify_live_validation_bundle.py`, its test and
   `live-validation-evidence.md` the repo-only role: retain release-manifest hashing
   and the kit checkout's drift check while omitting them from adopter inspection,

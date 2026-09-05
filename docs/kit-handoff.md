@@ -14,10 +14,35 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-03 — the live-validation verifier is repo-only, the friction
-inbox was triaged, and the adopter pilot's Codex write pass is next.
+Last updated: 2026-09-05 — the initial cs-toolkit write pilot merged; review-evidence
+hardening is the current kit change.
 
-## Latest session — 2026-09-03 (`#662` and friction triage, in a Codex session)
+## Latest session — 2026-09-05 (adopter write pilot and review evidence, in Codex)
+
+**Theme —** Complete the initial adopter rehearsal and strengthen the shared review
+instructions before the final parity replay.
+
+- The operator-authorized cs-toolkit upgrade and fork reconciliation merged on
+  2026-09-05 as [#2222](https://github.com/in-parallel-oy/cs-toolkit/pull/2222) and
+  [#2223](https://github.com/in-parallel-oy/cs-toolkit/pull/2223). The
+  [maintained parity plan](../saved_plans/codex-parity-plan_2026-08-23.md#phase-5--align-permissions-installation-and-upgrades)
+  records the kit source, adopter input, and stage revisions.
+- The shared fallback review contract now requires terminal verification reports,
+  proof that a mutation changed the intended bytes, and verified restoration
+  (`#671`, `#672`). The prompt assembler carries that contract to Claude and Codex;
+  the test checks transport, not whether a reviewer obeys the instructions.
+- This initial pilot does not establish the Phase 5 exit. Preserve the remaining
+  `#631`, `#608`, `#255`, and `#243` work and the final replay conditions in the plan.
+- The parked friction decisions from the preceding triage remain in force.
+  `TRI-03`, `TRI-04`, and `TRI-05` need fresh exact operator dispositions before
+  graduation; do not sweep them as part of this wrap-up.
+
+▶ Next: `$session-start` — implement `#631`'s declaration boundary from the maintained
+parity plan, then sequence `#608`/`#255` and `#243` before the final adopter replay.
+
+______________________________________________________________________
+
+## Session — 2026-09-03 (`#662` and friction triage, in a Codex session)
 
 **Theme —** The verifier received its repo-only manifest role, the approved friction
 entries graduated, and Phase 5 passed to its initial adopter write rehearsal.
@@ -316,58 +341,6 @@ exact-head reviews and operator-held merge authority can be recomputed from prom
 `adopt`, `parallel`, `triage-friction-log` and `post-merge-systemize`; bind `$REPO` and
 `$KIT` before `adopt` writes, and obtain the workflow-specific approvals before any
 tracker or external write.
-
-______________________________________________________________________
-
-## Session — 2026-09-01 (runtime_mappings status declaration, in a Claude Code session)
-
-**Theme —** `#255`'s disposition was settled against the tree rather than against the
-plan's summary of it, and the one measured residue shipped. The session then found its
-own disposition had been drawn too wide.
-
-- **Runtime —** Claude Code 2.1.252, assigned model `claude-opus-5`, effort `xhigh`,
-  read from this session's own transcript rather than from the prompt or argv.
-
-- **PR `#657` (squash `b5bc17a`) closed the gap between `#255`'s proposal and its
-  delivery.** `lens_compute` carried the per-runtime mechanical/advisory declaration on
-  both install surfaces; `models.runtime_mappings` carried it on the reference config
-  only, so a migrating adopter's config surface stated the values without their status.
-  `init.sh` now emits it, and `_runtime_mappings_block` — written for that pin and
-  wired to no assertion — became `_runtime_mappings_comment` behind a pin holding both
-  surfaces. The emitted block moved to single quotes because the added comment text
-  carries backticks.
-
-- **`Makefile`'s mutation guidance was inverted for the files that PR touched.** It
-  named `scripts/tests/` and `init.sh` as paths a mutation never trips the drift check
-  on; both are in `kit-manifest.json`, so a mutation to either read as killed under
-  plain `make test` with nothing behavioural catching it. Corrected to send a
-  contributor to the manifest rather than to the comment's own list.
-
-- **`#255` stays open, and the disposition comment that implied otherwise was too
-  wide.** Both halves of its *Proposed* section are delivered for the two keys the
-  issue's own comments name, but the Proposed states a general rule over every
-  compute- or capability-selecting key. Enumerating those found two carrying no
-  per-runtime status: `review.fallback_commands` (consumed by `pr_followup_hook.py`,
-  agent-executed and so advisory — the issue's own "real consumer, zero mechanism"
-  shape) and `runtime.launchers` (consumed by `dev_session.sh`). A correction comment
-  is owed on the issue and was not posted this session.
-
-- **The panel's convergence was not corroboration.** Both lenses filed no finding
-  against the diff and both drew the same overstated conclusion from the same probe.
-  Recorded with the enumeration lesson in
-  [`review-process-learnings_2026-08-24.md`](../saved_plans/review-process-learnings_2026-08-24.md).
-
-- **The sprint boundary held.** This session did not start `#631` or the retained Codex
-  parallel-batch Phase 4 run, and `saved_plans/claude-side-assessment_2026-08-26.md`
-  stayed operator-owned and unstaged.
-
-- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
-  `da142620a02d16d31e3231249d627b8fd194daa9` on 2026-09-01 printed
-  `2374 passed in 514.92s (0:08:34)` on a quiet tree; the merged squash is `b5bc17a`.
-
-▶ Next: `session-start` — then take `#243`'s Claude-side field exercise of `adopt`,
-`parallel`, `triage-friction-log` and `post-merge-systemize` as the opening slice, and
-settle `#255`'s two remaining undeclared keys.
 
 ______________________________________________________________________
 
