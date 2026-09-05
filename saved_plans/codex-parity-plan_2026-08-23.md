@@ -398,9 +398,10 @@ historical observation it was and is not silently refreshed.
   rule measurement; and PR `#649` for the safety-critical classification of the
   configured lane profile; and PR `#655` for adopter-side stale lens-definition
   inspection. The exit is not yet established. `#236` retains the engine/doctrine
-  same-function-different-path survey, `#243` retains field exercises for `adopt`,
-  `parallel`, `triage-friction-log`, and `post-merge-systemize`, and `#631` retains the
-  lane execution-boundary decision. The 2026-09-01 tracker reconciliation closed
+  same-function-different-path survey, and `#243` retains field exercises for `adopt`,
+  `parallel`, `triage-friction-log`, and `post-merge-systemize`. `#631`'s lane
+  execution-boundary decision was taken as a declaration on 2026-09-05 and awaits only
+  its tracker disposition. The 2026-09-01 tracker reconciliation closed
   `#606`. `#255` needed implementation after all: PR `#657` carried the
   `runtime_mappings` status declaration to `init.sh`'s migration surface, which the
   reference config alone had carried. `#255` stays open on the general rule its
@@ -791,11 +792,16 @@ and final open/unmerged fixture pull requests.
 - [x] Have `pr_watch.py --record-review` post a fixed-heading disposition comment at
   the recorded head, and report a receipt without that comment and a body stamp whose
   sha is not `headRefOid` (`#603`, `#604`, PR `#667`; added 2026-09-02).
-- [ ] Decide `#631` as a declaration: the Claude lane profile is task-scoping, the
+- [x] Decide `#631` as a declaration: the Claude lane profile is task-scoping, the
   boundary is the worktree plus branch protection, and the Codex mirror is
   `--sandbox workspace-write`; the Claude prefix list and Codex sandbox syntax are not
   interchangeable and no lane-side execution guard is built without a request for one
   (re-sequenced 2026-09-02; the earlier wording asked for executable evidence first).
+  Carried on 2026-09-05 by the shared lane contract's profile section and the
+  `Command permissions` matrix row, which now state the boundary, the Codex mirror,
+  the non-interchangeability, and the refusal to build an unrequested guard. The
+  tracker disposition on `#631` itself is an external write and is held for the
+  operator's go-ahead.
 - [ ] Declare `#608` as a matrix row and deliver `#255`'s general mechanism as one
   test over per-runtime config keys (added 2026-09-02).
 - [ ] Replay the adopter write pass and fork reconciliation from the current kit
