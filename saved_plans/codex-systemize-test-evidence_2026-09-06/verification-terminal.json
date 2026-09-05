@@ -1,0 +1,12 @@
+{
+  "command": "make test",
+  "revision": "4c4ce47ce067309f3cb24733a939c40c76911a4a",
+  "date": "2026-09-05T21:05:11.852215+00:00",
+  "directory": "/Users/topi/Coding/agentic-dev-kit",
+  "timeout_seconds": 1800,
+  "exit_code": 2,
+  "quiet_preflight": [],
+  "pr_watch_invoked_during_run": false,
+  "UV_CACHE_DIR": "/private/tmp/adk-systemize-field-20260905-hdhxe4ku/uv-cache",
+  "output": "/private/tmp/adk-systemize-field-20260905-hdhxe4ku/make-test-retry.log"
+}

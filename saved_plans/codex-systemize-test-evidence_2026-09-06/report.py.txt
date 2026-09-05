@@ -1,0 +1,250 @@
+import datetime, copy
+exec((__import__('pathlib').Path('/private/tmp/adk-systemize-field-20260905-hdhxe4ku/normalize.py')).read_text().split('selected={',1)[0])
+doc=validate_existing(paths['digest'],'digest')
+assert doc['single_pass_recommended'] is True
+clusters=[
+ ('overlay-documentation',637,3885794986,'The capability description omitted an accepted runtime settings overlay.','Document the supported Claude settings overlay.','below-threshold','friction-log','The retained disposition reports a correction. Keep addressed recurrence context only; no reimplementation. The corrected runtime-parity matrix names both settings files, but no broader shared instruction tightening follows from this incident.'),
+ ('lexical-grant-path',637,3885794988,'Grant comparison used lexical paths where its report promised resolved-path equivalence.','Normalize both paths before grant comparison.','below-threshold','friction-log','The retained disposition corrects the example: dot-dot was the defect; dot-slash already worked. Keep this as addressed incident context. The state-output safety rule is a different contract from grant equivalence.'),
+ ('archive-lint',648,3887305117,'A lint suggestion treated relocated historical bytes as newly authored editable prose.','Resolve the MD038 warning on this line.','covered','report-rule-citation','The retained decline explains historical-byte preservation. Shared wrap-up, Keep the handoff docs lean, delegates block moves to archive_plan_sessions.py and its verbatim relocation contract. No tightening proposed.'),
+ ('runtime-instruction-source',653,3891759458,'Documentation named the template source as the file imported at runtime.','Reference the generated AGENTS.md, not the template.','covered','report-rule-citation','AGENTS.md opening contract and the runtime-parity Repository instructions row explicitly name the loaded root file. The retained disposition reports the correction. No tightening proposed.'),
+ ('format-coupled-policy-check',653,5063174018,'A semantic policy check compared formatting-sensitive prose fragments.','Make policy checks independent of Markdown wrapping.','below-threshold','friction-log','The retained disposition reports whitespace normalization. Trivial is unrecognized and becomes normal. Keep addressed incident context; no specific general whitespace-matching doctrine was found in searched active instructions/workflows.'),
+ ('wrap-up-scope-warning',675,5551802784,'The scope check treated authorized session records as unrelated implementation scope.','Out of Scope Changes check','covered','report-rule-citation','The retained decline identifies intentional wrap-up scope. Shared wrap-up, Update any project-status doc and Commit + PR the handoff update, permits these records on the session feature branch before an independent-review receipt. No tightening proposed.')
+]
+for cl in clusters:
+ p=next(p for p in doc['prs'] if p['number']==cl[1]);assert cl[2] in [f['source']['id'] for f in p['findings']]
+ assert s['pattern_threshold']>1
+probe_results=[]
+baseline={k:hashlib.sha256(v.read_bytes()).hexdigest() for k,v in paths.items() if k in ['raw','digest'] and v.exists()}
+for change in ['foreign_kind','window_mismatch','config_mismatch','protected_head_mismatch','mode_mismatch','digest_mismatch']:
+ old_identity=copy.deepcopy(identity);old_digest=identity_digest;old_kind=kinds['raw']
+ try:
+  if change=='foreign_kind':kinds['raw']='foreign-artifact'
+  elif change=='window_mismatch':identity={**identity,'window_days':s['backfill_days']}
+  elif change=='config_mismatch':identity={**identity,'config_fingerprint':'sha256:'+'0'*64}
+  elif change=='protected_head_mismatch':identity={**identity,'protected_branch_head':'0'*40}
+  elif change=='mode_mismatch':identity={**identity,'execution_mode':'live'}
+  else:identity_digest='sha256:'+'0'*64
+  try:validate_existing(paths['raw'],'raw')
+  except AssertionError:probe_results.append({'probe':change,'outcome':'refused'})
+  else:raise RuntimeError('mismatched reuse accepted')
+ finally:identity=old_identity;identity_digest=old_digest;kinds['raw']=old_kind
+assert baseline=={k:hashlib.sha256(paths[k].read_bytes()).hexdigest() for k in baseline}
+for label in ['raw','digest']:validate_existing(paths[label],label)
+verification=json.loads((BASE/'verification-retry-stamp.json').read_text())
+initial_verification=json.loads((BASE/'verification-stamp.json').read_text())
+assert subprocess.check_output(['git','-C',str(KIT),'status','--porcelain'],text=True)==''
+assert subprocess.check_output(['git','-C',str(REPO),'diff','--name-only'],text=True)==''
+assert subprocess.check_output(['git','-C',str(REPO),'diff','--cached','--name-only'],text=True)==''
+for rel in ['AGENTS.md','.agents/skills/post-merge-systemize/SKILL.md','docs/agentic-dev-kit/workflows/post-merge-systemize.md','config/dev-model.yaml','docs/kit-handoff.md','docs/kit-friction-log.md']:
+ assert (REPO/rel).read_bytes()==(KIT/rel).read_bytes()
+report='<!-- '+canon(envelope('report')).decode()+' -->\n'
+report+='''# [TEST] Codex post-merge-systemize field observation
+
+This is an agent-executed test-mode observation. It does not establish an
+engine-backed or live route, completed adoption, or Phase 5 exit. The workflow
+made no branch, commit, PR, friction-log, tracker, or notification write.
+No reviewable kit patch was produced, so no fallback panel or review receipt was
+created. The disposable helper programs are exercise scaffolding, not kit engines.
+
+## Bound execution and context
+
+KIT is `/Users/topi/Coding/agentic-dev-kit`. REPO is
+`/private/tmp/adk-systemize-field-20260905-hdhxe4ku/fixture`.
+The kit source and detached fixture revision are
+`4c4ce47ce067309f3cb24733a939c40c76911a4a`.
+
+The current Codex session applied `$post-merge-systemize test` by reading its
+supplied skill and the complete shared workflow, with AGENTS.md as the instruction
+carrier. Fresh-client skill discovery was not tested. The configured expensive
+analysis tier was guidance; no launcher switched the model or effort.
+
+Outer preparation used `git clone --no-hardlinks`, detached the clone at the bound
+revision, and supplied a synthetic local overlay setting only `notify.user_key`
+to empty. No production notification identity was copied. Scaffolding programs and
+verification logs outside REPO belong to the outer exercise. Workflow publications
+were restricted to the configured raw cache, digest and report. Absolute paths,
+immediate cwd assertions and destination read-backs accompanied writes.
+
+The date is anchored to 2026-09-05 UTC, when preflight began. Helsinki crossed
+midnight during execution. The literal date-based query is retained in the digest;
+this is not a claim of an exact elapsed-hours interval.
+
+## Prior-evidence reconciliation
+
+The maintained `saved_plans/codex-parity-plan_2026-08-23.md` field reconciliation
+was read against #243's follow-up after PR #635 and its later residue comment.
+The latter concerns adapter templates and instruction tests; it does not require
+repeating completed field routes.
+
+- The Codex parallel batch remains credited only for the claim map in
+  `saved_plans/codex-parallel-batch-live-validation_2026-09-01.md`, delivered by
+  PR #659. That batch was not repeated.
+- The Codex triage route remains credited through PR #673 and its committed
+  graduation marker. Its local report and pipeline state were re-read, including
+  completed receipt `649638d19defab2fabf9cc21ec8e2b091f41cb32d12d00edd05e164068e9df53`.
+  TRI-03/TRI-04/TRI-05 remain parked, awaiting fresh exact operator dispositions.
+- PR #682 merged as `4c4ce47ce067309f3cb24733a939c40c76911a4a`. Its retained adopt
+  exercise records inspection, explicitly approved staging, destination verification
+  and Step 3c operator handoff. Initialization and later stages were not completed.
+  #683's serialization implementation remains outside this slice.
+- PR #680 delivered the joined #608/#255 implementation. Tracker dispositions remain
+  operator-held. The final Phase 5 exit and cs-toolkit replay were not attempted.
+- This report adds only the bounded test observation below. The maintained plan,
+  issue follow-ups, handoff and friction inbox were not rewritten by test mode.
+
+## Executed, failed and corrected
+
+The outer scaffold initially supplied an invalid `notify.backend` local override.
+`kitconfig.load_config()` refused it because only `notify.user_key` is overlayable.
+The scaffold was corrected at the destination and the merged read rerun before
+workflow publication. A diagnostic forge read in that interval was read-only and
+did not establish a valid workflow preflight for the invalid configuration.
+
+`field.py` then validated required config values, exact trusted identities,
+canonical JSON scalar support, artifact patterns, state.dirname and the atomic
+engine-set selection. Its fingerprint covers the complete effective fixture config.
+The canonicalizer validates ASCII mapping keys and safe integers, emits recursive
+sorted keys, compact JSON and unescaped UTF-8, and rejects unsupported scalars.
+These are RFC 8785 bytes for the actual restricted mapping, not a general float or
+non-ASCII-key canonicalizer. The local overlay was read through installed kitconfig. Its empty target equals the
+tracked value, so this fixture does not independently demonstrate differing-value
+overlay precedence. That narrower observation is not promoted into such a claim.
+
+The shared resolver came from REPO's configured scripts/lib/state_paths. Preflight
+executed marker resolution, an environment override to the same sandbox, and
+non-creating write resolution. Existing-artifact read resolution later selected the
+published sandbox cache. The competing production/sandbox mtime branch was not tested.
+Cache and digest were not written beneath REPO/state.
+
+Before creating parents, the harness checked containment, traversal, symlinks,
+tracked/control-input collisions, canonical artifact collisions and target absence.
+Published-file read-back checked regular-file type, link count, inode aliases,
+kind, schema, complete canonical run identity and recomputed identity digest.
+It used O_NOFOLLOW for identity reads, atomic replacement for publication and
+byte comparison at destination. This is executed harness evidence, not hostile
+filesystem-race coverage or proof of an engine-enforced safety boundary.
+
+The authenticated forge fetch used bounded merged-PR search, checking
+incomplete_results and total_count through completion. Every PR's review submissions,
+inline comments, issue comments and files were paged with
+`gh api --paginate --slurp`. Raw bodies, identities, merge revisions, file paths and
+PR-body tracker references were retained. A body reference is not independent proof
+that an issue originated the PR.
+
+`normalize.py` records the current agent's source classification. The operator list
+was empty, so operator findings were excluded. CodeRabbit identities and explicit
+aliases were matched exactly. Author dispositions annotated addressed state only;
+they did not become finding evidence. Forge thread-resolution state was not fetched.
+Status comments and repeated summaries were excluded. The review-object nitpick and
+the specific scope warning in a summary comment were retained. Trivial is unmapped
+and normalizes to normal, without a source-specific exception.
+
+The raw bundle was re-read after publication to recompute ranked/capped identities,
+omissions and batching fields, then compared with the destination digest. Clustering
+consumed that validated digest in its recommended single pass. Similar wording did
+not establish a recurring causal shape. No shared-rule proposal was justified.
+
+The initial report-scaffold construction failed with a Python SyntaxError before
+writing report.py or the report. It was rewritten as a literal heredoc and executed;
+raw and digest artifacts were preserved during that correction.
+
+## Capability preflight
+
+'''
+for key,value in raw['capability_preflight'].items():report+='- '+key+': '+value+'\n'
+report+='''
+The fixture Git origin is the local KIT clone source. The explicit forge read target
+is topij/agentic-dev-kit, matching KIT's repository context; no forge write identity
+was inferred from that local fixture origin.
+
+## Scope and proposed routing
+
+The digest enumerates the fetched population and finding-bearing selection.
+`normalize.py` at the bound source on 2026-09-05 UTC validated no cap omissions.
+That does not mean excluded authors' reviews were analyzed. Each incident below
+has its own distinct PR identity and remains below the configured pattern threshold;
+its normalized severity is below the configured tracker threshold. Covered routes
+are evaluated first. These dispositions were agent-executed from the digest and
+searched instructions, not engine-verified.
+
+'''
+for name,pr,source,cause,excerpt,route,target,reason in clusters:
+ report+='### '+name+'\n\n'+cause+'\n\n'
+ report+='- Evidence: PR #'+str(pr)+'; coderabbitai[bot]; source '+str(source)+'.\n'
+ report+='- Representative excerpt: “'+excerpt+'”\n'
+ report+='- Proposed route: `'+route+'` → `'+target+'`. '+reason+'\n'
+ report+='- Executed route: report only. No friction or external write.\n\n'
+report+='''## Artifact reuse and limits
+
+Read-only checkpoint probes changed the expected context while preserving artifact
+bytes. The following were refused; original raw/digest hashes matched afterward:
+
+'''
+for probe in probe_results:report+='- '+probe['probe']+': '+probe['outcome']+'.\n'
+report+='''
+A same-run raw/digest checkpoint succeeded after those probes. Report identity was
+checked after publication by the same reader. These are checkpoint observations,
+not full restarted workflow runs and not mutated-artifact tests. No restoration
+claim is needed: the read-only probes changed no artifact bytes.
+
+Test-mode route prohibitions were followed by the agent, not mechanically attacked.
+No branch/commit/PR/friction/tracker refusal was induced. No external identifier,
+notification receipt or review receipt was returned because no send or route write
+was attempted. Scanned read-only text triggered a lifecycle reminder, but no PR
+lifecycle action occurred, and no watch was started from that reminder.
+
+The partial-engine-set stop, unknown argument, hostile link/path targets, malformed
+existing files, concurrent replacement, competing-mtime selection, cap-triggered
+omission, batched clustering, high-severity approval, live rule route, notification
+transport, engine heartbeat, process-crash recovery and fresh-client context discovery
+remain untested. Adoption completion, other remaining exercises, tracker triage and
+cs-toolkit replay remain outside this slice.
+
+## Kit verification
+
+The preceding handoff named `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+`ab0a6d62308b298478b2f85fc961f14348f35365` on 2026-09-05, failing
+`test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero`.
+
+The initial run at `4c4ce47ce067309f3cb24733a939c40c76911a4a` on 2026-09-05 UTC
+stopped in lint because the host uv cache was inaccessible, before pytest.
+The retry used a disposable UV_CACHE_DIR and an extended subprocess timeout.
+The caller tree had no pending changes at preflight and no external watcher or suite
+was in flight. The session invoked no pr_watch alongside the run; fixture fetch and
+analysis did not write to the caller checkout.
+
+`make test` in `/Users/topi/Coding/agentic-dev-kit` at
+`4c4ce47ce067309f3cb24733a939c40c76911a4a` on 2026-09-05 UTC printed:
+
+`1 failed, 2436 passed, 1 skipped in 381.92s (0:06:21)`
+
+The hook exit assertion passed; `assert out == ""` failed because lifecycle-warning
+JSON was emitted. This is the #393-shaped failure named by the preceding handoff.
+No fix or independent causality proof was attempted. The terminal output and stamps
+are bound below. The suite does not validate this report or a live systemize route.
+
+## Result and next safe step
+
+The bounded test analysis completed with the declared degraded capabilities and
+report-only route proposals. The kit suite failed as recorded. These are separate
+outcomes. `report.py` at the bound source on 2026-09-05 UTC checked the caller status,
+fixture tracked/index diffs and source-byte equality for the active instruction,
+workflow, tracked config, handoff and friction files before report publication.
+
+Inspect the report and artifacts before a later invocation. Recompute the effective
+config fingerprint and read a fresh protected head for that new invocation. Reuse
+only when the complete identity and kind match. On mismatch, inspect and move the
+artifact or explicitly select a different configured pattern; never overwrite it.
+Do not rerun field.py blindly: its initial fresh-fixture assertions reject an existing
+sandbox. No external write needs repeating. Live routing or evidence promotion into
+a kit PR is separately scoped and must preserve this test-only boundary.
+
+## Machine evidence
+
+'''
+structured={'source_revision':identity['protected_branch_head'],'recorded_at_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'run_identity':identity,'artifact_paths':{k:str(v) for k,v in paths.items()},'raw_digest_sha256_before_report':baseline,'input_cap':doc['input_cap'],'reuse_probes':probe_results,'verification_initial':initial_verification,'verification_terminal':verification,'created_external_identifiers':[],'outcome':'degraded-success-test-analysis; kit-verification-failed'}
+report+='```json\n'+json.dumps(structured,ensure_ascii=False,indent=2)+'\n```\n'
+publish('report',report.encode())
+validate_existing(paths['report'],'report')
+print('REPORT PUBLISHED AND IDENTITY VERIFIED',paths['report'])
+print(json.dumps({k:hashlib.sha256(v.read_bytes()).hexdigest() for k,v in paths.items()}))

@@ -833,7 +833,7 @@ citation remains in Phase 6's implementation scope.
 | `parallel` | [Retained Codex batch](codex-parallel-batch-live-validation_2026-09-01.md), delivered by PR #659: lane identity, isolation, exact-head review, reconciliation and operator merge refusal. | Do not repeat that batch. Credit only its retained claim map, not every parallel mode. |
 | `triage-friction-log` | Codex's interactive LLM-only route completed through [PR #673](https://github.com/topij/agentic-dev-kit/pull/673); the committed graduation marker retains the approved and parked dispositions. The local run report and completed state were re-read in this session. | Do not repeat that graduation. Engine-backed and notification-service routes are not established by it; preserve TRI-03/TRI-04/TRI-05 for fresh exact decisions. |
 | `adopt` | [Bounded Codex context exercise](codex-adopt-field-exercise_2026-09-05.md): shared inspection, merged fixture config, approved staging, destination baseline, and Step 3c handoff. | Credit that bounded route only. Operator `init.sh`, post-init verification and fixture PR completion were not executed. |
-| `post-merge-systemize` | No field run is credited by this reconciliation; structural delivery is recorded in Phase 3. | Retain as a separate field exercise with its own approval boundaries. |
+| `post-merge-systemize` | [Bounded Codex test exercise](codex-systemize-test-field-exercise_2026-09-06.md): merged-config read, capability preflight, trusted review inputs, digest validation, artifact checkpoints and proposed routing. | Credit test-mode analysis only. Live routing, engine-backed operation and full restart recovery were not exercised; do not repeat this test as if no field evidence exists. |
 
 The local triage references inspected were
 `reports/triage_live_2026-09-03_triage-1565b7bfdf11475f9a92f06002f463d4.md` and
@@ -841,6 +841,12 @@ The local triage references inspected were
 records, not a new durable-evidence promotion. The durable route pointers are the
 PR and committed graduation marker. PR #680's joined delivery remains recorded
 above; tracker dispositions and the final cs-toolkit replay remain operator work.
+
+The 2026-09-06 record adds the bounded systemize test to this reconciliation.
+It does not complete the remaining field-coverage checklist or authorize live
+routes. The adopt serialization gap found in PR #682 is tracked separately by
+#683; its implementation and the later operator initialization boundary remain
+distinct from this test observation.
 
 The **adopter condition** is a reproducible set of assertions at the resulting adopter
 head:

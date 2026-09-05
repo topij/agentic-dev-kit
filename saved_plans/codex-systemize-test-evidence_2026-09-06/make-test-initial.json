@@ -1,0 +1,4 @@
+{
+  "output": "uvx ruff@0.16.0 check --no-fix\nerror: Failed to initialize cache at `/Users/topi/.cache/uv`\n  Caused by: failed to open file `/Users/topi/.cache/uv/sdists-v9/.git`: Operation not permitted (os error 1)\nmake: *** [lint] Error 2\n",
+  "output_sha256": "94468af827219cf68c1661e7521679c727684b7d7bd1635eb1c33c8d56cf2f23"
+}

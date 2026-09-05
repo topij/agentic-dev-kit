@@ -14,10 +14,36 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-05 — bounded Codex adopt context exercise staged to its
-operator handoff; Phase 5 field coverage reconciled against retained evidence.
+Last updated: 2026-09-06 — bounded Codex systemize test recorded with its
+evidence limits; adopt serialization is the next implementation slice.
 
-## Latest session — 2026-09-05 (adopt context field exercise, in Codex)
+## Latest session — 2026-09-06 (systemize test record, in Codex)
+
+**Theme —** Retain the bounded test observation and update the field-exercise
+reconciliation under the operator's separate record-and-wrap-up authorization.
+
+- The [field record](../saved_plans/codex-systemize-test-field-exercise_2026-09-06.md)
+  retains context, preflight, trusted source material, digest validation, artifact
+  checkpoint probes and proposed routes. This credits test-mode analysis only.
+- The maintained parity plan preserves the earlier parallel, triage and bounded
+  adopt evidence. PR #682 ended at the Step 3c operator handoff; #683 owns its
+  separately identified config-serialization gap.
+- The exercise's `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `4c4ce47ce067309f3cb24733a939c40c76911a4a` on 2026-09-05 UTC failed in
+  `test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero`.
+  The field record retains the terminal output and verification limits.
+- No test-mode routing or tracker disposition was executed. Preserve
+  TRI-03/TRI-04/TRI-05 and the operator-held #608/#255 dispositions. Adoption
+  completion, final Phase 5 exit and cs-toolkit replay remain separately scoped.
+
+▶ Next: `$session-start` — implement #683 in the shared adopt workflow and verify
+serialized config through the installed reader, including long scalars and the
+local overlay. Keep the operator initialization boundary and later adoption
+verification separate; follow the maintained plan before any final adopter replay.
+
+______________________________________________________________________
+
+## Session — 2026-09-05 (adopt context field exercise, in Codex)
 
 **Theme —** Exercise adopt's context carrier through its shared workflow in a
 local disposable fixture, with the operator's explicit staging approval.

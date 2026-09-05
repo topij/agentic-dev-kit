@@ -1,0 +1,65 @@
+import ast,os,sys,json,hashlib,stat,tempfile,subprocess,re,math
+from pathlib import Path
+REPO=Path('/private/tmp/adk-systemize-field-20260905-hdhxe4ku/fixture');KIT=Path('/Users/topi/Coding/agentic-dev-kit');BASE=REPO.parent
+assert Path.cwd().resolve()==REPO
+sys.path.insert(0,str(REPO/'scripts/lib'))
+from kitconfig import load_config
+from state_paths.resolver import resolve_read_path,resolve_write_path,state_root
+os.environ['DEVKIT_ROOT']=str(REPO);os.environ.pop('DEVKIT_STATE_ROOT',None)
+source=ast.parse((BASE/'field.py').read_text())
+for node in source.body:
+ if isinstance(node,ast.FunctionDef) and node.name in ['canon','digest','norm','envelope','validate_existing','publish']:
+  exec(compile(ast.Module(body=[node],type_ignores=[]),'field.py','exec'))
+c=load_config(REPO/'config/dev-model.yaml');s=c['systemize']
+raw_path=resolve_read_path('cache/merged-prs_7d_test_2026-09-05.json')
+raw=json.loads(raw_path.read_text())
+identity=raw['run_identity']; identity_digest=digest(identity)
+assert identity['config_fingerprint']==digest({'schema':'post-merge-systemize-config-v1','config':c})
+paths={k:Path(v) for k,v in raw['paths'].items()}
+kinds={'raw':'post-merge-systemize-raw','digest':'post-merge-systemize-digest','report':'post-merge-systemize-report'}
+tracked=[REPO/p for p in subprocess.check_output(['git','-C',str(REPO),'ls-files','-z'],text=True).split('\0') if p]
+controls=tracked+[REPO/'config/dev-model.local.yaml',REPO/'.devkit_state_root',REPO/'.git/config']
+validate_existing(raw_path,'raw')
+assert raw_path==paths['raw']==resolve_write_path('cache/merged-prs_7d_test_2026-09-05.json',mkdir=False)
+trusted=set(raw['trusted_sources'])
+# Exact source selection is the cockpit's classification of the fetched evidence,
+# not an engine classifier. Summary echoes and status comments are not findings.
+selected={637:[('inline_comments',3885794986,'Minor'),('inline_comments',3885794988,'Minor')],648:[('inline_comments',3887305117,'Minor')],653:[('inline_comments',3891759458,'Minor'),('reviews',5063174018,'Trivial')],675:[('issue_comments',5551802784,'Warning')]}
+dispositions={637:('addressed-reported','https://github.com/topij/agentic-dev-kit/pull/637#issuecomment-5460800449'),648:('declined-with-reason','https://github.com/topij/agentic-dev-kit/pull/648#discussion_r3887310387'),653:('addressed-reported','https://github.com/topij/agentic-dev-kit/pull/653#issuecomment-5474370266'),675:('declined-with-reason','https://github.com/topij/agentic-dev-kit/pull/675#issuecomment-5551859500')}
+severity_map={**dict.fromkeys(['low','minor','info','informational'],'low'),**dict.fromkeys(['medium','moderate','normal','warning'],'normal'),**dict.fromkeys(['high','major'],'high'),**dict.fromkeys(['critical','blocker'],'critical')}
+for p in raw['prs']:
+ p['tracker_references']=sorted(set(re.findall(r'(?<![\w/])#(\d+)',p.get('body') or '')),key=int)
+ p['findings']=[]
+ for surface,ident,sev in selected.get(p['number'],[]):
+  row=next(x for x in p[surface] if x['id']==ident)
+  assert norm(row['user']['login']) in trusted
+  text=row['body'].split('<details>')[0].strip();path=row.get('path')
+  if p['number']==653 and surface=='reviews':
+   text=row['body'].split('**Make policy checks independent of Markdown wrapping.**',1)[1].split('<details>',1)[0].strip()
+   path='scripts/tests/test_portability.py'
+  if p['number']==675:
+   text='The fallback review contract, test update, and manifest checksums are in scope. The handoff history, current handoff, and parity plan also document unrelated cs-toolkit write rehearsal and Phase 5 status work. Proposed removal or separation of those records.'
+   path='docs/kit-handoff.md; docs/kit-handoff-history.md; saved_plans/codex-parity-plan_2026-08-23.md'
+  state,url=dispositions[p['number']]
+  finding={'source':{'classification':'configured-reviewer','identity':norm(row['user']['login']),'surface':surface,'id':ident,'url':row['html_url']},'path':path,'original_severity':sev,'normalized_severity':severity_map.get(sev.strip().lower(),'normal'),'addressed_state':state,'addressed_evidence':url,'addressed_limit':'author disposition retained; current thread-resolution state not fetched','guideline_citation_state':'explicit MD038' if p['number']==648 else 'no explicit shared guideline citation in finding','cleaned_text':text,'classification_method':'agent-executed'}
+  p['findings'].append(finding)
+raw['classification_method']='agent-executed; operator-authored disposition used only for addressed state, never admitted as a finding'
+raw['source_exclusions']='Untrusted author identities; empty bodies; skip/failure/completion statuses; generic walkthroughs; review-summary echoes of selected inline findings. The specific #675 scope warning remains included despite its containing comment also announcing no actionable inline findings.'
+publish('raw',canon(raw)+b'\n')
+order={'low':0,'normal':1,'high':2,'critical':3}
+def rank(p):return (-max(order[f['normalized_severity']] for f in p['findings']),-sum(f['addressed_state'] not in ['addressed-reported','declined-with-reason'] for f in p['findings']),-len(p['findings']),p['identity'])
+candidates=sorted([p for p in raw['prs'] if p['findings']],key=rank)
+kept=candidates[:s['max_findings_prs_per_run']]
+cap={'applied':len(candidates)>len(kept),'uncapped_finding_bearing_count':len(candidates),'omitted_pr_identities':[p['identity'] for p in candidates[len(kept):]],'full_population_pr_identities':[p['identity'] for p in raw['prs']]}
+out={**envelope('digest'),'window':raw['window'],'forge_repo':raw['forge_repo'],'protected_branch_head':raw['protected_branch_head'],'config_fingerprint':raw['config_fingerprint'],'prs':[{k:p[k] for k in ['identity','number','merge_revision','tracker_references','findings']} for p in kept],'input_cap':cap,'batching':{k:s[k] for k in ['pattern_threshold','tracker_severity','batch_size','single_pass_max_prs','max_findings_prs_per_run']},'findings_pr_count':len(kept),'single_pass_recommended':len(kept)<=s['single_pass_max_prs'],'n_batches':math.ceil(len(kept)/s['batch_size']),'limitations':['Trivial is an unmapped source label and normalizes to normal; no source-specific mapping invented','Addressed states use explicit author dispositions, not independently checked forge thread resolution'],'classification_method':'agent-executed'}
+publish('digest',canon(out)+b'\n')
+# Recompute using destination bytes rather than trusting the candidate object.
+reread=json.loads(resolve_read_path('cache/merged-prs_7d_test_2026-09-05.json').read_text())
+actual=validate_existing(resolve_read_path('cache/merged-prs-digest_7d_test_2026-09-05.json'),'digest')
+ranked=sorted([p for p in reread['prs'] if p['findings']],key=rank)
+assert [p['identity'] for p in actual['prs']]==[p['identity'] for p in ranked[:s['max_findings_prs_per_run']]]
+assert actual['input_cap']['uncapped_finding_bearing_count']==len(ranked)
+assert actual['input_cap']['omitted_pr_identities']==[p['identity'] for p in ranked[s['max_findings_prs_per_run']:]]
+assert actual['input_cap']['applied']==(len(ranked)>s['max_findings_prs_per_run'])
+n=len(actual['prs']);assert actual['findings_pr_count']==n and actual['single_pass_recommended']==(n<=s['single_pass_max_prs']) and actual['n_batches']==math.ceil(n/s['batch_size'])
+print(json.dumps(actual,indent=2))
