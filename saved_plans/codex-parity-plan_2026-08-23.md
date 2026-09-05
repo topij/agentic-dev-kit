@@ -853,6 +853,13 @@ stamped read-backs. This does not exercise operator initialization, later adopti
 verification, fixture PR completion, or any remaining systemize route. Keep those
 boundaries and the Phase 5 exit unchecked; #243 stays open.
 
+PR #685's [fixture evidence](https://github.com/topij/agentic-dev-kit/pull/685#issuecomment-5555450011)
+and [full Codex panel record](https://github.com/topij/agentic-dev-kit/pull/685#issuecomment-5555538351)
+retain the executed probes, terminal suite failures, setup/runtime refusals, actual
+mutation diffs and restoration checks. The panel record distinguishes the stale
+pre-publication evidence observation from the subsequently retained artifacts;
+it does not establish automatic enforcement of the agent-executed comparison.
+
 The **adopter condition** is a reproducible set of assertions at the resulting adopter
 head:
 

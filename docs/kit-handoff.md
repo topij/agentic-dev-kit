@@ -25,8 +25,8 @@ and the Step 3c operator handoff.
 - Step 3a requires supported serialized representations and complete tracked and
   merged mapping comparisons through the installed destination reader. Runtime
   bindings and the parser are unchanged; this remains agent-executed verification.
-- The implementation PR retains the disposable fixture program and destination
-  read-backs: default wrapping lost long focus/remedy tails; the corrected fixture
+- [PR #685 fixture evidence](https://github.com/topij/agentic-dev-kit/pull/685#issuecomment-5555450011)
+  retains the disposable program and destination read-backs: default wrapping lost long focus/remedy tails; the corrected fixture
   preserved the complete mapping and a separate differing long local override.
   The fixture command `PYTHONDONTWRITEBYTECODE=1 uv run --with pyyaml python
   /private/tmp/adk683-6cfcvcic/verify_staging.py /Users/topi/Coding/agentic-dev-kit`
@@ -39,6 +39,16 @@ and the Step 3c operator handoff.
   failure was the recurring #393-shaped empty-output assertion in
   `test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero`.
   This run preceded the plan/handoff update; the PR carries later review evidence.
+- The [full Codex panel disposition](https://github.com/topij/agentic-dev-kit/pull/685#issuecomment-5555538351)
+  retains terminal reports, applied runtime read-backs, landed mutation diffs and
+  byte-verified restoration at `e417f281f12938dc517701287d5d667c4937ce32`.
+  The host CLI refused the configured model; the compatible installed runtime
+  completed the lenses. CodeRabbit refused the requested review due to its rate limit.
+  The correctness evidence-retention observation preceded the publication linked above.
+  The retained commands in the named lens directories on 2026-09-05 UTC show the
+  recurring hook failure, additional sandbox process-observation failures in the
+  correctness suite, and setup refusals separately. Removing Step 3a was not caught
+  behaviorally by the mutation runs; the workflow remains agent-executed prose.
 - PR #684 retains test-mode systemize analysis, not live routing or Phase 5 exit.
   PR #682 retains approved adopt staging and the operator handoff, not adoption
   completion. This implementation repeated neither field exercise.
