@@ -1,0 +1,31 @@
+{
+  "argv": [
+    "uv",
+    "venv",
+    "--offline",
+    "--python",
+    "/Users/topi/.local/share/uv/python/cpython-3.14.7-macos-aarch64-none/bin/python3.14",
+    "/private/tmp/adk-adopt-ver02-ja4w9bd0/venv"
+  ],
+  "cwd": "/private/tmp/adk-adopt-ver02-ja4w9bd0",
+  "started_at": "2026-09-06T11:58:09.373788+00:00",
+  "kit_revision": "cd39158df81457feafa4bd281d928f8fec7d9faf",
+  "timeout_seconds": 120,
+  "environment": {
+    "LANG": "C.UTF-8",
+    "LC_ALL": "C.UTF-8",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTHONOPTIMIZE": "0",
+    "GIT_OPTIONAL_LOCKS": "0",
+    "UV_OFFLINE": "1",
+    "UV_CACHE_DIR": "/private/tmp/adk-adopt-ver02-ja4w9bd0/uv-cache"
+  },
+  "runner_sha256": "57a1896506627d110a374b4c174c6aac6e6861a4490ed106949344f1e8c50f11",
+  "exit_code": 0,
+  "stdout": "",
+  "stderr": "Using CPython 3.14.7 interpreter at: /Users/topi/.local/share/uv/python/cpython-3.14.7-macos-aarch64-none/bin/python3.14\nCreating virtual environment at: venv\n",
+  "timed_out": false,
+  "finished_at": "2026-09-06T11:58:09.384966+00:00",
+  "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderr_sha256": "d30b4cf24b2257e9de8423f972ac9ca1de4eaf4a9647db660d4c12a87e28bdc5"
+}

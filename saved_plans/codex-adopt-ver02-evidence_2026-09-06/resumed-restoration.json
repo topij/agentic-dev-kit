@@ -1,0 +1,21 @@
+{
+  "observed_at": "2026-09-06T11:58:10.884942+00:00",
+  "kit_revision": "cd39158df81457feafa4bd281d928f8fec7d9faf",
+  "paths": [
+    {
+      "path": "/private/tmp/adk-adopt-ver02-ja4w9bd0/source-copy/.claude/agents/adversarial.md",
+      "sha256": "4d761e4a9bd284126a797a7cf163020d8151106ed07ac77b310ac0678cfa24f1",
+      "restored": true
+    },
+    {
+      "path": "/private/tmp/adk-adopt-ver02-ja4w9bd0/source-copy/scripts/tests/test_panel_prompt.py",
+      "sha256": "dd39d38f1208486cd9900230f3cba3bb4e60f52345616a78ae6dab71d3f21184",
+      "restored": true
+    },
+    {
+      "path": "/private/tmp/adk-adopt-ver02-ja4w9bd0/fixture-copy/scripts/devkit/tests/test_panel_prompt.py",
+      "sha256": "dd39d38f1208486cd9900230f3cba3bb4e60f52345616a78ae6dab71d3f21184",
+      "restored": true
+    }
+  ]
+}

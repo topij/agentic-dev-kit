@@ -1,0 +1,41 @@
+{
+  "argv": [
+    "/private/tmp/adk-adopt-ver02-ja4w9bd0/venv/bin/python",
+    "-m",
+    "pytest",
+    "--basetemp",
+    "/private/tmp/adk-adopt-ver02-ja4w9bd0/source-basetemp",
+    "-q",
+    "scripts/tests/test_panel_prompt.py::test_the_committed_lens_definitions_are_what_the_generator_renders"
+  ],
+  "cwd": "/private/tmp/adk-adopt-ver02-ja4w9bd0/source-copy",
+  "started_at": "2026-09-06T11:58:10.555116+00:00",
+  "kit_revision": "cd39158df81457feafa4bd281d928f8fec7d9faf",
+  "timeout_seconds": 120,
+  "environment": {
+    "LANG": "C.UTF-8",
+    "LC_ALL": "C.UTF-8",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTHONOPTIMIZE": "0",
+    "GIT_OPTIONAL_LOCKS": "0",
+    "DEVKIT_STATE_ROOT": "/private/tmp/adk-adopt-ver02-ja4w9bd0/source-state"
+  },
+  "runner_sha256": "57a1896506627d110a374b4c174c6aac6e6861a4490ed106949344f1e8c50f11",
+  "exit_code": 1,
+  "stdout": "F                                                                        [100%]\n=================================== FAILURES ===================================\n______ test_the_committed_lens_definitions_are_what_the_generator_renders ______\n\n    @pytest.mark.kit_repo_only(\".claude/agents\")\n    def test_the_committed_lens_definitions_are_what_the_generator_renders():\n        \"\"\"The kit's own `.claude/agents/<lens>.md` files are generated, and this is the\n        check that keeps them generated: an edit to `lens_compute.claude` or to a lens's\n        focus that does not regenerate them leaves a definition the runtime WILL apply\n        carrying the old compute \u2014 the silent-inherit shape one layer up. Kills: any\n        hand edit to either file, and a config change without regeneration.\"\"\"\n        pp = _load()\n        root = REPO_ROOT\n        config = pp.load_config(root / \"config\" / \"dev-model.yaml\")\n        lenses = [entry[\"name\"] for entry in pp.get(config, \"review.fallback_panel.lenses\", [])]\n        assert lenses, \"the shipped roster is empty\"\n        for lens in lenses:\n            committed = (root / \".claude\" / \"agents\" / f\"{lens}.md\").read_text(encoding=\"utf-8\")\n>           assert committed == pp.agent_definition(root, lens, \"claude\"), (\n                f\".claude/agents/{lens}.md differs from `panel_prompt.py --lens {lens} \"\n                \"--agent-definition`; regenerate it rather than editing it\"\n            )\nE           AssertionError: .claude/agents/adversarial.md differs from `panel_prompt.py --lens adversarial --agent-definition`; regenerate it rather than editing it\nE           assert '---\\nname: a...on sentinel\\n' == '---\\nname: a...ny finding.\\n'\nE             \nE             Skipping 1278 identical leading characters in diff, use -v to show\nE               y finding.\nE             + \nE             + VER-02 mutation sentinel\n\nscripts/tests/test_panel_prompt.py:1093: AssertionError\n=========================== short test summary info ============================\nFAILED scripts/tests/test_panel_prompt.py::test_the_committed_lens_definitions_are_what_the_generator_renders\n1 failed in 0.09s\n",
+  "stderr": "",
+  "timed_out": false,
+  "finished_at": "2026-09-06T11:58:10.871136+00:00",
+  "stdout_sha256": "ef0d80c1e52c0c17e3fec27bf9e6fbe4c3d5f5a032209a917bda1fc32facbfd4",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "input_revision": "ab0a6d62308b298478b2f85fc961f14348f35365",
+  "patched_test_sha256": "30ac592fcfb13237322e32cfbf1a495f22ab91105cf7accd7d0e3809c00a5c0f",
+  "resolved_environment": {
+    "executable": "/private/tmp/adk-adopt-ver02-ja4w9bd0/venv/bin/python",
+    "version": "3.14.7 (main, Aug  7 2026, 02:15:30) [Clang 22.1.3 ]",
+    "optimize": 0,
+    "pytest": "9.1.1",
+    "PyYAML": "6.0.3"
+  },
+  "continuation_runner_sha256": "8d1c3a95d97541caa7a2af69dfec79ca34b9a1ddface559ac700f1c503802d9c"
+}

@@ -1,0 +1,30 @@
+import datetime
+import hashlib
+import json
+import os
+import subprocess
+from pathlib import Path
+
+root = Path("/Users/topi/Coding/agentic-dev-kit")
+out = Path("/private/tmp/adk-adopt-ver02-ja4w9bd0")
+assert Path.cwd().resolve() == root
+metadata = {"argv": ["make", "test"], "cwd": str(root),
+            "revision": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+            "started_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "timeout_seconds": 1800,
+            "status_before": subprocess.check_output(["git", "status", "--short"], text=True),
+            "diff_sha256": hashlib.sha256(subprocess.check_output(["git", "diff", "HEAD"])).hexdigest()}
+with (out / "make-test.log").open("x") as log:
+    try:
+        p = subprocess.run(["make", "test"], cwd=root,
+                           env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+                           stdout=log, stderr=subprocess.STDOUT, timeout=1800)
+        metadata["exit_code"] = p.returncode
+    except subprocess.TimeoutExpired:
+        metadata["timed_out"] = True
+        metadata["exit_code"] = None
+metadata["finished_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+metadata["output_sha256"] = hashlib.sha256((out / "make-test.log").read_bytes()).hexdigest()
+(out / "make-test.json").write_text(json.dumps(metadata, indent=2) + "\n")
+print(json.dumps(metadata, indent=2))
+print("\n".join((out / "make-test.log").read_text().splitlines()[-45:]))

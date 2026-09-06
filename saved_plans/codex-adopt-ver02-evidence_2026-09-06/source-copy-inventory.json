@@ -1,0 +1,1589 @@
+{
+  ".agents": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".claude": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".coderabbit.yaml": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "184c9867beb956739a81a92a47ab4a5a918096d3fc8dbd92e3c1d9caa8b8000e"
+  },
+  ".codex": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".github": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".gitignore": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "141fbf1113c6776110cc027b723815a49d798d2f481942ae723555f4f375ec11"
+  },
+  "AGENTS.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "d787d2a85ae3bbe141393037a69f672ebe4d32990443b262d7d3e31106e80985"
+  },
+  "CHANGELOG.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "ee3ff28b9bbcd30565ee2deb9548d80d2da09abe59c8f9509618098351d88714"
+  },
+  "CLAUDE.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "d0793f6cb79d3a75880d876416e8ae6f6ef4fb31aa1208f06b859dd020e315c9"
+  },
+  "LICENSE": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "93367bdd0a38bba4ea001e6a2c2996c420872e4e1f3b9b084a8585d43bc8ed80"
+  },
+  "Makefile": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "f4fffc7b8a9fbaaad31147592329b3c420eafd33836626370f0d8a9f84272115"
+  },
+  "PRINCIPLES.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "9e0bdbe3ee736eafd93730f6a741295c2d654b8178ca97bef5549ad74589d294"
+  },
+  "README.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "a7cc3904d45f8d25780e4490d1f619fe5c2815d03130cc95514949f2dc6067c1"
+  },
+  "config": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "docs": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "init.sh": {
+    "mode": "0o755",
+    "kind": "file",
+    "sha256": "5cce07ddf5231d1944c883261f985d492530c2fa3472d992362a891aa5f17837"
+  },
+  "kit-manifest.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "dcc424bd6c5e90b01c1ef366677223eb1b831948479d7e49ee1f5414291af91f"
+  },
+  "ruff.toml": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "3f2ec8f1c5e78ff2ead16deb8ba08452c923ad44d7b027690702d10f61fdd95c"
+  },
+  "saved_plans": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "scripts": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".agents/skills": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".agents/skills/adopt": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".agents/skills/parallel": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".agents/skills/post-merge-systemize": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".agents/skills/pr-watch": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".agents/skills/session-start": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".agents/skills/triage-friction-log": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".agents/skills/upgrade": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".agents/skills/wrap-up": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".agents/skills/adopt/SKILL.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "d1a9a4ab0a0539b548b971d4f7b8e2d59d3e54e96e6be793c8e7e870bafae20c"
+  },
+  ".agents/skills/adopt/agents": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".agents/skills/adopt/agents/openai.yaml": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "14518f33e704d7918a596ef967a30b9d2850f21c6370cff0ebf772c644777d35"
+  },
+  ".agents/skills/parallel/SKILL.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "0cdefa4f13f7b77b342647badae9faf8f84d17a1619a3fdd54e024f7cd1fb997"
+  },
+  ".agents/skills/parallel/agents": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".agents/skills/parallel/agents/openai.yaml": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "90e96bcd33c5e750195184d934804934ced5ad91c6bd4714ebdb405196afa240"
+  },
+  ".agents/skills/post-merge-systemize/SKILL.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "8f3e81a3264136ea163f7910c09ba48fa5a10279c45157aacde7dc3cd0e9459e"
+  },
+  ".agents/skills/post-merge-systemize/agents": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".agents/skills/post-merge-systemize/agents/openai.yaml": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "4e47618bd52024e81067f1cff8c9c332c30ba6b9c5b6ecda9e2905da4ff91402"
+  },
+  ".agents/skills/pr-watch/SKILL.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "5ede8bdc11f41feb91ecc9a4cf4ca26a221b553e8d8839c949c4bde5964ca80e"
+  },
+  ".agents/skills/pr-watch/agents": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".agents/skills/pr-watch/agents/openai.yaml": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "16391436291fd57f5603b2d6813ce14cad009252e75a0eae8f7a23e48ec19b6c"
+  },
+  ".agents/skills/session-start/SKILL.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "5fc04e81b9bbfeb7f788b07b441f91a0fa900f5f179229f5b8d27d5818eba718"
+  },
+  ".agents/skills/session-start/agents": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".agents/skills/session-start/agents/openai.yaml": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "b1cc5405206257c06a3a1d4bbb4514014c92a4e6f5e339e679e572ad4918c6f1"
+  },
+  ".agents/skills/triage-friction-log/SKILL.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "c8cb0f541ae1aa635048efd2100c26f9525a9c286758688f4abea6d23f0f5838"
+  },
+  ".agents/skills/triage-friction-log/agents": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".agents/skills/triage-friction-log/agents/openai.yaml": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "927789478eaf83b4636b1cf72b9cd3050b554da2e36f08df4d3d1ae35fd4738b"
+  },
+  ".agents/skills/upgrade/SKILL.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "eee39cc801c57ac7ec36759a78aaffe1caca0893c94def6588f86493533b033d"
+  },
+  ".agents/skills/upgrade/agents": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".agents/skills/upgrade/agents/openai.yaml": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "44878ea4e4ee56bda70f2e67502893bb16acf05e56257caf63a25f5b715a877a"
+  },
+  ".agents/skills/wrap-up/SKILL.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "10263fbc2c78b055ec7e74ff60330b86ebd7c26ca0946245516f059335c71659"
+  },
+  ".agents/skills/wrap-up/agents": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".agents/skills/wrap-up/agents/openai.yaml": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "82340d9c59415468ddd5e8da7b065db9aa2a7969df60053a3464eca965c1b641"
+  },
+  ".claude/agents": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".claude/commands": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".claude/rules": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".claude/settings.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "7376f453039fc8af3c72525865ec583e1e3e2358cf9d3f295ed911e49cf11250"
+  },
+  ".claude/agents/adversarial.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "4d761e4a9bd284126a797a7cf163020d8151106ed07ac77b310ac0678cfa24f1"
+  },
+  ".claude/agents/correctness.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "cc24eb53096bd19f31c23ddadf169a79fcc89806278a27dad7bde3e1daa5f77b"
+  },
+  ".claude/commands/adopt.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "cec47dcd6724988e2ebe9b57e43b7f6939e5c186e7df26aca38831372ec060d0"
+  },
+  ".claude/commands/parallel.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "1cea5d8a6b5c570e3a1090827d606cf0e128ec8f9ec167821f0c0df25c5eba13"
+  },
+  ".claude/commands/post-merge-systemize.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "dba6d70df818a5fc9b80b93ab0a7a3f45309c48f80862c48946a354e01a01d64"
+  },
+  ".claude/commands/pr-watch.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "b9b47e4d667f2651b6997b6aaff0dfc95cb05ae8f66dbf38fad9a2ebc72c87df"
+  },
+  ".claude/commands/session-start.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "1cbbba9dfadc89058c227ae68374dcfe439f33c90d4f8500aa9edb51c039e506"
+  },
+  ".claude/commands/triage-friction-log.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "68c779feb0e28ce05f6594f9a964d42dec979088a7c8c7832186c3d28922e8fc"
+  },
+  ".claude/commands/upgrade.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "69699e0d79907cc70b0696442809ba2ff215243fca9fdaa8def1ded840146f27"
+  },
+  ".claude/commands/wrap-up.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "87be6243d98e046fef999fc3768080fe398e353b8c1cb068a5baaf4de7a82d2a"
+  },
+  ".claude/rules/safety-critical-changes.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "fc3bca756008da51567847c5ff30ea339ecbec0655622ce768c4bf926648ad5b"
+  },
+  ".codex/hooks.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "66979af482546118a359db5ec3ecd5559a4dfc757ad431c198a23c26e5a9b872"
+  },
+  ".github/workflows": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  ".github/workflows/test.yml": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "b33aaa29e85e15ec87261a3c9cc0ba367a6666d124175db85eee33b24aaf5a0b"
+  },
+  "config/claude-lane-settings.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "2dd313c0a0889235a72175d102356ad9cdc2ce02230164cb274162ae0f96260f"
+  },
+  "config/dev-model.yaml": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "45d6c14d080731c5cef80d74500eb8f5de1cc6f1fb9111c280afb3825617d21c"
+  },
+  "docs/AGENTS-sections.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "0a7a80d27b9b3c1592f1891b10392dcc1d5002ac31bd06ab5c0d8a1f1ca9a948"
+  },
+  "docs/CLAUDE-sections.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "92b6e4e137e2846901245e252bc6d4dd6a92478717b247f45115c495ff754d12"
+  },
+  "docs/adopter-forcing-function-memo_2026-08-07.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "377a6b6ac3f2e400c3fc07e8b836408cee73987121966b287e5ecff9dd162691"
+  },
+  "docs/adopter-phase3-memo_2026-08-08.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "9644710f8e9a5e00d78b8384c338fe471d8fe7e2baf81fef8fd729a8845d7177"
+  },
+  "docs/agentic-dev-kit": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "docs/autonomous-session-playbook.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "1ffbc0388163f5257c94e09bab760fe635f9b23c2480424f09d435bcfa605a3d"
+  },
+  "docs/friction-log-archive.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "8f3bffcf20f60ab86c1d6fe781146061465787d0899c4273999f3e8a9c107c17"
+  },
+  "docs/friction-log.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "3ca7d36c9b5f8cf595793947891fe903529eee36bfe822929ce40c4987d3a68a"
+  },
+  "docs/getting-started.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "d883c0fde36b37e0277f2e589bb4357a8f91205ce1f036cd366d94f428a4cc1a"
+  },
+  "docs/handoff-history.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "c8c75ab0395e76ce60a93a11df3b26dd2f9bce2a3a38373892b8f3d7bf7064b7"
+  },
+  "docs/handoff.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "550a1f587ea7080abdcdef024c3fb9637e9a6776f26400f113eba33b747bec35"
+  },
+  "docs/kit-convergence-plan.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "426d5d47ac98b0991fcba1b091c69d0348a61ab4816abd216b5b22b440f07cdc"
+  },
+  "docs/kit-friction-log-archive.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "79144bc50464741ddef4d3816f3641ecc12b2f79157ebdef23091ad91e1c998d"
+  },
+  "docs/kit-friction-log.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "cb636c8393540d737345bd44c355417459a04a3d34cc8cc40688443a09fd6355"
+  },
+  "docs/kit-handoff-history.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "e061f7c64847fce5207c734e48623db1554f776d9554ad54b1b81afbcf38ccde"
+  },
+  "docs/kit-handoff.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "cfd051cb6640e442c5ee1e8885e149dcff858ea7734e5c6c24b27c0c99f916e9"
+  },
+  "docs/parallel-dev.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "54a81ecb28882d56418068c5539e4ee0f8b385488ee7018f4912f3af29a247ba"
+  },
+  "docs/parallel-howto.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "302c5560bc1b8867170efe25fe058ff296f3e7af73a1bb288d6301d9a8173287"
+  },
+  "docs/templates": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "docs/agentic-dev-kit/adopting-into-a-linted-repo.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "c6c74e8cc3f80fe7ce6d88b34845e627a3800bc6c8cca10f57692fece4d16eab"
+  },
+  "docs/agentic-dev-kit/fallback-review-panel-evidence.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "645fcd50771351823ba1f3512bc483e404fd1a8337cc14bf9dd0333689640d3b"
+  },
+  "docs/agentic-dev-kit/fallback-review-panel.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "b2c35c612a13e4b19fdf1ea9a73f0e7604229d2eca3e1904014dd99478cdeb1e"
+  },
+  "docs/agentic-dev-kit/live-validation-evidence.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "4d9072247f215b3dd61883cf4a6ab11bb353a909fe9bb4569505670e92cb0f6b"
+  },
+  "docs/agentic-dev-kit/runtime-parity.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "cdf5a8a1fbd97decb25acb813bc1c7b753e4569e5b1280a4fdd4142e581f9efc"
+  },
+  "docs/agentic-dev-kit/safety-critical-changes.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "6dc6815ffb7fd89f00409dbd9ae620522214d0b97117ea8a0d09bf0d2344b365"
+  },
+  "docs/agentic-dev-kit/workflows": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "docs/agentic-dev-kit/workflows/adopt.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "b1f9a36d85e57f111f44ab46b0e3f7ccacd190864e149cc2d18481322f1c0bf5"
+  },
+  "docs/agentic-dev-kit/workflows/parallel-headless.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "8b0f2cb8b923449122721aa1d4d2f64c0babf4b4621aebd015cdacf68e8767bf"
+  },
+  "docs/agentic-dev-kit/workflows/parallel.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "6b1d4246ce89999a900e34a2986cb1d0047d738684f33c45ce82bb13c4f8689a"
+  },
+  "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "0995bc61338fd3c4919b74f1bdad72823bd4fc1224bd81a9dcfdb6faad40364b"
+  },
+  "docs/agentic-dev-kit/workflows/pr-watch.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "4618211f4b3055b3327ba174d180c0c6282d7e4c63d0605c962c7e16cd7d60f0"
+  },
+  "docs/agentic-dev-kit/workflows/session-start.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "f280ee4eb9e8aa37d277aaeb3806b34d4377b5afe149f8063ad25eb7e66d2a2a"
+  },
+  "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "af4b843d896063084139d77193e8435f761b979afd57cf396d5e47bbec14e3a7"
+  },
+  "docs/agentic-dev-kit/workflows/upgrade.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "2cad70fa094ebc01f78e835784b2f84ee9ffd6b56a42d3d039c5995e42d4bf37"
+  },
+  "docs/agentic-dev-kit/workflows/wrap-up.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "e88cf927424dfe861e34a0ca6661149c882058015f112f29dbd0d335b78368e7"
+  },
+  "docs/templates/AGENTS.md.tmpl": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "e3794b399331a16138e72c62ee74d7085bd6a5fe14e10e45e4c40ef91cf41a6b"
+  },
+  "docs/templates/CLAUDE.md.tmpl": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "e3195e5484d13f90122aa5ffacd9192e07b8445f5f0ab0cd44feced058fd23b3"
+  },
+  "docs/templates/friction-log-archive.md.tmpl": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "af4a138e4a5ebe5634c55e7e417cd6b9f362bf3a35182b033f72876cd88180cf"
+  },
+  "docs/templates/friction-log.md.tmpl": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "1e5fa714719cf147c03d03569e875e32a843c4b9f189025415d35dc2c326a062"
+  },
+  "docs/templates/handoff-history.md.tmpl": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "111cf71a4c9b2a296f4fcf5ea02c6516907710e5b4fe0a7b3074f444f862ae69"
+  },
+  "docs/templates/handoff.md.tmpl": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "1654465836a9e70a6e81d76208783e9a12d65343d1e9c3091f1d30c25a437ce7"
+  },
+  "saved_plans/capability-tier-calibration-design_2026-08-27.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "b4712615556f3ca389a44fe8c3d09fed8300eece8a1a8da5a90dd9954b6ccbef"
+  },
+  "saved_plans/capability-tier-calibration-live-validation_2026-08-27.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "b52890ba0a59125f6edb8a04bbeb9a696c7e311e89893cceda26e28d1f3ccafb"
+  },
+  "saved_plans/claude-bash-allow-grants-live-validation_2026-08-29.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "f3fd2aabb4ccce73f7d33448b07f975386d837b7f8c439011f59ca3f61ebbc98"
+  },
+  "saved_plans/claude-environment-capable-launcher-design_2026-08-27.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "61dfb9bf0ae3be0c86659b8d11a318c57676982cc447b970a5ebdd053027338e"
+  },
+  "saved_plans/claude-environment-capable-launcher-live-validation_2026-08-27.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "c109e76d4e95e53df49453fb3b8acfe7ff6d49def917697bf2216d2b9cb2a13d"
+  },
+  "saved_plans/claude-sessionstart-matcher-live-validation_2026-08-29.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "dbd1cf518af974cf3beb8f7789c44b954fc489f78e49e1cce8ae173f1dd7df8a"
+  },
+  "saved_plans/claude-writing-lane-approval-policy-design_2026-08-27.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "1beaf83e9f0195f195e0131b8ffee3eacbe693b3c46bef4d26a25855f328d792"
+  },
+  "saved_plans/claude-writing-lane-live-validation_2026-08-27.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "67e45ee3c6f5c348008e9e77c33be25ff205589334c4dfeec60ae6df2daad257"
+  },
+  "saved_plans/codex-environment-capable-launcher-design_2026-08-26.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "586328b3466220aaeb8cfe31b1b1cf1d85a3fc2c62f3123a0ddbba24137fb872"
+  },
+  "saved_plans/codex-environment-capable-launcher-live-validation_2026-08-26.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "2ae667926b9866308939b366d87edb94dea3a29c6b3fc2d8b4c474f2c9cc766d"
+  },
+  "saved_plans/codex-hooks-live-probe": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-hooks-live-validation_2026-08-23.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "3f449e25dff3baf0608c8dcd84d2ab3e4991e99c6674a92f68645f0bc21e70b9"
+  },
+  "saved_plans/codex-parallel-batch-design_2026-09-01.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "2442588d4167e71c2fec14d3ffe4388c5c673b1b291491dd5473b31cbcab3408"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-parallel-batch-live-validation_2026-09-01.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "757527ae4f9448d5b5e84ff499a28c68b303cbb9eafb5dfe5bcf5569f8ab0fa2"
+  },
+  "saved_plans/codex-parity-plan_2026-08-23.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "cfd5c5fa68dd0e8786881129e8c72251eb475cc13f862533e88c73e58910b569"
+  },
+  "saved_plans/codex-safety-doctrine-live-probe": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-safety-doctrine-live-validation_2026-08-24.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "6fd380d640ab23145678e9574a84727234f9854236a9d650146fdc21c62726a2"
+  },
+  "saved_plans/codex-writing-lane-design_2026-08-27.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "1763a07ead5f7fd4f180aeefd8b47b6ebaafb257af11d45b82a05ec286c7bd24"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-writing-lane-live-validation_2026-08-27.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "15fcbb94b8938aeaeea0d74bd495ad4a52993c8c2875c3adf485f198cdfef442"
+  },
+  "saved_plans/codex-writing-lane-live-validation_2026-08-30.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "0291fa2406268c3cb931abaeaee2023030d988957d4a6ace308047a9e1ae9bc5"
+  },
+  "saved_plans/cs-toolkit-adopter-pilot-readonly_2026-09-02.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "2647c6bf9e9a5b4c1a73ac572fa49ec65d86c1264797e0eb67a1345bef5b5aed"
+  },
+  "saved_plans/first-real-headless-lane-design_2026-08-28.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "547202428719b4d431f44507474206b7c7d98cac4ff8441a71802a4768db4cad"
+  },
+  "saved_plans/first-real-headless-lane-evidence_2026-08-28": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/first-real-headless-lane-live-validation_2026-08-28.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "d6069656408abe555f525a7833850123416648595d9105893f6e4e9c57b09f00"
+  },
+  "saved_plans/lane-permission-policy-evidence_2026-08-28": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/lane-permission-policy_2026-08-28.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "6ca35a34e7464813349f0bee62336f3ef5102d4af7e76a7e681a844d3a7794df"
+  },
+  "saved_plans/probe-bash-allow_2026-08-29.sh": {
+    "mode": "0o755",
+    "kind": "file",
+    "sha256": "7298972c943ada93005b5cd158afb781c8102f8f117552b1e9c65b929c8bf0be"
+  },
+  "saved_plans/review-process-learnings_2026-08-24.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "b52afbd64e9f2640f6239f93b359fcfc3fec164dd985d142c7b11023f6e027a4"
+  },
+  "saved_plans/codex-hooks-live-probe/.codex": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-hooks-live-probe/record_hook.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "d82fb84c2a55346cb582c503d7cb35ad6bfbb1ffa4fd1210d8e58906f6b26425"
+  },
+  "saved_plans/codex-hooks-live-probe/subdir": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-hooks-live-probe/.codex/hooks.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "5ab94c389419472efddece0cbe44a7fd4719e32046db041325079c9346f66c83"
+  },
+  "saved_plans/codex-hooks-live-probe/subdir/.gitkeep": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/bundle.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "3d574f7c0e68c169a593d3e82886604963e68c4280775a2808b39ca660b77b36"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/promotion.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "87ee987c63382c0a1a6f055ffeb32375eb31e781c84793070911aa329c2e6f1b"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/client-version.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "ca4fe30a68dd82c6a7af75eeb683f763cfb6554840590a9e345692269ae744f0"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/execution-source-digests.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "b90a9a859019f5c4a96303fe3b19018db3423eac172708ca4a1ccda90ab4f763"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/filesystem-readback.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "8d07c39063b7cb5d61ae7c037341f9111616b08e2132fd853529ebf66bb909a3"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/fixture": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/fixture-proof.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "a7dd5692909fd451461050edaf69e39a9987336266999ffdf981820775b34e3f"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/forge-readback.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "c30c49bbac557ff51e6c29c218ba023aaf1b5dbb29e1f857d2a87bfe9a1e1630"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/git-readback.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "c4a29b418103798adf4bc84350157de9f9d2ba1c3ec88ca43c70182ec0f835b7"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/reconciliation.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "d0eea5a439ec45fea4c977f5a9ec2d5cb3bd37e1cff5dad91e98309c00f8340f"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/reviews": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/source": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/source-digests.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "895b6a1a4c49cfb82035983b31676f8f3c8320c0e7e0c70f91389bd472f3fad9"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/source-proof.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "42554ad56787ad242d0bb1af3f3b18a1f4cabc52bef54efb81575bb4f7ec8297"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/fixture/config": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/fixture/config/dev-model.yaml": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "228eb2ff7d4ee0524b862867fbb23b1b9b92e5f1287ee30e037f73bce26821a1"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes/alpha": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes/beta": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes/alpha/descriptor.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "dc6d5c5fa06139c2d28c310b299af5b13fde9b4762a4ef02fafeca578c37a213"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes/alpha/final-message.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "ca3d3631a3188c90866d623c8266c21a488f20f1f643c02873824281dc7f07ab"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes/alpha/lane-output.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "c9e9523c9ce0d47d70d02830fa9febe62b6c1131c3ae6276ac8c8db808ae5bfb"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes/alpha/launch-attempt.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "256f8499b1284292e9eb5ab3c47308234a2a130a9087dcdea04b77c2075de69f"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes/alpha/launch-authority.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "c8e0cf786e98a831c0083f14846eb8cbf6feafbb249fcec8ca7601c4201a7726"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes/alpha/launcher-receipt.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "5f1df7ddca29b6b89af83e75da919c4e705492224ced991fbdd57dcb6683c71c"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes/alpha/merge-refusal.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "7e6bac4ced77961a68cd568bcdf4cc885746c6478ea086b514adbfa3d3d2e4f1"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes/alpha/review-receipt.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "99a986092773317ecb5cb856f65de495ee7dfd3091578fa869807028594278fc"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes/alpha/session-metadata.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "cd7144eb0743721ad099e46bebe62bb9789fff060624b7491ca445c6b9726d30"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes/alpha/state-root-marker.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "859fc0da899c61c3272f2bb4a907cbeb0cb35ae6dc19333fe884484f45ddc8e7"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes/alpha/task-prompt.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "f7d8c2f30cca7a4ac191ccf9322313204a8db1bad150f5274bd7cb31e6f000df"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes/beta/descriptor.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "60d9c11486418b0ec8015d2e28ad4b142eaf3d4eef363674ccaeabb216601371"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes/beta/final-message.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "d7eaef338c6d0cec6644ee524c423db289671b87696087d5558a7cbb0fbfab68"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes/beta/lane-output.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "9463c5b0e8de96005b6f98574ece35e01195a2626560dad3233b096db4545beb"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes/beta/launch-attempt.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "2b220665244ac11031fb5c18e636105e666cb765665c1de9c62614328a5138b8"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes/beta/launch-authority.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "fff7fbc2e1d42f8050e257c17310710d0190ec1f085b40a4b842e20d71fd77ff"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes/beta/launcher-receipt.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "d1d209efd71752e7a896c892146a81d045b657438d5eb5ef89353c4f08ad8e30"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes/beta/merge-refusal.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "5612c577176f0af7e1dd20a3a3342de185f10c84e3ca60606f50524604ebe7c9"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes/beta/review-receipt.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "b768359c7ad1a9369ef2e64327d760feb6a50a7c29300f9a0ae0b74887374908"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes/beta/session-metadata.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "95fbae93e1889b67ae354359a5d17b661def82c230a3442888082cd140c31386"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes/beta/state-root-marker.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "f98f8dcc5ee0a60f8b2b70dbe34cdfa940080a69475132e93d830ccb1a4300d9"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/lanes/beta/task-prompt.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "97d7ffcf7897d09f3140e17002cf4cd295b280ab49ce5578a7abda417b034458"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/reviews/alpha": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/reviews/beta": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/reviews/alpha/adversarial-prompt.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "f4539e7cba92226ead4adc05420bf245c5fb9e930f352d69c638264fb67b0437"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/reviews/alpha/adversarial-report.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "60721e47fabb80bf8c8dd75682e17e96d4c1ad94db760ff360060ee64d061aa5"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/reviews/alpha/adversarial-run.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "03b80ea2d61a81cfbf80cc2226441df8acc4ae031f6cd5789f514caaffef0c25"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/reviews/alpha/correctness-prompt.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "e90b78b8e283357b905d819acf9300ad1538b5f4e6d2a16e3d88259a851dc99c"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/reviews/alpha/correctness-report.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "13ac78cd9b97c41f53b6438111ac6dd63bc650474779c6b7f434df78f30c3c0c"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/reviews/alpha/correctness-run.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "b64abe9d0172b45dc1cd53122775be9f8579422b21964e0286c72ea649d82ae3"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/reviews/beta/adversarial-prompt.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "4fede5c71518d2244a5772ab6c91a44b3ce89fb484bd8bd623dc94b232204d06"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/reviews/beta/adversarial-report.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "79dba2b00b15a4cb552e9287c00351d3b699cfa291fd5c8fcd0ef130f39915d2"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/reviews/beta/adversarial-run.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "98d7241fe8397fc0dab754b3e5e0b7065f0116235052775a67baec83d6624d92"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/reviews/beta/correctness-prompt.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "fcd856e83b0f7d4d469f364250562f8ce517d17b0dbccdfe17e2c7a9f08ff9da"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/reviews/beta/correctness-report.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "ab3596e531b8d79495d3abcad6d2e26cf66258b750114eeca8497403dfad6a50"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/reviews/beta/correctness-run.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "1dd413fb24fa0da4cf3cc0fa615f0f51b15c042b6533a46d2ce1a02796c6328c"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/source/config": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/source/scripts": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/source/config/dev-model.yaml": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "7c626b397eb47d3162af78ed9b9288f9f4511c8180fab52e0b0c903cb7570710"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/source/scripts/dev_session.sh": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "f696372d912ba5f9ab9bbbbd3ea2a14689ea8c9fdda57e1c00aa5962d376012f"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/source/scripts/launch_lane.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "7787079163e9d678284db5df15311f059a519a61db6301980784864ab02ad9e6"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/source/scripts/lib": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/source/scripts/pr_watch.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "432fe654b1635a2b6ea45131e58c9d45d7c87d05dc52e721d6418193ba574b60"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/source/scripts/reconcile_sessions.sh": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "75d29491cf65b61d385bb7bbb1c2cd39b3f557bef05b1dfa4a049737e8937573"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/source/scripts/lib/kitconfig.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "4ab496661883d8f4ad590a6612a48b31f8cbf770283bb09794096149276634e6"
+  },
+  "saved_plans/codex-parallel-batch-evidence_2026-09-01/artifacts/source/scripts/lib/repo_root.sh": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "980cbf5596cea67033a5dd02d53630f2a92c24afd693ba7727d5fc50303ff555"
+  },
+  "saved_plans/codex-safety-doctrine-live-probe/AGENTS.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "dbd68157d0ef2747411b5365503e46d7f41bf4ed346a32d6750c7716de12ecd9"
+  },
+  "saved_plans/codex-safety-doctrine-live-probe/devkit-result.schema.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "0610d15ca6e985c630ce35b2013b70ea40fe6ddadda024fa90a7016c16a9cd7d"
+  },
+  "saved_plans/codex-safety-doctrine-live-probe/docs": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-safety-doctrine-live-probe/result.schema.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "f0e179b6b66a5d7421e600c98c9a7c931c958de7a8119f2e301186bba0b4688b"
+  },
+  "saved_plans/codex-safety-doctrine-live-probe/scripts": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-safety-doctrine-live-probe/docs/search-decoy.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "836af8af03c0533a9d9df3ef83d81e6006c12675c4611ebfff1cd6d704088693"
+  },
+  "saved_plans/codex-safety-doctrine-live-probe/docs/shared-safety-doctrine.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "d597b96e9aec16249c835ff6cc8555048c3278507cfb405c7918ddb15906194b"
+  },
+  "saved_plans/codex-safety-doctrine-live-probe/scripts/AGENTS.override.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "19149e291bbb269f39a3ef67578aa0f01583b3fc6d948068e1f3ed582e0d26a2"
+  },
+  "saved_plans/codex-safety-doctrine-live-probe/scripts/pr_watch.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "d6df62de4dee11d19dec7462df4abb57c9ab60817d458e86f93934a2a255834a"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/bundle.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "ead37a95d5321ecf294c7158388ac14b98f5314fb312cb33fb5d9a50d1182b0b"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/promotion.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "4207b3b6eafcdde6f89c46a2d6816512d8f6397eafa89c6e955014b615c9cab1"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/client-version.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "ca4fe30a68dd82c6a7af75eeb683f763cfb6554840590a9e345692269ae744f0"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/descriptor.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "d57a3eeaeef0dd01e208735e71b2c672f409b03ffec06347408864de396691cf"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/execution-source-digests.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "5d2696ba86165f940cf5ab4e5426bbd7f05ad75e2efe9e92ef432903e7ca78ef"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/filesystem-readback.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "ae6b54246ec52ac4dfd8079ea44a19499f5966887f5c0673084cf8e6df38dbf0"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/final-message.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "56c7748b3099da9282dde6c13e202b529740274577aa44ba4baaea8440051ca0"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/fixture": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/fixture-proof.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "a9be47ffe03aa319dc059fd9df1b210ef6d1ae684eeea460c021695d8e45e7ed"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/forge-readback.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "d6fb6505b19a522d9cc6718d7c09a4510b3e96bbf0ef554a8fa9f63d5910a6c6"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/git-readback.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "7767f7e2a40d17c61ec34ce205943a8414eb07810be28414bd50c35f68b47029"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/launcher-receipt.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "06be15394a823fedf6abee96cd38746f8a6c1f951abbef7a9b4f8f2b92e839cc"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/review-receipt.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "e71819c7a767c94adcee86c67f683045d7547af3a7a1f96792c8ae645f8c76b4"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/runtime-attestation.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "95271b822394dd24e9f5d2fdb2ae3c3b5a380a74f0c49bbefd71d8f59fd2deaa"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/source": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/source-digests.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "5859493e48386ebb12e382b3b743ee5b00c7c9d6a93c31c8dbed2faae93f7c19"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/source-proof.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "5c605d93a352f9cf1f2bf6f067d6abcff923cbcaf03101d60fa398f3334abc3c"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/fixture/config": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/fixture/config/dev-model.yaml": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "d4cb774d636655c2c572aed4341c773ae057d09f444494f4b54a56a513035393"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/source/config": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/source/scripts": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/source/config/dev-model.yaml": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "32d9e7b285a54438975c2aa2d9813adc5d017cef077b6df71564b1ae418a6d92"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/source/scripts/dev_session.sh": {
+    "mode": "0o755",
+    "kind": "file",
+    "sha256": "2ae9af83f182fa726bdc2102d65820242b873aa9d6749f9a450c4b1afd55e4ba"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/source/scripts/launch_lane.py": {
+    "mode": "0o755",
+    "kind": "file",
+    "sha256": "7787079163e9d678284db5df15311f059a519a61db6301980784864ab02ad9e6"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/source/scripts/lib": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/source/scripts/lib/kitconfig.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "4ab496661883d8f4ad590a6612a48b31f8cbf770283bb09794096149276634e6"
+  },
+  "saved_plans/codex-writing-lane-evidence_2026-08-30/artifacts/source/scripts/lib/repo_root.sh": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "980cbf5596cea67033a5dd02d53630f2a92c24afd693ba7727d5fc50303ff555"
+  },
+  "saved_plans/first-real-headless-lane-evidence_2026-08-28/00-pre-launch.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "d362e4eed6bbb4c4aa6d2ed628a1e5174caeeaa2306a80e8fa06ae76b8c05942"
+  },
+  "saved_plans/first-real-headless-lane-evidence_2026-08-28/01-receipt-observed.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "6b5e7a29731f9e2e0216d9bbdb510b96fd5e6507e7685846e1fa562736f2c65b"
+  },
+  "saved_plans/first-real-headless-lane-evidence_2026-08-28/02-descriptor.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "5a70c515c6840e6b900f05bb6016f42ec1755e127e2b1da7b418556203a50150"
+  },
+  "saved_plans/first-real-headless-lane-evidence_2026-08-28/03-authority-seal.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "94884de858e4cabf95bf90e786c9cd89915c911e6516a73e1f21f3816a5d0548"
+  },
+  "saved_plans/first-real-headless-lane-evidence_2026-08-28/04-attempt.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "8ef920843833d5f37b01742b87864abb316e73be3fb080caecf4170a5d5af98e"
+  },
+  "saved_plans/first-real-headless-lane-evidence_2026-08-28/05-lane-task-prompt.md": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "89a3d9ab4f930609f6554a684e9462581d0218be885a1ae2aa612e8586914119"
+  },
+  "saved_plans/first-real-headless-lane-evidence_2026-08-28/06-worktree-state-root-marker.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "39604c6482bf17aabdef8a5005a913dbb905f4efdd1609b6a4efaeab3716cd91"
+  },
+  "saved_plans/first-real-headless-lane-evidence_2026-08-28/07-receipt-terminal.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "08459b78cd3f9935f5c7671fba54214fe6cadbbd952da7442ba1db85213db15d"
+  },
+  "saved_plans/first-real-headless-lane-evidence_2026-08-28/08-final-message.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "170e8375c8fd39e1dfae9194e81d377ed46c1841e574defe5afe9d55012018bb"
+  },
+  "saved_plans/first-real-headless-lane-evidence_2026-08-28/09-dotclaude-scope-probe.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "19e3eb1506f2b893f5fd7f843eacbc9be9542a2b501c187edb54838617b9732b"
+  },
+  "saved_plans/first-real-headless-lane-evidence_2026-08-28/10-kit-doctor-grant-probe.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "cf018143dd788f274f5b63849538409a97e3fd6f6b369b30f388f2e08bbe92f6"
+  },
+  "saved_plans/lane-permission-policy-evidence_2026-08-28/escape-readback.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "e9c9505c0ff258051119fc4797440ab7f7d2290012f4147a67dd1310b29f32a9"
+  },
+  "saved_plans/lane-permission-policy-evidence_2026-08-28/profile-proposed.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "2dd313c0a0889235a72175d102356ad9cdc2ce02230164cb274162ae0f96260f"
+  },
+  "saved_plans/lane-permission-policy-evidence_2026-08-28/profile-shipped-at-probe-time.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "4ace4389fa06db1ad6336ff68d63e18c5cab97ccc2b2000d4c061d4616d6df9f"
+  },
+  "saved_plans/lane-permission-policy-evidence_2026-08-28/profile-widened.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "22ce2e6aefec4340265c5c19f7af59c1400ecc7663262be5c19e2991ebaa4770"
+  },
+  "saved_plans/lane-permission-policy-evidence_2026-08-28/prompt-A.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "c1bf1fc8e86f6d62ec34fd37eec19b7683467cf2547c03550cbdfe1f0e45d2d0"
+  },
+  "saved_plans/lane-permission-policy-evidence_2026-08-28/prompt-B.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "a6abe59fdb894270a27fcd27fa0521b58d2ca71b3a4b6dbf099b752a81de5d1c"
+  },
+  "saved_plans/lane-permission-policy-evidence_2026-08-28/prompt-C.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "a26a6c0692d23901e06f46dce3ec6bfb989ca1c64e727576ed5c04293d0083cb"
+  },
+  "saved_plans/lane-permission-policy-evidence_2026-08-28/prompt-D.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "dd16d504ca49c2b9eef612b90e1a71866a23689a2deda2c975ec6fa2962e6cd9"
+  },
+  "saved_plans/lane-permission-policy-evidence_2026-08-28/prompt-E.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "c60d0726dcec13a602c5c24859cabe339eedad47e0e3e7d608f0648cd1b05c17"
+  },
+  "saved_plans/lane-permission-policy-evidence_2026-08-28/prompt-F.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "bbcbac654eae3931744fc21e44dc24d0ff5be85d401c129f4971c9d6c46ca61f"
+  },
+  "saved_plans/lane-permission-policy-evidence_2026-08-28/prompt-G.txt": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "e13bac31c184f0b333aa30e86fa4f6e0cb09d6f1bf2c6a2ea663dbf89b5f4e6d"
+  },
+  "saved_plans/lane-permission-policy-evidence_2026-08-28/result-A.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "6a30b8f20a8adbf07ffb819e86fbb5628e4f80e3d64e58c0abfc72f11be10afe"
+  },
+  "saved_plans/lane-permission-policy-evidence_2026-08-28/result-B.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "8e38a37bf35535536ef8bbc95feda34647ccceefadd7962504ab5707878b6752"
+  },
+  "saved_plans/lane-permission-policy-evidence_2026-08-28/result-C.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "10330b96c9d4dd7a5d6ee942d1d6b11b666081c9ec05411ab4f10ec6a8a6fc36"
+  },
+  "saved_plans/lane-permission-policy-evidence_2026-08-28/result-D.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "45149f43bf41ead26170cf16718dbca4c07154d803f570ca6b9b532cb185d601"
+  },
+  "saved_plans/lane-permission-policy-evidence_2026-08-28/result-E.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "99f2048b26c49d1bb16740e067b4854cdac35b9745463c5a0bacea73743aafc0"
+  },
+  "saved_plans/lane-permission-policy-evidence_2026-08-28/result-F.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "453d8f4a1b00960bdf42e9b6479b23854db19d931638f6076524299280d8fd1d"
+  },
+  "saved_plans/lane-permission-policy-evidence_2026-08-28/result-G.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "8b90b9fc901c1e25d97959cd8c06c62efcecb2619107036d2a1c79d5197d681a"
+  },
+  "scripts/archive_plan_sessions.py": {
+    "mode": "0o755",
+    "kind": "file",
+    "sha256": "7d27ff31f4eaa7edef57e35a15f8745318cec41ca1228812207a9812f3b4e37b"
+  },
+  "scripts/check_doc_budget.py": {
+    "mode": "0o755",
+    "kind": "file",
+    "sha256": "013c1fa1e20763c9d99c8c2153b07723b1cda9a7b8c2dd9c2e78a6ed6a9d007c"
+  },
+  "scripts/check_memory_budget.py": {
+    "mode": "0o755",
+    "kind": "file",
+    "sha256": "5c385491289433b810b87167459015a3d23617accb5c317c0b539b879c1e1162"
+  },
+  "scripts/conftest.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "c2076c72a633fdd2d4e9991cf07ae2dda6c1747a1fe865a34a7fea013bd574c4"
+  },
+  "scripts/dev_session.sh": {
+    "mode": "0o755",
+    "kind": "file",
+    "sha256": "f696372d912ba5f9ab9bbbbd3ea2a14689ea8c9fdda57e1c00aa5962d376012f"
+  },
+  "scripts/hooks": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "scripts/kit_doctor.py": {
+    "mode": "0o755",
+    "kind": "file",
+    "sha256": "c0bdc94d3daec992a6c45a5671715f858b699f456a6f67e5bfeb679a28a0af7a"
+  },
+  "scripts/launch_lane.py": {
+    "mode": "0o755",
+    "kind": "file",
+    "sha256": "7787079163e9d678284db5df15311f059a519a61db6301980784864ab02ad9e6"
+  },
+  "scripts/lib": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "scripts/panel_prompt.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "f596c5f4bb4eb2d403ba0d2c9365808b01c771ff8d38b9b9d98cc563fd1bdca4"
+  },
+  "scripts/pr_watch.py": {
+    "mode": "0o755",
+    "kind": "file",
+    "sha256": "c84154a9d8019984d4a47627ec28ae9c3fe67181566bce835e1417fe7aa7eda9"
+  },
+  "scripts/reconcile_sessions.sh": {
+    "mode": "0o755",
+    "kind": "file",
+    "sha256": "75d29491cf65b61d385bb7bbb1c2cd39b3f557bef05b1dfa4a049737e8937573"
+  },
+  "scripts/run_installed_tests.py": {
+    "mode": "0o755",
+    "kind": "file",
+    "sha256": "4385056907334efbd44d7f67db3e10a302cf68433a18c666166b6b4d60c05235"
+  },
+  "scripts/tests": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "scripts/verify_live_validation_bundle.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "99dee623c937cd6374b978fd77ac3dbd582ab759bc79b26e91e697cfb329b494"
+  },
+  "scripts/hooks/pr_followup_hook.py": {
+    "mode": "0o755",
+    "kind": "file",
+    "sha256": "23bfa71eb732a12ac73976fff7c6b3baec28cb94e99e8ef9408b856d304dd879"
+  },
+  "scripts/hooks/pre-push": {
+    "mode": "0o755",
+    "kind": "file",
+    "sha256": "c469700ff61a1506fa5951b4d5ab3ac95f3213227d8838efa95eef0492516fba"
+  },
+  "scripts/lib/atomic_write.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "f9657f36f8bbcf3741382b616ae19be19cf516fc5fa4f36c53384579e96202b3"
+  },
+  "scripts/lib/devmodel_config.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "a4c29fb1808e0b3ec0a2ba80ffa97ba6c894f1a784463a5d126169542c300ef2"
+  },
+  "scripts/lib/kitconfig.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "4ab496661883d8f4ad590a6612a48b31f8cbf770283bb09794096149276634e6"
+  },
+  "scripts/lib/repo_root.sh": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "980cbf5596cea67033a5dd02d53630f2a92c24afd693ba7727d5fc50303ff555"
+  },
+  "scripts/lib/runtime_adapters.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "589a8e33508301d683467f94a1ac0cb7418d8c799fa0751813c7028f960f1afa"
+  },
+  "scripts/lib/state_paths": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "scripts/lib/state_paths/__init__.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "691a7df06a3bf9019b5faca8b8ebdb9d54463d231d492a632fd54c16cd51a2c6"
+  },
+  "scripts/lib/state_paths/paths.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "f54fd7d970402f8581f6c5080aa9614ce41cb2dafa2010c08406129731799397"
+  },
+  "scripts/lib/state_paths/repo_root.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "d9412f1fe395b944a86126bcc39f85d6838382b0fc29d68c8b29b965cd530b5a"
+  },
+  "scripts/lib/state_paths/resolver.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "e39fca241d6fbf28596ed3954f28a55e65831181cedb02c7c15e372895bb5bd2"
+  },
+  "scripts/lib/state_paths/tests": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "scripts/lib/state_paths/tests/__init__.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "scripts/lib/state_paths/tests/test_state_paths.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "b474703decdd2304d7460762fe5b5aa7fed9a81a9a422df61be0825b0c2ed88d"
+  },
+  "scripts/tests/_repo_layout.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "ab5c81c04b751f61a603f8b8a80f182b103f85417a58feb8abb725aebad7881b"
+  },
+  "scripts/tests/conftest.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "aa11d3ea18997d7beb676d64b84469d6d582888501a8ec40dbdc03f251af4057"
+  },
+  "scripts/tests/fixtures": {
+    "mode": "0o755",
+    "kind": "directory"
+  },
+  "scripts/tests/test_check_memory_budget.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "8ddd343a1d1ac2a583b0ad7fbbfd76f7a63016f5c7c1f8e8074002f70fe76b4b"
+  },
+  "scripts/tests/test_ci_workflow.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "4a26b00a2ddae874a76cdb0d85b3c9e14a77d727d959e45543647e928368b5f3"
+  },
+  "scripts/tests/test_init_sh.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "77a396100e48ff3706de3c4370bb6db3f26e680a0ea92e58b9c3750a44372fad"
+  },
+  "scripts/tests/test_kit_doctor.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "e077c276bebc8f2333ef7d037abe874b6e6255267070ef50af1916c66407f440"
+  },
+  "scripts/tests/test_kit_repo_only.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "e361de6f7c2de76a485307521556e16d185eadebf62907d09cd63d62dff75e4a"
+  },
+  "scripts/tests/test_kitconfig.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "74be2e158d39ea83c45ffed2108acb77d98bde21384ead95185e7bada4af3278"
+  },
+  "scripts/tests/test_lane_launcher.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "2fa95d6708194c57d5d4f4efb1e6f7a563633786f344d3478e3345c478ddbd3c"
+  },
+  "scripts/tests/test_live_validation_bundle.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "c84db1469e363628bbaac15cb0f7412e23a8240532ec003901ac2c039b4442c7"
+  },
+  "scripts/tests/test_mutation_gate.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "36f0ae3a031e7bd2e9ca6ece84668e37ff1b71ae2b665a2af08cfd8c7f06fa8b"
+  },
+  "scripts/tests/test_panel_prompt.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "dd39d38f1208486cd9900230f3cba3bb4e60f52345616a78ae6dab71d3f21184"
+  },
+  "scripts/tests/test_portability.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "4d73f3ee031f770e0770cd1361527fa1bf5d3e94db645a1d3ad09eaf0c1047fa"
+  },
+  "scripts/tests/test_pr_followup_hook.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "15fb412eb3023612988c09e44efa8c90afacb9e099822936fa2606567c888d07"
+  },
+  "scripts/tests/test_pr_watch.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "3fcf1c8b11338d1424bb81525df8ee16180924037567bd9e83b02ea28f5b9a1d"
+  },
+  "scripts/tests/test_reconcile_sessions.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "a12ddfbb4636376a07b3c047242a499226f47bc58a3668f1eb5a76fe1259b260"
+  },
+  "scripts/tests/test_repo_layout.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "3560dba495462b51d85d68d12dc779616436671558f30553e244b7ffdc76f163"
+  },
+  "scripts/tests/test_state_guard.py": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "915aae52d1b6fe38be757589d836c0f1198b79a4e20ba2a438aa2ef6fbf04bd9"
+  },
+  "scripts/tests/fixtures/codex_parallel_batch_expected.json": {
+    "mode": "0o644",
+    "kind": "file",
+    "sha256": "00307abae16c3d89d1ec79022f429f15c42359910a24fbf0b579538945de848b"
+  }
+}

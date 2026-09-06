@@ -1,0 +1,104 @@
+"""Continue VER-02 after its retained temporary-interpreter setup refusal."""
+
+import difflib
+import json
+from pathlib import Path
+
+import run_trial as trial
+
+
+def main():
+    trial.enter(trial.ROOT)
+    trial.publish('continuity-before-resume.json', trial.check_originals())
+    trial.require(trial.git(trial.ROOT, 'rev-parse', 'HEAD') == trial.PRE['kit_revision'], 'Kit revision changed')
+    copies = []
+    for label, relative in (('source', 'scripts/tests/test_panel_prompt.py'), ('fixture', 'scripts/devkit/tests/test_panel_prompt.py')):
+        copy = trial.OUT / (label + '-copy')
+        expected = json.loads((trial.OUT / (label + '-input-inventory.json')).read_text())
+        trial.require(trial.inventory(copy) == expected, 'Restored copy differs before resume: ' + label)
+        trial.require(trial.git(copy, 'rev-parse', 'HEAD') == trial.PRE[label + '_git']['head'], 'Copy revision changed')
+        trial.require(trial.git(copy, 'remote', '-v') == '', 'Copy gained a remote')
+        trial.require(trial.git(copy, 'ls-files', '--stage') == trial.PRE[label + '_git']['index'], 'Copy index changed')
+        copies.append((label, copy, copy / relative))
+    env = {**trial.ENV, 'UV_OFFLINE': '1', 'UV_CACHE_DIR': str(trial.OUT / 'uv-cache')}
+    interpreter = trial.OUT / 'venv/bin/python'
+    trial.require(not interpreter.parent.parent.exists(), 'Persistent environment already exists')
+    requested = '/Users/topi/.local/share/uv/python/cpython-3.14.7-macos-aarch64-none/bin/python3.14'
+    trial.checked('persistent-environment-create', ['uv', 'venv', '--offline', '--python', requested, str(interpreter.parent.parent)], trial.OUT, env)
+    trial.checked('persistent-environment-install', ['uv', 'pip', 'install', '--offline', '--python', str(interpreter), 'pytest', 'pyyaml'], trial.OUT, env)
+    probe = 'import importlib.metadata,json,sys; print(json.dumps({"executable":sys.executable,"version":sys.version,"optimize":sys.flags.optimize,"pytest":importlib.metadata.version("pytest"),"PyYAML":importlib.metadata.version("PyYAML")}))'
+    resolved = json.loads(trial.checked('persistent-environment-readback', [str(interpreter), '-c', probe], trial.OUT))
+    trial.require(resolved['executable'] == str(interpreter) and interpreter.is_file(), 'Persistent interpreter readback differs')
+    trial.publish('resolved-environment.json', resolved)
+    trial.publish('continuity-before-pytest.json', trial.check_originals())
+    patches = []
+    definition = None
+    definition_bytes = None
+    try:
+        for label, copy, test in copies:
+            record = json.loads((trial.OUT / (label + '-patch.json')).read_text())
+            original_bytes = test.read_bytes()
+            trial.require(trial.sha(original_bytes) == record['original_sha256'], 'Original copied test differs')
+            text = original_bytes.decode()
+            start = text.index('def ' + trial.NODE + '():')
+            end = text.find('\ndef ', start + 1)
+            if end < 0:
+                end = len(text)
+            body = text[start:end]
+            old = '    root = ENGINE.parent.parent\n'
+            trial.require(body.count(old) == 1, 'Named assignment is not unique')
+            patched = (text[:start] + body.replace(old, '    root = REPO_ROOT\n') + text[end:]).encode()
+            trial.require(trial.sha(patched) == record['patched_sha256'], 'Resumed patch differs from approved trial edit')
+            patches.append((copy, test, original_bytes))
+            trial.enter(copy)
+            test.write_bytes(patched)
+            trial.require(test.read_bytes() == patched, 'Copied-test patch did not land')
+        results = {}
+        for label, copy, test in copies:
+            runtime_env = {**trial.ENV, 'DEVKIT_STATE_ROOT': str(trial.OUT / (label + '-state'))}
+            argv = [str(interpreter), '-m', 'pytest', '--basetemp', str(trial.OUT / (label + '-basetemp')), '-q', str(test.relative_to(copy)) + '::' + trial.NODE]
+            result = trial.run(label + '-trial', argv, copy, runtime_env)
+            result.update(input_revision=trial.git(copy, 'rev-parse', 'HEAD'), patched_test_sha256=trial.sha(test.read_bytes()), resolved_environment=resolved,
+                          continuation_runner_sha256=trial.sha(Path(__file__).read_bytes()))
+            trial.publish(label + '-trial.json', result)
+            results[label] = result
+        source = results['source']
+        trial.require(source['exit_code'] == 0 and '1 passed' in source['stdout'] and 'skipped' not in source['stdout'], 'Source control did not pass without skip; mutation not authorized')
+        source_copy = copies[0][1]
+        definition = source_copy / '.claude/agents/adversarial.md'
+        definition_bytes = definition.read_bytes()
+        mutated = definition_bytes + b'\nVER-02 mutation sentinel\n'
+        trial.enter(source_copy)
+        definition.write_bytes(mutated)
+        trial.require(definition.read_bytes() == mutated, 'Definition mutation did not land')
+        trial.publish('mutation.json', {'path': str(definition), 'original_sha256': trial.sha(definition_bytes), 'mutated_sha256': trial.sha(mutated),
+                      'diff': ''.join(difflib.unified_diff(definition_bytes.decode().splitlines(True), mutated.decode().splitlines(True), fromfile='a/.claude/agents/adversarial.md', tofile='b/.claude/agents/adversarial.md'))})
+        mutation = trial.run('source-mutation', source['argv'], source_copy, {**trial.ENV, 'DEVKIT_STATE_ROOT': str(trial.OUT / 'source-state')})
+        mutation.update(input_revision=trial.git(source_copy, 'rev-parse', 'HEAD'), patched_test_sha256=trial.sha(copies[0][2].read_bytes()), resolved_environment=resolved,
+                        continuation_runner_sha256=trial.sha(Path(__file__).read_bytes()))
+        trial.publish('source-mutation.json', mutation)
+        killed = mutation['exit_code'] == 1 and 'AssertionError: .claude/agents/adversarial.md differs' in mutation['stdout'] and 'VER-02 mutation sentinel' in mutation['stdout']
+        fixture_reached = results['fixture']['exit_code'] == 1 and 'AssertionError: .claude/agents/adversarial.md differs' in results['fixture']['stdout']
+        trial.publish('trial-outcomes.json', {'observed_at': trial.now(), 'kit_revision': trial.PRE['kit_revision'], 'source_control_passed_without_skip': True,
+                      'fixture_reached_adversarial_equality': fixture_reached, 'source_mutation_rejected_by_equality': killed,
+                      'fixture_adoption_verified': False})
+        trial.require(killed, 'Mutation was not rejected at the expected equality assertion')
+    finally:
+        restored = {'observed_at': trial.now(), 'kit_revision': trial.PRE['kit_revision'], 'paths': []}
+        if definition is not None and definition_bytes is not None:
+            trial.enter(copies[0][1])
+            definition.write_bytes(definition_bytes)
+            trial.require(definition.read_bytes() == definition_bytes, 'Definition restoration differs')
+            restored['paths'].append({'path': str(definition), 'sha256': trial.sha(definition.read_bytes()), 'restored': True})
+        for copy, test, original_bytes in patches:
+            trial.enter(copy)
+            test.write_bytes(original_bytes)
+            trial.require(test.read_bytes() == original_bytes, 'Test restoration differs')
+            restored['paths'].append({'path': str(test), 'sha256': trial.sha(test.read_bytes()), 'restored': True})
+        trial.publish('resumed-restoration.json', restored)
+        trial.publish('continuity-after-resumed-trial.json', trial.check_originals())
+    print((trial.OUT / 'trial-outcomes.json').read_text())
+
+
+if __name__ == '__main__':
+    main()

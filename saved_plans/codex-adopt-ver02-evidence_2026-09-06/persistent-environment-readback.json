@@ -1,0 +1,26 @@
+{
+  "argv": [
+    "/private/tmp/adk-adopt-ver02-ja4w9bd0/venv/bin/python",
+    "-c",
+    "import importlib.metadata,json,sys; print(json.dumps({\"executable\":sys.executable,\"version\":sys.version,\"optimize\":sys.flags.optimize,\"pytest\":importlib.metadata.version(\"pytest\"),\"PyYAML\":importlib.metadata.version(\"PyYAML\")}))"
+  ],
+  "cwd": "/private/tmp/adk-adopt-ver02-ja4w9bd0",
+  "started_at": "2026-09-06T11:58:09.441621+00:00",
+  "kit_revision": "cd39158df81457feafa4bd281d928f8fec7d9faf",
+  "timeout_seconds": 120,
+  "environment": {
+    "LANG": "C.UTF-8",
+    "LC_ALL": "C.UTF-8",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTHONOPTIMIZE": "0",
+    "GIT_OPTIONAL_LOCKS": "0"
+  },
+  "runner_sha256": "57a1896506627d110a374b4c174c6aac6e6861a4490ed106949344f1e8c50f11",
+  "exit_code": 0,
+  "stdout": "{\"executable\": \"/private/tmp/adk-adopt-ver02-ja4w9bd0/venv/bin/python\", \"version\": \"3.14.7 (main, Aug  7 2026, 02:15:30) [Clang 22.1.3 ]\", \"optimize\": 0, \"pytest\": \"9.1.1\", \"PyYAML\": \"6.0.3\"}\n",
+  "stderr": "",
+  "timed_out": false,
+  "finished_at": "2026-09-06T11:58:09.484983+00:00",
+  "stdout_sha256": "3e234e4511d81bcaa1226142443ec9d283947d2f1e4a18e8f8b85c90be38b231",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

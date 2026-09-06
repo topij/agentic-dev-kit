@@ -1,0 +1,10 @@
+{
+  "observed_at": "2026-09-06T11:58:10.885736+00:00",
+  "kit_revision": "cd39158df81457feafa4bd281d928f8fec7d9faf",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "source_inventory_matches": true,
+  "source_git_matches": true,
+  "fixture_inventory_matches": true,
+  "fixture_git_matches": true,
+  "legacy_fixture_snapshot_matches": true
+}

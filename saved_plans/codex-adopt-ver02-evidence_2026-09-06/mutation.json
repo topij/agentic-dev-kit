@@ -1,0 +1,6 @@
+{
+  "path": "/private/tmp/adk-adopt-ver02-ja4w9bd0/source-copy/.claude/agents/adversarial.md",
+  "original_sha256": "4d761e4a9bd284126a797a7cf163020d8151106ed07ac77b310ac0678cfa24f1",
+  "mutated_sha256": "e0fb35d065c30f0e364fcfa27f23fee7fdc86bc8e3035e1ffa5afa571c95c71f",
+  "diff": "--- a/.claude/agents/adversarial.md\n+++ b/.claude/agents/adversarial.md\n@@ -20,3 +20,5 @@\n (`docs/agentic-dev-kit/fallback-review-panel.md`). You did NOT write the change under\n review. Your launch prompt carries the contract, the revision, the diff, and your\n focus; follow it exactly, and report what you reviewed before any finding.\n+\n+VER-02 mutation sentinel\n"
+}

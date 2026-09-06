@@ -115,7 +115,10 @@ is not an enduring approval precondition.
 
 ## Exact proposed decision: VER-02 — panel-test root repair trial
 
-**Prepared for operator decision; not executed.** This is a diagnostic patch in
+**Historical approved scope; execution recorded.** The operator approved this
+proposal after PR #688's merge. The [VER-02 trial record](codex-adopt-ver02-trial_2026-09-06.md)
+retains the execution and proposes VER-03 for a fresh decision. The approval is
+consumed; do not rerun this procedure under it. This is a diagnostic patch in
 private copies, not a landed kit repair. The question is whether correcting the
 known root calculation reaches the lens-content assertion, and what that assertion
 then reports about the initialized fixture.
@@ -192,7 +195,7 @@ fixture PR, adoption completion, Phase 5 exit, cs-toolkit replay or tracker writ
 | Fixture ownership | Approve only the `AGENTS.md` hunk in the retained patch, removing the marker while preserving policy, and confirm the retained policy reads as intended. |
 | Fixture lens definitions | Approve only the retained `adversarial.md` and `correctness.md` hunks after byte continuity; they update the engine path. Runtime discovery and applied compute need separate evidence. |
 | Runtime registration | Choose Codex project hooks, Claude cockpit settings, or both before preparing exact file payloads. File absence and initializer advice do not establish loaded registrations, trust or permission grants. |
-| Verification follow-up | VER-02 is the proposed next slice. Adapter source fixtures, narrative-skeleton applicability, initializer preconditions, launcher-policy and portability assertions remain outside it. A permanent test repair needs a fresh scope decision. |
+| Verification follow-up | The [VER-02 record](codex-adopt-ver02-trial_2026-09-06.md) retains the approved trial. VER-03 proposes the permanent root repair and layout regression for a fresh decision. Adapter source fixtures, narrative-skeleton applicability, initializer preconditions, launcher-policy and portability assertions remain outside it. |
 | Adoption completion | Requires the agreed fixture changes, resolved verification applicability and successful adoption-relevant checks; a passing flat source or warning-only doctor exit cannot substitute. |
 | Fixture PR | Needs its own remote/destination, change scope and review decision after fixture verification. This kit record PR does not create or authorize it. |
 | Phase 5 exit | Remains subject to the maintained plan's field-coverage and adopter-condition evidence and its own exact decision. |
@@ -208,7 +211,7 @@ immutable tuple and exit assertions; this assessment changes none of them.
 TRI-03/TRI-04/TRI-05, #608/#255 dispositions and the
 [parked initializer issue proposal](codex-adopt-initialization-evidence_2026-09-06/init-compatibility-issue.md)
 remain reserved. No tracker payload or friction graduation was executed. Phase 5 remains
-in progress; Phase 6 remains not started. The next decision is the exact VER-02 trial above; original-fixture
+in progress; Phase 6 remains not started. The next decision is the exact VER-03 scope in the trial record; original-fixture
 ownership, registration and lens handling remain independently scoped.
 
 ## Reconciliation verification and wrap-up

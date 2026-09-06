@@ -1,0 +1,32 @@
+{
+  "argv": [
+    "git",
+    "-c",
+    "core.hooksPath=/dev/null",
+    "clone",
+    "--no-local",
+    "--no-hardlinks",
+    "--no-checkout",
+    "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source",
+    "/private/tmp/adk-adopt-ver02-ja4w9bd0/source-copy"
+  ],
+  "cwd": "/private/tmp/adk-adopt-ver02-ja4w9bd0",
+  "started_at": "2026-09-06T11:56:17.164385+00:00",
+  "kit_revision": "cd39158df81457feafa4bd281d928f8fec7d9faf",
+  "timeout_seconds": 120,
+  "environment": {
+    "LANG": "C.UTF-8",
+    "LC_ALL": "C.UTF-8",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTHONOPTIMIZE": "0",
+    "GIT_OPTIONAL_LOCKS": "0"
+  },
+  "runner_sha256": "57a1896506627d110a374b4c174c6aac6e6861a4490ed106949344f1e8c50f11",
+  "exit_code": 0,
+  "stdout": "",
+  "stderr": "Cloning into '/private/tmp/adk-adopt-ver02-ja4w9bd0/source-copy'...\n",
+  "timed_out": false,
+  "finished_at": "2026-09-06T11:56:17.738111+00:00",
+  "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderr_sha256": "aa31adc64354aed78b940b18416218e23e448a8bec6c22f0bcb7de1923e30b0c"
+}

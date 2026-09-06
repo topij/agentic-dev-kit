@@ -1,0 +1,9 @@
+{
+  "argv": [
+    "python3",
+    "-"
+  ],
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "operation": "Read the original adversarial definition, PR #687 inspection.json lens_renders.adversarial.stdout and ownership-and-lenses.patch.json. Use difflib.unified_diff with a/.claude/agents/adversarial.md and b/.claude/agents/adversarial.md labels; require equality with that exact proposal section. Require fixture-trial.json to identify the adversarial equality assertion. Emit mismatch-comparison.json. No renderer or test invocation.",
+  "record_type": "operation description, not a verbatim stdin transcript"
+}

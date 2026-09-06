@@ -1,0 +1,28 @@
+{
+  "argv": [
+    "git",
+    "-C",
+    "/private/tmp/adk-adopt-ver02-ja4w9bd0/fixture-copy",
+    "read-tree",
+    "HEAD"
+  ],
+  "cwd": "/private/tmp/adk-adopt-ver02-ja4w9bd0/fixture-copy",
+  "started_at": "2026-09-06T11:56:18.098097+00:00",
+  "kit_revision": "cd39158df81457feafa4bd281d928f8fec7d9faf",
+  "timeout_seconds": 120,
+  "environment": {
+    "LANG": "C.UTF-8",
+    "LC_ALL": "C.UTF-8",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTHONOPTIMIZE": "0",
+    "GIT_OPTIONAL_LOCKS": "0"
+  },
+  "runner_sha256": "57a1896506627d110a374b4c174c6aac6e6861a4490ed106949344f1e8c50f11",
+  "exit_code": 0,
+  "stdout": "",
+  "stderr": "",
+  "timed_out": false,
+  "finished_at": "2026-09-06T11:56:18.110099+00:00",
+  "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

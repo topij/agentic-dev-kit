@@ -1,0 +1,8 @@
+{
+  "observed_at": "2026-09-06T11:58:10.884786+00:00",
+  "kit_revision": "cd39158df81457feafa4bd281d928f8fec7d9faf",
+  "source_control_passed_without_skip": true,
+  "fixture_reached_adversarial_equality": true,
+  "source_mutation_rejected_by_equality": true,
+  "fixture_adoption_verified": false
+}
