@@ -48,13 +48,19 @@ definitions; registration and verification follow-up stay separate.
   cs-toolkit replay keep separate exact decisions. TRI-03/TRI-04/TRI-05, #608/#255 and
   the parked initializer proposal remain reserved.
 
-▶ Next: In Claude or Codex, `/session-start` — then choose the runtime-registration
-scope for the fixture (Codex project hooks, Claude cockpit settings, or both) and
-prepare its exact payload, or scope the installed suite's remaining failures. Recheck
-continuity against the FIX-01 baseline before any approved execution. Do not repeat
-credited probes or exercises, or advance initialization, adoption completion, fixture
-PR, Phase 5 exit, cs-toolkit replay or reserved tracker dispositions without their own
-decisions.
+▶ Next: In Claude, `/session-start` — then take one of the two open Phase 5 blockers
+and prepare an exact decision for it: the fixture's runtime-registration scope (Codex
+project hooks, Claude cockpit settings, or both) with both exact payloads drafted, or a
+bounded assessment of the installed suite's initializer, launcher-policy and portability
+failures in PR #686's retained terminal log, adding occurrences to #534 rather than
+re-filing. Recheck continuity against
+`saved_plans/adopt-fix01-evidence_2026-09-06/fixture-inventory-after-fix01.json` — the
+VER-02/VER-03 inventory is superseded and a mismatch against it is not drift. Draft
+registration payloads in Claude but do not state whether Codex loaded them: `/hooks` in
+a Codex session is the only authority on that, so park that confirmation and anything
+resting on live Codex behaviour for one batched Codex session. Do not repeat credited
+probes or exercises, or advance initialization, adoption completion, fixture PR, Phase 5
+exit, cs-toolkit replay or reserved tracker dispositions without their own decisions.
 
 ______________________________________________________________________
 

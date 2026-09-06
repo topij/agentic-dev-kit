@@ -23,12 +23,15 @@ commit was made in the fixture, and no initializer ran.
 2026-09-06 UTC listed, outside `saved_plans` and the four narrative records named by
 `paths.handoff`, `paths.handoff_history`, `paths.friction_log` and
 `paths.friction_log_archive`, `docs/agentic-dev-kit/workflows/adopt.md`,
-`kit-manifest.json` and `scripts/tests/test_panel_prompt.py`. Naming the four keys
-rather than saying "narrative" is deliberate: a review round read the shorter phrase as
-covering the handoff alone and reported the friction log as an omission from the list. The landed VER-03 repair changed the test, not the
-renderer: `scripts/panel_prompt.py`, its `config/dev-model.yaml` lens keys and the kit's
-own `.claude/agents/` definitions are unchanged across that range. The retained diff was
-therefore current against the kit as well as against the fixture.
+`kit-manifest.json` and `scripts/tests/test_panel_prompt.py`. The landed VER-03 repair
+changed the test, not the renderer: `scripts/panel_prompt.py`, its
+`config/dev-model.yaml` lens keys and the kit's own `.claude/agents/` definitions are
+unchanged across that range. The retained diff was therefore current against the kit as
+well as against the fixture.
+
+Naming those four keys rather than saying "narrative" is deliberate: a review round read
+the shorter phrase as covering the handoff alone, and reported the friction log as an
+omission from the list.
 
 The diff was also shown to be *complete* rather than merely applicable. Applying it to
 copies of the three fixture files under the session scratch directory produced
