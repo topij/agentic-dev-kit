@@ -23,7 +23,8 @@ compares the fixture's working-tree status against the VER-02 preflight and find
 exactly one new line, ` M AGENTS.md`. The other FIX-01 files produce none, because
 `.claude/agents/adversarial.md` and `.claude/agents/correctness.md` were already
 untracked (`??`) before FIX-01 and editing an untracked file does not change its status
-line. The first draft of this check asserted every one of them would appear and failed;
+line. The first draft of this check asserted that each approved path would gain a
+status line, and failed on that;
 the assertion now derives the expected set from which approved paths were already
 untracked, rather than assuming.
 
