@@ -32,7 +32,8 @@ decisions and swept; the adopt-continuation thread is unchanged and still next.
   run's `TRI-03`/`TRI-04`/`TRI-05`. The 2026-09-06 graduation marker records the mapping
   and how it was established; read it before quoting a reserved id from an older block.
   `#608`/`#255` remain reserved.
-- Swept by PR #694, merged; its graduation marker is the committed approval record.
+- Swept by PR #694, merged on 2026-09-06 as `991ad16e7a2237e5440695c78573592f1b87964e`;
+  its graduation marker is the committed approval record.
   Review was the fallback panel — CodeRabbit's auto reviews are disabled, treated as an
   outage rather than a waiver. Its adversarial lens found that the marker overstated
   `#393` as recording both the 2026-09-01 entry and its recurrence when only the
@@ -47,9 +48,10 @@ decisions and swept; the adopt-continuation thread is unchanged and still next.
   for the review-fix round this session actually needed; #696, a graduation marker
   asserting tracker state it never verified.
 - **What the sweep could not reach.** The parked entries are a deliberate decision, and
-  the accumulated graduation markers hold most of the file. `triage-friction-log` can
-  reduce neither, so another sweep is not the remedy; whether marker blocks belong in
-  this file at all is `#224`'s territory and needs a decision.
+  the graduation markers accumulate in the same file. `triage-friction-log` can reduce
+  neither, so another sweep is not the remedy; whether marker blocks belong in this file
+  at all is `#224`'s territory and needs a decision. PR #694's review disposition
+  carries this session's stamped figures.
 
 ▶ Next: In Claude, `/session-start` — the adopt-continuation thread below is unchanged
 and still the live work; this session touched only the friction log. Note that #693 now
