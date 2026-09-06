@@ -29,9 +29,9 @@ changed the test, not the renderer: `scripts/panel_prompt.py`, its
 unchanged across that range. The retained diff was therefore current against the kit as
 well as against the fixture.
 
-Naming those four keys rather than saying "narrative" is deliberate: a review round read
-the shorter phrase as covering the handoff alone, and reported the friction log as an
-omission from the list.
+Naming those four `paths.*` keys rather than saying "narrative" is deliberate: a review
+round read the shorter phrase as covering the handoff alone, and reported the friction
+log as an omission from the list.
 
 The diff was also shown to be *complete* rather than merely applicable. Applying it to
 copies of the three fixture files under the session scratch directory produced
