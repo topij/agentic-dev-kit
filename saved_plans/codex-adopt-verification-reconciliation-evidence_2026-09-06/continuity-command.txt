@@ -1,0 +1,51 @@
+python3 - <<'PY'
+from pathlib import Path
+import hashlib,json,os,subprocess,datetime
+ROOT=Path('/Users/topi/Coding/agentic-dev-kit')
+FIXTURE=Path('/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture')
+SOURCE=Path('/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source')
+assert Path.cwd().resolve()==ROOT
+
+def git(p,*a):
+    return subprocess.check_output(['git','-C',str(p),*a],env={**os.environ,'GIT_OPTIONAL_LOCKS':'0'},text=True).strip()
+
+def sha(b): return hashlib.sha256(b).hexdigest()
+
+def snap():
+    paths=[p for p in FIXTURE.rglob('*') if '.git' not in p.relative_to(FIXTURE).parts]
+    paths += [FIXTURE/'.git/config',FIXTURE/'.git/hooks/pre-push']
+    return {str(p.relative_to(FIXTURE)):sha(p.read_bytes()) for p in sorted(paths) if p.is_file()}
+
+before=snap()
+BASE='08ac687f4ae14218a3861c6b8b143d8b86c4e3c2'
+SRC='ab0a6d62308b298478b2f85fc961f14348f35365'
+assert git(FIXTURE,'rev-parse','HEAD')==BASE
+assert git(FIXTURE,'symbolic-ref','--short','HEAD')=='chore/adopt-agentic-dev-kit'
+assert git(FIXTURE,'remote','-v')==''
+assert git(SOURCE,'rev-parse','HEAD')==SRC
+assert git(SOURCE,'status','--porcelain')==''
+OLD=ROOT/'saved_plans/codex-adopt-field-evidence_2026-09-05'
+INIT=ROOT/'saved_plans/codex-adopt-initialization-evidence_2026-09-06'
+REVIEW=ROOT/'saved_plans/codex-adopt-completion-review-evidence_2026-09-06'
+for rel,digest in json.loads((INIT/'sha256.json').read_text()).items():
+    assert sha((INIT/rel).read_bytes())==digest,rel
+for row in json.loads((OLD/'copy-ledger.json').read_text()):
+    if row['action']=='copied': assert sha((FIXTURE/row['destination']).read_bytes())==row['sha256'],row
+for rel,original in json.loads((OLD/'fixture-inputs.json').read_text()).items():
+    if rel not in ('config/dev-model.yaml','.gitignore'): assert (FIXTURE/rel).read_text()==original,rel
+assert (FIXTURE/'config/dev-model.yaml').read_bytes()==(INIT/'config-after-init.yaml').read_bytes()
+assert (FIXTURE/'kit-manifest.json').read_bytes()==(OLD/'install-baseline.json').read_bytes()
+previous=json.loads((REVIEW/'inspection.json').read_text())
+assert sha(json.dumps(before,sort_keys=True).encode())==previous['fixture_snapshot_sha256']
+raw=json.loads((INIT/'fixture-verification-output.json').read_text())
+assert sha(raw['output'].encode())==raw['output_sha256']
+retained={str(p.relative_to(ROOT)):sha(p.read_bytes()) for directory in (OLD,INIT,REVIEW) for p in directory.iterdir() if p.is_file()}
+after=snap()
+assert before==after
+result={'command':'python3 (continuity audit recorded in continuity-command.txt)','cwd':str(ROOT),'observed_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'kit_revision':git(ROOT,'rev-parse','HEAD'),'fixture':str(FIXTURE),'fixture_revision':BASE,'installed_source':SRC,'comparison_source':str(SOURCE),'checks':{'fixture_branch_and_no_remote':True,'comparison_source_revision_and_status':True,'initialization_evidence_hashes':True,'copy_ledger':True,'preserved_inputs_except_recorded_config_and_ignore_changes':True,'post_init_config':True,'install_baseline':True,'snapshot_matches_PR687_inspection':True,'fixture_files_before_after_equal':True,'original_terminal_log_digest':True},'fixture_snapshot_sha256':sha(json.dumps(before,sort_keys=True).encode()),'retained_input_hashes':retained,'absent_registration_paths':[p for p in ('.codex/config.toml','.codex/hooks.json','.claude/settings.json') if not (FIXTURE/p).exists()]}
+assert Path.cwd().resolve()==ROOT
+out=ROOT/'saved_plans/codex-adopt-verification-reconciliation-evidence_2026-09-06'
+out.mkdir(exist_ok=False)
+(out/'continuity.json').write_text(json.dumps(result,indent=2)+'\n')
+print(json.dumps({k:v for k,v in result.items() if k!='retained_input_hashes'},indent=2))
+PY

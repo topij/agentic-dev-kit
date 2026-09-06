@@ -14,10 +14,45 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-06 — adopt continuation reviewed; VER-01 diagnostic proposed
-and the maintained sprint status updated without advancing completion.
+Last updated: 2026-09-06 — VER-01 reconciled with retained independent probes;
+VER-02 root repair trial prepared for an exact decision.
 
-## Latest session — 2026-09-06 (adopt continuation review, in Codex)
+## Latest session — 2026-09-06 (adopt verification reconciliation, in Codex)
+
+**Theme —** Credit the retained diagnostic outcomes and prepare the next bounded
+decision without repeating the field exercises.
+
+- The [continuation review](../saved_plans/codex-adopt-completion-review_2026-09-06.md#ver-01-reconciliation--2026-09-06)
+  reconciles VER-01 with PR #687's independent source/fixture probes. It separates
+  their demonstrated path/ownership failures from missing historical telemetry and
+  the unresolved adoption-relevant verification obligation.
+- The exact VER-02 proposal trials the panel test's existing repository-root helper
+  in disposable copies and checks that the lens-content assertion is reached. The
+  proposal remains unexecuted; it does not change the fixture or initialize it again.
+- `python3 -` using the retained continuity audit program in
+  `/Users/topi/Coding/agentic-dev-kit` at
+  `61776212a2694108c5dfd8c2640c8b8ef08a40f4` on 2026-09-06 UTC completed its
+  assertions against PR #687's fixture snapshot and the retained source/config/
+  baseline evidence. The [result](../saved_plans/codex-adopt-verification-reconciliation-evidence_2026-09-06/continuity.json)
+  records the read's boundaries; continuity must be rechecked before execution.
+- Kit `make test` evidence and its verification limits are retained in the
+  continuation review; subsequent checks and independent review belong to this
+  wrap-up PR at its reviewed head.
+- The maintained [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md)
+  retains Phase 5 in progress and Phase 6 not started. Ownership, registration,
+  lens definitions, verification, adoption completion, fixture PR, Phase 5 exit
+  and cs-toolkit replay retain separate exact decisions.
+- TRI-03/TRI-04/TRI-05, #608/#255 dispositions and the parked initializer issue
+  proposal remain reserved. No tracker or friction-graduation action was taken.
+
+▶ Next: `$session-start` — follow the maintained Phase 5 reconciliation and decide
+VER-02 in `saved_plans/codex-adopt-completion-review_2026-09-06.md`. Before any approved
+trial, recheck the bound source and original-fixture continuity. Preserve the separate
+fixture, initialization, adoption-completion, PR, exit, replay and tracker decisions.
+
+______________________________________________________________________
+
+## Session — 2026-09-06 (adopt continuation review, in Codex)
 
 **Theme —** Review PR #686's remaining fixture decisions and select a bounded
 diagnostic without repeating credited exercises.
