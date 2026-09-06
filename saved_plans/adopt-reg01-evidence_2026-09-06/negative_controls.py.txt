@@ -1,0 +1,67 @@
+"""Negative controls: does the doctor actually FAIL these two checks when the
+payload is wrong, or are the green lines unconditional?"""
+from pathlib import Path
+import datetime, hashlib, json, os, shutil, subprocess, sys
+
+SP = Path(__file__).resolve().parent
+SCRATCH = Path((SP / 'SCRATCH_REG01').read_text().strip())
+FIXTURE = Path('/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture')
+MANIFEST = Path('/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source/kit-manifest.json')
+PAY = SP / 'payloads'
+assert Path.cwd() == Path('/Users/topi/Coding/agentic-dev-kit'), Path.cwd()
+
+claude = json.loads((PAY / 'claude-settings.json').read_text())
+codex = json.loads((PAY / 'codex-hooks.json').read_text())
+
+cases = {}
+
+# NC-1 (#606): the kit's OWN default allow entry, which names `scripts/` — the
+# path this adopter does not have, because it vendored under scripts/devkit.
+nc1 = json.loads(json.dumps(claude))
+nc1['permissions']['allow'] = [
+    r for r in nc1['permissions']['allow'] if 'pr_watch' not in r
+] + ['Bash(uv run scripts/pr_watch.py:*)']
+cases['nc1-wrong-engine-path-in-allow'] = {'.claude/settings.json': json.dumps(nc1, indent=2) + '\n'}
+
+# NC-2: an altered Codex command string (a different but equivalent shell
+# spelling) must lose its lifecycle verdict, not keep it.
+nc2 = json.loads(json.dumps(codex))
+grp = nc2['hooks']['PostToolUse'][0]['hooks'][0]
+grp['command'] = grp['command'].replace('exec python3', 'python3')
+cases['nc2-altered-codex-command'] = {
+    '.codex/hooks.json': json.dumps(nc2, indent=2) + '\n',
+    '.codex/config.toml': (PAY / 'codex-config.toml').read_text(),
+}
+
+# NC-3: the canonical Codex command under the WRONG timeout.
+nc3 = json.loads(json.dumps(codex))
+nc3['hooks']['SessionStart'][0]['hooks'][0]['timeout'] = 10
+cases['nc3-wrong-codex-timeout'] = {
+    '.codex/hooks.json': json.dumps(nc3, indent=2) + '\n',
+    '.codex/config.toml': (PAY / 'codex-config.toml').read_text(),
+}
+
+out = {'observed_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+       'kit_revision': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+       'cases': {}}
+for name, files in cases.items():
+    root = SCRATCH / name
+    if root.exists():
+        shutil.rmtree(root)
+    shutil.copytree(FIXTURE, root, symlinks=True)
+    for rel, text in files.items():
+        dest = root / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(text)
+    proc = subprocess.run(
+        [sys.executable, str(root / 'scripts/devkit/kit_doctor.py'),
+         '--root', str(root), '--manifest', str(MANIFEST)],
+        cwd=str(root), text=True, capture_output=True)
+    out['cases'][name] = {'root': str(root), 'exit_code': proc.returncode,
+                          'stdout': proc.stdout, 'stderr': proc.stderr}
+    print(f'===== {name}  exit={proc.returncode} =====')
+    print(proc.stdout)
+    if proc.stderr:
+        print('STDERR:', proc.stderr)
+
+(SP / 'negative-controls.json').write_text(json.dumps(out, indent=2) + '\n')

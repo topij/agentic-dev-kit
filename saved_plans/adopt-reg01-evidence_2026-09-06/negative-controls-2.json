@@ -1,0 +1,24 @@
+{
+  "observed_at": "2026-09-06T19:09:24.318900+00:00",
+  "kit_revision": "a4419dcd541f25162971615444aa995bc0dfb474",
+  "cases": {
+    "nc4-hooks-json-without-config-toml": {
+      "root": "/private/tmp/adk-reg01-df47497e/nc4-hooks-json-without-config-toml",
+      "exit_code": 0,
+      "stdout": "kit-doctor \u2014 installation report\n\n  \u2713 config schema: v2\n  \u2713 paths.engines: scripts/devkit\n  \u2713 pre-push hook: installed\n  \u00b7 .claude/settings.json [claude]: not present \u2014 no registration on this runtime\n  \u2713 .codex/hooks.json [codex]: scripts/devkit/check_doc_budget.py resolves\n  \u2713 .codex/hooks.json [codex]: scripts/devkit/hooks/pr_followup_hook.py resolves\n  \u2713 .codex/hooks.json [codex]: check_doc_budget.py canonical lifecycle form verified\n  \u2713 .codex/hooks.json [codex]: pr_followup_hook.py canonical lifecycle form verified\n    (registrations are hand-written \u2014 ./init.sh prints both blocks; `/hooks` in a session is the authority on what loaded)\n  \u2713 .claude/agents/adversarial.md [claude lens=adversarial]: matches the running doctor's expected output\n  \u2713 .claude/agents/correctness.md [claude lens=correctness]: matches the running doctor's expected output\n  \u2713 ROADMAP.md: in use\n  \u2713 notes/friction.md: in use\n  \u2713 AGENTS.md: in use\n  \u2713 CLAUDE.md: in use\n\n  files: 62 unchanged, 0 differ, 0 missing, 0 unknown\n  \u2713 intact for this adoption \u2014 full install, nothing declined\n  baseline: installed from kit ab0a6d62308b\n",
+      "stderr": ""
+    },
+    "nc5-features-hooks-false": {
+      "root": "/private/tmp/adk-reg01-df47497e/nc5-features-hooks-false",
+      "exit_code": 1,
+      "stdout": "kit-doctor \u2014 installation report\n\n  \u2713 config schema: v2\n  \u2713 paths.engines: scripts/devkit\n  \u2713 pre-push hook: installed\n  \u00b7 .claude/settings.json [claude]: not present \u2014 no registration on this runtime\n  \u2713 .codex/hooks.json [codex]: scripts/devkit/check_doc_budget.py resolves\n  \u2713 .codex/hooks.json [codex]: scripts/devkit/hooks/pr_followup_hook.py resolves\n  \u2713 .codex/hooks.json [codex]: check_doc_budget.py canonical lifecycle form verified\n  \u2713 .codex/hooks.json [codex]: pr_followup_hook.py canonical lifecycle form verified\n  \u2717 .codex/config.toml [codex]: Codex lifecycle hooks are disabled by the project config \u2014 lifecycle wiring does not match\n    (registrations are hand-written \u2014 ./init.sh prints both blocks; `/hooks` in a session is the authority on what loaded)\n  \u2713 .claude/agents/adversarial.md [claude lens=adversarial]: matches the running doctor's expected output\n  \u2713 .claude/agents/correctness.md [claude lens=correctness]: matches the running doctor's expected output\n  \u2713 ROADMAP.md: in use\n  \u2713 notes/friction.md: in use\n  \u2713 AGENTS.md: in use\n  \u2713 CLAUDE.md: in use\n\n  files: 62 unchanged, 0 differ, 0 missing, 0 unknown\n  \u2713 intact for this adoption \u2014 full install, nothing declined\n  baseline: installed from kit ab0a6d62308b\n",
+      "stderr": ""
+    },
+    "nc6-deprecated-alias-false": {
+      "root": "/private/tmp/adk-reg01-df47497e/nc6-deprecated-alias-false",
+      "exit_code": 1,
+      "stdout": "kit-doctor \u2014 installation report\n\n  \u2713 config schema: v2\n  \u2713 paths.engines: scripts/devkit\n  \u2713 pre-push hook: installed\n  \u00b7 .claude/settings.json [claude]: not present \u2014 no registration on this runtime\n  \u2713 .codex/hooks.json [codex]: scripts/devkit/check_doc_budget.py resolves\n  \u2713 .codex/hooks.json [codex]: scripts/devkit/hooks/pr_followup_hook.py resolves\n  \u2713 .codex/hooks.json [codex]: check_doc_budget.py canonical lifecycle form verified\n  \u2713 .codex/hooks.json [codex]: pr_followup_hook.py canonical lifecycle form verified\n  \u2717 .codex/config.toml [codex]: Codex lifecycle hooks are disabled by the project config \u2014 lifecycle wiring does not match\n    (registrations are hand-written \u2014 ./init.sh prints both blocks; `/hooks` in a session is the authority on what loaded)\n  \u2713 .claude/agents/adversarial.md [claude lens=adversarial]: matches the running doctor's expected output\n  \u2713 .claude/agents/correctness.md [claude lens=correctness]: matches the running doctor's expected output\n  \u2713 ROADMAP.md: in use\n  \u2713 notes/friction.md: in use\n  \u2713 AGENTS.md: in use\n  \u2713 CLAUDE.md: in use\n\n  files: 62 unchanged, 0 differ, 0 missing, 0 unknown\n  \u2713 intact for this adoption \u2014 full install, nothing declined\n  baseline: installed from kit ab0a6d62308b\n",
+      "stderr": ""
+    }
+  }
+}

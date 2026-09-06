@@ -1,0 +1,115 @@
+"""Read-only continuity audit against the FIX-01 baseline (supersedes VER-02/VER-03)."""
+from pathlib import Path
+import datetime
+import hashlib
+import json
+import os
+import stat
+import subprocess
+
+REPO = Path('/Users/topi/Coding/agentic-dev-kit')
+SELF = Path(__file__).resolve()
+OUT = SELF.parent
+OLD = REPO / 'saved_plans/codex-adopt-ver02-evidence_2026-09-06'
+NEW = REPO / 'saved_plans/adopt-fix01-evidence_2026-09-06'
+APPROVED = ('.claude/agents/adversarial.md', '.claude/agents/correctness.md', 'AGENTS.md')
+
+assert Path.cwd() == REPO, Path.cwd()
+pre = json.loads((OLD / 'preflight.json').read_text())
+
+
+def sha(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def git(root, *args):
+    return subprocess.check_output(['git', '-C', str(root), *args], text=True,
+                                   env={**os.environ, 'GIT_OPTIONAL_LOCKS': '0'}).strip()
+
+
+def inventory(root):
+    result = {}
+    for directory, dirs, files in os.walk(root, followlinks=False):
+        dirs[:] = sorted(name for name in dirs if name != '.git')
+        for name in sorted(dirs + files):
+            if name == '.git':
+                continue
+            p = Path(directory) / name
+            row = {'mode': oct(stat.S_IMODE(p.lstat().st_mode))}
+            if p.is_symlink():
+                row.update(kind='symlink', target=os.readlink(p))
+            elif p.is_file():
+                row.update(kind='file', sha256=sha(p.read_bytes()))
+            elif p.is_dir():
+                row.update(kind='directory')
+            else:
+                raise RuntimeError(str(p))
+            result[p.relative_to(root).as_posix()] = row
+    return result
+
+
+result = {
+    'command': f'uv run python {SELF}',
+    'cwd': str(REPO),
+    'kit_revision': git(REPO, 'rev-parse', 'HEAD'),
+    'observed_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    'program_sha256': sha(SELF.read_bytes()),
+    'fixture_baseline': 'saved_plans/adopt-fix01-evidence_2026-09-06/fixture-inventory-after-fix01.json',
+    'source_baseline': 'saved_plans/codex-adopt-ver02-evidence_2026-09-06/source-input-inventory.json',
+}
+
+# Retained-evidence integrity, both generations.
+for base in (OLD, NEW):
+    for name, digest in json.loads((base / 'sha256.json').read_text()).items():
+        assert sha((base / name).read_bytes()) == digest, f'{base.name}/{name}'
+result['retained_evidence_digests_match'] = True
+
+# Source: unchanged against its VER-02 input inventory and full Git state.
+source = Path(pre['source'])
+assert inventory(source) == json.loads((OLD / 'source-input-inventory.json').read_text()), 'source inventory changed'
+for key, args in {'head': ('rev-parse', 'HEAD'), 'branch': ('rev-parse', '--abbrev-ref', 'HEAD'),
+                  'remotes': ('remote', '-v'), 'status': ('status', '--porcelain', '--untracked-files=all'),
+                  'index': ('ls-files', '--stage')}.items():
+    assert git(source, *args) == pre['source_git'][key], 'source Git ' + key + ' changed'
+assert inventory(source) == json.loads((OLD / 'source-input-inventory.json').read_text()), 'source changed during read'
+result['source'] = {'root': str(source), 'revision': pre['source_git']['head'],
+                    'inventory_matches': True, 'git_state_matches': True}
+
+# Fixture: matches the FIX-01 baseline, not the superseded VER-02 one.
+fixture = Path(pre['fixture'])
+new_baseline = json.loads((NEW / 'fixture-inventory-after-fix01.json').read_text())
+observed = inventory(fixture)
+assert observed == new_baseline, 'fixture inventory differs from the FIX-01 baseline'
+for key, args in {'head': ('rev-parse', 'HEAD'), 'branch': ('rev-parse', '--abbrev-ref', 'HEAD'),
+                  'remotes': ('remote', '-v'), 'index': ('ls-files', '--stage')}.items():
+    assert git(fixture, *args) == pre['fixture_git'][key], 'fixture Git ' + key + ' changed'
+# Status legitimately differs from VER-02 by exactly the three approved uncommitted files.
+before = set(pre['fixture_git']['status'].splitlines())
+now = set(git(fixture, 'status', '--porcelain', '--untracked-files=all').splitlines())
+added = sorted(line[3:] for line in now - before)
+# Two of the three approved files were already untracked ('?? ...') before FIX-01, so
+# editing them produces no new status line; only the tracked one gains ' M'.
+already_untracked = sorted(line[3:] for line in before if line.startswith('?? ') and line[3:] in APPROVED)
+expected_added = sorted(p for p in APPROVED if p not in already_untracked)
+assert added == expected_added, f'unexpected new working-tree entries: {added} (expected {expected_added})'
+assert not (before - now), f'working-tree entries disappeared: {sorted(before - now)}'
+assert inventory(fixture) == new_baseline, 'fixture changed during read'
+result['fixture'] = {'root': str(fixture), 'revision': pre['fixture_git']['head'],
+                     'inventory_matches_fix01_baseline': True, 'git_head_branch_remotes_index_match': True,
+                     'status_delta_from_ver02': added,
+                     'approved_paths_already_untracked_before_fix01': already_untracked}
+
+# Legacy fixture hashes: the three approved files are expected to differ now.
+legacy = json.loads((OLD / 'legacy-fixture-input.json').read_text())
+changed, same = [], 0
+for rel, digest in legacy.items():
+    if sha((fixture / rel).read_bytes()) == digest:
+        same += 1
+    else:
+        changed.append(rel)
+assert sorted(changed) == sorted(p for p in APPROVED if p in legacy), f'unexpected legacy drift: {changed}'
+result['legacy_fixture_hashes'] = {'unchanged_count': same, 'changed': sorted(changed)}
+
+assert Path.cwd() == REPO
+(OUT / 'continuity-recheck-2026-09-06.json').write_text(json.dumps(result, indent=2) + '\n')
+print(json.dumps(result, indent=2))

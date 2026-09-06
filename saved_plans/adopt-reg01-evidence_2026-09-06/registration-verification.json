@@ -1,0 +1,88 @@
+{
+  "observed_at": "2026-09-06T19:08:22.607725+00:00",
+  "kit_revision": "a4419dcd541f25162971615444aa995bc0dfb474",
+  "fixture": "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+  "scratch": "/private/tmp/adk-reg01-df47497e",
+  "manifest": "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source/kit-manifest.json",
+  "payload_sha256": {
+    ".codex/hooks.json": "dbea8d8084adcc50e786af584c7e407fc5d7040bf26bd614c9966e9ba2797cfb",
+    ".codex/config.toml": "d37497c3278121598a663564ab38b53f658969717f78decb661ddd11c66551ea",
+    ".claude/settings.json": "cafe367d9ec90f34644dec0a2a4929dc195962e16df332523b7a74fec82751bf"
+  },
+  "scopes": {
+    "baseline": {
+      "root": "/private/tmp/adk-reg01-df47497e/baseline",
+      "installed": {},
+      "argv": [
+        "/Users/topi/.local/share/uv/python/cpython-3.14-macos-aarch64-none/bin/python3.14",
+        "/private/tmp/adk-reg01-df47497e/baseline/scripts/devkit/kit_doctor.py",
+        "--root",
+        "/private/tmp/adk-reg01-df47497e/baseline",
+        "--manifest",
+        "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source/kit-manifest.json"
+      ],
+      "cwd": "/private/tmp/adk-reg01-df47497e/baseline",
+      "exit_code": 0,
+      "stdout": "kit-doctor \u2014 installation report\n\n  \u2713 config schema: v2\n  \u2713 paths.engines: scripts/devkit\n  \u2713 pre-push hook: installed\n  \u00b7 .claude/settings.json [claude]: not present \u2014 no registration on this runtime\n  \u00b7 .codex/hooks.json [codex]: not present \u2014 no registration on this runtime\n    (registrations are hand-written \u2014 ./init.sh prints both blocks; `/hooks` in a session is the authority on what loaded)\n  \u2713 .claude/agents/adversarial.md [claude lens=adversarial]: matches the running doctor's expected output\n  \u2713 .claude/agents/correctness.md [claude lens=correctness]: matches the running doctor's expected output\n  \u2713 ROADMAP.md: in use\n  \u2713 notes/friction.md: in use\n  \u2713 AGENTS.md: in use\n  \u2713 CLAUDE.md: in use\n\n  files: 62 unchanged, 0 differ, 0 missing, 0 unknown\n  \u2713 intact for this adoption \u2014 full install, nothing declined\n  baseline: installed from kit ab0a6d62308b\n",
+      "stderr": ""
+    },
+    "codex-only": {
+      "root": "/private/tmp/adk-reg01-df47497e/codex-only",
+      "installed": {
+        ".codex/hooks.json": "dbea8d8084adcc50e786af584c7e407fc5d7040bf26bd614c9966e9ba2797cfb",
+        ".codex/config.toml": "d37497c3278121598a663564ab38b53f658969717f78decb661ddd11c66551ea"
+      },
+      "argv": [
+        "/Users/topi/.local/share/uv/python/cpython-3.14-macos-aarch64-none/bin/python3.14",
+        "/private/tmp/adk-reg01-df47497e/codex-only/scripts/devkit/kit_doctor.py",
+        "--root",
+        "/private/tmp/adk-reg01-df47497e/codex-only",
+        "--manifest",
+        "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source/kit-manifest.json"
+      ],
+      "cwd": "/private/tmp/adk-reg01-df47497e/codex-only",
+      "exit_code": 0,
+      "stdout": "kit-doctor \u2014 installation report\n\n  \u2713 config schema: v2\n  \u2713 paths.engines: scripts/devkit\n  \u2713 pre-push hook: installed\n  \u00b7 .claude/settings.json [claude]: not present \u2014 no registration on this runtime\n  \u2713 .codex/hooks.json [codex]: scripts/devkit/check_doc_budget.py resolves\n  \u2713 .codex/hooks.json [codex]: scripts/devkit/hooks/pr_followup_hook.py resolves\n  \u2713 .codex/hooks.json [codex]: check_doc_budget.py canonical lifecycle form verified\n  \u2713 .codex/hooks.json [codex]: pr_followup_hook.py canonical lifecycle form verified\n    (registrations are hand-written \u2014 ./init.sh prints both blocks; `/hooks` in a session is the authority on what loaded)\n  \u2713 .claude/agents/adversarial.md [claude lens=adversarial]: matches the running doctor's expected output\n  \u2713 .claude/agents/correctness.md [claude lens=correctness]: matches the running doctor's expected output\n  \u2713 ROADMAP.md: in use\n  \u2713 notes/friction.md: in use\n  \u2713 AGENTS.md: in use\n  \u2713 CLAUDE.md: in use\n\n  files: 62 unchanged, 0 differ, 0 missing, 0 unknown\n  \u2713 intact for this adoption \u2014 full install, nothing declined\n  baseline: installed from kit ab0a6d62308b\n",
+      "stderr": ""
+    },
+    "claude-only": {
+      "root": "/private/tmp/adk-reg01-df47497e/claude-only",
+      "installed": {
+        ".claude/settings.json": "cafe367d9ec90f34644dec0a2a4929dc195962e16df332523b7a74fec82751bf"
+      },
+      "argv": [
+        "/Users/topi/.local/share/uv/python/cpython-3.14-macos-aarch64-none/bin/python3.14",
+        "/private/tmp/adk-reg01-df47497e/claude-only/scripts/devkit/kit_doctor.py",
+        "--root",
+        "/private/tmp/adk-reg01-df47497e/claude-only",
+        "--manifest",
+        "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source/kit-manifest.json"
+      ],
+      "cwd": "/private/tmp/adk-reg01-df47497e/claude-only",
+      "exit_code": 0,
+      "stdout": "kit-doctor \u2014 installation report\n\n  \u2713 config schema: v2\n  \u2713 paths.engines: scripts/devkit\n  \u2713 pre-push hook: installed\n  \u2713 .claude/settings.json [claude]: scripts/devkit/check_doc_budget.py resolves\n  \u2713 .claude/settings.json [claude]: scripts/devkit/check_memory_budget.py resolves\n  \u2713 .claude/settings.json [claude]: scripts/devkit/hooks/pr_followup_hook.py resolves\n  \u00b7 .codex/hooks.json [codex]: not present \u2014 no registration on this runtime\n    (registrations are hand-written \u2014 ./init.sh prints both blocks; `/hooks` in a session is the authority on what loaded)\n  \u2713 .claude/agents/adversarial.md [claude lens=adversarial]: matches the running doctor's expected output\n  \u2713 .claude/agents/correctness.md [claude lens=correctness]: matches the running doctor's expected output\n  \u2713 ROADMAP.md: in use\n  \u2713 notes/friction.md: in use\n  \u2713 AGENTS.md: in use\n  \u2713 CLAUDE.md: in use\n\n  files: 62 unchanged, 0 differ, 0 missing, 0 unknown\n  \u2713 intact for this adoption \u2014 full install, nothing declined\n  baseline: installed from kit ab0a6d62308b\n",
+      "stderr": ""
+    },
+    "both": {
+      "root": "/private/tmp/adk-reg01-df47497e/both",
+      "installed": {
+        ".codex/hooks.json": "dbea8d8084adcc50e786af584c7e407fc5d7040bf26bd614c9966e9ba2797cfb",
+        ".codex/config.toml": "d37497c3278121598a663564ab38b53f658969717f78decb661ddd11c66551ea",
+        ".claude/settings.json": "cafe367d9ec90f34644dec0a2a4929dc195962e16df332523b7a74fec82751bf"
+      },
+      "argv": [
+        "/Users/topi/.local/share/uv/python/cpython-3.14-macos-aarch64-none/bin/python3.14",
+        "/private/tmp/adk-reg01-df47497e/both/scripts/devkit/kit_doctor.py",
+        "--root",
+        "/private/tmp/adk-reg01-df47497e/both",
+        "--manifest",
+        "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source/kit-manifest.json"
+      ],
+      "cwd": "/private/tmp/adk-reg01-df47497e/both",
+      "exit_code": 0,
+      "stdout": "kit-doctor \u2014 installation report\n\n  \u2713 config schema: v2\n  \u2713 paths.engines: scripts/devkit\n  \u2713 pre-push hook: installed\n  \u2713 .claude/settings.json [claude]: scripts/devkit/check_doc_budget.py resolves\n  \u2713 .claude/settings.json [claude]: scripts/devkit/check_memory_budget.py resolves\n  \u2713 .claude/settings.json [claude]: scripts/devkit/hooks/pr_followup_hook.py resolves\n  \u2713 .codex/hooks.json [codex]: scripts/devkit/check_doc_budget.py resolves\n  \u2713 .codex/hooks.json [codex]: scripts/devkit/hooks/pr_followup_hook.py resolves\n  \u2713 .codex/hooks.json [codex]: check_doc_budget.py canonical lifecycle form verified\n  \u2713 .codex/hooks.json [codex]: pr_followup_hook.py canonical lifecycle form verified\n  \u2713 .claude/agents/adversarial.md [claude lens=adversarial]: matches the running doctor's expected output\n  \u2713 .claude/agents/correctness.md [claude lens=correctness]: matches the running doctor's expected output\n  \u2713 ROADMAP.md: in use\n  \u2713 notes/friction.md: in use\n  \u2713 AGENTS.md: in use\n  \u2713 CLAUDE.md: in use\n\n  files: 62 unchanged, 0 differ, 0 missing, 0 unknown\n  \u2713 intact for this adoption \u2014 full install, nothing declined\n  baseline: installed from kit ab0a6d62308b\n",
+      "stderr": ""
+    }
+  },
+  "original_fixture_unchanged": true
+}

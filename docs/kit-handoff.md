@@ -14,10 +14,58 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-06 — the friction-log inbox was triaged on exact operator
-decisions and swept; the adopt-continuation thread is unchanged and still next.
+Last updated: 2026-09-06 — REG-01 drafted and verified the fixture's runtime-registration
+payloads and recommends both runtimes; the scope decision itself is open, and the
+installed-suite blocker is untouched.
 
-## Latest session — 2026-09-06 (friction-log triage, in Claude Code)
+## Latest session — 2026-09-06 (REG-01 registration payloads, in Claude Code)
+
+**Theme —** Take the runtime-registration blocker and prepare its exact decision.
+
+- The [REG-01 record](../saved_plans/adopt-reg01-runtime-registration_2026-09-06.md)
+  retains the drafted payloads with their digests, the per-scope doctor reports,
+  both sets of negative controls and the write boundary. **Scope is recommended, not decided:**
+  both runtimes. The original fixture was not written to, no initializer ran, and
+  nothing here states what either runtime loaded.
+- Continuity was rechecked first, against the FIX-01 baseline that supersedes the
+  VER-02/VER-03 inventory. `uv run python <scratch>/recheck_continuity_fix01.py` in
+  `/Users/topi/Coding/agentic-dev-kit` at
+  `a4419dcd541f25162971615444aa995bc0dfb474` on 2026-09-06 UTC exited zero. Its one
+  status divergence is expected and explained in the record: the lens files were
+  already untracked before FIX-01, so only `AGENTS.md` gains a line.
+- Each scope was read by the fixture copy's **own** installed doctor, in disposable
+  copies. Every scope exits zero including the do-nothing baseline, so the exit code is
+  not what separates them — the report body is, and the two runtimes' checks are
+  disjoint: only Codex gets a lifecycle verdict, only Claude gets `#606`'s grant check.
+- The green lines were falsified before being relied on. A wrong timeout exits 1; the
+  kit's own `scripts/` allow entry in this `scripts/devkit` adopter fires `#606`; an
+  altered command string silently loses its lifecycle verdict at exit 0.
+- Filed on that last control and on a related blind spot: **#698**, where `kit_doctor`
+  grades `[features].hooks` only when `.codex/config.toml` exists, so a fully verified
+  `hooks.json` reports green with the switch never set. The silent-verdict half went to
+  **#392** as an occurrence rather than a new issue, because that issue's option 3 is
+  the fix for both axes.
+- **Everything resting on live Codex behaviour is parked for one batched Codex
+  session:** whether the payloads load and are trusted via `/hooks`, #698's open
+  question, and the reserved `#608`/`#255` dispositions.
+- The maintained [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md) retains
+  Phase 5 in progress and Phase 6 not started. The second blocker — the installed
+  suite's failures in PR #686's log, with its `test_lane_launcher.py` root-helper defect
+  belonging there as a `#534` occurrence — is untouched by design. New initialization,
+  adoption completion, fixture PR, Phase 5 exit and cs-toolkit replay keep separate
+  exact decisions.
+
+▶ Next: In Claude, `/session-start` — then either give REG-01 its exact scope decision
+(the record recommends both runtimes; approving it authorizes a real `permissions.allow`
+grant in the fixture tree, not only a file a diagnostic reads) and apply the drafted
+payloads after a fresh continuity recheck, or take the remaining Phase 5 blocker: the
+bounded assessment of the initializer, launcher-policy and portability failures in PR
+#686's retained terminal log, adding occurrences to `#534` rather than re-filing. Keep
+every Codex-only confirmation for the batched Codex session.
+
+______________________________________________________________________
+
+## Session — 2026-09-06 (friction-log triage, in Claude Code)
 
 **Theme —** Graduate the friction-log inbox on exact operator decisions.
 
@@ -323,57 +371,8 @@ adoption completion or Phase 5 exit.
 
 ______________________________________________________________________
 
-## Session — 2026-09-06 (systemize test record, in Codex)
-
-**Theme —** Retain the bounded test observation and update the field-exercise
-reconciliation under the operator's separate record-and-wrap-up authorization.
-
-- The [field record](../saved_plans/codex-systemize-test-field-exercise_2026-09-06.md)
-  retains context, preflight, trusted source material, digest validation, artifact
-  checkpoint probes and proposed routes. This credits test-mode analysis only.
-- The maintained parity plan preserves the earlier parallel, triage and bounded
-  adopt evidence. PR #682 ended at the Step 3c operator handoff; #683 owns its
-  separately identified config-serialization gap.
-- The exercise's `make test` in `/Users/topi/Coding/agentic-dev-kit` at
-  `4c4ce47ce067309f3cb24733a939c40c76911a4a` on 2026-09-05 UTC failed in
-  `test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero`.
-  The field record retains the terminal output and verification limits.
-- No test-mode routing or tracker disposition was executed. Preserve
-  TRI-03/TRI-04/TRI-05 and the operator-held #608/#255 dispositions. Adoption
-  completion, final Phase 5 exit and cs-toolkit replay remain separately scoped.
-
-▶ Next: `$session-start` — implement #683 in the shared adopt workflow and verify
-serialized config through the installed reader, including long scalars and the
-local overlay. Keep the operator initialization boundary and later adoption
-verification separate; follow the maintained plan before any final adopter replay.
-
-______________________________________________________________________
-
-## Session — 2026-09-05 (adopt context field exercise, in Codex)
-
-**Theme —** Exercise adopt's context carrier through its shared workflow in a
-local disposable fixture, with the operator's explicit staging approval.
-
-- The [field record](../saved_plans/codex-adopt-field-exercise_2026-09-05.md)
-  retains inputs, inspection, copy/baseline read-backs, the cache refusal, and
-  the Step 3c operator handoff. `init.sh` and later adoption stages were not run.
-- The maintained parity plan now reconciles the older `#243` follow-up list with
-  retained parallel-batch evidence and the completed Codex triage route. It
-  credits those bounded routes without repeating them or claiming Phase 5 exit.
-- `make test` in `/Users/topi/Coding/agentic-dev-kit` at
-  `ab0a6d62308b298478b2f85fc961f14348f35365` on 2026-09-05 failed in
-  `test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero`.
-  The record retains the terminal output and quiet-tree verification limits.
-- No tracker dispositions changed. Preserve TRI-03/TRI-04/TRI-05 and the
-  operator decisions for `#608`/`#255`; no cs-toolkit replay was attempted.
-
-▶ Next: `$session-start` — follow the maintained Phase 5 field-exercise
-reconciliation. Take `post-merge-systemize` as a separate bounded field slice;
-keep adoption completion and the final cs-toolkit replay explicitly scoped.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Active open items from them are folded into the "Open for next session" lists above.
 
 ______________________________________________________________________
+

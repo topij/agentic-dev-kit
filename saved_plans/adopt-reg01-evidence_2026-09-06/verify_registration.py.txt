@@ -1,0 +1,95 @@
+"""Install the drafted registration payloads into disposable fixture copies and
+read each copy's own doctor. The original fixture is never opened for writing."""
+from pathlib import Path
+import datetime, hashlib, json, os, shutil, stat, subprocess, sys
+
+SP = Path(__file__).resolve().parent
+SCRATCH = Path((SP / 'SCRATCH_REG01').read_text().strip())
+FIXTURE = Path('/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture')
+SOURCE = Path('/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source')
+MANIFEST = SOURCE / 'kit-manifest.json'
+PAY = SP / 'payloads'
+
+assert Path.cwd() == Path('/Users/topi/Coding/agentic-dev-kit'), Path.cwd()
+assert SCRATCH.is_dir() and FIXTURE.is_dir() and MANIFEST.is_file()
+
+def sha(p: Path) -> str:
+    return hashlib.sha256(p.read_bytes()).hexdigest()
+
+def inventory(root: Path) -> dict:
+    out = {}
+    for directory, dirs, files in os.walk(root, followlinks=False):
+        dirs[:] = sorted(n for n in dirs if n != '.git')
+        for name in sorted(dirs + files):
+            if name == '.git':
+                continue
+            p = Path(directory) / name
+            row = {'mode': oct(stat.S_IMODE(p.lstat().st_mode))}
+            if p.is_symlink():
+                row.update(kind='symlink', target=os.readlink(p))
+            elif p.is_file():
+                row.update(kind='file', sha256=sha(p))
+            elif p.is_dir():
+                row.update(kind='directory')
+            else:
+                raise RuntimeError(str(p))
+            out[p.relative_to(root).as_posix()] = row
+    return out
+
+PAYLOADS = {
+    '.codex/hooks.json': PAY / 'codex-hooks.json',
+    '.codex/config.toml': PAY / 'codex-config.toml',
+    '.claude/settings.json': PAY / 'claude-settings.json',
+}
+SCOPES = {
+    'baseline': (),
+    'codex-only': ('.codex/hooks.json', '.codex/config.toml'),
+    'claude-only': ('.claude/settings.json',),
+    'both': ('.codex/hooks.json', '.codex/config.toml', '.claude/settings.json'),
+}
+
+fixture_before = inventory(FIXTURE)
+result = {
+    'observed_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    'kit_revision': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+    'fixture': str(FIXTURE), 'scratch': str(SCRATCH), 'manifest': str(MANIFEST),
+    'payload_sha256': {rel: sha(src) for rel, src in PAYLOADS.items()},
+    'scopes': {},
+}
+
+for scope, rels in SCOPES.items():
+    root = SCRATCH / scope
+    assert root.is_dir(), root
+    # Absolute-path writes, verified at the destination.
+    written = {}
+    for rel in rels:
+        dest = root / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(PAYLOADS[rel], dest)
+        written[rel] = sha(dest)
+        assert written[rel] == sha(PAYLOADS[rel]), f'{scope}:{rel} landed differently'
+    proc = subprocess.run(
+        [sys.executable, str(root / 'scripts/devkit/kit_doctor.py'),
+         '--root', str(root), '--manifest', str(MANIFEST)],
+        cwd=str(root), text=True, capture_output=True)
+    result['scopes'][scope] = {
+        'root': str(root),
+        'installed': written,
+        'argv': [sys.executable, str(root / 'scripts/devkit/kit_doctor.py'),
+                 '--root', str(root), '--manifest', str(MANIFEST)],
+        'cwd': str(root),
+        'exit_code': proc.returncode,
+        'stdout': proc.stdout,
+        'stderr': proc.stderr,
+    }
+
+assert inventory(FIXTURE) == fixture_before, 'ORIGINAL FIXTURE CHANGED'
+result['original_fixture_unchanged'] = True
+(SP / 'registration-verification.json').write_text(json.dumps(result, indent=2) + '\n')
+for scope in SCOPES:
+    r = result['scopes'][scope]
+    print(f"===== {scope}  exit={r['exit_code']} =====")
+    print(r['stdout'])
+    if r['stderr']:
+        print('STDERR:', r['stderr'])
+print('original fixture unchanged:', result['original_fixture_unchanged'])

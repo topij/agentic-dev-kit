@@ -1,0 +1,43 @@
+"""Does the doctor say anything about [features].hooks — the switch init.sh
+instructs and that gates whether Codex reads hooks.json at all?"""
+from pathlib import Path
+import datetime, json, shutil, subprocess, sys
+
+SP = Path(__file__).resolve().parent
+SCRATCH = Path((SP / 'SCRATCH_REG01').read_text().strip())
+FIXTURE = Path('/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture')
+MANIFEST = Path('/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source/kit-manifest.json')
+PAY = SP / 'payloads'
+assert Path.cwd() == Path('/Users/topi/Coding/agentic-dev-kit'), Path.cwd()
+
+hooks_json = (PAY / 'codex-hooks.json').read_text()
+cases = {
+    'nc4-hooks-json-without-config-toml': {'.codex/hooks.json': hooks_json},
+    'nc5-features-hooks-false': {'.codex/hooks.json': hooks_json,
+                                 '.codex/config.toml': '[features]\nhooks = false\n'},
+    'nc6-deprecated-alias-false': {'.codex/hooks.json': hooks_json,
+                                   '.codex/config.toml': '[features]\ncodex_hooks = false\n'},
+}
+out = {'observed_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+       'kit_revision': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+       'cases': {}}
+for name, files in cases.items():
+    root = SCRATCH / name
+    if root.exists():
+        shutil.rmtree(root)
+    shutil.copytree(FIXTURE, root, symlinks=True)
+    for rel, text in files.items():
+        dest = root / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(text)
+    proc = subprocess.run(
+        [sys.executable, str(root / 'scripts/devkit/kit_doctor.py'),
+         '--root', str(root), '--manifest', str(MANIFEST)],
+        cwd=str(root), text=True, capture_output=True)
+    out['cases'][name] = {'root': str(root), 'exit_code': proc.returncode,
+                          'stdout': proc.stdout, 'stderr': proc.stderr}
+    lines = [l for l in proc.stdout.splitlines() if 'codex' in l or 'features' in l or 'config.toml' in l]
+    print(f'===== {name}  exit={proc.returncode} =====')
+    print('\n'.join(lines) or '(no codex-related line)')
+    print()
+(SP / 'negative-controls-2.json').write_text(json.dumps(out, indent=2) + '\n')
