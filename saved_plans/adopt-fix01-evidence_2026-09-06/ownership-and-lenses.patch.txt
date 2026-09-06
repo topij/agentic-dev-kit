@@ -1,0 +1,42 @@
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -1,3 +1,2 @@
+-<!-- devkit-source: kit-own -->
+ # Fixture policy
+ Preserve this fixture-specific policy.
+--- a/.claude/agents/adversarial.md
++++ b/.claude/agents/adversarial.md
+@@ -1,13 +1,13 @@
+ ---
+ name: adversarial
+-description: "Fallback review panel lens adversarial: assume the change is wrong and try to prove it — bypasses, fail-open paths, wedges, and whether the new guard actually guards. Launch it only with a prompt assembled by scripts/panel_prompt.py; it is not a general-purpose agent."
++description: "Fallback review panel lens adversarial: assume the change is wrong and try to prove it — bypasses, fail-open paths, wedges, and whether the new guard actually guards. Launch it only with a prompt assembled by scripts/devkit/panel_prompt.py; it is not a general-purpose agent."
+ model: "sonnet"
+ effort: high
+ ---
+ 
+ Generated from `config/dev-model.yaml` (`review.fallback_panel.lenses` and
+ `review.fallback_panel.lens_compute.claude`) by
+-`scripts/panel_prompt.py --lens adversarial --agent-definition`. Regenerate it after
++`scripts/devkit/panel_prompt.py --lens adversarial --agent-definition`. Regenerate it after
+ changing either key; do not edit it by hand.
+ 
+ The frontmatter is what makes the configured compute mechanical: Claude Code
+--- a/.claude/agents/correctness.md
++++ b/.claude/agents/correctness.md
+@@ -1,13 +1,13 @@
+ ---
+ name: correctness
+-description: "Fallback review panel lens correctness: assume it works and ask what it says — stale comments, claims that overstate what is verified, tests whose names promise more than their bodies check. Launch it only with a prompt assembled by scripts/panel_prompt.py; it is not a general-purpose agent."
++description: "Fallback review panel lens correctness: assume it works and ask what it says — stale comments, claims that overstate what is verified, tests whose names promise more than their bodies check. Launch it only with a prompt assembled by scripts/devkit/panel_prompt.py; it is not a general-purpose agent."
+ model: "sonnet"
+ effort: high
+ ---
+ 
+ Generated from `config/dev-model.yaml` (`review.fallback_panel.lenses` and
+ `review.fallback_panel.lens_compute.claude`) by
+-`scripts/panel_prompt.py --lens correctness --agent-definition`. Regenerate it after
++`scripts/devkit/panel_prompt.py --lens correctness --agent-definition`. Regenerate it after
+ changing either key; do not edit it by hand.
+ 
+ The frontmatter is what makes the configured compute mechanical: Claude Code

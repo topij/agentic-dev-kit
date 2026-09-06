@@ -1,0 +1,77 @@
+"""Capture post-FIX-01 fixture state: doctor report, write boundary, new baseline."""
+from pathlib import Path
+import datetime, hashlib, json, os, stat, subprocess
+
+REPO = Path('/Users/topi/Coding/agentic-dev-kit')
+FIXTURE = Path('/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture')
+SOURCE = Path('/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source')
+OUT = Path('/private/tmp/claude-502/-Users-topi-Coding-agentic-dev-kit/974a4e27-d4a8-49a0-ac26-b86413ad87c0/scratchpad')
+OLD = REPO / 'saved_plans/codex-adopt-ver02-evidence_2026-09-06'
+assert Path.cwd() == REPO
+
+def sha(b): return hashlib.sha256(b).hexdigest()
+def git(root, *a):
+    return subprocess.check_output(['git', '-C', str(root), *a], text=True,
+        env={**os.environ, 'GIT_OPTIONAL_LOCKS': '0'}).strip()
+
+def inventory(root):
+    result = {}
+    for d, dirs, files in os.walk(root, followlinks=False):
+        dirs[:] = sorted(n for n in dirs if n != '.git')
+        for name in sorted(dirs + files):
+            if name == '.git': continue
+            p = Path(d) / name
+            row = {'mode': oct(stat.S_IMODE(p.lstat().st_mode))}
+            if p.is_symlink(): row.update(kind='symlink', target=os.readlink(p))
+            elif p.is_file(): row.update(kind='file', sha256=sha(p.read_bytes()))
+            elif p.is_dir(): row.update(kind='directory')
+            result[p.relative_to(root).as_posix()] = row
+    return result
+
+APPROVED = {'AGENTS.md', '.claude/agents/adversarial.md', '.claude/agents/correctness.md'}
+before_read = inventory(FIXTURE)
+
+# doctor, at the invocation the review evidence records
+argv = ['python3', str(FIXTURE / 'scripts/devkit/kit_doctor.py'),
+        '--root', str(FIXTURE), '--manifest', str(SOURCE / 'kit-manifest.json')]
+proc = subprocess.run(argv, cwd=FIXTURE, text=True, capture_output=True,
+                      env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1'}, timeout=120)
+doctor = {'argv': argv, 'cwd': str(FIXTURE), 'exit_code': proc.returncode,
+          'stdout': proc.stdout, 'stderr': proc.stderr,
+          'observed_at': datetime.datetime.now(datetime.timezone.utc).isoformat()}
+after_read = inventory(FIXTURE)
+assert before_read == after_read, 'fixture changed during the doctor read'
+
+# write boundary against the retained VER-02 input inventory
+pre = json.loads((OLD / 'preflight.json').read_text())
+assert Path(pre['fixture']) == FIXTURE and Path(pre['source']) == SOURCE
+expected = json.loads((OLD / 'fixture-input-inventory.json').read_text())
+added = sorted(set(after_read) - set(expected))
+removed = sorted(set(expected) - set(after_read))
+changed = sorted(k for k in set(after_read) & set(expected) if after_read[k] != expected[k])
+assert not added and not removed and set(changed) == APPROVED, (added, removed, changed)
+src_expected = json.loads((OLD / 'source-input-inventory.json').read_text())
+assert inventory(SOURCE) == src_expected, 'comparison source changed'
+
+boundary = {
+    'observed_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    'baseline_inventory': 'saved_plans/codex-adopt-ver02-evidence_2026-09-06/fixture-input-inventory.json',
+    'paths_added': added, 'paths_removed': removed, 'paths_changed': changed,
+    'changes_equal_approved_set': True,
+    'comparison_source_unchanged': True,
+    'per_file': {k: {'before_sha256': expected[k]['sha256'], 'after_sha256': after_read[k]['sha256'],
+                     'before_mode': expected[k]['mode'], 'after_mode': after_read[k]['mode']}
+                 for k in changed},
+    'fixture_git': {'head': git(FIXTURE, 'rev-parse', 'HEAD'),
+                    'branch': git(FIXTURE, 'rev-parse', '--abbrev-ref', 'HEAD'),
+                    'remotes': git(FIXTURE, 'remote', '-v')},
+    'fixture_uncommitted': True,
+}
+(OUT / 'doctor-after.json').write_text(json.dumps(doctor, indent=2) + '\n')
+(OUT / 'write-boundary.json').write_text(json.dumps(boundary, indent=2) + '\n')
+(OUT / 'fixture-inventory-after-fix01.json').write_text(
+    json.dumps(after_read, indent=2, sort_keys=True) + '\n')
+print('doctor exit:', doctor['exit_code'])
+print('changed:', changed)
+print('fixture head/branch/remotes:', boundary['fixture_git'])
+print('inventory entries:', len(after_read))

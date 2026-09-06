@@ -1,0 +1,39 @@
+{
+  "observed_at": "2026-09-06T16:18:55.013705+00:00",
+  "baseline_inventory": "saved_plans/codex-adopt-ver02-evidence_2026-09-06/fixture-input-inventory.json",
+  "paths_added": [],
+  "paths_removed": [],
+  "paths_changed": [
+    ".claude/agents/adversarial.md",
+    ".claude/agents/correctness.md",
+    "AGENTS.md"
+  ],
+  "changes_equal_approved_set": true,
+  "comparison_source_unchanged": true,
+  "per_file": {
+    ".claude/agents/adversarial.md": {
+      "before_sha256": "4d761e4a9bd284126a797a7cf163020d8151106ed07ac77b310ac0678cfa24f1",
+      "after_sha256": "f61adde9da0974c20dcba31d8fda4dec313e2f26ffd97baae518654bae3e9e7a",
+      "before_mode": "0o644",
+      "after_mode": "0o644"
+    },
+    ".claude/agents/correctness.md": {
+      "before_sha256": "cc24eb53096bd19f31c23ddadf169a79fcc89806278a27dad7bde3e1daa5f77b",
+      "after_sha256": "a91ee86a18f6043d8f2cfba06cdbb983509ef9514b5924540f09b8a87d74e171",
+      "before_mode": "0o644",
+      "after_mode": "0o644"
+    },
+    "AGENTS.md": {
+      "before_sha256": "32b9c9228358dbdc623faf7e51bdf802d664ae02d796d9e2f7ec5343aecade85",
+      "after_sha256": "afe455b56f1a6c4270961ed6ee301e3dae03b43748c1ceb8d5a49a3a30856819",
+      "before_mode": "0o644",
+      "after_mode": "0o644"
+    }
+  },
+  "fixture_git": {
+    "head": "08ac687f4ae14218a3861c6b8b143d8b86c4e3c2",
+    "branch": "chore/adopt-agentic-dev-kit",
+    "remotes": ""
+  },
+  "fixture_uncommitted": true
+}
