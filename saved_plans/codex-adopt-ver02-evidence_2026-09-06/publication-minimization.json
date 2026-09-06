@@ -1,0 +1,140 @@
+{
+  "operation": "Remove ambient PATH, HOME and TMPDIR values from top-level environment metadata; preserve argv, cwd, declared controls, resolved environment readback and emitted terminal streams.",
+  "kit_revision_before_edit": "d175c0806be02ab61df458de66db5ece4d8fc460",
+  "observed_at": "2026-09-06T12:30:57.751488+00:00",
+  "original_publication_location": "Retained outside the repository in the trial scratch publication-originals directory.",
+  "historical_runner_text_changed": false,
+  "terminal_streams_changed": false,
+  "artifacts": [
+    {
+      "artifact": "environment-resolution.json",
+      "omitted_environment_fields": [
+        "PATH",
+        "HOME",
+        "TMPDIR"
+      ],
+      "original_publication_sha256": "cd237e8fa532e7dee719d590a3d730fa38d7ae396bbb2dbfdb899dfbf751bc42",
+      "published_sha256": "2ccf4f9f4346895733b6b1becc89b94441e258b3d25fdc477db54090f6385265"
+    },
+    {
+      "artifact": "fixture-clone.json",
+      "omitted_environment_fields": [
+        "PATH",
+        "HOME",
+        "TMPDIR"
+      ],
+      "original_publication_sha256": "4a26b1933e9420c7de560270e1f83bf5a7f6617c38422e4be1ab3f4fc526d84b",
+      "published_sha256": "364f744dc9373fae11bf2f60d23f981a23e2deeb367d49ad841d4425acd6f0ae"
+    },
+    {
+      "artifact": "fixture-read-index.json",
+      "omitted_environment_fields": [
+        "PATH",
+        "HOME",
+        "TMPDIR"
+      ],
+      "original_publication_sha256": "15d0680202fb06f5aaead6e2bf71f78da7d559fd9aff0594a22d8a218cff789c",
+      "published_sha256": "a8edf6b8895f164c86af266e522b10e72a2044eb1a207347ecf29836fe7cc3b5"
+    },
+    {
+      "artifact": "fixture-remove-origin.json",
+      "omitted_environment_fields": [
+        "PATH",
+        "HOME",
+        "TMPDIR"
+      ],
+      "original_publication_sha256": "af321edf7a161bf48cd65f0358a6a9957ed086ed404c941b08da980065aed668",
+      "published_sha256": "f0575b518aeba2026d2e88c78eaef712faf253307b807a7df869359a854e085e"
+    },
+    {
+      "artifact": "fixture-trial.json",
+      "omitted_environment_fields": [
+        "PATH",
+        "HOME",
+        "TMPDIR"
+      ],
+      "original_publication_sha256": "f34064f78edbf743984d809c42854a017d8a1500cf67c0c11fa8f66f866d6ee7",
+      "published_sha256": "6d9821f260d58953e5377f3e86db192cfd2251a70504cd97e67a55cfb5b5a7b2"
+    },
+    {
+      "artifact": "persistent-environment-create.json",
+      "omitted_environment_fields": [
+        "PATH",
+        "HOME",
+        "TMPDIR"
+      ],
+      "original_publication_sha256": "a810f1f76e7538af165d00f65aef317b00061f55d072034d707b5caa29d7d45d",
+      "published_sha256": "2c599f58f8edc84690a73e60122c1adbdd7d0fbc2c21ea09a76d3db4e5895910"
+    },
+    {
+      "artifact": "persistent-environment-install.json",
+      "omitted_environment_fields": [
+        "PATH",
+        "HOME",
+        "TMPDIR"
+      ],
+      "original_publication_sha256": "cbc3eedf10e1fe037c73d00140d3e471a8c5dc69b23b18824343c86ea0a25b70",
+      "published_sha256": "3d0c833b4a97e15864ea88059f610b971732488d2a707fc9f108097c8a1551bc"
+    },
+    {
+      "artifact": "persistent-environment-readback.json",
+      "omitted_environment_fields": [
+        "PATH",
+        "HOME",
+        "TMPDIR"
+      ],
+      "original_publication_sha256": "092ff34273721e2259be720db5ba85dd6b10ae6c982063705785bfb6df84fd6d",
+      "published_sha256": "8e9fa3b182c77f0873893af4cff165e55ebd705b8bdbd8d1a08fa7e223c8702c"
+    },
+    {
+      "artifact": "source-clone.json",
+      "omitted_environment_fields": [
+        "PATH",
+        "HOME",
+        "TMPDIR"
+      ],
+      "original_publication_sha256": "724f892314f9f1c8b2616f2df9892fda708b5207712d2a66dbe2da80e7379d59",
+      "published_sha256": "ea23177a31ed56619aa1def7cc85b2a56770718bf5de8772feef7113632d0a62"
+    },
+    {
+      "artifact": "source-mutation.json",
+      "omitted_environment_fields": [
+        "PATH",
+        "HOME",
+        "TMPDIR"
+      ],
+      "original_publication_sha256": "5bc5e7b226c2dd508da9d512de5d126bf665db5405fa37acee01debf6d4549c1",
+      "published_sha256": "81bf7e408dcc8526b284945d0cbb3c0553d35cf07669f9aaef11daaf4092b4ae"
+    },
+    {
+      "artifact": "source-read-index.json",
+      "omitted_environment_fields": [
+        "PATH",
+        "HOME",
+        "TMPDIR"
+      ],
+      "original_publication_sha256": "aa1e41d824da52a5acff2b22256af43cfa0dff1e892bbf63f005b7513383e458",
+      "published_sha256": "977cf565394e6fae27cd0ba3df5a982546ba9f35633744f4ee8a0bc7a0c4ec6c"
+    },
+    {
+      "artifact": "source-remove-origin.json",
+      "omitted_environment_fields": [
+        "PATH",
+        "HOME",
+        "TMPDIR"
+      ],
+      "original_publication_sha256": "17ffb23c321f28a3853dca5a0fa303ae013e3cdbab5dccce2cd069d98f61d95e",
+      "published_sha256": "64676c8f34c6311d1c14316f173c33930df282f150f397bafe3be6c50dcdc4bc"
+    },
+    {
+      "artifact": "source-trial.json",
+      "omitted_environment_fields": [
+        "PATH",
+        "HOME",
+        "TMPDIR"
+      ],
+      "original_publication_sha256": "5c0e4af5e69a08011ac55bc2ebd221b133afdbcd213c9e928d8d03c692d10955",
+      "published_sha256": "d302e78f7fe21b472f63f933e1039d5b06015ad8d5466c15a694090bd1347540"
+    }
+  ]
+}

@@ -19,9 +19,6 @@
   "kit_revision": "cd39158df81457feafa4bd281d928f8fec7d9faf",
   "timeout_seconds": 120,
   "environment": {
-    "PATH": "/Users/topi/.antigravity-ide/antigravity-ide/bin:/Users/topi/.local/bin:/Users/topi/.antigravity/antigravity/bin:/Users/topi/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Users/topi/.codex/tmp/arg0/codex-arg0mZ7xOm:/Users/topi/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/topi/.antigravity-ide/antigravity-ide/bin:/Users/topi/.local/bin:/Users/topi/.antigravity/antigravity/bin:/Users/topi/.nvm/versions/node/v22.18.0/bin:/Users/topi/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
-    "HOME": "/Users/topi",
-    "TMPDIR": "/var/folders/68/_1c8pqwx5rvc9hm34fnkft1m0000gp/T/",
     "LANG": "C.UTF-8",
     "LC_ALL": "C.UTF-8",
     "PYTHONDONTWRITEBYTECODE": "1",

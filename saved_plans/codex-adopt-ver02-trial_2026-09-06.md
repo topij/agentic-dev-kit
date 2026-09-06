@@ -49,6 +49,10 @@ The historical supervisors are retained as
 [run_trial.py.txt](codex-adopt-ver02-evidence_2026-09-06/run_trial.py.txt) and
 [resume_trial.py.txt](codex-adopt-ver02-evidence_2026-09-06/resume_trial.py.txt).
 They record this consumed execution, not a reusable tool or a command to rerun.
+The [publication-minimization record](codex-adopt-ver02-evidence_2026-09-06/publication-minimization.json)
+records omitted ambient `PATH`, `HOME` and `TMPDIR` values. The original metadata
+remains outside the repository; argv, cwd, execution controls, resolved-interpreter
+readbacks, terminal streams and historical runner text are retained.
 
 ## Demonstrated outcomes and limits
 
