@@ -24,9 +24,8 @@ exactly one new line, ` M AGENTS.md`. The other FIX-01 files produce none, becau
 `.claude/agents/adversarial.md` and `.claude/agents/correctness.md` were already
 untracked (`??`) before FIX-01 and editing an untracked file does not change its status
 line. The first draft of this check asserted that each approved path would gain a
-status line, and failed on that;
-the assertion now derives the expected set from which approved paths were already
-untracked, rather than assuming.
+status line, and failed on that; the assertion now derives the expected set from which
+approved paths were already untracked, rather than assuming.
 
 ## The payloads
 
