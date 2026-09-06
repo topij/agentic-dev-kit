@@ -23,7 +23,7 @@ installed-suite blocker is untouched.
 **Theme —** Take the runtime-registration blocker and prepare its exact decision.
 
 - The [REG-01 record](../saved_plans/adopt-reg01-runtime-registration_2026-09-06.md)
-  retains the three drafted payloads with their digests, the per-scope doctor reports,
+  retains the drafted payloads with their digests, the per-scope doctor reports,
   both sets of negative controls and the write boundary. **Scope is recommended, not decided:**
   both runtimes. The original fixture was not written to, no initializer ran, and
   nothing here states what either runtime loaded.
@@ -31,7 +31,7 @@ installed-suite blocker is untouched.
   VER-02/VER-03 inventory. `uv run python <scratch>/recheck_continuity_fix01.py` in
   `/Users/topi/Coding/agentic-dev-kit` at
   `a4419dcd541f25162971615444aa995bc0dfb474` on 2026-09-06 UTC exited zero. Its one
-  status divergence is expected and explained in the record: the two lens files were
+  status divergence is expected and explained in the record: the lens files were
   already untracked before FIX-01, so only `AGENTS.md` gains a line.
 - Each scope was read by the fixture copy's **own** installed doctor, in disposable
   copies. Every scope exits zero including the do-nothing baseline, so the exit code is

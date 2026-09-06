@@ -1,6 +1,6 @@
 # REG-01 — the adoption fixture's runtime-registration scope and payloads
 
-The exact decision this record asks for is **scope**, and it is unmade. The three
+The exact decision this record asks for is **scope**, and it is unmade. The
 payloads below are drafted, digested and verified against the fixture's own installed
 doctor in disposable copies; none of them has been written to the original fixture. No
 initializer ran, no fixture file changed, and nothing here establishes what either
@@ -20,17 +20,17 @@ retained evidence re-hash to their recorded digests.
 
 **One expected divergence, named because it looks like drift and is not.** The program
 compares the fixture's working-tree status against the VER-02 preflight and finds
-exactly one new line, ` M AGENTS.md`. The other two FIX-01 files produce none, because
+exactly one new line, ` M AGENTS.md`. The other FIX-01 files produce none, because
 `.claude/agents/adversarial.md` and `.claude/agents/correctness.md` were already
 untracked (`??`) before FIX-01 and editing an untracked file does not change its status
-line. The first draft of this check asserted all three would appear and failed on that;
+line. The first draft of this check asserted every one of them would appear and failed;
 the assertion now derives the expected set from which approved paths were already
 untracked, rather than assuming.
 
-## The three payloads
+## The payloads
 
-All three registration paths are absent in the fixture — verified by direct inspection,
-and by the doctor's own `· not present` lines for the two surfaces that report their
+None of the registration paths exists in the fixture — verified by direct inspection,
+and by the doctor's own `· not present` lines for the surfaces that report their
 absence. Nothing below overwrites anything.
 
 The fixture's `paths.engines` is `scripts/devkit`, and every path in every payload is
@@ -54,7 +54,7 @@ adopter's engines dir rather than the kit's own.
 
 ## What each scope buys, measured
 
-Four disposable copies of the fixture, one per scope, each read by **its own** installed
+One disposable copy of the fixture per scope, each read by **its own** installed
 doctor:
 `python3 <copy>/scripts/devkit/kit_doctor.py --root <copy> --manifest
 <comparison-source>/kit-manifest.json`, cwd the copy, driven from
@@ -74,7 +74,7 @@ statuses:
 |---|---|---|
 | baseline | — | both `· not present` lines |
 | codex-only | both Codex engine paths `resolves`, plus `check_doc_budget.py` and `pr_followup_hook.py` `canonical lifecycle form verified` | `· .claude/settings.json … not present` |
-| claude-only | all three Claude engine paths `resolves` | `· .codex/hooks.json … not present` |
+| claude-only | every Claude engine path `resolves` | `· .codex/hooks.json … not present` |
 | both | every line from the two above | — |
 
 The asymmetry is worth naming, because it is not a matter of taste. Only the **Codex**
@@ -88,8 +88,8 @@ Each single-runtime scope leaves the other's check unexercised.
 
 A report that is green because nothing was examined is the failure mode this whole
 exercise is exposed to, so each check was falsified before being relied on. Same command
-shape, same revision and date as above; the captured reports retain each run, in two
-sets — [`negative-controls.json`](adopt-reg01-evidence_2026-09-06/negative-controls.json)
+shape, same revision and date as above; the captured reports retain each run, across
+the files named here — [`negative-controls.json`](adopt-reg01-evidence_2026-09-06/negative-controls.json)
 for the controls on the checks the payloads rely on, driven by
 [`negative_controls.py.txt`](adopt-reg01-evidence_2026-09-06/negative_controls.py.txt),
 and [`negative-controls-2.json`](adopt-reg01-evidence_2026-09-06/negative-controls-2.json)
@@ -119,13 +119,13 @@ only `.codex/config.toml`:
   `✗ … Codex lifecycle hooks are disabled by the project config` and exit 1. The switch
   is graded when the doctor can see it.
 - **`.codex/config.toml` absent entirely** produced no line about `[features]` at all,
-  at exit 0, beneath four green Codex lines. That asymmetry — graded when the file
+  at exit 0, beneath the green Codex lines. That asymmetry — graded when the file
   exists, silent when it does not — is `#698`, and it is why the Codex scope below
   includes `config.toml` on `init.sh`'s instruction rather than on the doctor's demand.
 
 ## Recommended scope: both
 
-Three reasons, in the order they matter:
+In the order they matter:
 
 1. **Neither single-runtime scope exercises the fixture's purpose.** This fixture exists
    to field-test adoption of a kit whose central doctrine is runtime parity. A fixture
@@ -134,7 +134,7 @@ Three reasons, in the order they matter:
 2. **The two checks are disjoint, as measured above.** Codex-only leaves `#606`
    unexercised; Claude-only leaves every lifecycle verdict unexercised. Only both closes
    the pair, and the drafted payloads are already verified for both.
-3. **Cost is symmetric and there is nothing to clobber.** All three paths are absent.
+3. **Cost is symmetric and there is nothing to clobber.** None of the paths exists yet.
 
 ## What writing these would actually do, stated plainly
 
