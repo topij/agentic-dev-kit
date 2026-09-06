@@ -18,5 +18,7 @@
   "operator-decision.md": "d2b30f0814a84bb586c47dc97b87bd9c24b8fd7cc333d117003fc6dc0b6c3b1d",
   "post-init-readback.json": "8defd4ccf16b9dcd7dac475bdf578e6aff92f25d09e6e7f53fedd1affef2959b",
   "run_verification.py": "1d79d135bd770bac57ac8b42b9773ce55a6793a2e0045f6067c663aac592565b",
+  "tracker-decision.json": "4b724953ee763465d122b83e646a1436f730e950f3b46c11edabd95ee058d336",
+  "tracker-readback.json": "c6336da4d016af8f42eeb601d3d53c73e01f25ca03cd3a23a80245f0ea351813",
   "vendored-suite-occurrence.md": "17fb15a21b49366e1989289ad22be72eed11100771ffb879f3a05802e6090a2a"
 }

@@ -38,18 +38,8 @@
   The [exact issue proposal](../saved_plans/codex-adopt-initialization-evidence_2026-09-06/init-compatibility-issue.md)
   retains the command, directory, source/config evidence and stamped duplicate
   searches. It was presented in-session; no exact decision arrived before staging.
-- **Installed suites depend on kit-only inputs and layout. Severity M.**
-  The same fixture's installed pytest command on 2026-09-06 failed; the
-  [continuation record](../saved_plans/codex-adopt-initialization-field-exercise_2026-09-06.md)
-  retains its command, directory, revision and terminal output. Representative
-  traces read an absent `scripts/config/dev-model.yaml`, expect kit skeletons, and
-  reject a preserved adopter-owned adapter during test setup. Proposed fix: use
-  layout helpers and separate kit-only invariants from adopter verification, within
-  [#534](https://github.com/topij/agentic-dev-kit/issues/534)'s existing scope.
-  The [exact occurrence payload](../saved_plans/codex-adopt-initialization-evidence_2026-09-06/vendored-suite-occurrence.md)
-  was presented after reading that issue; no exact decision arrived before staging.
 
-These entries grant no tracker or archive authority. The existing TRI-03/TRI-04/TRI-05
+This parked entry grants no tracker or archive authority. The existing TRI-03/TRI-04/TRI-05
 and #608/#255 dispositions remain reserved.
 
 ## 2026-09-03 — Backlog migrated to GitHub Issues (#671–#672)

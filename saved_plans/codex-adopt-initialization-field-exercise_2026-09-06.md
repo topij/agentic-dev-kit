@@ -89,8 +89,13 @@ and runtime registrations. These examples fit #534's kit-only/layout-assumption 
 they do not classify every failure, and no same-source flat-layout control was run in
 this continuation. The [occurrence proposal](codex-adopt-initialization-evidence_2026-09-06/vendored-suite-occurrence.md)
 and [initializer issue proposal](codex-adopt-initialization-evidence_2026-09-06/init-compatibility-issue.md)
-were presented for separate exact tracker decisions. No exact tracker decision arrived before wrap-up staging; the findings were parked
-in the friction log with these payloads. No tracker write occurred.
+were presented for separate exact tracker decisions. The operator subsequently
+approved the occurrence comment; its
+[posted payload](https://github.com/topij/agentic-dev-kit/issues/534#issuecomment-5557692003)
+was read back against the exact approved bytes. The evidence retains that separate
+[decision](codex-adopt-initialization-evidence_2026-09-06/tracker-decision.json) and
+[read-back](codex-adopt-initialization-evidence_2026-09-06/tracker-readback.json).
+The initializer issue proposal remains parked pending its own exact decision.
 
 ## Maintained sprint reconciliation
 

@@ -34,7 +34,8 @@ then reconcile the active sprint without promoting adoption or Phase 5 completio
 - `make test` in `/Users/topi/Coding/agentic-dev-kit` at
   `d898660c5da63a91f1916fa6b5f84357b5622ee4` plus initial record edits on
   2026-09-06 UTC failed in the recurring deep-payload hook assertion. The record
-  retains terminal output; tracker proposals were parked without writes.
+  retains terminal output and the approved #534 occurrence comment. The initializer
+  issue proposal remains parked pending its own exact decision.
 - The maintained [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md)
   credits the delivered milestones, records Phase 5's in-progress adopt continuation,
   corrects stale TUI/review/batch scheduling statements and leaves Phase 6 not started.
