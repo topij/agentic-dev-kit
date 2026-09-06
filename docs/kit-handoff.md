@@ -52,10 +52,14 @@ definitions; registration and verification follow-up stay separate.
 and prepare an exact decision for it: the fixture's runtime-registration scope (Codex
 project hooks, Claude cockpit settings, or both) with both exact payloads drafted, or a
 bounded assessment of the installed suite's initializer, launcher-policy and portability
-failures in PR #686's retained terminal log. #534 is scoped to a `REPO_ROOT / "scripts"`
-hardcoding in four named test files, so check each failure against that scope before
-adding an occurrence there rather than filing it separately — `test_lane_launcher.py`
-in particular fails on a different assumption. Recheck continuity against
+failures in PR #686's retained terminal log. Read #534's comments and not only its body:
+its 2026-09-06 occurrence places layout-assumption failures inside the issue's scope,
+including one in a file the body does not name, so a root miscalculation belongs there
+as an occurrence rather than as a new issue. One is already identifiable —
+`test_lane_launcher.py:2234` takes `root = ENGINE_DIR.parent` where `conftest.py:48`
+already offers `REPO_ROOT = find_repo_root(ENGINE_DIR)`, which is the defect VER-03
+repaired in `test_panel_prompt.py` and the same trace the fixture log shows. Recheck
+continuity against
 `saved_plans/adopt-fix01-evidence_2026-09-06/fixture-inventory-after-fix01.json` — the
 VER-02/VER-03 inventory is superseded and a mismatch against it is not drift. Draft
 registration payloads in Claude but do not state whether Codex loaded them: `/hooks` in
