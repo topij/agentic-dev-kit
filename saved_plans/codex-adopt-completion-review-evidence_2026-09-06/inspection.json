@@ -1,0 +1,67 @@
+{
+  "argv": [
+    "python3",
+    "/private/tmp/adk-adopt-review-20260906-WJZrv7/inspect_fixture.py"
+  ],
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "observed_at": "2026-09-06T08:28:47.927754+00:00",
+  "kit_revision": "2f4275642d4d75598a7fad7d865608b488b4c726",
+  "fixture": "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+  "fixture_revision": "08ac687f4ae14218a3861c6b8b143d8b86c4e3c2",
+  "installed_source": "ab0a6d62308b298478b2f85fc961f14348f35365",
+  "continuity": "retained copy ledger, inputs, post-init config and install baseline matched",
+  "fixture_files_before_after_equal": true,
+  "fixture_snapshot_sha256": "c504bc2c0d1c1a0caf97a9d1de689b85bb4d3a47824457c7cf8f757c03e804ca",
+  "absent_registration_paths": [
+    ".codex/config.toml",
+    ".codex/hooks.json",
+    ".claude/settings.json"
+  ],
+  "doctor": {
+    "argv": [
+      "python3",
+      "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture/scripts/devkit/kit_doctor.py",
+      "--root",
+      "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+      "--manifest",
+      "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source/kit-manifest.json"
+    ],
+    "cwd": "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+    "exit_code": 0,
+    "stdout": "kit-doctor \u2014 installation report\n\n  \u2713 config schema: v2\n  \u2713 paths.engines: scripts/devkit\n  \u2713 pre-push hook: installed\n  \u00b7 .claude/settings.json [claude]: not present \u2014 no registration on this runtime\n  \u00b7 .codex/hooks.json [codex]: not present \u2014 no registration on this runtime\n    (registrations are hand-written \u2014 ./init.sh prints both blocks; `/hooks` in a session is the authority on what loaded)\n  \u26a0 .claude/agents/adversarial.md [claude lens=adversarial]: differs from the running doctor's expected output \u2014 inspect and regenerate it\n  \u26a0 .claude/agents/correctness.md [claude lens=correctness]: differs from the running doctor's expected output \u2014 inspect and regenerate it\n    (lens definitions are adopter-owned \u2014 first resolve any kit engine drift reported below, then inspect the target and regenerate one with cd /private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture && mkdir -p .claude/agents && uv run scripts/devkit/panel_prompt.py --root . --lens <name> --agent-definition > .claude/agents/<name>.md; this check never executes the command or writes the definitions)\n  \u2713 ROADMAP.md: in use\n  \u2713 notes/friction.md: in use\n  \u26a0 AGENTS.md: still the kit's own contract, not yours \u2014 run ./init.sh\n  \u2713 CLAUDE.md: in use\n\n  files: 62 unchanged, 0 differ, 0 missing, 0 unknown\n  \u2713 intact for this adoption \u2014 full install, nothing declined\n  baseline: installed from kit ab0a6d62308b\n",
+    "stderr": ""
+  },
+  "lens_renders": {
+    "adversarial": {
+      "argv": [
+        "python3",
+        "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture/scripts/devkit/panel_prompt.py",
+        "--root",
+        "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+        "--lens",
+        "adversarial",
+        "--agent-definition"
+      ],
+      "cwd": "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+      "exit_code": 0,
+      "stdout": "---\nname: adversarial\ndescription: \"Fallback review panel lens adversarial: assume the change is wrong and try to prove it \u2014 bypasses, fail-open paths, wedges, and whether the new guard actually guards. Launch it only with a prompt assembled by scripts/devkit/panel_prompt.py; it is not a general-purpose agent.\"\nmodel: \"sonnet\"\neffort: high\n---\n\nGenerated from `config/dev-model.yaml` (`review.fallback_panel.lenses` and\n`review.fallback_panel.lens_compute.claude`) by\n`scripts/devkit/panel_prompt.py --lens adversarial --agent-definition`. Regenerate it after\nchanging either key; do not edit it by hand.\n\nThe frontmatter is what makes the configured compute mechanical: Claude Code\napplies its `model` and `effort` when the cockpit launches the agent named\n`adversarial`. It lists this file at session start; a file written mid-session was\nnot launchable in the turn it was written and appeared in the roster later, so\ncount on it from the next session and treat an earlier listing as a bonus.\n\nYou are the **adversarial** lens of the fallback review panel\n(`docs/agentic-dev-kit/fallback-review-panel.md`). You did NOT write the change under\nreview. Your launch prompt carries the contract, the revision, the diff, and your\nfocus; follow it exactly, and report what you reviewed before any finding.\n",
+      "stderr": ""
+    },
+    "correctness": {
+      "argv": [
+        "python3",
+        "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture/scripts/devkit/panel_prompt.py",
+        "--root",
+        "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+        "--lens",
+        "correctness",
+        "--agent-definition"
+      ],
+      "cwd": "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+      "exit_code": 0,
+      "stdout": "---\nname: correctness\ndescription: \"Fallback review panel lens correctness: assume it works and ask what it says \u2014 stale comments, claims that overstate what is verified, tests whose names promise more than their bodies check. Launch it only with a prompt assembled by scripts/devkit/panel_prompt.py; it is not a general-purpose agent.\"\nmodel: \"sonnet\"\neffort: high\n---\n\nGenerated from `config/dev-model.yaml` (`review.fallback_panel.lenses` and\n`review.fallback_panel.lens_compute.claude`) by\n`scripts/devkit/panel_prompt.py --lens correctness --agent-definition`. Regenerate it after\nchanging either key; do not edit it by hand.\n\nThe frontmatter is what makes the configured compute mechanical: Claude Code\napplies its `model` and `effort` when the cockpit launches the agent named\n`correctness`. It lists this file at session start; a file written mid-session was\nnot launchable in the turn it was written and appeared in the roster later, so\ncount on it from the next session and treat an earlier listing as a bonus.\n\nYou are the **correctness** lens of the fallback review panel\n(`docs/agentic-dev-kit/fallback-review-panel.md`). You did NOT write the change under\nreview. Your launch prompt carries the contract, the revision, the diff, and your\nfocus; follow it exactly, and report what you reviewed before any finding.\n",
+      "stderr": ""
+    }
+  },
+  "verification_log_source_sha256": "ec4ed4c4e7cae48fb86b7d697f3d0d7a6a905fb6426158e7814fc4818497baa3"
+}

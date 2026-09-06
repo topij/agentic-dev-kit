@@ -1,0 +1,13 @@
+{
+  "argv": [
+    "make",
+    "test"
+  ],
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "revision": "e3c7b14ffb26e7ffac37e0be62ac02618d819c58",
+  "started_at": "2026-09-06T08:02:18.917681+00:00",
+  "timeout_seconds": 1800,
+  "status_before": " M docs/kit-handoff-history.md\n M docs/kit-handoff.md\n M saved_plans/codex-parity-plan_2026-08-23.md\n?? saved_plans/codex-adopt-completion-review-evidence_2026-09-06/\n?? saved_plans/codex-adopt-completion-review_2026-09-06.md\n",
+  "exit_code": 2,
+  "finished_at": "2026-09-06T08:08:20.598049+00:00"
+}
