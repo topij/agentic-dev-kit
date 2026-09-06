@@ -1,0 +1,16 @@
+{
+  "mutation_root": "/private/tmp/adk-ver03-7m5h8wtr/mut-root-old-188cd97",
+  "kit_revision": "188cd97198dbee34919369cfa75a9379d9ddc6eb",
+  "observed_at": "2026-09-06T12:53:12.817312+00:00",
+  "source_hashes": {
+    "panel_prompt.py": "f596c5f4bb4eb2d403ba0d2c9365808b01c771ff8d38b9b9d98cc563fd1bdca4",
+    "kit_doctor.py": "c0bdc94d3daec992a6c45a5671715f858b699f456a6f67e5bfeb679a28a0af7a",
+    "lib/kitconfig.py": "4ab496661883d8f4ad590a6612a48b31f8cbf770283bb09794096149276634e6",
+    "tests/_repo_layout.py": "ab5c81c04b751f61a603f8b8a80f182b103f85417a58feb8abb725aebad7881b",
+    "tests/conftest.py": "aa11d3ea18997d7beb676d64b84469d6d582888501a8ec40dbdc03f251af4057",
+    "tests/test_panel_prompt.py": "a4937f85f74fb2cef7a4f3f9408908626dd8558998593e18f3c9c5d89155d7a9"
+  },
+  "original_sha256": "a4937f85f74fb2cef7a4f3f9408908626dd8558998593e18f3c9c5d89155d7a9",
+  "landed_sha256": "681887b7bec825b3ee42daa6ced4221e40b9e7d96962aff8a964b88d4d2cedf0",
+  "diff": "root-mutation.diff"
+}

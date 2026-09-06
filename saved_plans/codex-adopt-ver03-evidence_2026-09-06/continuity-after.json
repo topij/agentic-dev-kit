@@ -1,0 +1,20 @@
+{
+  "command": "python3 /private/tmp/adk-ver03-7m5h8wtr/check_continuity.py",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "kit_revision": "12a67be290989165e0e7f714942c3d59e38696fc",
+  "observed_at": "2026-09-06T13:00:48.048405+00:00",
+  "program_sha256": "9c65cdb54277f90aff2797a68849ea0b1921eef07bd5840a182d657d472d5a8c",
+  "source": {
+    "root": "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source",
+    "revision": "ab0a6d62308b298478b2f85fc961f14348f35365",
+    "inventory_matches": true,
+    "git_state_matches": true
+  },
+  "fixture": {
+    "root": "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+    "revision": "08ac687f4ae14218a3861c6b8b143d8b86c4e3c2",
+    "inventory_matches": true,
+    "git_state_matches": true
+  },
+  "legacy_fixture_hashes_match": true
+}

@@ -1,0 +1,10 @@
+{
+  "observed_at": "2026-09-06T12:53:35.616571+00:00",
+  "kit_revision": "188cd97198dbee34919369cfa75a9379d9ddc6eb",
+  "path": "/private/tmp/adk-ver03-7m5h8wtr/mut-root-old-188cd97/scripts/tests/test_panel_prompt.py",
+  "restored_sha256": "a4937f85f74fb2cef7a4f3f9408908626dd8558998593e18f3c9c5d89155d7a9",
+  "original_bytes_restored": true,
+  "kit_test_unchanged": true,
+  "mutation_result": "old-root-mutation.json",
+  "failure_boundary": "nested layout positive comparison fails because the old assignment reads scripts/config/dev-model.yaml; flat layout still passes; no drift/hash check ran"
+}

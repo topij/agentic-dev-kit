@@ -1,0 +1,56 @@
+"""Publish bounded historical VER-03 results; no trial commands are executed."""
+from pathlib import Path
+import datetime
+import hashlib
+import json
+
+REPO = Path('/Users/topi/Coding/agentic-dev-kit')
+OUT = Path('/private/tmp/adk-ver03-7m5h8wtr')
+DEST = REPO / 'saved_plans/codex-adopt-ver03-evidence_2026-09-06'
+assert Path.cwd() == REPO
+DEST.mkdir(exist_ok=True)
+def sha(data): return hashlib.sha256(data).hexdigest()
+def copy(source, relative):
+    target = DEST / relative
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(source.read_bytes())
+    assert target.read_bytes() == source.read_bytes()
+for name in ('continuity-before.json', 'continuity-after.json', 'focused.json',
+             'old-root-mutation.json', 'root-mutation.json', 'root-mutation.diff',
+             'root-restoration.json', 'make-test.json'):
+    copy(OUT / name, name)
+for name in ('run_command.py', 'check_continuity.py'):
+    copy(OUT / name, name + '.txt')
+
+bindings = {'observed_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    'kit_test_commit': '12a67be290989165e0e7f714942c3d59e38696fc',
+    'command': 'python3 /private/tmp/adk-ver03-7m5h8wtr/publish_evidence.py',
+    'cwd': str(REPO), 'program_sha256': sha(Path(__file__).read_bytes()), 'layouts': {}}
+for phase, parent in (('focused', 'focused.json'), ('mutation', 'old-root-mutation.json')):
+    base = OUT / (phase + '-basetemp')
+    for case in sorted(base.glob('test_committed_lens_comparison[0-9]*')):
+        config = next(case.glob('layout/config/dev-model.yaml'))
+        layout = 'nested' if 'engines: scripts/devkit' in config.read_text() else 'flat'
+        prefix = phase + '-' + layout
+        for path in sorted(case.glob('*.json')) + sorted(case.glob('*.diff')):
+            copy(path, prefix + '/' + path.name)
+        copy(config, prefix + '/config.yaml')
+        engines = case / 'layout' / ('scripts/devkit' if layout == 'nested' else 'scripts')
+        hashes = {}
+        for rel in ('panel_prompt.py', 'kit_doctor.py', 'lib/kitconfig.py', 'tests/_repo_layout.py',
+                    'tests/conftest.py', 'tests/test_panel_prompt.py'):
+            hashes[rel] = sha((engines / rel).read_bytes())
+        restored = {}
+        for lens in ('adversarial', 'correctness'):
+            rendered = json.loads((case / ('render-' + lens + '.json')).read_text())['stdout'].encode()
+            actual = (case / 'layout/.claude/agents' / (lens + '.md')).read_bytes()
+            assert actual == rendered, prefix + ' ' + lens + ' not restored'
+            restored[lens] = sha(actual)
+        bindings['layouts'][prefix] = {'parent_terminal': parent, 'case_root': str(case),
+            'copied_input_sha256': hashes, 'restored_definition_sha256': restored}
+(DEST / 'layout-bindings.json').write_text(json.dumps(bindings, indent=2) + '\n')
+copy(Path(__file__), 'publish_evidence.py.txt')
+manifest = {p.relative_to(DEST).as_posix(): sha(p.read_bytes()) for p in sorted(DEST.rglob('*'))
+            if p.is_file() and p.name != 'sha256.json'}
+(DEST / 'sha256.json').write_text(json.dumps(manifest, indent=2) + '\n')
+print('Published terminal records, synthetic-layout bindings, mutations and restoration evidence.')

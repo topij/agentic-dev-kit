@@ -105,9 +105,10 @@ node, fixture PR, Phase 5 exit, cs-toolkit replay or tracker write was performed
 
 ## Proposed exact decision: VER-03 — permanent root repair and layout regression
 
-**Prepared for a fresh operator decision; not implemented.** Review the retained
-VER-02 evidence in the next session before deciding this scope. If the kit test or
-helper has changed, present the current diff and revise the proposal before approval.
+**Historical approved scope; implementation recorded.** The operator subsequently
+approved VER-03. The [repair record](codex-adopt-ver03-repair_2026-09-06.md) retains
+its execution and verification. The original scope below is consumed; it grants no
+repeat execution. Merge and remaining fixture decisions stay separate.
 
 - In `scripts/tests/test_panel_prompt.py`, apply the trial's exact root assignment
   inside the named test. Preserve its marker, roster check and lens equality.
@@ -137,7 +138,7 @@ fixture PR, Phase 5 exit and cs-toolkit replay retain separate exact decisions.
 TRI-03/TRI-04/TRI-05, #608/#255 dispositions and the parked initializer issue
 proposal remain reserved; an incidental friction sweep cannot graduate them.
 
-## Next-session starter — Claude
+## Historical next-session starter — Claude, superseded by the VER-03 record
 
 ```text
 /session-start — follow docs/kit-handoff.md and the maintained Phase 5 reconciliation for #243. Read saved_plans/codex-adopt-ver02-trial_2026-09-06.md and its retained evidence, alongside the continuation review and PR #688. Review Codex's VER-02 outcomes and limits without repeating credited probes or exercises. Present VER-03's exact permanent root-repair and layout-regression scope for a fresh operator decision before implementing it. Recheck source/fixture continuity before any separately approved execution. Preserve separate decisions for initialization, fixture ownership/lenses/registration, verification follow-up, adoption completion, fixture PR, Phase 5 exit and cs-toolkit replay, plus TRI-03/TRI-04/TRI-05, #608/#255 and the parked initializer proposal. Update the maintained sprint status and next-session starter during /wrap-up and complete required PR follow-through. This starter grants no execution or merge approval.

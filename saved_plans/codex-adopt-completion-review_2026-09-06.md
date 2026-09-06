@@ -117,7 +117,8 @@ is not an enduring approval precondition.
 
 **Historical approved scope; execution recorded.** The operator approved this
 proposal after PR #688's merge. The [VER-02 trial record](codex-adopt-ver02-trial_2026-09-06.md)
-retains the execution and proposes VER-03 for a fresh decision. The approval is
+retains the execution. The separately approved [VER-03 repair](codex-adopt-ver03-repair_2026-09-06.md)
+records the permanent kit test change and synthetic-layout regression. The VER-02 approval is
 consumed; do not rerun this procedure under it. This is a diagnostic patch in
 private copies, not a landed kit repair. The question is whether correcting the
 known root calculation reaches the lens-content assertion, and what that assertion

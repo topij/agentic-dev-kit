@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "/Users/topi/.cache/uv/builds-v0/.tmpxQi4eu/bin/python",
+    "-m",
+    "pytest",
+    "--confcutdir",
+    "/private/tmp/adk-ver03-7m5h8wtr/mutation-basetemp/test_committed_lens_comparison0/layout",
+    "--basetemp",
+    "/private/tmp/adk-ver03-7m5h8wtr/mutation-basetemp/test_committed_lens_comparison0/comparison-clean-pytest",
+    "-q",
+    "scripts/tests/test_panel_prompt.py::test_the_committed_lens_definitions_are_what_the_generator_renders"
+  ],
+  "cwd": "/private/tmp/adk-ver03-7m5h8wtr/mutation-basetemp/test_committed_lens_comparison0/layout",
+  "exit_code": 0,
+  "stdout": ".                                                                        [100%]\n1 passed in 0.06s\n",
+  "stderr": ""
+}

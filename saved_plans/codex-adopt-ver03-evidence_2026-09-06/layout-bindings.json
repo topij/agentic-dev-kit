@@ -1,0 +1,73 @@
+{
+  "observed_at": "2026-09-06T13:00:48.281720+00:00",
+  "kit_test_commit": "12a67be290989165e0e7f714942c3d59e38696fc",
+  "command": "python3 /private/tmp/adk-ver03-7m5h8wtr/publish_evidence.py",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "program_sha256": "70cbfa66a6fad24d2bcecdd1c9b6fa61d6391e733d28f790b9f7b58b128af0e5",
+  "layouts": {
+    "focused-flat": {
+      "parent_terminal": "focused.json",
+      "case_root": "/private/tmp/adk-ver03-7m5h8wtr/focused-basetemp/test_committed_lens_comparison0",
+      "copied_input_sha256": {
+        "panel_prompt.py": "f596c5f4bb4eb2d403ba0d2c9365808b01c771ff8d38b9b9d98cc563fd1bdca4",
+        "kit_doctor.py": "c0bdc94d3daec992a6c45a5671715f858b699f456a6f67e5bfeb679a28a0af7a",
+        "lib/kitconfig.py": "4ab496661883d8f4ad590a6612a48b31f8cbf770283bb09794096149276634e6",
+        "tests/_repo_layout.py": "ab5c81c04b751f61a603f8b8a80f182b103f85417a58feb8abb725aebad7881b",
+        "tests/conftest.py": "aa11d3ea18997d7beb676d64b84469d6d582888501a8ec40dbdc03f251af4057",
+        "tests/test_panel_prompt.py": "a4937f85f74fb2cef7a4f3f9408908626dd8558998593e18f3c9c5d89155d7a9"
+      },
+      "restored_definition_sha256": {
+        "adversarial": "ed94521702a85b565d8410d847f04afeeff849bc45a89740f44252ffaab4720b",
+        "correctness": "b4cb63d2a795c1f9a88abaec84b9c78922a1d155765246ad1642fd9757527b96"
+      }
+    },
+    "focused-nested": {
+      "parent_terminal": "focused.json",
+      "case_root": "/private/tmp/adk-ver03-7m5h8wtr/focused-basetemp/test_committed_lens_comparison1",
+      "copied_input_sha256": {
+        "panel_prompt.py": "f596c5f4bb4eb2d403ba0d2c9365808b01c771ff8d38b9b9d98cc563fd1bdca4",
+        "kit_doctor.py": "c0bdc94d3daec992a6c45a5671715f858b699f456a6f67e5bfeb679a28a0af7a",
+        "lib/kitconfig.py": "4ab496661883d8f4ad590a6612a48b31f8cbf770283bb09794096149276634e6",
+        "tests/_repo_layout.py": "ab5c81c04b751f61a603f8b8a80f182b103f85417a58feb8abb725aebad7881b",
+        "tests/conftest.py": "aa11d3ea18997d7beb676d64b84469d6d582888501a8ec40dbdc03f251af4057",
+        "tests/test_panel_prompt.py": "a4937f85f74fb2cef7a4f3f9408908626dd8558998593e18f3c9c5d89155d7a9"
+      },
+      "restored_definition_sha256": {
+        "adversarial": "5472e7eca9fc68dd7c77318036aaa5f46ba8a4581add55f0d4627103cbc3aa97",
+        "correctness": "033160265923b433b9bb0351571a9707fd74995596970bfcf441d5751cc92e1c"
+      }
+    },
+    "mutation-flat": {
+      "parent_terminal": "old-root-mutation.json",
+      "case_root": "/private/tmp/adk-ver03-7m5h8wtr/mutation-basetemp/test_committed_lens_comparison0",
+      "copied_input_sha256": {
+        "panel_prompt.py": "f596c5f4bb4eb2d403ba0d2c9365808b01c771ff8d38b9b9d98cc563fd1bdca4",
+        "kit_doctor.py": "c0bdc94d3daec992a6c45a5671715f858b699f456a6f67e5bfeb679a28a0af7a",
+        "lib/kitconfig.py": "4ab496661883d8f4ad590a6612a48b31f8cbf770283bb09794096149276634e6",
+        "tests/_repo_layout.py": "ab5c81c04b751f61a603f8b8a80f182b103f85417a58feb8abb725aebad7881b",
+        "tests/conftest.py": "aa11d3ea18997d7beb676d64b84469d6d582888501a8ec40dbdc03f251af4057",
+        "tests/test_panel_prompt.py": "681887b7bec825b3ee42daa6ced4221e40b9e7d96962aff8a964b88d4d2cedf0"
+      },
+      "restored_definition_sha256": {
+        "adversarial": "ed94521702a85b565d8410d847f04afeeff849bc45a89740f44252ffaab4720b",
+        "correctness": "b4cb63d2a795c1f9a88abaec84b9c78922a1d155765246ad1642fd9757527b96"
+      }
+    },
+    "mutation-nested": {
+      "parent_terminal": "old-root-mutation.json",
+      "case_root": "/private/tmp/adk-ver03-7m5h8wtr/mutation-basetemp/test_committed_lens_comparison1",
+      "copied_input_sha256": {
+        "panel_prompt.py": "f596c5f4bb4eb2d403ba0d2c9365808b01c771ff8d38b9b9d98cc563fd1bdca4",
+        "kit_doctor.py": "c0bdc94d3daec992a6c45a5671715f858b699f456a6f67e5bfeb679a28a0af7a",
+        "lib/kitconfig.py": "4ab496661883d8f4ad590a6612a48b31f8cbf770283bb09794096149276634e6",
+        "tests/_repo_layout.py": "ab5c81c04b751f61a603f8b8a80f182b103f85417a58feb8abb725aebad7881b",
+        "tests/conftest.py": "aa11d3ea18997d7beb676d64b84469d6d582888501a8ec40dbdc03f251af4057",
+        "tests/test_panel_prompt.py": "681887b7bec825b3ee42daa6ced4221e40b9e7d96962aff8a964b88d4d2cedf0"
+      },
+      "restored_definition_sha256": {
+        "adversarial": "5472e7eca9fc68dd7c77318036aaa5f46ba8a4581add55f0d4627103cbc3aa97",
+        "correctness": "033160265923b433b9bb0351571a9707fd74995596970bfcf441d5751cc92e1c"
+      }
+    }
+  }
+}

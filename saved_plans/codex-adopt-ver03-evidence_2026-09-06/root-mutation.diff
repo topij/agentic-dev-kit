@@ -1,0 +1,11 @@
+--- a/scripts/tests/test_panel_prompt.py
++++ b/scripts/tests/test_panel_prompt.py
+@@ -1087,7 +1087,7 @@
+     carrying the old compute — the silent-inherit shape one layer up. Kills: any
+     hand edit to either file, and a config change without regeneration."""
+     pp = _load()
+-    root = REPO_ROOT
++    root = ENGINE.parent.parent
+     config = pp.load_config(root / "config" / "dev-model.yaml")
+     lenses = [entry["name"] for entry in pp.get(config, "review.fallback_panel.lenses", [])]
+     assert lenses, "the shipped roster is empty"

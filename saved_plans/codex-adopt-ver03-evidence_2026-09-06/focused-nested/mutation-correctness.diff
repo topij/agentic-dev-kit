@@ -1,0 +1,8 @@
+--- a/.claude/agents/correctness.md
++++ b/.claude/agents/correctness.md
+@@ -20,3 +20,5 @@
+ (`docs/agentic-dev-kit/fallback-review-panel.md`). You did NOT write the change under
+ review. Your launch prompt carries the contract, the revision, the diff, and your
+ focus; follow it exactly, and report what you reviewed before any finding.
++
++relocated definition mutation
