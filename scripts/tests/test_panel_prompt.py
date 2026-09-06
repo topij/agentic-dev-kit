@@ -24,7 +24,10 @@ gap `test_mutation_gate.py` records for itself.
 
 from __future__ import annotations
 
+import difflib
 import json
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -1084,7 +1087,7 @@ def test_the_committed_lens_definitions_are_what_the_generator_renders():
     carrying the old compute — the silent-inherit shape one layer up. Kills: any
     hand edit to either file, and a config change without regeneration."""
     pp = _load()
-    root = ENGINE.parent.parent
+    root = REPO_ROOT
     config = pp.load_config(root / "config" / "dev-model.yaml")
     lenses = [entry["name"] for entry in pp.get(config, "review.fallback_panel.lenses", [])]
     assert lenses, "the shipped roster is empty"
@@ -1094,3 +1097,93 @@ def test_the_committed_lens_definitions_are_what_the_generator_renders():
             f".claude/agents/{lens}.md differs from `panel_prompt.py --lens {lens} "
             "--agent-definition`; regenerate it rather than editing it"
         )
+
+
+@pytest.mark.parametrize("engine_rel", ["scripts", "scripts/devkit"], ids=["flat", "nested"])
+def test_committed_lens_comparison_in_relocated_layout(tmp_path, engine_rel):
+    """Exercise the real comparison after relocation, including its failure path.
+
+    A subprocess imports the copied module and root helper afresh. Patching its
+    globals here would hide the depth-based root mistake this regression catches.
+    Synthetic definitions keep this independent of adopter-owned lens files.
+    """
+    root = tmp_path / "layout"
+    root.mkdir()
+    (root / ".git").mkdir()
+    engines = root / engine_rel
+    for relative in (
+        "panel_prompt.py", "kit_doctor.py", "lib/kitconfig.py",
+        "tests/_repo_layout.py", "tests/conftest.py", "tests/test_panel_prompt.py",
+    ):
+        destination = engines / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ENGINE.parent / relative, destination)
+
+    (root / "config").mkdir()
+    (root / "config/dev-model.yaml").write_text(
+        f"paths:\n  engines: {engine_rel}\n"
+        "review:\n  fallback_panel:\n    lenses:\n"
+        "      - name: adversarial\n        focus: synthetic adversarial focus\n"
+        "      - name: correctness\n        focus: synthetic correctness focus\n"
+        "    lens_compute:\n      claude:\n        model: sonnet\n        effort: high\n",
+        encoding="utf-8",
+    )
+    definitions = root / ".claude/agents"
+    definitions.mkdir(parents=True)
+    env = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
+    env.update(
+        PYTEST_ADDOPTS="", PYTEST_DISABLE_PLUGIN_AUTOLOAD="1", PYTHONOPTIMIZE="0",
+        PYTHONDONTWRITEBYTECODE="1", DEVKIT_STATE_ROOT=str(tmp_path / "state"),
+    )
+
+    def run(label, argv):
+        result = subprocess.run(
+            argv, cwd=root, env=env, capture_output=True, text=True, timeout=60,
+        )
+        # Retain child output beside the fixture so a failed nested run is auditable.
+        (tmp_path / f"{label}.json").write_text(json.dumps({
+            "argv": argv, "cwd": str(root), "exit_code": result.returncode,
+            "stdout": result.stdout, "stderr": result.stderr,
+        }, indent=2) + "\n", encoding="utf-8")
+        return result
+
+    for lens in ("adversarial", "correctness"):
+        generated = run(f"render-{lens}", [
+            sys.executable, str(engines / "panel_prompt.py"), "--root", str(root),
+            "--agent-definition", "--lens", lens,
+        ])
+        assert generated.returncode == 0, generated.stderr
+        (definitions / f"{lens}.md").write_text(generated.stdout, encoding="utf-8")
+
+    node = (
+        f"{engine_rel}/tests/test_panel_prompt.py::"
+        "test_the_committed_lens_definitions_are_what_the_generator_renders"
+    )
+
+    def compare(label):
+        return run(label, [
+            sys.executable, "-m", "pytest", "--confcutdir", str(root),
+            "--basetemp", str(tmp_path / f"{label}-pytest"), "-q", node,
+        ])
+
+    positive = compare("comparison-clean")
+    assert positive.returncode == 0, positive.stdout + positive.stderr
+    assert "1 passed" in positive.stdout, positive.stdout  # a skip is not a pass
+    for lens in ("adversarial", "correctness"):
+        definition = definitions / f"{lens}.md"
+        original = definition.read_bytes()
+        try:
+            definition.write_bytes(original + b"\nrelocated definition mutation\n")
+            landed = definition.read_text(encoding="utf-8")
+            (tmp_path / f"mutation-{lens}.diff").write_text("".join(difflib.unified_diff(
+                original.decode().splitlines(keepends=True), landed.splitlines(keepends=True),
+                fromfile=f"a/.claude/agents/{lens}.md", tofile=f"b/.claude/agents/{lens}.md",
+            )), encoding="utf-8")
+            negative = compare(f"comparison-mutated-{lens}")
+            assert negative.returncode == 1, negative.stdout + negative.stderr
+            assert f"AssertionError: .claude/agents/{lens}.md differs" in negative.stdout, (
+                negative.stdout + negative.stderr
+            )
+        finally:
+            definition.write_bytes(original)
+        assert definition.read_bytes() == original
