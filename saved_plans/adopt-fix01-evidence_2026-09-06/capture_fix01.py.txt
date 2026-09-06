@@ -65,8 +65,16 @@ boundary = {
     'fixture_git': {'head': git(FIXTURE, 'rev-parse', 'HEAD'),
                     'branch': git(FIXTURE, 'rev-parse', '--abbrev-ref', 'HEAD'),
                     'remotes': git(FIXTURE, 'remote', '-v')},
-    'fixture_uncommitted': True,
+    # Derived, not assumed. An earlier draft hardcoded True here; the script
+    # commits nothing itself, but that says nothing about another process, and
+    # an artifact that presents an assumption as a check is the defect this
+    # bundle exists to avoid. Read it from the tree instead.
+    'fixture_uncommitted': {
+        path: bool(git(FIXTURE, 'status', '--porcelain', '--', path))
+        for path in sorted(APPROVED)
+    },
 }
+assert all(boundary['fixture_uncommitted'].values()), boundary['fixture_uncommitted']
 (OUT / 'doctor-after.json').write_text(json.dumps(doctor, indent=2) + '\n')
 (OUT / 'write-boundary.json').write_text(json.dumps(boundary, indent=2) + '\n')
 (OUT / 'fixture-inventory-after-fix01.json').write_text(

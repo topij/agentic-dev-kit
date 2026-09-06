@@ -1,9 +1,9 @@
 {
-  "capture_fix01.py.txt": "f6d765b1af6d94cb458b8dec58963e33323db39fd7525ea8127ce08d96d615ae",
+  "capture_fix01.py.txt": "d58e67b24b852a7e9644637aa6c4277f3983c88e4c3b9bfa3634da3dc38dedd8",
   "continuity-pre-fix01.json": "972a365e69030bf552efc073ad9d31b34038895eb2421013a4c28607feaf5d8f",
-  "doctor-after.json": "59c9e0c8020d501e43a3e608951adee5f58420a731aaf549301555cfe9d3a589",
+  "doctor-after.json": "5ea12b44a49f90c20a7912852f86c52a6403833701adc999f00930fd9ebb93b0",
   "fixture-inventory-after-fix01.json": "9c6a1f8b35c8b1a589428990bc86186436f37cdc5e525263ce5c45cbae633075",
   "ownership-and-lenses.patch.txt": "417e4d4947bbef414a83389893e6b5d53cb7753331440e4ddd1f6d9ee96680a2",
   "recheck_continuity.py.txt": "7efc48bdf991151b11aaf5435187367e9f0074b2190d94b18077ada33d9a80bc",
-  "write-boundary.json": "527096ab7679de3cf29716fc6fd036f3f8cb94db34d18adac7a4cbb5d85aec5a"
+  "write-boundary.json": "a3591ff5e0a2ad90975bd4431522544d9faafca7963845d9eeb6fd48186621fa"
 }

@@ -40,6 +40,8 @@ definitions; registration and verification follow-up stay separate.
 - **The fixture continuity baseline is superseded** by approved change. Compare against
   `fixture-inventory-after-fix01.json` in the FIX-01 evidence, not the VER-02/VER-03
   inventory; a mismatch against the older one is not drift.
+- Filed on the operator's approval of the exact payload: #692, for the doctor remedy
+  above. #338 stays open and covers the initializer side of the same ambiguity.
 - The maintained [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md) retains
   Phase 5 in progress and Phase 6 not started. Runtime registration, verification
   follow-up, new initialization, adoption completion, fixture PR, Phase 5 exit and

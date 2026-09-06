@@ -20,9 +20,12 @@ commit was made in the fixture, and no initializer ran.
 
 `git diff --name-only ab0a6d62308b298478b2f85fc961f14348f35365..HEAD` in
 `/Users/topi/Coding/agentic-dev-kit` at `585483b6d6b65f01e6d98304a6ac0fde77bcbed7` on
-2026-09-06 UTC listed, outside the narrative and `saved_plans` records,
-`docs/agentic-dev-kit/workflows/adopt.md`, `kit-manifest.json` and
-`scripts/tests/test_panel_prompt.py`. The landed VER-03 repair changed the test, not the
+2026-09-06 UTC listed, outside `saved_plans` and the four narrative records named by
+`paths.handoff`, `paths.handoff_history`, `paths.friction_log` and
+`paths.friction_log_archive`, `docs/agentic-dev-kit/workflows/adopt.md`,
+`kit-manifest.json` and `scripts/tests/test_panel_prompt.py`. Naming the four keys
+rather than saying "narrative" is deliberate: a review round read the shorter phrase as
+covering the handoff alone and reported the friction log as an omission from the list. The landed VER-03 repair changed the test, not the
 renderer: `scripts/panel_prompt.py`, its `config/dev-model.yaml` lens keys and the kit's
 own `.claude/agents/` definitions are unchanged across that range. The retained diff was
 therefore current against the kit as well as against the fixture.
@@ -45,7 +48,19 @@ differs from the retained original. Run in `/Users/topi/Coding/agentic-dev-kit` 
 `585483b6d6b65f01e6d98304a6ac0fde77bcbed7` on 2026-09-06 UTC immediately before the
 write, it exited zero with both inventories, both Git states and the legacy fixture
 hashes matching; the [result](adopt-fix01-evidence_2026-09-06/continuity-pre-fix01.json)
-binds that read. The fixture was on `chore/adopt-agentic-dev-kit` at
+binds that read.
+
+**That result's own `command` field is wrong, and this paragraph is the correction.**
+It reads `python3 /private/tmp/adk-ver03-7m5h8wtr/check_continuity.py` because the
+VER-03 program hardcodes that string as a literal, and copying the program forward
+carried the literal with it. The invocation was the scratch copy named above; the
+`program_sha256` in the same file
+(`7efc48bdf991151b11aaf5435187367e9f0074b2190d94b18077ada33d9a80bc`) is the digest of
+the retained `recheck_continuity.py.txt` and not of the VER-03 original, so the two
+fields disagree and the digest is the one to trust. A retained artifact that misreports
+its own command is exactly what `AGENTS.md`'s stamp rule exists to prevent; the field is
+left as the program emitted it rather than edited after the fact, and named here
+instead. The fixture was on `chore/adopt-agentic-dev-kit` at
 `08ac687f4ae14218a3861c6b8b143d8b86c4e3c2` with no remote, and the destination `pwd` was
 asserted before the write.
 
