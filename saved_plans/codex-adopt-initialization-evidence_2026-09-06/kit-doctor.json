@@ -1,0 +1,23 @@
+{
+  "date": "2026-09-06",
+  "cwd": "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+  "revision": "08ac687f4ae14218a3861c6b8b143d8b86c4e3c2",
+  "installed_source": "ab0a6d62308b298478b2f85fc961f14348f35365",
+  "argv": [
+    "uv",
+    "run",
+    "scripts/devkit/kit_doctor.py",
+    "--manifest",
+    "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source/kit-manifest.json"
+  ],
+  "result": {
+    "status": "fulfilled",
+    "value": {
+      "chunk_id": "f120e6",
+      "wall_time_seconds": 0.017203167,
+      "exit_code": 0,
+      "original_token_count": 357,
+      "output": "kit-doctor — installation report\n\n  ✓ config schema: v2\n  ✓ paths.engines: scripts/devkit\n  ✓ pre-push hook: installed\n  · .claude/settings.json [claude]: not present — no registration on this runtime\n  · .codex/hooks.json [codex]: not present — no registration on this runtime\n    (registrations are hand-written — ./init.sh prints both blocks; `/hooks` in a session is the authority on what loaded)\n  ⚠ .claude/agents/adversarial.md [claude lens=adversarial]: differs from the running doctor's expected output — inspect and regenerate it\n  ⚠ .claude/agents/correctness.md [claude lens=correctness]: differs from the running doctor's expected output — inspect and regenerate it\n    (lens definitions are adopter-owned — first resolve any kit engine drift reported below, then inspect the target and regenerate one with cd /private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture && mkdir -p .claude/agents && uv run scripts/devkit/panel_prompt.py --root . --lens <name> --agent-definition > .claude/agents/<name>.md; this check never executes the command or writes the definitions)\n  ✓ ROADMAP.md: in use\n  ✓ notes/friction.md: in use\n  ⚠ AGENTS.md: still the kit's own contract, not yours — run ./init.sh\n  ✓ CLAUDE.md: in use\n\n  files: 62 unchanged, 0 differ, 0 missing, 0 unknown\n  ✓ intact for this adoption — full install, nothing declined\n  baseline: installed from kit ab0a6d62308b\n"
+    }
+  }
+}

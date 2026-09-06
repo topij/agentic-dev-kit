@@ -267,7 +267,7 @@ maintained *Sprint status* and *Delivery plan* sections below.
     author edits is the one the renderer ships; add the appended-instruction mutation
     for `adopt`, `upgrade` and `pr-watch`.
 
-## Sprint status — reconciled 2026-09-01, re-sequenced 2026-09-02
+## Sprint status — reconciled 2026-09-06
 
 The machine-readable inventory and current capability judgments live in
 [`runtime-parity.md`](../docs/agentic-dev-kit/runtime-parity.md); this plan supplies
@@ -285,8 +285,9 @@ historical observation it was and is not silently refreshed.
   [`codex-safety-doctrine-live-validation_2026-08-24.md`](codex-safety-doctrine-live-validation_2026-08-24.md)
   then established, for the stamped trusted client observation, that Codex supplied
   the root route and read and applied the shared doctrine for affected merge-authority
-  work. It does not generalize one client observation. Interactive-TUI
-  `systemMessage` presentation remains an explicit live-client gap.
+  work. PR `#680` subsequently recorded a scoped interactive-TUI
+  `systemMessage` observation. The non-load-bearing matrix declaration remains;
+  neither client observation establishes a general presentation guarantee.
 - [x] **Phase 3 — Complete workflow and integration coverage.** PR `#595` merged the
   bounded `post-merge-systemize` extraction with a shared definition, thin runtime
   bindings, config-owned policy, equivalent durable artifacts, and explicit capability
@@ -356,10 +357,9 @@ historical observation it was and is not silently refreshed.
      Not built: a model or effort control on the wrapper, which the run gave no reason
      to add — the lane resolved to the product default and the task did not need
      another tier.
-     Adopt now, mechanise later: the final verification stamp is a PR comment at the
-     merged head, and a panel that ran leaves a disposition comment (`#603`, `#604`).
-     Phase 5 owns `#236`, the `#243` narrowing (adapter generation), and `#631`; Phase 6
-     takes `#607` as the adopter pilot and `#608`.
+     PR `#667` subsequently delivered the review disposition and stamp/head reporting
+     for `#603`/`#604`. The maintained Phase 5 checklist below owns the adopter pilot,
+     declaration work and remaining field coverage.
   6. Carried by PR `#651`: the repository-owned redacted evidence contract, hostile
      missing/altered/wrong-revision/claim-relabel mutations, and tracked positive
      control now refuse promotion when the retained bytes, complete claim-to-artifact
@@ -378,11 +378,8 @@ historical observation it was and is not silently refreshed.
      stays historical and unpromoted. The retained record is
      [`codex-writing-lane-live-validation_2026-08-30.md`](codex-writing-lane-live-validation_2026-08-30.md).
      This implements `#621`'s durable-evidence contract for the bounded writing-lane
-     claims. It does not establish the Phase 4 exit: the retained run is a writing
-     lane, not the parallel batch the exit condition requires. The remaining exit is a
-     retained, independently recomputable Codex parallel-batch run that demonstrates
-     disjoint worktree and state-root identities, exact-head review evidence, and
-     operator merge authority without merging.
+     claims. That writing-lane record alone does not establish the Phase 4 exit.
+     The required retained parallel-batch evidence followed in PR `#659`, below.
   7. Done in PR `#659`: the Codex-produced parallel batch retains both descriptor and
      launcher identity chains, independent filesystem and Git read-backs, both exact
      reviewed heads and dual-lens receipts, operator merge refusals, reconciliation's
@@ -409,7 +406,7 @@ historical observation it was and is not silently refreshed.
   it from the adopter-shipped set, plus putting review evidence on the pull request
   (`#603`, `#604`), join the phase; `#631` and `#608` are taken as declarations rather
   than mechanisms, while `#255` retains its general enforcement mechanism. Delivery
-  order, updated on 2026-09-03 by operator direction after the repo-only delivery:
+  order, reconciled on 2026-09-06 against the retained field records:
   1. [x] Adopter pilot, read-only pass first (`#607`, `#236`, `#243`).
   2. [x] `pr_watch.py --record-review` posting the disposition comment; stamp/head and
      receipt/comment mismatches reported.
@@ -418,8 +415,11 @@ historical observation it was and is not silently refreshed.
   4. [x] Initial pilot write pass and separate fork reconciliation, recorded with the
      stage identities in the Phase 5 checklist below. This pass does not establish the
      phase exit.
-  5. [ ] Complete the remaining `#243` field exercises and reconcile `#608`/`#255`
-     tracker dispositions with the landed work on the operator's decision.
+  5. [ ] **In progress:** complete the remaining `#243` field exercises and reconcile
+     `#608`/`#255` tracker dispositions on the operator's decision. The approved
+     [adopt continuation](codex-adopt-initialization-field-exercise_2026-09-06.md)
+     executed initialization and attempted Step 4 checks; the installed suites failed.
+     Adoption completion remains pending, as do the untested systemize routes.
   6. [ ] Replay the write pass and fork reconciliation from the then-current kit source,
      using the same `$REPO` origin check, `$KIT` path, and immediately-before-every-write
      directory assertion as the initial pass. For a stage with a diff, bind its PR
@@ -441,7 +441,7 @@ historical observation it was and is not silently refreshed.
      requires replay. Publish both snapshots and the stamped verification result on the
      kit wrap-up PR before it merges. Later ref movement is a separate event; wrap-up
      records the observation without treating its own commit as the replay source.
-- [ ] **Phase 6 — Gate parity and roll it out.** With the pilot pulled into Phase 5,
+- [ ] **Phase 6 — Gate parity and roll it out (not started).** With the pilot pulled into Phase 5,
   this phase holds the cost and hygiene work the review found burning, then the gate:
   the proportional opening pass for record prose (`#585`); the suite measured and
   marked (`make test-fast` beside an unchanged `make test`); the learnings memo
@@ -736,8 +736,8 @@ and final open/unmerged fixture pull requests.
 
 - [x] Decide the shipped Claude lane allowances as repository policy and bind the Codex
   side by equivalent safety doctrine rather than copied command syntax (PR `#632`).
-  The profile is task-scoping rather than a hostile-code boundary; `#631` owns the
-  executable-boundary mechanism.
+  The profile is task-scoping rather than a hostile-code boundary. PR `#676` later
+  carried `#631` as the declaration recorded below; no execution guard was built.
 - [x] Make generated Claude and Codex adapters refreshable while preserving
   adopter-authored variants, and make upgrade verification select the manifest-declared
   installed tests (PR `#635`). `#236` keeps the engine/doctrine survey where path or
@@ -832,7 +832,7 @@ citation remains in Phase 6's implementation scope.
 |---|---|---|
 | `parallel` | [Retained Codex batch](codex-parallel-batch-live-validation_2026-09-01.md), delivered by PR #659: lane identity, isolation, exact-head review, reconciliation and operator merge refusal. | Do not repeat that batch. Credit only its retained claim map, not every parallel mode. |
 | `triage-friction-log` | Codex's interactive LLM-only route completed through [PR #673](https://github.com/topij/agentic-dev-kit/pull/673); the committed graduation marker retains the approved and parked dispositions. The local run report and completed state were re-read in this session. | Do not repeat that graduation. Engine-backed and notification-service routes are not established by it; preserve TRI-03/TRI-04/TRI-05 for fresh exact decisions. |
-| `adopt` | PR #682: [bounded Codex context exercise](codex-adopt-field-exercise_2026-09-05.md): shared inspection, merged fixture config, approved staging, destination baseline, and Step 3c handoff. | Credit that bounded route only. Operator `init.sh`, post-init verification and fixture PR completion were not executed. |
+| `adopt` | PR #682: [bounded Codex context exercise](codex-adopt-field-exercise_2026-09-05.md): inspection, staging, baseline and Step 3c handoff. The separately approved [initialization continuation](codex-adopt-initialization-field-exercise_2026-09-06.md) retains initializer execution and Step 4 results, including the failed installed suites. | Credit execution and the recorded results only. Ownership-marker resolution, runtime registrations, lens-definition handling, successful adoption verification and fixture PR completion remain pending. |
 | `post-merge-systemize` | PR #684: [bounded Codex test exercise](codex-systemize-test-field-exercise_2026-09-06.md): merged-config read, capability preflight, trusted review inputs, digest validation, artifact checkpoints and proposed routing. | Credit test-mode analysis only. Live routing, engine-backed operation and full restart recovery were not exercised; do not repeat this test as if no field evidence exists. |
 
 The local triage references inspected were
@@ -851,7 +851,10 @@ fixture reproduced long-scalar loss and verified corrected serialization with a
 separate differing local override; the implementation PR retains the program and
 stamped read-backs. This does not exercise operator initialization, later adoption
 verification, fixture PR completion, or any remaining systemize route. Keep those
-boundaries and the Phase 5 exit unchecked; #243 stays open.
+boundaries for that implementation. The separately approved initialization continuation
+above advances the adopt route without establishing successful adoption verification,
+fixture PR completion or Phase 5 exit. Those completion gates remain unchecked;
+#243 stays open.
 
 PR #685's [fixture evidence](https://github.com/topij/agentic-dev-kit/pull/685#issuecomment-5555450011)
 and [full Codex panel record](https://github.com/topij/agentic-dev-kit/pull/685#issuecomment-5555538351)

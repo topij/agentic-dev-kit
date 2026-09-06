@@ -1,0 +1,8 @@
+{
+  "decision": "approved",
+  "source": "Operator user message in the current Codex conversation on 2026-09-06",
+  "proposal": "/private/tmp/adk-adopt-continuation-20260906-AFeElK/operator-decision.md",
+  "proposal_sha256": "d2b30f0814a84bb586c47dc97b87bd9c24b8fd7cc333d117003fc6dc0b6c3b1d",
+  "scope": "Codex executes the exact fixture-only initialization proposal and Step 4 verification, overriding the adopt executor rule for this exercise.",
+  "reserved": ["Adoption completion", "Fixture remote or PR", "Phase 5 exit", "cs-toolkit replay", "TRI-03", "TRI-04", "TRI-05", "#608 disposition", "#255 disposition"]
+}
