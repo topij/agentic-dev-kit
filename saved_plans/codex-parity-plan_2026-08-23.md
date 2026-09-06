@@ -426,9 +426,12 @@ historical observation it was and is not silently refreshed.
      records the copied-test root repair, assertion outcome and mutation/restoration
      evidence. The separately approved [VER-03 repair](codex-adopt-ver03-repair_2026-09-06.md)
      records the permanent kit test-root change, synthetic-layout regression and
-     mutation/restoration. It leaves the original fixture untouched. Prepare the
-     remaining exact fixture decisions; do not repeat credited probes or promote
-     synthetic regression results to fixture completion.
+     mutation/restoration. It leaves the original fixture untouched. The approved
+     [FIX-01 application](adopt-fix01-ownership-lenses_2026-09-06.md) then applied the
+     retained ownership/lens diff to the original fixture and supersedes its continuity
+     baseline. Runtime registration, the installed-suite verification follow-up and
+     adoption completion keep their own exact decisions; do not repeat credited probes
+     or promote a warning-free doctor exit to fixture completion.
   6. [ ] Replay the write pass and fork reconciliation from the then-current kit source,
      using the same `$REPO` origin check, `$KIT` path, and immediately-before-every-write
      directory assertion as the initial pass. For a stage with a diff, bind its PR

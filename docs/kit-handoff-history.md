@@ -5,6 +5,86 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-09-05 (`#631`'s declaration boundary, in a Claude Code session)
+
+**Theme —** The lane execution boundary was decided as a declaration rather than built as
+a mechanism, and the review that landed it exercised the new evidence contract end to end.
+
+- **Runtime —** Claude Code, model `claude-opus-5[1m]` as this session's own system
+  prompt names it; effort not read.
+
+- **PR `#676` (squash `7adb625`) delivered `#631`'s declaration.** The shared lane
+  contract and the `Command permissions` matrix row now state that what bounds a lane is
+  the worktree and the forge's branch protection; that **neither bounds the lane's
+  process**, the escape `#606` measured being exactly that case; that the Codex mirror is
+  `--sandbox workspace-write` from the launcher's engine-owned vocabulary rather than the
+  allow list rendered into another syntax; and that **no lane-side execution guard is
+  built without a request for one**. Neither route the issue opened was adopted. `#631`
+  is closed on the operator's approval, with the disposition on the issue rather than
+  restated here.
+
+- **The `#671`/`#672` evidence contract carried, and earned its keep.** Every lens
+  returned a terminal report with a mutation diff against saved original bytes and
+  verified byte-identical restoration. What the panel found was in the prose beside the
+  work rather than in the work: a headline that read as a containment guarantee, and then
+  an unstamped comparative claim about the Codex sandbox that the fix round for the first
+  finding had itself introduced.
+
+- **A lens disputed the author's draw and was right.**
+  `fallback-review-panel.md:615` sends a fix round whose delta contains executed prose to
+  the full re-run; the dual-lens option belongs to the record-prose-only branch. One round
+  was run as a delta pass where a full panel was owed, so a full panel followed at the fix
+  head and returned no correctness findings. The legibility of that branch is filed
+  separately.
+
+- **Verified:** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `72f195717059700991fa429ffdb2b217661e22ab` on 2026-09-05, on a quiet tree, printed
+  `1 failed, 2435 passed, 1 skipped in 362.94s (0:06:02)`. The failure is the
+  pre-existing `#393`-shaped `test_pr_followup_hook` flake; the round-3 correctness lens
+  ran the suite at the base in its own clone and found it absent there. CI was green at
+  the merged head.
+
+- **Filed this session, on the operator's approval of each exact payload:** `#677` (the
+  `#428` guard reports a concurrent cockpit write as a suite leak, and its remedy line
+  would have the reader delete the review receipt the merge gate reads) and `#678` (the
+  delta-pass branch condition sits inside the record-prose-only sentence). An occurrence
+  was added to `#645`: a `cd` outlived its command in the cockpit's own checkout, and
+  failed *misleadingly* rather than loudly — which is the property that issue's scope
+  argument assumes the two-tree boundary tracks. Each was read back from the tracker
+  after landing.
+
+▶ Next: `$session-start` — then `#608`'s matrix row and `#255`'s general mechanism, which
+the maintained parity plan joins in one Phase 5 checklist line, before the remaining
+`#243` field exercises and the final adopter replay. **Run it in Codex:** `#608` is a
+Codex interactive-TUI observation, so its "not observed, not load-bearing" matrix row is
+worth declaring from the side that can check it first-hand rather than inherit it, and
+`#255`'s per-runtime config keys are exercised by building the test there. The friction
+log is over its budget and its parked `TRI-03`/`TRI-04`/`TRI-05` still need fresh exact
+operator dispositions before `triage-friction-log` can graduate them.
+
+## Session — 2026-09-05 (adopter write pilot and review evidence, in Codex)
+
+**Theme —** Complete the initial adopter rehearsal and strengthen the shared review
+instructions before the final parity replay.
+
+- The operator-authorized cs-toolkit upgrade and fork reconciliation merged on
+  2026-09-05 as [#2222](https://github.com/in-parallel-oy/cs-toolkit/pull/2222) and
+  [#2223](https://github.com/in-parallel-oy/cs-toolkit/pull/2223). The
+  [maintained parity plan](../saved_plans/codex-parity-plan_2026-08-23.md#phase-5--align-permissions-installation-and-upgrades)
+  records the kit source, adopter input, and stage revisions.
+- The shared fallback review contract now requires terminal verification reports,
+  proof that a mutation changed the intended bytes, and verified restoration
+  (`#671`, `#672`). The prompt assembler carries that contract to Claude and Codex;
+  the test checks transport, not whether a reviewer obeys the instructions.
+- This initial pilot does not establish the Phase 5 exit. Preserve the remaining
+  `#631`, `#608`, `#255`, and `#243` work and the final replay conditions in the plan.
+- The parked friction decisions from the preceding triage remain in force.
+  `TRI-03`, `TRI-04`, and `TRI-05` need fresh exact operator dispositions before
+  graduation; do not sweep them as part of this wrap-up.
+
+▶ Next: `$session-start` — implement `#631`'s declaration boundary from the maintained
+parity plan, then sequence `#608`/`#255` and `#243` before the final adopter replay.
+
 ## Session — 2026-09-03 (`#662` and friction triage, in a Codex session)
 
 **Theme —** The verifier received its repo-only manifest role, the approved friction

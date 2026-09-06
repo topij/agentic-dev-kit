@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "python3",
+    "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture/scripts/devkit/kit_doctor.py",
+    "--root",
+    "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+    "--manifest",
+    "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source/kit-manifest.json"
+  ],
+  "cwd": "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+  "exit_code": 0,
+  "stdout": "kit-doctor \u2014 installation report\n\n  \u2713 config schema: v2\n  \u2713 paths.engines: scripts/devkit\n  \u2713 pre-push hook: installed\n  \u00b7 .claude/settings.json [claude]: not present \u2014 no registration on this runtime\n  \u00b7 .codex/hooks.json [codex]: not present \u2014 no registration on this runtime\n    (registrations are hand-written \u2014 ./init.sh prints both blocks; `/hooks` in a session is the authority on what loaded)\n  \u2713 .claude/agents/adversarial.md [claude lens=adversarial]: matches the running doctor's expected output\n  \u2713 .claude/agents/correctness.md [claude lens=correctness]: matches the running doctor's expected output\n  \u2713 ROADMAP.md: in use\n  \u2713 notes/friction.md: in use\n  \u2713 AGENTS.md: in use\n  \u2713 CLAUDE.md: in use\n\n  files: 62 unchanged, 0 differ, 0 missing, 0 unknown\n  \u2713 intact for this adoption \u2014 full install, nothing declined\n  baseline: installed from kit ab0a6d62308b\n",
+  "stderr": "",
+  "observed_at": "2026-09-06T16:31:24.831717+00:00"
+}
