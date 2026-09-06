@@ -1,0 +1,7 @@
+{
+  "executable": "/private/tmp/adk-adopt-ver02-ja4w9bd0/venv/bin/python",
+  "version": "3.14.7 (main, Aug  7 2026, 02:15:30) [Clang 22.1.3 ]",
+  "optimize": 0,
+  "pytest": "9.1.1",
+  "PyYAML": "6.0.3"
+}

@@ -1,0 +1,16 @@
+{
+  "command": "python3 - (operation described in mismatch-comparison-command.json)",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "kit_revision": "cd39158df81457feafa4bd281d928f8fec7d9faf",
+  "observed_at": "2026-09-06T11:59:39.185502+00:00",
+  "fixture_revision": "08ac687f4ae14218a3861c6b8b143d8b86c4e3c2",
+  "installed_source": "ab0a6d62308b298478b2f85fc961f14348f35365",
+  "fixture_trial_result": "fixture-trial.json",
+  "trial_reached_lens": "adversarial",
+  "terminal_difference": "scripts/panel_prompt.py versus scripts/devkit/panel_prompt.py",
+  "complete_diff_source": "Preserved fixture bytes compared with PR #687 retained renderer output; this is not a new renderer invocation.",
+  "diff": "--- a/.claude/agents/adversarial.md\n+++ b/.claude/agents/adversarial.md\n@@ -1,13 +1,13 @@\n ---\n name: adversarial\n-description: \"Fallback review panel lens adversarial: assume the change is wrong and try to prove it \u2014 bypasses, fail-open paths, wedges, and whether the new guard actually guards. Launch it only with a prompt assembled by scripts/panel_prompt.py; it is not a general-purpose agent.\"\n+description: \"Fallback review panel lens adversarial: assume the change is wrong and try to prove it \u2014 bypasses, fail-open paths, wedges, and whether the new guard actually guards. Launch it only with a prompt assembled by scripts/devkit/panel_prompt.py; it is not a general-purpose agent.\"\n model: \"sonnet\"\n effort: high\n ---\n \n Generated from `config/dev-model.yaml` (`review.fallback_panel.lenses` and\n `review.fallback_panel.lens_compute.claude`) by\n-`scripts/panel_prompt.py --lens adversarial --agent-definition`. Regenerate it after\n+`scripts/devkit/panel_prompt.py --lens adversarial --agent-definition`. Regenerate it after\n changing either key; do not edit it by hand.\n \n The frontmatter is what makes the configured compute mechanical: Claude Code\n",
+  "diff_matches_retained_proposal": true,
+  "current_generator_full_output_not_captured": true,
+  "correctness_lens_not_reached_by_fixture_trial": true
+}

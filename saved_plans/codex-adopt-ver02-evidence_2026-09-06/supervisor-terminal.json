@@ -1,0 +1,31 @@
+{
+  "initial_supervisor": {
+    "argv": [
+      "python3",
+      "/private/tmp/adk-adopt-ver02-ja4w9bd0/run_trial.py"
+    ],
+    "cwd": "/Users/topi/Coding/agentic-dev-kit",
+    "environment_overrides": {
+      "PYTHONDONTWRITEBYTECODE": "1",
+      "PYTHONOPTIMIZE": "0"
+    },
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Traceback (most recent call last):\n  File \"/private/tmp/adk-adopt-ver02-ja4w9bd0/run_trial.py\", line 232, in <module>\n    main()\n    ~~~~^^\n  File \"/private/tmp/adk-adopt-ver02-ja4w9bd0/run_trial.py\", line 184, in main\n    require(Path(resolved['executable']).is_absolute() and Path(resolved['executable']).is_file(), 'Resolved interpreter is unusable')\n    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/private/tmp/adk-adopt-ver02-ja4w9bd0/run_trial.py\", line 26, in require\n    raise RuntimeError(message)\nRuntimeError: Resolved interpreter is unusable\n"
+  },
+  "continuation_supervisor": {
+    "argv": [
+      "python3",
+      "/private/tmp/adk-adopt-ver02-ja4w9bd0/resume_trial.py"
+    ],
+    "cwd": "/Users/topi/Coding/agentic-dev-kit",
+    "environment_overrides": {
+      "PYTHONDONTWRITEBYTECODE": "1",
+      "PYTHONOPTIMIZE": "0"
+    },
+    "exit_code": 0,
+    "stdout": "{\n  \"observed_at\": \"2026-09-06T11:58:10.884786+00:00\",\n  \"kit_revision\": \"cd39158df81457feafa4bd281d928f8fec7d9faf\",\n  \"source_control_passed_without_skip\": true,\n  \"fixture_reached_adversarial_equality\": true,\n  \"source_mutation_rejected_by_equality\": true,\n  \"fixture_adoption_verified\": false\n}\n\n",
+    "stderr": ""
+  },
+  "source": "Terminal outputs read from the execution sessions; child-command records carry their own timestamps."
+}

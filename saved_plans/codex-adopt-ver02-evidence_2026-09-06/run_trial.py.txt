@@ -1,0 +1,232 @@
+"""VER-02 execution record; tied to the approved inputs and disposable roots."""
+
+from pathlib import Path
+import datetime
+import difflib
+import hashlib
+import json
+import os
+import shutil
+import stat
+import subprocess
+import sys
+
+ROOT = Path('/Users/topi/Coding/agentic-dev-kit')
+OUT = Path('/private/tmp/adk-adopt-ver02-ja4w9bd0')
+PRE = json.loads((OUT / 'preflight.json').read_text())
+SOURCE = Path(PRE['source'])
+FIXTURE = Path(PRE['fixture'])
+NODE = 'test_the_committed_lens_definitions_are_what_the_generator_renders'
+ENV = {k: os.environ[k] for k in ('PATH', 'HOME', 'USER', 'LOGNAME', 'TMPDIR', 'LANG', 'LC_ALL') if k in os.environ}
+ENV.update(PYTHONDONTWRITEBYTECODE='1', PYTHONOPTIMIZE='0', GIT_OPTIONAL_LOCKS='0')
+
+
+def require(ok, message):
+    if not ok:
+        raise RuntimeError(message)
+
+
+def now():
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+
+def sha(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def enter(root):
+    os.chdir(root)
+    require(Path.cwd().resolve() == root, 'Unexpected destination cwd: ' + str(root))
+
+
+def publish(name, data):
+    enter(OUT)
+    (OUT / name).write_text(json.dumps(data, indent=2) + '\n')
+
+
+def inventory(root):
+    data = {}
+    for directory, dirs, files in os.walk(root, followlinks=False):
+        dirs[:] = sorted(x for x in dirs if x != '.git')
+        for name in sorted(dirs + files):
+            if name == '.git':
+                continue
+            p = Path(directory) / name
+            row = {'mode': oct(stat.S_IMODE(p.lstat().st_mode))}
+            if p.is_symlink():
+                row.update(kind='symlink', target=os.readlink(p))
+            elif p.is_file():
+                row.update(kind='file', sha256=sha(p.read_bytes()))
+            elif p.is_dir():
+                row.update(kind='directory')
+            else:
+                raise RuntimeError('Unsupported input type: ' + str(p))
+            data[p.relative_to(root).as_posix()] = row
+    return data
+
+
+def run(label, argv, cwd, env=ENV, timeout=120):
+    enter(cwd)
+    result = {'argv': argv, 'cwd': str(cwd), 'started_at': now(),
+              'kit_revision': PRE['kit_revision'], 'timeout_seconds': timeout,
+              'environment': {k: v for k, v in env.items() if k not in ('USER', 'LOGNAME')},
+              'runner_sha256': sha(Path(__file__).read_bytes())}
+    try:
+        p = subprocess.run(argv, cwd=cwd, env=env, capture_output=True, text=True, timeout=timeout)
+        result.update(exit_code=p.returncode, stdout=p.stdout, stderr=p.stderr, timed_out=False)
+    except subprocess.TimeoutExpired as exc:
+        def decode(value):
+            return value.decode(errors='replace') if isinstance(value, bytes) else value or ''
+        result.update(exit_code=None, stdout=decode(exc.stdout), stderr=decode(exc.stderr), timed_out=True)
+    except OSError as exc:
+        result.update(exit_code=None, stdout='', stderr=str(exc), timed_out=False, setup_refusal=True)
+    result['finished_at'] = now()
+    result['stdout_sha256'] = sha(result['stdout'].encode())
+    result['stderr_sha256'] = sha(result['stderr'].encode())
+    publish(label + '.json', result)
+    return result
+
+
+def checked(label, argv, cwd, env=ENV):
+    result = run(label, argv, cwd, env)
+    require(result['exit_code'] == 0, label + ' did not complete: see retained terminal record')
+    return result['stdout'].strip()
+
+
+def git(root, *args):
+    return subprocess.check_output(['git', '-C', str(root), *args], env=ENV, text=True).strip()
+
+
+def legacy_snapshot():
+    paths = [p for p in FIXTURE.rglob('*') if '.git' not in p.relative_to(FIXTURE).parts]
+    paths += [FIXTURE / '.git/config', FIXTURE / '.git/hooks/pre-push']
+    return {str(p.relative_to(FIXTURE)): sha(p.read_bytes()) for p in sorted(paths) if p.is_file()}
+
+
+def check_originals():
+    result = {'observed_at': now(), 'kit_revision': PRE['kit_revision'], 'cwd': str(ROOT)}
+    for label, original in (('source', SOURCE), ('fixture', FIXTURE)):
+        expected = json.loads((OUT / (label + '-input-inventory.json')).read_text())
+        actual = inventory(original)
+        result[label + '_inventory_matches'] = actual == expected
+        require(actual == expected, label + ' original inventory changed')
+        expected_git = PRE[label + '_git']
+        for key, args in {'head': ('rev-parse', 'HEAD'), 'branch': ('rev-parse', '--abbrev-ref', 'HEAD'),
+                          'remotes': ('remote', '-v'), 'status': ('status', '--porcelain', '--untracked-files=all'),
+                          'index': ('ls-files', '--stage')}.items():
+            require(git(original, *args) == expected_git[key], label + ' original Git ' + key + ' changed')
+        result[label + '_git_matches'] = True
+    require(legacy_snapshot() == json.loads((OUT / 'legacy-fixture-input.json').read_text()), 'Legacy fixture snapshot changed')
+    result['legacy_fixture_snapshot_matches'] = True
+    return result
+
+
+def prepare_copy(label, original, relative_test):
+    check_originals()
+    copy = OUT / (label + '-copy')
+    require(not copy.exists(), 'Copy destination already exists')
+    checked(label + '-clone', ['git', '-c', 'core.hooksPath=/dev/null', 'clone', '--no-local', '--no-hardlinks', '--no-checkout', str(original), str(copy)], OUT)
+    checked(label + '-remove-origin', ['git', '-C', str(copy), 'remote', 'remove', 'origin'], copy)
+    checked(label + '-read-index', ['git', '-C', str(copy), 'read-tree', 'HEAD'], copy)
+    enter(copy)
+    shutil.copytree(original, copy, dirs_exist_ok=True, symlinks=True, ignore=shutil.ignore_patterns('.git'))
+    expected = json.loads((OUT / (label + '-input-inventory.json')).read_text())
+    actual = inventory(copy)
+    publish(label + '-copy-inventory.json', actual)
+    require(actual == expected, label + ' destination bytes/modes/symlinks differ from input')
+    require(git(copy, 'rev-parse', 'HEAD') == PRE[label + '_git']['head'], 'Copy revision differs')
+    require(git(copy, 'remote', '-v') == '', 'Copy retained a remote')
+    require((copy / git(copy, 'rev-parse', '--git-common-dir')).resolve() == copy / '.git', 'Git metadata is shared')
+    require(not (copy / '.git/objects/info/alternates').exists(), 'Copy has object alternates')
+    require(git(copy, 'ls-files', '--stage') == PRE[label + '_git']['index'], 'Copy index differs')
+    test = copy / relative_test
+    original_bytes = test.read_bytes()
+    text = original_bytes.decode()
+    start = text.index('def ' + NODE + '():')
+    end = text.find('\ndef ', start + 1)
+    if end < 0:
+        end = len(text)
+    body = text[start:end]
+    old = '    root = ENGINE.parent.parent\n'
+    require(body.count(old) == 1, 'Named assignment is not unique in target function')
+    patched = (text[:start] + body.replace(old, '    root = REPO_ROOT\n') + text[end:]).encode()
+    enter(copy)
+    test.write_bytes(patched)
+    require(test.read_bytes() == patched, 'Destination patch write differs')
+    diff = ''.join(difflib.unified_diff(text.splitlines(True), patched.decode().splitlines(True), fromfile='a/' + relative_test, tofile='b/' + relative_test))
+    publish(label + '-patch.json', {'root': str(copy), 'head': git(copy, 'rev-parse', 'HEAD'),
+            'test': relative_test, 'original_sha256': sha(original_bytes), 'patched_sha256': sha(patched),
+            'copy_inventory_matches_input': True, 'independent_git_metadata': True, 'no_remotes': True,
+            'diff': diff, 'original_text': text})
+    return copy, test, original_bytes
+
+
+def main():
+    enter(ROOT)
+    require(git(ROOT, 'rev-parse', 'HEAD') == PRE['kit_revision'], 'Kit revision changed')
+    publish('continuity-before-copy.json', check_originals())
+    patches = []
+    definition = None
+    definition_bytes = None
+    try:
+        patches.append(prepare_copy('source', SOURCE, 'scripts/tests/test_panel_prompt.py'))
+        patches.append(prepare_copy('fixture', FIXTURE, 'scripts/devkit/tests/test_panel_prompt.py'))
+        cache_source = Path('/private/tmp/mut-adversarial-2f42756-qsognm1n/uv-cache-seeded')
+        cache = OUT / 'uv-cache'
+        enter(OUT)
+        require(cache_source.is_dir() and not cache.exists(), 'Environment cache unavailable or destination exists')
+        shutil.copytree(cache_source, cache, symlinks=True)
+        env = {**ENV, 'UV_OFFLINE': '1', 'UV_CACHE_DIR': str(cache)}
+        requested_python = '/Users/topi/.local/share/uv/python/cpython-3.14.7-macos-aarch64-none/bin/python3.14'
+        probe = 'import importlib.metadata,json,sys; print(json.dumps({"executable":sys.executable,"version":sys.version,"optimize":sys.flags.optimize,"pytest":importlib.metadata.version("pytest"),"PyYAML":importlib.metadata.version("PyYAML")}))'
+        output = checked('environment-resolution', ['uv', 'run', '--no-project', '--offline', '--python', requested_python, '--with', 'pytest', '--with', 'pyyaml', 'python', '-c', probe], OUT, env)
+        resolved = json.loads(output)
+        require(Path(resolved['executable']).is_absolute() and Path(resolved['executable']).is_file(), 'Resolved interpreter is unusable')
+        publish('resolved-environment.json', resolved)
+        results = {}
+        for label, (copy, test, original_bytes) in zip(('source', 'fixture'), patches):
+            runtime_env = {**ENV, 'DEVKIT_STATE_ROOT': str(OUT / (label + '-state'))}
+            argv = [resolved['executable'], '-m', 'pytest', '--basetemp', str(OUT / (label + '-basetemp')), '-q', str(test.relative_to(copy)) + '::' + NODE]
+            result = run(label + '-trial', argv, copy, runtime_env)
+            result.update(input_revision=git(copy, 'rev-parse', 'HEAD'), original_test_sha256=sha(original_bytes), patched_test_sha256=sha(test.read_bytes()), resolved_environment=resolved)
+            publish(label + '-trial.json', result)
+            results[label] = result
+        source = results['source']
+        require(source['exit_code'] == 0 and '1 passed' in source['stdout'] and 'skipped' not in source['stdout'], 'Source control did not pass without a skip; mutation not authorized')
+        source_copy = patches[0][0]
+        definition = source_copy / '.claude/agents/adversarial.md'
+        definition_bytes = definition.read_bytes()
+        mutated = definition_bytes + b'\nVER-02 mutation sentinel\n'
+        enter(source_copy)
+        definition.write_bytes(mutated)
+        require(definition.read_bytes() == mutated, 'Definition mutation did not land')
+        publish('mutation.json', {'path': str(definition), 'original_sha256': sha(definition_bytes), 'mutated_sha256': sha(mutated),
+                'diff': ''.join(difflib.unified_diff(definition_bytes.decode().splitlines(True), mutated.decode().splitlines(True), fromfile='a/.claude/agents/adversarial.md', tofile='b/.claude/agents/adversarial.md'))})
+        mutation = run('source-mutation', source['argv'], source_copy, {**ENV, 'DEVKIT_STATE_ROOT': str(OUT / 'source-state')})
+        mutation.update(input_revision=git(source_copy, 'rev-parse', 'HEAD'), original_test_sha256=sha(patches[0][2]), patched_test_sha256=sha(patches[0][1].read_bytes()), resolved_environment=resolved)
+        publish('source-mutation.json', mutation)
+        killed = mutation['exit_code'] == 1 and 'AssertionError: .claude/agents/adversarial.md differs' in mutation['stdout'] and 'VER-02 mutation sentinel' in mutation['stdout']
+        fixture_reached = results['fixture']['exit_code'] == 1 and 'AssertionError: .claude/agents/adversarial.md differs' in results['fixture']['stdout']
+        publish('trial-outcomes.json', {'observed_at': now(), 'kit_revision': PRE['kit_revision'], 'source_control_passed_without_skip': True,
+                'fixture_reached_adversarial_equality': fixture_reached, 'source_mutation_rejected_by_equality': killed,
+                'fixture_adoption_verified': False})
+        require(killed, 'Mutation was not rejected at the expected equality assertion')
+    finally:
+        restored = {'observed_at': now(), 'kit_revision': PRE['kit_revision'], 'paths': []}
+        if definition is not None and definition_bytes is not None:
+            enter(patches[0][0])
+            definition.write_bytes(definition_bytes)
+            require(definition.read_bytes() == definition_bytes, 'Definition restoration differs')
+            restored['paths'].append({'path': str(definition), 'sha256': sha(definition.read_bytes()), 'restored': True})
+        for copy, test, original_bytes in patches:
+            enter(copy)
+            test.write_bytes(original_bytes)
+            require(test.read_bytes() == original_bytes, 'Test restoration differs')
+            restored['paths'].append({'path': str(test), 'sha256': sha(test.read_bytes()), 'restored': True})
+        publish('restoration.json', restored)
+        publish('continuity-after-trial.json', check_originals())
+    print((OUT / 'trial-outcomes.json').read_text())
+
+
+if __name__ == '__main__':
+    main()

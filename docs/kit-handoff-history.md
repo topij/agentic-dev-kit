@@ -5,6 +5,66 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-09-03 (`#662` and friction triage, in a Codex session)
+
+**Theme —** The verifier received its repo-only manifest role, the approved friction
+entries graduated, and Phase 5 passed to its initial adopter write rehearsal.
+
+- **Runtime —** Codex desktop. This was the parity-sensitive implementation session
+  after the preceding Claude Code sessions. It applied the shared workflow definitions
+  through implementation and review without adding a runtime-specific workflow change.
+
+- **PR `#670` delivered `#662`'s repo-only route.** It assigned the verifier, its test,
+  and its evidence page a manifest role that keeps their hashes in the kit checkout's
+  self-check but excludes them from adopter inspection, install baselines, and upgrade
+  offers. The stale saved-plan link was removed in the same PR.
+
+- **The approved friction entries graduated through PR `#673`.** `TRI-01` and
+  `TRI-02` became `#671` and `#672`; `TRI-03`, `TRI-04`, and `TRI-05` remain parked.
+  The entries already accounted for by `#393` stayed active. The triage run used the
+  LLM-only, agent-executed route and retained its completed merge receipt.
+
+- **The parked inbox still needs a later disposition pass.**
+  `uv run scripts/check_doc_budget.py` at
+  `e55ae691d948b525ffba0919acd6f960c16b98f2` on 2026-09-03 prescribed
+  `triage-friction-log`; a future run must preserve the parked decisions unless the
+  operator supplies fresh exact dispositions.
+
+- **Runtime choice for the initial write pass is deliberate.** The pilot's read-only
+  pass ran in Claude Code; its write pass should run through Codex's `$upgrade` binding
+  so the Phase 5 claim is tested at the existing Codex adopter. Writes to cs-toolkit
+  still require that repository operator's explicit approval, and its pull request
+  keeps separate merge authority.
+
+▶ Next: `$session-start` — then, with explicit cs-toolkit write approval, run the
+initial adopter pilot write pass in Codex. Bind `$REPO` to cs-toolkit and `$KIT` to a
+fresh clone of the kit's configured protected branch at `/tmp/agentic-dev-kit`, the path
+used by Upgrade Step 5. Record `$REPO`'s canonical origin URL and require it to match the
+approved cs-toolkit remote; assert `pwd` is in `$REPO` immediately before every write.
+Invoke `$upgrade` in `$REPO` while following `$KIT`'s workflow; it must leave the
+repo-owned lane forks untouched. Separately run reconciliation based on the upgrade
+branch; preserve runtime-neutral local policy and open a PR when that stage has a diff.
+Record the kit source SHA plus every created PR identity, base name, and head.
+For a no-change stage, record its exact invocation, successful no-change output, input
+and output SHA, tree equality, and clean status; its input must equal the preceding
+stage's output. Do not manufacture an empty PR. Do not claim the Phase 5 exit: `#243`,
+`#631`, `#608`, and `#255` remain. After those land, the final replay must use the
+then-current kit source, confirm each created PR's base-name and ancestry chain, record
+any no-change stage, and verify the final adopter head.
+At the exit decision, capture one authoritative tuple containing the kit source and
+configured protected head, the adopter repository's canonical origin URL, adopter
+protected head, exact resulting adopter head, and every created adopter PR's identity,
+base name and head. Require the origin URL to match the approved cs-toolkit remote and the
+kit source to equal the configured protected head in that tuple. Include each no-change
+stage's invocation, output, input/output equality, tree-equality check, clean status,
+and preceding-stage linkage. Verify every ancestry edge and the adopter condition
+defined in the maintained parity plan against those immutable SHAs, then capture the
+full tuple again and require it to be byte-identical.
+A mismatch requires replay. Publish both snapshots and the stamped verification result
+before the kit wrap-up PR merges; later ref movement is a separate event and does not
+rewrite the observation. The wrap-up records that event without treating its own commit
+as the replay source. Do not merge any created adopter PR without separate authority.
+
 ## Session — 2026-09-03 (two parallel lanes, in a Claude Code session)
 
 **Theme —** The pilot's findings became changes. Two isolated lanes fixed the instrument

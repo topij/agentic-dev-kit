@@ -1,0 +1,44 @@
+{
+  "argv": [
+    "/private/tmp/adk-adopt-ver02-ja4w9bd0/venv/bin/python",
+    "-m",
+    "pytest",
+    "--basetemp",
+    "/private/tmp/adk-adopt-ver02-ja4w9bd0/source-basetemp",
+    "-q",
+    "scripts/tests/test_panel_prompt.py::test_the_committed_lens_definitions_are_what_the_generator_renders"
+  ],
+  "cwd": "/private/tmp/adk-adopt-ver02-ja4w9bd0/source-copy",
+  "started_at": "2026-09-06T11:58:09.638816+00:00",
+  "kit_revision": "cd39158df81457feafa4bd281d928f8fec7d9faf",
+  "timeout_seconds": 120,
+  "environment": {
+    "PATH": "/Users/topi/.antigravity-ide/antigravity-ide/bin:/Users/topi/.local/bin:/Users/topi/.antigravity/antigravity/bin:/Users/topi/.nvm/versions/node/v22.18.0/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Users/topi/.codex/tmp/arg0/codex-arg0mZ7xOm:/Users/topi/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/override:/Users/topi/.antigravity-ide/antigravity-ide/bin:/Users/topi/.local/bin:/Users/topi/.antigravity/antigravity/bin:/Users/topi/.nvm/versions/node/v22.18.0/bin:/Users/topi/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback:/Applications/ChatGPT.app/Contents/Resources",
+    "HOME": "/Users/topi",
+    "TMPDIR": "/var/folders/68/_1c8pqwx5rvc9hm34fnkft1m0000gp/T/",
+    "LANG": "C.UTF-8",
+    "LC_ALL": "C.UTF-8",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTHONOPTIMIZE": "0",
+    "GIT_OPTIONAL_LOCKS": "0",
+    "DEVKIT_STATE_ROOT": "/private/tmp/adk-adopt-ver02-ja4w9bd0/source-state"
+  },
+  "runner_sha256": "57a1896506627d110a374b4c174c6aac6e6861a4490ed106949344f1e8c50f11",
+  "exit_code": 0,
+  "stdout": ".                                                                        [100%]\n1 passed in 0.30s\n",
+  "stderr": "",
+  "timed_out": false,
+  "finished_at": "2026-09-06T11:58:10.213467+00:00",
+  "stdout_sha256": "c9bcb144c21494e85f380ae0032b056c0b060b27bbfcfada9bc048d41195af09",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "input_revision": "ab0a6d62308b298478b2f85fc961f14348f35365",
+  "patched_test_sha256": "30ac592fcfb13237322e32cfbf1a495f22ab91105cf7accd7d0e3809c00a5c0f",
+  "resolved_environment": {
+    "executable": "/private/tmp/adk-adopt-ver02-ja4w9bd0/venv/bin/python",
+    "version": "3.14.7 (main, Aug  7 2026, 02:15:30) [Clang 22.1.3 ]",
+    "optimize": 0,
+    "pytest": "9.1.1",
+    "PyYAML": "6.0.3"
+  },
+  "continuation_runner_sha256": "8d1c3a95d97541caa7a2af69dfec79ca34b9a1ddface559ac700f1c503802d9c"
+}
