@@ -16,7 +16,7 @@ successfully after correcting the inspection program's expectation that the
 initializer had preserved `.gitignore`. The initializer's recorded ignore additions
 are expected; that file is outside the pre-initialization input-equality assertion.
 The program, [report](codex-adopt-completion-review-evidence_2026-09-06/inspection.json)
-and [proposed diff](codex-adopt-completion-review-evidence_2026-09-06/ownership-and-lenses.patch)
+and [proposed diff](codex-adopt-completion-review-evidence_2026-09-06/ownership-and-lenses.patch.json)
 are retained together. The report verifies retained evidence hashes, installed
 copy-ledger bytes, post-init config and baseline equality, retained policy inputs,
 and fixture file equality before and after this inspection. It is a continuity
