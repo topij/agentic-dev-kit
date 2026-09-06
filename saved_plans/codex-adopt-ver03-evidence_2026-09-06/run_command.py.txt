@@ -1,0 +1,39 @@
+"""Historical VER-03 command supervisor; retained with its execution records."""
+from pathlib import Path
+import datetime
+import hashlib
+import json
+import os
+import subprocess
+import sys
+
+REPO = Path('/Users/topi/Coding/agentic-dev-kit')
+OUT = Path('/private/tmp/adk-ver03-7m5h8wtr')
+assert Path.cwd() == REPO
+label, directory, seconds, *argv = sys.argv[1:]
+cwd = Path(directory)
+assert cwd.is_absolute()
+env = dict(os.environ)
+env.update(PYTHONDONTWRITEBYTECODE='1', PYTHONOPTIMIZE='0')
+def sha(data): return hashlib.sha256(data).hexdigest()
+def now(): return datetime.datetime.now(datetime.timezone.utc).isoformat()
+record = {
+    'argv': argv, 'cwd': str(cwd), 'started_at': now(), 'timeout_seconds': int(seconds),
+    'kit_revision': subprocess.check_output(['git', '-C', str(REPO), 'rev-parse', 'HEAD'], text=True).strip(),
+    'kit_test_sha256': sha((REPO / 'scripts/tests/test_panel_prompt.py').read_bytes()),
+    'supervisor_sha256': sha(Path(__file__).read_bytes()),
+    'environment': {k: env[k] for k in ('PYTHONDONTWRITEBYTECODE', 'PYTHONOPTIMIZE')},
+}
+try:
+    result = subprocess.run(argv, cwd=cwd, env=env, capture_output=True, text=True, timeout=int(seconds))
+    record.update(exit_code=result.returncode, stdout=result.stdout, stderr=result.stderr, timed_out=False)
+except subprocess.TimeoutExpired as exc:
+    def decode(value): return value.decode(errors='replace') if isinstance(value, bytes) else value or ''
+    record.update(exit_code=None, stdout=decode(exc.stdout), stderr=decode(exc.stderr), timed_out=True)
+record.update(finished_at=now(), stdout_sha256=sha(record['stdout'].encode()), stderr_sha256=sha(record['stderr'].encode()))
+assert Path.cwd() == REPO
+(OUT / (label + '.json')).write_text(json.dumps(record, indent=2) + '\n')
+print(record['stdout'])
+print(record['stderr'], file=sys.stderr)
+print(json.dumps({key: value for key, value in record.items() if key not in ('stdout', 'stderr')}))
+sys.exit(record['exit_code'] if record['exit_code'] is not None else 124)

@@ -14,10 +14,42 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-06 — approved VER-02 trial recorded;
-VER-03 permanent root repair proposed for a fresh decision.
+Last updated: 2026-09-06 — approved VER-03 kit test repair recorded;
+remaining fixture decisions stay separate.
 
-## Latest session — 2026-09-06 (approved VER-02 trial, in Codex)
+## Latest session — 2026-09-06 (approved VER-03 repair, in Codex)
+
+**Theme —** Repair the kit comparison's root and pin its behavior after relocation.
+
+- The [VER-03 record](../saved_plans/codex-adopt-ver03-repair_2026-09-06.md) retains
+  the approved scope, input continuity, focused regression, landed old-root mutation
+  and restoration. The kit test uses its existing root helper; its manifest digest
+  was refreshed. Synthetic layouts exercise the real comparison and renderer.
+- The focused command in that record ran in `/Users/topi/Coding/agentic-dev-kit`
+  at `188cd97198dbee34919369cfa75a9379d9ddc6eb` plus the test/manifest edits on
+  2026-09-06 UTC and passed. The old-root mutation in the recorded disposable cwd
+  failed in the nested-layout case; definition mutations reached the equality
+  assertion. These are synthetic-layout results, not original-fixture completion.
+- `python3 /private/tmp/adk-ver03-7m5h8wtr/check_continuity.py` in the kit checkout
+  at `12a67be290989165e0e7f714942c3d59e38696fc` on 2026-09-06 UTC matched the
+  original source/fixture inventories, Git state and legacy hashes after the trial.
+- The maintained [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md)
+  retains Phase 5 in progress and Phase 6 not started. Ownership/lenses, runtime
+  registration, verification follow-up, new initialization, adoption completion,
+  fixture PR, Phase 5 exit and cs-toolkit replay keep separate exact decisions.
+  TRI-03/TRI-04/TRI-05, #608/#255 and the parked initializer proposal remain reserved.
+
+▶ Next: In Claude, `/session-start` — follow `docs/kit-handoff.md` and read
+`saved_plans/codex-adopt-ver03-repair_2026-09-06.md`. Review the retained VER-03
+result and the continuation review's ownership/lens diff, then prepare an exact
+fixture decision. Keep registration and verification follow-up separately scoped;
+recheck continuity before approved execution. Do not repeat credited probes or
+exercises, or advance initialization, adoption completion, fixture PR, Phase 5 exit,
+cs-toolkit replay or reserved tracker dispositions without their own decisions.
+
+______________________________________________________________________
+
+## Session — 2026-09-06 (approved VER-02 trial, in Codex)
 
 **Theme —** Execute the approved disposable-copy diagnostic and preserve its limits.
 

@@ -1,0 +1,13 @@
+paths:
+  engines: scripts
+review:
+  fallback_panel:
+    lenses:
+      - name: adversarial
+        focus: synthetic adversarial focus
+      - name: correctness
+        focus: synthetic correctness focus
+    lens_compute:
+      claude:
+        model: sonnet
+        effort: high

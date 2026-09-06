@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "/Users/topi/.cache/uv/builds-v0/.tmpxQi4eu/bin/python",
+    "-m",
+    "pytest",
+    "--confcutdir",
+    "/private/tmp/adk-ver03-7m5h8wtr/mutation-basetemp/test_committed_lens_comparison0/layout",
+    "--basetemp",
+    "/private/tmp/adk-ver03-7m5h8wtr/mutation-basetemp/test_committed_lens_comparison0/comparison-mutated-correctness-pytest",
+    "-q",
+    "scripts/tests/test_panel_prompt.py::test_the_committed_lens_definitions_are_what_the_generator_renders"
+  ],
+  "cwd": "/private/tmp/adk-ver03-7m5h8wtr/mutation-basetemp/test_committed_lens_comparison0/layout",
+  "exit_code": 1,
+  "stdout": "F                                                                        [100%]\n=================================== FAILURES ===================================\n______ test_the_committed_lens_definitions_are_what_the_generator_renders ______\n\n    @pytest.mark.kit_repo_only(\".claude/agents\")\n    def test_the_committed_lens_definitions_are_what_the_generator_renders():\n        \"\"\"The kit's own `.claude/agents/<lens>.md` files are generated, and this is the\n        check that keeps them generated: an edit to `lens_compute.claude` or to a lens's\n        focus that does not regenerate them leaves a definition the runtime WILL apply\n        carrying the old compute \u2014 the silent-inherit shape one layer up. Kills: any\n        hand edit to either file, and a config change without regeneration.\"\"\"\n        pp = _load()\n        root = ENGINE.parent.parent\n        config = pp.load_config(root / \"config\" / \"dev-model.yaml\")\n        lenses = [entry[\"name\"] for entry in pp.get(config, \"review.fallback_panel.lenses\", [])]\n        assert lenses, \"the shipped roster is empty\"\n        for lens in lenses:\n            committed = (root / \".claude\" / \"agents\" / f\"{lens}.md\").read_text(encoding=\"utf-8\")\n>           assert committed == pp.agent_definition(root, lens, \"claude\"), (\n                f\".claude/agents/{lens}.md differs from `panel_prompt.py --lens {lens} \"\n                \"--agent-definition`; regenerate it rather than editing it\"\n            )\nE           AssertionError: .claude/agents/correctness.md differs from `panel_prompt.py --lens correctness --agent-definition`; regenerate it rather than editing it\nE           assert '---\\nname: c...on mutation\\n' == '---\\nname: c...ny finding.\\n'\nE             \nE             Skipping 1180 identical leading characters in diff, use -v to show\nE               y finding.\nE             + \nE             + relocated definition mutation\n\nscripts/tests/test_panel_prompt.py:1096: AssertionError\n=========================== short test summary info ============================\nFAILED scripts/tests/test_panel_prompt.py::test_the_committed_lens_definitions_are_what_the_generator_renders\n1 failed in 0.07s\n",
+  "stderr": ""
+}

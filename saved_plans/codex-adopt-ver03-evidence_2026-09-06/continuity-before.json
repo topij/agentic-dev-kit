@@ -1,0 +1,25 @@
+{
+  "decision": "VER-03",
+  "operator_message": "VER-03 approved",
+  "kit_revision": "188cd97198dbee34919369cfa75a9379d9ddc6eb",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "observed_at": "2026-09-06T12:49:27.034424+00:00",
+  "prior_evidence": "saved_plans/codex-adopt-ver02-evidence_2026-09-06",
+  "retained_evidence_hashes_match": true,
+  "source": {
+    "root": "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source",
+    "revision": "ab0a6d62308b298478b2f85fc961f14348f35365",
+    "inventory_matches": true,
+    "git_state_matches": true,
+    "inventory_sha256": "040433ba57a0218ef0ac243679c94e6631fec6029e5e97ead03169f8f7b77ad2"
+  },
+  "fixture": {
+    "root": "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+    "revision": "08ac687f4ae14218a3861c6b8b143d8b86c4e3c2",
+    "inventory_matches": true,
+    "git_state_matches": true,
+    "inventory_sha256": "ba420ea2df96a927d7e1ee205ee7cccefd7776e8b7eafaccefe73ffeeb05771d"
+  },
+  "legacy_fixture_hashes_match": true,
+  "approved_test_helper_renderer_match_trial_source": true
+}

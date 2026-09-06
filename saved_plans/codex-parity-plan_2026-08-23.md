@@ -424,9 +424,11 @@ historical observation it was and is not silently refreshed.
      the ownership/lens diff and reconciles the independent source/fixture probes
      with VER-01. The approved [VER-02 trial](codex-adopt-ver02-trial_2026-09-06.md)
      records the copied-test root repair, assertion outcome and mutation/restoration
-     evidence. Decide its proposed VER-03 permanent repair and layout regression
-     before implementation. Do not repeat credited probes or promote the diagnostic
-     to fixture completion.
+     evidence. The separately approved [VER-03 repair](codex-adopt-ver03-repair_2026-09-06.md)
+     records the permanent kit test-root change, synthetic-layout regression and
+     mutation/restoration. It leaves the original fixture untouched. Prepare the
+     remaining exact fixture decisions; do not repeat credited probes or promote
+     synthetic regression results to fixture completion.
   6. [ ] Replay the write pass and fork reconciliation from the then-current kit source,
      using the same `$REPO` origin check, `$KIT` path, and immediately-before-every-write
      directory assertion as the initial pass. For a stage with a diff, bind its PR
@@ -839,7 +841,7 @@ citation remains in Phase 6's implementation scope.
 |---|---|---|
 | `parallel` | [Retained Codex batch](codex-parallel-batch-live-validation_2026-09-01.md), delivered by PR #659: lane identity, isolation, exact-head review, reconciliation and operator merge refusal. | Do not repeat that batch. Credit only its retained claim map, not every parallel mode. |
 | `triage-friction-log` | Codex's interactive LLM-only route completed through [PR #673](https://github.com/topij/agentic-dev-kit/pull/673); the committed graduation marker retains the approved and parked dispositions. The local run report and completed state were re-read in this session. | Do not repeat that graduation. Engine-backed and notification-service routes are not established by it; preserve TRI-03/TRI-04/TRI-05 for fresh exact decisions. |
-| `adopt` | PR #682: [bounded Codex context exercise](codex-adopt-field-exercise_2026-09-05.md): inspection, staging, baseline and Step 3c handoff. PR #686's separately approved [initialization continuation](codex-adopt-initialization-field-exercise_2026-09-06.md) retains initializer execution and Step 4 results, including the failed installed suites. The [continuation review](codex-adopt-completion-review_2026-09-06.md) retains read-only continuity, proposed ownership/lens handling and independent diagnostic probes. The approved [VER-02 trial](codex-adopt-ver02-trial_2026-09-06.md) records the copied root repair, reached assertion, mutation and restoration. | Credit execution and recorded results only. VER-03's permanent root repair and layout regression await a fresh decision; ownership-marker resolution, runtime registrations, lens-definition handling, successful adoption verification and fixture PR completion remain pending. |
+| `adopt` | PR #682: [bounded Codex context exercise](codex-adopt-field-exercise_2026-09-05.md): inspection, staging, baseline and Step 3c handoff. PR #686's separately approved [initialization continuation](codex-adopt-initialization-field-exercise_2026-09-06.md) retains initializer execution and Step 4 results, including the failed installed suites. The [continuation review](codex-adopt-completion-review_2026-09-06.md) retains read-only continuity, proposed ownership/lens handling and independent diagnostic probes. The approved [VER-02 trial](codex-adopt-ver02-trial_2026-09-06.md) records the copied root repair, reached assertion, mutation and restoration; the approved [VER-03 repair](codex-adopt-ver03-repair_2026-09-06.md) records the permanent kit test change and synthetic-layout regression. | Credit execution and recorded results only. Ownership-marker resolution, runtime registrations, lens-definition handling, original-fixture verification follow-up, successful adoption verification and fixture PR completion remain pending. |
 | `post-merge-systemize` | PR #684: [bounded Codex test exercise](codex-systemize-test-field-exercise_2026-09-06.md): merged-config read, capability preflight, trusted review inputs, digest validation, artifact checkpoints and proposed routing. | Credit test-mode analysis only. Live routing, engine-backed operation and full restart recovery were not exercised; do not repeat this test as if no field evidence exists. |
 
 The local triage references inspected were

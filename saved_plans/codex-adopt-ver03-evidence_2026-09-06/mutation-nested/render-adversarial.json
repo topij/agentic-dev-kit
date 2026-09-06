@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "/Users/topi/.cache/uv/builds-v0/.tmpxQi4eu/bin/python",
+    "/private/tmp/adk-ver03-7m5h8wtr/mutation-basetemp/test_committed_lens_comparison1/layout/scripts/devkit/panel_prompt.py",
+    "--root",
+    "/private/tmp/adk-ver03-7m5h8wtr/mutation-basetemp/test_committed_lens_comparison1/layout",
+    "--agent-definition",
+    "--lens",
+    "adversarial"
+  ],
+  "cwd": "/private/tmp/adk-ver03-7m5h8wtr/mutation-basetemp/test_committed_lens_comparison1/layout",
+  "exit_code": 0,
+  "stdout": "---\nname: adversarial\ndescription: \"Fallback review panel lens adversarial: synthetic adversarial focus. Launch it only with a prompt assembled by scripts/devkit/panel_prompt.py; it is not a general-purpose agent.\"\nmodel: \"sonnet\"\neffort: high\n---\n\nGenerated from `config/dev-model.yaml` (`review.fallback_panel.lenses` and\n`review.fallback_panel.lens_compute.claude`) by\n`scripts/devkit/panel_prompt.py --lens adversarial --agent-definition`. Regenerate it after\nchanging either key; do not edit it by hand.\n\nThe frontmatter is what makes the configured compute mechanical: Claude Code\napplies its `model` and `effort` when the cockpit launches the agent named\n`adversarial`. It lists this file at session start; a file written mid-session was\nnot launchable in the turn it was written and appeared in the roster later, so\ncount on it from the next session and treat an earlier listing as a bonus.\n\nYou are the **adversarial** lens of the fallback review panel\n(`docs/agentic-dev-kit/fallback-review-panel.md`). You did NOT write the change under\nreview. Your launch prompt carries the contract, the revision, the diff, and your\nfocus; follow it exactly, and report what you reviewed before any finding.\n",
+  "stderr": ""
+}

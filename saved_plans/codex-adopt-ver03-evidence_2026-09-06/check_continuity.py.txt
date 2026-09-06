@@ -1,0 +1,55 @@
+"""Read-only continuity audit against the retained VER-02 inputs."""
+from pathlib import Path
+import datetime
+import hashlib
+import json
+import os
+import stat
+import subprocess
+
+REPO = Path('/Users/topi/Coding/agentic-dev-kit')
+OUT = Path('/private/tmp/adk-ver03-7m5h8wtr')
+OLD = REPO / 'saved_plans/codex-adopt-ver02-evidence_2026-09-06'
+assert Path.cwd() == REPO
+pre = json.loads((OLD / 'preflight.json').read_text())
+def sha(data): return hashlib.sha256(data).hexdigest()
+def git(root, *args):
+    return subprocess.check_output(['git', '-C', str(root), *args], text=True,
+        env={**os.environ, 'GIT_OPTIONAL_LOCKS': '0'}).strip()
+def inventory(root):
+    result = {}
+    for directory, dirs, files in os.walk(root, followlinks=False):
+        dirs[:] = sorted(name for name in dirs if name != '.git')
+        for name in sorted(dirs + files):
+            if name == '.git': continue
+            p = Path(directory) / name
+            row = {'mode': oct(stat.S_IMODE(p.lstat().st_mode))}
+            if p.is_symlink(): row.update(kind='symlink', target=os.readlink(p))
+            elif p.is_file(): row.update(kind='file', sha256=sha(p.read_bytes()))
+            elif p.is_dir(): row.update(kind='directory')
+            else: raise RuntimeError(str(p))
+            result[p.relative_to(root).as_posix()] = row
+    return result
+result = {'command': 'python3 /private/tmp/adk-ver03-7m5h8wtr/check_continuity.py',
+    'cwd': str(REPO), 'kit_revision': git(REPO, 'rev-parse', 'HEAD'),
+    'observed_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    'program_sha256': sha(Path(__file__).read_bytes())}
+for name, digest in json.loads((OLD / 'sha256.json').read_text()).items():
+    assert sha((OLD / name).read_bytes()) == digest, name
+for label in ('source', 'fixture'):
+    root = Path(pre[label])
+    expected = json.loads((OLD / (label + '-input-inventory.json')).read_text())
+    assert inventory(root) == expected, label + ' inventory changed'
+    for key, args in {'head': ('rev-parse', 'HEAD'), 'branch': ('rev-parse', '--abbrev-ref', 'HEAD'),
+                      'remotes': ('remote', '-v'), 'status': ('status', '--porcelain', '--untracked-files=all'),
+                      'index': ('ls-files', '--stage')}.items():
+        assert git(root, *args) == pre[label + '_git'][key], label + ' Git ' + key + ' changed'
+    assert inventory(root) == expected, label + ' changed during read'
+    result[label] = {'root': str(root), 'revision': pre[label + '_git']['head'],
+                     'inventory_matches': True, 'git_state_matches': True}
+for rel, digest in json.loads((OLD / 'legacy-fixture-input.json').read_text()).items():
+    assert sha((Path(pre['fixture']) / rel).read_bytes()) == digest, rel
+result['legacy_fixture_hashes_match'] = True
+assert Path.cwd() == REPO
+(OUT / 'continuity-after.json').write_text(json.dumps(result, indent=2) + '\n')
+print(json.dumps(result, indent=2))
