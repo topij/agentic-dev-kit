@@ -14,10 +14,51 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-06 — approved FIX-01 applied fixture ownership and lens
-definitions; registration and verification follow-up stay separate.
+Last updated: 2026-09-06 — the friction-log inbox was triaged on exact operator
+decisions and swept; the adopt-continuation thread is unchanged and still next.
 
-## Latest session — 2026-09-06 (approved FIX-01 application, in Claude Code)
+## Latest session — 2026-09-06 (friction-log triage, in Claude Code)
+
+**Theme —** Graduate the friction-log inbox on exact operator decisions.
+
+- The operator decided in-session: `approve TRI-01, archive TRI-02 TRI-03, park TRI-04
+  TRI-05 TRI-06`, superseding an earlier `approve all`. Filed: #693, the initializer's
+  refusal of an indentless `doc_budgets` list that `kitconfig` accepts — the entry the
+  2026-09-06 adopt-continuation block left reserved. Archived without filing: the
+  2026-09-01 entry and its recurrence. Parked and byte-identical in place: the
+  `claude -p` and `panel_prompt.py` entries (2026-08-27) and the eight-panel-rounds
+  entry (2026-08-22).
+- **Candidate ids shifted.** This run's `TRI-04`/`TRI-05`/`TRI-06` are the 2026-09-03
+  run's `TRI-03`/`TRI-04`/`TRI-05`. The 2026-09-06 graduation marker records the mapping
+  and how it was established; read it before quoting a reserved id from an older block.
+  `#608`/`#255` remain reserved.
+- Swept by PR #694, merged; its graduation marker is the committed approval record.
+  Review was the fallback panel — CodeRabbit's auto reviews are disabled, treated as an
+  outage rather than a waiver. Its adversarial lens found that the marker overstated
+  `#393` as recording both the 2026-09-01 entry and its recurrence when only the
+  recurrence is on the tracker; that was fixed before merge, and the disposition of
+  every finding is on the pull request.
+- **The run had to be unblocked first, and that is now on the tracker.** A terminal
+  `completed` record from the 2026-09-03 run occupied the live state path and no row
+  authorizes a later run to clear it, so drafting could not start until the operator
+  approved removing it. Recorded as an occurrence on
+  [#425](https://github.com/topij/agentic-dev-kit/issues/425), whose own direction 1
+  predicted the inverse case. Also filed: #695, the `forge-finalize` log having no slot
+  for the review-fix round this session actually needed; #696, a graduation marker
+  asserting tracker state it never verified.
+- **What the sweep could not reach.** The parked entries are a deliberate decision, and
+  the accumulated graduation markers hold most of the file. `triage-friction-log` can
+  reduce neither, so another sweep is not the remedy; whether marker blocks belong in
+  this file at all is `#224`'s territory and needs a decision.
+
+▶ Next: In Claude, `/session-start` — the adopt-continuation thread below is unchanged
+and still the live work; this session touched only the friction log. Note that #693 now
+covers the initializer/`kitconfig` grammar split that the block below left reserved, so
+it is a filed ticket rather than an open decision.
+
+______________________________________________________________________
+
+## Session — 2026-09-06 (approved FIX-01 application, in Claude Code)
 
 **Theme —** Apply the retained ownership/lens diff to the original adoption fixture.
 
@@ -327,37 +368,6 @@ local disposable fixture, with the operator's explicit staging approval.
 ▶ Next: `$session-start` — follow the maintained Phase 5 field-exercise
 reconciliation. Take `post-merge-systemize` as a separate bounded field slice;
 keep adoption completion and the final cs-toolkit replay explicitly scoped.
-
-______________________________________________________________________
-
-## Session — 2026-09-05 (runtime declarations, in Codex)
-
-**Theme —** Deliver the joined Phase 5 declaration and config-test scope, then hand
-the remaining field exercises to a fresh Codex session.
-
-- [PR #680](https://github.com/topij/agentic-dev-kit/pull/680) merged on 2026-09-05
-  as `3898204a00948ac5c73745dbb4bc551967b16e62`. It carries `#608`'s non-load-bearing
-  matrix row and `#255`'s general declaration-presence test together.
-- The first-hand Codex TUI observation is in that PR: `systemMessage` was displayed,
-  so the row does not repeat the planned "not observed" claim. This scoped observation
-  does not establish a general client guarantee. The config test covers the reference
-  and newly emitted migration blocks; it does not establish carrier truth or backfill
-  declarations into preserved existing blocks.
-- `make test` in `/Users/topi/Coding/agentic-dev-kit` at
-  `bb27a58ae640a7541d34bc984333565e4a435166` on 2026-09-05 failed at
-  `test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero`.
-  The [review disposition](https://github.com/topij/agentic-dev-kit/pull/680#issuecomment-5553981033)
-  retains the verification limits, accepted fixes, and the logged P3 prose imprecision
-  on `#163`. Executed test-code fix rounds received full Codex panels.
-- The final Phase 5 exit and adopter replay were not attempted. Reconcile the tracker
-  dispositions for `#608` and `#255` with the landed work on the operator's decision.
-  Preserve `TRI-03`, `TRI-04`, and `TRI-05`; graduation still needs fresh exact
-  operator dispositions through `triage-friction-log`.
-
-▶ Next: In a fresh Codex session, run `$session-start` and follow
-`docs/kit-handoff.md`. Reconcile prior evidence against `#243`, then take a bounded
-`adopt` field exercise through the shared workflow in an isolated fixture. Keep the
-remaining field exercises and final adopter replay separate.
 
 ______________________________________________________________________
 
