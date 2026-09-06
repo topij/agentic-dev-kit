@@ -75,37 +75,128 @@ establish adoption completion. The derived failed-node inventory was removed aft
 the panel demonstrated truncation inside parameter IDs; the original log retains
 the complete failure text.
 
-## Selected next action: VER-01 — same-source diagnostic control
+## VER-01 reconciliation — 2026-09-06
 
-**Proposed, awaiting an exact operator decision.** Before authorizing any new run,
-reconcile the retained independent probes above with this proposal. Reuse the
-outcomes they establish; do not repeat the named comparison merely because VER-01
-has no operator approval. A follow-up decision must identify the remaining evidence
-gap or bounded test-repair scope. The original diagnostic scope was:
+VER-01 remains an unapproved historical proposal. Its named comparison has
+independent evidence already; lack of operator approval is not an evidence gap and
+is not a reason to repeat it. PR #687 merged on 2026-09-06 as
+`61776212a2694108c5dfd8c2640c8b8ef08a40f4`; its retained review reports are the
+provenance for those probes, not an operator execution decision.
 
-- Recheck the bound fixture, source SHA, retained post-init config, baseline and
-  preserved inputs. If continuity differs, stop and present the difference.
-- Create fresh disposable copies under a unique `/private/tmp/adk-adopt-control-*`
-  directory: a flat kit checkout at the bound installed-source SHA, and a copy of
-  the initialized fixture including its staged files and synthetic local overlay.
-  Give the fixture copy its own Git metadata rooted at the bound baseline. Keep
-  each copy free of an origin remote; retain a file-digest comparison to its input.
-- Use the same explicitly resolved Python interpreter and dependency environment
-  for each run. Record its version, argv, cwd, source/baseline SHA, input digests,
-  isolated `DEVKIT_STATE_ROOT`, separate pytest `--basetemp`, timeout, terminal
-  output and exit status. Run sequentially with `PYTHONDONTWRITEBYTECODE=1`.
-- Run the exact nodes listed in the assessment table, using `scripts/tests/` in
-  the flat control and `scripts/devkit/tests/` in the fixture copy. Do not deselect
-  a failed node, insert replacement config/adapters/skeletons, or repair a test.
-- Compare each observed outcome and trace. A setup refusal or skipped node is an
-  unestablished control. Record unresolved explanations rather than interpreting
-  every difference as a layout defect. Verify the original fixture remains unchanged.
+The commands, directories, revisions and date in the linked probe results above
+establish the source pass and fixture failures for the named nodes. The retained
+program runs them sequentially, requests the same Python through `UV_PYTHON`, uses
+an offline seeded dependency cache, and separates `DEVKIT_STATE_ROOT` and pytest
+`--basetemp`. The fixture traceback identifies the Python installation it used.
+The result JSON does not independently read back the resolved interpreter and
+package versions or retain the pre-run copy digests; the program does not construct
+the copies. Credit the observed outcomes and the review's copy provenance without
+claiming that every proposed VER-01 telemetry requirement was executed. Those
+historical limits do not call for a ceremonial rerun.
 
-This proposal authorizes neither initialization nor fixture ownership/registration/
-lens writes. It does not authorize changes to kit tests or engines, adoption
-completion, a fixture remote or PR, final Phase 5 exit, cs-toolkit replay, tracker
-dispositions or archive graduation. Even a successful flat control is evidence only
-for its named nodes; successful adoption verification remains a separate obligation.
+The remaining verification gap is adoption-relevant coverage. The installed suite's
+original terminal log remains authoritative; the named probes neither classify its
+other failures nor demonstrate a corrected test reaching its intended assertion.
+A missing path, preserved adapter, or absent source skeleton cannot be repaired by
+replacing fixture-owned content merely to satisfy a source-kit test. Initializer,
+launcher-policy and portability failures in that log still need their own source
+and precondition assessment. No new derived failed-node inventory is maintained.
+
+`python3 -` (the retained continuity audit program) in
+`/Users/topi/Coding/agentic-dev-kit` at
+`61776212a2694108c5dfd8c2640c8b8ef08a40f4` on 2026-09-06 UTC completed its
+assertions. The [continuity result](codex-adopt-verification-reconciliation-evidence_2026-09-06/continuity.json)
+binds the fixture snapshot to PR #687's inspection, source checkout, copy ledger,
+preserved inputs, post-init config, install baseline and original terminal digest.
+It records fixture file equality around the read. It runs no doctor, renderer,
+pytest node or initializer, and does not establish loaded hooks or adoption success.
+Recheck continuity immediately before any later approved execution; this observation
+is not an enduring approval precondition.
+
+## Exact proposed decision: VER-02 — panel-test root repair trial
+
+**Prepared for operator decision; not executed.** This is a diagnostic patch in
+private copies, not a landed kit repair. The question is whether correcting the
+known root calculation reaches the lens-content assertion, and what that assertion
+then reports about the initialized fixture.
+
+**Inputs and write boundary.** Use the original fixture and comparison-source paths
+bound above. Before writing, require their revisions, fixture branch/no-remote,
+post-init config, synthetic overlay, preserved inputs, copy-ledger bytes and baseline
+to match the retained continuity evidence. Stop and present any difference. Create
+fresh flat-source and initialized-fixture copies beneath a unique
+`/private/tmp/adk-adopt-ver02-*` directory. Preserve the fixture's staged files and
+synthetic overlay, give each copy independent Git metadata at its bound input SHA,
+and leave both without origin remotes. Bind absolute roots, assert the destination
+`pwd` before each write sequence, and retain destination hashes including modes and
+symlink identities. Compare each copy with its input before the trial patch.
+
+**Exact trial edit.** In the source copy's `scripts/tests/test_panel_prompt.py` and
+the fixture copy's `scripts/devkit/tests/test_panel_prompt.py`, change only the
+assignment inside
+`test_the_committed_lens_definitions_are_what_the_generator_renders`:
+
+```diff
+-    root = ENGINE.parent.parent
++    root = REPO_ROOT
+```
+
+`REPO_ROOT` is already obtained from `_repo_layout.find_repo_root` in that module.
+Save original bytes, assert the named assignment exists in the named function,
+and retain the applied diff. Keep the existing marker, configuration read and
+lens equality assertion. Do not change the original fixture, kit working tree,
+engines, manifest, runtime registrations, policy or config. Generated definitions
+stay unchanged except for the source-copy mutation explicitly specified below.
+
+**Commands.** Resolve a Python interpreter and pytest/PyYAML environment once;
+record `sys.executable`, Python version and package versions from that environment
+before using its absolute interpreter path for each invocation. Run sequentially:
+
+```text
+<PYTHON> -m pytest --basetemp <SOURCE_TEMP> -q scripts/tests/test_panel_prompt.py::test_the_committed_lens_definitions_are_what_the_generator_renders
+<PYTHON> -m pytest --basetemp <FIXTURE_TEMP> -q scripts/devkit/tests/test_panel_prompt.py::test_the_committed_lens_definitions_are_what_the_generator_renders
+```
+
+The cwd is the corresponding private copy. Set `PYTHONDONTWRITEBYTECODE=1` and a
+separate absolute `DEVKIT_STATE_ROOT` for each run. Set a timeout of 120 seconds
+per invocation; retain argv, cwd, revisions, original and patched hashes, environment,
+start/end times, complete terminal output and exit status, including timeout/setup
+refusals. A skipped, uncollected or refused node does not establish the control.
+Do not run the other VER-01 nodes or a broad suite for this diagnostic.
+
+**Success criteria and stop.** The patched flat-source node must pass without a
+skip. The fixture node must reach the actual configured lens comparison instead
+of failing on `scripts/config/dev-model.yaml`. A mismatch is a diagnostic result,
+not permission to regenerate a lens or call the fixture verified. Compare the
+mismatch with the retained ownership/lens proposal and report any difference.
+If the control passes, append `\nVER-02 mutation sentinel\n` to the source copy's
+`.claude/agents/adversarial.md`, retain the landed mutation diff, and run only that same
+source node to show the equality assertion rejects it. Restore and byte-check both
+the definition and test patches before reporting. A failure before the equality
+assertion is not a mutation kill. Recheck the untouched original fixture and
+source checkout. Return the terminal evidence and a proposed permanent repair
+scope; stop before implementing that repair or advancing adoption.
+
+Re-running this node after the exact trial edit asks a new question about the
+repaired path. It does not repeat VER-01 merely to obtain an approval-shaped result.
+Approval of VER-02 authorizes only the copy creation, copied-test patch, named
+invocations, source-copy mutation/restoration and evidence recording above.
+It authorizes no initializer run, original-fixture change, permanent source repair,
+fixture PR, adoption completion, Phase 5 exit, cs-toolkit replay or tracker write.
+
+## Remaining fixture decisions
+
+| Separate decision | Concrete material or prerequisite |
+|---|---|
+| New initialization | Fresh exact command, inputs and destination decision; the PR #686 approval was consumed. VER-02 runs no initializer. |
+| Fixture ownership | Approve only the `AGENTS.md` hunk in the retained patch, removing the marker while preserving policy, and confirm the retained policy reads as intended. |
+| Fixture lens definitions | Approve only the retained `adversarial.md` and `correctness.md` hunks after byte continuity; they update the engine path. Runtime discovery and applied compute need separate evidence. |
+| Runtime registration | Choose Codex project hooks, Claude cockpit settings, or both before preparing exact file payloads. File absence and initializer advice do not establish loaded registrations, trust or permission grants. |
+| Verification follow-up | VER-02 is the proposed next slice. Adapter source fixtures, narrative-skeleton applicability, initializer preconditions, launcher-policy and portability assertions remain outside it. A permanent test repair needs a fresh scope decision. |
+| Adoption completion | Requires the agreed fixture changes, resolved verification applicability and successful adoption-relevant checks; a passing flat source or warning-only doctor exit cannot substitute. |
+| Fixture PR | Needs its own remote/destination, change scope and review decision after fixture verification. This kit record PR does not create or authorize it. |
+| Phase 5 exit | Remains subject to the maintained plan's field-coverage and adopter-condition evidence and its own exact decision. |
+| cs-toolkit replay | Requires its own current-source, origin and ancestry-bound approval/evidence; preserve the plan's immutable tuple and read-back requirements. |
 
 ## Preserved decisions and sprint boundary
 
@@ -117,12 +208,24 @@ immutable tuple and exit assertions; this assessment changes none of them.
 TRI-03/TRI-04/TRI-05, #608/#255 dispositions and the
 [parked initializer issue proposal](codex-adopt-initialization-evidence_2026-09-06/init-compatibility-issue.md)
 remain reserved. No tracker payload or friction graduation was executed. Phase 5 remains
-in progress; Phase 6 remains not started. The next decision reconciles VER-01 with
-the retained independent probes, followed by
-an evidence-based choice of test repair scope and the separately approved fixture
-ownership/registration/lens handling.
+in progress; Phase 6 remains not started. The next decision is the exact VER-02 trial above; original-fixture
+ownership, registration and lens handling remain independently scoped.
 
-## Kit verification and wrap-up
+## Reconciliation verification and wrap-up
+
+`make test` in `/Users/topi/Coding/agentic-dev-kit` at
+`61776212a2694108c5dfd8c2640c8b8ef08a40f4` plus the reconciliation record edits
+on 2026-09-06 UTC passed lint and failed in
+`test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero`.
+The [metadata](codex-adopt-verification-reconciliation-evidence_2026-09-06/make-test.json),
+[terminal output](codex-adopt-verification-reconciliation-evidence_2026-09-06/make-test-output.json)
+and command source retain the run and extended timeout. This is the recurring
+assertion recorded by the preceding sessions, outside the changed paths. The run
+preceded this paragraph, evidence copy and final proposal wording edits. It is kit
+record verification, not VER-02 or adoption verification. The wrap-up PR carries
+subsequent checks and review at its own head. No new tracker occurrence was posted.
+
+## Prior kit verification and wrap-up — PR #687
 
 `make test` in `/Users/topi/Coding/agentic-dev-kit` at
 `e3c7b14ffb26e7ffac37e0be62ac02618d819c58` plus the review, plan and handoff edits

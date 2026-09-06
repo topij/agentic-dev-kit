@@ -421,9 +421,10 @@ historical observation it was and is not silently refreshed.
      executed initialization and attempted Step 4 checks; the installed suites failed.
      Adoption completion remains pending, as do the untested systemize routes.
      The [continuation review](codex-adopt-completion-review_2026-09-06.md) retains
-     the ownership/lens diff and independent source/fixture comparison. Reconcile
-     those probes with VER-01 before an exact follow-up decision; do not repeat
-     the retained comparison or promote test repair or fixture completion.
+     the ownership/lens diff and reconciles the independent source/fixture probes
+     with VER-01; decide the
+     exact VER-02 panel-test root repair trial before execution. Do not repeat
+     the unchanged comparison or promote a proposed repair to fixture completion.
   6. [ ] Replay the write pass and fork reconciliation from the then-current kit source,
      using the same `$REPO` origin check, `$KIT` path, and immediately-before-every-write
      directory assertion as the initial pass. For a stage with a diff, bind its PR
@@ -836,7 +837,7 @@ citation remains in Phase 6's implementation scope.
 |---|---|---|
 | `parallel` | [Retained Codex batch](codex-parallel-batch-live-validation_2026-09-01.md), delivered by PR #659: lane identity, isolation, exact-head review, reconciliation and operator merge refusal. | Do not repeat that batch. Credit only its retained claim map, not every parallel mode. |
 | `triage-friction-log` | Codex's interactive LLM-only route completed through [PR #673](https://github.com/topij/agentic-dev-kit/pull/673); the committed graduation marker retains the approved and parked dispositions. The local run report and completed state were re-read in this session. | Do not repeat that graduation. Engine-backed and notification-service routes are not established by it; preserve TRI-03/TRI-04/TRI-05 for fresh exact decisions. |
-| `adopt` | PR #682: [bounded Codex context exercise](codex-adopt-field-exercise_2026-09-05.md): inspection, staging, baseline and Step 3c handoff. PR #686's separately approved [initialization continuation](codex-adopt-initialization-field-exercise_2026-09-06.md) retains initializer execution and Step 4 results, including the failed installed suites. The [continuation review](codex-adopt-completion-review_2026-09-06.md) retains read-only continuity, proposed ownership/lens handling and independent diagnostic probes. | Credit execution and recorded results only. Reconcile the retained source/fixture probes with VER-01 before an exact follow-up decision, without repeating them; ownership-marker resolution, runtime registrations, lens-definition handling, successful adoption verification and fixture PR completion remain pending. |
+| `adopt` | PR #682: [bounded Codex context exercise](codex-adopt-field-exercise_2026-09-05.md): inspection, staging, baseline and Step 3c handoff. PR #686's separately approved [initialization continuation](codex-adopt-initialization-field-exercise_2026-09-06.md) retains initializer execution and Step 4 results, including the failed installed suites. The [continuation review](codex-adopt-completion-review_2026-09-06.md) retains read-only continuity, proposed ownership/lens handling and independent diagnostic probes. | Credit execution and recorded results only. The continuation review reconciles VER-01 and proposes the exact VER-02 panel-test root repair trial, awaiting decision; ownership-marker resolution, runtime registrations, lens-definition handling, successful adoption verification and fixture PR completion remain pending. |
 | `post-merge-systemize` | PR #684: [bounded Codex test exercise](codex-systemize-test-field-exercise_2026-09-06.md): merged-config read, capability preflight, trusted review inputs, digest validation, artifact checkpoints and proposed routing. | Credit test-mode analysis only. Live routing, engine-backed operation and full restart recovery were not exercised; do not repeat this test as if no field evidence exists. |
 
 The local triage references inspected were
