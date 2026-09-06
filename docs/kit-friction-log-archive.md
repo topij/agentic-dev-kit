@@ -3,6 +3,77 @@
 Graduated friction entries live here after they have been routed to the tracker
 (GitHub Issues on this repo) or promoted into a repeated-pattern rule.
 
+## Graduated 2026-09-06 — GitHub Issues (#693)
+
+Swept by the `triage-friction-log` workflow in LLM-only mode; every result is
+agent-executed rather than engine-verified. The 2026-09-06 entry below graduated into
+[#693](https://github.com/topij/agentic-dev-kit/issues/693) after exact-payload approval,
+pre-create marker search, creation, and authoritative read-back.
+
+The 2026-09-01 entry and its 2026-09-02 recurrence were archived **without filing**, on
+the operator's explicit `archive` decision. The 2026-09-02 recurrence is recorded, with
+its mechanism, as an occurrence comment on
+[#393](https://github.com/topij/agentic-dev-kit/issues/393), which stays open. The
+2026-09-01 entry is not separately on the tracker — that comment refers to it only as
+the hypothesis the recurrence did not survive — so the verbatim copy below is the only
+record of its own revision and run. The 2026-09-03 sweep had kept both active pending
+exactly this decision.
+
+The `claude -p --output-format json` and `panel_prompt.py` entries (2026-08-27) and the
+eight-panel-rounds entry (2026-08-22) remain parked in `kit-friction-log.md`, as do the
+reserved `#608` and `#255` dispositions. The approval record and frozen-snapshot
+provenance are in this sweep's graduation marker there.
+
+Below, verbatim, with the heading demoted one level.
+
+### 2026-09-06
+
+- **Initializer rejects staged config accepted by kitconfig. Severity M.**
+  `./init.sh --no-clobber` in the disposable fixture at baseline
+  `08ac687f4ae14218a3861c6b8b143d8b86c4e3c2`, with staged kit source
+  `ab0a6d62308b298478b2f85fc961f14348f35365`, refused the indentless
+  `doc_budgets` list on 2026-09-06 before prompts. Its top-level line parser treats
+  the unindented list items as unsupported keys. Indenting the list preserved the
+  tracked/merged mappings and allowed the approved initialization to continue.
+  Proposed fix: cover the initializer's accepted serialization in shared adopt
+  staging guidance, preserving the operator boundary and mapping comparisons.
+  The [exact issue proposal](../saved_plans/codex-adopt-initialization-evidence_2026-09-06/init-compatibility-issue.md)
+  retains the command, directory, source/config evidence and stamped duplicate
+  searches. It was presented in-session; no exact decision arrived before staging.
+
+### 2026-09-01
+
+- **Two fallback-panel lenses each running the full suite concurrently produced a
+  failure neither reproduces alone.** Both lenses' `make test` runs at
+  `da142620a02d16d31e3231249d627b8fd194daa9` on 2026-09-01 failed
+  `scripts/tests/test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero`,
+  a file outside the reviewed diff, and both saw it pass standalone; the adversarial
+  lens saw the same failure at the base revision. The cockpit's own quiet-tree run at
+  the same head printed `2374 passed in 514.92s (0:08:34)` with nothing failing. One
+  lens reported `pytest-of-topi` tmp-dir cleanup races and two concurrent `make test`
+  process chains in the same window. **M** — the correlation with concurrency is
+  strong, but no mechanism is identified and a shared tmp-dir root is a guess rather
+  than an observation. Parked for accumulation: this is `#623`'s quiet-tree class seen
+  from the lens side rather than the cockpit's, and it recurs whenever a panel asks
+  both lenses to verify. If it recurs, keep both lenses' full pytest output and their
+  tmp-dir paths before re-running.
+
+- **Recurrence 2026-09-02 — the concurrency hypothesis above did not survive it.** The
+  same test failed twice in a row in
+  `/Users/topi/Coding/agentic-dev-kit` at
+  `679b197efc24e31a66e94f6d52b6b3e5f2a47855`, on a quiet tree with nothing running
+  alongside either run, and passed standalone after each. The second run retained full
+  output: the assertion that fails is `out == ""`, not the exit code, so the hook
+  emitted its lifecycle warning because `json.load` **succeeded** inside the suite.
+  Probed in the suite's own interpreter (Python 3.14.7), `json.loads` on the test's
+  exact input raises `RecursionError: Stack overflow (used 8144 kB)` — the precondition
+  holds in isolation and not in the suite, which is `#393`'s shape rather than a
+  tmp-dir race. `test_init_sh.py:5100` already names `#393` and measures its own
+  precondition for this reason; this sibling asserts it instead. The `pytest-of-topi`
+  `garbage-*` cleanup warnings appear in both runs and are unrelated to the assertion
+  that fails. **This is now issue-shaped** — reproduction, mechanism and a named sibling
+  guard — and belongs on the tracker rather than here.
+
 ## Graduated 2026-09-03 — GitHub Issues (#671–#672)
 
 Swept by the `triage-friction-log` workflow in LLM-only mode; every result is

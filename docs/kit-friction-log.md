@@ -24,23 +24,49 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
-## 2026-09-06 — Adopt continuation findings parked pending exact decisions
+## 2026-09-06 — Backlog migrated to GitHub Issues (#693)
 
-- **Initializer rejects staged config accepted by kitconfig. Severity M.**
-  `./init.sh --no-clobber` in the disposable fixture at baseline
-  `08ac687f4ae14218a3861c6b8b143d8b86c4e3c2`, with staged kit source
-  `ab0a6d62308b298478b2f85fc961f14348f35365`, refused the indentless
-  `doc_budgets` list on 2026-09-06 before prompts. Its top-level line parser treats
-  the unindented list items as unsupported keys. Indenting the list preserved the
-  tracked/merged mappings and allowed the approved initialization to continue.
-  Proposed fix: cover the initializer's accepted serialization in shared adopt
-  staging guidance, preserving the operator boundary and mapping comparisons.
-  The [exact issue proposal](../saved_plans/codex-adopt-initialization-evidence_2026-09-06/init-compatibility-issue.md)
-  retains the command, directory, source/config evidence and stamped duplicate
-  searches. It was presented in-session; no exact decision arrived before staging.
+Swept in **LLM-only mode** because the configured draft and finalize engines are absent,
+which is what selects it; every result here is **agent-executed**, not engine-verified.
 
-This parked entry grants no tracker or archive authority. The existing TRI-03/TRI-04/TRI-05
-and #608/#255 dispositions remain reserved.
+**Graduated:** [#693](https://github.com/topij/agentic-dev-kit/issues/693), from the
+2026-09-06 adopt-continuation entry, searched by its exact idempotency marker before
+creation and re-read afterward for its approved title, body, project, labels, marker and
+payload digest. The pre-create search returned nothing for this session's marker while
+returning prior markers for a `triage-payload` control term, so the empty result was
+meaningful rather than a search that never matches.
+
+**Archived without filing:** the 2026-09-01 entry and its 2026-09-02 recurrence, on the
+operator's explicit `archive` decision. The 2026-09-02 recurrence is recorded with its
+mechanism as an occurrence comment on
+[#393](https://github.com/topij/agentic-dev-kit/issues/393), which stays open. The
+2026-09-01 entry is not separately on the tracker — that comment refers to it only as
+the hypothesis the recurrence did not survive — so its verbatim copy in
+`kit-friction-log-archive.md` is the only record of its own revision and run. The
+2026-09-03 sweep kept both pending exactly this decision.
+
+**Kept active below this marker:** the `claude -p --output-format json` and
+`panel_prompt.py` entries (2026-08-27) and the eight-panel-rounds entry (2026-08-22),
+parked for accumulation. **Still reserved:** the `#608` and `#255` dispositions, carried
+here from the swept 2026-09-06 entry's own trailer.
+
+**Candidate ids are not the 2026-09-03 run's.** This run's `TRI-04`, `TRI-05` and
+`TRI-06` are that run's `TRI-03`, `TRI-04` and `TRI-05`, each pair confirmed by an
+identical source-block digest.
+
+**Approval.** The exact payloads were presented in the current Claude Code session; the
+DM path was not exercised, which the interactive route permits. The operator replied on
+2026-09-06 — `approve TRI-01, archive TRI-02 TRI-03, park TRI-04 TRI-05 TRI-06` —
+superseding an earlier `approve all`. This block is the committed approval record
+[#128](https://github.com/topij/agentic-dev-kit/issues/128) asks the interactive path to
+carry, since `state/` and `reports/` are gitignored.
+
+**Frozen inbox.** `shasum -a 256
+state/triage/frozen-inbox_live_2026-09-06_triage-548121b9fa18444808d6b2482aac91d3.json` in
+`/Users/topi/Coding/agentic-dev-kit` at `4989efd4cbc09c0a81f8d5e3259f0430ff69484b` on 2026-09-06
+printed `5dfbd96911df6e92a7272a6b4977853ea548eb81c2b51de4df2566fc1084b297`. Finalization
+re-read the active inbox and admitted only the byte-identical frozen blocks for
+`TRI-01`, `TRI-02` and `TRI-03`.
 
 ## 2026-09-03 — Backlog migrated to GitHub Issues (#671–#672)
 
@@ -66,39 +92,6 @@ at `e78c215c9bd1bd3e007a7d3c9753b2013e5a8221` on 2026-09-03 printed
 `03de6ef926e190a5800b939ee652c7c9607be58f3e95362ece4365ac3bc6ebef`. Finalization
 re-read the active inbox and admitted only the byte-identical frozen blocks for
 `TRI-01` and `TRI-02` to this sweep.
-
-## 2026-09-01
-
-- **Two fallback-panel lenses each running the full suite concurrently produced a
-  failure neither reproduces alone.** Both lenses' `make test` runs at
-  `da142620a02d16d31e3231249d627b8fd194daa9` on 2026-09-01 failed
-  `scripts/tests/test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero`,
-  a file outside the reviewed diff, and both saw it pass standalone; the adversarial
-  lens saw the same failure at the base revision. The cockpit's own quiet-tree run at
-  the same head printed `2374 passed in 514.92s (0:08:34)` with nothing failing. One
-  lens reported `pytest-of-topi` tmp-dir cleanup races and two concurrent `make test`
-  process chains in the same window. **M** — the correlation with concurrency is
-  strong, but no mechanism is identified and a shared tmp-dir root is a guess rather
-  than an observation. Parked for accumulation: this is `#623`'s quiet-tree class seen
-  from the lens side rather than the cockpit's, and it recurs whenever a panel asks
-  both lenses to verify. If it recurs, keep both lenses' full pytest output and their
-  tmp-dir paths before re-running.
-
-- **Recurrence 2026-09-02 — the concurrency hypothesis above did not survive it.** The
-  same test failed twice in a row in
-  `/Users/topi/Coding/agentic-dev-kit` at
-  `679b197efc24e31a66e94f6d52b6b3e5f2a47855`, on a quiet tree with nothing running
-  alongside either run, and passed standalone after each. The second run retained full
-  output: the assertion that fails is `out == ""`, not the exit code, so the hook
-  emitted its lifecycle warning because `json.load` **succeeded** inside the suite.
-  Probed in the suite's own interpreter (Python 3.14.7), `json.loads` on the test's
-  exact input raises `RecursionError: Stack overflow (used 8144 kB)` — the precondition
-  holds in isolation and not in the suite, which is `#393`'s shape rather than a
-  tmp-dir race. `test_init_sh.py:5100` already names `#393` and measures its own
-  precondition for this reason; this sibling asserts it instead. The `pytest-of-topi`
-  `garbage-*` cleanup warnings appear in both runs and are unrelated to the assertion
-  that fails. **This is now issue-shaped** — reproduction, mechanism and a named sibling
-  guard — and belongs on the tracker rather than here.
 
 ## 2026-08-29 — Backlog migrated to GitHub Issues (#641–#645)
 
