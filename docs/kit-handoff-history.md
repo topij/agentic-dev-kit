@@ -5,6 +5,71 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-09-03 (two parallel lanes, in a Claude Code session)
+
+**Theme —** The pilot's findings became changes. Two isolated lanes fixed the instrument
+defects the read-only pass found, and the review that landed them cost more rounds than
+the changes did — which is now its own tracker item.
+
+- **Runtime —** Claude Code, model `claude-opus-5[1m]` as this session's own system
+  prompt names it; effort not read. The session ran unattended from the operator's
+  "run the rest autonomously" onward.
+
+- **PR `#668` (squash `015908a`) fixed `#661` and its second occurrence.** `inspect`
+  trusts a `required_by` edge only where the installed dependent is byte-identical to
+  the comparison manifest, so a dependency the kit gained after an adopter's baseline
+  stops reading as a broken install. The lens-definition remedy now branches on whether
+  `panel_prompt.py` is installed rather than prescribing an engine the adopter lacks.
+  The narrowing buys no silence: a dependent failing the byte check still reports
+  `differs`/`stale`/`locally-edited` and still exits `1`.
+
+- **PR `#667` (squash `2aa1912`) delivered `#604` and `#603`.** `--record-review
+  --disposition` posts one comment at the recorded head under an engine-fixed heading,
+  and every poll's report grows `evidence_findings[]` for a receipt with no matching
+  comment and for a body stamp whose sha is not the head. Neither gates.
+
+- **The lane's own panel caught a merge-gate bypass, and the cockpit nearly lost it.**
+  `#667`'s first draft kept the engine's disposition out of `new_actionable` by matching
+  the public marker text — an unauthenticated string in front of a predicate
+  `dev_session.sh merge` reads, which GitHub's quote-reply reproduces by accident. The
+  lane fixed it with a `seen` key written at post time. Then a session rate limit killed
+  both lanes mid-task, and that fix was **committed but never pushed**: the forge held
+  the vulnerable version while the lane's own last words said it was about to re-run its
+  mutation battery. Reading the worktrees rather than the agents' final messages is what
+  recovered it.
+
+- **Review cost the session more than the code did.** `#665` took five panel rounds and
+  `#667` three, each round triggered by fixing the previous round's finding, which moved
+  the head and invalidated the evidence. `#666` was filed for that shape, including the
+  part that argues against simply capping rounds: `#665`'s fourth round found a false
+  claim in the pilot record that three earlier rounds had passed over.
+
+- **`#662` was started and deliberately abandoned.** Its two routes differ in
+  consequence — removing the three paths from `KIT_OWNED` drops them out of the drift
+  check the issue wants kept, while the repo-only role it prefers needs `inspect` to
+  distinguish its caller, since `test_kit_repo_self_check_is_clean` calls the same
+  function an adopter does. That is a design decision in the instrument that gates every
+  adopter's upgrade, so it was left for the operator with the analysis done rather than
+  invented overnight. The branch was deleted; nothing is half-built.
+
+- **Filed on the operator's approval of each exact payload:** occurrence comments on
+  `#661`, `#393`, `#643`, `#510` and `#571`, and `#666` opened for the review-round
+  loop. Each was read back from the tracker after landing. A later `#393` comment
+  recorded a review lens independently reproducing that flake in its own clone.
+
+- **Verified:** CI run `33700822303` at `912242eb1f96b85c6ebd3e88ff23323e9dff9958` on
+  2026-09-03 printed `2432 passed, 3 skipped` with nothing failing, and CI was green at
+  every merged head. Local `make test` on this machine reports one failure in
+  `test_pr_followup_hook.py` in every run — the `#393` flake, which passes in isolation
+  and which a lens reproduced and then failed to reproduce at the same sha. One local
+  run was killed by the harness at roughly half the suite and is reported as incomplete,
+  not green.
+
+▶ Next: `session-start` — then `#662`'s route is the operator's call (repo-only role
+versus dropping the three paths), and the adopter pilot's write pass still needs the
+cs-toolkit operator's approval. The friction log is over budget and its graduation
+still needs `triage-friction-log` with exact payload approval.
+
 ## Session — 2026-09-02 (cs-toolkit adopter pilot, read-only pass, in a Claude Code session)
 
 **Theme —** Phase 5's exit test, first half. `/upgrade` Steps 0 and 1 ran against the

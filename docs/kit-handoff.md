@@ -14,10 +14,39 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-06 — approved adopt initialization executed; installed
-verification failed, and the active sprint status was reconciled.
+Last updated: 2026-09-06 — adopt continuation reviewed; VER-01 diagnostic proposed
+and the maintained sprint status updated without advancing completion.
 
-## Latest session — 2026-09-06 (adopt initialization and sprint audit, in Codex)
+## Latest session — 2026-09-06 (adopt continuation review, in Codex)
+
+**Theme —** Review PR #686's remaining fixture decisions and select a bounded
+diagnostic without repeating credited exercises.
+
+- The [review and VER-01 proposal](../saved_plans/codex-adopt-completion-review_2026-09-06.md)
+  retain the stamped read-only inspection, failed-node inventory and proposed
+  ownership/lens diff. The original fixture was not changed or initialized again.
+- `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `e3c7b14ffb26e7ffac37e0be62ac02618d819c58` plus the review/plan/handoff edits
+  on 2026-09-06 UTC failed in the recurring deep-payload hook assertion. The
+  review record retains its terminal output and verification boundary.
+- The selected next action is a same-source comparison of named failing tests in
+  disposable copies. Its exact decision remains pending; the review does not
+  classify the entire installed suite or turn doctor warnings into a passing result.
+- Phase 5 remains in progress and Phase 6 not started in the maintained
+  [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md). Preserve exact
+  decisions for initialization, fixture ownership/registration/lenses, verification,
+  adoption completion, fixture PR, Phase 5 exit and cs-toolkit replay.
+- TRI-03/TRI-04/TRI-05, #608/#255 dispositions and the parked initializer issue
+  proposal remain reserved. The review added no tracker occurrence or graduation.
+
+▶ Next: `$session-start` — follow the maintained Phase 5 reconciliation and the
+VER-01 proposal in `saved_plans/codex-adopt-completion-review_2026-09-06.md`.
+Obtain its exact decision before the diagnostic; preserve the separate fixture,
+adoption-completion, replay and tracker decisions.
+
+______________________________________________________________________
+
+## Session — 2026-09-06 (adopt initialization and sprint audit, in Codex)
 
 **Theme —** Continue the staged fixture at Step 3c on the exact operator approval,
 then reconcile the active sprint without promoting adoption or Phase 5 completion.
@@ -322,73 +351,6 @@ A mismatch requires replay. Publish both snapshots and the stamped verification 
 before the kit wrap-up PR merges; later ref movement is a separate event and does not
 rewrite the observation. The wrap-up records that event without treating its own commit
 as the replay source. Do not merge any created adopter PR without separate authority.
-
-______________________________________________________________________
-
-## Session — 2026-09-03 (two parallel lanes, in a Claude Code session)
-
-**Theme —** The pilot's findings became changes. Two isolated lanes fixed the instrument
-defects the read-only pass found, and the review that landed them cost more rounds than
-the changes did — which is now its own tracker item.
-
-- **Runtime —** Claude Code, model `claude-opus-5[1m]` as this session's own system
-  prompt names it; effort not read. The session ran unattended from the operator's
-  "run the rest autonomously" onward.
-
-- **PR `#668` (squash `015908a`) fixed `#661` and its second occurrence.** `inspect`
-  trusts a `required_by` edge only where the installed dependent is byte-identical to
-  the comparison manifest, so a dependency the kit gained after an adopter's baseline
-  stops reading as a broken install. The lens-definition remedy now branches on whether
-  `panel_prompt.py` is installed rather than prescribing an engine the adopter lacks.
-  The narrowing buys no silence: a dependent failing the byte check still reports
-  `differs`/`stale`/`locally-edited` and still exits `1`.
-
-- **PR `#667` (squash `2aa1912`) delivered `#604` and `#603`.** `--record-review
-  --disposition` posts one comment at the recorded head under an engine-fixed heading,
-  and every poll's report grows `evidence_findings[]` for a receipt with no matching
-  comment and for a body stamp whose sha is not the head. Neither gates.
-
-- **The lane's own panel caught a merge-gate bypass, and the cockpit nearly lost it.**
-  `#667`'s first draft kept the engine's disposition out of `new_actionable` by matching
-  the public marker text — an unauthenticated string in front of a predicate
-  `dev_session.sh merge` reads, which GitHub's quote-reply reproduces by accident. The
-  lane fixed it with a `seen` key written at post time. Then a session rate limit killed
-  both lanes mid-task, and that fix was **committed but never pushed**: the forge held
-  the vulnerable version while the lane's own last words said it was about to re-run its
-  mutation battery. Reading the worktrees rather than the agents' final messages is what
-  recovered it.
-
-- **Review cost the session more than the code did.** `#665` took five panel rounds and
-  `#667` three, each round triggered by fixing the previous round's finding, which moved
-  the head and invalidated the evidence. `#666` was filed for that shape, including the
-  part that argues against simply capping rounds: `#665`'s fourth round found a false
-  claim in the pilot record that three earlier rounds had passed over.
-
-- **`#662` was started and deliberately abandoned.** Its two routes differ in
-  consequence — removing the three paths from `KIT_OWNED` drops them out of the drift
-  check the issue wants kept, while the repo-only role it prefers needs `inspect` to
-  distinguish its caller, since `test_kit_repo_self_check_is_clean` calls the same
-  function an adopter does. That is a design decision in the instrument that gates every
-  adopter's upgrade, so it was left for the operator with the analysis done rather than
-  invented overnight. The branch was deleted; nothing is half-built.
-
-- **Filed on the operator's approval of each exact payload:** occurrence comments on
-  `#661`, `#393`, `#643`, `#510` and `#571`, and `#666` opened for the review-round
-  loop. Each was read back from the tracker after landing. A later `#393` comment
-  recorded a review lens independently reproducing that flake in its own clone.
-
-- **Verified:** CI run `33700822303` at `912242eb1f96b85c6ebd3e88ff23323e9dff9958` on
-  2026-09-03 printed `2432 passed, 3 skipped` with nothing failing, and CI was green at
-  every merged head. Local `make test` on this machine reports one failure in
-  `test_pr_followup_hook.py` in every run — the `#393` flake, which passes in isolation
-  and which a lens reproduced and then failed to reproduce at the same sha. One local
-  run was killed by the harness at roughly half the suite and is reported as incomplete,
-  not green.
-
-▶ Next: `session-start` — then `#662`'s route is the operator's call (repo-only role
-versus dropping the three paths), and the adopter pilot's write pass still needs the
-cs-toolkit operator's approval. The friction log is over budget and its graduation
-still needs `triage-friction-log` with exact payload approval.
 
 ______________________________________________________________________
 
