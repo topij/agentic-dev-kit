@@ -1,0 +1,20 @@
+{
+  "kit_revision": "d898660c5da63a91f1916fa6b5f84357b5622ee4",
+  "fixture_revision": "08ac687f4ae14218a3861c6b8b143d8b86c4e3c2",
+  "source_revision": "ab0a6d62308b298478b2f85fc961f14348f35365",
+  "date": "2026-09-06",
+  "cwd": "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+  "invocation": "./init.sh --no-clobber",
+  "chunks": [
+    {
+      "action": "start",
+      "result": {
+        "chunk_id": "edc1de",
+        "wall_time_seconds": 0.287433209,
+        "exit_code": 1,
+        "original_token_count": 81,
+        "output": "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture\r\nerror: config/dev-model.yaml has a top-level key init.sh cannot migrate safely.\r\n  Use unique bare mapping keys with no tag, quote, anchor, or explicit-key\r\n  marker; sections read or written by init.sh must use a bare 'section:' line.\r\n  No migration was applied.\r\n"
+      }
+    }
+  ]
+}

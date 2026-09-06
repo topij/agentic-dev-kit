@@ -1,0 +1,109 @@
+{
+  "date": "2026-09-06",
+  "fixture_revision": "08ac687f4ae14218a3861c6b8b143d8b86c4e3c2",
+  "source_revision": "ab0a6d62308b298478b2f85fc961f14348f35365",
+  "cwd": "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+  "invocation": "./init.sh --no-clobber",
+  "chunks": [
+    {
+      "action": "start",
+      "result": {
+        "chunk_id": "0f80a8",
+        "wall_time_seconds": 1.001727583,
+        "session_id": 78490,
+        "original_token_count": 34,
+        "output": "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture\r\nseeded config/claude-lane-settings.json\r\nProject name [adopt-context-fixture]: "
+      }
+    },
+    {
+      "input": "adopt-context-fixture\n",
+      "result": {
+        "chunk_id": "80fe0f",
+        "wall_time_seconds": 1.001599625,
+        "session_id": 78490,
+        "original_token_count": 18,
+        "output": "adopt-context-fixture\r\nAgent runtime (claude | codex | none) [codex]: "
+      }
+    },
+    {
+      "input": "codex\n",
+      "result": {
+        "chunk_id": "0402b8",
+        "wall_time_seconds": 1.001621292,
+        "session_id": 78490,
+        "original_token_count": 22,
+        "output": "codex\r\nOperator forge logins trusted as review sources (comma-separated, or 'none') []: "
+      }
+    },
+    {
+      "input": "none\n",
+      "result": {
+        "chunk_id": "e8167e",
+        "wall_time_seconds": 1.002042542,
+        "session_id": 78490,
+        "original_token_count": 18,
+        "output": "none\r\nTracker backend (linear | github-issues | jira | none) [none]: "
+      }
+    },
+    {
+      "input": "none\n",
+      "result": {
+        "chunk_id": "cca3c1",
+        "wall_time_seconds": 1.002136041,
+        "session_id": 78490,
+        "original_token_count": 8,
+        "output": "none\r\nTracker project name []: "
+      }
+    },
+    {
+      "input": "\n",
+      "result": {
+        "chunk_id": "d503d3",
+        "wall_time_seconds": 1.001946959,
+        "session_id": 78490,
+        "original_token_count": 19,
+        "output": "\r\nTracker board URL (shown in the friction-log header; blank is fine) []: "
+      }
+    },
+    {
+      "input": "\n",
+      "result": {
+        "chunk_id": "5f091a",
+        "wall_time_seconds": 1.001897708,
+        "session_id": 78490,
+        "original_token_count": 19,
+        "output": "\r\nProtected branch (PRs target this, never commit to it directly) [main]: "
+      }
+    },
+    {
+      "input": "main\n",
+      "result": {
+        "chunk_id": "c1c12c",
+        "wall_time_seconds": 1.002089208,
+        "session_id": 78490,
+        "original_token_count": 29,
+        "output": "main\r\nNotify user id for approval DMs (blank is fine; see config/dev-model.local.yaml) [tracked-fixture-recipient]: "
+      }
+    },
+    {
+      "input": "tracked-fixture-recipient\n",
+      "result": {
+        "chunk_id": "00dc34",
+        "wall_time_seconds": 1.0016875,
+        "session_id": 78490,
+        "original_token_count": 18,
+        "output": "tracked-fixture-recipient\r\nReview bots (comma-separated, or 'none') []: "
+      }
+    },
+    {
+      "input": "none\n",
+      "result": {
+        "chunk_id": "cf9600",
+        "wall_time_seconds": 0.272365958,
+        "exit_code": 0,
+        "original_token_count": 1339,
+        "output": "none\r\nROADMAP.md already in use — left untouched\r\nnotes/history.md already in use — left untouched\r\nseeded notes/friction.md\r\nseeded notes/friction-archive.md\r\nleft untouched (--no-clobber): AGENTS.md\r\nCLAUDE.md already in use — left untouched\r\nadded '/state/' to .gitignore\r\nadded '.devkit_state_root' to .gitignore\r\nadded '.claude/worktrees/' to .gitignore\r\nadded '*.devkit-tmp' to .gitignore\r\nadded '/reports/' to .gitignore\r\ninstalled .git/hooks/pre-push -> scripts/devkit/hooks/pre-push\r\nnote: the PR follow-through hook is registered by hand, once per runtime.\r\n      Skip whichever you have already done — `/hooks` in a session lists\r\n      what that runtime actually loaded, which is the authority here.\r\n      Codex — .codex/hooks.json, under hooks.PostToolUse, matcher \"^Bash$\":\r\n        First inspect .codex/config.toml: remove any inline registration for\r\n        this engine. Set [features].hooks to true; if only its deprecated\r\n        codex_hooks alias is present, do not leave that alias false. Codex\r\n        merges inline hooks with hooks.json instead of replacing them.\r\n        root=\"$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"$root\" ] || exit 0; exec python3 \"$root/scripts/devkit/hooks/pr_followup_hook.py\" --runtime codex\r\n        Keep this exact command form; kit_doctor assigns lifecycle semantics only\r\n        to the repository-owned string and leaves altered strings to path diagnostics.\r\n        Set the command handler timeout to 10 seconds. PostToolUse ignores\r\n        plain stdout; this engine returns JSON additionalContext when it fires.\r\n        Codex also needs the project and current hook definition trusted\r\n        through /hooks before it runs.\r\n      Claude — .claude/settings.json, under hooks.PostToolUse, matcher \"Bash\".\r\n      `if` goes on the hook entry beside `command`, not next to `matcher`:\r\n        python3 \"$CLAUDE_PROJECT_DIR/scripts/devkit/hooks/pr_followup_hook.py\" --runtime claude\r\n        with if: \"Bash(*)\"\r\nnote: the SessionStart budget tripwires are registered by hand on each\r\n      applicable runtime. Skip whichever you have already done — `/hooks` in a\r\n      session lists what that runtime actually loaded.\r\n      Codex — .codex/hooks.json, under hooks.SessionStart; omit matcher\r\n      for open-ended coverage as new start sources are added:\r\n        First inspect .codex/config.toml: remove any inline registration for\r\n        this engine. Set [features].hooks to true; if only its deprecated\r\n        codex_hooks alias is present, do not leave that alias false.\r\n        root=\"$(git rev-parse --show-toplevel 2>/dev/null)\" || exit 0; [ -n \"$root\" ] || exit 0; [ -z \"${JOB_NAME:-}\" ] || exit 0; uv run --script \"$root/scripts/devkit/check_doc_budget.py\" --quiet || true\r\n        Keep this exact command form; kit_doctor assigns lifecycle semantics only\r\n        to the repository-owned string and leaves altered strings to path diagnostics.\r\n        Set the command handler timeout to 15 seconds. SessionStart plain stdout\r\n        becomes developer context, so the quiet flag keeps healthy runs empty.\r\n        Review and trust the project and current definition via /hooks.\r\n        New or changed definitions are\r\n        skipped until trusted; absence in a noninteractive run does not distinguish\r\n        pending trust from a broken command, so /hooks is the diagnostic authority.\r\n      Claude — .claude/settings.json, under hooks.SessionStart; omit matcher\r\n      here too, so a resumed session is covered:\r\n        [ -z \"$JOB_NAME\" ] && cd \"$CLAUDE_PROJECT_DIR\" && uv run --script scripts/devkit/check_doc_budget.py --quiet || true\r\n        [ -z \"$JOB_NAME\" ] && cd \"$CLAUDE_PROJECT_DIR\" && uv run --script scripts/devkit/check_memory_budget.py --quiet || true\r\nnote: the cockpit's own command permissions are optional and hand-written.\r\n      They only trim approval prompts for a session you are watching; skip\r\n      this entirely if you would rather approve each command.\r\n      Claude — .claude/settings.json, under permissions.allow:\r\n        \"Bash(gh pr view:*)\", \"Bash(gh pr list:*)\", \"Bash(gh pr checks:*)\",\r\n        \"Bash(gh run view:*)\", \"Bash(uv run scripts/devkit/pr_watch.py:*)\"\r\n      The last entry names YOUR engines dir; a rule naming a path you do not\r\n      have grants nothing. `kit_doctor.py` reports an engine no rule reaches.\r\n      Codex has no per-command equivalent to receive these — its writing\r\n      policy is `--sandbox`, which bounds the process rather than the command\r\n      name. See docs/agentic-dev-kit/runtime-parity.md.\r\n\r\nagentic-dev-kit is bootstrapped (kit schema v2).\r\nReview config/dev-model.yaml for any remaining values (paths, doc_budgets,\r\nmodels, systemize, review.fallback_panel.lenses) and edit to taste.\r\n\r\n--no-clobber left these existing files untouched:\r\n  AGENTS.md\r\n\r\nEach carries a kit marker on line 1, which is how the kit says it MAY own\r\na file — not that the file is still the kit's. Open each one: if it is an\r\nunrendered skeleton, delete it and re-run to have it seeded; if it holds\r\nyour own content, delete line 1 to claim it permanently.\r\n\r\nUpgrading later: pull the new kit files, then re-run ./init.sh — it\r\nmigrates an older config forward in place and never touches a narrative\r\ndoc that is actually in use.\r\n\r\nYou're set — invoke $session-start next.\r\n"
+      }
+    }
+  ]
+}

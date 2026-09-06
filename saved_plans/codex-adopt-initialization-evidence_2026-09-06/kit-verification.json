@@ -1,0 +1,20 @@
+{
+  "mode": "kit",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "argv": [
+    "make",
+    "test"
+  ],
+  "started_at": "2026-09-06T07:08:47.733449+00:00",
+  "revision": "d898660c5da63a91f1916fa6b5f84357b5622ee4",
+  "status_before": " M docs/kit-handoff.md\n M saved_plans/codex-parity-plan_2026-08-23.md\n?? saved_plans/codex-adopt-initialization-evidence_2026-09-06/\n?? saved_plans/codex-adopt-initialization-field-exercise_2026-09-06.md\n",
+  "env": {
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "UV_CACHE_DIR": "/private/tmp/adk-adopt-continuation-20260906-AFeElK/uv-cache"
+  },
+  "timeout_seconds": 1800,
+  "exit_code": 2,
+  "elapsed_seconds": 363.97633804198995,
+  "finished_at": "2026-09-06T07:14:51.732406+00:00",
+  "output_path": "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-verification.log"
+}

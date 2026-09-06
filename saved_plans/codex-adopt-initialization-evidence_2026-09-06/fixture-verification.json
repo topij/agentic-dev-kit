@@ -1,0 +1,31 @@
+{
+  "mode": "fixture",
+  "cwd": "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+  "argv": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "python",
+    "-m",
+    "pytest",
+    "scripts/devkit/lib/state_paths/tests/",
+    "scripts/devkit/tests/",
+    "-q"
+  ],
+  "started_at": "2026-09-06T06:53:13.374705+00:00",
+  "revision": "08ac687f4ae14218a3861c6b8b143d8b86c4e3c2",
+  "status_before": " M .gitignore\n M config/dev-model.yaml\n?? .agents/skills/adopt/\n?? .agents/skills/parallel/\n?? .agents/skills/post-merge-systemize/\n?? .agents/skills/pr-watch/\n?? .agents/skills/session-start/\n?? .agents/skills/triage-friction-log/\n?? .agents/skills/upgrade/\n?? .agents/skills/wrap-up/agents/\n?? .claude/\n?? PRINCIPLES.md\n?? config/claude-lane-settings.json\n?? docs/\n?? init.sh\n?? kit-manifest.json\n?? notes/friction-archive.md\n?? notes/friction.md\n?? scripts/devkit/\n",
+  "env": {
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "UV_CACHE_DIR": "/private/tmp/adk-adopt-continuation-20260906-AFeElK/uv-cache",
+    "DEVKIT_STATE_ROOT": "/private/tmp/adk-adopt-continuation-20260906-AFeElK/fixture-test-state"
+  },
+  "timeout_seconds": 1800,
+  "exit_code": 1,
+  "elapsed_seconds": 389.72836391699093,
+  "finished_at": "2026-09-06T06:59:43.143200+00:00",
+  "output_path": "/private/tmp/adk-adopt-continuation-20260906-AFeElK/fixture-verification.log"
+}

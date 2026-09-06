@@ -1,0 +1,21 @@
+{
+  "date": "2026-09-06",
+  "cwd": "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+  "revision": "08ac687f4ae14218a3861c6b8b143d8b86c4e3c2",
+  "installed_source": "ab0a6d62308b298478b2f85fc961f14348f35365",
+  "argv": [
+    "uv",
+    "run",
+    "scripts/devkit/check_doc_budget.py"
+  ],
+  "result": {
+    "status": "fulfilled",
+    "value": {
+      "chunk_id": "092d72",
+      "wall_time_seconds": 0.000002208,
+      "exit_code": 0,
+      "original_token_count": 16,
+      "output": "✓ ROADMAP.md 2/400 lines\n✓ notes/friction.md 29/150 lines\n"
+    }
+  }
+}
