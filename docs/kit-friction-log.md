@@ -37,9 +37,13 @@ returning prior markers for a `triage-payload` control term, so the empty result
 meaningful rather than a search that never matches.
 
 **Archived without filing:** the 2026-09-01 entry and its 2026-09-02 recurrence, on the
-operator's explicit `archive` decision. Both are already recorded, with their mechanism,
-as occurrence comments on [#393](https://github.com/topij/agentic-dev-kit/issues/393),
-which stays open; the 2026-09-03 sweep kept them pending exactly this decision.
+operator's explicit `archive` decision. The 2026-09-02 recurrence is recorded with its
+mechanism as an occurrence comment on
+[#393](https://github.com/topij/agentic-dev-kit/issues/393), which stays open. The
+2026-09-01 entry is not separately on the tracker — that comment refers to it only as
+the hypothesis the recurrence did not survive — so its verbatim copy in
+`kit-friction-log-archive.md` is the only record of its own revision and run. The
+2026-09-03 sweep kept both pending exactly this decision.
 
 **Kept active below this marker:** the `claude -p --output-format json` and
 `panel_prompt.py` entries (2026-08-27) and the eight-panel-rounds entry (2026-08-22),

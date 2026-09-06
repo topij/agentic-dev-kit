@@ -11,10 +11,13 @@ agent-executed rather than engine-verified. The 2026-09-06 entry below graduated
 pre-create marker search, creation, and authoritative read-back.
 
 The 2026-09-01 entry and its 2026-09-02 recurrence were archived **without filing**, on
-the operator's explicit `archive` decision: both are already recorded, with their
-mechanism, as occurrence comments on
+the operator's explicit `archive` decision. The 2026-09-02 recurrence is recorded, with
+its mechanism, as an occurrence comment on
 [#393](https://github.com/topij/agentic-dev-kit/issues/393), which stays open. The
-2026-09-03 sweep had kept them active pending exactly this decision.
+2026-09-01 entry is not separately on the tracker — that comment refers to it only as
+the hypothesis the recurrence did not survive — so the verbatim copy below is the only
+record of its own revision and run. The 2026-09-03 sweep had kept both active pending
+exactly this decision.
 
 The `claude -p --output-format json` and `panel_prompt.py` entries (2026-08-27) and the
 eight-panel-rounds entry (2026-08-22) remain parked in `kit-friction-log.md`, as do the
