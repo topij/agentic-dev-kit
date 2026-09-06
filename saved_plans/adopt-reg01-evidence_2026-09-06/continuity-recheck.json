@@ -1,0 +1,37 @@
+{
+  "command": "uv run python /private/tmp/claude-502/-Users-topi-Coding-agentic-dev-kit/4007b138-f0b8-418b-9429-75ed49f7d910/scratchpad/recheck_continuity_fix01.py",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "kit_revision": "a4419dcd541f25162971615444aa995bc0dfb474",
+  "observed_at": "2026-09-06T19:06:14.030549+00:00",
+  "program_sha256": "4e279775bb7d2834e8ed3e10dc245f9e4a04b759902824ccecdd556ca9a15806",
+  "fixture_baseline": "saved_plans/adopt-fix01-evidence_2026-09-06/fixture-inventory-after-fix01.json",
+  "source_baseline": "saved_plans/codex-adopt-ver02-evidence_2026-09-06/source-input-inventory.json",
+  "retained_evidence_digests_match": true,
+  "source": {
+    "root": "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source",
+    "revision": "ab0a6d62308b298478b2f85fc961f14348f35365",
+    "inventory_matches": true,
+    "git_state_matches": true
+  },
+  "fixture": {
+    "root": "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+    "revision": "08ac687f4ae14218a3861c6b8b143d8b86c4e3c2",
+    "inventory_matches_fix01_baseline": true,
+    "git_head_branch_remotes_index_match": true,
+    "status_delta_from_ver02": [
+      "AGENTS.md"
+    ],
+    "approved_paths_already_untracked_before_fix01": [
+      ".claude/agents/adversarial.md",
+      ".claude/agents/correctness.md"
+    ]
+  },
+  "legacy_fixture_hashes": {
+    "unchanged_count": 111,
+    "changed": [
+      ".claude/agents/adversarial.md",
+      ".claude/agents/correctness.md",
+      "AGENTS.md"
+    ]
+  }
+}

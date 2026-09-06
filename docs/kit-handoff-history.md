@@ -5,6 +5,52 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-09-06 (systemize test record, in Codex)
+
+**Theme —** Retain the bounded test observation and update the field-exercise
+reconciliation under the operator's separate record-and-wrap-up authorization.
+
+- The [field record](../saved_plans/codex-systemize-test-field-exercise_2026-09-06.md)
+  retains context, preflight, trusted source material, digest validation, artifact
+  checkpoint probes and proposed routes. This credits test-mode analysis only.
+- The maintained parity plan preserves the earlier parallel, triage and bounded
+  adopt evidence. PR #682 ended at the Step 3c operator handoff; #683 owns its
+  separately identified config-serialization gap.
+- The exercise's `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `4c4ce47ce067309f3cb24733a939c40c76911a4a` on 2026-09-05 UTC failed in
+  `test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero`.
+  The field record retains the terminal output and verification limits.
+- No test-mode routing or tracker disposition was executed. Preserve
+  TRI-03/TRI-04/TRI-05 and the operator-held #608/#255 dispositions. Adoption
+  completion, final Phase 5 exit and cs-toolkit replay remain separately scoped.
+
+▶ Next: `$session-start` — implement #683 in the shared adopt workflow and verify
+serialized config through the installed reader, including long scalars and the
+local overlay. Keep the operator initialization boundary and later adoption
+verification separate; follow the maintained plan before any final adopter replay.
+
+## Session — 2026-09-05 (adopt context field exercise, in Codex)
+
+**Theme —** Exercise adopt's context carrier through its shared workflow in a
+local disposable fixture, with the operator's explicit staging approval.
+
+- The [field record](../saved_plans/codex-adopt-field-exercise_2026-09-05.md)
+  retains inputs, inspection, copy/baseline read-backs, the cache refusal, and
+  the Step 3c operator handoff. `init.sh` and later adoption stages were not run.
+- The maintained parity plan now reconciles the older `#243` follow-up list with
+  retained parallel-batch evidence and the completed Codex triage route. It
+  credits those bounded routes without repeating them or claiming Phase 5 exit.
+- `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `ab0a6d62308b298478b2f85fc961f14348f35365` on 2026-09-05 failed in
+  `test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero`.
+  The record retains the terminal output and quiet-tree verification limits.
+- No tracker dispositions changed. Preserve TRI-03/TRI-04/TRI-05 and the
+  operator decisions for `#608`/`#255`; no cs-toolkit replay was attempted.
+
+▶ Next: `$session-start` — follow the maintained Phase 5 field-exercise
+reconciliation. Take `post-merge-systemize` as a separate bounded field slice;
+keep adoption completion and the final cs-toolkit replay explicitly scoped.
+
 ## Session — 2026-09-05 (runtime declarations, in Codex)
 
 **Theme —** Deliver the joined Phase 5 declaration and config-test scope, then hand

@@ -1,0 +1,13 @@
+{
+  "continuity-recheck.json": "f9500026946af2998cfc10fea4c0e2fe6fcb75d34d4335720885f76bd07f780f",
+  "negative-controls-2.json": "f6120981b2d80f9d1b70f535b8b07088ee34cf131ef658251d4fb8aa631a8564",
+  "negative-controls.json": "c9cc7d1d357bb9714a1449cf76866517c4d2d346cd300cd95fb8b5013c686b38",
+  "negative_controls.py.txt": "fbc16e8f3d942d289aa2fb3df63fcdc2ca5f1f7dd06a647d2664d3d2b9dc00c6",
+  "negative_controls2.py.txt": "bd5a21634bb8ae1786adad012731ead74d9694643c3862549e099942b45b7ab4",
+  "payload-claude-settings.json": "cafe367d9ec90f34644dec0a2a4929dc195962e16df332523b7a74fec82751bf",
+  "payload-codex-config.toml": "d37497c3278121598a663564ab38b53f658969717f78decb661ddd11c66551ea",
+  "payload-codex-hooks.json": "dbea8d8084adcc50e786af584c7e407fc5d7040bf26bd614c9966e9ba2797cfb",
+  "recheck_continuity_fix01.py.txt": "4e279775bb7d2834e8ed3e10dc245f9e4a04b759902824ccecdd556ca9a15806",
+  "registration-verification.json": "ea2edd00977b47a315fb3749262944210d4b1cc95af7167a4a92725e30121f2e",
+  "verify_registration.py.txt": "5f28582c290789730a72d062f69b4676734a459dfc344398c79dbf0c59a0bc7e"
+}

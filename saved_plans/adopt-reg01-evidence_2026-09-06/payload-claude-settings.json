@@ -1,0 +1,39 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -z \"$JOB_NAME\" ] && cd \"$CLAUDE_PROJECT_DIR\" && uv run --script scripts/devkit/check_doc_budget.py --quiet || true"
+          },
+          {
+            "type": "command",
+            "command": "[ -z \"$JOB_NAME\" ] && cd \"$CLAUDE_PROJECT_DIR\" && uv run --script scripts/devkit/check_memory_budget.py --quiet || true"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/scripts/devkit/hooks/pr_followup_hook.py\" --runtime claude",
+            "if": "Bash(*)"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh run view:*)",
+      "Bash(uv run scripts/devkit/pr_watch.py:*)"
+    ]
+  }
+}
