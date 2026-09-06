@@ -24,7 +24,7 @@ installed-suite blocker is untouched.
 
 - The [REG-01 record](../saved_plans/adopt-reg01-runtime-registration_2026-09-06.md)
   retains the three drafted payloads with their digests, the per-scope doctor reports,
-  three negative controls and the write boundary. **Scope is recommended, not decided:**
+  both sets of negative controls and the write boundary. **Scope is recommended, not decided:**
   both runtimes. The original fixture was not written to, no initializer ran, and
   nothing here states what either runtime loaded.
 - Continuity was rechecked first, against the FIX-01 baseline that supersedes the

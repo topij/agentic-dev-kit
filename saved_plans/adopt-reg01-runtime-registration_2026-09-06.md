@@ -61,8 +61,10 @@ doctor:
 `/Users/topi/Coding/agentic-dev-kit` at `a4419dcd541f25162971615444aa995bc0dfb474` on
 2026-09-06 UTC. Every scope exited zero, including the do-nothing baseline. The
 [captured reports](adopt-reg01-evidence_2026-09-06/registration-verification.json) are
-the evidence, and the program asserted the original fixture's inventory unchanged around
-the whole run.
+the evidence and
+[`verify_registration.py.txt`](adopt-reg01-evidence_2026-09-06/verify_registration.py.txt)
+is the driver that produced them; it asserted the original fixture's inventory unchanged
+around the whole run.
 
 **The exit code does not discriminate between these scopes; only the report body does.**
 That is the thing to decide on, and it is why the table below quotes lines rather than
@@ -82,13 +84,17 @@ checked for path resolution alone. Conversely, only the **Claude** surface carri
 cockpit allow-list, so `#606`'s ungranted check has nothing to read under codex-only.
 Each single-runtime scope leaves the other's check unexercised.
 
-## The green lines are load-bearing — three negative controls
+## The green lines are load-bearing — the negative controls
 
 A report that is green because nothing was examined is the failure mode this whole
 exercise is exposed to, so each check was falsified before being relied on. Same command
-shape, same revision and date as above; the
-[captured reports](adopt-reg01-evidence_2026-09-06/negative-controls.json) retain each
-run.
+shape, same revision and date as above; the captured reports retain each run, in two
+sets — [`negative-controls.json`](adopt-reg01-evidence_2026-09-06/negative-controls.json)
+for the controls on the checks the payloads rely on, driven by
+[`negative_controls.py.txt`](adopt-reg01-evidence_2026-09-06/negative_controls.py.txt),
+and [`negative-controls-2.json`](adopt-reg01-evidence_2026-09-06/negative-controls-2.json)
+for the `[features]` probes below, driven by
+[`negative_controls2.py.txt`](adopt-reg01-evidence_2026-09-06/negative_controls2.py.txt).
 
 - **The kit's own default allow entry, in this adopter's layout.** Replacing
   `Bash(uv run scripts/devkit/pr_watch.py:*)` with the kit's `scripts/` spelling
@@ -103,6 +109,19 @@ run.
   withheld silently — recorded as an occurrence on
   [`#392`](https://github.com/topij/agentic-dev-kit/issues/392#issuecomment-5561503045)
   rather than re-filed, because that issue's option 3 is the fix for both axes.
+
+The second set probes the axis the payload decision does **not** rest on, and is what
+grounds [`#698`](https://github.com/topij/agentic-dev-kit/issues/698). Same command
+shape, revision and date; each case keeps the canonical `.codex/hooks.json` and varies
+only `.codex/config.toml`:
+
+- **`[features] hooks = false`** and **`[features] codex_hooks = false`** each produced
+  `✗ … Codex lifecycle hooks are disabled by the project config` and exit 1. The switch
+  is graded when the doctor can see it.
+- **`.codex/config.toml` absent entirely** produced no line about `[features]` at all,
+  at exit 0, beneath four green Codex lines. That asymmetry — graded when the file
+  exists, silent when it does not — is `#698`, and it is why the Codex scope below
+  includes `config.toml` on `init.sh`'s instruction rather than on the doctor's demand.
 
 ## Recommended scope: both
 
