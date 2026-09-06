@@ -75,8 +75,6 @@ for lens in ('adversarial', 'correctness'):
 
 raw = json.loads((EVIDENCE / 'fixture-verification-output.json').read_text())
 assert sha(raw['output'].encode()) == raw['output_sha256']
-failed = [line[7:].split(' - ', 1)[0] for line in raw['output'].splitlines() if line.startswith('FAILED ')]
-assert failed and len(failed) == len(set(failed))
 after = snapshot()
 assert before == after, [p for p in before.keys() | after.keys() if before.get(p) != after.get(p)]
 report = {'argv': ['python3', str(Path(__file__).resolve())], 'cwd': str(ROOT),
@@ -88,8 +86,7 @@ report = {'argv': ['python3', str(Path(__file__).resolve())], 'cwd': str(ROOT),
           'absent_registration_paths': [p for p in ('.codex/config.toml', '.codex/hooks.json', '.claude/settings.json')
                                         if not (FIXTURE / p).exists()],
           'doctor': doctor, 'lens_renders': renders,
-          'failed_node_inventory_source_sha256': sha((EVIDENCE / 'fixture-verification-output.json').read_bytes()),
-          'failed_nodes': failed}
+          'verification_log_source_sha256': sha((EVIDENCE / 'fixture-verification-output.json').read_bytes())}
 assert Path.cwd().resolve() == ROOT
 (OUT / 'inspection.json').write_text(json.dumps(report, indent=2) + '\n')
 (OUT / 'ownership-and-lenses.patch').write_text(''.join(patches))

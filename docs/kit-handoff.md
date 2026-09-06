@@ -23,15 +23,16 @@ and the maintained sprint status updated without advancing completion.
 diagnostic without repeating credited exercises.
 
 - The [review and VER-01 proposal](../saved_plans/codex-adopt-completion-review_2026-09-06.md)
-  retain the stamped read-only inspection, failed-node inventory and proposed
+  retain the stamped read-only inspection, original failure-log pointer and proposed
   ownership/lens diff. The original fixture was not changed or initialized again.
 - `make test` in `/Users/topi/Coding/agentic-dev-kit` at
   `e3c7b14ffb26e7ffac37e0be62ac02618d819c58` plus the review/plan/handoff edits
   on 2026-09-06 UTC failed in the recurring deep-payload hook assertion. The
   review record retains its terminal output and verification boundary.
-- The selected next action is a same-source comparison of named failing tests in
-  disposable copies. Its exact decision remains pending; the review does not
-  classify the entire installed suite or turn doctor warnings into a passing result.
+- Independent review supplied the named source/fixture comparison and caught a
+  lossy derived failure inventory, which was removed. Reconcile those retained
+  probes with VER-01 before authorizing further verification; do not repeat them
+  merely because the proposal remains unapproved. The installed suite is not disposed.
 - Phase 5 remains in progress and Phase 6 not started in the maintained
   [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md). Preserve exact
   decisions for initialization, fixture ownership/registration/lenses, verification,
@@ -41,7 +42,7 @@ diagnostic without repeating credited exercises.
 
 ▶ Next: `$session-start` — follow the maintained Phase 5 reconciliation and the
 VER-01 proposal in `saved_plans/codex-adopt-completion-review_2026-09-06.md`.
-Obtain its exact decision before the diagnostic; preserve the separate fixture,
+Review the retained independent probes before an exact follow-up decision; preserve the separate fixture,
 adoption-completion, replay and tracker decisions.
 
 ______________________________________________________________________

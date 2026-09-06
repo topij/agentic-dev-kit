@@ -11,10 +11,9 @@ exercises were not repeated.
 `PYTHONDONTWRITEBYTECODE=1 python3
 /private/tmp/adk-adopt-review-20260906-WJZrv7/inspect_fixture.py` ran in
 `/Users/topi/Coding/agentic-dev-kit` at
-`e3c7b14ffb26e7ffac37e0be62ac02618d819c58` on 2026-09-06 UTC and completed
-successfully after correcting the inspection program's expectation that the
-initializer had preserved `.gitignore`. The initializer's recorded ignore additions
-are expected; that file is outside the pre-initialization input-equality assertion.
+`2f4275642d4d75598a7fad7d865608b488b4c726` plus review corrections on 2026-09-06
+UTC and completed successfully. `.gitignore` is outside the pre-initialization
+input-equality assertion because initialization added the recorded ignore entries.
 The program, [report](codex-adopt-completion-review-evidence_2026-09-06/inspection.json)
 and [proposed diff](codex-adopt-completion-review-evidence_2026-09-06/ownership-and-lenses.patch.json)
 are retained together. The report verifies retained evidence hashes, installed
@@ -38,7 +37,7 @@ commands completed successfully without applying their output.
 | `AGENTS.md` ownership | The file contains fixture policy below the marker. The proposed diff removes the marker while retaining the policy verbatim. `CLAUDE.md` already imports it. | Exact approval to apply the diff, plus the operator's confirmation that retained content reads as intended. |
 | Runtime registration | `.codex/config.toml`, `.codex/hooks.json` and `.claude/settings.json` were absent in the inspection. The source initializer deliberately prints registrations instead of installing them. | Choose the intended runtime registration scope before preparing and approving its exact payload. File inspection cannot establish loaded hooks or project trust. |
 | Lens definitions | The installed renderer's diff changes the engine path to `scripts/devkit/panel_prompt.py` in `.claude/agents/adversarial.md` and `.claude/agents/correctness.md`; model and effort do not change. | Exact approval to apply the retained generated diff. This does not establish runtime discovery or applied compute. |
-| Installed verification | The report enumerates the failed nodes from PR #686's retained terminal log and binds that log by digest. | The diagnostic proposal below precedes any test repair or completion disposition. |
+| Installed verification | The report binds PR #686's original terminal log by digest; use that log directly. | Review the independent probes below before deciding further diagnostic or test-repair scope. |
 
 The ownership and lens diff is review material, not an executable instruction to
 apply it. A bare initializer run is not the proposed ownership remedy. Registration
@@ -56,13 +55,33 @@ diagnoses. They do not classify every failed node or dispose of the installed su
 | `test_kit_doctor.py::test_shipped_runtime_adapters_equal_the_renderer_for_both_runtimes` | The comparison uses the adopter as its source kit; the preserved `.agents/skills/wrap-up/SKILL.md` is rejected as a source adapter. | Replacing fixture-owned policy to satisfy a source-kit assertion would invalidate the preservation exercise. |
 | `test_kitconfig.py::test_shipped_skeletons_carry_the_unrendered_marker[handoff.md]` | The test reads literal `docs/handoff.md`, while the fixture's configured plan is `ROADMAP.md` and the shipped templates were installed separately. | Adding a redundant plan to satisfy this assertion would change the approved adoption. |
 
-Initializer failures also appear in the retained inventory; they remain outside this
+Initializer failures also appear in the retained terminal log; they remain outside this
 selected diagnostic scope. The existing occurrence on #534 already records the
-vendored-suite finding. This assessment adds no new run or tracker occurrence.
+vendored-suite finding. No tracker occurrence was added.
+
+The adversarial lens supplied diagnostic evidence during
+[independent review](https://github.com/topij/agentic-dev-kit/pull/687#issuecomment-5558033584).
+The retained [program](codex-adopt-completion-review-evidence_2026-09-06/probe_diagnoses.py)
+and its [source-copy result](codex-adopt-completion-review-evidence_2026-09-06/source-copy-diagnoses.json)
+and [fixture-copy result](codex-adopt-completion-review-evidence_2026-09-06/fixture-copy-diagnoses.json)
+name the actual test commands and directories, run on 2026-09-06 UTC.
+The source-copy command at
+`ab0a6d62308b298478b2f85fc961f14348f35365` passed; the fixture-copy command at
+baseline `08ac687f4ae14218a3861c6b8b143d8b86c4e3c2` plus copied initialization
+failed in the named tests with the nominated path/ownership traces.
+
+These are independent review probes. They do not record operator approval or
+establish adoption completion. The derived failed-node inventory was removed after
+the panel demonstrated truncation inside parameter IDs; the original log retains
+the complete failure text.
 
 ## Selected next action: VER-01 — same-source diagnostic control
 
-**Proposed, awaiting an exact operator decision.** Authorize a diagnostic run only:
+**Proposed, awaiting an exact operator decision.** Before authorizing any new run,
+reconcile the retained independent probes above with this proposal. Reuse the
+outcomes they establish; do not repeat the named comparison merely because VER-01
+has no operator approval. A follow-up decision must identify the remaining evidence
+gap or bounded test-repair scope. The original diagnostic scope was:
 
 - Recheck the bound fixture, source SHA, retained post-init config, baseline and
   preserved inputs. If continuity differs, stop and present the difference.
@@ -98,7 +117,8 @@ immutable tuple and exit assertions; this assessment changes none of them.
 TRI-03/TRI-04/TRI-05, #608/#255 dispositions and the
 [parked initializer issue proposal](codex-adopt-initialization-evidence_2026-09-06/init-compatibility-issue.md)
 remain reserved. No tracker payload or friction graduation was executed. Phase 5 remains
-in progress; Phase 6 remains not started. The next decision is VER-01, followed by
+in progress; Phase 6 remains not started. The next decision reconciles VER-01 with
+the retained independent probes, followed by
 an evidence-based choice of test repair scope and the separately approved fixture
 ownership/registration/lens handling.
 
