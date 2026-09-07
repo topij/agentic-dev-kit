@@ -14,11 +14,56 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-07 — REG-01 is applied on both runtimes, on the operator's
-approval; the fixture's doctor is advisory-free and the continuity baseline has moved.
-The installed-suite blocker is the remaining Phase 5 work.
+Last updated: 2026-09-07 — both Phase 5 blockers are closed out: registration applied on
+both runtimes, and the installed suite assessed and recorded on #534. Phase 5 exit is now
+the live decision and was not taken.
 
-## Latest session — 2026-09-07 (REG-01 applied, in Claude Code)
+## Latest session — 2026-09-07 (installed-suite assessment, in Claude Code)
+
+**Theme —** Assess PR #686's retained installed-suite log; close the second Phase 5 blocker.
+
+- The [assessment record](../saved_plans/adopt-suite-assessment_2026-09-07.md) retains the
+  classification, the re-measurement and the boundary. It changed no fixture, ran no
+  initializer, and filed no new ticket: everything found is in `#534`'s stated scope and
+  is [recorded there](https://github.com/topij/agentic-dev-kit/issues/534#issuecomment-5565697869).
+- Every failure in the retained log fits a cause `#534` already names.
+  `test_portability.py`'s are runtime-parity assertions about the kit's own workflows and
+  adapters; `test_kitconfig.py`'s read the kit's template skeletons, which an adopter
+  renders to its own names. Both are that issue's cause 1. `test_lane_launcher.py`'s was
+  already recorded during PR #691's panel and was **not** re-filed.
+- **REG-01 invalidated part of that log.** Sixteen of its failure blocks were
+  `FileNotFoundError` on the two registration files that were absent then and exist now,
+  so the log is stale as a description of the fixture.
+- Re-measured in a disposable copy on 2026-09-07 UTC: of the registration-dependent
+  selector's 15 items, 9 pass and 6 fail — **and neither outcome is better than the
+  failure it replaced.** The passes assert against the *adopter's* registrations and
+  report nothing about the kit's, which is `#534`'s silent-false-pass family as a family
+  rather than an instance; they were loudly red until the adopter completed a step the
+  installer told them to complete, and completing it is what silenced them. The failures
+  cross an expectation built from `init.sh` in a sandbox that takes the default
+  `paths.engines: scripts` against a real registration carrying `scripts/devkit`, so the
+  text accuses the kit of drift when the cause is the adopter's layout.
+- That last point is what the occurrence adds to `#534`'s suggested scope: item 1's
+  `_repo_layout` fix reaches none of it, because nothing here reads `REPO_ROOT /
+  "scripts"`. Whether the answer is a kit-repo-only marker or an installed reference copy
+  is a decision that issue now carries.
+- The maintained [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md) retains
+  Phase 5 in progress and Phase 6 not started. **Both blockers named in the 2026-09-06
+  handoff are now closed out** — registration by approved application, the suite by this
+  assessment — but the failures are classified and recorded, not repaired, and Phase 5
+  exit is its own exact decision that was not taken.
+
+▶ Next: In Claude, `/session-start` — Phase 5 exit is now the live question and needs its
+own exact decision; the repairs `#534` carries are the work standing between here and it.
+Recheck continuity against `fixture-inventory-after-reg01.json` before any approved
+execution. Keep every Codex-only confirmation — `/hooks` loading, `#698`'s open question,
+the reserved `#608`/`#255` dispositions — for one batched Codex session, and keep new
+initialization, adoption completion, fixture PR and cs-toolkit replay on their own exact
+decisions.
+
+______________________________________________________________________
+
+## Session — 2026-09-07 (REG-01 applied, in Claude Code)
 
 **Theme —** Execute the approved runtime registration on both runtimes.
 
@@ -332,40 +377,6 @@ diagnostic without repeating credited exercises.
 VER-01 proposal in `saved_plans/codex-adopt-completion-review_2026-09-06.md`.
 Review the retained independent probes before an exact follow-up decision; preserve the separate fixture,
 adoption-completion, replay and tracker decisions.
-
-______________________________________________________________________
-
-## Session — 2026-09-06 (adopt initialization and sprint audit, in Codex)
-
-**Theme —** Continue the staged fixture at Step 3c on the exact operator approval,
-then reconcile the active sprint without promoting adoption or Phase 5 completion.
-
-- The [continuation record](../saved_plans/codex-adopt-initialization-field-exercise_2026-09-06.md)
-  retains the approval, initializer refusal, value-preserving formatting correction,
-  prompt transcript, config read-backs, doctor warnings and failed installed suites.
-  The fixture stayed bound to PR #682's installed source; staging was not repeated.
-- In `/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture`, at baseline
-  `08ac687f4ae14218a3861c6b8b143d8b86c4e3c2` plus the staged/initialized adoption
-  from `ab0a6d62308b298478b2f85fc961f14348f35365`, the installed pytest command
-  retained in the record failed on 2026-09-06 UTC. Initialization's successful retry
-  does not dispose of the doctor warnings or establish successful adoption verification.
-- `make test` in `/Users/topi/Coding/agentic-dev-kit` at
-  `d898660c5da63a91f1916fa6b5f84357b5622ee4` plus initial record edits on
-  2026-09-06 UTC failed in the recurring deep-payload hook assertion. The record
-  retains terminal output and the approved #534 occurrence comment. The initializer
-  issue proposal remains parked pending its own exact decision.
-- The maintained [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md)
-  credits the delivered milestones, records Phase 5's in-progress adopt continuation,
-  corrects stale TUI/review/batch scheduling statements and leaves Phase 6 not started.
-- Initialization authority was exercised only for the exact fixture proposal.
-  Adoption completion, fixture PR, final Phase 5 exit and cs-toolkit replay remain
-  separate decisions. Preserve TRI-03/TRI-04/TRI-05 and #608/#255 dispositions.
-  PR #684 remains test-mode systemize evidence; no live systemize route was attempted.
-
-▶ Next: `$session-start` — follow the maintained Phase 5 reconciliation and this
-adopt continuation's remaining boundary. Obtain exact decisions for the preserved
-fixture ownership/registration/lens choices and verification follow-up before any
-adoption completion; preserve the final replay and parked tracker decisions.
 
 ______________________________________________________________________
 

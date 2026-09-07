@@ -1,0 +1,56 @@
+{
+  "observed_at": "2026-09-07T05:50:46.228051+00:00",
+  "kit_revision": "6337cecc72d921d0bbdfbc78586d319c6c751073",
+  "log": "saved_plans/codex-adopt-initialization-evidence_2026-09-06/fixture-verification-output.json",
+  "log_output_sha256": "4f332feb53813f76e3eec502a0e7f58bcf6b2e88b3a39040c1048a45d708eb8f",
+  "log_summary_line": [
+    "79 failed, 2006 passed, 111 skipped in 388.78s (0:06:28)"
+  ],
+  "failures_per_file": {
+    "scripts/devkit/tests/test_init_sh.py": 52,
+    "scripts/devkit/tests/test_kit_doctor.py": 14,
+    "scripts/devkit/tests/test_kitconfig.py": 4,
+    "scripts/devkit/tests/test_lane_launcher.py": 1,
+    "scripts/devkit/tests/test_panel_prompt.py": 1,
+    "scripts/devkit/tests/test_portability.py": 7
+  },
+  "total_failure_lines": 79,
+  "missing_paths_to_tests": {
+    "<fixture>/.codex/hooks.json": [
+      "test_codex_lifecycle_semantics_accept_the_shipped_contract",
+      "test_the_advisory_matches_the_registrations_it_describes",
+      "test_the_budget_advisory_prints_the_shipped_codex_commands_verbatim",
+      "test_the_codex_budget_registration_skips_a_cron_run",
+      "test_the_codex_budget_registration_survives_a_git_less_tree",
+      "test_the_codex_registration_execs_rather_than_forking_the_interpreter",
+      "test_the_codex_registration_guards_a_git_that_fails_while_printing_a_path",
+      "test_the_codex_registration_guards_an_empty_root_that_git_reports_as_success",
+      "test_the_codex_registration_survives_a_git_less_tree",
+      "test_the_shipped_codex_session_start_carries_no_matcher"
+    ],
+    "<fixture>/.claude/settings.json": [
+      "test_both_shipped_registrations_name_their_own_runtime",
+      "test_the_budget_advisory_prints_the_shipped_claude_commands_verbatim",
+      "test_the_claude_budget_registration_skips_a_cron_run[doc-budget]",
+      "test_the_claude_budget_registration_skips_a_cron_run[memory-budget]",
+      "test_the_permissions_advisory_prints_the_shipped_allow_rules_verbatim",
+      "test_the_shipped_claude_session_start_carries_no_matcher"
+    ],
+    "<fixture>/docs/handoff.md": [
+      "test_shipped_skeletons_carry_the_unrendered_marker[handoff.md]"
+    ],
+    "<fixture>/docs/handoff-history.md": [
+      "test_shipped_skeletons_carry_the_unrendered_marker[handoff-history.md]"
+    ],
+    "<fixture>/docs/friction-log.md": [
+      "test_shipped_skeletons_carry_the_unrendered_marker[friction-log.md]"
+    ],
+    "<fixture>/docs/friction-log-archive.md": [
+      "test_shipped_skeletons_carry_the_unrendered_marker[friction-log-archive.md]"
+    ],
+    "<fixture>/scripts/config/dev-model.yaml": [
+      "test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_validates",
+      "test_the_committed_lens_definitions_are_what_the_generator_renders"
+    ]
+  }
+}
