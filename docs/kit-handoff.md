@@ -62,6 +62,14 @@ the live decision and was not taken.
   assessment — but the failures are classified and recorded, not repaired, and Phase 5
   exit is its own exact decision that was not taken.
 
+- **Session friction routed at close-out.** `#702` files the pattern behind two of this
+  session's own defects: a failure's cause read off its test name rather than its
+  traceback, the second instance landing inside the commit written to fix the first. An
+  occurrence on `#510` records the other half — the task wrapper reporting `exit code 0`
+  for a run `make` exited `2`, and a memory-killed run whose only tell was an absent pytest
+  summary line. `#666` carries the receipt-ordering trap, walked into twice by the session
+  that filed it and avoided on the third PR.
+
 ▶ Next: In Claude, `/session-start` — Phase 5 exit is now the live question and needs its
 own exact decision; the repairs `#534` carries are the work standing between here and it.
 Recheck continuity against `fixture-inventory-after-reg01.json` before any approved
@@ -321,71 +329,6 @@ ______________________________________________________________________
 without repeating credited probes; present VER-03 for a fresh exact decision.
 Recheck continuity before separately approved execution and preserve all fixture,
 initialization, verification, completion, PR, exit, replay and tracker decisions.
-
-______________________________________________________________________
-
-## Session — 2026-09-06 (adopt verification reconciliation, in Codex)
-
-**Theme —** Credit the retained diagnostic outcomes and prepare the next bounded
-decision without repeating the field exercises.
-
-- The [continuation review](../saved_plans/codex-adopt-completion-review_2026-09-06.md#ver-01-reconciliation--2026-09-06)
-  reconciles VER-01 with PR #687's independent source/fixture probes. It separates
-  their demonstrated path/ownership failures from missing historical telemetry and
-  the unresolved adoption-relevant verification obligation.
-- The exact VER-02 proposal trials the panel test's existing repository-root helper
-  in disposable copies and checks that the lens-content assertion is reached. The
-  proposal remains unexecuted; it does not change the fixture or initialize it again.
-- `python3 -` using the retained continuity audit program in
-  `/Users/topi/Coding/agentic-dev-kit` at
-  `61776212a2694108c5dfd8c2640c8b8ef08a40f4` on 2026-09-06 UTC completed its
-  assertions against PR #687's fixture snapshot and the retained source/config/
-  baseline evidence. The [result](../saved_plans/codex-adopt-verification-reconciliation-evidence_2026-09-06/continuity.json)
-  records the read's boundaries; continuity must be rechecked before execution.
-- Kit `make test` evidence and its verification limits are retained in the
-  continuation review; subsequent checks and independent review belong to this
-  wrap-up PR at its reviewed head.
-- The maintained [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md)
-  retains Phase 5 in progress and Phase 6 not started. Ownership, registration,
-  lens definitions, verification, adoption completion, fixture PR, Phase 5 exit
-  and cs-toolkit replay retain separate exact decisions.
-- TRI-03/TRI-04/TRI-05, #608/#255 dispositions and the parked initializer issue
-  proposal remain reserved. No tracker or friction-graduation action was taken.
-
-▶ Next: `$session-start` — follow the maintained Phase 5 reconciliation and decide
-VER-02 in `saved_plans/codex-adopt-completion-review_2026-09-06.md`. Before any approved
-trial, recheck the bound source and original-fixture continuity. Preserve the separate
-fixture, initialization, adoption-completion, PR, exit, replay and tracker decisions.
-
-______________________________________________________________________
-
-## Session — 2026-09-06 (adopt continuation review, in Codex)
-
-**Theme —** Review PR #686's remaining fixture decisions and select a bounded
-diagnostic without repeating credited exercises.
-
-- The [review and VER-01 proposal](../saved_plans/codex-adopt-completion-review_2026-09-06.md)
-  retain the stamped read-only inspection, original failure-log pointer and proposed
-  ownership/lens diff. The original fixture was not changed or initialized again.
-- `make test` in `/Users/topi/Coding/agentic-dev-kit` at
-  `e3c7b14ffb26e7ffac37e0be62ac02618d819c58` plus the review/plan/handoff edits
-  on 2026-09-06 UTC failed in the recurring deep-payload hook assertion. The
-  review record retains its terminal output and verification boundary.
-- Independent review supplied the named source/fixture comparison and caught a
-  lossy derived failure inventory, which was removed. Reconcile those retained
-  probes with VER-01 before authorizing further verification; do not repeat them
-  merely because the proposal remains unapproved. The installed suite is not disposed.
-- Phase 5 remains in progress and Phase 6 not started in the maintained
-  [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md). Preserve exact
-  decisions for initialization, fixture ownership/registration/lenses, verification,
-  adoption completion, fixture PR, Phase 5 exit and cs-toolkit replay.
-- TRI-03/TRI-04/TRI-05, #608/#255 dispositions and the parked initializer issue
-  proposal remain reserved. The review added no tracker occurrence or graduation.
-
-▶ Next: `$session-start` — follow the maintained Phase 5 reconciliation and the
-VER-01 proposal in `saved_plans/codex-adopt-completion-review_2026-09-06.md`.
-Review the retained independent probes before an exact follow-up decision; preserve the separate fixture,
-adoption-completion, replay and tracker decisions.
 
 ______________________________________________________________________
 
