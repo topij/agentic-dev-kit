@@ -5,7 +5,7 @@ of it that the approved REG-01 application invalidated. It changes no fixture, r
 initializer, and asks for no new ticket. Most of what it found belongs to
 [`#534`](https://github.com/topij/agentic-dev-kit/issues/534)'s stated scope and is
 [recorded there](https://github.com/topij/agentic-dev-kit/issues/534#issuecomment-5565697869),
-with a [correction](https://github.com/topij/agentic-dev-kit/issues/534) appended for the
+with a [correction](https://github.com/topij/agentic-dev-kit/issues/534#issuecomment-5565966166) appended for the
 part the first pass overstated; one failure turns out to belong to `#690`, already
 repaired.
 
@@ -37,8 +37,14 @@ draft of this record claimed every one of the 79 fits a cause `#534` already nam
 was an overstatement — written having examined four of the six files — and PR #701's
 correctness lens caught it. What is actually established:
 
-- `test_portability.py` — runtime-parity-contract assertions about the kit's own
-  workflows and adapters. `#534` cause 1.
+- `test_portability.py` — **every one** of its failures carries the fixture-owned
+  wrap-up-adapter shape (`Preserve this adapter.`), the same mechanism behind most of
+  `test_kit_doctor.py`'s. An earlier draft called these runtime-parity-contract
+  assertions and filed them under `#534` cause 1; that was read off the test *names*
+  rather than the tracebacks, and PR #701's correctness lens caught it. Worth flagging
+  because `#534`'s body lists this same file under **cause 3**, for different tests that
+  did not fire here — so the file appears under two causes and neither label settles the
+  other.
 - `test_kitconfig.py` — `test_shipped_skeletons_carry_the_unrendered_marker` reading the
   kit's template skeletons, which an adopter renders to its own configured names. Cause 1.
 - `test_lane_launcher.py` — already recorded on `#534` during PR #691's panel; not

@@ -24,11 +24,15 @@ the live decision and was not taken.
 
 - The [assessment record](../saved_plans/adopt-suite-assessment_2026-09-07.md) retains the
   classification, the re-measurement and the boundary. It changed no fixture, ran no
-  initializer, and filed no new ticket: everything found is in `#534`'s stated scope and
-  is [recorded there](https://github.com/topij/agentic-dev-kit/issues/534#issuecomment-5565697869).
-- Most of the retained log's failures fit a cause `#534` already names — the parity
-  assertions, the template-skeleton reads, and `test_kit_doctor.py`'s preserved
-  fixture-owned wrap-up adapter. `test_lane_launcher.py`'s was already recorded during
+  initializer, and filed no new ticket. Most of what it found is in `#534`'s stated scope
+  and is [recorded there](https://github.com/topij/agentic-dev-kit/issues/534#issuecomment-5565697869),
+  with a [correction](https://github.com/topij/agentic-dev-kit/issues/534#issuecomment-5565966166)
+  appended; one failure belongs to `#690` instead, already repaired.
+- Most of the retained log's failures fit a cause `#534` already names. The largest
+  single mechanism is the fixture's deliberately preserved wrap-up adapter, which
+  accounts for every `test_portability.py` failure and most of `test_kit_doctor.py`'s —
+  established from the tracebacks, after a first pass attributed the portability ones
+  from their test names and got the mechanism wrong. `test_lane_launcher.py`'s was already recorded during
   PR #691's panel and was **not** re-filed. **`test_panel_prompt.py`'s is not a `#534`
   item at all:** `585483b` (#690) already repaired that test's root, and the fixture's
   installed copy predates the fix.
