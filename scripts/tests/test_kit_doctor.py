@@ -4688,6 +4688,138 @@ def test_codex_lifecycle_semantics_detect_project_feature_disable(tmp_path, feat
     assert "Codex lifecycle hooks are disabled by the project config" in details
 
 
+def _unset_switches(statuses) -> list[str]:
+    return [s.surface for s in statuses if s.state == "unset"]
+
+
+def test_an_absent_codex_config_still_reports_the_unset_feature_switch(tmp_path):
+    """#698's headline: a verified `hooks.json` reported an unqualified green.
+
+    The switch was graded only when `.codex/config.toml` existed, so the
+    adopter who never wrote it — the population likeliest to have left the
+    switch unset — saw ENABLED and NEVER CONFIGURED render identically.
+    """
+    root = _fake_repo(tmp_path)
+    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+    assert not (root / ".codex" / "config.toml").exists(), "fixture precondition"
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert _unset_switches(statuses) == [".codex/config.toml"]
+    assert [s.detail for s in statuses if s.state == "unset"] == ["[features].hooks"]
+
+
+def test_a_features_table_carrying_neither_spelling_reports_unset(tmp_path):
+    """A table with no `hooks` key says as little as a missing table does.
+
+    This case reached the end of `inspect_registrations` silently even when
+    `.codex/config.toml` existed, so it is not fixed by the absent-file branch
+    alone.
+    """
+    root = _fake_repo(tmp_path)
+    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+    _write(root / ".codex" / "config.toml", "[features]\nweb_search = true\n")
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert _unset_switches(statuses) == [".codex/config.toml"]
+
+
+def test_a_config_without_a_features_table_reports_unset(tmp_path):
+    root = _fake_repo(tmp_path)
+    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+    _write(root / ".codex" / "config.toml", 'model = "gpt-5"\n')
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert _unset_switches(statuses) == [".codex/config.toml"]
+
+
+@pytest.mark.parametrize("feature", ["hooks", "codex_hooks"])
+def test_an_enabled_switch_reports_no_unset_line(tmp_path, feature):
+    """The negative control the headline test needs to mean anything."""
+    root = _fake_repo(tmp_path)
+    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+    _write(root / ".codex" / "config.toml", f"[features]\n{feature} = true\n")
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert _unset_switches(statuses) == []
+
+
+def test_a_disabled_switch_is_misconfigured_rather_than_unset(tmp_path):
+    """The third case keeps its exit 1; `unset` must not soften it."""
+    root = _fake_repo(tmp_path)
+    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+    _write(root / ".codex" / "config.toml", "[features]\nhooks = false\n")
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert _unset_switches(statuses) == []
+    assert "Codex lifecycle hooks are disabled by the project config" in [
+        s.detail for s in statuses if s.state == "misconfigured"
+    ]
+
+
+def test_no_codex_registration_means_no_unset_advice(tmp_path):
+    """`occurrence_names` is the half of the old condition that was right.
+
+    With no kit hook registered there is nothing for the switch to gate, so
+    advising the adopter to set it would be advice about nothing.
+    """
+    root = _fake_repo(tmp_path)
+    _write(root / ".codex" / "hooks.json", json.dumps({"hooks": {}}))
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert _unset_switches(statuses) == []
+
+
+def test_an_unparseable_config_is_not_also_reported_unset(tmp_path):
+    """An `unreadable` config already has its line.
+
+    Adding `unset` beside it would state the switch's value from a document
+    this run never read — the same overclaim `unresolvable` exists to avoid.
+    """
+    root = _fake_repo(tmp_path)
+    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+    _write(root / ".codex" / "config.toml", "[features\nhooks = true\n")
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert _unset_switches(statuses) == []
+    assert "unreadable" in [
+        s.state for s in statuses if s.surface == ".codex/config.toml"
+    ]
+
+
+def test_the_unset_switch_does_not_reach_the_exit_code(tmp_path):
+    """The calibration decision, pinned.
+
+    The live observation on #698 recorded a Codex client discovering these
+    registrations with the switch unset, so failing the run would assert an
+    outcome that probe did not establish. `unset` reports and exits 0.
+    """
+    root = _fake_repo(tmp_path)
+    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    report = kit_doctor.Report(
+        kit_version_config=2,
+        kit_version_manifest=2,
+        engines_dir="scripts",
+        engines_dir_ok=True,
+        hooks_installed=True,
+        narrative_rendered={},
+        registrations=statuses,
+    )
+
+    assert _unset_switches(statuses) == [".codex/config.toml"], (
+        "precondition: without an unset switch in the report this asserts nothing"
+    )
+    assert "unset" not in {r.state for r in report.dead_registrations}
+
+
 def test_codex_lifecycle_semantics_validates_each_present_feature_alias(tmp_path):
     root = _fake_repo(tmp_path)
     _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
@@ -6962,6 +7094,11 @@ def test_an_ungranted_line_carries_its_own_hand_written_footer(tmp_path):
             }
         ),
     )
+    # And the feature switch set, for the same reason one line up: `unset` is a
+    # third state that pulls in the hook footer (#698), so leaving it out would
+    # make the negative assertion vacuous again — by a different route than the
+    # `absent` one the comment above describes.
+    _write(root / ".codex" / "config.toml", "[features]\nhooks = true\n")
     _write(
         root / ".claude" / "settings.json",
         json.dumps(

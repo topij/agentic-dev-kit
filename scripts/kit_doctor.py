@@ -1005,7 +1005,12 @@ class Report:
         measurement it did not make. `ungranted` is omitted for the first of
         those reasons rather than a new one: an operator who prefers to approve
         each invocation has wired nothing wrong, so failing them would be the
-        same bug in a fourth place (#606).
+        same bug in a fourth place (#606). `unset` — `[features].hooks` absent
+        where a kit registration exists — is omitted for the SECOND reason, not
+        the first: the live observation on #698 recorded a Codex client
+        discovering these registrations with the switch unset, so failing the
+        run would assert an outcome that probe did not establish. An explicit
+        `false` is `misconfigured` and still exits 1.
 
         That this list enumerates every state it omits is the property, and
         `test_dead_registrations_docstring_accounts_for_every_state_it_omits`
@@ -1989,7 +1994,22 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
             )
 
     codex_config = codex_documents.get(".codex/config.toml")
-    if isinstance(codex_config, dict) and occurrence_names:
+    # Graded whenever a kit registration EXISTS, not only when
+    # `.codex/config.toml` does. Those were the same condition until #698, and
+    # the difference is the whole bug: `codex_documents` holds only surfaces
+    # that exist as files, so the adopter who never wrote the file — the
+    # population likeliest to have left the switch unset — got no line about it,
+    # and a fully verified `hooks.json` rendered as an unqualified green report.
+    # The two states an operator most needs told apart, ENABLED and NEVER
+    # CONFIGURED, were identical in the output; only explicitly disabled was
+    # caught.
+    #
+    # `occurrence_names` stays in the condition, because it is the half that is
+    # right: with no kit registration anywhere there is no hook for the switch
+    # to gate, and advising an adopter to enable one would be advice about
+    # nothing.
+    feature_unset = False
+    if occurrence_names and isinstance(codex_config, dict):
         features = codex_config.get("features")
         if "features" in codex_config and not isinstance(features, dict):
             statuses.append(
@@ -2000,7 +2020,10 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
                     "Codex project features must be a table",
                 )
             )
-        elif isinstance(features, dict):
+        elif not isinstance(features, dict):
+            # Parsed, but carries no `features` table at all.
+            feature_unset = True
+        else:
             feature_keys = [
                 key for key in ("hooks", "codex_hooks") if key in features
             ]
@@ -2036,6 +2059,25 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
                         "Codex lifecycle hooks are disabled by the project config",
                     )
                 )
+            # A `features` table carrying NEITHER spelling says as little about
+            # the switch as a missing table does, and reached this function's
+            # end silently for the same reason.
+            feature_unset = not feature_keys
+    elif occurrence_names and not (root / ".codex/config.toml").is_file():
+        feature_unset = True
+    # The remaining case is a `.codex/config.toml` that EXISTS and is absent
+    # from `codex_documents`, which means it did not parse. It already carries
+    # its own `unreadable` line; adding `unset` beside it would state the
+    # switch's value from a document this run never read.
+    if feature_unset:
+        statuses.append(
+            RegistrationStatus(
+                "codex",
+                ".codex/config.toml",
+                "unset",
+                "[features].hooks",
+            )
+        )
     return statuses
 
 
@@ -3177,10 +3219,22 @@ def render(report: Report) -> str:
                 "nothing pre-approves it",
             ),
             "absent": ("·", "not present — no registration on this runtime"),
+            # A `·` for `ungranted`'s reason, not `unregistered`'s: the switch
+            # being unset is not a declined hook, it is a step `init.sh` asks
+            # for that this check cannot confirm was taken. It shares the footer
+            # below — unlike `ungranted`, which needed its own — because both of
+            # that footer's claims are true here: the block is hand-written, and
+            # `/hooks` is the authority on whether the switch mattered.
+            "unset": (
+                "·",
+                f"{reg.detail} is not set — ./init.sh's registration block asks for it",
+            ),
             "unreadable": ("⚠", f"unreadable — {reg.detail}"),
         }.get(reg.state, ("⚠", reg.state))
         lines.append(f"  {mark} {reg.surface} [{reg.runtime}]: {text}")
-    if any(reg.state in ("unregistered", "absent") for reg in report.registrations):
+    if any(
+        reg.state in ("unregistered", "absent", "unset") for reg in report.registrations
+    ):
         # Said once, not per line: `init.sh` prints both blocks and writes
         # neither (#303), and only a live session can report what a runtime
         # actually loaded — so this check can say the path is there, never that
