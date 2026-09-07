@@ -50,18 +50,8 @@ REPO_ROOT = find_repo_root(ENGINE_DIR)
 
 
 def _shipped(name: str) -> Path:
-    """A reference registration, or a skip declaring why it is unavailable.
-
-    Accessors rather than module constants so the dependency is declared ONCE
-    and every future reader inherits it — the reasoning `conftest.py`'s
-    `require_kit_paths` gives for expressing a fixture-introduced dependency at
-    the fixture instead of repeating a marker per test.
-
-    Without this, declining these two installable files would raise
-    FileNotFoundError — which is #534 cause 2, the defect this same branch
-    repaired one module over. Introducing a fresh instance of it while fixing
-    the old one is exactly the trap that issue's history keeps recording.
-    """
+    """See `conftest.shipped_registration`, which this and `test_kit_doctor.py`
+    both delegate to."""
     return shipped_registration(name)
 
 
