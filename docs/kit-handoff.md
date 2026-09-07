@@ -67,8 +67,9 @@ the live decision and was not taken.
   traceback, the second instance landing inside the commit written to fix the first. An
   occurrence on `#510` records the other half — the task wrapper reporting `exit code 0`
   for a run `make` exited `2`, and a memory-killed run whose only tell was an absent pytest
-  summary line. `#666` carries the receipt-ordering trap, walked into twice by the session
-  that filed it and avoided on the third PR.
+  summary line. `#666` carries the receipt-ordering trap as **two walk-ins** and nothing
+  else — the successful application, recording the parent receipt before the fix round, is
+  on PR #701's own disposition, in the same PR as the second walk-in.
 
 ▶ Next: In Claude, `/session-start` — Phase 5 exit is now the live question and needs its
 own exact decision; the repairs `#534` carries are the work standing between here and it.
