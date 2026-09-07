@@ -257,11 +257,11 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "a4a2761c0dcd700526562459e546de6b4ed12c382df704e880b3ac1870f5da07"
+      "sha256": "cc2eef59a08817a69dfbf12af07a387837c2a929421d236af966e2f39f8f85a4"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "84376d6e2b953426abb5d7b58343551a461657bf5698f4efe49e399beec901f2"
+      "sha256": "ee69724d65ff6f3527cc8ddeee73054774764510ec4d49d2f1aca3a0a34a3015"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
