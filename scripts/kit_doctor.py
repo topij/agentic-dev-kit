@@ -2066,9 +2066,16 @@ def inspect_registrations(root: Path, engines_dir: str) -> list[RegistrationStat
     elif occurrence_names and not (root / ".codex/config.toml").is_file():
         feature_unset = True
     # The remaining case is a `.codex/config.toml` that EXISTS and is absent
-    # from `codex_documents`, which means it did not parse. It already carries
-    # its own `unreadable` line; adding `unset` beside it would state the
-    # switch's value from a document this run never read.
+    # from `codex_documents`. It already carries its own `unreadable` line, and
+    # adding `unset` beside it would state the switch's value from a document
+    # this run never read through.
+    #
+    # "did not parse" is the common route there and not the only one, which an
+    # earlier version of this comment asserted (panel, correctness lens): a
+    # document whose `hooks` value is degenerately nested parses fine and then
+    # exhausts `_hook_commands`, reaching the same `continue` with a
+    # `RecursionError` detail. What the two share is the reason this branch
+    # stays silent — the read did not complete — not the stage it stopped at.
     if feature_unset:
         statuses.append(
             RegistrationStatus(

@@ -4820,6 +4820,107 @@ def test_the_unset_switch_does_not_reach_the_exit_code(tmp_path):
     assert "unset" not in {r.state for r in report.dead_registrations}
 
 
+def _report_of(*registrations) -> kit_doctor.Report:
+    return kit_doctor.Report(
+        kit_version_config=2,
+        kit_version_manifest=2,
+        engines_dir="scripts",
+        engines_dir_ok=True,
+        hooks_installed=True,
+        narrative_rendered={},
+        registrations=list(registrations),
+    )
+
+
+_UNSET_STATUS = ("codex", ".codex/config.toml", "unset", "[features].hooks")
+
+
+def test_the_unset_line_renders_its_mark_and_its_message():
+    """`render()` was pinned by nothing while every model-layer test passed.
+
+    A panel lens replaced the mark with `✗` and the message with different
+    wording, and both mutants survived the whole file. The CHANGELOG promises
+    the adopter "a new advisory line", so this holds that promise to the text
+    it actually prints.
+
+    Built from a hand-made `Report` rather than a fixture: a repo fixture also
+    emits `absent`/`unregistered` lines, and those would satisfy these
+    assertions on their own.
+    """
+    rendered = kit_doctor.render(_report_of(kit_doctor.RegistrationStatus(*_UNSET_STATUS)))
+
+    matched = [
+        line for line in rendered.splitlines() if "[features].hooks is not set" in line
+    ]
+
+    assert len(matched) == 1, rendered
+    assert matched[0].lstrip().startswith("·"), matched[0]
+    assert "./init.sh's registration block asks for it" in matched[0]
+
+
+def test_the_unset_state_alone_pulls_in_the_hand_written_footer():
+    """The footer's trigger tuple gained `unset`, and nothing held it there.
+
+    Asserted against a report whose ONLY registration is `unset`, because
+    `unregistered` and `absent` trigger the same footer — a fixture carrying
+    either would pass this with `unset` removed from the tuple again.
+    """
+    rendered = kit_doctor.render(_report_of(kit_doctor.RegistrationStatus(*_UNSET_STATUS)))
+
+    assert "`/hooks` in a session is the authority" in rendered
+
+
+def test_a_report_without_an_unset_line_prints_no_hand_written_footer():
+    """The negative half: the footer follows the finding rather than the state
+    vocabulary, so a clean Codex report stays quiet."""
+    rendered = kit_doctor.render(
+        _report_of(
+            kit_doctor.RegistrationStatus(
+                "codex", ".codex/hooks.json", "verified", "canonical lifecycle form verified"
+            )
+        )
+    )
+
+    assert "`/hooks` in a session is the authority" not in rendered
+
+
+def test_a_features_value_that_is_not_a_table_is_not_also_reported_unset(tmp_path):
+    """Its `unreadable` sibling has such a test; this case did not.
+
+    `features = 0` is already `misconfigured`, and an `unset` line beside it
+    would report the switch as merely unwritten when the adopter did write it.
+    """
+    root = _fake_repo(tmp_path)
+    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+    _write(root / ".codex" / "config.toml", "features = 0\n")
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert _unset_switches(statuses) == []
+    assert "Codex project features must be a table" in [
+        s.detail for s in statuses if s.state == "misconfigured"
+    ]
+
+
+def test_a_registration_living_only_in_config_toml_still_reports_unset(tmp_path):
+    """`.codex/config.toml` is itself a registration surface.
+
+    Every other test here registers through `.codex/hooks.json`, so this path —
+    the switch unset in the same file that carries the registration — went
+    unexercised.
+    """
+    root = _fake_repo(tmp_path)
+    _write(root / ".codex" / "config.toml", _valid_codex_inline_posttooluse())
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+
+    assert any(
+        s.surface == ".codex/config.toml" and s.state in ("resolves", "broken")
+        for s in statuses
+    ), f"precondition: config.toml must carry the registration — {statuses}"
+    assert _unset_switches(statuses) == [".codex/config.toml"]
+
+
 def test_codex_lifecycle_semantics_validates_each_present_feature_alias(tmp_path):
     root = _fake_repo(tmp_path)
     _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
