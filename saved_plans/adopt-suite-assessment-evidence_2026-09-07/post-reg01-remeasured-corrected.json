@@ -1,0 +1,101 @@
+{
+  "observed_at": "2026-09-07T06:19:46.167373+00:00",
+  "kit_revision": "fe8c030af873c2a0dcfb3a70607dc8ce2a08a14d",
+  "supersedes": "post-reg01-registration-subset.json (targeted test_init_sh.py only)",
+  "copy_root": "/private/tmp/adk-remeasure-ba8d8004",
+  "registration_subset": {
+    "files_targeted": [
+      "scripts/devkit/tests/test_init_sh.py",
+      "scripts/devkit/tests/test_kit_doctor.py"
+    ],
+    "selector": "advisory_matches_the_registrations or shipped_registrations_name_their_own_runtime or budget_advisory_prints_the_shipped or codex_budget_registration or codex_registration or shipped_codex_session_start or shipped_claude_session_start or claude_budget_registration or permissions_advisory_prints_the_shipped or codex_lifecycle_semantics_accept",
+    "exit_code": 1,
+    "outcomes": {
+      "test_the_advisory_matches_the_registrations_it_describes": "FAILED",
+      "test_both_shipped_registrations_name_their_own_runtime": "PASSED",
+      "test_the_shipped_codex_session_start_carries_no_matcher": "PASSED",
+      "test_the_budget_advisory_prints_the_shipped_codex_commands_verbatim": "FAILED",
+      "test_the_budget_advisory_prints_the_shipped_claude_commands_verbatim": "FAILED",
+      "test_the_codex_budget_registration_survives_a_git_less_tree": "PASSED",
+      "test_the_codex_registration_survives_a_git_less_tree": "FAILED",
+      "test_the_codex_registration_execs_rather_than_forking_the_interpreter": "FAILED",
+      "test_the_codex_budget_registration_skips_a_cron_run": "PASSED",
+      "test_the_claude_budget_registration_skips_a_cron_run[doc-budget]": "PASSED",
+      "test_the_claude_budget_registration_skips_a_cron_run[memory-budget]": "PASSED",
+      "test_the_codex_registration_guards_a_git_that_fails_while_printing_a_path": "PASSED",
+      "test_the_codex_registration_guards_an_empty_root_that_git_reports_as_success": "PASSED",
+      "test_the_shipped_claude_session_start_carries_no_matcher": "PASSED",
+      "test_the_permissions_advisory_prints_the_shipped_allow_rules_verbatim": "FAILED",
+      "test_codex_lifecycle_semantics_accept_the_shipped_contract": "FAILED",
+      "test_codex_lifecycle_semantics_accept_inline_project_config": "PASSED",
+      "test_nested_hooks_metadata_is_not_an_inline_codex_registration": "PASSED"
+    },
+    "passed": [
+      "test_both_shipped_registrations_name_their_own_runtime",
+      "test_codex_lifecycle_semantics_accept_inline_project_config",
+      "test_nested_hooks_metadata_is_not_an_inline_codex_registration",
+      "test_the_claude_budget_registration_skips_a_cron_run[doc-budget]",
+      "test_the_claude_budget_registration_skips_a_cron_run[memory-budget]",
+      "test_the_codex_budget_registration_skips_a_cron_run",
+      "test_the_codex_budget_registration_survives_a_git_less_tree",
+      "test_the_codex_registration_guards_a_git_that_fails_while_printing_a_path",
+      "test_the_codex_registration_guards_an_empty_root_that_git_reports_as_success",
+      "test_the_shipped_claude_session_start_carries_no_matcher",
+      "test_the_shipped_codex_session_start_carries_no_matcher"
+    ],
+    "failed": [
+      "test_codex_lifecycle_semantics_accept_the_shipped_contract",
+      "test_the_advisory_matches_the_registrations_it_describes",
+      "test_the_budget_advisory_prints_the_shipped_claude_commands_verbatim",
+      "test_the_budget_advisory_prints_the_shipped_codex_commands_verbatim",
+      "test_the_codex_registration_execs_rather_than_forking_the_interpreter",
+      "test_the_codex_registration_survives_a_git_less_tree",
+      "test_the_permissions_advisory_prints_the_shipped_allow_rules_verbatim"
+    ],
+    "stdout_tail": "a8d8004/scripts/devkit/tests/test_init_sh.py:5981: AssertionError: the advisory offers rules this repo does not grant itself:\nE   AssertionError: assert set() == {'scripts/che...owup_hook.py'}\n      \n      Extra items in the right set:\n      'scripts/hooks/pr_followup_hook.py'\n      'scripts/check_doc_budget.py'\n      \n      Full diff:\n      + set()...\n      \n      ...Full output truncated (4 lines hidden), use '-vv' to show\n/private/tmp/adk-remeasure-ba8d8004/scripts/devkit/tests/test_kit_doctor.py:4335: AssertionError: assert set() == {'scripts/che...owup_hook.py'}\n=========================== short test summary info ============================\nFAILED scripts/devkit/tests/test_init_sh.py::test_the_advisory_matches_the_registrations_it_describes\nFAILED scripts/devkit/tests/test_init_sh.py::test_the_budget_advisory_prints_the_shipped_codex_commands_verbatim\nFAILED scripts/devkit/tests/test_init_sh.py::test_the_budget_advisory_prints_the_shipped_claude_commands_verbatim\nFAILED scripts/devkit/tests/test_init_sh.py::test_the_codex_registration_survives_a_git_less_tree\nFAILED scripts/devkit/tests/test_init_sh.py::test_the_codex_registration_execs_rather_than_forking_the_interpreter\nFAILED scripts/devkit/tests/test_init_sh.py::test_the_permissions_advisory_prints_the_shipped_allow_rules_verbatim\nFAILED scripts/devkit/tests/test_kit_doctor.py::test_codex_lifecycle_semantics_accept_the_shipped_contract\n================= 7 failed, 11 passed, 811 deselected in 7.12s =================\n"
+  },
+  "test_kit_doctor_full_file": {
+    "exit_code": 1,
+    "failed": [
+      "test_adapter_report_cli_is_read_only_and_does_not_require_adopter_config",
+      "test_adapter_report_preserves_a_hardlinked_path_as_adopter_owned",
+      "test_adapter_report_preserves_a_symlink_path_as_adopter_owned[claude-.claude/commands/adopt.md]",
+      "test_adapter_report_preserves_a_symlink_path_as_adopter_owned[codex-.agents/skills/adopt/SKILL.md]",
+      "test_adapter_report_preserves_a_symlinked_ancestor_as_adopter_owned",
+      "test_authored_adapter_change_is_reported_and_preserved_for_each_runtime",
+      "test_codex_lifecycle_semantics_accept_the_shipped_contract",
+      "test_no_shipped_kit_owned_file_hardcodes_a_bare_engine_path",
+      "test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned[adopt]",
+      "test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned[parallel]",
+      "test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned[pr-watch]",
+      "test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned[upgrade]",
+      "test_shipped_manifest_covers_every_kit_owned_file",
+      "test_shipped_runtime_adapters_equal_the_renderer_for_both_runtimes"
+    ],
+    "terminal_reason_lines": [
+      "<copy>/scripts/devkit/lib/runtime_adapters.py:347: ValueError: source adapter .agents/skills/wrap-up/SKILL.md does not equal the current rendered form",
+      "<copy>/scripts/devkit/lib/runtime_adapters.py:347: ValueError: source adapter .agents/skills/wrap-up/SKILL.md does not equal the current rendered form",
+      "<copy>/scripts/devkit/lib/runtime_adapters.py:347: ValueError: source adapter .agents/skills/wrap-up/SKILL.md does not equal the current rendered form",
+      "<copy>/scripts/devkit/lib/runtime_adapters.py:347: ValueError: source adapter .agents/skills/wrap-up/SKILL.md does not equal the current rendered form",
+      "<copy>/scripts/devkit/lib/runtime_adapters.py:347: ValueError: source adapter .agents/skills/wrap-up/SKILL.md does not equal the current rendered form",
+      "<copy>/scripts/devkit/lib/runtime_adapters.py:347: ValueError: source adapter .agents/skills/wrap-up/SKILL.md does not equal the current rendered form",
+      "<copy>/scripts/devkit/lib/runtime_adapters.py:347: ValueError: source adapter .agents/skills/wrap-up/SKILL.md does not equal the current rendered form",
+      "<copy>/scripts/devkit/lib/runtime_adapters.py:347: ValueError: source adapter .agents/skills/wrap-up/SKILL.md does not equal the current rendered form",
+      "<copy>/scripts/devkit/lib/runtime_adapters.py:347: ValueError: source adapter .agents/skills/wrap-up/SKILL.md does not equal the current rendered form",
+      "<copy>/scripts/devkit/lib/runtime_adapters.py:347: ValueError: source adapter .agents/skills/wrap-up/SKILL.md does not equal the current rendered form",
+      "<copy>/scripts/devkit/tests/test_kit_doctor.py:1098: AssertionError: manifest out of sync: {'scripts/verify_live_validation_bundle.py', 'docs/agentic-dev-kit/live-validation-evidence.md', 'scripts/tests/test_live_validation_bundle.py'}",
+      "<copy>/scripts/devkit/tests/test_kit_doctor.py:3220: AssertionError: a kit-owned file's set of hardcoded-`scripts/`-path lines changed since this test was written. If this is a NEW violation: fix it \u2014 write `<engine-dir>/<name>` the way every workflow doc does (see kit_doctor.py's own Usage block), or render it from paths.engines at run time. If a KNOWN one from _KNOWN_PRE_EXISTING_HARDCODED_ENGINE_PATHS was just fixed: delete its entry above \u2014 do not widen the pin to make this pass.",
+      "<copy>/scripts/devkit/tests/test_kit_doctor.py:4335: AssertionError: assert set() == {'scripts/che...owup_hook.py'}"
+    ],
+    "reason_shapes": {
+      "ValueError: source adapter .agents/skills/wrap-up/SKILL.md does not equal the cu": 10,
+      "AssertionError: manifest out of sync: {'scripts/verify_live_validation_bundle.py": 1,
+      "AssertionError: a kit-owned file's set of hardcoded-`scripts/`-path lines change": 1,
+      "AssertionError: assert set() == {'scripts/che...owup_hook.py'}": 1
+    },
+    "summary_line": [
+      "14 failed, 485 passed, 3 skipped in 3.41s"
+    ]
+  },
+  "original_fixture_unchanged": true
+}

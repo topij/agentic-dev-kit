@@ -2,9 +2,12 @@
 
 The second open Phase 5 blocker. This assesses the retained log and re-measures the part
 of it that the approved REG-01 application invalidated. It changes no fixture, runs no
-initializer, and asks for no new ticket: everything it found belongs to
+initializer, and asks for no new ticket. Most of what it found belongs to
 [`#534`](https://github.com/topij/agentic-dev-kit/issues/534)'s stated scope and is
-[recorded there as an occurrence](https://github.com/topij/agentic-dev-kit/issues/534#issuecomment-5565697869).
+[recorded there](https://github.com/topij/agentic-dev-kit/issues/534#issuecomment-5565697869),
+with a [correction](https://github.com/topij/agentic-dev-kit/issues/534) appended for the
+part the first pass overstated; one failure turns out to belong to `#690`, already
+repaired.
 
 ## Boundary, stated first
 
@@ -15,7 +18,10 @@ new initialization, adoption completion, the fixture PR, Phase 5 exit or the cs-
 replay, each of which keeps its own exact decision.
 
 [`assess_installed_suite.py.txt`](adopt-suite-assessment-evidence_2026-09-07/assess_installed_suite.py.txt)
-is the program; it refuses to reuse an existing copy path rather than removing one.
+and
+[`remeasure_corrected.py.txt`](adopt-suite-assessment-evidence_2026-09-07/remeasure_corrected.py.txt)
+are the programs; each refuses to reuse an existing copy path rather than removing one,
+and each asserts the original fixture unchanged around its run.
 
 ## What the retained log contains
 
@@ -26,12 +32,34 @@ out of it. It carries `79 failed, 2006 passed, 111 skipped in 388.78s (0:06:28)`
 groups every failure line by file and maps each `FileNotFoundError` to the tests that
 raised it.
 
-**Every failure fits a cause `#534` already names.** `test_portability.py`'s are
-runtime-parity-contract assertions about the kit's own workflows and adapters;
-`test_kitconfig.py`'s are `test_shipped_skeletons_carry_the_unrendered_marker` reading the
-kit's template skeletons, which an adopter renders to its own configured names. Both are
-that issue's cause 1. `test_lane_launcher.py`'s single failure was already recorded there
-during PR #691's panel, and is not re-filed here.
+**How the failures classify, and what this assessment did not establish.** An earlier
+draft of this record claimed every one of the 79 fits a cause `#534` already names. That
+was an overstatement — written having examined four of the six files — and PR #701's
+correctness lens caught it. What is actually established:
+
+- `test_portability.py` — runtime-parity-contract assertions about the kit's own
+  workflows and adapters. `#534` cause 1.
+- `test_kitconfig.py` — `test_shipped_skeletons_carry_the_unrendered_marker` reading the
+  kit's template skeletons, which an adopter renders to its own configured names. Cause 1.
+- `test_lane_launcher.py` — already recorded on `#534` during PR #691's panel; not
+  re-filed here.
+- `test_panel_prompt.py` — **not a `#534` item, and the earlier draft was wrong to imply
+  it was.** `585483b` (#690) already repaired exactly this test's root computation,
+  changing `root = ENGINE.parent.parent` to `root = REPO_ROOT` for nested installed
+  layouts. That commit is an ancestor of this PR's base; the fixture's *installed copy*
+  predates it. The failure in the log is a fixed bug still present in a stale copy, not
+  an open defect.
+- `test_kit_doctor.py` — characterised by re-running the whole file in a disposable copy
+  rather than by inference. Ten of its failures share `ValueError: source adapter
+  .agents/skills/wrap-up/SKILL.md does not equal the current rendered form` — the
+  deliberately preserved fixture-owned wrap-up adapter that `#534`'s 2026-09-06 comment
+  already names; one is `test_shipped_manifest_covers_every_kit_owned_file` reporting
+  `manifest out of sync`, that issue body's own cause-1 example; one is
+  `test_no_shipped_kit_owned_file_hardcodes_a_bare_engine_path`, a kit-repo invariant
+  about the kit's own files; and one is the registration-dependent test discussed below.
+  **One failure's terminal line did not match the reason extractor and is therefore
+  uncharacterised** — the characterised reasons are fewer than the failures, and that gap
+  is stated rather than rounded away.
 
 ## The part REG-01 invalidated
 
@@ -40,26 +68,39 @@ and `<fixture>/.claude/settings.json` — the two registration files that were *
 the log was taken and exist now**. The log is therefore stale as a description of the
 fixture, and re-measuring against it rather than against the current state would be wrong.
 
-Re-measured in the disposable copy on 2026-09-07 UTC, the registration-dependent selector
-picked 15 items: **9 passed, 6 failed**. The
-[captured run](adopt-suite-assessment-evidence_2026-09-07/post-reg01-registration-subset.json)
-retains the command, both streams and the per-test outcomes.
+Re-measured in a disposable copy on 2026-09-07 UTC. **The first re-measurement was wrong
+and is superseded.** It targeted `test_init_sh.py` alone, while one of the sixteen blocks
+— `test_codex_lifecycle_semantics_accept_the_shipped_contract` — lives in
+`test_kit_doctor.py`, so that test could never be selected however the `-k` expression
+matched. The run reported `15 selected` beside a paragraph saying sixteen, and neither the
+record nor its evidence reconciled the two. PR #701's correctness lens caught it. The
+[first run](adopt-suite-assessment-evidence_2026-09-07/post-reg01-registration-subset.json)
+is retained as what ran; the
+[corrected run](adopt-suite-assessment-evidence_2026-09-07/post-reg01-remeasured-corrected.json),
+driven by
+[`remeasure_corrected.py.txt`](adopt-suite-assessment-evidence_2026-09-07/remeasure_corrected.py.txt),
+targets both files.
+
+Corrected, the selector picks 18 items: **11 passed, 7 failed.** It is deliberately
+broader than the sixteen blocks, which is why it selects more than sixteen. The test the
+first run could not reach still fails, now on a content assertion rather than the
+`FileNotFoundError` it used to raise.
 
 **Neither outcome is an improvement on the failure it replaced**, which is the finding.
 
-- The **9 passes** now assert against the *adopter's* registrations and report nothing
+- The **passes** now assert against the *adopter's* registrations and report nothing
   about the kit's. That is `#534`'s silent-false-pass family — the shape its body calls
-  "the failure mode worth prioritising" — reproduced nine times in one file. The
-  direction of travel is the sharp part: these were loudly red until the adopter
-  completed a step the kit's own installer told them to complete, and completing it is
-  what silenced them.
-- The **6 failures** share one mechanism. Each crosses an expectation built from
-  `init.sh` run in the test's `tmp_path` sandbox — which initializes a fresh config and
-  so takes the **default** `paths.engines: scripts` — against the repo's real
-  registration file, which in this layout carries `scripts/devkit`. In the kit the two
-  coincide, because the kit's engines dir is `scripts`. In an adopter whose engines dir
-  differs they cannot, and the assertion text accuses the kit of advisory drift when the
-  cause is the adopter's layout.
+  "the failure mode worth prioritising" — as a family rather than the single
+  `dev_session.sh` instance that issue names. The direction of travel is the sharp part:
+  these were loudly red until the adopter completed a step the kit's own installer told
+  them to complete, and completing it is what silenced them.
+- The **failures** share one mechanism. Each crosses an expectation built from `init.sh`
+  run in the test's `tmp_path` sandbox — which initializes a fresh config and so takes the
+  **default** `paths.engines: scripts` — against the repo's real registration file, which
+  in this layout carries `scripts/devkit`. In the kit the two coincide, because the kit's
+  engines dir is `scripts`. In an adopter whose engines dir differs they cannot, and the
+  assertion text accuses the kit of advisory drift when the cause is the adopter's
+  layout.
 
 ## Why this needed no new ticket
 
@@ -70,9 +111,9 @@ the body alone. Filing separately would have repeated that error.
 
 It does add something to that issue's suggested scope, which the occurrence states: item
 1's `_repo_layout` fix does not reach any of this. Nothing here reads
-`REPO_ROOT / "scripts"`. The six read an engines dir that `init.sh` had just written with
-its default; the nine read a correctly-resolved path that simply is not the kit's file in
-an adopter. A test asserting a property of a file the kit *ships* needs the kit's copy of
+`REPO_ROOT / "scripts"`. The failing ones read an engines dir that `init.sh` had just
+written with its default; the passing ones read a correctly-resolved path that simply is
+not the kit's file in an adopter. A test asserting a property of a file the kit *ships* needs the kit's copy of
 it, not the path where an adopter keeps their own — and whether the answer is a
 kit-repo-only marker or an installed reference copy is a decision the occurrence asks for
 rather than settles.

@@ -1,0 +1,75 @@
+"""Corrected re-measurement: covers BOTH files holding registration-dependent tests,
+and characterises test_kit_doctor.py's failures. Supersedes the first run, which
+targeted only test_init_sh.py and therefore could never select one of the sixteen.
+"""
+from pathlib import Path
+from collections import Counter
+import datetime, hashlib, json, os, re, shutil, stat, subprocess, sys
+
+KIT = Path('/Users/topi/Coding/agentic-dev-kit')
+FIXTURE = Path('/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture')
+BASELINE = KIT / 'saved_plans/adopt-reg01-application-evidence_2026-09-07/fixture-inventory-after-reg01.json'
+OUT = Path(sys.argv[1]); COPY = Path(sys.argv[2])
+assert Path.cwd() == KIT
+def sha(p): return hashlib.sha256(p.read_bytes()).hexdigest()
+def inv(root):
+    o={}
+    for d,ds,fs in os.walk(root, followlinks=False):
+        ds[:]=sorted(n for n in ds if n!='.git')
+        for n in sorted(ds+fs):
+            if n=='.git': continue
+            p=Path(d)/n; row={'mode':oct(stat.S_IMODE(p.lstat().st_mode))}
+            if p.is_symlink(): row.update(kind='symlink',target=os.readlink(p))
+            elif p.is_file(): row.update(kind='file',sha256=sha(p))
+            elif p.is_dir(): row.update(kind='directory')
+            o[p.relative_to(root).as_posix()]=row
+    return o
+before = inv(FIXTURE)
+assert before == json.loads(BASELINE.read_text()), 'fixture not at REG-01 baseline'
+if COPY.exists(): raise SystemExit(f'refusing to reuse {COPY}')
+shutil.copytree(FIXTURE, COPY, symlinks=True)
+env = {**os.environ, 'PYTHONDONTWRITEBYTECODE':'1', 'DEVKIT_STATE_ROOT': str(COPY/'.state')}
+def run(args):
+    p = subprocess.run(['uv','run','--with','pytest','--with','pyyaml','python','-m','pytest',*args],
+                       cwd=str(COPY), text=True, capture_output=True, env=env)
+    return p
+K = ("advisory_matches_the_registrations or shipped_registrations_name_their_own_runtime or "
+     "budget_advisory_prints_the_shipped or codex_budget_registration or codex_registration or "
+     "shipped_codex_session_start or shipped_claude_session_start or claude_budget_registration or "
+     "permissions_advisory_prints_the_shipped or codex_lifecycle_semantics_accept")
+# BOTH files this time.
+p1 = run(['scripts/devkit/tests/test_init_sh.py','scripts/devkit/tests/test_kit_doctor.py','-k',K,'-v','--tb=line'])
+outcomes = dict(re.findall(r'scripts/devkit/tests/(?:test_init_sh|test_kit_doctor)\.py::(\S+) (PASSED|FAILED)', p1.stdout))
+# Characterise every test_kit_doctor.py failure.
+p2 = run(['scripts/devkit/tests/test_kit_doctor.py','-q','--tb=line'])
+reasons = [re.sub(re.escape(str(COPY)), '<copy>', l).strip()
+           for l in p2.stdout.splitlines() if re.search(r':\d+: (\w*Error|assert)', l)]
+kd_failed = re.findall(r'FAILED scripts/devkit/tests/test_kit_doctor\.py::(\S+)', p2.stdout)
+assert inv(FIXTURE) == before, 'ORIGINAL FIXTURE CHANGED'
+OUT.mkdir(parents=True, exist_ok=True)
+(OUT / 'post-reg01-remeasured-corrected.json').write_text(json.dumps({
+    'observed_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    'kit_revision': subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
+    'supersedes': 'post-reg01-registration-subset.json (targeted test_init_sh.py only)',
+    'copy_root': str(COPY),
+    'registration_subset': {
+        'files_targeted': ['scripts/devkit/tests/test_init_sh.py','scripts/devkit/tests/test_kit_doctor.py'],
+        'selector': K, 'exit_code': p1.returncode, 'outcomes': outcomes,
+        'passed': sorted(k for k,v in outcomes.items() if v=='PASSED'),
+        'failed': sorted(k for k,v in outcomes.items() if v=='FAILED'),
+        'stdout_tail': p1.stdout[-1500:],
+    },
+    'test_kit_doctor_full_file': {
+        'exit_code': p2.returncode, 'failed': sorted(kd_failed),
+        'terminal_reason_lines': reasons,
+        'reason_shapes': dict(Counter(r.split(': ',1)[-1][:80] for r in reasons)),
+        'summary_line': [l.strip() for l in p2.stdout.splitlines() if 'failed' in l and ' in ' in l],
+    },
+    'original_fixture_unchanged': True,
+}, indent=2) + '\n')
+print('registration subset -> passed:', sum(v=='PASSED' for v in outcomes.values()),
+      'failed:', sum(v=='FAILED' for v in outcomes.values()), 'total:', len(outcomes))
+print('test_kit_doctor.py failures:', len(kd_failed))
+for r,c in Counter(r.split(': ',1)[-1][:70] for r in reasons).most_common():
+    print(f'   {c:>3}  {r}')
+print('original fixture unchanged: True')

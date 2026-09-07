@@ -1,5 +1,7 @@
 {
   "assess_installed_suite.py.txt": "724f03202898aa49462b4cf9bc6f5cb6483e93c01da0214eefcf37b0ebdbf425",
   "post-reg01-registration-subset.json": "99977008cccd696b26bf0accbf87fa25ccd03d113867a9fb91b96cfeb18d7093",
+  "post-reg01-remeasured-corrected.json": "48ba5409229c855185bb5a97d0ca488d696cb3eee28dd92923bdcf17b63579ff",
+  "remeasure_corrected.py.txt": "7538d1291907ed9a6e43c02427c9f148a28012d9892597f1edd7f3471e80be77",
   "retained-log-classification.json": "551911deafba07a4951db73cda3e63c9f90b5b66a11f5f33d7fc6f4552ae7936"
 }

@@ -26,23 +26,28 @@ the live decision and was not taken.
   classification, the re-measurement and the boundary. It changed no fixture, ran no
   initializer, and filed no new ticket: everything found is in `#534`'s stated scope and
   is [recorded there](https://github.com/topij/agentic-dev-kit/issues/534#issuecomment-5565697869).
-- Every failure in the retained log fits a cause `#534` already names.
-  `test_portability.py`'s are runtime-parity assertions about the kit's own workflows and
-  adapters; `test_kitconfig.py`'s read the kit's template skeletons, which an adopter
-  renders to its own names. Both are that issue's cause 1. `test_lane_launcher.py`'s was
-  already recorded during PR #691's panel and was **not** re-filed.
+- Most of the retained log's failures fit a cause `#534` already names — the parity
+  assertions, the template-skeleton reads, and `test_kit_doctor.py`'s preserved
+  fixture-owned wrap-up adapter. `test_lane_launcher.py`'s was already recorded during
+  PR #691's panel and was **not** re-filed. **`test_panel_prompt.py`'s is not a `#534`
+  item at all:** `585483b` (#690) already repaired that test's root, and the fixture's
+  installed copy predates the fix.
 - **REG-01 invalidated part of that log.** Sixteen of its failure blocks were
   `FileNotFoundError` on the two registration files that were absent then and exist now,
   so the log is stale as a description of the fixture.
-- Re-measured in a disposable copy on 2026-09-07 UTC: of the registration-dependent
-  selector's 15 items, 9 pass and 6 fail — **and neither outcome is better than the
-  failure it replaced.** The passes assert against the *adopter's* registrations and
+- Re-measured in a disposable copy on 2026-09-07 UTC: the selector picks 18 items,
+  11 passing and 7 failing — **and neither outcome is better than the failure it
+  replaced.** The passes assert against the *adopter's* registrations and
   report nothing about the kit's, which is `#534`'s silent-false-pass family as a family
-  rather than an instance; they were loudly red until the adopter completed a step the
+  rather than a single instance; they were loudly red until the adopter completed a step the
   installer told them to complete, and completing it is what silenced them. The failures
   cross an expectation built from `init.sh` in a sandbox that takes the default
   `paths.engines: scripts` against a real registration carrying `scripts/devkit`, so the
   text accuses the kit of drift when the cause is the adopter's layout.
+- **The first pass overstated two things and PR #701's correctness lens caught both** —
+  a completeness claim covering files it had not examined, and a re-measurement that
+  reached one file while the sixteenth test lived in another. Both are corrected on the
+  record and in an appended `#534` correction; the substantive finding is unchanged.
 - That last point is what the occurrence adds to `#534`'s suggested scope: item 1's
   `_repo_layout` fix reaches none of it, because nothing here reads `REPO_ROOT /
   "scripts"`. Whether the answer is a kit-repo-only marker or an installed reference copy
