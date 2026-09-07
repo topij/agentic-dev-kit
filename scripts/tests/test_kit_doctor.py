@@ -37,6 +37,25 @@ from conftest import is_install_baseline, require_kit_source
 
 ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
+
+# See test_init_sh.py's note: the kit's own copies of the two registrations it
+# ships but does not write (#303), engine-relative so they resolve in any
+# layout. Kept equal to the live files by
+# `test_the_reference_registrations_match_the_shipped_files` below.
+SHIPPED_REGISTRATIONS = ENGINE_DIR / "tests" / "fixtures" / "shipped-registrations"
+
+
+def _shipped(name: str) -> Path:
+    """See test_init_sh.py's accessor: declares the dependency rather than
+    raising FileNotFoundError when an adopter declines these installable files
+    (#534 cause 2)."""
+    path = SHIPPED_REGISTRATIONS / name
+    if not path.is_file():
+        pytest.skip(
+            "needs the kit's reference registrations: not vendored in this "
+            f"tree: {path.name}"
+        )
+    return path
 sys.path.insert(0, str(ENGINE_DIR))
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
@@ -1127,6 +1146,37 @@ def test_shipped_manifest_covers_every_kit_owned_file():
     assert owned == accounted, f"manifest out of sync: {owned ^ accounted}"
     holes = [p for p, e in manifest["files"].items() if e["sha256"] is None]
     assert not holes, f"manifest has null hashes (files absent at generation): {holes}"
+
+
+def test_the_reference_registrations_match_the_shipped_files():
+    """The reference copies under `tests/fixtures/shipped-registrations/` must
+    equal the registrations the kit actually ships (#534).
+
+    **This is what makes reading the copies legitimate.** The readers in
+    `test_init_sh.py` were deliberately written to read the live file rather
+    than restate its content, because comparing a copy against a copy makes a
+    shared defect invisible — their own docstrings say so. Pointing them at a
+    reference copy would reintroduce exactly that, except for this test: it is
+    the single place the copy is pinned to the original, so a live registration
+    edited without refreshing the copy fails here, loudly, once.
+
+    Kit-repo-only, and NOT via a path marker: an adopter HAS `.codex/hooks.json`
+    and `.claude/settings.json`, holding their own hand-written registrations,
+    so a path check would pass the guard and then compare the kit's reference
+    against the adopter's file — reporting drift for having adopted. Existence
+    is not identity, which is the whole reason this family needed the reference
+    copy rather than the marker item 2 proposed.
+    """
+    require_kit_source()
+    for reference, shipped in (
+        (SHIPPED_REGISTRATIONS / "codex-hooks.json", REPO_ROOT / ".codex" / "hooks.json"),
+        (SHIPPED_REGISTRATIONS / "claude-settings.json", REPO_ROOT / ".claude" / "settings.json"),
+    ):
+        assert reference.read_bytes() == shipped.read_bytes(), (
+            f"{reference.name} no longer matches {shipped}. The kit ships the "
+            "latter and tests assert against the former; refresh the reference "
+            "copy in the same commit that changes the registration."
+        )
 
 
 def test_the_installer_is_tracked():
@@ -4386,7 +4436,7 @@ def _has_verified_lifecycle(statuses, name: str) -> bool:
 def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
     root = _fake_repo(tmp_path)
     shipped = json.loads(
-        (REPO_ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8")
+        _shipped("codex-hooks.json").read_text(encoding="utf-8")
     )
     _write_codex_lifecycle_fixture(root, shipped)
 

@@ -139,7 +139,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "c0bdc94d3daec992a6c45a5671715f858b699f456a6f67e5bfeb679a28a0af7a"
+      "sha256": "32033ca2b6bd9b3e48662c4f4eb0d735158e6ccc5ffbff5a95933ce1625dcb66"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -239,6 +239,14 @@
       "role": "test",
       "sha256": "b9cb4ed657dea49201b43721db02e8b06d27082d778f5e7b22f9aa69c6ef413a"
     },
+    "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
+      "role": "test",
+      "sha256": "7376f453039fc8af3c72525865ec583e1e3e2358cf9d3f295ed911e49cf11250"
+    },
+    "scripts/tests/fixtures/shipped-registrations/codex-hooks.json": {
+      "role": "test",
+      "sha256": "66979af482546118a359db5ec3ecd5559a4dfc757ad431c198a23c26e5a9b872"
+    },
     "scripts/tests/test_check_memory_budget.py": {
       "role": "test",
       "sha256": "8ddd343a1d1ac2a583b0ad7fbbfd76f7a63016f5c7c1f8e8074002f70fe76b4b"
@@ -249,11 +257,11 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "77a396100e48ff3706de3c4370bb6db3f26e680a0ea92e58b9c3750a44372fad"
+      "sha256": "a4a2761c0dcd700526562459e546de6b4ed12c382df704e880b3ac1870f5da07"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "5c2ba83444c8c3c2c11683ef3a1be0ba2dfb3fd2e1c9429c9349a56874f9de61"
+      "sha256": "84376d6e2b953426abb5d7b58343551a461657bf5698f4efe49e399beec901f2"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
