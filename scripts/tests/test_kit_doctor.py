@@ -33,6 +33,7 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 from _repo_layout import engine_dir, find_repo_root
+from conftest import is_install_baseline, require_kit_source
 
 ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
@@ -1089,13 +1090,41 @@ def test_unversioned_config_is_called_out(tmp_path):
 def test_shipped_manifest_covers_every_kit_owned_file():
     """A KIT_OWNED entry with no manifest hash degrades silently to
     `unknown-version` for every adopter, so the manifest must be regenerated
-    whenever the list changes."""
+    whenever the list changes.
+
+    **Stated as an invariant that holds in BOTH layouts (#534 cause 1).** It used
+    to assert `owned == listed` against the full KIT_OWNED, which any adopter
+    with a declined install set fails by construction — the symmetric difference
+    is exactly what they declined. That made it a permanent red an adopter could
+    only silence by not vendoring this file, which is the coverage hole #534's
+    "why it matters" section is about.
+
+    The property that is actually true everywhere is that every adopter-facing
+    kit-owned file is *accounted for* — either installed and hashed, or recorded
+    as declined. In the kit's own tree there are no declines, so this reduces to
+    the original equality; in an adopter it becomes a real check that nothing
+    fell out of both lists silently.
+
+    Both key sets are in the kit's own layout, so they compare directly: the
+    manifest records `scripts/…` and comparison remaps that prefix onto whatever
+    `paths.engines` the adopter configured (see this module's header).
+    """
     manifest_path = REPO_ROOT / kit_doctor.MANIFEST_NAME
     assert manifest_path.is_file(), "run kit_doctor.py --generate-manifest"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     listed = set(manifest["files"])
-    owned = {rel for rel, _ in kit_doctor.KIT_OWNED}
-    assert owned == listed, f"manifest out of sync: {owned ^ listed}"
+    declined = set(manifest.get("not_installed", ()))
+    # `kit_commit` is written ONLY by --record-install, which is what
+    # distinguishes an adopter's recorded install baseline from the kit's own
+    # --generate-manifest output. The two are measured against different sets:
+    # generation deliberately walks all of KIT_OWNED, while --record-install
+    # walks ADOPTER_KIT_OWNED, which drops the `repo-only` role.
+    if is_install_baseline():
+        owned = {rel for rel, _ in kit_doctor.ADOPTER_KIT_OWNED}
+    else:
+        owned = {rel for rel, _ in kit_doctor.KIT_OWNED}
+    accounted = listed | declined
+    assert owned == accounted, f"manifest out of sync: {owned ^ accounted}"
     holes = [p for p, e in manifest["files"].items() if e["sha256"] is None]
     assert not holes, f"manifest has null hashes (files absent at generation): {holes}"
 
@@ -1247,6 +1276,14 @@ def test_kit_repo_self_check_is_clean():
     pass and contributes nothing, which is how a gate that is not coverage came
     to be read as coverage (#112).
     """
+    # #534 cause 1, and the half with NO layout-honest form. The sibling above
+    # could be restated to hold everywhere; this one cannot. Its premise is that
+    # drift means a STALE MANIFEST — true only against the kit's own generated
+    # one. Against an adopter's recorded baseline the same `drifted` list means
+    # they edited a kit-owned file, which is `locally-edited`: a legitimate
+    # state this test would report as a defect. `include_repo_only=True` below
+    # asks for files an adopter is never offered, which compounds it.
+    require_kit_source()
     manifest = json.loads((REPO_ROOT / kit_doctor.MANIFEST_NAME).read_text(encoding="utf-8"))
     config = kit_doctor.load_config(REPO_ROOT / "config" / "dev-model.yaml", overlay=False)
     report = kit_doctor.inspect(REPO_ROOT, manifest, config, include_repo_only=True)
@@ -3226,6 +3263,16 @@ def test_no_shipped_kit_owned_file_hardcodes_a_bare_engine_path():
     `_KNOWN_PRE_EXISTING_HARDCODED_ENGINE_PATHS`: this file's fix must hold
     with no exception, which an entry here would quietly grant it.
     """
+    # #534 cause 1, and the predicate case rather than the layout-honest one.
+    # `_KNOWN_PRE_EXISTING_HARDCODED_ENGINE_PATHS` is pinned to the kit's CURRENT
+    # source. An adopter's installed copies are legitimately allowed to sit at an
+    # older kit revision until they `/upgrade`, so comparing them against this
+    # baseline reports staleness as a defect — the same wrong verdict
+    # `test_kit_repo_self_check_is_clean` above would give, for the same reason.
+    # The `.is_file()` guard below does not save it either: under a vendored
+    # `paths.engines`, kit-layout engine paths simply do not resolve, so those
+    # files drop out of `found` silently and the equality fails on absence.
+    require_kit_source()
     found = {
         rel: _bare_engine_path_lines((REPO_ROOT / rel).read_text(encoding="utf-8", errors="replace"))
         for rel, _role in kit_doctor.KIT_OWNED

@@ -20,6 +20,7 @@ from pathlib import Path
 
 import pytest
 from _repo_layout import engine_dir, find_repo_root
+from conftest import require_kit_source
 
 ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
@@ -331,6 +332,13 @@ def test_shipped_skeletons_carry_the_unrendered_marker(skeleton):
     `paths.handoff`: this repo points its own config at `docs/kit-*.md` so its
     session blocks never ship to adopters, so reading the config here would check
     the kit's live plan (which must NOT carry the marker) instead of the skeleton."""
+    # #534 cause 1. These are the kit's shipped SKELETONS; `init.sh` renders
+    # them to whatever names an adopter configured. The `kit_repo_only` marker
+    # cannot carry this: an adopter who kept the default `docs/handoff.md` has
+    # the path, holding their own live plan — which must NOT carry the marker,
+    # so a path check passes the guard and then the assertion fails on their
+    # real handoff. Existence is not identity.
+    require_kit_source()
     doc = REPO_ROOT / "docs" / skeleton
     assert "devkit-template: unrendered" in doc.read_text(encoding="utf-8"), doc
     # Pinned to LINE 1 specifically: init.sh's seed guard reads only the first

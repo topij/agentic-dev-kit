@@ -36,6 +36,7 @@ and should still be caught if they write into the real ``state/``.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -143,6 +144,53 @@ def require_kit_paths(*paths: str) -> None:
     it. `test_kit_repo_only.py` scans for both spellings.
     """
     _skip_if_missing(paths, "a fixture this test uses needs")
+
+
+def is_install_baseline() -> bool:
+    """Whether this tree's manifest is an adopter's recorded install baseline.
+
+    `kit_commit` is written ONLY by `--record-install`, so its presence separates
+    an adopter's baseline from the kit's own `--generate-manifest` output.
+
+    **The question `kit_repo_only` cannot ask, and why it needs asking (#534).**
+    That marker skips on a MISSING PATH, which answers "did this adopter vendor
+    the file" — exactly right for a test whose subject an adopter may simply not
+    have. It cannot answer "is the file at this path the KIT's copy", because
+    existence is not identity: an adopter can hold a file at the same path that
+    is their own. `.codex/hooks.json` and `.claude/settings.json` are the sharp
+    case — the kit prints both and writes neither (#303), so in an adopter those
+    paths are hand-written registrations that a path check happily accepts.
+
+    Derived from a documented property of the artifact, so this is NOT the
+    sentinel file the `kit_repo_only` docstring below rules out: it does not
+    judge which repository this is, it reads which command wrote the manifest.
+    """
+    manifest = REPO_ROOT / "kit-manifest.json"
+    if not manifest.is_file():
+        return False
+    try:
+        return "kit_commit" in json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        # An unreadable or malformed manifest is not evidence of an install, and
+        # guessing "adopter" here would silently skip kit coverage. Fail open to
+        # running the test, which is the loud direction.
+        return False
+
+
+def require_kit_source() -> None:
+    """Skip unless this tree is the kit's own source rather than an install.
+
+    For a test asserting a property of what the kit SHIPS, where an adopter's
+    copy at the same path is legitimately different — a rendered skeleton, a
+    stale engine awaiting `/upgrade`, their own registration. Against such a
+    tree the assertion does not report a kit defect, it reports the adopter
+    having adopted.
+    """
+    if is_install_baseline():
+        pytest.skip(
+            "asserts about the kit's own shipped source; this tree carries a "
+            "recorded install baseline (kit_commit present)"
+        )
 
 
 def _skip_if_missing(paths, prefix: str) -> None:

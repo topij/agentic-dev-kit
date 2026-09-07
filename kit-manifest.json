@@ -237,7 +237,7 @@
     },
     "scripts/tests/conftest.py": {
       "role": "test",
-      "sha256": "aa11d3ea18997d7beb676d64b84469d6d582888501a8ec40dbdc03f251af4057"
+      "sha256": "b9cb4ed657dea49201b43721db02e8b06d27082d778f5e7b22f9aa69c6ef413a"
     },
     "scripts/tests/test_check_memory_budget.py": {
       "role": "test",
@@ -253,7 +253,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "8bce8dd7659ea9f39f78a1c28500a03574daaedb4cbcf9c1388ff8725d1c553b"
+      "sha256": "5c2ba83444c8c3c2c11683ef3a1be0ba2dfb3fd2e1c9429c9349a56874f9de61"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -261,7 +261,7 @@
     },
     "scripts/tests/test_kitconfig.py": {
       "role": "test",
-      "sha256": "74be2e158d39ea83c45ffed2108acb77d98bde21384ead95185e7bada4af3278"
+      "sha256": "a4a77ccffd183350625b5c48d0d395f37941f155fc24ff85e34d1c577ec058b9"
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
