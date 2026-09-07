@@ -1,0 +1,56 @@
+{
+  "approval": {
+    "source": "current Codex task",
+    "operator_reply": "Approved",
+    "scope": "post the exact linked dispositions and close #608 and #255 as completed"
+  },
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "revision": "0fcad7f7dab385d9ea5f296423e956f6d0ac0eea",
+  "observed_at": "2026-09-07T10:03:45.784859+00:00",
+  "receipts": [
+    {
+      "issue": 608,
+      "url": "https://github.com/topij/agentic-dev-kit/issues/608",
+      "state": "closed",
+      "state_reason": "completed",
+      "closed_at": "2026-09-07T10:03:00Z",
+      "comment_url": "https://github.com/topij/agentic-dev-kit/issues/608#issuecomment-5568932557",
+      "approved_body_matches": true,
+      "body_sha256": "b7bf0a50d1870f7a4a10ad6976298d3c253158078b5e35636ebfe32c264f9b92",
+      "readback_commands": [
+        [
+          "gh",
+          "api",
+          "repos/topij/agentic-dev-kit/issues/608"
+        ],
+        [
+          "gh",
+          "api",
+          "repos/topij/agentic-dev-kit/issues/comments/5568932557"
+        ]
+      ]
+    },
+    {
+      "issue": 255,
+      "url": "https://github.com/topij/agentic-dev-kit/issues/255",
+      "state": "closed",
+      "state_reason": "completed",
+      "closed_at": "2026-09-07T10:03:06Z",
+      "comment_url": "https://github.com/topij/agentic-dev-kit/issues/255#issuecomment-5568933659",
+      "approved_body_matches": true,
+      "body_sha256": "afa0d0487c3b50dc500a9392425dd0827f59853e90227176cfca2051ccfbc579",
+      "readback_commands": [
+        [
+          "gh",
+          "api",
+          "repos/topij/agentic-dev-kit/issues/255"
+        ],
+        [
+          "gh",
+          "api",
+          "repos/topij/agentic-dev-kit/issues/comments/5568933659"
+        ]
+      ]
+    }
+  ]
+}

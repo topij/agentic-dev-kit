@@ -1,0 +1,33 @@
+{
+  "command": "python3 /Users/topi/Coding/agentic-dev-kit/reports/codex-hooks-batch_2026-09-07/audit.py",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "kit_revision": "0fcad7f7dab385d9ea5f296423e956f6d0ac0eea",
+  "observed_at": "2026-09-07T09:54:34.803931+00:00",
+  "program_sha256": "c5b671737b7910c2f010b1db0524a305e6badbcc792cfb164f529f0d899a639d",
+  "results": {
+    "fixture": {
+      "root": "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+      "revision": "08ac687f4ae14218a3861c6b8b143d8b86c4e3c2",
+      "baseline": "/Users/topi/Coding/agentic-dev-kit/saved_plans/adopt-reg01-application-evidence_2026-09-07/fixture-inventory-after-reg01.json",
+      "inventory_matches": true,
+      "git_state_matches": true
+    },
+    "source": {
+      "root": "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source",
+      "revision": "ab0a6d62308b298478b2f85fc961f14348f35365",
+      "baseline": "/Users/topi/Coding/agentic-dev-kit/saved_plans/codex-adopt-ver02-evidence_2026-09-06/source-input-inventory.json",
+      "inventory_matches": true,
+      "git_state_matches": true
+    }
+  },
+  "unset_copy_matches_expected": true,
+  "unset_runtime_config": {
+    "check_for_update_on_startup": false,
+    "projects": {
+      "/private/tmp/adk-codex-batch-20260907-br1ch2u4/unset-fixture": {
+        "trust_level": "trusted"
+      }
+    }
+  },
+  "temporary_auth_copy_removed": true
+}

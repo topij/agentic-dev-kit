@@ -1,0 +1,26 @@
+{
+  "approval": {
+    "source": "current Codex task",
+    "operator_reply": "Approve the exact comment",
+    "scope": "post the linked observation to #698, leaving it open"
+  },
+  "command": [
+    "gh",
+    "issue",
+    "view",
+    "698",
+    "--repo",
+    "topij/agentic-dev-kit",
+    "--json",
+    "state,comments"
+  ],
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "revision": "0fcad7f7dab385d9ea5f296423e956f6d0ac0eea",
+  "observed_at": "2026-09-07T10:26:16.714277+00:00",
+  "issue": 698,
+  "state": "OPEN",
+  "comment_url": "https://github.com/topij/agentic-dev-kit/issues/698#issuecomment-5569204436",
+  "created_at": "2026-09-07T10:24:34Z",
+  "approved_body_matches": true,
+  "body_sha256": "aee671ca96406fb7632b2380357daf2833697d000272003fb312f923317a547d"
+}

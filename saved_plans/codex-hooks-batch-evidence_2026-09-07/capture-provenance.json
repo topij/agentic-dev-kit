@@ -1,0 +1,30 @@
+{
+  "kind": "excerpts from control-sequence-stripped PTY output, with trailing whitespace removed; not screenshots or complete terminal transcripts",
+  "observed_at": "2026-09-07T10:21:03.050879+00:00",
+  "promotion_revision": "0fcad7f7dab385d9ea5f296423e956f6d0ac0eea",
+  "omitted": "Blank redraws, unrelated user-hook command details, account-usage notices, model/default hints and other screens outside the selected hooks/config observations. Original raw captures remain in the ignored source directory.",
+  "sources": {
+    "fixture-tui": {
+      "raw_json_sha256": "c80bca409624e4843473c642dda5084a234f0b87c97f1c8d935e8231b36abaa3",
+      "stripped_text_sha256": "dee11509b064c1663782dfa0f746a6a247b8b70778feff816d61e4f7895e4b5a",
+      "source_directory": "/Users/topi/Coding/agentic-dev-kit/reports/codex-hooks-batch_2026-09-07",
+      "selection_labels": [
+        "Hook overview",
+        "PostToolUse project definition",
+        "SessionStart project definition",
+        "Live configuration stack"
+      ]
+    },
+    "unset-tui": {
+      "raw_json_sha256": "73bd8951047f17bec988e8636cc24d30f352d38c431ccbf9bb2828e28f31b63a",
+      "stripped_text_sha256": "e48b8a6653edec97942ecd4fa6f98a9ec1eb5b64f1de19022df3e4147f697ca2",
+      "source_directory": "/Users/topi/Coding/agentic-dev-kit/reports/codex-hooks-batch_2026-09-07",
+      "selection_labels": [
+        "Hook overview",
+        "PostToolUse project definition",
+        "SessionStart project definition",
+        "Live configuration stack"
+      ]
+    }
+  }
+}

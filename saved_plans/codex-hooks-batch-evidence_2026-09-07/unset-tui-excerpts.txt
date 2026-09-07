@@ -1,0 +1,63 @@
+=== Hook overview ===
+Hooks
+  Lifecycle hooks from config and enabled plugins.
+
+  ⚠ 2 hooks need review before they can run.
+
+  Event                 Installed   Active      Review      Description
+  PreToolUse            0           0           0           Before a tool executes
+  PermissionRequest     0           0           0           When permission is requested
+  PostToolUse           1           0           1           After a tool executes
+  PreCompact            0           0           0           Before context compaction
+  PostCompact           0           0           0           After context compaction
+  SessionStart          1           0           1           When a new session starts
+  SessionEnd            0           0           0           Right before a session ends
+  UserPromptSubmit      0           0           0           When the user submits a prompt
+  SubagentStart         0           0           0           When a subagent is created
+  SubagentStop          0           0           0           Right before a subagent ends its turn
+  Stop                  0           0           0           Right before Codex ends its turn
+
+  Press t to trust all; enter to review hooks; esc to close
+
+=== PostToolUse project definition ===
+PostToolUse hooks
+  1 hook needs review before it can run.
+
+  [!] Hook 1 · new
+
+  Event     PostToolUse
+  Matcher   ^Bash$
+  Source    Project config - /private/tmp/adk-codex-batch-20260907-br1ch2u4/unset-fixture/.codex/hooks.json
+  Command   root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; [ -n "$root" ] || exit 0; exec python3 "$root/scripts/
+            devkit/hooks/pr_followup_hook.py" --runtime codex
+  Mode      Sync
+  Timeout   10s
+  Trust     New hook - review required
+
+  Press t to trust; esc to go back
+
+=== SessionStart project definition ===
+SessionStart hooks
+  1 hook needs review before it can run.
+
+  [!] Hook 1 · new
+
+  Event     SessionStart
+  Source    Project config - /private/tmp/adk-codex-batch-20260907-br1ch2u4/unset-fixture/.codex/hooks.json
+  Command   root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; [ -n "$root" ] || exit 0; [ -z "${JOB_NAME:-}" ] ||
+            exit 0; uv run --script "$root/scripts/devkit/check_doc_budget.py" --quiet || true
+  Mode      Sync
+  Timeout   15s
+  Trust     New hook - review required
+
+  Press t to trust; esc to go back
+
+=== Live configuration stack ===
+Config layer stack (lowest precedence first):
+  1. packaged defaults (/opt/homebrew/bin/codex) (enabled)
+  2. system (/etc/codex/config.toml) (enabled)
+  3. user (/private/tmp/adk-codex-batch-20260907-br1ch2u4/codex-state/config.toml) (enabled)
+  4. project (/private/tmp/adk-codex-batch-20260907-br1ch2u4/unset-fixture/.codex/config.toml) (enabled)
+
+Requirements:
+  <none>

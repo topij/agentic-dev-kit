@@ -1,0 +1,28 @@
+{
+  "observed_at": "2026-09-07T09:47:35.177964+00:00",
+  "kit_revision": "0fcad7f7dab385d9ea5f296423e956f6d0ac0eea",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "continuity": {
+    "fixture": {
+      "revision": "08ac687f4ae14218a3861c6b8b143d8b86c4e3c2",
+      "inventory_matches": true,
+      "git_matches": true
+    },
+    "source": {
+      "revision": "ab0a6d62308b298478b2f85fc961f14348f35365",
+      "inventory_matches": true,
+      "git_matches": true
+    }
+  },
+  "fixture_baseline": "/Users/topi/Coding/agentic-dev-kit/saved_plans/adopt-reg01-application-evidence_2026-09-07/fixture-inventory-after-reg01.json",
+  "source_baseline": "/Users/topi/Coding/agentic-dev-kit/saved_plans/codex-adopt-ver02-evidence_2026-09-06/source-input-inventory.json",
+  "scratch": "/private/tmp/adk-codex-batch-20260907-br1ch2u4",
+  "copy": "/private/tmp/adk-codex-batch-20260907-br1ch2u4/unset-fixture",
+  "copy_changes": [
+    ".codex/config.toml removed"
+  ],
+  "runtime_state": "/private/tmp/adk-codex-batch-20260907-br1ch2u4/codex-state",
+  "runtime_config": "check_for_update_on_startup = false\n",
+  "hooks_sha256": "dbea8d8084adcc50e786af584c7e407fc5d7040bf26bd614c9966e9ba2797cfb",
+  "originals_unchanged": true
+}

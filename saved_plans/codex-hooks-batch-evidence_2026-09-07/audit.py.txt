@@ -1,0 +1,66 @@
+"""Audit the preserved inputs without invoking an initializer or test suite."""
+from pathlib import Path
+import ast
+import datetime
+import hashlib
+import json
+import os
+import stat
+import subprocess
+import sys
+import tomllib
+
+REPO = Path('/Users/topi/Coding/agentic-dev-kit')
+FIXTURE = Path('/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture')
+SOURCE = Path('/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source')
+SCRATCH = Path('/private/tmp/adk-codex-batch-20260907-br1ch2u4')
+assert Path.cwd() == REPO
+assert FIXTURE.is_dir() and SOURCE.is_dir(), 'required temporary tree missing'
+
+# Reuse only the recorded pure inventory/Git helper definitions, never the write driver.
+driver = REPO / 'saved_plans/adopt-reg01-application-evidence_2026-09-07/apply_reg01.py.txt'
+parsed = ast.parse(driver.read_text())
+helpers = ast.Module(body=[node for node in parsed.body if isinstance(node, ast.FunctionDef)], type_ignores=[])
+exec(compile(helpers, str(driver), 'exec'))
+
+OLD = REPO / 'saved_plans/codex-adopt-ver02-evidence_2026-09-06'
+NEW = REPO / 'saved_plans/adopt-reg01-application-evidence_2026-09-07'
+results = {}
+for label, root, baseline_path, expected_git in (
+    ('fixture', FIXTURE, NEW / 'fixture-inventory-after-reg01.json', json.loads((NEW / 'write-boundary.json').read_text())['fixture_git_after']),
+    ('source', SOURCE, OLD / 'source-input-inventory.json', json.loads((OLD / 'preflight.json').read_text())['source_git']),
+):
+    baseline = json.loads(baseline_path.read_text())
+    observed = inventory(root)
+    differences = {key: {'expected': baseline.get(key), 'actual': observed.get(key)} for key in sorted(set(baseline) | set(observed)) if baseline.get(key) != observed.get(key)}
+    assert not differences, (label, differences)
+    actual_git = {key: git(root, *args) for key, args in {
+        'head': ('rev-parse', 'HEAD'), 'branch': ('rev-parse', '--abbrev-ref', 'HEAD'),
+        'remotes': ('remote', '-v'), 'index': ('ls-files', '--stage'),
+        'status': ('status', '--porcelain', '--untracked-files=all'),
+    }.items()}
+    assert actual_git == expected_git, (label, 'Git state mismatch')
+    assert inventory(root) == baseline, (label, 'changed during audit')
+    results[label] = {'root': str(root), 'revision': actual_git['head'], 'baseline': str(baseline_path), 'inventory_matches': True, 'git_state_matches': True}
+
+copy = SCRATCH / 'unset-fixture'
+runtime_state = SCRATCH / 'codex-state'
+assert not (copy / '.codex/config.toml').exists()
+expected = json.loads((NEW / 'fixture-inventory-after-reg01.json').read_text())
+expected.pop('.codex/config.toml')
+assert inventory(copy) == expected
+runtime_config = tomllib.loads((runtime_state / 'config.toml').read_text())
+assert 'hooks' not in runtime_config.get('features', {})
+assert 'codex_hooks' not in runtime_config.get('features', {})
+assert runtime_config['projects'][str(copy)]['trust_level'] == 'trusted'
+assert not (runtime_state / 'hooks.json').exists()
+assert not (runtime_state / 'auth.json').exists(), 'temporary credential copy was not removed'
+result = {
+    'command': f'python3 {Path(__file__).resolve()}',
+    'cwd': str(REPO), 'kit_revision': git(REPO, 'rev-parse', 'HEAD'),
+    'observed_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    'program_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+    'results': results, 'unset_copy_matches_expected': True,
+    'unset_runtime_config': runtime_config, 'temporary_auth_copy_removed': True,
+}
+print(json.dumps(result, indent=2))
