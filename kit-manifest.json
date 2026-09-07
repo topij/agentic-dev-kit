@@ -139,7 +139,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "c0bdc94d3daec992a6c45a5671715f858b699f456a6f67e5bfeb679a28a0af7a"
+      "sha256": "32033ca2b6bd9b3e48662c4f4eb0d735158e6ccc5ffbff5a95933ce1625dcb66"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -237,7 +237,15 @@
     },
     "scripts/tests/conftest.py": {
       "role": "test",
-      "sha256": "aa11d3ea18997d7beb676d64b84469d6d582888501a8ec40dbdc03f251af4057"
+      "sha256": "bca66a00f37739ea0a2cb4a69ee6b29f1e5931152802c1869458bcdc18f785d4"
+    },
+    "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
+      "role": "test",
+      "sha256": "7376f453039fc8af3c72525865ec583e1e3e2358cf9d3f295ed911e49cf11250"
+    },
+    "scripts/tests/fixtures/shipped-registrations/codex-hooks.json": {
+      "role": "test",
+      "sha256": "66979af482546118a359db5ec3ecd5559a4dfc757ad431c198a23c26e5a9b872"
     },
     "scripts/tests/test_check_memory_budget.py": {
       "role": "test",
@@ -249,11 +257,11 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "77a396100e48ff3706de3c4370bb6db3f26e680a0ea92e58b9c3750a44372fad"
+      "sha256": "aab0275f1aefd83eaf80f07879e0f7a9787858c9ecc35ae03ce3a25e2c621a42"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "e077c276bebc8f2333ef7d037abe874b6e6255267070ef50af1916c66407f440"
+      "sha256": "cddc427037e65358934f7098c071083ceaf7e531a9b628c73817265aa280717c"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -261,11 +269,11 @@
     },
     "scripts/tests/test_kitconfig.py": {
       "role": "test",
-      "sha256": "74be2e158d39ea83c45ffed2108acb77d98bde21384ead95185e7bada4af3278"
+      "sha256": "a4a77ccffd183350625b5c48d0d395f37941f155fc24ff85e34d1c577ec058b9"
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
-      "sha256": "2fa95d6708194c57d5d4f4efb1e6f7a563633786f344d3478e3345c478ddbd3c"
+      "sha256": "9138d6ad975c2377a1c56c22610a0c329f17e3253294d0e4b62921b3f912a60a"
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "repo-only",

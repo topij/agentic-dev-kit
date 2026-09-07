@@ -31,11 +31,44 @@ import subprocess
 import sys
 from pathlib import Path, PurePosixPath
 
+import conftest
 import pytest
 from _repo_layout import engine_dir, find_repo_root
+from conftest import is_install_baseline, looks_like_kit_source, require_kit_source
 
 ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
+
+# See test_init_sh.py's note: the kit's own copies of the two registrations it
+# ships but does not write (#303), engine-relative so they resolve in any
+# layout. Kept equal to the live files by
+# `test_the_reference_registrations_match_the_shipped_files` below.
+SHIPPED_REGISTRATIONS = ENGINE_DIR / "tests" / "fixtures" / "shipped-registrations"
+
+
+def _shipped(name: str) -> Path:
+    """See test_init_sh.py's accessor: declares the dependency rather than
+    raising FileNotFoundError when an adopter declines these installable files
+    (#534 cause 2)."""
+    path = SHIPPED_REGISTRATIONS / name
+    if path.is_file():
+        return path
+    # Absent. For an adopter who declined these installable files that is a
+    # legitimate decline and must be a skip (#534 cause 2). In the KIT's own
+    # tree it is a DELETED shipped file, and nothing else catches that:
+    # `test_kit_repo_self_check_is_clean` compares the bytes of files that
+    # exist and passes when one is removed — verified by deleting this fixture
+    # in a clone at `cd6f180`, where that test still reported one passed.
+    if looks_like_kit_source():
+        pytest.fail(
+            f"{path} is missing from the kit's own tree. The kit ships this "
+            "reference registration and the drift gate does not catch a "
+            "deletion, so restore it or drop its KIT_OWNED entry."
+        )
+    pytest.skip(
+        "needs the kit's reference registrations: not vendored in this "
+        f"tree: {path.name}"
+    )
 sys.path.insert(0, str(ENGINE_DIR))
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
@@ -1089,15 +1122,202 @@ def test_unversioned_config_is_called_out(tmp_path):
 def test_shipped_manifest_covers_every_kit_owned_file():
     """A KIT_OWNED entry with no manifest hash degrades silently to
     `unknown-version` for every adopter, so the manifest must be regenerated
-    whenever the list changes."""
+    whenever the list changes.
+
+    **Stated as an invariant that holds in BOTH layouts (#534 cause 1).** It used
+    to assert `owned == listed` against the full KIT_OWNED, which any adopter
+    with a declined install set fails by construction — the symmetric difference
+    is exactly what they declined. That made it a permanent red an adopter could
+    only silence by not vendoring this file, which is the coverage hole #534's
+    "why it matters" section is about.
+
+    The property that is actually true everywhere is that every adopter-facing
+    kit-owned file is *accounted for* — either installed and hashed, or recorded
+    as declined. In the kit's own tree there are no declines, so this reduces to
+    the original equality; in an adopter it becomes a real check that nothing
+    fell out of both lists silently.
+
+    Both key sets are in the kit's own layout, so they compare directly and this
+    function performs no remapping of its own: `record_install_manifest` keys
+    `files` and `not_installed` by the KIT-layout path even when the file lives
+    elsewhere locally, so `paths.engines` does not enter this equality at all.
+    (`kit_doctor.inspect()` does remap, when it resolves a key to a local file.
+    That is a different step, and reading it into this one would invite a remap
+    here that breaks the comparison.)
+    """
     manifest_path = REPO_ROOT / kit_doctor.MANIFEST_NAME
     assert manifest_path.is_file(), "run kit_doctor.py --generate-manifest"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     listed = set(manifest["files"])
-    owned = {rel for rel, _ in kit_doctor.KIT_OWNED}
-    assert owned == listed, f"manifest out of sync: {owned ^ listed}"
+    declined = set(manifest.get("not_installed", ()))
+    # `kit_commit` is written ONLY by --record-install, which is what
+    # distinguishes an adopter's recorded install baseline from the kit's own
+    # --generate-manifest output. The two are measured against different sets:
+    # generation deliberately walks all of KIT_OWNED, while --record-install
+    # walks ADOPTER_KIT_OWNED, which drops the `repo-only` role.
+    if is_install_baseline():
+        owned = {rel for rel, _ in kit_doctor.ADOPTER_KIT_OWNED}
+    else:
+        owned = {rel for rel, _ in kit_doctor.KIT_OWNED}
+    accounted = listed | declined
+    assert owned == accounted, f"manifest out of sync: {owned ^ accounted}"
     holes = [p for p, e in manifest["files"].items() if e["sha256"] is None]
     assert not holes, f"manifest has null hashes (files absent at generation): {holes}"
+
+
+def test_the_reference_registrations_match_the_shipped_files():
+    """The reference copies under `tests/fixtures/shipped-registrations/` must
+    equal the registrations the kit actually ships (#534).
+
+    **This is what makes reading the copies legitimate.** The readers in
+    `test_init_sh.py` were deliberately written to read the live file rather
+    than restate its content, because comparing a copy against a copy makes a
+    shared defect invisible — their own docstrings say so. Pointing them at a
+    reference copy would reintroduce exactly that, except for this test: it is
+    the single place the copy is pinned to the original, so a live registration
+    edited without refreshing the copy fails here, loudly, once.
+
+    Kit-repo-only, and NOT via a path marker: an adopter HAS `.codex/hooks.json`
+    and `.claude/settings.json`, holding their own hand-written registrations,
+    so a path check would pass the guard and then compare the kit's reference
+    against the adopter's file — reporting drift for having adopted. Existence
+    is not identity, which is the whole reason this family needed the reference
+    copy rather than the marker item 2 proposed.
+    """
+    require_kit_source()
+    for reference, shipped in (
+        (_shipped("codex-hooks.json"), REPO_ROOT / ".codex" / "hooks.json"),
+        (_shipped("claude-settings.json"), REPO_ROOT / ".claude" / "settings.json"),
+    ):
+        assert reference.read_bytes() == shipped.read_bytes(), (
+            f"{reference.name} no longer matches {shipped}. The kit ships the "
+            "latter and tests assert against the former; refresh the reference "
+            "copy in the same commit that changes the registration."
+        )
+
+
+def test_the_kit_only_witness_is_still_repo_only():
+    """`conftest.KIT_ONLY_WITNESS` must keep the role its use depends on.
+
+    `looks_like_kit_source()` treats that path's presence as evidence the tree
+    is the kit's own source. That holds only while the path carries the
+    `repo-only` role, which is what keeps `--record-install` from installing it
+    into an adopter. Held as a literal in `conftest.py` because importing
+    `kit_doctor` at conftest import time would abort collection in a tree that
+    declined that engine — so the derivation lives here instead, where
+    `kit_doctor` is already imported.
+    """
+    assert dict(kit_doctor.KIT_OWNED).get(conftest.KIT_ONLY_WITNESS) == (
+        kit_doctor.REPO_ONLY_ROLE
+    ), (
+        f"{conftest.KIT_ONLY_WITNESS} is no longer a `repo-only` KIT_OWNED "
+        "entry, so its presence no longer distinguishes the kit's tree from an "
+        "adopter's. Point conftest.KIT_ONLY_WITNESS at a path that still does."
+    )
+
+
+def test_a_stray_kit_commit_cannot_silently_disable_the_kit_drift_gate():
+    """A baseline key in the KIT's manifest must be loud, not a skip.
+
+    `is_install_baseline()` keys on `kit_commit`, which only `--record-install`
+    writes. Nothing stops one reaching this repo's own manifest — an accidental
+    `--record-install` against this checkout, a bad merge — and a bare skip
+    would then switch off `test_kit_repo_self_check_is_clean` and three other
+    invariants with nothing but a skip count to show for it.
+
+    An adversarial review lens on PR #705 demonstrated exactly that: with a
+    fake `kit_commit` added and `"Bash(rm -rf /:*)"` injected into
+    `.claude/settings.json`, three guarded tests skipped instead of failing.
+
+    Stated as a conditional so it is true in both layouts: it asserts nothing in
+    an adopter, where the witness is absent by construction.
+    """
+    if not conftest.looks_like_kit_source():
+        pytest.skip(
+            f"not the kit's own tree: {conftest.KIT_ONLY_WITNESS} is absent"
+        )
+    assert not conftest.is_install_baseline(), (
+        f"{REPO_ROOT / kit_doctor.MANIFEST_NAME} carries `kit_commit` in the "
+        "kit's own tree. Every `require_kit_source()` guard is now skipping, "
+        "including the drift gate. Remove the key and regenerate the manifest."
+    )
+
+
+def _outcome_of(call):
+    """Classify a guard call as run / skip / fail without inheriting its outcome.
+
+    `pytest.raises(pytest.fail.Exception)` is the wrong instrument here, and
+    wrongly enough to be worth the comment: a `Skipped` raised inside it is not
+    caught, propagates, and pytest marks THIS test skipped — so a guard that
+    skips when it should fail turns the test green-adjacent instead of red. That
+    is the same going-quiet failure the guard itself exists to prevent, and it
+    let the deleted-corroboration mutation survive when this test first used
+    `pytest.raises`. Catching `Skipped` explicitly is what keeps it loud.
+    """
+    try:
+        call()
+    except pytest.fail.Exception as exc:
+        return "fail", str(exc)
+    except pytest.skip.Exception as exc:
+        return "skip", str(exc)
+    return "run", ""
+
+
+def _fake_root(tmp_path, *, kit_commit: bool, witness: bool):
+    """A synthetic REPO_ROOT for driving `require_kit_source()` directly."""
+    manifest = {"files": {}, "kit_version": 2}
+    if kit_commit:
+        manifest["kit_commit"] = "0" * 40
+    (tmp_path / kit_doctor.MANIFEST_NAME).write_text(
+        json.dumps(manifest), encoding="utf-8"
+    )
+    if witness:
+        path = tmp_path / conftest.KIT_ONLY_WITNESS
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("", encoding="utf-8")
+    return tmp_path
+
+
+@pytest.mark.parametrize(
+    "kit_commit,witness,expected",
+    [
+        (True, True, "fail"),
+        (True, False, "skip"),
+        (False, True, "run"),
+        (False, False, "run"),
+    ],
+)
+def test_require_kit_source_decides_between_failing_and_skipping(
+    tmp_path, monkeypatch, kit_commit, witness, expected
+):
+    """Drives `require_kit_source()` itself, over all four input states.
+
+    **Why this exists, and what its absence cost.** The sibling
+    `test_a_stray_kit_commit_cannot_silently_disable_the_kit_drift_gate` asserts
+    `is_install_baseline()` is false against the REAL manifest. That is a
+    necessary precondition and not the mechanism: both lenses of PR #705's
+    round-2 panel deleted the corroboration branch out of
+    `require_kit_source()` — reverting it to the bare skip that round 1 found —
+    and the whole suite still passed. The fix was pinned by nothing but its own
+    source text.
+
+    So this drives the function against a synthetic root rather than asserting
+    about the real one. Both helpers resolve `REPO_ROOT` at CALL time, which is
+    what makes that reachable.
+
+    The `(True, True)` row is round 1's exact attack: a baseline key in a tree
+    that also holds the kit-only witness. It must FAIL, never skip — a skip
+    there switches off the kit's own drift gate silently.
+    """
+    monkeypatch.setattr(
+        conftest, "REPO_ROOT", _fake_root(tmp_path, kit_commit=kit_commit, witness=witness)
+    )
+    outcome, detail = _outcome_of(conftest.require_kit_source)
+    assert outcome == expected, (
+        f"require_kit_source() {outcome} where it must {expected}: {detail}"
+    )
+    if expected == "fail":
+        assert "stray baseline key" in detail
 
 
 def test_the_installer_is_tracked():
@@ -1159,7 +1379,22 @@ def test_the_installers_premise_is_pinned_in_test_init_sh():
     and quietly lose its evidence.
     """
     guard = "test_running_the_installer_does_not_modify_the_installer"
-    text = (Path(__file__).parent / "test_init_sh.py").read_text(encoding="utf-8")
+    # Declared, not implicit (#534 cause 2). An adopter who declines
+    # `test_init_sh.py` used to get a raw FileNotFoundError here — one test
+    # file's INSTALLABILITY depending on another's, with nothing saying so.
+    #
+    # Not expressible as `kit_repo_only`: that marker resolves its paths against
+    # REPO_ROOT (conftest.py `_skip_if_missing`), while a sibling test module is
+    # engine-dir-relative. A marker naming `scripts/tests/test_init_sh.py` would
+    # skip in a vendored `scripts/devkit` layout even when the file IS installed
+    # there — a false skip, hiding real coverage in the one layout that needs it.
+    sibling = Path(__file__).parent / "test_init_sh.py"
+    if not sibling.exists():
+        pytest.skip(
+            "needs the sibling test module: not vendored in this tree: "
+            f"{sibling.name}"
+        )
+    text = sibling.read_text(encoding="utf-8")
     # `def <guard>(` — the trailing paren is load-bearing. Matching `def <guard>`
     # alone is a SUBSTRING check, so renaming the guard to
     # `<guard>_RENAMED` left the old name as a prefix and this test kept passing.
@@ -1232,6 +1467,14 @@ def test_kit_repo_self_check_is_clean():
     pass and contributes nothing, which is how a gate that is not coverage came
     to be read as coverage (#112).
     """
+    # #534 cause 1, and the half with NO layout-honest form. The sibling above
+    # could be restated to hold everywhere; this one cannot. Its premise is that
+    # drift means a STALE MANIFEST — true only against the kit's own generated
+    # one. Against an adopter's recorded baseline the same `drifted` list means
+    # they edited a kit-owned file, which is `locally-edited`: a legitimate
+    # state this test would report as a defect. `include_repo_only=True` below
+    # asks for files an adopter is never offered, which compounds it.
+    require_kit_source()
     manifest = json.loads((REPO_ROOT / kit_doctor.MANIFEST_NAME).read_text(encoding="utf-8"))
     config = kit_doctor.load_config(REPO_ROOT / "config" / "dev-model.yaml", overlay=False)
     report = kit_doctor.inspect(REPO_ROOT, manifest, config, include_repo_only=True)
@@ -3211,6 +3454,16 @@ def test_no_shipped_kit_owned_file_hardcodes_a_bare_engine_path():
     `_KNOWN_PRE_EXISTING_HARDCODED_ENGINE_PATHS`: this file's fix must hold
     with no exception, which an entry here would quietly grant it.
     """
+    # #534 cause 1, and the predicate case rather than the layout-honest one.
+    # `_KNOWN_PRE_EXISTING_HARDCODED_ENGINE_PATHS` is pinned to the kit's CURRENT
+    # source. An adopter's installed copies are legitimately allowed to sit at an
+    # older kit revision until they `/upgrade`, so comparing them against this
+    # baseline reports staleness as a defect — the same wrong verdict
+    # `test_kit_repo_self_check_is_clean` above would give, for the same reason.
+    # The `.is_file()` guard below does not save it either: under a vendored
+    # `paths.engines`, kit-layout engine paths simply do not resolve, so those
+    # files drop out of `found` silently and the equality fails on absence.
+    require_kit_source()
     found = {
         rel: _bare_engine_path_lines((REPO_ROOT / rel).read_text(encoding="utf-8", errors="replace"))
         for rel, _role in kit_doctor.KIT_OWNED
@@ -4324,7 +4577,7 @@ def _has_verified_lifecycle(statuses, name: str) -> bool:
 def test_codex_lifecycle_semantics_accept_the_shipped_contract(tmp_path):
     root = _fake_repo(tmp_path)
     shipped = json.loads(
-        (REPO_ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8")
+        _shipped("codex-hooks.json").read_text(encoding="utf-8")
     )
     _write_codex_lifecycle_fixture(root, shipped)
 

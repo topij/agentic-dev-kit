@@ -42,6 +42,24 @@ starts.
 
 ---
 
+## #705 — 2026-09-07
+
+- **ADDED (report / return shape, `#534`):** Refresh `scripts/kit_doctor.py` and take
+  `scripts/tests/fixtures/shipped-registrations/codex-hooks.json` and
+  `scripts/tests/fixtures/shipped-registrations/claude-settings.json`. Adopter inspection
+  and `--record-install` now walk both, so they appear in your baseline's `files`, or in
+  `not_installed` if you decline them. Declining is supported: the tests that read them
+  skip rather than fail.
+- **CHANGED (report / return shape, `#534`):** If you vendor the kit's tests, four
+  assertions that could not pass in an adopter layout no longer fail there.
+  `test_shipped_manifest_covers_every_kit_owned_file` now checks that every
+  adopter-facing kit-owned file is either hashed or recorded as declined, so it passes
+  against a `--record-install` baseline instead of reporting your declines as drift.
+  `test_kit_repo_self_check_is_clean`,
+  `test_no_shipped_kit_owned_file_hardcodes_a_bare_engine_path` and
+  `test_shipped_skeletons_carry_the_unrendered_marker` skip against such a baseline.
+  Nothing to do; expect skips where you had failures.
+
 ## #670 — 2026-09-03
 
 - **CHANGED (report / return shape, `#662`):** Refresh `scripts/kit_doctor.py`,

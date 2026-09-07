@@ -19,8 +19,10 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+from _repo_layout import find_repo_root
 
 ENGINE_DIR = Path(__file__).resolve().parent.parent
+REPO_ROOT = find_repo_root(ENGINE_DIR)
 
 
 def _load_launcher(engine_dir: Path = ENGINE_DIR) -> ModuleType:
@@ -2231,7 +2233,11 @@ def test_observed_argv_that_omits_the_policy_or_trust_step_fails_parent_validati
 @pytest.mark.kit_repo_only("config/dev-model.yaml", "config/claude-lane-settings.json")
 def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_validates() -> None:
     launcher = _load_launcher()
-    root = ENGINE_DIR.parent
+    # REPO_ROOT, not `ENGINE_DIR.parent` (#534): the fixed parent hop assumes the
+    # root sits one level above the engine dir, which holds in a flat layout and
+    # is short by one in a vendored `scripts/devkit` one. Same defect VER-03
+    # repaired in test_panel_prompt.py (`12a67be2`), one file over.
+    root = REPO_ROOT
     config = launcher.load_config(root / "config" / "dev-model.yaml", overlay=False)
     codex = launcher._approval_for_runtime("codex", config, root)
     claude = launcher._approval_for_runtime("claude", config, root)

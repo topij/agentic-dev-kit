@@ -36,6 +36,7 @@ from pathlib import Path
 import pytest
 import yaml
 from _repo_layout import engine_dir, find_repo_root
+from conftest import looks_like_kit_source
 
 # Every test here asserts on `init.sh`'s behaviour, and an adopter who
 # vendored engines and config has no `init.sh` to assert about. Repairing
@@ -46,6 +47,57 @@ pytestmark = pytest.mark.kit_repo_only("init.sh")
 
 ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
+
+# The kit's OWN copies of the two registrations it ships but does not write
+# (#303). Engine-relative, so they travel with `paths.engines` and resolve in
+# any layout — unlike `REPO_ROOT / ".codex"`, which in an adopter is that
+# adopter's hand-written file (#534's silent-false-pass family). Kept equal to
+# the live files by
+# `test_kit_doctor.py::test_the_reference_registrations_match_the_shipped_files`,
+# so reading these is not the copy-against-a-copy these assertions avoid.
+SHIPPED_REGISTRATIONS = ENGINE_DIR / "tests" / "fixtures" / "shipped-registrations"
+
+
+def _shipped(name: str) -> Path:
+    """A reference registration, or a skip declaring why it is unavailable.
+
+    Accessors rather than module constants so the dependency is declared ONCE
+    and every future reader inherits it — the reasoning `conftest.py`'s
+    `require_kit_paths` gives for expressing a fixture-introduced dependency at
+    the fixture instead of repeating a marker per test.
+
+    Without this, declining these two installable files would raise
+    FileNotFoundError — which is #534 cause 2, the defect this same branch
+    repaired one module over. Introducing a fresh instance of it while fixing
+    the old one is exactly the trap that issue's history keeps recording.
+    """
+    path = SHIPPED_REGISTRATIONS / name
+    if path.is_file():
+        return path
+    # Absent. For an adopter who declined these installable files that is a
+    # legitimate decline and must be a skip (#534 cause 2). In the KIT's own
+    # tree it is a DELETED shipped file, and nothing else catches that:
+    # `test_kit_repo_self_check_is_clean` compares the bytes of files that
+    # exist and passes when one is removed — verified by deleting this fixture
+    # in a clone at `cd6f180`, where that test still reported one passed.
+    if looks_like_kit_source():
+        pytest.fail(
+            f"{path} is missing from the kit's own tree. The kit ships this "
+            "reference registration and the drift gate does not catch a "
+            "deletion, so restore it or drop its KIT_OWNED entry."
+        )
+    pytest.skip(
+        "needs the kit's reference registrations: not vendored in this "
+        f"tree: {path.name}"
+    )
+
+
+def shipped_codex_hooks() -> Path:
+    return _shipped("codex-hooks.json")
+
+
+def shipped_claude_settings() -> Path:
+    return _shipped("claude-settings.json")
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
 def locale_where_nbsp_is_blank() -> str | None:
@@ -3649,9 +3701,9 @@ def test_the_advisory_matches_the_registrations_it_describes(tmp_path: Path) -> 
     So every expected value here is READ FROM the shipped file rather than
     written down again. Editing either side alone fails this.
     """
-    codex_cfg = json.loads((REPO_ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    codex_cfg = json.loads(shipped_codex_hooks().read_text(encoding="utf-8"))
     claude_cfg = json.loads(
-        (REPO_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8")
+        shipped_claude_settings().read_text(encoding="utf-8")
     )
     # both sides selected by content, not position: `[0]` is correct today
     # only because .codex/hooks.json has exactly one PostToolUse entry, and a
@@ -3694,12 +3746,19 @@ def test_the_advisory_matches_the_registrations_it_describes(tmp_path: Path) -> 
 def test_both_shipped_registrations_name_their_own_runtime() -> None:
     """Kills: `--runtime claude` in .claude/settings.json flipped to codex.
 
-    Nothing else covers those two files. `kit-manifest.json` does not track
-    either, so the drift check cannot see a hand-edit, and `init.sh` no longer
-    writes them — so these literals are only as correct as this assertion."""
-    root = REPO_ROOT
-    claude = (root / ".claude" / "settings.json").read_text(encoding="utf-8")
-    codex = (root / ".codex" / "hooks.json").read_text(encoding="utf-8")
+    Nothing else covers those two files. `init.sh` no longer writes them (#303),
+    so these literals are only as correct as this assertion — and the reference
+    copies below are now tracked in `kit-manifest.json`, so the drift check does
+    see a hand-edit to them.
+
+    Reads the reference copies, not `<repo>/.codex` and `<repo>/.claude` (#534).
+    Those are the ADOPTER's hand-written registrations in any adopter, so this
+    assertion measured their file and reported nothing about the kit's. A field
+    mutation check caught this site specifically: corrupting the adopter's
+    registration in a fixture copy failed this test and no other, which is what
+    reading the wrong file looks like from outside."""
+    claude = shipped_claude_settings().read_text(encoding="utf-8")
+    codex = shipped_codex_hooks().read_text(encoding="utf-8")
 
     assert "pr_followup_hook.py" in claude
     assert "--runtime claude" in claude
@@ -3755,7 +3814,7 @@ def _codex_session_start_commands() -> list[str]:
     third of which sat one test below a commit message claiming both levels
     filtered by content.
     """
-    parsed = json.loads((REPO_ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    parsed = json.loads(shipped_codex_hooks().read_text(encoding="utf-8"))
     return [
         hook["command"]
         for entry in parsed["hooks"]["SessionStart"]
@@ -3774,7 +3833,7 @@ def test_the_shipped_codex_session_start_carries_no_matcher() -> None:
     `test_the_shipped_claude_session_start_carries_no_matcher` holds the other
     half. The Claude-only memory checker must still not be present here.
     """
-    parsed = json.loads((REPO_ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    parsed = json.loads(shipped_codex_hooks().read_text(encoding="utf-8"))
     entries = [
         entry
         for entry in parsed["hooks"]["SessionStart"]
@@ -3829,7 +3888,7 @@ def test_the_budget_advisory_prints_the_shipped_codex_commands_verbatim(
 def _claude_session_start_commands() -> list[str]:
     """The Claude SessionStart budget commands, read OUT OF the shipped file."""
     parsed = json.loads(
-        (REPO_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8")
+        shipped_claude_settings().read_text(encoding="utf-8")
     )
     return [
         hook["command"]
@@ -4010,7 +4069,7 @@ def _codex_registration_command() -> str:
     copy of the same text, and a shared defect is invisible to a consistency
     check.
     """
-    parsed = json.loads((REPO_ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+    parsed = json.loads(shipped_codex_hooks().read_text(encoding="utf-8"))
     entry = next(
         e
         for e in parsed["hooks"]["PostToolUse"]
@@ -5897,7 +5956,7 @@ def test_the_shipped_claude_session_start_carries_no_matcher() -> None:
     bug's slower form.
     """
     parsed = json.loads(
-        (REPO_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8")
+        shipped_claude_settings().read_text(encoding="utf-8")
     )
     entries = [
         entry
@@ -5972,7 +6031,7 @@ def test_the_permissions_advisory_prints_the_shipped_allow_rules_verbatim(
     result = _run_init(repo)
 
     shipped = set(
-        json.loads((REPO_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8"))[
+        json.loads(shipped_claude_settings().read_text(encoding="utf-8"))[
             "permissions"
         ]["allow"]
     )

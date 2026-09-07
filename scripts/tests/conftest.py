@@ -36,6 +36,7 @@ and should still be caught if they write into the real ``state/``.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -143,6 +144,87 @@ def require_kit_paths(*paths: str) -> None:
     it. `test_kit_repo_only.py` scans for both spellings.
     """
     _skip_if_missing(paths, "a fixture this test uses needs")
+
+
+def is_install_baseline() -> bool:
+    """Whether this tree's manifest is an adopter's recorded install baseline.
+
+    `kit_commit` is written ONLY by `--record-install`, so its presence separates
+    an adopter's baseline from the kit's own `--generate-manifest` output.
+
+    **The question `kit_repo_only` cannot ask, and why it needs asking (#534).**
+    That marker skips on a MISSING PATH, which answers "did this adopter vendor
+    the file" — exactly right for a test whose subject an adopter may simply not
+    have. It cannot answer "is the file at this path the KIT's copy", because
+    existence is not identity: an adopter can hold a file at the same path that
+    is their own. `.codex/hooks.json` and `.claude/settings.json` are the sharp
+    case — the kit prints both and writes neither (#303), so in an adopter those
+    paths are hand-written registrations that a path check happily accepts.
+
+    Derived from a documented property of the artifact, so this is NOT the
+    sentinel file the `kit_repo_only` docstring below rules out: it does not
+    judge which repository this is, it reads which command wrote the manifest.
+    """
+    manifest = REPO_ROOT / "kit-manifest.json"
+    if not manifest.is_file():
+        return False
+    try:
+        return "kit_commit" in json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        # An unreadable or malformed manifest is not evidence of an install, and
+        # guessing "adopter" here would silently skip kit coverage. Fail open to
+        # running the test, which is the loud direction.
+        return False
+
+
+# A file the kit owns with the `repo-only` role, which `--record-install` never
+# offers an adopter and `CHANGELOG.md` #670 tells existing adopters to remove.
+# Its presence is therefore evidence the tree is the kit's own source, in a way
+# `kit_commit` alone is not. Pinned to that role by
+# `test_kit_doctor.py::test_the_kit_only_witness_is_still_repo_only`, so it
+# cannot quietly stop being kit-only; kept as a literal here rather than derived
+# because importing `kit_doctor` at conftest import time would abort COLLECTION
+# in any tree that declined that engine.
+KIT_ONLY_WITNESS = "scripts/verify_live_validation_bundle.py"
+
+
+def looks_like_kit_source() -> bool:
+    """Whether this tree carries a file only the kit's own source has."""
+    return (REPO_ROOT / KIT_ONLY_WITNESS).is_file()
+
+
+def require_kit_source() -> None:
+    """Skip unless this tree is the kit's own source rather than an install.
+
+    For a test asserting a property of what the kit SHIPS, where an adopter's
+    copy at the same path is legitimately different — a rendered skeleton, a
+    stale engine awaiting `/upgrade`, their own registration. Against such a
+    tree the assertion does not report a kit defect, it reports the adopter
+    having adopted.
+    """
+    if not is_install_baseline():
+        return
+    # `kit_commit` is a single unauthenticated key. If one reaches the KIT's own
+    # manifest — an accidental `--record-install` against this checkout, a bad
+    # merge — a bare skip here would silently switch off the kit's own drift
+    # gate and three other invariants. So corroborate, and make a disagreement
+    # loud: a tree holding the kit-only witness is the kit with a stray key, not
+    # an adopter. Found by an adversarial review lens on PR #705, which injected
+    # a fake `kit_commit` beside a real `.claude/settings.json` edit and got
+    # three skips where the drift gate should have fired.
+    if looks_like_kit_source():
+        pytest.fail(
+            f"{REPO_ROOT / 'kit-manifest.json'} carries `kit_commit`, which only "
+            "--record-install writes, but this tree also holds "
+            f"{KIT_ONLY_WITNESS}, which --record-install never installs. That is "
+            "the kit's own tree with a stray baseline key, and skipping here "
+            "would disable the kit's drift gate silently. Remove `kit_commit` "
+            "and regenerate with `kit_doctor.py --generate-manifest`."
+        )
+    pytest.skip(
+        "asserts about the kit's own shipped source; this tree carries a "
+        "recorded install baseline (kit_commit present)"
+    )
 
 
 def _skip_if_missing(paths, prefix: str) -> None:
