@@ -267,7 +267,7 @@ maintained *Sprint status* and *Delivery plan* sections below.
     author edits is the one the renderer ships; add the appended-instruction mutation
     for `adopt`, `upgrade` and `pr-watch`.
 
-## Sprint status — reconciled 2026-09-06
+## Sprint status — reconciled 2026-09-07
 
 The machine-readable inventory and current capability judgments live in
 [`runtime-parity.md`](../docs/agentic-dev-kit/runtime-parity.md); this plan supplies
@@ -398,8 +398,9 @@ historical observation it was and is not silently refreshed.
   same-function-different-path survey. The Phase 5 field-exercise reconciliation below
   owns `#243` coverage and its remaining limits. The Phase 5 checklist
   below records the landed `#631` declaration, the joined `#608`/`#255` delivery in
-  PR `#680`, and the initial adopter write pass. Tracker disposition for `#608` and
-  `#255` remains an operator decision before the exit. **Re-sequenced on
+  PR `#680`, and the initial adopter write pass. The operator approved the `#608`/`#255`
+  dispositions and closure on 2026-09-07; the [Codex batch record](codex-hooks-batch_2026-09-07.md)
+  retains the tracker receipts. **Re-sequenced on
   2026-09-02** (*Sprint review* above): the cs-toolkit adopter pilot moves from Phase 6
   into this phase as its exit test, because the exit is only establishable by an
   upgrade run; assigning the live-validation verifier a repo-only role and withdrawing
@@ -415,8 +416,7 @@ historical observation it was and is not silently refreshed.
   4. [x] Initial pilot write pass and separate fork reconciliation, recorded with the
      stage identities in the Phase 5 checklist below. This pass does not establish the
      phase exit.
-  5. [ ] **In progress:** complete the remaining `#243` field exercises and reconcile
-     `#608`/`#255` tracker dispositions on the operator's decision. The approved
+  5. [ ] **In progress:** complete the remaining `#243` field exercises. The approved
      [adopt continuation](codex-adopt-initialization-field-exercise_2026-09-06.md)
      executed initialization and attempted Step 4 checks; the installed suites failed.
      Adoption completion remains pending, as do the untested systemize routes.
@@ -429,9 +429,13 @@ historical observation it was and is not silently refreshed.
      mutation/restoration. It leaves the original fixture untouched. The approved
      [FIX-01 application](adopt-fix01-ownership-lenses_2026-09-06.md) then applied the
      retained ownership/lens diff to the original fixture and supersedes its continuity
-     baseline. Runtime registration, the installed-suite verification follow-up and
-     adoption completion keep their own exact decisions; do not repeat credited probes
-     or promote a warning-free doctor exit to fixture completion.
+     baseline. The approved [REG-01 application](adopt-reg01-application_2026-09-07.md)
+     subsequently applied registration and superseded the fixture baseline again.
+     The [suite assessment](adopt-suite-assessment_2026-09-07.md) classified the retained
+     failures without repairing them. The [Codex batch](codex-hooks-batch_2026-09-07.md)
+     records live loading/discovery, the disposable unset case and the approved tracker
+     dispositions. Adoption completion and Phase 5 exit keep their own exact decisions;
+     do not repeat credited probes or promote a warning-free doctor to fixture completion.
   6. [ ] Replay the write pass and fork reconciliation from the then-current kit source,
      using the same `$REPO` origin check, `$KIT` path, and immediately-before-every-write
      directory assertion as the initial pass. For a stage with a diff, bind its PR
@@ -807,7 +811,9 @@ and final open/unmerged fixture pull requests.
   hook-message presentation non-load-bearing without promoting a client guarantee.
   `test_per_runtime_config_maps_declare_status_on_each_install_surface` discovers
   runtime sub-maps in the reference and newly emitted migration blocks and requires a
-  mechanical or advisory declaration beside each runtime entry.
+  mechanical or advisory declaration beside each runtime entry. The operator approved
+  the tracker dispositions and closure on 2026-09-07; the
+  [Codex batch record](codex-hooks-batch_2026-09-07.md) retains the receipts and limits.
 - [ ] Replay the adopter write pass and fork reconciliation from the current kit
   protected-branch head, using the same `$REPO` origin check, `$KIT` path, and
   immediately-before-every-write directory assertion as the initial pass. Bind every
@@ -844,7 +850,7 @@ citation remains in Phase 6's implementation scope.
 |---|---|---|
 | `parallel` | [Retained Codex batch](codex-parallel-batch-live-validation_2026-09-01.md), delivered by PR #659: lane identity, isolation, exact-head review, reconciliation and operator merge refusal. | Do not repeat that batch. Credit only its retained claim map, not every parallel mode. |
 | `triage-friction-log` | Codex's interactive LLM-only route completed through [PR #673](https://github.com/topij/agentic-dev-kit/pull/673); the committed graduation marker retains the approved and parked dispositions. The local run report and completed state were re-read in this session. | Do not repeat that graduation. Engine-backed and notification-service routes are not established by it; preserve TRI-03/TRI-04/TRI-05 for fresh exact decisions. |
-| `adopt` | PR #682: [bounded Codex context exercise](codex-adopt-field-exercise_2026-09-05.md): inspection, staging, baseline and Step 3c handoff. PR #686's separately approved [initialization continuation](codex-adopt-initialization-field-exercise_2026-09-06.md) retains initializer execution and Step 4 results, including the failed installed suites. The [continuation review](codex-adopt-completion-review_2026-09-06.md) retains read-only continuity, proposed ownership/lens handling and independent diagnostic probes. The approved [VER-02 trial](codex-adopt-ver02-trial_2026-09-06.md) records the copied root repair, reached assertion, mutation and restoration; the approved [VER-03 repair](codex-adopt-ver03-repair_2026-09-06.md) records the permanent kit test change and synthetic-layout regression. | Credit execution and recorded results only. Ownership-marker resolution, runtime registrations, lens-definition handling, original-fixture verification follow-up, successful adoption verification and fixture PR completion remain pending. |
+| `adopt` | PR #682: [bounded Codex context exercise](codex-adopt-field-exercise_2026-09-05.md): inspection, staging, baseline and Step 3c handoff. PR #686's separately approved [initialization continuation](codex-adopt-initialization-field-exercise_2026-09-06.md) retains initializer execution and Step 4 results, including the failed installed suites. The [continuation review](codex-adopt-completion-review_2026-09-06.md) retains read-only continuity, proposed ownership/lens handling and independent diagnostic probes. The approved [VER-02 trial](codex-adopt-ver02-trial_2026-09-06.md) records the copied root repair, reached assertion, mutation and restoration; the approved [VER-03 repair](codex-adopt-ver03-repair_2026-09-06.md) records the permanent kit test change and synthetic-layout regression. | Credit execution and recorded results only. The [FIX-01 application](adopt-fix01-ownership-lenses_2026-09-06.md), [REG-01 application](adopt-reg01-application_2026-09-07.md), [suite assessment](adopt-suite-assessment_2026-09-07.md) and [live Codex batch](codex-hooks-batch_2026-09-07.md) supersede the earlier pending ownership, lens, registration and assessment work. Successful adoption verification and fixture PR completion retain their own exact decisions. |
 | `post-merge-systemize` | PR #684: [bounded Codex test exercise](codex-systemize-test-field-exercise_2026-09-06.md): merged-config read, capability preflight, trusted review inputs, digest validation, artifact checkpoints and proposed routing. | Credit test-mode analysis only. Live routing, engine-backed operation and full restart recovery were not exercised; do not repeat this test as if no field evidence exists. |
 
 The local triage references inspected were
@@ -852,7 +858,9 @@ The local triage references inspected were
 `state/triage/triage-pipeline-state_live.json`; these are gitignored supporting
 records, not a new durable-evidence promotion. The durable route pointers are the
 PR and committed graduation marker. PR #680's joined delivery remains recorded
-above; tracker dispositions and the final cs-toolkit replay remain operator work.
+above; the operator approved its tracker dispositions on 2026-09-07, as retained in
+the [Codex batch record](codex-hooks-batch_2026-09-07.md). The final cs-toolkit replay
+retains its own exact decision.
 
 The 2026-09-06 record adds the bounded systemize test to this reconciliation.
 It does not complete the remaining field-coverage checklist or authorize live

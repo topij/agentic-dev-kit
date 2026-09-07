@@ -1,0 +1,33 @@
+{
+  "command": "Python post-session inventory, Git and unset-config audit (tool invocation)",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "kit_revision": "0fcad7f7dab385d9ea5f296423e956f6d0ac0eea",
+  "observed_at": "2026-09-07T09:51:01.744466+00:00",
+  "results": {
+    "fixture": {
+      "root": "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+      "revision": "08ac687f4ae14218a3861c6b8b143d8b86c4e3c2",
+      "inventory_matches": true,
+      "git_matches": true,
+      "baseline": "/Users/topi/Coding/agentic-dev-kit/saved_plans/adopt-reg01-application-evidence_2026-09-07/fixture-inventory-after-reg01.json"
+    },
+    "source": {
+      "root": "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source",
+      "revision": "ab0a6d62308b298478b2f85fc961f14348f35365",
+      "inventory_matches": true,
+      "git_matches": true,
+      "baseline": "/Users/topi/Coding/agentic-dev-kit/saved_plans/codex-adopt-ver02-evidence_2026-09-06/source-input-inventory.json"
+    }
+  },
+  "unset_user_config": {
+    "check_for_update_on_startup": false,
+    "projects": {
+      "/private/tmp/adk-codex-batch-20260907-br1ch2u4/unset-fixture": {
+        "trust_level": "trusted"
+      }
+    }
+  },
+  "unset_project_config_absent": true,
+  "unset_user_hooks_absent": true,
+  "unset_copy_matches_expected": true
+}

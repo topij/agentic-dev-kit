@@ -14,11 +14,42 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-07 — both Phase 5 blockers are closed out: registration applied on
-both runtimes, and the installed suite assessed and recorded on #534. Phase 5 exit is now
-the live decision and was not taken.
+Last updated: 2026-09-07 — the parked Codex batch is recorded. Runtime discovery was
+observed, the reserved tracker dispositions were approved, and Phase 5 exit retains its
+own exact decision.
 
-## Latest session — 2026-09-07 (installed-suite assessment, in Claude Code)
+## Latest session — 2026-09-07 (live Codex hooks batch)
+
+**Theme —** Complete the parked Codex observations and preserve their scope.
+
+- The [batch record](../saved_plans/codex-hooks-batch_2026-09-07.md) retains the live
+  `/hooks` excerpts, configuration stack, continuity audits and tracker receipts.
+  It distinguishes project trust from trust of the current hook definitions and
+  discovery from execution.
+- The fixture's registration appeared in `/hooks`; the disposable unset case also
+  exposed its registrations. See the command/date/revision-bound record for the
+  observations and their limits. The original fixture was not used for the unset case.
+- The operator approved and posted the reserved `#608`/`#255` dispositions and closed
+  those issues as completed. The credited PR #680 probe was not repeated.
+- The approved [observation on #698](https://github.com/topij/agentic-dev-kit/issues/698#issuecomment-5569204436)
+  scopes the remaining installer/doctor correction. It does not establish hook execution
+  after trust or a default shared by every Codex client.
+- The maintained [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md) carries
+  those decisions without advancing Phase 5 exit. New initialization, adoption completion,
+  fixture PR and cs-toolkit replay retain their own exact decisions. The `#534` repairs
+  were outside this Codex batch.
+
+▶ Next: In Claude, `/session-start` — follow `docs/kit-handoff.md`, read
+`saved_plans/codex-hooks-batch_2026-09-07.md` and
+`saved_plans/adopt-suite-assessment_2026-09-07.md`, and prepare the bounded `#534`
+repair work and its exact decisions. Before approved fixture execution, recheck
+`fixture-inventory-after-reg01.json`; stop if either original temporary tree is missing.
+Do not repeat credited exercises or advance Phase 5 exit, adoption completion, fixture PR,
+new initialization or cs-toolkit replay without their own exact decisions.
+
+______________________________________________________________________
+
+## Session — 2026-09-07 (installed-suite assessment, in Claude Code)
 
 **Theme —** Assess PR #686's retained installed-suite log; close the second Phase 5 blocker.
 
