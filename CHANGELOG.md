@@ -42,6 +42,21 @@ starts.
 
 ---
 
+## #709 — 2026-09-07
+
+- **CHANGED (gate semantics, `#706`):** Refresh `scripts/hooks/pre-push`. It now exits 1
+  on a push whose commit carries a `kit-manifest.json` that disagrees with the kit-owned
+  files in that same commit — a class of push that previously always succeeded. Run
+  `kit_doctor.py --generate-manifest` and commit the result with your change, LAST, after
+  the final edit to a kit-owned file. **This does not fire in an adopter repo whose
+  manifest is a recorded install baseline** (one carrying `kit_commit`, written by
+  `--record-install`): there a differing hash means you edited a kit-owned file, which is
+  supported. If the check cannot run — no `python3`, or a manifest it cannot read or
+  recognise — it warns on stderr and allows the push. `git push --no-verify` still
+  bypasses the hook entirely.
+
+---
+
 ## #705 — 2026-09-07
 
 - **ADDED (report / return shape, `#534`):** Refresh `scripts/kit_doctor.py` and take

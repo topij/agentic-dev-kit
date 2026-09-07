@@ -162,8 +162,12 @@ def test_a_repo_with_no_manifest_is_left_alone(tmp_path):
 
 
 def test_a_malformed_manifest_does_not_refuse_the_push(tmp_path):
-    """Report nothing rather than guess: a manifest that does not parse is a
-    separate problem, and this check has no measurement to report about it."""
+    """Fail open on a manifest that does not parse — but say so.
+
+    Reporting nothing was the first draft, and `#709`'s panel showed why that
+    is wrong: an unread manifest means the check did not run, which must not
+    look like a check that ran and found nothing.
+    """
     repo = _repo(tmp_path)
     (repo / ENGINES / "kit_doctor.py").write_text("print('one')\n", encoding="utf-8")
     (repo / "kit-manifest.json").write_text("{not json", encoding="utf-8")
@@ -172,6 +176,62 @@ def test_a_malformed_manifest_does_not_refuse_the_push(tmp_path):
     done = _push(repo, sha)
 
     assert done.returncode == 0, done.stderr
+    assert "could not check kit-manifest.json" in done.stderr
+
+
+@pytest.mark.parametrize("body", ["[]", "null", "42", '"a string"', "false"])
+def test_valid_json_that_is_not_an_object_fails_open_loudly(tmp_path, body):
+    """The hole a panel lens found, reproduced against the shipped bytes.
+
+    These parse, so the `ValueError` arm never fires, and every line after it
+    assumed a dict — `manifest.get` raised `AttributeError`, `"kit_commit" in
+    manifest` raised `TypeError`. The wrapping `2>/dev/null || true` swallowed
+    the traceback AND the exit code, so the guard went completely inert while
+    printing nothing at all: exit 0, no output, identical to a clean check.
+
+    Both halves are asserted. Exit 0 alone would have passed against the
+    defect.
+    """
+    repo = _repo(tmp_path)
+    engine = repo / ENGINES / "kit_doctor.py"
+    engine.write_text("print('deliberately stale')\n", encoding="utf-8")
+    (repo / "kit-manifest.json").write_text(body, encoding="utf-8")
+    sha = _commit(repo)
+
+    done = _push(repo, sha)
+
+    assert done.returncode == 0, done.stderr
+    assert "could not check kit-manifest.json" in done.stderr, (
+        "an unreadable-shape manifest must not go silent — silence here reads "
+        "as a clean check"
+    )
+
+
+def test_a_files_table_of_the_wrong_shape_fails_open_loudly(tmp_path):
+    repo = _repo(tmp_path)
+    (repo / ENGINES / "kit_doctor.py").write_text("print('one')\n", encoding="utf-8")
+    (repo / "kit-manifest.json").write_text('{"files": []}', encoding="utf-8")
+    sha = _commit(repo)
+
+    done = _push(repo, sha)
+
+    assert done.returncode == 0, done.stderr
+    assert "could not check kit-manifest.json" in done.stderr
+
+
+def test_a_clean_check_and_a_manifestless_repo_both_stay_quiet(tmp_path):
+    """The negative half: the warning must follow the failure, not the state
+    vocabulary. A guard that warns on every push is one nobody reads."""
+    repo = _repo(tmp_path)
+    engine = repo / ENGINES / "kit_doctor.py"
+    engine.write_text("print('one')\n", encoding="utf-8")
+    _manifest(repo, {f"{ENGINES}/kit_doctor.py": engine.read_bytes()})
+    sha = _commit(repo)
+
+    done = _push(repo, sha)
+
+    assert done.returncode == 0, done.stderr
+    assert "could not check" not in done.stderr
 
 
 def test_a_recorded_file_missing_from_the_commit_is_not_this_checks_business(tmp_path):

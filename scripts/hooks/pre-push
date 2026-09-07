@@ -236,28 +236,44 @@ def _batch(paths):
     return found
 
 
+# Every exit prints an outcome line FIRST, so the shell can tell the three
+# states apart: checked, deliberately skipped, and could-not-check. Silence
+# means this program died, and the shell warns on it -- the discipline the
+# no-python3 branch above already follows, and which an earlier version of
+# this block broke. A manifest of `[]` or `null` is valid JSON, so it passed
+# the ValueError guard and then raised AttributeError on `.get`; the wrapping
+# `2>/dev/null || true` swallowed the traceback AND the exit code, leaving a
+# guard that was completely inert and looked exactly like a clean check
+# (panel, adversarial lens).
+def _skip(reason):
+    print("SKIP:" + reason)
+    sys.exit(0)
+
+
 done = subprocess.run(
     ["git", "cat-file", "-p", f"{sha}:kit-manifest.json"], capture_output=True
 )
 if done.returncode != 0:
-    # No manifest in this commit: a repo that declined it has nothing to be
-    # stale against.
-    sys.exit(0)
+    # A repo that declined the manifest has nothing to be stale against. This
+    # is the one silent skip: it is a repository shape, not a failed read.
+    _skip("no-manifest")
 try:
     manifest = json.loads(done.stdout)
 except ValueError:
-    # Report nothing rather than guess. A malformed manifest is a separate
-    # problem, and not one for this check to diagnose.
-    sys.exit(0)
+    _skip("unreadable")
+if not isinstance(manifest, dict):
+    # Valid JSON, wrong shape. Named separately from `unreadable` because the
+    # remedies differ and because conflating them is what hid this case.
+    _skip("not-an-object")
 if "kit_commit" in manifest:
     # An adopter install baseline, which `--record-install` writes and
     # `--generate-manifest` does not. There a drift means the adopter EDITED a
     # kit-owned file, which is a legitimate state, so refusing that push would
     # put the #286 bug in a new place.
-    sys.exit(0)
+    _skip("adopter-baseline")
 files = manifest.get("files")
 if not isinstance(files, dict):
-    sys.exit(0)
+    _skip("no-files-table")
 
 wanted = {}
 for path, record in files.items():
@@ -271,9 +287,33 @@ stale = [
     for path, body in sorted(blobs.items())
     if hashlib.sha256(body).hexdigest() != wanted[path]
 ]
+print("CHECKED")
 print("\n".join(stale))
 PY
 )"
+      _outcome="$(printf '%s\n' "${_stale:-}" | head -n 1)"
+      _stale="$(printf '%s\n' "${_stale:-}" | tail -n +2)"
+      case "$_outcome" in
+        CHECKED|SKIP:no-manifest)
+          # Checked, or a repo that has no manifest to check. Both are real
+          # answers, so both stay quiet.
+          ;;
+        *)
+          # Everything else is the check NOT having run: a manifest it could
+          # not read or recognise, or -- on an EMPTY outcome -- the checker
+          # itself dying. Fail-open, but never silently, because silence here
+          # is indistinguishable from "checked and clean".
+          cat >&2 <<EOF
+
+⚠ pre-push: could not check kit-manifest.json for ${remote_ref#refs/heads/}
+  (${_outcome:-the check produced no outcome}) — skipping the staleness check
+  (fail-open). A stale kit-manifest.json will surface later as a red
+  test_kit_repo_self_check_is_clean instead.
+
+EOF
+          _stale=""
+          ;;
+      esac
       if [ -n "${_stale:-}" ]; then
         cat >&2 <<EOF
 
