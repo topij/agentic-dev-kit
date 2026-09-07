@@ -54,7 +54,9 @@ Project trust persisted in the host user's Codex config outside the fixture.
 The original fixture and host user config set `features.hooks = true`, so neither
 could establish the unset case. A disposable fixture copy retained the same revision
 and payloads except for removal of its `.codex/config.toml`. Private temporary Codex
-state omitted both hooks feature spellings and a user hooks file.
+state omitted both hooks feature spellings and a user hooks file. The original
+[prelaunch configuration check](codex-hooks-batch-evidence_2026-09-07/pre-unset-config-checks.json)
+records the system and ancestor configuration-file observations before that launch.
 
 ```sh
 env CODEX_HOME=/private/tmp/adk-codex-batch-20260907-br1ch2u4/codex-state TERM=xterm-256color codex --cd /private/tmp/adk-codex-batch-20260907-br1ch2u4/unset-fixture --no-alt-screen
@@ -67,8 +69,8 @@ retain the table and definition details. The audit records the absent feature se
 absent project config and user hooks file, and removal of the temporary credential copy.
 `/debug-config`'s project-layer listing alone is not evidence that an absent file exists.
 
-**Unset did not prevent discovery in this observed CLI.** This does not establish
-execution after hook trust, the explicitly disabled case or other clients' defaults.
+Hook execution after trust, the explicitly disabled case and other clients' defaults
+were not exercised.
 The operator approved the [exact observation](codex-hooks-batch-evidence_2026-09-07/observation-698.md),
 which was [posted to #698](https://github.com/topij/agentic-dev-kit/issues/698#issuecomment-5569204436).
 The [read-back receipt](codex-hooks-batch-evidence_2026-09-07/tracker-observation-698.json)

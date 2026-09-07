@@ -1,0 +1,13 @@
+{
+  "kind": "historical tool output extracted after review started; no probe rerun",
+  "observed_at": "2026-09-07T09:45:32.875Z",
+  "source_call_id": "call_WXwPpk9O85vJtbWXhS2dKPph",
+  "source_rollout": "/Users/topi/.codex/sessions/2026/09/07/rollout-2026-09-07T12-40-29-01a07b3d-9775-7a31-9c62-2120305b79c8.jsonl",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "kit_revision": "0fcad7f7dab385d9ea5f296423e956f6d0ac0eea",
+  "command": "python3 - <<'PY'\nfrom pathlib import Path\nimport os,tomllib,json\nhome=Path(os.environ.get('CODEX_HOME',str(Path.home()/'.codex')))\npaths=[home/'config.toml',Path('/etc/codex/config.toml'),Path('/etc/codex/managed_config.toml'),Path('/.codex/config.toml'),Path('/private/.codex/config.toml'),Path('/private/tmp/.codex/config.toml')]\nfor p in paths:\n if p.is_file():\n  r=tomllib.loads(p.read_text())\n  print(json.dumps({'path':str(p),'features':r.get('features'),'profile_features':{k:v.get('features') for k,v in r.get('profiles',{}).items() if isinstance(v,dict)},'fixture_project':r.get('projects',{}).get('/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture')}))\n else: print(json.dumps({'path':str(p),'exists':False}))\nPY",
+  "exit_code": 0,
+  "stdout": "{\"path\": \"/Users/topi/.codex/config.toml\", \"features\": {\"js_repl\": false, \"hooks\": true}, \"profile_features\": {}, \"fixture_project\": {\"trust_level\": \"trusted\"}}\n{\"path\": \"/etc/codex/config.toml\", \"exists\": false}\n{\"path\": \"/etc/codex/managed_config.toml\", \"exists\": false}\n{\"path\": \"/.codex/config.toml\", \"exists\": false}\n{\"path\": \"/private/.codex/config.toml\", \"exists\": false}\n{\"path\": \"/private/tmp/.codex/config.toml\", \"exists\": false}\n",
+  "source_command_record_sha256": "a2c5bbb82d8a0843c930c07c8c9255553428840d835ad8b1378120570a79e0b4",
+  "source_output_record_sha256": "1e61cd52fef96c366424a388b4d84e77aa4b9f109f791b2c2f23cbe56ae42ca9"
+}
