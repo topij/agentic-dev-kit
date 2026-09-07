@@ -5,6 +5,38 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-09-06 (adopt initialization and sprint audit, in Codex)
+
+**Theme —** Continue the staged fixture at Step 3c on the exact operator approval,
+then reconcile the active sprint without promoting adoption or Phase 5 completion.
+
+- The [continuation record](../saved_plans/codex-adopt-initialization-field-exercise_2026-09-06.md)
+  retains the approval, initializer refusal, value-preserving formatting correction,
+  prompt transcript, config read-backs, doctor warnings and failed installed suites.
+  The fixture stayed bound to PR #682's installed source; staging was not repeated.
+- In `/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture`, at baseline
+  `08ac687f4ae14218a3861c6b8b143d8b86c4e3c2` plus the staged/initialized adoption
+  from `ab0a6d62308b298478b2f85fc961f14348f35365`, the installed pytest command
+  retained in the record failed on 2026-09-06 UTC. Initialization's successful retry
+  does not dispose of the doctor warnings or establish successful adoption verification.
+- `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `d898660c5da63a91f1916fa6b5f84357b5622ee4` plus initial record edits on
+  2026-09-06 UTC failed in the recurring deep-payload hook assertion. The record
+  retains terminal output and the approved #534 occurrence comment. The initializer
+  issue proposal remains parked pending its own exact decision.
+- The maintained [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md)
+  credits the delivered milestones, records Phase 5's in-progress adopt continuation,
+  corrects stale TUI/review/batch scheduling statements and leaves Phase 6 not started.
+- Initialization authority was exercised only for the exact fixture proposal.
+  Adoption completion, fixture PR, final Phase 5 exit and cs-toolkit replay remain
+  separate decisions. Preserve TRI-03/TRI-04/TRI-05 and #608/#255 dispositions.
+  PR #684 remains test-mode systemize evidence; no live systemize route was attempted.
+
+▶ Next: `$session-start` — follow the maintained Phase 5 reconciliation and this
+adopt continuation's remaining boundary. Obtain exact decisions for the preserved
+fixture ownership/registration/lens choices and verification follow-up before any
+adoption completion; preserve the final replay and parked tracker decisions.
+
 ## Session — 2026-09-06 (adopt config compatibility, in Codex)
 
 **Theme —** Implement #683 in the shared adopt workflow, before baseline recording

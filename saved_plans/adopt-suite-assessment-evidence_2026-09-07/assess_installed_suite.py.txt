@@ -1,0 +1,93 @@
+"""Bounded assessment of PR #686's retained installed-suite log, re-measured after REG-01.
+
+Reads the retained log, classifies its failures, and re-runs the registration-dependent
+subset in a DISPOSABLE COPY of the fixture. The original fixture is never written to.
+"""
+from pathlib import Path
+from collections import Counter, defaultdict
+import datetime, hashlib, json, os, re, shutil, stat, subprocess, sys
+
+KIT = Path('/Users/topi/Coding/agentic-dev-kit')
+FIXTURE = Path('/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture')
+LOG = KIT / 'saved_plans/codex-adopt-initialization-evidence_2026-09-06/fixture-verification-output.json'
+BASELINE = KIT / 'saved_plans/adopt-reg01-application-evidence_2026-09-07/fixture-inventory-after-reg01.json'
+OUT = Path(sys.argv[1]); COPY = Path(sys.argv[2])
+assert Path.cwd() == KIT, Path.cwd()
+
+def sha(p): return hashlib.sha256(p.read_bytes()).hexdigest()
+def inv(root):
+    o = {}
+    for d, ds, fs in os.walk(root, followlinks=False):
+        ds[:] = sorted(n for n in ds if n != '.git')
+        for n in sorted(ds + fs):
+            if n == '.git': continue
+            p = Path(d) / n; row = {'mode': oct(stat.S_IMODE(p.lstat().st_mode))}
+            if p.is_symlink(): row.update(kind='symlink', target=os.readlink(p))
+            elif p.is_file(): row.update(kind='file', sha256=sha(p))
+            elif p.is_dir(): row.update(kind='directory')
+            o[p.relative_to(root).as_posix()] = row
+    return o
+
+before = inv(FIXTURE)
+assert before == json.loads(BASELINE.read_text()), 'fixture is not at the REG-01 baseline'
+
+doc = json.loads(LOG.read_text())
+out = doc['output']
+assert hashlib.sha256(out.encode()).hexdigest() == doc['output_sha256'], 'log digest mismatch'
+
+# --- classify the retained log ---
+raw = [l for l in out.splitlines() if l.startswith('FAILED ') or l.startswith('ERROR ')]
+per_file = Counter(l.split(' ', 1)[1].split('::', 1)[0] for l in raw)
+summary = [l.strip() for l in out.splitlines() if re.search(r'\d+ failed', l) and ' in ' in l]
+
+body = out.split('=================================== FAILURES ===================================')[1]
+blocks = re.split(r'\n_+ (.*?) _+\n', body)
+missing = defaultdict(set)
+for name, txt in zip(blocks[1::2], blocks[2::2]):
+    for m in re.finditer(r"No such file or directory: '([^']+)'|not found: (\S+)", txt):
+        p = m.group(1) or m.group(2)
+        if p.startswith(str(FIXTURE)):
+            missing[p.replace(str(FIXTURE), '<fixture>')].add(name.strip())
+
+# --- re-measure the registration-dependent subset in a disposable copy ---
+if COPY.exists(): raise SystemExit(f'refusing to reuse {COPY}')
+shutil.copytree(FIXTURE, COPY, symlinks=True)
+K = ("advisory_matches_the_registrations or shipped_registrations_name_their_own_runtime or "
+     "budget_advisory_prints_the_shipped or codex_budget_registration or codex_registration or "
+     "shipped_codex_session_start or shipped_claude_session_start or claude_budget_registration or "
+     "permissions_advisory_prints_the_shipped or codex_lifecycle_semantics_accept")
+argv = ['uv', 'run', '--with', 'pytest', '--with', 'pyyaml', 'python', '-m', 'pytest',
+        'scripts/devkit/tests/test_init_sh.py', '-k', K, '-v', '--tb=line']
+proc = subprocess.run(argv, cwd=str(COPY), text=True, capture_output=True,
+                      env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1',
+                           'DEVKIT_STATE_ROOT': str(COPY / '.state')})
+outcomes = {}
+for line in proc.stdout.splitlines():
+    m = re.match(r'scripts/devkit/tests/test_init_sh\.py::(\S+) (PASSED|FAILED)', line)
+    if m: outcomes[m.group(1)] = m.group(2)
+
+assert inv(FIXTURE) == before, 'ORIGINAL FIXTURE CHANGED'
+
+OUT.mkdir(parents=True, exist_ok=True)
+(OUT / 'retained-log-classification.json').write_text(json.dumps({
+    'observed_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    'kit_revision': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+    'log': str(LOG.relative_to(KIT)), 'log_output_sha256': doc['output_sha256'],
+    'log_summary_line': summary, 'failures_per_file': dict(per_file),
+    'total_failure_lines': len(raw),
+    'missing_paths_to_tests': {k: sorted(v) for k, v in missing.items()},
+}, indent=2) + '\n')
+(OUT / 'post-reg01-registration-subset.json').write_text(json.dumps({
+    'observed_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    'copy_root': str(COPY), 'argv': argv, 'cwd': str(COPY),
+    'exit_code': proc.returncode, 'outcomes': outcomes,
+    'passed': sorted(k for k, v in outcomes.items() if v == 'PASSED'),
+    'failed': sorted(k for k, v in outcomes.items() if v == 'FAILED'),
+    'stdout': proc.stdout, 'stderr': proc.stderr,
+    'original_fixture_unchanged': True,
+}, indent=2) + '\n')
+print('log summary:', summary)
+print('failures per file:', dict(per_file), '| total lines:', len(raw))
+print('post-REG-01 subset -> passed:', sum(v == 'PASSED' for v in outcomes.values()),
+      'failed:', sum(v == 'FAILED' for v in outcomes.values()))
+print('original fixture unchanged: True')
