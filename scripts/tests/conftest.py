@@ -193,6 +193,53 @@ def looks_like_kit_source() -> bool:
     return (REPO_ROOT / KIT_ONLY_WITNESS).is_file()
 
 
+# The kit's OWN copies of the two registrations it ships but does not write
+# (#303). Engine-relative, so they travel with `paths.engines` and resolve in
+# any layout — unlike `REPO_ROOT / ".codex"`, which in an adopter is that
+# adopter's hand-written file (#534's silent-false-pass family). Kept equal to
+# the live files by
+# `test_kit_doctor.py::test_the_reference_registrations_match_the_shipped_files`,
+# so reading these is not the copy-against-a-copy those assertions avoid.
+SHIPPED_REGISTRATIONS = ENGINE_DIR / "tests" / "fixtures" / "shipped-registrations"
+
+
+def shipped_registration(name: str) -> Path:
+    """A reference registration, or a skip declaring why it is unavailable.
+
+    An accessor rather than a module constant so the dependency is declared ONCE
+    and every future reader inherits it — the reasoning `require_kit_paths`
+    gives for expressing a fixture-introduced dependency at the fixture instead
+    of repeating a marker per test.
+
+    Without this, declining these two installable files would raise
+    FileNotFoundError, which is #534 cause 2.
+
+    **Here rather than in a test module** because `test_init_sh.py` and
+    `test_kit_doctor.py` each carried a byte-identical copy, which a review lens
+    on PR #705 noted. Two copies of a rule about declines is two places for the
+    rule to drift, and the decline behaviour is exactly what an adopter meets.
+    """
+    path = SHIPPED_REGISTRATIONS / name
+    if path.is_file():
+        return path
+    # Absent. For an adopter who declined these installable files that is a
+    # legitimate decline and must be a skip (#534 cause 2). In the KIT's own
+    # tree it is a DELETED shipped file, and nothing else catches that:
+    # `test_kit_repo_self_check_is_clean` compares the bytes of files that
+    # exist and passes when one is removed — verified by deleting this fixture
+    # in a clone at `cd6f180`, where that test still reported one passed.
+    if looks_like_kit_source():
+        pytest.fail(
+            f"{path} is missing from the kit's own tree. The kit ships this "
+            "reference registration and the drift gate does not catch a "
+            "deletion, so restore it or drop its KIT_OWNED entry."
+        )
+    pytest.skip(
+        "needs the kit's reference registrations: not vendored in this "
+        f"tree: {path.name}"
+    )
+
+
 def require_kit_source() -> None:
     """Skip unless this tree is the kit's own source rather than an install.
 

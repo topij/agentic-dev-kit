@@ -34,41 +34,11 @@ from pathlib import Path, PurePosixPath
 import conftest
 import pytest
 from _repo_layout import engine_dir, find_repo_root
-from conftest import is_install_baseline, looks_like_kit_source, require_kit_source
+from conftest import is_install_baseline, require_kit_source, shipped_registration
 
 ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
 
-# See test_init_sh.py's note: the kit's own copies of the two registrations it
-# ships but does not write (#303), engine-relative so they resolve in any
-# layout. Kept equal to the live files by
-# `test_the_reference_registrations_match_the_shipped_files` below.
-SHIPPED_REGISTRATIONS = ENGINE_DIR / "tests" / "fixtures" / "shipped-registrations"
-
-
-def _shipped(name: str) -> Path:
-    """See test_init_sh.py's accessor: declares the dependency rather than
-    raising FileNotFoundError when an adopter declines these installable files
-    (#534 cause 2)."""
-    path = SHIPPED_REGISTRATIONS / name
-    if path.is_file():
-        return path
-    # Absent. For an adopter who declined these installable files that is a
-    # legitimate decline and must be a skip (#534 cause 2). In the KIT's own
-    # tree it is a DELETED shipped file, and nothing else catches that:
-    # `test_kit_repo_self_check_is_clean` compares the bytes of files that
-    # exist and passes when one is removed — verified by deleting this fixture
-    # in a clone at `cd6f180`, where that test still reported one passed.
-    if looks_like_kit_source():
-        pytest.fail(
-            f"{path} is missing from the kit's own tree. The kit ships this "
-            "reference registration and the drift gate does not catch a "
-            "deletion, so restore it or drop its KIT_OWNED entry."
-        )
-    pytest.skip(
-        "needs the kit's reference registrations: not vendored in this "
-        f"tree: {path.name}"
-    )
 sys.path.insert(0, str(ENGINE_DIR))
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
@@ -76,6 +46,13 @@ import kit_doctor  # noqa: E402
 import panel_prompt  # noqa: E402
 import run_installed_tests  # noqa: E402
 import runtime_adapters  # noqa: E402
+
+
+def _shipped(name: str) -> Path:
+    """See `conftest.shipped_registration`, which this and `test_init_sh.py`
+    both delegate to."""
+    return shipped_registration(name)
+
 
 LEGACY_CODEX_SHA256 = {
     "adopt": "fee749f57477fc21ced59027209d48eac22fafc44b15307bfff209028897def9",
@@ -1241,6 +1218,58 @@ def test_a_stray_kit_commit_cannot_silently_disable_the_kit_drift_gate():
         "kit's own tree. Every `require_kit_source()` guard is now skipping, "
         "including the drift gate. Remove the key and regenerate the manifest."
     )
+
+
+@pytest.mark.parametrize(
+    ("body", "why"),
+    [
+        ("{not json at all", "ValueError from a malformed document"),
+        ('{"kit_commit": ', "ValueError from a truncated document"),
+    ],
+)
+def test_an_unreadable_manifest_is_not_read_as_an_install_baseline(
+    tmp_path, monkeypatch, body, why
+):
+    """The `ValueError` half of `is_install_baseline`'s except arm. `#534` follow-up.
+
+    Its sibling below pins the `OSError` half, which no malformed-content
+    fixture reaches — both files here are perfectly readable.
+
+    An adversarial lens on PR #705 noted it fails toward RUNNING the guarded
+    test — the loud direction — and found no way to exploit it, but that
+    flipping its `False` to `True` would be a silent-skip regression nothing
+    would catch. It is the direction, not the return value, that matters: a
+    `True` here would switch off `test_kit_repo_self_check_is_clean` and its
+    siblings against a manifest this process could not even read.
+    """
+    monkeypatch.setattr(conftest, "REPO_ROOT", tmp_path)
+    (tmp_path / "kit-manifest.json").write_text(body, encoding="utf-8")
+
+    assert conftest.is_install_baseline() is False, why
+
+
+def test_an_os_error_reading_the_manifest_is_not_read_as_an_install_baseline(
+    tmp_path, monkeypatch
+):
+    """The `OSError` half of the same arm, which no malformed-content fixture
+    reaches: the read has to fail rather than the parse."""
+    manifest = tmp_path / "kit-manifest.json"
+    manifest.write_text('{"kit_commit": "abc"}', encoding="utf-8")
+    monkeypatch.setattr(conftest, "REPO_ROOT", tmp_path)
+
+    original = Path.read_text
+
+    def _refuse(self, *args, **kwargs):
+        if self == manifest:
+            raise OSError("permission denied")
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", _refuse)
+
+    # Note the fixture DOES carry `kit_commit`, so a bare `False` here could be
+    # the right answer for the wrong reason. The unreadable path is what is
+    # under test, and it is the only reason this returns False.
+    assert conftest.is_install_baseline() is False
 
 
 def _outcome_of(call):
