@@ -24,6 +24,73 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-09-07
+
+- **`make test` fails on `main` in a way CI cannot see, and not always on the same test.**
+  `make test` at `4b56d3eec285781ac382e0b897d5d1da9c7fe40e` (clean `main`) on 2026-09-07
+  printed `1 failed, 2445 passed, 1 skipped in 379.54s`, failing
+  `test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero`. It
+  passes in isolation every time. Four review lenses measured it independently across the
+  session: one got a *different* single failure
+  (`test_reconcile_sessions.py::test_portable_bounded_runner_reaps_on_startup_interrupt`)
+  from base-content files under concurrent load, and another got no failure at all on a
+  repeat run at an identical sha. `uv run python -c "import sys; print(sys.version)"` in
+  `/Users/topi/Coding/agentic-dev-kit` on 2026-09-07 printed `3.14.7`, while
+  `.github/workflows/test.yml` pins `python-version: "3.12"`. `#393` records that `json`'s
+  `RecursionError` behaviour changes at 3.14 and names a *different* test. **M** — the
+  interpreter split is a candidate contributor, not an established mechanism, and the
+  non-determinism is unexplained. Route to `#393` as a second occurrence, or file
+  separately if it is judged distinct. Worth recording either way: a red local suite that
+  CI reports green trains a session to discount its own verification command.
+
+- **A genuinely unparseable `scripts/hooks/pre-push` passed `make test`.** `check-syntax`
+  hands four filenames to one `bash -n`, and `pre-push` is last on that line, so it is
+  never parsed — locally or in CI. Measured on 2026-09-07: `bash -n good.sh bad.sh` exits
+  0 with a syntactically broken `bad.sh`, while `bash -n bad.sh` alone exits 2. `#561`
+  already names the mechanism; what this adds is the blast radius — the hook runs on every
+  push here and in every adopter, so a broken one ships through a green suite. `#709`
+  closes the hole for that one file with `test_the_hook_parses_on_its_own`. **M** —
+  `#561` remains the general fix and is worth raising in priority on this evidence.
+
+- **The parse failure itself: bash 3.2 mis-parses an apostrophe inside a quoted heredoc
+  within `$( )`.** Reproduced minimally on `GNU bash, version 3.2.57(1)-release
+  (arm64-apple-darwin25)` — macOS's default, and what `#!/usr/bin/env bash` selects there
+  — where a `$(python3 - <<'PY' … PY )` block whose body contains one apostrophe in a
+  *Python comment* fails with ``unexpected EOF while looking for matching `'``. The
+  existing config-read block in the same file has always avoided apostrophes, which now
+  reads as deliberate but was nowhere stated. **L** — single instance, mechanism
+  identified and commented in place; recorded because the failure presents as a broken
+  heredoc rather than as a quoting rule.
+
+- **`cp -a` of a linked git worktree does not isolate it, and the panel contract does not
+  say so.** A review lens built its mutation scratch that way; the copied `.git` is a
+  *pointer file* naming the same per-worktree admin directory, so `git stash` and
+  `git checkout` run in the "copy" wrote the given tree's index. File contents were never
+  altered, the lens detected and repaired it, and the cockpit independently confirmed the
+  tree clean, index empty, HEAD unmoved and both changed files hash-matching the manifest.
+  **M** — proposed fix: *No writes in the tree you were given* should name the mechanism,
+  because the rule as written ("use an absolute path outside the given tree") is satisfied
+  by the very command that breaks it. Six later lens launches stated the hazard inline and
+  none recurred, so the carrier is the gap rather than the wording — the same shape as
+  `#469`.
+
+- **Lenses end their turn on a progress update while a background `make test` runs.** Four
+  occurrences on 2026-09-07 across three PRs, each needing a `SendMessage` resume to
+  produce a terminal report, and one lens lost its run entirely by piping it through `tail`
+  and stopping early. *Execute, don't only read* already says a progress update is not a
+  report, and two of the four had that sentence quoted in their prompt. **M** — no
+  mechanism identified beyond "the instruction is present and does not bind"; proposed
+  direction is the same as `#469`'s, a carrier change rather than a wording one. Parked
+  for accumulation; if it recurs, capture whether the lens had a foreground alternative.
+
+- **`#666`'s ordering is enforced by the engine, and the recovery costs a full round.**
+  Round 2 of `#708`'s panel was fixed before its receipt was recorded; the retroactive
+  `pr_watch.py --record-review --head <round-2 sha>` then refused with `PR head changed
+  during review … review the new head before recording evidence`. That is the guard
+  working. **L** — no fix proposed and none obviously needed: the cost lands on the party
+  that skipped the step. Recorded so the next session knows the receipt is not recoverable
+  after the fact and plans the round accordingly.
+
 ## 2026-09-06 — Backlog migrated to GitHub Issues (#693)
 
 Swept in **LLM-only mode** because the configured draft and finalize engines are absent,

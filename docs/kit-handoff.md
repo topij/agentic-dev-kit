@@ -14,10 +14,59 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-07 — `#534`'s residual repairs merged. Phase 5 exit is unblocked
-by them and retains its own exact decision.
+Last updated: 2026-09-07 — `#698`'s doctor correction and `#706`'s push gate merged.
+Phase 5 exit remains the live question and retains its own exact decision.
 
-## Latest session — 2026-09-07 (#534 residual repairs, in Claude Code)
+## Latest session — 2026-09-07 (#698 doctor correction and #706 push gate, in Claude Code)
+
+**Theme —** Take the two delegate-shaped items and `#534`'s panel follow-ups, and let the
+fallback panel do its work on a gate.
+
+- [PR #708](https://github.com/topij/agentic-dev-kit/pull/708) merged as `ec75075`.
+  `kit_doctor` grades `[features].hooks` whenever a Codex registration exists rather than
+  only when `.codex/config.toml` does — this repo was itself the affected population. The
+  new `unset` state reports at `·` and does not reach the exit code, which was the
+  operator's calibration decision: the approved observation recorded a client discovering
+  registrations with the switch unset, so failing the run would assert what that probe did
+  not establish. An explicit `false` still exits 1.
+- [PR #709](https://github.com/topij/agentic-dev-kit/pull/709) merged as `6f2cc24`.
+  `scripts/hooks/pre-push` refuses a push whose commit carries a stale
+  `kit-manifest.json`, verified firing against the real remote after the merge. An
+  adopter's `--record-install` baseline is exempt.
+- **Four panel rounds on `#709` produced four HIGH findings, every one the same shape:
+  the guard reporting a clean check while not having checked.** Valid-but-non-object JSON
+  crashed it into silence; an entry with no `sha256` was dropped silently; the
+  adopter-baseline skip warned on every adopter push forever, contradicting the CHANGELOG
+  written in the same commit; and a newline in a manifest key desynchronised the
+  positional `git cat-file --batch` reader, **laundering a genuinely tampered file past
+  the guard with exit 0 and an empty stderr**. The last was found by building the attack,
+  not by reading. Round 4 confirmed the repair closes the class rather than the instance.
+- The recurring shape is now unmissable and is in `docs/kit-friction-log.md`: across every
+  round this session, each finding was in a claim the author made rather than in a
+  mechanism. The 2026-08-22 entry parked exactly that pattern for accumulation on two
+  docs-only PRs; it has now recurred on code, repeatedly. **Deciding whether it graduates
+  to a rule is the clearest open judgement call.**
+- **`#561` is worse than its title.** A genuinely unparseable `pre-push` passed `make
+  test`: `check-syntax` hands four filenames to one `bash -n` and `pre-push` is last, so
+  it is never parsed. `bash -n good.sh bad.sh` exits 0 with a broken second file. `#709`
+  closes the hole for that one file; the general fix is still `#561`'s.
+- **A `make test` failure reproduces on clean `main` and CI cannot see it.** Recorded with
+  its stamps in the friction log; local `uv run` resolves 3.14.7 against CI's pinned 3.12,
+  and `#393` names the mechanism family but a different test. Non-deterministic, so the
+  interpreter split is a candidate contributor rather than an established cause.
+- `#698`, `#706`, `#534`, `#561` and `#393` all stay open.
+
+▶ Next: In Claude, `/session-start` — Phase 5 exit is still the live question and still
+needs its own exact decision, as do the cs-toolkit replay, new initialization, adoption
+completion and the fixture PR. Two things want an operator decision first: whether the
+friction log's recurring panel-findings pattern graduates to a rule, and whether this
+session's six friction entries are filed to the tracker. `docs/kit-friction-log.md` is
+over budget — the `triage-friction-log` workflow is the route, and it needs those
+decisions.
+
+______________________________________________________________________
+
+## Session — 2026-09-07 (#534 residual repairs, in Claude Code)
 
 **Theme —** Repair what `#534` still carried, and field-verify the item that merged
 without ever being checked in an adopter.
@@ -294,91 +343,6 @@ ______________________________________________________________________
 and still the live work; this session touched only the friction log. Note that #693 now
 covers the initializer/`kitconfig` grammar split that the block below left reserved, so
 it is a filed ticket rather than an open decision.
-
-______________________________________________________________________
-
-## Session — 2026-09-06 (approved FIX-01 application, in Claude Code)
-
-**Theme —** Apply the retained ownership/lens diff to the original adoption fixture.
-
-- The [FIX-01 record](../saved_plans/adopt-fix01-ownership-lenses_2026-09-06.md) retains
-  the approved scope, precondition read, applied patch, doctor result and write
-  boundary. `AGENTS.md` loses its kit-own marker and keeps its policy body; both lens
-  definitions take the installed engine path. The fixture was not committed and no
-  initializer ran.
-- Before applying, the diff was shown current against the kit — the landed VER-03
-  repair changed the panel test, not the renderer — and complete against the fixture:
-  patching scratch copies reproduced the installed renderer's output byte-for-byte.
-- `python3 <fixture>/scripts/devkit/kit_doctor.py --root <fixture> --manifest
-  <comparison-source>/kit-manifest.json`, cwd the fixture, on 2026-09-06 UTC returned
-  exit zero, reading `AGENTS.md: in use` and both lens definitions as matching the
-  running doctor's expected output. The retained report read an ownership warning and a
-  staleness warning per lens.
-- The doctor's own remedy for that ownership warning is `run ./init.sh`, which in
-  default mode renders the template over a marked-but-edited file; `#338` already names
-  deleting line 1 as the operator resolution, and that is what was applied.
-- **The fixture continuity baseline is superseded** by approved change. Compare against
-  `fixture-inventory-after-fix01.json` in the FIX-01 evidence, not the VER-02/VER-03
-  inventory; a mismatch against the older one is not drift.
-- Filed on the operator's approval of the exact payload: #692, for the doctor remedy
-  above. #338 stays open and covers the initializer side of the same ambiguity.
-- The maintained [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md) retains
-  Phase 5 in progress and Phase 6 not started. Runtime registration, verification
-  follow-up, new initialization, adoption completion, fixture PR, Phase 5 exit and
-  cs-toolkit replay keep separate exact decisions. TRI-03/TRI-04/TRI-05, #608/#255 and
-  the parked initializer proposal remain reserved.
-
-▶ Next: In Claude, `/session-start` — then take one of the two open Phase 5 blockers
-and prepare an exact decision for it: the fixture's runtime-registration scope (Codex
-project hooks, Claude cockpit settings, or both) with both exact payloads drafted, or a
-bounded assessment of the installed suite's initializer, launcher-policy and portability
-failures in PR #686's retained terminal log. Read #534's comments and not only its body:
-its 2026-09-06 occurrence places layout-assumption failures inside the issue's scope,
-including one in a file the body does not name, so a root miscalculation belongs there
-as an occurrence rather than as a new issue. One is already identifiable —
-`test_lane_launcher.py:2234` takes `root = ENGINE_DIR.parent` where `conftest.py:48`
-already offers `REPO_ROOT = find_repo_root(ENGINE_DIR)`, which is the defect VER-03
-repaired in `test_panel_prompt.py` and the same trace the fixture log shows. Recheck
-continuity against
-`saved_plans/adopt-fix01-evidence_2026-09-06/fixture-inventory-after-fix01.json` — the
-VER-02/VER-03 inventory is superseded and a mismatch against it is not drift. Draft
-registration payloads in Claude but do not state whether Codex loaded them: `/hooks` in
-a Codex session is the only authority on that, so park that confirmation and anything
-resting on live Codex behaviour for one batched Codex session. Do not repeat credited
-probes or exercises, or advance initialization, adoption completion, fixture PR, Phase 5
-exit, cs-toolkit replay or reserved tracker dispositions without their own decisions.
-
-______________________________________________________________________
-
-## Session — 2026-09-06 (approved VER-03 repair, in Codex)
-
-**Theme —** Repair the kit comparison's root and pin its behavior after relocation.
-
-- The [VER-03 record](../saved_plans/codex-adopt-ver03-repair_2026-09-06.md) retains
-  the approved scope, input continuity, focused regression, landed old-root mutation
-  and restoration. The kit test uses its existing root helper; its manifest digest
-  was refreshed. Synthetic layouts exercise the real comparison and renderer.
-- The focused command in that record ran in `/Users/topi/Coding/agentic-dev-kit`
-  at `188cd97198dbee34919369cfa75a9379d9ddc6eb` plus the test/manifest edits on
-  2026-09-06 UTC and passed. The old-root mutation in the recorded disposable cwd
-  failed in the nested-layout case; definition mutations reached the equality
-  assertion. These are synthetic-layout results, not original-fixture completion.
-- `python3 /private/tmp/adk-ver03-7m5h8wtr/check_continuity.py` in the kit checkout
-  at `12a67be290989165e0e7f714942c3d59e38696fc` on 2026-09-06 UTC matched the
-  original source/fixture inventories, Git state and legacy hashes after the trial.
-- The maintained [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md)
-  retains Phase 5 in progress and Phase 6 not started. Ownership/lenses, runtime
-  registration, verification follow-up, new initialization, adoption completion,
-  fixture PR, Phase 5 exit and cs-toolkit replay keep separate exact decisions.
-  TRI-03/TRI-04/TRI-05, #608/#255 and the parked initializer proposal remain reserved.
-
-▶ Next: In Claude, `/session-start` — follow `docs/kit-handoff.md` and read
-`saved_plans/codex-adopt-ver03-repair_2026-09-06.md`. Review the retained VER-03
-result and the continuation review's ownership/lens diff, then prepare an exact
-fixture decision. Keep registration and verification follow-up separately scoped;
-recheck continuity before approved execution. Do not repeat credited probes or
-exercises, or advance initialization, adoption completion, fixture PR, Phase 5 exit,
-cs-toolkit replay or reserved tracker dispositions without their own decisions.
 
 ______________________________________________________________________
 
