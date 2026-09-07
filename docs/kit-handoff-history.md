@@ -5,6 +5,36 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-09-06 (approved VER-02 trial, in Codex)
+
+**Theme —** Execute the approved disposable-copy diagnostic and preserve its limits.
+
+- The [VER-02 record](../saved_plans/codex-adopt-ver02-trial_2026-09-06.md) retains
+  exact commands, revisions, terminal results, input/destination inventories,
+  setup refusals, mutation and restoration. Its verification stamps bind the
+  source-control pass, fixture adversarial-lens mismatch and assertion rejection.
+- `python3 /private/tmp/adk-adopt-ver02-ja4w9bd0/resume_trial.py` ran in
+  `/Users/topi/Coding/agentic-dev-kit`
+  at `cd39158df81457feafa4bd281d928f8fec7d9faf` on 2026-09-06 UTC and matched the
+  original source/fixture inventories, Git state and retained snapshot. The trial
+  changed only disposable copies; its approval is consumed.
+- VER-03 proposes the permanent test-root repair and layout regression for a fresh
+  operator decision. The fixture test stopped at the adversarial lens; it did not
+  establish a correctness-lens pass or successful adoption verification.
+- The maintained [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md)
+  retains Phase 5 in progress and Phase 6 not started. Initialization, fixture
+  ownership/lenses/registration, verification follow-up, adoption completion,
+  fixture PR, Phase 5 exit and cs-toolkit replay remain separately scoped.
+- TRI-03/TRI-04/TRI-05, #608/#255 and the parked initializer issue proposal remain
+  reserved. No tracker graduation was performed. The trial record contains the
+  requested Claude-ready starter for reviewing Codex's evidence next.
+
+▶ Next: In Claude, `/session-start` — follow `docs/kit-handoff.md` and read
+`saved_plans/codex-adopt-ver02-trial_2026-09-06.md`. Review the retained outcomes
+without repeating credited probes; present VER-03 for a fresh exact decision.
+Recheck continuity before separately approved execution and preserve all fixture,
+initialization, verification, completion, PR, exit, replay and tracker decisions.
+
 ## Session — 2026-09-06 (adopt verification reconciliation, in Codex)
 
 **Theme —** Credit the retained diagnostic outcomes and prepare the next bounded

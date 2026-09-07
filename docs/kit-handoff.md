@@ -14,11 +14,61 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-07 — the parked Codex batch is recorded. Runtime discovery was
-observed, the reserved tracker dispositions were approved, and Phase 5 exit retains its
-own exact decision.
+Last updated: 2026-09-07 — `#534`'s residual repairs merged. Phase 5 exit is unblocked
+by them and retains its own exact decision.
 
-## Latest session — 2026-09-07 (live Codex hooks batch)
+## Latest session — 2026-09-07 (#534 residual repairs, in Claude Code)
+
+**Theme —** Repair what `#534` still carried, and field-verify the item that merged
+without ever being checked in an adopter.
+
+- [PR #705](https://github.com/topij/agentic-dev-kit/pull/705) merged as `7cb0868`.
+  Item 1 (`_repo_layout` engine-dir resolution) was **not** re-done: it merged in
+  PR #545, and `kit-handoff-history.md`'s 2026-08-21 block records the residual — those
+  issues stayed open because nothing verified their acceptance criteria in the field.
+  That verification is what this session did.
+- **The proposed kit-repo-only marker cannot carry cause 1, and the reason generalises.**
+  It skips on a *missing path*, and the question these tests need answered is whether the
+  file at that path is the kit's copy. `conftest.py` gains the predicate it cannot
+  express, derived from `kit_commit` being written only by `--record-install`.
+  `test_shipped_manifest_covers_every_kit_owned_file` is restated rather than skipped, so
+  an adopter gains coverage where they had a permanent red.
+- **`.codex/hooks.json` and `.claude/settings.json` are the sharp case** — the kit prints
+  both and writes neither (`#303`), so in an adopter those paths hold hand-written
+  registrations and a path check accepts them. Reference copies now ship, engine-relative
+  and `KIT_OWNED`, with a drift guard pinning reference to live.
+- **Field-verified in disposable copies of the adopter fixture**, the original asserted
+  equal to `fixture-inventory-after-reg01.json` before and unchanged after each run.
+  Item 1 resolves there; a cause-1 test went from failing to passing, and others from
+  failing to skipping. The silent false pass was proven fixed **by mutation, not by a passing run** —
+  a pass is what that defect looks like — and that mutation is what caught a read site an
+  edit had missed.
+- **What the panel found is where the risk sat.** Its rounds are enumerated with their
+  heads and fixes in the [disposition](https://github.com/topij/agentic-dev-kit/pull/705#issuecomment-5574151329).
+  Every finding was in a claim the author made — a predicate said to be safe, an accessor
+  said to decline gracefully, a test said to guard a fix, a docstring describing a step
+  its function does not perform — and none was in a mechanism. Rounds whose CI was green
+  still carried them.
+- **`#534` stays open.** The typed decline reasons are deliberately out of scope; the
+  disposition also carries the follow-up candidates the panel raised and this PR did not
+  take.
+- An occurrence on [`#393`](https://github.com/topij/agentic-dev-kit/issues/393#issuecomment-5573705268)
+  records that the interpreter `uv run` resolves locally and the version
+  `.github/workflows/test.yml` pins are not the same, so a suite failure reproducible on
+  `main` is invisible to CI. That issue stays open.
+
+- **Session friction routed at close-out.** [`#706`](https://github.com/topij/agentic-dev-kit/issues/706)
+  files the manifest going stale between `--generate-manifest` and the commit, caught only
+  by the full suite. The guard is not broken — it caught every instance — so the finding is
+  about when it reports, and the proposed fix moves that to `scripts/hooks/pre-push`.
+
+▶ Next: In Claude, `/session-start` — Phase 5 exit is the live question and now has no
+`#534` repair standing in front of it; it still needs its own exact decision. New
+initialization, adoption completion, fixture PR and cs-toolkit replay keep theirs.
+
+______________________________________________________________________
+
+## Session — 2026-09-07 (live Codex hooks batch)
 
 **Theme —** Complete the parked Codex observations and preserve their scope.
 
@@ -329,38 +379,6 @@ fixture decision. Keep registration and verification follow-up separately scoped
 recheck continuity before approved execution. Do not repeat credited probes or
 exercises, or advance initialization, adoption completion, fixture PR, Phase 5 exit,
 cs-toolkit replay or reserved tracker dispositions without their own decisions.
-
-______________________________________________________________________
-
-## Session — 2026-09-06 (approved VER-02 trial, in Codex)
-
-**Theme —** Execute the approved disposable-copy diagnostic and preserve its limits.
-
-- The [VER-02 record](../saved_plans/codex-adopt-ver02-trial_2026-09-06.md) retains
-  exact commands, revisions, terminal results, input/destination inventories,
-  setup refusals, mutation and restoration. Its verification stamps bind the
-  source-control pass, fixture adversarial-lens mismatch and assertion rejection.
-- `python3 /private/tmp/adk-adopt-ver02-ja4w9bd0/resume_trial.py` ran in
-  `/Users/topi/Coding/agentic-dev-kit`
-  at `cd39158df81457feafa4bd281d928f8fec7d9faf` on 2026-09-06 UTC and matched the
-  original source/fixture inventories, Git state and retained snapshot. The trial
-  changed only disposable copies; its approval is consumed.
-- VER-03 proposes the permanent test-root repair and layout regression for a fresh
-  operator decision. The fixture test stopped at the adversarial lens; it did not
-  establish a correctness-lens pass or successful adoption verification.
-- The maintained [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md)
-  retains Phase 5 in progress and Phase 6 not started. Initialization, fixture
-  ownership/lenses/registration, verification follow-up, adoption completion,
-  fixture PR, Phase 5 exit and cs-toolkit replay remain separately scoped.
-- TRI-03/TRI-04/TRI-05, #608/#255 and the parked initializer issue proposal remain
-  reserved. No tracker graduation was performed. The trial record contains the
-  requested Claude-ready starter for reviewing Codex's evidence next.
-
-▶ Next: In Claude, `/session-start` — follow `docs/kit-handoff.md` and read
-`saved_plans/codex-adopt-ver02-trial_2026-09-06.md`. Review the retained outcomes
-without repeating credited probes; present VER-03 for a fresh exact decision.
-Recheck continuity before separately approved execution and preserve all fixture,
-initialization, verification, completion, PR, exit, replay and tracker decisions.
 
 ______________________________________________________________________
 
