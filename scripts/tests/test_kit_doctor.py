@@ -39,10 +39,6 @@ from conftest import is_install_baseline, require_kit_source, shipped_registrati
 ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
 
-def _shipped(name: str) -> Path:
-    """See `conftest.shipped_registration`, which this and `test_init_sh.py`
-    both delegate to."""
-    return shipped_registration(name)
 sys.path.insert(0, str(ENGINE_DIR))
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
@@ -50,6 +46,13 @@ import kit_doctor  # noqa: E402
 import panel_prompt  # noqa: E402
 import run_installed_tests  # noqa: E402
 import runtime_adapters  # noqa: E402
+
+
+def _shipped(name: str) -> Path:
+    """See `conftest.shipped_registration`, which this and `test_init_sh.py`
+    both delegate to."""
+    return shipped_registration(name)
+
 
 LEGACY_CODEX_SHA256 = {
     "adopt": "fee749f57477fc21ced59027209d48eac22fafc44b15307bfff209028897def9",
@@ -1227,7 +1230,10 @@ def test_a_stray_kit_commit_cannot_silently_disable_the_kit_drift_gate():
 def test_an_unreadable_manifest_is_not_read_as_an_install_baseline(
     tmp_path, monkeypatch, body, why
 ):
-    """The `except (OSError, ValueError)` arm, pinned. `#534` follow-up.
+    """The `ValueError` half of `is_install_baseline`'s except arm. `#534` follow-up.
+
+    Its sibling below pins the `OSError` half, which no malformed-content
+    fixture reaches — both files here are perfectly readable.
 
     An adversarial lens on PR #705 noted it fails toward RUNNING the guarded
     test — the loud direction — and found no way to exploit it, but that
