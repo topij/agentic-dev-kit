@@ -290,6 +290,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/test_panel_prompt.py", "test"),
     ("scripts/tests/test_portability.py", "test"),
     ("scripts/tests/test_pr_followup_hook.py", "test"),
+    ("scripts/tests/test_pre_push_hook.py", "test"),
     ("scripts/tests/test_pr_watch.py", "test"),
     ("scripts/tests/test_reconcile_sessions.py", "test"),
     ("scripts/tests/test_repo_layout.py", "test"),

@@ -155,6 +155,229 @@ EOF
 EOF
     fi
   fi
+
+  # ── Stale-manifest guard (#706) ───────────────────────────────────────────
+  #
+  # A SEPARATE check, per this file's header: it shares the ref loop and
+  # nothing else, and it applies to EVERY branch rather than only `dev/*` —
+  # the occurrences it is filed about were on `chore/*` cockpit branches.
+  #
+  # `kit-manifest.json` records a hash per kit-owned file, correct only for the
+  # bytes present when `--generate-manifest` ran. Regenerating is a natural
+  # thing to do right after the edit that made it necessary, which is exactly
+  # when a later edit in the same change invalidates it. Nothing re-checks
+  # between that moment and the commit, so the only report came from
+  # `test_kit_repo_self_check_is_clean` in the full suite — a `make test` run or
+  # a CI round trip later. The guard was never broken; this moves WHEN it
+  # reports.
+  #
+  # Both sides are read out of the PUSHED COMMIT, not the working tree: the
+  # commit is what the remote will hold and what CI will judge, and a dirty or
+  # half-staged tree is exactly the state this fires in.
+  if [ "${local_sha:-$ZERO}" != "$ZERO" ]; then
+    if ! command -v python3 >/dev/null 2>&1; then
+      # Fail-open and WARN, like the guard above: silence here is
+      # indistinguishable from "checked and clean".
+      cat >&2 <<EOF
+
+⚠ pre-push: no python3 — skipping the kit-manifest staleness check for
+  ${remote_ref#refs/heads/} (fail-open). A stale kit-manifest.json will surface
+  later as a red test_kit_repo_self_check_is_clean instead.
+
+EOF
+    else
+      _stale="$(python3 - "$local_sha" <<'PY' 2>/dev/null || true
+import hashlib
+import json
+import subprocess
+import sys
+
+sha = sys.argv[1]
+
+
+def _batch(paths):
+    """Bytes of each path at the pushed commit, in ONE git process.
+
+    An earlier version diffed against the merge base and checked only the
+    changed paths, spawning a `git show` each. That carried a branch for a
+    failed diff which no test could reach, and a mutation flipping its
+    fallback to an empty set -- the guard silently checking nothing --
+    survived the whole file. Removing the branch was cheaper than reaching
+    it, and checking every recorded file is also stricter: a manifest entry
+    that went stale under an earlier commit is caught here too, rather than
+    waiting for the push that happens to touch it again.
+    """
+    if not paths:
+        return {}
+    done = subprocess.run(
+        ["git", "cat-file", "--batch"],
+        input="\n".join(f"{sha}:{p}" for p in paths).encode() + b"\n",
+        capture_output=True,
+    )
+    if done.returncode != 0:
+        return {}
+    out, at, found = done.stdout, 0, {}
+    for path in paths:
+        nl = out.find(b"\n", at)
+        if nl == -1:
+            break
+        header = out[at:nl]
+        if header.endswith(b" missing"):
+            # Recorded but not in this commit. That is the membership
+            # question #47 owns, not this one.
+            at = nl + 1
+            continue
+        try:
+            size = int(header.rsplit(b" ", 1)[1])
+        except (IndexError, ValueError):
+            break
+        found[path] = out[nl + 1 : nl + 1 + size]
+        at = nl + 1 + size + 1
+    return found
+
+
+# Every exit prints an outcome line FIRST, so the shell can tell the three
+# states apart: checked, deliberately skipped, and could-not-check. Silence
+# means this program died, and the shell warns on it -- the discipline the
+# no-python3 branch above already follows, and which an earlier version of
+# this block broke. A manifest of `[]` or `null` is valid JSON, so it passed
+# the ValueError guard and then raised AttributeError on `.get`; the wrapping
+# `2>/dev/null || true` swallowed the traceback AND the exit code, leaving a
+# guard that was completely inert and looked exactly like a clean check
+# (panel, adversarial lens).
+def _skip(reason):
+    print("SKIP:" + reason)
+    sys.exit(0)
+
+
+done = subprocess.run(
+    ["git", "cat-file", "-p", f"{sha}:kit-manifest.json"], capture_output=True
+)
+if done.returncode != 0:
+    # A repo that declined the manifest has nothing to be stale against. This
+    # is the one silent skip: it is a repository shape, not a failed read.
+    _skip("no-manifest")
+try:
+    manifest = json.loads(done.stdout)
+except ValueError:
+    _skip("unreadable")
+if not isinstance(manifest, dict):
+    # Valid JSON, wrong shape. Named separately from `unreadable` because the
+    # remedies differ and because conflating them is what hid this case.
+    _skip("not-an-object")
+if "kit_commit" in manifest:
+    # An adopter install baseline, which `--record-install` writes and
+    # `--generate-manifest` does not. There a drift means the adopter EDITED a
+    # kit-owned file, which is a legitimate state, so refusing that push would
+    # put the #286 bug in a new place.
+    _skip("adopter-baseline")
+files = manifest.get("files")
+if not isinstance(files, dict):
+    _skip("no-files-table")
+
+# An entry carrying no usable hash is REPORTED, never quietly dropped. Skipping
+# it silently while still printing CHECKED left a tracked file unhashed with no
+# signal at all -- round 1 high, one level down, and found again there (panel,
+# adversarial lens). It does not refuse the push, because an unusable record is
+# a broken manifest rather than a stale file, and this check cannot tell whether
+# the bytes are current; it says so instead.
+wanted = {}
+unusable = []
+for path, record in files.items():
+    want = record.get("sha256") if isinstance(record, dict) else record
+    if not isinstance(path, str) or "\n" in path or "\r" in path:
+        # A path carrying a newline serialises into TWO input lines below while
+        # the reader consumes one response chunk per path, so every later path
+        # pairs with the wrong chunk and its check silently never runs. A lens
+        # laundered a genuinely tampered file past this guard that way, using a
+        # throwaway entry that sorts just before the target and needs no correct
+        # hash of anything. `--batch` pairs positionally and cannot echo the
+        # path back, so ONE INPUT LINE PER PATH is the invariant the reader
+        # depends on; keeping such a path out of the batch is what holds it.
+        # It is reported rather than dropped, for the same reason as an entry
+        # with no usable hash.
+        unusable.append(repr(path))
+    elif isinstance(want, str):
+        wanted[path] = want
+    else:
+        unusable.append(path)
+
+blobs = _batch(sorted(wanted))
+print("CHECKED")
+for path, body in sorted(blobs.items()):
+    if hashlib.sha256(body).hexdigest() != wanted[path]:
+        print("STALE " + path)
+for path in sorted(unusable):
+    print("UNUSABLE " + path)
+PY
+)"
+      _outcome="$(printf '%s\n' "${_stale:-}" | head -n 1)"
+      _body="$(printf '%s\n' "${_stale:-}" | tail -n +2)"
+      _stale="$(printf '%s\n' "$_body" | sed -n 's/^STALE //p')"
+      _unusable="$(printf '%s\n' "$_body" | sed -n 's/^UNUSABLE //p')"
+      case "$_outcome" in
+        CHECKED|SKIP:no-manifest|SKIP:adopter-baseline)
+          # Every one of these is an ANSWER, so all three stay quiet: the check
+          # ran; there was no manifest to check; or this is an adopter whose
+          # manifest is an install baseline and whose edits to kit-owned files
+          # are supported.
+          #
+          # `SKIP:adopter-baseline` was missing here and both review lenses found
+          # it independently. `--record-install` stamps `kit_commit` permanently,
+          # so the omission warned on EVERY push in EVERY adopter forever, told
+          # them a check "could not" run when it had deliberately declined to,
+          # and pointed them at a kit-repo self-check that is not theirs. A guard
+          # that warns on every push is one nobody reads, which is the failure
+          # the warning below exists to prevent, arriving through the warning
+          # itself.
+          ;;
+        *)
+          # Everything else is the check NOT having run: a manifest it could
+          # not read or recognise, or -- on an EMPTY outcome -- the checker
+          # itself dying. Fail-open, but never silently, because silence here
+          # is indistinguishable from "checked and clean".
+          cat >&2 <<EOF
+
+⚠ pre-push: could not check kit-manifest.json for ${remote_ref#refs/heads/}
+  (${_outcome:-the check produced no outcome}) — skipping the staleness check
+  (fail-open). A stale kit-manifest.json will surface later as a red
+  test_kit_repo_self_check_is_clean instead.
+
+EOF
+          _stale=""
+          ;;
+      esac
+      if [ -n "${_unusable:-}" ]; then
+        cat >&2 <<EOF
+
+⚠ pre-push: kit-manifest.json records no usable sha256 for:
+
+$(printf '%s\n' "$_unusable" | sed 's/^/    /')
+
+  Those file(s) were NOT checked for staleness. Regenerate the manifest with
+  \`kit_doctor.py --generate-manifest\`.
+
+EOF
+      fi
+      if [ -n "${_stale:-}" ]; then
+        cat >&2 <<EOF
+
+✗ Refusing to push ${remote_ref#refs/heads/} — kit-owned file(s) differ from
+  kit-manifest.json in the commit being pushed:
+
+$(printf '%s\n' "$_stale" | sed 's/^/    /')
+
+  The manifest is stale: run \`kit_doctor.py --generate-manifest\` and commit it
+  with your change. Regenerate it LAST, after the final edit to a kit-owned
+  file — regenerating early is what leaves it stale again.
+
+  Bypass (only if you know this push is legitimate): git push --no-verify
+
+EOF
+        exit 1
+      fi
+    fi
+  fi
 done
 
 exit 0
