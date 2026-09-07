@@ -48,8 +48,8 @@
   never parsed — locally or in CI. Measured on 2026-09-07: `bash -n good.sh bad.sh` exits
   0 with a syntactically broken `bad.sh`, while `bash -n bad.sh` alone exits 2. `#561`
   already names the mechanism; what this adds is the blast radius — the hook runs on every
-  push here and in every adopter, so a broken one ships through a green suite. `#709`
-  closes the hole for that one file with `test_the_hook_parses_on_its_own`. **M** —
+  push here and in every adopter, so a broken one ships through a green suite. The hole for
+  that one file is now shut by `#709`, with `test_the_hook_parses_on_its_own`. **M** —
   `#561` remains the general fix and is worth raising in priority on this evidence.
 
 - **The parse failure itself: bash 3.2 mis-parses an apostrophe inside a quoted heredoc
@@ -82,6 +82,20 @@
   mechanism identified beyond "the instruction is present and does not bind"; proposed
   direction is the same as `#469`'s, a carrier change rather than a wording one. Parked
   for accumulation; if it recurs, capture whether the lens had a foreground alternative.
+
+- **A review lens left an untracked file in the cockpit's own repository root.**
+  `bad2.sh` — a lens's reproduction of the bash heredoc bug recorded above — was created
+  by a *relative* path, so it landed in `/Users/topi/Coding/agentic-dev-kit` rather than in
+  the lens's scratch. It was never committed, and every branch tip was checked clear of it,
+  but the cockpit stages with `git add -A`, so it was one commit away from shipping. *No
+  writes in the tree you were given* already names this exact failure — "a *relative*
+  extract path lands in the repo root, where it sits untracked until some later `git add
+  -A` commits it" — so the wording is not the gap. **M**, and the second distinct isolation
+  mechanism this session after the `cp -a` entry above: the lenses were handed their own
+  worktrees and still reached the cockpit's tree, once through shared git admin state and
+  once through a bare relative path. Two occurrences, one session, different routes, same
+  contract item — the shape to watch is whether isolating a lens by *tree* is the wrong
+  unit when the lens can name any path it likes.
 
 - **`panel_prompt.py` rendered a stale base, and only the lens contract caught it.** The
   `#711` round was assembled after `#709` merged, and its prompts named

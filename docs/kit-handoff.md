@@ -56,8 +56,8 @@ fallback panel do its work on a gate.
   to a rule is the clearest open judgement call.**
 - **`#561` is worse than its title.** A genuinely unparseable `pre-push` passed `make
   test`: `check-syntax` hands four filenames to one `bash -n` and `pre-push` is last, so
-  it is never parsed. `bash -n good.sh bad.sh` exits 0 with a broken second file. `#709`
-  closes the hole for that one file; the general fix is still `#561`'s.
+  it is never parsed. `bash -n good.sh bad.sh` exits 0 with a broken second file. The hole
+  for that one file is now shut by `#709`; the general fix is still `#561`'s.
 - **A `make test` failure reproduces on clean `main` and CI cannot see it.** Recorded with
   its stamps in the friction log; local `uv run` resolves 3.14.7 against CI's pinned 3.12,
   and `#393` names the mechanism family but a different test. Non-deterministic, so the
@@ -68,7 +68,7 @@ fallback panel do its work on a gate.
 needs its own exact decision, as do the cs-toolkit replay, new initialization, adoption
 completion and the fixture PR. Two things want an operator decision first: whether the
 friction log's recurring panel-findings pattern graduates to a rule, and whether this
-session's six friction entries are filed to the tracker. Run
+session's friction entries are filed to the tracker. Run
 `python3 scripts/check_doc_budget.py` for where `docs/kit-friction-log.md` stands against
 its budget; `triage-friction-log` is the route once those decisions exist.
 
