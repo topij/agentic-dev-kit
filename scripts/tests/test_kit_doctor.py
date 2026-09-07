@@ -1159,7 +1159,22 @@ def test_the_installers_premise_is_pinned_in_test_init_sh():
     and quietly lose its evidence.
     """
     guard = "test_running_the_installer_does_not_modify_the_installer"
-    text = (Path(__file__).parent / "test_init_sh.py").read_text(encoding="utf-8")
+    # Declared, not implicit (#534 cause 2). An adopter who declines
+    # `test_init_sh.py` used to get a raw FileNotFoundError here — one test
+    # file's INSTALLABILITY depending on another's, with nothing saying so.
+    #
+    # Not expressible as `kit_repo_only`: that marker resolves its paths against
+    # REPO_ROOT (conftest.py `_skip_if_missing`), while a sibling test module is
+    # engine-dir-relative. A marker naming `scripts/tests/test_init_sh.py` would
+    # skip in a vendored `scripts/devkit` layout even when the file IS installed
+    # there — a false skip, hiding real coverage in the one layout that needs it.
+    sibling = Path(__file__).parent / "test_init_sh.py"
+    if not sibling.exists():
+        pytest.skip(
+            "needs the sibling test module: not vendored in this tree: "
+            f"{sibling.name}"
+        )
+    text = sibling.read_text(encoding="utf-8")
     # `def <guard>(` — the trailing paren is load-bearing. Matching `def <guard>`
     # alone is a SUBSTRING check, so renaming the guard to
     # `<guard>_RENAMED` left the old name as a prefix and this test kept passing.
