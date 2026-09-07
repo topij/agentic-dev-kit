@@ -36,7 +36,7 @@ from pathlib import Path
 import pytest
 import yaml
 from _repo_layout import engine_dir, find_repo_root
-from conftest import looks_like_kit_source
+from conftest import shipped_registration
 
 # Every test here asserts on `init.sh`'s behaviour, and an adopter who
 # vendored engines and config has no `init.sh` to assert about. Repairing
@@ -47,15 +47,6 @@ pytestmark = pytest.mark.kit_repo_only("init.sh")
 
 ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
-
-# The kit's OWN copies of the two registrations it ships but does not write
-# (#303). Engine-relative, so they travel with `paths.engines` and resolve in
-# any layout — unlike `REPO_ROOT / ".codex"`, which in an adopter is that
-# adopter's hand-written file (#534's silent-false-pass family). Kept equal to
-# the live files by
-# `test_kit_doctor.py::test_the_reference_registrations_match_the_shipped_files`,
-# so reading these is not the copy-against-a-copy these assertions avoid.
-SHIPPED_REGISTRATIONS = ENGINE_DIR / "tests" / "fixtures" / "shipped-registrations"
 
 
 def _shipped(name: str) -> Path:
@@ -71,25 +62,7 @@ def _shipped(name: str) -> Path:
     repaired one module over. Introducing a fresh instance of it while fixing
     the old one is exactly the trap that issue's history keeps recording.
     """
-    path = SHIPPED_REGISTRATIONS / name
-    if path.is_file():
-        return path
-    # Absent. For an adopter who declined these installable files that is a
-    # legitimate decline and must be a skip (#534 cause 2). In the KIT's own
-    # tree it is a DELETED shipped file, and nothing else catches that:
-    # `test_kit_repo_self_check_is_clean` compares the bytes of files that
-    # exist and passes when one is removed — verified by deleting this fixture
-    # in a clone at `cd6f180`, where that test still reported one passed.
-    if looks_like_kit_source():
-        pytest.fail(
-            f"{path} is missing from the kit's own tree. The kit ships this "
-            "reference registration and the drift gate does not catch a "
-            "deletion, so restore it or drop its KIT_OWNED entry."
-        )
-    pytest.skip(
-        "needs the kit's reference registrations: not vendored in this "
-        f"tree: {path.name}"
-    )
+    return shipped_registration(name)
 
 
 def shipped_codex_hooks() -> Path:

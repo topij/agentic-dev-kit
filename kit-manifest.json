@@ -237,7 +237,7 @@
     },
     "scripts/tests/conftest.py": {
       "role": "test",
-      "sha256": "bca66a00f37739ea0a2cb4a69ee6b29f1e5931152802c1869458bcdc18f785d4"
+      "sha256": "685b3af6939b3b181b1dfe4700d47a45030e9682bd38d159b0016a54693608cd"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -257,11 +257,11 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "aab0275f1aefd83eaf80f07879e0f7a9787858c9ecc35ae03ce3a25e2c621a42"
+      "sha256": "76cb3f21efdf9903fa13081ba4ebef5e28a21c6f6983994b04b96b34352786cd"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "252c78c9586dd52c8c308a88af66ee836edd9f74d37c8142b0af4f3d2bc1469b"
+      "sha256": "dee360fca76136eedd24ccc6bb19ca6d1de2ffcdaa77b5e4eb415acd6c4f17fe"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
