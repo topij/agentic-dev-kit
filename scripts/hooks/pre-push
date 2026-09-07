@@ -285,7 +285,19 @@ wanted = {}
 unusable = []
 for path, record in files.items():
     want = record.get("sha256") if isinstance(record, dict) else record
-    if isinstance(want, str):
+    if not isinstance(path, str) or "\n" in path or "\r" in path:
+        # A path carrying a newline serialises into TWO input lines below while
+        # the reader consumes one response chunk per path, so every later path
+        # pairs with the wrong chunk and its check silently never runs. A lens
+        # laundered a genuinely tampered file past this guard that way, using a
+        # throwaway entry that sorts just before the target and needs no correct
+        # hash of anything. `--batch` pairs positionally and cannot echo the
+        # path back, so ONE INPUT LINE PER PATH is the invariant the reader
+        # depends on; keeping such a path out of the batch is what holds it.
+        # It is reported rather than dropped, for the same reason as an entry
+        # with no usable hash.
+        unusable.append(repr(path))
+    elif isinstance(want, str):
         wanted[path] = want
     else:
         unusable.append(path)

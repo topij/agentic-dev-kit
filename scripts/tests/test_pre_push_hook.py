@@ -163,6 +163,11 @@ def test_a_repo_with_no_manifest_is_left_alone(tmp_path):
     done = _push(repo, sha)
 
     assert done.returncode == 0, done.stderr
+    # "Left alone" means quiet, the same reading its adopter-baseline sibling
+    # already takes. Without this, dropping `SKIP:no-manifest` from the shell's
+    # quiet list passes the whole file — measured by a review lens, which
+    # mutated exactly that and saw every test still pass.
+    assert done.stderr.strip() == "", done.stderr
 
 
 def test_a_malformed_manifest_does_not_refuse_the_push(tmp_path):
@@ -223,9 +228,14 @@ def test_a_files_table_of_the_wrong_shape_fails_open_loudly(tmp_path):
     assert "could not check kit-manifest.json" in done.stderr
 
 
-def test_a_clean_check_and_a_manifestless_repo_both_stay_quiet(tmp_path):
+def test_a_clean_check_stays_quiet(tmp_path):
     """The negative half: the warning must follow the failure, not the state
-    vocabulary. A guard that warns on every push is one nobody reads."""
+    vocabulary. A guard that warns on every push is one nobody reads.
+
+    Renamed. As `..._and_a_manifestless_repo_both_stay_quiet` it named two cases
+    and built one — the manifestless repo has its own test above, which is where
+    that half belongs and now asserts the silence itself.
+    """
     repo = _repo(tmp_path)
     engine = repo / ENGINES / "kit_doctor.py"
     engine.write_text("print('one')\n", encoding="utf-8")
@@ -235,7 +245,7 @@ def test_a_clean_check_and_a_manifestless_repo_both_stay_quiet(tmp_path):
     done = _push(repo, sha)
 
     assert done.returncode == 0, done.stderr
-    assert "could not check" not in done.stderr
+    assert done.stderr.strip() == "", done.stderr
 
 
 def test_a_recorded_file_missing_from_the_commit_is_not_this_checks_business(tmp_path):
@@ -342,3 +352,36 @@ def test_every_stale_path_is_indented_not_just_the_first(tmp_path):
     ]
     assert len(listed) == 2, done.stderr
     assert all(line.startswith("    ") for line in listed), done.stderr
+
+
+def test_a_newline_in_a_manifest_path_cannot_launder_another_file(tmp_path):
+    """The bypass a review lens reproduced end-to-end, pinned.
+
+    `git cat-file --batch` cannot echo the path back, so the reader pairs
+    responses with inputs POSITIONALLY. A manifest key carrying a newline
+    serialises into two input lines, desynchronising every path after it: the
+    next one consumed the wrong chunk, never reached the hash comparison, and
+    the hook printed `CHECKED` and exited 0 with no output at all.
+
+    The laundering needs no correct hash for the injected entry, and the target
+    keeps its own true recorded hash — so this asserts the refusal still fires
+    for the victim, not merely that something was said.
+    """
+    repo = _repo(tmp_path)
+    target = repo / ENGINES / "target.py"
+    target.write_text("print('original')\n", encoding="utf-8")
+    _manifest(repo, {f"{ENGINES}/target.py": target.read_bytes()})
+    payload = json.loads((repo / "kit-manifest.json").read_text(encoding="utf-8"))
+    # Sorts immediately before the target, which is what selects the victim.
+    payload["files"][f"{ENGINES}/targe\nZZZZ"] = {"sha256": "0" * 64}
+    (repo / "kit-manifest.json").write_text(json.dumps(payload), encoding="utf-8")
+    target.write_text("print('tampered')\n", encoding="utf-8")
+    sha = _commit(repo)
+
+    done = _push(repo, sha)
+
+    assert done.returncode == 1, (
+        f"the tampered file was laundered past the guard — {done.stderr!r}"
+    )
+    assert f"{ENGINES}/target.py" in done.stderr
+    assert "no usable sha256" in done.stderr, "the crafted entry must be reported too"

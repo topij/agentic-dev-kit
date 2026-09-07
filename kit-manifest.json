@@ -132,7 +132,7 @@
     },
     "scripts/hooks/pre-push": {
       "role": "hook",
-      "sha256": "fc48357f8dc942ed6f8a7f45bd29cc13f69e8c8f2067b6c83d101e8e15b65ffb"
+      "sha256": "3bd8321e2aea0b137a033ebe0e4c23ff7269b10be6669ed6cb5a9d738b5c155e"
     },
     "scripts/kit_doctor.py": {
       "required_by": [
@@ -301,7 +301,7 @@
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",
-      "sha256": "67a02199d33539c5e9a502e1e335903d3ad8a95d6518c45f7a99799a9234925d"
+      "sha256": "98d845268d4e6ebc7709070078c324cda814d64f572b8f00097746acc3a7070e"
     },
     "scripts/tests/test_reconcile_sessions.py": {
       "role": "test",
