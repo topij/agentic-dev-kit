@@ -149,6 +149,10 @@ def test_an_adopter_install_baseline_is_left_alone(tmp_path):
     done = _push(repo, sha)
 
     assert done.returncode == 0, done.stderr
+    # The half this test was missing, and both review lenses found it: exit 0
+    # alone passed while the hook warned on EVERY adopter push forever. "Left
+    # alone" has to mean quiet, or the name promises more than the body checks.
+    assert done.stderr.strip() == "", done.stderr
 
 
 def test_a_repo_with_no_manifest_is_left_alone(tmp_path):
@@ -281,3 +285,60 @@ def test_the_guard_applies_to_every_branch(tmp_path, ref):
     done = _push(repo, sha, ref=ref)
 
     assert done.returncode == 1, done.stderr
+
+
+def test_a_manifest_entry_with_no_usable_hash_is_reported_not_dropped(tmp_path):
+    """Round 1's high, one level down — found again there.
+
+    An entry whose value carries no `sha256` was excluded from the checked set
+    and the run still printed `CHECKED`, so a tracked, tampered file went
+    unhashed with no signal at all. It does not refuse the push: an unusable
+    record is a broken manifest rather than a stale file, and this check cannot
+    tell whether those bytes are current. It has to say so.
+    """
+    repo = _repo(tmp_path)
+    good = repo / ENGINES / "kit_doctor.py"
+    good.write_text("print('one')\n", encoding="utf-8")
+    bad = repo / ENGINES / "other.py"
+    bad.write_text("print('two')\n", encoding="utf-8")
+    _manifest(repo, {f"{ENGINES}/kit_doctor.py": good.read_bytes()})
+    payload = json.loads((repo / "kit-manifest.json").read_text(encoding="utf-8"))
+    payload["files"][f"{ENGINES}/other.py"] = {"role": "engine"}
+    (repo / "kit-manifest.json").write_text(json.dumps(payload), encoding="utf-8")
+    bad.write_text("print('tampered after the manifest was written')\n", encoding="utf-8")
+    sha = _commit(repo)
+
+    done = _push(repo, sha)
+
+    assert done.returncode == 0, done.stderr
+    assert "no usable sha256" in done.stderr
+    assert f"{ENGINES}/other.py" in done.stderr
+
+
+def test_every_stale_path_is_indented_not_just_the_first(tmp_path):
+    """`printf '    %s\\n' "$one_joined_string"` formats one argument, so the
+    format string is never reused and only the first line got its indent."""
+    repo = _repo(tmp_path)
+    first = repo / ENGINES / "kit_doctor.py"
+    second = repo / ENGINES / "other.py"
+    first.write_text("print('one')\n", encoding="utf-8")
+    second.write_text("print('two')\n", encoding="utf-8")
+    _manifest(
+        repo,
+        {
+            f"{ENGINES}/kit_doctor.py": first.read_bytes(),
+            f"{ENGINES}/other.py": second.read_bytes(),
+        },
+    )
+    first.write_text("print('edited')\n", encoding="utf-8")
+    second.write_text("print('edited too')\n", encoding="utf-8")
+    sha = _commit(repo)
+
+    done = _push(repo, sha)
+
+    assert done.returncode == 1, done.stderr
+    listed = [
+        line for line in done.stderr.splitlines() if line.strip().endswith(".py")
+    ]
+    assert len(listed) == 2, done.stderr
+    assert all(line.startswith("    ") for line in listed), done.stderr

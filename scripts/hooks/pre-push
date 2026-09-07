@@ -275,28 +275,49 @@ files = manifest.get("files")
 if not isinstance(files, dict):
     _skip("no-files-table")
 
+# An entry carrying no usable hash is REPORTED, never quietly dropped. Skipping
+# it silently while still printing CHECKED left a tracked file unhashed with no
+# signal at all -- round 1 high, one level down, and found again there (panel,
+# adversarial lens). It does not refuse the push, because an unusable record is
+# a broken manifest rather than a stale file, and this check cannot tell whether
+# the bytes are current; it says so instead.
 wanted = {}
+unusable = []
 for path, record in files.items():
     want = record.get("sha256") if isinstance(record, dict) else record
     if isinstance(want, str):
         wanted[path] = want
+    else:
+        unusable.append(path)
 
 blobs = _batch(sorted(wanted))
-stale = [
-    path
-    for path, body in sorted(blobs.items())
-    if hashlib.sha256(body).hexdigest() != wanted[path]
-]
 print("CHECKED")
-print("\n".join(stale))
+for path, body in sorted(blobs.items()):
+    if hashlib.sha256(body).hexdigest() != wanted[path]:
+        print("STALE " + path)
+for path in sorted(unusable):
+    print("UNUSABLE " + path)
 PY
 )"
       _outcome="$(printf '%s\n' "${_stale:-}" | head -n 1)"
-      _stale="$(printf '%s\n' "${_stale:-}" | tail -n +2)"
+      _body="$(printf '%s\n' "${_stale:-}" | tail -n +2)"
+      _stale="$(printf '%s\n' "$_body" | sed -n 's/^STALE //p')"
+      _unusable="$(printf '%s\n' "$_body" | sed -n 's/^UNUSABLE //p')"
       case "$_outcome" in
-        CHECKED|SKIP:no-manifest)
-          # Checked, or a repo that has no manifest to check. Both are real
-          # answers, so both stay quiet.
+        CHECKED|SKIP:no-manifest|SKIP:adopter-baseline)
+          # Every one of these is an ANSWER, so all three stay quiet: the check
+          # ran; there was no manifest to check; or this is an adopter whose
+          # manifest is an install baseline and whose edits to kit-owned files
+          # are supported.
+          #
+          # `SKIP:adopter-baseline` was missing here and both review lenses found
+          # it independently. `--record-install` stamps `kit_commit` permanently,
+          # so the omission warned on EVERY push in EVERY adopter forever, told
+          # them a check "could not" run when it had deliberately declined to,
+          # and pointed them at a kit-repo self-check that is not theirs. A guard
+          # that warns on every push is one nobody reads, which is the failure
+          # the warning below exists to prevent, arriving through the warning
+          # itself.
           ;;
         *)
           # Everything else is the check NOT having run: a manifest it could
@@ -314,13 +335,25 @@ EOF
           _stale=""
           ;;
       esac
+      if [ -n "${_unusable:-}" ]; then
+        cat >&2 <<EOF
+
+⚠ pre-push: kit-manifest.json records no usable sha256 for:
+
+$(printf '%s\n' "$_unusable" | sed 's/^/    /')
+
+  Those file(s) were NOT checked for staleness. Regenerate the manifest with
+  \`kit_doctor.py --generate-manifest\`.
+
+EOF
+      fi
       if [ -n "${_stale:-}" ]; then
         cat >&2 <<EOF
 
 ✗ Refusing to push ${remote_ref#refs/heads/} — kit-owned file(s) differ from
   kit-manifest.json in the commit being pushed:
 
-$(printf '    %s\n' "$_stale")
+$(printf '%s\n' "$_stale" | sed 's/^/    /')
 
   The manifest is stale: run \`kit_doctor.py --generate-manifest\` and commit it
   with your change. Regenerate it LAST, after the final edit to a kit-owned
