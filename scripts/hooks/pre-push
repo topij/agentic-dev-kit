@@ -155,6 +155,144 @@ EOF
 EOF
     fi
   fi
+
+  # ── Stale-manifest guard (#706) ───────────────────────────────────────────
+  #
+  # A SEPARATE check, per this file's header: it shares the ref loop and
+  # nothing else, and it applies to EVERY branch rather than only `dev/*` —
+  # the occurrences it is filed about were on `chore/*` cockpit branches.
+  #
+  # `kit-manifest.json` records a hash per kit-owned file, correct only for the
+  # bytes present when `--generate-manifest` ran. Regenerating is a natural
+  # thing to do right after the edit that made it necessary, which is exactly
+  # when a later edit in the same change invalidates it. Nothing re-checks
+  # between that moment and the commit, so the only report came from
+  # `test_kit_repo_self_check_is_clean` in the full suite — a `make test` run or
+  # a CI round trip later. The guard was never broken; this moves WHEN it
+  # reports.
+  #
+  # Both sides are read out of the PUSHED COMMIT, not the working tree: the
+  # commit is what the remote will hold and what CI will judge, and a dirty or
+  # half-staged tree is exactly the state this fires in.
+  if [ "${local_sha:-$ZERO}" != "$ZERO" ]; then
+    if ! command -v python3 >/dev/null 2>&1; then
+      # Fail-open and WARN, like the guard above: silence here is
+      # indistinguishable from "checked and clean".
+      cat >&2 <<EOF
+
+⚠ pre-push: no python3 — skipping the kit-manifest staleness check for
+  ${remote_ref#refs/heads/} (fail-open). A stale kit-manifest.json will surface
+  later as a red test_kit_repo_self_check_is_clean instead.
+
+EOF
+    else
+      _stale="$(python3 - "$local_sha" <<'PY' 2>/dev/null || true
+import hashlib
+import json
+import subprocess
+import sys
+
+sha = sys.argv[1]
+
+
+def _batch(paths):
+    """Bytes of each path at the pushed commit, in ONE git process.
+
+    An earlier version diffed against the merge base and checked only the
+    changed paths, spawning a `git show` each. That carried a branch for a
+    failed diff which no test could reach, and a mutation flipping its
+    fallback to an empty set -- the guard silently checking nothing --
+    survived the whole file. Removing the branch was cheaper than reaching
+    it, and checking every recorded file is also stricter: a manifest entry
+    that went stale under an earlier commit is caught here too, rather than
+    waiting for the push that happens to touch it again.
+    """
+    if not paths:
+        return {}
+    done = subprocess.run(
+        ["git", "cat-file", "--batch"],
+        input="\n".join(f"{sha}:{p}" for p in paths).encode() + b"\n",
+        capture_output=True,
+    )
+    if done.returncode != 0:
+        return {}
+    out, at, found = done.stdout, 0, {}
+    for path in paths:
+        nl = out.find(b"\n", at)
+        if nl == -1:
+            break
+        header = out[at:nl]
+        if header.endswith(b" missing"):
+            # Recorded but not in this commit. That is the membership
+            # question #47 owns, not this one.
+            at = nl + 1
+            continue
+        try:
+            size = int(header.rsplit(b" ", 1)[1])
+        except (IndexError, ValueError):
+            break
+        found[path] = out[nl + 1 : nl + 1 + size]
+        at = nl + 1 + size + 1
+    return found
+
+
+done = subprocess.run(
+    ["git", "cat-file", "-p", f"{sha}:kit-manifest.json"], capture_output=True
+)
+if done.returncode != 0:
+    # No manifest in this commit: a repo that declined it has nothing to be
+    # stale against.
+    sys.exit(0)
+try:
+    manifest = json.loads(done.stdout)
+except ValueError:
+    # Report nothing rather than guess. A malformed manifest is a separate
+    # problem, and not one for this check to diagnose.
+    sys.exit(0)
+if "kit_commit" in manifest:
+    # An adopter install baseline, which `--record-install` writes and
+    # `--generate-manifest` does not. There a drift means the adopter EDITED a
+    # kit-owned file, which is a legitimate state, so refusing that push would
+    # put the #286 bug in a new place.
+    sys.exit(0)
+files = manifest.get("files")
+if not isinstance(files, dict):
+    sys.exit(0)
+
+wanted = {}
+for path, record in files.items():
+    want = record.get("sha256") if isinstance(record, dict) else record
+    if isinstance(want, str):
+        wanted[path] = want
+
+blobs = _batch(sorted(wanted))
+stale = [
+    path
+    for path, body in sorted(blobs.items())
+    if hashlib.sha256(body).hexdigest() != wanted[path]
+]
+print("\n".join(stale))
+PY
+)"
+      if [ -n "${_stale:-}" ]; then
+        cat >&2 <<EOF
+
+✗ Refusing to push ${remote_ref#refs/heads/} — kit-owned file(s) differ from
+  kit-manifest.json in the commit being pushed:
+
+$(printf '    %s\n' "$_stale")
+
+  The manifest is stale: run \`kit_doctor.py --generate-manifest\` and commit it
+  with your change. Regenerate it LAST, after the final edit to a kit-owned
+  file — regenerating early is what leaves it stale again.
+
+  Bypass (only if you know this push is legitimate): git push --no-verify
+
+EOF
+        exit 1
+      fi
+    fi
+  fi
 done
 
 exit 0

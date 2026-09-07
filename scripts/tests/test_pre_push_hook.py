@@ -1,0 +1,223 @@
+"""Behavioural tests for `scripts/hooks/pre-push`.
+
+The hook had no behavioural coverage before `#706`: `test_init_sh.py` asserts
+the SHIM is installed and points at the right engine path, and `test_kitconfig`
+asserts the keys it reads exist, but nothing ran the hook and read its exit
+code.
+"""
+
+import hashlib
+import json
+import subprocess
+from pathlib import Path
+
+import pytest
+
+# Engine-relative, never `REPO_ROOT / "scripts"`: those resolve to the same path
+# in the kit's own layout and diverge in an adopter's `scripts/devkit` one, which
+# is #534 cause 3 and what `test_no_test_module_rebuilds_the_engine_dir_from_repo_root`
+# pins. It caught this module's first draft.
+ENGINE_DIR = Path(__file__).resolve().parent.parent
+HOOK = ENGINE_DIR / "hooks" / "pre-push"
+ZERO = "0" * 40
+ENGINES = "scripts"
+
+
+def _git(repo: Path, *args: str) -> str:
+    done = subprocess.run(
+        ["git", *args],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+        env={
+            "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin",
+            "HOME": str(repo),
+            "GIT_AUTHOR_NAME": "t",
+            "GIT_AUTHOR_EMAIL": "t@example.invalid",
+            "GIT_COMMITTER_NAME": "t",
+            "GIT_COMMITTER_EMAIL": "t@example.invalid",
+        },
+    )
+    return done.stdout.strip()
+
+
+def _repo(tmp_path: Path) -> Path:
+    repo = tmp_path / "project"
+    hook = repo / ENGINES / "hooks" / "pre-push"
+    hook.parent.mkdir(parents=True)
+    (repo / ENGINES / "lib").mkdir(parents=True, exist_ok=True)
+    # The hook resolves kitconfig.py relative to its OWN path, so it must sit
+    # where a real install puts it rather than anywhere convenient.
+    hook.write_bytes(HOOK.read_bytes())
+    hook.chmod(0o755)
+    _git(repo.parent, "init", "-q", str(repo))
+    return repo
+
+
+def _commit(repo: Path, message: str = "c") -> str:
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", message)
+    return _git(repo, "rev-parse", "HEAD")
+
+
+def _manifest(repo: Path, files: dict[str, bytes], **extra) -> None:
+    """Write a manifest recording the CURRENT bytes of each named path."""
+    payload = {
+        "kit_version": 2,
+        "files": {
+            path: {"role": "engine", "sha256": hashlib.sha256(body).hexdigest()}
+            for path, body in files.items()
+        },
+        **extra,
+    }
+    (repo / "kit-manifest.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def _push(repo: Path, sha: str, ref: str = "refs/heads/chore/x"):
+    return subprocess.run(
+        ["bash", f"{ENGINES}/hooks/pre-push", "origin", "https://example.invalid/r.git"],
+        cwd=repo,
+        input=f"{ref} {sha} {ref} {ZERO}\n",
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_the_hook_parses_on_its_own():
+    """`make check-syntax` cannot establish this, which is `#561`.
+
+    It passes four filenames to ONE `bash -n`, so the first is parsed and the
+    rest arrive as that script's positional arguments. `scripts/hooks/pre-push`
+    is last on that line, so it is unchecked locally and in CI alike.
+
+    Measured while writing `#706`: `bash -n good.sh bad.sh` exits 0 with a
+    broken `bad.sh`. A genuinely unparseable pre-push would therefore reach
+    every adopter through a green suite, and it is a hook that runs on every
+    push. This test is the one file's worth of that hole closed; `#561` is the
+    general fix and stays open.
+    """
+    done = subprocess.run(["bash", "-n", str(HOOK)], capture_output=True, text=True)
+
+    assert done.returncode == 0, done.stderr
+
+
+def test_a_stale_manifest_refuses_the_push(tmp_path):
+    repo = _repo(tmp_path)
+    engine = repo / ENGINES / "kit_doctor.py"
+    engine.write_text("print('one')\n", encoding="utf-8")
+    _manifest(repo, {f"{ENGINES}/kit_doctor.py": engine.read_bytes()})
+    # The edit AFTER the manifest was written — the exact ordering `#706` is
+    # filed about.
+    engine.write_text("print('two')\n", encoding="utf-8")
+    sha = _commit(repo)
+
+    done = _push(repo, sha)
+
+    assert done.returncode == 1, done.stderr
+    assert f"{ENGINES}/kit_doctor.py" in done.stderr
+    assert "--generate-manifest" in done.stderr
+
+
+def test_a_current_manifest_allows_the_push(tmp_path):
+    repo = _repo(tmp_path)
+    engine = repo / ENGINES / "kit_doctor.py"
+    engine.write_text("print('one')\n", encoding="utf-8")
+    _manifest(repo, {f"{ENGINES}/kit_doctor.py": engine.read_bytes()})
+    sha = _commit(repo)
+
+    done = _push(repo, sha)
+
+    assert done.returncode == 0, done.stderr
+    assert "Refusing to push" not in done.stderr
+
+
+def test_an_adopter_install_baseline_is_left_alone(tmp_path):
+    """`kit_commit` is written only by `--record-install`.
+
+    Against a baseline, a differing hash means the adopter EDITED a kit-owned
+    file — a legitimate state. Refusing their push would put `#286`'s bug in a
+    new place.
+    """
+    repo = _repo(tmp_path)
+    engine = repo / ENGINES / "kit_doctor.py"
+    engine.write_text("print('one')\n", encoding="utf-8")
+    _manifest(repo, {f"{ENGINES}/kit_doctor.py": engine.read_bytes()}, kit_commit="abc123")
+    engine.write_text("print('adopter edited this')\n", encoding="utf-8")
+    sha = _commit(repo)
+
+    done = _push(repo, sha)
+
+    assert done.returncode == 0, done.stderr
+
+
+def test_a_repo_with_no_manifest_is_left_alone(tmp_path):
+    repo = _repo(tmp_path)
+    (repo / ENGINES / "kit_doctor.py").write_text("print('one')\n", encoding="utf-8")
+    sha = _commit(repo)
+
+    done = _push(repo, sha)
+
+    assert done.returncode == 0, done.stderr
+
+
+def test_a_malformed_manifest_does_not_refuse_the_push(tmp_path):
+    """Report nothing rather than guess: a manifest that does not parse is a
+    separate problem, and this check has no measurement to report about it."""
+    repo = _repo(tmp_path)
+    (repo / ENGINES / "kit_doctor.py").write_text("print('one')\n", encoding="utf-8")
+    (repo / "kit-manifest.json").write_text("{not json", encoding="utf-8")
+    sha = _commit(repo)
+
+    done = _push(repo, sha)
+
+    assert done.returncode == 0, done.stderr
+
+
+def test_a_recorded_file_missing_from_the_commit_is_not_this_checks_business(tmp_path):
+    """That is the membership question `#47` owns."""
+    repo = _repo(tmp_path)
+    engine = repo / ENGINES / "kit_doctor.py"
+    engine.write_text("print('one')\n", encoding="utf-8")
+    _manifest(
+        repo,
+        {
+            f"{ENGINES}/kit_doctor.py": engine.read_bytes(),
+            f"{ENGINES}/gone.py": b"never committed\n",
+        },
+    )
+    sha = _commit(repo)
+
+    done = _push(repo, sha)
+
+    assert done.returncode == 0, done.stderr
+
+
+def test_a_deletion_push_is_not_scanned(tmp_path):
+    """A deleted ref has no content to compare."""
+    repo = _repo(tmp_path)
+    engine = repo / ENGINES / "kit_doctor.py"
+    engine.write_text("print('one')\n", encoding="utf-8")
+    _manifest(repo, {f"{ENGINES}/kit_doctor.py": engine.read_bytes()})
+    engine.write_text("print('two')\n", encoding="utf-8")
+    _commit(repo)
+
+    done = _push(repo, ZERO)
+
+    assert done.returncode == 0, done.stderr
+
+
+@pytest.mark.parametrize("ref", ["refs/heads/chore/x", "refs/heads/dev/y", "refs/heads/main"])
+def test_the_guard_applies_to_every_branch(tmp_path, ref):
+    """Unlike the narrative guard beside it, this one is not `dev/*`-scoped —
+    the occurrences `#706` records were on `chore/*` cockpit branches."""
+    repo = _repo(tmp_path)
+    engine = repo / ENGINES / "kit_doctor.py"
+    engine.write_text("print('one')\n", encoding="utf-8")
+    _manifest(repo, {f"{ENGINES}/kit_doctor.py": engine.read_bytes()})
+    engine.write_text("print('two')\n", encoding="utf-8")
+    sha = _commit(repo)
+
+    done = _push(repo, sha, ref=ref)
+
+    assert done.returncode == 1, done.stderr
