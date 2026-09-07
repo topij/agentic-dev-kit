@@ -31,9 +31,10 @@ import subprocess
 import sys
 from pathlib import Path, PurePosixPath
 
+import conftest
 import pytest
 from _repo_layout import engine_dir, find_repo_root
-from conftest import is_install_baseline, require_kit_source
+from conftest import is_install_baseline, looks_like_kit_source, require_kit_source
 
 ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
@@ -50,12 +51,24 @@ def _shipped(name: str) -> Path:
     raising FileNotFoundError when an adopter declines these installable files
     (#534 cause 2)."""
     path = SHIPPED_REGISTRATIONS / name
-    if not path.is_file():
-        pytest.skip(
-            "needs the kit's reference registrations: not vendored in this "
-            f"tree: {path.name}"
+    if path.is_file():
+        return path
+    # Absent. For an adopter who declined these installable files that is a
+    # legitimate decline and must be a skip (#534 cause 2). In the KIT's own
+    # tree it is a DELETED shipped file, and nothing else catches that:
+    # `test_kit_repo_self_check_is_clean` compares the bytes of files that
+    # exist and passes when one is removed — verified by deleting this fixture
+    # in a clone at `cd6f180`, where that test still reported one passed.
+    if looks_like_kit_source():
+        pytest.fail(
+            f"{path} is missing from the kit's own tree. The kit ships this "
+            "reference registration and the drift gate does not catch a "
+            "deletion, so restore it or drop its KIT_OWNED entry."
         )
-    return path
+    pytest.skip(
+        "needs the kit's reference registrations: not vendored in this "
+        f"tree: {path.name}"
+    )
 sys.path.insert(0, str(ENGINE_DIR))
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
@@ -1169,14 +1182,61 @@ def test_the_reference_registrations_match_the_shipped_files():
     """
     require_kit_source()
     for reference, shipped in (
-        (SHIPPED_REGISTRATIONS / "codex-hooks.json", REPO_ROOT / ".codex" / "hooks.json"),
-        (SHIPPED_REGISTRATIONS / "claude-settings.json", REPO_ROOT / ".claude" / "settings.json"),
+        (_shipped("codex-hooks.json"), REPO_ROOT / ".codex" / "hooks.json"),
+        (_shipped("claude-settings.json"), REPO_ROOT / ".claude" / "settings.json"),
     ):
         assert reference.read_bytes() == shipped.read_bytes(), (
             f"{reference.name} no longer matches {shipped}. The kit ships the "
             "latter and tests assert against the former; refresh the reference "
             "copy in the same commit that changes the registration."
         )
+
+
+def test_the_kit_only_witness_is_still_repo_only():
+    """`conftest.KIT_ONLY_WITNESS` must keep the role its use depends on.
+
+    `looks_like_kit_source()` treats that path's presence as evidence the tree
+    is the kit's own source. That holds only while the path carries the
+    `repo-only` role, which is what keeps `--record-install` from installing it
+    into an adopter. Held as a literal in `conftest.py` because importing
+    `kit_doctor` at conftest import time would abort collection in a tree that
+    declined that engine — so the derivation lives here instead, where
+    `kit_doctor` is already imported.
+    """
+    assert dict(kit_doctor.KIT_OWNED).get(conftest.KIT_ONLY_WITNESS) == (
+        kit_doctor.REPO_ONLY_ROLE
+    ), (
+        f"{conftest.KIT_ONLY_WITNESS} is no longer a `repo-only` KIT_OWNED "
+        "entry, so its presence no longer distinguishes the kit's tree from an "
+        "adopter's. Point conftest.KIT_ONLY_WITNESS at a path that still does."
+    )
+
+
+def test_a_stray_kit_commit_cannot_silently_disable_the_kit_drift_gate():
+    """A baseline key in the KIT's manifest must be loud, not a skip.
+
+    `is_install_baseline()` keys on `kit_commit`, which only `--record-install`
+    writes. Nothing stops one reaching this repo's own manifest — an accidental
+    `--record-install` against this checkout, a bad merge — and a bare skip
+    would then switch off `test_kit_repo_self_check_is_clean` and three other
+    invariants with nothing but a skip count to show for it.
+
+    An adversarial review lens on PR #705 demonstrated exactly that: with a
+    fake `kit_commit` added and `"Bash(rm -rf /:*)"` injected into
+    `.claude/settings.json`, three guarded tests skipped instead of failing.
+
+    Stated as a conditional so it is true in both layouts: it asserts nothing in
+    an adopter, where the witness is absent by construction.
+    """
+    if not conftest.looks_like_kit_source():
+        pytest.skip(
+            f"not the kit's own tree: {conftest.KIT_ONLY_WITNESS} is absent"
+        )
+    assert not conftest.is_install_baseline(), (
+        f"{REPO_ROOT / kit_doctor.MANIFEST_NAME} carries `kit_commit` in the "
+        "kit's own tree. Every `require_kit_source()` guard is now skipping, "
+        "including the drift gate. Remove the key and regenerate the manifest."
+    )
 
 
 def test_the_installer_is_tracked():

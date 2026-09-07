@@ -36,6 +36,7 @@ from pathlib import Path
 import pytest
 import yaml
 from _repo_layout import engine_dir, find_repo_root
+from conftest import looks_like_kit_source
 
 # Every test here asserts on `init.sh`'s behaviour, and an adopter who
 # vendored engines and config has no `init.sh` to assert about. Repairing
@@ -71,12 +72,24 @@ def _shipped(name: str) -> Path:
     the old one is exactly the trap that issue's history keeps recording.
     """
     path = SHIPPED_REGISTRATIONS / name
-    if not path.is_file():
-        pytest.skip(
-            "needs the kit's reference registrations: not vendored in this "
-            f"tree: {path.name}"
+    if path.is_file():
+        return path
+    # Absent. For an adopter who declined these installable files that is a
+    # legitimate decline and must be a skip (#534 cause 2). In the KIT's own
+    # tree it is a DELETED shipped file, and nothing else catches that:
+    # `test_kit_repo_self_check_is_clean` compares the bytes of files that
+    # exist and passes when one is removed — verified by deleting this fixture
+    # in a clone at `cd6f180`, where that test still reported one passed.
+    if looks_like_kit_source():
+        pytest.fail(
+            f"{path} is missing from the kit's own tree. The kit ships this "
+            "reference registration and the drift gate does not catch a "
+            "deletion, so restore it or drop its KIT_OWNED entry."
         )
-    return path
+    pytest.skip(
+        "needs the kit's reference registrations: not vendored in this "
+        f"tree: {path.name}"
+    )
 
 
 def shipped_codex_hooks() -> Path:

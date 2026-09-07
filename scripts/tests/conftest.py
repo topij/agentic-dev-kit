@@ -177,6 +177,22 @@ def is_install_baseline() -> bool:
         return False
 
 
+# A file the kit owns with the `repo-only` role, which `--record-install` never
+# offers an adopter and `CHANGELOG.md` #670 tells existing adopters to remove.
+# Its presence is therefore evidence the tree is the kit's own source, in a way
+# `kit_commit` alone is not. Pinned to that role by
+# `test_kit_doctor.py::test_the_kit_only_witness_is_still_repo_only`, so it
+# cannot quietly stop being kit-only; kept as a literal here rather than derived
+# because importing `kit_doctor` at conftest import time would abort COLLECTION
+# in any tree that declined that engine.
+KIT_ONLY_WITNESS = "scripts/verify_live_validation_bundle.py"
+
+
+def looks_like_kit_source() -> bool:
+    """Whether this tree carries a file only the kit's own source has."""
+    return (REPO_ROOT / KIT_ONLY_WITNESS).is_file()
+
+
 def require_kit_source() -> None:
     """Skip unless this tree is the kit's own source rather than an install.
 
@@ -186,11 +202,29 @@ def require_kit_source() -> None:
     tree the assertion does not report a kit defect, it reports the adopter
     having adopted.
     """
-    if is_install_baseline():
-        pytest.skip(
-            "asserts about the kit's own shipped source; this tree carries a "
-            "recorded install baseline (kit_commit present)"
+    if not is_install_baseline():
+        return
+    # `kit_commit` is a single unauthenticated key. If one reaches the KIT's own
+    # manifest — an accidental `--record-install` against this checkout, a bad
+    # merge — a bare skip here would silently switch off the kit's own drift
+    # gate and three other invariants. So corroborate, and make a disagreement
+    # loud: a tree holding the kit-only witness is the kit with a stray key, not
+    # an adopter. Found by an adversarial review lens on PR #705, which injected
+    # a fake `kit_commit` beside a real `.claude/settings.json` edit and got
+    # three skips where the drift gate should have fired.
+    if looks_like_kit_source():
+        pytest.fail(
+            f"{REPO_ROOT / 'kit-manifest.json'} carries `kit_commit`, which only "
+            "--record-install writes, but this tree also holds "
+            f"{KIT_ONLY_WITNESS}, which --record-install never installs. That is "
+            "the kit's own tree with a stray baseline key, and skipping here "
+            "would disable the kit's drift gate silently. Remove `kit_commit` "
+            "and regenerate with `kit_doctor.py --generate-manifest`."
         )
+    pytest.skip(
+        "asserts about the kit's own shipped source; this tree carries a "
+        "recorded install baseline (kit_commit present)"
+    )
 
 
 def _skip_if_missing(paths, prefix: str) -> None:
