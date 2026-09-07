@@ -31,8 +31,11 @@ fallback panel do its work on a gate.
   not establish. An explicit `false` still exits 1.
 - [PR #709](https://github.com/topij/agentic-dev-kit/pull/709) merged as `6f2cc24`.
   `scripts/hooks/pre-push` refuses a push whose commit carries a stale
-  `kit-manifest.json`, verified firing against the real remote after the merge. An
-  adopter's `--record-install` baseline is exempt.
+  `kit-manifest.json`. Checked against the real remote from `main` at `6f2cc24` by
+  committing an edit to `scripts/kit_doctor.py` without regenerating and attempting the
+  push, which was refused naming that file; the probe branch was then deleted. Re-run it
+  that way rather than trusting this sentence. An adopter's `--record-install` baseline is
+  exempt.
 - **Four panel rounds on `#709` produced four HIGH findings, every one the same shape:
   the guard reporting a clean check while not having checked.** Valid-but-non-object JSON
   crashed it into silence; an entry with no `sha256` was dropped silently; the
@@ -41,6 +44,11 @@ fallback panel do its work on a gate.
   positional `git cat-file --batch` reader, **laundering a genuinely tampered file past
   the guard with exit 0 and an empty stderr**. The last was found by building the attack,
   not by reading. Round 4 confirmed the repair closes the class rather than the instance.
+- [PR #710](https://github.com/topij/agentic-dev-kit/pull/710) carries `#534`'s two
+  panel follow-ups from PR #705's disposition — `is_install_baseline`'s untested except
+  arm, now pinned, and the `_shipped()` body duplicated across two test modules, now one
+  accessor in `conftest.py`. **It was open and unmerged when this block was written**, so
+  the next session owes it the ground rule's watch-to-green, not a fresh start on `#534`.
 - The recurring shape is now unmissable and is in `docs/kit-friction-log.md`: across every
   round this session, each finding was in a claim the author made rather than in a
   mechanism. The 2026-08-22 entry parked exactly that pattern for accumulation on two
@@ -60,9 +68,9 @@ fallback panel do its work on a gate.
 needs its own exact decision, as do the cs-toolkit replay, new initialization, adoption
 completion and the fixture PR. Two things want an operator decision first: whether the
 friction log's recurring panel-findings pattern graduates to a rule, and whether this
-session's six friction entries are filed to the tracker. `docs/kit-friction-log.md` is
-over budget — the `triage-friction-log` workflow is the route, and it needs those
-decisions.
+session's six friction entries are filed to the tracker. Run
+`python3 scripts/check_doc_budget.py` for where `docs/kit-friction-log.md` stands against
+its budget; `triage-friction-log` is the route once those decisions exist.
 
 ______________________________________________________________________
 

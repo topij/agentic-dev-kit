@@ -83,6 +83,20 @@
   direction is the same as `#469`'s, a carrier change rather than a wording one. Parked
   for accumulation; if it recurs, capture whether the lens had a foreground alternative.
 
+- **`panel_prompt.py` rendered a stale base, and only the lens contract caught it.** The
+  `#711` round was assembled after `#709` merged, and its prompts named
+  `ec750753eff1a645c64163b61a2b511e3adf71d4` as the base — one commit behind
+  `origin/main`, then at `6f2cc2470c62ca4aa16793e0e20252341ba48b24`. Diffing against it
+  attributed `#709`'s already-merged hook, tests and manifest to `#711`, which is a large,
+  non-empty, wrong diff — the exact shape *Right revision* warns satisfies every other
+  check. Both lenses independently detected it against the remote, re-derived the correct
+  three-file diff, and said so in their reports before reviewing. **M** — the contract
+  worked and the mechanism did not. Proposed fix: `panel_prompt.py` should re-resolve the
+  base at render time rather than at an earlier assembly step, or state the timestamp of
+  the resolution it used so a stale one is visible in the prompt. Worth filing: the
+  cockpit had no signal, and a lens that skipped the check would have reviewed the wrong
+  diff and reported it clean.
+
 - **`#666`'s ordering is enforced by the engine, and the recovery costs a full round.**
   Round 2 of `#708`'s panel was fixed before its receipt was recorded; the retroactive
   `pr_watch.py --record-review --head <round-2 sha>` then refused with `PR head changed
