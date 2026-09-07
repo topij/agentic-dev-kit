@@ -1,0 +1,137 @@
+"""REG-01 application: install the approved registration payloads on BOTH runtimes.
+
+Reads the payloads from the committed evidence directory, writes them into the
+original adoption fixture at absolute paths, and verifies at the destination.
+No initializer runs. Nothing is committed in the fixture.
+"""
+from pathlib import Path
+import datetime, hashlib, json, os, stat, subprocess, sys
+
+KIT = Path('/Users/topi/Coding/agentic-dev-kit')
+FIXTURE = Path('/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture')
+SOURCE = Path('/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source')
+EV = KIT / 'saved_plans/adopt-reg01-evidence_2026-09-06'
+FIX01 = KIT / 'saved_plans/adopt-fix01-evidence_2026-09-06'
+OUT = Path('/private/tmp/claude-502/-Users-topi-Coding-agentic-dev-kit/'
+           '4007b138-f0b8-418b-9429-75ed49f7d910/scratchpad/reg01-apply')
+
+# Two-tree discipline: assert where we are before the first write.
+assert Path.cwd() == KIT, f'cwd is {Path.cwd()}, not the kit'
+assert FIXTURE.is_dir() and SOURCE.is_dir() and EV.is_dir()
+
+PAYLOADS = {
+    '.codex/hooks.json': EV / 'payload-codex-hooks.json',
+    '.codex/config.toml': EV / 'payload-codex-config.toml',
+    '.claude/settings.json': EV / 'payload-claude-settings.json',
+}
+EXPECTED_NEW = {'.codex', '.codex/hooks.json', '.codex/config.toml', '.claude/settings.json'}
+
+
+def sha(p: Path) -> str:
+    return hashlib.sha256(p.read_bytes()).hexdigest()
+
+
+def git(root, *args):
+    return subprocess.check_output(['git', '-C', str(root), *args], text=True,
+                                   env={**os.environ, 'GIT_OPTIONAL_LOCKS': '0'}).strip()
+
+
+def inventory(root: Path) -> dict:
+    out = {}
+    for directory, dirs, files in os.walk(root, followlinks=False):
+        dirs[:] = sorted(n for n in dirs if n != '.git')
+        for name in sorted(dirs + files):
+            if name == '.git':
+                continue
+            p = Path(directory) / name
+            row = {'mode': oct(stat.S_IMODE(p.lstat().st_mode))}
+            if p.is_symlink():
+                row.update(kind='symlink', target=os.readlink(p))
+            elif p.is_file():
+                row.update(kind='file', sha256=sha(p))
+            elif p.is_dir():
+                row.update(kind='directory')
+            else:
+                raise RuntimeError(str(p))
+            out[p.relative_to(root).as_posix()] = row
+    return out
+
+
+# Payload integrity against the committed digests.
+recorded = json.loads((EV / 'sha256.json').read_text())
+for rel, src in PAYLOADS.items():
+    assert sha(src) == recorded[src.name], f'payload digest drift: {src.name}'
+
+# Precondition: the fixture is exactly the FIX-01 baseline, and none of the
+# target paths exists yet.
+before = inventory(FIXTURE)
+fix01_baseline = json.loads((FIX01 / 'fixture-inventory-after-fix01.json').read_text())
+assert before == fix01_baseline, 'fixture is not at the FIX-01 baseline'
+for rel in PAYLOADS:
+    assert not (FIXTURE / rel).exists(), f'{rel} already exists — this would overwrite'
+
+git_before = {k: git(FIXTURE, *a) for k, a in {
+    'head': ('rev-parse', 'HEAD'), 'branch': ('rev-parse', '--abbrev-ref', 'HEAD'),
+    'remotes': ('remote', '-v'), 'index': ('ls-files', '--stage'),
+    'status': ('status', '--porcelain', '--untracked-files=all')}.items()}
+source_before = inventory(SOURCE)
+
+# --- the approved write, through absolute paths only ---
+written = {}
+for rel, src in PAYLOADS.items():
+    dest = FIXTURE / rel
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(src.read_bytes())
+    # Verify AT THE DESTINATION, not from where the shell happens to be.
+    landed = sha(dest)
+    assert landed == sha(src), f'{rel} landed differently'
+    written[rel] = {'path': str(dest), 'sha256': landed,
+                    'mode': oct(stat.S_IMODE(dest.lstat().st_mode))}
+
+after = inventory(FIXTURE)
+added = sorted(set(after) - set(before))
+removed = sorted(set(before) - set(after))
+changed = sorted(k for k in set(before) & set(after) if before[k] != after[k])
+assert set(added) == EXPECTED_NEW, f'unexpected additions: {added}'
+assert removed == [], f'paths removed: {removed}'
+assert changed == [], f'existing paths changed: {changed}'
+assert inventory(SOURCE) == source_before, 'comparison source changed'
+
+git_after = {k: git(FIXTURE, *a) for k, a in {
+    'head': ('rev-parse', 'HEAD'), 'branch': ('rev-parse', '--abbrev-ref', 'HEAD'),
+    'remotes': ('remote', '-v'), 'index': ('ls-files', '--stage'),
+    'status': ('status', '--porcelain', '--untracked-files=all')}.items()}
+for key in ('head', 'branch', 'remotes', 'index'):
+    assert git_after[key] == git_before[key], f'fixture Git {key} changed'
+
+# Read the fixture with its OWN installed doctor.
+argv = [sys.executable, str(FIXTURE / 'scripts/devkit/kit_doctor.py'),
+        '--root', str(FIXTURE), '--manifest', str(SOURCE / 'kit-manifest.json')]
+proc = subprocess.run(argv, cwd=str(FIXTURE), text=True, capture_output=True)
+assert inventory(FIXTURE) == after, 'fixture changed during the doctor read'
+
+OUT.mkdir(parents=True, exist_ok=True)
+(OUT / 'fixture-inventory-after-reg01.json').write_text(json.dumps(after, indent=2) + '\n')
+(OUT / 'write-boundary.json').write_text(json.dumps({
+    'observed_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    'kit_revision': git(KIT, 'rev-parse', 'HEAD'),
+    'scope': 'both runtimes',
+    'baseline_inventory': 'saved_plans/adopt-fix01-evidence_2026-09-06/fixture-inventory-after-fix01.json',
+    'paths_added': added, 'paths_removed': removed, 'paths_changed': changed,
+    'additions_equal_approved_set': True,
+    'comparison_source_unchanged': True,
+    'written': written,
+    'fixture_git_before': git_before, 'fixture_git_after': git_after,
+}, indent=2) + '\n')
+(OUT / 'doctor-after-reg01.json').write_text(json.dumps({
+    'argv': argv, 'cwd': str(FIXTURE), 'exit_code': proc.returncode,
+    'stdout': proc.stdout, 'stderr': proc.stderr,
+    'observed_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+}, indent=2) + '\n')
+
+print('paths added:', added)
+print('paths removed:', removed, '| existing paths changed:', changed)
+print('doctor exit:', proc.returncode)
+print(proc.stdout)
+if proc.stderr:
+    print('STDERR:', proc.stderr)

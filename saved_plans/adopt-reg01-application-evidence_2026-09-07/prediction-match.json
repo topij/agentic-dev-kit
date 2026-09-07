@@ -1,0 +1,11 @@
+{
+  "observed_at": "2026-09-07T03:56:22.265510+00:00",
+  "question": "does the disposable-copy trial's 'both' scope predict the real fixture's doctor output?",
+  "predicted_from": "saved_plans/adopt-reg01-evidence_2026-09-06/registration-verification.json (scope: both)",
+  "predicted_root": "/private/tmp/adk-reg01-df47497e/both",
+  "actual_root": "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+  "normalisation": "each run's own fixture root replaced with <ROOT>; nothing else altered",
+  "exit_code_predicted": 0,
+  "exit_code_actual": 0,
+  "stdout_identical_after_normalisation": true
+}

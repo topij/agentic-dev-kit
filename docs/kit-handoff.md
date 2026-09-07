@@ -14,11 +14,56 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-06 — REG-01 drafted and verified the fixture's runtime-registration
-payloads and recommends both runtimes; the scope decision itself is open, and the
-installed-suite blocker is untouched.
+Last updated: 2026-09-07 — REG-01 is applied on both runtimes, on the operator's
+approval; the fixture's doctor is advisory-free and the continuity baseline has moved.
+The installed-suite blocker is the remaining Phase 5 work.
 
-## Latest session — 2026-09-06 (REG-01 registration payloads, in Claude Code)
+## Latest session — 2026-09-07 (REG-01 applied, in Claude Code)
+
+**Theme —** Execute the approved runtime registration on both runtimes.
+
+- The [application record](../saved_plans/adopt-reg01-application_2026-09-07.md) retains
+  the approval, precondition read, write boundary, doctor result and the new continuity
+  baseline. The operator approved **both runtimes** on 2026-09-07; that execution
+  approval is consumed.
+- Continuity was rechecked immediately before the write — in
+  `/Users/topi/Coding/agentic-dev-kit` at
+  `810b2911abb1598b4662a5b96a6bcc5823588751` on 2026-09-07 UTC, exit zero — not earlier
+  in the session.
+- Paths added are exactly `.codex`, `.codex/hooks.json`, `.codex/config.toml` and
+  `.claude/settings.json`. No path was removed and **no existing path changed**; the
+  fixture's `HEAD`, branch, absent remote and index are untouched and the additions are
+  untracked. No initializer ran and nothing was committed inside the fixture.
+- The fixture's own doctor returned exit zero on 2026-09-07 UTC with **no advisory line
+  left**: every engine path on both runtimes resolves and both Codex lifecycle forms
+  verify. The two `· not present` lines are gone.
+- **The disposable-copy trial predicted that report byte-for-byte**, once each run's own
+  fixture root is normalised. Verifying in a copy first was accurate here, not merely
+  safe.
+- **The continuity baseline moved again.** Compare against
+  `fixture-inventory-after-reg01.json`; a mismatch against the FIX-01 inventory is not
+  drift. The comparison-source baseline is unchanged.
+- **Nothing states what either runtime loaded**, and nothing here could — `/hooks` is
+  the only authority. Parked for one batched Codex session with #698's open question
+  (which this fixture no longer exercises, since it now sets `[features].hooks` to true)
+  and the reserved `#608`/`#255` dispositions.
+- The maintained [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md) retains
+  Phase 5 in progress and Phase 6 not started. A warning-free doctor is not adoption
+  completion. The installed-suite blocker is still untouched, and its
+  `test_lane_launcher.py` root-helper defect still belongs to that assessment as a
+  `#534` occurrence rather than a filing from outside it.
+
+▶ Next: In Claude, `/session-start` — the remaining Phase 5 blocker is the bounded
+assessment of the initializer, launcher-policy and portability failures in PR #686's
+retained terminal log, adding occurrences to `#534` rather than re-filing. Recheck
+continuity against `fixture-inventory-after-reg01.json` before any approved execution.
+Keep every Codex-only confirmation for the batched Codex session, and keep new
+initialization, adoption completion, fixture PR, Phase 5 exit and cs-toolkit replay on
+their own exact decisions.
+
+______________________________________________________________________
+
+## Session — 2026-09-06 (REG-01 registration payloads, in Claude Code)
 
 **Theme —** Take the runtime-registration blocker and prepare its exact decision.
 
@@ -321,53 +366,6 @@ then reconcile the active sprint without promoting adoption or Phase 5 completio
 adopt continuation's remaining boundary. Obtain exact decisions for the preserved
 fixture ownership/registration/lens choices and verification follow-up before any
 adoption completion; preserve the final replay and parked tracker decisions.
-
-______________________________________________________________________
-
-## Session — 2026-09-06 (adopt config compatibility, in Codex)
-
-**Theme —** Implement #683 in the shared adopt workflow, before baseline recording
-and the Step 3c operator handoff.
-
-- Step 3a requires supported serialized representations and complete tracked and
-  merged mapping comparisons through the installed destination reader. Runtime
-  bindings and the parser are unchanged; this remains agent-executed verification.
-- [PR #685 fixture evidence](https://github.com/topij/agentic-dev-kit/pull/685#issuecomment-5555450011)
-  retains the disposable program and destination read-backs: default wrapping lost long focus/remedy tails; the corrected fixture
-  preserved the complete mapping and a separate differing long local override.
-  The fixture command `PYTHONDONTWRITEBYTECODE=1 uv run --with pyyaml python
-  /private/tmp/adk683-6cfcvcic/verify_staging.py /Users/topi/Coding/agentic-dev-kit`
-  in `/Users/topi/Coding/agentic-dev-kit` at
-  `5588c36008cb376a34dc10fe3d0d54ab79332a73` on 2026-09-05 UTC succeeded.
-- `make test` in `/Users/topi/Coding/agentic-dev-kit` at
-  `5588c36008cb376a34dc10fe3d0d54ab79332a73` on 2026-09-05 UTC printed
-  `1 failed, 2436 passed, 1 skipped in 407.01s (0:06:47)` and make exited `2`.
-  The quiet-tree run used an extended timeout with no watcher in flight. The
-  failure was the recurring #393-shaped empty-output assertion in
-  `test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero`.
-  This run preceded the plan/handoff update; the PR carries later review evidence.
-- The [full Codex panel disposition](https://github.com/topij/agentic-dev-kit/pull/685#issuecomment-5555538351)
-  retains terminal reports, applied runtime read-backs, landed mutation diffs and
-  byte-verified restoration at `e417f281f12938dc517701287d5d667c4937ce32`.
-  The host CLI refused the configured model; the compatible installed runtime
-  completed the lenses. CodeRabbit refused the requested review due to its rate limit.
-  The correctness evidence-retention observation preceded the publication linked above.
-  The retained commands in the named lens directories on 2026-09-05 UTC show the
-  recurring hook failure, additional sandbox process-observation failures in the
-  correctness suite, and setup refusals separately. Removing Step 3a was not caught
-  behaviorally by the mutation runs; the workflow remains agent-executed prose.
-- PR #684 retains test-mode systemize analysis, not live routing or Phase 5 exit.
-  PR #682 retains approved adopt staging and the operator handoff, not adoption
-  completion. This implementation repeated neither field exercise.
-- Operator initialization, adoption completion, final Phase 5 exit, cs-toolkit replay
-  and other field routes were not run. #243 stays open. Preserve TRI-03/TRI-04/TRI-05
-  and the operator-held #608/#255 dispositions; no tracker or archive authority
-  follows from the budget reminder or test-mode proposals.
-
-▶ Next: `$session-start` — continue #243 from the maintained Phase 5 field-exercise
-reconciliation; select the next bounded untested route and obtain any fresh exact
-operator decisions it requires. Do not repeat credited exercises or treat #683 as
-adoption completion or Phase 5 exit.
 
 ______________________________________________________________________
 
