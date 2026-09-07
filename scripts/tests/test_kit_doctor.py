@@ -4902,6 +4902,37 @@ def test_a_features_value_that_is_not_a_table_is_not_also_reported_unset(tmp_pat
     ]
 
 
+def test_a_config_that_parses_but_blows_the_walk_is_not_also_reported_unset(tmp_path):
+    """The other route into the `unreadable` skip, and the one the comment is about.
+
+    Its sibling above reaches that skip through a TOML *syntax* error, so
+    `tomllib.loads` never returns. This one parses cleanly and then exhausts
+    `_hook_commands`, which is what the comment beside `feature_unset` claims
+    behaves the same way.
+
+    A panel lens showed the claim was true and pinned by nothing: gating
+    `codex_documents[surface] = document` into the `_RegistrationTooDeep`
+    handler reintroduced the double report — `unreadable` and `unset` on one
+    file, the second stating the switch's value from a document the run
+    declined to read — and survived the whole file.
+    """
+    root = _fake_repo(tmp_path)
+    _write_codex_lifecycle_fixture(root, _valid_codex_lifecycle_document())
+    depth = kit_doctor._MAX_REGISTRATION_DEPTH + 6
+    _write(
+        root / ".codex" / "config.toml",
+        "hooks = " + "{ a = " * depth + "1" + " }" * depth + "\n",
+    )
+
+    statuses = kit_doctor.inspect_registrations(root, "scripts")
+    config_states = [s.state for s in statuses if s.surface == ".codex/config.toml"]
+
+    assert config_states == ["unreadable"], (
+        f"precondition: the walk must be what stops this read — {statuses}"
+    )
+    assert _unset_switches(statuses) == []
+
+
 def test_a_registration_living_only_in_config_toml_still_reports_unset(tmp_path):
     """`.codex/config.toml` is itself a registration surface.
 
