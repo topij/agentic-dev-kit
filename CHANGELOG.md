@@ -42,6 +42,20 @@ starts.
 
 ---
 
+## #708 — 2026-09-07
+
+- **CHANGED (report / return shape, `#698`):** Refresh `scripts/kit_doctor.py`. Codex
+  registrations gain an `unset` state, reported at `·`, for `[features].hooks` not being
+  set where a kit hook **is** registered. It was previously graded only when
+  `.codex/config.toml` existed, so if you never wrote that file your report said nothing
+  about the switch. Expect a new advisory line, and a new `state` value in `--json`
+  `registrations` — widen any exact-match parsing of that field. The exit code does not
+  change: `unset` does not fail the run, and an explicit `hooks = false` is still
+  `misconfigured` and still exits 1. To silence the line, set `[features].hooks = true`
+  in `.codex/config.toml` as `./init.sh`'s registration block asks.
+
+---
+
 ## #705 — 2026-09-07
 
 - **ADDED (report / return shape, `#534`):** Refresh `scripts/kit_doctor.py` and take
