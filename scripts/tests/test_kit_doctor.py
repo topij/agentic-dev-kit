@@ -1137,9 +1137,13 @@ def test_shipped_manifest_covers_every_kit_owned_file():
     the original equality; in an adopter it becomes a real check that nothing
     fell out of both lists silently.
 
-    Both key sets are in the kit's own layout, so they compare directly: the
-    manifest records `scripts/…` and comparison remaps that prefix onto whatever
-    `paths.engines` the adopter configured (see this module's header).
+    Both key sets are in the kit's own layout, so they compare directly and this
+    function performs no remapping of its own: `record_install_manifest` keys
+    `files` and `not_installed` by the KIT-layout path even when the file lives
+    elsewhere locally, so `paths.engines` does not enter this equality at all.
+    (`kit_doctor.inspect()` does remap, when it resolves a key to a local file.
+    That is a different step, and reading it into this one would invite a remap
+    here that breaks the comparison.)
     """
     manifest_path = REPO_ROOT / kit_doctor.MANIFEST_NAME
     assert manifest_path.is_file(), "run kit_doctor.py --generate-manifest"
@@ -1237,6 +1241,83 @@ def test_a_stray_kit_commit_cannot_silently_disable_the_kit_drift_gate():
         "kit's own tree. Every `require_kit_source()` guard is now skipping, "
         "including the drift gate. Remove the key and regenerate the manifest."
     )
+
+
+def _outcome_of(call):
+    """Classify a guard call as run / skip / fail without inheriting its outcome.
+
+    `pytest.raises(pytest.fail.Exception)` is the wrong instrument here, and
+    wrongly enough to be worth the comment: a `Skipped` raised inside it is not
+    caught, propagates, and pytest marks THIS test skipped — so a guard that
+    skips when it should fail turns the test green-adjacent instead of red. That
+    is the same going-quiet failure the guard itself exists to prevent, and it
+    let the deleted-corroboration mutation survive when this test first used
+    `pytest.raises`. Catching `Skipped` explicitly is what keeps it loud.
+    """
+    try:
+        call()
+    except pytest.fail.Exception as exc:
+        return "fail", str(exc)
+    except pytest.skip.Exception as exc:
+        return "skip", str(exc)
+    return "run", ""
+
+
+def _fake_root(tmp_path, *, kit_commit: bool, witness: bool):
+    """A synthetic REPO_ROOT for driving `require_kit_source()` directly."""
+    manifest = {"files": {}, "kit_version": 2}
+    if kit_commit:
+        manifest["kit_commit"] = "0" * 40
+    (tmp_path / kit_doctor.MANIFEST_NAME).write_text(
+        json.dumps(manifest), encoding="utf-8"
+    )
+    if witness:
+        path = tmp_path / conftest.KIT_ONLY_WITNESS
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("", encoding="utf-8")
+    return tmp_path
+
+
+@pytest.mark.parametrize(
+    "kit_commit,witness,expected",
+    [
+        (True, True, "fail"),
+        (True, False, "skip"),
+        (False, True, "run"),
+        (False, False, "run"),
+    ],
+)
+def test_require_kit_source_decides_between_failing_and_skipping(
+    tmp_path, monkeypatch, kit_commit, witness, expected
+):
+    """Drives `require_kit_source()` itself, over all four input states.
+
+    **Why this exists, and what its absence cost.** The sibling
+    `test_a_stray_kit_commit_cannot_silently_disable_the_kit_drift_gate` asserts
+    `is_install_baseline()` is false against the REAL manifest. That is a
+    necessary precondition and not the mechanism: both lenses of PR #705's
+    round-2 panel deleted the corroboration branch out of
+    `require_kit_source()` — reverting it to the bare skip that round 1 found —
+    and the whole suite still passed. The fix was pinned by nothing but its own
+    source text.
+
+    So this drives the function against a synthetic root rather than asserting
+    about the real one. Both helpers resolve `REPO_ROOT` at CALL time, which is
+    what makes that reachable.
+
+    The `(True, True)` row is round 1's exact attack: a baseline key in a tree
+    that also holds the kit-only witness. It must FAIL, never skip — a skip
+    there switches off the kit's own drift gate silently.
+    """
+    monkeypatch.setattr(
+        conftest, "REPO_ROOT", _fake_root(tmp_path, kit_commit=kit_commit, witness=witness)
+    )
+    outcome, detail = _outcome_of(conftest.require_kit_source)
+    assert outcome == expected, (
+        f"require_kit_source() {outcome} where it must {expected}: {detail}"
+    )
+    if expected == "fail":
+        assert "stray baseline key" in detail
 
 
 def test_the_installer_is_tracked():
