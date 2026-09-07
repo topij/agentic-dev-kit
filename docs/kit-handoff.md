@@ -47,8 +47,8 @@ fallback panel do its work on a gate.
 - [PR #710](https://github.com/topij/agentic-dev-kit/pull/710) carries `#534`'s two
   panel follow-ups from PR #705's disposition — `is_install_baseline`'s untested except
   arm, now pinned, and the `_shipped()` body duplicated across two test modules, now one
-  accessor in `conftest.py`. **It was open and unmerged when this block was written**, so
-  the next session owes it the ground rule's watch-to-green, not a fresh start on `#534`.
+  accessor in `conftest.py`. It merged as `dc6a74e`, so `#534` needs no fresh start on
+  either — only the typed decline reasons it always kept out of scope.
 - The recurring shape is now unmissable and is in `docs/kit-friction-log.md`: across every
   round this session, each finding was in a claim the author made rather than in a
   mechanism. The 2026-08-22 entry parked exactly that pattern for accumulation on two

@@ -30,11 +30,11 @@
   `make test` at `4b56d3eec285781ac382e0b897d5d1da9c7fe40e` (clean `main`) on 2026-09-07
   printed `1 failed, 2445 passed, 1 skipped in 379.54s`, failing
   `test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero`. It
-  passes in isolation every time. Four review lenses measured it independently across the
-  session: one got a *different* single failure
+  passes in isolation every time. Review lenses measured it independently across the
+  session and did not agree: one got a *different* single failure
   (`test_reconcile_sessions.py::test_portable_bounded_runner_reaps_on_startup_interrupt`)
-  from base-content files under concurrent load, and another got no failure at all on a
-  repeat run at an identical sha. `uv run python -c "import sys; print(sys.version)"` in
+  from base-content files under concurrent load; one got no failure at all on a repeat run
+  at an identical sha; others reproduced this same one. The disagreement is the finding. `uv run python -c "import sys; print(sys.version)"` in
   `/Users/topi/Coding/agentic-dev-kit` on 2026-09-07 printed `3.14.7`, while
   `.github/workflows/test.yml` pins `python-version: "3.12"`. `#393` records that `json`'s
   `RecursionError` behaviour changes at 3.14 and names a *different* test. **M** — the
@@ -65,7 +65,7 @@
 - **`cp -a` of a linked git worktree does not isolate it, and the panel contract does not
   say so.** A review lens built its mutation scratch that way; the copied `.git` is a
   *pointer file* naming the same per-worktree admin directory, so `git stash` and
-  `git checkout` run in the "copy" wrote the given tree's index. File contents were never
+  `git checkout` run inside that "copy" wrote straight into the given tree's index. File contents were never
   altered, the lens detected and repaired it, and the cockpit independently confirmed the
   tree clean, index empty, HEAD unmoved and both changed files hash-matching the manifest.
   **M** — proposed fix: *No writes in the tree you were given* should name the mechanism,
