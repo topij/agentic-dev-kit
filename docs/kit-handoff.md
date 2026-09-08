@@ -79,6 +79,13 @@ perishable.** It was held for one live run after `#698`'s fix existed; that fix 
 trust, the explicitly-disabled case, and other clients' defaults — and static doctor
 output is not. Verifying `#698`'s correction in the field is the same run.
 
+**Do not repeat what that batch already credited.** Its earlier run discovered the
+fixture's registration in `/hooks`, posted the disposable unset-case observation to
+`#698`, and carried the reserved `#608`/`#255` dispositions, which the operator approved
+and closed on 2026-09-07 — that record is in the *live Codex hooks batch* block below.
+What remains is only what a live run must still establish: hook execution after trust,
+the explicitly-disabled case, other clients' defaults, and `#698`'s fix in the field.
+
 **Recheck continuity first** against
 `saved_plans/adopt-reg01-application-evidence_2026-09-07/fixture-inventory-after-reg01.json`
 (the post-REG-01 baseline; disagreement with FIX-01 is not drift), work in a disposable
@@ -92,22 +99,35 @@ route. That is why it goes first.
 
 Then, in Claude, **write the prose-claims rule.** The 2026-08-22 friction entry parked
 *"every finding was in a claim about the work rather than in the work"* pending a
-recurrence with a mechanism; the operator approved graduating it.
+recurrence with a mechanism, and the operator gave that approval in session — a decision
+with no forge artifact, resting on this record.
 
 **Scope it narrowly, and read this before writing:** the broad reading — *"panel findings
 land in claims rather than mechanisms"* — is **contradicted by this session's own
 evidence.** `#709`'s four HIGH findings were real defects in mechanisms, including a
 working bypass of its guard. Do not write that rule. What recurred, and what has a
-mechanism, is narrower: **an author editing text adjacent to a fact they are
-simultaneously changing does not re-read that text.** Both instances on PR #711 were in
-the same paragraph as the edit, and both were introduced by the fix for the previous
-finding. Bind prose surfaces; leave code alone. Placement is itself a judgement call —
+mechanism, is narrower — and **it covers one of the two PR #711 instances, not both.**
+A review lens established the difference by tracing the commits, and the distinction is
+the useful part:
+
+- The stale entry count **is** author-side: one commit added a friction entry and left
+  the digit two lines below, in the same paragraph it was editing.
+- The stale PR #710 line **is not**: it was written true, and went stale because #710
+  merged externally between review rounds. The later edit that missed it touched a
+  different paragraph.
+
+So one is *an author not re-reading text adjacent to their own edit*, and the other is
+*a claim about mutable external state that nothing re-validates*. Before writing a rule,
+settle whether those want one rule or two — and note that the second may need no new rule
+at all, since `AGENTS.md` already says a current-state claim does not belong in prose.
+What it lacks is enforcement, which is `#586`'s territory rather than a wording change.
+Bind prose surfaces; leave code alone. Placement is itself a judgement call —
 the rule binds authors rather than lenses, which argues for `AGENTS.md` over the panel
 doctrine, but that is not settled here.
 
-Then: `docs/kit-friction-log.md` is past its budget and the operator holds the triage —
-run `python3 scripts/check_doc_budget.py` for where it stands, and `triage-friction-log`
-is the route. Phase 5 exit is still the live question and still needs its own exact
+Then: the operator holds the friction-log triage. Run
+`python3 scripts/check_doc_budget.py` for where `docs/kit-friction-log.md` stands against
+its budget; `triage-friction-log` is the route. Phase 5 exit is still the live question and still needs its own exact
 decision, as do the cs-toolkit replay, new initialization, adoption completion and the
 fixture PR.
 
