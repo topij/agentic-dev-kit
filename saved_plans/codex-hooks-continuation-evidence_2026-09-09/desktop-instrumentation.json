@@ -1,0 +1,47 @@
+{
+  "command": "python3 disposable desktop engine-entry preparation (recorded tool invocation)",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "observed_at": "2026-09-08T20:54:17.791130+00:00",
+  "kit_revision": "144bc7f55ac7d98988acb4c4691f017ccbbb43f8",
+  "continuity": {
+    "command": "python3 /Users/topi/Coding/agentic-dev-kit/reports/codex-hooks-batch_2026-09-08/audit.py",
+    "cwd": "/Users/topi/Coding/agentic-dev-kit",
+    "kit_revision": "144bc7f55ac7d98988acb4c4691f017ccbbb43f8",
+    "observed_at": "2026-09-08T20:54:17.762866+00:00",
+    "results": {
+      "fixture": {
+        "revision": "08ac687f4ae14218a3861c6b8b143d8b86c4e3c2",
+        "baseline": "/Users/topi/Coding/agentic-dev-kit/saved_plans/adopt-reg01-application-evidence_2026-09-07/fixture-inventory-after-reg01.json",
+        "inventory_matches": true,
+        "git_matches": true
+      },
+      "source": {
+        "revision": "ab0a6d62308b298478b2f85fc961f14348f35365",
+        "baseline": "/Users/topi/Coding/agentic-dev-kit/saved_plans/codex-adopt-ver02-evidence_2026-09-06/source-input-inventory.json",
+        "inventory_matches": true,
+        "git_matches": true
+      }
+    }
+  },
+  "log": "/private/tmp/adk-hooks-20260908-s1k0zmx7/desktop-engine-entries.jsonl",
+  "registration_sha256": "dbea8d8084adcc50e786af584c7e407fc5d7040bf26bd614c9966e9ba2797cfb",
+  "changes": [
+    {
+      "path": "/private/tmp/adk-hooks-20260908-s1k0zmx7/desktop-unset-fixture/scripts/devkit/check_doc_budget.py",
+      "original_sha256": "013c1fa1e20763c9d99c8c2153b07723b1cda9a7b8c2dd9c2e78a6ed6a9d007c",
+      "instrumented_sha256": "9af06d85161be86f924a90f5716385e85252a9d466448609b407e727c5a1fcf1",
+      "insertion": "\nimport json as _hook_probe_json, os as _hook_probe_os, datetime as _hook_probe_dt\nwith open('/private/tmp/adk-hooks-20260908-s1k0zmx7/desktop-engine-entries.jsonl', \"a\") as _hook_probe_file:\n    _hook_probe_file.write(_hook_probe_json.dumps({\"observed_at\": _hook_probe_dt.datetime.now(_hook_probe_dt.timezone.utc).isoformat(), \"file\": __file__, \"cwd\": _hook_probe_os.getcwd(), \"pid\": _hook_probe_os.getpid(), \"ppid\": _hook_probe_os.getppid()}) + \"\\n\")\n",
+      "relative": "scripts/devkit/check_doc_budget.py",
+      "backup": "/Users/topi/Coding/agentic-dev-kit/reports/codex-hooks-batch_2026-09-08/desktop-instrumentation-originals/scripts/devkit/check_doc_budget.py"
+    },
+    {
+      "path": "/private/tmp/adk-hooks-20260908-s1k0zmx7/desktop-unset-fixture/scripts/devkit/hooks/pr_followup_hook.py",
+      "original_sha256": "23bfa71eb732a12ac73976fff7c6b3baec28cb94e99e8ef9408b856d304dd879",
+      "instrumented_sha256": "56ba3ca78d23b7d278febf21e9db4dd56cc344804cfe608f2be1bfc3c503f966",
+      "insertion": "\nimport json as _hook_probe_json, os as _hook_probe_os, datetime as _hook_probe_dt\nwith open('/private/tmp/adk-hooks-20260908-s1k0zmx7/desktop-engine-entries.jsonl', \"a\") as _hook_probe_file:\n    _hook_probe_file.write(_hook_probe_json.dumps({\"observed_at\": _hook_probe_dt.datetime.now(_hook_probe_dt.timezone.utc).isoformat(), \"file\": __file__, \"cwd\": _hook_probe_os.getcwd(), \"pid\": _hook_probe_os.getpid(), \"ppid\": _hook_probe_os.getppid()}) + \"\\n\")\n",
+      "relative": "scripts/devkit/hooks/pr_followup_hook.py",
+      "backup": "/Users/topi/Coding/agentic-dev-kit/reports/codex-hooks-batch_2026-09-08/desktop-instrumentation-originals/scripts/devkit/hooks/pr_followup_hook.py"
+    }
+  ],
+  "scope": "Entry logging only in disposable installed engines; no manual engine invocation. Registrations and hook commands unchanged."
+}

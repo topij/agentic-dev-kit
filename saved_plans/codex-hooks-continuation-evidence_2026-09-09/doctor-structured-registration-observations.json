@@ -1,0 +1,200 @@
+[
+  {
+    "argv": [
+      "python3",
+      "/Users/topi/Coding/agentic-dev-kit/scripts/kit_doctor.py",
+      "--root",
+      "/private/tmp/adk-hooks-20260908-s1k0zmx7/unset-fixture",
+      "--manifest",
+      "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source/kit-manifest.json",
+      "--json"
+    ],
+    "cwd": "/private/tmp/adk-hooks-20260908-s1k0zmx7/unset-fixture",
+    "kit_revision": "144bc7f55ac7d98988acb4c4691f017ccbbb43f8",
+    "observed_at": "2026-09-08T08:30:41.474151+00:00",
+    "exit_code": 0,
+    "stderr": "",
+    "case": "unset",
+    "registration_observations": [
+      {
+        "runtime": "claude",
+        "surface": ".claude/settings.json",
+        "state": "resolves",
+        "detail": "scripts/devkit/check_doc_budget.py"
+      },
+      {
+        "runtime": "claude",
+        "surface": ".claude/settings.json",
+        "state": "resolves",
+        "detail": "scripts/devkit/check_memory_budget.py"
+      },
+      {
+        "runtime": "claude",
+        "surface": ".claude/settings.json",
+        "state": "resolves",
+        "detail": "scripts/devkit/hooks/pr_followup_hook.py"
+      },
+      {
+        "runtime": "codex",
+        "surface": ".codex/hooks.json",
+        "state": "resolves",
+        "detail": "scripts/devkit/check_doc_budget.py"
+      },
+      {
+        "runtime": "codex",
+        "surface": ".codex/hooks.json",
+        "state": "resolves",
+        "detail": "scripts/devkit/hooks/pr_followup_hook.py"
+      },
+      {
+        "runtime": "codex",
+        "surface": ".codex/hooks.json",
+        "state": "verified",
+        "detail": "check_doc_budget.py canonical lifecycle form verified"
+      },
+      {
+        "runtime": "codex",
+        "surface": ".codex/hooks.json",
+        "state": "verified",
+        "detail": "pr_followup_hook.py canonical lifecycle form verified"
+      },
+      {
+        "runtime": "codex",
+        "surface": ".codex/config.toml",
+        "state": "unset",
+        "detail": "[features].hooks"
+      }
+    ],
+    "selection": "Only the parsed registrations array is retained from structured stdout; argv, cwd, revision, timestamp and exit status are retained from the invocation record."
+  },
+  {
+    "argv": [
+      "python3",
+      "/Users/topi/Coding/agentic-dev-kit/scripts/kit_doctor.py",
+      "--root",
+      "/private/tmp/adk-hooks-20260908-s1k0zmx7/disabled-fixture",
+      "--manifest",
+      "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source/kit-manifest.json",
+      "--json"
+    ],
+    "cwd": "/private/tmp/adk-hooks-20260908-s1k0zmx7/disabled-fixture",
+    "kit_revision": "144bc7f55ac7d98988acb4c4691f017ccbbb43f8",
+    "observed_at": "2026-09-08T08:30:41.561253+00:00",
+    "exit_code": 1,
+    "stderr": "",
+    "case": "disabled",
+    "registration_observations": [
+      {
+        "runtime": "claude",
+        "surface": ".claude/settings.json",
+        "state": "resolves",
+        "detail": "scripts/devkit/check_doc_budget.py"
+      },
+      {
+        "runtime": "claude",
+        "surface": ".claude/settings.json",
+        "state": "resolves",
+        "detail": "scripts/devkit/check_memory_budget.py"
+      },
+      {
+        "runtime": "claude",
+        "surface": ".claude/settings.json",
+        "state": "resolves",
+        "detail": "scripts/devkit/hooks/pr_followup_hook.py"
+      },
+      {
+        "runtime": "codex",
+        "surface": ".codex/hooks.json",
+        "state": "resolves",
+        "detail": "scripts/devkit/check_doc_budget.py"
+      },
+      {
+        "runtime": "codex",
+        "surface": ".codex/hooks.json",
+        "state": "resolves",
+        "detail": "scripts/devkit/hooks/pr_followup_hook.py"
+      },
+      {
+        "runtime": "codex",
+        "surface": ".codex/hooks.json",
+        "state": "verified",
+        "detail": "check_doc_budget.py canonical lifecycle form verified"
+      },
+      {
+        "runtime": "codex",
+        "surface": ".codex/hooks.json",
+        "state": "verified",
+        "detail": "pr_followup_hook.py canonical lifecycle form verified"
+      },
+      {
+        "runtime": "codex",
+        "surface": ".codex/config.toml",
+        "state": "misconfigured",
+        "detail": "Codex lifecycle hooks are disabled by the project config"
+      }
+    ],
+    "selection": "Only the parsed registrations array is retained from structured stdout; argv, cwd, revision, timestamp and exit status are retained from the invocation record."
+  },
+  {
+    "argv": [
+      "python3",
+      "/Users/topi/Coding/agentic-dev-kit/scripts/kit_doctor.py",
+      "--root",
+      "/private/tmp/adk-hooks-20260908-s1k0zmx7/enabled-fixture",
+      "--manifest",
+      "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source/kit-manifest.json",
+      "--json"
+    ],
+    "cwd": "/private/tmp/adk-hooks-20260908-s1k0zmx7/enabled-fixture",
+    "kit_revision": "144bc7f55ac7d98988acb4c4691f017ccbbb43f8",
+    "observed_at": "2026-09-08T08:30:41.649205+00:00",
+    "exit_code": 0,
+    "stderr": "",
+    "case": "enabled",
+    "registration_observations": [
+      {
+        "runtime": "claude",
+        "surface": ".claude/settings.json",
+        "state": "resolves",
+        "detail": "scripts/devkit/check_doc_budget.py"
+      },
+      {
+        "runtime": "claude",
+        "surface": ".claude/settings.json",
+        "state": "resolves",
+        "detail": "scripts/devkit/check_memory_budget.py"
+      },
+      {
+        "runtime": "claude",
+        "surface": ".claude/settings.json",
+        "state": "resolves",
+        "detail": "scripts/devkit/hooks/pr_followup_hook.py"
+      },
+      {
+        "runtime": "codex",
+        "surface": ".codex/hooks.json",
+        "state": "resolves",
+        "detail": "scripts/devkit/check_doc_budget.py"
+      },
+      {
+        "runtime": "codex",
+        "surface": ".codex/hooks.json",
+        "state": "resolves",
+        "detail": "scripts/devkit/hooks/pr_followup_hook.py"
+      },
+      {
+        "runtime": "codex",
+        "surface": ".codex/hooks.json",
+        "state": "verified",
+        "detail": "check_doc_budget.py canonical lifecycle form verified"
+      },
+      {
+        "runtime": "codex",
+        "surface": ".codex/hooks.json",
+        "state": "verified",
+        "detail": "pr_followup_hook.py canonical lifecycle form verified"
+      }
+    ],
+    "selection": "Only the parsed registrations array is retained from structured stdout; argv, cwd, revision, timestamp and exit status are retained from the invocation record."
+  }
+]

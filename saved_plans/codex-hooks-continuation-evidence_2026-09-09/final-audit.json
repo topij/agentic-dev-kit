@@ -1,0 +1,30 @@
+{
+  "command": "python3 final audit and restore heredoc in tool transcript",
+  "kit_revision": "144bc7f55ac7d98988acb4c4691f017ccbbb43f8",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "observed_at": "2026-09-08T08:30:41.892954+00:00",
+  "originals": {
+    "fixture": {
+      "revision": "08ac687f4ae14218a3861c6b8b143d8b86c4e3c2",
+      "baseline": "/Users/topi/Coding/agentic-dev-kit/saved_plans/adopt-reg01-application-evidence_2026-09-07/fixture-inventory-after-reg01.json",
+      "inventory_matches": true,
+      "git_state_matches": true
+    },
+    "source": {
+      "revision": "ab0a6d62308b298478b2f85fc961f14348f35365",
+      "baseline": "/Users/topi/Coding/agentic-dev-kit/saved_plans/codex-adopt-ver02-evidence_2026-09-06/source-input-inventory.json",
+      "inventory_matches": true,
+      "git_state_matches": true
+    }
+  },
+  "restored_instrumentation": [
+    "/private/tmp/adk-hooks-20260908-s1k0zmx7/unset-fixture/scripts/devkit/check_doc_budget.py",
+    "/private/tmp/adk-hooks-20260908-s1k0zmx7/unset-fixture/scripts/devkit/hooks/pr_followup_hook.py",
+    "/private/tmp/adk-hooks-20260908-s1k0zmx7/disabled-fixture/scripts/devkit/check_doc_budget.py",
+    "/private/tmp/adk-hooks-20260908-s1k0zmx7/disabled-fixture/scripts/devkit/hooks/pr_followup_hook.py",
+    "/private/tmp/adk-hooks-20260908-s1k0zmx7/enabled-fixture/scripts/devkit/check_doc_budget.py",
+    "/private/tmp/adk-hooks-20260908-s1k0zmx7/enabled-fixture/scripts/devkit/hooks/pr_followup_hook.py"
+  ],
+  "disposable_cli_copies_match_prelaunch_inventories": true,
+  "temporary_auth_copies_removed": true
+}

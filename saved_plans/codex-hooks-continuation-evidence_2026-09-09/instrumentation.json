@@ -1,0 +1,53 @@
+{
+  "purpose": "Record entry into the real installed engine without changing hook registration bytes, command, stdin, or output. PATH observer gave no entry and is not evidence of nonexecution.",
+  "changes": [
+    {
+      "case": "unset",
+      "path": "/private/tmp/adk-hooks-20260908-s1k0zmx7/unset-fixture/scripts/devkit/check_doc_budget.py",
+      "original_sha256": "013c1fa1e20763c9d99c8c2153b07723b1cda9a7b8c2dd9c2e78a6ed6a9d007c",
+      "instrumented_sha256": "783252e02aa0b122030ac86af86f189b18f9d36053711741a649837c97ddb9a5",
+      "insert_after_line": 37,
+      "insertion": "\nimport json as _hook_probe_json, os as _hook_probe_os, datetime as _hook_probe_dt\nwith open('/private/tmp/adk-hooks-20260908-s1k0zmx7/engine-entries.jsonl', \"a\") as _hook_probe_file:\n    _hook_probe_file.write(_hook_probe_json.dumps({\"observed_at\": _hook_probe_dt.datetime.now(_hook_probe_dt.timezone.utc).isoformat(), \"file\": __file__, \"cwd\": _hook_probe_os.getcwd(), \"pid\": _hook_probe_os.getpid(), \"ppid\": _hook_probe_os.getppid()}) + \"\\n\")\n"
+    },
+    {
+      "case": "unset",
+      "path": "/private/tmp/adk-hooks-20260908-s1k0zmx7/unset-fixture/scripts/devkit/hooks/pr_followup_hook.py",
+      "original_sha256": "23bfa71eb732a12ac73976fff7c6b3baec28cb94e99e8ef9408b856d304dd879",
+      "instrumented_sha256": "33f961d25b81b0d078b85ef9e6c9f581506fbf0a1a285997fc71ed6c00eb5cdf",
+      "insert_after_line": 49,
+      "insertion": "\nimport json as _hook_probe_json, os as _hook_probe_os, datetime as _hook_probe_dt\nwith open('/private/tmp/adk-hooks-20260908-s1k0zmx7/engine-entries.jsonl', \"a\") as _hook_probe_file:\n    _hook_probe_file.write(_hook_probe_json.dumps({\"observed_at\": _hook_probe_dt.datetime.now(_hook_probe_dt.timezone.utc).isoformat(), \"file\": __file__, \"cwd\": _hook_probe_os.getcwd(), \"pid\": _hook_probe_os.getpid(), \"ppid\": _hook_probe_os.getppid()}) + \"\\n\")\n"
+    },
+    {
+      "case": "disabled",
+      "path": "/private/tmp/adk-hooks-20260908-s1k0zmx7/disabled-fixture/scripts/devkit/check_doc_budget.py",
+      "original_sha256": "013c1fa1e20763c9d99c8c2153b07723b1cda9a7b8c2dd9c2e78a6ed6a9d007c",
+      "instrumented_sha256": "783252e02aa0b122030ac86af86f189b18f9d36053711741a649837c97ddb9a5",
+      "insert_after_line": 37,
+      "insertion": "\nimport json as _hook_probe_json, os as _hook_probe_os, datetime as _hook_probe_dt\nwith open('/private/tmp/adk-hooks-20260908-s1k0zmx7/engine-entries.jsonl', \"a\") as _hook_probe_file:\n    _hook_probe_file.write(_hook_probe_json.dumps({\"observed_at\": _hook_probe_dt.datetime.now(_hook_probe_dt.timezone.utc).isoformat(), \"file\": __file__, \"cwd\": _hook_probe_os.getcwd(), \"pid\": _hook_probe_os.getpid(), \"ppid\": _hook_probe_os.getppid()}) + \"\\n\")\n"
+    },
+    {
+      "case": "disabled",
+      "path": "/private/tmp/adk-hooks-20260908-s1k0zmx7/disabled-fixture/scripts/devkit/hooks/pr_followup_hook.py",
+      "original_sha256": "23bfa71eb732a12ac73976fff7c6b3baec28cb94e99e8ef9408b856d304dd879",
+      "instrumented_sha256": "33f961d25b81b0d078b85ef9e6c9f581506fbf0a1a285997fc71ed6c00eb5cdf",
+      "insert_after_line": 49,
+      "insertion": "\nimport json as _hook_probe_json, os as _hook_probe_os, datetime as _hook_probe_dt\nwith open('/private/tmp/adk-hooks-20260908-s1k0zmx7/engine-entries.jsonl', \"a\") as _hook_probe_file:\n    _hook_probe_file.write(_hook_probe_json.dumps({\"observed_at\": _hook_probe_dt.datetime.now(_hook_probe_dt.timezone.utc).isoformat(), \"file\": __file__, \"cwd\": _hook_probe_os.getcwd(), \"pid\": _hook_probe_os.getpid(), \"ppid\": _hook_probe_os.getppid()}) + \"\\n\")\n"
+    },
+    {
+      "case": "enabled",
+      "path": "/private/tmp/adk-hooks-20260908-s1k0zmx7/enabled-fixture/scripts/devkit/check_doc_budget.py",
+      "original_sha256": "013c1fa1e20763c9d99c8c2153b07723b1cda9a7b8c2dd9c2e78a6ed6a9d007c",
+      "instrumented_sha256": "783252e02aa0b122030ac86af86f189b18f9d36053711741a649837c97ddb9a5",
+      "insert_after_line": 37,
+      "insertion": "\nimport json as _hook_probe_json, os as _hook_probe_os, datetime as _hook_probe_dt\nwith open('/private/tmp/adk-hooks-20260908-s1k0zmx7/engine-entries.jsonl', \"a\") as _hook_probe_file:\n    _hook_probe_file.write(_hook_probe_json.dumps({\"observed_at\": _hook_probe_dt.datetime.now(_hook_probe_dt.timezone.utc).isoformat(), \"file\": __file__, \"cwd\": _hook_probe_os.getcwd(), \"pid\": _hook_probe_os.getpid(), \"ppid\": _hook_probe_os.getppid()}) + \"\\n\")\n"
+    },
+    {
+      "case": "enabled",
+      "path": "/private/tmp/adk-hooks-20260908-s1k0zmx7/enabled-fixture/scripts/devkit/hooks/pr_followup_hook.py",
+      "original_sha256": "23bfa71eb732a12ac73976fff7c6b3baec28cb94e99e8ef9408b856d304dd879",
+      "instrumented_sha256": "33f961d25b81b0d078b85ef9e6c9f581506fbf0a1a285997fc71ed6c00eb5cdf",
+      "insert_after_line": 49,
+      "insertion": "\nimport json as _hook_probe_json, os as _hook_probe_os, datetime as _hook_probe_dt\nwith open('/private/tmp/adk-hooks-20260908-s1k0zmx7/engine-entries.jsonl', \"a\") as _hook_probe_file:\n    _hook_probe_file.write(_hook_probe_json.dumps({\"observed_at\": _hook_probe_dt.datetime.now(_hook_probe_dt.timezone.utc).isoformat(), \"file\": __file__, \"cwd\": _hook_probe_os.getcwd(), \"pid\": _hook_probe_os.getpid(), \"ppid\": _hook_probe_os.getppid()}) + \"\\n\")\n"
+    }
+  ]
+}

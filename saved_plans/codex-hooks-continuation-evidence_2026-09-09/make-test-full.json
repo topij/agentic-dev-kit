@@ -1,0 +1,8 @@
+{
+  "command": "make test",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "revision": "144bc7f55ac7d98988acb4c4691f017ccbbb43f8",
+  "observed_at": "2026-09-08T08:30:59.757236+00:00",
+  "returncode": 2,
+  "log": "/private/tmp/adk-hooks-20260908-s1k0zmx7/make-test-full.log"
+}

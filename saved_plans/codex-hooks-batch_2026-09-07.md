@@ -3,6 +3,10 @@
 This records the approved live Codex batch following the
 [REG-01 application](adopt-reg01-application_2026-09-07.md) and
 [installed-suite assessment](adopt-suite-assessment_2026-09-07.md).
+The [subsequent continuation](codex-hooks-continuation_2026-09-09.md) records
+execution after trust, the disabled CLI case, the desktop unset observation and
+field verification of the doctor correction; the observations below remain the
+earlier discovery record.
 The observations below come from interactive `/hooks`, with `/debug-config`
 providing the live configuration stack. Static doctor output does not establish them.
 

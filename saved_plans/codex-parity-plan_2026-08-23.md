@@ -434,7 +434,10 @@ historical observation it was and is not silently refreshed.
      The [suite assessment](adopt-suite-assessment_2026-09-07.md) classified the retained
      failures without repairing them. The [Codex batch](codex-hooks-batch_2026-09-07.md)
      records live loading/discovery, the disposable unset case and the approved tracker
-     dispositions. Adoption completion and Phase 5 exit keep their own exact decisions;
+     dispositions. Its [continuation](codex-hooks-continuation_2026-09-09.md) adds
+     execution after trust, the disabled CLI case, a desktop unset observation and
+     field verification of the doctor correction, with client-specific limits.
+     Adoption completion and Phase 5 exit keep their own exact decisions;
      do not repeat credited probes or promote a warning-free doctor to fixture completion.
   6. [ ] Replay the write pass and fork reconciliation from the then-current kit source,
      using the same `$REPO` origin check, `$KIT` path, and immediately-before-every-write

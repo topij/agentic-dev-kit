@@ -1,0 +1,15 @@
+{
+  "command": "python3 selective pre-task config and instrumentation inspection; operator screenshot read",
+  "observed_at": "2026-09-08T20:58:35.036445+00:00",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "kit_revision": "144bc7f55ac7d98988acb4c4691f017ccbbb43f8",
+  "config_sha256": "f5d5217fcd2a09f48c8d95675bb7ba008690c17dcec65956690bdbc4a1d96fae",
+  "features_hooks": "unset",
+  "features_codex_hooks": "unset",
+  "fixture": "/private/tmp/adk-hooks-20260908-s1k0zmx7/desktop-unset-fixture",
+  "registration_sha256": "dbea8d8084adcc50e786af584c7e407fc5d7040bf26bd614c9966e9ba2797cfb",
+  "engine_entries_before": "",
+  "screenshot": "/Users/topi/Coding/agentic-dev-kit/reports/codex-hooks-batch_2026-09-08/desktop-fixture-after-trust.png",
+  "screenshot_sha256": "fdf9bd481576b957743e8380026e48e9f04e9a38fa2023e39e8ed04a673c9297",
+  "visible_observation": "PostToolUse and SessionStart displayed for the named disposable path with switches on; Trust buttons and warnings absent. No execution inferred from this screenshot."
+}

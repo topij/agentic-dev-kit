@@ -1,0 +1,20 @@
+{
+  "command": "python3 /Users/topi/Coding/agentic-dev-kit/reports/codex-hooks-batch_2026-09-08/audit.py",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "kit_revision": "144bc7f55ac7d98988acb4c4691f017ccbbb43f8",
+  "observed_at": "2026-09-08T08:34:41.464080+00:00",
+  "results": {
+    "fixture": {
+      "revision": "08ac687f4ae14218a3861c6b8b143d8b86c4e3c2",
+      "baseline": "/Users/topi/Coding/agentic-dev-kit/saved_plans/adopt-reg01-application-evidence_2026-09-07/fixture-inventory-after-reg01.json",
+      "inventory_matches": true,
+      "git_matches": true
+    },
+    "source": {
+      "revision": "ab0a6d62308b298478b2f85fc961f14348f35365",
+      "baseline": "/Users/topi/Coding/agentic-dev-kit/saved_plans/codex-adopt-ver02-evidence_2026-09-06/source-input-inventory.json",
+      "inventory_matches": true,
+      "git_matches": true
+    }
+  }
+}

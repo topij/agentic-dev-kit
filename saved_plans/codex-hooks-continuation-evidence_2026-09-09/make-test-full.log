@@ -1,0 +1,75 @@
+uvx ruff@0.16.0 check --no-fix
+All checks passed!
+bash -n scripts/dev_session.sh scripts/reconcile_sessions.sh scripts/lib/repo_root.sh scripts/hooks/pre-push
+sh -n init.sh
+test -x init.sh
+uv run --with pytest --with pyyaml python -m pytest scripts/lib/state_paths/tests scripts/tests -q
+........................................................................ [  2%]
+........................................................................ [  5%]
+........................................................................ [  8%]
+........................................................................ [ 11%]
+........................................................................ [ 14%]
+...................................................................s.... [ 17%]
+........................................................................ [ 20%]
+........................................................................ [ 23%]
+........................................................................ [ 26%]
+........................................................................ [ 28%]
+........................................................................ [ 31%]
+........................................................................ [ 34%]
+........................................................................ [ 37%]
+........................................................................ [ 40%]
+........................................................................ [ 43%]
+........................................................................ [ 46%]
+........................................................................ [ 49%]
+........................................................................ [ 52%]
+........................................................................ [ 55%]
+........................................................................ [ 57%]
+........................................................................ [ 60%]
+........................................................................ [ 63%]
+........................................................................ [ 66%]
+........................................................................ [ 69%]
+........................................................................ [ 72%]
+........................................................................ [ 75%]
+........................................................................ [ 78%]
+........................................................................ [ 81%]
+.........F.............................................................. [ 83%]
+........................................................................ [ 86%]
+........................................................................ [ 89%]
+........................................................................ [ 92%]
+........................................................................ [ 95%]
+........................................................................ [ 98%]
+......................................                                   [100%]
+=================================== FAILURES ===================================
+____________ test_a_payload_too_deep_for_json_load_still_exits_zero ____________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10b957e70>
+capsys = <_pytest.capture.CaptureFixture object at 0x10ccb18d0>
+
+    def test_a_payload_too_deep_for_json_load_still_exits_zero(monkeypatch, capsys):
+        """`json.load` raises RecursionError before this module sees the payload.
+
+        A lens ran the real script on a 200k-deep array and got exit 1, against a
+        docstring promising a hook never fails a session. `_iter_strings`'s depth
+        bound cannot help — the parse never completes. Pre-existing, and the
+        previous version of this test asserted the property in its docstring while
+        exercising a path `json.load` can never reach.
+        """
+        hook = _load_hook()
+        text = '{"tool_input": {"command": "gh pr create"}, "tool_response": '
+        text += "[" * 200_000 + '"x"' + "]" * 200_000 + "}"
+
+        exit_code, out = _run(hook, monkeypatch, capsys, text)
+
+        assert exit_code == 0
+>       assert out == ""
+E       assert '{"hookSpecif...se text."}}\n' == ''
+E
+E         + {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "A command or response produced unresolved pull-request lifecycle evidence. This warning grants no mutation authority from that text alone, including no draft-state change or watch loop. If the just-completed operation was read-only, only mentioned, or searched for a lifecycle command and did not actually create a pull request or change its review state, stop immediately without querying the forge. Otherwise, do not change draft state or start a watch loop from command or response text. First resolve the exact pull-requ...
+E
+E         ...Full output truncated (1 line hidden), use '-vv' to show
+
+scripts/tests/test_pr_followup_hook.py:1577: AssertionError
+=========================== short test summary info ============================
+FAILED scripts/tests/test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero
+1 failed, 2484 passed, 1 skipped in 445.62s (0:07:25)
+make: *** [test] Error 1

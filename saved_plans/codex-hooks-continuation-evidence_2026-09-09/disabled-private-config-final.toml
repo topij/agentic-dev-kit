@@ -1,0 +1,4 @@
+check_for_update_on_startup = false
+
+[projects."/private/tmp/adk-hooks-20260908-s1k0zmx7/disabled-fixture"]
+trust_level = "trusted"

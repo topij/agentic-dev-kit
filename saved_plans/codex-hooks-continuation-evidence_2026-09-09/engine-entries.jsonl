@@ -1,0 +1,2 @@
+{"observed_at": "2026-09-08T08:24:56.918024+00:00", "file": "/private/tmp/adk-hooks-20260908-s1k0zmx7/unset-fixture/scripts/devkit/check_doc_budget.py", "cwd": "/private/tmp/adk-hooks-20260908-s1k0zmx7/unset-fixture", "pid": 18406, "ppid": 18386}
+{"observed_at": "2026-09-08T08:25:01.961933+00:00", "file": "/private/tmp/adk-hooks-20260908-s1k0zmx7/unset-fixture/scripts/devkit/hooks/pr_followup_hook.py", "cwd": "/private/tmp/adk-hooks-20260908-s1k0zmx7/unset-fixture", "pid": 21342, "ppid": 3719}

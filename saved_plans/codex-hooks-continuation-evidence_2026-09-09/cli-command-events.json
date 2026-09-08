@@ -1,0 +1,204 @@
+[
+  {
+    "source_file": "rollout-2026-09-08T11-24-31-01a0801e-6836-7fd3-b09c-588b5d8bc98a.jsonl",
+    "event": {
+      "timestamp": "2026-09-08T08:24:56.242Z",
+      "ordinal": 1,
+      "type": "event_msg",
+      "payload": {
+        "type": "task_started",
+        "turn_id": "01a0801e-c85b-75d3-911b-4f444fbbc05e",
+        "started_at": 1788855896,
+        "model_context_window": 258400,
+        "collaboration_mode_kind": "default"
+      }
+    }
+  },
+  {
+    "source_file": "rollout-2026-09-08T11-24-31-01a0801e-6836-7fd3-b09c-588b5d8bc98a.jsonl",
+    "event": {
+      "timestamp": "2026-09-08T08:24:56.950Z",
+      "ordinal": 9,
+      "type": "event_msg",
+      "payload": {
+        "type": "item_completed",
+        "thread_id": "01a0801e-6836-7fd3-b09c-588b5d8bc98a",
+        "turn_id": "01a0801e-c85b-75d3-911b-4f444fbbc05e",
+        "item": {
+          "type": "UserMessage",
+          "id": "01a0801e-cb76-78a0-850e-ef6c3fc48645",
+          "content": [
+            {
+              "type": "text",
+              "text": "Run only the read-only shell command `pwd`, then reply with the directory. This is an authorized disposable hook execution observation. Do not edit files, initialize anything, contact GitHub, delegate, or run a workflow.",
+              "text_elements": []
+            }
+          ]
+        },
+        "started_at_ms": 1788855896950,
+        "completed_at_ms": 1788855896950
+      }
+    }
+  },
+  {
+    "source_file": "rollout-2026-09-08T11-24-31-01a0801e-6836-7fd3-b09c-588b5d8bc98a.jsonl",
+    "event": {
+      "timestamp": "2026-09-08T08:25:01.899Z",
+      "ordinal": 13,
+      "type": "event_msg",
+      "payload": {
+        "type": "item_completed",
+        "thread_id": "01a0801e-6836-7fd3-b09c-588b5d8bc98a",
+        "turn_id": "01a0801e-c85b-75d3-911b-4f444fbbc05e",
+        "item": {
+          "type": "CommandExecution",
+          "id": "exec-4edcb9e8-ba50-4b5e-9d4f-45e48a6097a8",
+          "process_id": "89254",
+          "command": [
+            "/bin/zsh",
+            "-lc",
+            "pwd"
+          ],
+          "cwd": "file:///private/tmp/adk-hooks-20260908-s1k0zmx7/unset-fixture",
+          "parsed_cmd": [
+            {
+              "type": "unknown",
+              "cmd": "pwd"
+            }
+          ],
+          "source": "unified_exec_startup",
+          "status": "completed",
+          "stdout": "/private/tmp/adk-hooks-20260908-s1k0zmx7/unset-fixture\n",
+          "stderr": "",
+          "aggregated_output": "/private/tmp/adk-hooks-20260908-s1k0zmx7/unset-fixture\n",
+          "exit_code": 0,
+          "duration": {
+            "secs": 0,
+            "nanos": 3875
+          },
+          "formatted_output": "/private/tmp/adk-hooks-20260908-s1k0zmx7/unset-fixture\n"
+        },
+        "started_at_ms": 1788855901898,
+        "completed_at_ms": 1788855901899
+      }
+    }
+  },
+  {
+    "source_file": "rollout-2026-09-08T11-24-31-01a0801e-6836-7fd3-b09c-588b5d8bc98a.jsonl",
+    "event": {
+      "timestamp": "2026-09-08T08:25:04.669Z",
+      "ordinal": 19,
+      "type": "event_msg",
+      "payload": {
+        "type": "task_complete",
+        "turn_id": "01a0801e-c85b-75d3-911b-4f444fbbc05e",
+        "last_agent_message": "/private/tmp/adk-hooks-20260908-s1k0zmx7/unset-fixture",
+        "started_at": 1788855896,
+        "completed_at": 1788855904,
+        "duration_ms": 8502,
+        "time_to_first_token_ms": 2755
+      }
+    }
+  },
+  {
+    "source_file": "rollout-2026-09-08T11-25-11-01a0801f-04d6-71b1-9c10-a6eb157f1639.jsonl",
+    "event": {
+      "timestamp": "2026-09-08T08:26:50.063Z",
+      "ordinal": 1,
+      "type": "event_msg",
+      "payload": {
+        "type": "task_started",
+        "turn_id": "01a08020-8506-7fd0-bad4-e01c402d0ad7",
+        "started_at": 1788856009,
+        "model_context_window": 258400,
+        "collaboration_mode_kind": "default"
+      }
+    }
+  },
+  {
+    "source_file": "rollout-2026-09-08T11-25-11-01a0801f-04d6-71b1-9c10-a6eb157f1639.jsonl",
+    "event": {
+      "timestamp": "2026-09-08T08:26:50.472Z",
+      "ordinal": 9,
+      "type": "event_msg",
+      "payload": {
+        "type": "item_completed",
+        "thread_id": "01a0801f-04d6-71b1-9c10-a6eb157f1639",
+        "turn_id": "01a08020-8506-7fd0-bad4-e01c402d0ad7",
+        "item": {
+          "type": "UserMessage",
+          "id": "01a08020-86e8-70f2-8786-03dd6e9f3549",
+          "content": [
+            {
+              "type": "text",
+              "text": "Run only the read-only shell command `pwd`, then reply with the directory. This is the explicit hooks=false case of an authorized disposable observation. Do not edit files, initialize anything, contact GitHub, delegate, or run a workflow.",
+              "text_elements": []
+            }
+          ]
+        },
+        "started_at_ms": 1788856010472,
+        "completed_at_ms": 1788856010472
+      }
+    }
+  },
+  {
+    "source_file": "rollout-2026-09-08T11-25-11-01a0801f-04d6-71b1-9c10-a6eb157f1639.jsonl",
+    "event": {
+      "timestamp": "2026-09-08T08:26:55.193Z",
+      "ordinal": 13,
+      "type": "event_msg",
+      "payload": {
+        "type": "item_completed",
+        "thread_id": "01a0801f-04d6-71b1-9c10-a6eb157f1639",
+        "turn_id": "01a08020-8506-7fd0-bad4-e01c402d0ad7",
+        "item": {
+          "type": "CommandExecution",
+          "id": "exec-7c683ad5-3050-402e-aa28-5b710a27da2e",
+          "process_id": "82680",
+          "command": [
+            "/bin/zsh",
+            "-lc",
+            "pwd"
+          ],
+          "cwd": "file:///private/tmp/adk-hooks-20260908-s1k0zmx7/disabled-fixture",
+          "parsed_cmd": [
+            {
+              "type": "unknown",
+              "cmd": "pwd"
+            }
+          ],
+          "source": "unified_exec_startup",
+          "status": "completed",
+          "stdout": "/private/tmp/adk-hooks-20260908-s1k0zmx7/disabled-fixture\n",
+          "stderr": "",
+          "aggregated_output": "/private/tmp/adk-hooks-20260908-s1k0zmx7/disabled-fixture\n",
+          "exit_code": 0,
+          "duration": {
+            "secs": 0,
+            "nanos": 3458
+          },
+          "formatted_output": "/private/tmp/adk-hooks-20260908-s1k0zmx7/disabled-fixture\n"
+        },
+        "started_at_ms": 1788856015192,
+        "completed_at_ms": 1788856015193
+      }
+    }
+  },
+  {
+    "source_file": "rollout-2026-09-08T11-25-11-01a0801f-04d6-71b1-9c10-a6eb157f1639.jsonl",
+    "event": {
+      "timestamp": "2026-09-08T08:26:57.684Z",
+      "ordinal": 19,
+      "type": "event_msg",
+      "payload": {
+        "type": "task_complete",
+        "turn_id": "01a08020-8506-7fd0-bad4-e01c402d0ad7",
+        "last_agent_message": "/private/tmp/adk-hooks-20260908-s1k0zmx7/disabled-fixture",
+        "started_at": 1788856009,
+        "completed_at": 1788856017,
+        "duration_ms": 7684,
+        "time_to_first_token_ms": 1999
+      }
+    }
+  }
+]

@@ -1,0 +1,54 @@
+{
+  "command": "python3 selective tomllib inspection after desktop-normal-config.py apply",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "kit_revision": "144bc7f55ac7d98988acb4c4691f017ccbbb43f8",
+  "observed_at": "2026-09-08T20:55:56.062571+00:00",
+  "configuration_layers": [
+    {
+      "path": "/Users/topi/.codex/config.toml",
+      "exists": true,
+      "hook_settings": {}
+    },
+    {
+      "path": "/private/tmp/adk-hooks-20260908-s1k0zmx7/desktop-unset-fixture/.codex/config.toml",
+      "exists": false,
+      "hook_settings": {}
+    },
+    {
+      "path": "/private/tmp/adk-hooks-20260908-s1k0zmx7/.codex/config.toml",
+      "exists": false,
+      "hook_settings": {}
+    },
+    {
+      "path": "/private/tmp/.codex/config.toml",
+      "exists": false,
+      "hook_settings": {}
+    },
+    {
+      "path": "/private/.codex/config.toml",
+      "exists": false,
+      "hook_settings": {}
+    },
+    {
+      "path": "/.codex/config.toml",
+      "exists": false,
+      "hook_settings": {}
+    },
+    {
+      "path": "/etc/codex/config.toml",
+      "exists": false,
+      "hook_settings": {}
+    },
+    {
+      "path": "/etc/codex/managed_config.toml",
+      "exists": false,
+      "hook_settings": {}
+    },
+    {
+      "path": "/etc/codex/requirements.toml",
+      "exists": false,
+      "hook_settings": {}
+    }
+  ],
+  "live_scope": "Filesystem settings only; waiting for operator Hooks UI trust review and a fresh local task. No desktop default or execution result credited yet."
+}
