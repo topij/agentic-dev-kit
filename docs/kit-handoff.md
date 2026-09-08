@@ -64,13 +64,97 @@ fallback panel do its work on a gate.
   interpreter split is a candidate contributor rather than an established cause.
 - `#698`, `#706`, `#534`, `#561` and `#393` all stay open.
 
-▶ Next: In Claude, `/session-start` — Phase 5 exit is still the live question and still
-needs its own exact decision, as do the cs-toolkit replay, new initialization, adoption
-completion and the fixture PR. Two things want an operator decision first: whether the
-friction log's recurring panel-findings pattern graduates to a rule, and whether this
-session's friction entries are filed to the tracker. Run
+**Both operator decisions this block asked for were given, and one is done.**
+
+- **Filing: done.** The issue-shaped friction went to the tracker — [`#712`](https://github.com/topij/agentic-dev-kit/issues/712)
+  (lens isolation, both occurrences), [`#713`](https://github.com/topij/agentic-dev-kit/issues/713)
+  (`panel_prompt.py` resolving its base at assembly time), and occurrence comments on
+  `#561` and `#393`. The rest stayed in the log, and each routed entry now records where
+  it went, so triage reconciles rather than re-files.
+- **Graduation: decided yes, not yet written.** That is the next piece of work.
+
+▶ Next: **In Codex, run the parked hooks batch — it is unblocked and its inputs are
+perishable.** It was held for one live run after `#698`'s fix existed; that fix merged as
+`ec75075`. `/hooks` is the only authority for what it must clear — hook execution after
+trust, the explicitly-disabled case, and other clients' defaults — and static doctor
+output is not. Verifying `#698`'s correction in the field is the same run.
+
+**Do not repeat what that batch already credited.** Its earlier run discovered the
+fixture's registration in `/hooks`, posted the disposable unset-case observation to
+`#698`, and carried the reserved `#608`/`#255` dispositions, which the operator approved
+and closed on 2026-09-07 — that record is in the *live Codex hooks batch* block below.
+What remains is only what a live run must still establish: hook execution after trust,
+the explicitly-disabled case, other clients' defaults, and `#698`'s fix in the field.
+
+**Recheck continuity first** against
+`saved_plans/adopt-reg01-application-evidence_2026-09-07/fixture-inventory-after-reg01.json`
+(the post-REG-01 baseline; disagreement with FIX-01 is not drift), work in a disposable
+copy, and **stop rather than rebuild** if either original temporary tree is missing:
+
+    fixture: /private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture
+    source:  /private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source
+
+**They expire, and the mechanism is now established rather than guessed.**
+`/System/Library/LaunchDaemons/com.apple.tmp_cleaner.plist` runs `com.apple.tmp_cleaner`
+at `Hour = 0` daily, `launchctl print-disabled system` does not list it, `man tmp_cleaner`
+reads *"Remove old content from /tmp"*, and `strings /usr/libexec/tmp_cleaner` shows
+`daily_clean_tmps_days="3"` applied as `-atime +3 -mtime +3 -ctime +3`. So `/tmp` content
+untouched for more than three days is deleted, and empty directories after it.
+
+`stat -f "%N atime=%Sa mtime=%Sm"` on 2026-09-08 reported `kit-source` at 2026-09-06 and
+`fixture` at 2026-09-07 on both timestamps. Read the deadline off that yourself rather
+than from a sentence written earlier.
+
+**This paragraph was wrong twice before, in two different ways**, and the difference is
+the useful part:
+
+- `d72bac4` said a reboot ended the route. No command is recorded anywhere against it — it
+  was an assumption, written as fact.
+- `ff248b1` replaced that in one edit with two claims: that `/private/tmp` survives a
+  reboot, and that no cleaner is installed in `/etc/periodic/daily`. The second came from
+  an `ls` on a path that does not exist, whose *failure* was read as evidence of
+  *absence*.
+
+So one was never checked and one was checked wrongly. Verify before restating any of it.
+The instruction does not depend on the mechanism: check both trees first, and stop rather
+than rebuild if either is gone.
+
+Then, in Claude, **write the prose-claims rule.** The 2026-08-22 friction entry parked
+*"every finding was in a claim about the work rather than in the work"* pending a
+recurrence with a mechanism, and the operator gave that approval in session — a decision
+with no forge artifact, resting on this record.
+
+**Scope it narrowly, and read this before writing:** the broad reading — *"panel findings
+land in claims rather than mechanisms"* — is **contradicted by this session's own
+evidence.** `#709`'s four HIGH findings were real defects in mechanisms, including a
+working bypass of its guard. Do not write that rule. What recurred, and what has a
+mechanism, is narrower — and **it covers one of the two PR #711 instances, not both.**
+A review lens established the difference by tracing the commits, and the distinction is
+the useful part:
+
+- The stale entry count **is** author-side: one commit added a friction entry and left
+  the digit two lines below, in the same paragraph it was editing.
+- The stale PR #710 line **is not**: it was written true, and went stale because #710
+  merged externally between review rounds. The later edit that missed it touched a
+  different paragraph.
+
+So one is *an author not re-reading text adjacent to their own edit*, and the other is
+*a claim about mutable external state that nothing re-validates*. Before writing a rule,
+settle whether those want one rule or two — and note that the second may need no new rule
+at all, since `AGENTS.md` already says a current-state claim does not belong in prose.
+What it lacks is enforcement, and the issue for that is [`#120`](https://github.com/topij/agentic-dev-kit/issues/120),
+a cheaper terminal check for record accuracy — **not** `#586`, which scopes itself to
+executed prose, says "Not record prose" outright, and names `#120` as the half it
+deliberately leaves alone.
+Bind prose surfaces; leave code alone. Placement is itself a judgement call —
+the rule binds authors rather than lenses, which argues for `AGENTS.md` over the panel
+doctrine, but that is not settled here.
+
+Then: the operator holds the friction-log triage. Run
 `python3 scripts/check_doc_budget.py` for where `docs/kit-friction-log.md` stands against
-its budget; `triage-friction-log` is the route once those decisions exist.
+its budget; `triage-friction-log` is the route. Phase 5 exit is still the live question and still needs its own exact
+decision, as do the cs-toolkit replay, new initialization, adoption completion and the
+fixture PR.
 
 ______________________________________________________________________
 
@@ -261,96 +345,6 @@ continuity against `fixture-inventory-after-reg01.json` before any approved exec
 Keep every Codex-only confirmation for the batched Codex session, and keep new
 initialization, adoption completion, fixture PR, Phase 5 exit and cs-toolkit replay on
 their own exact decisions.
-
-______________________________________________________________________
-
-## Session — 2026-09-06 (REG-01 registration payloads, in Claude Code)
-
-**Theme —** Take the runtime-registration blocker and prepare its exact decision.
-
-- The [REG-01 record](../saved_plans/adopt-reg01-runtime-registration_2026-09-06.md)
-  retains the drafted payloads with their digests, the per-scope doctor reports,
-  both sets of negative controls and the write boundary. **Scope is recommended, not decided:**
-  both runtimes. The original fixture was not written to, no initializer ran, and
-  nothing here states what either runtime loaded.
-- Continuity was rechecked first, against the FIX-01 baseline that supersedes the
-  VER-02/VER-03 inventory. `uv run python <scratch>/recheck_continuity_fix01.py` in
-  `/Users/topi/Coding/agentic-dev-kit` at
-  `a4419dcd541f25162971615444aa995bc0dfb474` on 2026-09-06 UTC exited zero. Its one
-  status divergence is expected and explained in the record: the lens files were
-  already untracked before FIX-01, so only `AGENTS.md` gains a line.
-- Each scope was read by the fixture copy's **own** installed doctor, in disposable
-  copies. Every scope exits zero including the do-nothing baseline, so the exit code is
-  not what separates them — the report body is, and the two runtimes' checks are
-  disjoint: only Codex gets a lifecycle verdict, only Claude gets `#606`'s grant check.
-- The green lines were falsified before being relied on. A wrong timeout exits 1; the
-  kit's own `scripts/` allow entry in this `scripts/devkit` adopter fires `#606`; an
-  altered command string silently loses its lifecycle verdict at exit 0.
-- Filed on that last control and on a related blind spot: **#698**, where `kit_doctor`
-  grades `[features].hooks` only when `.codex/config.toml` exists, so a fully verified
-  `hooks.json` reports green with the switch never set. The silent-verdict half went to
-  **#392** as an occurrence rather than a new issue, because that issue's option 3 is
-  the fix for both axes.
-- **Everything resting on live Codex behaviour is parked for one batched Codex
-  session:** whether the payloads load and are trusted via `/hooks`, #698's open
-  question, and the reserved `#608`/`#255` dispositions.
-- The maintained [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md) retains
-  Phase 5 in progress and Phase 6 not started. The second blocker — the installed
-  suite's failures in PR #686's log, with its `test_lane_launcher.py` root-helper defect
-  belonging there as a `#534` occurrence — is untouched by design. New initialization,
-  adoption completion, fixture PR, Phase 5 exit and cs-toolkit replay keep separate
-  exact decisions.
-
-▶ Next: In Claude, `/session-start` — then either give REG-01 its exact scope decision
-(the record recommends both runtimes; approving it authorizes a real `permissions.allow`
-grant in the fixture tree, not only a file a diagnostic reads) and apply the drafted
-payloads after a fresh continuity recheck, or take the remaining Phase 5 blocker: the
-bounded assessment of the initializer, launcher-policy and portability failures in PR
-#686's retained terminal log, adding occurrences to `#534` rather than re-filing. Keep
-every Codex-only confirmation for the batched Codex session.
-
-______________________________________________________________________
-
-## Session — 2026-09-06 (friction-log triage, in Claude Code)
-
-**Theme —** Graduate the friction-log inbox on exact operator decisions.
-
-- The operator decided in-session: `approve TRI-01, archive TRI-02 TRI-03, park TRI-04
-  TRI-05 TRI-06`, superseding an earlier `approve all`. Filed: #693, the initializer's
-  refusal of an indentless `doc_budgets` list that `kitconfig` accepts — the entry the
-  2026-09-06 adopt-continuation block left reserved. Archived without filing: the
-  2026-09-01 entry and its recurrence. Parked and byte-identical in place: the
-  `claude -p` and `panel_prompt.py` entries (2026-08-27) and the eight-panel-rounds
-  entry (2026-08-22).
-- **Candidate ids shifted.** This run's `TRI-04`/`TRI-05`/`TRI-06` are the 2026-09-03
-  run's `TRI-03`/`TRI-04`/`TRI-05`. The 2026-09-06 graduation marker records the mapping
-  and how it was established; read it before quoting a reserved id from an older block.
-  `#608`/`#255` remain reserved.
-- Swept by PR #694, merged on 2026-09-06 as `991ad16e7a2237e5440695c78573592f1b87964e`;
-  its graduation marker is the committed approval record.
-  Review was the fallback panel — CodeRabbit's auto reviews are disabled, treated as an
-  outage rather than a waiver. Its adversarial lens found that the marker overstated
-  `#393` as recording both the 2026-09-01 entry and its recurrence when only the
-  recurrence is on the tracker; that was fixed before merge, and the disposition of
-  every finding is on the pull request.
-- **The run had to be unblocked first, and that is now on the tracker.** A terminal
-  `completed` record from the 2026-09-03 run occupied the live state path and no row
-  authorizes a later run to clear it, so drafting could not start until the operator
-  approved removing it. Recorded as an occurrence on
-  [#425](https://github.com/topij/agentic-dev-kit/issues/425), whose own direction 1
-  predicted the inverse case. Also filed: #695, the `forge-finalize` log having no slot
-  for the review-fix round this session actually needed; #696, a graduation marker
-  asserting tracker state it never verified.
-- **What the sweep could not reach.** The parked entries are a deliberate decision, and
-  the graduation markers accumulate in the same file. `triage-friction-log` can reduce
-  neither, so another sweep is not the remedy; whether marker blocks belong in this file
-  at all is `#224`'s territory and needs a decision. PR #694's review disposition
-  carries this session's stamped figures.
-
-▶ Next: In Claude, `/session-start` — the adopt-continuation thread below is unchanged
-and still the live work; this session touched only the friction log. Note that #693 now
-covers the initializer/`kitconfig` grammar split that the block below left reserved, so
-it is a filed ticket rather than an open decision.
 
 ______________________________________________________________________
 
