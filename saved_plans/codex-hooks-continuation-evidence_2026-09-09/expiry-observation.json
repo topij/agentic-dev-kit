@@ -1,0 +1,28 @@
+{
+  "command": "stat -f on required roots; plutil -p cleaner plist; strings /usr/libexec/tmp_cleaner; man find",
+  "revision": "144bc7f55ac7d98988acb4c4691f017ccbbb43f8",
+  "observed_at": "2026-09-08T11:32:07.448857+03:00",
+  "observations": {
+    "fixture": {
+      "root": "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+      "timestamps": {
+        "accessed": "2026-09-07T06:55:42.714645+03:00",
+        "modified": "2026-09-07T06:55:42.714026+03:00",
+        "changed": "2026-09-07T06:55:42.714026+03:00"
+      },
+      "root_timestamp_age_threshold": "2026-09-10T06:55:42.714645+03:00",
+      "next_scheduled_midnight_after_root_timestamp_threshold": "2026-09-11T00:00:00+03:00"
+    },
+    "source": {
+      "root": "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source",
+      "timestamps": {
+        "accessed": "2026-09-06T09:24:14.039170+03:00",
+        "modified": "2026-09-06T09:23:58.398989+03:00",
+        "changed": "2026-09-06T09:23:58.398989+03:00"
+      },
+      "root_timestamp_age_threshold": "2026-09-09T09:24:14.039170+03:00",
+      "next_scheduled_midnight_after_root_timestamp_threshold": "2026-09-10T00:00:00+03:00"
+    }
+  },
+  "limit": "Root timestamps give scheduling risk, not a guarantee that every child survives until then; file deletion applies all access/modification/change predicates per file and directory deletion additionally requires emptiness."
+}

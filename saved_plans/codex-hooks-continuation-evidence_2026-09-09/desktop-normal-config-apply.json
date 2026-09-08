@@ -1,0 +1,16 @@
+{
+  "command": "python3 /Users/topi/Coding/agentic-dev-kit/reports/codex-hooks-batch_2026-09-08/desktop-normal-config.py apply",
+  "observed_at": "2026-09-08T20:55:10.007401+00:00",
+  "kit_revision": "144bc7f55ac7d98988acb4c4691f017ccbbb43f8",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "config_path": "/Users/topi/.codex/config.toml",
+  "config_before_sha256": "e0f20008d2baca65a49b4b4041671b2b7eec65b4175d6cfcb485e230dc2b268c",
+  "authorization": "Operator answered Yes to temporarily removing only features.hooks from the ordinary config, running a fresh local disposable-fixture task, and restoring the setting.",
+  "change": {
+    "section": "[features]",
+    "removed": "hooks = true",
+    "added": null
+  },
+  "config_after_sha256": "2bbbc0933b1e91d229063663c098b25639ddbfc452271c09a92e2061c327e9ea",
+  "features_hooks_after": "unset"
+}

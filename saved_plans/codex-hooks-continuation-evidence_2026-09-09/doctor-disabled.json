@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "python3",
+    "/Users/topi/Coding/agentic-dev-kit/scripts/kit_doctor.py",
+    "--root",
+    "/private/tmp/adk-hooks-20260908-s1k0zmx7/disabled-fixture",
+    "--manifest",
+    "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source/kit-manifest.json"
+  ],
+  "cwd": "/private/tmp/adk-hooks-20260908-s1k0zmx7/disabled-fixture",
+  "kit_revision": "144bc7f55ac7d98988acb4c4691f017ccbbb43f8",
+  "observed_at": "2026-09-08T08:03:06.221674+00:00",
+  "exit_code": 1,
+  "stdout": "kit-doctor \u2014 installation report\n\n  \u2713 config schema: v2\n  \u2713 paths.engines: scripts/devkit\n  \u2713 pre-push hook: installed\n  \u2713 .claude/settings.json [claude]: scripts/devkit/check_doc_budget.py resolves\n  \u2713 .claude/settings.json [claude]: scripts/devkit/check_memory_budget.py resolves\n  \u2713 .claude/settings.json [claude]: scripts/devkit/hooks/pr_followup_hook.py resolves\n  \u2713 .codex/hooks.json [codex]: scripts/devkit/check_doc_budget.py resolves\n  \u2713 .codex/hooks.json [codex]: scripts/devkit/hooks/pr_followup_hook.py resolves\n  \u2713 .codex/hooks.json [codex]: check_doc_budget.py canonical lifecycle form verified\n  \u2713 .codex/hooks.json [codex]: pr_followup_hook.py canonical lifecycle form verified\n  \u2717 .codex/config.toml [codex]: Codex lifecycle hooks are disabled by the project config \u2014 lifecycle wiring does not match\n  \u2713 .claude/agents/adversarial.md [claude lens=adversarial]: matches the running doctor's expected output\n  \u2713 .claude/agents/correctness.md [claude lens=correctness]: matches the running doctor's expected output\n  \u2713 ROADMAP.md: in use\n  \u2713 notes/friction.md: in use\n  \u2713 AGENTS.md: in use\n  \u2713 CLAUDE.md: in use\n\n  files: 62 unchanged, 0 differ, 0 missing, 0 unknown\n  \u2713 intact for this adoption \u2014 full install, nothing declined\n  \u24d8 3 file(s) this baseline does not mention either way \u2014 neither installed nor declined, so most likely added to the kit since it was recorded:\n      scripts/devkit/tests/test_pre_push_hook.py\n      scripts/devkit/tests/fixtures/shipped-registrations/codex-hooks.json\n      scripts/devkit/tests/fixtures/shipped-registrations/claude-settings.json\n      Run /upgrade to accept or decline them.\n  baseline: installed from kit ab0a6d62308b\n",
+  "stderr": ""
+}

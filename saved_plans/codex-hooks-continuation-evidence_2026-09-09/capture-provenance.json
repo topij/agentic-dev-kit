@@ -1,0 +1,64 @@
+{
+  "command": "python3 curated evidence promotion in parent task transcript",
+  "observed_at": "2026-09-08T21:09:05.485023+00:00",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "kit_revision": "144bc7f55ac7d98988acb4c4691f017ccbbb43f8",
+  "fixture_revision": "08ac687f4ae14218a3861c6b8b143d8b86c4e3c2",
+  "source_revision": "ab0a6d62308b298478b2f85fc961f14348f35365",
+  "capture_selection": [
+    {
+      "raw_source": "/Users/topi/Coding/agentic-dev-kit/reports/codex-hooks-batch_2026-09-08/cli-unset.raw",
+      "raw_sha256": "91cba0b0ab69aa18e295ebf3bd65cead7acbd836d9cff4c61b5b0080bc386ca1",
+      "stripped_source_sha256": "fad342dc8b94856c214492807785b7d5b8398a982959a58f87b5d7ae6220c6f4",
+      "selection": "Exact unique Hooks overview spans through their footer, plus debug-config stack through Requirements when present. ANSI-stripped derivatives are not screen reconstructions; no table cells were reconstructed."
+    },
+    {
+      "raw_source": "/Users/topi/Coding/agentic-dev-kit/reports/codex-hooks-batch_2026-09-08/cli-unset-instrumented.raw",
+      "raw_sha256": "61769373a6a4d988a6abb33ad6ad2a65ca39ad1c58007514ab8cc7a7f5cb138d",
+      "stripped_source_sha256": "5b1137859a44fd9f5f8b34d757d17f440d5be066288d3622469d4305f3a52111",
+      "selection": "Exact unique Hooks overview spans through their footer, plus debug-config stack through Requirements when present. ANSI-stripped derivatives are not screen reconstructions; no table cells were reconstructed."
+    },
+    {
+      "raw_source": "/Users/topi/Coding/agentic-dev-kit/reports/codex-hooks-batch_2026-09-08/cli-disabled.raw",
+      "raw_sha256": "c94406e6b60d6ab72881dc851fbff8177c4db77d4034da261a4d8ec47ec02b76",
+      "stripped_source_sha256": "07c654d1999ffa821fee0eeae3cdd14f9568cbdfd2af69c465cd87ab88494a3f",
+      "selection": "Exact unique Hooks overview spans through their footer, plus debug-config stack through Requirements when present. ANSI-stripped derivatives are not screen reconstructions; no table cells were reconstructed."
+    }
+  ],
+  "scope": "CLI observations ran on 2026-09-08. Desktop task began 2026-09-08 UTC / local and finished 2026-09-09 local. Settings Hooks is the observed desktop surface; the composer did not offer CLI /hooks. This is not a guarantee for every client or hook type. Full raw captures and failed GUI/observer attempts remain in ignored reports. No auth, full normal config, or full conversation rollout is promoted.",
+  "copied_files": [
+    "retained-audit.json",
+    "final-audit.json",
+    "expiry-observation.json",
+    "engine-entries.jsonl",
+    "instrumentation.json",
+    "doctor-unset.json",
+    "doctor-disabled.json",
+    "doctor-enabled.json",
+    "desktop-execution.json",
+    "desktop-command-events.json",
+    "desktop-after-trust-pre-task.json",
+    "desktop-instrumentation.json",
+    "desktop-normal-config-apply.json",
+    "desktop-normal-config-restore.json",
+    "desktop-normal-unset-preflight.json",
+    "desktop-cleanup.json",
+    "desktop-fixture-after-trust.png",
+    "make-test-full.json"
+  ],
+  "derived_files": [
+    "setup.json",
+    "cli-hooks-excerpts.txt",
+    "doctor-structured-registration-observations.json",
+    "desktop-cleanup.json",
+    "cli-command-events.json",
+    "unset-setup-selection.json",
+    "disabled-setup-selection.json",
+    "make-test-full.log"
+  ],
+  "derivation_notes": "setup.json retains initial continuity and hashes the recorded index stdout rather than copying its full listing; desktop-cleanup.json adds the private launcher final-state readback and replaces the earlier speculative window note. cli-command-events.json selects task boundaries, user input and completed commands from the instrumented unset session and disabled session. The setup selections retain only the .codex inventory entries from the prelaunch records. Final private configs are copied from the original retained CLI export. fixture-hooks.json is the unchanged registration read from the restored unset copy.",
+  "make_test_log_derivation": {
+    "raw_sha256": "6348fd9ae2cb86d1474adfc591779a1deb897d2934f3a5dd361814b569d47a59",
+    "transformation": "Trailing whitespace removed from each line only; pytest traceback and summary text retained."
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "case": "unset",
+  "git_head": "08ac687f4ae14218a3861c6b8b143d8b86c4e3c2",
+  "hooks_sha256": "dbea8d8084adcc50e786af584c7e407fc5d7040bf26bd614c9966e9ba2797cfb",
+  "codex_inventory_selection": {
+    ".codex": {
+      "mode": "0o755",
+      "kind": "directory"
+    },
+    ".codex/hooks.json": {
+      "mode": "0o644",
+      "kind": "file",
+      "sha256": "dbea8d8084adcc50e786af584c7e407fc5d7040bf26bd614c9966e9ba2797cfb"
+    }
+  },
+  "project_config_absent_from_inventory": true
+}

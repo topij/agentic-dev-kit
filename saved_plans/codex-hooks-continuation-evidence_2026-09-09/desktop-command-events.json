@@ -1,0 +1,59 @@
+[
+  {
+    "timestamp": "2026-09-08T20:59:55.198Z",
+    "ordinal": 8,
+    "type": "response_item",
+    "payload": {
+      "type": "function_call_output",
+      "id": "fco_01a082d1-73ab-78a3-89b7-f5ceb910c03c",
+      "name": "create_thread",
+      "namespace": "codex_app",
+      "output": "<codex_delegation>\n  <source_thread_id>01a08004-d01e-7c81-9362-b4908d08c942</source_thread_id>\n  <input>Run `pwd` once and return its output. Do not edit files or run any other command.</input>\n</codex_delegation>",
+      "internal_chat_message_metadata_passthrough": {
+        "turn_id": "01a082d1-73a2-7ad3-9cf6-b8e440fedc8d",
+        "create_time": 1788901195.197956
+      }
+    }
+  },
+  {
+    "timestamp": "2026-09-08T20:59:59.508Z",
+    "ordinal": 12,
+    "type": "response_item",
+    "payload": {
+      "type": "custom_tool_call",
+      "id": "ctc_0391a8560c63c2b1016aa0774ec5a087d2900455065510a9a9",
+      "status": "completed",
+      "call_id": "call_edOkX0b8wiKi7f5D2sSa2ZnH",
+      "name": "exec",
+      "input": "const result = await tools.exec_command({cmd:\"pwd\",max_output_tokens:1000}); text(result.output);\n",
+      "internal_chat_message_metadata_passthrough": {
+        "turn_id": "01a082d1-73a2-7ad3-9cf6-b8e440fedc8d",
+        "create_time": 1788901196.380151
+      }
+    }
+  },
+  {
+    "timestamp": "2026-09-08T20:59:59.628Z",
+    "ordinal": 15,
+    "type": "response_item",
+    "payload": {
+      "type": "custom_tool_call_output",
+      "id": "ctco_01a082d2-0f0c-7be3-8a89-74ce41649a23",
+      "call_id": "call_edOkX0b8wiKi7f5D2sSa2ZnH",
+      "output": [
+        {
+          "type": "input_text",
+          "text": "Script completed\nWall time 0.1 seconds\nOutput:\n"
+        },
+        {
+          "type": "input_text",
+          "text": "/private/tmp/adk-hooks-20260908-s1k0zmx7/desktop-unset-fixture\n"
+        }
+      ],
+      "internal_chat_message_metadata_passthrough": {
+        "turn_id": "01a082d1-73a2-7ad3-9cf6-b8e440fedc8d",
+        "create_time": 1788901199.62837
+      }
+    }
+  }
+]

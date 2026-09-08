@@ -1,0 +1,22 @@
+{
+  "case": "disabled",
+  "git_head": "08ac687f4ae14218a3861c6b8b143d8b86c4e3c2",
+  "hooks_sha256": "dbea8d8084adcc50e786af584c7e407fc5d7040bf26bd614c9966e9ba2797cfb",
+  "codex_inventory_selection": {
+    ".codex": {
+      "mode": "0o755",
+      "kind": "directory"
+    },
+    ".codex/config.toml": {
+      "mode": "0o644",
+      "kind": "file",
+      "sha256": "7d59ec088f039328edd6055a108b838c0da1f31822bdc8b9026d66c85b3bbb72"
+    },
+    ".codex/hooks.json": {
+      "mode": "0o644",
+      "kind": "file",
+      "sha256": "dbea8d8084adcc50e786af584c7e407fc5d7040bf26bd614c9966e9ba2797cfb"
+    }
+  },
+  "project_config_absent_from_inventory": false
+}

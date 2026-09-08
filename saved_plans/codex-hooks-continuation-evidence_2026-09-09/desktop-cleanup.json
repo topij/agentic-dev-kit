@@ -1,0 +1,47 @@
+{
+  "command": "python3 verified disposable-engine restoration, private auth/backup cleanup, and baseline audit",
+  "observed_at": "2026-09-08T21:03:52.508941+00:00",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "kit_revision": "144bc7f55ac7d98988acb4c4691f017ccbbb43f8",
+  "continuity": {
+    "command": "python3 /Users/topi/Coding/agentic-dev-kit/reports/codex-hooks-batch_2026-09-08/audit.py",
+    "cwd": "/Users/topi/Coding/agentic-dev-kit",
+    "kit_revision": "144bc7f55ac7d98988acb4c4691f017ccbbb43f8",
+    "observed_at": "2026-09-08T21:03:52.487703+00:00",
+    "results": {
+      "fixture": {
+        "revision": "08ac687f4ae14218a3861c6b8b143d8b86c4e3c2",
+        "baseline": "/Users/topi/Coding/agentic-dev-kit/saved_plans/adopt-reg01-application-evidence_2026-09-07/fixture-inventory-after-reg01.json",
+        "inventory_matches": true,
+        "git_matches": true
+      },
+      "source": {
+        "revision": "ab0a6d62308b298478b2f85fc961f14348f35365",
+        "baseline": "/Users/topi/Coding/agentic-dev-kit/saved_plans/codex-adopt-ver02-evidence_2026-09-06/source-input-inventory.json",
+        "inventory_matches": true,
+        "git_matches": true
+      }
+    }
+  },
+  "disposable_inventory_matches_pre_instrumentation": true,
+  "ordinary_hooks_setting_restored": true,
+  "cleanup": [
+    {
+      "path": "/private/tmp/adk-hooks-20260908-s1k0zmx7/desktop-state/auth.json",
+      "existed": false,
+      "absent_after": true
+    },
+    {
+      "path": "/private/tmp/adk-hooks-20260908-s1k0zmx7/normal-config-amendment/config.original.toml",
+      "existed": true,
+      "absent_after": true
+    }
+  ],
+  "isolated_launcher_readback": {
+    "status": "desktop process exited",
+    "process_exit_code": 0,
+    "credential_copy_removed": true,
+    "finished_at": "2026-09-08T20:20:34.532362+00:00"
+  },
+  "isolated_launcher_scope": "Read back during wrap-up. The private launcher had already exited and removed its auth copy; no app termination was performed by this cleanup."
+}

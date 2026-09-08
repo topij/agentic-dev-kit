@@ -1,0 +1,12 @@
+check_for_update_on_startup = false
+
+[projects."/private/tmp/adk-hooks-20260908-s1k0zmx7/unset-fixture"]
+trust_level = "trusted"
+
+[hooks.state]
+
+[hooks.state."/private/tmp/adk-hooks-20260908-s1k0zmx7/unset-fixture/.codex/hooks.json:post_tool_use:0:0"]
+trusted_hash = "sha256:1aa9c9c37907587eac22d6e1a07236f7ef17498cc8a1cef5f8502232a99f03ac"
+
+[hooks.state."/private/tmp/adk-hooks-20260908-s1k0zmx7/unset-fixture/.codex/hooks.json:session_start:0:0"]
+trusted_hash = "sha256:2e4c0243b7b34dd4d374720c721e72ceee15ddd4d3d9384b7d3ac3ffd94c99d8"

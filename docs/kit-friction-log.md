@@ -24,6 +24,29 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-09-09
+
+- **Desktop hook testing looped on app mode while the task used another config.**
+  During the [hooks continuation](../saved_plans/codex-hooks-continuation_2026-09-09.md),
+  guidance repeatedly asked the operator to identify or switch windows from their
+  appearance. The supplied Codex view did not identify its effective config; the
+  recorded fixture task used the ordinary profile with hooks explicitly enabled.
+  A private profile's saved mode was then overinterpreted as the explanation for
+  the operator's window. **M** — mechanism: app identity, UI mode and task/config
+  identity were treated as interchangeable observations. Proposed direction: bind
+  the actual task's cwd and configuration before directing another UI step; use
+  the available task API for the bounded test once its target is established.
+  Parked because the operator went to sleep before wrap-up and no exact tracker
+  payload was approved. This adds an occurrence without sweeping existing entries.
+
+- **A following shell line committed after staged validation failed.** During this
+  wrap-up, `git diff --cached --check` rejected trailing whitespace in a copied
+  pytest log, but the following `git commit` still ran because the shell command
+  did not stop on the Python validator's failure. **L** — the unpublished record
+  was corrected; the log now declares its whitespace-only transformation. Keep
+  dependent commit work in a later tool call after reading validation, as the
+  wrap-up workflow already prescribes. Parked for accumulation; no tracker write.
+
 ## 2026-09-07
 
 - **`make test` fails on `main` in a way CI cannot see, and not always on the same test.**

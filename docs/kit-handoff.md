@@ -14,10 +14,36 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-07 — `#698`'s doctor correction and `#706`'s push gate merged.
+Last updated: 2026-09-09 — parked hooks continuation recorded in Codex.
 Phase 5 exit remains the live question and retains its own exact decision.
 
-## Latest session — 2026-09-07 (#698 doctor correction and #706 push gate, in Claude Code)
+## Latest session — 2026-09-09 (hooks continuation, in Codex)
+
+**Theme —** Finish the authorized live observations and retain their limits.
+
+- The [continuation record](../saved_plans/codex-hooks-continuation_2026-09-09.md)
+  binds CLI `/hooks`, the operator's desktop Settings → Hooks capture, engine-entry
+  evidence and the doctor invocations to their commands, revisions and dates.
+  It distinguishes execution after trust from discovery, and scopes the disabled
+  observation to the CLI. The desktop result does not assert every client's default.
+- The operator approved temporarily removing the ordinary user hooks setting for
+  the desktop observation, then restoring it. The record retains the config
+  amendment, fresh local task, script restoration and original-tree audits.
+  The disposable desktop project remains in the app.
+- Earlier discovery, tracker dispositions and field exercises were not credited
+  again. Phase 5 exit, cs-toolkit replay, new initialization, adoption completion
+  and the fixture PR retain their own exact decisions.
+- The session's desktop profile-identification friction was parked in the inbox
+  after the operator left; no tracker payload was approved or posted. The
+  operator-held triage and Claude prose-claims work were not performed.
+
+▶ Next: In Claude, `/session-start` — read this handoff's 2026-09-07 scope note
+before writing the approved prose-claims rule. Keep the reserved Phase 5 and
+adoption decisions separate, and reconcile routed friction rather than re-file it.
+
+______________________________________________________________________
+
+## Session — 2026-09-07 (#698 doctor correction and #706 push gate, in Claude Code)
 
 **Theme —** Take the two delegate-shaped items and `#534`'s panel follow-ups, and let the
 fallback panel do its work on a gate.
@@ -352,4 +378,3 @@ ______________________________________________________________________
 > Active open items from them are folded into the "Open for next session" lists above.
 
 ______________________________________________________________________
-
