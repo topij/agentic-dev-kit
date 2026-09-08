@@ -93,6 +93,7 @@ and still the live work; this session touched only the friction log. Note that #
 covers the initializer/`kitconfig` grammar split that the block below left reserved, so
 it is a filed ticket rather than an open decision.
 
+______________________________________________________________________
 
 ## Session — 2026-09-06 (approved FIX-01 application, in Claude Code)
 

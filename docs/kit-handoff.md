@@ -105,11 +105,19 @@ untouched for more than three days is deleted, and empty directories after it.
 `fixture` at 2026-09-07 on both timestamps. Read the deadline off that yourself rather
 than from a sentence written earlier.
 
-**Three earlier attempts at this paragraph each asserted a different unchecked mechanism**
-— a reboot ending the route, then `/private/tmp` surviving one, then no cleaner existing.
-The error underneath all three was the same: a check whose command *failed* was read as
-evidence of *absence*. Verify before restating any of it. The instruction does not depend
-on the mechanism: check both trees first, and stop rather than rebuild if either is gone.
+**This paragraph was wrong twice before, in two different ways**, and the difference is
+the useful part:
+
+- `d72bac4` said a reboot ended the route. No command is recorded anywhere against it — it
+  was an assumption, written as fact.
+- `ff248b1` replaced that in one edit with two claims: that `/private/tmp` survives a
+  reboot, and that no cleaner is installed in `/etc/periodic/daily`. The second came from
+  an `ls` on a path that does not exist, whose *failure* was read as evidence of
+  *absence*.
+
+So one was never checked and one was checked wrongly. Verify before restating any of it.
+The instruction does not depend on the mechanism: check both trees first, and stop rather
+than rebuild if either is gone.
 
 Then, in Claude, **write the prose-claims rule.** The 2026-08-22 friction entry parked
 *"every finding was in a claim about the work rather than in the work"* pending a
