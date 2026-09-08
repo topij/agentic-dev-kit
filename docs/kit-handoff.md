@@ -94,12 +94,22 @@ copy, and **stop rather than rebuild** if either original temporary tree is miss
     fixture: /private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture
     source:  /private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source
 
-Both were present on 2026-09-08, last accessed 2026-09-07 and 2026-09-06. They are
-temporary, outside version control, and the instruction above is to stop rather than
-rebuild — so check them before anything else. **No eviction mechanism is asserted here:**
-`/private/tmp` on this machine is disk-backed and survives a reboot, and no tmp cleaner is
-installed in `/etc/periodic/daily` either. What makes this go first is that the route
-depends on state nothing in the repository can restore, not a predicted deadline.
+**They expire, and the mechanism is now established rather than guessed.**
+`/System/Library/LaunchDaemons/com.apple.tmp_cleaner.plist` runs `com.apple.tmp_cleaner`
+at `Hour = 0` daily, `launchctl print-disabled system` does not list it, `man tmp_cleaner`
+reads *"Remove old content from /tmp"*, and `strings /usr/libexec/tmp_cleaner` shows
+`daily_clean_tmps_days="3"` applied as `-atime +3 -mtime +3 -ctime +3`. So `/tmp` content
+untouched for more than three days is deleted, and empty directories after it.
+
+`stat -f "%N atime=%Sa mtime=%Sm"` on 2026-09-08 reported `kit-source` at 2026-09-06 and
+`fixture` at 2026-09-07 on both timestamps. Read the deadline off that yourself rather
+than from a sentence written earlier.
+
+**Three earlier attempts at this paragraph each asserted a different unchecked mechanism**
+— a reboot ending the route, then `/private/tmp` surviving one, then no cleaner existing.
+The error underneath all three was the same: a check whose command *failed* was read as
+evidence of *absence*. Verify before restating any of it. The instruction does not depend
+on the mechanism: check both trees first, and stop rather than rebuild if either is gone.
 
 Then, in Claude, **write the prose-claims rule.** The 2026-08-22 friction entry parked
 *"every finding was in a claim about the work rather than in the work"* pending a
