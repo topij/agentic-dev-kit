@@ -5,6 +5,95 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-09-06 (REG-01 registration payloads, in Claude Code)
+
+**Theme —** Take the runtime-registration blocker and prepare its exact decision.
+
+- The [REG-01 record](../saved_plans/adopt-reg01-runtime-registration_2026-09-06.md)
+  retains the drafted payloads with their digests, the per-scope doctor reports,
+  both sets of negative controls and the write boundary. **Scope is recommended, not decided:**
+  both runtimes. The original fixture was not written to, no initializer ran, and
+  nothing here states what either runtime loaded.
+- Continuity was rechecked first, against the FIX-01 baseline that supersedes the
+  VER-02/VER-03 inventory. `uv run python <scratch>/recheck_continuity_fix01.py` in
+  `/Users/topi/Coding/agentic-dev-kit` at
+  `a4419dcd541f25162971615444aa995bc0dfb474` on 2026-09-06 UTC exited zero. Its one
+  status divergence is expected and explained in the record: the lens files were
+  already untracked before FIX-01, so only `AGENTS.md` gains a line.
+- Each scope was read by the fixture copy's **own** installed doctor, in disposable
+  copies. Every scope exits zero including the do-nothing baseline, so the exit code is
+  not what separates them — the report body is, and the two runtimes' checks are
+  disjoint: only Codex gets a lifecycle verdict, only Claude gets `#606`'s grant check.
+- The green lines were falsified before being relied on. A wrong timeout exits 1; the
+  kit's own `scripts/` allow entry in this `scripts/devkit` adopter fires `#606`; an
+  altered command string silently loses its lifecycle verdict at exit 0.
+- Filed on that last control and on a related blind spot: **#698**, where `kit_doctor`
+  grades `[features].hooks` only when `.codex/config.toml` exists, so a fully verified
+  `hooks.json` reports green with the switch never set. The silent-verdict half went to
+  **#392** as an occurrence rather than a new issue, because that issue's option 3 is
+  the fix for both axes.
+- **Everything resting on live Codex behaviour is parked for one batched Codex
+  session:** whether the payloads load and are trusted via `/hooks`, #698's open
+  question, and the reserved `#608`/`#255` dispositions.
+- The maintained [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md) retains
+  Phase 5 in progress and Phase 6 not started. The second blocker — the installed
+  suite's failures in PR #686's log, with its `test_lane_launcher.py` root-helper defect
+  belonging there as a `#534` occurrence — is untouched by design. New initialization,
+  adoption completion, fixture PR, Phase 5 exit and cs-toolkit replay keep separate
+  exact decisions.
+
+▶ Next: In Claude, `/session-start` — then either give REG-01 its exact scope decision
+(the record recommends both runtimes; approving it authorizes a real `permissions.allow`
+grant in the fixture tree, not only a file a diagnostic reads) and apply the drafted
+payloads after a fresh continuity recheck, or take the remaining Phase 5 blocker: the
+bounded assessment of the initializer, launcher-policy and portability failures in PR
+#686's retained terminal log, adding occurrences to `#534` rather than re-filing. Keep
+every Codex-only confirmation for the batched Codex session.
+
+______________________________________________________________________
+
+## Session — 2026-09-06 (friction-log triage, in Claude Code)
+
+**Theme —** Graduate the friction-log inbox on exact operator decisions.
+
+- The operator decided in-session: `approve TRI-01, archive TRI-02 TRI-03, park TRI-04
+  TRI-05 TRI-06`, superseding an earlier `approve all`. Filed: #693, the initializer's
+  refusal of an indentless `doc_budgets` list that `kitconfig` accepts — the entry the
+  2026-09-06 adopt-continuation block left reserved. Archived without filing: the
+  2026-09-01 entry and its recurrence. Parked and byte-identical in place: the
+  `claude -p` and `panel_prompt.py` entries (2026-08-27) and the eight-panel-rounds
+  entry (2026-08-22).
+- **Candidate ids shifted.** This run's `TRI-04`/`TRI-05`/`TRI-06` are the 2026-09-03
+  run's `TRI-03`/`TRI-04`/`TRI-05`. The 2026-09-06 graduation marker records the mapping
+  and how it was established; read it before quoting a reserved id from an older block.
+  `#608`/`#255` remain reserved.
+- Swept by PR #694, merged on 2026-09-06 as `991ad16e7a2237e5440695c78573592f1b87964e`;
+  its graduation marker is the committed approval record.
+  Review was the fallback panel — CodeRabbit's auto reviews are disabled, treated as an
+  outage rather than a waiver. Its adversarial lens found that the marker overstated
+  `#393` as recording both the 2026-09-01 entry and its recurrence when only the
+  recurrence is on the tracker; that was fixed before merge, and the disposition of
+  every finding is on the pull request.
+- **The run had to be unblocked first, and that is now on the tracker.** A terminal
+  `completed` record from the 2026-09-03 run occupied the live state path and no row
+  authorizes a later run to clear it, so drafting could not start until the operator
+  approved removing it. Recorded as an occurrence on
+  [#425](https://github.com/topij/agentic-dev-kit/issues/425), whose own direction 1
+  predicted the inverse case. Also filed: #695, the `forge-finalize` log having no slot
+  for the review-fix round this session actually needed; #696, a graduation marker
+  asserting tracker state it never verified.
+- **What the sweep could not reach.** The parked entries are a deliberate decision, and
+  the graduation markers accumulate in the same file. `triage-friction-log` can reduce
+  neither, so another sweep is not the remedy; whether marker blocks belong in this file
+  at all is `#224`'s territory and needs a decision. PR #694's review disposition
+  carries this session's stamped figures.
+
+▶ Next: In Claude, `/session-start` — the adopt-continuation thread below is unchanged
+and still the live work; this session touched only the friction log. Note that #693 now
+covers the initializer/`kitconfig` grammar split that the block below left reserved, so
+it is a filed ticket rather than an open decision.
+
+
 ## Session — 2026-09-06 (approved FIX-01 application, in Claude Code)
 
 **Theme —** Apply the retained ownership/lens diff to the original adoption fixture.
