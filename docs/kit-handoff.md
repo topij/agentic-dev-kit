@@ -73,7 +73,24 @@ fallback panel do its work on a gate.
   it went, so triage reconciles rather than re-files.
 - **Graduation: decided yes, not yet written.** That is the next piece of work.
 
-▶ Next: In Claude, **write the prose-claims rule.** The 2026-08-22 friction entry parked
+▶ Next: **In Codex, run the parked hooks batch — it is unblocked and its inputs are
+perishable.** It was held for one live run after `#698`'s fix existed; that fix merged as
+`ec75075`. `/hooks` is the only authority for what it must clear — hook execution after
+trust, the explicitly-disabled case, and other clients' defaults — and static doctor
+output is not. Verifying `#698`'s correction in the field is the same run.
+
+**Recheck continuity first** against
+`saved_plans/adopt-reg01-application-evidence_2026-09-07/fixture-inventory-after-reg01.json`
+(the post-REG-01 baseline; disagreement with FIX-01 is not drift), work in a disposable
+copy, and **stop rather than rebuild** if either original temporary tree is missing:
+
+    fixture: /private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture
+    source:  /private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source
+
+Both were present on 2026-09-08 and both live under `/private/tmp`, so a reboot ends this
+route. That is why it goes first.
+
+Then, in Claude, **write the prose-claims rule.** The 2026-08-22 friction entry parked
 *"every finding was in a claim about the work rather than in the work"* pending a
 recurrence with a mechanism; the operator approved graduating it.
 
