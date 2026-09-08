@@ -64,13 +64,35 @@ fallback panel do its work on a gate.
   interpreter split is a candidate contributor rather than an established cause.
 - `#698`, `#706`, `#534`, `#561` and `#393` all stay open.
 
-▶ Next: In Claude, `/session-start` — Phase 5 exit is still the live question and still
-needs its own exact decision, as do the cs-toolkit replay, new initialization, adoption
-completion and the fixture PR. Two things want an operator decision first: whether the
-friction log's recurring panel-findings pattern graduates to a rule, and whether this
-session's friction entries are filed to the tracker. Run
-`python3 scripts/check_doc_budget.py` for where `docs/kit-friction-log.md` stands against
-its budget; `triage-friction-log` is the route once those decisions exist.
+**Both operator decisions this block asked for were given, and one is done.**
+
+- **Filing: done.** The issue-shaped friction went to the tracker — [`#712`](https://github.com/topij/agentic-dev-kit/issues/712)
+  (lens isolation, both occurrences), [`#713`](https://github.com/topij/agentic-dev-kit/issues/713)
+  (`panel_prompt.py` resolving its base at assembly time), and occurrence comments on
+  `#561` and `#393`. The rest stayed in the log, and each routed entry now records where
+  it went, so triage reconciles rather than re-files.
+- **Graduation: decided yes, not yet written.** That is the next piece of work.
+
+▶ Next: In Claude, **write the prose-claims rule.** The 2026-08-22 friction entry parked
+*"every finding was in a claim about the work rather than in the work"* pending a
+recurrence with a mechanism; the operator approved graduating it.
+
+**Scope it narrowly, and read this before writing:** the broad reading — *"panel findings
+land in claims rather than mechanisms"* — is **contradicted by this session's own
+evidence.** `#709`'s four HIGH findings were real defects in mechanisms, including a
+working bypass of its guard. Do not write that rule. What recurred, and what has a
+mechanism, is narrower: **an author editing text adjacent to a fact they are
+simultaneously changing does not re-read that text.** Both instances on PR #711 were in
+the same paragraph as the edit, and both were introduced by the fix for the previous
+finding. Bind prose surfaces; leave code alone. Placement is itself a judgement call —
+the rule binds authors rather than lenses, which argues for `AGENTS.md` over the panel
+doctrine, but that is not settled here.
+
+Then: `docs/kit-friction-log.md` is past its budget and the operator holds the triage —
+run `python3 scripts/check_doc_budget.py` for where it stands, and `triage-friction-log`
+is the route. Phase 5 exit is still the live question and still needs its own exact
+decision, as do the cs-toolkit replay, new initialization, adoption completion and the
+fixture PR.
 
 ______________________________________________________________________
 
