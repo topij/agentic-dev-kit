@@ -94,8 +94,12 @@ copy, and **stop rather than rebuild** if either original temporary tree is miss
     fixture: /private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture
     source:  /private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source
 
-Both were present on 2026-09-08 and both live under `/private/tmp`, so a reboot ends this
-route. That is why it goes first.
+Both were present on 2026-09-08, last accessed 2026-09-07 and 2026-09-06. They are
+temporary, outside version control, and the instruction above is to stop rather than
+rebuild — so check them before anything else. **No eviction mechanism is asserted here:**
+`/private/tmp` on this machine is disk-backed and survives a reboot, and no tmp cleaner is
+installed in `/etc/periodic/daily` either. What makes this go first is that the route
+depends on state nothing in the repository can restore, not a predicted deadline.
 
 Then, in Claude, **write the prose-claims rule.** The 2026-08-22 friction entry parked
 *"every finding was in a claim about the work rather than in the work"* pending a
@@ -120,7 +124,10 @@ So one is *an author not re-reading text adjacent to their own edit*, and the ot
 *a claim about mutable external state that nothing re-validates*. Before writing a rule,
 settle whether those want one rule or two — and note that the second may need no new rule
 at all, since `AGENTS.md` already says a current-state claim does not belong in prose.
-What it lacks is enforcement, which is `#586`'s territory rather than a wording change.
+What it lacks is enforcement, and the issue for that is [`#120`](https://github.com/topij/agentic-dev-kit/issues/120),
+a cheaper terminal check for record accuracy — **not** `#586`, which scopes itself to
+executed prose, says "Not record prose" outright, and names `#120` as the half it
+deliberately leaves alone.
 Bind prose surfaces; leave code alone. Placement is itself a judgement call —
 the rule binds authors rather than lenses, which argues for `AGENTS.md` over the panel
 doctrine, but that is not settled here.
