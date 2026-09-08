@@ -39,9 +39,11 @@
   `.github/workflows/test.yml` pins `python-version: "3.12"`. `#393` records that `json`'s
   `RecursionError` behaviour changes at 3.14 and names a *different* test. **M** — the
   interpreter split is a candidate contributor, not an established mechanism, and the
-  non-determinism is unexplained. Route to `#393` as a second occurrence, or file
-  separately if it is judged distinct. Worth recording either way: a red local suite that
-  CI reports green trains a session to discount its own verification command.
+  non-determinism is unexplained. **Routed 2026-09-08 to
+  [`#393`](https://github.com/topij/agentic-dev-kit/issues/393#issuecomment-5579081191) as
+  an occurrence, on the operator's go-ahead**; that issue stays open. Worth recording
+  either way: a red local suite that CI reports green trains a session to discount its own
+  verification command.
 
 - **A genuinely unparseable `scripts/hooks/pre-push` passed `make test`.** `check-syntax`
   hands four filenames to one `bash -n`, and `pre-push` is last on that line, so it is
@@ -50,7 +52,10 @@
   already names the mechanism; what this adds is the blast radius — the hook runs on every
   push here and in every adopter, so a broken one ships through a green suite. The hole for
   that one file is now shut by `#709`, with `test_the_hook_parses_on_its_own`. **M** —
-  `#561` remains the general fix and is worth raising in priority on this evidence.
+  **routed 2026-09-08 to
+  [`#561`](https://github.com/topij/agentic-dev-kit/issues/561#issuecomment-5579077909) as
+  an occurrence, on the operator's go-ahead.** That issue stays open and remains the
+  general fix; the comment carries the blast-radius evidence for raising its priority.
 
 - **The parse failure itself: bash 3.2 mis-parses an apostrophe inside a quoted heredoc
   within `$( )`.** Reproduced minimally on `GNU bash, version 3.2.57(1)-release
@@ -72,7 +77,9 @@
   because the rule as written ("use an absolute path outside the given tree") is satisfied
   by the very command that breaks it. Six later lens launches stated the hazard inline and
   none recurred, so the carrier is the gap rather than the wording — the same shape as
-  `#469`.
+  `#469`. **Filed 2026-09-08 as
+  [`#712`](https://github.com/topij/agentic-dev-kit/issues/712)**, together with the
+  untracked-file entry below, on the operator's go-ahead.
 
 - **Lenses end their turn on a progress update while a background `make test` runs.** Four
   occurrences on 2026-09-07 across three PRs, each needing a `SendMessage` resume to
@@ -95,7 +102,9 @@
   worktrees and still reached the cockpit's tree, once through shared git admin state and
   once through a bare relative path. Two occurrences, one session, different routes, same
   contract item — the shape to watch is whether isolating a lens by *tree* is the wrong
-  unit when the lens can name any path it likes.
+  unit when the lens can name any path it likes. **Filed 2026-09-08 as
+  [`#712`](https://github.com/topij/agentic-dev-kit/issues/712)**, together with the
+  `cp -a` entry above, on the operator's go-ahead.
 
 - **`panel_prompt.py` rendered a stale base, and only the lens contract caught it.** The
   `#711` round was assembled after `#709` merged, and its prompts named
@@ -109,7 +118,9 @@
   base at render time rather than at an earlier assembly step, or state the timestamp of
   the resolution it used so a stale one is visible in the prompt. Worth filing: the
   cockpit had no signal, and a lens that skipped the check would have reviewed the wrong
-  diff and reported it clean.
+  diff and reported it clean. **Filed 2026-09-08 as
+  [`#713`](https://github.com/topij/agentic-dev-kit/issues/713)**, on the operator's
+  go-ahead.
 
 - **`#666`'s ordering is enforced by the engine, and the recovery costs a full round.**
   Round 2 of `#708`'s panel was fixed before its receipt was recorded; the retroactive
