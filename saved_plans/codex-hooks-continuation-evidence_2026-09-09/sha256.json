@@ -1,7 +1,7 @@
 {
-  "capture-provenance.json": "18be1716dc914d9c8412b08128e79a4c2ad9b1092a31a9abc70d16a750982619",
+  "capture-provenance.json": "6537dee23dec77308b728556f410626b14388b774c4204062d5417b9254ccbac",
   "cli-command-events.json": "bf97f7649ba37b7ac7b6e78d8356dd78dd80bbf1c2864ecea774faa4b0749adc",
-  "cli-hooks-excerpts.txt": "aa1aff2bafa18202810b335e6dee623ae42f1c735fb46669cc5fca02fcb51070",
+  "cli-hooks-excerpts.txt": "76d5884dd7ea9ffd1771a8921d47049fa7fa5d1a2583dbf0b926ad60a4d73483",
   "desktop-after-trust-pre-task.json": "10240719397fce18994c19ba16e4f560be35eee8ef9bc771de78848e404b581b",
   "desktop-cleanup.json": "2df954b9e017f26ef01978011b3ae80d71850e2bd03b6fad0715d68e68339f89",
   "desktop-command-events.json": "9cb46831a776d716872fd95f3d5238d17250e553f139d1202e6173f720366c23",

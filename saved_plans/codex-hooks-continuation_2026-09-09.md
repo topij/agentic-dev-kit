@@ -25,7 +25,6 @@ retain the comparisons. Neither original was rebuilt or used for instrumentation
 
 The CLI launches used `script -q <capture> env CODEX_HOME=<private-state>
 TERM=xterm-256color codex --cd <disposable-fixture> --no-alt-screen`.
-The live header identified codex-cli `0.149.1` at the revision/date above.
 The private user configuration omitted hooks feature settings; the unset fixture
 omitted `.codex/config.toml`, and the disabled fixture set `[features].hooks = false`.
 `/debug-config` identified the private layers and reported no requirements.

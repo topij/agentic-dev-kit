@@ -1,5 +1,7 @@
 cli-unset.raw
 
+│ >_ OpenAI Codex (v0.149.1)            │
+
     Hooks  Lifecycle hooks from config and enabled plugins.   ⚠ 2 hooks need review before they can run.   Event                 Installed   Active      Review      Description  PreToolUse            0           0           0           Before a tool exec  PermissionRequest     0           0           0           When permission is  PostToolUse           1           0           1           After a tool execu  PreCompact            0           0           0           Before context com  PostCompact           0           0           0           After context comp  SessionStart          1           0           1           When a new session  SessionEnd            0           0           0           Right before a ses  UserPromptSubmit      0           0           0           When the user subm  SubagentStart         0           0           0           When a subagent is  SubagentStop          0           0           0           Right before a sub  Stop                  0           0           0           Right before Codex   Press t to trust all; enter to review hooks; esc to close
 
     Hooks  Lifecycle hooks from config and enabled plugins.   Event                 Installed   Active      Description  PreToolUse            0           0           Before a tool executes  PermissionRequest     0           0           When permission is requested  PostToolUse           1           1           After a tool executes  PreCompact            0           0           Before context compaction  PostCompact           0           0           After context compaction  SessionStart          1           1           When a new session starts  SessionEnd            0           0           Right before a session ends  UserPromptSubmit      0           0           When the user submits a prompt  SubagentStart         0           0           When a subagent is created  SubagentStop          0           0           Right before a subagent ends i  Stop                  0           0           Right before Codex ends its tu   Press enter to view hooks; esc to close
@@ -7,6 +9,8 @@ cli-unset.raw
 ---
 
 cli-unset-instrumented.raw
+
+│ >_ OpenAI Codex (v0.149.1)            │
 
     Hooks  Lifecycle hooks from config and enabled plugins.   Event                 Installed   Active      Description  PreToolUse            0           0           Before a tool executes  PermissionRequest     0           0           When permission is requested  PostToolUse           1           1           After a tool executes  PreCompact            0           0           Before context compaction  PostCompact           0           0           After context compaction  SessionStart          1           1           When a new session starts  SessionEnd            0           0           Right before a session ends  UserPromptSubmit      0           0           When the user submits a prompt  SubagentStart         0           0           When a subagent is created  SubagentStop          0           0           Right before a subagent ends i  Stop                  0           0           Right before Codex ends its tu   Press enter to view hooks; esc to close
 
@@ -26,6 +30,8 @@ Requirements:
 ---
 
 cli-disabled.raw
+
+│ >_ OpenAI Codex (v0.149.1)            │
 
     Hooks  Lifecycle hooks from config and enabled plugins.   Event                 Installed   Active      Description  PreToolUse            0           0           Before a tool executes  PermissionRequest     0           0           When permission is requested  PostToolUse           0           0           After a tool executes  PreCompact            0           0           Before context compaction  PostCompact           0           0           After context compaction  SessionStart          0           0           When a new session starts  SessionEnd            0           0           Right before a session ends  UserPromptSubmit      0           0           When the user submits a prompt  SubagentStart         0           0           When a subagent is created  SubagentStop          0           0           Right before a subagent ends i  Stop                  0           0           Right before Codex ends its tu   Press enter to view hooks; esc to close
 
