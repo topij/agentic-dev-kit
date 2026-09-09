@@ -1,0 +1,40 @@
+{
+  "adopter_merge_readback": {
+    "baseRefName": "main",
+    "headRefOid": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+    "mergeCommit": {
+      "oid": "c4119f85e07f2a089ab8d5decc94cf2cd1635d14"
+    },
+    "mergedAt": "2026-09-09T18:40:30Z",
+    "number": 2255,
+    "state": "MERGED",
+    "url": "https://github.com/in-parallel-oy/cs-toolkit/pull/2255"
+  },
+  "kit_merge_condition": "complete current-head review and CI before exercising the new merge authority",
+  "kit_revision_at_readback": "9b63bc921533b2db19b05313ff2600ee9f1ffc52",
+  "kit_wrapup_pr": "https://github.com/topij/agentic-dev-kit/pull/724",
+  "merge_argv": [
+    "gh",
+    "pr",
+    "merge",
+    "2255",
+    "--repo",
+    "in-parallel-oy/cs-toolkit",
+    "--squash",
+    "--match-head-commit",
+    "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+    "--subject",
+    "Replay the approved kit upgrade from e698ec47 (#2255)",
+    "--body",
+    "Approved REPLAY-01 replay. Verification, independent review and the operator-approved upstream #723 deferral are recorded on the pull request. The operator authorized merge when clean on 2026-09-09."
+  ],
+  "operator_authorization": {
+    "date": "2026-09-09",
+    "exact_text": "merge when clean",
+    "scope": "ongoing adopter replay and ordinary kit wrap-up PRs",
+    "source": "current interactive operator"
+  },
+  "readback_command": "gh pr view 2255 --repo in-parallel-oy/cs-toolkit --json number,url,state,headRefOid,baseRefName,mergedAt,mergeCommit",
+  "readback_date": "2026-09-09",
+  "relationship_to_replay": "later event after the stable exit read-back; original tuple bytes remain unchanged"
+}

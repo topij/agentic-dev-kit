@@ -80,6 +80,10 @@
   exists and did not bind", which is the carrier-not-wording shape of `#469` and of the
   progress-update entry already in this inbox. Parked for accumulation; if it recurs,
   capture whether the lens had an unbounded alternative it declined.
+  **Reconciled 2026-09-09 under #722:** the operator confirmed that a foreground
+  alternative was available and omitted. The park condition is discharged to the
+  [#578 occurrence](https://github.com/topij/agentic-dev-kit/issues/578#issuecomment-5605922954);
+  reconcile this entry during triage rather than re-filing it.
 
 - **Desktop hook testing looped on app mode while the task used another config.**
   During the [hooks continuation](../saved_plans/codex-hooks-continuation_2026-09-09.md),
@@ -93,6 +97,10 @@
   the available task API for the bounded test once its target is established.
   Parked because the operator went to sleep before wrap-up and no exact tracker
   payload was approved. This adds an occurrence without sweeping existing entries.
+  **Reconciled 2026-09-09 under #722:** the operator subsequently approved the
+  exact payload, filed as [#721](https://github.com/topij/agentic-dev-kit/issues/721).
+  That filing discharges the parked tracker decision; triage reconciles it rather
+  than creating another issue.
 
 - **A following shell line committed after staged validation failed.** During this
   wrap-up, `git diff --cached --check` rejected trailing whitespace in a copied
@@ -167,6 +175,10 @@
   mechanism identified beyond "the instruction is present and does not bind"; proposed
   direction is the same as `#469`'s, a carrier change rather than a wording one. Parked
   for accumulation; if it recurs, capture whether the lens had a foreground alternative.
+  **Reconciled 2026-09-09 under #722:** the available foreground alternative was
+  confirmed and the park condition discharged to the
+  [#578 occurrence](https://github.com/topij/agentic-dev-kit/issues/578#issuecomment-5605922954).
+  Triage reconciles this pointer rather than re-filing the entry.
 
 - **A review lens left an untracked file in the cockpit's own repository root.**
   `bad2.sh` — a lens's reproduction of the bash heredoc bug recorded above — was created

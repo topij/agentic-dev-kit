@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "uv",
+    "run",
+    "/Users/topi/Coding/in-parallel/cs-toolkit/scripts/devkit/pr_watch.py",
+    "2255",
+    "--json"
+  ],
+  "cwd": "/Users/topi/Coding/in-parallel/cs-toolkit",
+  "elapsed_seconds": 3.486753959001362,
+  "exit_code": 0,
+  "finished_at": "2026-09-09T18:29:34.307747+00:00",
+  "head": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+  "head_after": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+  "started_at": "2026-09-09T18:29:30.734496+00:00",
+  "status_after": "",
+  "status_before": ""
+}

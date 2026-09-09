@@ -1,0 +1,46 @@
+"""Validate retained terminal evidence and pinned destination bytes between tuple reads."""
+import datetime,hashlib,json,os,subprocess
+from pathlib import Path
+repo=Path(os.environ['REPO']);kit=Path(os.environ['KIT']);root=Path(os.environ['EVIDENCE'])
+assert Path.cwd().resolve()==repo.resolve()
+head=subprocess.check_output(['git','-C',str(repo),'rev-parse','HEAD'],text=True).strip()
+assert head=='21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351'
+assert not subprocess.check_output(['git','-C',str(repo),'status','--short'],text=True)
+manifest=json.loads((repo/'kit-manifest.json').read_text())
+assert manifest['kit_commit']==os.environ['KIT_SOURCE']
+for source_path,entry in manifest['files'].items():
+    target=repo/('scripts/devkit/'+source_path.removeprefix('scripts/') if source_path.startswith('scripts/') else source_path)
+    digest=hashlib.sha256(target.read_bytes()).hexdigest()
+    assert digest==entry['sha256']==hashlib.sha256((kit/source_path).read_bytes()).hexdigest(),source_path
+    if '/test_' in source_path and source_path.endswith('.py'):
+        r=subprocess.run(['rg','-n','is_install_baseline|shipped_registration|require_kit_source',str(target)],capture_output=True,text=True)
+        assert r.returncode==1 and not r.stderr
+receipts={}
+for label in ['installed-tests','adopter-check-root','scoped-precommit','installed-doctor','source-adapter-report','adopter-doc-budget','fork-policy-tests','reconciliation','final-source-doctor','baseline-inventory-probe','nonobject-manifest-probe']:
+    d=json.loads((root/(label+'.json')).read_text())
+    assert d['head']==d['head_after']==head and d['status_before']==d['status_after']==''
+    assert d['exit_code']==0,label
+    receipts[label]={'receipt':d,'stdout_sha256':hashlib.sha256((root/(label+'.stdout')).read_bytes()).hexdigest()}
+doctor=json.loads((root/'final-source-doctor.stdout').read_text())
+assert doctor['baseline_trusted'] and not doctor['baseline_is_comparison'] and doctor['declared_scope_known']
+assert doctor['baseline_kit_commit']==os.environ['KIT_SOURCE']
+assert all(f['state'] in ['unchanged','declined'] for f in doctor['files'])
+adapters=json.loads((root/'source-adapter-report.stdout').read_text())['adapters']
+assert adapters and all(a['state']=='kit-current' for a in adapters)
+assert {a['runtime'] for a in adapters}=={'claude','codex'}
+package=json.loads((root/'adopter-make-test.json').read_text());assert package['exit_code']==2 and package['head']==package['head_after']==head and package['status_after']==''
+clean=Path('/private/tmp/adopter-correctness-21fe33bb-UhJZNe')
+clone_results={}
+for label in ['make-test','make-check-root','make-test-devkit']:
+    r=json.loads((clean/(label+'-elevated.result.json')).read_text())
+    assert r['revision']==head and r['returncode']==0
+    assert subprocess.check_output(['git','-C',r['cwd'],'rev-parse','HEAD'],text=True).strip()==head
+    assert not subprocess.check_output(['git','-C',r['cwd'],'status','--short'],text=True)
+    clone_results[label]={'receipt':r,'stdout_sha256':hashlib.sha256((clean/(label+'-elevated.log')).read_bytes()).hexdigest()}
+node_log=(root/'fork-policy-tests.stdout').read_text()
+for node in ['tests/test_dev_session_headless.py::test_self_merge_class_refuses_before_creating_a_session','tests/test_reconcile_sessions.py::TestClassification::test_merge_ready_operator_pr_is_held_for_exit_4','tests/test_review_receipt_integrity.py::test_parallel_runtime_adapters_reach_the_shared_merge_override','tests/test_review_receipt_integrity.py::test_shared_parallel_policy_requires_descriptor_env_replacement','tests/test_review_receipt_integrity.py::test_scope_adapter_forwards_shared_state_root_and_repo_identity','tests/test_review_receipt_integrity.py::test_merge_always_parks_before_invoking_gh_or_review_engine[operator]']:
+    assert node+' PASSED' in node_log,node
+review=clean/'fork-reconciliation-report.md'
+assert review.is_file()
+assert 'Approve filing and deferral' in (root/'nonobject-approval.txt').read_text()
+print(json.dumps({'at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'cwd':str(repo),'adopter_head':head,'kit_source':os.environ['KIT_SOURCE'],'result':'adopter condition verified with disclosed checkout-artifact failure and operator-accepted upstream #723 limitation','phase_5_complete':False,'item_5':'blocked; original fixture and source missing; no rebuild decision','receipts':receipts,'clean_clone_results':clone_results,'original_checkout_make_test':package,'reconciliation_review_sha256':hashlib.sha256(review.read_bytes()).hexdigest(),'accepted_limitation':'https://github.com/topij/agentic-dev-kit/issues/723','approval_sha256':hashlib.sha256((root/'nonobject-approval.txt').read_bytes()).hexdigest()},sort_keys=True,indent=2))

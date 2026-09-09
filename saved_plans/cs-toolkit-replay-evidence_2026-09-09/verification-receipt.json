@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "python3",
+    "-B",
+    "/private/tmp/adk-cs-replay-decision-20260909-mxhnaq2w/verify_adopter_condition.py"
+  ],
+  "cwd": "/Users/topi/Coding/in-parallel/cs-toolkit",
+  "elapsed_seconds": 0.2954629589985416,
+  "exit_code": 0,
+  "finished_at": "2026-09-09T18:28:33.542732+00:00",
+  "head": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+  "head_after": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+  "started_at": "2026-09-09T18:28:33.204077+00:00",
+  "status_after": "",
+  "status_before": ""
+}

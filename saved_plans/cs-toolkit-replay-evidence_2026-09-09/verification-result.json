@@ -1,0 +1,337 @@
+{
+  "accepted_limitation": "https://github.com/topij/agentic-dev-kit/issues/723",
+  "adopter_head": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+  "approval_sha256": "47a58624abf53469ee7215a8774e08370a20bcb03382b3903962d6fc393d83f4",
+  "at": "2026-09-09T18:28:33.538266+00:00",
+  "clean_clone_results": {
+    "make-check-root": {
+      "receipt": {
+        "argv": [
+          "make",
+          "check-root"
+        ],
+        "cwd": "/private/tmp/adopter-correctness-21fe33bb-UhJZNe/repo",
+        "date": "2026-09-09",
+        "returncode": 0,
+        "revision": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351"
+      },
+      "stdout_sha256": "4541e17a2dae15341c4ed5d96141f734126cf98e3d2696d913abe4e30ea1b04e"
+    },
+    "make-test": {
+      "receipt": {
+        "argv": [
+          "make",
+          "test"
+        ],
+        "cwd": "/private/tmp/adopter-correctness-21fe33bb-UhJZNe/repo",
+        "date": "2026-09-09",
+        "returncode": 0,
+        "revision": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351"
+      },
+      "stdout_sha256": "bc5b76b501ff7de35b73c35a5562422fb1cd5595ac40b6a369f6532fe71e7fae"
+    },
+    "make-test-devkit": {
+      "receipt": {
+        "argv": [
+          "make",
+          "test-devkit"
+        ],
+        "cwd": "/private/tmp/adopter-correctness-21fe33bb-UhJZNe/repo",
+        "date": "2026-09-09",
+        "returncode": 0,
+        "revision": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351"
+      },
+      "stdout_sha256": "82f26eda418636883e554c877704052468c222a4d9fa17d8df687e87b8c4c45a"
+    }
+  },
+  "cwd": "/Users/topi/Coding/in-parallel/cs-toolkit",
+  "item_5": "blocked; original fixture and source missing; no rebuild decision",
+  "kit_source": "e698ec47d6284ccd31af5ba9d8bc5657fe992310",
+  "original_checkout_make_test": {
+    "argv": [
+      "env",
+      "DEVKIT_STATE_ROOT=/private/tmp/cs-replay-package-state.iIgAwN",
+      "CS_TOOLKIT_STATE_ROOT=/private/tmp/cs-replay-package-state.iIgAwN",
+      "make",
+      "test"
+    ],
+    "cwd": "/Users/topi/Coding/in-parallel/cs-toolkit",
+    "elapsed_seconds": 115.1164048339997,
+    "exit_code": 2,
+    "finished_at": "2026-09-09T18:02:12.068193+00:00",
+    "head": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+    "head_after": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+    "started_at": "2026-09-09T18:00:16.917155+00:00",
+    "status_after": "",
+    "status_before": ""
+  },
+  "phase_5_complete": false,
+  "receipts": {
+    "adopter-check-root": {
+      "receipt": {
+        "argv": [
+          "env",
+          "DEVKIT_STATE_ROOT=/private/tmp/cs-replay-root-state.9adjty",
+          "CS_TOOLKIT_STATE_ROOT=/private/tmp/cs-replay-root-state.9adjty",
+          "make",
+          "check-root"
+        ],
+        "cwd": "/Users/topi/Coding/in-parallel/cs-toolkit",
+        "elapsed_seconds": 459.4062127500001,
+        "exit_code": 0,
+        "finished_at": "2026-09-09T18:11:03.401232+00:00",
+        "head": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "head_after": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "started_at": "2026-09-09T18:03:23.968442+00:00",
+        "status_after": "",
+        "status_before": ""
+      },
+      "stdout_sha256": "757276a12c5d21830c243341d65aae7d931a5b286089b0c20cb1edbabe4aa13a"
+    },
+    "adopter-doc-budget": {
+      "receipt": {
+        "argv": [
+          "uv",
+          "run",
+          "/Users/topi/Coding/in-parallel/cs-toolkit/scripts/devkit/check_doc_budget.py"
+        ],
+        "cwd": "/Users/topi/Coding/in-parallel/cs-toolkit",
+        "elapsed_seconds": 0.05524370899729547,
+        "exit_code": 0,
+        "finished_at": "2026-09-09T18:11:28.301146+00:00",
+        "head": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "head_after": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "started_at": "2026-09-09T18:11:28.196128+00:00",
+        "status_after": "",
+        "status_before": ""
+      },
+      "stdout_sha256": "813a2cfe05dbf70b253861e6b301ff320c00eb0b704c27e9f64c30d5e5434c66"
+    },
+    "baseline-inventory-probe": {
+      "receipt": {
+        "argv": [
+          "uv",
+          "run",
+          "--directory",
+          "/Users/topi/Coding/in-parallel/cs-toolkit/domains/support-docs",
+          "python",
+          "/private/tmp/adk-cs-replay-decision-20260909-mxhnaq2w/baseline_inventory_probe.py"
+        ],
+        "cwd": "/Users/topi/Coding/in-parallel/cs-toolkit",
+        "elapsed_seconds": 33.33088150000185,
+        "exit_code": 0,
+        "finished_at": "2026-09-09T18:11:08.685232+00:00",
+        "head": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "head_after": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "started_at": "2026-09-09T18:10:35.258187+00:00",
+        "status_after": "",
+        "status_before": ""
+      },
+      "stdout_sha256": "a3c0b1a2769fd2344438f001686a0265015150ff012972a5b8d885b0297e9330"
+    },
+    "final-source-doctor": {
+      "receipt": {
+        "argv": [
+          "uv",
+          "run",
+          "/private/tmp/agentic-dev-kit/scripts/kit_doctor.py",
+          "--root",
+          "/Users/topi/Coding/in-parallel/cs-toolkit",
+          "--manifest",
+          "/private/tmp/agentic-dev-kit/kit-manifest.json",
+          "--json"
+        ],
+        "cwd": "/Users/topi/Coding/in-parallel/cs-toolkit",
+        "elapsed_seconds": 0.09069133299999521,
+        "exit_code": 0,
+        "finished_at": "2026-09-09T18:27:58.126156+00:00",
+        "head": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "head_after": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "started_at": "2026-09-09T18:27:57.936937+00:00",
+        "status_after": "",
+        "status_before": ""
+      },
+      "stdout_sha256": "e72f768a3596e8a0993cf31832021164cb6821bf886b45a2a2cd05cb03c4bf11"
+    },
+    "fork-policy-tests": {
+      "receipt": {
+        "argv": [
+          "env",
+          "DEVKIT_STATE_ROOT=/private/tmp/cs-replay-matrix-state.YBSgPn",
+          "CS_TOOLKIT_STATE_ROOT=/private/tmp/cs-replay-matrix-state.YBSgPn",
+          "make",
+          "test-root",
+          "PYTEST_ARGS=-v -k 'dev_session_headless or dev_session_rm or reconcile_deadlines or reconcile_sessions or review_receipt_integrity'"
+        ],
+        "cwd": "/Users/topi/Coding/in-parallel/cs-toolkit",
+        "elapsed_seconds": 105.28399433400045,
+        "exit_code": 0,
+        "finished_at": "2026-09-09T18:14:12.096416+00:00",
+        "head": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "head_after": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "started_at": "2026-09-09T18:12:26.768789+00:00",
+        "status_after": "",
+        "status_before": ""
+      },
+      "stdout_sha256": "90fd4fe6a26310ef8f6aa5b4312ac89da7b54d05c9e3b41158ca855966e58958"
+    },
+    "installed-doctor": {
+      "receipt": {
+        "argv": [
+          "uv",
+          "run",
+          "/Users/topi/Coding/in-parallel/cs-toolkit/scripts/devkit/kit_doctor.py",
+          "--manifest",
+          "/private/tmp/agentic-dev-kit/kit-manifest.json"
+        ],
+        "cwd": "/Users/topi/Coding/in-parallel/cs-toolkit",
+        "elapsed_seconds": 0.10290779200295219,
+        "exit_code": 0,
+        "finished_at": "2026-09-09T18:11:27.789241+00:00",
+        "head": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "head_after": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "started_at": "2026-09-09T18:11:27.640329+00:00",
+        "status_after": "",
+        "status_before": ""
+      },
+      "stdout_sha256": "6899feb723c99a6fed011e1ef7be849bfbc5e2ec74a188c6b8bbbdf454738700"
+    },
+    "installed-tests": {
+      "receipt": {
+        "argv": [
+          "env",
+          "DEVKIT_STATE_ROOT=/private/tmp/cs-replay-installed-state.H0vV0a",
+          "CS_TOOLKIT_STATE_ROOT=/private/tmp/cs-replay-installed-state.H0vV0a",
+          "uv",
+          "run",
+          "--no-project",
+          "--with",
+          "pytest",
+          "--with",
+          "pyyaml",
+          "python",
+          "/Users/topi/Coding/in-parallel/cs-toolkit/scripts/devkit/run_installed_tests.py",
+          "--root",
+          "/Users/topi/Coding/in-parallel/cs-toolkit"
+        ],
+        "cwd": "/Users/topi/Coding/in-parallel/cs-toolkit",
+        "elapsed_seconds": 5.156565749999572,
+        "exit_code": 0,
+        "finished_at": "2026-09-09T17:59:46.109722+00:00",
+        "head": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "head_after": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "started_at": "2026-09-09T17:59:40.921701+00:00",
+        "status_after": "",
+        "status_before": ""
+      },
+      "stdout_sha256": "a56986663c0760b33446848d7b87df0604261cdc1db4b11c9ac66c4caa400a8c"
+    },
+    "nonobject-manifest-probe": {
+      "receipt": {
+        "argv": [
+          "uv",
+          "run",
+          "--no-project",
+          "--with",
+          "pytest",
+          "python",
+          "-B",
+          "/private/tmp/adk-cs-replay-decision-20260909-mxhnaq2w/probe_nonobject_manifest.py"
+        ],
+        "cwd": "/Users/topi/Coding/in-parallel/cs-toolkit",
+        "elapsed_seconds": 0.13428354200004833,
+        "exit_code": 0,
+        "finished_at": "2026-09-09T18:22:14.353929+00:00",
+        "head": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "head_after": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "started_at": "2026-09-09T18:22:14.175632+00:00",
+        "status_after": "",
+        "status_before": ""
+      },
+      "stdout_sha256": "23bd10da05e93ed696c5da72177535a5d9a890a4299bc4f05b762af7ab530452"
+    },
+    "reconciliation": {
+      "receipt": {
+        "argv": [
+          "python3",
+          "-B",
+          "/private/tmp/adk-cs-replay-decision-20260909-mxhnaq2w/reconcile_no_change.py",
+          "--repo",
+          "/Users/topi/Coding/in-parallel/cs-toolkit",
+          "--kit",
+          "/private/tmp/agentic-dev-kit",
+          "--baseline",
+          "bde4c234eaa9005e90b987007101aba98281ce88",
+          "--source",
+          "e698ec47d6284ccd31af5ba9d8bc5657fe992310",
+          "--protected",
+          "bdeaf04f1ceed92570ddcd22281b659d5eb5cc80",
+          "--input",
+          "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+          "--upgrade-pr",
+          "https://github.com/in-parallel-oy/cs-toolkit/pull/2255"
+        ],
+        "cwd": "/Users/topi/Coding/in-parallel/cs-toolkit",
+        "elapsed_seconds": 0.2855020829993009,
+        "exit_code": 0,
+        "finished_at": "2026-09-09T18:18:59.140319+00:00",
+        "head": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "head_after": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "started_at": "2026-09-09T18:18:58.810754+00:00",
+        "status_after": "",
+        "status_before": ""
+      },
+      "stdout_sha256": "5606709e202501f833a9cd1349f23749cd4de547ffb3335da50ab4e028f44f7d"
+    },
+    "scoped-precommit": {
+      "receipt": {
+        "argv": [
+          "uvx",
+          "pre-commit",
+          "run",
+          "--from-ref",
+          "bdeaf04f1ceed92570ddcd22281b659d5eb5cc80",
+          "--to-ref",
+          "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351"
+        ],
+        "cwd": "/Users/topi/Coding/in-parallel/cs-toolkit",
+        "elapsed_seconds": 2.840720207997947,
+        "exit_code": 0,
+        "finished_at": "2026-09-09T18:12:06.455120+00:00",
+        "head": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "head_after": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "started_at": "2026-09-09T18:12:03.570035+00:00",
+        "status_after": "",
+        "status_before": ""
+      },
+      "stdout_sha256": "65e5c2fd8c3fc89637c74560221713ec977a38ae1598db5d8320857aa119e637"
+    },
+    "source-adapter-report": {
+      "receipt": {
+        "argv": [
+          "uv",
+          "run",
+          "/private/tmp/agentic-dev-kit/scripts/kit_doctor.py",
+          "--root",
+          "/Users/topi/Coding/in-parallel/cs-toolkit",
+          "--adapter-report",
+          "--adapter-source",
+          "/private/tmp/agentic-dev-kit",
+          "--json"
+        ],
+        "cwd": "/Users/topi/Coding/in-parallel/cs-toolkit",
+        "elapsed_seconds": 0.11279445800028043,
+        "exit_code": 0,
+        "finished_at": "2026-09-09T18:11:28.068350+00:00",
+        "head": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "head_after": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "started_at": "2026-09-09T18:11:27.905640+00:00",
+        "status_after": "",
+        "status_before": ""
+      },
+      "stdout_sha256": "1f1bbe5729818697804d92a626d165aa88f0798eb08742b6a067e5e489232eba"
+    }
+  },
+  "reconciliation_review_sha256": "b508234099c68075ef8331c6816d849ac6a8e1023ee3768997011a9dce08f375",
+  "result": "adopter condition verified with disclosed checkout-artifact failure and operator-accepted upstream #723 limitation"
+}

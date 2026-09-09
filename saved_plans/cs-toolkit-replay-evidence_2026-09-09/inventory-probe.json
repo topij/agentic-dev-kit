@@ -1,0 +1,22 @@
+{
+  "all_unclassified_references_are_gitignored": true,
+  "changed_files_have_no_token_reference_at_either_revision": true,
+  "execution_head": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+  "inventory_sha256": "8a2ae4a9c9e68e6d585cbae6ebaa81b705a18e044f31e7e9387a4e6ce5879820",
+  "mode": "original committed test source executed against current local artifact population",
+  "private_path_list_sha256": "4990f67da60f22e045247fa3e8c03e54d5395290c5776a41b31d4ecaf9be691f",
+  "source_revision": "bdeaf04f1ceed92570ddcd22281b659d5eb5cc80",
+  "test_source_sha256": "619d69889f6359e86eb7d862846f466d5c33fe53c7ee1ad8d8e86750fd490dca",
+  "tests": {
+    "test_inventory_matches_every_runtime_token_reference": {
+      "assertion": "assert found_paths == classified_token_paths",
+      "line": 848,
+      "result": "AssertionError"
+    },
+    "test_inventory_records_every_stage_a_credential_blocker": {
+      "assertion": "assert set(operator_surfaces) == derived_operator_surfaces",
+      "line": 1177,
+      "result": "AssertionError"
+    }
+  }
+}
