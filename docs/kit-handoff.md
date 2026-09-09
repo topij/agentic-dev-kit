@@ -50,8 +50,11 @@ Phase 5 exit remains the live question and retains its own exact decision.
   falsified elsewhere in the file. The 2026-08-29 marker is left as written and the
   correction appended to the entry it points at, which is `#696`'s proposed remedy.
 - Two instance claims taken from PR #711's round dispositions did not survive checking
-  against the diffs and were corrected rather than carried. Re-derive them from the
-  commits rather than from this sentence.
+  against the diffs, and both were corrected rather than carried. The round-2 disposition
+  said the stale count sat two lines above the sentence its commit rewrote; `1bcb04e`
+  shows it **on** that rewritten line. The round-3 disposition said `8942cea` kept the
+  dated hedge; it replaced the hedge with the merge sha. Check them at those commits
+  rather than here.
 - The 2026-08-22 friction entry now records its park condition as discharged to the rule
   rather than to the tracker, so triage reconciles instead of re-filing. `#712` and `#713`
   were left untouched and the inbox was not swept.
