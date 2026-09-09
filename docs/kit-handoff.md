@@ -14,18 +14,19 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-09 — the approved prose-claims rule is written and open for
-review. Phase 5 exit remains the live question and retains its own exact decision.
+Last updated: 2026-09-09 — the approved prose-claims rule is merged.
+Phase 5 exit remains the live question and retains its own exact decision.
 
 ## Latest session — 2026-09-09 (the prose-claims rule, in Claude Code)
 
 **Theme —** Write the rule the 2026-08-22 entry parked, and keep the two mechanisms apart.
 
-- [PR #717](https://github.com/topij/agentic-dev-kit/pull/717) carries the rule. At
-  wrap-up on 2026-09-09, `uv run scripts/pr_watch.py 717` reported
-  `DONE — green, reviewed, merge-ready` at `d6b06466f62202fb438608bd42bcdca929349a17`,
-  and it was left unmerged for the operator. Re-poll rather than trusting that line.
-  `AGENTS.md` gains *Prose that goes false*, placed next to *Numbers in prose* because it
+- [PR #717](https://github.com/topij/agentic-dev-kit/pull/717) merged as `b866298`,
+  on the operator's word after `uv run scripts/pr_watch.py 717` reported
+  `DONE — green, reviewed, merge-ready` at `d6b06466f62202fb438608bd42bcdca929349a17`.
+  The merge was read back rather than inferred from the command: `gh pr view 717`
+  returned state `MERGED`, and the new section is present in `AGENTS.md` on
+  `origin/main`. `AGENTS.md` gains *Prose that goes false*, placed next to *Numbers in prose* because it
   is that section's other half: one governs the number you write, the other the sentence
   you ship without rewriting.
 - **The two PR #711 instances stayed distinct, and the section says why neither read
@@ -73,11 +74,11 @@ comment rather than a review object, which the engine reports and deliberately d
 count as evidence. The panel receipt was left standing rather than replaced by
 `coderabbit:comment-verdict`.
 
-▶ Next: `/session-start`. Several threads are live and none is obviously first —
-PR #717 was mergeable and unmerged at wrap-up, so check its live state before acting on
-it; the friction inbox has this session's parked entries alongside the earlier ones and
-its triage is operator-held; and Phase 5 exit, the cs-toolkit replay, new initialization,
-adoption completion and the fixture PR each still retain their own exact decisions.
+▶ Next: `/session-start`. Several threads are live and none is obviously first — the
+friction inbox has this session's parked entries alongside the earlier ones and its
+triage is operator-held; `#120` is now the open half of the rule that just merged; and
+Phase 5 exit, the cs-toolkit replay, new initialization, adoption completion and the
+fixture PR each still retain their own exact decisions.
 
 ______________________________________________________________________
 
