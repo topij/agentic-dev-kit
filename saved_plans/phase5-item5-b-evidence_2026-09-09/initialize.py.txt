@@ -1,0 +1,83 @@
+"""Drive the approved fixture-only initializer answers and retain its terminal."""
+import errno
+import hashlib
+import json
+import os
+import pty
+import select
+import subprocess
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+OUT = Path('/Users/topi/Coding/adk-field-exercises/item5-b-20260909/evidence')
+authority = json.loads((OUT / 'authority').read_text())
+REPO = Path(authority['fixture'])
+KIT = Path(authority['kit'])
+assert Path.cwd().resolve() == REPO
+assert subprocess.check_output(['git', '-C', str(KIT), 'rev-parse', 'HEAD'], text=True).strip() == authority['source_pin']
+answers = [
+    ('Project name [', 'adopt-context-fixture'),
+    ('Agent runtime (claude | codex | none) [', 'codex'),
+    ("Operator forge logins trusted as review sources (comma-separated, or 'none') [", 'none'),
+    ('Tracker backend (linear | github-issues | jira | none) [', 'none'),
+    ('Tracker project name [', ''),
+    ('Tracker board URL (shown in the friction-log header; blank is fine) [', ''),
+    ('Protected branch (PRs target this, never commit to it directly) [', 'main'),
+    ('Notify user id for approval DMs (blank is fine; see config/dev-model.local.yaml) [', 'tracked-fixture-recipient'),
+    ("Review bots (comma-separated, or 'none') [", 'none'),
+]
+stamp = {'argv': ['bash', str(REPO / 'init.sh'), '--no-clobber'], 'cwd': str(REPO),
+         'source_pin': authority['source_pin'],
+         'revision': subprocess.check_output(['git', '-C', str(REPO), 'rev-parse', 'HEAD'], text=True).strip(),
+         'started_at': datetime.now(timezone.utc).isoformat(), 'answers': answers}
+assert Path.cwd() == REPO
+master, slave = pty.openpty()
+process = subprocess.Popen(stamp['argv'], cwd=REPO, stdin=slave, stdout=slave, stderr=slave,
+                           env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1'})
+os.close(slave)
+transcript = bytearray()
+pending = ''
+index = 0
+deadline = time.monotonic() + 300
+try:
+    while time.monotonic() < deadline:
+        ready, _, _ = select.select([master], [], [], 1)
+        if ready:
+            try:
+                data = os.read(master, 65536)
+            except OSError as exc:
+                if exc.errno == errno.EIO:
+                    break
+                raise
+            if not data:
+                break
+            transcript.extend(data)
+            pending += data.decode(errors='replace')
+            if index < len(answers) and answers[index][0] in pending and ']: ' in pending:
+                os.write(master, (answers[index][1] + '\n').encode())
+                index += 1
+                pending = ''
+        if process.poll() is not None and not ready:
+            break
+    if process.poll() is None:
+        process.terminate()
+    stamp['exit_code'] = process.wait(timeout=15)
+finally:
+    os.close(master)
+    if process.poll() is None:
+        process.kill()
+        process.wait()
+    stamp['answered_prompts'] = index
+    stamp['finished_at'] = datetime.now(timezone.utc).isoformat()
+    assert Path.cwd() == REPO
+    with (OUT / 'initializer-terminal.txt').open('xb') as f:
+        f.write(transcript)
+    stamp['terminal_sha256'] = hashlib.sha256(transcript).hexdigest()
+    with (OUT / 'initializer.json').open('x') as f:
+        json.dump(stamp, f, indent=2)
+        f.write('\n')
+print(transcript.decode(errors='replace'))
+print(json.dumps(stamp, indent=2))
+assert index == len(answers)
+assert stamp['exit_code'] == 0

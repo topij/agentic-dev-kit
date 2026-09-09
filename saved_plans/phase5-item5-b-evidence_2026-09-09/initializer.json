@@ -1,0 +1,53 @@
+{
+  "argv": [
+    "bash",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/init.sh",
+    "--no-clobber"
+  ],
+  "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+  "source_pin": "8418118e40728c667c32a28a182697139bc7a5ef",
+  "revision": "8533c334637e8776ca7a4fe3a9fd8c6c64e35707",
+  "started_at": "2026-09-09T20:01:07.796474+00:00",
+  "answers": [
+    [
+      "Project name [",
+      "adopt-context-fixture"
+    ],
+    [
+      "Agent runtime (claude | codex | none) [",
+      "codex"
+    ],
+    [
+      "Operator forge logins trusted as review sources (comma-separated, or 'none') [",
+      "none"
+    ],
+    [
+      "Tracker backend (linear | github-issues | jira | none) [",
+      "none"
+    ],
+    [
+      "Tracker project name [",
+      ""
+    ],
+    [
+      "Tracker board URL (shown in the friction-log header; blank is fine) [",
+      ""
+    ],
+    [
+      "Protected branch (PRs target this, never commit to it directly) [",
+      "main"
+    ],
+    [
+      "Notify user id for approval DMs (blank is fine; see config/dev-model.local.yaml) [",
+      "tracked-fixture-recipient"
+    ],
+    [
+      "Review bots (comma-separated, or 'none') [",
+      "none"
+    ]
+  ],
+  "exit_code": 0,
+  "answered_prompts": 9,
+  "finished_at": "2026-09-09T20:01:08.653584+00:00",
+  "terminal_sha256": "7c02a5b9ae2bee28a01a62cff1c927ab7c781a112b30e7a1186aac2438f1d2cb"
+}

@@ -1,0 +1,85 @@
+seeded config/claude-lane-settings.json
+seeded .claude/agents/adversarial.md
+seeded .claude/agents/correctness.md
+Project name [adopt-context-fixture]: adopt-context-fixture
+Agent runtime (claude | codex | none) [codex]: codex
+Operator forge logins trusted as review sources (comma-separated, or 'none') []: none
+Tracker backend (linear | github-issues | jira | none) [none]: none
+Tracker project name []: 
+Tracker board URL (shown in the friction-log header; blank is fine) []: 
+Protected branch (PRs target this, never commit to it directly) [main]: main
+Notify user id for approval DMs (blank is fine; see config/dev-model.local.yaml) [tracked-fixture-recipient]: tracked-fixture-recipient
+Review bots (comma-separated, or 'none') []: none
+ROADMAP.md already in use — left untouched
+notes/history.md already in use — left untouched
+seeded notes/friction.md
+seeded notes/friction-archive.md
+AGENTS.md already in use — left untouched
+CLAUDE.md already in use — left untouched
+added '/state/' to .gitignore
+added '.devkit_state_root' to .gitignore
+added '.claude/worktrees/' to .gitignore
+added '*.devkit-tmp' to .gitignore
+added '/reports/' to .gitignore
+installed .git/hooks/pre-push -> scripts/devkit/hooks/pre-push
+note: the PR follow-through hook is registered by hand, once per runtime.
+      Skip whichever you have already done — `/hooks` in a session lists
+      what that runtime actually loaded, which is the authority here.
+      Codex — .codex/hooks.json, under hooks.PostToolUse, matcher "^Bash$":
+        First inspect .codex/config.toml: remove any inline registration for
+        this engine. Set [features].hooks to true; if only its deprecated
+        codex_hooks alias is present, do not leave that alias false. Codex
+        merges inline hooks with hooks.json instead of replacing them.
+        root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; [ -n "$root" ] || exit 0; exec python3 "$root/scripts/devkit/hooks/pr_followup_hook.py" --runtime codex
+        Keep this exact command form; kit_doctor assigns lifecycle semantics only
+        to the repository-owned string and leaves altered strings to path diagnostics.
+        Set the command handler timeout to 10 seconds. PostToolUse ignores
+        plain stdout; this engine returns JSON additionalContext when it fires.
+        Codex also needs the project and current hook definition trusted
+        through /hooks before it runs.
+      Claude — .claude/settings.json, under hooks.PostToolUse, matcher "Bash".
+      `if` goes on the hook entry beside `command`, not next to `matcher`:
+        python3 "$CLAUDE_PROJECT_DIR/scripts/devkit/hooks/pr_followup_hook.py" --runtime claude
+        with if: "Bash(*)"
+note: the SessionStart budget tripwires are registered by hand on each
+      applicable runtime. Skip whichever you have already done — `/hooks` in a
+      session lists what that runtime actually loaded.
+      Codex — .codex/hooks.json, under hooks.SessionStart; omit matcher
+      for open-ended coverage as new start sources are added:
+        First inspect .codex/config.toml: remove any inline registration for
+        this engine. Set [features].hooks to true; if only its deprecated
+        codex_hooks alias is present, do not leave that alias false.
+        root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0; [ -n "$root" ] || exit 0; [ -z "${JOB_NAME:-}" ] || exit 0; uv run --script "$root/scripts/devkit/check_doc_budget.py" --quiet || true
+        Keep this exact command form; kit_doctor assigns lifecycle semantics only
+        to the repository-owned string and leaves altered strings to path diagnostics.
+        Set the command handler timeout to 15 seconds. SessionStart plain stdout
+        becomes developer context, so the quiet flag keeps healthy runs empty.
+        Review and trust the project and current definition via /hooks.
+        New or changed definitions are
+        skipped until trusted; absence in a noninteractive run does not distinguish
+        pending trust from a broken command, so /hooks is the diagnostic authority.
+      Claude — .claude/settings.json, under hooks.SessionStart; omit matcher
+      here too, so a resumed session is covered:
+        [ -z "$JOB_NAME" ] && cd "$CLAUDE_PROJECT_DIR" && uv run --script scripts/devkit/check_doc_budget.py --quiet || true
+        [ -z "$JOB_NAME" ] && cd "$CLAUDE_PROJECT_DIR" && uv run --script scripts/devkit/check_memory_budget.py --quiet || true
+note: the cockpit's own command permissions are optional and hand-written.
+      They only trim approval prompts for a session you are watching; skip
+      this entirely if you would rather approve each command.
+      Claude — .claude/settings.json, under permissions.allow:
+        "Bash(gh pr view:*)", "Bash(gh pr list:*)", "Bash(gh pr checks:*)",
+        "Bash(gh run view:*)", "Bash(uv run scripts/devkit/pr_watch.py:*)"
+      The last entry names YOUR engines dir; a rule naming a path you do not
+      have grants nothing. `kit_doctor.py` reports an engine no rule reaches.
+      Codex has no per-command equivalent to receive these — its writing
+      policy is `--sandbox`, which bounds the process rather than the command
+      name. See docs/agentic-dev-kit/runtime-parity.md.
+
+agentic-dev-kit is bootstrapped (kit schema v2).
+Review config/dev-model.yaml for any remaining values (paths, doc_budgets,
+models, systemize, review.fallback_panel.lenses) and edit to taste.
+
+Upgrading later: pull the new kit files, then re-run ./init.sh — it
+migrates an older config forward in place and never touches a narrative
+doc that is actually in use.
+
+You're set — invoke $session-start next.

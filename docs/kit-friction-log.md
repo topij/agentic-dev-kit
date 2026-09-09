@@ -26,6 +26,30 @@
 
 ## 2026-09-09
 
+- **ITEM5-B exposed a drift-check applicability mismatch after #705.** The
+  [approved execution](../saved_plans/phase5-item5-b-execution_2026-09-09.md) retains
+  the installed runner's complete command, fixture/source SHAs, output and failure
+  excerpts. **M** — `test_the_drift_test_actually_executes` requires its child never
+  to skip, while #705 added `require_kit_source()` to that child so an adopter's
+  recorded baseline intentionally skips it. Proposed repair: align the parent's
+  applicability with the child and prove the liveness check still detects an improper
+  skip in a kit source tree. The same execution retains config/adapter assumptions
+  already represented on #534; neither class is #393. Searched the exact parent test
+  name with `gh search issues` and read #534's body and comments on 2026-09-09 at
+  `edc199f42bc65b1850172ea79b791ef358577ae1`; the search returned no matching item,
+  while #534 supplies the cross-test and kit-only-invariant scope. Parked for an exact
+  occurrence-payload decision because the operator went to sleep; no tracker write.
+
+- **A review suite encountered undecodable process-list output.** PR #725's
+  [initial receipt](https://github.com/topij/agentic-dev-kit/pull/725#issuecomment-5607994984)
+  retains the adversarial lens's `make test` result and targeted retry at
+  `edc199f42bc65b1850172ea79b791ef358577ae1` on 2026-09-09 in its independent scratch
+  clone. **L** — the launcher raised `UnicodeDecodeError` while reading process-list
+  output; the targeted retry passed, and the raw offending process bytes were not
+  captured. Parked for accumulation rather than asserting a reproducible repair.
+  Keep this environment-dependent observation separate from #393 and ITEM5-B's
+  installed-test failures.
+
 - **A review lens wrote into the tree it was handed, disclosed it, and restored it.**
   Round 2 of `#717`'s panel ran `git checkout <base> -- docs/kit-friction-log.md` inside
   its own handed worktree to compare `check_doc_budget.py` output across revisions, then

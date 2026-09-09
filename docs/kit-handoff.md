@@ -14,31 +14,33 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-09 — item 5 decision packet prepared; execution awaits the operator.
-Phase 5 remains blocked on delivery item 5, whose original fixture/source are missing.
+Last updated: 2026-09-09 — ITEM5-B executed; installed verification still needs repair.
+Phase 5 delivery item 5 remains incomplete; item 6's replay remains complete.
 
-## Latest session — 2026-09-09 (item 5 decision packet, in Codex)
+## Latest session — 2026-09-09 (ITEM5-B decision and execution, in Codex)
 
-The [decision packet](../saved_plans/phase5-item5-decision_2026-09-09.md) compares a
-normalized historical payload rebuild with a fresh current-kit verification fixture.
-It recommends ITEM5-B and specifies the roots, source pin, initialization answers,
-registration effects, verification scope and writes for either exact decision.
-No reconstruction, initialization, runtime launch or adopter write occurred.
+The operator approved ITEM5-B from the
+[decision packet](../saved_plans/phase5-item5-decision_2026-09-09.md), then requested
+autonomous continuation. The [execution record](../saved_plans/phase5-item5-b-execution_2026-09-09.md)
+retains the new fixture/source, initialization, registrations, local checks and baseline.
+The original missing paths were not reconstructed. No client session was launched in
+the new fixture, and no cs-toolkit write occurred.
 
-The [retained audit](../saved_plans/phase5-item5-baseline-audit_2026-09-09.json)
-records the missing original paths and byte-availability checks. It distinguishes
-recoverable payloads from unavailable cache bytes and Git/runtime continuity.
-The maintained sprint status retains item 6 as complete and item 5 as pending;
-#585's earlier placement and #723's accepted upstream deferral are unchanged.
+The [retained audit](../saved_plans/phase5-item5-baseline-audit_2026-09-09.json) remains
+the read-only assessment of the old baselines. The new execution's complete suite logs
+separate installed config/adapter assumptions and the #705 drift-liveness interaction
+from #393. Its record proposes a kit-only #534 repair slice; no repair was authorized
+or applied. Source pin, fixture commit, commands, directories and actual results are
+retained there. #585's earlier placement and #723's accepted upstream deferral are unchanged.
 
 `gh pr view 724` and `gh pr view 2255`, with their explicit kit/adopter repositories,
 read back the merges on 2026-09-09 at kit `8418118e40728c667c32a28a182697139bc7a5ef`.
 Kit #724 contains the #722 batch. This packet does not repeat that batch or re-credit
 the initial adopter pass or replay. The prior replay's snapshots remain historical.
 
-▶ Next: `$session-start` — read `saved_plans/phase5-item5-decision_2026-09-09.md`
-and obtain the operator's exact ITEM5-A or ITEM5-B decision before creating either
-proposed root. Neither option alone completes the remaining field coverage.
+▶ Next: `$session-start` — read `saved_plans/phase5-item5-b-execution_2026-09-09.md`
+and obtain approval for its kit-only #534 repair slice. Recheck the new fixture's
+retained baseline before any later approved write; do not repeat consumed ITEM5-B setup.
 
 ______________________________________________________________________
 

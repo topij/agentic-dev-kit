@@ -1,0 +1,21 @@
+{
+  "argv": [
+    "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "-B",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/kit_doctor.py",
+    "--root",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "--manifest",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/kit-manifest.json"
+  ],
+  "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+  "source_pin": "8418118e40728c667c32a28a182697139bc7a5ef",
+  "revision": "07bacf5bda3b1e7a6718c7d4528336ef81dc2143",
+  "status_before": "",
+  "started_at": "2026-09-09T20:03:08.929053+00:00",
+  "environment_overrides": {},
+  "exit_code": 0,
+  "finished_at": "2026-09-09T20:03:08.996253+00:00",
+  "log_sha256": "b47599c4e53ba702d250e488a395b220aabdcf20bfec8f4384e5b1733ebcdfc5",
+  "status_after": ""
+}

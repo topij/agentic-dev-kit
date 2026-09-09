@@ -421,13 +421,18 @@ historical observation it was and is not silently refreshed.
      from kit revision `e698ec47d6284ccd31af5ba9d8bc5657fe992310`:
      `/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture` and
      `/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source`.
-     Check both trees and stop rather than rebuild. Rebuilding from retained
-     `saved_plans/` baselines or changing the approach needs an operator decision.
+     Do not reconstruct either original path. The operator subsequently approved
+     ITEM5-B from the retained-baseline decision packet on 2026-09-09.
      The [item 5 decision packet](phase5-item5-decision_2026-09-09.md) now compares
      ITEM5-A's normalized historical payload rebuild with ITEM5-B's fresh current-kit
      verification fixture. The [read-only audit](phase5-item5-baseline-audit_2026-09-09.json)
      distinguishes available file bytes from the missing Git/runtime continuity and
-     cache bytes. ITEM5-B is recommended; neither option has execution approval.
+     cache bytes. The [ITEM5-B execution](phase5-item5-b-execution_2026-09-09.md)
+     records the new fixture at kit pin `8418118e40728c667c32a28a182697139bc7a5ef`,
+     its consumed setup approval and complete local verification results. Installed
+     verification did not establish successful adoption; the next decision is the
+     proposed kit-only #534 repair slice. No original continuity or prior field credit
+     was recreated, and the new fixture must not be rewritten without a later decision.
      Delivery item 6 is independent of these paths. The approved
      [adopt continuation](codex-adopt-initialization-field-exercise_2026-09-06.md)
      executed initialization and attempted Step 4 checks; the installed suites failed.

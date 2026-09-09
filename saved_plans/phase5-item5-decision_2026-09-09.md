@@ -1,9 +1,10 @@
 # Phase 5 item 5 — operator decision packet
 
-**Decision pending. Recommend ITEM5-B:** replace the missing-tree continuation with
-a fresh current-kit verification fixture that preserves the retained adopter scenario.
-Use ITEM5-A only if comparing the historical installed payload is the desired result.
-Neither option restores the original exercise's continuity or completes item 5 by itself.
+**ITEM5-B approved on 2026-09-09.** The operator replied `Approve ITEM5-B as scoped`
+to the packet at `edc199f42bc65b1850172ea79b791ef358577ae1`, then requested autonomous
+continuation. The [execution record](phase5-item5-b-execution_2026-09-09.md) owns its
+result and next action. ITEM5-A was not selected. Neither option restores the original
+exercise's continuity or completes item 5 by itself.
 
 ## Delivery and evidence read-back
 
@@ -32,7 +33,7 @@ It found the original paths absent, including a check for dangling symlinks:
 - `/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture`
 - `/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source`
 
-No tree was reconstructed. The same audit compared the named bundle ledgers and
+No tree was reconstructed during that audit. The same audit compared the named bundle ledgers and
 the replay snapshots; its mismatch fields are empty and the snapshots remain
 byte-identical. This checks retained bytes, not a rerun of the replay.
 
@@ -68,7 +69,7 @@ push-capable origin pointing back to the cockpit.
 | `REPO` | `/Users/topi/Coding/adk-field-exercises/item5-a-20260909/fixture` | `/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture` |
 | `KIT` | `/Users/topi/Coding/adk-field-exercises/item5-a-20260909/kit-source` | `/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source` |
 | Kit pin | `ab0a6d62308b298478b2f85fc961f14348f35365` | `8418118e40728c667c32a28a182697139bc7a5ef`; later movement does not silently change this proposal. |
-| Fixture construction | Materialize post-REG-01 non-cache payloads from the audit's sources, with the recorded modes. Use a new Git identity and baseline. Explicitly omit the listed cache artifacts and record that normalization. | Create a new synthetic input repository using retained adopter-owned text/config and settled ownership choices; stage non-repo-only manifest paths from the pinned current kit under `scripts/devkit`, retaining the custom wrap-up adapter. Record a new installation baseline. |
+| Fixture construction | Materialize post-REG-01 non-cache payloads from the audit's sources, with the recorded modes. Use a new Git identity and baseline. Explicitly omit the listed cache artifacts and record that normalization. | Create a new synthetic input repository using retained adopter-owned text/config and settled ownership choices; stage non-repo-only manifest paths from the pinned current kit. Remap only `scripts/` to `scripts/devkit/`; keep other paths root-relative. Install the missing runtime adapters and retained reference-file scope at their root-relative paths, preserving the custom wrap-up adapter. Record a new installation baseline. |
 | Additional writes | New local Git metadata/commit on `chore/adopt-agentic-dev-kit`; external test-state/log directories under the selected exercise parent. No initializer or historical `.git/hooks` reconstruction. | New local Git metadata/commits on `chore/adopt-agentic-dev-kit`; `init.sh --no-clobber` with the exact prompt answers below; generated narrative/profile/hook files and ignore entries; retained REG-01 registrations and current renderer's nested-path lens definitions; new baseline, test-state/log directories under the selected parent. |
 | Evidence gained if checks succeed | Reproduction of the normalized historical file payload and behavior of the historical installed source under a newly recorded environment. | Successful installation verification at the current pin while preserving custom paths, policy, wrap-up adapter and local overlay; tests can assess the later installed-suite repairs without the lost-tree precondition. Setup steps are not newly credited field exercises. |
 | Cannot establish | Original filesystem/Git/trust continuity; current-kit correctness; newly successful original adoption; fixture PR lifecycle; any systemize route. | Original continuity or historical-cache behavior; fresh runtime discovery/trust/execution; fixture PR lifecycle; any systemize route. It does not rewrite the existing hook observations. |
@@ -121,15 +122,16 @@ proposal; otherwise adopt Step 3c leaves execution to the operator.
 - **Sprint:** Phase 5 stays incomplete until the remaining field coverage is resolved;
   Phase 6 stays unstarted. Item 6's completed replay and #723 deferral are unchanged.
 
-## Exact decision requested
+## Approval boundary
 
-Reply **`Approve ITEM5-B as scoped`** to authorize only the new fixture/source, specified
-initialization, registration, local verification and evidence writes above, or
-**`Approve ITEM5-A as scoped`** for the normalized historical rebuild and its checks.
-Either decision permits a compact result record under `saved_plans/` and the ordinary
-kit wrap-up/ready-PR review path, held for operator merge. Neither permits cs-toolkit
+The operator's **`Approve ITEM5-B as scoped`** authorized only the new fixture/source,
+specified initialization, registration, local verification and evidence writes above.
+The scope includes a compact result record under `saved_plans/` and the ordinary
+kit wrap-up/ready-PR review path. The separate `merge when clean` instruction and
+autonomous-continuation request govern this session's kit PR. Neither permits cs-toolkit
 writes, a fixture remote/PR, live systemize/triage routing, user-profile changes, or a
-Phase 5 completion declaration. An amended choice needs a revised exact scope first.
+Phase 5 completion declaration. Unexpected failures still require a proposed repair,
+not an unapproved source or fixture fix. An amended choice needs a revised exact scope.
 
-**Next-session action:** read this packet and obtain the exact item 5 choice before
-creating either proposed root. No rebuild or adopter write is authorized by this record.
+The [execution record](phase5-item5-b-execution_2026-09-09.md) supersedes this packet's
+former request for an item 5 choice. Do not repeat the consumed setup approval.

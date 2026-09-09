@@ -1,0 +1,641 @@
+{
+  "source_stamp": {
+    "argv": [
+      "uv",
+      "run",
+      "--with",
+      "pytest",
+      "--with",
+      "pyyaml",
+      "python",
+      "-B",
+      "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/run_installed_tests.py",
+      "--root",
+      "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture"
+    ],
+    "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "source_pin": "8418118e40728c667c32a28a182697139bc7a5ef",
+    "revision": "07bacf5bda3b1e7a6718c7d4528336ef81dc2143",
+    "status_before": "",
+    "started_at": "2026-09-09T20:03:09.141617+00:00",
+    "environment_overrides": {
+      "DEVKIT_STATE_ROOT": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture-test-state",
+      "PYTHONDONTWRITEBYTECODE": "1"
+    },
+    "exit_code": 1,
+    "finished_at": "2026-09-09T20:09:03.005877+00:00",
+    "log_sha256": "63dfafb3db94ded7c93ab086bc8d2d741b6ad544af95ac0f853840258723acac",
+    "status_after": ""
+  },
+  "extraction_observed_at": "2026-09-09T20:14:08.317875+00:00",
+  "summary": "58 failed, 2066 passed, 120 skipped in 353.54s (0:05:53)",
+  "failed_nodes": [
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_installer_preserves_prompted_key_beneath_extended_top_level_section[custom-section]",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: assert 'none' == 'github-issues'",
+        "E         ",
+        "E         - github-issues",
+        "E         + none",
+        "scripts/devkit/tests/test_init_sh.py:366: AssertionError"
+      ],
+      "traceback_sha256": "b1f7d9ba55e7739ed9bbdd6ec4d5400f7579562d6d936c35b44093cb701d808c"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_installer_preserves_prompted_key_beneath_extended_top_level_section[custom.section]",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: assert 'none' == 'github-issues'",
+        "E         ",
+        "E         - github-issues",
+        "E         + none",
+        "scripts/devkit/tests/test_init_sh.py:366: AssertionError"
+      ],
+      "traceback_sha256": "a60791a370aa57018494ffb91a5a406c650575376600359679a4b0d3c9751b8c"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_rerun_on_shipped_config_preserves_every_value_and_is_stable",
+      "terminal_exception_excerpt": [
+        "E       assert 'bots: [\"coderabbit\"]' in 'kit:\\n  version: 2\\nproject:\\n  name: adopt-context-fixture\\npaths:\\n  handoff: ROADMAP.md\\n  handoff_history: notes/...ensive: fable\\n    codex:\\n      cheap: low\\n      default: medium\\n      expensive: xhigh\\nstate:\\n  dirname: state\\n'",
+        "scripts/devkit/tests/test_init_sh.py:803: AssertionError"
+      ],
+      "traceback_sha256": "1409193e700a703fd756b11fe9d700297c463bc8f59692bcabf34ae7b201f2b3"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_rerun_normalizes_single_quoted_bots_item",
+      "terminal_exception_excerpt": [
+        "E       assert \"  bots: ['coderabbit']\" in 'kit:\\n  version: 2\\nproject:\\n  name: adopt-context-fixture\\npaths:\\n  handoff: ROADMAP.md\\n  handoff_history: notes/...ensive: fable\\n    codex:\\n      cheap: low\\n      default: medium\\n      expensive: xhigh\\nstate:\\n  dirname: state\\n'",
+        "scripts/devkit/tests/test_init_sh.py:967: AssertionError"
+      ],
+      "traceback_sha256": "e3a7f37f779a0c45d460e423b62eada4c65747813c85dd42fac6f27bb040b166"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_rerun_drops_yaml_significant_chars_from_bots_items",
+      "terminal_exception_excerpt": [
+        "E       assert '  bots: [\"a\\\\\"b\"]' in 'kit:\\n  version: 2\\nproject:\\n  name: adopt-context-fixture\\npaths:\\n  handoff: ROADMAP.md\\n  handoff_history: notes/...ensive: fable\\n    codex:\\n      cheap: low\\n      default: medium\\n      expensive: xhigh\\nstate:\\n  dirname: state\\n'",
+        "scripts/devkit/tests/test_init_sh.py:995: AssertionError"
+      ],
+      "traceback_sha256": "9e0959fae6831cf3a7560bb0b01a7ce84c13651e43481669252177d98c321578"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_seeds_narrative_docs_with_tokens_rendered",
+      "terminal_exception_excerpt": [
+        "scripts/devkit/tests/test_init_sh.py:1262: ",
+        "E       FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/68/_1c8pqwx5rvc9hm34fnkft1m0000gp/T/pytest-of-topi/pytest-210/test_seeds_narrative_docs_with0/project/docs/kit-handoff.md'"
+      ],
+      "traceback_sha256": "311aa93be205955a4472c5d5ef319341d6b9dc835553a751b78829feb265d8c8"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_blank_tracker_url_renders_the_set_it_instruction",
+      "terminal_exception_excerpt": [
+        "scripts/devkit/tests/test_init_sh.py:1320: ",
+        "E       FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/68/_1c8pqwx5rvc9hm34fnkft1m0000gp/T/pytest-of-topi/pytest-210/test_blank_tracker_url_renders0/project/docs/kit-friction-log.md'"
+      ],
+      "traceback_sha256": "9666b22d4d2300f503829d247b8ac404068f5fc6fc482be103030956b508b567"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_render_preserves_backslashes_in_values",
+      "terminal_exception_excerpt": [
+        "scripts/devkit/tests/test_init_sh.py:1334: ",
+        "E       FileNotFoundError: [Errno 2] No such file or directory: '/private/var/folders/68/_1c8pqwx5rvc9hm34fnkft1m0000gp/T/pytest-of-topi/pytest-210/test_render_preserves_backslas0/project/docs/kit-handoff.md'"
+      ],
+      "traceback_sha256": "7d313c61e186db21ce1b06518409b281cd9c1f8c66a0249c4e386be0746ccb4a"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_seeding_respects_in_use_docs_and_reclaims_marked_ones",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: assert 'skeleton' not in '<!-- devkit...\\nskeleton\\n'",
+        "E         ",
+        "E         'skeleton' is contained here:",
+        "E           stine -->",
+        "E           skeleton",
+        "scripts/devkit/tests/test_init_sh.py:1353: AssertionError"
+      ],
+      "traceback_sha256": "ecd2489c8d34cd08b42b79d1ae547f9c30312c636814e336be41131a0dc18c2c"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_kit_own_entry_points_carry_the_marker[AGENTS.md]",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: AGENTS.md must carry 'devkit-source: kit-own' on line 1 \u2014 without it ./init.sh reports it 'already in use' in every `cp -r` adopter and leaves them the kit's contract, silently",
+        "E       assert 'devkit-source: kit-own' in '# Fixture policy'",
+        "scripts/devkit/tests/test_init_sh.py:1427: AssertionError"
+      ],
+      "traceback_sha256": "bfc6c2ae48e7cb44192718aba8ec92badadcf8ed91d9fcedca78b96cf594535b"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_kit_own_entry_points_carry_the_marker[CLAUDE.md]",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: CLAUDE.md must carry 'devkit-source: kit-own' on line 1 \u2014 without it ./init.sh reports it 'already in use' in every `cp -r` adopter and leaves them the kit's contract, silently",
+        "E       assert 'devkit-source: kit-own' in '@AGENTS.md'",
+        "scripts/devkit/tests/test_init_sh.py:1427: AssertionError"
+      ],
+      "traceback_sha256": "6480cdd4270201add45b79853452b9456582deaef6a34ba25bf3dccd70b7e5e2"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_kit_own_marked_file_is_reseeded_over",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: fixture config did not take the distinctive values \u2014 the substitutions above no longer match config/dev-model.yaml",
+        "E       assert ('acme-q7' in 'kit:\\n  version: 2\\nproject:\\n  name: adopt-context-fixture\\npaths:\\n  handoff: ROADMAP.md\\n  handoff_history: notes/...ensive: fable\\n    codex:\\n      cheap: low\\n      default: medium\\n      expensive: xhigh\\nstate:\\n  dirname: state\\n')",
+        "scripts/devkit/tests/test_init_sh.py:1451: AssertionError"
+      ],
+      "traceback_sha256": "a6d7564ac784d811a2330abce082f566afab953ac0dc307459bee82b8243abef"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_a_marker_quoted_in_prose_on_line_1_is_not_seedable[docs/kit-friction-log.md]",
+      "terminal_exception_excerpt": [
+        "E               assert 'docs/kit-friction-log.md already in use \u2014 left untouched' in \"seeded config/claude-lane-settings.json\\nseeded .claude/agents/adversarial.md\\nseeded .claude/agents/correctness.md\\n...ard in place and never touches a narrative\\ndoc that is actually in use.\\n\\nYou're set \u2014 invoke $session-start next.\\n\"",
+        "E                +  where \"seeded config/claude-lane-settings.json\\nseeded .claude/agents/adversarial.md\\nseeded .claude/agents/correctness.md\\n...ard in place and never touches a narrative\\ndoc that is actually in use.\\n\\nYou're set \u2014 invoke $session-start next.\\n\" = CompletedProcess(args=['sh', 'init.sh'], returncode=0, stdout=\"seeded config/claude-lane-settings.json\\nseeded .claude...ent config/dev-model.yaml values.\\nnote: not a git repo yet \u2014 run 'git init' then re-run ./init.sh to install hooks\\n\").stdout",
+        "scripts/devkit/tests/test_init_sh.py:1537: AssertionError"
+      ],
+      "traceback_sha256": "01f8436aee105f5d6e840b6d2583dc1e344f79e4f609c0f96cdc3fdb843e7ac2"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_the_real_marker_comment_is_still_seedable[AGENTS.md]",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: assert 'devkit-source: kit-own' in '# Fixture policy'",
+        "E        +  where 'devkit-source: kit-own' = kit_own_marker()",
+        "scripts/devkit/tests/test_init_sh.py:1663: AssertionError"
+      ],
+      "traceback_sha256": "d0c94613d060edc5afdace98421b9cf1e1328911c3bb8d65b08e27cf7a1187e3"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_the_real_marker_comment_is_still_seedable[CLAUDE.md]",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: assert 'devkit-source: kit-own' in '@AGENTS.md'",
+        "E        +  where 'devkit-source: kit-own' = kit_own_marker()",
+        "scripts/devkit/tests/test_init_sh.py:1663: AssertionError"
+      ],
+      "traceback_sha256": "21ccd0c8e383563815a6ce1ba96b72aa24e7611e3387946c862232499631b01f"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_no_clobber_still_seeds_a_genuinely_absent_target",
+      "terminal_exception_excerpt": [
+        "E       assert 'seeded docs/kit-handoff.md' in \"seeded config/claude-lane-settings.json\\nseeded .claude/agents/adversarial.md\\nseeded .claude/agents/correctness.md\\n...ard in place and never touches a narrative\\ndoc that is actually in use.\\n\\nYou're set \u2014 invoke $session-start next.\\n\"",
+        "E        +  where \"seeded config/claude-lane-settings.json\\nseeded .claude/agents/adversarial.md\\nseeded .claude/agents/correctness.md\\n...ard in place and never touches a narrative\\ndoc that is actually in use.\\n\\nYou're set \u2014 invoke $session-start next.\\n\" = CompletedProcess(args=['sh', 'init.sh', '--no-clobber'], returncode=0, stdout=\"seeded config/claude-lane-settings.json...ent config/dev-model.yaml values.\\nnote: not a git repo yet \u2014 run 'git init' then re-run ./init.sh to install hooks\\n\").stdout",
+        "scripts/devkit/tests/test_init_sh.py:1784: AssertionError"
+      ],
+      "traceback_sha256": "6715cf53ff2051b4b0232cb6a9a81a65f7691e90406dfa76212b1e78e692cabc"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_no_clobber_summarizes_every_file_it_declined",
+      "terminal_exception_excerpt": [
+        "E           AssertionError: docs/kit-friction-log.md missing from the summary",
+        "E           assert '\\n  docs/kit-friction-log.md\\n' in \"\\n  AGENTS.md\\n\\nEach carries a kit marker on line 1, which is how the kit says it MAY own\\na file \u2014 not that the fil...ard in place and never touches a narrative\\ndoc that is actually in use.\\n\\nYou're set \u2014 invoke $session-start next.\\n\"",
+        "scripts/devkit/tests/test_init_sh.py:1828: AssertionError"
+      ],
+      "traceback_sha256": "7473022a80998ebe0ef3329c26142bd0fcea191a13f641f0bbfc91b4d1179779"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_non_interactive_run_refuses_to_inherit_a_foreign_tracker",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: seeded config/claude-lane-settings.json",
+        "E         seeded .claude/agents/adversarial.md",
+        "E         seeded .claude/agents/correctness.md",
+        "E         added '/state/' to .gitignore",
+        "E         added '.devkit_state_root' to .gitignore",
+        "E         added '.claude/worktrees/' to .gitignore",
+        "E         added '*.devkit-tmp' to .gitignore",
+        "E         added '/reports/' to .gitignore",
+        "E         added 'config/*.local.yaml' to .gitignore",
+        "E         ",
+        "E         agentic-dev-kit is bootstrapped (kit schema v2).",
+        "E         Review config/dev-model.yaml for any remaining values (paths, doc_budgets,",
+        "E         models, systemize, review.fallback_panel.lenses) and edit to taste.",
+        "E         ",
+        "E         Upgrading later: pull the new kit files, then re-run ./init.sh \u2014 it",
+        "E         migrates an older config forward in place and never touches a narrative",
+        "E         doc that is actually in use.",
+        "E         ",
+        "E         You're set \u2014 invoke $session-start next.",
+        "E         ",
+        "E       assert 0 == 1",
+        "E        +  where 0 = CompletedProcess(args=['sh', 'init.sh'], returncode=0, stdout=\"seeded config/claude-lane-settings.json\\nseeded .claude...GENTS.md.tmpl missing \u2014 skipped AGENTS.md\\nnote: template docs/templates/CLAUDE.md.tmpl missing \u2014 skipped CLAUDE.md\\n').returncode",
+        "scripts/devkit/tests/test_init_sh.py:2496: AssertionError"
+      ],
+      "traceback_sha256": "3bb904ab1e889bd8dce7b28b509e48a0161c74a41f3abb7ad1acd07c01c91e56"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_foreign_tracker_refusal_survives_a_custom_child_mapping",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: seeded config/claude-lane-settings.json",
+        "E         seeded .claude/agents/adversarial.md",
+        "E         seeded .claude/agents/correctness.md",
+        "E         added '/state/' to .gitignore",
+        "E         added '.devkit_state_root' to .gitignore",
+        "E         added '.claude/worktrees/' to .gitignore",
+        "E         added '*.devkit-tmp' to .gitignore",
+        "E         added '/reports/' to .gitignore",
+        "E         added 'config/*.local.yaml' to .gitignore",
+        "E         ",
+        "E         agentic-dev-kit is bootstrapped (kit schema v2).",
+        "E         Review config/dev-model.yaml for any remaining values (paths, doc_budgets,",
+        "E         models, systemize, review.fallback_panel.lenses) and edit to taste.",
+        "E         ",
+        "E         Upgrading later: pull the new kit files, then re-run ./init.sh \u2014 it",
+        "E         migrates an older config forward in place and never touches a narrative",
+        "E         doc that is actually in use.",
+        "E         ",
+        "E         You're set \u2014 invoke $session-start next.",
+        "E         ",
+        "E       assert 0 == 1",
+        "E        +  where 0 = CompletedProcess(args=['sh', 'init.sh', '--no-clobber'], returncode=0, stdout=\"seeded config/claude-lane-settings.json...GENTS.md.tmpl missing \u2014 skipped AGENTS.md\\nnote: template docs/templates/CLAUDE.md.tmpl missing \u2014 skipped CLAUDE.md\\n').returncode",
+        "scripts/devkit/tests/test_init_sh.py:2525: AssertionError"
+      ],
+      "traceback_sha256": "e700a6245e13920502f5147fe09e1b5f7fa3d1722b8f43344ebac0f48a95e7b9"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_installer_refuses_duplicate_tracker_authority_before_writing",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: seeded config/claude-lane-settings.json",
+        "E         seeded .claude/agents/adversarial.md",
+        "E         seeded .claude/agents/correctness.md",
+        "E         added '/state/' to .gitignore",
+        "E         added '.devkit_state_root' to .gitignore",
+        "E         added '.claude/worktrees/' to .gitignore",
+        "E         added '*.devkit-tmp' to .gitignore",
+        "E         added '/reports/' to .gitignore",
+        "E         added 'config/*.local.yaml' to .gitignore",
+        "E         ",
+        "E         agentic-dev-kit is bootstrapped (kit schema v2).",
+        "E         Review config/dev-model.yaml for any remaining values (paths, doc_budgets,",
+        "E         models, systemize, review.fallback_panel.lenses) and edit to taste.",
+        "E         ",
+        "E         Upgrading later: pull the new kit files, then re-run ./init.sh \u2014 it",
+        "E         migrates an older config forward in place and never touches a narrative",
+        "E         doc that is actually in use.",
+        "E         ",
+        "E         You're set \u2014 invoke $session-start next.",
+        "E         ",
+        "E       assert 0 == 1",
+        "E        +  where 0 = CompletedProcess(args=['sh', 'init.sh', '--no-clobber'], returncode=0, stdout=\"seeded config/claude-lane-settings.json...GENTS.md.tmpl missing \u2014 skipped AGENTS.md\\nnote: template docs/templates/CLAUDE.md.tmpl missing \u2014 skipped CLAUDE.md\\n').returncode",
+        "scripts/devkit/tests/test_init_sh.py:2558: AssertionError"
+      ],
+      "traceback_sha256": "53c627ee2d2dbf250c10df6119ce5f3dbf63fa3491fde71b3f4bb0a23f59a6f1"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_installer_refuses_block_children_under_a_prompt_owned_value[  bots:\\n    - coderabbit]",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: assert [] == ['coderabbit']",
+        "E         ",
+        "E         Right contains one more item: 'coderabbit'",
+        "E         Use -v to get more diff",
+        "scripts/devkit/tests/test_init_sh.py:2695: AssertionError"
+      ],
+      "traceback_sha256": "ac49f59e0ac419b9c25c211d59f7a230dc233397f30d4665c0d5608263bf3ac2"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_installer_refuses_block_children_under_a_prompt_owned_value[  bots:\\n  - coderabbit]",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: assert [] == ['coderabbit']",
+        "E         ",
+        "E         Right contains one more item: 'coderabbit'",
+        "E         Use -v to get more diff",
+        "scripts/devkit/tests/test_init_sh.py:2695: AssertionError"
+      ],
+      "traceback_sha256": "14fa9cf04b6cc4d85d20767bf1b0de449512351f498c49a0bc523138bb0d90b8"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_installer_refuses_commented_block_children_under_a_line_owned_value[  bots: [coderabbit]-  bots: # retained comment\\n    - coderabbit-review-bots]",
+      "terminal_exception_excerpt": [
+        "E           AssertionError: assert [] == ['coderabbit']",
+        "E             ",
+        "E             Right contains one more item: 'coderabbit'",
+        "E             Use -v to get more diff",
+        "scripts/devkit/tests/test_init_sh.py:2743: AssertionError"
+      ],
+      "traceback_sha256": "54eeee3a14ecbdcfe3fce26c2f9aa02206a5e3d5f6c31f1b08082fd2f10e940a"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_installer_refuses_commented_block_children_under_a_line_owned_value[    team_id: \"\"-    team_id: # retained comment\\n      nested: value-tracker-linear]",
+      "terminal_exception_excerpt": [
+        "E           AssertionError: assert '' == {'nested': 'value'}",
+        "scripts/devkit/tests/test_init_sh.py:2745: AssertionError"
+      ],
+      "traceback_sha256": "091b8f95c90b8a434d9595b48e64e9adb53302d4c546cfbd1c872d09c1a55aec"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_installer_refuses_wrong_node_types_for_line_owned_fields_before_writing[  handoff: docs/kit-handoff.md-  handoff: [../../../outside/handoff.md]]",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: assert 'kit:\\n  version: 2\\nproject:\\n  name: adopt-context-fixture\\npaths:\\n  handoff: ROADMAP.md\\n  handoff_history: notes/...ensive: fable\\n    codex:\\n      cheap: low\\n      default: medium\\n      expensive: xhigh\\nstate:\\n  dirname: state\\n' != 'kit:\\n  version: 2\\nproject:\\n  name: adopt-context-fixture\\npaths:\\n  handoff: ROADMAP.md\\n  handoff_history: notes/...ensive: fable\\n    codex:\\n      cheap: low\\n      default: medium\\n      expensive: xhigh\\nstate:\\n  dirname: state\\n'",
+        "E        +  where 'kit:\\n  version: 2\\nproject:\\n  name: adopt-context-fixture\\npaths:\\n  handoff: ROADMAP.md\\n  handoff_history: notes/...ensive: fable\\n    codex:\\n      cheap: low\\n      default: medium\\n      expensive: xhigh\\nstate:\\n  dirname: state\\n' = shipped_config()",
+        "scripts/devkit/tests/test_init_sh.py:2825: AssertionError"
+      ],
+      "traceback_sha256": "f64375c9130ebf799170357c1536fb7a54b6ace7396446fa6e959fad246c8eb8"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_installer_refuses_wrong_node_types_for_line_owned_fields_before_writing[  bots: [coderabbit]-  bots: coderabbit]",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: assert 'kit:\\n  version: 2\\nproject:\\n  name: adopt-context-fixture\\npaths:\\n  handoff: ROADMAP.md\\n  handoff_history: notes/...ensive: fable\\n    codex:\\n      cheap: low\\n      default: medium\\n      expensive: xhigh\\nstate:\\n  dirname: state\\n' != 'kit:\\n  version: 2\\nproject:\\n  name: adopt-context-fixture\\npaths:\\n  handoff: ROADMAP.md\\n  handoff_history: notes/...ensive: fable\\n    codex:\\n      cheap: low\\n      default: medium\\n      expensive: xhigh\\nstate:\\n  dirname: state\\n'",
+        "E        +  where 'kit:\\n  version: 2\\nproject:\\n  name: adopt-context-fixture\\npaths:\\n  handoff: ROADMAP.md\\n  handoff_history: notes/...ensive: fable\\n    codex:\\n      cheap: low\\n      default: medium\\n      expensive: xhigh\\nstate:\\n  dirname: state\\n' = shipped_config()",
+        "scripts/devkit/tests/test_init_sh.py:2825: AssertionError"
+      ],
+      "traceback_sha256": "a8a1ae14ca86d8fd24c47a6f89bd37ebed7c099a33e6eda61824ba71f1fadedf"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_installer_refuses_wrong_node_types_for_line_owned_fields_before_writing[  project_name: \"topij/agentic-dev-kit\"-  project_name: {value: topij/agentic-dev-kit}]",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: assert 'kit:\\n  version: 2\\nproject:\\n  name: adopt-context-fixture\\npaths:\\n  handoff: ROADMAP.md\\n  handoff_history: notes/...ensive: fable\\n    codex:\\n      cheap: low\\n      default: medium\\n      expensive: xhigh\\nstate:\\n  dirname: state\\n' != 'kit:\\n  version: 2\\nproject:\\n  name: adopt-context-fixture\\npaths:\\n  handoff: ROADMAP.md\\n  handoff_history: notes/...ensive: fable\\n    codex:\\n      cheap: low\\n      default: medium\\n      expensive: xhigh\\nstate:\\n  dirname: state\\n'",
+        "E        +  where 'kit:\\n  version: 2\\nproject:\\n  name: adopt-context-fixture\\npaths:\\n  handoff: ROADMAP.md\\n  handoff_history: notes/...ensive: fable\\n    codex:\\n      cheap: low\\n      default: medium\\n      expensive: xhigh\\nstate:\\n  dirname: state\\n' = shipped_config()",
+        "scripts/devkit/tests/test_init_sh.py:2825: AssertionError"
+      ],
+      "traceback_sha256": "f62592cdef2bb50276d2357f41c1b531e737389e78f0e5e98e0ebdb051510fd9"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_installer_refuses_an_alias_on_tracker_authority_before_writing",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: assert '' == 'topij/agentic-dev-kit'",
+        "E         ",
+        "E         - topij/agentic-dev-kit",
+        "scripts/devkit/tests/test_init_sh.py:2921: AssertionError"
+      ],
+      "traceback_sha256": "00ed419ddcf3013a044b04a40396e45539aa521020caa01e313fb44ecae6980e"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_non_interactive_run_is_unaffected_without_an_origin_remote",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: assert '' == 'topij/agentic-dev-kit'",
+        "E         ",
+        "E         - topij/agentic-dev-kit",
+        "scripts/devkit/tests/test_init_sh.py:3039: AssertionError"
+      ],
+      "traceback_sha256": "08285ef6e34ed9e9be43b60da99f0945c5646b77cb18d4a4619e78bc38c944ac"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_per_runtime_config_maps_declare_status_on_each_install_surface",
+      "terminal_exception_excerpt": [
+        "scripts/devkit/tests/test_init_sh.py:3060: ",
+        "scripts/devkit/tests/test_init_sh.py:3123: in _assert_runtime_status_declarations",
+        "scripts/devkit/tests/test_init_sh.py:3118: in inspect",
+        "scripts/devkit/tests/test_init_sh.py:3118: in inspect",
+        "E                   AssertionError: config/dev-model.yaml: runtime.launchers.claude requires an adjacent runtime-status: mechanical or advisory declaration",
+        "E                   assert None",
+        "E                    +  where None = <function fullmatch at 0x1087a05c0>('    # runtime-status: (mechanical|advisory)', '  launchers:')",
+        "E                    +    where <function fullmatch at 0x1087a05c0> = re.fullmatch",
+        "scripts/devkit/tests/test_init_sh.py:3111: AssertionError"
+      ],
+      "traceback_sha256": "bbe96e8c88ed3fc759e593010cd58a2141c837f1d5d43ac740cd21a10f254aa5"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_init_sh_ships_the_same_lens_compute_values_as_the_reference_config",
+      "terminal_exception_excerpt": [
+        "scripts/devkit/tests/test_init_sh.py:3155: ",
+        "E       ValueError: substring not found",
+        "scripts/devkit/tests/test_init_sh.py:3131: ValueError"
+      ],
+      "traceback_sha256": "34c4dde356c19fd001fe4cfcd0a7b8cd3a78505210aacd67921a71909a81d981"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_both_lens_compute_comments_declare_the_carrier_per_key_per_runtime",
+      "terminal_exception_excerpt": [
+        "scripts/devkit/tests/test_init_sh.py:3189: ",
+        "E       ValueError: substring not found",
+        "scripts/devkit/tests/test_init_sh.py:3131: ValueError"
+      ],
+      "traceback_sha256": "890e1a469df8450a630f5a6ae26728484ea08a9f0f7a69769da6e1e8768c6fd0"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_both_runtime_mappings_comments_declare_the_status_per_runtime",
+      "terminal_exception_excerpt": [
+        "E           AssertionError: config/dev-model.yaml must declare the status of `runtime_mappings` per runtime",
+        "E           assert 'STATUS, per runtime' in ''",
+        "scripts/devkit/tests/test_init_sh.py:3247: AssertionError"
+      ],
+      "traceback_sha256": "5fdbe194433fbced3e637e201c9203dd2f3fdceed95b259a27c864555abd9420"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_init_sh_seeds_an_engine_path_sed_would_otherwise_mangle[scr&ipts]",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: assert 'engines: scr&ipts\\n' in 'kit:\\n  version: 2\\nproject:\\n  name: adopt-context-fixture\\npaths:\\n  handoff: ROADMAP.md\\n  handoff_history: notes/...ensive: fable\\n    codex:\\n      cheap: low\\n      default: medium\\n      expensive: xhigh\\nstate:\\n  dirname: state\\n'",
+        "scripts/devkit/tests/test_init_sh.py:3333: AssertionError"
+      ],
+      "traceback_sha256": "21a55a1f85b4cdcb38e1d8237d1d445847339ec28e83df2508958b94ddea0a51"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_init_sh_seeds_an_engine_path_sed_would_otherwise_mangle[scr|ipts]",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: assert 'engines: scr|ipts\\n' in 'kit:\\n  version: 2\\nproject:\\n  name: adopt-context-fixture\\npaths:\\n  handoff: ROADMAP.md\\n  handoff_history: notes/...ensive: fable\\n    codex:\\n      cheap: low\\n      default: medium\\n      expensive: xhigh\\nstate:\\n  dirname: state\\n'",
+        "scripts/devkit/tests/test_init_sh.py:3333: AssertionError"
+      ],
+      "traceback_sha256": "16fe4e11d6c8fd46147b333b62c7eab26c8322daa7d09eca8d2656ea095a1afe"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_init_sh_seeds_an_engine_path_sed_would_otherwise_mangle[a/b&c|d]",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: assert 'engines: a/b&c|d\\n' in 'kit:\\n  version: 2\\nproject:\\n  name: adopt-context-fixture\\npaths:\\n  handoff: ROADMAP.md\\n  handoff_history: notes/...ensive: fable\\n    codex:\\n      cheap: low\\n      default: medium\\n      expensive: xhigh\\nstate:\\n  dirname: state\\n'",
+        "scripts/devkit/tests/test_init_sh.py:3333: AssertionError"
+      ],
+      "traceback_sha256": "797a534450fa58c22720f69858ee4ae26b289eac7d270798eec0b5d398185dcd"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_init_sh_declines_to_seed_a_path_the_quoted_description_cannot_carry[scr\\\\ipts]",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: assert not True",
+        "E        +  where True = exists()",
+        "E        +    where exists = ((PosixPath('/private/var/folders/68/_1c8pqwx5rvc9hm34fnkft1m0000gp/T/pytest-of-topi/pytest-210/test_init_sh_declines_to_seed_0/project') / '.claude') / 'agents').exists",
+        "scripts/devkit/tests/test_init_sh.py:3355: AssertionError"
+      ],
+      "traceback_sha256": "fc373e01ff136b303d4dcebac58b0e0206e244e426df3ededef2cd0c0c5933a5"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_init_sh_declines_to_seed_a_path_the_quoted_description_cannot_carry[scr\"ipts]",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: assert not True",
+        "E        +  where True = exists()",
+        "E        +    where exists = ((PosixPath('/private/var/folders/68/_1c8pqwx5rvc9hm34fnkft1m0000gp/T/pytest-of-topi/pytest-210/test_init_sh_declines_to_seed_1/project') / '.claude') / 'agents').exists",
+        "scripts/devkit/tests/test_init_sh.py:3355: AssertionError"
+      ],
+      "traceback_sha256": "eceb6fd712a8d255c5d6ed7786e5f5cfe28a5b9bdd7bbe3128fb143604a2879a"
+    },
+    {
+      "node": "scripts/devkit/tests/test_init_sh.py::test_init_sh_seeds_only_lenses_the_roster_names",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: assert not True",
+        "E        +  where True = exists()",
+        "E        +    where exists = (((PosixPath('/private/var/folders/68/_1c8pqwx5rvc9hm34fnkft1m0000gp/T/pytest-of-topi/pytest-210/test_init_sh_seeds_only_lenses0/project') / '.claude') / 'agents') / 'correctness.md').exists",
+        "scripts/devkit/tests/test_init_sh.py:3385: AssertionError"
+      ],
+      "traceback_sha256": "7f16996c481f9ead37893140f6226e921629e1f0aa7a0fa1a549a09675ea7d04"
+    },
+    {
+      "node": "scripts/devkit/tests/test_kit_doctor.py::test_shipped_runtime_adapters_equal_the_renderer_for_both_runtimes",
+      "terminal_exception_excerpt": [
+        "scripts/devkit/tests/test_kit_doctor.py:419: ",
+        "E                   ValueError: source adapter .agents/skills/wrap-up/SKILL.md does not equal the current rendered form",
+        "scripts/devkit/lib/runtime_adapters.py:347: ValueError"
+      ],
+      "traceback_sha256": "5c43f0d3fe70d02ff71fb79187e30cc2901db671dba65396362e3d958bd98440"
+    },
+    {
+      "node": "scripts/devkit/tests/test_kit_doctor.py::test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned[adopt]",
+      "terminal_exception_excerpt": [
+        "scripts/devkit/tests/test_kit_doctor.py:467: ",
+        "E                   ValueError: source adapter .agents/skills/wrap-up/SKILL.md does not equal the current rendered form",
+        "scripts/devkit/lib/runtime_adapters.py:347: ValueError"
+      ],
+      "traceback_sha256": "0df7431d8b47ba2c0de9716227bfa3bb3db4406c13a84b97a33e5c4e3b7910c2"
+    },
+    {
+      "node": "scripts/devkit/tests/test_kit_doctor.py::test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned[parallel]",
+      "terminal_exception_excerpt": [
+        "scripts/devkit/tests/test_kit_doctor.py:467: ",
+        "E                   ValueError: source adapter .agents/skills/wrap-up/SKILL.md does not equal the current rendered form",
+        "scripts/devkit/lib/runtime_adapters.py:347: ValueError"
+      ],
+      "traceback_sha256": "a8114864eaaf16546b21937ab1afd61b1cf39ce2eb832d12d49caa94e146f78f"
+    },
+    {
+      "node": "scripts/devkit/tests/test_kit_doctor.py::test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned[pr-watch]",
+      "terminal_exception_excerpt": [
+        "scripts/devkit/tests/test_kit_doctor.py:467: ",
+        "E                   ValueError: source adapter .agents/skills/wrap-up/SKILL.md does not equal the current rendered form",
+        "scripts/devkit/lib/runtime_adapters.py:347: ValueError"
+      ],
+      "traceback_sha256": "9ae98408205884322c3e5a61cba812e6c4cc2336a5080758edfc14353b596e30"
+    },
+    {
+      "node": "scripts/devkit/tests/test_kit_doctor.py::test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned[upgrade]",
+      "terminal_exception_excerpt": [
+        "scripts/devkit/tests/test_kit_doctor.py:467: ",
+        "E                   ValueError: source adapter .agents/skills/wrap-up/SKILL.md does not equal the current rendered form",
+        "scripts/devkit/lib/runtime_adapters.py:347: ValueError"
+      ],
+      "traceback_sha256": "0e2c1c17608ab6d67a8bde76938b085a1cdb4d8f320c85f721379b87fee338fc"
+    },
+    {
+      "node": "scripts/devkit/tests/test_kit_doctor.py::test_authored_adapter_change_is_reported_and_preserved_for_each_runtime",
+      "terminal_exception_excerpt": [
+        "scripts/devkit/tests/test_kit_doctor.py:490: ",
+        "E                   ValueError: source adapter .agents/skills/wrap-up/SKILL.md does not equal the current rendered form",
+        "scripts/devkit/lib/runtime_adapters.py:347: ValueError"
+      ],
+      "traceback_sha256": "4b93c040a4a856da74113b6f94bf4a912915ddeea42be238920182a3eaa6bab3"
+    },
+    {
+      "node": "scripts/devkit/tests/test_kit_doctor.py::test_adapter_report_preserves_a_symlink_path_as_adopter_owned[claude-.claude/commands/adopt.md]",
+      "terminal_exception_excerpt": [
+        "scripts/devkit/tests/test_kit_doctor.py:514: ",
+        "E                   ValueError: source adapter .agents/skills/wrap-up/SKILL.md does not equal the current rendered form",
+        "scripts/devkit/lib/runtime_adapters.py:347: ValueError"
+      ],
+      "traceback_sha256": "dfa17677bfbf1d81dcbd46325a2d591de4a7e3efc6cc9fffba000b5b4a5e6135"
+    },
+    {
+      "node": "scripts/devkit/tests/test_kit_doctor.py::test_adapter_report_preserves_a_symlink_path_as_adopter_owned[codex-.agents/skills/adopt/SKILL.md]",
+      "terminal_exception_excerpt": [
+        "scripts/devkit/tests/test_kit_doctor.py:514: ",
+        "E                   ValueError: source adapter .agents/skills/wrap-up/SKILL.md does not equal the current rendered form",
+        "scripts/devkit/lib/runtime_adapters.py:347: ValueError"
+      ],
+      "traceback_sha256": "c1f54c0f2f2d49c7f9e6d9488e61d53c90ceba7edfad4d1c2ef3fe647e8d04dc"
+    },
+    {
+      "node": "scripts/devkit/tests/test_kit_doctor.py::test_adapter_report_preserves_a_symlinked_ancestor_as_adopter_owned",
+      "terminal_exception_excerpt": [
+        "scripts/devkit/tests/test_kit_doctor.py:530: ",
+        "E                   ValueError: source adapter .agents/skills/wrap-up/SKILL.md does not equal the current rendered form",
+        "scripts/devkit/lib/runtime_adapters.py:347: ValueError"
+      ],
+      "traceback_sha256": "d29a57613b928db7f490e5b16e41c9f20f2b7947fad861664120a5aaeb459860"
+    },
+    {
+      "node": "scripts/devkit/tests/test_kit_doctor.py::test_adapter_report_preserves_a_hardlinked_path_as_adopter_owned",
+      "terminal_exception_excerpt": [
+        "scripts/devkit/tests/test_kit_doctor.py:554: ",
+        "E                   ValueError: source adapter .agents/skills/wrap-up/SKILL.md does not equal the current rendered form",
+        "scripts/devkit/lib/runtime_adapters.py:347: ValueError"
+      ],
+      "traceback_sha256": "81cfb839d49e2400ae9e40d18bbfa4e85309a7bbc38c5841b9d1f53ed2e762ca"
+    },
+    {
+      "node": "scripts/devkit/tests/test_kit_doctor.py::test_adapter_report_cli_is_read_only_and_does_not_require_adopter_config",
+      "terminal_exception_excerpt": [
+        "scripts/devkit/tests/test_kit_doctor.py:784: ",
+        "E           json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+      ],
+      "traceback_sha256": "16ab32381236c0bb9195be7861e7de6da4d7a2637cbc58a82091b350d6a8eaa2"
+    },
+    {
+      "node": "scripts/devkit/tests/test_mutation_gate.py::test_the_drift_test_actually_executes",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: the drift test is skipped, so it guards nothing:",
+        "E         s                                                                        [100%]",
+        "E         1 skipped in 0.22s",
+        "E         ",
+        "E       assert 'skipped' not in 's          ...d in 0.22s\\n'",
+        "E         ",
+        "E         'skipped' is contained here:",
+        "E            [100%]",
+        "E           1 skipped in 0.22s",
+        "E         ?   +++++++",
+        "scripts/devkit/tests/test_mutation_gate.py:191: AssertionError"
+      ],
+      "traceback_sha256": "7f6724dd11178461cb8cec67d32be5f31af7046efdd399d2203e216a1e417bf5"
+    },
+    {
+      "node": "scripts/devkit/tests/test_portability.py::test_codex_skill_adapters_are_valid_and_share_workflows",
+      "terminal_exception_excerpt": [
+        "scripts/devkit/tests/test_portability.py:1733: ",
+        "E           AssertionError: assert 'docs/agentic-dev-kit/workflows/wrap-up.md' in '\\nPreserve this adapter.\\n'",
+        "scripts/devkit/tests/test_portability.py:1718: AssertionError"
+      ],
+      "traceback_sha256": "bdf3fd1727ec939c4dafa97f4578af32e1a17b0ae63feb72b8a742abd2e673fb"
+    },
+    {
+      "node": "scripts/devkit/tests/test_portability.py::test_bookend_integrations_are_shared_thin_declared_and_manifested",
+      "terminal_exception_excerpt": [
+        "E               AssertionError: assert 'docs/agentic-dev-kit/workflows/wrap-up.md' in '---\\nname: wrap-up\\ndescription: Fixture-owned wrap-up\\n---\\nPreserve this adapter.\\n'",
+        "scripts/devkit/tests/test_portability.py:2665: AssertionError"
+      ],
+      "traceback_sha256": "0e6f74ebb4bd13d30098ec11d64c363c1edaa2879801661877829045e6532642"
+    },
+    {
+      "node": "scripts/devkit/tests/test_portability.py::test_bookend_adapter_hostile_mutations_are_rejected",
+      "terminal_exception_excerpt": [
+        "E                   AssertionError: assert '---\\nname: wrap-up\\ndescription: Fixture-owned wrap-up\\n---\\nPreserve this adapter.\\n' != '---\\nname: wrap-up\\ndescription: Fixture-owned wrap-up\\n---\\nPreserve this adapter.\\n'",
+        "scripts/devkit/tests/test_portability.py:2789: AssertionError"
+      ],
+      "traceback_sha256": "bd65cd84a7919a679f8e28a9feeeec6a7f339b95ba245119ae07309b8e39b570"
+    },
+    {
+      "node": "scripts/devkit/tests/test_portability.py::test_runtime_parity_contract_covers_workflows_and_adapters",
+      "terminal_exception_excerpt": [
+        "scripts/devkit/tests/test_portability.py:13888: ",
+        "E           AssertionError: assert 'docs/agentic-dev-kit/workflows/wrap-up.md' in '\\nPreserve this adapter.\\n'",
+        "scripts/devkit/tests/test_portability.py:1718: AssertionError"
+      ],
+      "traceback_sha256": "b64e3a5976ff8a5e8f0cb12c3d1ccfecff90c2c784f51174fb9b30ba7da21d91"
+    },
+    {
+      "node": "scripts/devkit/tests/test_portability.py::test_runtime_parity_contract_distinguishes_a_decline_from_a_removal",
+      "terminal_exception_excerpt": [
+        "scripts/devkit/tests/test_portability.py:14240: ",
+        "scripts/devkit/tests/test_portability.py:13888: in test_runtime_parity_contract_covers_workflows_and_adapters",
+        "E           AssertionError: assert 'docs/agentic-dev-kit/workflows/wrap-up.md' in '\\nPreserve this adapter.\\n'",
+        "scripts/devkit/tests/test_portability.py:1718: AssertionError"
+      ],
+      "traceback_sha256": "72ce8de4d942dbea7bff357efa504feb1874790015844ae648a6b9752706dd8a"
+    },
+    {
+      "node": "scripts/devkit/tests/test_portability.py::test_runtime_parity_contract_allows_a_codex_only_gap",
+      "terminal_exception_excerpt": [
+        "scripts/devkit/tests/test_portability.py:14297: ",
+        "scripts/devkit/tests/test_portability.py:1733: in test_codex_skill_adapters_are_valid_and_share_workflows",
+        "E           AssertionError: assert 'docs/agentic-dev-kit/workflows/wrap-up.md' in '\\nPreserve this adapter.\\n'",
+        "scripts/devkit/tests/test_portability.py:1718: AssertionError"
+      ],
+      "traceback_sha256": "e40edcd431593753ac42d886c32b6b28288a7f89c833c99a0abd724b72831811"
+    },
+    {
+      "node": "scripts/devkit/tests/test_portability.py::test_runtime_parity_companion_must_be_referenced_by_its_owner",
+      "terminal_exception_excerpt": [
+        "E       AssertionError: Regex pattern did not match.",
+        "E         Expected regex: 'not referenced by its loaded_by owner'",
+        "E         Actual message: \"assert 'docs/agentic-dev-kit/workflows/wrap-up.md' in '\\\\nPreserve this adapter.\\\\n'\"",
+        "scripts/devkit/tests/test_portability.py:14315: AssertionError"
+      ],
+      "traceback_sha256": "836a93c8c5fa753024e62209e639d728b93ef63e0bac01263accaac9dc2e1c1c"
+    }
+  ],
+  "unmatched_failure_nodes": [],
+  "unmatched_trace_headers": [],
+  "limits": "Extraction preserves terminal excerpts and links each failed node to its full retained traceback; it does not assign every failure a root cause or prove prior-source behavior."
+}

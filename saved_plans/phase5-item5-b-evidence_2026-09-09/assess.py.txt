@@ -1,0 +1,37 @@
+"""Extract retained failure evidence without running tests or altering a fixture."""
+import hashlib
+import json
+import re
+from datetime import datetime, timezone
+from pathlib import Path
+
+OUT = Path('/Users/topi/Coding/adk-field-exercises/item5-b-20260909/evidence')
+REPO = Path('/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture')
+KIT = Path('/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source')
+assert Path.cwd().resolve() == REPO
+stamp = json.loads((OUT / 'installed-suite.json').read_text())
+raw = (OUT / 'installed-suite.log').read_bytes()
+assert hashlib.sha256(raw).hexdigest() == stamp['log_sha256']
+text = raw.decode()
+failed = [line.removeprefix('FAILED ') for line in text.splitlines() if line.startswith('FAILED ')]
+body = text.split('FAILURES', 1)[1].split('short test summary info', 1)[0]
+parts = re.split(r'(?m)^_+ (.*?) _+$', body)
+blocks = dict(zip(parts[1::2], parts[2::2]))
+assert set(blocks) == {node.split('::')[-1] for node in failed}
+evidence = []
+for node in failed:
+    block = blocks[node.split('::')[-1]]
+    lines = block.splitlines()
+    excerpts = [line for line in lines if line.startswith('E ') or re.match(r'scripts/.*:\d+:', line)]
+    evidence.append({'node': node, 'terminal_exception_excerpt': excerpts,
+                     'traceback_sha256': hashlib.sha256(block.encode()).hexdigest()})
+record = {'source_stamp': stamp, 'extraction_observed_at': datetime.now(timezone.utc).isoformat(),
+          'summary': text.splitlines()[-1], 'failed_nodes': evidence,
+          'unmatched_failure_nodes': [], 'unmatched_trace_headers': [],
+          'limits': 'Extraction preserves terminal excerpts and links each failed node to its full retained traceback; it does not assign every failure a root cause or prove prior-source behavior.'}
+assert Path.cwd().resolve() == REPO
+with (OUT / 'installed-failure-excerpts.json').open('x') as f:
+    json.dump(record, f, indent=2)
+    f.write('\n')
+print(json.dumps({'output': str(OUT / 'installed-failure-excerpts.json'), 'summary': record['summary'],
+                  'unmatched_failure_nodes': [], 'unmatched_trace_headers': []}, indent=2))

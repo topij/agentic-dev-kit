@@ -1,0 +1,68 @@
+{
+  "command": "python3 -B export-and-compare (inline session program)",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "revision": "edc199f42bc65b1850172ea79b791ef358577ae1",
+  "observed_at": "2026-09-09T20:17:52.371435+00:00",
+  "comparisons": {
+    "fixture": {
+      "added": [
+        ".pytest_cache",
+        ".pytest_cache/.gitignore",
+        ".pytest_cache/CACHEDIR.TAG",
+        ".pytest_cache/README.md",
+        ".pytest_cache/v",
+        ".pytest_cache/v/cache",
+        ".pytest_cache/v/cache/lastfailed",
+        ".pytest_cache/v/cache/nodeids",
+        "scripts/devkit/lib/state_paths/tests/.pytest_cache",
+        "scripts/devkit/lib/state_paths/tests/.pytest_cache/.gitignore",
+        "scripts/devkit/lib/state_paths/tests/.pytest_cache/CACHEDIR.TAG",
+        "scripts/devkit/lib/state_paths/tests/.pytest_cache/README.md",
+        "scripts/devkit/lib/state_paths/tests/.pytest_cache/v",
+        "scripts/devkit/lib/state_paths/tests/.pytest_cache/v/cache",
+        "scripts/devkit/lib/state_paths/tests/.pytest_cache/v/cache/nodeids"
+      ],
+      "removed": [],
+      "changed": []
+    },
+    "source": {
+      "added": [
+        ".pytest_cache",
+        ".pytest_cache/.gitignore",
+        ".pytest_cache/CACHEDIR.TAG",
+        ".pytest_cache/README.md",
+        ".pytest_cache/v",
+        ".pytest_cache/v/cache",
+        ".pytest_cache/v/cache/lastfailed",
+        ".pytest_cache/v/cache/nodeids",
+        ".ruff_cache",
+        ".ruff_cache/.gitignore",
+        ".ruff_cache/0.16.0",
+        ".ruff_cache/0.16.0/13086885000503996922",
+        ".ruff_cache/0.16.0/13164108518138176828",
+        ".ruff_cache/0.16.0/13862288583414457420",
+        ".ruff_cache/0.16.0/15353260955989326250",
+        ".ruff_cache/0.16.0/16679308652220694926",
+        ".ruff_cache/0.16.0/16809958022034779128",
+        ".ruff_cache/0.16.0/3464689790738016177",
+        ".ruff_cache/0.16.0/3703842536152311599",
+        ".ruff_cache/0.16.0/4186440916181382610",
+        ".ruff_cache/0.16.0/5109483733450790890",
+        ".ruff_cache/0.16.0/518846972820465900",
+        ".ruff_cache/0.16.0/6468921891185260637",
+        ".ruff_cache/0.16.0/8052691826778233663",
+        ".ruff_cache/CACHEDIR.TAG",
+        "scripts/lib/state_paths/tests/.pytest_cache",
+        "scripts/lib/state_paths/tests/.pytest_cache/.gitignore",
+        "scripts/lib/state_paths/tests/.pytest_cache/CACHEDIR.TAG",
+        "scripts/lib/state_paths/tests/.pytest_cache/README.md",
+        "scripts/lib/state_paths/tests/.pytest_cache/v",
+        "scripts/lib/state_paths/tests/.pytest_cache/v/cache",
+        "scripts/lib/state_paths/tests/.pytest_cache/v/cache/nodeids"
+      ],
+      "removed": [],
+      "changed": []
+    }
+  },
+  "limits": "Inventories exclude .git. Added entries are tool caches. Git state and initializer hook bytes are retained separately."
+}

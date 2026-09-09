@@ -1,0 +1,125 @@
+"""Execute only the approved ITEM5-B local staging and record destination evidence."""
+import copy
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+COCKPIT = Path('/Users/topi/Coding/agentic-dev-kit')
+PARENT = Path('/Users/topi/Coding/adk-field-exercises/item5-b-20260909')
+REPO = PARENT / 'fixture'
+KIT = PARENT / 'kit-source'
+OUT = PARENT / 'evidence'
+PIN = '8418118e40728c667c32a28a182697139bc7a5ef'
+SAVED = COCKPIT / 'saved_plans'
+os.environ['PYTHONDONTWRITEBYTECODE'] = '1'
+
+
+def sha(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def write_json(name, value):
+    assert Path.cwd() in (COCKPIT, REPO, KIT)
+    with (OUT / name).open('x') as f:
+        json.dump(value, f, indent=2)
+        f.write('\n')
+
+
+def run(name, argv, cwd):
+    os.chdir(cwd)
+    assert Path.cwd().resolve() == cwd
+    result = subprocess.run(argv, cwd=cwd, text=True, capture_output=True)
+    record = dict(argv=argv, cwd=str(cwd), observed_at=datetime.now(timezone.utc).isoformat(),
+                  exit_code=result.returncode, stdout=result.stdout, stderr=result.stderr)
+    write_json(name + '.json', record)
+    print(name, result.returncode, result.stdout[-1800:], result.stderr[-1800:], flush=True)
+    result.check_returncode()
+    return result.stdout
+
+
+assert sys.argv[1] == 'stage'
+assert Path.cwd().resolve() == COCKPIT
+assert subprocess.check_output(['git', '-C', str(COCKPIT), 'rev-parse', 'HEAD'], text=True).strip() == 'edc199f42bc65b1850172ea79b791ef358577ae1'
+for original in [Path('/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture'),
+                 Path('/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source')]:
+    assert not original.exists() and not original.is_symlink()
+assert not PARENT.exists() and not PARENT.is_symlink()
+PARENT.mkdir(parents=True)
+OUT.mkdir()
+write_json('authority', {'operator_response': 'Approve ITEM5-B as scoped',
+                        'date': '2026-09-09', 'proposal_commit': 'edc199f42bc65b1850172ea79b791ef358577ae1',
+                        'proposal_sha256': sha(SAVED / 'phase5-item5-decision_2026-09-09.md'),
+                        'source_pin': PIN, 'fixture': str(REPO), 'kit': str(KIT),
+                        'original_paths_missing': True})
+run('clone', ['git', 'clone', '--no-hardlinks', '--no-checkout', str(COCKPIT), str(KIT)], COCKPIT)
+run('detach-source', ['git', '-C', str(KIT), 'checkout', '--detach', PIN], KIT)
+run('remove-source-origin', ['git', '-C', str(KIT), 'remote', 'remove', 'origin'], KIT)
+assert (KIT / '.git').is_dir() and not (KIT / '.git/objects/info/alternates').exists()
+assert not subprocess.check_output(['git', '-C', str(KIT), 'remote'], text=True).strip()
+assert Path.cwd() == KIT
+REPO.mkdir()
+run('fixture-init', ['git', '-C', str(REPO), 'init', '--initial-branch=chore/adopt-agentic-dev-kit'], REPO)
+inputs = json.loads((SAVED / 'codex-adopt-field-evidence_2026-09-05/fixture-inputs.json').read_text())
+inputs['AGENTS.md'] = inputs['AGENTS.md'].split('\n', 1)[1]
+inputs['config/dev-model.yaml'] = (SAVED / 'codex-adopt-initialization-evidence_2026-09-06/config-after-init.yaml').read_text()
+assert Path.cwd() == REPO
+for name, text in inputs.items():
+    target = REPO / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open('x') as f:
+        f.write(text)
+write_json('fixture-input-hashes.json', {name: sha(REPO / name) for name in inputs})
+run('input-add', ['git', '-C', str(REPO), 'add', '--', *[str(REPO / p) for p in inputs if not p.endswith('.local.yaml')]], REPO)
+run('input-commit', ['git', '-C', str(REPO), 'commit', '-m', 'chore: seed the approved ITEM5-B fixture inputs'], REPO)
+write_json('input-identity.json', {'revision': subprocess.check_output(['git','-C',str(REPO),'rev-parse','HEAD'], text=True).strip(),
+                                  'branch': subprocess.check_output(['git','-C',str(REPO),'branch','--show-current'], text=True).strip(),
+                                  'remotes': subprocess.check_output(['git','-C',str(REPO),'remote','-v'], text=True)})
+manifest = json.loads((KIT / 'kit-manifest.json').read_text())
+copies = {name: ('scripts/devkit/' + name[len('scripts/'):] if name.startswith('scripts/') else name)
+          for name, entry in manifest['files'].items() if entry['role'] != 'repo-only'}
+old_ledger = json.loads((SAVED / 'codex-adopt-field-evidence_2026-09-05/copy-ledger.json').read_text())
+for entry in old_ledger:
+    name = entry['source']
+    if name not in manifest['files'] and not name.startswith('.claude/agents/'):
+        copies[name] = entry['destination']
+ledger = []
+assert Path.cwd() == REPO
+for name, dest in sorted(copies.items()):
+    source, target = KIT / name, REPO / dest
+    assert source.is_file() and not source.is_symlink(), name
+    if target.exists() or target.is_symlink():
+        assert dest == '.agents/skills/wrap-up/SKILL.md', dest
+        ledger.append({'source': name, 'destination': dest, 'action': 'preserved-existing', 'sha256': sha(target)})
+        continue
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, target)
+    assert sha(target) == sha(source), dest
+    ledger.append({'source': name, 'destination': dest, 'action': 'copied', 'sha256': sha(target), 'mode': oct(target.stat().st_mode & 0o777)})
+write_json('copy-ledger.json', ledger)
+import yaml
+expected = yaml.safe_load(inputs['config/dev-model.yaml'])
+expected_merged = copy.deepcopy(expected)
+expected_merged['notify']['user_key'] = 'local-fixture-recipient'
+write_json('intended-tracked-config.json', expected)
+write_json('intended-merged-config.json', expected_merged)
+sys.path.insert(0, str(REPO / 'scripts/devkit/lib'))
+import kitconfig
+config_path = REPO / 'config/dev-model.yaml'
+actual = kitconfig.load_config(config_path, overlay=False)
+actual_merged = kitconfig.load_config(config_path)
+assert actual == expected
+assert actual_merged == expected_merged
+write_json('configuration-validation.json', {'reader': kitconfig.__file__, 'path': str(config_path),
+                                            'tracked_equal': True, 'merged_equal': True,
+                                            'sha256': sha(config_path), 'overlay_sha256': sha(REPO / 'config/dev-model.local.yaml')})
+run('record-install', [sys.executable, '-B', str(REPO / 'scripts/devkit/kit_doctor.py'), '--root', str(REPO), '--record-install', '--from-kit', str(KIT)], REPO)
+baseline = json.loads((REPO / 'kit-manifest.json').read_text())
+assert baseline['kit_commit'] == PIN
+assert 'not_installed' in baseline
+write_json('install-baseline.json', baseline)
+print('STAGING_COMPLETE', flush=True)

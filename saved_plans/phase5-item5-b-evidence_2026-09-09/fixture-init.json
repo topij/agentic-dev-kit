@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "git",
+    "-C",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "init",
+    "--initial-branch=chore/adopt-agentic-dev-kit"
+  ],
+  "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+  "observed_at": "2026-09-09T19:59:40.119382+00:00",
+  "exit_code": 0,
+  "stdout": "Initialized empty Git repository in /Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.git/\n",
+  "stderr": ""
+}

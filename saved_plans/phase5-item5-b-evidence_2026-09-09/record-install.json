@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "/Users/topi/.cache/uv/builds-v0/.tmpSbGHi9/bin/python",
+    "-B",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/kit_doctor.py",
+    "--root",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "--record-install",
+    "--from-kit",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source"
+  ],
+  "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+  "observed_at": "2026-09-09T19:59:40.373254+00:00",
+  "exit_code": 0,
+  "stdout": "",
+  "stderr": "wrote /Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/kit-manifest.json (65 installed files, kit_version=2, kit_commit=8418118e4072)\n"
+}

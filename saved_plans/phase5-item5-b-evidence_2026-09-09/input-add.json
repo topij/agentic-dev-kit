@@ -1,0 +1,23 @@
+{
+  "argv": [
+    "git",
+    "-C",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "add",
+    "--",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/README.md",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/AGENTS.md",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/CLAUDE.md",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/ROADMAP.md",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/notes/history.md",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.agents/skills/wrap-up/SKILL.md",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/local_task.py",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.gitignore",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/config/dev-model.yaml"
+  ],
+  "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+  "observed_at": "2026-09-09T19:59:40.144930+00:00",
+  "exit_code": 0,
+  "stdout": "",
+  "stderr": ""
+}
