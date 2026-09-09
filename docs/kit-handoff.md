@@ -14,7 +14,7 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-09 — cs-toolkit replay verified at its bound refs; merges operator-held.
+Last updated: 2026-09-09 — cs-toolkit replay merged; the item 5 decision remains.
 Phase 5 remains blocked on delivery item 5, whose original fixture/source are missing.
 
 ## Latest session — 2026-09-09 (cs-toolkit replay, in Codex)
@@ -22,7 +22,8 @@ Phase 5 remains blocked on delivery item 5, whose original fixture/source are mi
 The operator approved REPLAY-01 in this session. The [replay record](../saved_plans/cs-toolkit-replay_2026-09-09.md)
 retains the upgrade, separate no-change reconciliation, test limits, independent reviews,
 and the byte-identical authoritative snapshots. Item 6's verification is complete at the
-named refs; this is not completion of Phase 5 or authority to merge.
+named refs; this is not completion of Phase 5. The operator later authorized
+`merge when clean`; the replay record separates that decision from the exit evidence.
 
 - [cs-toolkit #2255](https://github.com/in-parallel-oy/cs-toolkit/pull/2255) contains the
   upgrade from kit `bde4c234eaa9005e90b987007101aba98281ce88` to protected kit source
@@ -31,7 +32,9 @@ named refs; this is not completion of Phase 5 or authority to merge.
   stage's exact invocation, unchanged output/tree and preceding-stage linkage are retained.
 - `uv run scripts/devkit/pr_watch.py 2255 --json` in
   `/Users/topi/Coding/in-parallel/cs-toolkit` at that exact head on 2026-09-09 reported
-  `converged: true`, `mergeable: true`, `done: true`. The operator holds the merge.
+  `converged: true`, `mergeable: true`, `done: true`. After the later authorization,
+  `gh pr view 2255` read back its merge as `c4119f85e07f2a089ab8d5decc94cf2cd1635d14`
+  on 2026-09-09; the read-back is retained in the replay record.
 - The original checkout's `make test` failed in support-docs on ignored local artifact
   inventory; unchanged original test source reproduced the assertions there. Independent
   fresh clones passed `make test` at the same head. Commands, directories, dates and
@@ -42,15 +45,15 @@ named refs; this is not completion of Phase 5 or authority to merge.
 - The #722 batch is folded into this ordinary wrap-up: #578/#721 routing annotations,
   removal of the `/tmp` mechanism explanation, the missing-tree blocker, #585's settled
   earlier placement, and this next action. Existing credited exercises were not repeated.
-- The kit branch is `chore/kit-replay-handoff-20260909`. This wrap-up publishes the
+- [Kit PR #724](https://github.com/topij/agentic-dev-kit/pull/724) carries the ordinary
+  wrap-up from `chore/kit-replay-handoff-20260909`. This wrap-up publishes the
   snapshots and stamped replay result before its merge; its own commit is not the kit
   source used for the replay. Later ref movement is a separate event.
 
 ▶ Next: `$session-start` — read this handoff and the maintained sprint status, then
-re-read cs-toolkit #2255 and the kit PR for `chore/kit-replay-handoff-20260909` before
-seeking exact operator merge decisions. After delivery, obtain the Phase 5 item 5
-rebuild-versus-change-approach decision. Check both original trees and stop rather than
-rebuild. #585 already moved earlier; #723 is the accepted upstream follow-up.
+prepare the Phase 5 item 5 operator decision: rebuild from retained baselines or change
+approach. Check both original trees first and stop rather than rebuild without that
+decision. #585's earlier placement is settled; #723 is the accepted upstream follow-up.
 
 ______________________________________________________________________
 

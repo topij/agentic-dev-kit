@@ -1,6 +1,6 @@
 # cs-toolkit replay — 2026-09-09
 
-Phase 5 delivery item 6 was executed under [REPLAY-01 and its exact approval](cs-toolkit-replay-evidence_2026-09-09/approval.md). The replay verification at the bound refs succeeded with the disclosed original-checkout failure and operator-accepted #723 limitation. This does not complete Phase 5: item 5 remains blocked by the missing original fixture/source and has no rebuild decision. The initial #2222/#2223 pass is not credited again. Merge authority remains with the operator.
+Phase 5 delivery item 6 was executed under [REPLAY-01 and its exact approval](cs-toolkit-replay-evidence_2026-09-09/approval.md). The replay verification at the bound refs succeeded with the disclosed original-checkout failure and operator-accepted #723 limitation. This does not complete Phase 5: item 5 remains blocked by the missing original fixture/source and has no rebuild decision. The initial #2222/#2223 pass is not credited again. REPLAY-01 initially held merges for the operator; the later authorization and delivery are recorded below.
 
 ## Bound upgrade and separate reconciliation
 
@@ -51,12 +51,30 @@ Exact passing nodes and the full test invocation are retained in [fork-test-node
 Its executed source bytes and the capture/reconciliation probes are retained with
 `.py.txt` suffixes as archival text; the invocation receipts name the original scratch scripts.
 
-`uv run scripts/devkit/pr_watch.py 2255 --json` in the original adopter at `21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351` on 2026-09-09 reported `converged: true`, `mergeable: true` and `done: true`; the [poll](cs-toolkit-replay-evidence_2026-09-09/adopter-pr-watch.json) and [receipt](cs-toolkit-replay-evidence_2026-09-09/adopter-pr-watch-receipt.json) retain the observation. The PR was left open for the operator.
+`uv run scripts/devkit/pr_watch.py 2255 --json` in the original adopter at `21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351` on 2026-09-09 reported `converged: true`, `mergeable: true` and `done: true`; the [poll](cs-toolkit-replay-evidence_2026-09-09/adopter-pr-watch.json) and [receipt](cs-toolkit-replay-evidence_2026-09-09/adopter-pr-watch-receipt.json) retain the observation. That observation preceded the operator’s subsequent merge authorization.
 
 This kit wrap-up publishes the snapshots and stamped result before merge. Its own commit is not the replay source. Later ref movement is a separate event; it does not rewrite this observation or authorize a later merge without fresh checks.
+
+## Subsequent delivery — 2026-09-09
+
+After the exit read-back, the operator instructed `merge when clean`. A fresh
+`uv run scripts/devkit/pr_watch.py 2255 --json --no-persist` in the original adopter
+at `21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351` on 2026-09-09 reported the exact head
+mergeable. `gh pr merge` used `--squash` and pinned that exact SHA with
+`--match-head-commit`;
+`gh pr view 2255` read back `MERGED` with merge commit
+`c4119f85e07f2a089ab8d5decc94cf2cd1635d14` at `2026-09-09T18:40:30Z`.
+The [delivery event](cs-toolkit-replay-evidence_2026-09-09/delivery-events.json)
+retains the authoritative response and the later authorization. The local adopter was
+fast-forwarded to the merged main; its manifest bytes still match the reviewed head.
+
+[Kit PR #724](https://github.com/topij/agentic-dev-kit/pull/724) publishes this ordinary
+wrap-up and the replay snapshots. Its current-head CI and review must finish before
+using the same merge authorization. The [initial kit panel receipt](https://github.com/topij/agentic-dev-kit/pull/724#issuecomment-5607067732)
+was recorded at `9b63bc921533b2db19b05313ff2600ee9f1ffc52` before this later-event update.
 
 ## Operational limits and next action
 
 A kit wrap-up branch-creation command used an explicit tool working directory but omitted the required pre-write `pwd` assertion. Read-back confirmed `chore/kit-replay-handoff-20260909` at `e698ec47d6284ccd31af5ba9d8bc5657fe992310`; subsequent record writes asserted the directory first and verified destination hashes. This lapse is recorded rather than claiming perfect procedure compliance.
 
-The [fixture absence check](cs-toolkit-replay-evidence_2026-09-09/fixture-absence.json) retains the original missing paths. Check both trees and stop rather than rebuild. The next session starts from the operator-held replay and kit wrap-up PRs, rechecks their exact heads and reviews before any authorized merge, then obtains the item 5 decision. #585's earlier placement is settled; its implementation is separate. #723 remains the accepted upstream follow-up.
+The [fixture absence check](cs-toolkit-replay-evidence_2026-09-09/fixture-absence.json) retains the original missing paths. Check both trees and stop rather than rebuild. The next session prepares the item 5 operator decision: rebuild from retained baselines or change approach. #585's earlier placement is settled; its implementation is separate. #723 remains the accepted upstream follow-up.

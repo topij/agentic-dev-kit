@@ -86,3 +86,10 @@ Body SHA256: bbd40d80eb3b66f142c21c21eb3a55c963737532ee5d6830525859f10339622b
 At kit source e698ec47d6284ccd31af5ba9d8bc5657fe992310, scripts/tests/conftest.py uses membership directly on json.loads output. The replay probe imported the corresponding cs-toolkit helper at 21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351 on 2026-09-09: null and numeric JSON raised TypeError; a matching string or list returned True. Require a dict before testing kit_commit, and cover these forms in the helper tests. The approved adopter installation has no test-module callers of this helper. Finding: https://github.com/in-parallel-oy/cs-toolkit/pull/2255#discussion_r3971657369. Preserve the replay’s pinned source and record this accepted limitation; implementation remains separate.
 
 Filed and authoritatively read back as https://github.com/topij/agentic-dev-kit/issues/723.
+
+## Later merge authorization — 2026-09-09
+
+The operator subsequently instructed: `merge when clean`. This superseded the
+earlier hold for the ongoing replay and kit wrap-up PRs after their exact-head
+checks and reviews. The [delivery events](delivery-events.json) retain the later
+adopter merge read-back; the original replay snapshots are unchanged.

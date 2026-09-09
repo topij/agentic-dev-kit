@@ -470,8 +470,9 @@ historical observation it was and is not silently refreshed.
      Executed 2026-09-09 under REPLAY-01: the [replay record](cs-toolkit-replay_2026-09-09.md)
      retains cs-toolkit #2255 at `21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351`,
      its no-change reconciliation, stable snapshots, and actual verification limits.
-     The operator approved the #723 deferral; merges remain operator-held. Item 5
-     remains blocked, so this does not complete Phase 5.
+     The operator approved the #723 deferral, then later authorized merge when clean.
+     cs-toolkit #2255 merged on 2026-09-09 as `c4119f85e07f2a089ab8d5decc94cf2cd1635d14`;
+     kit #724 carries the wrap-up. Item 5 remains blocked, so this does not complete Phase 5.
 - [ ] **Earlier sprint work — #585.** The operator moved the proportional opening
   pass for record prose out of Phase 6 on 2026-09-09; the
   [decision and evidence](https://github.com/topij/agentic-dev-kit/issues/585#issuecomment-5606158377)
@@ -855,7 +856,7 @@ and final open/unmerged fixture pull requests.
   before it merges. Later ref movement is a separate event; wrap-up records the
   observation without treating its own commit as the replay source.
   The [2026-09-09 replay](cs-toolkit-replay_2026-09-09.md) retains the completed
-  verification at its bound refs, accepted #723 limitation and operator-held merges.
+  verification at its bound refs, accepted #723 limitation and later delivery events.
   The remaining fixture work is blocked as recorded in delivery item 5.
 
 #### Field-exercise reconciliation — 2026-09-05
