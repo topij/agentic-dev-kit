@@ -69,8 +69,10 @@ retains the authoritative response and the later authorization. The local adopte
 fast-forwarded to the merged main; its manifest bytes still match the reviewed head.
 
 [Kit PR #724](https://github.com/topij/agentic-dev-kit/pull/724) publishes this ordinary
-wrap-up and the replay snapshots. Its current-head CI and review must finish before
-using the same merge authorization. The [initial kit panel receipt](https://github.com/topij/agentic-dev-kit/pull/724#issuecomment-5607067732)
+wrap-up and the replay snapshots. `gh pr view 724 --repo topij/agentic-dev-kit`
+read back its merge as `8418118e40728c667c32a28a182697139bc7a5ef` on 2026-09-09.
+This later delivery event leaves the replay snapshots unchanged.
+The [initial kit panel receipt](https://github.com/topij/agentic-dev-kit/pull/724#issuecomment-5607067732)
 was recorded at `9b63bc921533b2db19b05313ff2600ee9f1ffc52` before this later-event update.
 
 ## Operational limits and next action

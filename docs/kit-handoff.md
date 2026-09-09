@@ -14,10 +14,35 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-09 — cs-toolkit replay merged; the item 5 decision remains.
+Last updated: 2026-09-09 — item 5 decision packet prepared; execution awaits the operator.
 Phase 5 remains blocked on delivery item 5, whose original fixture/source are missing.
 
-## Latest session — 2026-09-09 (cs-toolkit replay, in Codex)
+## Latest session — 2026-09-09 (item 5 decision packet, in Codex)
+
+The [decision packet](../saved_plans/phase5-item5-decision_2026-09-09.md) compares a
+normalized historical payload rebuild with a fresh current-kit verification fixture.
+It recommends ITEM5-B and specifies the roots, source pin, initialization answers,
+registration effects, verification scope and writes for either exact decision.
+No reconstruction, initialization, runtime launch or adopter write occurred.
+
+The [retained audit](../saved_plans/phase5-item5-baseline-audit_2026-09-09.json)
+records the missing original paths and byte-availability checks. It distinguishes
+recoverable payloads from unavailable cache bytes and Git/runtime continuity.
+The maintained sprint status retains item 6 as complete and item 5 as pending;
+#585's earlier placement and #723's accepted upstream deferral are unchanged.
+
+`gh pr view 724` and `gh pr view 2255`, with their explicit kit/adopter repositories,
+read back the merges on 2026-09-09 at kit `8418118e40728c667c32a28a182697139bc7a5ef`.
+Kit #724 contains the #722 batch. This packet does not repeat that batch or re-credit
+the initial adopter pass or replay. The prior replay's snapshots remain historical.
+
+▶ Next: `$session-start` — read `saved_plans/phase5-item5-decision_2026-09-09.md`
+and obtain the operator's exact ITEM5-A or ITEM5-B decision before creating either
+proposed root. Neither option alone completes the remaining field coverage.
+
+______________________________________________________________________
+
+## Session — 2026-09-09 (cs-toolkit replay, in Codex)
 
 The operator approved REPLAY-01 in this session. The [replay record](../saved_plans/cs-toolkit-replay_2026-09-09.md)
 retains the upgrade, separate no-change reconciliation, test limits, independent reviews,
@@ -46,14 +71,11 @@ named refs; this is not completion of Phase 5. The operator later authorized
   removal of the `/tmp` mechanism explanation, the missing-tree blocker, #585's settled
   earlier placement, and this next action. Existing credited exercises were not repeated.
 - [Kit PR #724](https://github.com/topij/agentic-dev-kit/pull/724) carries the ordinary
-  wrap-up from `chore/kit-replay-handoff-20260909`. This wrap-up publishes the
-  snapshots and stamped replay result before its merge; its own commit is not the kit
-  source used for the replay. Later ref movement is a separate event.
+  wrap-up from `chore/kit-replay-handoff-20260909`. It merged on 2026-09-09 as
+  `8418118e40728c667c32a28a182697139bc7a5ef`, read back with `gh pr view 724`.
+  Its commit is not the kit source used for the replay; the snapshots retain that source.
 
-▶ Next: `$session-start` — read this handoff and the maintained sprint status, then
-prepare the Phase 5 item 5 operator decision: rebuild from retained baselines or change
-approach. Check both original trees first and stop rather than rebuild without that
-decision. #585's earlier placement is settled; #723 is the accepted upstream follow-up.
+The latest session block owns the prepared item 5 decision and next action.
 
 ______________________________________________________________________
 
