@@ -1,0 +1,15 @@
+{
+  "adopter_head": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+  "after_sha256": "99c78b8409ce5b70aa23ff10cfc6c4ee93605d7d9934c7d911b6858658fa5918",
+  "argv": [
+    "cmp",
+    "-s",
+    "/private/tmp/adk-cs-replay-decision-20260909-mxhnaq2w/tuple-before.stdout",
+    "/private/tmp/adk-cs-replay-decision-20260909-mxhnaq2w/tuple-after.stdout"
+  ],
+  "before_sha256": "99c78b8409ce5b70aa23ff10cfc6c4ee93605d7d9934c7d911b6858658fa5918",
+  "byte_identical": true,
+  "date": "2026-09-09T18:29:31.913129+00:00",
+  "exit_code": 0,
+  "kit_source": "e698ec47d6284ccd31af5ba9d8bc5657fe992310"
+}

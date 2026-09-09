@@ -267,7 +267,7 @@ maintained *Sprint status* and *Delivery plan* sections below.
     author edits is the one the renderer ships; add the appended-instruction mutation
     for `adopt`, `upgrade` and `pr-watch`.
 
-## Sprint status — reconciled 2026-09-07
+## Sprint status — reconciled 2026-09-09
 
 The machine-readable inventory and current capability judgments live in
 [`runtime-parity.md`](../docs/agentic-dev-kit/runtime-parity.md); this plan supplies
@@ -416,7 +416,14 @@ historical observation it was and is not silently refreshed.
   4. [x] Initial pilot write pass and separate fork reconciliation, recorded with the
      stage identities in the Phase 5 checklist below. This pass does not establish the
      phase exit.
-  5. [ ] **In progress:** complete the remaining `#243` field exercises. The approved
+  5. [ ] **Blocked:** complete the remaining `#243` field exercises. The original
+     fixture and source paths were absent when checked with `test -e` on 2026-09-09
+     from kit revision `e698ec47d6284ccd31af5ba9d8bc5657fe992310`:
+     `/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture` and
+     `/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source`.
+     Check both trees and stop rather than rebuild. Rebuilding from retained
+     `saved_plans/` baselines or changing the approach needs an operator decision.
+     Delivery item 6 is independent of these paths. The approved
      [adopt continuation](codex-adopt-initialization-field-exercise_2026-09-06.md)
      executed initialization and attempted Step 4 checks; the installed suites failed.
      Adoption completion remains pending, as do the untested systemize routes.
@@ -439,7 +446,7 @@ historical observation it was and is not silently refreshed.
      field verification of the doctor correction, with client-specific limits.
      Adoption completion and Phase 5 exit keep their own exact decisions;
      do not repeat credited probes or promote a warning-free doctor to fixture completion.
-  6. [ ] Replay the write pass and fork reconciliation from the then-current kit source,
+  6. [x] Replay the write pass and fork reconciliation from the then-current kit source,
      using the same `$REPO` origin check, `$KIT` path, and immediately-before-every-write
      directory assertion as the initial pass. For a stage with a diff, bind its PR
      identity, base name and head and require the protected → upgrade → reconciliation chain
@@ -460,9 +467,18 @@ historical observation it was and is not silently refreshed.
      requires replay. Publish both snapshots and the stamped verification result on the
      kit wrap-up PR before it merges. Later ref movement is a separate event; wrap-up
      records the observation without treating its own commit as the replay source.
+     Executed 2026-09-09 under REPLAY-01: the [replay record](cs-toolkit-replay_2026-09-09.md)
+     retains cs-toolkit #2255 at `21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351`,
+     its no-change reconciliation, stable snapshots, and actual verification limits.
+     The operator approved the #723 deferral; merges remain operator-held. Item 5
+     remains blocked, so this does not complete Phase 5.
+- [ ] **Earlier sprint work — #585.** The operator moved the proportional opening
+  pass for record prose out of Phase 6 on 2026-09-09; the
+  [decision and evidence](https://github.com/topij/agentic-dev-kit/issues/585#issuecomment-5606158377)
+  govern its placement. This replay does not implement it.
 - [ ] **Phase 6 — Gate parity and roll it out (not started).** With the pilot pulled into Phase 5,
   this phase holds the cost and hygiene work the review found burning, then the gate:
-  the proportional opening pass for record prose (`#585`); the suite measured and
+  the suite measured and
   marked (`make test-fast` beside an unchanged `make test`); the learnings memo
   distilled into `fallback-review-panel.md`; the matrix's headless-lane cell split per
   runtime and this plan cut to exits and order; `session-start`'s forge reads routed
@@ -817,7 +833,7 @@ and final open/unmerged fixture pull requests.
   mechanical or advisory declaration beside each runtime entry. The operator approved
   the tracker dispositions and closure on 2026-09-07; the
   [Codex batch record](codex-hooks-batch_2026-09-07.md) retains the receipts and limits.
-- [ ] Replay the adopter write pass and fork reconciliation from the current kit
+- [x] Replay the adopter write pass and fork reconciliation from the current kit
   protected-branch head, using the same `$REPO` origin check, `$KIT` path, and
   immediately-before-every-write directory assertion as the initial pass. Bind every
   created PR's identity, base name and head and require the protected → upgrade →
@@ -838,6 +854,9 @@ and final open/unmerged fixture pull requests.
   Publish both snapshots and the stamped verification result on the kit wrap-up PR
   before it merges. Later ref movement is a separate event; wrap-up records the
   observation without treating its own commit as the replay source.
+  The [2026-09-09 replay](cs-toolkit-replay_2026-09-09.md) retains the completed
+  verification at its bound refs, accepted #723 limitation and operator-held merges.
+  The remaining fixture work is blocked as recorded in delivery item 5.
 
 #### Field-exercise reconciliation — 2026-09-05
 
@@ -931,9 +950,9 @@ Re-sequenced 2026-09-02: the pilot moved to Phase 5, and the cost and hygiene wo
 review found burning comes before the gate, because the gate would otherwise inherit
 the cost.
 
-- Add the proportional opening pass for record-prose pull requests (`#585`):
-  deterministic checks plus one correctness lens when every changed path is a record
-  surface.
+The operator moved `#585` earlier in the sprint on 2026-09-09, outside this phase;
+see the maintained status and its linked decision.
+
 - Measure the suite (`pytest --durations`, stamped), register an `evidence` marker for
   the bundle-walking and copytree fixture tests, add `make test-fast`, keep `make test`
   as the verification command.

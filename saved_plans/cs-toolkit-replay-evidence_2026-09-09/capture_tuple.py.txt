@@ -1,0 +1,52 @@
+"""Read the replay's authoritative refs; emit canonical comparable tuple bytes."""
+import hashlib
+import json
+import os
+from pathlib import Path
+import subprocess
+
+repo=Path(os.environ["REPO"])
+kit=Path(os.environ["KIT"])
+evidence=Path(os.environ["EVIDENCE"])
+assert Path.cwd().resolve()==repo.resolve()
+
+def command(*args):
+    return subprocess.check_output(args,text=True).strip()
+def gh(path):
+    return json.loads(command("gh","api",path))
+def git(root,*args):
+    return command("git","-C",str(root),*args)
+
+kit_ref=gh("repos/topij/agentic-dev-kit/branches/main")
+adopter_ref=gh("repos/in-parallel-oy/cs-toolkit/branches/main")
+pr=gh("repos/in-parallel-oy/cs-toolkit/pulls/2255")
+origin=git(repo,"remote","get-url","origin")
+source=git(kit,"rev-parse","HEAD")
+head=git(repo,"rev-parse","HEAD")
+stage=json.loads((evidence/"reconciliation.stdout").read_text())
+invocation=json.loads((evidence/"reconciliation.json").read_text())
+assert origin=="https://github.com/in-parallel-oy/cs-toolkit.git"
+assert source==kit_ref["commit"]["sha"]==os.environ["KIT_SOURCE"]
+assert adopter_ref["commit"]["sha"]==os.environ["ADOPTER_INPUT"]
+assert kit_ref["protected"] and adopter_ref["protected"]
+assert pr["head"]["sha"]==head==stage["output_sha"]
+assert pr["base"]["sha"]==adopter_ref["commit"]["sha"]
+assert pr["base"]["ref"]=="main" and pr["base"]["repo"]["full_name"]=="in-parallel-oy/cs-toolkit"
+assert pr["head"]["ref"]=="chore/kit-upgrade-replay-20260909"
+assert pr["head"]["repo"]["full_name"]=="in-parallel-oy/cs-toolkit"
+assert not pr["draft"] and pr["state"]=="open" and not pr["merged"]
+assert git(repo,"symbolic-ref","--short","HEAD")==pr["head"]["ref"]
+assert git(repo,"rev-parse","main")==adopter_ref["commit"]["sha"]
+assert not git(repo,"status","--short") and not git(kit,"status","--short")
+assert invocation["exit_code"]==0 and invocation["head"]==stage["input_sha"]
+assert stage["input_sha"]==stage["output_sha"]==stage["preceding_stage"]["output_sha"]
+assert stage["input_tree"]==stage["output_tree"]==git(repo,"rev-parse","HEAD^{tree}")
+assert stage["status_before"]==stage["status_after"]==""
+subprocess.run(["git","-C",str(repo),"merge-base","--is-ancestor",adopter_ref["commit"]["sha"],head],check=True)
+print(json.dumps({
+    "kit":{"canonical_origin":git(kit,"remote","get-url","origin"),"source_sha":source,"protected_ref":"main","protected_sha":kit_ref["commit"]["sha"],"protected":kit_ref["protected"]},
+    "adopter":{"canonical_origin":origin,"protected_ref":"main","protected_sha":adopter_ref["commit"]["sha"],"protected":adopter_ref["protected"],"resulting_head":head,"resulting_tree":git(repo,"rev-parse","HEAD^{tree}"),"branch":pr["head"]["ref"],"status_short":""},
+    "created_prs":[{"number":pr["number"],"node_id":pr["node_id"],"url":pr["html_url"],"repository":pr["base"]["repo"]["full_name"],"base_name":pr["base"]["ref"],"base_sha":pr["base"]["sha"],"head_name":pr["head"]["ref"],"head_sha":pr["head"]["sha"],"head_repository":pr["head"]["repo"]["full_name"],"state":pr["state"],"draft":pr["draft"],"merged":pr["merged"]}],
+    "no_change_stages":[{"invocation":invocation["argv"],"cwd":invocation["cwd"],"exit_code":invocation["exit_code"],"output":stage,"output_sha256":hashlib.sha256((evidence/"reconciliation.stdout").read_bytes()).hexdigest(),"script_sha256":hashlib.sha256((evidence/"reconcile_no_change.py").read_bytes()).hexdigest()}],
+    "ancestry":[{"from":adopter_ref["commit"]["sha"],"to":head,"relation":"ancestor","check":"git merge-base --is-ancestor"},{"from":head,"to":stage["output_sha"],"relation":"equal","stage":"reconciliation"}]
+},sort_keys=True,indent=2))

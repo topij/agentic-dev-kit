@@ -1,0 +1,140 @@
+{
+  "adopter": {
+    "branch": "chore/kit-upgrade-replay-20260909",
+    "canonical_origin": "https://github.com/in-parallel-oy/cs-toolkit.git",
+    "protected": true,
+    "protected_ref": "main",
+    "protected_sha": "bdeaf04f1ceed92570ddcd22281b659d5eb5cc80",
+    "resulting_head": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+    "resulting_tree": "20acdff99233f85f5409c51e36b64b00eefe7078",
+    "status_short": ""
+  },
+  "ancestry": [
+    {
+      "check": "git merge-base --is-ancestor",
+      "from": "bdeaf04f1ceed92570ddcd22281b659d5eb5cc80",
+      "relation": "ancestor",
+      "to": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351"
+    },
+    {
+      "from": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+      "relation": "equal",
+      "stage": "reconciliation",
+      "to": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351"
+    }
+  ],
+  "created_prs": [
+    {
+      "base_name": "main",
+      "base_sha": "bdeaf04f1ceed92570ddcd22281b659d5eb5cc80",
+      "draft": false,
+      "head_name": "chore/kit-upgrade-replay-20260909",
+      "head_repository": "in-parallel-oy/cs-toolkit",
+      "head_sha": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+      "merged": false,
+      "node_id": "PR_kwDORuRJEc8AAAABC4H3HA",
+      "number": 2255,
+      "repository": "in-parallel-oy/cs-toolkit",
+      "state": "open",
+      "url": "https://github.com/in-parallel-oy/cs-toolkit/pull/2255"
+    }
+  ],
+  "kit": {
+    "canonical_origin": "https://github.com/topij/agentic-dev-kit.git",
+    "protected": true,
+    "protected_ref": "main",
+    "protected_sha": "e698ec47d6284ccd31af5ba9d8bc5657fe992310",
+    "source_sha": "e698ec47d6284ccd31af5ba9d8bc5657fe992310"
+  },
+  "no_change_stages": [
+    {
+      "cwd": "/Users/topi/Coding/in-parallel/cs-toolkit",
+      "exit_code": 0,
+      "invocation": [
+        "python3",
+        "-B",
+        "/private/tmp/adk-cs-replay-decision-20260909-mxhnaq2w/reconcile_no_change.py",
+        "--repo",
+        "/Users/topi/Coding/in-parallel/cs-toolkit",
+        "--kit",
+        "/private/tmp/agentic-dev-kit",
+        "--baseline",
+        "bde4c234eaa9005e90b987007101aba98281ce88",
+        "--source",
+        "e698ec47d6284ccd31af5ba9d8bc5657fe992310",
+        "--protected",
+        "bdeaf04f1ceed92570ddcd22281b659d5eb5cc80",
+        "--input",
+        "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "--upgrade-pr",
+        "https://github.com/in-parallel-oy/cs-toolkit/pull/2255"
+      ],
+      "output": {
+        "adopter_diff": {
+          "argv": [
+            "git",
+            "-C",
+            "/Users/topi/Coding/in-parallel/cs-toolkit",
+            "diff",
+            "--exit-code",
+            "bdeaf04f1ceed92570ddcd22281b659d5eb5cc80",
+            "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+            "--",
+            "scripts/dev_session.sh",
+            "scripts/reconcile_sessions.sh",
+            "docs/developer/devkit-workflows-local.md",
+            "docs/developer/parallel-local.md",
+            ".claude/commands/parallel.md",
+            ".agents/skills/parallel/SKILL.md"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "stdout": ""
+        },
+        "destination_sha256": {
+          ".agents/skills/parallel/SKILL.md": "0cdefa4f13f7b77b342647badae9faf8f84d17a1619a3fdd54e024f7cd1fb997",
+          ".claude/commands/parallel.md": "1cea5d8a6b5c570e3a1090827d606cf0e128ec8f9ec167821f0c0df25c5eba13",
+          "docs/developer/devkit-workflows-local.md": "17030c61fb81d07e7f7529db1213ece884f9ff184d55de2ee6380bb95ccd9cd8",
+          "docs/developer/parallel-local.md": "ddb2bd6f2f3aff4a477b68c50f5dc751ead0ecd17dcb1de42b993b5a494d470f",
+          "scripts/dev_session.sh": "54bc7eb957782d0cbaf42f09059c1f8eacb23f958f1ffe46f4510d50d6895dc5",
+          "scripts/reconcile_sessions.sh": "8664008f6689ca33f28cb1bc9b8099dcd48731500ce84b46375498eb9859f882"
+        },
+        "input_sha": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "input_tree": "20acdff99233f85f5409c51e36b64b00eefe7078",
+        "output_sha": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+        "output_tree": "20acdff99233f85f5409c51e36b64b00eefe7078",
+        "preceding_stage": {
+          "output_sha": "21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351",
+          "pr_url": "https://github.com/in-parallel-oy/cs-toolkit/pull/2255",
+          "stage": "upgrade"
+        },
+        "result": "NO_CHANGE: pinned upstream fork diff and adopter fork/local-binding diff are empty; reconciliation preserves the upgrade output",
+        "semantic_review": "The separate independent reconciliation review and exact-node matrix must accompany this structural observation; this probe does not infer doctrine compatibility.",
+        "sha_equal": true,
+        "stage": "fork-reconciliation",
+        "status_after": "",
+        "status_before": "",
+        "tree_equal": true,
+        "upstream_diff": {
+          "argv": [
+            "git",
+            "-C",
+            "/private/tmp/agentic-dev-kit",
+            "diff",
+            "--exit-code",
+            "bde4c234eaa9005e90b987007101aba98281ce88",
+            "e698ec47d6284ccd31af5ba9d8bc5657fe992310",
+            "--",
+            "scripts/dev_session.sh",
+            "scripts/reconcile_sessions.sh"
+          ],
+          "exit_code": 0,
+          "stderr": "",
+          "stdout": ""
+        }
+      },
+      "output_sha256": "5606709e202501f833a9cd1349f23749cd4de547ffb3335da50ab4e028f44f7d",
+      "script_sha256": "71866c9d537d58817cbbbe9463554f55d5585220bef2d8fd944fdec3324e2f9c"
+    }
+  ]
+}

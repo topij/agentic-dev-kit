@@ -1,0 +1,25 @@
+{
+  "at": "2026-09-09T18:18:00.552790+00:00",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "head": "e698ec47d6284ccd31af5ba9d8bc5657fe992310",
+  "observations": {
+    "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source": {
+      "argv": [
+        "test",
+        "-e",
+        "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source"
+      ],
+      "exists": false,
+      "exit_code": 1
+    },
+    "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture": {
+      "argv": [
+        "test",
+        "-e",
+        "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture"
+      ],
+      "exists": false,
+      "exit_code": 1
+    }
+  }
+}

@@ -1,0 +1,47 @@
+"""Replay evidence probe: compare pinned fork inputs without changing either tree."""
+import argparse
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+
+p = argparse.ArgumentParser()
+for key in ("repo", "kit", "baseline", "source", "protected", "input", "upgrade-pr"):
+    p.add_argument("--" + key, required=True)
+a = p.parse_args()
+assert Path.cwd().resolve() == Path(a.repo).resolve()
+
+def git(root, *args):
+    return subprocess.check_output(["git", "-C", root, *args], text=True).strip()
+
+forks = ["scripts/dev_session.sh", "scripts/reconcile_sessions.sh"]
+local = forks + ["docs/developer/devkit-workflows-local.md", "docs/developer/parallel-local.md", ".claude/commands/parallel.md", ".agents/skills/parallel/SKILL.md"]
+head_before = git(a.repo, "rev-parse", "HEAD")
+tree_before = git(a.repo, "rev-parse", "HEAD^{tree}")
+assert head_before == a.input
+assert git(a.kit, "rev-parse", "HEAD") == a.source
+assert not git(a.repo, "status", "--short")
+assert not git(a.kit, "status", "--short")
+upstream_argv = ["git", "-C", a.kit, "diff", "--exit-code", a.baseline, a.source, "--", *forks]
+upstream = subprocess.run(upstream_argv, capture_output=True, text=True)
+assert upstream.returncode == 0 and upstream.stdout == "" and upstream.stderr == ""
+local_argv = ["git", "-C", a.repo, "diff", "--exit-code", a.protected, a.input, "--", *local]
+local_diff = subprocess.run(local_argv, capture_output=True, text=True)
+assert local_diff.returncode == 0 and local_diff.stdout == "" and local_diff.stderr == ""
+subprocess.run(["git", "-C", a.repo, "merge-base", "--is-ancestor", a.protected, a.input], check=True)
+head_after = git(a.repo, "rev-parse", "HEAD")
+tree_after = git(a.repo, "rev-parse", "HEAD^{tree}")
+status_after = git(a.repo, "status", "--short")
+assert head_after == head_before and tree_after == tree_before and status_after == ""
+print(json.dumps({
+    "stage": "fork-reconciliation",
+    "result": "NO_CHANGE: pinned upstream fork diff and adopter fork/local-binding diff are empty; reconciliation preserves the upgrade output",
+    "input_sha": head_before, "output_sha": head_after, "sha_equal": head_before == head_after,
+    "input_tree": tree_before, "output_tree": tree_after, "tree_equal": tree_before == tree_after,
+    "status_before": "", "status_after": status_after,
+    "preceding_stage": {"stage": "upgrade", "pr_url": a.upgrade_pr, "output_sha": a.input},
+    "upstream_diff": {"argv": upstream_argv, "exit_code": upstream.returncode, "stdout": upstream.stdout, "stderr": upstream.stderr},
+    "adopter_diff": {"argv": local_argv, "exit_code": local_diff.returncode, "stdout": local_diff.stdout, "stderr": local_diff.stderr},
+    "destination_sha256": {name: hashlib.sha256((Path(a.repo) / name).read_bytes()).hexdigest() for name in local},
+    "semantic_review": "The separate independent reconciliation review and exact-node matrix must accompany this structural observation; this probe does not infer doctrine compatibility."
+}, sort_keys=True, indent=2))

@@ -1,0 +1,116 @@
+{
+ "adapters": [
+  {
+   "runtime": "claude",
+   "slug": "adopt",
+   "path": ".claude/commands/adopt.md",
+   "state": "kit-current",
+   "detail": "matches rendered form"
+  },
+  {
+   "runtime": "claude",
+   "slug": "parallel",
+   "path": ".claude/commands/parallel.md",
+   "state": "kit-current",
+   "detail": "matches rendered form"
+  },
+  {
+   "runtime": "claude",
+   "slug": "post-merge-systemize",
+   "path": ".claude/commands/post-merge-systemize.md",
+   "state": "kit-current",
+   "detail": "matches rendered form"
+  },
+  {
+   "runtime": "claude",
+   "slug": "pr-watch",
+   "path": ".claude/commands/pr-watch.md",
+   "state": "kit-current",
+   "detail": "matches rendered form"
+  },
+  {
+   "runtime": "claude",
+   "slug": "session-start",
+   "path": ".claude/commands/session-start.md",
+   "state": "kit-current",
+   "detail": "matches rendered form"
+  },
+  {
+   "runtime": "claude",
+   "slug": "triage-friction-log",
+   "path": ".claude/commands/triage-friction-log.md",
+   "state": "kit-current",
+   "detail": "matches rendered form"
+  },
+  {
+   "runtime": "claude",
+   "slug": "upgrade",
+   "path": ".claude/commands/upgrade.md",
+   "state": "kit-current",
+   "detail": "matches rendered form"
+  },
+  {
+   "runtime": "claude",
+   "slug": "wrap-up",
+   "path": ".claude/commands/wrap-up.md",
+   "state": "kit-current",
+   "detail": "matches rendered form"
+  },
+  {
+   "runtime": "codex",
+   "slug": "adopt",
+   "path": ".agents/skills/adopt/SKILL.md",
+   "state": "kit-current",
+   "detail": "matches rendered form"
+  },
+  {
+   "runtime": "codex",
+   "slug": "parallel",
+   "path": ".agents/skills/parallel/SKILL.md",
+   "state": "kit-current",
+   "detail": "matches rendered form"
+  },
+  {
+   "runtime": "codex",
+   "slug": "post-merge-systemize",
+   "path": ".agents/skills/post-merge-systemize/SKILL.md",
+   "state": "kit-current",
+   "detail": "matches rendered form"
+  },
+  {
+   "runtime": "codex",
+   "slug": "pr-watch",
+   "path": ".agents/skills/pr-watch/SKILL.md",
+   "state": "kit-current",
+   "detail": "matches rendered form"
+  },
+  {
+   "runtime": "codex",
+   "slug": "session-start",
+   "path": ".agents/skills/session-start/SKILL.md",
+   "state": "kit-current",
+   "detail": "matches rendered form"
+  },
+  {
+   "runtime": "codex",
+   "slug": "triage-friction-log",
+   "path": ".agents/skills/triage-friction-log/SKILL.md",
+   "state": "kit-current",
+   "detail": "matches rendered form"
+  },
+  {
+   "runtime": "codex",
+   "slug": "upgrade",
+   "path": ".agents/skills/upgrade/SKILL.md",
+   "state": "kit-current",
+   "detail": "matches rendered form"
+  },
+  {
+   "runtime": "codex",
+   "slug": "wrap-up",
+   "path": ".agents/skills/wrap-up/SKILL.md",
+   "state": "kit-current",
+   "detail": "matches rendered form"
+  }
+ ]
+}
