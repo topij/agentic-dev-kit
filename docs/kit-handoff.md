@@ -52,7 +52,7 @@ Phase 5 exit remains the live question and retains its own exact decision.
 - Two instance claims taken from PR #711's round dispositions did not survive checking
   against the diffs, and both were corrected rather than carried: `1bcb04e` puts the
   stale count on the line it rewrote, and `8942cea` replaced the dated hedge with the
-  merge sha. Check them at those commits.
+  merge sha. Check them at those commits rather than here.
 - The 2026-08-22 friction entry now records its park condition as discharged to the rule
   rather than to the tracker, so triage reconciles instead of re-filing. `#712` and `#713`
   were left untouched and the inbox was not swept.
