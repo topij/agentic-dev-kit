@@ -218,14 +218,14 @@ exit 0 and an empty stderr, and was found by building the attack rather than by 
 the prose beside it. The broad reading is contradicted by the very evidence that
 graduated this rule.
 
-Enforcement here is reading, and [`#120`](https://github.com/topij/agentic-dev-kit/issues/120)
-is the follow-up for a cheaper terminal check — **not** `#586`, which scopes itself to
-executed prose, says "Not record prose" outright, and names `#120` as the half it leaves
-alone. This sits in `AGENTS.md` rather than in `fallback-review-panel.md` because the
-failure is an author's and the remedy is at authoring time; a lens does catch these, at
-the cost of a round. `.claude/rules/` is excluded by *Runtime parity* — it must bind both
-runtimes. And unlike *Numbers in prose* it has no `wrap-up.md` counterpart, so it binds
-this repository's sessions and not an adopter's.
+Enforcement here is reading, and `#120` is the follow-up for a cheaper terminal check —
+**not** `#586`, which scopes itself to executed prose, says "Not record prose" outright,
+and names `#120` as the half it leaves alone. This sits in `AGENTS.md` rather than in
+`fallback-review-panel.md` because the failure is an author's and the remedy is at
+authoring time; a lens does catch these, at the cost of a round. `.claude/rules/` is
+excluded by *Runtime parity* — it must bind both runtimes. And unlike *Numbers in prose*
+it has no `wrap-up.md` counterpart, so it binds this repository's sessions and not an
+adopter's.
 
 ## Ground rules
 
