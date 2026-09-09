@@ -77,7 +77,7 @@ named refs; this is not completion of Phase 5. The operator later authorized
   `8418118e40728c667c32a28a182697139bc7a5ef`, read back with `gh pr view 724`.
   Its commit is not the kit source used for the replay; the snapshots retain that source.
 
-The latest session block owns the prepared item 5 decision and next action.
+The latest session block owns the item 5 status and next action.
 
 ______________________________________________________________________
 
@@ -227,19 +227,10 @@ The [hooks continuation](../saved_plans/codex-hooks-continuation_2026-09-09.md)
 records the later live observations and their client-specific limits. These completed
 steps are not fresh instructions.
 
-For any future approved fixture execution, check continuity against
-`saved_plans/adopt-reg01-application-evidence_2026-09-07/fixture-inventory-after-reg01.json`,
-then work in a disposable copy. **Check both original trees and stop rather than rebuild
-if either is missing:**
-
-    fixture: /private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture
-    source:  /private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source
-
-Use `stat -f "%N atime=%Sa mtime=%Sm"` on the paths yourself rather than relying on
-an earlier timestamp sentence. `test -e` from kit revision
-`e698ec47d6284ccd31af5ba9d8bc5657fe992310` on 2026-09-09 found both paths absent.
-Phase 5 delivery item 5 is blocked pending the operator's decision whether to rebuild
-from retained baselines or change approach. Item 6 does not depend on those trees.
+The [replay record](../saved_plans/cs-toolkit-replay_2026-09-09.md) retains the
+original paths and their missing-tree observation. The latest session block supersedes
+this block's former fixture prerequisite and pending-decision instruction; it owns
+the later ITEM5-B execution, retained baseline and next action.
 
 ______________________________________________________________________
 
