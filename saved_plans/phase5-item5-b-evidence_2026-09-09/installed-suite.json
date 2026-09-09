@@ -1,0 +1,28 @@
+{
+  "argv": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "python",
+    "-B",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/run_installed_tests.py",
+    "--root",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture"
+  ],
+  "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+  "source_pin": "8418118e40728c667c32a28a182697139bc7a5ef",
+  "revision": "07bacf5bda3b1e7a6718c7d4528336ef81dc2143",
+  "status_before": "",
+  "started_at": "2026-09-09T20:03:09.141617+00:00",
+  "environment_overrides": {
+    "DEVKIT_STATE_ROOT": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture-test-state",
+    "PYTHONDONTWRITEBYTECODE": "1"
+  },
+  "exit_code": 1,
+  "finished_at": "2026-09-09T20:09:03.005877+00:00",
+  "log_sha256": "63dfafb3db94ded7c93ab086bc8d2d741b6ad544af95ac0f853840258723acac",
+  "status_after": ""
+}

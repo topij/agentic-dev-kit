@@ -1,0 +1,16 @@
+{
+  "tracked_mapping_equal": true,
+  "merged_mapping_equal": true,
+  "preserved_file_hashes_equal": {
+    "README.md": true,
+    "AGENTS.md": true,
+    "CLAUDE.md": true,
+    "ROADMAP.md": true,
+    "notes/history.md": true,
+    ".agents/skills/wrap-up/SKILL.md": true,
+    "scripts/local_task.py": true,
+    "config/dev-model.local.yaml": true
+  },
+  "config_sha256": "1cefdb92c970b997eaa56745f1fc8d5d9cf5ce0b86050b962f987548bdaaf8aa",
+  "pre_push_sha256": "b0d3019ee1de92d7960b22339e51eb68eca5e60fd59c2277cfbd3214955d4fef"
+}

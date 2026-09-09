@@ -1,0 +1,11 @@
+{
+  "installed_suite_exit": 1,
+  "kit_suite_exit": 2,
+  "fixture_revision": "07bacf5bda3b1e7a6718c7d4528336ef81dc2143",
+  "source_pin": "8418118e40728c667c32a28a182697139bc7a5ef",
+  "fixture_status": "",
+  "source_status": "",
+  "finished_at": "2026-09-09T20:15:44.790981+00:00",
+  "no_runtime_launched": true,
+  "no_fixture_remote": true
+}

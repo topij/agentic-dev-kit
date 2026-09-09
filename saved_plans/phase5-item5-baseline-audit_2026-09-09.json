@@ -1,0 +1,81 @@
+{
+  "argv": [
+    "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "-B",
+    "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-baseline-audit_2026-09-09.py.txt"
+  ],
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "revision": "8418118e40728c667c32a28a182697139bc7a5ef",
+  "observed_at": "2026-09-09T19:36:46.435704+00:00",
+  "program_sha256": "033adceee10ab19db63b47f5fca540473862ae273131f1d410f638a31f207d90",
+  "original_paths_exist_or_symlink": {
+    "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture": false,
+    "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source": false
+  },
+  "fixture_commit_available_in_kit_object_database": false,
+  "fixture_inventory": "adopt-reg01-application-evidence_2026-09-07/fixture-inventory-after-reg01.json",
+  "source_inventory": "codex-adopt-ver02-evidence_2026-09-06/source-input-inventory.json",
+  "fixture_bytes_unavailable_from_examined_sources": {
+    ".pytest_cache/.gitignore": {
+      "mode": "0o644",
+      "kind": "file",
+      "sha256": "3ed731b65d06150c138e2dadb0be0697550888a6b47eb8c45ecc9adba8b8e9bd"
+    },
+    ".pytest_cache/CACHEDIR.TAG": {
+      "mode": "0o644",
+      "kind": "file",
+      "sha256": "37dc88ef9a0abeddbe81053a6dd8fdfb13afb613045ea1eb4a5c815a74a3bde4"
+    },
+    ".pytest_cache/README.md": {
+      "mode": "0o644",
+      "kind": "file",
+      "sha256": "73fd6fccdd802c419a6b2d983d6c3173b7da97558ac4b589edec2dfe443db9ad"
+    },
+    ".pytest_cache/v/cache/lastfailed": {
+      "mode": "0o644",
+      "kind": "file",
+      "sha256": "1c071910bf63dad8c3c2b47c15129075d93991db7b1e89ee20ae84875d88a1a0"
+    },
+    ".pytest_cache/v/cache/nodeids": {
+      "mode": "0o644",
+      "kind": "file",
+      "sha256": "f7f96af8253f5ada400783193045b321a6a69934137fed8294b298e9501ce45f"
+    },
+    "scripts/devkit/lib/__pycache__/kitconfig.cpython-314.pyc": {
+      "mode": "0o644",
+      "kind": "file",
+      "sha256": "ff6709b08f9b963c40ae0af5cbf5ad95e4ad96c0d09be6fea5a9204237cdd9fd"
+    }
+  },
+  "fixture_non_source_byte_locations": {
+    ".gitignore": "derived: pinned initializer ignore entries appended to retained input",
+    "AGENTS.md": "derived: FIX-01 marker removal",
+    "CLAUDE.md": "saved_plans/codex-adopt-field-evidence_2026-09-05/fixture-inputs.json/CLAUDE.md",
+    "README.md": "saved_plans/codex-adopt-field-evidence_2026-09-05/fixture-inputs.json/README.md",
+    "ROADMAP.md": "saved_plans/codex-adopt-field-evidence_2026-09-05/fixture-inputs.json/ROADMAP.md",
+    "kit-manifest.json": "saved_plans/codex-adopt-field-evidence_2026-09-05/install-baseline.json",
+    ".agents/skills/wrap-up/SKILL.md": "saved_plans/codex-adopt-field-evidence_2026-09-05/fixture-inputs.json/.agents/skills/wrap-up/SKILL.md",
+    ".claude/settings.json": "saved_plans/adopt-reg01-evidence_2026-09-06/payload-claude-settings.json",
+    ".claude/agents/adversarial.md": "saved_plans/codex-adopt-completion-review-evidence_2026-09-06/inspection.json/lens_renders/adversarial/stdout",
+    ".claude/agents/correctness.md": "saved_plans/codex-adopt-completion-review-evidence_2026-09-06/inspection.json/lens_renders/correctness/stdout",
+    ".codex/config.toml": "saved_plans/adopt-reg01-evidence_2026-09-06/payload-codex-config.toml",
+    ".codex/hooks.json": "saved_plans/adopt-reg01-evidence_2026-09-06/payload-codex-hooks.json",
+    "config/dev-model.local.yaml": "saved_plans/codex-adopt-field-evidence_2026-09-05/fixture-inputs.json/config/dev-model.local.yaml",
+    "config/dev-model.yaml": "saved_plans/codex-adopt-initialization-evidence_2026-09-06/config-after-init.yaml",
+    "notes/friction.md": "derived: pinned template and retained initialization inputs/date",
+    "notes/history.md": "saved_plans/codex-adopt-field-evidence_2026-09-05/fixture-inputs.json/notes/history.md",
+    "scripts/local_task.py": "saved_plans/codex-adopt-field-evidence_2026-09-05/fixture-inputs.json/scripts/local_task.py"
+  },
+  "source_paths_without_matching_git_blob": [],
+  "ledger_mismatches": {
+    "cs-toolkit-replay-evidence_2026-09-09": [],
+    "codex-adopt-initialization-evidence_2026-09-06": [],
+    "codex-adopt-ver02-evidence_2026-09-06": [],
+    "adopt-fix01-evidence_2026-09-06": [],
+    "adopt-reg01-evidence_2026-09-06": [],
+    "adopt-reg01-application-evidence_2026-09-07": []
+  },
+  "replay_snapshots_byte_identical": true,
+  "replay_snapshot_sha256": "99c78b8409ce5b70aa23ff10cfc6c4ee93605d7d9934c7d911b6858658fa5918",
+  "limits": "Byte-availability audit only. No reconstruction, mode application, Git metadata recovery, test execution, runtime load, or adopter write. Inventories exclude .git."
+}

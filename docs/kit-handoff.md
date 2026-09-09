@@ -14,10 +14,37 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-09 — cs-toolkit replay merged; the item 5 decision remains.
-Phase 5 remains blocked on delivery item 5, whose original fixture/source are missing.
+Last updated: 2026-09-09 — ITEM5-B executed; installed verification still needs repair.
+Phase 5 delivery item 5 remains incomplete; item 6's replay remains complete.
 
-## Latest session — 2026-09-09 (cs-toolkit replay, in Codex)
+## Latest session — 2026-09-09 (ITEM5-B decision and execution, in Codex)
+
+The operator approved ITEM5-B from the
+[decision packet](../saved_plans/phase5-item5-decision_2026-09-09.md), then requested
+autonomous continuation. The [execution record](../saved_plans/phase5-item5-b-execution_2026-09-09.md)
+retains the new fixture/source, initialization, registrations, local checks and baseline.
+The original missing paths were not reconstructed. No client session was launched in
+the new fixture, and no cs-toolkit write occurred.
+
+The [retained audit](../saved_plans/phase5-item5-baseline-audit_2026-09-09.json) remains
+the read-only assessment of the old baselines. The new execution's complete suite logs
+separate installed config/adapter assumptions and the #705 drift-liveness interaction
+from #393. Its record proposes a kit-only #534 repair slice; no repair was authorized
+or applied. Source pin, fixture commit, commands, directories and actual results are
+retained there. #585's earlier placement and #723's accepted upstream deferral are unchanged.
+
+`gh pr view 724` and `gh pr view 2255`, with their explicit kit/adopter repositories,
+read back the merges on 2026-09-09 at kit `8418118e40728c667c32a28a182697139bc7a5ef`.
+Kit #724 contains the #722 batch. This packet does not repeat that batch or re-credit
+the initial adopter pass or replay. The prior replay's snapshots remain historical.
+
+▶ Next: `$session-start` — read `saved_plans/phase5-item5-b-execution_2026-09-09.md`
+and obtain approval for its kit-only #534 repair slice. Recheck the new fixture's
+retained baseline before any later approved write; do not repeat consumed ITEM5-B setup.
+
+______________________________________________________________________
+
+## Session — 2026-09-09 (cs-toolkit replay, in Codex)
 
 The operator approved REPLAY-01 in this session. The [replay record](../saved_plans/cs-toolkit-replay_2026-09-09.md)
 retains the upgrade, separate no-change reconciliation, test limits, independent reviews,
@@ -46,14 +73,11 @@ named refs; this is not completion of Phase 5. The operator later authorized
   removal of the `/tmp` mechanism explanation, the missing-tree blocker, #585's settled
   earlier placement, and this next action. Existing credited exercises were not repeated.
 - [Kit PR #724](https://github.com/topij/agentic-dev-kit/pull/724) carries the ordinary
-  wrap-up from `chore/kit-replay-handoff-20260909`. This wrap-up publishes the
-  snapshots and stamped replay result before its merge; its own commit is not the kit
-  source used for the replay. Later ref movement is a separate event.
+  wrap-up from `chore/kit-replay-handoff-20260909`. It merged on 2026-09-09 as
+  `8418118e40728c667c32a28a182697139bc7a5ef`, read back with `gh pr view 724`.
+  Its commit is not the kit source used for the replay; the snapshots retain that source.
 
-▶ Next: `$session-start` — read this handoff and the maintained sprint status, then
-prepare the Phase 5 item 5 operator decision: rebuild from retained baselines or change
-approach. Check both original trees first and stop rather than rebuild without that
-decision. #585's earlier placement is settled; #723 is the accepted upstream follow-up.
+The latest session block owns the item 5 status and next action.
 
 ______________________________________________________________________
 
@@ -203,19 +227,10 @@ The [hooks continuation](../saved_plans/codex-hooks-continuation_2026-09-09.md)
 records the later live observations and their client-specific limits. These completed
 steps are not fresh instructions.
 
-For any future approved fixture execution, check continuity against
-`saved_plans/adopt-reg01-application-evidence_2026-09-07/fixture-inventory-after-reg01.json`,
-then work in a disposable copy. **Check both original trees and stop rather than rebuild
-if either is missing:**
-
-    fixture: /private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture
-    source:  /private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source
-
-Use `stat -f "%N atime=%Sa mtime=%Sm"` on the paths yourself rather than relying on
-an earlier timestamp sentence. `test -e` from kit revision
-`e698ec47d6284ccd31af5ba9d8bc5657fe992310` on 2026-09-09 found both paths absent.
-Phase 5 delivery item 5 is blocked pending the operator's decision whether to rebuild
-from retained baselines or change approach. Item 6 does not depend on those trees.
+The [replay record](../saved_plans/cs-toolkit-replay_2026-09-09.md) retains the
+original paths and their missing-tree observation. The latest session block supersedes
+this block's former fixture prerequisite and pending-decision instruction; it owns
+the later ITEM5-B execution, retained baseline and next action.
 
 ______________________________________________________________________
 

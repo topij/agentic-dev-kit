@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "-B",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/check_doc_budget.py"
+  ],
+  "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+  "source_pin": "8418118e40728c667c32a28a182697139bc7a5ef",
+  "revision": "07bacf5bda3b1e7a6718c7d4528336ef81dc2143",
+  "status_before": "",
+  "started_at": "2026-09-09T20:03:08.840685+00:00",
+  "environment_overrides": {},
+  "exit_code": 0,
+  "finished_at": "2026-09-09T20:03:08.884098+00:00",
+  "log_sha256": "69202da087b33aebd7c98b9b4d7654cb4ca7681e5025a1a1008681865aeda2c3",
+  "status_after": ""
+}

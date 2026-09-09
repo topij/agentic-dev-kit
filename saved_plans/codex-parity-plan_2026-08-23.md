@@ -421,8 +421,18 @@ historical observation it was and is not silently refreshed.
      from kit revision `e698ec47d6284ccd31af5ba9d8bc5657fe992310`:
      `/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture` and
      `/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source`.
-     Check both trees and stop rather than rebuild. Rebuilding from retained
-     `saved_plans/` baselines or changing the approach needs an operator decision.
+     Do not reconstruct either original path. The operator subsequently approved
+     ITEM5-B from the retained-baseline decision packet on 2026-09-09.
+     The [item 5 decision packet](phase5-item5-decision_2026-09-09.md) now compares
+     ITEM5-A's normalized historical payload rebuild with ITEM5-B's fresh current-kit
+     verification fixture. The [read-only audit](phase5-item5-baseline-audit_2026-09-09.json)
+     distinguishes available file bytes from the missing Git/runtime continuity and
+     cache bytes. The [ITEM5-B execution](phase5-item5-b-execution_2026-09-09.md)
+     records the new fixture at kit pin `8418118e40728c667c32a28a182697139bc7a5ef`,
+     its consumed setup approval and complete local verification results. Installed
+     verification did not establish successful adoption; the next decision is the
+     proposed kit-only #534 repair slice. No original continuity or prior field credit
+     was recreated, and the new fixture must not be rewritten without a later decision.
      Delivery item 6 is independent of these paths. The approved
      [adopt continuation](codex-adopt-initialization-field-exercise_2026-09-06.md)
      executed initialization and attempted Step 4 checks; the installed suites failed.
@@ -472,7 +482,8 @@ historical observation it was and is not silently refreshed.
      its no-change reconciliation, stable snapshots, and actual verification limits.
      The operator approved the #723 deferral, then later authorized merge when clean.
      cs-toolkit #2255 merged on 2026-09-09 as `c4119f85e07f2a089ab8d5decc94cf2cd1635d14`;
-     kit #724 carries the wrap-up. Item 5 remains blocked, so this does not complete Phase 5.
+     kit #724 merged as `8418118e40728c667c32a28a182697139bc7a5ef`, confirmed by
+     `gh pr view 724` on 2026-09-09. Item 5 remains blocked, so this does not complete Phase 5.
 - [ ] **Earlier sprint work — #585.** The operator moved the proportional opening
   pass for record prose out of Phase 6 on 2026-09-09; the
   [decision and evidence](https://github.com/topij/agentic-dev-kit/issues/585#issuecomment-5606158377)

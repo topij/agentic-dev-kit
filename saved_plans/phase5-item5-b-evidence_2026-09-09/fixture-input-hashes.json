@@ -1,0 +1,12 @@
+{
+  "README.md": "6af27b579cc44964c52819a4e68e916acec81516ddeedcfe3973d4912e710828",
+  "AGENTS.md": "afe455b56f1a6c4270961ed6ee301e3dae03b43748c1ceb8d5a49a3a30856819",
+  "CLAUDE.md": "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49",
+  "ROADMAP.md": "02b32402fb8bf0bf197e1473f3f88a4718f411c03e07686c829714063f0d6fd7",
+  "notes/history.md": "755b4349978cb4269cf89b6938427ee5e9da8475dc833f5cb2d10236dbea087a",
+  ".agents/skills/wrap-up/SKILL.md": "c5a267b53de07157cd69f035de68f662a634d469f71f99a9ddf4d2b0b0a93df7",
+  "scripts/local_task.py": "b98c3bf1a444b55b768580aae461d82b6da53e88fc7af4e49d3e0dacec12c646",
+  ".gitignore": "3e40bcef3da172549a7bed1c4a6ad8d9bffcfd316e83abd89ce990aafaa63ced",
+  "config/dev-model.yaml": "1cefdb92c970b997eaa56745f1fc8d5d9cf5ce0b86050b962f987548bdaaf8aa",
+  "config/dev-model.local.yaml": "1d7c76ab19a3c1f550cf398b52284bb12c8b662485734add5c30abc3870f5524"
+}

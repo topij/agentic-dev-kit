@@ -1,0 +1,10 @@
+{
+  "operator_response": "Approve ITEM5-B as scoped",
+  "date": "2026-09-09",
+  "proposal_commit": "edc199f42bc65b1850172ea79b791ef358577ae1",
+  "proposal_sha256": "0dceac6edf78300f2a4426961e345a551096368b6837fed787f1b1e37a8536da",
+  "source_pin": "8418118e40728c667c32a28a182697139bc7a5ef",
+  "fixture": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+  "kit": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source",
+  "original_paths_missing": true
+}

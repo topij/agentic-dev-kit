@@ -1,6 +1,6 @@
 # cs-toolkit replay — 2026-09-09
 
-Phase 5 delivery item 6 was executed under [REPLAY-01 and its exact approval](cs-toolkit-replay-evidence_2026-09-09/approval.md). The replay verification at the bound refs succeeded with the disclosed original-checkout failure and operator-accepted #723 limitation. This does not complete Phase 5: item 5 remains blocked by the missing original fixture/source and has no rebuild decision. The initial #2222/#2223 pass is not credited again. REPLAY-01 initially held merges for the operator; the later authorization and delivery are recorded below.
+Phase 5 delivery item 6 was executed under [REPLAY-01 and its exact approval](cs-toolkit-replay-evidence_2026-09-09/approval.md). The replay verification at the bound refs succeeded with the disclosed original-checkout failure and operator-accepted #723 limitation. This does not complete Phase 5: item 5's later approved fixture and remaining verification are recorded in [ITEM5-B](phase5-item5-b-execution_2026-09-09.md). The initial #2222/#2223 pass is not credited again. REPLAY-01 initially held merges for the operator; the later authorization and delivery are recorded below.
 
 ## Bound upgrade and separate reconciliation
 
@@ -69,12 +69,14 @@ retains the authoritative response and the later authorization. The local adopte
 fast-forwarded to the merged main; its manifest bytes still match the reviewed head.
 
 [Kit PR #724](https://github.com/topij/agentic-dev-kit/pull/724) publishes this ordinary
-wrap-up and the replay snapshots. Its current-head CI and review must finish before
-using the same merge authorization. The [initial kit panel receipt](https://github.com/topij/agentic-dev-kit/pull/724#issuecomment-5607067732)
+wrap-up and the replay snapshots. `gh pr view 724 --repo topij/agentic-dev-kit`
+read back its merge as `8418118e40728c667c32a28a182697139bc7a5ef` on 2026-09-09.
+This later delivery event leaves the replay snapshots unchanged.
+The [initial kit panel receipt](https://github.com/topij/agentic-dev-kit/pull/724#issuecomment-5607067732)
 was recorded at `9b63bc921533b2db19b05313ff2600ee9f1ffc52` before this later-event update.
 
 ## Operational limits and next action
 
 A kit wrap-up branch-creation command used an explicit tool working directory but omitted the required pre-write `pwd` assertion. Read-back confirmed `chore/kit-replay-handoff-20260909` at `e698ec47d6284ccd31af5ba9d8bc5657fe992310`; subsequent record writes asserted the directory first and verified destination hashes. This lapse is recorded rather than claiming perfect procedure compliance.
 
-The [fixture absence check](cs-toolkit-replay-evidence_2026-09-09/fixture-absence.json) retains the original missing paths. Check both trees and stop rather than rebuild. The next session prepares the item 5 operator decision: rebuild from retained baselines or change approach. #585's earlier placement is settled; its implementation is separate. #723 remains the accepted upstream follow-up.
+The [fixture absence check](cs-toolkit-replay-evidence_2026-09-09/fixture-absence.json) retains the original missing paths; do not reconstruct them. The later [ITEM5-B execution](phase5-item5-b-execution_2026-09-09.md) supersedes this record's request to prepare an item 5 decision and owns the next action. #585's earlier placement is settled; its implementation is separate. #723 remains the accepted upstream follow-up.

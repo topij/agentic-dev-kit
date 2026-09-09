@@ -1,0 +1,129 @@
+"""Read retained bytes and Git objects; never create an exercise tree."""
+import hashlib
+import json
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+SAVED = ROOT / "saved_plans"
+SOURCE = "ab0a6d62308b298478b2f85fc961f14348f35365"
+FIXTURE = "08ac687f4ae14218a3861c6b8b143d8b86c4e3c2"
+ORIGINALS = [
+    "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+    "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source",
+]
+
+
+def digest(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def read(name):
+    return json.loads((SAVED / name).read_text())
+
+
+def git(*args):
+    return subprocess.check_output(["git", "-C", str(ROOT), *args])
+
+
+pool = {}
+
+
+def retain(data, location):
+    pool.setdefault(digest(data), location)
+
+
+def string_leaves(value, location):
+    if isinstance(value, str):
+        retain(value.encode(), location)
+    elif isinstance(value, dict):
+        for key, child in value.items():
+            string_leaves(child, location + "/" + str(key))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            string_leaves(child, location + "/" + str(index))
+
+
+source_blobs = {}
+for entry in git("ls-tree", "-r", SOURCE).decode().splitlines():
+    metadata, path = entry.split("\t", 1)
+    mode, kind, oid = metadata.split()
+    if kind == "blob":
+        data = git("cat-file", "blob", oid)
+        source_blobs[path] = digest(data)
+        retain(data, "git:" + SOURCE + ":" + path)
+for path in sorted(SAVED.rglob("*")):
+    if not path.is_file() or path.name.startswith("phase5-item5-"):
+        continue
+    data = path.read_bytes()
+    retain(data, str(path.relative_to(ROOT)))
+    if path.suffix == ".json":
+        string_leaves(json.loads(data), str(path.relative_to(ROOT)))
+
+inputs = read("codex-adopt-field-evidence_2026-09-05/fixture-inputs.json")
+retain(inputs["AGENTS.md"].split("\n", 1)[1].encode(), "derived: FIX-01 marker removal")
+ignore = inputs[".gitignore"] + "/state/\n.devkit_state_root\n.claude/worktrees/\n*.devkit-tmp\n/reports/\n"
+retain(ignore.encode(), "derived: pinned initializer ignore entries appended to retained input")
+friction = git("show", SOURCE + ":docs/templates/friction-log.md.tmpl").decode()
+for token, value in {
+    "{{FRICTION_ARCHIVE}}": "friction-archive.md",
+    "{{TRACKER_URL}}": "set `tracker.url` in `config/dev-model.yaml`",
+    "{{DATE}}": "2026-09-06",
+}.items():
+    friction = friction.replace(token, value)
+retain(friction.encode(), "derived: pinned template and retained initialization inputs/date")
+
+fixture_name = "adopt-reg01-application-evidence_2026-09-07/fixture-inventory-after-reg01.json"
+source_name = "codex-adopt-ver02-evidence_2026-09-06/source-input-inventory.json"
+fixture_inventory = read(fixture_name)
+unavailable = {}
+special = {}
+for path, entry in fixture_inventory.items():
+    if entry["kind"] != "file":
+        continue
+    location = pool.get(entry["sha256"])
+    if location is None:
+        unavailable[path] = entry
+    elif not location.startswith("git:"):
+        special[path] = location
+source_unavailable = [
+    path for path, entry in read(source_name).items()
+    if entry["kind"] == "file" and source_blobs.get(path) != entry["sha256"]
+]
+ledgers = {}
+for name in [
+    "cs-toolkit-replay-evidence_2026-09-09",
+    "codex-adopt-initialization-evidence_2026-09-06",
+    "codex-adopt-ver02-evidence_2026-09-06",
+    "adopt-fix01-evidence_2026-09-06",
+    "adopt-reg01-evidence_2026-09-06",
+    "adopt-reg01-application-evidence_2026-09-07",
+]:
+    ledgers[name] = [
+        path for path, expected in read(name + "/sha256.json").items()
+        if digest((SAVED / name / path).read_bytes()) != expected
+    ]
+replay = SAVED / "cs-toolkit-replay-evidence_2026-09-09"
+before, after = [(replay / name).read_bytes() for name in ["tuple-before.json", "tuple-after.json"]]
+print(json.dumps({
+    "argv": [sys.executable, "-B", str(Path(__file__).resolve())],
+    "cwd": str(Path.cwd()),
+    "revision": git("rev-parse", "HEAD").decode().strip(),
+    "observed_at": datetime.now(timezone.utc).isoformat(),
+    "program_sha256": digest(Path(__file__).read_bytes()),
+    "original_paths_exist_or_symlink": {p: Path(p).exists() or Path(p).is_symlink() for p in ORIGINALS},
+    "fixture_commit_available_in_kit_object_database": subprocess.run(
+        ["git", "-C", str(ROOT), "cat-file", "-e", FIXTURE + "^{commit}"],
+        capture_output=True).returncode == 0,
+    "fixture_inventory": fixture_name,
+    "source_inventory": source_name,
+    "fixture_bytes_unavailable_from_examined_sources": unavailable,
+    "fixture_non_source_byte_locations": special,
+    "source_paths_without_matching_git_blob": source_unavailable,
+    "ledger_mismatches": ledgers,
+    "replay_snapshots_byte_identical": before == after,
+    "replay_snapshot_sha256": digest(before),
+    "limits": "Byte-availability audit only. No reconstruction, mode application, Git metadata recovery, test execution, runtime load, or adopter write. Inventories exclude .git.",
+}, indent=2))

@@ -1,0 +1,22 @@
+kit-doctor — installation report
+
+  ✓ config schema: v2
+  ✓ paths.engines: scripts/devkit
+  ✓ pre-push hook: installed
+  ✓ .claude/settings.json [claude]: scripts/devkit/check_doc_budget.py resolves
+  ✓ .claude/settings.json [claude]: scripts/devkit/check_memory_budget.py resolves
+  ✓ .claude/settings.json [claude]: scripts/devkit/hooks/pr_followup_hook.py resolves
+  ✓ .codex/hooks.json [codex]: scripts/devkit/check_doc_budget.py resolves
+  ✓ .codex/hooks.json [codex]: scripts/devkit/hooks/pr_followup_hook.py resolves
+  ✓ .codex/hooks.json [codex]: check_doc_budget.py canonical lifecycle form verified
+  ✓ .codex/hooks.json [codex]: pr_followup_hook.py canonical lifecycle form verified
+  ✓ .claude/agents/adversarial.md [claude lens=adversarial]: matches the running doctor's expected output
+  ✓ .claude/agents/correctness.md [claude lens=correctness]: matches the running doctor's expected output
+  ✓ ROADMAP.md: in use
+  ✓ notes/friction.md: in use
+  ✓ AGENTS.md: in use
+  ✓ CLAUDE.md: in use
+
+  files: 65 unchanged, 0 differ, 0 missing, 0 unknown
+  ✓ intact for this adoption — full install, nothing declined
+  baseline: installed from kit 8418118e4072

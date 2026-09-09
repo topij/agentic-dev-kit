@@ -1,0 +1,32 @@
+{
+  "adversarial": {
+    "argv": [
+      "/opt/homebrew/opt/python@3.14/bin/python3.14",
+      "-B",
+      "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/panel_prompt.py",
+      "--root",
+      "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+      "--lens",
+      "adversarial",
+      "--agent-definition"
+    ],
+    "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.claude/agents/adversarial.md",
+    "sha256": "f61adde9da0974c20dcba31d8fda4dec313e2f26ffd97baae518654bae3e9e7a",
+    "initializer_matches_renderer": true
+  },
+  "correctness": {
+    "argv": [
+      "/opt/homebrew/opt/python@3.14/bin/python3.14",
+      "-B",
+      "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/panel_prompt.py",
+      "--root",
+      "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+      "--lens",
+      "correctness",
+      "--agent-definition"
+    ],
+    "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.claude/agents/correctness.md",
+    "sha256": "a91ee86a18f6043d8f2cfba06cdbb983509ef9514b5924540f09b8a87d74e171",
+    "initializer_matches_renderer": true
+  }
+}

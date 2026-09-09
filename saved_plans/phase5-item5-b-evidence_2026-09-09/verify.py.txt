@@ -1,0 +1,136 @@
+"""Complete the approved registration and local checks; never repair test failures."""
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+OUT = Path('/Users/topi/Coding/adk-field-exercises/item5-b-20260909/evidence')
+authority = json.loads((OUT / 'authority').read_text())
+REPO = Path(authority['fixture'])
+KIT = Path(authority['kit'])
+SAVED = Path('/Users/topi/Coding/agentic-dev-kit/saved_plans')
+os.environ['PYTHONDONTWRITEBYTECODE'] = '1'
+
+
+def sha(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def write_json(name, value):
+    assert Path.cwd().resolve() in (REPO, KIT)
+    with (OUT / name).open('x') as f:
+        json.dump(value, f, indent=2)
+        f.write('\n')
+
+
+def run(name, argv, cwd, check=True, extra_env=None):
+    os.chdir(cwd)
+    assert Path.cwd().resolve() == cwd
+    stamp = {'argv': argv, 'cwd': str(cwd), 'source_pin': authority['source_pin'],
+             'revision': subprocess.check_output(['git', '-C', str(cwd), 'rev-parse', 'HEAD'], text=True).strip(),
+             'status_before': subprocess.check_output(['git', '-C', str(cwd), 'status', '--short'], text=True),
+             'started_at': datetime.now(timezone.utc).isoformat(), 'environment_overrides': extra_env or {}}
+    with (OUT / (name + '.log')).open('x') as stream:
+        result = subprocess.run(argv, cwd=cwd, env={**os.environ, **(extra_env or {})}, stdout=stream, stderr=subprocess.STDOUT)
+    stamp['exit_code'] = result.returncode
+    stamp['finished_at'] = datetime.now(timezone.utc).isoformat()
+    stamp['log_sha256'] = sha(OUT / (name + '.log'))
+    stamp['status_after'] = subprocess.check_output(['git', '-C', str(cwd), 'status', '--short'], text=True)
+    write_json(name + '.json', stamp)
+    print(name, json.dumps(stamp), flush=True)
+    print('\n'.join((OUT / (name + '.log')).read_text().splitlines()[-25:]), flush=True)
+    if check:
+        result.check_returncode()
+    return result.returncode
+
+
+def inventory(root):
+    result = {}
+    for path in sorted(root.rglob('*')):
+        rel = path.relative_to(root).as_posix()
+        if rel == '.git' or rel.startswith('.git/'):
+            continue
+        st = path.lstat()
+        entry = {'mode': oct(st.st_mode & 0o777)}
+        if path.is_symlink():
+            entry.update(kind='symlink', target=os.readlink(path))
+        elif path.is_file():
+            entry.update(kind='file', sha256=sha(path))
+        elif path.is_dir():
+            entry.update(kind='directory')
+        else:
+            raise AssertionError(str(path))
+        result[rel] = entry
+    return result
+
+
+assert Path.cwd().resolve() == REPO
+assert subprocess.check_output(['git', '-C', str(KIT), 'rev-parse', 'HEAD'], text=True).strip() == authority['source_pin']
+sys.path.insert(0, str(REPO / 'scripts/devkit/lib'))
+import kitconfig
+tracked = kitconfig.load_config(REPO / 'config/dev-model.yaml', overlay=False)
+merged = kitconfig.load_config(REPO / 'config/dev-model.yaml')
+canonical = lambda x: json.dumps(x, sort_keys=True)
+assert canonical(tracked) == canonical(json.loads((OUT / 'intended-tracked-config.json').read_text()))
+assert canonical(merged) == canonical(json.loads((OUT / 'intended-merged-config.json').read_text()))
+original_hashes = json.loads((OUT / 'fixture-input-hashes.json').read_text())
+preserved = {p: sha(REPO / p) == h for p, h in original_hashes.items() if p not in ['config/dev-model.yaml', '.gitignore']}
+assert all(preserved.values())
+write_json('post-init-readback.json', {'tracked_mapping_equal': True, 'merged_mapping_equal': True,
+                                     'preserved_file_hashes_equal': preserved,
+                                     'config_sha256': sha(REPO / 'config/dev-model.yaml'),
+                                     'pre_push_sha256': sha(REPO / '.git/hooks/pre-push')})
+payload_dir = SAVED / 'adopt-reg01-evidence_2026-09-06'
+payload_ledger = json.loads((payload_dir / 'sha256.json').read_text())
+registrations = {}
+for name, dest in [('payload-codex-hooks.json', '.codex/hooks.json'),
+                   ('payload-codex-config.toml', '.codex/config.toml'),
+                   ('payload-claude-settings.json', '.claude/settings.json')]:
+    assert sha(payload_dir / name) == payload_ledger[name]
+    target = REPO / dest
+    assert not target.exists() and not target.is_symlink()
+    assert Path.cwd().resolve() == REPO
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(payload_dir / name, target)
+    assert sha(target) == payload_ledger[name]
+    registrations[dest] = {'source': str(payload_dir / name), 'sha256': sha(target)}
+write_json('registrations.json', registrations)
+lenses = {}
+for lens in ['adversarial', 'correctness']:
+    argv = [sys.executable, '-B', str(REPO / 'scripts/devkit/panel_prompt.py'), '--root', str(REPO), '--lens', lens, '--agent-definition']
+    rendered = subprocess.check_output(argv, cwd=REPO)
+    target = REPO / '.claude/agents' / (lens + '.md')
+    assert target.read_bytes() == rendered, lens
+    lenses[lens] = {'argv': argv, 'destination': str(target), 'sha256': sha(target), 'initializer_matches_renderer': True}
+write_json('lens-render-readback.json', lenses)
+assert Path.cwd().resolve() == REPO
+run('setup-add', ['git', '-C', str(REPO), 'add', '--all', '--', str(REPO)], REPO)
+run('setup-commit', ['git', '-C', str(REPO), 'commit', '-m', 'chore: stage the approved ITEM5-B kit installation'], REPO)
+write_json('fixture-inventory-before-checks.json', inventory(REPO))
+write_json('source-inventory-before-checks.json', inventory(KIT))
+run('document-budget', [sys.executable, '-B', str(REPO / 'scripts/devkit/check_doc_budget.py')], REPO)
+run('installed-doctor', [sys.executable, '-B', str(REPO / 'scripts/devkit/kit_doctor.py'), '--root', str(REPO), '--manifest', str(KIT / 'kit-manifest.json')], REPO)
+run('source-adapter-report', [sys.executable, '-B', str(KIT / 'scripts/kit_doctor.py'), '--root', str(REPO), '--adapter-report', '--adapter-source', str(KIT), '--json'], REPO)
+assert Path.cwd().resolve() == REPO
+fixture_state = REPO.parent / 'fixture-test-state'
+fixture_state.mkdir()
+fixture_result = run('installed-suite', ['uv', 'run', '--with', 'pytest', '--with', 'pyyaml', 'python', '-B', str(REPO / 'scripts/devkit/run_installed_tests.py'), '--root', str(REPO)], REPO, check=False, extra_env={'DEVKIT_STATE_ROOT': str(fixture_state), 'PYTHONDONTWRITEBYTECODE': '1'})
+assert Path.cwd().resolve() == REPO
+write_json('fixture-inventory-after-checks.json', inventory(REPO))
+os.chdir(KIT)
+assert Path.cwd().resolve() == KIT
+kit_state = REPO.parent / 'kit-test-state'
+kit_state.mkdir()
+kit_result = run('kit-suite', ['make', 'test'], KIT, check=False, extra_env={'DEVKIT_STATE_ROOT': str(kit_state), 'PYTHONDONTWRITEBYTECODE': '1'})
+write_json('source-inventory-after-checks.json', inventory(KIT))
+write_json('verification-result.json', {'installed_suite_exit': fixture_result, 'kit_suite_exit': kit_result,
+                                        'fixture_revision': subprocess.check_output(['git','-C',str(REPO),'rev-parse','HEAD'], text=True).strip(),
+                                        'source_pin': authority['source_pin'],
+                                        'fixture_status': subprocess.check_output(['git','-C',str(REPO),'status','--short'], text=True),
+                                        'source_status': subprocess.check_output(['git','-C',str(KIT),'status','--short'], text=True),
+                                        'finished_at': datetime.now(timezone.utc).isoformat(),
+                                        'no_runtime_launched': True, 'no_fixture_remote': True})

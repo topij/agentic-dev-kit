@@ -1,0 +1,14 @@
+{
+  ".codex/hooks.json": {
+    "source": "/Users/topi/Coding/agentic-dev-kit/saved_plans/adopt-reg01-evidence_2026-09-06/payload-codex-hooks.json",
+    "sha256": "dbea8d8084adcc50e786af584c7e407fc5d7040bf26bd614c9966e9ba2797cfb"
+  },
+  ".codex/config.toml": {
+    "source": "/Users/topi/Coding/agentic-dev-kit/saved_plans/adopt-reg01-evidence_2026-09-06/payload-codex-config.toml",
+    "sha256": "d37497c3278121598a663564ab38b53f658969717f78decb661ddd11c66551ea"
+  },
+  ".claude/settings.json": {
+    "source": "/Users/topi/Coding/agentic-dev-kit/saved_plans/adopt-reg01-evidence_2026-09-06/payload-claude-settings.json",
+    "sha256": "cafe367d9ec90f34644dec0a2a4929dc195962e16df332523b7a74fec82751bf"
+  }
+}
