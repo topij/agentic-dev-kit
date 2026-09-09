@@ -26,6 +26,61 @@
 
 ## 2026-09-09
 
+- **A review lens wrote into the tree it was handed, disclosed it, and restored it.**
+  Round 2 of `#717`'s panel ran `git checkout <base> -- docs/kit-friction-log.md` inside
+  its own handed worktree to compare `check_doc_budget.py` output across revisions, then
+  restored the file and said so in its report. The cockpit verified the restoration at the
+  destination rather than accepting the attestation: `git status --short` empty and `HEAD`
+  unmoved in both lens worktrees, and `shasum -a 256 docs/kit-friction-log.md` identical
+  across both worktrees and the cockpit tree. **M** — mechanism: *No writes in the tree you
+  were given* forbids checking out what you were handed, and *Right revision* supplies
+  `git show <sha>:<path>` for **reading** a past revision, but a lens that needs to run a
+  *script* against past content has no sanctioned route and the writable-copy guidance is
+  framed entirely around mutation testing. Proposed fix: say that comparing a command's
+  output across revisions goes through an extract to a scratch path, never a checkout in
+  place. **Routed 2026-09-09 to
+  [`#574`](https://github.com/topij/agentic-dev-kit/issues/574#issuecomment-5604328385) as
+  a third occurrence, on the operator's go-ahead**; that issue stays open. `#574` already
+  holds this exact shape — a contract obligation with no sanctioned no-write route, the
+  lens self-disclosing — for two `git fetch` occurrences, and the comment widens it past
+  base currency rather than opening a second issue. Searched `#254` and `#712` first and
+  neither fits: `#254` is the destructiveness of `git checkout --` over uncommitted work,
+  which was absent here, and `#712` is a lens reaching **outside** its tree, where this
+  lens stayed inside its own.
+
+- **A lens corrected its own report after the receipt for that round was already
+  written.** The round-1 adversarial lens reported its pytest phase as reaching no terminal
+  result, the receipt recorded that, and the lens then finished and reported `1 failed,
+  2484 passed, 1 skipped in 424.47s` at `06ff7d7`. **M** — mechanism: a receipt is
+  head-bound and written once, `#666`'s ordering requires it before that round's fixes, and
+  nothing defines a route for a lens that resumes and amends its report afterwards. The
+  cockpit restated it in the next round's disposition, which works only because there *was*
+  a next round; a corrected report after the final round would have no carrier at all.
+  Proposed fix: name this case in the panel doctrine's recording step. **Filed 2026-09-09
+  as [`#719`](https://github.com/topij/agentic-dev-kit/issues/719), on the operator's
+  go-ahead.** Worth noting it is also an instance of the rule `#717` shipped as `b866298` —
+  outside state falsified a sentence in a record already published.
+
+- **`--lenses` takes one comma-separated value and the doctrine's example reads as
+  space-separated.** `pr_watch.py 717 --record-review "fallback:panel" --lenses adversarial
+  correctness` exited on `error: unrecognized arguments: correctness`; the comma form
+  worked. **L** — mechanism: the option is single-value argparse, while
+  `fallback-review-panel.md`'s code block writes the placeholder as
+  `--lenses <names of the lenses that actually ran>` and its prose says "names", both of
+  which read as `nargs='+'`. Proposed fix: write the literal `--lenses adversarial,correctness`
+  in that block. Fail-closed and caught immediately, so the cost was one invocation.
+  **Filed 2026-09-09 as [`#720`](https://github.com/topij/agentic-dev-kit/issues/720), on
+  the operator's go-ahead.**
+
+- **A lens imposed its own timeout on `make test` and killed its run, with the warning
+  against it already in its reach.** The round-1 adversarial lens wrapped the suite in
+  `timeout 300` and lost the run, then reported a verification limit; `AGENTS.md`'s
+  *Verification* says to raise the tool timeout before starting, and the lens named that
+  warning itself when reporting the kill. **L** — no mechanism beyond "the instruction
+  exists and did not bind", which is the carrier-not-wording shape of `#469` and of the
+  progress-update entry already in this inbox. Parked for accumulation; if it recurs,
+  capture whether the lens had an unbounded alternative it declined.
+
 - **Desktop hook testing looped on app mode while the task used another config.**
   During the [hooks continuation](../saved_plans/codex-hooks-continuation_2026-09-09.md),
   guidance repeatedly asked the operator to identify or switch windows from their
