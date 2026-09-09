@@ -55,6 +55,15 @@ Phase 5 exit remains the live question and retains its own exact decision.
 - The 2026-08-22 friction entry now records its park condition as discharged to the rule
   rather than to the tracker, so triage reconciles instead of re-filing. `#712` and `#713`
   were left untouched and the inbox was not swept.
+- **This session's issue-shaped friction went to the tracker on the operator's go-ahead:**
+  [`#719`](https://github.com/topij/agentic-dev-kit/issues/719) (a lens correcting its own
+  report after that round's receipt is written) and
+  [`#720`](https://github.com/topij/agentic-dev-kit/issues/720) (`--lenses` takes one
+  comma-separated value while the doctrine's example reads as space-separated), plus an
+  occurrence comment on [`#574`](https://github.com/topij/agentic-dev-kit/issues/574) for a
+  lens writing into its handed tree — searched first, and it widens `#574` past base
+  currency rather than opening a second issue. Each was read back from the tracker after
+  landing. The self-imposed-timeout entry stays parked for accumulation.
 
 **Verification.** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
 `d6b06466f62202fb438608bd42bcdca929349a17` on 2026-09-09 printed `1 failed, 2484 passed,
@@ -324,69 +333,6 @@ repair work and its exact decisions. Before approved fixture execution, recheck
 `fixture-inventory-after-reg01.json`; stop if either original temporary tree is missing.
 Do not repeat credited exercises or advance Phase 5 exit, adoption completion, fixture PR,
 new initialization or cs-toolkit replay without their own exact decisions.
-
-______________________________________________________________________
-
-## Session — 2026-09-07 (installed-suite assessment, in Claude Code)
-
-**Theme —** Assess PR #686's retained installed-suite log; close the second Phase 5 blocker.
-
-- The [assessment record](../saved_plans/adopt-suite-assessment_2026-09-07.md) retains the
-  classification, the re-measurement and the boundary. It changed no fixture, ran no
-  initializer, and filed no new ticket. Most of what it found is in `#534`'s stated scope
-  and is [recorded there](https://github.com/topij/agentic-dev-kit/issues/534#issuecomment-5565697869),
-  with a [correction](https://github.com/topij/agentic-dev-kit/issues/534#issuecomment-5565966166)
-  appended; one failure belongs to `#690` instead, already repaired.
-- Most of the retained log's failures fit a cause `#534` already names. The largest
-  single mechanism is the fixture's deliberately preserved wrap-up adapter, which
-  accounts for every `test_portability.py` failure and most of `test_kit_doctor.py`'s —
-  established from the tracebacks, after a first pass attributed the portability ones
-  from their test names and got the mechanism wrong. `test_lane_launcher.py`'s was already recorded during
-  PR #691's panel and was **not** re-filed. **`test_panel_prompt.py`'s is not a `#534`
-  item at all:** `585483b` (#690) already repaired that test's root, and the fixture's
-  installed copy predates the fix.
-- **REG-01 invalidated part of that log.** Sixteen of its failure blocks were
-  `FileNotFoundError` on the two registration files that were absent then and exist now,
-  so the log is stale as a description of the fixture.
-- Re-measured in a disposable copy on 2026-09-07 UTC: the selector picks 18 items,
-  11 passing and 7 failing — **and neither outcome is better than the failure it
-  replaced.** The passes assert against the *adopter's* registrations and
-  report nothing about the kit's, which is `#534`'s silent-false-pass family as a family
-  rather than a single instance; they were loudly red until the adopter completed a step the
-  installer told them to complete, and completing it is what silenced them. The failures
-  cross an expectation built from `init.sh` in a sandbox that takes the default
-  `paths.engines: scripts` against a real registration carrying `scripts/devkit`, so the
-  text accuses the kit of drift when the cause is the adopter's layout.
-- **The first pass overstated two things and PR #701's correctness lens caught both** —
-  a completeness claim covering files it had not examined, and a re-measurement that
-  reached one file while the sixteenth test lived in another. Both are corrected on the
-  record and in an appended `#534` correction; the substantive finding is unchanged.
-- That last point is what the occurrence adds to `#534`'s suggested scope: item 1's
-  `_repo_layout` fix reaches none of it, because nothing here reads `REPO_ROOT /
-  "scripts"`. Whether the answer is a kit-repo-only marker or an installed reference copy
-  is a decision that issue now carries.
-- The maintained [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md) retains
-  Phase 5 in progress and Phase 6 not started. **Both blockers named in the 2026-09-06
-  handoff are now closed out** — registration by approved application, the suite by this
-  assessment — but the failures are classified and recorded, not repaired, and Phase 5
-  exit is its own exact decision that was not taken.
-
-- **Session friction routed at close-out.** `#702` files the pattern behind two of this
-  session's own defects: a failure's cause read off its test name rather than its
-  traceback, the second instance landing inside the commit written to fix the first. An
-  occurrence on `#510` records the other half — the task wrapper reporting `exit code 0`
-  for a run `make` exited `2`, and a memory-killed run whose only tell was an absent pytest
-  summary line. `#666` carries the receipt-ordering trap as **two walk-ins** and nothing
-  else — the successful application, recording the parent receipt before the fix round, is
-  on PR #701's own disposition, in the same PR as the second walk-in.
-
-▶ Next: In Claude, `/session-start` — Phase 5 exit is now the live question and needs its
-own exact decision; the repairs `#534` carries are the work standing between here and it.
-Recheck continuity against `fixture-inventory-after-reg01.json` before any approved
-execution. Keep every Codex-only confirmation — `/hooks` loading, `#698`'s open question,
-the reserved `#608`/`#255` dispositions — for one batched Codex session, and keep new
-initialization, adoption completion, fixture PR and cs-toolkit replay on their own exact
-decisions.
 
 ______________________________________________________________________
 
