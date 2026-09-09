@@ -344,3 +344,15 @@ Swept entries are verbatim in the archive under `Graduated 2026-08-22`.
   author, or of a panel that has more purchase on prose than on tested code. If it recurs with
   a mechanism attached it is worth a rule; the shape to watch is whether a claim verified
   against a *command* ever failed, versus one verified against nothing.
+  **Park condition discharged 2026-09-09 — graduated to `AGENTS.md`'s *Prose that goes
+  false*, not to the tracker.** The recurrence arrived on 2026-09-07–08 with mechanisms
+  attached, and the operator approved graduation in session. What graduated is narrower
+  than this entry's phrasing: the two PR #711 instances, which are an author's edit
+  falsifying a neighbouring sentence and an outside change falsifying an instruction that
+  had been correctly dated. This entry's own broad reading — *every finding was in a claim
+  about the work rather than in the work* — was **not** written as a rule, because `#709`'s
+  findings in that same session were real defects in a mechanism. `#120` is the
+  enforcement follow-up. Left in place rather than swept, per `#575` — and the
+  2026-08-29 marker's *"each waits for a recurrence an archived entry never reaches"*
+  is left as written, since dated sections record what was decided then; this note is
+  the appended correction `#696` proposes.

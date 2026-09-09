@@ -138,6 +138,95 @@ which is not in the stamp above and which this repo's two-tree hazard makes load
 on its own. Where both apply, satisfy both. Neither may contradict the other, and a
 change to one is a reason to read the other.
 
+## Prose that goes false
+
+*Numbers in prose* governs the number you are about to **write**. This governs the
+sentence you are about to **ship without rewriting** — already in the file, untouched by
+your diff, and false at your sha. It binds the same surfaces for the same reason, and it
+reaches prose only: **a stale code comment is out of scope**, because the remedy there is
+the comment beside the code and a lens already hunts it there.
+
+**A record ships at a sha, and every sentence in it is a claim made at that sha** —
+including the ones you did not write. But *re-read the whole record before you ship* is an
+unbounded pass that nobody performs, so the obligation splits into two bounded reads,
+keyed on how the sentence went false. Each names what bounds it, and that bound is the
+part to keep.
+
+**Your own commit falsified it — so go looking for what your change makes false, in the
+two places that are both bounded.** First the paragraph your diff lands in, because it is
+free: the text is already open, and you read it whole rather than only the line you
+changed. At `1bcb04e` on 2026-09-08 a commit added an entry to the friction log and left
+*"this session's six friction entries"* standing in the `▶ Next:` paragraph — **on the
+very line it rewrote**, immediately before the clause it replaced. The rewrite was itself
+an application of *Numbers in prose*: it dropped an unstamped `over budget` verdict out of
+that paragraph. So the count did not survive out of ignorance of the rule, and it did not
+survive out of distance from the edit either. It survived because attention was on the
+clause being changed rather than on the line being shipped. That is `#546`'s shape with
+the author standing inside it.
+
+**Then the subject you changed, wherever else the record asserts it.** Not a re-read of
+everything — a grep, bounded because you already know what you changed. The commit that
+added this section is its own instance: annotating the 2026-08-22 friction entry as
+discharged falsified *"each waits for a recurrence an archived entry never reaches"* in
+the 2026-08-29 graduation marker, a paragraph none of its hunks touch. The first look
+could not have reached it and grepping `park` over the file it had just edited did.
+**That marker was left as written**, because dated sections record what was decided then;
+`#696` is where that convention and its appended-correction remedy are being settled, and
+until they are, the correction goes on the entry the marker points at.
+
+**Something outside your commit falsified it — and dating the observation does not date
+the instruction built on it.** *Numbers in prose* lets a dated narrative event stand;
+that permission covers the observation and not what you hang off it. It is the same split
+as *naming the command covers the number and not the verdict built on it*, one surface
+over. At `1bcb04e` the handoff said of PR #710: *"**It was open and unmerged when this
+block was written**, so the next session owes it the ground rule's watch-to-green."* The
+hedge was true and stayed true. `#710` then merged as `dc6a74e`, which falsified the
+instruction without touching the file; the next handoff edit at `ebc0b56` rewrote the
+`#561` bullet and the `▶ Next:` paragraph rather than that one; and the branch then
+merged `origin/main`, making `dc6a74e` one of its own parents — so it carried an
+instruction to watch a pull request it already contained. **The lenses split on it, and
+the split measures the camouflage:** the adversarial lens read the instruction and
+flagged it, the correctness lens read the hedge and did not. The fix at `8942cea` kept
+the bullet and put the merge sha where the obligation had been.
+
+**That read is keyed on the kind of sentence, not on anything your commit did.** Ask
+whether it could go false while the repository sits untouched. A pull request or issue
+being open, a branch existing, a temporary tree surviving, another session owing
+something, a tracker state, a remote's head — each is held up by something you do not
+control, and each has the same two exits: re-check it at the sha you are shipping and
+state what you found, or drop it. **Apply the test and not the list.**
+
+**Neither read catches the other's case, which is why there are two.** The commit-scoped
+read never reaches the `#710` bullet: no hunk landed in it, and its subjects — the `#561`
+wording and the entry count — grep nowhere near it. The outside-state read never reaches
+*"six friction entries"*, because nothing outside the commit held that number up; the
+commit itself broke it. Merging them means dropping one of the two bounds, and the
+unbounded version is precisely the one that does not get performed.
+
+**Where the false sentence is a figure, a quantity word, or a verdict resting on one,
+*Numbers in prose* already governs it and this section adds nothing to its form.** What
+this adds is that you owe such a sentence a look even when your commit does not touch it.
+Where it is none of those — an instruction, an obligation, an ownership, a claim that
+something is still open — that section does not reach it at all, and this one is the whole
+rule.
+
+**Do not widen this to "panel findings land in claims rather than mechanisms."** The
+2026-08-22 friction entry parked that phrasing pending a recurrence with a mechanism, and
+what recurred is narrower than the phrasing. `#709`'s findings in the same session were
+real defects in a mechanism — one laundered a genuinely tampered file past the guard with
+exit 0 and an empty stderr, and was found by building the attack rather than by reading
+the prose beside it. The broad reading is contradicted by the very evidence that
+graduated this rule.
+
+Enforcement here is reading, and `#120` is the follow-up for a cheaper terminal check —
+**not** `#586`, which scopes itself to executed prose, says "Not record prose" outright,
+and names `#120` as the half it leaves alone. This sits in `AGENTS.md` rather than in
+`fallback-review-panel.md` because the failure is an author's and the remedy is at
+authoring time; a lens does catch these, at the cost of a round. `.claude/rules/` is
+excluded by *Runtime parity* — it must bind both runtimes. And unlike *Numbers in prose*
+it has no `wrap-up.md` counterpart, so it binds this repository's sessions and not an
+adopter's.
+
 ## Ground rules
 
 - `main` is protected: never commit to it directly. Branch and open a PR — and opening
