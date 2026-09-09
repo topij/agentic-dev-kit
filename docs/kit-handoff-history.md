@@ -5,6 +5,49 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-09-07 (REG-01 applied, in Claude Code)
+
+**Theme —** Execute the approved runtime registration on both runtimes.
+
+- The [application record](../saved_plans/adopt-reg01-application_2026-09-07.md) retains
+  the approval, precondition read, write boundary, doctor result and the new continuity
+  baseline. The operator approved **both runtimes** on 2026-09-07; that execution
+  approval is consumed.
+- Continuity was rechecked immediately before the write — in
+  `/Users/topi/Coding/agentic-dev-kit` at
+  `810b2911abb1598b4662a5b96a6bcc5823588751` on 2026-09-07 UTC, exit zero — not earlier
+  in the session.
+- Paths added are exactly `.codex`, `.codex/hooks.json`, `.codex/config.toml` and
+  `.claude/settings.json`. No path was removed and **no existing path changed**; the
+  fixture's `HEAD`, branch, absent remote and index are untouched and the additions are
+  untracked. No initializer ran and nothing was committed inside the fixture.
+- The fixture's own doctor returned exit zero on 2026-09-07 UTC with **no advisory line
+  left**: every engine path on both runtimes resolves and both Codex lifecycle forms
+  verify. The two `· not present` lines are gone.
+- **The disposable-copy trial predicted that report byte-for-byte**, once each run's own
+  fixture root is normalised. Verifying in a copy first was accurate here, not merely
+  safe.
+- **The continuity baseline moved again.** Compare against
+  `fixture-inventory-after-reg01.json`; a mismatch against the FIX-01 inventory is not
+  drift. The comparison-source baseline is unchanged.
+- **Nothing states what either runtime loaded**, and nothing here could — `/hooks` is
+  the only authority. Parked for one batched Codex session with #698's open question
+  (which this fixture no longer exercises, since it now sets `[features].hooks` to true)
+  and the reserved `#608`/`#255` dispositions.
+- The maintained [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md) retains
+  Phase 5 in progress and Phase 6 not started. A warning-free doctor is not adoption
+  completion. The installed-suite blocker is still untouched, and its
+  `test_lane_launcher.py` root-helper defect still belongs to that assessment as a
+  `#534` occurrence rather than a filing from outside it.
+
+▶ Next: In Claude, `/session-start` — the remaining Phase 5 blocker is the bounded
+assessment of the initializer, launcher-policy and portability failures in PR #686's
+retained terminal log, adding occurrences to `#534` rather than re-filing. Recheck
+continuity against `fixture-inventory-after-reg01.json` before any approved execution.
+Keep every Codex-only confirmation for the batched Codex session, and keep new
+initialization, adoption completion, fixture PR, Phase 5 exit and cs-toolkit replay on
+their own exact decisions.
+
 ## Session — 2026-09-06 (REG-01 registration payloads, in Claude Code)
 
 **Theme —** Take the runtime-registration blocker and prepare its exact decision.

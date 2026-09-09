@@ -14,10 +14,74 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-09 — parked hooks continuation recorded in Codex.
-Phase 5 exit remains the live question and retains its own exact decision.
+Last updated: 2026-09-09 — the approved prose-claims rule is written and open for
+review. Phase 5 exit remains the live question and retains its own exact decision.
 
-## Latest session — 2026-09-09 (hooks continuation, in Codex)
+## Latest session — 2026-09-09 (the prose-claims rule, in Claude Code)
+
+**Theme —** Write the rule the 2026-08-22 entry parked, and keep the two mechanisms apart.
+
+- [PR #717](https://github.com/topij/agentic-dev-kit/pull/717) carries the rule. At
+  wrap-up on 2026-09-09, `uv run scripts/pr_watch.py 717` reported
+  `DONE — green, reviewed, merge-ready` at `d6b06466f62202fb438608bd42bcdca929349a17`,
+  and it was left unmerged for the operator. Re-poll rather than trusting that line.
+  `AGENTS.md` gains *Prose that goes false*, placed next to *Numbers in prose* because it
+  is that section's other half: one governs the number you write, the other the sentence
+  you ship without rewriting.
+- **The two PR #711 instances stayed distinct, and the section says why neither read
+  catches the other's case.** One is bounded by the commit — the paragraph the diff lands
+  in, then a grep on the subject changed. The other is bounded by the kind of sentence:
+  could this go false while the repository sits untouched.
+- **The second mechanism needed its own rule, and the gap is exact.** *Numbers in prose*
+  prohibits a number, a quantity word, or a verdict resting on one; an instruction to
+  watch a merged pull request is none of those, and the dated hedge in front of it is a
+  permission that section grants. So: dating the observation does not date the
+  instruction built on it. Where the sentence is numeric, the new section defers.
+- **The broad reading was not written, and the section records why** — `#709`'s findings
+  in that same session were real defects in a mechanism. `#120` is named as enforcement,
+  `#586` ruled out against its own body text.
+- Placement was the open judgement call: `AGENTS.md` binds authors and both runtimes,
+  which `fallback-review-panel.md` and `.claude/rules/` do not. No `wrap-up.md`
+  counterpart, so it binds this repository and not an adopter's. **Whether adopters
+  should get one is undecided and nobody has been asked.**
+- **Applying the rule to its own commit found a hole in the draft.** The first read was
+  bounded by the diff's neighbourhood and could not reach a sentence the same commit
+  falsified elsewhere in the file. The 2026-08-29 marker is left as written and the
+  correction appended to the entry it points at, which is `#696`'s proposed remedy.
+- Two instance claims taken from PR #711's round dispositions did not survive checking
+  against the diffs and were corrected rather than carried. Re-derive them from the
+  commits rather than from this sentence.
+- The 2026-08-22 friction entry now records its park condition as discharged to the rule
+  rather than to the tracker, so triage reconciles instead of re-filing. `#712` and `#713`
+  were left untouched and the inbox was not swept.
+
+**Verification.** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+`d6b06466f62202fb438608bd42bcdca929349a17` on 2026-09-09 printed `1 failed, 2484 passed,
+1 skipped in 393.65s (0:06:33)`, failing the pre-existing
+`test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero` that
+`#393` tracks; `make` exited non-zero for it. Both lenses ran the same command
+independently in their own worktrees at that sha and reached the same single failure.
+
+**Review.** Panel rounds at `06ff7d7` and `d6b0646`, each receipt recorded before that
+round's fixes; both dispositions are on the pull request. The second was a full panel
+rather than a delta pass because the first round's fix touched executed prose.
+Correctness reported nothing in either round; adversarial's round-1 citation-style finding
+was fixed and its other findings replied to as disclosed limitations. CodeRabbit was asked
+at the converged head, because automatic review is off here and `#518` says a panel receipt
+does not discharge that request; it answered *"No actionable comments were generated"* in a
+comment rather than a review object, which the engine reports and deliberately does not
+count as evidence. The panel receipt was left standing rather than replaced by
+`coderabbit:comment-verdict`.
+
+▶ Next: `/session-start`. Several threads are live and none is obviously first —
+PR #717 was mergeable and unmerged at wrap-up, so check its live state before acting on
+it; the friction inbox has this session's parked entries alongside the earlier ones and
+its triage is operator-held; and Phase 5 exit, the cs-toolkit replay, new initialization,
+adoption completion and the fixture PR each still retain their own exact decisions.
+
+______________________________________________________________________
+
+## Session — 2026-09-09 (hooks continuation, in Codex)
 
 **Theme —** Finish the authorized live observations and retain their limits.
 
@@ -36,10 +100,6 @@ Phase 5 exit remains the live question and retains its own exact decision.
 - The session's desktop profile-identification friction was parked in the inbox
   after the operator left; no tracker payload was approved or posted. The
   operator-held triage and Claude prose-claims work were not performed.
-
-▶ Next: In Claude, `/session-start` — read this handoff's 2026-09-07 scope note
-before writing the approved prose-claims rule. Keep the reserved Phase 5 and
-adoption decisions separate, and reconcile routed friction rather than re-file it.
 
 ______________________________________________________________________
 
@@ -326,51 +386,6 @@ execution. Keep every Codex-only confirmation — `/hooks` loading, `#698`'s ope
 the reserved `#608`/`#255` dispositions — for one batched Codex session, and keep new
 initialization, adoption completion, fixture PR and cs-toolkit replay on their own exact
 decisions.
-
-______________________________________________________________________
-
-## Session — 2026-09-07 (REG-01 applied, in Claude Code)
-
-**Theme —** Execute the approved runtime registration on both runtimes.
-
-- The [application record](../saved_plans/adopt-reg01-application_2026-09-07.md) retains
-  the approval, precondition read, write boundary, doctor result and the new continuity
-  baseline. The operator approved **both runtimes** on 2026-09-07; that execution
-  approval is consumed.
-- Continuity was rechecked immediately before the write — in
-  `/Users/topi/Coding/agentic-dev-kit` at
-  `810b2911abb1598b4662a5b96a6bcc5823588751` on 2026-09-07 UTC, exit zero — not earlier
-  in the session.
-- Paths added are exactly `.codex`, `.codex/hooks.json`, `.codex/config.toml` and
-  `.claude/settings.json`. No path was removed and **no existing path changed**; the
-  fixture's `HEAD`, branch, absent remote and index are untouched and the additions are
-  untracked. No initializer ran and nothing was committed inside the fixture.
-- The fixture's own doctor returned exit zero on 2026-09-07 UTC with **no advisory line
-  left**: every engine path on both runtimes resolves and both Codex lifecycle forms
-  verify. The two `· not present` lines are gone.
-- **The disposable-copy trial predicted that report byte-for-byte**, once each run's own
-  fixture root is normalised. Verifying in a copy first was accurate here, not merely
-  safe.
-- **The continuity baseline moved again.** Compare against
-  `fixture-inventory-after-reg01.json`; a mismatch against the FIX-01 inventory is not
-  drift. The comparison-source baseline is unchanged.
-- **Nothing states what either runtime loaded**, and nothing here could — `/hooks` is
-  the only authority. Parked for one batched Codex session with #698's open question
-  (which this fixture no longer exercises, since it now sets `[features].hooks` to true)
-  and the reserved `#608`/`#255` dispositions.
-- The maintained [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md) retains
-  Phase 5 in progress and Phase 6 not started. A warning-free doctor is not adoption
-  completion. The installed-suite blocker is still untouched, and its
-  `test_lane_launcher.py` root-helper defect still belongs to that assessment as a
-  `#534` occurrence rather than a filing from outside it.
-
-▶ Next: In Claude, `/session-start` — the remaining Phase 5 blocker is the bounded
-assessment of the initializer, launcher-policy and portability failures in PR #686's
-retained terminal log, adding occurrences to `#534` rather than re-filing. Recheck
-continuity against `fixture-inventory-after-reg01.json` before any approved execution.
-Keep every Codex-only confirmation for the batched Codex session, and keep new
-initialization, adoption completion, fixture PR, Phase 5 exit and cs-toolkit replay on
-their own exact decisions.
 
 ______________________________________________________________________
 
