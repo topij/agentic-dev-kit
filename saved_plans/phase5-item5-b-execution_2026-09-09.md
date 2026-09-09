@@ -20,6 +20,11 @@ source repairs, another fixture update, client exercises and completion remain s
   hashes, complete suite logs and failure excerpts. The archived `.py.txt` drivers
   document this execution; they are **not resume commands** and must not be rerun.
 
+`initializer-terminal.txt`, `installed-suite.log` and `kit-suite.log` retain raw
+terminal whitespace, including CRLF in the initializer transcript. They are excluded
+explicitly from authored-file whitespace checks; their integrity is checked by the
+evidence ledger rather than by normalizing the recorded bytes.
+
 The staging program bound absolute roots, asserted cwd before writes and compared
 destination hashes. Only `scripts/` was remapped to `scripts/devkit/`; the installer,
 docs, adapters and reference files retained their root-relative destinations.

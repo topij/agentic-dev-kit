@@ -133,6 +133,11 @@
   was corrected; the log now declares its whitespace-only transformation. Keep
   dependent commit work in a later tool call after reading validation, as the
   wrap-up workflow already prescribes. Parked for accumulation; no tracker write.
+  **Recurred during ITEM5-B on 2026-09-09:** the combined validation/commit command
+  again continued after `git diff --cached --check` flagged raw transcript whitespace,
+  producing `38af832b8d044a12866dcdfb0ab3346558b392a2`. Those raw bytes were retained;
+  an explicit raw-log exclusion and separate authored-file check were read afterward.
+  Subsequent commit work moved to a separate tool call. No new tracker write.
 
 ## 2026-09-07
 
