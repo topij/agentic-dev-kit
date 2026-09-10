@@ -1,0 +1,22 @@
+{
+  "/Users/topi/Coding/agentic-dev-kit/CHANGELOG.md": {
+    "mode": "0o644",
+    "sha256": "f2fa0097779a49b0cef63412104fbde0cafeb86c4546d67131893d58769d55e5"
+  },
+  "/Users/topi/Coding/agentic-dev-kit/docs/agentic-dev-kit/workflows/upgrade.md": {
+    "mode": "0o644",
+    "sha256": "2cad70fa094ebc01f78e835784b2f84ee9ffd6b56a42d3d039c5995e42d4bf37"
+  },
+  "/Users/topi/Coding/agentic-dev-kit/kit-manifest.json": {
+    "mode": "0o644",
+    "sha256": "8f97a6939f4427667372f4692da9b4a63e12fb05d17543d4c4b129988bc3b551"
+  },
+  "/Users/topi/Coding/agentic-dev-kit/scripts/conftest.py": {
+    "mode": "0o644",
+    "sha256": "c2076c72a633fdd2d4e9991cf07ae2dda6c1747a1fe865a34a7fea013bd574c4"
+  },
+  "/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_state_guard.py": {
+    "mode": "0o644",
+    "sha256": "915aae52d1b6fe38be757589d836c0f1198b79a4e20ba2a438aa2ef6fbf04bd9"
+  }
+}

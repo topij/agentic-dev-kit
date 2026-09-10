@@ -5,6 +5,30 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-09-07 (live Codex hooks batch)
+
+**Theme —** Complete the parked Codex observations and preserve their scope.
+
+- The [batch record](../saved_plans/codex-hooks-batch_2026-09-07.md) retains the live
+  `/hooks` excerpts, configuration stack, continuity audits and tracker receipts.
+  It distinguishes project trust from trust of the current hook definitions and
+  discovery from execution.
+- The fixture's registration appeared in `/hooks`; the disposable unset case also
+  exposed its registrations. See the command/date/revision-bound record for the
+  observations and their limits. The original fixture was not used for the unset case.
+- The operator approved and posted the reserved `#608`/`#255` dispositions and closed
+  those issues as completed. The credited PR #680 probe was not repeated.
+- The approved [observation on #698](https://github.com/topij/agentic-dev-kit/issues/698#issuecomment-5569204436)
+  scopes the remaining installer/doctor correction. It does not establish hook execution
+  after trust or a default shared by every Codex client.
+- The maintained [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md) carries
+  those decisions without advancing Phase 5 exit. The later replay decision and
+  remaining operator-held work are in the latest session block. The `#534` repairs
+  were outside this Codex batch.
+
+The #534 repair and hooks continuation remain in the [living handoff](kit-handoff.md).
+Preserve their credited exercises; its latest session block owns the next action.
+
 ## Session — 2026-09-07 (installed-suite assessment, in Claude Code)
 
 **Theme —** Assess PR #686's retained installed-suite log; close the second Phase 5 blocker.
@@ -6975,4 +6999,3 @@ written down rules it was itself violating.**
 gate → receipts behind a flag → wire the fixer → flip) was replaced: the flag existed to
 defer a breakage caused by `done` conflating two predicates, so splitting them removed the
 need for it.
-
