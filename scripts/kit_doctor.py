@@ -298,7 +298,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/test_live_validation_bundle.py", REPO_ONLY_ROLE),
     # Reference copies of the two registrations the kit SHIPS but does not write
     # (#303 — init.sh prints both and writes neither). Tracked and installed,
-    # unlike the rest of `tests/fixtures/`, and that is the whole point: a test
+    # so they follow the selected engine layout. A test
     # asserting a property of a file the kit ships needs the KIT's copy, and
     # `<repo>/.codex/hooks.json` is the adopter's own hand-written file in every
     # adopter. Reading the live path there measured their registration and
@@ -309,6 +309,8 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # copy-against-a-copy the readers below were written to avoid.
     ("scripts/tests/fixtures/shipped-registrations/codex-hooks.json", "test"),
     ("scripts/tests/fixtures/shipped-registrations/claude-settings.json", "test"),
+    ("scripts/tests/fixtures/init-config.json", "test"),
+    ("scripts/tests/fixtures/entry-point-markers.json", "test"),
     # `state_paths` is a package with its own `tests/`, hashed the same way for
     # the same reason: it sits under `scripts/lib/`, so `_remap` covers it
     # uniformly with everything else — no boundary to draw here.

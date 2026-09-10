@@ -44,12 +44,14 @@ stats `conftest.py`.
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+from conftest import require_kit_source
 
 ENGINE_DIR = Path(__file__).resolve().parent.parent
 
@@ -187,6 +189,7 @@ def test_the_drift_test_actually_executes():
     it. Whether the drift test passes is its own business; this one only cares
     that it is not silently inert.
     """
+    require_kit_source()
     proc = _pytest(DRIFTCHECK_NODE, "-q", "--no-header")
     assert "skipped" not in proc.stdout, (
         "the drift test is skipped, so it guards nothing:\n" + proc.stdout
@@ -194,6 +197,48 @@ def test_the_drift_test_actually_executes():
     assert "1 passed" in proc.stdout or "1 failed" in proc.stdout, (
         "the drift test must RUN, not merely be collected; got:\n" + proc.stdout
     )
+
+
+@pytest.mark.parametrize(
+    "baseline, witness, child_skips, result, diagnostic",
+    [
+        (False, False, False, "1 passed", ""),
+        (False, False, True, "1 failed", "the drift test is skipped"),
+        (True, False, True, "1 skipped", "recorded install baseline"),
+        (True, True, True, "1 failed", "stray baseline key"),
+    ],
+)
+def test_drift_liveness_respects_source_identity_without_hiding_skips(
+    tmp_path, baseline, witness, child_skips, result, diagnostic
+):
+    """Execute the real parent in a nested tree, including an improperly skipped child."""
+    root = tmp_path / "repo"
+    tests = root / "scripts/devkit/tests"
+    tests.mkdir(parents=True)
+    (root / ".git").mkdir()
+    for name in ("conftest.py", "_repo_layout.py", "test_mutation_gate.py"):
+        shutil.copy2(ENGINE_DIR / "tests" / name, tests / name)
+    (root / "kit-manifest.json").write_text(
+        json.dumps({"kit_commit": "recorded-source"} if baseline else {}),
+        encoding="utf-8",
+    )
+    if witness:
+        from conftest import KIT_ONLY_WITNESS
+
+        (root / KIT_ONLY_WITNESS).write_text("# source witness\n", encoding="utf-8")
+    body = "pytest.skip('deliberately inert')" if child_skips else "assert True"
+    (tests / "test_kit_doctor.py").write_text(
+        "import pytest\n\ndef test_kit_repo_self_check_is_clean():\n    " + body + "\n",
+        encoding="utf-8",
+    )
+    proc = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-rs", "--no-header",
+         "scripts/devkit/tests/test_mutation_gate.py::test_the_drift_test_actually_executes"],
+        cwd=root, text=True, capture_output=True, check=False,
+    )
+    assert proc.returncode == (1 if "failed" in result else 0), proc.stdout + proc.stderr
+    assert result in proc.stdout, proc.stdout + proc.stderr
+    assert diagnostic in proc.stdout, proc.stdout
 
 
 def test_the_drift_failure_message_names_the_escape_hatch(monkeypatch):
