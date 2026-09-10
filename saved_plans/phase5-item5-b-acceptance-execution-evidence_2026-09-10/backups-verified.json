@@ -1,0 +1,19 @@
+{
+  "archive_members_bytes_modes_match": true,
+  "archive_sha256": "720fdcbb22fb7141a94e4e3a35e8a3bd05ed848201a5bc2a39be6eb87112334c",
+  "bundle_sha256": "4b5c6acc71d2790d1bdfe0bf4fda5a2ace876b813ad522ad630be613f3aebfad",
+  "bundle_verify_argv": [
+    "git",
+    "-C",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "bundle",
+    "verify",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910/fixture-before.bundle"
+  ],
+  "bundle_verify_status": 0,
+  "bundle_verify_stderr": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910/fixture-before.bundle is okay\n",
+  "bundle_verify_stdout": "The bundle contains these 3 refs:\n07bacf5bda3b1e7a6718c7d4528336ef81dc2143 refs/heads/chore/adopt-agentic-dev-kit\n413132b01d14c735d94753231bf325904135285f refs/heads/chore/item5-b-update-60fe0dc\n413132b01d14c735d94753231bf325904135285f HEAD\nThe bundle records a complete history.\nThe bundle uses this hash algorithm: sha1\n",
+  "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+  "observed_at": "2026-09-10T16:35:15.946828+00:00",
+  "revision": "413132b01d14c735d94753231bf325904135285f"
+}

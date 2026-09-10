@@ -1,0 +1,15 @@
+{
+  "changelog-entry.template.md": "928b5492070da41d523f77195ea60436c738c6b3575493b0bd4efaeca45dacdd",
+  "new-regression-before-fix.stderr.log": "c60defb7d8b3333338935a033d01df082d4d0af8f3c3bfe5ee4c870473c694f3",
+  "new-regression-before-fix.stdout.log": "705ffeb430f6df29a62e7d43b70b8940b4aebd053353b28faa53200546f0fec0",
+  "proposal-lint.stderr.log": "f4f4fbed024d0f9cbb1241c3e347366b5cfa0422c9afb0180af80c588fd0804e",
+  "proposal-lint.stdout.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+  "proposed-repair.patch.txt": "14ff9579cde9166445e22b0ba2d898e8bb3330b34a38bf1ea84a2028b6593afd",
+  "scripts-conftest.py.txt": "a0a82682c9431205f8c0db80176694b37800da7964e5b77ec3eba283fc7569c2",
+  "state-guard-with-proposal.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "state-guard-with-proposal.stdout.log": "871cdc393b0aa66d4a4376766e10849cf315046b489bf71f60439c60b30091a9",
+  "test-state-guard.py.txt": "8e7a7082fa4e7fcaa0ccf1985be646c7b26bb86af4cc519349cc068861b6b291",
+  "upgrade.md.txt": "c29baa57bc48b2d74e5e553745028f84bd2e8d400e88d891c9336d8496724cf6",
+  "verification.json": "85bba3737a913fa5f2ddc0b3fefb93be65cd6fab01d07e4c8bf8953495bf6028",
+  "write-ledger.json": "f8942505da39df4ee1a7bd38d5d787f9fa5464df1092bf0c84c8b11ab0c7b3b1"
+}

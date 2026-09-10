@@ -1,0 +1,52 @@
+import json,os,runpy,subprocess,sys
+from pathlib import Path
+E=runpy.run_path('/private/tmp/item5-b-pr-execution-d9i5jh0q/execute.py')
+REPO,KIT,OUT,RECORD=(E[k] for k in ['REPO','KIT','OUT','RECORD'])
+HEAD='f770f183bf6691f1f706c676b740cf2ef5ceb766'
+NAME='topij/adk-item5-b-field-20260909'
+SEED='8533c334637e8776ca7a4fe3a9fd8c6c64e35707'
+
+def local():
+ invocation_cwd=str(Path.cwd())
+ E['check']()
+ actual=E['identity'](REPO)
+ assert actual['revision']==HEAD and actual['branch']=='chore/item5-b-field-exit' and actual['status']==''
+ assert actual['remotes']=='origin\thttps://github.com/'+NAME+'.git (fetch)\norigin\thttps://github.com/'+NAME+'.git (push)\n'
+ refs={row.split()[1]:row.split()[0] for row in actual['refs'].splitlines()}
+ assert refs=={'HEAD':HEAD,'refs/heads/chore/adopt-agentic-dev-kit':'07bacf5bda3b1e7a6718c7d4528336ef81dc2143','refs/heads/chore/item5-b-field-exit':HEAD,'refs/heads/chore/item5-b-update-60fe0dc':E['FIXTURE_INPUT'],'refs/heads/main':SEED,'refs/remotes/origin/chore/item5-b-field-exit':HEAD,'refs/remotes/origin/main':SEED}
+ for name in ['/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture','/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source']:assert not os.path.lexists(name),name
+ E['enter'](OUT)
+ for role,root in [('fixture',REPO),('source',KIT)]:
+  E['write'](OUT/(role+'-final-inventory.json'),E['inventory'](root))
+  E['write'](OUT/(role+'-final-git.json'),dict(identity=E['identity'](root),administrative_inventory=E['inventory'](root/'.git')))
+ E['write'](OUT/'rollback.json',dict(executed=False,reason='Approved payloads retained; evidence preserved and no local or remote undo performed.',observed_at=E['now'](),fixture_revision=HEAD,source_revision=E['SOURCE']))
+ result=E['read'](OUT/'result.json');result['retained_checkpoint']=dict(argv=['python3','-B',str(Path(__file__)),'local'],program_sha256=E['sha'](Path(__file__).read_bytes()),invocation_cwd=invocation_cwd,output_cwd=str(Path.cwd()),at=E['now'](),fixture_head=HEAD,source_head=E['SOURCE'],declared_non_git_delta_only=True,retained_source_including_git_unchanged=True,original_paths_absent=True,baseline_sha256=E['BASELINE'],full_typed_configuration_unchanged=True,preserved_destinations_except_declared_payload_unchanged=True,historical_fixture_refs_unchanged=True)
+ E['write'](OUT/'result.json',result)
+ print(json.dumps(result['retained_checkpoint'],indent=2))
+
+def forge(which,comment):
+ E['enter'](REPO);commands=[]
+ def call(argv):
+  start=E['now']();p=subprocess.run(argv,cwd=REPO,env=E['environment']('review'),capture_output=True,check=True)
+  commands.append(dict(argv=argv,cwd=str(REPO),revision=HEAD,started_at=start,ended_at=E['now'](),returncode=p.returncode,stdout=p.stdout.decode(),stderr=p.stderr.decode()))
+  return p.stdout
+ repo=json.loads(call(['gh','api','repos/'+NAME,'--jq','{id,node_id,full_name,private,clone_url,default_branch,visibility}']))
+ pr=json.loads(call(['gh','pr','view','1','--repo',NAME,'--json','number,url,state,isDraft,baseRefName,baseRefOid,headRefName,headRefOid,title,body,statusCheckRollup']))
+ files=call(['gh','api','--paginate','repos/'+NAME+'/pulls/1/files','--jq','.[].filename']).decode().splitlines()
+ receipts=[json.loads(call(['gh','api','repos/'+NAME+'/issues/comments/'+cid])) for cid in comment.split(',')]
+ assert repo['full_name']==NAME and repo['private'] is True and repo['default_branch']=='main'
+ assert pr['state']=='OPEN' and pr['isDraft'] is False and pr['baseRefOid']==SEED and pr['headRefOid']==HEAD and pr['headRefName']=='chore/item5-b-field-exit' and pr['baseRefName']=='main'
+ assert set(files)==set(E['git'](REPO,'diff','--name-only',SEED+'...'+HEAD).splitlines())
+ proposal=E['read'](OUT/'payload-ledger.json')['remote']
+ assert pr['title']==proposal['title'] and E['sha'](pr['body'].encode())==proposal['body_sha256']
+ assert all(HEAD in receipt['body'] and receipt['html_url'].startswith('https://github.com/'+NAME+'/pull/1#issuecomment-') for receipt in receipts)
+ result=dict(repository=repo,pr={k:v for k,v in pr.items() if k not in ['body','statusCheckRollup']},pr_body_sha256=E['sha'](pr['body'].encode()),changed_files=sorted(files),checks=pr['statusCheckRollup'],review_receipts=[dict(id=receipt['id'],url=receipt['html_url'],body_sha256=E['sha'](receipt['body'].encode())) for receipt in receipts],local_fixture_head=E['git'](REPO,'rev-parse','HEAD'))
+ assert result['local_fixture_head']==HEAD
+ E['enter'](OUT);path=OUT/('forge-'+which+'-exit.json');E['write'](path,dict(at=E['now'](),commands=commands,tuple=result))
+ if which=='after':assert result==E['read'](OUT/'forge-before-exit.json')['tuple']
+ print(json.dumps(result,indent=2))
+
+if __name__=='__main__':
+ if sys.flags.optimize or not sys.dont_write_bytecode:raise SystemExit('Unoptimized python3 -B is required.')
+ if sys.argv[1]=='local':local()
+ elif sys.argv[1]=='forge':forge(*sys.argv[2:])

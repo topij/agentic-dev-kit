@@ -1,0 +1,101 @@
+[
+  {
+    "argv": [
+      "gh",
+      "api",
+      "user",
+      "--jq",
+      ".login"
+    ],
+    "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "ended_at": "2026-09-10T16:54:06.789497+00:00",
+    "returncode": 0,
+    "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+    "started_at": "2026-09-10T16:54:06.306522+00:00",
+    "stderr": "",
+    "stdout": "topij\n"
+  },
+  {
+    "argv": [
+      "gh",
+      "api",
+      "--paginate",
+      "user/repos?affiliation=owner&per_page=100",
+      "--jq",
+      ".[].full_name"
+    ],
+    "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "ended_at": "2026-09-10T16:54:07.593800+00:00",
+    "projection": "Unrelated private repository names omitted from the durable record.",
+    "returncode": 0,
+    "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+    "started_at": "2026-09-10T16:54:06.790012+00:00",
+    "stderr": "",
+    "stdout": "{\"requested_repository\": \"topij/adk-item5-b-field-20260909\", \"present\": false}",
+    "stdout_sha256": "2506aebed456831fee9523403eb129a4154e0d36480ebbc5872eaf8fcb05b757"
+  },
+  {
+    "argv": [
+      "gh",
+      "api",
+      "repos/topij/adk-item5-b-field-20260909"
+    ],
+    "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "ended_at": "2026-09-10T16:54:08.039502+00:00",
+    "returncode": 1,
+    "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+    "started_at": "2026-09-10T16:54:07.594371+00:00",
+    "stderr": "gh: Not Found (HTTP 404)\n",
+    "stdout": "{\"message\":\"Not Found\",\"documentation_url\":\"https://docs.github.com/rest/repos/repos#get-a-repository\",\"status\":\"404\"}"
+  },
+  {
+    "argv": [
+      "gh",
+      "repo",
+      "create",
+      "topij/adk-item5-b-field-20260909",
+      "--private"
+    ],
+    "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "ended_at": "2026-09-10T16:54:11.252358+00:00",
+    "returncode": 0,
+    "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+    "started_at": "2026-09-10T16:54:08.040093+00:00",
+    "stderr": "",
+    "stdout": "https://github.com/topij/adk-item5-b-field-20260909\n"
+  },
+  {
+    "argv": [
+      "gh",
+      "api",
+      "repos/topij/adk-item5-b-field-20260909"
+    ],
+    "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "ended_at": "2026-09-10T16:54:11.790582+00:00",
+    "projection": "Stored canonical identity and visibility fields only; omitted temporary credentials and unrelated repository metadata.",
+    "returncode": 0,
+    "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+    "started_at": "2026-09-10T16:54:11.253006+00:00",
+    "stderr": "",
+    "stdout": "{\"id\": 1364586097, \"node_id\": \"R_kgDOUVXucQ\", \"full_name\": \"topij/adk-item5-b-field-20260909\", \"private\": true, \"clone_url\": \"https://github.com/topij/adk-item5-b-field-20260909.git\", \"default_branch\": \"main\", \"visibility\": \"private\"}",
+    "stdout_sha256": "a36a9503c3a0b6abac173c183557a770fbc0c001a6c3bdec84b52449b2c57943"
+  },
+  {
+    "argv": [
+      "git",
+      "-C",
+      "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+      "remote",
+      "add",
+      "origin",
+      "https://github.com/topij/adk-item5-b-field-20260909.git"
+    ],
+    "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "ended_at": "2026-09-10T16:54:11.823714+00:00",
+    "returncode": 0,
+    "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+    "started_at": "2026-09-10T16:54:11.791702+00:00",
+    "stderr": "",
+    "stdout": ""
+  }
+]

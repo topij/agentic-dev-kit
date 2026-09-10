@@ -1,0 +1,21 @@
+{
+  "contexts": [
+    {
+      "collaboration_mode": {
+        "mode": "default",
+        "settings": {
+          "developer_instructions": null,
+          "model": "gpt-6-astra",
+          "reasoning_effort": "high"
+        }
+      },
+      "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910/reviews/f770f183bf6691f1f706c676b740cf2ef5ceb766/correctness/handed-tree",
+      "effort": "high",
+      "model": "gpt-6-astra",
+      "reasoning_effort": null
+    }
+  ],
+  "observed_at": "2026-09-10T17:02:20.293023+00:00",
+  "rollout_path": "/Users/topi/.codex/sessions/2026/09/10/rollout-2026-09-10T20-00-03-01a08c43-1ce2-7c81-9cce-600ec9778478.jsonl",
+  "thread_id": "01a08c43-1ce2-7c81-9cce-600ec9778478"
+}

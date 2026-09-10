@@ -1,0 +1,82 @@
+{
+  "checkpoint": {
+    "argv": [
+      "python3",
+      "-B",
+      "/private/tmp/item5-b-pr-execution-d9i5jh0q/checkpoint.py",
+      "local"
+    ],
+    "at": "2026-09-10T17:44:01.822571+00:00",
+    "baseline_sha256": "9e2196df3b7239b599819abcfc20271b0389b70f78f22837a0709575145b9126",
+    "declared_non_git_delta_only": true,
+    "fixture_head": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+    "full_typed_configuration_unchanged": true,
+    "historical_fixture_refs_unchanged": true,
+    "invocation_cwd": "/Users/topi/Coding/agentic-dev-kit",
+    "original_paths_absent": true,
+    "output_cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910",
+    "preserved_destinations_except_declared_payload_unchanged": true,
+    "program_sha256": "86ba6bc4fdcb92f9316d390fb0c5888f8e120fdb1d97a4a429eb1376bfa676c1",
+    "retained_source_including_git_unchanged": true,
+    "source_head": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac"
+  },
+  "external_inventories": {
+    "fixture-before-git.json": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910/fixture-before-git.json",
+      "sha256": "dbdb02dfcdaf33b153709f2b325adcb3769e85c17476617feaf43c6f8fd2933d"
+    },
+    "fixture-before-inventory.json": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910/fixture-before-inventory.json",
+      "sha256": "b3191a27cba45e6a3f97de0e23cca04a7933b7459670d196d57b1a7698e83dbb"
+    },
+    "fixture-final-git.json": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910/fixture-final-git.json",
+      "sha256": "db16a1d81517b848b1c7574e561656c8bcf671296a32a80bc7e46232a7ed0e32"
+    },
+    "fixture-final-inventory.json": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910/fixture-final-inventory.json",
+      "sha256": "7ad662f349ed9a3c1577b7456e4014a90876f1a5891f78dab71106bb3ebc492e"
+    },
+    "source-before-git.json": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910/source-before-git.json",
+      "sha256": "99c01be38f983305a6661f048f0210d2296bd15e4d02b9e41983fd5a3164f1d5"
+    },
+    "source-before-inventory.json": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910/source-before-inventory.json",
+      "sha256": "9488a193885fc2804944b65dbc2577c3cd8c77fc2012f886c2d5ddb9f00af29e"
+    },
+    "source-final-git.json": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910/source-final-git.json",
+      "sha256": "99c01be38f983305a6661f048f0210d2296bd15e4d02b9e41983fd5a3164f1d5"
+    },
+    "source-final-inventory.json": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910/source-final-inventory.json",
+      "sha256": "9488a193885fc2804944b65dbc2577c3cd8c77fc2012f886c2d5ddb9f00af29e"
+    }
+  },
+  "fixture": {
+    "branch": "chore/item5-b-field-exit",
+    "config_sha256": "eb9545d0472091bdd51290dfdb960f1c7d438d8d922f548877766dbe9824e23e",
+    "git_directory": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.git",
+    "head_bytes": "ref: refs/heads/chore/item5-b-field-exit\n",
+    "index_sha256": "9d9229d163d92b76e8c040a7d376e0d556042c6a395bbfc1589c7767405d5fe4",
+    "refs": "f770f183bf6691f1f706c676b740cf2ef5ceb766 HEAD\n07bacf5bda3b1e7a6718c7d4528336ef81dc2143 refs/heads/chore/adopt-agentic-dev-kit\nf770f183bf6691f1f706c676b740cf2ef5ceb766 refs/heads/chore/item5-b-field-exit\n413132b01d14c735d94753231bf325904135285f refs/heads/chore/item5-b-update-60fe0dc\n8533c334637e8776ca7a4fe3a9fd8c6c64e35707 refs/heads/main\nf770f183bf6691f1f706c676b740cf2ef5ceb766 refs/remotes/origin/chore/item5-b-field-exit\n8533c334637e8776ca7a4fe3a9fd8c6c64e35707 refs/remotes/origin/main\n",
+    "remotes": "origin\thttps://github.com/topij/adk-item5-b-field-20260909.git (fetch)\norigin\thttps://github.com/topij/adk-item5-b-field-20260909.git (push)\n",
+    "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+    "root": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "status": ""
+  },
+  "observed_at": "2026-09-10T17:44:01.822571+00:00",
+  "source": {
+    "branch": "DETACHED",
+    "config_sha256": "cae33efdb02cf774435c1ff9cb16bcc1014606908530c6e1dc727615fe3e8cda",
+    "git_directory": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/.git",
+    "head_bytes": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac\n",
+    "index_sha256": "d8d3b7cc426fbb2421d928a7449a368f0be636ed2994904644bc8fb64393d43a",
+    "refs": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac HEAD\nedc199f42bc65b1850172ea79b791ef358577ae1 refs/heads/chore/item5-decision-packet-20260909\n",
+    "remotes": "",
+    "revision": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac",
+    "root": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source",
+    "status": ""
+  }
+}

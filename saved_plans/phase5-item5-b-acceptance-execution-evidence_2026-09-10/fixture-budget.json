@@ -1,0 +1,24 @@
+{
+  "PYTHONOPTIMIZE": null,
+  "argv": [
+    "python3",
+    "-B",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/check_doc_budget.py"
+  ],
+  "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+  "ended_at": "2026-09-10T16:35:59.323186+00:00",
+  "environment": {
+    "DEVKIT_STATE_ROOT": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910/fixture-state",
+    "PYTEST_ADDOPTS": "-o cache_dir=/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910/fixture-pytest-cache -ra",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "RUFF_CACHE_DIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910/ruff-cache",
+    "TMPDIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910/tmp",
+    "UV_CACHE_DIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910/uv-cache",
+    "UV_TOOL_DIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910/uv-tools"
+  },
+  "returncode": 0,
+  "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+  "started_at": "2026-09-10T16:35:59.260181+00:00",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_sha256": "2972c8bd40fff65ddb459505abac905c3f6ce741d20009b5c8457d9ad5e961dd"
+}

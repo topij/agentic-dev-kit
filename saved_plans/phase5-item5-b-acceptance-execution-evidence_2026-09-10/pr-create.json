@@ -1,0 +1,129 @@
+[
+  {
+    "argv": [
+      "gh",
+      "pr",
+      "list",
+      "--repo",
+      "topij/adk-item5-b-field-20260909",
+      "--state",
+      "all",
+      "--head",
+      "chore/item5-b-field-exit",
+      "--json",
+      "number,url,headRefOid",
+      "--limit",
+      "100"
+    ],
+    "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "ended_at": "2026-09-10T16:55:44.362844+00:00",
+    "returncode": 0,
+    "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+    "started_at": "2026-09-10T16:55:43.796823+00:00",
+    "stderr": "",
+    "stdout": "[]\n"
+  },
+  {
+    "argv": [
+      "gh",
+      "pr",
+      "create",
+      "--repo",
+      "topij/adk-item5-b-field-20260909",
+      "--base",
+      "main",
+      "--head",
+      "chore/item5-b-field-exit",
+      "--title",
+      "Complete the ITEM5-B adoption fixture",
+      "--body-file",
+      "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-acceptance-evidence_2026-09-10/proposed-fixture-pr-body.md"
+    ],
+    "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "ended_at": "2026-09-10T16:55:46.871156+00:00",
+    "returncode": 0,
+    "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+    "started_at": "2026-09-10T16:55:44.363309+00:00",
+    "stderr": "",
+    "stdout": "https://github.com/topij/adk-item5-b-field-20260909/pull/1\n"
+  },
+  {
+    "argv": [
+      "gh",
+      "pr",
+      "list",
+      "--repo",
+      "topij/adk-item5-b-field-20260909",
+      "--state",
+      "open",
+      "--head",
+      "chore/item5-b-field-exit",
+      "--json",
+      "number,url,headRefOid",
+      "--limit",
+      "100"
+    ],
+    "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "ended_at": "2026-09-10T16:55:47.366212+00:00",
+    "returncode": 0,
+    "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+    "started_at": "2026-09-10T16:55:46.871877+00:00",
+    "stderr": "",
+    "stdout": "[{\"headRefOid\":\"f770f183bf6691f1f706c676b740cf2ef5ceb766\",\"number\":1,\"url\":\"https://github.com/topij/adk-item5-b-field-20260909/pull/1\"}]\n"
+  },
+  {
+    "argv": [
+      "gh",
+      "pr",
+      "view",
+      "1",
+      "--repo",
+      "topij/adk-item5-b-field-20260909",
+      "--json",
+      "number,url,state,isDraft,baseRefName,baseRefOid,headRefName,headRefOid,files"
+    ],
+    "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "ended_at": "2026-09-10T16:55:47.931741+00:00",
+    "returncode": 0,
+    "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+    "started_at": "2026-09-10T16:55:47.367153+00:00",
+    "stderr": "",
+    "stdout": "{\"baseRefName\":\"main\",\"baseRefOid\":\"8533c334637e8776ca7a4fe3a9fd8c6c64e35707\",\"files\":[{\"path\":\".agents/skills/adopt/SKILL.md\",\"additions\":12,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".agents/skills/adopt/agents/openai.yaml\",\"additions\":4,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".agents/skills/parallel/SKILL.md\",\"additions\":12,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".agents/skills/parallel/agents/openai.yaml\",\"additions\":4,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".agents/skills/post-merge-systemize/SKILL.md\",\"additions\":15,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".agents/skills/post-merge-systemize/agents/openai.yaml\",\"additions\":4,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".agents/skills/pr-watch/SKILL.md\",\"additions\":17,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".agents/skills/pr-watch/agents/openai.yaml\",\"additions\":4,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".agents/skills/session-start/SKILL.md\",\"additions\":12,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".agents/skills/session-start/agents/openai.yaml\",\"additions\":4,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".agents/skills/triage-friction-log/SKILL.md\",\"additions\":12,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".agents/skills/triage-friction-log/agents/openai.yaml\",\"additions\":4,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".agents/skills/upgrade/SKILL.md\",\"additions\":18,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".agents/skills/upgrade/agents/openai.yaml\",\"additions\":4,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".agents/skills/wrap-up/agents/openai.yaml\",\"additions\":4,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".claude/agents/adversarial.md\",\"additions\":22,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".claude/agents/correctness.md\",\"additions\":22,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".claude/commands/adopt.md\",\"additions\":9,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".claude/commands/parallel.md\",\"additions\":9,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".claude/commands/post-merge-systemize.md\",\"additions\":12,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".claude/commands/pr-watch.md\",\"additions\":17,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".claude/commands/session-start.md\",\"additions\":8,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".claude/commands/triage-friction-log.md\",\"additions\":10,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".claude/commands/upgrade.md\",\"additions\":17,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".claude/commands/wrap-up.md\",\"additions\":8,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".claude/rules/safety-critical-changes.md\",\"additions\":23,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".claude/settings.json\",\"additions\":39,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".codex/config.toml\",\"additions\":2,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".codex/hooks.json\",\"additions\":27,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".github/workflows/item5-b-installed.yml\",\"additions\":60,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\".gitignore\",\"additions\":5,\"deletions\":0,\"changeType\":\"MODIFIED\"},{\"path\":\"PRINCIPLES.md\",\"additions\":289,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"config/claude-lane-settings.json\",\"additions\":36,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"docs/AGENTS-sections.md\",\"additions\":31,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"docs/agentic-dev-kit/adopting-into-a-linted-repo.md\",\"additions\":155,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"docs/agentic-dev-kit/fallback-review-panel-evidence.md\",\"additions\":230,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"docs/agentic-dev-kit/fallback-review-panel.md\",\"additions\":809,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"docs/agentic-dev-kit/runtime-parity.md\",\"additions\":233,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"docs/agentic-dev-kit/safety-critical-changes.md\",\"additions\":55,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"docs/agentic-dev-kit/workflows/adopt.md\",\"additions\":579,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"docs/agentic-dev-kit/workflows/parallel-headless.md\",\"additions\":406,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"docs/agentic-dev-kit/workflows/parallel.md\",\"additions\":439,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"docs/agentic-dev-kit/workflows/post-merge-systemize.md\",\"additions\":440,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"docs/agentic-dev-kit/workflows/pr-watch.md\",\"additions\":689,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"docs/agentic-dev-kit/workflows/session-start.md\",\"additions\":449,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"docs/agentic-dev-kit/workflows/triage-friction-log.md\",\"additions\":1071,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"docs/agentic-dev-kit/workflows/upgrade.md\",\"additions\":892,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"docs/agentic-dev-kit/workflows/wrap-up.md\",\"additions\":498,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"docs/autonomous-session-playbook.md\",\"additions\":115,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"docs/parallel-dev.md\",\"additions\":198,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"docs/templates/AGENTS.md.tmpl\",\"additions\":88,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"docs/templates/CLAUDE.md.tmpl\",\"additions\":22,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"docs/templates/friction-log-archive.md.tmpl\",\"additions\":4,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"docs/templates/friction-log.md.tmpl\",\"additions\":29,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"docs/templates/handoff-history.md.tmpl\",\"additions\":6,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"docs/templates/handoff.md.tmpl\",\"additions\":26,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"init.sh\",\"additions\":2744,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"kit-manifest.json\",\"additions\":293,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"notes/friction-archive.md\",\"additions\":4,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"notes/friction.md\",\"additions\":31,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/archive_plan_sessions.py\",\"additions\":864,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/check_doc_budget.py\",\"additions\":194,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/check_memory_budget.py\",\"additions\":222,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/conftest.py\",\"additions\":368,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/dev_session.sh\",\"additions\":1073,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/hooks/pr_followup_hook.py\",\"additions\":629,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/hooks/pre-push\",\"additions\":383,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/kit_doctor.py\",\"additions\":4132,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/launch_lane.py\",\"additions\":1625,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/lib/atomic_write.py\",\"additions\":381,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/lib/devmodel_config.py\",\"additions\":108,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/lib/kitconfig.py\",\"additions\":503,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/lib/repo_root.sh\",\"additions\":51,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/lib/runtime_adapters.py\",\"additions\":436,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/lib/state_paths/__init__.py\",\"additions\":40,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/lib/state_paths/paths.py\",\"additions\":44,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/lib/state_paths/repo_root.py\",\"additions\":31,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/lib/state_paths/resolver.py\",\"additions\":457,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/lib/state_paths/tests/__init__.py\",\"additions\":0,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/lib/state_paths/tests/test_state_paths.py\",\"additions\":739,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/panel_prompt.py\",\"additions\":718,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/pr_watch.py\",\"additions\":5660,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/reconcile_sessions.sh\",\"additions\":823,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/run_installed_tests.py\",\"additions\":95,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/tests/_repo_layout.py\",\"additions\":77,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/tests/conftest.py\",\"additions\":392,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/tests/fixtures/entry-point-markers.json\",\"additions\":4,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/tests/fixtures/init-config.json\",\"additions\":625,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/tests/fixtures/shipped-registrations/claude-settings.json\",\"additions\":42,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/tests/fixtures/shipped-registrations/codex-hooks.json\",\"additions\":27,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/tests/test_check_memory_budget.py\",\"additions\":127,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/tests/test_ci_workflow.py\",\"additions\":354,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/tests/test_init_sh.py\",\"additions\":6074,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/tests/test_kit_doctor.py\",\"additions\":7536,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/tests/test_kit_repo_only.py\",\"additions\":411,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/tests/test_kitconfig.py\",\"additions\":950,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/tests/test_lane_launcher.py\",\"additions\":2349,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/tests/test_mutation_gate.py\",\"additions\":356,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/tests/test_panel_prompt.py\",\"additions\":1189,\"deletions\":0,\"changeType\":\"ADDED\"},{\"path\":\"scripts/devkit/tests/test_portability.py\",\"additions\":17329,\"deletions\":0,\"changeType\":\"ADDED\"}],\"headRefName\":\"chore/item5-b-field-exit\",\"headRefOid\":\"f770f183bf6691f1f706c676b740cf2ef5ceb766\",\"isDraft\":false,\"number\":1,\"state\":\"OPEN\",\"url\":\"https://github.com/topij/adk-item5-b-field-20260909/pull/1\"}\n"
+  },
+  {
+    "argv": [
+      "gh",
+      "api",
+      "--paginate",
+      "repos/topij/adk-item5-b-field-20260909/pulls/1/files",
+      "--jq",
+      ".[].filename"
+    ],
+    "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "ended_at": "2026-09-10T16:56:19.823105+00:00",
+    "returncode": 0,
+    "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+    "started_at": "2026-09-10T16:56:17.949397+00:00",
+    "stderr": "",
+    "stdout": ".agents/skills/adopt/SKILL.md\n.agents/skills/adopt/agents/openai.yaml\n.agents/skills/parallel/SKILL.md\n.agents/skills/parallel/agents/openai.yaml\n.agents/skills/post-merge-systemize/SKILL.md\n.agents/skills/post-merge-systemize/agents/openai.yaml\n.agents/skills/pr-watch/SKILL.md\n.agents/skills/pr-watch/agents/openai.yaml\n.agents/skills/session-start/SKILL.md\n.agents/skills/session-start/agents/openai.yaml\n.agents/skills/triage-friction-log/SKILL.md\n.agents/skills/triage-friction-log/agents/openai.yaml\n.agents/skills/upgrade/SKILL.md\n.agents/skills/upgrade/agents/openai.yaml\n.agents/skills/wrap-up/agents/openai.yaml\n.claude/agents/adversarial.md\n.claude/agents/correctness.md\n.claude/commands/adopt.md\n.claude/commands/parallel.md\n.claude/commands/post-merge-systemize.md\n.claude/commands/pr-watch.md\n.claude/commands/session-start.md\n.claude/commands/triage-friction-log.md\n.claude/commands/upgrade.md\n.claude/commands/wrap-up.md\n.claude/rules/safety-critical-changes.md\n.claude/settings.json\n.codex/config.toml\n.codex/hooks.json\n.github/workflows/item5-b-installed.yml\n.gitignore\nPRINCIPLES.md\nconfig/claude-lane-settings.json\ndocs/AGENTS-sections.md\ndocs/agentic-dev-kit/adopting-into-a-linted-repo.md\ndocs/agentic-dev-kit/fallback-review-panel-evidence.md\ndocs/agentic-dev-kit/fallback-review-panel.md\ndocs/agentic-dev-kit/runtime-parity.md\ndocs/agentic-dev-kit/safety-critical-changes.md\ndocs/agentic-dev-kit/workflows/adopt.md\ndocs/agentic-dev-kit/workflows/parallel-headless.md\ndocs/agentic-dev-kit/workflows/parallel.md\ndocs/agentic-dev-kit/workflows/post-merge-systemize.md\ndocs/agentic-dev-kit/workflows/pr-watch.md\ndocs/agentic-dev-kit/workflows/session-start.md\ndocs/agentic-dev-kit/workflows/triage-friction-log.md\ndocs/agentic-dev-kit/workflows/upgrade.md\ndocs/agentic-dev-kit/workflows/wrap-up.md\ndocs/autonomous-session-playbook.md\ndocs/parallel-dev.md\ndocs/templates/AGENTS.md.tmpl\ndocs/templates/CLAUDE.md.tmpl\ndocs/templates/friction-log-archive.md.tmpl\ndocs/templates/friction-log.md.tmpl\ndocs/templates/handoff-history.md.tmpl\ndocs/templates/handoff.md.tmpl\ninit.sh\nkit-manifest.json\nnotes/friction-archive.md\nnotes/friction.md\nscripts/devkit/archive_plan_sessions.py\nscripts/devkit/check_doc_budget.py\nscripts/devkit/check_memory_budget.py\nscripts/devkit/conftest.py\nscripts/devkit/dev_session.sh\nscripts/devkit/hooks/pr_followup_hook.py\nscripts/devkit/hooks/pre-push\nscripts/devkit/kit_doctor.py\nscripts/devkit/launch_lane.py\nscripts/devkit/lib/atomic_write.py\nscripts/devkit/lib/devmodel_config.py\nscripts/devkit/lib/kitconfig.py\nscripts/devkit/lib/repo_root.sh\nscripts/devkit/lib/runtime_adapters.py\nscripts/devkit/lib/state_paths/__init__.py\nscripts/devkit/lib/state_paths/paths.py\nscripts/devkit/lib/state_paths/repo_root.py\nscripts/devkit/lib/state_paths/resolver.py\nscripts/devkit/lib/state_paths/tests/__init__.py\nscripts/devkit/lib/state_paths/tests/test_state_paths.py\nscripts/devkit/panel_prompt.py\nscripts/devkit/pr_watch.py\nscripts/devkit/reconcile_sessions.sh\nscripts/devkit/run_installed_tests.py\nscripts/devkit/tests/_repo_layout.py\nscripts/devkit/tests/conftest.py\nscripts/devkit/tests/fixtures/entry-point-markers.json\nscripts/devkit/tests/fixtures/init-config.json\nscripts/devkit/tests/fixtures/shipped-registrations/claude-settings.json\nscripts/devkit/tests/fixtures/shipped-registrations/codex-hooks.json\nscripts/devkit/tests/test_check_memory_budget.py\nscripts/devkit/tests/test_ci_workflow.py\nscripts/devkit/tests/test_init_sh.py\nscripts/devkit/tests/test_kit_doctor.py\nscripts/devkit/tests/test_kit_repo_only.py\nscripts/devkit/tests/test_kitconfig.py\nscripts/devkit/tests/test_lane_launcher.py\nscripts/devkit/tests/test_mutation_gate.py\nscripts/devkit/tests/test_panel_prompt.py\nscripts/devkit/tests/test_portability.py\nscripts/devkit/tests/test_pr_followup_hook.py\nscripts/devkit/tests/test_pr_watch.py\nscripts/devkit/tests/test_pre_push_hook.py\nscripts/devkit/tests/test_reconcile_sessions.py\nscripts/devkit/tests/test_repo_layout.py\nscripts/devkit/tests/test_state_guard.py\n"
+  },
+  {
+    "argv": [
+      "gh",
+      "pr",
+      "view",
+      "1",
+      "--repo",
+      "topij/adk-item5-b-field-20260909",
+      "--json",
+      "number,url,state,isDraft,baseRefName,baseRefOid,headRefName,headRefOid"
+    ],
+    "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "ended_at": "2026-09-10T16:56:20.349542+00:00",
+    "returncode": 0,
+    "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+    "started_at": "2026-09-10T16:56:19.850947+00:00",
+    "stderr": "",
+    "stdout": "{\"baseRefName\":\"main\",\"baseRefOid\":\"8533c334637e8776ca7a4fe3a9fd8c6c64e35707\",\"headRefName\":\"chore/item5-b-field-exit\",\"headRefOid\":\"f770f183bf6691f1f706c676b740cf2ef5ceb766\",\"isDraft\":false,\"number\":1,\"state\":\"OPEN\",\"url\":\"https://github.com/topij/adk-item5-b-field-20260909/pull/1\"}\n"
+  }
+]

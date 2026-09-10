@@ -1,0 +1,15 @@
+{
+  "audit_program_sha256": "3902a43b0ede7a08ae8b12449981a2070a05056d1b49a43be36a7932801c829d",
+  "audit_stdout_sha256": "55f33016caf94a8185ff641ac8c752e3aa9d976f6173a859dd333b5a0da7b439",
+  "baseline_sha256": "9e2196df3b7239b599819abcfc20271b0389b70f78f22837a0709575145b9126",
+  "cockpit_revision": "914c2e4ef06a33d88ae7c94a823d3262a9526278",
+  "fixture_input": "413132b01d14c735d94753231bf325904135285f",
+  "fixture_merge_authorized": false,
+  "kit_record_merge_authorized": "standing merge-when-clean within scope",
+  "operator_message": "I approve\nITEM5-B-ACCEPT-01 as scoped\nITEM5-B-PR-01 as scoped",
+  "packet": "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-acceptance-decision_2026-09-10.md",
+  "packet_sha256": "cf5da03c708383c39b6e157102919444964bf3425f295fb488c45943b5731086",
+  "proposed_writes_sha256": "9a1f464ae9198b4c762f3e30c37ff2f83ceecfedd208fdcb4fb686977df2e918",
+  "recorded_at": "2026-09-10T16:35:14.626266+00:00",
+  "source_pin": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac"
+}
