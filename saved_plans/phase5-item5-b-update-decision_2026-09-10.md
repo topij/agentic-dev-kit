@@ -43,14 +43,19 @@ run at the final merge. No delivery reading establishes retained ITEM5-B success
 The [audit program](phase5-item5-b-update-audit_2026-09-10.py.txt), run as
 `python3 -B /Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-update-audit_2026-09-10.py.txt`
 in `/Users/topi/Coding/agentic-dev-kit` at
-`60fe0dc7ad68922d064c0cf401cff2c4c6d607ac` on 2026-09-10, produced the
+`02c991770181e720ba2bb2491dcc688439004a69` with the review corrections below
+in the working tree on 2026-09-10, produced the
 [audit result and exact write ledger](phase5-item5-b-update-audit_2026-09-10.json).
 Its reads established:
 
 - Fixture equality with `fixture-inventory-after-checks.json`, and source equality
   with `source-inventory-after-checks.json`, from the retained ITEM5-B evidence.
   The comparison covers path presence, file bytes, symlink targets and permission
-  modes, including the retained cache entries. It excludes `.git`.
+  modes, including the retained cache entries. It excludes `.git`. The current
+  audit uses `stat.S_IMODE`, including special permission bits; the historical
+  inventory masked those bits out. Exact equality requires their absence now,
+  but cannot establish whether they were absent when the historical inventory
+  was captured. Retain full permission bits in the execution before/after snapshots.
 - The named fixture/source revisions, fixture branch and detached source, independent
   `.git` directories, empty Git status and absent remotes. This is a snapshot, not an
   attestation about everything another process may have done between observations.
@@ -90,7 +95,7 @@ compare these fields before execution; a mismatch requires an amended decision.
 | `$REPO/kit-manifest.json` | Re-record the adopter baseline from actual destination bytes against the independent repair source, after the copy/config/preservation checks. Never copy the source release manifest into this path. |
 | `$REPO/.git/` | Create `chore/item5-b-update-60fe0dc` from the exact input commit; stage only the listed payloads and baseline, and commit the attempt. This writes the new branch/ref log, HEAD/log, index, commit-message file, Git objects and their transient locks. Keep `chore/adopt-agentic-dev-kit` at the historical input. No remote or fixture PR is included. |
 | `$KIT/.git/` | Fetch writes Git objects; detached checkout writes HEAD/log, index and transient locks. Use `--no-tags --no-write-fetch-head --no-auto-maintenance --no-recurse-submodules` on fetch. Do not change remote/config policy or create a push destination. Record metadata observations; Git-generated administrative bytes are not predictable payload hashes. |
-| `$OUT/` | Create only if absent: `authority.json`, before/after inventory and Git read-backs, `fixture-before.tar`, `source-before.tar`, `fixture-before.bundle`, `source-before.bundle`, copy/baseline/config/ownership reports, command/output logs, `result.json`, hash ledger, and isolated `fixture-state/`, `source-state/`, `fixture-pytest-cache/`, `source-pytest-cache/`, `uv-cache/`, `uv-tools/`, `tmp/`. Backups contain actual bytes/modes, not only digests; archives exclude `.git`, bundles preserve Git objects. All are new execution evidence, never replacements for the retained evidence directories. |
+| `$OUT/` | Create only if absent: `authority.json`, before/after inventory and Git read-backs, `fixture-before.tar`, `source-before.tar`, `fixture-before.bundle`, `source-before.bundle`, copy/baseline/config/ownership reports, command/output logs, `result.json`, hash ledger, and isolated `fixture-state/`, `source-state/`, `fixture-pytest-cache/`, `source-pytest-cache/`, `uv-cache/`, `uv-tools/`, `ruff-cache/`, `tmp/`. Backups contain actual bytes/modes, not only digests; archives exclude `.git`, bundles preserve Git objects. All are new execution evidence, never replacements for the retained evidence directories. |
 
 Create directories only when required by an added destination in the source ledger or
 the declared new evidence root. The fixture payload parents already exist in the
@@ -164,7 +169,10 @@ immutable fixture revision. Read validation results before a later commit invoca
 Run the suites serially, without concurrent checkout, stage, commit, baseline or
 other checkout-state writers. Use separate absolute `DEVKIT_STATE_ROOT` values under
 `$OUT/fixture-state` and `$OUT/source-state`; set `PYTHONDONTWRITEBYTECODE=1`, route
-uv caches/tools under `$OUT`, and direct pytest caches and temporary files there.
+uv caches/tools under `$OUT`, set `RUFF_CACHE_DIR="$OUT/ruff-cache"` before any
+source lint invocation, and direct pytest caches and temporary files there. Ruff
+otherwise writes the preserved `$KIT/.ruff_cache`; that default destination is
+not authorized by this packet.
 Capture the actual environment, argv, cwd, source/fixture SHAs, start/end times,
 exit codes, full output hashes and pre/post inventories. Tests can still expose
 unexpected writes; stop and report them instead of silently treating them as approved.
@@ -197,6 +205,16 @@ never delete an unrelated cache or metadata path. Hash restored files at their a
 destinations and compare the restored non-Git inventories with the before-snapshots.
 Git administrative history may retain the attempted fetch/checkout/commit: rollback
 restores the named content and refs, not an invented claim of unchanged Git history.
+
+## Packet review corrections
+
+The [review receipt before fixes](https://github.com/topij/agentic-dev-kit/pull/727#issuecomment-5615355490)
+records the adversarial and correctness findings at
+`02c991770181e720ba2bb2491dcc688439004a69` on 2026-09-10. The audit now includes
+special permission bits and states the historical limitation; the procedure declares
+and redirects Ruff's cache. The receipt's private baseline simulations reproduced
+the predicted baseline at the repair pin. They were disposable-clone probes, not an
+execution of this decision or a full installed-suite result.
 
 ## Operator choice and remaining scope
 

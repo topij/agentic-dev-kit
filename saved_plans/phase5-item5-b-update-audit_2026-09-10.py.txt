@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import stat
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,7 +31,7 @@ def inventory(root):
         rel = path.relative_to(root).as_posix()
         if rel == '.git' or rel.startswith('.git/'):
             continue
-        entry = {'mode': oct(path.lstat().st_mode & 0o777)}
+        entry = {'mode': oct(stat.S_IMODE(path.lstat().st_mode))}
         if path.is_symlink():
             entry.update(kind='symlink', target=os.readlink(path))
         elif path.is_file():
@@ -64,7 +65,11 @@ assert git(KIT, 'rev-parse', 'HEAD').decode().strip() == OLD
 result = {'argv': ['python3', '-B', str(Path(__file__).resolve())],
           'cwd': str(COCKPIT), 'revision': observed_revision,
           'observed_at_utc': datetime.now(timezone.utc).isoformat(),
-          'repair_pin': REPAIR, 'retained': {}, 'ledgers': {}}
+          'repair_pin': REPAIR, 'retained': {}, 'ledgers': {},
+          'inventory_mode_policy': {
+              'current': 'stat.S_IMODE, including special permission bits',
+              'historical': 'st_mode & 0o777; special bits were not recorded',
+              'comparison': 'Exact current-to-historical equality requires no current special bits; historical absence cannot be proved.'}}
 for role, root in [('fixture', REPO), ('source', KIT)]:
     prior_path = SAVED / 'phase5-item5-b-evidence_2026-09-09' / f'{role}-inventory-after-checks.json'
     prior = json.loads(prior_path.read_bytes())
@@ -154,7 +159,7 @@ preserve = ['config/dev-model.yaml', 'config/dev-model.local.yaml', 'config/clau
             '.codex/config.toml', '.claude/settings.json', '.claude/agents/adversarial.md',
             '.claude/agents/correctness.md', '.gitignore', 'init.sh', '.git/hooks/pre-push']
 result['preserve_hashes'] = {str(REPO / p): {'sha256': digest((REPO / p).read_bytes()),
-                                           'mode': oct((REPO / p).stat().st_mode & 0o777)} for p in preserve}
+                                           'mode': oct(stat.S_IMODE((REPO / p).lstat().st_mode))} for p in preserve}
 import sys
 sys.path.insert(0, str(REPO / 'scripts/devkit/lib'))
 from kitconfig import load_config
