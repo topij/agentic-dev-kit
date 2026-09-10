@@ -32,6 +32,12 @@ deferral, #585's earlier placement and the delivered #722 batch in #724 remain u
 The budget reminder's bounded triage intake preserved prior state and parked decisions;
 it started no new draft, recovery, tracker payload or archive sweep.
 
+`make test` in `/Users/topi/Coding/agentic-dev-kit` at
+`22734da7d3aebdf31f846b7e288e50eb99ca7156` on 2026-09-10 finished with the
+recorded #393 deep-JSON failure; the packet retains the actual summary and full log.
+The operator selected the proposed private fixture destination without authorizing
+creation or PR execution.
+
 ▶ Next: `$session-start` — read the ITEM5-B acceptance decision packet, revalidate its
 FINAL input, and obtain the exact ACCEPT-01 and optional PR-01 decisions. Do not repeat
 the consumed update, launch a fixture client, or treat kit-record delivery as field exit.

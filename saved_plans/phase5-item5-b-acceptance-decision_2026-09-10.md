@@ -127,11 +127,21 @@ the final merge. The later retained-fixture update is the full installed observa
 The fixture has no project Makefile; no fixture `make test` is claimed or proposed.
 Audit equality carries the identity of this historical evidence forward, not a fresh run.
 
+The kit-record verification is separate: `make test` in `$COCKPIT` at
+`22734da7d3aebdf31f846b7e288e50eb99ca7156` on 2026-09-10 printed
+`1 failed, 2497 passed, 1 skipped in 429.74s (0:07:09)`, exit `2`.
+The [complete log](phase5-item5-b-acceptance-evidence_2026-09-10/kit-make-test.log)
+and [command/environment record](phase5-item5-b-acceptance-evidence_2026-09-10/kit-verification.json)
+retain the same #393 deep-JSON traceback. This observation verifies neither the
+proposed hosted workflow nor a new fixture run.
+
 ## ITEM5-B-PR-01 — proposed next adoption-lifecycle execution
 
 This decision depends on ACCEPT-01, including explicit acceptance of the custom
-wrap-up as an ownership fixture. Proposed destination, pending operator selection:
-**new private `topij/adk-item5-b-field-20260909` on GitHub**. It must be absent; an
+wrap-up as an ownership fixture. The operator selected this proposal destination on
+2026-09-10: **new private `topij/adk-item5-b-field-20260909` on GitHub**
+([selection record](phase5-item5-b-acceptance-evidence_2026-09-10/destination-selection.json)).
+That selection is not execution approval. It must be absent; an
 existing repository, ambiguous absence or unavailable authentication stops before
 creation. This proposal includes GitHub Actions usage and publication of the fixture's
 tracked history to that private repository. It does not include a fixture merge,
