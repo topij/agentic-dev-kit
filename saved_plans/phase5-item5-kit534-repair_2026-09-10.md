@@ -23,7 +23,9 @@ commands, directories, immutable source/fixture revisions and output hashes on
 2026-09-10. Full suites ran serially with separate external state directories.
 The synthetic install uses `scripts/devkit/`, customized configuration, authored policy
 and a custom Codex wrap-up adapter. Its setup driver is retained as historical evidence,
-not a resume command. No retained field fixture was used as a write destination.
+not a resume command. The setup result and `roots.json` retain the original captured
+bytes, including the empty stdout from `--record-install`; its status text goes to
+stderr. No retained field fixture was used as a write destination.
 Suite logs retain terminal whitespace; their bytes are checked with the hash ledger
 and excluded from authored-text whitespace checks.
 

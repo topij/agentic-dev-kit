@@ -237,7 +237,7 @@
     },
     "scripts/tests/conftest.py": {
       "role": "test",
-      "sha256": "eec1aca0e46971ffe848c968c5302128a6397c08b7a1de5c555482c0ec848ed4"
+      "sha256": "dcc6980325b5ab33ddfb069f8a27f27b70f406c42892e5fcbcaf2369d0f07cd4"
     },
     "scripts/tests/fixtures/entry-point-markers.json": {
       "role": "test",

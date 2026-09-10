@@ -106,7 +106,7 @@
   ],
   "setup_cwd": "/Users/topi/Coding/agentic-dev-kit",
   "setup_driver": "setup-driver.py.txt",
-  "setup_roots": "setup-roots.json",
+  "setup_roots": "roots.json",
   "retained_fixture_updated": false,
   "client_exercise_performed": false,
   "source_393_separate": true

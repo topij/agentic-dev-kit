@@ -301,14 +301,8 @@ def require_kit_source() -> None:
     """
     if not is_install_baseline():
         return
-    # `kit_commit` is a single unauthenticated key. If one reaches the KIT's own
-    # manifest — an accidental `--record-install` against this checkout, a bad
-    # merge — a bare skip here would silently switch off the kit's own drift
-    # gate and three other invariants. So corroborate, and make a disagreement
-    # loud: a tree holding the kit-only witness is the kit with a stray key, not
-    # an adopter. Found by an adversarial review lens on PR #705, which injected
-    # a fake `kit_commit` beside a real `.claude/settings.json` edit and got
-    # three skips where the drift gate should have fired.
+    # `kit_commit` is unauthenticated. When the kit-only witness is present,
+    # fail on that stray baseline key instead of skipping source assertions.
     if looks_like_kit_source():
         pytest.fail(
             f"{REPO_ROOT / 'kit-manifest.json'} carries `kit_commit`, which only "
