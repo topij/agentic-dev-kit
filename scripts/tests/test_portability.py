@@ -22,6 +22,7 @@ from types import ModuleType
 
 import pytest
 import yaml
+from conftest import generated_adapter_source, require_kit_source
 
 ENGINE_DIR = Path(__file__).resolve().parent.parent
 
@@ -1725,6 +1726,11 @@ def _assert_codex_workflow_adapter(
 
 
 def test_codex_skill_adapters_are_valid_and_share_workflows() -> None:
+    require_kit_source()
+    _assert_codex_skill_adapters_are_valid_and_share_workflows()
+
+
+def _assert_codex_skill_adapters_are_valid_and_share_workflows() -> None:
     for skill_path in (REPO_ROOT / ".agents" / "skills").glob("*/SKILL.md"):
         name = skill_path.parent.name
         shared_path = f"docs/agentic-dev-kit/workflows/{name}.md"
@@ -2647,6 +2653,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
     "kit-manifest.json",
 )
 def test_bookend_integrations_are_shared_thin_declared_and_manifested() -> None:
+    require_kit_source()
     manifest = json.loads(
         (REPO_ROOT / "kit-manifest.json").read_text(encoding="utf-8")
     )["files"]
@@ -2766,12 +2773,12 @@ def test_parallel_identity_chain_files_are_manifest_owned_for_adopter_upgrade() 
     ".agents/skills/session-start",
     ".agents/skills/wrap-up",
 )
-def test_bookend_adapter_hostile_mutations_are_rejected() -> None:
+def test_bookend_adapter_hostile_mutations_are_rejected(adapter_source: Path) -> None:
     for name in ("session-start", "wrap-up"):
         shared_path = f"docs/agentic-dev-kit/workflows/{name}.md"
         paths = (
-            REPO_ROOT / ".claude" / "commands" / f"{name}.md",
-            REPO_ROOT / ".agents" / "skills" / name / "SKILL.md",
+            adapter_source / ".claude" / "commands" / f"{name}.md",
+            adapter_source / ".agents" / "skills" / name / "SKILL.md",
         )
         for runtime, path in zip(("claude", "codex"), paths, strict=True):
             adapter = path.read_text(encoding="utf-8")
@@ -3040,12 +3047,12 @@ def test_runtime_parity_rejects_missing_or_stale_bookend_adapter(
     monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", repo)
 
     with pytest.raises(AssertionError):
-        test_runtime_parity_contract_covers_workflows_and_adapters()
+        _assert_runtime_parity_contract_covers_workflows_and_adapters()
 
     skill.write_text(original, encoding="utf-8")
     skill.unlink()
     with pytest.raises((AssertionError, FileNotFoundError)):
-        test_runtime_parity_contract_covers_workflows_and_adapters()
+        _assert_runtime_parity_contract_covers_workflows_and_adapters()
 
 
 def _triage_adapter_body(runtime: str) -> str:
@@ -13798,15 +13805,20 @@ def test_runtime_parity_rejects_a_missing_or_stale_systemize_adapter(
     monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", repo)
 
     with pytest.raises(AssertionError):
-        test_runtime_parity_contract_covers_workflows_and_adapters()
+        _assert_runtime_parity_contract_covers_workflows_and_adapters()
 
     shutil.rmtree(repo / ".agents" / "skills" / "post-merge-systemize")
     with pytest.raises((AssertionError, FileNotFoundError)):
-        test_runtime_parity_contract_covers_workflows_and_adapters()
+        _assert_runtime_parity_contract_covers_workflows_and_adapters()
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/runtime-parity.md")
 def test_runtime_parity_contract_covers_workflows_and_adapters() -> None:
+    require_kit_source()
+    _assert_runtime_parity_contract_covers_workflows_and_adapters()
+
+
+def _assert_runtime_parity_contract_covers_workflows_and_adapters() -> None:
     parity_doc = REPO_ROOT / "docs" / "agentic-dev-kit" / "runtime-parity.md"
     text = parity_doc.read_text(encoding="utf-8")
     assert text.startswith("---\n")
@@ -14220,10 +14232,7 @@ def _runtime_parity_fixture(tmp_path: Path) -> Path:
         REPO_ROOT / "docs" / "agentic-dev-kit" / "runtime-parity.md",
         doctrine_dir / "runtime-parity.md",
     )
-    (repo / ".claude").mkdir()
-    shutil.copytree(REPO_ROOT / ".claude" / "commands", repo / ".claude" / "commands")
-    (repo / ".agents").mkdir()
-    shutil.copytree(REPO_ROOT / ".agents" / "skills", repo / ".agents" / "skills")
+    generated_adapter_source(repo)
     return repo
 
 
@@ -14237,12 +14246,12 @@ def test_runtime_parity_contract_distinguishes_a_decline_from_a_removal(
     (repo / "kit-manifest.json").write_text(json.dumps(baseline), encoding="utf-8")
     monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", repo)
 
-    test_runtime_parity_contract_covers_workflows_and_adapters()
+    _assert_runtime_parity_contract_covers_workflows_and_adapters()
 
     baseline["not_installed"] = []
     (repo / "kit-manifest.json").write_text(json.dumps(baseline), encoding="utf-8")
     with pytest.raises(AssertionError):
-        test_runtime_parity_contract_covers_workflows_and_adapters()
+        _assert_runtime_parity_contract_covers_workflows_and_adapters()
 
 
 def test_runtime_parity_contract_rejects_a_gap_with_no_real_surface(
@@ -14264,7 +14273,7 @@ def test_runtime_parity_contract_rejects_a_gap_with_no_real_surface(
     monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", repo)
 
     with pytest.raises(AssertionError):
-        test_runtime_parity_contract_covers_workflows_and_adapters()
+        _assert_runtime_parity_contract_covers_workflows_and_adapters()
 
 
 def test_runtime_parity_contract_allows_a_codex_only_gap(
@@ -14294,8 +14303,8 @@ def test_runtime_parity_contract_allows_a_codex_only_gap(
     (repo / ".claude" / "commands" / "session-start.md").unlink()
     monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", repo)
 
-    test_codex_skill_adapters_are_valid_and_share_workflows()
-    test_runtime_parity_contract_covers_workflows_and_adapters()
+    _assert_codex_skill_adapters_are_valid_and_share_workflows()
+    _assert_runtime_parity_contract_covers_workflows_and_adapters()
 
 
 def test_runtime_parity_companion_must_be_referenced_by_its_owner(
@@ -14313,7 +14322,7 @@ def test_runtime_parity_companion_must_be_referenced_by_its_owner(
     monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", repo)
 
     with pytest.raises(AssertionError, match="not referenced by its loaded_by owner"):
-        test_runtime_parity_contract_covers_workflows_and_adapters()
+        _assert_runtime_parity_contract_covers_workflows_and_adapters()
 
 
 def test_shared_lane_contract_has_no_runtime_specific_peer_api() -> None:

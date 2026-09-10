@@ -416,6 +416,7 @@ def test_json_reports_missing_lens_definitions_as_advisory(tmp_path, capsys):
 
 
 def test_shipped_runtime_adapters_equal_the_renderer_for_both_runtimes():
+    require_kit_source()
     statuses = runtime_adapters.compare_adapters(REPO_ROOT, REPO_ROOT)
     actual_paths = {
         path.relative_to(REPO_ROOT).as_posix()
@@ -441,8 +442,10 @@ def test_shipped_runtime_adapters_equal_the_renderer_for_both_runtimes():
 
 
 @pytest.mark.parametrize("slug", ["adopt", "parallel", "pr-watch", "upgrade"])
-def test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned(tmp_path, slug):
-    source = REPO_ROOT
+def test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned(
+    tmp_path, slug, adapter_source
+):
+    source = adapter_source
     adopter = tmp_path / "adopter"
     rel = f".agents/skills/{slug}/SKILL.md"
     source_text = (source / rel).read_text(encoding="utf-8")
@@ -471,13 +474,16 @@ def test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned(tmp_p
     assert "refresh freely" in status.detail
 
 
-def test_authored_adapter_change_is_reported_and_preserved_for_each_runtime(tmp_path):
+def test_authored_adapter_change_is_reported_and_preserved_for_each_runtime(
+    tmp_path, adapter_source
+):
     adopter = tmp_path / "adopter"
-    shutil.copytree(REPO_ROOT / ".claude", adopter / ".claude")
-    shutil.copytree(REPO_ROOT / ".agents", adopter / ".agents")
+    shutil.copytree(adapter_source / ".claude", adopter / ".claude")
+    shutil.copytree(adapter_source / ".agents", adopter / ".agents")
     changed = {
         ".claude/commands/adopt.md",
         ".agents/skills/adopt/SKILL.md",
+        ".agents/skills/wrap-up/SKILL.md",
     }
     for rel in changed:
         path = adopter / rel
@@ -487,7 +493,7 @@ def test_authored_adapter_change_is_reported_and_preserved_for_each_runtime(tmp_
         )
     before = {rel: (adopter / rel).read_bytes() for rel in changed}
 
-    statuses = runtime_adapters.compare_adapters(REPO_ROOT, adopter)
+    statuses = runtime_adapters.compare_adapters(adapter_source, adopter)
     by_path = {status.path: status for status in statuses}
 
     for rel in changed:
@@ -503,7 +509,9 @@ def test_authored_adapter_change_is_reported_and_preserved_for_each_runtime(tmp_
         ("codex", ".agents/skills/adopt/SKILL.md"),
     ],
 )
-def test_adapter_report_preserves_a_symlink_path_as_adopter_owned(tmp_path, runtime, rel):
+def test_adapter_report_preserves_a_symlink_path_as_adopter_owned(
+    tmp_path, runtime, rel, adapter_source
+):
     adopter = tmp_path / "adopter"
     outside = tmp_path / "outside.md"
     outside.write_text("outside\n", encoding="utf-8")
@@ -511,7 +519,7 @@ def test_adapter_report_preserves_a_symlink_path_as_adopter_owned(tmp_path, runt
     path.parent.mkdir(parents=True)
     path.symlink_to(outside)
 
-    statuses = runtime_adapters.compare_adapters(REPO_ROOT, adopter)
+    statuses = runtime_adapters.compare_adapters(adapter_source, adopter)
     status = next(item for item in statuses if item.runtime == runtime and item.path == rel)
 
     assert status.state == "adopter-owned"
@@ -520,14 +528,16 @@ def test_adapter_report_preserves_a_symlink_path_as_adopter_owned(tmp_path, runt
     assert outside.read_text(encoding="utf-8") == "outside\n"
 
 
-def test_adapter_report_preserves_a_symlinked_ancestor_as_adopter_owned(tmp_path):
+def test_adapter_report_preserves_a_symlinked_ancestor_as_adopter_owned(
+    tmp_path, adapter_source
+):
     adopter = tmp_path / "adopter"
     outside = tmp_path / "outside-agents"
     outside.mkdir()
     adopter.mkdir()
     (adopter / ".agents").symlink_to(outside, target_is_directory=True)
 
-    statuses = runtime_adapters.compare_adapters(REPO_ROOT, adopter)
+    statuses = runtime_adapters.compare_adapters(adapter_source, adopter)
     status = next(
         item
         for item in statuses
@@ -539,11 +549,13 @@ def test_adapter_report_preserves_a_symlinked_ancestor_as_adopter_owned(tmp_path
     assert list(outside.iterdir()) == []
 
 
-def test_adapter_report_preserves_a_hardlinked_path_as_adopter_owned(tmp_path):
+def test_adapter_report_preserves_a_hardlinked_path_as_adopter_owned(
+    tmp_path, adapter_source
+):
     adopter = tmp_path / "adopter"
     outside = tmp_path / "outside.md"
     outside.write_text(
-        (REPO_ROOT / ".agents/skills/adopt/SKILL.md").read_text(encoding="utf-8"),
+        (adapter_source / ".agents/skills/adopt/SKILL.md").read_text(encoding="utf-8"),
         encoding="utf-8",
     )
     path = adopter / ".agents/skills/adopt/SKILL.md"
@@ -551,7 +563,7 @@ def test_adapter_report_preserves_a_hardlinked_path_as_adopter_owned(tmp_path):
     path.hardlink_to(outside)
     before = outside.read_bytes()
 
-    statuses = runtime_adapters.compare_adapters(REPO_ROOT, adopter)
+    statuses = runtime_adapters.compare_adapters(adapter_source, adopter)
     status = next(item for item in statuses if item.path == ".agents/skills/adopt/SKILL.md")
 
     assert status.state == "adopter-owned"
@@ -739,25 +751,25 @@ def test_installed_test_targets_refuse_declared_symlinked_ancestor(tmp_path):
 
 
 def test_adapter_report_refuses_a_source_adapter_the_renderer_does_not_own(
-    tmp_path, capsys
+    tmp_path, capsys, adapter_source
 ):
     source = tmp_path / "source"
-    shutil.copytree(REPO_ROOT / ".claude", source / ".claude")
-    shutil.copytree(REPO_ROOT / ".agents", source / ".agents")
+    shutil.copytree(adapter_source / ".claude", source / ".claude")
+    shutil.copytree(adapter_source / ".agents", source / ".agents")
     shutil.copytree(
-        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows",
+        adapter_source / "docs" / "agentic-dev-kit" / "workflows",
         source / "docs" / "agentic-dev-kit" / "workflows",
     )
     path = source / ".claude" / "commands" / "adopt.md"
     path.write_text(path.read_text(encoding="utf-8") + "\nSource drift.\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match="does not equal the current rendered form"):
-        runtime_adapters.compare_adapters(source, REPO_ROOT)
+        runtime_adapters.compare_adapters(source, adapter_source)
 
     code = kit_doctor.main(
         [
             "--root",
-            str(REPO_ROOT),
+            str(adapter_source),
             "--adapter-report",
             "--adapter-source",
             str(source),
@@ -769,24 +781,25 @@ def test_adapter_report_refuses_a_source_adapter_the_renderer_does_not_own(
 
 
 def test_adapter_report_cli_is_read_only_and_does_not_require_adopter_config(
-    tmp_path, capsys
+    tmp_path, capsys, adapter_source
 ):
+    adopter = tmp_path / "empty-adopter"
     code = kit_doctor.main(
         [
             "--root",
-            str(tmp_path),
+            str(adopter),
             "--adapter-report",
             "--adapter-source",
-            str(REPO_ROOT),
+            str(adapter_source),
             "--json",
         ]
     )
-    payload = json.loads(capsys.readouterr().out)
-
-    assert code == 0
+    captured = capsys.readouterr()
+    assert code == 0, captured.err
+    payload = json.loads(captured.out)
     assert payload["adapters"]
     assert {item["state"] for item in payload["adapters"]} == {"missing"}
-    assert list(tmp_path.iterdir()) == []
+    assert not adopter.exists()
 
 
 @pytest.mark.parametrize(

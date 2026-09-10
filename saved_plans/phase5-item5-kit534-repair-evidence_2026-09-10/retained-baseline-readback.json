@@ -1,0 +1,26 @@
+{
+  "observed_at_utc": "2026-09-10T06:05:13.173639+00:00",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "revision": "919a10b4f2ef45879011c9be5e4572e979623864",
+  "retained": [
+    {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+      "revision": "07bacf5bda3b1e7a6718c7d4528336ef81dc2143",
+      "inventory_equal": true,
+      "git_status": ""
+    },
+    {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source",
+      "revision": "8418118e40728c667c32a28a182697139bc7a5ef",
+      "inventory_equal": true,
+      "git_status": ""
+    }
+  ],
+  "original_paths_absent": [
+    "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture",
+    "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source"
+  ],
+  "item5_evidence_ledger_sha256": "5e5c7417574a1e17c8325516e31553f9a75062427344047393ad873a0c66fa69",
+  "replay_unchanged_from": "8418118e40728c667c32a28a182697139bc7a5ef",
+  "replay_tuple_sha256": "99c78b8409ce5b70aa23ff10cfc6c4ee93605d7d9934c7d911b6858658fa5918"
+}

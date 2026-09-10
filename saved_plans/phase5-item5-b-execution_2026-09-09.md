@@ -117,3 +117,9 @@ Phase 6 and the delivered #722 batch in kit #724 remain unchanged.
 **Next session:** review and approve the kit-only #534 repair slice above. Recheck the
 new fixture against its retained inventory before any later approved write; do not
 repeat ITEM5-B setup or reconstruct either original missing path.
+
+
+**Continuation — 2026-09-10:** the operator approved the kit-only repair slice above.
+The [repair record](phase5-item5-kit534-repair_2026-09-10.md) supersedes this record's
+historical approval request and next-session instruction. The retained fixture remains
+subject to its separate update decision; this correction does not renew setup approval.

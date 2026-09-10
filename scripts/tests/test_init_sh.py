@@ -36,7 +36,7 @@ from pathlib import Path
 import pytest
 import yaml
 from _repo_layout import engine_dir, find_repo_root
-from conftest import shipped_registration
+from conftest import require_kit_source, shipped_registration, shipped_test_input
 
 # Every test here asserts on `init.sh`'s behaviour, and an adopter who
 # vendored engines and config has no `init.sh` to assert about. Repairing
@@ -101,8 +101,8 @@ def kit_own_marker() -> str:
     nothing looks for any more. Derived, a rename fails the shipped files that
     still carry the old one, which is the failure that matters.
 
-    Call time, not module scope, for the reason `shipped_config()` gives below:
-    a read that raises during COLLECTION aborts the whole pytest session and
+    Call time, not module scope: a read that raises during COLLECTION aborts
+    the whole pytest session and
     takes unrelated modules down with it (#226/#233), long before
     `kit_repo_only` is consulted."""
     text = (REPO_ROOT / "init.sh").read_text(encoding="utf-8")
@@ -123,17 +123,54 @@ def template_marker() -> str:
 
 
 def shipped_config() -> str:
-    """The kit's own `config/dev-model.yaml`, read at CALL time.
+    """Controlled source config, independent of the adopter's live configuration."""
+    # The JSON array preserves source lines, including comments, as fixture data.
+    return "".join(json.loads(shipped_test_input("init-config.json").read_text(encoding="utf-8")))
 
-    This was a module-scope `read_text()`. Wherever `REPO_ROOT` resolves wrong —
-    a nested engines directory in a tree with no `.git`, which #233 records as
-    not resolvable — it raised during COLLECTION, so pytest aborted the whole
-    session and ran zero tests, taking unrelated modules down with it. That is
-    #226's failure class in a second module, and the reason the `kit_repo_only`
-    marker cannot help: the exception fires at import, long before any marker is
-    consulted. Correctness lens, PR #232 round 3.
-    """
-    return (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
+
+def _replace_config(config: str, old: str, new: str, count: int = -1) -> str:
+    """A hostile fixture edit must land before the installer is exercised."""
+    assert old in config, f"config fixture edit did not match: {old!r}"
+    changed = config.replace(old, new, count)
+    assert changed != config, f"config fixture edit changed nothing: {old!r}"
+    return changed
+
+
+def test_initializer_inputs_match_the_shipped_source() -> None:
+    require_kit_source()
+    assert shipped_config() == (REPO_ROOT / "config/dev-model.yaml").read_text(encoding="utf-8")
+    markers = json.loads(shipped_test_input("entry-point-markers.json").read_text())
+    assert markers == {
+        name: (REPO_ROOT / name).read_text(encoding="utf-8").splitlines()[0]
+        for name in ("AGENTS.md", "CLAUDE.md")
+    }
+
+
+@pytest.mark.parametrize("old, new", [("missing-key", "new"), ("bots", "bots")])
+def test_config_fixture_edits_cannot_silently_do_nothing(old: str, new: str) -> None:
+    with pytest.raises(AssertionError, match="config fixture edit"):
+        _replace_config(shipped_config(), old, new)
+
+
+@pytest.mark.parametrize("name", ["init-config.json", "entry-point-markers.json"])
+def test_missing_initializer_input_is_a_decline_only_outside_the_kit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    import conftest
+
+    monkeypatch.setattr(conftest, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(conftest, "ENGINE_DIR", tmp_path / "scripts/devkit")
+    with pytest.raises(pytest.skip.Exception, match="not vendored"):
+        shipped_test_input(name)
+    witness = tmp_path / conftest.KIT_ONLY_WITNESS
+    witness.parent.mkdir(parents=True)
+    witness.write_text("# source witness\n", encoding="utf-8")
+    try:
+        with pytest.raises(pytest.fail.Exception, match="missing from the kit"):
+            shipped_test_input(name)
+    except pytest.skip.Exception as exc:
+        pytest.fail(f"missing kit input skipped instead of failing: {exc}")
+
 
 # A v1-schema config with no `paths.engines`, so a run must call
 # detect_engines_dir() to stamp it — the same shape test_portability.py migrates.
@@ -289,7 +326,7 @@ def test_installer_adds_the_shared_triage_config_to_an_existing_schema(
 def test_installer_completes_a_partial_triage_section_without_replacing_policy(
     tmp_path: Path,
 ) -> None:
-    config = _without_triage(shipped_config()).replace(
+    config = _replace_config(_without_triage(shipped_config()),
         "\nsystemize:\n",
         "\ntriage:\n"
         "    analysis_tier: expensive  # adopter choice\n"
@@ -322,7 +359,7 @@ def test_installer_completes_a_partial_triage_section_without_replacing_policy(
 def test_installer_completes_triage_before_a_hyphenated_top_level_section(
     tmp_path: Path,
 ) -> None:
-    config = _without_triage(shipped_config()).replace(
+    config = _replace_config(_without_triage(shipped_config()),
         "\nsystemize:\n",
         "\ntriage:\n"
         "  analysis_tier: expensive\n\n"
@@ -352,7 +389,7 @@ def test_installer_preserves_prompted_key_beneath_extended_top_level_section(
     tmp_path: Path,
     section_name: str,
 ) -> None:
-    config = shipped_config().replace(
+    config = _replace_config(shipped_config(),
         "\nnotify:\n",
         f"\n{section_name}:\n  backend: preserve-me\n\nnotify:\n",
         1,
@@ -385,7 +422,7 @@ def test_installer_refuses_triage_section_keys_it_cannot_migrate(
     tmp_path: Path,
     section_line: str,
 ) -> None:
-    config = shipped_config().replace("triage:\n", section_line, 1)
+    config = _replace_config(shipped_config(), "triage:\n", section_line, 1)
     repo = _fixture(tmp_path, config=config)
 
     result = _run_init(repo, check=False)
@@ -411,7 +448,7 @@ def test_installer_rejects_unsafe_triage_children_before_migration(
     tmp_path: Path,
     triage_block: str,
 ) -> None:
-    config = _without_triage(shipped_config()).replace(
+    config = _replace_config(_without_triage(shipped_config()),
         "systemize:\n", triage_block + "systemize:\n", 1
     )
     repo = _fixture(tmp_path, config=config)
@@ -449,7 +486,7 @@ def test_installer_rejects_unsafe_partial_triage_values_before_migration(
     tmp_path: Path,
     triage_block: str,
 ) -> None:
-    config = _without_triage(shipped_config()).replace(
+    config = _replace_config(_without_triage(shipped_config()),
         "systemize:\n", triage_block + "systemize:\n", 1
     )
     repo = _fixture(tmp_path, config=config)
@@ -479,7 +516,7 @@ def test_installer_adds_the_shared_systemize_config_to_an_existing_schema(
 def test_installer_preserves_an_adopter_owned_partial_systemize_section(
     tmp_path: Path,
 ) -> None:
-    config = _without_systemize(shipped_config()).replace(
+    config = _replace_config(_without_systemize(shipped_config()),
         "\ntracker:\n",
         "\nsystemize:\n  analysis_tier: custom\n\ntracker:\n",
         1,
@@ -505,7 +542,7 @@ def test_installer_preserves_an_adopter_owned_partial_systemize_section(
 def test_installer_refuses_systemize_section_keys_it_cannot_migrate(
     tmp_path: Path, section_line: str,
 ) -> None:
-    config = shipped_config().replace("systemize:\n", section_line, 1)
+    config = _replace_config(shipped_config(), "systemize:\n", section_line, 1)
     repo = _fixture(tmp_path, config=config)
 
     result = _run_init(repo, check=False)
@@ -525,7 +562,7 @@ def test_installer_refuses_systemize_section_keys_it_cannot_migrate(
 def test_installer_refuses_block_style_systemize_operator_logins(
     tmp_path: Path, key_line: str,
 ) -> None:
-    config = shipped_config().replace(
+    config = _replace_config(shipped_config(),
         "  operator_logins: []\n",
         key_line + "    - topij\n    - second-operator\n",
         1,
@@ -551,7 +588,7 @@ def test_installer_refuses_block_style_systemize_operator_logins(
 def test_installer_refuses_operator_login_keys_it_cannot_rewrite(
     tmp_path: Path, key_line: str,
 ) -> None:
-    config = shipped_config().replace(
+    config = _replace_config(shipped_config(),
         "  operator_logins: []\n",
         key_line,
         1,
@@ -641,7 +678,7 @@ def test_installer_accepts_unowned_bare_top_level_key_with_hyphen(
 def test_installer_preserves_supported_operator_login_flow_items(
     tmp_path: Path,
 ) -> None:
-    config = shipped_config().replace(
+    config = _replace_config(shipped_config(),
         "  operator_logins: []\n",
         "  operator_logins: [topij, \"123\", 'git.lab']  # trusted sources\n",
         1,
@@ -963,7 +1000,7 @@ def test_rerun_normalizes_single_quoted_bots_item(tmp_path: Path) -> None:
     """A hand-written `bots: ['coderabbit']` is valid YAML naming the reviewer
     `coderabbit` — the double-quote-only strip re-serialized it as the literal
     name `'coderabbit'`, which pr_watch silently fails to match (panel, #87)."""
-    config = shipped_config().replace("  bots: [coderabbit]", "  bots: ['coderabbit']")
+    config = _replace_config(shipped_config(), "  bots: [coderabbit]", "  bots: ['coderabbit']")
     assert "  bots: ['coderabbit']" in config
     repo = _fixture(tmp_path, config=config)
 
@@ -991,7 +1028,7 @@ def test_rerun_drops_yaml_significant_chars_from_bots_items(tmp_path: Path) -> N
     """A quote or backslash inside a bots item would corrupt the whole flow
     list when re-wrapped; such characters cannot appear in a real bot handle
     and are dropped so the config stays loadable (CodeRabbit on #87)."""
-    config = shipped_config().replace('  bots: [coderabbit]', '  bots: ["a\\"b"]')
+    config = _replace_config(shipped_config(), '  bots: [coderabbit]', '  bots: ["a\\"b"]')
     assert '  bots: ["a\\"b"]' in config
     repo = _fixture(tmp_path, config=config)
 
@@ -1365,7 +1402,7 @@ def test_agents_md_renders_the_configured_protected_branch(tmp_path: Path) -> No
     would pass with the substitution deleted: the template contains no literal
     `main`, so that assertion would have failed. The test is right; the reason
     given for it was not.)"""
-    config = shipped_config().replace("protected_branch: main", "protected_branch: trunk-9f2a")
+    config = _replace_config(shipped_config(), "protected_branch: main", "protected_branch: trunk-9f2a")
     repo = _fixture(tmp_path, config=config, templates=True)
 
     _run_init(repo)
@@ -1421,6 +1458,7 @@ def test_kit_own_entry_points_carry_the_marker(entry_point: str) -> None:
 
     Line 1 specifically, because that is all `_seedable` reads."""
     marker = kit_own_marker()
+    require_kit_source()
     path = REPO_ROOT / entry_point
     assert path.is_file(), f"the kit must ship its own {entry_point}"
     first_line = path.read_text(encoding="utf-8").split("\n", 1)[0]
@@ -1444,9 +1482,7 @@ def test_kit_own_marked_file_is_reseeded_over(tmp_path: Path) -> None:
     The first version of this test did exactly that and failed against correct
     code."""
     config = (
-        shipped_config()
-        .replace("name: agentic-dev-kit", "name: acme-q7")
-        .replace("handoff: docs/kit-handoff.md", "handoff: docs/plan-q7.md")
+        _replace_config(_replace_config(shipped_config(), "name: agentic-dev-kit", "name: acme-q7"), "handoff: docs/kit-handoff.md", "handoff: docs/plan-q7.md")
     )
     assert "acme-q7" in config and "docs/plan-q7.md" in config, (
         "fixture config did not take the distinctive values — the substitutions "
@@ -1659,7 +1695,7 @@ def test_the_real_marker_comment_is_still_seedable(tmp_path: Path, target: str) 
     points would then never be rendered over in an adopter, which is the whole
     mechanism. Uses the SHIPPED line 1 verbatim rather than a reconstruction."""
     repo = _fixture(tmp_path, config=shipped_config(), templates=True)
-    shipped_first_line = (REPO_ROOT / target).read_text(encoding="utf-8").split("\n", 1)[0]
+    shipped_first_line = json.loads(shipped_test_input("entry-point-markers.json").read_text())[target]
     assert kit_own_marker() in shipped_first_line  # positive control on the fixture
     (repo / target).write_text(f"{shipped_first_line}\n# the kit's own\n", encoding="utf-8")
 
@@ -2506,7 +2542,7 @@ def test_foreign_tracker_refusal_survives_a_custom_child_mapping(
     after ``custom.section:``. The following ``project_name`` was then invisible,
     bypassing the non-interactive foreign-tracker write boundary.
     """
-    config = shipped_config().replace(
+    config = _replace_config(shipped_config(),
         "tracker:\n",
         "tracker:\n  custom.section:\n    retained: adopter-value\n",
         1,
@@ -2532,7 +2568,7 @@ def test_foreign_tracker_refusal_survives_a_custom_child_mapping(
 def test_installer_refuses_duplicate_tracker_authority_before_writing(
     tmp_path: Path,
 ) -> None:
-    config = shipped_config().replace(
+    config = _replace_config(shipped_config(),
         '  project_name: "topij/agentic-dev-kit"\n',
         '  project_name: "topij/agentic-dev-kit"\n'
         '  project_name: "acme/foreign"\n',
@@ -2578,7 +2614,7 @@ def test_installer_refuses_nested_flow_path_decoy_before_outside_write(
     original_handoff = next(
         line for line in shipped_config().splitlines() if line.startswith("  handoff:")
     )
-    config = shipped_config().replace(
+    config = _replace_config(shipped_config(),
         f"{original_handoff}\n",
         opening + f'  handoff: "{outside_handoff}"\n' + closing,
         1,
@@ -2626,7 +2662,7 @@ def test_installer_refuses_multiline_quoted_path_decoy_before_outside_write(
     original_handoff = next(
         line for line in shipped_config().splitlines() if line.startswith("  handoff:")
     )
-    config = shipped_config().replace(
+    config = _replace_config(shipped_config(),
         f"{original_handoff}\n",
         f"  metadata: {prefix}{quote}retained text\n"
         f"  handoff: {outside_handoff}{quote}\n",
@@ -2691,7 +2727,7 @@ def test_installer_refuses_multiline_quote_decoy_in_triage(
 def test_installer_refuses_block_children_under_a_prompt_owned_value(
     tmp_path: Path, replacement: str
 ) -> None:
-    config = shipped_config().replace("  bots: [coderabbit]", replacement, 1)
+    config = _replace_config(shipped_config(), "  bots: [coderabbit]", replacement, 1)
     assert yaml.safe_load(config)["review"]["bots"] == ["coderabbit"]
     repo = _fixture(tmp_path, config=config, git=True, templates=True)
     existing = {
@@ -2737,7 +2773,7 @@ def test_installer_refuses_block_children_under_a_prompt_owned_value(
 def test_installer_refuses_commented_block_children_under_a_line_owned_value(
     tmp_path: Path, old_line: str, replacement: str, section: str, key: str
 ) -> None:
-    config = shipped_config().replace(old_line, replacement, 1)
+    config = _replace_config(shipped_config(), old_line, replacement, 1)
     parsed = yaml.safe_load(config)
     if section == "review":
         assert parsed[section][key] == ["coderabbit"]
@@ -2783,7 +2819,7 @@ def test_installer_refuses_unsupported_yaml_syntax_on_a_line_owned_path(
     original = next(
         line for line in shipped_config().splitlines() if line.startswith("  handoff:")
     )
-    config = prefix + shipped_config().replace(original, f"  handoff: {value}", 1)
+    config = prefix + _replace_config(shipped_config(), original, f"  handoff: {value}", 1)
     assert yaml.safe_load(config)["paths"]["handoff"] == "docs/kit-handoff.md"
     repo = _fixture(tmp_path, config=config, git=True, templates=True)
     existing = {
@@ -2821,7 +2857,7 @@ def test_installer_refuses_unsupported_yaml_syntax_on_a_line_owned_path(
 def test_installer_refuses_wrong_node_types_for_line_owned_fields_before_writing(
     tmp_path: Path, old_line: str, replacement: str
 ) -> None:
-    config = shipped_config().replace(old_line, replacement, 1)
+    config = _replace_config(shipped_config(), old_line, replacement, 1)
     assert config != shipped_config()
     repo = _fixture(tmp_path, config=config, git=True, templates=True)
     outside_dir = tmp_path / "outside"
@@ -2912,7 +2948,7 @@ def test_installer_refuses_an_alias_on_tracker_authority_before_writing(
 ) -> None:
     config = (
         "tracker_project: &tracker_project topij/agentic-dev-kit\n"
-        + shipped_config().replace(
+        + _replace_config(shipped_config(),
             '  project_name: "topij/agentic-dev-kit"',
             "  project_name: *tracker_project",
             1,
@@ -3153,7 +3189,7 @@ def test_init_sh_ships_the_same_lens_compute_values_as_the_reference_config():
         (REPO_ROOT / "init.sh").read_text(encoding="utf-8"), unescape=True
     )
     cfg_comment, cfg_values = _lens_compute_block(
-        (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
+        shipped_config()
     )
 
     assert init_values == cfg_values
@@ -3187,7 +3223,7 @@ def test_both_lens_compute_comments_declare_the_carrier_per_key_per_runtime():
         (REPO_ROOT / "init.sh").read_text(encoding="utf-8"), unescape=True
     )
     cfg_comment, _ = _lens_compute_block(
-        (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
+        shipped_config()
     )
     for surface, comment in (("init.sh", init_comment), ("config/dev-model.yaml", cfg_comment)):
         assert "MECHANICAL" in comment, f"{surface} must declare a status per key"
@@ -3239,7 +3275,7 @@ def test_both_runtime_mappings_comments_declare_the_status_per_runtime():
         (
             "config/dev-model.yaml",
             _runtime_mappings_comment(
-                (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
+                shipped_config()
             ),
         ),
     )
@@ -3299,7 +3335,7 @@ def test_init_sh_seeds_a_lens_agent_definition_per_shipped_lens(tmp_path: Path) 
     for lens in ("adversarial", "correctness"):
         seeded = repo / ".claude" / "agents" / f"{lens}.md"
         assert seeded.is_file(), out.stdout
-        assert seeded.read_text(encoding="utf-8") == _generated_definition(lens)
+        assert seeded.read_text(encoding="utf-8") == _generated_definition(lens, repo)
         assert f"seeded .claude/agents/{lens}.md" in out.stdout
 
 
@@ -3308,7 +3344,7 @@ def test_init_sh_seeds_the_adopters_engine_path_into_the_definition(tmp_path: Pa
     regenerating command names `scripts/panel_prompt.py`, which that tree does not
     have. Kills: a literal `scripts/` in init.sh's heredoc, or the generator
     reading `paths.engines` while init.sh does not."""
-    config = shipped_config().replace("  engines: scripts\n", "  engines: scripts/devkit\n")
+    config = _replace_config(shipped_config(), "  engines: scripts\n", "  engines: scripts/devkit\n")
     assert "engines: scripts/devkit" in config
     repo = _fixture(tmp_path, config=config, git=True)
     _run_init(repo)
@@ -3329,7 +3365,7 @@ def test_init_sh_seeds_an_engine_path_sed_would_otherwise_mangle(
     escaped for that position. Kills: dropping the escape."""
     # A plain scalar: the kit's YAML reader hands a double-quoted value through
     # without unescaping, so a quoted backslash would test the fixture, not the seed.
-    config = shipped_config().replace("  engines: scripts\n", f"  engines: {engines}\n")
+    config = _replace_config(shipped_config(), "  engines: scripts\n", f"  engines: {engines}\n")
     assert f"engines: {engines}\n" in config
     repo = _fixture(tmp_path, config=config, git=True)
     out = _run_init(repo)
@@ -3348,7 +3384,7 @@ def test_init_sh_declines_to_seed_a_path_the_quoted_description_cannot_carry(
     would diverge from the generator's bytes. init.sh declines, says so, and names
     the generator. Kills: dropping the `case` guard (the seeded file then differs
     from the generator, or is not valid YAML)."""
-    config = shipped_config().replace("  engines: scripts\n", f"  engines: {engines}\n")
+    config = _replace_config(shipped_config(), "  engines: scripts\n", f"  engines: {engines}\n")
     repo = _fixture(tmp_path, config=config, git=True)
     out = _run_init(repo)
     assert out.returncode == 0
@@ -3378,7 +3414,7 @@ def test_init_sh_never_rewrites_an_existing_lens_agent_definition(tmp_path: Path
 def test_init_sh_seeds_only_lenses_the_roster_names(tmp_path: Path) -> None:
     """A renamed roster gets no stray definition: a file for a lens nothing
     configures would be an agent nothing launches, carrying compute nothing set."""
-    config = shipped_config().replace("      - name: correctness\n", "      - name: what-it-says\n")
+    config = _replace_config(shipped_config(), "      - name: correctness\n", "      - name: what-it-says\n")
     repo = _fixture(tmp_path, config=config, git=True)
     _run_init(repo)
     assert (repo / ".claude" / "agents" / "adversarial.md").is_file()

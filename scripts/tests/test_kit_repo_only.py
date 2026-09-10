@@ -69,6 +69,63 @@ def test_probe():
 """
 
 
+@pytest.mark.parametrize("installed", [False, True])
+def test_generated_adapter_fixture_declares_its_renderer_dependency(tmp_path, installed):
+    if installed:
+        from conftest import require_kit_paths
+
+        renderer_path = ENGINE_DIR / "lib/runtime_adapters.py"
+        require_kit_paths(renderer_path.relative_to(REPO_ROOT).as_posix())
+    root = _tree(tmp_path, """
+from conftest import generated_adapter_source
+
+
+def test_probe(tmp_path):
+    source = generated_adapter_source(tmp_path / "source")
+    assert (source / ".agents/skills/wrap-up/SKILL.md").is_file()
+""")
+    if installed:
+        library = root / "scripts/devkit/lib"
+        library.mkdir()
+        shutil.copy2(ENGINE_DIR / "lib/runtime_adapters.py", library / "runtime_adapters.py")
+    out = _run(root)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert ("1 passed" if installed else "1 skipped") in out.stdout, out.stdout
+    if not installed:
+        assert "scripts/devkit/lib/runtime_adapters.py" in out.stdout, out.stdout
+
+
+@pytest.mark.parametrize("renderer_present", [False, True])
+def test_renderer_dependency_probe_obeys_the_declared_installation(tmp_path, renderer_present):
+    root = _tree(tmp_path, "")
+    copied = root / "scripts/devkit/tests/test_kit_repo_only.py"
+    shutil.copy2(Path(__file__), copied)
+    if renderer_present:
+        library = root / "scripts/devkit/lib"
+        library.mkdir()
+        # The probe checks dependency availability; its enclosing installation
+        # supplies a stand-in so this regression test needs no vendored renderer.
+        (library / "runtime_adapters.py").write_text(
+            '_CURRENT_CONTEXTS = {"codex": {"wrap-up": ""}}\n'
+            'def _adapter_path(runtime, slug):\n'
+            '    return f".agents/skills/{slug}/SKILL.md"\n'
+            'def render_adapter(runtime, slug, description, shared):\n'
+            '    return description + "\\n"\n',
+            encoding="utf-8",
+        )
+    out = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "--no-header", "-rs",
+         "scripts/devkit/tests/test_kit_repo_only.py::"
+         "test_generated_adapter_fixture_declares_its_renderer_dependency"],
+        cwd=root, capture_output=True, text=True, check=False,
+    )
+    assert out.returncode == 0, out.stdout + out.stderr
+    expected = "2 passed" if renderer_present else "1 passed, 1 skipped"
+    assert expected in out.stdout, out.stdout
+    if not renderer_present:
+        assert "scripts/devkit/lib/runtime_adapters.py" in out.stdout, out.stdout
+
+
 def test_a_marker_naming_an_absent_path_skips(tmp_path):
     root = _tree(tmp_path, PROBE.format(paths='"init.sh"'))
     out = _run(root)

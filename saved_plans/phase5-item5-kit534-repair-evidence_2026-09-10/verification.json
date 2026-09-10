@@ -1,0 +1,113 @@
+{
+  "runs": [
+    {
+      "date": "2026-09-10",
+      "argv": [
+        "make",
+        "test"
+      ],
+      "cwd": "/Users/topi/Coding/agentic-dev-kit",
+      "source_pin": "85205bb491ce7ad09b7b3e3ab1e6c3027b19c363",
+      "revision": "85205bb491ce7ad09b7b3e3ab1e6c3027b19c363",
+      "environment": {
+        "DEVKIT_STATE_ROOT": "/private/tmp/kit534-repair-20260910-3pWV3M/source-state"
+      },
+      "exit_code": 2,
+      "pytest_summary": "1 failed, 2493 passed, 1 skipped in 449.64s (0:07:29)",
+      "failure_nodes": [
+        "FAILED scripts/tests/test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero"
+      ],
+      "log": "make-test-85205bb.log",
+      "log_sha256": "f48807244a4448529e9fd8fbf20fb80fe0b1fbacef4501e1ce09b2a7e2f48444"
+    },
+    {
+      "date": "2026-09-10",
+      "argv": [
+        "uv",
+        "run",
+        "--with",
+        "pytest",
+        "--with",
+        "pyyaml",
+        "python",
+        "-B",
+        "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/run_installed_tests.py",
+        "--root",
+        "/private/tmp/kit534-repair-20260910-3pWV3M/installed"
+      ],
+      "cwd": "/private/tmp/kit534-repair-20260910-3pWV3M/installed",
+      "source_pin": "85205bb491ce7ad09b7b3e3ab1e6c3027b19c363",
+      "revision": "0e04147a7dbeed332f8e589ac0dd0c7ea5b20bc9",
+      "environment": {
+        "DEVKIT_STATE_ROOT": "/private/tmp/kit534-repair-20260910-3pWV3M/installed-state"
+      },
+      "exit_code": 0,
+      "pytest_summary": "2125 passed, 128 skipped in 428.71s (0:07:08)",
+      "failure_nodes": [],
+      "log": "installed-suite-85205bb.log",
+      "log_sha256": "6a9affe70396b05251da3fa81f08de68e6c4946232c71ca65236474739ceb21a"
+    },
+    {
+      "date": "2026-09-10",
+      "argv": [
+        "uv",
+        "run",
+        "--with",
+        "pytest",
+        "--with",
+        "pyyaml",
+        "python",
+        "-B",
+        "-m",
+        "pytest",
+        "scripts/devkit/tests/test_kit_repo_only.py",
+        "-q"
+      ],
+      "cwd": "/private/tmp/kit534-repair-20260910-3pWV3M/installed",
+      "source_pin": "919a10b4f2ef45879011c9be5e4572e979623864",
+      "revision": "af217e63906d0c398474828ddf75770c9b8ba7db",
+      "environment": {
+        "DEVKIT_STATE_ROOT": "/private/tmp/kit534-repair-20260910-3pWV3M/installed-refinement-state"
+      },
+      "exit_code": 0,
+      "pytest_summary": "19 passed, 49 skipped in 5.28s",
+      "failure_nodes": [],
+      "log": "installed-refinement-tests.log",
+      "log_sha256": "615fef0f995f4fee69141e81447c7038d16b207dde93f9ac766dcb35cdaab712"
+    },
+    {
+      "date": "2026-09-10",
+      "argv": [
+        "make",
+        "test"
+      ],
+      "cwd": "/private/tmp/kit534-repair-20260910-3pWV3M/source-919a10b",
+      "source_pin": "919a10b4f2ef45879011c9be5e4572e979623864",
+      "revision": "919a10b4f2ef45879011c9be5e4572e979623864",
+      "environment": {
+        "DEVKIT_STATE_ROOT": "/private/tmp/kit534-repair-20260910-3pWV3M/final-source-state"
+      },
+      "exit_code": 2,
+      "pytest_summary": "1 failed, 2495 passed, 1 skipped in 419.85s (0:06:59)",
+      "failure_nodes": [
+        "FAILED scripts/tests/test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero"
+      ],
+      "log": "make-test-919a10b.log",
+      "log_sha256": "c32605dde3def8d1df60fdc34b158a86e1b4b1c8352c03feaab772bb037025c9"
+    }
+  ],
+  "full_suites_serial": true,
+  "synthetic_install_status_after_checks": "",
+  "final_source_status_after_checks": "",
+  "setup_argv": [
+    "python3",
+    "-B",
+    "/private/tmp/kit534-repair-20260910-3pWV3M/build_installed.py"
+  ],
+  "setup_cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "setup_driver": "setup-driver.py.txt",
+  "setup_roots": "roots.json",
+  "retained_fixture_updated": false,
+  "client_exercise_performed": false,
+  "source_393_separate": true
+}

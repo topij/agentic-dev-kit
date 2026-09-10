@@ -1,0 +1,518 @@
+{
+  "source_pin": "85205bb491ce7ad09b7b3e3ab1e6c3027b19c363",
+  "installed_pin": "0e04147a7dbeed332f8e589ac0dd0c7ea5b20bc9",
+  "root": "/private/tmp/kit534-repair-20260910-3pWV3M/installed",
+  "command": "",
+  "copy_ledger": [
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/agentic-dev-kit/adopting-into-a-linted-repo.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/agentic-dev-kit/adopting-into-a-linted-repo.md",
+      "sha256": "c6c74e8cc3f80fe7ce6d88b34845e627a3800bc6c8cca10f57692fece4d16eab"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/agentic-dev-kit/fallback-review-panel-evidence.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/agentic-dev-kit/fallback-review-panel-evidence.md",
+      "sha256": "645fcd50771351823ba1f3512bc483e404fd1a8337cc14bf9dd0333689640d3b"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/agentic-dev-kit/fallback-review-panel.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/agentic-dev-kit/fallback-review-panel.md",
+      "sha256": "b2c35c612a13e4b19fdf1ea9a73f0e7604229d2eca3e1904014dd99478cdeb1e"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/agentic-dev-kit/runtime-parity.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/agentic-dev-kit/runtime-parity.md",
+      "sha256": "cdf5a8a1fbd97decb25acb813bc1c7b753e4569e5b1280a4fdd4142e581f9efc"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/agentic-dev-kit/safety-critical-changes.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/agentic-dev-kit/safety-critical-changes.md",
+      "sha256": "6dc6815ffb7fd89f00409dbd9ae620522214d0b97117ea8a0d09bf0d2344b365"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/agentic-dev-kit/workflows/adopt.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/agentic-dev-kit/workflows/adopt.md",
+      "sha256": "83794fdfd9534ba7760cdd7e65335f2d21e65b81651f8ebee1295dddf065fcdf"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/agentic-dev-kit/workflows/parallel-headless.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/agentic-dev-kit/workflows/parallel-headless.md",
+      "sha256": "8b0f2cb8b923449122721aa1d4d2f64c0babf4b4621aebd015cdacf68e8767bf"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/agentic-dev-kit/workflows/parallel.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/agentic-dev-kit/workflows/parallel.md",
+      "sha256": "6b1d4246ce89999a900e34a2986cb1d0047d738684f33c45ce82bb13c4f8689a"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/agentic-dev-kit/workflows/post-merge-systemize.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/agentic-dev-kit/workflows/post-merge-systemize.md",
+      "sha256": "0995bc61338fd3c4919b74f1bdad72823bd4fc1224bd81a9dcfdb6faad40364b"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/agentic-dev-kit/workflows/pr-watch.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/agentic-dev-kit/workflows/pr-watch.md",
+      "sha256": "4618211f4b3055b3327ba174d180c0c6282d7e4c63d0605c962c7e16cd7d60f0"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/agentic-dev-kit/workflows/session-start.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/agentic-dev-kit/workflows/session-start.md",
+      "sha256": "f280ee4eb9e8aa37d277aaeb3806b34d4377b5afe149f8063ad25eb7e66d2a2a"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/agentic-dev-kit/workflows/triage-friction-log.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/agentic-dev-kit/workflows/triage-friction-log.md",
+      "sha256": "af4b843d896063084139d77193e8435f761b979afd57cf396d5e47bbec14e3a7"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/agentic-dev-kit/workflows/upgrade.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/agentic-dev-kit/workflows/upgrade.md",
+      "sha256": "2cad70fa094ebc01f78e835784b2f84ee9ffd6b56a42d3d039c5995e42d4bf37"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/agentic-dev-kit/workflows/wrap-up.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/agentic-dev-kit/workflows/wrap-up.md",
+      "sha256": "e88cf927424dfe861e34a0ca6661149c882058015f112f29dbd0d335b78368e7"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/templates/AGENTS.md.tmpl",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/templates/AGENTS.md.tmpl",
+      "sha256": "e3794b399331a16138e72c62ee74d7085bd6a5fe14e10e45e4c40ef91cf41a6b"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/templates/CLAUDE.md.tmpl",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/templates/CLAUDE.md.tmpl",
+      "sha256": "e3195e5484d13f90122aa5ffacd9192e07b8445f5f0ab0cd44feced058fd23b3"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/templates/friction-log-archive.md.tmpl",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/templates/friction-log-archive.md.tmpl",
+      "sha256": "af4a138e4a5ebe5634c55e7e417cd6b9f362bf3a35182b033f72876cd88180cf"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/templates/friction-log.md.tmpl",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/templates/friction-log.md.tmpl",
+      "sha256": "1e5fa714719cf147c03d03569e875e32a843c4b9f189025415d35dc2c326a062"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/templates/handoff-history.md.tmpl",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/templates/handoff-history.md.tmpl",
+      "sha256": "111cf71a4c9b2a296f4fcf5ea02c6516907710e5b4fe0a7b3074f444f862ae69"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/templates/handoff.md.tmpl",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/templates/handoff.md.tmpl",
+      "sha256": "1654465836a9e70a6e81d76208783e9a12d65343d1e9c3091f1d30c25a437ce7"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/init.sh",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/init.sh",
+      "sha256": "5cce07ddf5231d1944c883261f985d492530c2fa3472d992362a891aa5f17837"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/archive_plan_sessions.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/archive_plan_sessions.py",
+      "sha256": "7d27ff31f4eaa7edef57e35a15f8745318cec41ca1228812207a9812f3b4e37b"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/check_doc_budget.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/check_doc_budget.py",
+      "sha256": "013c1fa1e20763c9d99c8c2153b07723b1cda9a7b8c2dd9c2e78a6ed6a9d007c"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/check_memory_budget.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/check_memory_budget.py",
+      "sha256": "5c385491289433b810b87167459015a3d23617accb5c317c0b539b879c1e1162"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/conftest.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/conftest.py",
+      "sha256": "c2076c72a633fdd2d4e9991cf07ae2dda6c1747a1fe865a34a7fea013bd574c4"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/dev_session.sh",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/dev_session.sh",
+      "sha256": "f696372d912ba5f9ab9bbbbd3ea2a14689ea8c9fdda57e1c00aa5962d376012f"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/hooks/pr_followup_hook.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/hooks/pr_followup_hook.py",
+      "sha256": "23bfa71eb732a12ac73976fff7c6b3baec28cb94e99e8ef9408b856d304dd879"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/hooks/pre-push",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/hooks/pre-push",
+      "sha256": "3bd8321e2aea0b137a033ebe0e4c23ff7269b10be6669ed6cb5a9d738b5c155e"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/kit_doctor.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/kit_doctor.py",
+      "sha256": "f8ce3862bd947211ee4e1ec1b1ad68f4c854a692455e106276802621d0a2427c"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/launch_lane.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/launch_lane.py",
+      "sha256": "7787079163e9d678284db5df15311f059a519a61db6301980784864ab02ad9e6"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/lib/atomic_write.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/lib/atomic_write.py",
+      "sha256": "f9657f36f8bbcf3741382b616ae19be19cf516fc5fa4f36c53384579e96202b3"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/lib/devmodel_config.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/lib/devmodel_config.py",
+      "sha256": "a4c29fb1808e0b3ec0a2ba80ffa97ba6c894f1a784463a5d126169542c300ef2"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/lib/kitconfig.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/lib/kitconfig.py",
+      "sha256": "4ab496661883d8f4ad590a6612a48b31f8cbf770283bb09794096149276634e6"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/lib/repo_root.sh",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/lib/repo_root.sh",
+      "sha256": "980cbf5596cea67033a5dd02d53630f2a92c24afd693ba7727d5fc50303ff555"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/lib/runtime_adapters.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/lib/runtime_adapters.py",
+      "sha256": "589a8e33508301d683467f94a1ac0cb7418d8c799fa0751813c7028f960f1afa"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/lib/state_paths/__init__.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/lib/state_paths/__init__.py",
+      "sha256": "691a7df06a3bf9019b5faca8b8ebdb9d54463d231d492a632fd54c16cd51a2c6"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/lib/state_paths/paths.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/lib/state_paths/paths.py",
+      "sha256": "f54fd7d970402f8581f6c5080aa9614ce41cb2dafa2010c08406129731799397"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/lib/state_paths/repo_root.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/lib/state_paths/repo_root.py",
+      "sha256": "d9412f1fe395b944a86126bcc39f85d6838382b0fc29d68c8b29b965cd530b5a"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/lib/state_paths/resolver.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/lib/state_paths/resolver.py",
+      "sha256": "e39fca241d6fbf28596ed3954f28a55e65831181cedb02c7c15e372895bb5bd2"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/lib/state_paths/tests/__init__.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/lib/state_paths/tests/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/lib/state_paths/tests/test_state_paths.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/lib/state_paths/tests/test_state_paths.py",
+      "sha256": "b474703decdd2304d7460762fe5b5aa7fed9a81a9a422df61be0825b0c2ed88d"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/panel_prompt.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/panel_prompt.py",
+      "sha256": "f596c5f4bb4eb2d403ba0d2c9365808b01c771ff8d38b9b9d98cc563fd1bdca4"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/pr_watch.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/pr_watch.py",
+      "sha256": "c84154a9d8019984d4a47627ec28ae9c3fe67181566bce835e1417fe7aa7eda9"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/reconcile_sessions.sh",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/reconcile_sessions.sh",
+      "sha256": "75d29491cf65b61d385bb7bbb1c2cd39b3f557bef05b1dfa4a049737e8937573"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/run_installed_tests.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/run_installed_tests.py",
+      "sha256": "4385056907334efbd44d7f67db3e10a302cf68433a18c666166b6b4d60c05235"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/_repo_layout.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/_repo_layout.py",
+      "sha256": "ab5c81c04b751f61a603f8b8a80f182b103f85417a58feb8abb725aebad7881b"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/conftest.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/conftest.py",
+      "sha256": "de924b99de2f6f6cc2cdaf69c57f307601a2e11d43505963bffcc54f3b1acc89"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/fixtures/entry-point-markers.json",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/fixtures/entry-point-markers.json",
+      "sha256": "13573d15825139f78e3a878fbe916f8096e924cec39be399f25688173fc3b079"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/fixtures/init-config.json",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/fixtures/init-config.json",
+      "sha256": "30609a5ccbba55ccbb163a64dae788b7c571031acf4e90b7bbacd6f177b56eda"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/fixtures/shipped-registrations/claude-settings.json",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/fixtures/shipped-registrations/claude-settings.json",
+      "sha256": "7376f453039fc8af3c72525865ec583e1e3e2358cf9d3f295ed911e49cf11250"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/fixtures/shipped-registrations/codex-hooks.json",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/fixtures/shipped-registrations/codex-hooks.json",
+      "sha256": "66979af482546118a359db5ec3ecd5559a4dfc757ad431c198a23c26e5a9b872"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_check_memory_budget.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_check_memory_budget.py",
+      "sha256": "8ddd343a1d1ac2a583b0ad7fbbfd76f7a63016f5c7c1f8e8074002f70fe76b4b"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_ci_workflow.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_ci_workflow.py",
+      "sha256": "4a26b00a2ddae874a76cdb0d85b3c9e14a77d727d959e45543647e928368b5f3"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_init_sh.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_init_sh.py",
+      "sha256": "202860cb44d05ad122fb651f2875607e56111698f4226d9390374ddfa38e4569"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_kit_doctor.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_kit_doctor.py",
+      "sha256": "b844706be86763345d67d28f93c0335e61ec378410b398c246e74fbf411f7e11"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_kit_repo_only.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_kit_repo_only.py",
+      "sha256": "e361de6f7c2de76a485307521556e16d185eadebf62907d09cd63d62dff75e4a"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_kitconfig.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_kitconfig.py",
+      "sha256": "a4a77ccffd183350625b5c48d0d395f37941f155fc24ff85e34d1c577ec058b9"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_lane_launcher.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_lane_launcher.py",
+      "sha256": "9138d6ad975c2377a1c56c22610a0c329f17e3253294d0e4b62921b3f912a60a"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_mutation_gate.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_mutation_gate.py",
+      "sha256": "72914ad18b3622faa05a8e5c03035ba1040e7477aeca2cf8f9742aecd2bbf334"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_panel_prompt.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_panel_prompt.py",
+      "sha256": "a4937f85f74fb2cef7a4f3f9408908626dd8558998593e18f3c9c5d89155d7a9"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_portability.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_portability.py",
+      "sha256": "6d889025b72306a4dfe96fcf3eefa8b7c75d7f08112003e49ecec6c3f4f27e0b"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_pr_followup_hook.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_pr_followup_hook.py",
+      "sha256": "15fb412eb3023612988c09e44efa8c90afacb9e099822936fa2606567c888d07"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_pr_watch.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_pr_watch.py",
+      "sha256": "3fcf1c8b11338d1424bb81525df8ee16180924037567bd9e83b02ea28f5b9a1d"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_pre_push_hook.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_pre_push_hook.py",
+      "sha256": "98d845268d4e6ebc7709070078c324cda814d64f572b8f00097746acc3a7070e"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_reconcile_sessions.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_reconcile_sessions.py",
+      "sha256": "a12ddfbb4636376a07b3c047242a499226f47bc58a3668f1eb5a76fe1259b260"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_repo_layout.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_repo_layout.py",
+      "sha256": "3560dba495462b51d85d68d12dc779616436671558f30553e244b7ffdc76f163"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_state_guard.py",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_state_guard.py",
+      "sha256": "915aae52d1b6fe38be757589d836c0f1198b79a4e20ba2a438aa2ef6fbf04bd9"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/templates/friction-log.md.tmpl",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/templates/friction-log.md.tmpl",
+      "sha256": "1e5fa714719cf147c03d03569e875e32a843c4b9f189025415d35dc2c326a062"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/templates/CLAUDE.md.tmpl",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/templates/CLAUDE.md.tmpl",
+      "sha256": "e3195e5484d13f90122aa5ffacd9192e07b8445f5f0ab0cd44feced058fd23b3"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/templates/friction-log-archive.md.tmpl",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/templates/friction-log-archive.md.tmpl",
+      "sha256": "af4a138e4a5ebe5634c55e7e417cd6b9f362bf3a35182b033f72876cd88180cf"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/templates/handoff-history.md.tmpl",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/templates/handoff-history.md.tmpl",
+      "sha256": "111cf71a4c9b2a296f4fcf5ea02c6516907710e5b4fe0a7b3074f444f862ae69"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/templates/handoff.md.tmpl",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/templates/handoff.md.tmpl",
+      "sha256": "1654465836a9e70a6e81d76208783e9a12d65343d1e9c3091f1d30c25a437ce7"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/docs/templates/AGENTS.md.tmpl",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/docs/templates/AGENTS.md.tmpl",
+      "sha256": "e3794b399331a16138e72c62ee74d7085bd6a5fe14e10e45e4c40ef91cf41a6b"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/.claude/commands/pr-watch.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/.claude/commands/pr-watch.md",
+      "sha256": "b9b47e4d667f2651b6997b6aaff0dfc95cb05ae8f66dbf38fad9a2ebc72c87df"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/.claude/commands/wrap-up.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/.claude/commands/wrap-up.md",
+      "sha256": "87be6243d98e046fef999fc3768080fe398e353b8c1cb068a5baaf4de7a82d2a"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/.claude/commands/parallel.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/.claude/commands/parallel.md",
+      "sha256": "1cea5d8a6b5c570e3a1090827d606cf0e128ec8f9ec167821f0c0df25c5eba13"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/.claude/commands/session-start.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/.claude/commands/session-start.md",
+      "sha256": "1cbbba9dfadc89058c227ae68374dcfe439f33c90d4f8500aa9edb51c039e506"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/.claude/commands/post-merge-systemize.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/.claude/commands/post-merge-systemize.md",
+      "sha256": "dba6d70df818a5fc9b80b93ab0a7a3f45309c48f80862c48946a354e01a01d64"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/.claude/commands/adopt.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/.claude/commands/adopt.md",
+      "sha256": "cec47dcd6724988e2ebe9b57e43b7f6939e5c186e7df26aca38831372ec060d0"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/.claude/commands/upgrade.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/.claude/commands/upgrade.md",
+      "sha256": "69699e0d79907cc70b0696442809ba2ff215243fca9fdaa8def1ded840146f27"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/.claude/commands/triage-friction-log.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/.claude/commands/triage-friction-log.md",
+      "sha256": "68c779feb0e28ce05f6594f9a964d42dec979088a7c8c7832186c3d28922e8fc"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/.agents/skills/post-merge-systemize/SKILL.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/.agents/skills/post-merge-systemize/SKILL.md",
+      "sha256": "8f3e81a3264136ea163f7910c09ba48fa5a10279c45157aacde7dc3cd0e9459e"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/.agents/skills/wrap-up/SKILL.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/.agents/skills/wrap-up/SKILL.md",
+      "sha256": "10263fbc2c78b055ec7e74ff60330b86ebd7c26ca0946245516f059335c71659"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/.agents/skills/upgrade/SKILL.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/.agents/skills/upgrade/SKILL.md",
+      "sha256": "eee39cc801c57ac7ec36759a78aaffe1caca0893c94def6588f86493533b033d"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/.agents/skills/parallel/SKILL.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/.agents/skills/parallel/SKILL.md",
+      "sha256": "0cdefa4f13f7b77b342647badae9faf8f84d17a1619a3fdd54e024f7cd1fb997"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/.agents/skills/session-start/SKILL.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/.agents/skills/session-start/SKILL.md",
+      "sha256": "5fc04e81b9bbfeb7f788b07b441f91a0fa900f5f179229f5b8d27d5818eba718"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/.agents/skills/adopt/SKILL.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/.agents/skills/adopt/SKILL.md",
+      "sha256": "d1a9a4ab0a0539b548b971d4f7b8e2d59d3e54e96e6be793c8e7e870bafae20c"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/.agents/skills/triage-friction-log/SKILL.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/.agents/skills/triage-friction-log/SKILL.md",
+      "sha256": "c8cb0f541ae1aa635048efd2100c26f9525a9c286758688f4abea6d23f0f5838"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/.agents/skills/pr-watch/SKILL.md",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/.agents/skills/pr-watch/SKILL.md",
+      "sha256": "5ede8bdc11f41feb91ecc9a4cf4ca26a221b553e8d8839c949c4bde5964ca80e"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/.agents/skills/post-merge-systemize/agents/openai.yaml",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/.agents/skills/post-merge-systemize/agents/openai.yaml",
+      "sha256": "4e47618bd52024e81067f1cff8c9c332c30ba6b9c5b6ecda9e2905da4ff91402"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/.agents/skills/wrap-up/agents/openai.yaml",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/.agents/skills/wrap-up/agents/openai.yaml",
+      "sha256": "82340d9c59415468ddd5e8da7b065db9aa2a7969df60053a3464eca965c1b641"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/.agents/skills/upgrade/agents/openai.yaml",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/.agents/skills/upgrade/agents/openai.yaml",
+      "sha256": "44878ea4e4ee56bda70f2e67502893bb16acf05e56257caf63a25f5b715a877a"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/.agents/skills/parallel/agents/openai.yaml",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/.agents/skills/parallel/agents/openai.yaml",
+      "sha256": "90e96bcd33c5e750195184d934804934ced5ad91c6bd4714ebdb405196afa240"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/.agents/skills/session-start/agents/openai.yaml",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/.agents/skills/session-start/agents/openai.yaml",
+      "sha256": "b1cc5405206257c06a3a1d4bbb4514014c92a4e6f5e339e679e572ad4918c6f1"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/.agents/skills/adopt/agents/openai.yaml",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/.agents/skills/adopt/agents/openai.yaml",
+      "sha256": "14518f33e704d7918a596ef967a30b9d2850f21c6370cff0ebf772c644777d35"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/.agents/skills/triage-friction-log/agents/openai.yaml",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/.agents/skills/triage-friction-log/agents/openai.yaml",
+      "sha256": "927789478eaf83b4636b1cf72b9cd3050b554da2e36f08df4d3d1ae35fd4738b"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/.agents/skills/pr-watch/agents/openai.yaml",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/.agents/skills/pr-watch/agents/openai.yaml",
+      "sha256": "16391436291fd57f5603b2d6813ce14cad009252e75a0eae8f7a23e48ec19b6c"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/config/claude-lane-settings.json",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/config/claude-lane-settings.json",
+      "sha256": "2dd313c0a0889235a72175d102356ad9cdc2ce02230164cb274162ae0f96260f"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-evidence_2026-09-09/config-after-init.yaml",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/config/dev-model.yaml",
+      "sha256": "1cefdb92c970b997eaa56745f1fc8d5d9cf5ce0b86050b962f987548bdaaf8aa"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-evidence_2026-09-09/synthetic-local-overlay.yaml",
+      "target": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/config/dev-model.local.yaml",
+      "sha256": "1d7c76ab19a3c1f550cf398b52284bb12c8b662485734add5c30abc3870f5524"
+    }
+  ],
+  "owned_sha256": {
+    "AGENTS.md": "7386ced095705801bdb838e9018f143f49ab604421d3c4612aa3a0d508191f27",
+    "CLAUDE.md": "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49",
+    ".agents/skills/wrap-up/SKILL.md": "6047141f3e37f6556a3e8ce642b29c55737b5ae5e855a66040c3565f791a048a",
+    "ROADMAP.md": "3f63b02372a2a1911aaac8a6778687114bf76dcb03a0d76b26c80815b8f44ff5",
+    "notes/history.md": "d0533ed14ea4a74605b08f141045aa45919b5663fca347249eb80c9adcbb59be",
+    "notes/friction.md": "975e7297835a0e5567e43866f1ea07d70852dbbd5f20698b92e9324ffd97fea8",
+    "notes/friction-archive.md": "890b38a076a055fae4a037d86968ed65c8af507bb0930d680c57063221b8904c",
+    ".gitignore": "6204674f1cd7cc57e36a6c177ad053ae69c3748b0e335659c094cfa31c2bb5f4"
+  }
+}

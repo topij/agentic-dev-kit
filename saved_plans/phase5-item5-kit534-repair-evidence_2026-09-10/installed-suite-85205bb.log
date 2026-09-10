@@ -1,0 +1,51 @@
+kit tests:
+  /private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/lib/state_paths/tests/test_state_paths.py
+  /private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_check_memory_budget.py
+  /private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_ci_workflow.py
+  /private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_init_sh.py
+  /private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_kit_doctor.py
+  /private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_kit_repo_only.py
+  /private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_kitconfig.py
+  /private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_lane_launcher.py
+  /private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_mutation_gate.py
+  /private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_panel_prompt.py
+  /private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_portability.py
+  /private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_pr_followup_hook.py
+  /private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_pr_watch.py
+  /private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_pre_push_hook.py
+  /private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_reconcile_sessions.py
+  /private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_repo_layout.py
+  /private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_state_guard.py
+........................................................................ [  3%]
+.sssssssssssssssssssssssssssssssssssssssssssssssssss.................... [  6%]
+........................................................................ [  9%]
+...............................ss....................................... [ 12%]
+........................................................................ [ 15%]
+........................................................................ [ 19%]
+..............s...................s..................................... [ 22%]
+.....................s.s..........s..................................... [ 25%]
+...................s.ss................................................. [ 28%]
+...................................s.................................... [ 31%]
+........................................................................ [ 35%]
+........................................................................ [ 38%]
+........................................................................ [ 41%]
+...............................................................sssssssss [ 44%]
+ssssssssssssssssssssssssssssssssssssssss................................ [ 47%]
+.............ssss....................................................... [ 51%]
+........................................................................ [ 54%]
+........................................................................ [ 57%]
+........................................................................ [ 60%]
+.......s....ss.......................................................... [ 63%]
+........................................................................ [ 67%]
+..s.s.ss......s.....s.ssss.............................................. [ 70%]
+........................................................................ [ 73%]
+........................................................................ [ 76%]
+........................................................................ [ 79%]
+........................................................................ [ 83%]
+........................................................................ [ 86%]
+........................................................................ [ 89%]
+........................................................................ [ 92%]
+........................................................................ [ 95%]
+........................................................................ [ 99%]
+.....................                                                    [100%]
+2125 passed, 128 skipped in 428.71s (0:07:08)

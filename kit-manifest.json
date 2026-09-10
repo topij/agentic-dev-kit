@@ -139,7 +139,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "a8c5cb408c0d793a1da0c8c7e053bd3cfb6e8223176e4133fc0e5c7ce845d3ac"
+      "sha256": "f8ce3862bd947211ee4e1ec1b1ad68f4c854a692455e106276802621d0a2427c"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -237,7 +237,15 @@
     },
     "scripts/tests/conftest.py": {
       "role": "test",
-      "sha256": "685b3af6939b3b181b1dfe4700d47a45030e9682bd38d159b0016a54693608cd"
+      "sha256": "dcc6980325b5ab33ddfb069f8a27f27b70f406c42892e5fcbcaf2369d0f07cd4"
+    },
+    "scripts/tests/fixtures/entry-point-markers.json": {
+      "role": "test",
+      "sha256": "13573d15825139f78e3a878fbe916f8096e924cec39be399f25688173fc3b079"
+    },
+    "scripts/tests/fixtures/init-config.json": {
+      "role": "test",
+      "sha256": "30609a5ccbba55ccbb163a64dae788b7c571031acf4e90b7bbacd6f177b56eda"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -257,15 +265,15 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "f21c94c74613ba255a663faac3aefbd7d703b2df0c8e25cfdc5d42d9f709feaa"
+      "sha256": "87cca005542d8dfc3ff923f5706ae77a63a4068b8c852499c2ac05718db323bc"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "3cc39f867eb507708921be34398f548e0b74fe4d11186143fec4328c8cabaf1d"
+      "sha256": "b844706be86763345d67d28f93c0335e61ec378410b398c246e74fbf411f7e11"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
-      "sha256": "e361de6f7c2de76a485307521556e16d185eadebf62907d09cd63d62dff75e4a"
+      "sha256": "2002fb473dfffedc6125303bab6523c973bf628171c986490ed9bf368836b8e7"
     },
     "scripts/tests/test_kitconfig.py": {
       "role": "test",
@@ -281,7 +289,7 @@
     },
     "scripts/tests/test_mutation_gate.py": {
       "role": "test",
-      "sha256": "36f0ae3a031e7bd2e9ca6ece84668e37ff1b71ae2b665a2af08cfd8c7f06fa8b"
+      "sha256": "72914ad18b3622faa05a8e5c03035ba1040e7477aeca2cf8f9742aecd2bbf334"
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
@@ -289,7 +297,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "4d73f3ee031f770e0770cd1361527fa1bf5d3e94db645a1d3ad09eaf0c1047fa"
+      "sha256": "6d889025b72306a4dfe96fcf3eefa8b7c75d7f08112003e49ecec6c3f4f27e0b"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

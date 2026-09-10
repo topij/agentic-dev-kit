@@ -14,10 +14,26 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-09 — ITEM5-B executed; installed verification still needs repair.
+Last updated: 2026-09-10 — approved kit test repair; retained ITEM5-B update is separate.
 Phase 5 delivery item 5 remains incomplete; item 6's replay remains complete.
 
-## Latest session — 2026-09-09 (ITEM5-B decision and execution, in Codex)
+## Latest session — 2026-09-10 (kit test repair, in Codex)
+
+The operator approved the kit-only #534 slice from the ITEM5-B execution record.
+The [repair record](../saved_plans/phase5-item5-kit534-repair_2026-09-10.md) retains
+source and synthetic installed verification, command/directory/revision stamps and
+limits. Controlled initializer inputs and generated adapter fixtures replace assumptions
+about adopter-owned files. The drift-liveness parent follows its child's applicability.
+The retained ITEM5-B baseline and completed item 6 replay were not rewritten.
+
+▶ Next: `$session-start` — prepare an exact ITEM5-B update decision packet against
+the merged repair pin, using `saved_plans/phase5-item5-kit534-repair_2026-09-10.md`.
+Recheck the retained inventory; obtain the operator's decision before fixture writes.
+Do not repeat consumed setup or reconstruct either original missing path.
+
+______________________________________________________________________
+
+## Session — 2026-09-09 (ITEM5-B decision and execution, in Codex)
 
 The operator approved ITEM5-B from the
 [decision packet](../saved_plans/phase5-item5-decision_2026-09-09.md), then requested
@@ -29,18 +45,16 @@ the new fixture, and no cs-toolkit write occurred.
 The [retained audit](../saved_plans/phase5-item5-baseline-audit_2026-09-09.json) remains
 the read-only assessment of the old baselines. The new execution's complete suite logs
 separate installed config/adapter assumptions and the #705 drift-liveness interaction
-from #393. Its record proposes a kit-only #534 repair slice; no repair was authorized
-or applied. Source pin, fixture commit, commands, directories and actual results are
-retained there. #585's earlier placement and #723's accepted upstream deferral are unchanged.
+from #393. Its record proposed the kit-only #534 repair slice later approved in the
+session above. Source pin, fixture commit, commands, directories and actual results
+are retained there. #585's earlier placement and #723's accepted upstream deferral are unchanged.
 
 `gh pr view 724` and `gh pr view 2255`, with their explicit kit/adopter repositories,
 read back the merges on 2026-09-09 at kit `8418118e40728c667c32a28a182697139bc7a5ef`.
 Kit #724 contains the #722 batch. This packet does not repeat that batch or re-credit
 the initial adopter pass or replay. The prior replay's snapshots remain historical.
 
-▶ Next: `$session-start` — read `saved_plans/phase5-item5-b-execution_2026-09-09.md`
-and obtain approval for its kit-only #534 repair slice. Recheck the new fixture's
-retained baseline before any later approved write; do not repeat consumed ITEM5-B setup.
+The latest session block owns the subsequent repair and next action.
 
 ______________________________________________________________________
 

@@ -1,0 +1,4 @@
+{
+  "AGENTS.md": "<!-- devkit-source: kit-own \u2014 this is the KIT's own entry point, not a rendered one. ./init.sh replaces it with yours; delete this line to claim the file. -->",
+  "CLAUDE.md": "<!-- devkit-source: kit-own \u2014 this is the KIT's own entry point, not a rendered one. ./init.sh replaces it with yours; delete this line to claim the file. -->"
+}

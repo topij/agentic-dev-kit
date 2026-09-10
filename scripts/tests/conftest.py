@@ -220,6 +220,56 @@ def shipped_registration(name: str) -> Path:
     rule to drift, and the decline behaviour is exactly what an adopter meets.
     """
     path = SHIPPED_REGISTRATIONS / name
+    return _required_shipped_input(path)
+
+
+def shipped_test_input(name: str) -> Path:
+    """Read a controlled input beside the installed tests, never adopter policy."""
+    return _required_shipped_input(ENGINE_DIR / "tests" / "fixtures" / name)
+
+
+def generated_adapter_source(root: Path) -> Path:
+    """Build generated adapters explicitly; an installed adapter may be authored.
+
+    Existing workflow bodies are retained for callers testing their semantics.
+    Adapter-report tests only need the workflow's presence and can use the stub.
+    This fixture does not establish that the real kit adapters match the renderer;
+    that assertion remains a separate source-only test.
+    """
+    require_kit_paths((ENGINE_DIR / "lib/runtime_adapters.py").relative_to(REPO_ROOT).as_posix())
+    sys.path.insert(0, str(ENGINE_DIR / "lib"))
+    import runtime_adapters
+
+    for runtime, contexts in runtime_adapters._CURRENT_CONTEXTS.items():
+        for slug in contexts:
+            shared = f"docs/agentic-dev-kit/workflows/{slug}.md"
+            workflow = root / shared
+            workflow.parent.mkdir(parents=True, exist_ok=True)
+            if not workflow.exists():
+                workflow.write_text(f"# {slug}\n", encoding="utf-8")
+            rel = runtime_adapters._adapter_path(runtime, slug)
+            adapter = root / rel
+            adapter.parent.mkdir(parents=True, exist_ok=True)
+            adapter.write_text(
+                runtime_adapters.render_adapter(runtime, slug, f"Exercise {slug}.", shared),
+                encoding="utf-8",
+            )
+            if runtime == "codex":
+                interface = adapter.parent / "agents" / "openai.yaml"
+                interface.parent.mkdir()
+                interface.write_text(json.dumps({"interface": {
+                    "short_description": "Exercise the shared development workflow",
+                    "default_prompt": f"Use ${slug} for this task.",
+                }}), encoding="utf-8")
+    return root
+
+
+@pytest.fixture
+def adapter_source(tmp_path: Path) -> Path:
+    return generated_adapter_source(tmp_path / "adapter-source")
+
+
+def _required_shipped_input(path: Path) -> Path:
     if path.is_file():
         return path
     # Absent. For an adopter who declined these installable files that is a
@@ -231,11 +281,11 @@ def shipped_registration(name: str) -> Path:
     if looks_like_kit_source():
         pytest.fail(
             f"{path} is missing from the kit's own tree. The kit ships this "
-            "reference registration and the drift gate does not catch a "
+            "test input and the drift gate does not catch a "
             "deletion, so restore it or drop its KIT_OWNED entry."
         )
     pytest.skip(
-        "needs the kit's reference registrations: not vendored in this "
+        "needs a kit test input: not vendored in this "
         f"tree: {path.name}"
     )
 
@@ -251,14 +301,8 @@ def require_kit_source() -> None:
     """
     if not is_install_baseline():
         return
-    # `kit_commit` is a single unauthenticated key. If one reaches the KIT's own
-    # manifest — an accidental `--record-install` against this checkout, a bad
-    # merge — a bare skip here would silently switch off the kit's own drift
-    # gate and three other invariants. So corroborate, and make a disagreement
-    # loud: a tree holding the kit-only witness is the kit with a stray key, not
-    # an adopter. Found by an adversarial review lens on PR #705, which injected
-    # a fake `kit_commit` beside a real `.claude/settings.json` edit and got
-    # three skips where the drift gate should have fired.
+    # `kit_commit` is unauthenticated. When the kit-only witness is present,
+    # fail on that stray baseline key instead of skipping source assertions.
     if looks_like_kit_source():
         pytest.fail(
             f"{REPO_ROOT / 'kit-manifest.json'} carries `kit_commit`, which only "
