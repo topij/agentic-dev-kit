@@ -1,0 +1,21 @@
+{
+  "contexts": [
+    {
+      "collaboration_mode": {
+        "mode": "default",
+        "settings": {
+          "developer_instructions": null,
+          "model": "gpt-6-astra",
+          "reasoning_effort": "high"
+        }
+      },
+      "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/handed-tree",
+      "effort": "high",
+      "model": "gpt-6-astra",
+      "reasoning_effort": null
+    }
+  ],
+  "observed_at": "2026-09-10T19:42:40.821427+00:00",
+  "rollout_path": "/Users/topi/.codex/sessions/2026/09/10/rollout-2026-09-10T22-22-27-01a08cc5-79a7-7963-8c7b-7033c3d9b39c.jsonl",
+  "thread_id": "01a08cc5-79a7-7963-8c7b-7033c3d9b39c"
+}

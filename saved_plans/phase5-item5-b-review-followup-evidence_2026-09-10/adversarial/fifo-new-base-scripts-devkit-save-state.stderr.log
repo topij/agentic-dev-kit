@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import sys; from pathlib import Path; sys.path.insert(0, '/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo/scripts'); import pr_watch; pr_watch.STATE_DIR=Path('/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-base-d0u3x_o6/state/pr-watch'); pr_watch.save_state(987654, {})
+                                                                                                                                                                                                                                                                                                                                                                                                                         ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo/scripts/pr_watch.py", line 3571, in save_state
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/topi/.local/share/uv/python/cpython-3.14.7-macos-aarch64-none/lib/python3.14/pathlib/__init__.py", line 1011, in mkdir
+    os.mkdir(self, mode)
+    ~~~~~~~~^^^^^^^^^^^^
+NotADirectoryError: [Errno 20] Not a directory: '/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-base-d0u3x_o6/state/pr-watch'

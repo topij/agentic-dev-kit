@@ -1,0 +1,175 @@
+Waiting for serial verification lock
+{"cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo", "argv": ["python3", "-B", "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/final-attestation.py"], "environment": {"PYTHONDONTWRITEBYTECODE": "1", "DEVKIT_STATE_ROOT": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/state", "UV_CACHE_DIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/uv-cache", "UV_TOOL_DIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/uv-tools", "RUFF_CACHE_DIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/ruff-cache", "TMPDIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/tmp", "PYTEST_ADDOPTS": "-o cache_dir=/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/pytest-cache -ra"}}
+[
+  {
+    "argv": [
+      "bash",
+      "-n",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo/scripts/dev_session.sh"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo",
+    "revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+    "date": "2026-09-10T19:38:38.257941+00:00",
+    "stdout": "",
+    "stderr": "",
+    "returncode": 0
+  },
+  {
+    "argv": [
+      "bash",
+      "-n",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo/scripts/reconcile_sessions.sh"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo",
+    "revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+    "date": "2026-09-10T19:38:38.262066+00:00",
+    "stdout": "",
+    "stderr": "",
+    "returncode": 0
+  },
+  {
+    "argv": [
+      "bash",
+      "-n",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo/scripts/lib/repo_root.sh"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo",
+    "revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+    "date": "2026-09-10T19:38:38.264871+00:00",
+    "stdout": "",
+    "stderr": "",
+    "returncode": 0
+  },
+  {
+    "argv": [
+      "bash",
+      "-n",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo/scripts/hooks/pre-push"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo",
+    "revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+    "date": "2026-09-10T19:38:38.268007+00:00",
+    "stdout": "",
+    "stderr": "",
+    "returncode": 0
+  },
+  {
+    "argv": [
+      "sh",
+      "-n",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo/init.sh"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo",
+    "revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+    "date": "2026-09-10T19:38:38.275033+00:00",
+    "stdout": "",
+    "stderr": "",
+    "returncode": 0
+  },
+  {
+    "argv": [
+      "git",
+      "--no-optional-locks",
+      "-C",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo",
+      "rev-parse",
+      "HEAD"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo",
+    "revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+    "date": "2026-09-10T19:38:38.287751+00:00",
+    "stdout": "b018a0544c44028c21399ad073ce8a3dee3bfd45\n",
+    "stderr": "",
+    "returncode": 0
+  },
+  {
+    "argv": [
+      "git",
+      "--no-optional-locks",
+      "-C",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo",
+      "status",
+      "--short"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo",
+    "revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+    "date": "2026-09-10T19:38:38.416804+00:00",
+    "stdout": "",
+    "stderr": "",
+    "returncode": 0
+  },
+  {
+    "argv": [
+      "git",
+      "--no-optional-locks",
+      "-C",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo",
+      "diff",
+      "--exit-code",
+      "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+      "--"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo",
+    "revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+    "date": "2026-09-10T19:38:38.517656+00:00",
+    "stdout": "",
+    "stderr": "",
+    "returncode": 0
+  },
+  {
+    "argv": [
+      "git",
+      "--no-optional-locks",
+      "-C",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/handed-tree",
+      "rev-parse",
+      "HEAD"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo",
+    "revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+    "date": "2026-09-10T19:38:38.529714+00:00",
+    "stdout": "b018a0544c44028c21399ad073ce8a3dee3bfd45\n",
+    "stderr": "",
+    "returncode": 0
+  },
+  {
+    "argv": [
+      "git",
+      "--no-optional-locks",
+      "-C",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/handed-tree",
+      "status",
+      "--short"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo",
+    "revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+    "date": "2026-09-10T19:38:38.663693+00:00",
+    "stdout": "",
+    "stderr": "",
+    "returncode": 0
+  },
+  {
+    "argv": [
+      "git",
+      "--no-optional-locks",
+      "-C",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/handed-tree",
+      "diff",
+      "--exit-code",
+      "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+      "--"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo",
+    "revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+    "date": "2026-09-10T19:38:38.720309+00:00",
+    "stdout": "",
+    "stderr": "",
+    "returncode": 0
+  },
+  {
+    "guard_restored_byte_equal": true,
+    "original_sha256": "a0a82682c9431205f8c0db80176694b37800da7964e5b77ec3eba283fc7569c2",
+    "restored_sha256": "a0a82682c9431205f8c0db80176694b37800da7964e5b77ec3eba283fc7569c2"
+  }
+]
+{"returncode": 0}

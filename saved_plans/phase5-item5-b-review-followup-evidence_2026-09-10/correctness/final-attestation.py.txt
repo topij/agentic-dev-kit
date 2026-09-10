@@ -1,0 +1,25 @@
+import datetime,hashlib,json,subprocess
+from pathlib import Path
+root=Path.cwd()
+owned=root.parent.parent
+handed=owned/'handed-tree'
+revision='b018a0544c44028c21399ad073ce8a3dee3bfd45'
+records=[]
+for cmd in [['bash','-n',str(root/p)] for p in ['scripts/dev_session.sh','scripts/reconcile_sessions.sh','scripts/lib/repo_root.sh','scripts/hooks/pre-push']]+[['sh','-n',str(root/'init.sh')]]:
+    p=subprocess.run(cmd,capture_output=True,text=True)
+    records.append(dict(argv=cmd,cwd=str(root),revision=revision,date=datetime.datetime.now(datetime.timezone.utc).isoformat(),stdout=p.stdout,stderr=p.stderr,returncode=p.returncode))
+    assert p.returncode==0
+for tree in [root,handed]:
+    for args in [['rev-parse','HEAD'],['status','--short'],['diff','--exit-code',revision,'--']]:
+        cmd=['git','--no-optional-locks','-C',str(tree),*args]
+        p=subprocess.run(cmd,capture_output=True,text=True)
+        records.append(dict(argv=cmd,cwd=str(root),revision=revision,date=datetime.datetime.now(datetime.timezone.utc).isoformat(),stdout=p.stdout,stderr=p.stderr,returncode=p.returncode))
+        assert p.returncode==0
+        if args[0]=='rev-parse': assert p.stdout.strip()==revision
+        else: assert p.stdout==''
+original=(owned/'guard-original.py.txt').read_bytes()
+restored=(root/'scripts/conftest.py').read_bytes()
+assert restored==original
+records.append(dict(guard_restored_byte_equal=True,original_sha256=hashlib.sha256(original).hexdigest(),restored_sha256=hashlib.sha256(restored).hexdigest()))
+(owned/'final-attestation.json').write_text(json.dumps(records,indent=2))
+print(json.dumps(records,indent=2))

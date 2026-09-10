@@ -1,0 +1,88 @@
+import difflib,json,os,runpy,subprocess,sys
+from pathlib import Path
+E=runpy.run_path('/private/tmp/item5-b-kit-repair-1kc2i4t2/execute.py')
+KIT,OUT=(E[k] for k in ['KIT','OUT'])
+ROOT=OUT/'proposal02';CLONE=ROOT/'repo'
+HEAD='b018a0544c44028c21399ad073ce8a3dee3bfd45'
+TEST='''
+
+@pytest.mark.parametrize("layout", list(_LAYOUTS), ids=list(_LAYOUTS))
+@pytest.mark.parametrize("case", ["new-link", "target-modified"])
+def test_guard_leaves_root_file_symlinks_outside_snapshot(
+    tmp_path: Path, layout: str, case: str
+) -> None:
+    """Pin the documented exclusion of a root symlink to a regular file."""
+    engine_rel = _LAYOUTS[layout]
+    _build_tree(tmp_path, leak_in=None, engine_rel=engine_rel)
+    state = tmp_path / "state"
+    target = tmp_path / "state-target"
+    target.write_text("before")
+    if case == "target-modified":
+        state.symlink_to(target)
+    statement = (
+        f"Path({str(state)!r}).symlink_to({str(target)!r})"
+        if case == "new-link"
+        else f"Path({str(target)!r}).write_text('after')"
+    )
+    probe = tmp_path / engine_rel / "lib/state_paths/tests/test_state_paths_probe.py"
+    probe.write_text(
+        "from pathlib import Path\\n"
+        "def test_root_file_symlink():\\n"
+        f"    {statement}\\n"
+    )
+    result = _run_pytest(tmp_path, [f"{engine_rel}/lib/state_paths/tests"])
+    assert state.is_symlink() and state.resolve() == target
+    assert target.read_text() == ("before" if case == "new-link" else "after")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _BANNER not in result.stdout + result.stderr
+'''
+def main():
+    E['enter'](KIT);assert E['git'](KIT,'rev-parse','HEAD')==HEAD and E['git'](KIT,'status','--porcelain')==''
+    for lens in ['adversarial','correctness']:
+        receipt=E['read'](OUT/'reviews'/HEAD/lens/'receipt.json');assert receipt['forge_comment'] and receipt['handed_identity']==receipt['handed_after']
+    E['enter'](OUT);ROOT.mkdir()
+    subprocess.run(['git','clone','--no-hardlinks','--no-checkout',str(KIT),str(CLONE)],check=True)
+    E['enter'](CLONE);subprocess.run(['git','-C',str(CLONE),'checkout','--detach',HEAD],check=True)
+    paths=['scripts/conftest.py','scripts/tests/test_state_guard.py','kit-manifest.json']
+    original={p:(CLONE/p).read_bytes() for p in paths}
+    text=original['scripts/conftest.py'].decode()
+    anchor='      - REPLACEMENT AT A STABLE PATH, for any kind recorded as a CONSTANT.'
+    assert text.count(anchor)==1
+    note='''      - ``state/`` ITSELF BEING A SPECIAL FILE. A FIFO, socket or device
+        node at the root reaches neither the regular-file branch nor the
+        directory walk, so its presence compares as absent. Special-file
+        descendants are different: the walk records them without reading
+        them. A FIFO at the root can obstruct engine state-directory creation.
+'''
+    (CLONE/'scripts/conftest.py').write_text(text.replace(anchor,note+anchor))
+    (CLONE/'scripts/tests/test_state_guard.py').write_bytes(original['scripts/tests/test_state_guard.py']+TEST.encode())
+    guard=(CLONE/'scripts/conftest.py').read_bytes();tests=(CLONE/'scripts/tests/test_state_guard.py').read_bytes()
+    E['call']('proposal02-lint',['uvx','ruff@0.16.0','check','--no-fix','scripts/conftest.py','scripts/tests/test_state_guard.py'],CLONE,role='proposal02-env')
+    E['call']('proposal02-symlink-control',['uv','run','--with','pytest','--with','pyyaml','python','-B','-m','pytest','scripts/tests/test_state_guard.py::test_guard_leaves_root_file_symlinks_outside_snapshot','-q'],CLONE,role='proposal02-env')
+    mutant=guard.replace(b'if not state_dir.is_symlink() and state_dir.is_file():',b'if state_dir.is_file():',1)
+    assert mutant!=guard
+    E['enter'](CLONE);(CLONE/'scripts/conftest.py').write_bytes(mutant)
+    assert (CLONE/'scripts/conftest.py').read_bytes()==mutant
+    (ROOT/'symlink-mutation.diff').write_text(''.join(difflib.unified_diff(guard.decode().splitlines(True),mutant.decode().splitlines(True),fromfile='candidate/scripts/conftest.py',tofile='mutant/scripts/conftest.py')))
+    try:
+        E['call']('proposal02-symlink-mutant',['uv','run','--with','pytest','--with','pyyaml','python','-B','-m','pytest','scripts/tests/test_state_guard.py::test_guard_leaves_root_file_symlinks_outside_snapshot','-q'],CLONE,accepted=(1,),role='proposal02-env')
+    finally:
+        E['enter'](CLONE);(CLONE/'scripts/conftest.py').write_bytes(guard);assert (CLONE/'scripts/conftest.py').read_bytes()==guard
+        E['write'](ROOT/'restoration.json',dict(at=E['now'](),revision=HEAD,candidate_guard_sha256=E['sha'](guard),restored_byte_equal=True))
+    E['call']('proposal02-manifest',['uv','run','--with','pyyaml','python','-B',str(CLONE/'scripts/kit_doctor.py'),'--root',str(CLONE),'--generate-manifest'],CLONE,role='proposal02-env')
+    manifest=(CLONE/'kit-manifest.json').read_bytes()
+    E['call']('proposal02-focused',['uv','run','--with','pytest','--with','pyyaml','python','-B','-m','pytest','scripts/tests/test_state_guard.py','scripts/tests/test_kit_doctor.py::test_kit_repo_self_check_is_clean','-q'],CLONE,role='proposal02-env')
+    E['call']('proposal02-manifest-determinism',['uv','run','--with','pyyaml','python','-B',str(CLONE/'scripts/kit_doctor.py'),'--root',str(CLONE),'--generate-manifest'],CLONE,role='proposal02-env');assert (CLONE/'kit-manifest.json').read_bytes()==manifest
+    E['enter'](ROOT)
+    rows=[]
+    for p in paths:
+        target=KIT/p;assert target.read_bytes()==original[p]
+        payload_name=p.replace('/','--')+'.txt';payload=(CLONE/p).read_bytes();(ROOT/payload_name).write_bytes(payload)
+        rows.append(dict(destination=str(target),before_sha256=E['sha'](original[p]),after_sha256=E['sha'](payload),mode=oct(target.stat().st_mode&0o777),payload=payload_name))
+    patch=subprocess.check_output(['git','-C',str(CLONE),'diff','--',*paths]);(ROOT/'proposed.patch.txt').write_bytes(patch)
+    E['write'](ROOT/'write-ledger.json',dict(decision='ITEM5-B-KIT-REVIEW-02',approved=False,prepared_at=E['now'](),preparation_revision=HEAD,preparation_clone=str(CLONE),writes=rows,patch_sha256=E['sha'](patch),production_behavior_change=False,acceptance_required='Accept the documented inherited special-file-root detection limitation for this regular-file repair; no functional extension is proposed.',changelog_sha256_unchanged=E['sha']((KIT/'CHANGELOG.md').read_bytes()),retained_writes=[],tracker_writes=[],merge_authorized=False))
+    E['write'](ROOT/'sha256.json',{p.name:E['sha'](p.read_bytes()) for p in sorted(ROOT.iterdir()) if p.is_file() and p.name!='sha256.json'})
+    print(json.dumps(E['read'](ROOT/'write-ledger.json'),indent=2))
+if __name__=='__main__':
+    assert not sys.flags.optimize and sys.dont_write_bytecode
+    main()

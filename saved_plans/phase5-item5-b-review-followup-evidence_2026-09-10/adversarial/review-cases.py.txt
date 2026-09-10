@@ -1,0 +1,68 @@
+import subprocess,sys,os,json,hashlib,difflib,tempfile,stat
+from pathlib import Path
+owned=Path(__file__).resolve().parent
+repo=Path.cwd()
+target=repo/'scripts/conftest.py'
+original=subprocess.check_output(['git','show','b018a0544c44028c21399ad073ce8a3dee3bfd45:scripts/conftest.py'])
+assert target.read_bytes()==original
+(owned/'original-conftest.py.txt').write_bytes(original)
+results=[]
+def run(name,argv,cwd):
+ r=subprocess.run(argv,cwd=cwd,capture_output=True,text=True)
+ (owned/(name+'.stdout.log')).write_text(r.stdout)
+ (owned/(name+'.stderr.log')).write_text(r.stderr)
+ result={'case':name,'argv':argv,'cwd':str(cwd),'returncode':r.returncode}
+ results.append(result)
+ print(json.dumps(result),flush=True)
+ print(r.stdout[-1800:]+r.stderr[-1000:],flush=True)
+ return r
+try:
+ for layout in ['scripts','scripts/devkit']:
+  for case in ['empty-new','delete','file-to-dir','dir-to-file','fifo-new','fifo-new-base','symlink-file-new']:
+   root=Path(tempfile.mkdtemp(prefix='probe-'+case+'-',dir=owned/'tmp'))
+   (root/'.git').mkdir()
+   engine=root/layout
+   tests=engine/'lib/state_paths/tests'
+   tests.mkdir(parents=True)
+   (engine/'conftest.py').write_bytes(subprocess.check_output(['git','show','f408039dc3a9b0d2e0e8d246c126af892839cee8:scripts/conftest.py']) if case=='fifo-new-base' else original)
+   state=root/'state'
+   if case in ['delete','file-to-dir']: state.write_bytes(b'old')
+   if case=='dir-to-file': state.mkdir()
+   if case=='symlink-file-new': (root/'destination').write_bytes(b'target')
+   stmt={'empty-new':'p.write_bytes(b"")','delete':'p.unlink()','file-to-dir':'p.unlink(); p.mkdir()','dir-to-file':'p.rmdir(); p.write_bytes(b"new")','fifo-new':'os.mkfifo(p)','fifo-new-base':'os.mkfifo(p)','symlink-file-new':f'p.symlink_to({str(root/"destination")!r})'}[case]
+   (tests/'test_probe.py').write_text('from pathlib import Path\nimport os\ndef test_probe():\n    p=Path('+repr(str(state))+')\n    '+stmt+'\n')
+   name=case+'-'+layout.replace('/','-')
+   r=run(name,[sys.executable,'-B','-m','pytest',str(tests),'-q','-p','no:cacheprovider'],root)
+   results[-1]['state_kind']=stat.S_IFMT(state.lstat().st_mode) if state.exists() else 'absent'
+   if case in ['fifo-new','fifo-new-base']:
+    try: (state/'pr-watch').mkdir(parents=True,exist_ok=True)
+    except OSError as e: results[-1]['engine_mkdir_error']=repr(e); print(repr(e),flush=True)
+    code='import sys; from pathlib import Path; sys.path.insert(0, '+repr(str(repo/'scripts'))+'); import pr_watch; pr_watch.STATE_DIR=Path('+repr(str(state/'pr-watch'))+'); pr_watch.save_state(987654, {})'
+    engine_result=run(name+'-save-state',[sys.executable,'-B','-c',code],repo)
+    assert engine_result.returncode==1 and 'NotADirectoryError' in engine_result.stderr
+   expected=0 if case in ['fifo-new','fifo-new-base','symlink-file-new'] else 1
+   assert r.returncode==expected,(name,r.returncode)
+   assert ('REAL state/ WAS WRITTEN (#428)' in r.stdout)==(expected==1)
+ for name,replacement in [('mutation-drop-root-file','return {}'),('mutation-constant-root-hash','return {"./": "<file>"}')]:
+  old='return {"./": _hash_file(state_dir)}'
+  assert original.decode().count(old)==1
+  mutant=original.decode().replace(old,replacement).encode()
+  target.write_bytes(mutant)
+  landed=target.read_bytes()
+  assert landed==mutant and landed!=original
+  diff=''.join(difflib.unified_diff(original.decode().splitlines(True),landed.decode().splitlines(True),fromfile='reviewed/scripts/conftest.py',tofile=name+'/scripts/conftest.py'))
+  (owned/(name+'.diff')).write_text(diff)
+  print(diff,flush=True)
+  try:
+   r=run(name,[sys.executable,'-B','-m','pytest','scripts/tests/test_state_guard.py','scripts/tests/test_kit_doctor.py::test_kit_repo_self_check_is_clean','-q','-m','not driftcheck'],repo)
+   assert 'deselected' in r.stdout
+  finally:
+   target.write_bytes(original)
+   evidence={'byte_equal':target.read_bytes()==original,'sha256':hashlib.sha256(target.read_bytes()).hexdigest()}
+   (owned/(name+'.restoration.json')).write_text(json.dumps(evidence,indent=2))
+   print(json.dumps(evidence),flush=True)
+   assert evidence['byte_equal']
+ run('restored-focused',[sys.executable,'-B','-m','pytest','scripts/tests/test_state_guard.py','scripts/tests/test_kit_doctor.py::test_kit_repo_self_check_is_clean','-q'],repo)
+finally:
+ (owned/'behavior-results.json').write_text(json.dumps(results,indent=2))
+ assert target.read_bytes()==original

@@ -14,7 +14,7 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-10 — approved ITEM5-B kit review repair applied; operator merge hold.
+Last updated: 2026-09-10 — ITEM5-B kit repair review recorded; follow-up decision held.
 Phase 5 delivery item 5 remains incomplete; item 6's replay remains complete.
 
 ## Latest session — 2026-09-10 (ITEM5-B kit review repair, in Codex)
@@ -23,9 +23,11 @@ The operator approved ITEM5-B-KIT-REVIEW-01 as scoped and requested autonomous
 continuation. The [execution record](../saved_plans/phase5-item5-b-kit-repair-execution_2026-09-10.md)
 binds authority, protected-main readback, original destination bytes and applied hashes.
 [Kit PR #731](https://github.com/topij/agentic-dev-kit/pull/731) carries the guard,
-regression tests, normalized-text wording, release manifest and changelog. Its final
-head-bound disposition owns independent review and hosted-check evidence.
-The repair is operator-merge; no merge is authorized by this execution approval.
+regression tests, normalized-text wording, release manifest and changelog. The panel
+at `b018a0544c44028c21399ad073ce8a3dee3bfd45` on 2026-09-10 recorded the inherited
+FIFO-root gap and missing root-symlink compatibility coverage. The [follow-up packet](../saved_plans/phase5-item5-b-review-followup-decision_2026-09-10.md)
+owns complete review receipts, actual hosted results and the unapproved exact decision.
+The repair remains operator-merge, with no clean-review receipt or merge claimed.
 
 `make test` in `/Users/topi/Coding/agentic-dev-kit` at
 `1f6195d64482bef4a5437c1eff3a07069e2b14b8` on 2026-09-10 reached pytest's terminal summary with the disclosed #393
@@ -37,9 +39,9 @@ or field exit; fixture PR #1 retains its separate update and merge boundaries.
 Item 6's completed replay, #723's approved upstream deferral, #585's earlier placement
 and kit #724's delivered #722 batch are preserved. The friction sweep stays parked.
 
-▶ Next: `$session-start` — read back kit PR #731's final disposition and exact
-reviewed head, then decide its operator merge. A retained update still needs its own
-exact decision; do not repeat UPDATE-01 or the completed replay.
+▶ Next: `$session-start` — decide ITEM5-B-KIT-REVIEW-02 from the linked follow-up
+packet after reading back PR #731 and its complete review receipts. Keep repair merge
+and retained updates separate; do not repeat UPDATE-01 or the completed replay.
 
 ______________________________________________________________________
 

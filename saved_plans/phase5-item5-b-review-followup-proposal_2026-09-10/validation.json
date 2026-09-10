@@ -1,0 +1,10 @@
+{
+  "at": "2026-09-10T19:50:28.502185+00:00",
+  "candidate_guard_sha256": "ecebbbc42cd6a8960e187abda41c5917e39aa1623b438ad932c7102cdf3ab03c",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "executable_guard_ast_equal": true,
+  "full_candidate_make_test": "not run; required after exact approval",
+  "production_guard_sha256": "a0a82682c9431205f8c0db80176694b37800da7964e5b77ec3eba283fc7569c2",
+  "production_payloads_unchanged": true,
+  "revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45"
+}

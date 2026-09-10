@@ -1,0 +1,7 @@
+{
+  "case": "constant-root-file-hash",
+  "byte_equal": true,
+  "original_sha256": "a0a82682c9431205f8c0db80176694b37800da7964e5b77ec3eba283fc7569c2",
+  "restored_sha256": "a0a82682c9431205f8c0db80176694b37800da7964e5b77ec3eba283fc7569c2",
+  "date": "2026-09-10T19:37:23.857298+00:00"
+}

@@ -1,0 +1,73 @@
+import datetime,difflib,hashlib,json,os,subprocess,sys,tempfile
+from pathlib import Path
+ROOT=Path.cwd()
+OWNED=ROOT.parent.parent
+REV='b018a0544c44028c21399ad073ce8a3dee3bfd45'
+def sha(b): return hashlib.sha256(b).hexdigest()
+def run(name,argv):
+    started=datetime.datetime.now(datetime.timezone.utc).isoformat()
+    p=subprocess.run(argv,capture_output=True,text=True)
+    (OWNED/(name+'.stdout.log')).write_text(p.stdout)
+    (OWNED/(name+'.stderr.log')).write_text(p.stderr)
+    row=dict(argv=argv,cwd=str(ROOT),revision=REV,date=started,returncode=p.returncode,stdout_sha256=sha(p.stdout.encode()),stderr_sha256=sha(p.stderr.encode()))
+    (OWNED/(name+'.json')).write_text(json.dumps(row,indent=2))
+    print(json.dumps(row),flush=True)
+    print(p.stdout[-2500:],p.stderr[-1000:],flush=True)
+    return p
+
+def audit():
+    evidence=ROOT/'saved_plans/phase5-item5-b-kit-repair-execution-evidence_2026-09-10'
+    index=json.loads((evidence/'sha256.json').read_text())
+    mismatches=[p for p,h in index.items() if sha((evidence/p).read_bytes())!=h]
+    assert not mismatches,mismatches
+    before=json.loads((evidence/'retained-before.json').read_text())
+    after=json.loads((evidence/'retained-after-verification.json').read_text())
+    for key in ['trees','original_paths']: assert before[key]==after[key],key
+    for meta in evidence.glob('*.json'):
+        data=json.loads(meta.read_text())
+        if isinstance(data,dict) and 'stdout_sha256' in data:
+            for kind in ['stdout','stderr']:
+                p=meta.with_suffix('.'+kind+'.log')
+                assert sha(p.read_bytes())==data[kind+'_sha256'],str(p)
+    manifest=json.loads((ROOT/'kit-manifest.json').read_text())
+    for p in ['scripts/conftest.py','scripts/tests/test_state_guard.py','docs/agentic-dev-kit/workflows/upgrade.md']:
+        assert manifest['files'][p]['sha256']==sha((ROOT/p).read_bytes()),p
+    print('Execution hash index, command output hashes, retained checkpoint fields and changed manifest entries match.',flush=True)
+
+def mutations():
+    target=ROOT/'scripts/conftest.py'
+    original=subprocess.check_output(['git','show',REV+':scripts/conftest.py'])
+    assert target.read_bytes()==original
+    (OWNED/'guard-original.py.txt').write_bytes(original)
+    branch=b'    if not state_dir.is_symlink() and state_dir.is_file():\n        return {"./": _hash_file(state_dir)}\n'
+    assert original.count(branch)==1
+    cases={
+      'removed-root-file-branch':original.replace(branch,b''),
+      'constant-root-file-hash':original.replace(b'return {"./": _hash_file(state_dir)}',b'return {"./": "<file>"}'),
+      'follow-root-file-symlink':original.replace(b'if not state_dir.is_symlink() and state_dir.is_file():',b'if state_dir.is_file():'),
+    }
+    argv=['uv','run','--with','pytest','--with','pyyaml','python','-B','-m','pytest','scripts/tests/test_state_guard.py','scripts/tests/test_kit_doctor.py::test_kit_repo_self_check_is_clean','-q','-m','not driftcheck']
+    for name,mutant in cases.items():
+        assert target.read_bytes()==original
+        try:
+            target.write_bytes(mutant)
+            reread=target.read_bytes()
+            assert reread==mutant and reread!=original
+            diff=''.join(difflib.unified_diff(original.decode().splitlines(True),reread.decode().splitlines(True),fromfile='reviewed/scripts/conftest.py',tofile='mutant/scripts/conftest.py'))
+            (OWNED/(name+'.diff')).write_text(diff)
+            print(diff,flush=True)
+            p=run(name,argv)
+            assert 'deselected' in p.stdout,'Drift exclusion not evidenced'
+        finally:
+            target.write_bytes(original)
+            restored=target.read_bytes()
+            evidence=dict(case=name,byte_equal=restored==original,original_sha256=sha(original),restored_sha256=sha(restored),date=datetime.datetime.now(datetime.timezone.utc).isoformat())
+            (OWNED/(name+'-restoration.json')).write_text(json.dumps(evidence,indent=2))
+            print(json.dumps(evidence),flush=True)
+            assert restored==original
+    run('restored-state-guard',['uv','run','--with','pytest','--with','pyyaml','python','-B','-m','pytest','scripts/tests/test_state_guard.py','scripts/tests/test_kit_doctor.py::test_kit_repo_self_check_is_clean','-q'])
+
+if __name__=='__main__':
+    print(json.dumps(dict(cwd=str(ROOT),revision=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),date=datetime.datetime.now(datetime.timezone.utc).isoformat())),flush=True)
+    if sys.argv[1]=='audit': audit()
+    if sys.argv[1]=='mutations': mutations()

@@ -1,0 +1,23 @@
+import json,runpy,subprocess,sys
+from pathlib import Path
+E=runpy.run_path('/private/tmp/item5-b-kit-repair-1kc2i4t2/execute.py')
+K,O,R=(E[k] for k in ['KIT','OUT','REPO'])
+assert Path.cwd()==K and not sys.flags.optimize and sys.dont_write_bytecode
+before=E['read'](O/'retained-before.json');after=E['retention']()
+assert after['trees']==before['trees'] and after['original_paths']==before['original_paths'] and not any(after['original_paths'].values())
+E['enter'](O);E['write'](O/'retained-final.json',after)
+expected=E['read'](K/'saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/forge-after-exit.json')['tuple']
+name='topij/adk-item5-b-field-20260909';commands=[]
+def call(argv):
+    env=E['env']('watch');E['enter'](K);start=E['now']()
+    p=subprocess.run(argv,cwd=K,env=env,capture_output=True,check=True)
+    commands.append(dict(argv=argv,cwd=str(K),revision=E['git'](K,'rev-parse','HEAD'),started_at=start,ended_at=E['now'](),returncode=p.returncode,stdout=p.stdout.decode(),stderr=p.stderr.decode()))
+    return p.stdout
+repo=json.loads(call(['gh','api','repos/'+name,'--jq','{id,node_id,full_name,private,clone_url,default_branch,visibility}']))
+pr=json.loads(call(['gh','pr','view','1','--repo',name,'--json','number,url,state,isDraft,baseRefName,baseRefOid,headRefName,headRefOid,title,body,statusCheckRollup']))
+files=call(['gh','api','--paginate','repos/'+name+'/pulls/1/files','--jq','.[].filename']).decode().splitlines()
+receipts=[json.loads(call(['gh','api','repos/'+name+'/issues/comments/'+str(row['id'])])) for row in expected['review_receipts']]
+actual=dict(repository=repo,pr={k:v for k,v in pr.items() if k not in ['body','statusCheckRollup']},pr_body_sha256=E['sha'](pr['body'].encode()),changed_files=sorted(files),checks=pr['statusCheckRollup'],review_receipts=[dict(id=x['id'],url=x['html_url'],body_sha256=E['sha'](x['body'].encode())) for x in receipts],local_fixture_head=E['git'](R,'rev-parse','HEAD'))
+E['enter'](O);E['write'](O/'fixture-forge-final.json',dict(at=E['now'](),program_sha256=E['sha'](Path(__file__).read_bytes()),commands=commands,tuple=actual,equal_to_accepted_checkpoint=actual==expected))
+assert actual==expected
+print(json.dumps(dict(at=E['now'](),retained_trees_equal=True,original_paths_absent=True,fixture_forge_equal=True,fixture_head=actual['local_fixture_head'],retained_final_sha256=E['sha']((O/'retained-final.json').read_bytes()),fixture_forge_sha256=E['sha']((O/'fixture-forge-final.json').read_bytes()))))

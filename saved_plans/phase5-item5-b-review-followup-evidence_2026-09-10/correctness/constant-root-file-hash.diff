@@ -1,0 +1,11 @@
+--- reviewed/scripts/conftest.py
++++ mutant/scripts/conftest.py
+@@ -235,7 +235,7 @@
+     # it at the root entry so creation and content changes cannot look absent.
+     # Root symlinks retain the separately documented handling below.
+     if not state_dir.is_symlink() and state_dir.is_file():
+-        return {"./": _hash_file(state_dir)}
++        return {"./": "<file>"}
+     if not state_dir.is_dir():
+         return {}
+     snapshot: dict[str, str] = {"./": "<dir>"}

@@ -1,0 +1,14 @@
+Waiting for serial verification lock
+{"cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo", "argv": ["make", "test"], "environment": {"PYTHONDONTWRITEBYTECODE": "1", "DEVKIT_STATE_ROOT": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/state", "UV_CACHE_DIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache", "UV_TOOL_DIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-tools", "RUFF_CACHE_DIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/ruff-cache", "TMPDIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp", "PYTEST_ADDOPTS": "-o cache_dir=/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/pytest-cache -ra"}}
+uvx ruff@0.16.0 check --no-fix
+WARN Retry attempt #0. Sleeping 1.687521063s before the next attempt
+WARN Retry attempt #1. Sleeping 1.203188206s before the next attempt
+WARN Retry attempt #2. Sleeping 3.696083933s before the next attempt
+error: Request failed after 3 retries in 6.6s
+  Caused by: Failed to fetch: `https://pypi.org/simple/ruff/`
+  Caused by: error sending request for url (https://pypi.org/simple/ruff/)
+  Caused by: client error (Connect)
+  Caused by: dns error
+  Caused by: failed to lookup address information: nodename nor servname provided, or not known
+make: *** [lint] Error 2
+{"returncode": 2}

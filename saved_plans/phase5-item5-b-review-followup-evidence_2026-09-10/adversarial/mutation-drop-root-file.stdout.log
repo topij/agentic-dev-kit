@@ -1,0 +1,284 @@
+...............................................FF..FF                    [100%]
+=================================== FAILURES ===================================
+___________ test_guard_observes_regular_file_at_state_root[new-flat] ___________
+
+tmp_path = PosixPath('/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/pytest-of-topi/pytest-19/test_guard_observes_regular_fi0')
+layout = 'flat', case = 'new'
+
+    @pytest.mark.parametrize("layout", list(_LAYOUTS), ids=list(_LAYOUTS))
+    @pytest.mark.parametrize("case", ["new", "unchanged", "modified"])
+    def test_guard_observes_regular_file_at_state_root(
+        tmp_path: Path, layout: str, case: str
+    ) -> None:
+        """Detect persisted root-file changes without rejecting an unchanged baseline."""
+        engine_rel = _LAYOUTS[layout]
+        _build_tree(tmp_path, leak_in=None, engine_rel=engine_rel)
+        state = tmp_path / "state"
+        if case != "new":
+            state.write_text("before")
+        expected = "before" if case == "unchanged" else "after"
+        probe = tmp_path / engine_rel / "lib/state_paths/tests/test_state_paths_probe.py"
+        probe.write_text(
+            "from pathlib import Path\n"
+            "def test_write_state_root():\n"
+            f"    Path({str(state)!r}).write_text({expected!r})\n"
+        )
+        result = _run_pytest(tmp_path, [f"{engine_rel}/lib/state_paths/tests"])
+        assert state.is_file() and state.read_text() == expected
+        if case == "unchanged":
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert _BANNER not in result.stdout + result.stderr
+        else:
+>           _assert_guard_fired(result, tmp_path, "bare-root")
+
+scripts/tests/test_state_guard.py:748: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+result = CompletedProcess(args=['/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adve...n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 0.00s\n', stderr='')
+root = PosixPath('/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/pytest-of-topi/pytest-19/test_guard_observes_regular_fi0')
+leak_kind = 'bare-root'
+
+    def _assert_guard_fired(
+        result: subprocess.CompletedProcess[str], root: Path, leak_kind: str
+    ) -> None:
+        leaked = _leaked_path(root, leak_kind)
+        if not _leak_landed(root, leak_kind):
+            pytest.fail(
+                f"the planted test did not write {leaked}, so this run proves nothing "
+                f"about the guard.\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+            )
+>       assert result.returncode != 0, (
+            f"the guard did not fail the run after a write into {leaked}.\n"
+            f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        )
+E       AssertionError: the guard did not fail the run after a write into /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/pytest-of-topi/pytest-19/test_guard_observes_regular_fi0/state.
+E         stdout:
+E         .                                                                        [100%]
+E         =============================== warnings summary ===============================
+E         ../../../../uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+E           /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+E           
+E             self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+E         
+E         -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+E         1 passed, 1 warning in 0.00s
+E         
+E         stderr:
+E         
+E       assert 0 != 0
+E        +  where 0 = CompletedProcess(args=['/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adve...n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 0.00s\n', stderr='').returncode
+
+scripts/tests/test_state_guard.py:287: AssertionError
+__________ test_guard_observes_regular_file_at_state_root[new-nested] __________
+
+tmp_path = PosixPath('/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/pytest-of-topi/pytest-19/test_guard_observes_regular_fi1')
+layout = 'nested', case = 'new'
+
+    @pytest.mark.parametrize("layout", list(_LAYOUTS), ids=list(_LAYOUTS))
+    @pytest.mark.parametrize("case", ["new", "unchanged", "modified"])
+    def test_guard_observes_regular_file_at_state_root(
+        tmp_path: Path, layout: str, case: str
+    ) -> None:
+        """Detect persisted root-file changes without rejecting an unchanged baseline."""
+        engine_rel = _LAYOUTS[layout]
+        _build_tree(tmp_path, leak_in=None, engine_rel=engine_rel)
+        state = tmp_path / "state"
+        if case != "new":
+            state.write_text("before")
+        expected = "before" if case == "unchanged" else "after"
+        probe = tmp_path / engine_rel / "lib/state_paths/tests/test_state_paths_probe.py"
+        probe.write_text(
+            "from pathlib import Path\n"
+            "def test_write_state_root():\n"
+            f"    Path({str(state)!r}).write_text({expected!r})\n"
+        )
+        result = _run_pytest(tmp_path, [f"{engine_rel}/lib/state_paths/tests"])
+        assert state.is_file() and state.read_text() == expected
+        if case == "unchanged":
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert _BANNER not in result.stdout + result.stderr
+        else:
+>           _assert_guard_fired(result, tmp_path, "bare-root")
+
+scripts/tests/test_state_guard.py:748: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+result = CompletedProcess(args=['/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adve...n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 0.00s\n', stderr='')
+root = PosixPath('/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/pytest-of-topi/pytest-19/test_guard_observes_regular_fi1')
+leak_kind = 'bare-root'
+
+    def _assert_guard_fired(
+        result: subprocess.CompletedProcess[str], root: Path, leak_kind: str
+    ) -> None:
+        leaked = _leaked_path(root, leak_kind)
+        if not _leak_landed(root, leak_kind):
+            pytest.fail(
+                f"the planted test did not write {leaked}, so this run proves nothing "
+                f"about the guard.\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+            )
+>       assert result.returncode != 0, (
+            f"the guard did not fail the run after a write into {leaked}.\n"
+            f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        )
+E       AssertionError: the guard did not fail the run after a write into /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/pytest-of-topi/pytest-19/test_guard_observes_regular_fi1/state.
+E         stdout:
+E         .                                                                        [100%]
+E         =============================== warnings summary ===============================
+E         ../../../../uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+E           /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+E           
+E             self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+E         
+E         -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+E         1 passed, 1 warning in 0.00s
+E         
+E         stderr:
+E         
+E       assert 0 != 0
+E        +  where 0 = CompletedProcess(args=['/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adve...n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 0.00s\n', stderr='').returncode
+
+scripts/tests/test_state_guard.py:287: AssertionError
+________ test_guard_observes_regular_file_at_state_root[modified-flat] _________
+
+tmp_path = PosixPath('/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/pytest-of-topi/pytest-19/test_guard_observes_regular_fi4')
+layout = 'flat', case = 'modified'
+
+    @pytest.mark.parametrize("layout", list(_LAYOUTS), ids=list(_LAYOUTS))
+    @pytest.mark.parametrize("case", ["new", "unchanged", "modified"])
+    def test_guard_observes_regular_file_at_state_root(
+        tmp_path: Path, layout: str, case: str
+    ) -> None:
+        """Detect persisted root-file changes without rejecting an unchanged baseline."""
+        engine_rel = _LAYOUTS[layout]
+        _build_tree(tmp_path, leak_in=None, engine_rel=engine_rel)
+        state = tmp_path / "state"
+        if case != "new":
+            state.write_text("before")
+        expected = "before" if case == "unchanged" else "after"
+        probe = tmp_path / engine_rel / "lib/state_paths/tests/test_state_paths_probe.py"
+        probe.write_text(
+            "from pathlib import Path\n"
+            "def test_write_state_root():\n"
+            f"    Path({str(state)!r}).write_text({expected!r})\n"
+        )
+        result = _run_pytest(tmp_path, [f"{engine_rel}/lib/state_paths/tests"])
+        assert state.is_file() and state.read_text() == expected
+        if case == "unchanged":
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert _BANNER not in result.stdout + result.stderr
+        else:
+>           _assert_guard_fired(result, tmp_path, "bare-root")
+
+scripts/tests/test_state_guard.py:748: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+result = CompletedProcess(args=['/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adve...n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 0.00s\n', stderr='')
+root = PosixPath('/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/pytest-of-topi/pytest-19/test_guard_observes_regular_fi4')
+leak_kind = 'bare-root'
+
+    def _assert_guard_fired(
+        result: subprocess.CompletedProcess[str], root: Path, leak_kind: str
+    ) -> None:
+        leaked = _leaked_path(root, leak_kind)
+        if not _leak_landed(root, leak_kind):
+            pytest.fail(
+                f"the planted test did not write {leaked}, so this run proves nothing "
+                f"about the guard.\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+            )
+>       assert result.returncode != 0, (
+            f"the guard did not fail the run after a write into {leaked}.\n"
+            f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        )
+E       AssertionError: the guard did not fail the run after a write into /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/pytest-of-topi/pytest-19/test_guard_observes_regular_fi4/state.
+E         stdout:
+E         .                                                                        [100%]
+E         =============================== warnings summary ===============================
+E         ../../../../uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+E           /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+E           
+E             self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+E         
+E         -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+E         1 passed, 1 warning in 0.00s
+E         
+E         stderr:
+E         
+E       assert 0 != 0
+E        +  where 0 = CompletedProcess(args=['/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adve...n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 0.00s\n', stderr='').returncode
+
+scripts/tests/test_state_guard.py:287: AssertionError
+_______ test_guard_observes_regular_file_at_state_root[modified-nested] ________
+
+tmp_path = PosixPath('/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/pytest-of-topi/pytest-19/test_guard_observes_regular_fi5')
+layout = 'nested', case = 'modified'
+
+    @pytest.mark.parametrize("layout", list(_LAYOUTS), ids=list(_LAYOUTS))
+    @pytest.mark.parametrize("case", ["new", "unchanged", "modified"])
+    def test_guard_observes_regular_file_at_state_root(
+        tmp_path: Path, layout: str, case: str
+    ) -> None:
+        """Detect persisted root-file changes without rejecting an unchanged baseline."""
+        engine_rel = _LAYOUTS[layout]
+        _build_tree(tmp_path, leak_in=None, engine_rel=engine_rel)
+        state = tmp_path / "state"
+        if case != "new":
+            state.write_text("before")
+        expected = "before" if case == "unchanged" else "after"
+        probe = tmp_path / engine_rel / "lib/state_paths/tests/test_state_paths_probe.py"
+        probe.write_text(
+            "from pathlib import Path\n"
+            "def test_write_state_root():\n"
+            f"    Path({str(state)!r}).write_text({expected!r})\n"
+        )
+        result = _run_pytest(tmp_path, [f"{engine_rel}/lib/state_paths/tests"])
+        assert state.is_file() and state.read_text() == expected
+        if case == "unchanged":
+            assert result.returncode == 0, result.stdout + result.stderr
+            assert _BANNER not in result.stdout + result.stderr
+        else:
+>           _assert_guard_fired(result, tmp_path, "bare-root")
+
+scripts/tests/test_state_guard.py:748: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+result = CompletedProcess(args=['/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adve...n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 0.00s\n', stderr='')
+root = PosixPath('/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/pytest-of-topi/pytest-19/test_guard_observes_regular_fi5')
+leak_kind = 'bare-root'
+
+    def _assert_guard_fired(
+        result: subprocess.CompletedProcess[str], root: Path, leak_kind: str
+    ) -> None:
+        leaked = _leaked_path(root, leak_kind)
+        if not _leak_landed(root, leak_kind):
+            pytest.fail(
+                f"the planted test did not write {leaked}, so this run proves nothing "
+                f"about the guard.\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+            )
+>       assert result.returncode != 0, (
+            f"the guard did not fail the run after a write into {leaked}.\n"
+            f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        )
+E       AssertionError: the guard did not fail the run after a write into /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/pytest-of-topi/pytest-19/test_guard_observes_regular_fi5/state.
+E         stdout:
+E         .                                                                        [100%]
+E         =============================== warnings summary ===============================
+E         ../../../../uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+E           /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+E           
+E             self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+E         
+E         -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+E         1 passed, 1 warning in 0.00s
+E         
+E         stderr:
+E         
+E       assert 0 != 0
+E        +  where 0 = CompletedProcess(args=['/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adve...n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 0.00s\n', stderr='').returncode
+
+scripts/tests/test_state_guard.py:287: AssertionError
+=========================== short test summary info ============================
+FAILED scripts/tests/test_state_guard.py::test_guard_observes_regular_file_at_state_root[new-flat]
+FAILED scripts/tests/test_state_guard.py::test_guard_observes_regular_file_at_state_root[new-nested]
+FAILED scripts/tests/test_state_guard.py::test_guard_observes_regular_file_at_state_root[modified-flat]
+FAILED scripts/tests/test_state_guard.py::test_guard_observes_regular_file_at_state_root[modified-nested]
+4 failed, 49 passed, 1 deselected in 16.84s

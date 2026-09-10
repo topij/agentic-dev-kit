@@ -1,0 +1,320 @@
+[
+  {
+    "case": "empty-new-scripts",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-empty-new-1w05xbie/scripts/lib/state_paths/tests",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-empty-new-1w05xbie",
+    "returncode": 1,
+    "state_kind": 32768
+  },
+  {
+    "case": "delete-scripts",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-delete-vgj6qf0y/scripts/lib/state_paths/tests",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-delete-vgj6qf0y",
+    "returncode": 1,
+    "state_kind": "absent"
+  },
+  {
+    "case": "file-to-dir-scripts",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-file-to-dir-ffmnaxhk/scripts/lib/state_paths/tests",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-file-to-dir-ffmnaxhk",
+    "returncode": 1,
+    "state_kind": 16384
+  },
+  {
+    "case": "dir-to-file-scripts",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-dir-to-file-h6tgkqok/scripts/lib/state_paths/tests",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-dir-to-file-h6tgkqok",
+    "returncode": 1,
+    "state_kind": 32768
+  },
+  {
+    "case": "fifo-new-scripts",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-c51kcqjs/scripts/lib/state_paths/tests",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-c51kcqjs",
+    "returncode": 0,
+    "state_kind": 4096,
+    "engine_mkdir_error": "NotADirectoryError(20, 'Not a directory')"
+  },
+  {
+    "case": "fifo-new-scripts-save-state",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python",
+      "-B",
+      "-c",
+      "import sys; from pathlib import Path; sys.path.insert(0, '/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo/scripts'); import pr_watch; pr_watch.STATE_DIR=Path('/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-c51kcqjs/state/pr-watch'); pr_watch.save_state(987654, {})"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo",
+    "returncode": 1
+  },
+  {
+    "case": "fifo-new-base-scripts",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-base-erxiqtim/scripts/lib/state_paths/tests",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-base-erxiqtim",
+    "returncode": 0,
+    "state_kind": 4096,
+    "engine_mkdir_error": "NotADirectoryError(20, 'Not a directory')"
+  },
+  {
+    "case": "fifo-new-base-scripts-save-state",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python",
+      "-B",
+      "-c",
+      "import sys; from pathlib import Path; sys.path.insert(0, '/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo/scripts'); import pr_watch; pr_watch.STATE_DIR=Path('/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-base-erxiqtim/state/pr-watch'); pr_watch.save_state(987654, {})"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo",
+    "returncode": 1
+  },
+  {
+    "case": "symlink-file-new-scripts",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-symlink-file-new-vfqr1pz9/scripts/lib/state_paths/tests",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-symlink-file-new-vfqr1pz9",
+    "returncode": 0,
+    "state_kind": 40960
+  },
+  {
+    "case": "empty-new-scripts-devkit",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-empty-new-j97bzyo5/scripts/devkit/lib/state_paths/tests",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-empty-new-j97bzyo5",
+    "returncode": 1,
+    "state_kind": 32768
+  },
+  {
+    "case": "delete-scripts-devkit",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-delete-uxp91ypg/scripts/devkit/lib/state_paths/tests",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-delete-uxp91ypg",
+    "returncode": 1,
+    "state_kind": "absent"
+  },
+  {
+    "case": "file-to-dir-scripts-devkit",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-file-to-dir-p6a95k6w/scripts/devkit/lib/state_paths/tests",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-file-to-dir-p6a95k6w",
+    "returncode": 1,
+    "state_kind": 16384
+  },
+  {
+    "case": "dir-to-file-scripts-devkit",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-dir-to-file-sfskprjl/scripts/devkit/lib/state_paths/tests",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-dir-to-file-sfskprjl",
+    "returncode": 1,
+    "state_kind": 32768
+  },
+  {
+    "case": "fifo-new-scripts-devkit",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-ih8mcs0o/scripts/devkit/lib/state_paths/tests",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-ih8mcs0o",
+    "returncode": 0,
+    "state_kind": 4096,
+    "engine_mkdir_error": "NotADirectoryError(20, 'Not a directory')"
+  },
+  {
+    "case": "fifo-new-scripts-devkit-save-state",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python",
+      "-B",
+      "-c",
+      "import sys; from pathlib import Path; sys.path.insert(0, '/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo/scripts'); import pr_watch; pr_watch.STATE_DIR=Path('/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-ih8mcs0o/state/pr-watch'); pr_watch.save_state(987654, {})"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo",
+    "returncode": 1
+  },
+  {
+    "case": "fifo-new-base-scripts-devkit",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-base-d0u3x_o6/scripts/devkit/lib/state_paths/tests",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-base-d0u3x_o6",
+    "returncode": 0,
+    "state_kind": 4096,
+    "engine_mkdir_error": "NotADirectoryError(20, 'Not a directory')"
+  },
+  {
+    "case": "fifo-new-base-scripts-devkit-save-state",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python",
+      "-B",
+      "-c",
+      "import sys; from pathlib import Path; sys.path.insert(0, '/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo/scripts'); import pr_watch; pr_watch.STATE_DIR=Path('/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-base-d0u3x_o6/state/pr-watch'); pr_watch.save_state(987654, {})"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo",
+    "returncode": 1
+  },
+  {
+    "case": "symlink-file-new-scripts-devkit",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-symlink-file-new-wjpx5dqe/scripts/devkit/lib/state_paths/tests",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-symlink-file-new-wjpx5dqe",
+    "returncode": 0,
+    "state_kind": 40960
+  },
+  {
+    "case": "mutation-drop-root-file",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "scripts/tests/test_state_guard.py",
+      "scripts/tests/test_kit_doctor.py::test_kit_repo_self_check_is_clean",
+      "-q",
+      "-m",
+      "not driftcheck"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo",
+    "returncode": 1
+  },
+  {
+    "case": "mutation-constant-root-hash",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "scripts/tests/test_state_guard.py",
+      "scripts/tests/test_kit_doctor.py::test_kit_repo_self_check_is_clean",
+      "-q",
+      "-m",
+      "not driftcheck"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo",
+    "returncode": 1
+  },
+  {
+    "case": "restored-focused",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "scripts/tests/test_state_guard.py",
+      "scripts/tests/test_kit_doctor.py::test_kit_repo_self_check_is_clean",
+      "-q"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo",
+    "returncode": 0
+  }
+]

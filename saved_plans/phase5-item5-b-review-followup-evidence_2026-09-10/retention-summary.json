@@ -1,0 +1,14 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "/private/tmp/item5-b-kit-repair-1kc2i4t2/retained_checkpoint.py"
+  ],
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "fixture_forge_equal_to_accepted_checkpoint": true,
+  "original_paths_absent": true,
+  "recorded_at": "2026-09-10T19:52:40.762640+00:00",
+  "retained_final_uncompressed_sha256": "39a118adb0dee408a0abe1f8c4d687e0d35f3bbab2380cfad4426f3393f467c4",
+  "revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+  "trees_equal_to_original_execution_checkpoint": true
+}

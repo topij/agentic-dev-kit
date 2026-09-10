@@ -82,6 +82,14 @@ Item 6's completed replay and cs-toolkit #2222/#2223/#2255 are preserved without
 or new credit. #723 remains the approved upstream deferral, #585 stays earlier outside
 Phase 6, and kit #724 already delivered the #722 batch. The friction sweep remains parked.
 
-**Next:** decide operator merge of the repair PR's exact reviewed head after reading
-back its final disposition and hosted checks. Even a delivered repair requires a new
-exact retained-update decision before changing fixture PR #1; UPDATE-01 is consumed.
+## Independent review disposition
+
+The full panel at `b018a0544c44028c21399ad073ce8a3dee3bfd45` on 2026-09-10 completed
+with the recorded P2 inherited FIFO-root gap and P3 root-symlink coverage gap.
+The [follow-up packet](phase5-item5-b-review-followup-decision_2026-09-10.md) retains
+complete pre-fix receipts, actual local/hosted results and the exact unapproved next
+decision. REVIEW-01's production payloads remain as applied; its PR handoff is paused.
+No clean-review gate receipt, handled-round acknowledgment or merge is claimed.
+
+**Next:** decide ITEM5-B-KIT-REVIEW-02 from that packet. A delivered repair still needs
+a separate retained-update decision; UPDATE-01 is consumed and fixture merge is excluded.

@@ -1,0 +1,33 @@
+{
+  "PYTHONOPTIMIZE": null,
+  "argv": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "python",
+    "-B",
+    "-m",
+    "pytest",
+    "scripts/tests/test_state_guard.py::test_guard_leaves_root_file_symlinks_outside_snapshot",
+    "-q"
+  ],
+  "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02/repo",
+  "ended_at": "2026-09-10T19:46:33.992730+00:00",
+  "environment": {
+    "DEVKIT_STATE_ROOT": "/private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/state",
+    "PYTEST_ADDOPTS": "-o cache_dir=/private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/pytest-cache -ra",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "RUFF_CACHE_DIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/ruff-cache",
+    "TMPDIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/tmp",
+    "UV_CACHE_DIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/uv-cache",
+    "UV_TOOL_DIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/uv-tools"
+  },
+  "returncode": 0,
+  "revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+  "started_at": "2026-09-10T19:46:32.509571+00:00",
+  "stderr_sha256": "00d88df913341bddfe0ef7555ea86bf784b1eb2830d230c2be4fed4ade825514",
+  "stdout_sha256": "9ec3f8871416f43c00a62e0a3a3ac1f5787063a1e36708faf3817e8e47bc38f4"
+}

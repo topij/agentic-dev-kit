@@ -1,0 +1,45 @@
+import datetime,hashlib,json,os,subprocess,sys,tempfile
+from pathlib import Path
+repo=Path.cwd()
+owned=repo.parent.parent
+revision=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+records=[]
+for layout in ['scripts','scripts/devkit']:
+ for case in ['new-empty','delete-file','file-to-directory','directory-to-file','symlink-target-content']:
+    root=Path(tempfile.mkdtemp(prefix='probe-correctness-b018a054-',dir=owned))
+    (root/'.git').mkdir()
+    engine=root/layout
+    tests=engine/'lib/state_paths/tests'
+    tests.mkdir(parents=True)
+    (engine/'conftest.py').write_bytes((repo/'scripts/conftest.py').read_bytes())
+    state=root/'state'
+    if case in ['delete-file','file-to-directory']: state.write_text('before')
+    if case=='directory-to-file': state.mkdir()
+    if case=='symlink-target-content':
+        (root/'target').write_text('before')
+        state.symlink_to(root/'target')
+    actions={
+        'new-empty':"state.write_bytes(b'')",
+        'delete-file':'state.unlink()',
+        'file-to-directory':'state.unlink(); state.mkdir()',
+        'directory-to-file':"state.rmdir(); state.write_text('after')",
+        'symlink-target-content':"state.write_text('after')",
+    }
+    (tests/'test_probe.py').write_text('from pathlib import Path\ndef test_probe():\n    state=Path('+repr(str(state))+')\n    '+actions[case]+'\n')
+    argv=[sys.executable,'-B','-m','pytest',str(tests),'-q','-p','no:cacheprovider']
+    p=subprocess.run(argv,cwd=root,capture_output=True,text=True)
+    name=layout.replace('/','-')+'-'+case
+    (owned/(name+'.stdout.log')).write_text(p.stdout)
+    (owned/(name+'.stderr.log')).write_text(p.stderr)
+    changed=case!='symlink-target-content'
+    assert p.returncode==(1 if changed else 0),(name,p.stdout,p.stderr)
+    assert ('REAL state/ WAS WRITTEN (#428)' in p.stdout)==changed
+    if changed: assert "Changed paths: ['./']" in p.stdout
+    if case=='new-empty': assert state.is_file() and state.read_bytes()==b''
+    elif case=='delete-file': assert not os.path.lexists(state)
+    elif case=='file-to-directory': assert state.is_dir()
+    elif case=='directory-to-file': assert state.is_file() and state.read_text()=='after'
+    else: assert state.is_symlink() and (root/'target').read_text()=='after'
+    records.append(dict(case=case,layout=layout,argv=argv,cwd=str(root),source_revision=revision,date=datetime.datetime.now(datetime.timezone.utc).isoformat(),returncode=p.returncode,expected_guard=changed,filesystem_postcondition=True))
+    print(json.dumps(records[-1]),flush=True)
+(owned/'independent-probes.json').write_text(json.dumps(records,indent=2))

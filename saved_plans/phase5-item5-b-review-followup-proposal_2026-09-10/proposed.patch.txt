@@ -1,0 +1,77 @@
+diff --git a/kit-manifest.json b/kit-manifest.json
+index 79ae06d..b49e91b 100644
+--- a/kit-manifest.json
++++ b/kit-manifest.json
+@@ -120,7 +120,7 @@
+     },
+     "scripts/conftest.py": {
+       "role": "engine",
+-      "sha256": "a0a82682c9431205f8c0db80176694b37800da7964e5b77ec3eba283fc7569c2"
++      "sha256": "ecebbbc42cd6a8960e187abda41c5917e39aa1623b438ad932c7102cdf3ab03c"
+     },
+     "scripts/dev_session.sh": {
+       "role": "engine",
+@@ -321,7 +321,7 @@
+     },
+     "scripts/tests/test_state_guard.py": {
+       "role": "test",
+-      "sha256": "8e7a7082fa4e7fcaa0ccf1985be646c7b26bb86af4cc519349cc068861b6b291"
++      "sha256": "9420de32bcba5232f13e9d8258de6f5c08ccb0a398513ff83e01cd731f377613"
+     },
+     "scripts/verify_live_validation_bundle.py": {
+       "role": "repo-only",
+diff --git a/scripts/conftest.py b/scripts/conftest.py
+index 73b702f..f72f3ae 100644
+--- a/scripts/conftest.py
++++ b/scripts/conftest.py
+@@ -216,6 +216,11 @@ def _real_state_snapshot() -> dict[str, str]:
+ 
+       - ``state/`` ITSELF BEING A SYMLINK, which the ``is_dir()`` at the top
+         of this function follows silently. Nothing in the kit creates one.
++      - ``state/`` ITSELF BEING A SPECIAL FILE. A FIFO, socket or device
++        node at the root reaches neither the regular-file branch nor the
++        directory walk, so its presence compares as absent. Special-file
++        descendants are different: the walk records them without reading
++        them. A FIFO at the root can obstruct engine state-directory creation.
+       - REPLACEMENT AT A STABLE PATH, for any kind recorded as a CONSTANT. A
+         directory or special file deleted and recreated at the same path
+         between the two instants compares ``<dir>`` == ``<dir>`` or
+diff --git a/scripts/tests/test_state_guard.py b/scripts/tests/test_state_guard.py
+index a21345e..10ecd54 100644
+--- a/scripts/tests/test_state_guard.py
++++ b/scripts/tests/test_state_guard.py
+@@ -746,3 +746,34 @@ def test_guard_observes_regular_file_at_state_root(
+         assert _BANNER not in result.stdout + result.stderr
+     else:
+         _assert_guard_fired(result, tmp_path, "bare-root")
++
++
++@pytest.mark.parametrize("layout", list(_LAYOUTS), ids=list(_LAYOUTS))
++@pytest.mark.parametrize("case", ["new-link", "target-modified"])
++def test_guard_leaves_root_file_symlinks_outside_snapshot(
++    tmp_path: Path, layout: str, case: str
++) -> None:
++    """Pin the documented exclusion of a root symlink to a regular file."""
++    engine_rel = _LAYOUTS[layout]
++    _build_tree(tmp_path, leak_in=None, engine_rel=engine_rel)
++    state = tmp_path / "state"
++    target = tmp_path / "state-target"
++    target.write_text("before")
++    if case == "target-modified":
++        state.symlink_to(target)
++    statement = (
++        f"Path({str(state)!r}).symlink_to({str(target)!r})"
++        if case == "new-link"
++        else f"Path({str(target)!r}).write_text('after')"
++    )
++    probe = tmp_path / engine_rel / "lib/state_paths/tests/test_state_paths_probe.py"
++    probe.write_text(
++        "from pathlib import Path\n"
++        "def test_root_file_symlink():\n"
++        f"    {statement}\n"
++    )
++    result = _run_pytest(tmp_path, [f"{engine_rel}/lib/state_paths/tests"])
++    assert state.is_symlink() and state.resolve() == target
++    assert target.read_text() == ("before" if case == "new-link" else "after")
++    assert result.returncode == 0, result.stdout + result.stderr
++    assert _BANNER not in result.stdout + result.stderr

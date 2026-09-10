@@ -1,0 +1,51 @@
+[
+  {
+    "argv": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/handed-tree",
+    "stdout": "b018a0544c44028c21399ad073ce8a3dee3bfd45\n",
+    "stderr": "",
+    "returncode": 0,
+    "date": "2026-09-10T19:23:05.553998+00:00"
+  },
+  {
+    "argv": [
+      "git",
+      "status",
+      "--short"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/handed-tree",
+    "stdout": "",
+    "stderr": "",
+    "returncode": 0,
+    "date": "2026-09-10T19:23:05.669939+00:00"
+  },
+  {
+    "argv": [
+      "git",
+      "remote",
+      "-v"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/handed-tree",
+    "stdout": "origin\thttps://github.com/topij/agentic-dev-kit.git (fetch)\norigin\thttps://github.com/topij/agentic-dev-kit.git (push)\n",
+    "stderr": "",
+    "returncode": 0,
+    "date": "2026-09-10T19:23:05.680919+00:00"
+  },
+  {
+    "argv": [
+      "git",
+      "diff",
+      "--shortstat",
+      "f408039dc3a9b0d2e0e8d246c126af892839cee8...b018a0544c44028c21399ad073ce8a3dee3bfd45"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/handed-tree",
+    "stdout": " 98 files changed, 61589 insertions(+), 45 deletions(-)\n",
+    "stderr": "",
+    "returncode": 0,
+    "date": "2026-09-10T19:23:05.705622+00:00"
+  }
+]
