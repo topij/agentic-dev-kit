@@ -1,49 +1,61 @@
 {
-  "decision": "ITEM5-B-KIT-REVIEW-01",
+  "amended_at": "2026-09-10T18:23:04.112792+00:00",
   "approved": false,
-  "prepared_at": "2026-09-10T17:33:07.774326+00:00",
-  "preparation_base": "914c2e4ef06a33d88ae7c94a823d3262a9526278",
-  "preparation_clone": "/private/tmp/item5-b-review-proposal-srbdj7uq/repo",
-  "payload_writes": [
-    {
-      "destination": "/Users/topi/Coding/agentic-dev-kit/scripts/conftest.py",
-      "source": "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-review-repair-proposal_2026-09-10/scripts-conftest.py.txt",
-      "before_sha256": "c2076c72a633fdd2d4e9991cf07ae2dda6c1747a1fe865a34a7fea013bd574c4",
-      "after_sha256": "a0a82682c9431205f8c0db80176694b37800da7964e5b77ec3eba283fc7569c2",
-      "mode": "0o644"
-    },
-    {
-      "destination": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_state_guard.py",
-      "source": "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-review-repair-proposal_2026-09-10/test-state-guard.py.txt",
-      "before_sha256": "915aae52d1b6fe38be757589d836c0f1198b79a4e20ba2a438aa2ef6fbf04bd9",
-      "after_sha256": "8e7a7082fa4e7fcaa0ccf1985be646c7b26bb86af4cc519349cc068861b6b291",
-      "mode": "0o644"
-    },
-    {
-      "destination": "/Users/topi/Coding/agentic-dev-kit/docs/agentic-dev-kit/workflows/upgrade.md",
-      "source": "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-review-repair-proposal_2026-09-10/upgrade.md.txt",
-      "before_sha256": "2cad70fa094ebc01f78e835784b2f84ee9ffd6b56a42d3d039c5995e42d4bf37",
-      "after_sha256": "c29baa57bc48b2d74e5e553745028f84bd2e8d400e88d891c9336d8496724cf6",
-      "mode": "0o644"
-    }
-  ],
-  "patch_sha256": "14ff9579cde9166445e22b0ba2d898e8bb3330b34a38bf1ea84a2028b6593afd",
+  "baseline_writes": [],
   "changelog": {
-    "destination": "/Users/topi/Coding/agentic-dev-kit/CHANGELOG.md",
     "before_sha256": "f2fa0097779a49b0cef63412104fbde0cafeb86c4546d67131893d58769d55e5",
+    "destination": "/Users/topi/Coding/agentic-dev-kit/CHANGELOG.md",
     "entry_template": "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-review-repair-proposal_2026-09-10/changelog-entry.template.md",
-    "template_sha256": "928b5492070da41d523f77195ea60436c738c6b3575493b0bd4efaeca45dacdd",
     "insert_before": "first existing PR entry",
     "placeholders": {
-      "REPAIR_PR_NUMBER": "authoritatively returned kit repair PR number",
-      "EXECUTION_DATE": "UTC calendar date of that repair execution"
-    }
+      "EXECUTION_DATE": "UTC calendar date of that repair execution",
+      "REPAIR_PR_NUMBER": "authoritatively returned kit repair PR number"
+    },
+    "template_sha256": "928b5492070da41d523f77195ea60436c738c6b3575493b0bd4efaeca45dacdd"
   },
+  "client_actions": [],
+  "decision": "ITEM5-B-KIT-REVIEW-01",
+  "fixture_merge_authorized": false,
+  "full_make_test": "required after approval; not run for this proposal",
+  "manifest_review_receipts": {
+    "adversarial": "https://github.com/topij/agentic-dev-kit/pull/730#issuecomment-5623418113",
+    "correctness": "https://github.com/topij/agentic-dev-kit/pull/730#issuecomment-5623385214"
+  },
+  "patch_sha256": "30f9a3027ba4afe86e9eeca4985c8aec8990632416eb526f851a8105ad400898",
+  "payload_writes": [
+    {
+      "after_sha256": "a0a82682c9431205f8c0db80176694b37800da7964e5b77ec3eba283fc7569c2",
+      "before_sha256": "c2076c72a633fdd2d4e9991cf07ae2dda6c1747a1fe865a34a7fea013bd574c4",
+      "destination": "/Users/topi/Coding/agentic-dev-kit/scripts/conftest.py",
+      "mode": "0o644",
+      "source": "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-review-repair-proposal_2026-09-10/scripts-conftest.py.txt"
+    },
+    {
+      "after_sha256": "8e7a7082fa4e7fcaa0ccf1985be646c7b26bb86af4cc519349cc068861b6b291",
+      "before_sha256": "915aae52d1b6fe38be757589d836c0f1198b79a4e20ba2a438aa2ef6fbf04bd9",
+      "destination": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_state_guard.py",
+      "mode": "0o644",
+      "source": "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-review-repair-proposal_2026-09-10/test-state-guard.py.txt"
+    },
+    {
+      "after_sha256": "c29baa57bc48b2d74e5e553745028f84bd2e8d400e88d891c9336d8496724cf6",
+      "before_sha256": "2cad70fa094ebc01f78e835784b2f84ee9ffd6b56a42d3d039c5995e42d4bf37",
+      "destination": "/Users/topi/Coding/agentic-dev-kit/docs/agentic-dev-kit/workflows/upgrade.md",
+      "mode": "0o644",
+      "source": "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-review-repair-proposal_2026-09-10/upgrade.md.txt"
+    },
+    {
+      "after_sha256": "4697b0e14dfa85ba86797aef85788d1ce2edb0a7001a9c6a1057109775cbad96",
+      "before_sha256": "8f97a6939f4427667372f4692da9b4a63e12fb05d17543d4c4b129988bc3b551",
+      "destination": "/Users/topi/Coding/agentic-dev-kit/kit-manifest.json",
+      "mode": "0o644",
+      "source": "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-review-repair-proposal_2026-09-10/kit-manifest.json.txt"
+    }
+  ],
+  "preparation_base": "914c2e4ef06a33d88ae7c94a823d3262a9526278",
+  "preparation_clone": "/private/tmp/item5-b-review-proposal-srbdj7uq/repo",
+  "prepared_at": "2026-09-10T17:33:07.774326+00:00",
   "retained_fixture_writes": [],
   "retained_source_writes": [],
-  "baseline_writes": [],
-  "tracker_payloads": [],
-  "client_actions": [],
-  "fixture_merge_authorized": false,
-  "full_make_test": "required after approval; not run for this proposal"
+  "tracker_payloads": []
 }

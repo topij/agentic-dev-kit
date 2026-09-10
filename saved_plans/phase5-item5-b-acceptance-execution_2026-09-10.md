@@ -200,3 +200,23 @@ The friction-log sweep remains parked; no tracker payload or new intake was star
 **Next:** decide `ITEM5-B-KIT-REVIEW-01` from the linked repair packet. Resolve that
 kit-only scope before preparing any retained-fixture update; keep the remaining
 systemize field-exit matrix and fixture merge separate.
+
+## Kit record review amendment
+
+The kit record at `d2d32d56e3bdedcd0b32b1210a459f6429e3d6fd` received independent
+adversarial and correctness review on 2026-09-10. The complete
+[adversarial receipt](https://github.com/topij/agentic-dev-kit/pull/730#issuecomment-5623418113)
+and [correctness receipt](https://github.com/topij/agentic-dev-kit/pull/730#issuecomment-5623385214)
+were posted and read back before fixes. Their terminal reports retain actual compute,
+full `make test` summaries, the disclosed #393 failure, separate shell parses,
+behavioral mutation results and restoration/handed-tree evidence.
+
+The adversarial lens reproduced a P2 omission in the new repair plan: its initial
+ledger left out the kit release manifest required after changing covered files.
+The correctness lens reported no actionable finding. The unapproved repair packet
+was amended to include the exact release-manifest payload, before/after hashes,
+deterministic generation and a failing-before/passing-after self-check. This amended
+future kit scope does not authorize any retained fixture/source or baseline write.
+The proposal evidence binds the focused preparation; full candidate `make test`
+remains required after approval. The fixture's inherited review findings remain
+pending under their separate decision boundary.

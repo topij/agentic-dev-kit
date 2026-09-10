@@ -1,0 +1,50 @@
+{
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "revision": "d2d32d56e3bdedcd0b32b1210a459f6429e3d6fd",
+  "date": "2026-09-10T18:25:12.504366+00:00",
+  "raw_check": {
+    "argv": [
+      "git",
+      "diff",
+      "--cached",
+      "--check",
+      "HEAD"
+    ],
+    "returncode": 2,
+    "stdout": "saved_plans/phase5-item5-b-review-repair-proposal_2026-09-10/manifest-before-amendment.stdout.log:9: trailing whitespace.\n+    \nsaved_plans/phase5-item5-b-review-repair-proposal_2026-09-10/manifest-before-amendment.stdout.log:44: trailing whitespace.\n+E         \n",
+    "stderr": ""
+  },
+  "scoped_check": {
+    "argv": [
+      "git",
+      "diff",
+      "--cached",
+      "--check",
+      "HEAD",
+      "--",
+      "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/README.md",
+      "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/sha256.json",
+      "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-acceptance-execution_2026-09-10.md",
+      "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-review-repair-decision_2026-09-10.md",
+      "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-review-repair-proposal_2026-09-10/kit-manifest.json.txt",
+      "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-review-repair-proposal_2026-09-10/manifest-after-amendment.stderr.log",
+      "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-review-repair-proposal_2026-09-10/manifest-after-amendment.stdout.log",
+      "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-review-repair-proposal_2026-09-10/manifest-before-amendment.stderr.log",
+      "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-review-repair-proposal_2026-09-10/manifest-determinism.stderr.log",
+      "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-review-repair-proposal_2026-09-10/manifest-determinism.stdout.log",
+      "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-review-repair-proposal_2026-09-10/manifest-generate.stderr.log",
+      "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-review-repair-proposal_2026-09-10/manifest-generate.stdout.log",
+      "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-review-repair-proposal_2026-09-10/manifest-verification.json",
+      "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-review-repair-proposal_2026-09-10/proposed-repair.patch.txt",
+      "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-review-repair-proposal_2026-09-10/sha256.json",
+      "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-review-repair-proposal_2026-09-10/write-ledger.json"
+    ],
+    "returncode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "raw_artifacts": {
+    "saved_plans/phase5-item5-b-review-repair-proposal_2026-09-10/manifest-before-amendment.stdout.log": "a9def55384d6d4b7413d3498cb3765b959d806da7e80bde692c283f7bb61d853"
+  },
+  "disposition": "Preserve bound raw failure output and exact patch context; production destinations still match the before hashes. No Git configuration or attribute change."
+}

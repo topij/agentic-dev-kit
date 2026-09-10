@@ -1,0 +1,114 @@
+{
+  "after_sha256": "4697b0e14dfa85ba86797aef85788d1ce2edb0a7001a9c6a1057109775cbad96",
+  "amended_patch_sha256": "30f9a3027ba4afe86e9eeca4985c8aec8990632416eb526f851a8105ad400898",
+  "before_sha256": "8f97a6939f4427667372f4692da9b4a63e12fb05d17543d4c4b129988bc3b551",
+  "changed_manifest_entries": [
+    "docs/agentic-dev-kit/workflows/upgrade.md",
+    "scripts/conftest.py",
+    "scripts/tests/test_state_guard.py"
+  ],
+  "commands": [
+    {
+      "argv": [
+        "uv",
+        "run",
+        "--with",
+        "pytest",
+        "--with",
+        "pyyaml",
+        "python",
+        "-B",
+        "-m",
+        "pytest",
+        "scripts/tests/test_kit_doctor.py::test_kit_repo_self_check_is_clean",
+        "-q"
+      ],
+      "cwd": "/private/tmp/item5-b-manifest-proposal-b7j9ubsm/repo",
+      "ended_at": "2026-09-10T18:23:03.249447+00:00",
+      "label": "manifest-before-amendment",
+      "returncode": 1,
+      "revision": "d2d32d56e3bdedcd0b32b1210a459f6429e3d6fd",
+      "started_at": "2026-09-10T18:23:02.484177+00:00",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "a9def55384d6d4b7413d3498cb3765b959d806da7e80bde692c283f7bb61d853"
+    },
+    {
+      "argv": [
+        "uv",
+        "run",
+        "--with",
+        "pyyaml",
+        "python",
+        "-B",
+        "/private/tmp/item5-b-manifest-proposal-b7j9ubsm/repo/scripts/kit_doctor.py",
+        "--root",
+        "/private/tmp/item5-b-manifest-proposal-b7j9ubsm/repo",
+        "--generate-manifest"
+      ],
+      "cwd": "/private/tmp/item5-b-manifest-proposal-b7j9ubsm/repo",
+      "ended_at": "2026-09-10T18:23:03.429699+00:00",
+      "label": "manifest-generate",
+      "returncode": 0,
+      "revision": "d2d32d56e3bdedcd0b32b1210a459f6429e3d6fd",
+      "started_at": "2026-09-10T18:23:03.249569+00:00",
+      "stderr_sha256": "b82ab286ae3ea9ed88e517e7fdb98b5f749e4765043bc13351358b8aaa6bc11a",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "uv",
+        "run",
+        "--with",
+        "pytest",
+        "--with",
+        "pyyaml",
+        "python",
+        "-B",
+        "-m",
+        "pytest",
+        "scripts/tests/test_kit_doctor.py::test_kit_repo_self_check_is_clean",
+        "-q"
+      ],
+      "cwd": "/private/tmp/item5-b-manifest-proposal-b7j9ubsm/repo",
+      "ended_at": "2026-09-10T18:23:03.972014+00:00",
+      "label": "manifest-after-amendment",
+      "returncode": 0,
+      "revision": "d2d32d56e3bdedcd0b32b1210a459f6429e3d6fd",
+      "started_at": "2026-09-10T18:23:03.430027+00:00",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_sha256": "36ee6125777253800df314c891baf72e42248a17540db95c6bdb02de742e24de"
+    },
+    {
+      "argv": [
+        "uv",
+        "run",
+        "--with",
+        "pyyaml",
+        "python",
+        "-B",
+        "/private/tmp/item5-b-manifest-proposal-b7j9ubsm/repo/scripts/kit_doctor.py",
+        "--root",
+        "/private/tmp/item5-b-manifest-proposal-b7j9ubsm/repo",
+        "--generate-manifest"
+      ],
+      "cwd": "/private/tmp/item5-b-manifest-proposal-b7j9ubsm/repo",
+      "ended_at": "2026-09-10T18:23:04.112461+00:00",
+      "label": "manifest-determinism",
+      "returncode": 0,
+      "revision": "d2d32d56e3bdedcd0b32b1210a459f6429e3d6fd",
+      "started_at": "2026-09-10T18:23:03.972117+00:00",
+      "stderr_sha256": "580335b2267c064c469c91cd46d9922b98adeb0d8a11d47eb4a6869c7baea035",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "date": "2026-09-10T18:23:04.130718+00:00",
+  "full_candidate_make_test": "required after approval; not performed by this focused preparation",
+  "original_patch_sha256": "14ff9579cde9166445e22b0ba2d898e8bb3330b34a38bf1ea84a2028b6593afd",
+  "preparation_cwd": "/private/tmp/item5-b-manifest-proposal-b7j9ubsm/repo",
+  "preparation_revision": "d2d32d56e3bdedcd0b32b1210a459f6429e3d6fd",
+  "production_kit_manifest_unchanged": true,
+  "review_receipts": {
+    "adversarial": "https://github.com/topij/agentic-dev-kit/pull/730#issuecomment-5623418113",
+    "correctness": "https://github.com/topij/agentic-dev-kit/pull/730#issuecomment-5623385214"
+  }
+}

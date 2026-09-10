@@ -27,12 +27,21 @@ retains the actual local and hosted results and the unchanged retained-tree chec
 A passing hosted check does not dispose of independent findings. No clean-review
 receipt is claimed for the fixture head.
 
+The kit record review found a separate P2 execution-plan omission: the initial
+proposal changed manifest-covered files without including the release manifest.
+The [adversarial report](https://github.com/topij/agentic-dev-kit/pull/730#issuecomment-5623418113)
+and [correctness report](https://github.com/topij/agentic-dev-kit/pull/730#issuecomment-5623385214)
+were posted and read back before this amendment. The amended ledger includes that
+necessary kit-only destination; the proposal remains unapproved. The original packet
+and patch remain available at reviewed revision
+`d2d32d56e3bdedcd0b32b1210a459f6429e3d6fd`.
+
 ## ITEM5-B-KIT-REVIEW-01 — exact proposed kit-only work
 
 The [write ledger](phase5-item5-b-review-repair-proposal_2026-09-10/write-ledger.json)
 binds complete payload files, destination modes and before/after SHA-256 values.
 The [reviewable patch](phase5-item5-b-review-repair-proposal_2026-09-10/proposed-repair.patch.txt)
-has SHA-256 `14ff9579cde9166445e22b0ba2d898e8bb3330b34a38bf1ea84a2028b6593afd`.
+has SHA-256 `30f9a3027ba4afe86e9eeca4985c8aec8990632416eb526f851a8105ad400898`.
 The proposed production destinations are exclusively in the kit cockpit:
 
 | Destination | Proposed change |
@@ -40,6 +49,7 @@ The proposed production destinations are exclusively in the kit cockpit:
 | `/Users/topi/Coding/agentic-dev-kit/scripts/conftest.py` | Hash a regular file at the `state` root into its root snapshot entry before the existing directory check. Detect creation and content changes. Keep the documented root-symlink and observation-window limits; add no new traversal or recovery mechanism. |
 | `/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_state_guard.py` | Add nested-pytest behavioral cases for new, unchanged and modified regular root files in the declared flat/nested layouts. An unchanged baseline must remain accepted. |
 | `/Users/topi/Coding/agentic-dev-kit/docs/agentic-dev-kit/workflows/upgrade.md` | Describe `kit-current` as equality of rendered text after newline normalization. Comparator behavior remains as implemented. |
+| `/Users/topi/Coding/agentic-dev-kit/kit-manifest.json` | Apply the supplied release manifest generated from the proposed source payloads. Validate deterministic regeneration and the kit self-check. This is distinct from the retained fixture install baseline, which remains excluded. |
 | `/Users/topi/Coding/agentic-dev-kit/CHANGELOG.md` | Insert the supplied entry template before the first existing PR entry. Substitute only the authoritatively returned repair PR number and UTC execution date; retain the template hash, substituted values and resulting file hash. Never predict a PR number. |
 
 The changelog [entry template](phase5-item5-b-review-repair-proposal_2026-09-10/changelog-entry.template.md)
@@ -83,12 +93,29 @@ unset. Production kit files and retained fixture/source files were not changed.
 | `uv run --with pytest --with pyyaml python -B -m pytest scripts/tests/test_state_guard.py -q`, with proposed guard/tests | `53 passed in 16.59s`, exit `0`. |
 | `uvx ruff@0.16.0 check --no-fix scripts/conftest.py scripts/tests/test_state_guard.py` | Exit `0`. |
 
+The release-manifest amendment was prepared in
+`/private/tmp/item5-b-manifest-proposal-b7j9ubsm/repo` at
+`d2d32d56e3bdedcd0b32b1210a459f6429e3d6fd` on 2026-09-10 with the recorded candidate
+overlays. [Manifest verification](phase5-item5-b-review-repair-proposal_2026-09-10/manifest-verification.json)
+retains exact argv, stdout/stderr hashes and the changed manifest entries.
+`uv run --with pytest --with pyyaml python -B -m pytest scripts/tests/test_kit_doctor.py::test_kit_repo_self_check_is_clean -q`
+printed `1 failed in 0.29s` before adding the manifest and `1 passed in 0.23s` afterward.
+`kit_doctor.py --root <that clone> --generate-manifest` generated the supplied bytes;
+repeating that recorded command left the manifest bytes identical. The production
+kit manifest was not changed. These are release-integrity checks, not behavioral
+mutation kills or fixture-baseline acceptance.
+
 These focused preparation runs do not substitute for the repair's full `make test`.
 After approval, bind absolute cockpit/fixture/source roots, assert the owning `pwd`
 before writes, verify destination hashes/modes and serialize checkout/test/staging
 operations. Read the staged diff before a separate commit. Render the changelog with
 the returned repair PR identity before final review; no placeholder ships.
 
+After applying the complete payload ledger, regenerate the kit release manifest
+with `uv run --with pyyaml python -B "$KIT/scripts/kit_doctor.py" --root "$KIT" --generate-manifest`,
+where `$KIT` is the absolute cockpit root. Require its bytes to equal the supplied
+manifest payload; unexpected differences stop for an amended packet. Run the named
+manifest self-check without deselecting `driftcheck` as the release-integrity gate.
 Run `make test` at the repair revision and let it finish; read its actual summary.
 Run separate `bash -n` calls for `scripts/dev_session.sh`,
 `scripts/reconcile_sessions.sh`, `scripts/lib/repo_root.sh`, `scripts/hooks/pre-push`
@@ -108,7 +135,7 @@ PR closure or fixture/source restoration is authorized by this proposal.
 ## Exact approval question
 
 **Approve ITEM5-B-KIT-REVIEW-01 as scoped: apply the hash-bound kit-only guard,
-regression-test and wording payloads, add the supplied changelog entry, run required
+regression-test, wording and release-manifest payloads, add the supplied changelog entry, run required
 verification and complete the ready repair PR through independent review, holding
 its reviewed head for an operator merge decision and leaving retained trees,
 baseline, fixture PR merge, clients and trackers untouched?**

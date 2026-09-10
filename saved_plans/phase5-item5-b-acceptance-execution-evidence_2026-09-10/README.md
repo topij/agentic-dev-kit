@@ -39,3 +39,9 @@ ledger binds those supporting files.
 
 Historical UPDATE/replay evidence is not rewritten. These records do not authorize
 rerunning the mutation drivers, refreshing the baseline or merging the fixture PR.
+
+`record-validation.json` records the initial record snapshot before kit review at
+`d2d32d56e3bdedcd0b32b1210a459f6429e3d6fd`; its patch hash is historical. The repair
+proposal's `manifest-verification.json` and `amendment-validation.json` own the later
+manifest amendment and its validation. Do not apply the initial patch-hash assertion
+to the amended proposal.
