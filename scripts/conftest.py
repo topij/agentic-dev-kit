@@ -231,6 +231,11 @@ def _real_state_snapshot() -> dict[str, str]:
     spots.
     """
     state_dir = REPO_ROOT / "state"
+    # A regular file here blocks engines that require a state directory. Hash
+    # it at the root entry so creation and content changes cannot look absent.
+    # Root symlinks retain the separately documented handling below.
+    if not state_dir.is_symlink() and state_dir.is_file():
+        return {"./": _hash_file(state_dir)}
     if not state_dir.is_dir():
         return {}
     snapshot: dict[str, str] = {"./": "<dir>"}

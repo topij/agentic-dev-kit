@@ -719,3 +719,30 @@ def test_the_documented_residual_still_behaves_as_documented(
         f"landed, delete this test and the docstring's residual section.\n{combined}"
     )
     assert _BANNER not in combined, f"the guard fired where it is documented not to:\n{combined}"
+
+
+@pytest.mark.parametrize("layout", list(_LAYOUTS), ids=list(_LAYOUTS))
+@pytest.mark.parametrize("case", ["new", "unchanged", "modified"])
+def test_guard_observes_regular_file_at_state_root(
+    tmp_path: Path, layout: str, case: str
+) -> None:
+    """Detect persisted root-file changes without rejecting an unchanged baseline."""
+    engine_rel = _LAYOUTS[layout]
+    _build_tree(tmp_path, leak_in=None, engine_rel=engine_rel)
+    state = tmp_path / "state"
+    if case != "new":
+        state.write_text("before")
+    expected = "before" if case == "unchanged" else "after"
+    probe = tmp_path / engine_rel / "lib/state_paths/tests/test_state_paths_probe.py"
+    probe.write_text(
+        "from pathlib import Path\n"
+        "def test_write_state_root():\n"
+        f"    Path({str(state)!r}).write_text({expected!r})\n"
+    )
+    result = _run_pytest(tmp_path, [f"{engine_rel}/lib/state_paths/tests"])
+    assert state.is_file() and state.read_text() == expected
+    if case == "unchanged":
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert _BANNER not in result.stdout + result.stderr
+    else:
+        _assert_guard_fired(result, tmp_path, "bare-root")
