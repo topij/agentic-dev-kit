@@ -14,27 +14,27 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-10 — ITEM5-B update decision packet prepared; execution awaits approval.
+Last updated: 2026-09-10 — approved ITEM5-B update executed; field-exit decision remains.
 Phase 5 delivery item 5 remains incomplete; item 6's replay remains complete.
 
-## Latest session — 2026-09-10 (ITEM5-B update packet, in Codex)
+## Latest session — 2026-09-10 (ITEM5-B update execution, in Codex)
 
-The [update packet](../saved_plans/phase5-item5-b-update-decision_2026-09-10.md)
-binds the proposed source advance, fixture payloads, ownership choices, baseline,
-verification and rollback to the delivered repair pin. Its read-only audit retains
-the inventory comparisons and the exact source/fixture write ledger. PR #726's
-final receipt was read before relying on delivery. No retained fixture/source update,
-initializer, client exercise or replay was performed.
+The operator approved ITEM5-B-UPDATE-01. The [execution record](../saved_plans/phase5-item5-b-update-execution_2026-09-10.md)
+retains the source advance, fixture attempt, recorded baseline, complete local suite
+results and preservation evidence. Its byte archives and Git bundles preserve the
+bounded rollback route. No retained-tree initialization or client exercise was repeated.
 
-The packet's execution requires a new exact operator decision. Prior setup and
-kit-only repair approvals are consumed. Completed item 6, its replay evidence,
-the accepted #723 deferral and #585's earlier placement remain as recorded.
-The budget reminder's triage intake preserved the existing completed-state record;
-no fresh sweep or tracker payload was authorized by this packet.
+The [packet](../saved_plans/phase5-item5-b-update-decision_2026-09-10.md) records the
+consumed approval. Preserved-file acceptance, fixture PR lifecycle, adoption completion
+and the untested systemize routes retain their separate boundaries. Completed item 6,
+its replay evidence, #723's accepted deferral and #585's earlier placement are preserved.
+The friction-budget reminder's intake again preserved the existing triage state;
+no new sweep or tracker payload was started.
 
-▶ Next: `$session-start` — obtain the operator's decision on ITEM5-B-UPDATE-01 in
-`saved_plans/phase5-item5-b-update-decision_2026-09-10.md`. If approved, recheck its
-retained inputs before executing only that packet; otherwise preserve them unchanged.
+▶ Next: `$session-start` — review the ITEM5-B update execution at fixture
+`413132b01d14c735d94753231bf325904135285f`, then prepare the exact preserved-file
+acceptance and next field-exit decision. Do not launch a client or open a fixture PR
+under the consumed update approval.
 
 ______________________________________________________________________
 

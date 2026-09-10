@@ -1,0 +1,318 @@
+"""Execute the approved ITEM5-B-UPDATE-01 in separately invoked stages."""
+import ast
+import hashlib
+import json
+import os
+import pathlib
+import stat
+import subprocess
+import sys
+import tarfile
+from datetime import datetime, timezone
+
+COCKPIT = pathlib.Path('/Users/topi/Coding/agentic-dev-kit')
+REPO = pathlib.Path('/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture')
+KIT = pathlib.Path('/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source')
+OUT = pathlib.Path('/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-60fe0dc-20260910')
+OLD = '8418118e40728c667c32a28a182697139bc7a5ef'
+FIXTURE = '07bacf5bda3b1e7a6718c7d4528336ef81dc2143'
+REPAIR = '60fe0dc7ad68922d064c0cf401cff2c4c6d607ac'
+ATTEMPT = 'chore/item5-b-update-60fe0dc'
+SAVED = COCKPIT / 'saved_plans'
+AUDIT = SAVED / 'phase5-item5-b-update-audit_2026-09-10.json'
+PROPOSAL = json.loads(AUDIT.read_bytes())
+
+
+def now():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def digest(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def enter(root):
+    assert root.is_absolute() and root.resolve() == root, root
+    os.chdir(root)
+    assert pathlib.Path.cwd() == root, (root, pathlib.Path.cwd())
+
+
+def git(root, *args):
+    return subprocess.check_output(['git', '--no-optional-locks', '-C', str(root), *args])
+
+
+def inventory(root):
+    result = {}
+    for path in sorted(root.rglob('*')):
+        rel = path.relative_to(root).as_posix()
+        if rel == '.git' or rel.startswith('.git/'):
+            continue
+        item = {'mode': oct(stat.S_IMODE(path.lstat().st_mode))}
+        if path.is_symlink():
+            item.update(kind='symlink', target=os.readlink(path))
+        elif path.is_file():
+            item.update(kind='file', sha256=digest(path.read_bytes()))
+        elif path.is_dir():
+            item.update(kind='directory')
+        else:
+            raise ValueError(path)
+        result[rel] = item
+    return result
+
+
+def dump(name, data):
+    enter(OUT)
+    path = OUT / name
+    assert not os.path.lexists(path), path
+    path.write_text(json.dumps(data, indent=2, sort_keys=True) + '\n')
+
+
+def identity(root):
+    branch = subprocess.run(['git','--no-optional-locks','-C',str(root),'symbolic-ref','--short','-q','HEAD'],capture_output=True)
+    assert branch.returncode in (0,1)
+    return {'root':str(root), 'revision':git(root,'rev-parse','HEAD').decode().strip(),
+            'branch':branch.stdout.decode().strip() or 'DETACHED',
+            'status':git(root,'status','--porcelain=v1').decode(),
+            'remotes':git(root,'remote','-v').decode(),
+            'refs':git(root,'show-ref','--head').decode(),
+            'index_sha256':digest((root/'.git/index').read_bytes()),
+            'config_sha256':digest((root/'.git/config').read_bytes()),
+            'head_bytes':(root/'.git/HEAD').read_text(),
+            'git_directory':str((root/'.git').resolve())}
+
+
+def environment(role):
+    # Record task-controlled variables, not unrelated inherited credentials.
+    return {'PYTHONDONTWRITEBYTECODE':'1','DEVKIT_STATE_ROOT':str(OUT/f'{role}-state'),
+            'UV_CACHE_DIR':str(OUT/'uv-cache'),'UV_TOOL_DIR':str(OUT/'uv-tools'),
+            'RUFF_CACHE_DIR':str(OUT/'ruff-cache'),'TMPDIR':str(OUT/'tmp'),
+            'PYTEST_ADDOPTS':f'-o cache_dir={OUT}/{role}-pytest-cache -ra'}
+
+
+def run(name, argv, cwd, role='fixture'):
+    enter(OUT)
+    for suffix in ['stdout.log','stderr.log','json']:
+        assert not os.path.lexists(OUT/f'{name}.{suffix}')
+    start=now()
+    before={'fixture':identity(REPO),'source':identity(KIT)}
+    env_delta=environment(role)
+    with (OUT/f'{name}.stdout.log').open('wb') as stdout, (OUT/f'{name}.stderr.log').open('wb') as stderr:
+        enter(cwd)
+        p=subprocess.run([str(a) for a in argv],cwd=cwd,env={**os.environ,**env_delta},stdout=stdout,stderr=stderr)
+    report={'argv':[str(a) for a in argv],'cwd':str(cwd),'started_at':start,'ended_at':now(),
+            'environment_overrides':env_delta,'before':before,'after':{'fixture':identity(REPO),'source':identity(KIT)},
+            'exit_code':p.returncode,
+            'stdout_sha256':digest((OUT/f'{name}.stdout.log').read_bytes()),
+            'stderr_sha256':digest((OUT/f'{name}.stderr.log').read_bytes())}
+    dump(f'{name}.json',report)
+    print(json.dumps({'command':name,'exit_code':p.returncode,'stdout':str(OUT/f'{name}.stdout.log'),'stderr':str(OUT/f'{name}.stderr.log')}),flush=True)
+    return p.returncode
+
+
+def safe_regular(path, root, absent=False):
+    assert path.is_absolute() and path.is_relative_to(root)
+    for ancestor in [root,*list(path.relative_to(root).parents)[::-1][1:]]:
+        candidate=ancestor if ancestor.is_absolute() else root/ancestor
+        assert not candidate.is_symlink(), candidate
+    parent=root
+    for component in path.relative_to(root).parts[:-1]:
+        parent/=component
+        assert parent.is_dir() and not parent.is_symlink(), parent
+    if absent:
+        assert not os.path.lexists(path), path
+    else:
+        st=path.lstat()
+        assert stat.S_ISREG(st.st_mode) and st.st_nlink == 1 and not path.is_symlink(), path
+
+
+def preserved():
+    readings={}
+    for name,expected in PROPOSAL['preserve_hashes'].items():
+        path=pathlib.Path(name)
+        actual={'sha256':digest(path.read_bytes()),'mode':oct(stat.S_IMODE(path.lstat().st_mode))}
+        assert actual==expected,(name,actual,expected)
+        readings[name]=actual
+    return readings
+
+
+def configurations():
+    sys.path.insert(0,str(REPO/'scripts/devkit/lib'))
+    from kitconfig import load_config
+    result={}
+    for name,overlay in [('tracked',False),('merged',True)]:
+        actual=load_config(REPO/'config/dev-model.yaml',overlay=overlay)
+        expected=json.loads((SAVED/'phase5-item5-b-evidence_2026-09-09'/f'intended-{name}-config.json').read_text())
+        assert json.dumps(actual,sort_keys=True)==json.dumps(expected,sort_keys=True)
+        result[name]=actual
+    return result
+
+
+def fixture_expected(include_baseline):
+    expected=json.loads((OUT/'fixture-before-inventory.json').read_text())
+    for item in PROPOSAL['fixture_payload_writes']:
+        rel=pathlib.Path(item['destination']).relative_to(REPO).as_posix()
+        expected[rel]={'kind':'file','mode':item['mode'],'sha256':item['after']['sha256']}
+    if include_baseline:
+        expected['kit-manifest.json']['sha256']=PROPOSAL['baseline_write']['proposed_sha256']
+    return expected
+
+
+def source_expected():
+    expected=json.loads((OUT/'source-before-inventory.json').read_text())
+    for item in PROPOSAL['source_checkout_writes']:
+        rel=item['relative_path']
+        if item['after'] is None:
+            expected.pop(rel)
+            continue
+        after=item['after']
+        assert after['git_mode'] in ('100644','100755')
+        expected[rel]={'kind':'file','mode':'0o755' if after['git_mode']=='100755' else '0o644','sha256':after['sha256']}
+        for parent in pathlib.PurePosixPath(rel).parents:
+            if str(parent)!='.':
+                expected.setdefault(str(parent),{'kind':'directory','mode':'0o755'})
+    return expected
+
+
+def require_inventory(root, expected, name):
+    actual=inventory(root)
+    differences={p:{'expected':expected.get(p),'actual':actual.get(p)} for p in expected.keys()|actual.keys() if expected.get(p)!=actual.get(p)}
+    dump(name,{'root':str(root),'observed_at':now(),'revision':identity(root)['revision'],'differences':differences})
+    assert not differences, differences
+    return actual
+
+
+def verify_source():
+    assert git(KIT,'rev-parse','HEAD').decode().strip()==REPAIR
+    assert git(KIT,'rev-parse','--show-object-format').decode().strip()=='sha1'
+    files={}
+    for row in git(KIT,'ls-tree','-rz','--full-tree',REPAIR).split(b'\0'):
+        if not row: continue
+        meta,raw=row.split(b'\t'); mode,kind,oid=meta.split(); rel=raw.decode(); path=KIT/rel
+        assert kind==b'blob'
+        safe_regular(path,KIT)
+        data=path.read_bytes()
+        actual=hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()
+        assert actual==oid.decode(),rel
+        assert stat.S_IMODE(path.lstat().st_mode)==(0o755 if mode==b'100755' else 0o644),rel
+        files[rel]={'blob':actual,'sha256':digest(data),'git_mode':mode.decode()}
+    manifest=json.loads((KIT/'kit-manifest.json').read_text())
+    for rel,item in manifest['files'].items():
+        assert files[rel]['sha256']==item['sha256'],rel
+    assert not git(KIT,'status','--porcelain')
+    return files
+
+
+def prepare():
+    enter(COCKPIT)
+    a=json.loads(pathlib.Path('/private/tmp/item5-b-approved-preflight-20260910.json').read_text())
+    assert {k for k in a.keys()|PROPOSAL.keys() if a.get(k)!=PROPOSAL.get(k)} <= {'revision','observed_at_utc'}
+    for root,sha,branch,role in [(REPO,FIXTURE,'chore/adopt-agentic-dev-kit','fixture'),(KIT,OLD,'DETACHED','source')]:
+        state=identity(root)
+        assert state['revision']==sha and state['branch']==branch and not state['status'] and not state['remotes'],state
+        historical=json.loads((SAVED/'phase5-item5-b-evidence_2026-09-09'/f'{role}-inventory-after-checks.json').read_text())
+        assert inventory(root)==historical
+    p=subprocess.run(['git','--no-optional-locks','-C',str(REPO),'show-ref','--verify','--quiet',f'refs/heads/{ATTEMPT}'])
+    assert p.returncode==1
+    for item in PROPOSAL['fixture_payload_writes']:
+        safe_regular(pathlib.Path(item['destination']),REPO,item['action']=='add')
+    safe_regular(REPO/'kit-manifest.json',REPO)
+    preserved()
+    assert not os.path.lexists(OUT)
+    enter(OUT.parent)
+    OUT.mkdir()
+    dump('authority.json',{'decision':'ITEM5-B-UPDATE-01','operator_message':'I approve ITEM5-B-UPDATE-01 as scoped',
+                           'recorded_at':now(),'packet_revision':git(COCKPIT,'rev-parse','HEAD').decode().strip(),
+                           'packet_sha256':digest((SAVED/'phase5-item5-b-update-decision_2026-09-10.md').read_bytes()),
+                           'ledger_sha256':digest(AUDIT.read_bytes()),'roots':{'REPO':str(REPO),'KIT':str(KIT),'OUT':str(OUT)},
+                           'fixture_input':FIXTURE,'source_input':OLD,'repair_pin':REPAIR})
+    dump('preflight-audit.json',a)
+    for dirname in ['fixture-state','source-state','fixture-pytest-cache','source-pytest-cache','uv-cache','uv-tools','ruff-cache','tmp']:
+        enter(OUT); (OUT/dirname).mkdir()
+    for role,root in [('fixture',REPO),('source',KIT)]:
+        before=inventory(root)
+        dump(f'{role}-before-inventory.json',before)
+        dump(f'{role}-before-git.json',identity(root))
+        enter(OUT)
+        tarpath=OUT/f'{role}-before.tar'
+        with tarfile.open(tarpath,'x',dereference=False) as tar:
+            for rel in sorted(before):
+                tar.add(root/rel,arcname=rel,recursive=False)
+        with tarfile.open(tarpath,'r') as tar:
+            members=tar.getmembers(); assert {m.name for m in members}==set(before)
+            for m in members:
+                expected=before[m.name]
+                assert oct(m.mode)==expected['mode'],m.name
+                if expected['kind']=='file':
+                    assert m.isfile() and digest(tar.extractfile(m).read())==expected['sha256'],m.name
+                elif expected['kind']=='directory': assert m.isdir(),m.name
+                else: assert m.issym() and m.linkname==expected['target'],m.name
+        assert run(f'{role}-bundle-create',['git','bundle','create',OUT/f'{role}-before.bundle','--all','HEAD'],root)==0
+        assert run(f'{role}-bundle-verify',['git','bundle','verify',OUT/f'{role}-before.bundle'],root)==0
+        assert inventory(root)==before
+    dump('backups-verified.json',{'observed_at':now(),'files':{name:digest((OUT/name).read_bytes()) for name in ['fixture-before.tar','source-before.tar','fixture-before.bundle','source-before.bundle']}})
+    dump('preserved-before.json',preserved())
+    print('Preparation completed; source and fixture payloads remain at their inputs.',flush=True)
+
+
+def apply():
+    assert (OUT/'backups-verified.json').is_file()
+    for role,root,sha in [('fixture',REPO,FIXTURE),('source',KIT,OLD)]:
+        assert identity(root)==json.loads((OUT/f'{role}-before-git.json').read_text())
+        assert inventory(root)==json.loads((OUT/f'{role}-before-inventory.json').read_text())
+        backup=json.loads((OUT/'backups-verified.json').read_text())
+        for name,sha256 in backup['files'].items(): assert digest((OUT/name).read_bytes())==sha256
+    assert run('source-fetch',['git','fetch','--no-tags','--no-write-fetch-head','--no-auto-maintenance','--no-recurse-submodules',COCKPIT,REPAIR],KIT,'source')==0
+    assert run('source-checkout',['git','switch','--detach',REPAIR],KIT,'source')==0
+    dump('source-pinned-tracked-files.json',verify_source())
+    require_inventory(KIT,source_expected(),'source-checkout-comparison.json')
+    assert run('fixture-branch',['git','switch','-c',ATTEMPT,FIXTURE],REPO)==0
+    copies=[]
+    for item in PROPOSAL['fixture_payload_writes']:
+        src=pathlib.Path(item['source']); dst=pathlib.Path(item['destination'])
+        safe_regular(src,KIT); safe_regular(dst,REPO,item['action']=='add')
+        data=src.read_bytes(); assert digest(data)==item['after']['sha256']
+        if item['before']: assert digest(dst.read_bytes())==item['before']['sha256']
+        enter(REPO)
+        if item['action']=='add':
+            with dst.open('xb') as f: f.write(data)
+        else: dst.write_bytes(data)
+        dst.chmod(int(item['mode'],8))
+        assert digest(dst.read_bytes())==item['after']['sha256']
+        assert oct(stat.S_IMODE(dst.lstat().st_mode))==item['mode']
+        copies.append({**item,'actual_destination_sha256':digest(dst.read_bytes()),'actual_destination_mode':oct(stat.S_IMODE(dst.lstat().st_mode))})
+    dump('copy-report.json',copies)
+    dump('configuration-before-baseline.json',configurations())
+    dump('preserved-before-baseline.json',preserved())
+    require_inventory(REPO,fixture_expected(False),'fixture-before-baseline-comparison.json')
+    assert run('record-install',['python3','-B',REPO/'scripts/devkit/kit_doctor.py','--root',REPO,'--record-install','--from-kit',KIT],REPO)==0
+    data=(REPO/'kit-manifest.json').read_bytes()
+    assert digest(data)==PROPOSAL['baseline_write']['proposed_sha256']
+    assert json.loads(data)==PROPOSAL['baseline_write']['proposed_content']
+    dump('baseline-recorded.json',{'sha256':digest(data),'content':json.loads(data)})
+    require_inventory(REPO,fixture_expected(True),'fixture-after-baseline-comparison.json')
+    dump('preserved-after-baseline.json',preserved())
+    print('Payload and baseline checks completed. Read recorder output before committing.',flush=True)
+
+
+def commit():
+    assert digest((REPO/'kit-manifest.json').read_bytes())==PROPOSAL['baseline_write']['proposed_sha256']
+    require_inventory(REPO,fixture_expected(True),'fixture-precommit-comparison.json')
+    assert not git(REPO,'diff','--cached','--name-only')
+    assert identity(REPO)['branch']==ATTEMPT and identity(REPO)['revision']==FIXTURE
+    paths=[str(pathlib.Path(i['destination']).relative_to(REPO)) for i in PROPOSAL['fixture_payload_writes']]+['kit-manifest.json']
+    assert run('fixture-stage',['git','add','--',*[REPO/p for p in paths]],REPO)==0
+    staged=git(REPO,'diff','--cached','--name-only','-z').decode().strip('\0').split('\0')
+    assert set(staged)==set(paths),(staged,paths)
+    assert run('fixture-diff-check',['git','diff','--cached','--check'],REPO)==0
+    assert run('fixture-commit',['git','commit','-m','Apply the approved ITEM5-B repair payloads and install baseline'],REPO)==0
+    state=identity(REPO)
+    assert not state['status'] and state['branch']==ATTEMPT
+    assert git(REPO,'rev-parse','chore/adopt-agentic-dev-kit').decode().strip()==FIXTURE
+    dump('attempt-committed.json',{'fixture':state,'source':identity(KIT),'observed_at':now()})
+    dump('fixture-before-checks-inventory.json',inventory(REPO))
+    dump('source-before-checks-inventory.json',inventory(KIT))
+    print(json.dumps({'fixture_revision':state['revision'],'source_revision':REPAIR}),flush=True)
+
+
+if __name__=='__main__':
+    {'prepare':prepare,'apply':apply,'commit':commit}[sys.argv[1]]()

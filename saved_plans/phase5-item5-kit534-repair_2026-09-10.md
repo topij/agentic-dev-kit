@@ -61,7 +61,8 @@ earlier, outside Phase 6. The accepted #723 deferral and delivered #722 batch in
 #724 are unchanged. The [maintained sprint status](codex-parity-plan_2026-08-23.md#sprint-status--reconciled-2026-09-10)
 remains the delivery authority.
 
-**Next session:** prepare an exact ITEM5-B update decision packet against the merged
-repair pin, including source/destination paths, proposed file writes and verification.
-Recheck the retained inventory first. Do not update the fixture before that decision,
-repeat its consumed setup, or reconstruct either original missing path.
+**Follow-through — 2026-09-10:** the [update packet](phase5-item5-b-update-decision_2026-09-10.md)
+and its [approved execution](phase5-item5-b-update-execution_2026-09-10.md) supersede
+this record's packet-preparation instruction. The execution record owns the remaining
+preserved-file acceptance and field-exit decision; neither setup nor the update is to
+be repeated under consumed authority.

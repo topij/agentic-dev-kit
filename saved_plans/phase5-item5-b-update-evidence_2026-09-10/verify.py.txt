@@ -1,0 +1,41 @@
+"""Run the approved verification stage without changing either checkout."""
+import importlib.util
+import json
+import pathlib
+import sys
+spec=importlib.util.spec_from_file_location('attempt','/private/tmp/item5-b-update-execute-20260910.py')
+a=importlib.util.module_from_spec(spec)
+spec.loader.exec_module(a)
+mode=sys.argv[1]
+committed=json.loads((a.OUT/'attempt-committed.json').read_text())
+assert a.identity(a.REPO)==committed['fixture']
+assert a.identity(a.KIT)==committed['source']
+assert a.inventory(a.REPO)==json.loads((a.OUT/'fixture-before-checks-inventory.json').read_text())
+assert a.inventory(a.KIT)==json.loads((a.OUT/'source-before-checks-inventory.json').read_text())
+commands={
+'doctor':('installed-doctor',['python3','-B',a.REPO/'scripts/devkit/kit_doctor.py','--root',a.REPO,'--manifest',a.KIT/'kit-manifest.json','--json'],a.REPO,'fixture'),
+'adapters':('source-adapter-report',['python3','-B',a.KIT/'scripts/kit_doctor.py','--root',a.REPO,'--adapter-report','--adapter-source',a.KIT,'--json'],a.REPO,'fixture'),
+'budget':('fixture-document-budget',['python3','-B',a.REPO/'scripts/devkit/check_doc_budget.py'],a.REPO,'fixture'),
+'installed':('installed-suite',['uv','run','--with','pytest','--with','pyyaml','python','-B',a.REPO/'scripts/devkit/run_installed_tests.py','--root',a.REPO],a.REPO,'fixture'),
+'source':('source-make-test',['make','test'],a.KIT,'source'),
+}
+if mode=='syntax':
+    for name,path,shell in [('dev-session','scripts/dev_session.sh','bash'),('reconcile','scripts/reconcile_sessions.sh','bash'),('repo-root','scripts/lib/repo_root.sh','bash'),('pre-push','scripts/hooks/pre-push','bash'),('init','init.sh','sh')]:
+        assert a.run(f'syntax-{name}',[shell,'-n',a.KIT/path],a.KIT,'source')==0
+    result=0
+else:
+    name,argv,cwd,role=commands[mode]
+    result=a.run(name,argv,cwd,role)
+# Always record complete after-inventories, including on a failed command.
+for role,root in [('fixture',a.REPO),('source',a.KIT)]:
+    after=a.inventory(root)
+    a.dump(f'{role}-after-{mode}-inventory.json',after)
+    expected=json.loads((a.OUT/f'{role}-before-checks-inventory.json').read_text())
+    delta={p:{'before':expected.get(p),'after':after.get(p)} for p in expected.keys()|after.keys() if expected.get(p)!=after.get(p)}
+    a.dump(f'{role}-after-{mode}-comparison.json',{'revision':a.identity(root)['revision'],'observed_at':a.now(),'differences':delta})
+    assert not delta,delta
+assert a.identity(a.REPO)==committed['fixture']
+assert a.identity(a.KIT)==committed['source']
+a.dump(f'preserved-after-{mode}.json',a.preserved())
+print(json.dumps({'stage':mode,'exit_code':result,'after_inventory_differences':{},'git_state_unchanged':True}),flush=True)
+sys.exit(result)

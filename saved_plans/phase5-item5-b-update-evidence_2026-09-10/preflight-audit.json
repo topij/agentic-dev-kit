@@ -1,0 +1,1546 @@
+{
+  "argv": [
+    "python3",
+    "-B",
+    "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-update-audit_2026-09-10.py.txt"
+  ],
+  "baseline_write": {
+    "before_sha256": "0606c7769136e8f38180fbb4a8b1e5a34cdec3e7ea3212f5479d39ee19ad7285",
+    "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/kit-manifest.json",
+    "note": "Predicted in memory, not recorded into the fixture.",
+    "proposed_content": {
+      "adopter_owned": [
+        "config/dev-model.yaml",
+        "config/claude-lane-settings.json",
+        ".claude/agents/adversarial.md",
+        ".claude/agents/correctness.md",
+        "docs/handoff.md",
+        "docs/handoff-history.md",
+        "docs/friction-log.md",
+        "docs/friction-log-archive.md",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "docs/kit-handoff.md",
+        "docs/kit-handoff-history.md",
+        "docs/kit-friction-log.md",
+        "docs/kit-friction-log-archive.md",
+        "README.md",
+        ".gitignore"
+      ],
+      "files": {
+        "docs/agentic-dev-kit/adopting-into-a-linted-repo.md": {
+          "role": "doctrine",
+          "sha256": "c6c74e8cc3f80fe7ce6d88b34845e627a3800bc6c8cca10f57692fece4d16eab"
+        },
+        "docs/agentic-dev-kit/fallback-review-panel-evidence.md": {
+          "role": "doctrine",
+          "sha256": "645fcd50771351823ba1f3512bc483e404fd1a8337cc14bf9dd0333689640d3b"
+        },
+        "docs/agentic-dev-kit/fallback-review-panel.md": {
+          "role": "doctrine",
+          "sha256": "b2c35c612a13e4b19fdf1ea9a73f0e7604229d2eca3e1904014dd99478cdeb1e"
+        },
+        "docs/agentic-dev-kit/runtime-parity.md": {
+          "role": "doctrine",
+          "sha256": "cdf5a8a1fbd97decb25acb813bc1c7b753e4569e5b1280a4fdd4142e581f9efc"
+        },
+        "docs/agentic-dev-kit/safety-critical-changes.md": {
+          "role": "doctrine",
+          "sha256": "6dc6815ffb7fd89f00409dbd9ae620522214d0b97117ea8a0d09bf0d2344b365"
+        },
+        "docs/agentic-dev-kit/workflows/adopt.md": {
+          "role": "workflow",
+          "sha256": "83794fdfd9534ba7760cdd7e65335f2d21e65b81651f8ebee1295dddf065fcdf"
+        },
+        "docs/agentic-dev-kit/workflows/parallel-headless.md": {
+          "role": "workflow",
+          "sha256": "8b0f2cb8b923449122721aa1d4d2f64c0babf4b4621aebd015cdacf68e8767bf"
+        },
+        "docs/agentic-dev-kit/workflows/parallel.md": {
+          "role": "workflow",
+          "sha256": "6b1d4246ce89999a900e34a2986cb1d0047d738684f33c45ce82bb13c4f8689a"
+        },
+        "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
+          "role": "workflow",
+          "sha256": "0995bc61338fd3c4919b74f1bdad72823bd4fc1224bd81a9dcfdb6faad40364b"
+        },
+        "docs/agentic-dev-kit/workflows/pr-watch.md": {
+          "role": "workflow",
+          "sha256": "4618211f4b3055b3327ba174d180c0c6282d7e4c63d0605c962c7e16cd7d60f0"
+        },
+        "docs/agentic-dev-kit/workflows/session-start.md": {
+          "role": "workflow",
+          "sha256": "f280ee4eb9e8aa37d277aaeb3806b34d4377b5afe149f8063ad25eb7e66d2a2a"
+        },
+        "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
+          "role": "workflow",
+          "sha256": "af4b843d896063084139d77193e8435f761b979afd57cf396d5e47bbec14e3a7"
+        },
+        "docs/agentic-dev-kit/workflows/upgrade.md": {
+          "role": "workflow",
+          "sha256": "2cad70fa094ebc01f78e835784b2f84ee9ffd6b56a42d3d039c5995e42d4bf37"
+        },
+        "docs/agentic-dev-kit/workflows/wrap-up.md": {
+          "role": "workflow",
+          "sha256": "e88cf927424dfe861e34a0ca6661149c882058015f112f29dbd0d335b78368e7"
+        },
+        "docs/templates/AGENTS.md.tmpl": {
+          "role": "template",
+          "sha256": "e3794b399331a16138e72c62ee74d7085bd6a5fe14e10e45e4c40ef91cf41a6b"
+        },
+        "docs/templates/CLAUDE.md.tmpl": {
+          "role": "template",
+          "sha256": "e3195e5484d13f90122aa5ffacd9192e07b8445f5f0ab0cd44feced058fd23b3"
+        },
+        "docs/templates/friction-log-archive.md.tmpl": {
+          "role": "template",
+          "sha256": "af4a138e4a5ebe5634c55e7e417cd6b9f362bf3a35182b033f72876cd88180cf"
+        },
+        "docs/templates/friction-log.md.tmpl": {
+          "role": "template",
+          "sha256": "1e5fa714719cf147c03d03569e875e32a843c4b9f189025415d35dc2c326a062"
+        },
+        "docs/templates/handoff-history.md.tmpl": {
+          "role": "template",
+          "sha256": "111cf71a4c9b2a296f4fcf5ea02c6516907710e5b4fe0a7b3074f444f862ae69"
+        },
+        "docs/templates/handoff.md.tmpl": {
+          "role": "template",
+          "sha256": "1654465836a9e70a6e81d76208783e9a12d65343d1e9c3091f1d30c25a437ce7"
+        },
+        "init.sh": {
+          "role": "installer",
+          "sha256": "5cce07ddf5231d1944c883261f985d492530c2fa3472d992362a891aa5f17837"
+        },
+        "scripts/archive_plan_sessions.py": {
+          "role": "engine",
+          "sha256": "7d27ff31f4eaa7edef57e35a15f8745318cec41ca1228812207a9812f3b4e37b"
+        },
+        "scripts/check_doc_budget.py": {
+          "role": "engine",
+          "sha256": "013c1fa1e20763c9d99c8c2153b07723b1cda9a7b8c2dd9c2e78a6ed6a9d007c"
+        },
+        "scripts/check_memory_budget.py": {
+          "role": "engine",
+          "sha256": "5c385491289433b810b87167459015a3d23617accb5c317c0b539b879c1e1162"
+        },
+        "scripts/conftest.py": {
+          "role": "engine",
+          "sha256": "c2076c72a633fdd2d4e9991cf07ae2dda6c1747a1fe865a34a7fea013bd574c4"
+        },
+        "scripts/dev_session.sh": {
+          "role": "engine",
+          "sha256": "f696372d912ba5f9ab9bbbbd3ea2a14689ea8c9fdda57e1c00aa5962d376012f"
+        },
+        "scripts/hooks/pr_followup_hook.py": {
+          "role": "hook",
+          "sha256": "23bfa71eb732a12ac73976fff7c6b3baec28cb94e99e8ef9408b856d304dd879"
+        },
+        "scripts/hooks/pre-push": {
+          "role": "hook",
+          "sha256": "3bd8321e2aea0b137a033ebe0e4c23ff7269b10be6669ed6cb5a9d738b5c155e"
+        },
+        "scripts/kit_doctor.py": {
+          "role": "engine",
+          "sha256": "f8ce3862bd947211ee4e1ec1b1ad68f4c854a692455e106276802621d0a2427c"
+        },
+        "scripts/launch_lane.py": {
+          "role": "engine",
+          "sha256": "7787079163e9d678284db5df15311f059a519a61db6301980784864ab02ad9e6"
+        },
+        "scripts/lib/atomic_write.py": {
+          "role": "engine",
+          "sha256": "f9657f36f8bbcf3741382b616ae19be19cf516fc5fa4f36c53384579e96202b3"
+        },
+        "scripts/lib/devmodel_config.py": {
+          "role": "engine",
+          "sha256": "a4c29fb1808e0b3ec0a2ba80ffa97ba6c894f1a784463a5d126169542c300ef2"
+        },
+        "scripts/lib/kitconfig.py": {
+          "role": "engine",
+          "sha256": "4ab496661883d8f4ad590a6612a48b31f8cbf770283bb09794096149276634e6"
+        },
+        "scripts/lib/repo_root.sh": {
+          "role": "engine",
+          "sha256": "980cbf5596cea67033a5dd02d53630f2a92c24afd693ba7727d5fc50303ff555"
+        },
+        "scripts/lib/runtime_adapters.py": {
+          "role": "engine",
+          "sha256": "589a8e33508301d683467f94a1ac0cb7418d8c799fa0751813c7028f960f1afa"
+        },
+        "scripts/lib/state_paths/__init__.py": {
+          "role": "engine",
+          "sha256": "691a7df06a3bf9019b5faca8b8ebdb9d54463d231d492a632fd54c16cd51a2c6"
+        },
+        "scripts/lib/state_paths/paths.py": {
+          "role": "engine",
+          "sha256": "f54fd7d970402f8581f6c5080aa9614ce41cb2dafa2010c08406129731799397"
+        },
+        "scripts/lib/state_paths/repo_root.py": {
+          "role": "engine",
+          "sha256": "d9412f1fe395b944a86126bcc39f85d6838382b0fc29d68c8b29b965cd530b5a"
+        },
+        "scripts/lib/state_paths/resolver.py": {
+          "role": "engine",
+          "sha256": "e39fca241d6fbf28596ed3954f28a55e65831181cedb02c7c15e372895bb5bd2"
+        },
+        "scripts/lib/state_paths/tests/__init__.py": {
+          "role": "test",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "scripts/lib/state_paths/tests/test_state_paths.py": {
+          "role": "test",
+          "sha256": "b474703decdd2304d7460762fe5b5aa7fed9a81a9a422df61be0825b0c2ed88d"
+        },
+        "scripts/panel_prompt.py": {
+          "role": "engine",
+          "sha256": "f596c5f4bb4eb2d403ba0d2c9365808b01c771ff8d38b9b9d98cc563fd1bdca4"
+        },
+        "scripts/pr_watch.py": {
+          "role": "engine",
+          "sha256": "c84154a9d8019984d4a47627ec28ae9c3fe67181566bce835e1417fe7aa7eda9"
+        },
+        "scripts/reconcile_sessions.sh": {
+          "role": "engine",
+          "sha256": "75d29491cf65b61d385bb7bbb1c2cd39b3f557bef05b1dfa4a049737e8937573"
+        },
+        "scripts/run_installed_tests.py": {
+          "role": "engine",
+          "sha256": "4385056907334efbd44d7f67db3e10a302cf68433a18c666166b6b4d60c05235"
+        },
+        "scripts/tests/_repo_layout.py": {
+          "role": "test",
+          "sha256": "ab5c81c04b751f61a603f8b8a80f182b103f85417a58feb8abb725aebad7881b"
+        },
+        "scripts/tests/conftest.py": {
+          "role": "test",
+          "sha256": "dcc6980325b5ab33ddfb069f8a27f27b70f406c42892e5fcbcaf2369d0f07cd4"
+        },
+        "scripts/tests/fixtures/entry-point-markers.json": {
+          "role": "test",
+          "sha256": "13573d15825139f78e3a878fbe916f8096e924cec39be399f25688173fc3b079"
+        },
+        "scripts/tests/fixtures/init-config.json": {
+          "role": "test",
+          "sha256": "30609a5ccbba55ccbb163a64dae788b7c571031acf4e90b7bbacd6f177b56eda"
+        },
+        "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
+          "role": "test",
+          "sha256": "7376f453039fc8af3c72525865ec583e1e3e2358cf9d3f295ed911e49cf11250"
+        },
+        "scripts/tests/fixtures/shipped-registrations/codex-hooks.json": {
+          "role": "test",
+          "sha256": "66979af482546118a359db5ec3ecd5559a4dfc757ad431c198a23c26e5a9b872"
+        },
+        "scripts/tests/test_check_memory_budget.py": {
+          "role": "test",
+          "sha256": "8ddd343a1d1ac2a583b0ad7fbbfd76f7a63016f5c7c1f8e8074002f70fe76b4b"
+        },
+        "scripts/tests/test_ci_workflow.py": {
+          "role": "test",
+          "sha256": "4a26b00a2ddae874a76cdb0d85b3c9e14a77d727d959e45543647e928368b5f3"
+        },
+        "scripts/tests/test_init_sh.py": {
+          "role": "test",
+          "sha256": "87cca005542d8dfc3ff923f5706ae77a63a4068b8c852499c2ac05718db323bc"
+        },
+        "scripts/tests/test_kit_doctor.py": {
+          "role": "test",
+          "sha256": "b844706be86763345d67d28f93c0335e61ec378410b398c246e74fbf411f7e11"
+        },
+        "scripts/tests/test_kit_repo_only.py": {
+          "role": "test",
+          "sha256": "2002fb473dfffedc6125303bab6523c973bf628171c986490ed9bf368836b8e7"
+        },
+        "scripts/tests/test_kitconfig.py": {
+          "role": "test",
+          "sha256": "a4a77ccffd183350625b5c48d0d395f37941f155fc24ff85e34d1c577ec058b9"
+        },
+        "scripts/tests/test_lane_launcher.py": {
+          "role": "test",
+          "sha256": "9138d6ad975c2377a1c56c22610a0c329f17e3253294d0e4b62921b3f912a60a"
+        },
+        "scripts/tests/test_mutation_gate.py": {
+          "role": "test",
+          "sha256": "72914ad18b3622faa05a8e5c03035ba1040e7477aeca2cf8f9742aecd2bbf334"
+        },
+        "scripts/tests/test_panel_prompt.py": {
+          "role": "test",
+          "sha256": "a4937f85f74fb2cef7a4f3f9408908626dd8558998593e18f3c9c5d89155d7a9"
+        },
+        "scripts/tests/test_portability.py": {
+          "role": "test",
+          "sha256": "6d889025b72306a4dfe96fcf3eefa8b7c75d7f08112003e49ecec6c3f4f27e0b"
+        },
+        "scripts/tests/test_pr_followup_hook.py": {
+          "role": "test",
+          "sha256": "15fb412eb3023612988c09e44efa8c90afacb9e099822936fa2606567c888d07"
+        },
+        "scripts/tests/test_pr_watch.py": {
+          "role": "test",
+          "sha256": "3fcf1c8b11338d1424bb81525df8ee16180924037567bd9e83b02ea28f5b9a1d"
+        },
+        "scripts/tests/test_pre_push_hook.py": {
+          "role": "test",
+          "sha256": "98d845268d4e6ebc7709070078c324cda814d64f572b8f00097746acc3a7070e"
+        },
+        "scripts/tests/test_reconcile_sessions.py": {
+          "role": "test",
+          "sha256": "a12ddfbb4636376a07b3c047242a499226f47bc58a3668f1eb5a76fe1259b260"
+        },
+        "scripts/tests/test_repo_layout.py": {
+          "role": "test",
+          "sha256": "3560dba495462b51d85d68d12dc779616436671558f30553e244b7ffdc76f163"
+        },
+        "scripts/tests/test_state_guard.py": {
+          "role": "test",
+          "sha256": "915aae52d1b6fe38be757589d836c0f1198b79a4e20ba2a438aa2ef6fbf04bd9"
+        }
+      },
+      "kit_commit": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac",
+      "kit_version": 2,
+      "not_installed": []
+    },
+    "proposed_sha256": "9e2196df3b7239b599819abcfc20271b0389b70f78f22837a0709575145b9126"
+  },
+  "configuration": {
+    "merged_mapping_equal": true,
+    "tracked_mapping_equal": true
+  },
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "fixture_payload_writes": [
+    {
+      "action": "replace",
+      "after": {
+        "role": "engine",
+        "sha256": "f8ce3862bd947211ee4e1ec1b1ad68f4c854a692455e106276802621d0a2427c"
+      },
+      "before": {
+        "role": "engine",
+        "sha256": "a8c5cb408c0d793a1da0c8c7e053bd3cfb6e8223176e4133fc0e5c7ce845d3ac"
+      },
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/kit_doctor.py",
+      "mode": "0o755",
+      "ownership": "kit-owned",
+      "source": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/scripts/kit_doctor.py",
+      "source_key": "scripts/kit_doctor.py"
+    },
+    {
+      "action": "replace",
+      "after": {
+        "role": "test",
+        "sha256": "dcc6980325b5ab33ddfb069f8a27f27b70f406c42892e5fcbcaf2369d0f07cd4"
+      },
+      "before": {
+        "role": "test",
+        "sha256": "685b3af6939b3b181b1dfe4700d47a45030e9682bd38d159b0016a54693608cd"
+      },
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/conftest.py",
+      "mode": "0o644",
+      "ownership": "kit-owned",
+      "source": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/scripts/tests/conftest.py",
+      "source_key": "scripts/tests/conftest.py"
+    },
+    {
+      "action": "add",
+      "after": {
+        "role": "test",
+        "sha256": "13573d15825139f78e3a878fbe916f8096e924cec39be399f25688173fc3b079"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/fixtures/entry-point-markers.json",
+      "mode": "0o644",
+      "ownership": "kit-owned",
+      "source": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/scripts/tests/fixtures/entry-point-markers.json",
+      "source_key": "scripts/tests/fixtures/entry-point-markers.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "role": "test",
+        "sha256": "30609a5ccbba55ccbb163a64dae788b7c571031acf4e90b7bbacd6f177b56eda"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/fixtures/init-config.json",
+      "mode": "0o644",
+      "ownership": "kit-owned",
+      "source": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/scripts/tests/fixtures/init-config.json",
+      "source_key": "scripts/tests/fixtures/init-config.json"
+    },
+    {
+      "action": "replace",
+      "after": {
+        "role": "test",
+        "sha256": "87cca005542d8dfc3ff923f5706ae77a63a4068b8c852499c2ac05718db323bc"
+      },
+      "before": {
+        "role": "test",
+        "sha256": "f21c94c74613ba255a663faac3aefbd7d703b2df0c8e25cfdc5d42d9f709feaa"
+      },
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_init_sh.py",
+      "mode": "0o644",
+      "ownership": "kit-owned",
+      "source": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/scripts/tests/test_init_sh.py",
+      "source_key": "scripts/tests/test_init_sh.py"
+    },
+    {
+      "action": "replace",
+      "after": {
+        "role": "test",
+        "sha256": "b844706be86763345d67d28f93c0335e61ec378410b398c246e74fbf411f7e11"
+      },
+      "before": {
+        "role": "test",
+        "sha256": "3cc39f867eb507708921be34398f548e0b74fe4d11186143fec4328c8cabaf1d"
+      },
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_kit_doctor.py",
+      "mode": "0o644",
+      "ownership": "kit-owned",
+      "source": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/scripts/tests/test_kit_doctor.py",
+      "source_key": "scripts/tests/test_kit_doctor.py"
+    },
+    {
+      "action": "replace",
+      "after": {
+        "role": "test",
+        "sha256": "2002fb473dfffedc6125303bab6523c973bf628171c986490ed9bf368836b8e7"
+      },
+      "before": {
+        "role": "test",
+        "sha256": "e361de6f7c2de76a485307521556e16d185eadebf62907d09cd63d62dff75e4a"
+      },
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_kit_repo_only.py",
+      "mode": "0o644",
+      "ownership": "kit-owned",
+      "source": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/scripts/tests/test_kit_repo_only.py",
+      "source_key": "scripts/tests/test_kit_repo_only.py"
+    },
+    {
+      "action": "replace",
+      "after": {
+        "role": "test",
+        "sha256": "72914ad18b3622faa05a8e5c03035ba1040e7477aeca2cf8f9742aecd2bbf334"
+      },
+      "before": {
+        "role": "test",
+        "sha256": "36f0ae3a031e7bd2e9ca6ece84668e37ff1b71ae2b665a2af08cfd8c7f06fa8b"
+      },
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_mutation_gate.py",
+      "mode": "0o644",
+      "ownership": "kit-owned",
+      "source": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/scripts/tests/test_mutation_gate.py",
+      "source_key": "scripts/tests/test_mutation_gate.py"
+    },
+    {
+      "action": "replace",
+      "after": {
+        "role": "test",
+        "sha256": "6d889025b72306a4dfe96fcf3eefa8b7c75d7f08112003e49ecec6c3f4f27e0b"
+      },
+      "before": {
+        "role": "test",
+        "sha256": "4d73f3ee031f770e0770cd1361527fa1bf5d3e94db645a1d3ad09eaf0c1047fa"
+      },
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_portability.py",
+      "mode": "0o644",
+      "ownership": "kit-owned",
+      "source": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/scripts/tests/test_portability.py",
+      "source_key": "scripts/tests/test_portability.py"
+    }
+  ],
+  "inventory_mode_policy": {
+    "comparison": "Exact current-to-historical equality requires no current special bits; historical absence cannot be proved.",
+    "current": "stat.S_IMODE, including special permission bits",
+    "historical": "st_mode & 0o777; special bits were not recorded"
+  },
+  "ledgers": {
+    "phase5-item5-b-evidence_2026-09-09": {
+      "mismatches": [],
+      "sha256": "5e5c7417574a1e17c8325516e31553f9a75062427344047393ad873a0c66fa69"
+    },
+    "phase5-item5-kit534-repair-evidence_2026-09-10": {
+      "mismatches": [],
+      "sha256": "8e04569e97cf0673c61f9262f934efd06c88818cb01a2872289e5944528ca1f5"
+    }
+  },
+  "observed_at_utc": "2026-09-10T11:01:35.422273+00:00",
+  "original_paths": {
+    "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source": {
+      "exists": false,
+      "lexists": false
+    },
+    "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture": {
+      "exists": false,
+      "lexists": false
+    }
+  },
+  "preserve_hashes": {
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.agents/skills/wrap-up/SKILL.md": {
+      "mode": "0o644",
+      "sha256": "c5a267b53de07157cd69f035de68f662a634d469f71f99a9ddf4d2b0b0a93df7"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.claude/agents/adversarial.md": {
+      "mode": "0o644",
+      "sha256": "f61adde9da0974c20dcba31d8fda4dec313e2f26ffd97baae518654bae3e9e7a"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.claude/agents/correctness.md": {
+      "mode": "0o644",
+      "sha256": "a91ee86a18f6043d8f2cfba06cdbb983509ef9514b5924540f09b8a87d74e171"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.claude/settings.json": {
+      "mode": "0o644",
+      "sha256": "cafe367d9ec90f34644dec0a2a4929dc195962e16df332523b7a74fec82751bf"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.codex/config.toml": {
+      "mode": "0o644",
+      "sha256": "d37497c3278121598a663564ab38b53f658969717f78decb661ddd11c66551ea"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.codex/hooks.json": {
+      "mode": "0o644",
+      "sha256": "dbea8d8084adcc50e786af584c7e407fc5d7040bf26bd614c9966e9ba2797cfb"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.git/hooks/pre-push": {
+      "mode": "0o755",
+      "sha256": "b0d3019ee1de92d7960b22339e51eb68eca5e60fd59c2277cfbd3214955d4fef"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.gitignore": {
+      "mode": "0o644",
+      "sha256": "3d98e73ca1b75d1afc6c1663edfed6e4c6405456d5213a908296a6d5a139a866"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/AGENTS.md": {
+      "mode": "0o644",
+      "sha256": "afe455b56f1a6c4270961ed6ee301e3dae03b43748c1ceb8d5a49a3a30856819"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/CLAUDE.md": {
+      "mode": "0o644",
+      "sha256": "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/ROADMAP.md": {
+      "mode": "0o644",
+      "sha256": "02b32402fb8bf0bf197e1473f3f88a4718f411c03e07686c829714063f0d6fd7"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/config/claude-lane-settings.json": {
+      "mode": "0o644",
+      "sha256": "2dd313c0a0889235a72175d102356ad9cdc2ce02230164cb274162ae0f96260f"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/config/dev-model.local.yaml": {
+      "mode": "0o644",
+      "sha256": "1d7c76ab19a3c1f550cf398b52284bb12c8b662485734add5c30abc3870f5524"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/config/dev-model.yaml": {
+      "mode": "0o644",
+      "sha256": "1cefdb92c970b997eaa56745f1fc8d5d9cf5ce0b86050b962f987548bdaaf8aa"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/init.sh": {
+      "mode": "0o755",
+      "sha256": "5cce07ddf5231d1944c883261f985d492530c2fa3472d992362a891aa5f17837"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/notes/friction-archive.md": {
+      "mode": "0o644",
+      "sha256": "af4a138e4a5ebe5634c55e7e417cd6b9f362bf3a35182b033f72876cd88180cf"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/notes/friction.md": {
+      "mode": "0o644",
+      "sha256": "9d7adf210f28942e5fac48c49e629aabb2c58a7f86776a4a1385f68dbd9764e5"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/notes/history.md": {
+      "mode": "0o644",
+      "sha256": "755b4349978cb4269cf89b6938427ee5e9da8475dc833f5cb2d10236dbea087a"
+    }
+  },
+  "repair_pin": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac",
+  "repair_tree_equals_reviewed_head": "186cd68010d04b3a6f334b0df10117835ed683dc",
+  "replay_evidence_unchanged_between_source_pins": [
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/adapter-report.json",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/adopter-pr-watch-receipt.json",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/adopter-pr-watch.json",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/approval.md",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/bindings.sh",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/capture_tuple.py.txt",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/delivery-events.json",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/fixture-absence.json",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/fork-test-nodes.json",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/inventory-probe-receipt.json",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/inventory-probe.json",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/reconcile_no_change.py.txt",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/reconciliation-receipt.json",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/reconciliation.json",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/review-record.md",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/sha256.json",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/snapshot-comparison.json",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/source-doctor.json",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/test-results.json",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/tuple-after-receipt.json",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/tuple-after.json",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/tuple-before-receipt.json",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/tuple-before.json",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/verification-receipt.json",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/verification-result.json",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/verify_adopter_condition.py.txt"
+  ],
+  "retained": {
+    "fixture": {
+      "added": [],
+      "branch": "chore/adopt-agentic-dev-kit",
+      "changed": [],
+      "git_entry_is_directory": true,
+      "git_status": "",
+      "inventory_equal": true,
+      "inventory_reference": "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-evidence_2026-09-09/fixture-inventory-after-checks.json",
+      "inventory_reference_sha256": "4a737487cfb292d41a1f1837f5b5696122ce384f6c599631dfcf01d1652bef58",
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+      "remotes": "",
+      "removed": [],
+      "revision": "07bacf5bda3b1e7a6718c7d4528336ef81dc2143"
+    },
+    "source": {
+      "added": [],
+      "branch": "DETACHED",
+      "changed": [],
+      "git_entry_is_directory": true,
+      "git_status": "",
+      "inventory_equal": true,
+      "inventory_reference": "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-evidence_2026-09-09/source-inventory-after-checks.json",
+      "inventory_reference_sha256": "c47ac9c2ccc8eb0e71128d71d6bb83177898a5f623144eace59d39b09e3bb5d5",
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source",
+      "remotes": "",
+      "removed": [],
+      "revision": "8418118e40728c667c32a28a182697139bc7a5ef"
+    }
+  },
+  "revision": "4ee132ae4f4a4a0d0fd600e6da6e5325e5f68b34",
+  "source_checkout_writes": [
+    {
+      "action": "replace",
+      "after": {
+        "blob": "e4a7d116486e43d0b7c13eb99f15c68cce91566a",
+        "git_mode": "100644",
+        "sha256": "f2fa0097779a49b0cef63412104fbde0cafeb86c4546d67131893d58769d55e5"
+      },
+      "before": {
+        "blob": "4fa5b4e82c0cbf67723215b1ead590ac13314b74",
+        "git_mode": "100644",
+        "sha256": "3c40e9ecdd4bf084b9066c868847d1e1365b3150ccbe1a387cb22d32fdf6fa8a"
+      },
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/CHANGELOG.md",
+      "relative_path": "CHANGELOG.md"
+    },
+    {
+      "action": "replace",
+      "after": {
+        "blob": "9750ec840785667c72a4a45b16e3290d01f8f69e",
+        "git_mode": "100644",
+        "sha256": "63ba2775a3a2c6d4a47049109d20c7bae403ecf43aa143ab3e4ce44d4d3d6619"
+      },
+      "before": {
+        "blob": "1b6e565e9171d4c5e2b9838112a2438c06806c64",
+        "git_mode": "100644",
+        "sha256": "0dd5ed3debe5264f39835f5745bc983f2ffbdbaf6e4142431f50fe94be7724ef"
+      },
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/docs/kit-friction-log.md",
+      "relative_path": "docs/kit-friction-log.md"
+    },
+    {
+      "action": "replace",
+      "after": {
+        "blob": "b64bc21aa9192f06efd75f7f56bfe8c216658e35",
+        "git_mode": "100644",
+        "sha256": "075667722c3ed998be53d2de30816dc09a534268808277166766b610eae28519"
+      },
+      "before": {
+        "blob": "0acbfa8adf6663a0fb3b2b43d072d1decdd3091a",
+        "git_mode": "100644",
+        "sha256": "aff299ee024b71a2554fcfb77dabc7360694a858720eb59bf3077aa1fd9ab8f6"
+      },
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/docs/kit-handoff.md",
+      "relative_path": "docs/kit-handoff.md"
+    },
+    {
+      "action": "replace",
+      "after": {
+        "blob": "7234c0c300ee6512f50500a288f8ac2a7d182b35",
+        "git_mode": "100644",
+        "sha256": "8f97a6939f4427667372f4692da9b4a63e12fb05d17543d4c4b129988bc3b551"
+      },
+      "before": {
+        "blob": "c92b4f4de055ec6e7b0f549480672c2037c2e7d9",
+        "git_mode": "100644",
+        "sha256": "47394146a352fef24e42c644a0b906e2eab3e5fb2a60496c999af8a2c6fc7136"
+      },
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/kit-manifest.json",
+      "relative_path": "kit-manifest.json"
+    },
+    {
+      "action": "replace",
+      "after": {
+        "blob": "03e07bf2d32c5fc89be42a92f8f52540671da929",
+        "git_mode": "100644",
+        "sha256": "179e9d811b453b33f0fb5f1556c35827cade6ab72fd1c0f6dc667404e0919f6f"
+      },
+      "before": {
+        "blob": "c3e3fb03d44a5051e572970c72f3459a4bb119b2",
+        "git_mode": "100644",
+        "sha256": "701c32eaac309b5e49d1c6cff4c7b7044f181f5901d59b8770a5202954ad57ad"
+      },
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/codex-parity-plan_2026-08-23.md",
+      "relative_path": "saved_plans/codex-parity-plan_2026-08-23.md"
+    },
+    {
+      "action": "replace",
+      "after": {
+        "blob": "30875c4f139ac426ef328ce714dfad28d8306a17",
+        "git_mode": "100644",
+        "sha256": "2df2d0df1e83bdaf5d1e65b73200073acac8e8ac7063339c85315bfb0c28afe5"
+      },
+      "before": {
+        "blob": "f548815f3775dbc7ecbd9e2640d97679d4dc31ee",
+        "git_mode": "100644",
+        "sha256": "ae1a37b0980a4e2c4c2bff93b3a505f257522fef12f2ce4f691d844638798bee"
+      },
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/cs-toolkit-replay_2026-09-09.md",
+      "relative_path": "saved_plans/cs-toolkit-replay_2026-09-09.md"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "55113aef8645e63ee861a4c780fefbdead91628d",
+        "git_mode": "100644",
+        "sha256": "d4bf70f4fd3cb673dbb7922eb2422b777dd1d17014ddf4c9588b736faabc3a28"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/assess.py.txt",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/assess.py.txt"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "12896fd98f71e06ad19d2647c4a0404c53a0c7ee",
+        "git_mode": "100644",
+        "sha256": "1a3a6f218a62253bb1f33850ef7963028dc7ddb7d6d715c526ad9e147c6d9bb9"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/clone.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/clone.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "692a859167b735b5115480f614fa9a26344bf452",
+        "git_mode": "100644",
+        "sha256": "1cefdb92c970b997eaa56745f1fc8d5d9cf5ce0b86050b962f987548bdaaf8aa"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/config-after-init.yaml",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/config-after-init.yaml"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "11514395fe63a9608efe8f5e00947609f592c6af",
+        "git_mode": "100644",
+        "sha256": "4f65e5de6a897a78243f8670be1216534f79b2111f3745b6ea3536d63fb7067c"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/configuration-validation.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/configuration-validation.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "a35fa3bc84b0fa6b4d5bfd5db85b78b592ed24bb",
+        "git_mode": "100644",
+        "sha256": "966b2ed6ed919dfe7b82ceb098bf9fc2e1d529e4fb998f130b6ed58f4d28fc76"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/copy-ledger.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/copy-ledger.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "d5cc1c29f7fe92162ca9dd455016ed699c8ac5fd",
+        "git_mode": "100644",
+        "sha256": "83fb02790201bbbdcd9739aa51d73bceed90470a643060ae9f860f5c92e6fc97"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/detach-source.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/detach-source.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "a288dbbcaa3e558e4f7f0d25326ac2602072ff5f",
+        "git_mode": "100644",
+        "sha256": "e5909c7e53d434aa1266539d626c6a7f9c92714da24b8711ba933be9ea0d6b24"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/document-budget.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/document-budget.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "be1aea4607ced62d243073600a0ee979aca91926",
+        "git_mode": "100644",
+        "sha256": "69202da087b33aebd7c98b9b4d7654cb4ca7681e5025a1a1008681865aeda2c3"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/document-budget.log",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/document-budget.log"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "cd6426e9a80ea26a92446c4e50f67a9f462af293",
+        "git_mode": "100644",
+        "sha256": "737898733e62f05da5829b25ba8cd2516c529680616b53431ac7458b98abfd16"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/fixture-init.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/fixture-init.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "3ec1d7ca31e6f029f0f7198b8ef1a4b65339a289",
+        "git_mode": "100644",
+        "sha256": "d130792603427a73a21ec70dd7392ef2ce92c16bd985b4f7718b7a01fa4a766e"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/fixture-input-hashes.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/fixture-input-hashes.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "f3372602e07358c53ac6b38e3aeb93f31b86eec5",
+        "git_mode": "100644",
+        "sha256": "4a737487cfb292d41a1f1837f5b5696122ce384f6c599631dfcf01d1652bef58"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/fixture-inventory-after-checks.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/fixture-inventory-after-checks.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "fcfc6eb0e044cdd1568c8e745b0f88e8fbdd4b65",
+        "git_mode": "100644",
+        "sha256": "d89f5b09cc9663dba7fb8a9aaffd18745ff07150899b76a777e74299da8c3867"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/fixture-inventory-before-checks.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/fixture-inventory-before-checks.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "f88a03ccf4c47f2ec6cb82c826252e9008999af4",
+        "git_mode": "100644",
+        "sha256": "ce2be5ed6fe1b38564a71372c69ee1480728ce83e953fe50a80a4cd66a64779b"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/initialize.py.txt",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/initialize.py.txt"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "2f6ca4f97ca5422656fa61d9bf2e576cb931892b",
+        "git_mode": "100644",
+        "sha256": "7c02a5b9ae2bee28a01a62cff1c927ab7c781a112b30e7a1186aac2438f1d2cb"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/initializer-terminal.txt",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/initializer-terminal.txt"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "b012a1b1ac93b3c945c85c70c4d1644085b562f2",
+        "git_mode": "100644",
+        "sha256": "517cd7f2cbcc226dc6425f4c0f9e6b6408c8a8453783e6cd20c889298bbfd7f3"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/initializer.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/initializer.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "bc7ecbf295c413d4641cefdd124447278cbe0f79",
+        "git_mode": "100644",
+        "sha256": "ed6a3071febd457cf202dd5b7ae4a5e552608f014335280c0bc400d093917213"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/input-add.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/input-add.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "ec68f01b56740e6f86294b0543736835f5166c55",
+        "git_mode": "100644",
+        "sha256": "97d90a70575fc31e40d43cc9408433b780e3a96a3d04684f5166bdfc2cc749e9"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/input-commit.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/input-commit.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "36cc93d1991add196a7b63911e418b1a3647165d",
+        "git_mode": "100644",
+        "sha256": "5abb390c0a6c585b30c39cd08d461faa30a4ea986bd128e87448efedebf4fa6f"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/input-identity.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/input-identity.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "09135758fd2b111e4eeda98778c64ebca4786049",
+        "git_mode": "100644",
+        "sha256": "0606c7769136e8f38180fbb4a8b1e5a34cdec3e7ea3212f5479d39ee19ad7285"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/install-baseline.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/install-baseline.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "4c6ad8f50c90b182003fd886069b4aba547ade58",
+        "git_mode": "100644",
+        "sha256": "4177ed1732ae33ea4d4fedf0c2f3d911e6c1404777e5b24b6cc9ea4dedc4a28d"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/installed-doctor.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/installed-doctor.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "1c0690f4697ca0a6634e345405eaa90df728ae19",
+        "git_mode": "100644",
+        "sha256": "b47599c4e53ba702d250e488a395b220aabdcf20bfec8f4384e5b1733ebcdfc5"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/installed-doctor.log",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/installed-doctor.log"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "ce0e4be4625939c717610f1f3f432b4f258c3cb0",
+        "git_mode": "100644",
+        "sha256": "760ef9ef77f080061c29c7523c871c5c229683ff42fe5952822396e5580f20e3"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/installed-failure-excerpts.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/installed-failure-excerpts.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "eaadbd4bc42df25217bb31870186b000f71d5d27",
+        "git_mode": "100644",
+        "sha256": "b3c8b70e1aaf34c464cb95edc101e6b0bedf05c837989a2b44d238756e1e11fa"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/installed-suite.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/installed-suite.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "dc469eff69f188efa7f8d8a832eb417a431d4c4f",
+        "git_mode": "100644",
+        "sha256": "63dfafb3db94ded7c93ab086bc8d2d741b6ad544af95ac0f853840258723acac"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/installed-suite.log",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/installed-suite.log"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "c36ecddc8cb8b6a04c25b0815b7860e2cbf7c34b",
+        "git_mode": "100644",
+        "sha256": "5cb98d7f164a89d3074c20dee42407ae94fe3baaa12935c307fd225c9501ef09"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/intended-merged-config.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/intended-merged-config.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "1cff493da965c5da97b1195b9a2faf301097db53",
+        "git_mode": "100644",
+        "sha256": "4c6bfbadf2a21d9ce746dfbf7c8149faf56fb35d734045f0cc5b197b094d8769"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/intended-tracked-config.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/intended-tracked-config.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "02e98949dea1c6364bf9cc2039d64bf29d65731d",
+        "git_mode": "100644",
+        "sha256": "1f40881e887257e4c734a90ff50c9ea1181c0c0b461b51d1102fdce4de8e5e36"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/inventory-comparison.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/inventory-comparison.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "f28399601ba98f67ece091188996a4bc46c8e961",
+        "git_mode": "100644",
+        "sha256": "8f02ea0c9536c94a4c08146b63360dacab0351388d0fd351e74a9c9288f9c639"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/kit-suite.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/kit-suite.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "a6247b49cbe9ffe21409f28c4d21b793876af293",
+        "git_mode": "100644",
+        "sha256": "279ecfe1018dadda27ac8de599403b1996a9934614577c256a940fb8f0ea35f4"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/kit-suite.log",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/kit-suite.log"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "87d1fef1a2ad067b2126e2eec8ee3ade2547420a",
+        "git_mode": "100644",
+        "sha256": "c4a09498890038e2e553482f1b9779959e9044c48577c1677fe101467f4f965c"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/lens-render-readback.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/lens-render-readback.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "85c667ad62d667c7e0b4a0fe1427308caf2a8ea9",
+        "git_mode": "100644",
+        "sha256": "c68d2e14fee8446c2e5f047ade6ecb2543649dd2ba805ad21c9420191d93b1aa"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/operator-decision.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/operator-decision.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "84cd0a95402470c4ed659445552e588857e48d69",
+        "git_mode": "100644",
+        "sha256": "01bb3100aed206affbdf5be5a336bcb376ee2bb7a1ea7723ece5e9c2dcbf9f58"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/post-init-readback.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/post-init-readback.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "ae8f3a8c1e01e0254c1d8c4529e8de3533de4bd2",
+        "git_mode": "100644",
+        "sha256": "b0d3019ee1de92d7960b22339e51eb68eca5e60fd59c2277cfbd3214955d4fef"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/pre-push-shim.txt",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/pre-push-shim.txt"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "7cc78da26c26595a89bbe2e9d702b37396b61834",
+        "git_mode": "100644",
+        "sha256": "1c47ea8aed76287da85a040934659edaa1686f1d498c6dfe69448dbd7375a4f4"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/record-install.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/record-install.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "bb40d290c1abbd14f80b47e62f804f7757c93393",
+        "git_mode": "100644",
+        "sha256": "79d26d2d58562a8afc46bfd1c4f82b5efb886460efcef34d267a54164369f8f3"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/registrations.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/registrations.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "3ca8bf920d80bd91095aa4ddc1cdadb4d1c7ba6e",
+        "git_mode": "100644",
+        "sha256": "faac28b44fbd438c0cf2bafa1b3b800d7cd85f5f07e4c10492e00329ff634ff2"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/remove-source-origin.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/remove-source-origin.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "46299c7823a7fc1215c6b87b948f7c1ea9298e4c",
+        "git_mode": "100644",
+        "sha256": "80da09b51c7a0298ccc30698f678f3e9077caf6b4a875f86a3fad3cd011c2e00"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/setup-add.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/setup-add.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+        "git_mode": "100644",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/setup-add.log",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/setup-add.log"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "565e1601256b2158f74be537ca790bdf805390bb",
+        "git_mode": "100644",
+        "sha256": "8052c9c4c478a3be60c01154b727d17a39d5fd3fc8c0b3db859ace1d91ce1681"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/setup-commit.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/setup-commit.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "3e5134c041868ced838a9fea02eabab6b1780f5f",
+        "git_mode": "100644",
+        "sha256": "0ad399f1d0036801e63dcd88d44d6ceed3aea047349f01643c86c050122569cf"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/setup-commit.log",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/setup-commit.log"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "11cfbbe7c9b6b1926b23a2e3d8f0eac387b3afc8",
+        "git_mode": "100644",
+        "sha256": "5e5c7417574a1e17c8325516e31553f9a75062427344047393ad873a0c66fa69"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/sha256.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/sha256.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "4793f61bf114a9a5be89efb09800a4f048159c74",
+        "git_mode": "100644",
+        "sha256": "5be65b9e61e05d77287d3675b0433f90b334b1ad2b63f19593d77dfcbcdf02b0"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/source-adapter-report.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/source-adapter-report.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "224155adb358ff1c78ba5d89b80a6b849e531816",
+        "git_mode": "100644",
+        "sha256": "7d71ee2d486474122a2eeea3e8e2a9f46bf6efa87297f949917bd46b8d13bb80"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/source-adapter-report.log",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/source-adapter-report.log"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "64fc03d7fd05c997c7bbc4c1cf4191f1e7257929",
+        "git_mode": "100644",
+        "sha256": "c47ac9c2ccc8eb0e71128d71d6bb83177898a5f623144eace59d39b09e3bb5d5"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/source-inventory-after-checks.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/source-inventory-after-checks.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "2e6f0b9d52f55b0858bedac6829a66253b66f8dc",
+        "git_mode": "100644",
+        "sha256": "47746bf5cfb43c9aba394caa30234738f9e0f56c4e19914ec9507031c5e5a087"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/source-inventory-before-checks.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/source-inventory-before-checks.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "ea569fc02ece0fa5565cc1fa5c9444729357397e",
+        "git_mode": "100644",
+        "sha256": "903951048cb7091276d8764af77ed2e74f06df60abb09433c131a588eacccdd5"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/stage.py.txt",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/stage.py.txt"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "0251a9fcb0d0f53296651f59b98f8115e3423753",
+        "git_mode": "100644",
+        "sha256": "1d7c76ab19a3c1f550cf398b52284bb12c8b662485734add5c30abc3870f5524"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/synthetic-local-overlay.yaml",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/synthetic-local-overlay.yaml"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "a320fa0d1889f9d40ab61ac4b2a99da9dea8b132",
+        "git_mode": "100644",
+        "sha256": "bc990ed319261d7b9be31554f1593b69d1e7b1d334ff0df31ad11cac665cce21"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/verification-result.json",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/verification-result.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "ec96089af0491244d6132bfec10da9d4e6cddc02",
+        "git_mode": "100644",
+        "sha256": "0de7968f8dc7821b419a031bcb82467daa5332dccf7c29798274e144921b5618"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-evidence_2026-09-09/verify.py.txt",
+      "relative_path": "saved_plans/phase5-item5-b-evidence_2026-09-09/verify.py.txt"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "388ca04b3ba71a263ec5f0a62040a52f04b06702",
+        "git_mode": "100644",
+        "sha256": "921ce7049daa9b615f00ee063335e7bafbcc6bda3ec75c9d4e2b20b541c60761"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-b-execution_2026-09-09.md",
+      "relative_path": "saved_plans/phase5-item5-b-execution_2026-09-09.md"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "f244027275a2b8797932c5f391ef557a76b10b4a",
+        "git_mode": "100644",
+        "sha256": "ae7ccf108349d1665cca347722ce866ac9ba1c0259a8207657b63dc4344ffd16"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-baseline-audit_2026-09-09.json",
+      "relative_path": "saved_plans/phase5-item5-baseline-audit_2026-09-09.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "60653fe17236730cefa2dfc0c2c3df2d92a172a8",
+        "git_mode": "100644",
+        "sha256": "033adceee10ab19db63b47f5fca540473862ae273131f1d410f638a31f207d90"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-baseline-audit_2026-09-09.py.txt",
+      "relative_path": "saved_plans/phase5-item5-baseline-audit_2026-09-09.py.txt"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "e01fc174b8e975ba805bfbfa1714b40164f0fd62",
+        "git_mode": "100644",
+        "sha256": "224d2cd22cae374b919443132ee3818cae823a6ba8f94e7bc233ab723f5262a5"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-decision_2026-09-09.md",
+      "relative_path": "saved_plans/phase5-item5-decision_2026-09-09.md"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "4dc6d7702068f12f20530c16d354dc9b84646c50",
+        "git_mode": "100644",
+        "sha256": "615fef0f995f4fee69141e81447c7038d16b207dde93f9ac766dcb35cdaab712"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/installed-refinement-tests.log",
+      "relative_path": "saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/installed-refinement-tests.log"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "a79b82e6c4c709e5a059db84cd4440694e5a19a9",
+        "git_mode": "100644",
+        "sha256": "fc97c6fa4f0a7a3262c4a17aa29a0c0d657f5f811a9e1f137c00955f7398ad94"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/installed-refinement.json",
+      "relative_path": "saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/installed-refinement.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "e39d6173e39541e4caedbab9e931df471c7f2153",
+        "git_mode": "100644",
+        "sha256": "713fdfb5acda13a2d3c89aebbe737050ba4a2866f326557e4a55dadfa752ed06"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/installed-setup.json",
+      "relative_path": "saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/installed-setup.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "10f1ada4b8116b7537f42dcb27dc229d5e30459e",
+        "git_mode": "100644",
+        "sha256": "6a9affe70396b05251da3fa81f08de68e6c4946232c71ca65236474739ceb21a"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/installed-suite-85205bb.log",
+      "relative_path": "saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/installed-suite-85205bb.log"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "767fc46338ea94adeacceeab27b68f19799d4aff",
+        "git_mode": "100644",
+        "sha256": "f48807244a4448529e9fd8fbf20fb80fe0b1fbacef4501e1ce09b2a7e2f48444"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/make-test-85205bb.log",
+      "relative_path": "saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/make-test-85205bb.log"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "107b440b46167281cf47f8f5b7f8e9fde3938c76",
+        "git_mode": "100644",
+        "sha256": "c32605dde3def8d1df60fdc34b158a86e1b4b1c8352c03feaab772bb037025c9"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/make-test-919a10b.log",
+      "relative_path": "saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/make-test-919a10b.log"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "ea070b9395731525e55c0561669cac79f3323277",
+        "git_mode": "100644",
+        "sha256": "52b65c1fe51f46fe1c5f9c1a9547db08ba31bc7307a2c6ee85704e87351c3267"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/retained-baseline-readback.json",
+      "relative_path": "saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/retained-baseline-readback.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "c7dc6b8c3ebbb4cc7aa65b133da22e2c6a20141d",
+        "git_mode": "100644",
+        "sha256": "300d6b6d545b3875175fd4d973c7cbd9730d9a4bd79dda5bb6bbd55a4013a3d4"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/roots.json",
+      "relative_path": "saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/roots.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "4daa4dc599ff97f76e02f10343186f11c9a28a7f",
+        "git_mode": "100644",
+        "sha256": "d8bc8f533ee02d5b36e6a069e26bf2823abc9a59f03c3f1ca195ec34b25eb372"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/setup-driver.py.txt",
+      "relative_path": "saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/setup-driver.py.txt"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "63e3b43004b3c8aba5682aed284353260d21b724",
+        "git_mode": "100644",
+        "sha256": "8e04569e97cf0673c61f9262f934efd06c88818cb01a2872289e5944528ca1f5"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/sha256.json",
+      "relative_path": "saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/sha256.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "2350f0f36566384c146c1d5f548e1e90114b6c48",
+        "git_mode": "100644",
+        "sha256": "f05089b7a0b29118270148b94939e3af0cb9f30a9f6ab98af33ca501be884d9e"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/verification.json",
+      "relative_path": "saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/verification.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "e74f146bb69455c822ab83768350a15a0762eaac",
+        "git_mode": "100644",
+        "sha256": "04d732bf9c70ca920cb607df7eb1199f51a0921ba44d7e708e1511c69a521d49"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/saved_plans/phase5-item5-kit534-repair_2026-09-10.md",
+      "relative_path": "saved_plans/phase5-item5-kit534-repair_2026-09-10.md"
+    },
+    {
+      "action": "replace",
+      "after": {
+        "blob": "719aba0653736f7ceeff52b5dd7fbd2bd634cf9c",
+        "git_mode": "100755",
+        "sha256": "f8ce3862bd947211ee4e1ec1b1ad68f4c854a692455e106276802621d0a2427c"
+      },
+      "before": {
+        "blob": "e689af565ec3146e37ec01ae86a86e43d9209baa",
+        "git_mode": "100755",
+        "sha256": "a8c5cb408c0d793a1da0c8c7e053bd3cfb6e8223176e4133fc0e5c7ce845d3ac"
+      },
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/scripts/kit_doctor.py",
+      "relative_path": "scripts/kit_doctor.py"
+    },
+    {
+      "action": "replace",
+      "after": {
+        "blob": "c9ac63c5eb50492cc41aed1593c288143c3c07ea",
+        "git_mode": "100644",
+        "sha256": "dcc6980325b5ab33ddfb069f8a27f27b70f406c42892e5fcbcaf2369d0f07cd4"
+      },
+      "before": {
+        "blob": "5d6585657f52248adaba778a9aaa3ff42c3a1f20",
+        "git_mode": "100644",
+        "sha256": "685b3af6939b3b181b1dfe4700d47a45030e9682bd38d159b0016a54693608cd"
+      },
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/scripts/tests/conftest.py",
+      "relative_path": "scripts/tests/conftest.py"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "1d1921fb0afbdd8a6a867fb560d8fadbf6671b92",
+        "git_mode": "100644",
+        "sha256": "13573d15825139f78e3a878fbe916f8096e924cec39be399f25688173fc3b079"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/scripts/tests/fixtures/entry-point-markers.json",
+      "relative_path": "scripts/tests/fixtures/entry-point-markers.json"
+    },
+    {
+      "action": "add",
+      "after": {
+        "blob": "e916072810404f26409928b9d323e53859e6dc45",
+        "git_mode": "100644",
+        "sha256": "30609a5ccbba55ccbb163a64dae788b7c571031acf4e90b7bbacd6f177b56eda"
+      },
+      "before": null,
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/scripts/tests/fixtures/init-config.json",
+      "relative_path": "scripts/tests/fixtures/init-config.json"
+    },
+    {
+      "action": "replace",
+      "after": {
+        "blob": "20a120a98edd54574bb566b909a4d4471e0d721c",
+        "git_mode": "100644",
+        "sha256": "87cca005542d8dfc3ff923f5706ae77a63a4068b8c852499c2ac05718db323bc"
+      },
+      "before": {
+        "blob": "baa1445cebd8597c907e1e6769aac39c929784b7",
+        "git_mode": "100644",
+        "sha256": "f21c94c74613ba255a663faac3aefbd7d703b2df0c8e25cfdc5d42d9f709feaa"
+      },
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/scripts/tests/test_init_sh.py",
+      "relative_path": "scripts/tests/test_init_sh.py"
+    },
+    {
+      "action": "replace",
+      "after": {
+        "blob": "658cbd9c548068143d9aa6673cf49d324ef89770",
+        "git_mode": "100644",
+        "sha256": "b844706be86763345d67d28f93c0335e61ec378410b398c246e74fbf411f7e11"
+      },
+      "before": {
+        "blob": "9b174bcc6afe09a56e99537f9a71bb9ed20c72fa",
+        "git_mode": "100644",
+        "sha256": "3cc39f867eb507708921be34398f548e0b74fe4d11186143fec4328c8cabaf1d"
+      },
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/scripts/tests/test_kit_doctor.py",
+      "relative_path": "scripts/tests/test_kit_doctor.py"
+    },
+    {
+      "action": "replace",
+      "after": {
+        "blob": "6ae6d57f795b98ba2c3f80083432d5cf96fb6c87",
+        "git_mode": "100644",
+        "sha256": "2002fb473dfffedc6125303bab6523c973bf628171c986490ed9bf368836b8e7"
+      },
+      "before": {
+        "blob": "e144f86c6d8db50d42b9ea3d07438a2b56ab90be",
+        "git_mode": "100644",
+        "sha256": "e361de6f7c2de76a485307521556e16d185eadebf62907d09cd63d62dff75e4a"
+      },
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/scripts/tests/test_kit_repo_only.py",
+      "relative_path": "scripts/tests/test_kit_repo_only.py"
+    },
+    {
+      "action": "replace",
+      "after": {
+        "blob": "12573c176a1ed9f40f25bed0af2d54f4e12f6fac",
+        "git_mode": "100644",
+        "sha256": "72914ad18b3622faa05a8e5c03035ba1040e7477aeca2cf8f9742aecd2bbf334"
+      },
+      "before": {
+        "blob": "5ed1f4a5f37214744cd38518c5714958c79fbc74",
+        "git_mode": "100644",
+        "sha256": "36f0ae3a031e7bd2e9ca6ece84668e37ff1b71ae2b665a2af08cfd8c7f06fa8b"
+      },
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/scripts/tests/test_mutation_gate.py",
+      "relative_path": "scripts/tests/test_mutation_gate.py"
+    },
+    {
+      "action": "replace",
+      "after": {
+        "blob": "d9fd2be02b7e1f47fef968eb42e4e52af54628db",
+        "git_mode": "100644",
+        "sha256": "6d889025b72306a4dfe96fcf3eefa8b7c75d7f08112003e49ecec6c3f4f27e0b"
+      },
+      "before": {
+        "blob": "d55d8321b45f4446e14eb9215b3acce5f8e32fa6",
+        "git_mode": "100644",
+        "sha256": "4d73f3ee031f770e0770cd1361527fa1bf5d3e94db645a1d3ad09eaf0c1047fa"
+      },
+      "destination": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/scripts/tests/test_portability.py",
+      "relative_path": "scripts/tests/test_portability.py"
+    }
+  ]
+}

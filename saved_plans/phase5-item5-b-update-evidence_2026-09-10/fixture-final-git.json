@@ -1,0 +1,12 @@
+{
+  "branch": "chore/item5-b-update-60fe0dc",
+  "config_sha256": "cae33efdb02cf774435c1ff9cb16bcc1014606908530c6e1dc727615fe3e8cda",
+  "git_directory": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.git",
+  "head_bytes": "ref: refs/heads/chore/item5-b-update-60fe0dc\n",
+  "index_sha256": "ba5ef0df17c888f506db9167e04ee212bf3d4c36f35bf4327be8a008ea4021af",
+  "refs": "413132b01d14c735d94753231bf325904135285f HEAD\n07bacf5bda3b1e7a6718c7d4528336ef81dc2143 refs/heads/chore/adopt-agentic-dev-kit\n413132b01d14c735d94753231bf325904135285f refs/heads/chore/item5-b-update-60fe0dc\n",
+  "remotes": "",
+  "revision": "413132b01d14c735d94753231bf325904135285f",
+  "root": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+  "status": ""
+}

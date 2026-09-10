@@ -1,0 +1,73 @@
+{
+  "after": {
+    "fixture": {
+      "branch": "chore/item5-b-update-60fe0dc",
+      "config_sha256": "cae33efdb02cf774435c1ff9cb16bcc1014606908530c6e1dc727615fe3e8cda",
+      "git_directory": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.git",
+      "head_bytes": "ref: refs/heads/chore/item5-b-update-60fe0dc\n",
+      "index_sha256": "ba5ef0df17c888f506db9167e04ee212bf3d4c36f35bf4327be8a008ea4021af",
+      "refs": "413132b01d14c735d94753231bf325904135285f HEAD\n07bacf5bda3b1e7a6718c7d4528336ef81dc2143 refs/heads/chore/adopt-agentic-dev-kit\n413132b01d14c735d94753231bf325904135285f refs/heads/chore/item5-b-update-60fe0dc\n",
+      "remotes": "",
+      "revision": "413132b01d14c735d94753231bf325904135285f",
+      "root": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+      "status": ""
+    },
+    "source": {
+      "branch": "DETACHED",
+      "config_sha256": "cae33efdb02cf774435c1ff9cb16bcc1014606908530c6e1dc727615fe3e8cda",
+      "git_directory": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/.git",
+      "head_bytes": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac\n",
+      "index_sha256": "d8d3b7cc426fbb2421d928a7449a368f0be636ed2994904644bc8fb64393d43a",
+      "refs": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac HEAD\nedc199f42bc65b1850172ea79b791ef358577ae1 refs/heads/chore/item5-decision-packet-20260909\n",
+      "remotes": "",
+      "revision": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac",
+      "root": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source",
+      "status": ""
+    }
+  },
+  "argv": [
+    "make",
+    "test"
+  ],
+  "before": {
+    "fixture": {
+      "branch": "chore/item5-b-update-60fe0dc",
+      "config_sha256": "cae33efdb02cf774435c1ff9cb16bcc1014606908530c6e1dc727615fe3e8cda",
+      "git_directory": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.git",
+      "head_bytes": "ref: refs/heads/chore/item5-b-update-60fe0dc\n",
+      "index_sha256": "ba5ef0df17c888f506db9167e04ee212bf3d4c36f35bf4327be8a008ea4021af",
+      "refs": "413132b01d14c735d94753231bf325904135285f HEAD\n07bacf5bda3b1e7a6718c7d4528336ef81dc2143 refs/heads/chore/adopt-agentic-dev-kit\n413132b01d14c735d94753231bf325904135285f refs/heads/chore/item5-b-update-60fe0dc\n",
+      "remotes": "",
+      "revision": "413132b01d14c735d94753231bf325904135285f",
+      "root": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+      "status": ""
+    },
+    "source": {
+      "branch": "DETACHED",
+      "config_sha256": "cae33efdb02cf774435c1ff9cb16bcc1014606908530c6e1dc727615fe3e8cda",
+      "git_directory": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/.git",
+      "head_bytes": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac\n",
+      "index_sha256": "d8d3b7cc426fbb2421d928a7449a368f0be636ed2994904644bc8fb64393d43a",
+      "refs": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac HEAD\nedc199f42bc65b1850172ea79b791ef358577ae1 refs/heads/chore/item5-decision-packet-20260909\n",
+      "remotes": "",
+      "revision": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac",
+      "root": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source",
+      "status": ""
+    }
+  },
+  "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source",
+  "ended_at": "2026-09-10T11:32:10.131217+00:00",
+  "environment_overrides": {
+    "DEVKIT_STATE_ROOT": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-60fe0dc-20260910/source-state",
+    "PYTEST_ADDOPTS": "-o cache_dir=/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-60fe0dc-20260910/source-pytest-cache -ra",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "RUFF_CACHE_DIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-60fe0dc-20260910/ruff-cache",
+    "TMPDIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-60fe0dc-20260910/tmp",
+    "UV_CACHE_DIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-60fe0dc-20260910/uv-cache",
+    "UV_TOOL_DIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-60fe0dc-20260910/uv-tools"
+  },
+  "exit_code": 2,
+  "started_at": "2026-09-10T11:24:16.117691+00:00",
+  "stderr_sha256": "3f3554b1b6fb97400d3b4b4ed723b20ad650a7285f0540ff69f8654ce7aa4e61",
+  "stdout_sha256": "4106c8c3749b7aa18ba473c9be2e98fbd3d8f0315adba4252590900cb3fb88be"
+}
