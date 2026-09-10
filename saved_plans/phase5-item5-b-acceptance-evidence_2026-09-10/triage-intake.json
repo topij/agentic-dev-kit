@@ -1,0 +1,37 @@
+{
+  "observed_at": "2026-09-10T12:40:27.833536+00:00",
+  "revision": "b80fe9905c0f8dc303aae38c77aa822129e1760d",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "entry": "bounded budget-reminder intake",
+  "state_path": "/Users/topi/Coding/agentic-dev-kit/state/triage/triage-pipeline-state_live.json",
+  "state_sha256": "5f4872c69894bed498ba6b3c6bc17f42667173324cd16dcee06a4d08319060a6",
+  "recorded_phase": "completed",
+  "recorded_completion": {
+    "completed_receipt_digest": "0459cc7d34ba23a6d148b20364e305674a8b71746115de1be8a31b32bae4d495",
+    "degraded": [
+      "notification-thread \u2014 DM path not exercised; the interactive session carried presentation and decision",
+      "runtime-compute-selection \u2014 Claude Code exposes no mechanical control for triage.analysis_tier"
+    ],
+    "merge_read_back": {
+      "base": "main",
+      "final_head": "feb1608a43f152310c7380e772c56252fc535c2a",
+      "merge_commit": "991ad16e7a2237e5440695c78573592f1b87964e",
+      "merged": true,
+      "pull_request": "694"
+    },
+    "outcome": "degraded-success",
+    "route": "archive-sweep"
+  },
+  "run_identity": {
+    "config_fingerprint": "942ac28b890773023e6bf635119b24aea2b90367511e728b0577f980efa8abab",
+    "friction_log": "docs/kit-friction-log.md",
+    "mode": "live",
+    "protected_branch_head": "4989efd4cbc09c0a81f8d5e3259f0430ff69484b",
+    "repository_identity": "https://github.com/topij/agentic-dev-kit.git",
+    "session": "triage-548121b9fa18444808d6b2482aac91d3"
+  },
+  "outcome": "operator-held",
+  "state_changed": false,
+  "scope": "No full resume or completion validation claimed. Preserve recorded triage completion and parked decisions; no new draft, sweep, recovery, tracker or notification operation authorized.",
+  "initial_probe": "An earlier intake expected missing legacy schema fields and refused when the fields were present. It changed no state and released only its own gate."
+}

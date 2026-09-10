@@ -14,10 +14,31 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-10 — approved ITEM5-B update executed; field-exit decision remains.
+Last updated: 2026-09-10 — ITEM5-B preserved-file acceptance and fixture PR packet prepared.
 Phase 5 delivery item 5 remains incomplete; item 6's replay remains complete.
 
-## Latest session — 2026-09-10 (ITEM5-B update execution, in Codex)
+## Latest session — 2026-09-10 (ITEM5-B acceptance preparation, in Codex)
+
+The [decision packet](../saved_plans/phase5-item5-b-acceptance-decision_2026-09-10.md)
+binds preserved-file acceptance to the update's FINAL evidence, and separately proposes
+the fixture friction/CI files, private publication, verification and ready-PR handoff.
+It explains the custom wrap-up's ownership-only role and the remaining systemize routes.
+The packet is prepared, not approved; no fixture/source update or client exercise ran.
+
+The packet retains the readback of kit #728 and its final review receipt, the new
+read-only audit, exact proposed payloads and rollback boundaries. The maintained sprint
+status keeps item 5 incomplete and preserves item 6's completed replay. #723's approved
+deferral, #585's earlier placement and the delivered #722 batch in #724 remain unchanged.
+The budget reminder's bounded triage intake preserved prior state and parked decisions;
+it started no new draft, recovery, tracker payload or archive sweep.
+
+▶ Next: `$session-start` — read the ITEM5-B acceptance decision packet, revalidate its
+FINAL input, and obtain the exact ACCEPT-01 and optional PR-01 decisions. Do not repeat
+the consumed update, launch a fixture client, or treat kit-record delivery as field exit.
+
+______________________________________________________________________
+
+## Session — 2026-09-10 (ITEM5-B update execution, in Codex)
 
 The operator approved ITEM5-B-UPDATE-01. The [execution record](../saved_plans/phase5-item5-b-update-execution_2026-09-10.md)
 retains the source advance, fixture attempt, recorded baseline, complete local suite
@@ -31,10 +52,7 @@ its replay evidence, #723's accepted deferral and #585's earlier placement are p
 The friction-budget reminder's intake again preserved the existing triage state;
 no new sweep or tracker payload was started.
 
-▶ Next: `$session-start` — review the ITEM5-B update execution at fixture
-`413132b01d14c735d94753231bf325904135285f`, then prepare the exact preserved-file
-acceptance and next field-exit decision. Do not launch a client or open a fixture PR
-under the consumed update approval.
+The latest session block owns the subsequent acceptance packet and next action.
 
 ______________________________________________________________________
 

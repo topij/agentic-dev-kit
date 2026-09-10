@@ -1,0 +1,34 @@
+{
+  "commands": {
+    "pr728": [
+      "gh",
+      "pr",
+      "view",
+      "728",
+      "--repo",
+      "topij/agentic-dev-kit",
+      "--json",
+      "number,state,headRefOid,mergeCommit,mergedAt,statusCheckRollup,url"
+    ],
+    "pr728-final-receipt": [
+      "gh",
+      "api",
+      "repos/topij/agentic-dev-kit/issues/comments/5618460675"
+    ],
+    "issue243": [
+      "gh",
+      "api",
+      "repos/topij/agentic-dev-kit/issues/243"
+    ],
+    "issue243-comments": [
+      "gh",
+      "api",
+      "--paginate",
+      "--slurp",
+      "repos/topij/agentic-dev-kit/issues/243/comments?per_page=100"
+    ]
+  },
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "revision": "b80fe9905c0f8dc303aae38c77aa822129e1760d",
+  "observed_at": "2026-09-10T12:32:17.784534+00:00"
+}
