@@ -835,7 +835,7 @@
     "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-update-evidence_2026-09-10/sha256.json": "943db7966961b6baec28642bb3eee8cd227009538791c458d8cc7a81fc4b7972",
     "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/sha256.json": "8e04569e97cf0673c61f9262f934efd06c88818cb01a2872289e5944528ca1f5"
   },
-  "observed_at": "2026-09-10T13:22:18.136489+00:00",
+  "observed_at": "2026-09-10T12:31:17.490444+00:00",
   "original_paths": {
     "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source": {
       "exists": false,
@@ -920,7 +920,7 @@
       "sha256": "755b4349978cb4269cf89b6938427ee5e9da8475dc833f5cb2d10236dbea087a"
     }
   },
-  "program_sha256": "3902a43b0ede7a08ae8b12449981a2070a05056d1b49a43be36a7932801c829d",
+  "program_sha256": "1d7341f8b230d154fa715b770f5787788b74db9814a58264c0d4429533bde848",
   "record_merge_tree_equals_reviewed_head": true,
   "replay_evidence": {
     "saved_plans/cs-toolkit-replay-evidence_2026-09-09/adapter-report.json": "1f1bbe5729818697804d92a626d165aa88f0798eb08742b6a067e5e489232eba",
@@ -951,7 +951,7 @@
     "saved_plans/cs-toolkit-replay-evidence_2026-09-09/verify_adopter_condition.py.txt": "0d92b004297f82198108c8b35cae00664d0e1af77cdb1d4f3bbe26e18b002d3d"
   },
   "result": "equal-to-update-final-at-observed-checkpoints",
-  "revision": "32ba74b74e2b1b59e5e4510246a9d02f310633c3",
+  "revision": "b80fe9905c0f8dc303aae38c77aa822129e1760d",
   "trees": {
     "fixture": {
       "final_inventory_sha256": "b3191a27cba45e6a3f97de0e23cca04a7933b7459670d196d57b1a7698e83dbb",

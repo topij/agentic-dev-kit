@@ -37,6 +37,9 @@ it started no new draft, recovery, tracker payload or archive sweep.
 recorded #393 deep-JSON failure; the packet retains the actual summary and full log.
 The operator selected the proposed private fixture destination without authorizing
 creation or PR execution.
+The [kit review receipt](https://github.com/topij/agentic-dev-kit/pull/729#issuecomment-5619355511)
+preceded the audit optimization-refusal fix. The packet preserves the initial audit
+bytes and the follow-up refusal/mutation evidence; this defect is separate from #393.
 
 ▶ Next: `$session-start` — read the ITEM5-B acceptance decision packet, revalidate its
 FINAL input, and obtain the exact ACCEPT-01 and optional PR-01 decisions. Do not repeat

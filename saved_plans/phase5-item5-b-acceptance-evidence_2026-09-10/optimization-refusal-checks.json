@@ -1,0 +1,63 @@
+{
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "normal_audit": {
+    "argv": [
+      "python3",
+      "-B",
+      "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-acceptance-audit_2026-09-10.py.txt"
+    ],
+    "exit_code": 0,
+    "result": "equal-to-update-final-at-observed-checkpoints"
+  },
+  "observed_at": "2026-09-10T13:22:19.302018+00:00",
+  "optimized_runs": [
+    {
+      "PYTHONOPTIMIZE": "1",
+      "argv": [
+        "python3",
+        "-B",
+        "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-acceptance-audit_2026-09-10.py.txt"
+      ],
+      "exit_code": 1,
+      "stderr": "Refusing optimized Python: acceptance assertions must execute\n",
+      "stdout": ""
+    },
+    {
+      "PYTHONOPTIMIZE": "2",
+      "argv": [
+        "python3",
+        "-B",
+        "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-acceptance-audit_2026-09-10.py.txt"
+      ],
+      "exit_code": 1,
+      "stderr": "Refusing optimized Python: acceptance assertions must execute\n",
+      "stdout": ""
+    },
+    {
+      "PYTHONOPTIMIZE": null,
+      "argv": [
+        "python3",
+        "-O",
+        "-B",
+        "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-acceptance-audit_2026-09-10.py.txt"
+      ],
+      "exit_code": 1,
+      "stderr": "Refusing optimized Python: acceptance assertions must execute\n",
+      "stdout": ""
+    },
+    {
+      "PYTHONOPTIMIZE": null,
+      "argv": [
+        "python3",
+        "-OO",
+        "-B",
+        "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-acceptance-audit_2026-09-10.py.txt"
+      ],
+      "exit_code": 1,
+      "stderr": "Refusing optimized Python: acceptance assertions must execute\n",
+      "stdout": ""
+    }
+  ],
+  "revision": "32ba74b74e2b1b59e5e4510246a9d02f310633c3",
+  "working_tree_program_sha256": "3902a43b0ede7a08ae8b12449981a2070a05056d1b49a43be36a7932801c829d"
+}

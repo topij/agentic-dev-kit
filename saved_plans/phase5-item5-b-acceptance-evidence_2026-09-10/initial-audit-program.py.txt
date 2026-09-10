@@ -71,8 +71,6 @@ def compare(actual, expected):
 
 
 def main():
-    if sys.flags.optimize:
-        raise SystemExit('Refusing optimized Python: acceptance assertions must execute')
     assert sys.dont_write_bytecode, 'Run python3 -B'
     assert Path.cwd() == COCKPIT
     report = {'argv': [sys.executable, '-B', str(Path(__file__).resolve())],

@@ -33,10 +33,26 @@ report a new installed-suite run, client exercise, executed rollback or complete
 The audit below also compares the merge and reviewed Git tree objects for equality.
 
 `python3 -B /Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-acceptance-audit_2026-09-10.py.txt`
-ran in `$COCKPIT` at `b80fe9905c0f8dc303aae38c77aa822129e1760d`, with that new
-audit program in the working tree, on 2026-09-10. The
+ran in `$COCKPIT` at `32ba74b74e2b1b59e5e4510246a9d02f310633c3`, with the
+optimization-refusal fix in the working tree, on 2026-09-10. The
 [result](phase5-item5-b-acceptance-audit_2026-09-10.json) reports equality to the
-update's **FINAL** evidence. It checks:
+update's **FINAL** evidence. The earlier observation at
+`b80fe9905c0f8dc303aae38c77aa822129e1760d` remains byte-preserved as the
+[initial result](phase5-item5-b-acceptance-evidence_2026-09-10/initial-audit-result.json)
+and [initial program](phase5-item5-b-acceptance-evidence_2026-09-10/initial-audit-program.py.txt);
+that archived program is historical evidence, not the current check.
+
+The [review receipt](https://github.com/topij/agentic-dev-kit/pull/729#issuecomment-5619355511)
+was recorded before the fix. Its adversarial P2 demonstrated that `PYTHONOPTIMIZE`
+could suppress the audit's assertions. The current program unconditionally refuses
+optimized execution before inspecting inputs. [Exact refusal checks](phase5-item5-b-acceptance-evidence_2026-09-10/optimization-refusal-checks.json)
+retain the command, revision, program hash, date, status and output for environment
+and CLI optimization routes. The [synthetic behavioral check](phase5-item5-b-acceptance-evidence_2026-09-10/optimization-behavioral-probe.json)
+uses the review-authored harness with synthetic roots: normal equality succeeds,
+changed inputs refuse, and optimized runs refuse. Removing the new refusal in a
+scratch copy reproduces the unauthorized-file acceptance; the retained diff and
+restoration check bind that observation. This new audit defect is separate from #393
+and from the retained update's verification. The audit checks:
 
 - Full non-Git inventories, including file hashes, directories, symlink targets and
   `stat.S_IMODE` permission bits, before and after its reads.
