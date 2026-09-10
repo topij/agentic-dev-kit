@@ -1,0 +1,35 @@
+[
+  {
+    "argv": [
+      "gh",
+      "repo",
+      "edit",
+      "topij/adk-item5-b-field-20260909",
+      "--default-branch",
+      "main"
+    ],
+    "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "ended_at": "2026-09-10T16:55:27.943971+00:00",
+    "returncode": 0,
+    "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+    "started_at": "2026-09-10T16:55:27.234777+00:00",
+    "stderr": "",
+    "stdout": ""
+  },
+  {
+    "argv": [
+      "gh",
+      "api",
+      "repos/topij/adk-item5-b-field-20260909",
+      "--jq",
+      "{id,node_id,full_name,private,clone_url,default_branch,visibility}"
+    ],
+    "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "ended_at": "2026-09-10T16:55:28.455635+00:00",
+    "returncode": 0,
+    "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+    "started_at": "2026-09-10T16:55:27.944709+00:00",
+    "stderr": "",
+    "stdout": "{\"clone_url\":\"https://github.com/topij/adk-item5-b-field-20260909.git\",\"default_branch\":\"main\",\"full_name\":\"topij/adk-item5-b-field-20260909\",\"id\":1364586097,\"node_id\":\"R_kgDOUVXucQ\",\"private\":true,\"visibility\":\"private\"}\n"
+  }
+]

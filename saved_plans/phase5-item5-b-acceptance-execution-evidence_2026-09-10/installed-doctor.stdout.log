@@ -1,0 +1,484 @@
+{
+ "kit_version_config": 2,
+ "kit_version_manifest": 2,
+ "kit_version_config_raw": 2,
+ "kit_version_manifest_raw": 2,
+ "engines_dir": "scripts/devkit",
+ "engines_dir_ok": true,
+ "hooks_installed": true,
+ "hooks_state": "installed",
+ "registrations": [
+  {
+   "runtime": "claude",
+   "surface": ".claude/settings.json",
+   "state": "resolves",
+   "detail": "scripts/devkit/check_doc_budget.py"
+  },
+  {
+   "runtime": "claude",
+   "surface": ".claude/settings.json",
+   "state": "resolves",
+   "detail": "scripts/devkit/check_memory_budget.py"
+  },
+  {
+   "runtime": "claude",
+   "surface": ".claude/settings.json",
+   "state": "resolves",
+   "detail": "scripts/devkit/hooks/pr_followup_hook.py"
+  },
+  {
+   "runtime": "codex",
+   "surface": ".codex/hooks.json",
+   "state": "resolves",
+   "detail": "scripts/devkit/check_doc_budget.py"
+  },
+  {
+   "runtime": "codex",
+   "surface": ".codex/hooks.json",
+   "state": "resolves",
+   "detail": "scripts/devkit/hooks/pr_followup_hook.py"
+  },
+  {
+   "runtime": "codex",
+   "surface": ".codex/hooks.json",
+   "state": "verified",
+   "detail": "check_doc_budget.py canonical lifecycle form verified"
+  },
+  {
+   "runtime": "codex",
+   "surface": ".codex/hooks.json",
+   "state": "verified",
+   "detail": "pr_followup_hook.py canonical lifecycle form verified"
+  }
+ ],
+ "lens_definitions": [
+  {
+   "runtime": "claude",
+   "lens": "adversarial",
+   "surface": ".claude/agents/adversarial.md",
+   "state": "current",
+   "detail": "matches the running doctor's expected output"
+  },
+  {
+   "runtime": "claude",
+   "lens": "correctness",
+   "surface": ".claude/agents/correctness.md",
+   "state": "current",
+   "detail": "matches the running doctor's expected output"
+  }
+ ],
+ "narrative_rendered": {
+  "ROADMAP.md": true,
+  "notes/friction.md": true,
+  "AGENTS.md": true,
+  "CLAUDE.md": true
+ },
+ "baseline_trusted": true,
+ "baseline_is_comparison": false,
+ "baseline_kit_commit": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac",
+ "declared_scope_known": true,
+ "files": [
+  {
+   "path": "scripts/devkit/pr_watch.py",
+   "role": "engine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/check_doc_budget.py",
+   "role": "engine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/archive_plan_sessions.py",
+   "role": "engine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/dev_session.sh",
+   "role": "engine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/launch_lane.py",
+   "role": "engine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/reconcile_sessions.sh",
+   "role": "engine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/kit_doctor.py",
+   "role": "engine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/panel_prompt.py",
+   "role": "engine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/run_installed_tests.py",
+   "role": "engine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/conftest.py",
+   "role": "engine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/lib/kitconfig.py",
+   "role": "engine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/lib/runtime_adapters.py",
+   "role": "engine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/lib/atomic_write.py",
+   "role": "engine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/lib/devmodel_config.py",
+   "role": "engine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/lib/repo_root.sh",
+   "role": "engine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/lib/state_paths/__init__.py",
+   "role": "engine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/lib/state_paths/resolver.py",
+   "role": "engine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/lib/state_paths/paths.py",
+   "role": "engine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/lib/state_paths/repo_root.py",
+   "role": "engine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/check_memory_budget.py",
+   "role": "engine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/tests/_repo_layout.py",
+   "role": "test",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/tests/conftest.py",
+   "role": "test",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/tests/test_check_memory_budget.py",
+   "role": "test",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/tests/test_ci_workflow.py",
+   "role": "test",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/tests/test_lane_launcher.py",
+   "role": "test",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/tests/test_init_sh.py",
+   "role": "test",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/tests/test_kit_doctor.py",
+   "role": "test",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/tests/test_kit_repo_only.py",
+   "role": "test",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/tests/test_kitconfig.py",
+   "role": "test",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/tests/test_mutation_gate.py",
+   "role": "test",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/tests/test_panel_prompt.py",
+   "role": "test",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/tests/test_portability.py",
+   "role": "test",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/tests/test_pr_followup_hook.py",
+   "role": "test",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/tests/test_pre_push_hook.py",
+   "role": "test",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/tests/test_pr_watch.py",
+   "role": "test",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/tests/test_reconcile_sessions.py",
+   "role": "test",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/tests/test_repo_layout.py",
+   "role": "test",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/tests/test_state_guard.py",
+   "role": "test",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/tests/fixtures/shipped-registrations/codex-hooks.json",
+   "role": "test",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/tests/fixtures/shipped-registrations/claude-settings.json",
+   "role": "test",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/tests/fixtures/init-config.json",
+   "role": "test",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/tests/fixtures/entry-point-markers.json",
+   "role": "test",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/lib/state_paths/tests/__init__.py",
+   "role": "test",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/lib/state_paths/tests/test_state_paths.py",
+   "role": "test",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/hooks/pre-push",
+   "role": "hook",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "scripts/devkit/hooks/pr_followup_hook.py",
+   "role": "hook",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "docs/agentic-dev-kit/workflows/session-start.md",
+   "role": "workflow",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "docs/agentic-dev-kit/workflows/wrap-up.md",
+   "role": "workflow",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "docs/agentic-dev-kit/workflows/pr-watch.md",
+   "role": "workflow",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "docs/agentic-dev-kit/workflows/parallel.md",
+   "role": "workflow",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "docs/agentic-dev-kit/workflows/parallel-headless.md",
+   "role": "workflow",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "docs/agentic-dev-kit/workflows/adopt.md",
+   "role": "workflow",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "docs/agentic-dev-kit/workflows/upgrade.md",
+   "role": "workflow",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "docs/agentic-dev-kit/workflows/triage-friction-log.md",
+   "role": "workflow",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "docs/agentic-dev-kit/workflows/post-merge-systemize.md",
+   "role": "workflow",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "docs/agentic-dev-kit/runtime-parity.md",
+   "role": "doctrine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "docs/agentic-dev-kit/safety-critical-changes.md",
+   "role": "doctrine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "docs/agentic-dev-kit/fallback-review-panel.md",
+   "role": "doctrine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "docs/agentic-dev-kit/fallback-review-panel-evidence.md",
+   "role": "doctrine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "docs/agentic-dev-kit/adopting-into-a-linted-repo.md",
+   "role": "doctrine",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "docs/templates/handoff.md.tmpl",
+   "role": "template",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "docs/templates/handoff-history.md.tmpl",
+   "role": "template",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "docs/templates/friction-log.md.tmpl",
+   "role": "template",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "docs/templates/friction-log-archive.md.tmpl",
+   "role": "template",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "docs/templates/AGENTS.md.tmpl",
+   "role": "template",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "docs/templates/CLAUDE.md.tmpl",
+   "role": "template",
+   "state": "unchanged",
+   "detail": ""
+  },
+  {
+   "path": "init.sh",
+   "role": "installer",
+   "state": "unchanged",
+   "detail": ""
+  }
+ ]
+}

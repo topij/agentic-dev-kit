@@ -1,0 +1,91 @@
+{
+  "environment": {
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "DEVKIT_STATE_ROOT": "/private/tmp/item5-b-review-proposal-srbdj7uq/state",
+    "UV_CACHE_DIR": "/private/tmp/item5-b-review-proposal-srbdj7uq/uv-cache",
+    "UV_TOOL_DIR": "/private/tmp/item5-b-review-proposal-srbdj7uq/uv-tools",
+    "RUFF_CACHE_DIR": "/private/tmp/item5-b-review-proposal-srbdj7uq/ruff-cache",
+    "TMPDIR": "/private/tmp/item5-b-review-proposal-srbdj7uq/tmp",
+    "PYTEST_ADDOPTS": "-o cache_dir=/private/tmp/item5-b-review-proposal-srbdj7uq/pytest-cache -ra"
+  },
+  "commands": [
+    {
+      "argv": [
+        "uv",
+        "run",
+        "--with",
+        "pytest",
+        "--with",
+        "pyyaml",
+        "python",
+        "-B",
+        "-m",
+        "pytest",
+        "scripts/tests/test_state_guard.py::test_guard_observes_regular_file_at_state_root",
+        "-q"
+      ],
+      "cwd": "/private/tmp/item5-b-review-proposal-srbdj7uq/repo",
+      "revision": "914c2e4ef06a33d88ae7c94a823d3262a9526278",
+      "working_files_sha256": {
+        "scripts/conftest.py": "c2076c72a633fdd2d4e9991cf07ae2dda6c1747a1fe865a34a7fea013bd574c4",
+        "scripts/tests/test_state_guard.py": "8e7a7082fa4e7fcaa0ccf1985be646c7b26bb86af4cc519349cc068861b6b291",
+        "docs/agentic-dev-kit/workflows/upgrade.md": "2cad70fa094ebc01f78e835784b2f84ee9ffd6b56a42d3d039c5995e42d4bf37"
+      },
+      "started_at": "2026-09-10T17:32:46.582123+00:00",
+      "ended_at": "2026-09-10T17:32:49.623136+00:00",
+      "returncode": 1,
+      "stdout_sha256": "705ffeb430f6df29a62e7d43b70b8940b4aebd053353b28faa53200546f0fec0",
+      "stderr_sha256": "c60defb7d8b3333338935a033d01df082d4d0af8f3c3bfe5ee4c870473c694f3"
+    },
+    {
+      "argv": [
+        "uv",
+        "run",
+        "--with",
+        "pytest",
+        "--with",
+        "pyyaml",
+        "python",
+        "-B",
+        "-m",
+        "pytest",
+        "scripts/tests/test_state_guard.py",
+        "-q"
+      ],
+      "cwd": "/private/tmp/item5-b-review-proposal-srbdj7uq/repo",
+      "revision": "914c2e4ef06a33d88ae7c94a823d3262a9526278",
+      "working_files_sha256": {
+        "scripts/conftest.py": "a0a82682c9431205f8c0db80176694b37800da7964e5b77ec3eba283fc7569c2",
+        "scripts/tests/test_state_guard.py": "8e7a7082fa4e7fcaa0ccf1985be646c7b26bb86af4cc519349cc068861b6b291",
+        "docs/agentic-dev-kit/workflows/upgrade.md": "c29baa57bc48b2d74e5e553745028f84bd2e8d400e88d891c9336d8496724cf6"
+      },
+      "started_at": "2026-09-10T17:32:49.624316+00:00",
+      "ended_at": "2026-09-10T17:33:06.553688+00:00",
+      "returncode": 0,
+      "stdout_sha256": "871cdc393b0aa66d4a4376766e10849cf315046b489bf71f60439c60b30091a9",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv": [
+        "uvx",
+        "ruff@0.16.0",
+        "check",
+        "--no-fix",
+        "scripts/conftest.py",
+        "scripts/tests/test_state_guard.py"
+      ],
+      "cwd": "/private/tmp/item5-b-review-proposal-srbdj7uq/repo",
+      "revision": "914c2e4ef06a33d88ae7c94a823d3262a9526278",
+      "working_files_sha256": {
+        "scripts/conftest.py": "a0a82682c9431205f8c0db80176694b37800da7964e5b77ec3eba283fc7569c2",
+        "scripts/tests/test_state_guard.py": "8e7a7082fa4e7fcaa0ccf1985be646c7b26bb86af4cc519349cc068861b6b291",
+        "docs/agentic-dev-kit/workflows/upgrade.md": "c29baa57bc48b2d74e5e553745028f84bd2e8d400e88d891c9336d8496724cf6"
+      },
+      "started_at": "2026-09-10T17:33:06.554401+00:00",
+      "ended_at": "2026-09-10T17:33:07.748124+00:00",
+      "returncode": 0,
+      "stdout_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "stderr_sha256": "f4f4fbed024d0f9cbb1241c3e347366b5cfa0422c9afb0180af80c588fd0804e"
+    }
+  ]
+}

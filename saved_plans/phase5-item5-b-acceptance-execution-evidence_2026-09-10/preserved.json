@@ -1,0 +1,74 @@
+{
+  "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.agents/skills/wrap-up/SKILL.md": {
+    "mode": "0o644",
+    "sha256": "c5a267b53de07157cd69f035de68f662a634d469f71f99a9ddf4d2b0b0a93df7"
+  },
+  "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.claude/agents/adversarial.md": {
+    "mode": "0o644",
+    "sha256": "f61adde9da0974c20dcba31d8fda4dec313e2f26ffd97baae518654bae3e9e7a"
+  },
+  "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.claude/agents/correctness.md": {
+    "mode": "0o644",
+    "sha256": "a91ee86a18f6043d8f2cfba06cdbb983509ef9514b5924540f09b8a87d74e171"
+  },
+  "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.claude/settings.json": {
+    "mode": "0o644",
+    "sha256": "cafe367d9ec90f34644dec0a2a4929dc195962e16df332523b7a74fec82751bf"
+  },
+  "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.codex/config.toml": {
+    "mode": "0o644",
+    "sha256": "d37497c3278121598a663564ab38b53f658969717f78decb661ddd11c66551ea"
+  },
+  "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.codex/hooks.json": {
+    "mode": "0o644",
+    "sha256": "dbea8d8084adcc50e786af584c7e407fc5d7040bf26bd614c9966e9ba2797cfb"
+  },
+  "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.git/hooks/pre-push": {
+    "mode": "0o755",
+    "sha256": "b0d3019ee1de92d7960b22339e51eb68eca5e60fd59c2277cfbd3214955d4fef"
+  },
+  "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.gitignore": {
+    "mode": "0o644",
+    "sha256": "3d98e73ca1b75d1afc6c1663edfed6e4c6405456d5213a908296a6d5a139a866"
+  },
+  "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/AGENTS.md": {
+    "mode": "0o644",
+    "sha256": "afe455b56f1a6c4270961ed6ee301e3dae03b43748c1ceb8d5a49a3a30856819"
+  },
+  "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/CLAUDE.md": {
+    "mode": "0o644",
+    "sha256": "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49"
+  },
+  "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/ROADMAP.md": {
+    "mode": "0o644",
+    "sha256": "02b32402fb8bf0bf197e1473f3f88a4718f411c03e07686c829714063f0d6fd7"
+  },
+  "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/config/claude-lane-settings.json": {
+    "mode": "0o644",
+    "sha256": "2dd313c0a0889235a72175d102356ad9cdc2ce02230164cb274162ae0f96260f"
+  },
+  "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/config/dev-model.local.yaml": {
+    "mode": "0o644",
+    "sha256": "1d7c76ab19a3c1f550cf398b52284bb12c8b662485734add5c30abc3870f5524"
+  },
+  "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/config/dev-model.yaml": {
+    "mode": "0o644",
+    "sha256": "1cefdb92c970b997eaa56745f1fc8d5d9cf5ce0b86050b962f987548bdaaf8aa"
+  },
+  "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/init.sh": {
+    "mode": "0o755",
+    "sha256": "5cce07ddf5231d1944c883261f985d492530c2fa3472d992362a891aa5f17837"
+  },
+  "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/notes/friction-archive.md": {
+    "mode": "0o644",
+    "sha256": "af4a138e4a5ebe5634c55e7e417cd6b9f362bf3a35182b033f72876cd88180cf"
+  },
+  "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/notes/friction.md": {
+    "mode": "0o644",
+    "sha256": "9d7adf210f28942e5fac48c49e629aabb2c58a7f86776a4a1385f68dbd9764e5"
+  },
+  "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/notes/history.md": {
+    "mode": "0o644",
+    "sha256": "755b4349978cb4269cf89b6938427ee5e9da8475dc833f5cb2d10236dbea087a"
+  }
+}

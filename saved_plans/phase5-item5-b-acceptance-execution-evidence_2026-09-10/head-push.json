@@ -1,0 +1,35 @@
+[
+  {
+    "argv": [
+      "git",
+      "-C",
+      "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+      "push",
+      "-u",
+      "origin",
+      "chore/item5-b-field-exit"
+    ],
+    "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "ended_at": "2026-09-10T16:55:31.268409+00:00",
+    "returncode": 0,
+    "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+    "started_at": "2026-09-10T16:55:28.456378+00:00",
+    "stderr": "remote: \nremote: Create a pull request for 'chore/item5-b-field-exit' on GitHub by visiting:        \nremote:      https://github.com/topij/adk-item5-b-field-20260909/pull/new/chore/item5-b-field-exit        \nremote: \nTo https://github.com/topij/adk-item5-b-field-20260909.git\n * [new branch]      chore/item5-b-field-exit -> chore/item5-b-field-exit\n",
+    "stdout": "branch 'chore/item5-b-field-exit' set up to track 'origin/chore/item5-b-field-exit'.\n"
+  },
+  {
+    "argv": [
+      "git",
+      "ls-remote",
+      "https://github.com/topij/adk-item5-b-field-20260909.git",
+      "refs/heads/chore/item5-b-field-exit"
+    ],
+    "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "ended_at": "2026-09-10T16:55:32.175750+00:00",
+    "returncode": 0,
+    "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+    "started_at": "2026-09-10T16:55:31.268877+00:00",
+    "stderr": "",
+    "stdout": "f770f183bf6691f1f706c676b740cf2ef5ceb766\trefs/heads/chore/item5-b-field-exit\n"
+  }
+]

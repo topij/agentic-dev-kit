@@ -1,0 +1,95 @@
+diff --git a/docs/agentic-dev-kit/workflows/upgrade.md b/docs/agentic-dev-kit/workflows/upgrade.md
+index 8fe68d8..bb11f8e 100644
+--- a/docs/agentic-dev-kit/workflows/upgrade.md
++++ b/docs/agentic-dev-kit/workflows/upgrade.md
+@@ -156,7 +156,7 @@ uv run "${KIT:?KIT is not set — re-run Step 0}"/scripts/kit_doctor.py \
+ ```
+ 
+ This comparison is deliberately outside `KIT_OWNED` and never changes the drift
+-gate. `kit-current` is byte-identical to the current rendered form; `kit-stale`
++gate. `kit-current` equals the current rendered text after newline normalization; `kit-stale`
+ matches an earlier rendered form and can be refreshed without losing authored
+ behavior; `missing` can be installed; `adopter-owned` matches no known rendered
+ form, so report it and leave it unchanged. The source kit's own adapters must first
+diff --git a/kit-manifest.json b/kit-manifest.json
+index 7234c0c..79ae06d 100644
+--- a/kit-manifest.json
++++ b/kit-manifest.json
+@@ -72,7 +72,7 @@
+     },
+     "docs/agentic-dev-kit/workflows/upgrade.md": {
+       "role": "workflow",
+-      "sha256": "2cad70fa094ebc01f78e835784b2f84ee9ffd6b56a42d3d039c5995e42d4bf37"
++      "sha256": "c29baa57bc48b2d74e5e553745028f84bd2e8d400e88d891c9336d8496724cf6"
+     },
+     "docs/agentic-dev-kit/workflows/wrap-up.md": {
+       "role": "workflow",
+@@ -120,7 +120,7 @@
+     },
+     "scripts/conftest.py": {
+       "role": "engine",
+-      "sha256": "c2076c72a633fdd2d4e9991cf07ae2dda6c1747a1fe865a34a7fea013bd574c4"
++      "sha256": "a0a82682c9431205f8c0db80176694b37800da7964e5b77ec3eba283fc7569c2"
+     },
+     "scripts/dev_session.sh": {
+       "role": "engine",
+@@ -321,7 +321,7 @@
+     },
+     "scripts/tests/test_state_guard.py": {
+       "role": "test",
+-      "sha256": "915aae52d1b6fe38be757589d836c0f1198b79a4e20ba2a438aa2ef6fbf04bd9"
++      "sha256": "8e7a7082fa4e7fcaa0ccf1985be646c7b26bb86af4cc519349cc068861b6b291"
+     },
+     "scripts/verify_live_validation_bundle.py": {
+       "role": "repo-only",
+diff --git a/scripts/conftest.py b/scripts/conftest.py
+index ce8d849..73b702f 100644
+--- a/scripts/conftest.py
++++ b/scripts/conftest.py
+@@ -231,6 +231,11 @@ def _real_state_snapshot() -> dict[str, str]:
+     spots.
+     """
+     state_dir = REPO_ROOT / "state"
++    # A regular file here blocks engines that require a state directory. Hash
++    # it at the root entry so creation and content changes cannot look absent.
++    # Root symlinks retain the separately documented handling below.
++    if not state_dir.is_symlink() and state_dir.is_file():
++        return {"./": _hash_file(state_dir)}
+     if not state_dir.is_dir():
+         return {}
+     snapshot: dict[str, str] = {"./": "<dir>"}
+diff --git a/scripts/tests/test_state_guard.py b/scripts/tests/test_state_guard.py
+index 8292a32..a21345e 100644
+--- a/scripts/tests/test_state_guard.py
++++ b/scripts/tests/test_state_guard.py
+@@ -719,3 +719,30 @@ def test_the_documented_residual_still_behaves_as_documented(
+         f"landed, delete this test and the docstring's residual section.\n{combined}"
+     )
+     assert _BANNER not in combined, f"the guard fired where it is documented not to:\n{combined}"
++
++
++@pytest.mark.parametrize("layout", list(_LAYOUTS), ids=list(_LAYOUTS))
++@pytest.mark.parametrize("case", ["new", "unchanged", "modified"])
++def test_guard_observes_regular_file_at_state_root(
++    tmp_path: Path, layout: str, case: str
++) -> None:
++    """Detect persisted root-file changes without rejecting an unchanged baseline."""
++    engine_rel = _LAYOUTS[layout]
++    _build_tree(tmp_path, leak_in=None, engine_rel=engine_rel)
++    state = tmp_path / "state"
++    if case != "new":
++        state.write_text("before")
++    expected = "before" if case == "unchanged" else "after"
++    probe = tmp_path / engine_rel / "lib/state_paths/tests/test_state_paths_probe.py"
++    probe.write_text(
++        "from pathlib import Path\n"
++        "def test_write_state_root():\n"
++        f"    Path({str(state)!r}).write_text({expected!r})\n"
++    )
++    result = _run_pytest(tmp_path, [f"{engine_rel}/lib/state_paths/tests"])
++    assert state.is_file() and state.read_text() == expected
++    if case == "unchanged":
++        assert result.returncode == 0, result.stdout + result.stderr
++        assert _BANNER not in result.stdout + result.stderr
++    else:
++        _assert_guard_fired(result, tmp_path, "bare-root")

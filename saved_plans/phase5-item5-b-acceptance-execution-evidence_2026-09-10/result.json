@@ -1,0 +1,138 @@
+{
+  "accept_01": "ownership acceptance executed",
+  "findings": [
+    {
+      "comment": "https://github.com/topij/adk-item5-b-field-20260909/pull/1#issuecomment-5622780057",
+      "disposition": "pending exact repair decision",
+      "kind": "inherited regular-file state-root detection gap",
+      "lens": "adversarial",
+      "regression": false,
+      "severity": "P2"
+    },
+    {
+      "comment": "https://github.com/topij/adk-item5-b-field-20260909/pull/1#issuecomment-5622712808",
+      "disposition": "pending exact repair decision",
+      "kind": "newline-normalized adapter comparison wording imprecision",
+      "lens": "correctness",
+      "regression": false,
+      "severity": "P3"
+    }
+  ],
+  "fixture_handoff_complete": false,
+  "fixture_head": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+  "fixture_merge_authorized": false,
+  "fixture_merged": false,
+  "fixture_pr": "https://github.com/topij/adk-item5-b-field-20260909/pull/1",
+  "forge_tuples_equal": true,
+  "hosted_verification": {
+    "conclusion": "success",
+    "head": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+    "hosted_skip_difference": "locale-dependent initializer probes skipped; see full job log",
+    "installed_summary": "2126 passed, 131 skipped in 201.53s (0:03:21)",
+    "job_id": 102965180333,
+    "run_id": 34505089997,
+    "source_pin": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac",
+    "source_summary": "2496 passed, 3 skipped in 230.28s (0:03:50)"
+  },
+  "installed_skip_entries": [
+    "SKIPPED [50] scripts/devkit/tests/conftest.py:326: needs: not vendored in this tree: .github/workflows/test.yml",
+    "SKIPPED [16] scripts/devkit/tests/conftest.py:315: asserts about the kit's own shipped source; this tree carries a recorded install baseline (kit_commit present)",
+    "SKIPPED [4] scripts/devkit/tests/conftest.py:326: needs: not vendored in this tree: CHANGELOG.md",
+    "SKIPPED [1] scripts/devkit/tests/test_kit_doctor.py:1226: not the kit's own tree: scripts/verify_live_validation_bundle.py is absent",
+    "SKIPPED [3] scripts/devkit/tests/conftest.py:326: needs: not vendored in this tree: scripts/kit_doctor.py",
+    "SKIPPED [49] scripts/devkit/tests/test_kit_repo_only.py:386: not a complete kit tree \u2014 a marked path being absent here is the mechanism working, not a defect",
+    "SKIPPED [1] scripts/devkit/tests/test_mutation_gate.py:313: no `mutation-test` target here (or no make); nothing to pin",
+    "SKIPPED [1] scripts/devkit/tests/conftest.py:326: needs: not vendored in this tree: CHANGELOG.md, docs/CLAUDE-sections.md, docs/parallel-howto.md, scripts/dev_session.sh, scripts/hooks/pr_followup_hook.py, scripts/pr_watch.py",
+    "SKIPPED [1] scripts/devkit/tests/conftest.py:326: needs: not vendored in this tree: CHANGELOG.md, scripts/dev_session.sh, scripts/launch_lane.py, scripts/reconcile_sessions.sh, scripts/tests/test_lane_launcher.py, scripts/tests/test_portability.py, scripts/tests/test_reconcile_sessions.py",
+    "SKIPPED [1] scripts/devkit/tests/conftest.py:326: needs: not vendored in this tree: saved_plans/codex-hooks-live-probe/.codex/hooks.json",
+    "SKIPPED [1] scripts/devkit/tests/conftest.py:326: needs: not vendored in this tree: saved_plans/codex-safety-doctrine-live-probe"
+  ],
+  "installed_skip_scope_matches_update": true,
+  "installed_summary": [
+    "2129 passed, 128 skipped in 466.23s (0:07:46)"
+  ],
+  "local_verification_accepted_for_publication": true,
+  "next_decision": "ITEM5-B-KIT-REVIEW-01",
+  "next_packet": "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-review-repair-decision_2026-09-10.md",
+  "observed_at": "2026-09-10T17:44:50.244071+00:00",
+  "pr_01": "payload/publication/verification executed; independent findings pending",
+  "retained_checkpoint": {
+    "argv": [
+      "python3",
+      "-B",
+      "/private/tmp/item5-b-pr-execution-d9i5jh0q/checkpoint.py",
+      "local"
+    ],
+    "at": "2026-09-10T17:44:01.822571+00:00",
+    "baseline_sha256": "9e2196df3b7239b599819abcfc20271b0389b70f78f22837a0709575145b9126",
+    "declared_non_git_delta_only": true,
+    "fixture_head": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+    "full_typed_configuration_unchanged": true,
+    "historical_fixture_refs_unchanged": true,
+    "invocation_cwd": "/Users/topi/Coding/agentic-dev-kit",
+    "original_paths_absent": true,
+    "output_cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910",
+    "preserved_destinations_except_declared_payload_unchanged": true,
+    "program_sha256": "86ba6bc4fdcb92f9316d390fb0c5888f8e120fdb1d97a4a429eb1376bfa676c1",
+    "retained_source_including_git_unchanged": true,
+    "source_head": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac"
+  },
+  "review_gate_receipt": null,
+  "source_failure_disposition": "known disclosed #393 limitation",
+  "source_failure_entries": [
+    "FAILED scripts/tests/test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero"
+  ],
+  "source_pin": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac",
+  "source_returncode": 2,
+  "source_summary": [
+    "1 failed, 2497 passed, 1 skipped in 526.82s (0:08:46)"
+  ],
+  "stage": "paused-for-exact-review-repair-decision",
+  "versions": [
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "--version"
+      ],
+      "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+      "observed_at": "2026-09-10T16:53:44.918361+00:00",
+      "returncode": 0,
+      "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+      "stderr": "",
+      "stdout": "Python 3.14.6\n"
+    },
+    {
+      "argv": [
+        "uv",
+        "--version"
+      ],
+      "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+      "observed_at": "2026-09-10T16:53:44.944562+00:00",
+      "returncode": 0,
+      "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+      "stderr": "",
+      "stdout": "uv 0.12.3 (Homebrew 2026-08-07 aarch64-apple-darwin)\n"
+    },
+    {
+      "argv": [
+        "uv",
+        "run",
+        "--with",
+        "pytest",
+        "--with",
+        "pyyaml",
+        "python",
+        "-B",
+        "-c",
+        "import json,sys,pytest,yaml; print(json.dumps(dict(python=sys.version,pytest=pytest.__version__,pyyaml=yaml.__version__)))"
+      ],
+      "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+      "observed_at": "2026-09-10T16:53:45.446336+00:00",
+      "returncode": 0,
+      "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+      "stderr": "",
+      "stdout": "{\"python\": \"3.14.7 (main, Aug  7 2026, 02:15:30) [Clang 22.1.3 ]\", \"pytest\": \"9.1.1\", \"pyyaml\": \"6.0.3\"}\n"
+    }
+  ]
+}

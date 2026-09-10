@@ -1,0 +1,116 @@
+{
+  "job": {
+    "completedAt": "2026-09-10T17:03:22Z",
+    "conclusion": "success",
+    "databaseId": 102965180333,
+    "name": "installed-kit",
+    "startedAt": "2026-09-10T16:55:52Z",
+    "status": "completed",
+    "steps": [
+      {
+        "completedAt": "2026-09-10T16:55:54Z",
+        "conclusion": "success",
+        "name": "Set up job",
+        "number": 1,
+        "startedAt": "2026-09-10T16:55:53Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-09-10T16:55:55Z",
+        "conclusion": "success",
+        "name": "Run actions/checkout@v4",
+        "number": 2,
+        "startedAt": "2026-09-10T16:55:54Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-09-10T16:55:55Z",
+        "conclusion": "success",
+        "name": "Run actions/setup-python@v5",
+        "number": 3,
+        "startedAt": "2026-09-10T16:55:55Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-09-10T16:56:02Z",
+        "conclusion": "success",
+        "name": "Install verification tools",
+        "number": 4,
+        "startedAt": "2026-09-10T16:55:55Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-09-10T17:03:17Z",
+        "conclusion": "success",
+        "name": "Verify installed bytes and selected tests against the approved source",
+        "number": 5,
+        "startedAt": "2026-09-10T16:56:02Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-09-10T17:03:18Z",
+        "conclusion": "success",
+        "name": "Post Run actions/setup-python@v5",
+        "number": 9,
+        "startedAt": "2026-09-10T17:03:17Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-09-10T17:03:18Z",
+        "conclusion": "success",
+        "name": "Post Run actions/checkout@v4",
+        "number": 10,
+        "startedAt": "2026-09-10T17:03:18Z",
+        "status": "completed"
+      },
+      {
+        "completedAt": "2026-09-10T17:03:18Z",
+        "conclusion": "success",
+        "name": "Complete job",
+        "number": 11,
+        "startedAt": "2026-09-10T17:03:18Z",
+        "status": "completed"
+      }
+    ],
+    "url": "https://github.com/topij/adk-item5-b-field-20260909/actions/runs/34505089997/job/102965180333"
+  },
+  "log_read": {
+    "argv": [
+      "gh",
+      "run",
+      "view",
+      "34505089997",
+      "--repo",
+      "topij/adk-item5-b-field-20260909",
+      "--job",
+      "102965180333",
+      "--log"
+    ],
+    "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "ended_at": "2026-09-10T17:07:03.777240+00:00",
+    "returncode": 0,
+    "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+    "started_at": "2026-09-10T17:07:01.678133+00:00",
+    "stderr": ""
+  },
+  "log_sha256": "24041d0881d907b2ab2bd464fca08cf5923d7b13327087abb5630ec174713424",
+  "run_read": {
+    "argv": [
+      "gh",
+      "run",
+      "view",
+      "34505089997",
+      "--repo",
+      "topij/adk-item5-b-field-20260909",
+      "--json",
+      "databaseId,headSha,event,status,conclusion,name,url,createdAt,updatedAt,jobs"
+    ],
+    "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "ended_at": "2026-09-10T17:07:01.677802+00:00",
+    "returncode": 0,
+    "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+    "started_at": "2026-09-10T17:07:00.551258+00:00",
+    "stderr": "",
+    "stdout": "{\"conclusion\":\"success\",\"createdAt\":\"2026-09-10T16:55:49Z\",\"databaseId\":34505089997,\"event\":\"pull_request\",\"headSha\":\"f770f183bf6691f1f706c676b740cf2ef5ceb766\",\"jobs\":[{\"completedAt\":\"2026-09-10T17:03:22Z\",\"conclusion\":\"success\",\"databaseId\":102965180333,\"name\":\"installed-kit\",\"startedAt\":\"2026-09-10T16:55:52Z\",\"status\":\"completed\",\"steps\":[{\"completedAt\":\"2026-09-10T16:55:54Z\",\"conclusion\":\"success\",\"name\":\"Set up job\",\"number\":1,\"startedAt\":\"2026-09-10T16:55:53Z\",\"status\":\"completed\"},{\"completedAt\":\"2026-09-10T16:55:55Z\",\"conclusion\":\"success\",\"name\":\"Run actions/checkout@v4\",\"number\":2,\"startedAt\":\"2026-09-10T16:55:54Z\",\"status\":\"completed\"},{\"completedAt\":\"2026-09-10T16:55:55Z\",\"conclusion\":\"success\",\"name\":\"Run actions/setup-python@v5\",\"number\":3,\"startedAt\":\"2026-09-10T16:55:55Z\",\"status\":\"completed\"},{\"completedAt\":\"2026-09-10T16:56:02Z\",\"conclusion\":\"success\",\"name\":\"Install verification tools\",\"number\":4,\"startedAt\":\"2026-09-10T16:55:55Z\",\"status\":\"completed\"},{\"completedAt\":\"2026-09-10T17:03:17Z\",\"conclusion\":\"success\",\"name\":\"Verify installed bytes and selected tests against the approved source\",\"number\":5,\"startedAt\":\"2026-09-10T16:56:02Z\",\"status\":\"completed\"},{\"completedAt\":\"2026-09-10T17:03:18Z\",\"conclusion\":\"success\",\"name\":\"Post Run actions/setup-python@v5\",\"number\":9,\"startedAt\":\"2026-09-10T17:03:17Z\",\"status\":\"completed\"},{\"completedAt\":\"2026-09-10T17:03:18Z\",\"conclusion\":\"success\",\"name\":\"Post Run actions/checkout@v4\",\"number\":10,\"startedAt\":\"2026-09-10T17:03:18Z\",\"status\":\"completed\"},{\"completedAt\":\"2026-09-10T17:03:18Z\",\"conclusion\":\"success\",\"name\":\"Complete job\",\"number\":11,\"startedAt\":\"2026-09-10T17:03:18Z\",\"status\":\"completed\"}],\"url\":\"https://github.com/topij/adk-item5-b-field-20260909/actions/runs/34505089997/job/102965180333\"}],\"name\":\"ITEM5-B installed verification\",\"status\":\"completed\",\"updatedAt\":\"2026-09-10T17:03:23Z\",\"url\":\"https://github.com/topij/adk-item5-b-field-20260909/actions/runs/34505089997\"}\n"
+  }
+}

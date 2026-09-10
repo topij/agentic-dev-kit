@@ -1,0 +1,7 @@
+Downloading ruff (10.0MiB)
+ Downloaded ruff
+Installed 1 package in 5ms
+Downloading pygments (1.2MiB)
+ Downloaded pygments
+Installed 6 packages in 7ms
+make: *** [test] Error 1

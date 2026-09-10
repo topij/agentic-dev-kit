@@ -439,11 +439,16 @@ historical observation it was and is not silently refreshed.
      fixture attempt `413132b01d14c735d94753231bf325904135285f`, complete local
      verification and preservation evidence. That update approval is consumed.
      The [acceptance and field-exit packet](phase5-item5-b-acceptance-decision_2026-09-10.md)
-     now binds the preserved-file decisions to a read-only comparison with the update's
-     FINAL evidence. It separately proposes fixture friction/CI payloads and a private
-     ready-PR handoff; neither decision is approved. The next action is the exact
-     ACCEPT-01 and optional PR-01 decision, not another update or client exercise.
-     No original continuity or prior field credit was recreated.
+     binds the preserved-file decisions to the fresh read-only comparison with the
+     update's FINAL evidence. The operator approved ACCEPT-01 and PR-01 as scoped on
+     2026-09-10. The [acceptance execution](phase5-item5-b-acceptance-execution_2026-09-10.md)
+     records ownership acceptance, the exact friction/CI payloads, local/hosted results
+     and private fixture PR #1 at `f770f183bf6691f1f706c676b740cf2ef5ceb766`.
+     PR-01 is paused at the recorded P2 inherited detector gap and P3 wording
+     imprecision. The [kit-only repair decision](phase5-item5-b-review-repair-decision_2026-09-10.md)
+     owns the next action. Fixture merge remains excluded; the nonfunctional custom
+     wrap-up carries ownership acceptance only. No original continuity or prior field
+     credit was recreated.
      Delivery item 6 is independent of these paths. The approved
      [adopt continuation](codex-adopt-initialization-field-exercise_2026-09-06.md)
      executed initialization and attempted Step 4 checks; the installed suites failed.
@@ -895,7 +900,7 @@ citation remains in Phase 6's implementation scope.
 |---|---|---|
 | `parallel` | [Retained Codex batch](codex-parallel-batch-live-validation_2026-09-01.md), delivered by PR #659: lane identity, isolation, exact-head review, reconciliation and operator merge refusal. | Do not repeat that batch. Credit only its retained claim map, not every parallel mode. |
 | `triage-friction-log` | Codex's interactive LLM-only route completed through [PR #673](https://github.com/topij/agentic-dev-kit/pull/673); the committed graduation marker retains the approved and parked dispositions. The local run report and completed state were re-read in this session. | Do not repeat that graduation. Engine-backed and notification-service routes are not established by it; preserve TRI-03/TRI-04/TRI-05 for fresh exact decisions. |
-| `adopt` | PR #682: [bounded Codex context exercise](codex-adopt-field-exercise_2026-09-05.md): inspection, staging, baseline and Step 3c handoff. PR #686's separately approved [initialization continuation](codex-adopt-initialization-field-exercise_2026-09-06.md) retains initializer execution and Step 4 results, including the failed installed suites. The [continuation review](codex-adopt-completion-review_2026-09-06.md) retains read-only continuity, proposed ownership/lens handling and independent diagnostic probes. The approved [VER-02 trial](codex-adopt-ver02-trial_2026-09-06.md) records the copied root repair, reached assertion, mutation and restoration; the approved [VER-03 repair](codex-adopt-ver03-repair_2026-09-06.md) records the permanent kit test change and synthetic-layout regression. | Credit execution and recorded results only. The [FIX-01 application](adopt-fix01-ownership-lenses_2026-09-06.md), [REG-01 application](adopt-reg01-application_2026-09-07.md), [suite assessment](adopt-suite-assessment_2026-09-07.md) and [live Codex batch](codex-hooks-batch_2026-09-07.md) supersede the earlier pending ownership, lens, registration and assessment work. Successful adoption verification and fixture PR completion retain their own exact decisions. |
+| `adopt` | PR #682: [bounded Codex context exercise](codex-adopt-field-exercise_2026-09-05.md): inspection, staging, baseline and Step 3c handoff. PR #686's separately approved [initialization continuation](codex-adopt-initialization-field-exercise_2026-09-06.md) retains initializer execution and Step 4 results, including the failed installed suites. The [continuation review](codex-adopt-completion-review_2026-09-06.md) retains read-only continuity, proposed ownership/lens handling and independent diagnostic probes. The approved [VER-02 trial](codex-adopt-ver02-trial_2026-09-06.md) records the copied root repair, reached assertion, mutation and restoration; the approved [VER-03 repair](codex-adopt-ver03-repair_2026-09-06.md) records the permanent kit test change and synthetic-layout regression. | Credit execution and recorded results only. The [FIX-01 application](adopt-fix01-ownership-lenses_2026-09-06.md), [REG-01 application](adopt-reg01-application_2026-09-07.md), [suite assessment](adopt-suite-assessment_2026-09-07.md) and [live Codex batch](codex-hooks-batch_2026-09-07.md) supersede the earlier pending ownership, lens, registration and assessment work. The later [ITEM5-B acceptance execution](phase5-item5-b-acceptance-execution_2026-09-10.md) records approved ownership, local/hosted verification and the fixture PR disposition. Client functionality, fixture merge and field exit retain their separate boundaries. |
 | `post-merge-systemize` | PR #684: [bounded Codex test exercise](codex-systemize-test-field-exercise_2026-09-06.md): merged-config read, capability preflight, trusted review inputs, digest validation, artifact checkpoints and proposed routing. | Credit test-mode analysis only. Live routing, engine-backed operation and full restart recovery were not exercised; do not repeat this test as if no field evidence exists. |
 
 The local triage references inspected were

@@ -1,0 +1,275 @@
+import hashlib
+import importlib.util
+import io
+import json
+import os
+from pathlib import Path
+import runpy
+import shutil
+import stat
+import subprocess
+import sys
+import tarfile
+from datetime import datetime, timezone
+
+COCKPIT = Path('/Users/topi/Coding/agentic-dev-kit')
+REPO = Path('/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture')
+KIT = Path('/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source')
+OUT = REPO.parent / 'acceptance-pr-20260910'
+RECORD = COCKPIT / 'saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10'
+PACKET = COCKPIT / 'saved_plans/phase5-item5-b-acceptance-decision_2026-09-10.md'
+EVIDENCE = COCKPIT / 'saved_plans/phase5-item5-b-acceptance-evidence_2026-09-10'
+AUDIT = COCKPIT / 'saved_plans/phase5-item5-b-acceptance-audit_2026-09-10.py.txt'
+FIXTURE_INPUT = '413132b01d14c735d94753231bf325904135285f'
+SOURCE = '60fe0dc7ad68922d064c0cf401cff2c4c6d607ac'
+BASELINE = '9e2196df3b7239b599819abcfc20271b0389b70f78f22837a0709575145b9126'
+BRANCH = 'chore/item5-b-field-exit'
+NAMESPACE = runpy.run_path(str(AUDIT))
+inventory = NAMESPACE['inventory']
+identity = NAMESPACE['identity']
+sha = NAMESPACE['sha']
+
+
+def now():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def read(path):
+    return json.loads(path.read_bytes())
+
+
+def enter(root):
+    assert root.resolve() == root and root.is_dir() and not root.is_symlink(), root
+    os.chdir(root)
+    assert Path.cwd() == root
+
+
+def write(path, data):
+    assert path.is_absolute() and path.resolve() == path, path
+    assert path.parent.is_dir(), path
+    if path.exists():
+        s = path.lstat()
+        assert stat.S_ISREG(s.st_mode) and s.st_nlink == 1, path
+    path.write_text(json.dumps(data, indent=2, sort_keys=True) + '\n')
+
+
+def git(root, *args):
+    return subprocess.check_output(['git', '--no-optional-locks', '-C', str(root), *args], text=True).strip()
+
+
+def environment(role):
+    env = dict(os.environ)
+    env.pop('PYTHONOPTIMIZE', None)
+    env.update(PYTHONDONTWRITEBYTECODE='1', UV_CACHE_DIR=str(OUT/'uv-cache'),
+               UV_TOOL_DIR=str(OUT/'uv-tools'), RUFF_CACHE_DIR=str(OUT/'ruff-cache'),
+               TMPDIR=str(OUT/'tmp'), DEVKIT_STATE_ROOT=str(OUT/(role+'-state')),
+               PYTEST_ADDOPTS=f'-o cache_dir={OUT/(role+"-pytest-cache")} -ra')
+    return env
+
+
+def run(name, argv, cwd, role='fixture', accepted=(0,)):
+    enter(cwd)
+    env = environment(role)
+    start = now()
+    print(json.dumps({'starting': name, 'argv': argv, 'cwd': str(cwd), 'at': start}), flush=True)
+    with (OUT/(name+'.stdout.log')).open('xb') as stdout, (OUT/(name+'.stderr.log')).open('xb') as stderr:
+        p = subprocess.run(argv, cwd=cwd, env=env, stdout=stdout, stderr=stderr)
+    item = {'argv':argv, 'cwd':str(cwd), 'revision':git(cwd,'rev-parse','HEAD'),
+            'started_at':start, 'ended_at':now(), 'returncode':p.returncode,
+            'environment':{k:env[k] for k in ['PYTHONDONTWRITEBYTECODE','UV_CACHE_DIR','UV_TOOL_DIR','RUFF_CACHE_DIR','TMPDIR','DEVKIT_STATE_ROOT','PYTEST_ADDOPTS']},
+            'PYTHONOPTIMIZE':env.get('PYTHONOPTIMIZE'),
+            'stdout_sha256':sha((OUT/(name+'.stdout.log')).read_bytes()),
+            'stderr_sha256':sha((OUT/(name+'.stderr.log')).read_bytes())}
+    write(OUT/(name+'.json'), item)
+    print(json.dumps(item), flush=True)
+    print((OUT/(name+'.stdout.log')).read_text(errors='replace')[-5000:], flush=True)
+    print((OUT/(name+'.stderr.log')).read_text(errors='replace')[-2000:], flush=True)
+    if p.returncode not in accepted:
+        raise SystemExit(f'{name} stopped with status {p.returncode}')
+    return item
+
+
+def prepare():
+    enter(COCKPIT)
+    assert not sys.flags.optimize and sys.dont_write_bytecode
+    assert not os.path.lexists(OUT) and not os.path.lexists(RECORD)
+    assert git(COCKPIT,'status','--porcelain') == ''
+    assert git(COCKPIT,'rev-parse','HEAD') == '914c2e4ef06a33d88ae7c94a823d3262a9526278'
+    assert git(COCKPIT,'symbolic-ref','--short','HEAD') == 'chore/item5-b-acceptance-execution-20260910'
+    proposal = read(EVIDENCE/'proposed-writes.json')
+    assert sha((EVIDENCE/'proposed-writes.json').read_bytes()) == '9a1f464ae9198b4c762f3e30c37ff2f83ceecfedd208fdcb4fb686977df2e918'
+    for name, expected in read(EVIDENCE/'sha256.json').items():
+        assert sha((EVIDENCE/name).read_bytes()) == expected, name
+    env = dict(os.environ)
+    env.pop('PYTHONOPTIMIZE',None)
+    result = subprocess.run(['python3','-B',str(AUDIT)],cwd=COCKPIT,env=env,capture_output=True,check=True)
+    audit = json.loads(result.stdout)
+    assert audit['result'] == 'equal-to-update-final-at-observed-checkpoints'
+    assert subprocess.run(['git','-C',str(REPO),'show-ref','--verify','--quiet','refs/heads/'+BRANCH]).returncode == 1
+    for row in proposal['fixture_payload_writes']:
+        source, dest = Path(row['source']), Path(row['destination'])
+        assert sha(source.read_bytes()) == row['source_sha256'] == row['after_sha256']
+        assert dest.resolve() == dest and source.resolve() == source
+        if row['before_sha256'] is None:
+            assert not os.path.lexists(dest)
+        else:
+            st=dest.lstat()
+            assert stat.S_ISREG(st.st_mode) and st.st_nlink==1
+            assert sha(dest.read_bytes())==row['before_sha256']
+    for name in proposal['fixture_directories_to_add']:
+        assert not os.path.lexists(name)
+    assert sha(Path(proposal['remote']['body_source']).read_bytes()) == proposal['remote']['body_sha256']
+    assert OUT.parent.resolve() == OUT.parent
+    enter(OUT.parent)
+    OUT.mkdir()
+    for name in ['tmp','fixture-state','source-state','review-state','uv-cache','uv-tools','ruff-cache','fixture-pytest-cache','source-pytest-cache']:
+        (OUT/name).mkdir()
+    enter(COCKPIT)
+    RECORD.mkdir()
+    authority={'operator_message':'I approve\nITEM5-B-ACCEPT-01 as scoped\nITEM5-B-PR-01 as scoped',
+               'recorded_at':now(),'cockpit_revision':git(COCKPIT,'rev-parse','HEAD'),
+               'packet':str(PACKET),'packet_sha256':sha(PACKET.read_bytes()),
+               'proposed_writes_sha256':sha((EVIDENCE/'proposed-writes.json').read_bytes()),
+               'audit_program_sha256':audit['program_sha256'],
+               'audit_stdout_sha256':sha(result.stdout),'fixture_input':FIXTURE_INPUT,
+               'source_pin':SOURCE,'baseline_sha256':BASELINE,
+               'fixture_merge_authorized':False,'kit_record_merge_authorized':'standing merge-when-clean within scope'}
+    write(OUT/'authority.json',authority)
+    write(RECORD/'authority.json',authority)
+    (RECORD/'acceptance-audit.json').write_bytes(result.stdout)
+    shutil.copyfile(EVIDENCE/'proposed-writes.json', OUT/'payload-ledger.json')
+    for role,root in [('fixture',REPO),('source',KIT)]:
+        write(OUT/(role+'-before-inventory.json'),inventory(root))
+        write(OUT/(role+'-before-git.json'),{'identity':identity(root),'administrative_inventory':inventory(root/'.git')})
+    write(OUT/'configuration.json',audit['configuration'])
+    write(OUT/'preserved.json',audit['preserved_files'])
+    write(OUT/'baseline.json',audit['baseline'])
+    enter(REPO)
+    before=read(OUT/'fixture-before-inventory.json')
+    with tarfile.open(OUT/'fixture-before.tar','x') as archive:
+        for rel in sorted(before):
+            path=REPO/rel
+            info=archive.gettarinfo(str(path),arcname=rel)
+            if info.isfile():
+                with path.open('rb') as src:
+                    archive.addfile(info,src)
+            else:
+                archive.addfile(info)
+    with tarfile.open(OUT/'fixture-before.tar','r') as archive:
+        members={m.name:m for m in archive.getmembers()}
+        assert set(members)==set(before)
+        for rel,expected in before.items():
+            m=members[rel]
+            assert oct(m.mode)==expected['mode'],rel
+            if expected['kind']=='file':
+                assert m.isfile() or m.islnk()
+                assert sha(archive.extractfile(m).read())==expected['sha256'],rel
+            elif expected['kind']=='directory':
+                assert m.isdir(),rel
+            else:
+                assert m.issym() and m.linkname==expected['target'],rel
+    subprocess.run(['git','-C',str(REPO),'bundle','create',str(OUT/'fixture-before.bundle'),'--all'],check=True)
+    verify=subprocess.run(['git','-C',str(REPO),'bundle','verify',str(OUT/'fixture-before.bundle')],capture_output=True,check=True)
+    write(OUT/'backups-verified.json',{'observed_at':now(),'cwd':str(REPO),'revision':FIXTURE_INPUT,
+          'archive_sha256':sha((OUT/'fixture-before.tar').read_bytes()),'archive_members_bytes_modes_match':True,
+          'bundle_sha256':sha((OUT/'fixture-before.bundle').read_bytes()),'bundle_verify_argv':['git','-C',str(REPO),'bundle','verify',str(OUT/'fixture-before.bundle')],
+          'bundle_verify_status':verify.returncode,'bundle_verify_stdout':verify.stdout.decode(),'bundle_verify_stderr':verify.stderr.decode()})
+    for role,root in [('fixture',REPO),('source',KIT)]:
+        assert inventory(root)==read(OUT/(role+'-before-inventory.json'))
+        assert identity(root)==read(OUT/(role+'-before-git.json'))['identity']
+    print(json.dumps({'prepared':str(OUT),'audit':audit['result'],'authority':authority},indent=2))
+
+
+def apply():
+    enter(REPO)
+    proposal=read(OUT/'payload-ledger.json')
+    for role,root in [('fixture',REPO),('source',KIT)]:
+        assert identity(root)==read(OUT/(role+'-before-git.json'))['identity']
+        assert inventory(root)==read(OUT/(role+'-before-inventory.json'))
+    subprocess.run(['git','-C',str(REPO),'switch','-c',BRANCH,FIXTURE_INPUT],check=True)
+    for name in proposal['fixture_directories_to_add']:
+        Path(name).mkdir()
+    for row in proposal['fixture_payload_writes']:
+        p=Path(row['destination'])
+        p.write_bytes(Path(row['source']).read_bytes())
+        p.chmod(int(row['mode'],8))
+        assert sha(p.read_bytes())==row['after_sha256']
+        assert oct(stat.S_IMODE(p.lstat().st_mode))==row['mode']
+    check()
+    subprocess.run(['git','-C',str(REPO),'add','--',*[x['destination'] for x in proposal['fixture_payload_writes']]],check=True)
+    subprocess.run(['git','-C',str(REPO),'diff','--cached','--check'],check=True)
+    print(git(REPO,'diff','--cached','--stat'))
+    print(git(REPO,'diff','--cached'))
+    write(OUT/'payload-applied.json',{'at':now(),'revision':FIXTURE_INPUT,'payloads':proposal['fixture_payload_writes'],'fixture_inventory':inventory(REPO)})
+
+
+def check():
+    proposal=read(OUT/'payload-ledger.json')
+    expected=read(OUT/'fixture-before-inventory.json')
+    for name in proposal['fixture_directories_to_add']:
+        expected[Path(name).relative_to(REPO).as_posix()]={'kind':'directory','mode':'0o755'}
+    for row in proposal['fixture_payload_writes']:
+        expected[Path(row['destination']).relative_to(REPO).as_posix()]={'kind':'file','mode':row['mode'],'sha256':row['after_sha256']}
+    delta=NAMESPACE['compare'](inventory(REPO),expected)
+    assert not delta,delta
+    assert inventory(KIT)==read(OUT/'source-before-inventory.json')
+    assert identity(KIT)==read(OUT/'source-before-git.json')['identity']
+    assert inventory(KIT/'.git')==read(OUT/'source-before-git.json')['administrative_inventory']
+    assert sha((REPO/'kit-manifest.json').read_bytes())==BASELINE
+    for name,expected in read(OUT/'preserved.json').items():
+        if name in {row['destination'] for row in proposal['fixture_payload_writes']}:
+            continue
+        p=Path(name);s=p.lstat()
+        assert stat.S_ISREG(s.st_mode) and s.st_nlink==1 and p.resolve()==p
+        assert {'sha256':sha(p.read_bytes()),'mode':oct(stat.S_IMODE(s.st_mode))}==expected,name
+    spec=importlib.util.spec_from_file_location('fixture_config',REPO/'scripts/devkit/lib/kitconfig.py')
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    config=REPO/'config/dev-model.yaml'
+    mappings={'tracked':module.load_config(config,overlay=False),'merged':module.load_config(config)}
+    assert json.dumps(mappings,sort_keys=True)==json.dumps(read(OUT/'configuration.json'),sort_keys=True)
+    for ref,expected in [('chore/adopt-agentic-dev-kit','07bacf5bda3b1e7a6718c7d4528336ef81dc2143'),('chore/item5-b-update-60fe0dc',FIXTURE_INPUT)]:
+        assert git(REPO,'rev-parse','refs/heads/'+ref)==expected
+    print('Declared fixture delta, preservation/configuration/baseline, historical refs and retained source matched.',flush=True)
+
+
+def commit():
+    enter(REPO)
+    check()
+    names=git(REPO,'diff','--cached','--name-only').splitlines()
+    assert set(names)=={'notes/friction.md','.github/workflows/item5-b-installed.yml'}
+    assert git(REPO,'rev-parse','HEAD')==FIXTURE_INPUT
+    subprocess.run(['git','-C',str(REPO),'commit','-m','Complete the ITEM5-B adoption fixture'],check=True)
+    assert git(REPO,'status','--porcelain')==''
+    write(OUT/'fixture-commit.json',{'at':now(),'identity':identity(REPO),'administrative_inventory':inventory(REPO/'.git')})
+    print(git(REPO,'rev-parse','HEAD'))
+
+
+def verify_fixture():
+    commands=[('installed-doctor',['python3','-B',str(REPO/'scripts/devkit/kit_doctor.py'),'--root',str(REPO),'--manifest',str(KIT/'kit-manifest.json'),'--json']),
+              ('adapter-report',['python3','-B',str(KIT/'scripts/kit_doctor.py'),'--root',str(REPO),'--adapter-report','--adapter-source',str(KIT),'--json']),
+              ('fixture-budget',['python3','-B',str(REPO/'scripts/devkit/check_doc_budget.py')]),
+              ('installed-suite',['uv','run','--with','pytest','--with','pyyaml','python','-B',str(REPO/'scripts/devkit/run_installed_tests.py'),'--root',str(REPO)])]
+    for name,argv in commands:
+        run(name,argv,REPO)
+        check()
+        assert git(REPO,'status','--porcelain')==''
+
+
+def verify_source():
+    target=OUT/'source-verification'
+    enter(OUT)
+    assert not os.path.lexists(target)
+    subprocess.run(['git','clone','--no-hardlinks','--no-checkout',str(KIT),str(target)],check=True)
+    enter(target)
+    subprocess.run(['git','-C',str(target),'checkout','--detach',SOURCE],check=True)
+    run('source-make-test',['make','test'],target,'source',accepted=(0,2))
+    check()
+    for name,path in [('dev-session','scripts/dev_session.sh'),('reconcile','scripts/reconcile_sessions.sh'),('repo-root','scripts/lib/repo_root.sh'),('pre-push','scripts/hooks/pre-push')]:
+        run('syntax-'+name,['bash','-n',str(target/path)],target,'source')
+    run('syntax-init',['sh','-n',str(target/'init.sh')],target,'source')
+    check()
+
+
+if __name__=='__main__':
+    assert not sys.flags.optimize and sys.dont_write_bytecode
+    {'prepare':prepare,'apply':apply,'commit':commit,'fixture':verify_fixture,'source':verify_source,'check':check}[sys.argv[1]]()

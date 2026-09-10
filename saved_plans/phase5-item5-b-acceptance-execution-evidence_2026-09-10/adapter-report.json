@@ -1,0 +1,30 @@
+{
+  "PYTHONOPTIMIZE": null,
+  "argv": [
+    "python3",
+    "-B",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/scripts/kit_doctor.py",
+    "--root",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "--adapter-report",
+    "--adapter-source",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source",
+    "--json"
+  ],
+  "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+  "ended_at": "2026-09-10T16:35:59.079653+00:00",
+  "environment": {
+    "DEVKIT_STATE_ROOT": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910/fixture-state",
+    "PYTEST_ADDOPTS": "-o cache_dir=/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910/fixture-pytest-cache -ra",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "RUFF_CACHE_DIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910/ruff-cache",
+    "TMPDIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910/tmp",
+    "UV_CACHE_DIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910/uv-cache",
+    "UV_TOOL_DIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/acceptance-pr-20260910/uv-tools"
+  },
+  "returncode": 0,
+  "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+  "started_at": "2026-09-10T16:35:58.993614+00:00",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_sha256": "7d71ee2d486474122a2eeea3e8e2a9f46bf6efa87297f949917bd46b8d13bb80"
+}

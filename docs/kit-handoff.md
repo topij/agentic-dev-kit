@@ -14,16 +14,40 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-10 — ITEM5-B preserved-file acceptance and fixture PR packet prepared.
+Last updated: 2026-09-10 — ITEM5-B acceptance and fixture PR execution recorded.
 Phase 5 delivery item 5 remains incomplete; item 6's replay remains complete.
 
-## Latest session — 2026-09-10 (ITEM5-B acceptance preparation, in Codex)
+## Latest session — 2026-09-10 (ITEM5-B acceptance execution, in Codex)
+
+The operator approved ACCEPT-01 and PR-01 as scoped in the
+[decision packet](../saved_plans/phase5-item5-b-acceptance-decision_2026-09-10.md).
+The [execution record](../saved_plans/phase5-item5-b-acceptance-execution_2026-09-10.md)
+retains the fresh UPDATE FINAL audit, PR #729 merge/review readback, exact authority,
+applied friction/CI payloads and private fixture PR #1. PR-01 is paused at the recorded
+P2 inherited state-root detector gap and P3 wording imprecision; fixture merge remains
+excluded. The custom wrap-up acceptance is ownership only, with no client/function claim.
+
+The execution record retains actual local and hosted commands, revisions, dates and
+terminal summaries, with #393 separated from installed coverage.
+The fixture baseline, retained source and historical update/replay evidence remain
+bound to the execution checkpoints. Item 5 remains incomplete, item 6's replay remains
+complete, and #723's approved upstream deferral and #585's earlier placement remain.
+Kit #724 already delivered the #722 batch. The friction-log sweep stays parked.
+
+▶ Next: `$session-start` — decide ITEM5-B-KIT-REVIEW-01 from
+`saved_plans/phase5-item5-b-review-repair-decision_2026-09-10.md`. Keep retained updates,
+fixture merge and systemize separate; do not repeat UPDATE-01 or the completed replay.
+
+______________________________________________________________________
+
+## Session — 2026-09-10 (ITEM5-B acceptance preparation, in Codex)
 
 The [decision packet](../saved_plans/phase5-item5-b-acceptance-decision_2026-09-10.md)
 binds preserved-file acceptance to the update's FINAL evidence, and separately proposes
 the fixture friction/CI files, private publication, verification and ready-PR handoff.
 It explains the custom wrap-up's ownership-only role and the remaining systemize routes.
-The packet is prepared, not approved; no fixture/source update or client exercise ran.
+Preparation itself did not approve execution; no fixture/source update or client exercise
+ran in that pass.
 
 The packet retains the readback of kit #728 and its final review receipt, the new
 read-only audit, exact proposed payloads and rollback boundaries. The maintained sprint
@@ -41,9 +65,7 @@ The [kit review receipt](https://github.com/topij/agentic-dev-kit/pull/729#issue
 preceded the audit optimization-refusal fix. The packet preserves the initial audit
 bytes and the follow-up refusal/mutation evidence; this defect is separate from #393.
 
-▶ Next: `$session-start` — read the ITEM5-B acceptance decision packet, revalidate its
-FINAL input, and obtain the exact ACCEPT-01 and optional PR-01 decisions. Do not repeat
-the consumed update, launch a fixture client, or treat kit-record delivery as field exit.
+The latest session block owns the subsequent operator approval and execution.
 
 ______________________________________________________________________
 

@@ -1,0 +1,143 @@
+{
+  "PYTHONOPTIMIZE": null,
+  "argv": [
+    "make",
+    "test"
+  ],
+  "cwd": "/private/tmp/item5-b-kit-verification-_lknkru1/repo",
+  "ended_at": "2026-09-10T17:24:23.582714+00:00",
+  "environment": {
+    "DEVKIT_STATE_ROOT": "/private/tmp/item5-b-kit-verification-_lknkru1/state",
+    "PYTEST_ADDOPTS": "-o cache_dir=/private/tmp/item5-b-kit-verification-_lknkru1/pytest-cache -ra",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "RUFF_CACHE_DIR": "/private/tmp/item5-b-kit-verification-_lknkru1/ruff-cache",
+    "TMPDIR": "/private/tmp/item5-b-kit-verification-_lknkru1/tmp",
+    "UV_CACHE_DIR": "/private/tmp/item5-b-kit-verification-_lknkru1/uv-cache",
+    "UV_TOOL_DIR": "/private/tmp/item5-b-kit-verification-_lknkru1/uv-tools"
+  },
+  "record_worktree_sha256": {
+    "docs/kit-handoff.md": "16053dadf649f5fe3ac3a84b79a48c9b2adeba45fcbed0b7de8b31090ffcfe24",
+    "saved_plans/codex-parity-plan_2026-08-23.md": "c279d72b9e9322587fc17d1b739debd0962900e421373d35d12d4aebfb8a7cdc",
+    "saved_plans/phase5-item5-b-acceptance-decision_2026-09-10.md": "ef9ad72f37e37cb059ea03534035c49e82ab0a45c7369279d70a8f6c853d9acf",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/acceptance-audit.json": "55f33016caf94a8185ff641ac8c752e3aa9d976f6173a859dd333b5a0da7b439",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/adapter-report.json": "27d4bc539c31cbe9fce8962209c64e0870b410dbf0bcfc5554423d27e99122bd",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/adapter-report.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/adapter-report.stdout.log": "7d71ee2d486474122a2eeea3e8e2a9f46bf6efa87297f949917bd46b8d13bb80",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/authority.json": "d0e268f2164a9b0ed1d4f5d49f30b14a94cf443591d173757c86396d99dbd31c",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/backups-verified.json": "91c451f24d4ffcc0edb16d60827127a7d768aa8d23a7f9d22fd2c3c8401645ed",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/base-push.json": "dd90f939570401502e0774c6d9a858591ec078033ca242549d6f845c2dcec8cc",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/baseline.json": "68f9cf7c4af1eb4188b549a5ff5a6c9d5872c2b426eef1d17799d4709244fd5b",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/configuration.json": "b7630df29be9706f42cf7ff4cae4d93905d4126cf6efc7287e6acda34c7f4357",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/default-branch.json": "8c30e5e7e3afd80836e09f598b8ae628e726f79b19818dc27dcc065009526dcf",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/fixture-budget.json": "f2c2fca2048cc5ef7a56c10082d3f947a2ebbd0036b755d6682dc83ff1318453",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/fixture-budget.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/fixture-budget.stdout.log": "2972c8bd40fff65ddb459505abac905c3f6ce741d20009b5c8457d9ad5e961dd",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/fixture-ci-job.json": "13a14da8f5b8719304fe3753a2b80c32082229f2ab7c123a454c2217d6035843",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/fixture-ci-job.log": "24041d0881d907b2ab2bd464fca08cf5923d7b13327087abb5630ec174713424",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/head-push.json": "4ae04084f98ce639e927128a9a22baec9357fd8f846e549dc882ac26b0af6c60",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/installed-doctor.json": "7ff1d225e1603c21da1fe454a0453d916fa9bc75418d829777d95a73fbc1b778",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/installed-doctor.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/installed-doctor.stdout.log": "1fae83d41ebbaa696ede4a2fc883fda37dd0d7a54ade1293152aaff7ffabac83",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/installed-suite.json": "07c7fea45b5aef7506f3eb1aa19bedfcee075cc4be54b73b9ce16992dffaacc7",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/installed-suite.stderr.log": "c60defb7d8b3333338935a033d01df082d4d0af8f3c3bfe5ee4c870473c694f3",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/installed-suite.stdout.log": "4b4ddce040bc05ca3f76e54883979fd62089daa207256198b9169f82b3d94fe5",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/payload-applied.json": "652d9c5ab47372fe907fad42dcf0e4b95e2b72ca1d42fbcd4acd38f10b9b1f3e",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/payload-ledger.json": "9a1f464ae9198b4c762f3e30c37ff2f83ceecfedd208fdcb4fb686977df2e918",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/pr-create.json": "194b6e62cc5c267b257cd9e9944179e394c1b2fc594c845e20e9105fd075dd88",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/pr-ready.json": "8398fc27dbf811469e94be9ed38796770926252d4d2722967937cc3eb6c27229",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/pr729-readback.json": "859b447fbc00bcc8cee6752786505e850f16b77cb049bf1d326a7d9ad12a694a",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/preserved.json": "bde4940ffaac11b9cbf344f0f2aba4f18fb03ceadbdab0a1d8dc7d7050e6f39f",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/repo-create.json": "f99add32e6720f8f89d6fad332480684cda4a54a10c916cac15931d51666f4f8",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/source-make-test.json": "fc500bb48fa4e3e92eb4e535e048401fbbc9025f1cd39a5c78a9a4ff8572322a",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/source-make-test.stderr.log": "90195fa21bc5b886780e56e10830808299178f435615779382d3f8093775257b",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/source-make-test.stdout.log": "351a5baf5b0ed15fd0c8cdbf45e21f9a4ee2d84cbeed25c066aae6ddd1bba292",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/syntax-dev-session.json": "8cec5efa36b3476948bbe7b520d952ddc17805ec8bd8def2a3849b7ece553f4f",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/syntax-dev-session.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/syntax-dev-session.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/syntax-init.json": "23c8332c21497479142c2c65c5e4fad94eee41eb35e0d0ba0eef136cf9355557",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/syntax-init.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/syntax-init.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/syntax-pre-push.json": "08496dc289e0e4deb81e64d4e98c2278c9a74b65259829917707fd62a8525e17",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/syntax-pre-push.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/syntax-pre-push.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/syntax-reconcile.json": "5a52de1186c14940ebb3ea7cb4a1e3c6d586cfd42bb27be2657e12b5dc47743e",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/syntax-reconcile.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/syntax-reconcile.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/syntax-repo-root.json": "c20b80eb1ae2f8c96761933b0245fe69d1fddc08b66594aca1050d4adb8de35d",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/syntax-repo-root.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/syntax-repo-root.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "saved_plans/phase5-item5-b-acceptance-execution_2026-09-10.md": "d391a68348c392c61181466fb5fc8c829c4034afc53fba49e379db6db141cd6f"
+  },
+  "returncode": 2,
+  "revision": "914c2e4ef06a33d88ae7c94a823d3262a9526278",
+  "started_at": "2026-09-10T17:17:53.223606+00:00",
+  "stderr_sha256": "63c5699b5c2aa6377ed6845164a0569e92f9f43b245581a25e21c1afc44da5ab",
+  "stdout_sha256": "c46091f680cb928ef34193348c8daedea2624ba82a252bdcb8f97686a75e414b",
+  "syntax": [
+    {
+      "argv": [
+        "bash",
+        "-n",
+        "/private/tmp/item5-b-kit-verification-_lknkru1/repo/scripts/dev_session.sh"
+      ],
+      "at": "2026-09-10T17:24:23.588378+00:00",
+      "cwd": "/private/tmp/item5-b-kit-verification-_lknkru1/repo",
+      "returncode": 0,
+      "revision": "914c2e4ef06a33d88ae7c94a823d3262a9526278",
+      "stderr": "",
+      "stdout": ""
+    },
+    {
+      "argv": [
+        "bash",
+        "-n",
+        "/private/tmp/item5-b-kit-verification-_lknkru1/repo/scripts/reconcile_sessions.sh"
+      ],
+      "at": "2026-09-10T17:24:23.592359+00:00",
+      "cwd": "/private/tmp/item5-b-kit-verification-_lknkru1/repo",
+      "returncode": 0,
+      "revision": "914c2e4ef06a33d88ae7c94a823d3262a9526278",
+      "stderr": "",
+      "stdout": ""
+    },
+    {
+      "argv": [
+        "bash",
+        "-n",
+        "/private/tmp/item5-b-kit-verification-_lknkru1/repo/scripts/lib/repo_root.sh"
+      ],
+      "at": "2026-09-10T17:24:23.595071+00:00",
+      "cwd": "/private/tmp/item5-b-kit-verification-_lknkru1/repo",
+      "returncode": 0,
+      "revision": "914c2e4ef06a33d88ae7c94a823d3262a9526278",
+      "stderr": "",
+      "stdout": ""
+    },
+    {
+      "argv": [
+        "bash",
+        "-n",
+        "/private/tmp/item5-b-kit-verification-_lknkru1/repo/scripts/hooks/pre-push"
+      ],
+      "at": "2026-09-10T17:24:23.598208+00:00",
+      "cwd": "/private/tmp/item5-b-kit-verification-_lknkru1/repo",
+      "returncode": 0,
+      "revision": "914c2e4ef06a33d88ae7c94a823d3262a9526278",
+      "stderr": "",
+      "stdout": ""
+    },
+    {
+      "argv": [
+        "sh",
+        "-n",
+        "/private/tmp/item5-b-kit-verification-_lknkru1/repo/init.sh"
+      ],
+      "at": "2026-09-10T17:24:23.605658+00:00",
+      "cwd": "/private/tmp/item5-b-kit-verification-_lknkru1/repo",
+      "returncode": 0,
+      "revision": "914c2e4ef06a33d88ae7c94a823d3262a9526278",
+      "stderr": "",
+      "stdout": ""
+    }
+  ]
+}

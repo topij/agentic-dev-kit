@@ -1,11 +1,12 @@
 # ITEM5-B preserved-file acceptance and field-exit decision
 
-**Prepared, not approved.** `ITEM5-B-ACCEPT-01` and `ITEM5-B-PR-01` below are
-separate operator decisions. Preparation and this kit record are authorized;
-neither decision is inferred from ITEM5-B-UPDATE-01, whose approval is consumed.
-The recommendation is to accept the named preservation outcomes, then take the
-bounded fixture PR route if the operator wants to finish the adoption lifecycle.
-Neither decision completes Phase 5 item 5 or the untested systemize routes.
+**Approved on 2026-09-10.** The operator approved `ITEM5-B-ACCEPT-01` and
+`ITEM5-B-PR-01` exactly as scoped below. The appended operator disposition binds
+the original packet and payload ledger; the [execution record](phase5-item5-b-acceptance-execution_2026-09-10.md)
+owns the resulting state. The input assertions and proposed commands below retain
+the scope approved before execution; they are not instructions to repeat it.
+Neither approval completes Phase 5 item 5 or the untested systemize routes.
+ITEM5-B-UPDATE-01 remains consumed; fixture merge remains excluded.
 
 ## Bound evidence and delivery
 
@@ -281,8 +282,8 @@ not the rollback for PR-01. Neither rollback route has been executed by this pre
 
 | Requirement / route | Decision and evidence still needed |
 |---|---|
-| Preserved-file acceptance | Exact operator acceptance of ACCEPT-01, including the deliberately nonfunctional custom wrap-up boundary. |
-| Adoption friction and ready fixture PR | PR-01's exact destination/write decision, actual local and hosted verification, independent exact-head review, PR readback and operator handoff. Fixture merge remains a separate decision. |
+| Preserved-file acceptance | ACCEPT-01 approved on 2026-09-10 against the fresh pre-write audit in the appended disposition. Ownership acceptance includes the deliberately nonfunctional custom wrap-up boundary. |
+| Adoption friction and ready fixture PR | PR-01 approved on 2026-09-10. The linked execution record owns local/hosted verification, independent review and the fixture PR handoff disposition. Fixture merge remains a separate decision. |
 | New fixture client loading/trust | Untested; no new client exercise is proposed here. A later packet must name client/version/task/cwd, effective configuration stack, trust changes, prompts, permitted writes and evidence, plus restoration of any approved changes. Earlier CLI/desktop hook observations retain their original scope; do not repeat them as missing history. |
 | `post-merge-systemize` live rule, friction and tracker routing | The retained test exercise establishes test-mode analysis only. Select the live repository/window and exact rule/friction/issue payloads after trusted review-source and digest checks. The fixture's disabled tracker/notification backends are not a usable live route. No old test proposal is approval. |
 | Systemize engine-backed operation | Untested and the configured engines were absent in the retained exercise. Requires an implementation/install decision and exact engine provenance before field execution; kit #7 owns extraction context. This packet neither installs nor pretends to test those engines. |
@@ -313,6 +314,31 @@ declared fixture files, private destination, hosted/local verification, ready PR
 bounded local rollback; it requires ACCEPT-01 and does not authorize fixture merge.
 Either may be declined or amended independently. No response is not approval.
 
-**Next:** decide ACCEPT-01 and, if ready to proceed with adoption handoff, PR-01 from
-this packet after revalidating the FINAL input. Keep the systemize field-exit decision
-separate and preserve item 6's completed evidence.
+## Operator disposition — 2026-09-10
+
+The operator responded exactly:
+
+> I approve
+> ITEM5-B-ACCEPT-01 as scoped
+> ITEM5-B-PR-01 as scoped
+
+The [authority record](phase5-item5-b-acceptance-execution-evidence_2026-09-10/authority.json)
+binds packet SHA-256 `cf5da03c708383c39b6e157102919444964bf3425f295fb488c45943b5731086`,
+payload-ledger SHA-256 `9a1f464ae9198b4c762f3e30c37ff2f83ceecfedd208fdcb4fb686977df2e918`
+and audit-program SHA-256 `3902a43b0ede7a08ae8b12449981a2070a05056d1b49a43be36a7932801c829d`.
+The original proposal ledger's `approved: false` remains a historical preparation
+field; this explicit response supplies execution authority without rewriting it.
+
+Immediately before the approved writes, the current `python3 -B` audit command above
+ran in `/Users/topi/Coding/agentic-dev-kit` at
+`914c2e4ef06a33d88ae7c94a823d3262a9526278` on 2026-09-10 with Python optimization
+unset. Its [raw result](phase5-item5-b-acceptance-execution-evidence_2026-09-10/acceptance-audit.json),
+SHA-256 `55f33016caf94a8185ff641ac8c752e3aa9d976f6173a859dd333b5a0da7b439`,
+reported `equal-to-update-final-at-observed-checkpoints`. The approval therefore
+binds the preserved bytes and full typed configuration from that observation.
+The later PR-01 fixture commit intentionally supersedes that pre-write identity;
+do not run the UPDATE FINAL equality assertion as its current-state check.
+
+**Next:** follow the execution record's resulting checkpoint and next action. Keep
+remaining systemize field-exit decisions separate and preserve item 6's completed
+evidence. Neither approval authorizes fixture merge or a new fixture client exercise.

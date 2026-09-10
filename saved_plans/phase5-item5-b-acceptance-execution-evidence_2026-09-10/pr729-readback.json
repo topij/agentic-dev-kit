@@ -1,0 +1,155 @@
+{
+  "records": [
+    {
+      "argv": [
+        "gh",
+        "pr",
+        "view",
+        "729",
+        "--repo",
+        "topij/agentic-dev-kit",
+        "--json",
+        "number,url,state,isDraft,headRefOid,mergeCommit,mergedAt"
+      ],
+      "cwd": "/Users/topi/Coding/agentic-dev-kit",
+      "revision": "914c2e4ef06a33d88ae7c94a823d3262a9526278",
+      "observed_at": "2026-09-10T17:03:10.635442+00:00",
+      "returncode": 0,
+      "response": {
+        "headRefOid": "119283e2d8a4add1e4a3d7f1cc944ddd07e85f99",
+        "isDraft": false,
+        "mergeCommit": {
+          "oid": "914c2e4ef06a33d88ae7c94a823d3262a9526278"
+        },
+        "mergedAt": "2026-09-10T13:50:22Z",
+        "number": 729,
+        "state": "MERGED",
+        "url": "https://github.com/topij/agentic-dev-kit/pull/729"
+      },
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "gh",
+        "api",
+        "repos/topij/agentic-dev-kit/issues/comments/5619727368"
+      ],
+      "cwd": "/Users/topi/Coding/agentic-dev-kit",
+      "revision": "914c2e4ef06a33d88ae7c94a823d3262a9526278",
+      "observed_at": "2026-09-10T17:03:11.186134+00:00",
+      "returncode": 0,
+      "response": {
+        "url": "https://api.github.com/repos/topij/agentic-dev-kit/issues/comments/5619727368",
+        "html_url": "https://github.com/topij/agentic-dev-kit/pull/729#issuecomment-5619727368",
+        "issue_url": "https://api.github.com/repos/topij/agentic-dev-kit/issues/729",
+        "id": 5619727368,
+        "node_id": "IC_kwDOTNg3cs8AAAABTvY8CA",
+        "user": {
+          "login": "topij",
+          "id": 5101841,
+          "node_id": "MDQ6VXNlcjUxMDE4NDE=",
+          "avatar_url": "https://avatars.githubusercontent.com/u/5101841?v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/topij",
+          "html_url": "https://github.com/topij",
+          "followers_url": "https://api.github.com/users/topij/followers",
+          "following_url": "https://api.github.com/users/topij/following{/other_user}",
+          "gists_url": "https://api.github.com/users/topij/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/topij/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/topij/subscriptions",
+          "organizations_url": "https://api.github.com/users/topij/orgs",
+          "repos_url": "https://api.github.com/users/topij/repos",
+          "events_url": "https://api.github.com/users/topij/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/topij/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "created_at": "2026-09-10T13:47:47Z",
+        "updated_at": "2026-09-10T13:47:47Z",
+        "author_association": "OWNER",
+        "body": "<!-- pr-watch:disposition head=119283e2d8a4add1e4a3d7f1cc944ddd07e85f99 -->\n## Review disposition \u2014 119283e\n\n- reviewed head: `119283e2d8a4add1e4a3d7f1cc944ddd07e85f99`\n- review source: `fallback:panel`\n- lenses: adversarial, correctness\n\nFull fresh-context adversarial/correctness panel at `119283e2d8a4add1e4a3d7f1cc944ddd07e85f99`, against remote base `b80fe9905c0f8dc303aae38c77aa822129e1760d`, on 2026-09-10. The reports below found no actionable finding in the full PR, with the delta after the recorded parent prioritized. This is a full-panel receipt, not a delta composition or author-context fallback.\n\nThe prior accepted optimization bypass was recorded before repair at https://github.com/topij/agentic-dev-kit/pull/729#issuecomment-5619355511. The fix unconditionally refuses optimized Python before auditing. Review-authored behavioral probes reproduce the bypass when that refusal is removed and restore rejection when the original bytes are restored. I read the target diffs, command outputs and restoration evidence, and independently re-read the restored target bytes. No unrequested mechanism or retained fixture/source write was added.\n\nI checked the actual placed paths/heads, nonempty current-base diffs, scratch attestations, permitted and refused routes, and terminal reports. Each verification process completed. The full source `make test` runs failed only with the disclosed deep-JSON test in these final review runs; the actual summaries and directories are below. This does not claim a passing local source suite. The earlier sandbox process-inspection failures remain observations of that earlier review environment, not new regressions attributed to this record change.\n\nBefore recording this receipt I reread the full current CodeRabbit status body at https://github.com/topij/agentic-dev-kit/pull/729#issuecomment-5619404494, whose updated_at is `2026-09-10T13:24:31Z`. It still reports skipped auto review; no completed review verdict is being omitted. The engine also reports the bot's trusted check-surface skip. The configured independent panel supplies review evidence; the skip is not a waiver.\n\nThe executable audit and decision procedures received the full re-review. This scoped preparation does not change shipped gate, launch-authority, merge-authority or lane-permission behavior. The kit-record merge remains within the operator's explicit standing merge-when-clean authority. The fixture/source, baseline, initialization, client exercise, fixture publication/PR, tracker and user-profile decisions remain unapproved. The proposed hosted fixture workflow and rollback have not been executed. Phase 5 item 5 remains incomplete; item 6's completed replay and the retained upstream deferral remain as recorded.\n\nActual compute was read from each exact runtime rollout turn_context after launching `codex exec --approve-for-me -c model_reasoning_effort=high` without a model override. The reports below are independent terminal outputs. The rollout readbacks are:\n\n```json\n{\n  \"contexts\": [\n    {\n      \"approval_policy\": \"on-request\",\n      \"cwd\": \"/private/tmp/item5-b-acceptance-checks-bhF1FT/panel-119283e/adversarial/handed-tree\",\n      \"effort\": \"high\",\n      \"model\": \"gpt-6-astra\",\n      \"sandbox_policy\": {\n        \"exclude_slash_tmp\": false,\n        \"exclude_tmpdir_env_var\": false,\n        \"network_access\": false,\n        \"type\": \"workspace-write\"\n      }\n    }\n  ],\n  \"rollout\": \"/Users/topi/.codex/sessions/2026/09/10/rollout-2026-09-10T16-26-24-01a08b7f-8210-72d3-b577-6152759e9f61.jsonl\",\n  \"thread_id\": \"01a08b7f-8210-72d3-b577-6152759e9f61\"\n}\n```\n\n### adversarial terminal report\n\nReviewed `topij/agentic-dev-kit` in `/private/tmp/item5-b-acceptance-checks-bhF1FT/panel-119283e/adversarial/handed-tree`. I did not author this change.\n\n- **Actual and reviewed HEAD:** `119283e2d8a4add1e4a3d7f1cc944ddd07e85f99`, observed with `git rev-parse HEAD`.\n- **Base:** `b80fe9905c0f8dc303aae38c77aa822129e1760d`, confirmed and subsequently refreshed using `git ls-remote`.\n- **Diff:** `git diff --stat <base>...<reviewed-sha>` on 2026-09-10 printed `23 files changed, 3284 insertions(+), 8 deletions(-)`.\n- **Scratch:** `/private/tmp/mut-adversarial-119283e-em8o8n0s`, created fresh using `git clone --no-hardlinks`.\n- **Sandbox routes:** cloning and scratch writes succeeded. Default network requests failed DNS resolution; permitted network retries and an offline dependency-cache retry succeeded.\n- **Attestation:** final `git --no-optional-locks status --short` produced no output; HEAD remained unchanged. I neither edited nor repointed the handed tree. Status alone does not prove absence of ref operations.\n\n**No actionable adversarial findings from this review.** The source suite remains failing as detailed below.\n\nThese observations were established on **2026-09-10**, using the reviewed revision through the required serialization wrapper. Every verification process reached a terminal result.\n\n| Command | Actual result |\n|---|---|\n| `make test`, in scratch `repo` | Exit `2`; `1 failed, 2497 passed, 1 skipped in 449.27s`. Failure: `test_a_payload_too_deep_for_json_load_still_exits_zero`, matching the disclosed #393 limitation. [Complete log](\u200c/private/tmp/mut-adversarial-119283e-em8o8n0s/logs/make-test-network.log). |\n| `python3 -B \u2026/check_probes.py`, in scratch | Exit `0`. Equality accepted; inventory, permissions, symlink, preservation, hard-link, Git-identity, configuration-type and evidence changes refused. CLI and environment optimization routes refused. [Commands and output](/private/tmp/mut-adversarial-119283e-em8o8n0s/logs/probes.log). |\n| `python3 -B \u2026/phase5-item5-b-acceptance-audit_2026-09-10.py.txt`, copied program, cwd `/Users/topi/Coding/agentic-dev-kit` | Exit `0`; reported `equal-to-update-final-at-observed-checkpoints`. Retained inputs were accessed read-only. [Audit output](/private/tmp/mut-adversarial-119283e-em8o8n0s/logs/retained-audit.log). |\n| `uv run --offline --with pytest --with pyyaml python -B \u2026/check_artifacts.py`, in scratch | Exit `0`; evidence/payload hashes, audit-program binding, YAML parsing, embedded shell syntax and separate repository shell parses checked. [Output](/private/tmp/mut-adversarial-119283e-em8o8n0s/logs/artifacts-offline.log). |\n\nFor **Mutation-test new branches**, the behavioral harness demonstrated:\n\n| Mutation diff | Behavior exposing the mutation |\n|---|---|\n| [Remove optimization refusal](/private/tmp/mut-adversarial-119283e-em8o8n0s/remove-optimization-refusal.diff) | `python3 -B -O \u2026/probe.py inventory` accepted unauthorized inventory. |\n| [Weaken configuration comparison](/private/tmp/mut-adversarial-119283e-em8o8n0s/weaken-config-type-comparison.diff) | `python3 -B \u2026/probe.py config-type` accepted the boolean/integer mismatch. |\n| [Remove preserved-file shape check](/private/tmp/mut-adversarial-119283e-em8o8n0s/omit-preserved-shape-check.diff) | `python3 -B \u2026/probe.py hardlink` accepted a multiply-linked preserved file. |\n\nEach mutation was reread before testing. Each expected-refusal check failed behaviorally; restoration verified original-byte equality and restored rejection. No driftcheck supplied a kill. [Results and restoration evidence](/private/tmp/mut-adversarial-119283e-em8o8n0s/probe-results.json).\n\nSynthetic probes substitute Git identities and a minimal configuration reader. Hosted workflow execution, fixture-client behavior and rollback remain unverified. No historical driver, initialization, baseline refresh, publication or external write was performed.\n\n```json\n{\n  \"contexts\": [\n    {\n      \"approval_policy\": \"on-request\",\n      \"cwd\": \"/private/tmp/item5-b-acceptance-checks-bhF1FT/panel-119283e/correctness/handed-tree\",\n      \"effort\": \"high\",\n      \"model\": \"gpt-6-astra\",\n      \"sandbox_policy\": {\n        \"exclude_slash_tmp\": false,\n        \"exclude_tmpdir_env_var\": false,\n        \"network_access\": false,\n        \"type\": \"workspace-write\"\n      }\n    }\n  ],\n  \"rollout\": \"/Users/topi/.codex/sessions/2026/09/10/rollout-2026-09-10T16-26-24-01a08b7f-8210-7e92-b140-3bda7da268f6.jsonl\",\n  \"thread_id\": \"01a08b7f-8210-7e92-b140-3bda7da268f6\"\n}\n```\n\n### correctness terminal report\n\nReviewed `topij/agentic-dev-kit` in [the handed tree](/private/tmp/item5-b-acceptance-checks-bhF1FT/panel-119283e/correctness/handed-tree). I did not author this change.\n\n- **Actual and reviewed HEAD:** `119283e2d8a4add1e4a3d7f1cc944ddd07e85f99`, observed with `git rev-parse HEAD`.\n- **Base:** `b80fe9905c0f8dc303aae38c77aa822129e1760d`, confirmed against remote `main` using `git ls-remote`.\n- **Scope:** full named diff, prioritizing the delta and commit message after `32ba74b`. On 2026-09-10, `git diff --stat <base>...<reviewed-sha>` printed `23 files changed, 3284 insertions(+), 8 deletions(-)`.\n- **Scratch:** `/private/tmp/mut-correctness-119283e-_42x5ygb`, created fresh using `git clone --no-hardlinks`.\n- **Sandbox routes:** cloning and scratch writes succeeded. Sandboxed GitHub/PyPI requests failed DNS resolution; elevated retries succeeded.\n- **Attestation:** final `git --no-optional-locks status --short` produced no output; HEAD remained the reviewed SHA. I neither edited nor repointed the handed tree. Status alone does not prove absence of repointing.\n\n**No actionable correctness findings.**\n\nVerification ran on **2026-09-10**, against the reviewed SHA from the scratch repository, through the required `serial-verify.py` wrapper:\n\n| Command | Observed result |\n|---|---|\n| `make test` | Exit `2`: `1 failed, 2497 passed, 1 skipped in 426.06s`. The failure was `test_a_payload_too_deep_for_json_load_still_exits_zero`, matching the disclosed #393 limitation. [Complete log](/private/tmp/mut-correctness-119283e-_42x5ygb/make-test-network.log). |\n| `python3 -B \u2026/run_probes.py` | Exit `0`: evidence/payload hashes matched; normal equality succeeded; inventory, preservation and configuration-type changes refused; environment and CLI optimization routes refused. [Results](/private/tmp/mut-correctness-119283e-_42x5ygb/probe-results.json). |\n| `python3 -B \u2026/readonly_audit.py` | Exit `0`, reporting equality to UPDATE FINAL checkpoints. Only the kit-record root was rebound to scratch; retained fixture/source inputs remained read-only. [Log](/private/tmp/mut-correctness-119283e-_42x5ygb/readonly-audit.log). |\n| `uv run --offline --with pytest --with pyyaml python -B \u2026/workflow_probe.py` | Exit `0`: YAML parsing, embedded shell syntax and separate repository shell parses. [Log](/private/tmp/mut-correctness-119283e-_42x5ygb/workflow.log). |\n\nFor **Mutation-test new branches**, `python3 -B \u2026/confirm_mutations.py` verified behavioral failures:\n\n- [Removing the optimization refusal](/private/tmp/mut-correctness-119283e-_42x5ygb/optimization-guard.diff) made `test_refusal.py inventory` fail.\n- [Replacing typed JSON comparison with dictionary equality](/private/tmp/mut-correctness-119283e-_42x5ygb/typed-config.diff) made `test_refusal.py config-type` fail.\n\nEach mutation was reread and diffed before testing, then restored with byte equality verified. Baseline and restored assertions succeeded. These were behavioral assertions; no driftcheck supplied a kill. [Commands, failures and restoration evidence](/private/tmp/mut-correctness-119283e-_42x5ygb/mutations.log).\n\nEvery verification process reached a terminal result. Hosted workflow execution and fixture-client behavior remain unverified. No historical driver, initialization, baseline refresh, publication or external write was performed.\n",
+        "reactions": {
+          "url": "https://api.github.com/repos/topij/agentic-dev-kit/issues/comments/5619727368/reactions",
+          "total_count": 0,
+          "+1": 0,
+          "-1": 0,
+          "laugh": 0,
+          "hooray": 0,
+          "confused": 0,
+          "heart": 0,
+          "rocket": 0,
+          "eyes": 0
+        },
+        "performed_via_github_app": null,
+        "minimized": null,
+        "pin": null
+      },
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "gh",
+        "api",
+        "repos/topij/agentic-dev-kit/issues/comments/5619798749"
+      ],
+      "cwd": "/Users/topi/Coding/agentic-dev-kit",
+      "revision": "914c2e4ef06a33d88ae7c94a823d3262a9526278",
+      "observed_at": "2026-09-10T17:03:11.754278+00:00",
+      "returncode": 0,
+      "response": {
+        "url": "https://api.github.com/repos/topij/agentic-dev-kit/issues/comments/5619798749",
+        "html_url": "https://github.com/topij/agentic-dev-kit/pull/729#issuecomment-5619798749",
+        "issue_url": "https://api.github.com/repos/topij/agentic-dev-kit/issues/729",
+        "id": 5619798749,
+        "node_id": "IC_kwDOTNg3cs8AAAABTvdS3Q",
+        "user": {
+          "login": "topij",
+          "id": 5101841,
+          "node_id": "MDQ6VXNlcjUxMDE4NDE=",
+          "avatar_url": "https://avatars.githubusercontent.com/u/5101841?v=4",
+          "gravatar_id": "",
+          "url": "https://api.github.com/users/topij",
+          "html_url": "https://github.com/topij",
+          "followers_url": "https://api.github.com/users/topij/followers",
+          "following_url": "https://api.github.com/users/topij/following{/other_user}",
+          "gists_url": "https://api.github.com/users/topij/gists{/gist_id}",
+          "starred_url": "https://api.github.com/users/topij/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/topij/subscriptions",
+          "organizations_url": "https://api.github.com/users/topij/orgs",
+          "repos_url": "https://api.github.com/users/topij/repos",
+          "events_url": "https://api.github.com/users/topij/events{/privacy}",
+          "received_events_url": "https://api.github.com/users/topij/received_events",
+          "type": "User",
+          "user_view_type": "public",
+          "site_admin": false
+        },
+        "created_at": "2026-09-10T13:52:53Z",
+        "updated_at": "2026-09-10T13:52:53Z",
+        "author_association": "OWNER",
+        "body": "Merge and final checkpoint readback, 2026-09-10, in `/Users/topi/Coding/agentic-dev-kit`.\n\n`gh pr view 729 --repo topij/agentic-dev-kit --json state,headRefOid,mergeCommit,mergedAt` read back merge `914c2e4ef06a33d88ae7c94a823d3262a9526278` from reviewed head `119283e2d8a4add1e4a3d7f1cc944ddd07e85f99`. Before merging, `uv run scripts/pr_watch.py 729 --json --no-persist` at that reviewed head reported `mergeable: true`, `done: true`, successful settled checks, and empty merge-blocker/evidence-finding lists. The final review receipt is https://github.com/topij/agentic-dev-kit/pull/729#issuecomment-5619727368. `git rev-parse` of the merge and reviewed commit tree objects established equality. The cockpit was fast-forwarded to the merge; `git --no-optional-locks status --porcelain` there returned empty output.\n\nAt merge `914c2e4ef06a33d88ae7c94a823d3262a9526278` on 2026-09-10, `python3 -B /Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-acceptance-audit_2026-09-10.py.txt` ran in that cockpit and returned `equal-to-update-final-at-observed-checkpoints`. It again bound fixture `413132b01d14c735d94753231bf325904135285f`, detached source `60fe0dc7ad68922d064c0cf401cff2c4c6d607ac`, and baseline SHA-256 `9e2196df3b7239b599819abcfc20271b0389b70f78f22837a0709575145b9126` to the unchanged FINAL inventories, preservation/configuration, retained external evidence and replay hashes. Original paths `/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture` and `/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source` remained absent under both existence and dangling-symlink checks; neither was reconstructed. This is checkpoint evidence with the packet's stated limits, not an execution of the historical update or its pre-update audit.\n\nThe [operator packet](https://github.com/topij/agentic-dev-kit/blob/914c2e4ef06a33d88ae7c94a823d3262a9526278/saved_plans/phase5-item5-b-acceptance-decision_2026-09-10.md), maintained sprint status and handoff were delivered. ACCEPT-01 and PR-01 remain unapproved. Selecting a proposed private `topij/adk-item5-b-field-20260909` destination did not authorize creating it. No further fixture/source, baseline, initialization, client, fixture-PR, tracker or user-profile action was performed. The full review-head source suites' #393 failures, synthetic probe limits, unexecuted hosted fixture workflow and unexecuted rollback remain explicit in the final review receipt.\n\nNext session: decide the exact ACCEPT-01 and optional PR-01 packet after revalidating its FINAL input. Phase 5 item 5 remains incomplete; item 6 and its replay stay complete. Preserve the recorded upstream deferral and earlier placement, and do not repeat prior cs-toolkit delivery or the already-delivered record batch.\n",
+        "reactions": {
+          "url": "https://api.github.com/repos/topij/agentic-dev-kit/issues/comments/5619798749/reactions",
+          "total_count": 0,
+          "+1": 0,
+          "-1": 0,
+          "laugh": 0,
+          "hooray": 0,
+          "confused": 0,
+          "heart": 0,
+          "rocket": 0,
+          "eyes": 0
+        },
+        "performed_via_github_app": null,
+        "minimized": null,
+        "pin": null
+      },
+      "stderr": ""
+    }
+  ],
+  "git_tree_argv": "git rev-parse <sha>^{tree}",
+  "reviewed_and_merged_trees": [
+    "a199c5d663db9e8d51c23f03393a9dafd848e8e8",
+    "a199c5d663db9e8d51c23f03393a9dafd848e8e8"
+  ]
+}

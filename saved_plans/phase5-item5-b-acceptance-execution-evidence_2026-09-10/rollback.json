@@ -1,0 +1,7 @@
+{
+  "executed": false,
+  "fixture_revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+  "observed_at": "2026-09-10T17:44:01.821785+00:00",
+  "reason": "Approved payloads retained; evidence preserved and no local or remote undo performed.",
+  "source_revision": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac"
+}

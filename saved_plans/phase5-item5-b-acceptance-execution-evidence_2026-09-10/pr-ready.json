@@ -1,0 +1,18 @@
+[
+  {
+    "argv": [
+      "uv",
+      "run",
+      "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/pr_watch.py",
+      "1",
+      "--assert-ready"
+    ],
+    "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+    "ended_at": "2026-09-10T16:56:20.967170+00:00",
+    "returncode": 0,
+    "revision": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+    "started_at": "2026-09-10T16:56:20.350701+00:00",
+    "stderr": "",
+    "stdout": "PR #1 \u2014 already ready-for-review (isDraft=False)\n"
+  }
+]
