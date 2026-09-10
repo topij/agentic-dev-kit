@@ -1,0 +1,155 @@
+"""Read-only acceptance audit against ITEM5-B UPDATE FINAL evidence; stdout only."""
+import hashlib
+import importlib.util
+import json
+import os
+from pathlib import Path
+import stat
+import subprocess
+import sys
+from datetime import datetime, timezone
+
+COCKPIT = Path('/Users/topi/Coding/agentic-dev-kit')
+REPO = Path('/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture')
+KIT = Path('/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source')
+EVIDENCE = COCKPIT / 'saved_plans/phase5-item5-b-update-evidence_2026-09-10'
+FIXTURE_SHA = '413132b01d14c735d94753231bf325904135285f'
+SOURCE_SHA = '60fe0dc7ad68922d064c0cf401cff2c4c6d607ac'
+BASELINE_SHA256 = '9e2196df3b7239b599819abcfc20271b0389b70f78f22837a0709575145b9126'
+
+
+def sha(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def git(root, *args):
+    return subprocess.check_output(['git', '--no-optional-locks', '-C', str(root), *args]).decode().strip()
+
+
+def read_json(path):
+    return json.loads(path.read_bytes())
+
+
+def inventory(root):
+    result = {}
+    for directory, dirs, files in os.walk(root, followlinks=False):
+        if Path(directory) == root:
+            dirs[:] = [d for d in dirs if d != '.git']
+        for name in sorted(dirs + files):
+            path = Path(directory) / name
+            st = path.lstat()
+            item = {'mode': oct(stat.S_IMODE(st.st_mode))}
+            if stat.S_ISLNK(st.st_mode):
+                item.update(kind='symlink', target=os.readlink(path))
+            elif stat.S_ISREG(st.st_mode):
+                item.update(kind='file', sha256=sha(path.read_bytes()))
+            elif stat.S_ISDIR(st.st_mode):
+                item.update(kind='directory')
+            else:
+                raise ValueError(f'Unexpected file kind: {path}')
+            result[path.relative_to(root).as_posix()] = item
+    return result
+
+
+def identity(root):
+    branch = subprocess.run(['git', '--no-optional-locks', '-C', str(root), 'symbolic-ref', '--short', '-q', 'HEAD'], capture_output=True, text=True)
+    assert branch.returncode in (0, 1), branch.stderr
+    return {'root': str(root), 'revision': git(root, 'rev-parse', 'HEAD'),
+            'branch': branch.stdout.strip() or 'DETACHED',
+            'status': subprocess.check_output(['git', '--no-optional-locks', '-C', str(root), 'status', '--porcelain=v1']).decode(),
+            'remotes': subprocess.check_output(['git', '--no-optional-locks', '-C', str(root), 'remote', '-v']).decode(),
+            'refs': subprocess.check_output(['git', '--no-optional-locks', '-C', str(root), 'show-ref', '--head']).decode(),
+            'index_sha256': sha((root / '.git/index').read_bytes()),
+            'config_sha256': sha((root / '.git/config').read_bytes()),
+            'head_bytes': (root / '.git/HEAD').read_text(),
+            'git_directory': str((root / '.git').resolve())}
+
+
+def compare(actual, expected):
+    return {key: {'actual': actual.get(key), 'expected': expected.get(key)}
+            for key in sorted(actual.keys() | expected.keys()) if actual.get(key) != expected.get(key)}
+
+
+def main():
+    if sys.flags.optimize:
+        raise SystemExit('Refusing optimized Python: acceptance assertions must execute')
+    assert sys.dont_write_bytecode, 'Run python3 -B'
+    assert Path.cwd() == COCKPIT
+    report = {'argv': [sys.executable, '-B', str(Path(__file__).resolve())],
+              'cwd': str(Path.cwd()), 'revision': git(COCKPIT, 'rev-parse', 'HEAD'),
+              'observed_at': datetime.now(timezone.utc).isoformat(),
+              'program_sha256': sha(Path(__file__).read_bytes())}
+    for root in (REPO, KIT):
+        assert root.resolve() == root and root.is_dir() and not root.is_symlink()
+        assert (root / '.git').is_dir() and not (root / '.git').is_symlink()
+    report['ledger_checks'] = {}
+    for folder in [EVIDENCE, COCKPIT / 'saved_plans/phase5-item5-b-evidence_2026-09-09',
+                   COCKPIT / 'saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10']:
+        ledger = read_json(folder / 'sha256.json')
+        for name, expected in ledger.items():
+            assert sha((folder / name).read_bytes()) == expected, (folder, name)
+        report['ledger_checks'][str(folder / 'sha256.json')] = sha((folder / 'sha256.json').read_bytes())
+    report['trees'] = {}
+    for role, root, expected_sha in [('fixture', REPO, FIXTURE_SHA), ('source', KIT, SOURCE_SHA)]:
+        before = identity(root)
+        assert before['revision'] == expected_sha
+        expected_git = read_json(EVIDENCE / f'{role}-final-git.json')
+        differences = compare(before, expected_git)
+        assert not differences, differences
+        actual = inventory(root)
+        expected = read_json(EVIDENCE / f'{role}-final-inventory.json')
+        differences = compare(actual, expected)
+        assert not differences, differences
+        assert identity(root) == before
+        report['trees'][role] = {'identity': before, 'final_inventory_sha256': sha((EVIDENCE / f'{role}-final-inventory.json').read_bytes()),
+                                 'inventory_differences': differences, 'git_differences': {}}
+    preserved = read_json(EVIDENCE / 'preserved-final.json')
+    report['preserved_files'] = {}
+    for name, expected in preserved.items():
+        path = Path(name)
+        st = path.lstat()
+        assert stat.S_ISREG(st.st_mode) and st.st_nlink == 1 and path.resolve() == path, path
+        actual = {'mode': oct(stat.S_IMODE(st.st_mode)), 'sha256': sha(path.read_bytes())}
+        assert actual == expected, path
+        report['preserved_files'][name] = actual
+    baseline = (REPO / 'kit-manifest.json').read_bytes()
+    assert sha(baseline) == BASELINE_SHA256
+    assert json.loads(baseline) == read_json(EVIDENCE / 'baseline-recorded.json')['content']
+    proposal = read_json(COCKPIT / 'saved_plans/phase5-item5-b-update-audit_2026-09-10.json')
+    report['historical_ledger_sha256'] = sha((COCKPIT / 'saved_plans/phase5-item5-b-update-audit_2026-09-10.json').read_bytes())
+    assert report['preserved_files'] == proposal['preserve_hashes']
+    spec = importlib.util.spec_from_file_location('acceptance_kitconfig', REPO / 'scripts/devkit/lib/kitconfig.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    config = REPO / 'config/dev-model.yaml'
+    mappings = {'tracked': module.load_config(config, overlay=False), 'merged': module.load_config(config)}
+    # JSON serialization keeps scalar types distinct (Python equality equates True and 1).
+    assert json.dumps(mappings, sort_keys=True) == json.dumps(read_json(EVIDENCE / 'configuration-final.json'), sort_keys=True)
+    report['configuration'] = mappings
+    report['baseline'] = {'sha256': sha(baseline), 'content': json.loads(baseline)}
+    report['replay_evidence'] = read_json(EVIDENCE / 'replay-evidence-final.json')
+    for rel, expected in report['replay_evidence'].items():
+        for root in (COCKPIT, KIT):
+            assert sha((root / rel).read_bytes()) == expected, (root, rel)
+    retention = read_json(EVIDENCE / 'retention.json')
+    external = Path(retention['external_root'])
+    report['external_evidence'] = {}
+    for rel, expected in retention['external_ledger'].items():
+        assert sha((external / rel).read_bytes()) == expected, rel
+        report['external_evidence'][rel] = expected
+    report['original_paths'] = {}
+    for name in ['/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture',
+                 '/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source']:
+        report['original_paths'][name] = {'exists': Path(name).exists(), 'lexists': os.path.lexists(name)}
+        assert not os.path.lexists(name), name
+    report['record_merge_tree_equals_reviewed_head'] = git(COCKPIT, 'rev-parse', 'b80fe9905c0f8dc303aae38c77aa822129e1760d^{tree}') == git(COCKPIT, 'rev-parse', 'a14322d3358b07a7477550b7a7c2bb16caef27d5^{tree}')
+    assert report['record_merge_tree_equals_reviewed_head']
+    for role, root in [('fixture', REPO), ('source', KIT)]:
+        assert identity(root) == report['trees'][role]['identity']
+        assert inventory(root) == read_json(EVIDENCE / f'{role}-final-inventory.json')
+    report['result'] = 'equal-to-update-final-at-observed-checkpoints'
+    print(json.dumps(report, indent=2, sort_keys=True))
+
+
+if __name__ == '__main__':
+    main()

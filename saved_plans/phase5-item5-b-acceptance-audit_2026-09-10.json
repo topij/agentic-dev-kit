@@ -1,0 +1,991 @@
+{
+  "argv": [
+    "/opt/homebrew/opt/python@3.14/bin/python3.14",
+    "-B",
+    "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-acceptance-audit_2026-09-10.py.txt"
+  ],
+  "baseline": {
+    "content": {
+      "adopter_owned": [
+        "config/dev-model.yaml",
+        "config/claude-lane-settings.json",
+        ".claude/agents/adversarial.md",
+        ".claude/agents/correctness.md",
+        "docs/handoff.md",
+        "docs/handoff-history.md",
+        "docs/friction-log.md",
+        "docs/friction-log-archive.md",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "docs/kit-handoff.md",
+        "docs/kit-handoff-history.md",
+        "docs/kit-friction-log.md",
+        "docs/kit-friction-log-archive.md",
+        "README.md",
+        ".gitignore"
+      ],
+      "files": {
+        "docs/agentic-dev-kit/adopting-into-a-linted-repo.md": {
+          "role": "doctrine",
+          "sha256": "c6c74e8cc3f80fe7ce6d88b34845e627a3800bc6c8cca10f57692fece4d16eab"
+        },
+        "docs/agentic-dev-kit/fallback-review-panel-evidence.md": {
+          "role": "doctrine",
+          "sha256": "645fcd50771351823ba1f3512bc483e404fd1a8337cc14bf9dd0333689640d3b"
+        },
+        "docs/agentic-dev-kit/fallback-review-panel.md": {
+          "role": "doctrine",
+          "sha256": "b2c35c612a13e4b19fdf1ea9a73f0e7604229d2eca3e1904014dd99478cdeb1e"
+        },
+        "docs/agentic-dev-kit/runtime-parity.md": {
+          "role": "doctrine",
+          "sha256": "cdf5a8a1fbd97decb25acb813bc1c7b753e4569e5b1280a4fdd4142e581f9efc"
+        },
+        "docs/agentic-dev-kit/safety-critical-changes.md": {
+          "role": "doctrine",
+          "sha256": "6dc6815ffb7fd89f00409dbd9ae620522214d0b97117ea8a0d09bf0d2344b365"
+        },
+        "docs/agentic-dev-kit/workflows/adopt.md": {
+          "role": "workflow",
+          "sha256": "83794fdfd9534ba7760cdd7e65335f2d21e65b81651f8ebee1295dddf065fcdf"
+        },
+        "docs/agentic-dev-kit/workflows/parallel-headless.md": {
+          "role": "workflow",
+          "sha256": "8b0f2cb8b923449122721aa1d4d2f64c0babf4b4621aebd015cdacf68e8767bf"
+        },
+        "docs/agentic-dev-kit/workflows/parallel.md": {
+          "role": "workflow",
+          "sha256": "6b1d4246ce89999a900e34a2986cb1d0047d738684f33c45ce82bb13c4f8689a"
+        },
+        "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
+          "role": "workflow",
+          "sha256": "0995bc61338fd3c4919b74f1bdad72823bd4fc1224bd81a9dcfdb6faad40364b"
+        },
+        "docs/agentic-dev-kit/workflows/pr-watch.md": {
+          "role": "workflow",
+          "sha256": "4618211f4b3055b3327ba174d180c0c6282d7e4c63d0605c962c7e16cd7d60f0"
+        },
+        "docs/agentic-dev-kit/workflows/session-start.md": {
+          "role": "workflow",
+          "sha256": "f280ee4eb9e8aa37d277aaeb3806b34d4377b5afe149f8063ad25eb7e66d2a2a"
+        },
+        "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
+          "role": "workflow",
+          "sha256": "af4b843d896063084139d77193e8435f761b979afd57cf396d5e47bbec14e3a7"
+        },
+        "docs/agentic-dev-kit/workflows/upgrade.md": {
+          "role": "workflow",
+          "sha256": "2cad70fa094ebc01f78e835784b2f84ee9ffd6b56a42d3d039c5995e42d4bf37"
+        },
+        "docs/agentic-dev-kit/workflows/wrap-up.md": {
+          "role": "workflow",
+          "sha256": "e88cf927424dfe861e34a0ca6661149c882058015f112f29dbd0d335b78368e7"
+        },
+        "docs/templates/AGENTS.md.tmpl": {
+          "role": "template",
+          "sha256": "e3794b399331a16138e72c62ee74d7085bd6a5fe14e10e45e4c40ef91cf41a6b"
+        },
+        "docs/templates/CLAUDE.md.tmpl": {
+          "role": "template",
+          "sha256": "e3195e5484d13f90122aa5ffacd9192e07b8445f5f0ab0cd44feced058fd23b3"
+        },
+        "docs/templates/friction-log-archive.md.tmpl": {
+          "role": "template",
+          "sha256": "af4a138e4a5ebe5634c55e7e417cd6b9f362bf3a35182b033f72876cd88180cf"
+        },
+        "docs/templates/friction-log.md.tmpl": {
+          "role": "template",
+          "sha256": "1e5fa714719cf147c03d03569e875e32a843c4b9f189025415d35dc2c326a062"
+        },
+        "docs/templates/handoff-history.md.tmpl": {
+          "role": "template",
+          "sha256": "111cf71a4c9b2a296f4fcf5ea02c6516907710e5b4fe0a7b3074f444f862ae69"
+        },
+        "docs/templates/handoff.md.tmpl": {
+          "role": "template",
+          "sha256": "1654465836a9e70a6e81d76208783e9a12d65343d1e9c3091f1d30c25a437ce7"
+        },
+        "init.sh": {
+          "role": "installer",
+          "sha256": "5cce07ddf5231d1944c883261f985d492530c2fa3472d992362a891aa5f17837"
+        },
+        "scripts/archive_plan_sessions.py": {
+          "role": "engine",
+          "sha256": "7d27ff31f4eaa7edef57e35a15f8745318cec41ca1228812207a9812f3b4e37b"
+        },
+        "scripts/check_doc_budget.py": {
+          "role": "engine",
+          "sha256": "013c1fa1e20763c9d99c8c2153b07723b1cda9a7b8c2dd9c2e78a6ed6a9d007c"
+        },
+        "scripts/check_memory_budget.py": {
+          "role": "engine",
+          "sha256": "5c385491289433b810b87167459015a3d23617accb5c317c0b539b879c1e1162"
+        },
+        "scripts/conftest.py": {
+          "role": "engine",
+          "sha256": "c2076c72a633fdd2d4e9991cf07ae2dda6c1747a1fe865a34a7fea013bd574c4"
+        },
+        "scripts/dev_session.sh": {
+          "role": "engine",
+          "sha256": "f696372d912ba5f9ab9bbbbd3ea2a14689ea8c9fdda57e1c00aa5962d376012f"
+        },
+        "scripts/hooks/pr_followup_hook.py": {
+          "role": "hook",
+          "sha256": "23bfa71eb732a12ac73976fff7c6b3baec28cb94e99e8ef9408b856d304dd879"
+        },
+        "scripts/hooks/pre-push": {
+          "role": "hook",
+          "sha256": "3bd8321e2aea0b137a033ebe0e4c23ff7269b10be6669ed6cb5a9d738b5c155e"
+        },
+        "scripts/kit_doctor.py": {
+          "role": "engine",
+          "sha256": "f8ce3862bd947211ee4e1ec1b1ad68f4c854a692455e106276802621d0a2427c"
+        },
+        "scripts/launch_lane.py": {
+          "role": "engine",
+          "sha256": "7787079163e9d678284db5df15311f059a519a61db6301980784864ab02ad9e6"
+        },
+        "scripts/lib/atomic_write.py": {
+          "role": "engine",
+          "sha256": "f9657f36f8bbcf3741382b616ae19be19cf516fc5fa4f36c53384579e96202b3"
+        },
+        "scripts/lib/devmodel_config.py": {
+          "role": "engine",
+          "sha256": "a4c29fb1808e0b3ec0a2ba80ffa97ba6c894f1a784463a5d126169542c300ef2"
+        },
+        "scripts/lib/kitconfig.py": {
+          "role": "engine",
+          "sha256": "4ab496661883d8f4ad590a6612a48b31f8cbf770283bb09794096149276634e6"
+        },
+        "scripts/lib/repo_root.sh": {
+          "role": "engine",
+          "sha256": "980cbf5596cea67033a5dd02d53630f2a92c24afd693ba7727d5fc50303ff555"
+        },
+        "scripts/lib/runtime_adapters.py": {
+          "role": "engine",
+          "sha256": "589a8e33508301d683467f94a1ac0cb7418d8c799fa0751813c7028f960f1afa"
+        },
+        "scripts/lib/state_paths/__init__.py": {
+          "role": "engine",
+          "sha256": "691a7df06a3bf9019b5faca8b8ebdb9d54463d231d492a632fd54c16cd51a2c6"
+        },
+        "scripts/lib/state_paths/paths.py": {
+          "role": "engine",
+          "sha256": "f54fd7d970402f8581f6c5080aa9614ce41cb2dafa2010c08406129731799397"
+        },
+        "scripts/lib/state_paths/repo_root.py": {
+          "role": "engine",
+          "sha256": "d9412f1fe395b944a86126bcc39f85d6838382b0fc29d68c8b29b965cd530b5a"
+        },
+        "scripts/lib/state_paths/resolver.py": {
+          "role": "engine",
+          "sha256": "e39fca241d6fbf28596ed3954f28a55e65831181cedb02c7c15e372895bb5bd2"
+        },
+        "scripts/lib/state_paths/tests/__init__.py": {
+          "role": "test",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "scripts/lib/state_paths/tests/test_state_paths.py": {
+          "role": "test",
+          "sha256": "b474703decdd2304d7460762fe5b5aa7fed9a81a9a422df61be0825b0c2ed88d"
+        },
+        "scripts/panel_prompt.py": {
+          "role": "engine",
+          "sha256": "f596c5f4bb4eb2d403ba0d2c9365808b01c771ff8d38b9b9d98cc563fd1bdca4"
+        },
+        "scripts/pr_watch.py": {
+          "role": "engine",
+          "sha256": "c84154a9d8019984d4a47627ec28ae9c3fe67181566bce835e1417fe7aa7eda9"
+        },
+        "scripts/reconcile_sessions.sh": {
+          "role": "engine",
+          "sha256": "75d29491cf65b61d385bb7bbb1c2cd39b3f557bef05b1dfa4a049737e8937573"
+        },
+        "scripts/run_installed_tests.py": {
+          "role": "engine",
+          "sha256": "4385056907334efbd44d7f67db3e10a302cf68433a18c666166b6b4d60c05235"
+        },
+        "scripts/tests/_repo_layout.py": {
+          "role": "test",
+          "sha256": "ab5c81c04b751f61a603f8b8a80f182b103f85417a58feb8abb725aebad7881b"
+        },
+        "scripts/tests/conftest.py": {
+          "role": "test",
+          "sha256": "dcc6980325b5ab33ddfb069f8a27f27b70f406c42892e5fcbcaf2369d0f07cd4"
+        },
+        "scripts/tests/fixtures/entry-point-markers.json": {
+          "role": "test",
+          "sha256": "13573d15825139f78e3a878fbe916f8096e924cec39be399f25688173fc3b079"
+        },
+        "scripts/tests/fixtures/init-config.json": {
+          "role": "test",
+          "sha256": "30609a5ccbba55ccbb163a64dae788b7c571031acf4e90b7bbacd6f177b56eda"
+        },
+        "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
+          "role": "test",
+          "sha256": "7376f453039fc8af3c72525865ec583e1e3e2358cf9d3f295ed911e49cf11250"
+        },
+        "scripts/tests/fixtures/shipped-registrations/codex-hooks.json": {
+          "role": "test",
+          "sha256": "66979af482546118a359db5ec3ecd5559a4dfc757ad431c198a23c26e5a9b872"
+        },
+        "scripts/tests/test_check_memory_budget.py": {
+          "role": "test",
+          "sha256": "8ddd343a1d1ac2a583b0ad7fbbfd76f7a63016f5c7c1f8e8074002f70fe76b4b"
+        },
+        "scripts/tests/test_ci_workflow.py": {
+          "role": "test",
+          "sha256": "4a26b00a2ddae874a76cdb0d85b3c9e14a77d727d959e45543647e928368b5f3"
+        },
+        "scripts/tests/test_init_sh.py": {
+          "role": "test",
+          "sha256": "87cca005542d8dfc3ff923f5706ae77a63a4068b8c852499c2ac05718db323bc"
+        },
+        "scripts/tests/test_kit_doctor.py": {
+          "role": "test",
+          "sha256": "b844706be86763345d67d28f93c0335e61ec378410b398c246e74fbf411f7e11"
+        },
+        "scripts/tests/test_kit_repo_only.py": {
+          "role": "test",
+          "sha256": "2002fb473dfffedc6125303bab6523c973bf628171c986490ed9bf368836b8e7"
+        },
+        "scripts/tests/test_kitconfig.py": {
+          "role": "test",
+          "sha256": "a4a77ccffd183350625b5c48d0d395f37941f155fc24ff85e34d1c577ec058b9"
+        },
+        "scripts/tests/test_lane_launcher.py": {
+          "role": "test",
+          "sha256": "9138d6ad975c2377a1c56c22610a0c329f17e3253294d0e4b62921b3f912a60a"
+        },
+        "scripts/tests/test_mutation_gate.py": {
+          "role": "test",
+          "sha256": "72914ad18b3622faa05a8e5c03035ba1040e7477aeca2cf8f9742aecd2bbf334"
+        },
+        "scripts/tests/test_panel_prompt.py": {
+          "role": "test",
+          "sha256": "a4937f85f74fb2cef7a4f3f9408908626dd8558998593e18f3c9c5d89155d7a9"
+        },
+        "scripts/tests/test_portability.py": {
+          "role": "test",
+          "sha256": "6d889025b72306a4dfe96fcf3eefa8b7c75d7f08112003e49ecec6c3f4f27e0b"
+        },
+        "scripts/tests/test_pr_followup_hook.py": {
+          "role": "test",
+          "sha256": "15fb412eb3023612988c09e44efa8c90afacb9e099822936fa2606567c888d07"
+        },
+        "scripts/tests/test_pr_watch.py": {
+          "role": "test",
+          "sha256": "3fcf1c8b11338d1424bb81525df8ee16180924037567bd9e83b02ea28f5b9a1d"
+        },
+        "scripts/tests/test_pre_push_hook.py": {
+          "role": "test",
+          "sha256": "98d845268d4e6ebc7709070078c324cda814d64f572b8f00097746acc3a7070e"
+        },
+        "scripts/tests/test_reconcile_sessions.py": {
+          "role": "test",
+          "sha256": "a12ddfbb4636376a07b3c047242a499226f47bc58a3668f1eb5a76fe1259b260"
+        },
+        "scripts/tests/test_repo_layout.py": {
+          "role": "test",
+          "sha256": "3560dba495462b51d85d68d12dc779616436671558f30553e244b7ffdc76f163"
+        },
+        "scripts/tests/test_state_guard.py": {
+          "role": "test",
+          "sha256": "915aae52d1b6fe38be757589d836c0f1198b79a4e20ba2a438aa2ef6fbf04bd9"
+        }
+      },
+      "kit_commit": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac",
+      "kit_version": 2,
+      "not_installed": []
+    },
+    "sha256": "9e2196df3b7239b599819abcfc20271b0389b70f78f22837a0709575145b9126"
+  },
+  "configuration": {
+    "merged": {
+      "doc_budgets": [
+        {
+          "archive": "notes/history.md",
+          "budget": 400,
+          "path": "ROADMAP.md",
+          "remedy": "run the wrap-up workflow to sweep old session blocks into the history file (archive_plan_sessions.py --target-lines {budget}, not --keep \u2014 this budget is in lines, not blocks)"
+        },
+        {
+          "archive": "notes/friction-archive.md",
+          "budget": 150,
+          "path": "notes/friction.md",
+          "remedy": "run the triage-friction-log workflow to graduate the inbox to the tracker"
+        }
+      ],
+      "kit": {
+        "version": 2
+      },
+      "models": {
+        "runtime_mappings": {
+          "claude": {
+            "cheap": "haiku",
+            "default": "sonnet",
+            "expensive": "fable"
+          },
+          "codex": {
+            "cheap": "low",
+            "default": "medium",
+            "expensive": "xhigh"
+          }
+        },
+        "tiers": {
+          "cheap": "mechanical",
+          "default": "standard",
+          "expensive": "judgment"
+        }
+      },
+      "notify": {
+        "backend": "none",
+        "user_key": "local-fixture-recipient"
+      },
+      "parallel": {
+        "claude_approval_policy": "dont-ask",
+        "claude_final_text_transport": "json-stdout",
+        "claude_headless_command": [
+          "claude",
+          "-p"
+        ],
+        "claude_prompt_transport": "stdin",
+        "claude_settings_profile": "config/claude-lane-settings.json",
+        "claude_worktree_transport": "process-cwd",
+        "codex_approval_policy": "read-only",
+        "codex_final_text_transport": "last-message-file",
+        "codex_headless_command": [
+          "codex",
+          "exec"
+        ],
+        "codex_prompt_transport": "stdin-dash",
+        "codex_worktree_transport": "cd-flag",
+        "descriptor_ttl_seconds": 900,
+        "observation_timeout_seconds": 30,
+        "termination_grace_seconds": 5
+      },
+      "paths": {
+        "engines": "scripts/devkit",
+        "friction_log": "notes/friction.md",
+        "friction_log_archive": "notes/friction-archive.md",
+        "handoff": "ROADMAP.md",
+        "handoff_history": "notes/history.md",
+        "playbook": "docs/autonomous-session-playbook.md"
+      },
+      "project": {
+        "name": "adopt-context-fixture"
+      },
+      "review": {
+        "bot_author_aliases": {
+          "coderabbit": [
+            "coderabbitai",
+            "coderabbitai[bot]"
+          ]
+        },
+        "bot_pending_grace_minutes": 15,
+        "bots": [],
+        "comment_verdict_markers": [
+          "no actionable comments were generated",
+          "actionable comments posted:"
+        ],
+        "fallback_commands": {
+          "claude": "/code-review",
+          "codex": "/review"
+        },
+        "fallback_panel": {
+          "lens_compute": {
+            "claude": {
+              "effort": "high",
+              "model": "sonnet"
+            },
+            "codex": {
+              "effort": "high"
+            }
+          },
+          "lenses": [
+            {
+              "focus": "assume the change is wrong and try to prove it \u2014 bypasses, fail-open paths, wedges, and whether the new guard actually guards",
+              "name": "adversarial"
+            },
+            {
+              "focus": "assume it works and ask what it says \u2014 stale comments, claims that overstate what is verified, tests whose names promise more than their bodies check",
+              "name": "correctness"
+            }
+          ],
+          "receipt_source": "fallback:panel"
+        },
+        "informational_checks": [
+          "coderabbit"
+        ],
+        "noise_markers": [
+          "<!-- this is an auto-generated comment: summarize by coderabbit",
+          "<!-- this is an auto-generated comment: review in progress",
+          "<!-- walkthrough_start -->",
+          "<!-- linear-linkback -->"
+        ],
+        "require_ci": true,
+        "settle_grace_minutes": 3,
+        "unavailable_markers": [
+          "bugbot needs on-demand usage enabled",
+          "review limit reached",
+          "rate limited by coderabbit",
+          "review rate limited",
+          "couldn't start this review",
+          "review skipped",
+          "no review credits"
+        ]
+      },
+      "runtime": {
+        "default": "codex",
+        "launchers": {
+          "claude": "claude",
+          "codex": "codex"
+        }
+      },
+      "state": {
+        "dirname": "state"
+      },
+      "systemize": {
+        "analysis_tier": "expensive",
+        "backfill_days": 28,
+        "batch_size": 25,
+        "cache_pattern": "state/cache/merged-prs_{window}_{mode}_{date}.json",
+        "commit_subject": "docs(systemize): promote recurring review patterns",
+        "digest_cache_pattern": "state/cache/merged-prs-digest_{window}_{mode}_{date}.json",
+        "digest_engine": "digest_merged_prs.py",
+        "fetch_engine": "fetch_merged_prs.py",
+        "heartbeat_engine": "heartbeat_cli.py",
+        "lookback_days": 7,
+        "max_findings_prs_per_run": 75,
+        "operator_logins": [],
+        "pattern_threshold": 2,
+        "pr_draft": false,
+        "report_pattern": "reports/post-merge-systemize_{window}_{mode}_{date}.md",
+        "report_root": "reports",
+        "single_pass_max_prs": 60,
+        "tracker_severity": "high"
+      },
+      "tracker": {
+        "backend": "none",
+        "linear": {
+          "label_name": "",
+          "project_id": "",
+          "team_id": ""
+        },
+        "project_name": "",
+        "url": ""
+      },
+      "triage": {
+        "analysis_tier": "default",
+        "commit_subject": "docs(triage): graduate friction-log entries",
+        "draft_engine": "triage_friction_log.py",
+        "finalize_engine": "finalize_triage.py",
+        "frozen_inbox_pattern": "state/triage/frozen-inbox_{mode}_{date}_{session}.json",
+        "gate_path": "state/triage/triage-pipeline-gate_{mode}.lock",
+        "pr_draft": false,
+        "recovery_bundle_pattern": "state/triage/recovery-bundle_{mode}_{gate_digest}.json",
+        "report_pattern": "reports/triage_{mode}_{date}_{session}.md",
+        "report_root": "reports",
+        "state_path": "state/triage/triage-pipeline-state_{mode}.json"
+      },
+      "vcs": {
+        "dev_branch_prefix": "dev",
+        "forge": "github",
+        "protected_branch": "main",
+        "systemize_branch_pattern": "chore/systemize-{date}",
+        "triage_branch_pattern": "chore/triage-{date}"
+      }
+    },
+    "tracked": {
+      "doc_budgets": [
+        {
+          "archive": "notes/history.md",
+          "budget": 400,
+          "path": "ROADMAP.md",
+          "remedy": "run the wrap-up workflow to sweep old session blocks into the history file (archive_plan_sessions.py --target-lines {budget}, not --keep \u2014 this budget is in lines, not blocks)"
+        },
+        {
+          "archive": "notes/friction-archive.md",
+          "budget": 150,
+          "path": "notes/friction.md",
+          "remedy": "run the triage-friction-log workflow to graduate the inbox to the tracker"
+        }
+      ],
+      "kit": {
+        "version": 2
+      },
+      "models": {
+        "runtime_mappings": {
+          "claude": {
+            "cheap": "haiku",
+            "default": "sonnet",
+            "expensive": "fable"
+          },
+          "codex": {
+            "cheap": "low",
+            "default": "medium",
+            "expensive": "xhigh"
+          }
+        },
+        "tiers": {
+          "cheap": "mechanical",
+          "default": "standard",
+          "expensive": "judgment"
+        }
+      },
+      "notify": {
+        "backend": "none",
+        "user_key": "tracked-fixture-recipient"
+      },
+      "parallel": {
+        "claude_approval_policy": "dont-ask",
+        "claude_final_text_transport": "json-stdout",
+        "claude_headless_command": [
+          "claude",
+          "-p"
+        ],
+        "claude_prompt_transport": "stdin",
+        "claude_settings_profile": "config/claude-lane-settings.json",
+        "claude_worktree_transport": "process-cwd",
+        "codex_approval_policy": "read-only",
+        "codex_final_text_transport": "last-message-file",
+        "codex_headless_command": [
+          "codex",
+          "exec"
+        ],
+        "codex_prompt_transport": "stdin-dash",
+        "codex_worktree_transport": "cd-flag",
+        "descriptor_ttl_seconds": 900,
+        "observation_timeout_seconds": 30,
+        "termination_grace_seconds": 5
+      },
+      "paths": {
+        "engines": "scripts/devkit",
+        "friction_log": "notes/friction.md",
+        "friction_log_archive": "notes/friction-archive.md",
+        "handoff": "ROADMAP.md",
+        "handoff_history": "notes/history.md",
+        "playbook": "docs/autonomous-session-playbook.md"
+      },
+      "project": {
+        "name": "adopt-context-fixture"
+      },
+      "review": {
+        "bot_author_aliases": {
+          "coderabbit": [
+            "coderabbitai",
+            "coderabbitai[bot]"
+          ]
+        },
+        "bot_pending_grace_minutes": 15,
+        "bots": [],
+        "comment_verdict_markers": [
+          "no actionable comments were generated",
+          "actionable comments posted:"
+        ],
+        "fallback_commands": {
+          "claude": "/code-review",
+          "codex": "/review"
+        },
+        "fallback_panel": {
+          "lens_compute": {
+            "claude": {
+              "effort": "high",
+              "model": "sonnet"
+            },
+            "codex": {
+              "effort": "high"
+            }
+          },
+          "lenses": [
+            {
+              "focus": "assume the change is wrong and try to prove it \u2014 bypasses, fail-open paths, wedges, and whether the new guard actually guards",
+              "name": "adversarial"
+            },
+            {
+              "focus": "assume it works and ask what it says \u2014 stale comments, claims that overstate what is verified, tests whose names promise more than their bodies check",
+              "name": "correctness"
+            }
+          ],
+          "receipt_source": "fallback:panel"
+        },
+        "informational_checks": [
+          "coderabbit"
+        ],
+        "noise_markers": [
+          "<!-- this is an auto-generated comment: summarize by coderabbit",
+          "<!-- this is an auto-generated comment: review in progress",
+          "<!-- walkthrough_start -->",
+          "<!-- linear-linkback -->"
+        ],
+        "require_ci": true,
+        "settle_grace_minutes": 3,
+        "unavailable_markers": [
+          "bugbot needs on-demand usage enabled",
+          "review limit reached",
+          "rate limited by coderabbit",
+          "review rate limited",
+          "couldn't start this review",
+          "review skipped",
+          "no review credits"
+        ]
+      },
+      "runtime": {
+        "default": "codex",
+        "launchers": {
+          "claude": "claude",
+          "codex": "codex"
+        }
+      },
+      "state": {
+        "dirname": "state"
+      },
+      "systemize": {
+        "analysis_tier": "expensive",
+        "backfill_days": 28,
+        "batch_size": 25,
+        "cache_pattern": "state/cache/merged-prs_{window}_{mode}_{date}.json",
+        "commit_subject": "docs(systemize): promote recurring review patterns",
+        "digest_cache_pattern": "state/cache/merged-prs-digest_{window}_{mode}_{date}.json",
+        "digest_engine": "digest_merged_prs.py",
+        "fetch_engine": "fetch_merged_prs.py",
+        "heartbeat_engine": "heartbeat_cli.py",
+        "lookback_days": 7,
+        "max_findings_prs_per_run": 75,
+        "operator_logins": [],
+        "pattern_threshold": 2,
+        "pr_draft": false,
+        "report_pattern": "reports/post-merge-systemize_{window}_{mode}_{date}.md",
+        "report_root": "reports",
+        "single_pass_max_prs": 60,
+        "tracker_severity": "high"
+      },
+      "tracker": {
+        "backend": "none",
+        "linear": {
+          "label_name": "",
+          "project_id": "",
+          "team_id": ""
+        },
+        "project_name": "",
+        "url": ""
+      },
+      "triage": {
+        "analysis_tier": "default",
+        "commit_subject": "docs(triage): graduate friction-log entries",
+        "draft_engine": "triage_friction_log.py",
+        "finalize_engine": "finalize_triage.py",
+        "frozen_inbox_pattern": "state/triage/frozen-inbox_{mode}_{date}_{session}.json",
+        "gate_path": "state/triage/triage-pipeline-gate_{mode}.lock",
+        "pr_draft": false,
+        "recovery_bundle_pattern": "state/triage/recovery-bundle_{mode}_{gate_digest}.json",
+        "report_pattern": "reports/triage_{mode}_{date}_{session}.md",
+        "report_root": "reports",
+        "state_path": "state/triage/triage-pipeline-state_{mode}.json"
+      },
+      "vcs": {
+        "dev_branch_prefix": "dev",
+        "forge": "github",
+        "protected_branch": "main",
+        "systemize_branch_pattern": "chore/systemize-{date}",
+        "triage_branch_pattern": "chore/triage-{date}"
+      }
+    }
+  },
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "external_evidence": {
+    "attempt-committed.json": "64752af2c026e1cbcd1c564b63d79d48f3e73b6df8828e038b3a2a1577b41c16",
+    "authority.json": "f22712881b2f6ca06b95d1ae588870abf8426008ed954a5391ed92234e55747b",
+    "backups-verified.json": "9a1ae49134468c65b1170affe0964ada5a3f42f024b53461f53cee207e387fa0",
+    "baseline-recorded.json": "68f9cf7c4af1eb4188b549a5ff5a6c9d5872c2b426eef1d17799d4709244fd5b",
+    "configuration-before-baseline.json": "b7630df29be9706f42cf7ff4cae4d93905d4126cf6efc7287e6acda34c7f4357",
+    "configuration-final.json": "b7630df29be9706f42cf7ff4cae4d93905d4126cf6efc7287e6acda34c7f4357",
+    "copy-report.json": "43bec2b7f2e8ada8a7be0f48ef1cfef438b2a4640f96829e7335eec6e219765c",
+    "fixture-after-adapters-comparison.json": "c1bc065933559ea74348d091de9abf969fb5ec5c3cdae50875fe39b9aef5faa5",
+    "fixture-after-adapters-inventory.json": "b3191a27cba45e6a3f97de0e23cca04a7933b7459670d196d57b1a7698e83dbb",
+    "fixture-after-baseline-comparison.json": "f7753fd4393de7df666811f93d2e49f350420016c47a5c92cfdd64640bf1a566",
+    "fixture-after-budget-comparison.json": "18adc01342c81da94449222b0c0ed8ec0476e11afca45248e1f3fc7dd78087d3",
+    "fixture-after-budget-inventory.json": "b3191a27cba45e6a3f97de0e23cca04a7933b7459670d196d57b1a7698e83dbb",
+    "fixture-after-doctor-comparison.json": "430e56dea54aae40cf2cf5c69fdccdccbdfccc19edd2489621390f2b24364f2d",
+    "fixture-after-doctor-inventory.json": "b3191a27cba45e6a3f97de0e23cca04a7933b7459670d196d57b1a7698e83dbb",
+    "fixture-after-installed-comparison.json": "f7ac07ddb89f4bc4d465eb6cb174a7d30d58bdefde3ad0b7b5a75ce74a973431",
+    "fixture-after-installed-inventory.json": "b3191a27cba45e6a3f97de0e23cca04a7933b7459670d196d57b1a7698e83dbb",
+    "fixture-after-source-comparison.json": "844804081e14902bf3427263efc8fe24bbae6e5c4fe33e22c710b8cf0ffa5653",
+    "fixture-after-source-inventory.json": "b3191a27cba45e6a3f97de0e23cca04a7933b7459670d196d57b1a7698e83dbb",
+    "fixture-after-syntax-comparison.json": "ab9fbeaa3f69143aa4ec6a1ea4aec43c1144820520c2ec6bc46c148f367b52bb",
+    "fixture-after-syntax-inventory.json": "b3191a27cba45e6a3f97de0e23cca04a7933b7459670d196d57b1a7698e83dbb",
+    "fixture-before-baseline-comparison.json": "eedbd655795f57c6ef4fc8c3b1467a8263c27a901a4683830f1b1536d98bd165",
+    "fixture-before-checks-inventory.json": "b3191a27cba45e6a3f97de0e23cca04a7933b7459670d196d57b1a7698e83dbb",
+    "fixture-before-git.json": "62fb567ef9aef134c1b5930f4b45d3e462e9db5badab15d3eec0f7d110332bbb",
+    "fixture-before-inventory.json": "aa7d3b6732c6ec3cdb5034dd9bf38eddf3590872ab409ce84d8e5dec164a82e0",
+    "fixture-before.bundle": "5c5cb2bf8c025b52b65569b25423af40901e21dc5c7a19e22c2ad418e80552e5",
+    "fixture-before.tar": "646e2ab5a1c6832e690876f8ea39c64a48c5bfa1898f7c5ed7ace0c9529b6c18",
+    "fixture-branch.json": "17ab81a03353c875037ddc14390e66a7acfd85c652bb48920931b1408cce6d60",
+    "fixture-branch.stderr.log": "60d994143a6b648afbb39199e24fde6733082627d9900fb14f77b9bf2f09afc3",
+    "fixture-branch.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fixture-bundle-create.json": "2794a6b932085ecc2f1b346d3ec60a435499194f515c23f355d837c6a21bd119",
+    "fixture-bundle-create.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fixture-bundle-create.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fixture-bundle-verify.json": "d59690b546386731ca8ee89859dff4570f7f20583095b690d2768e7310a2f0c7",
+    "fixture-bundle-verify.stderr.log": "8459e78dccf2459fa1d5c2cd5a27e3d27c375ea193f39a0562db08e7a38f2d68",
+    "fixture-bundle-verify.stdout.log": "7974ee724af2a547c0dd2b115dc7adeaf896681cbb21b4ca681387d5434e9658",
+    "fixture-commit.json": "abccc48b2f6af5b501f9193b98e400edf70ea661fb74e3e064b1ff3ed162b582",
+    "fixture-commit.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fixture-commit.stdout.log": "4c9179ffc58ad14d16bcf1e4d6d854896e15d259c2a5ecc42b93702ace08db95",
+    "fixture-diff-check.json": "bf27027e6e7bb411082cf72a35fbc4006cc0bd1e206c82eb4171936141cc1557",
+    "fixture-diff-check.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fixture-diff-check.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fixture-document-budget.json": "25e36c435aa26a3e83f936d2627162e95f1abb927ff5377c74806d6506fdad87",
+    "fixture-document-budget.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fixture-document-budget.stdout.log": "69202da087b33aebd7c98b9b4d7654cb4ca7681e5025a1a1008681865aeda2c3",
+    "fixture-environment-readback.json": "243e827d5fb3c2369da6c3a872c66fe985870fb2cb1bbd38db0160b4074f3487",
+    "fixture-environment-readback.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fixture-environment-readback.stdout.log": "c97012aedbec41cee8165b7075829030b0d130a7958be7cdf28ad075d42a738d",
+    "fixture-final-git.json": "19357ffa003a2a4609e0b5f916b1d306cf18be1726160320ff82cc85cf6af6cc",
+    "fixture-final-inventory.json": "b3191a27cba45e6a3f97de0e23cca04a7933b7459670d196d57b1a7698e83dbb",
+    "fixture-precommit-comparison.json": "b1786ae8e3cb1a3febe86bef4f37c6d84a5c40e0c0ea6452ffc7b396592551a3",
+    "fixture-stage.json": "2ba028da5ed8fea34a868a47436adb74d5f3e2523068652a7b9b1244049e560e",
+    "fixture-stage.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "fixture-stage.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "installed-doctor.json": "e70945fae8dce516bcfa13b769f52baeb158b231dec60d8d32930aa1c531da9a",
+    "installed-doctor.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "installed-doctor.stdout.log": "1fae83d41ebbaa696ede4a2fc883fda37dd0d7a54ade1293152aaff7ffabac83",
+    "installed-suite.json": "9575da66651e766debf19eabaec18084d97810b41cca241b0eba5a3ae2b83456",
+    "installed-suite.stderr.log": "7e423563f90ebe0fdcd3e10fe3614ae7676ac67486d94c3364ae3c4a3ea00e94",
+    "installed-suite.stdout.log": "1dfb2b37f0b7728a1d7e532e75d67b884fb2fcd5a1cd60d5e8ca5e6144dc84d4",
+    "original-paths-final.json": "48f75ef6fa998cf1963e0433b3fe3afd929653c1281567ca379a897dc5ff8b44",
+    "preflight-audit.json": "1e0a7e9b885fc466e31fe32071217b266491dfe0b71956a8a820828dab14a97e",
+    "preserved-after-adapters.json": "bde4940ffaac11b9cbf344f0f2aba4f18fb03ceadbdab0a1d8dc7d7050e6f39f",
+    "preserved-after-baseline.json": "bde4940ffaac11b9cbf344f0f2aba4f18fb03ceadbdab0a1d8dc7d7050e6f39f",
+    "preserved-after-budget.json": "bde4940ffaac11b9cbf344f0f2aba4f18fb03ceadbdab0a1d8dc7d7050e6f39f",
+    "preserved-after-doctor.json": "bde4940ffaac11b9cbf344f0f2aba4f18fb03ceadbdab0a1d8dc7d7050e6f39f",
+    "preserved-after-installed.json": "bde4940ffaac11b9cbf344f0f2aba4f18fb03ceadbdab0a1d8dc7d7050e6f39f",
+    "preserved-after-source.json": "bde4940ffaac11b9cbf344f0f2aba4f18fb03ceadbdab0a1d8dc7d7050e6f39f",
+    "preserved-after-syntax.json": "bde4940ffaac11b9cbf344f0f2aba4f18fb03ceadbdab0a1d8dc7d7050e6f39f",
+    "preserved-before-baseline.json": "bde4940ffaac11b9cbf344f0f2aba4f18fb03ceadbdab0a1d8dc7d7050e6f39f",
+    "preserved-before.json": "bde4940ffaac11b9cbf344f0f2aba4f18fb03ceadbdab0a1d8dc7d7050e6f39f",
+    "preserved-final.json": "bde4940ffaac11b9cbf344f0f2aba4f18fb03ceadbdab0a1d8dc7d7050e6f39f",
+    "record-install.json": "ac684b5f98ba6b0a67b3af8a407636e044a320b64e01f2d30528421348ed05e2",
+    "record-install.stderr.log": "e1b0bea89ec8eb362b48d35e1091428b496d17aca6e16b4cd5c08de5d849aa52",
+    "record-install.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "replay-evidence-final.json": "3d73abedb9cc48129a78e0ea37846c50c2bfcffb35ce5a5136337d8ee9df1496",
+    "result.json": "3a29dc27ebeac4fdd0657ee4501fbed34888f5ede893caf461c98e2ef8bbda1b",
+    "source-adapter-report.json": "849db71a6ff57e11e202c29960970d3f93219a248b0aa60bccab0d31148c48df",
+    "source-adapter-report.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source-adapter-report.stdout.log": "7d71ee2d486474122a2eeea3e8e2a9f46bf6efa87297f949917bd46b8d13bb80",
+    "source-after-adapters-comparison.json": "674d7312077694924dffcb414d27cbed2cf920d0b24d962fdb17cb5a74d27163",
+    "source-after-adapters-inventory.json": "9488a193885fc2804944b65dbc2577c3cd8c77fc2012f886c2d5ddb9f00af29e",
+    "source-after-budget-comparison.json": "0ad2efbbd213ae22557abeb1e4c2612a5893a8cb5a1bbc0e81c88c3f5c330e42",
+    "source-after-budget-inventory.json": "9488a193885fc2804944b65dbc2577c3cd8c77fc2012f886c2d5ddb9f00af29e",
+    "source-after-doctor-comparison.json": "864c51e7dce9df7c95787132cacef4b4f94d6f3e081a42beebb1b22052e95e03",
+    "source-after-doctor-inventory.json": "9488a193885fc2804944b65dbc2577c3cd8c77fc2012f886c2d5ddb9f00af29e",
+    "source-after-installed-comparison.json": "f1ce4933f83f50592df771f2606b8b2459d46862dac5e0848719ec2cc39db215",
+    "source-after-installed-inventory.json": "9488a193885fc2804944b65dbc2577c3cd8c77fc2012f886c2d5ddb9f00af29e",
+    "source-after-source-comparison.json": "427ccd769d8eea4e42cc5cf41c8b94382c8b026648c4a59bb4c387df3d9c4396",
+    "source-after-source-inventory.json": "9488a193885fc2804944b65dbc2577c3cd8c77fc2012f886c2d5ddb9f00af29e",
+    "source-after-syntax-comparison.json": "4a786a08018ae8da0521a30960a94710f6bd640d8de6ac758405a49be71c5fc0",
+    "source-after-syntax-inventory.json": "9488a193885fc2804944b65dbc2577c3cd8c77fc2012f886c2d5ddb9f00af29e",
+    "source-before-checks-inventory.json": "9488a193885fc2804944b65dbc2577c3cd8c77fc2012f886c2d5ddb9f00af29e",
+    "source-before-git.json": "3c5807e45a272d0706ec59f3235ea83b52b58a71476c980d8f39e191b7df1888",
+    "source-before-inventory.json": "1bba840b62ad9c6b4d62553896968d9a6365165a48af1c6f26e1eb3b4f7a03fe",
+    "source-before.bundle": "2d2aca4342e7a8848576755b4baf8370be758983faf567cd24bc917cecf90dad",
+    "source-before.tar": "8a0c753fd842c6b09afdb43cfd8ac3b94e6eb91e4be5f0844e03728ebe6d5562",
+    "source-bundle-create.json": "f3b80605220f0b82cdd497062d466b50121ea9d4d94e9d5afa70e84f68d733aa",
+    "source-bundle-create.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source-bundle-create.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source-bundle-verify.json": "467a81a70803f748449d6dbfecd727cf5b8b4d2b29acdb1871d1d9cb42ff83d3",
+    "source-bundle-verify.stderr.log": "c811d1cfa3ae9dcb843c81fca03750a99631a7753aea69afd0ee11b521d740c5",
+    "source-bundle-verify.stdout.log": "96d5a151422c35bf2036b2c60480f0f1b9090dc2950da0c2ad6defa8c38de03e",
+    "source-checkout-comparison.json": "10766610fd3f44ee2503c12e9572b6f24a406d58802a012ab012bb2bd3d262b5",
+    "source-checkout.json": "5b14840deb7a9bd5e093320786a28588c8a98dab7d2368954a4d7716c3de6ef2",
+    "source-checkout.stderr.log": "c0665c080526ea5452fb6cc9768b77408dd22c2244094b133cb653223ebc65f4",
+    "source-checkout.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source-environment-readback.json": "784badd6224694e87fef4c5b9a901febe3f354237caf0b3cf112dcd6ba5e0455",
+    "source-environment-readback.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source-environment-readback.stdout.log": "c3f1def96fe8620228881420bb0b820827f276a444b6afc85087becfeda92be7",
+    "source-fetch.json": "0a99a64b260e3a8118cbda016e9b6478d5ba46e0b4ef978541af538091d53270",
+    "source-fetch.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source-fetch.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "source-final-git.json": "35d90c2b378e7613e5f924c8d84694013cc59727a4508b91e35e1d38e35a3f09",
+    "source-final-inventory.json": "9488a193885fc2804944b65dbc2577c3cd8c77fc2012f886c2d5ddb9f00af29e",
+    "source-make-test.json": "f51f3e77dc2238fee7d97c063f85ef32cadcfa4efd6d51dc13ed5358dc218d4d",
+    "source-make-test.stderr.log": "3f3554b1b6fb97400d3b4b4ed723b20ad650a7285f0540ff69f8654ce7aa4e61",
+    "source-make-test.stdout.log": "4106c8c3749b7aa18ba473c9be2e98fbd3d8f0315adba4252590900cb3fb88be",
+    "source-pinned-tracked-files.json": "fa29ce28e7e4aa38c805badcb2db7f35053fc854867dc1c4c1de71c4fe1fa9e8",
+    "syntax-dev-session.json": "996ebcbba545e2b14e03ea9e7ea7e3ab08ea59e9c4a6e84dab6bb94daeef6038",
+    "syntax-dev-session.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "syntax-dev-session.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "syntax-init.json": "5b4d6eb9c64b61ecd57f072124b329cf56bb18aef635aa1dcafed97e14ea44eb",
+    "syntax-init.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "syntax-init.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "syntax-pre-push.json": "8ae06251257349865dc2ab162e00d6a46f19289ea381c86d2b326aa4c8fc1937",
+    "syntax-pre-push.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "syntax-pre-push.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "syntax-reconcile.json": "d5d1ba234a7e566b606521e74fc21c027600722a1f03f16e4a87099b27177429",
+    "syntax-reconcile.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "syntax-reconcile.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "syntax-repo-root.json": "1a371a01e8720b1cccde1c257a20c9da87ecdc3e43daa6d5580533801d85c422",
+    "syntax-repo-root.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "syntax-repo-root.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "verification-commands.json": "0a97869456fc3d4b436afe8a91bb04a2b7c0880ac14e89b83fcba9d7f10bbf6e"
+  },
+  "historical_ledger_sha256": "98d67eefc4505f717298500fe91750c9f34d80bd8984e5d0a5c81f2b7b08abb8",
+  "ledger_checks": {
+    "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-evidence_2026-09-09/sha256.json": "5e5c7417574a1e17c8325516e31553f9a75062427344047393ad873a0c66fa69",
+    "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-update-evidence_2026-09-10/sha256.json": "943db7966961b6baec28642bb3eee8cd227009538791c458d8cc7a81fc4b7972",
+    "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/sha256.json": "8e04569e97cf0673c61f9262f934efd06c88818cb01a2872289e5944528ca1f5"
+  },
+  "observed_at": "2026-09-10T13:22:18.136489+00:00",
+  "original_paths": {
+    "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source": {
+      "exists": false,
+      "lexists": false
+    },
+    "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture": {
+      "exists": false,
+      "lexists": false
+    }
+  },
+  "preserved_files": {
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.agents/skills/wrap-up/SKILL.md": {
+      "mode": "0o644",
+      "sha256": "c5a267b53de07157cd69f035de68f662a634d469f71f99a9ddf4d2b0b0a93df7"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.claude/agents/adversarial.md": {
+      "mode": "0o644",
+      "sha256": "f61adde9da0974c20dcba31d8fda4dec313e2f26ffd97baae518654bae3e9e7a"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.claude/agents/correctness.md": {
+      "mode": "0o644",
+      "sha256": "a91ee86a18f6043d8f2cfba06cdbb983509ef9514b5924540f09b8a87d74e171"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.claude/settings.json": {
+      "mode": "0o644",
+      "sha256": "cafe367d9ec90f34644dec0a2a4929dc195962e16df332523b7a74fec82751bf"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.codex/config.toml": {
+      "mode": "0o644",
+      "sha256": "d37497c3278121598a663564ab38b53f658969717f78decb661ddd11c66551ea"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.codex/hooks.json": {
+      "mode": "0o644",
+      "sha256": "dbea8d8084adcc50e786af584c7e407fc5d7040bf26bd614c9966e9ba2797cfb"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.git/hooks/pre-push": {
+      "mode": "0o755",
+      "sha256": "b0d3019ee1de92d7960b22339e51eb68eca5e60fd59c2277cfbd3214955d4fef"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.gitignore": {
+      "mode": "0o644",
+      "sha256": "3d98e73ca1b75d1afc6c1663edfed6e4c6405456d5213a908296a6d5a139a866"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/AGENTS.md": {
+      "mode": "0o644",
+      "sha256": "afe455b56f1a6c4270961ed6ee301e3dae03b43748c1ceb8d5a49a3a30856819"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/CLAUDE.md": {
+      "mode": "0o644",
+      "sha256": "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/ROADMAP.md": {
+      "mode": "0o644",
+      "sha256": "02b32402fb8bf0bf197e1473f3f88a4718f411c03e07686c829714063f0d6fd7"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/config/claude-lane-settings.json": {
+      "mode": "0o644",
+      "sha256": "2dd313c0a0889235a72175d102356ad9cdc2ce02230164cb274162ae0f96260f"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/config/dev-model.local.yaml": {
+      "mode": "0o644",
+      "sha256": "1d7c76ab19a3c1f550cf398b52284bb12c8b662485734add5c30abc3870f5524"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/config/dev-model.yaml": {
+      "mode": "0o644",
+      "sha256": "1cefdb92c970b997eaa56745f1fc8d5d9cf5ce0b86050b962f987548bdaaf8aa"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/init.sh": {
+      "mode": "0o755",
+      "sha256": "5cce07ddf5231d1944c883261f985d492530c2fa3472d992362a891aa5f17837"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/notes/friction-archive.md": {
+      "mode": "0o644",
+      "sha256": "af4a138e4a5ebe5634c55e7e417cd6b9f362bf3a35182b033f72876cd88180cf"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/notes/friction.md": {
+      "mode": "0o644",
+      "sha256": "9d7adf210f28942e5fac48c49e629aabb2c58a7f86776a4a1385f68dbd9764e5"
+    },
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/notes/history.md": {
+      "mode": "0o644",
+      "sha256": "755b4349978cb4269cf89b6938427ee5e9da8475dc833f5cb2d10236dbea087a"
+    }
+  },
+  "program_sha256": "3902a43b0ede7a08ae8b12449981a2070a05056d1b49a43be36a7932801c829d",
+  "record_merge_tree_equals_reviewed_head": true,
+  "replay_evidence": {
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/adapter-report.json": "1f1bbe5729818697804d92a626d165aa88f0798eb08742b6a067e5e489232eba",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/adopter-pr-watch-receipt.json": "f5492f11018cc9818dcbd03dad6b403e9e43cc6db48c1102469e76dd67504bda",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/adopter-pr-watch.json": "ffff9f38bba6c389b1dbab8e5f66cdac11fb240d838f3f30c5f48cf581991d54",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/approval.md": "d65a3a895f60a9397665320d564c840b26dea8d0253b42e84b9d752c8a32b11e",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/bindings.sh": "fb10d6d0444bfdc62190f669abcb6ad604699c429abfaa0a39b814fc950920a8",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/capture_tuple.py.txt": "d51dcd056d68f5fca3138a1e5ab34f395e2ab12746b7dd28f1a01609b27828ea",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/delivery-events.json": "c4540350ef57e4acfcd2e3122642b32616910af0236bf198877b820f45f1d5df",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/fixture-absence.json": "e8649721aa12c3100f516b3dac0954e36694908bf98f8006eb06fe1cccd6813f",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/fork-test-nodes.json": "86c4a9dd7074f3f2bcfe5cd0d90a752eb7ba32fd5454af548a3e15b8a2fce4c4",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/inventory-probe-receipt.json": "17094e6d9b47665f8bf0f826ef3ca60633bc664c2882fc6fe21e91a7d8b92e80",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/inventory-probe.json": "a3c0b1a2769fd2344438f001686a0265015150ff012972a5b8d885b0297e9330",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/reconcile_no_change.py.txt": "71866c9d537d58817cbbbe9463554f55d5585220bef2d8fd944fdec3324e2f9c",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/reconciliation-receipt.json": "2c2ddefcbfd5c6bca5c4cd3d6fd368780417386fc992781744c3981a9fcdb079",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/reconciliation.json": "5606709e202501f833a9cd1349f23749cd4de547ffb3335da50ab4e028f44f7d",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/review-record.md": "04a26130f370e8654061a38890794458c86d3efe72dfeb96667845c5995dba40",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/sha256.json": "e2dbb5d500cd0c0dd8b8b474a59561358a8bd0275be4a25a3a4d2be3e6cda117",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/snapshot-comparison.json": "67e28c00c18fbbf68d460bc3616cdaadf0f0031af7d7d2193c5aee10e97e64ec",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/source-doctor.json": "e72f768a3596e8a0993cf31832021164cb6821bf886b45a2a2cd05cb03c4bf11",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/test-results.json": "8e648524c74a8408dc64191bc2551925c69d1d6b1ad3f16ebfd7000456391d1a",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/tuple-after-receipt.json": "fa58baedc109bd3a1c60ba620997cf797ef1394ba586a10979e573a095485f9e",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/tuple-after.json": "99c78b8409ce5b70aa23ff10cfc6c4ee93605d7d9934c7d911b6858658fa5918",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/tuple-before-receipt.json": "a7dd0b3788dc7fe7aa994b642d3d82f7ed7eab79aa6b013cfb14cd76dc56feb7",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/tuple-before.json": "99c78b8409ce5b70aa23ff10cfc6c4ee93605d7d9934c7d911b6858658fa5918",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/verification-receipt.json": "edd520e52c50b43330d39076c12471504d849a08195d6e6679e3f51ee45f6e27",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/verification-result.json": "0dc8aa9fd9606e57962db64013bf01630b70e0667346297d0b26222d7576585f",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/verify_adopter_condition.py.txt": "0d92b004297f82198108c8b35cae00664d0e1af77cdb1d4f3bbe26e18b002d3d"
+  },
+  "result": "equal-to-update-final-at-observed-checkpoints",
+  "revision": "32ba74b74e2b1b59e5e4510246a9d02f310633c3",
+  "trees": {
+    "fixture": {
+      "final_inventory_sha256": "b3191a27cba45e6a3f97de0e23cca04a7933b7459670d196d57b1a7698e83dbb",
+      "git_differences": {},
+      "identity": {
+        "branch": "chore/item5-b-update-60fe0dc",
+        "config_sha256": "cae33efdb02cf774435c1ff9cb16bcc1014606908530c6e1dc727615fe3e8cda",
+        "git_directory": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.git",
+        "head_bytes": "ref: refs/heads/chore/item5-b-update-60fe0dc\n",
+        "index_sha256": "ba5ef0df17c888f506db9167e04ee212bf3d4c36f35bf4327be8a008ea4021af",
+        "refs": "413132b01d14c735d94753231bf325904135285f HEAD\n07bacf5bda3b1e7a6718c7d4528336ef81dc2143 refs/heads/chore/adopt-agentic-dev-kit\n413132b01d14c735d94753231bf325904135285f refs/heads/chore/item5-b-update-60fe0dc\n",
+        "remotes": "",
+        "revision": "413132b01d14c735d94753231bf325904135285f",
+        "root": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+        "status": ""
+      },
+      "inventory_differences": {}
+    },
+    "source": {
+      "final_inventory_sha256": "9488a193885fc2804944b65dbc2577c3cd8c77fc2012f886c2d5ddb9f00af29e",
+      "git_differences": {},
+      "identity": {
+        "branch": "DETACHED",
+        "config_sha256": "cae33efdb02cf774435c1ff9cb16bcc1014606908530c6e1dc727615fe3e8cda",
+        "git_directory": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/.git",
+        "head_bytes": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac\n",
+        "index_sha256": "d8d3b7cc426fbb2421d928a7449a368f0be636ed2994904644bc8fb64393d43a",
+        "refs": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac HEAD\nedc199f42bc65b1850172ea79b791ef358577ae1 refs/heads/chore/item5-decision-packet-20260909\n",
+        "remotes": "",
+        "revision": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac",
+        "root": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source",
+        "status": ""
+      },
+      "inventory_differences": {}
+    }
+  }
+}

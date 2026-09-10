@@ -438,8 +438,11 @@ historical observation it was and is not silently refreshed.
      retains the applied repair pin `60fe0dc7ad68922d064c0cf401cff2c4c6d607ac`,
      fixture attempt `413132b01d14c735d94753231bf325904135285f`, complete local
      verification and preservation evidence. That update approval is consumed.
-     The next action is preserved-file acceptance and an exact next field-exit
-     decision; local verification does not authorize a client exercise or fixture PR.
+     The [acceptance and field-exit packet](phase5-item5-b-acceptance-decision_2026-09-10.md)
+     now binds the preserved-file decisions to a read-only comparison with the update's
+     FINAL evidence. It separately proposes fixture friction/CI payloads and a private
+     ready-PR handoff; neither decision is approved. The next action is the exact
+     ACCEPT-01 and optional PR-01 decision, not another update or client exercise.
      No original continuity or prior field credit was recreated.
      Delivery item 6 is independent of these paths. The approved
      [adopt continuation](codex-adopt-initialization-field-exercise_2026-09-06.md)

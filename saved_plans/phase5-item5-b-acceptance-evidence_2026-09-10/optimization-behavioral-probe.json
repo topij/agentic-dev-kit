@@ -1,0 +1,149 @@
+{
+  "mutation_diff": "--- fixed-audit\n+++ optimization-refusal-removed\n@@ -71,8 +71,6 @@\n \n \n def main():\n-    if sys.flags.optimize:\n-        raise SystemExit('Refusing optimized Python: acceptance assertions must execute')\n     assert sys.dont_write_bytecode, 'Run python3 -B'\n     assert Path.cwd() == COCKPIT\n     report = {'argv': [sys.executable, '-B', str(Path(__file__).resolve())],\n",
+  "observed_at": "2026-09-10T13:23:01.080207+00:00",
+  "restored_byte_equal": true,
+  "results": [
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro/probe_audit.py",
+        "equal"
+      ],
+      "case": "equal",
+      "cwd": "/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro",
+      "optimized": false,
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "{\n  \"case\": \"equal\",\n  \"outcome\": \"accepted\",\n  \"optimization\": 0,\n  \"report\": {\n    \"argv\": [\n      \"/opt/homebrew/opt/python@3.14/bin/python3.14\",\n      \"-B\",\n      \"/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro/repo/saved_plans/phase5-item5-b-acceptance-audit_2026-09-10.py.txt\"\n    ],\n    \"baseline\": {\n      \"content\": {\n        \"files\": {}\n      },\n      \"sha256\": \"72977a5bca3b6477ebcbf9abf97bb444c5d27d874e0109bf6d10a810519f3c24\"\n    },\n    \"configuration\": {\n      \"merged\": {\n        \"enabled\": true\n      },\n      \"tracked\": {\n        \"enabled\": true\n      }\n    },\n    \"cwd\": \"/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro/audit-synthetic-03r8cgs_/record\",\n    \"external_evidence\": {},\n    \"historical_ledger_sha256\": \"df23038e4887f7c061b743299d3967ab266811920e4b3ee91e2696e7e1f2fd4c\",\n    \"ledger_checks\": {\n      \"/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro/audit-synthetic-03r8cgs_/record/saved_plans/phase5-item5-b-evidence_2026-09-09/sha256.json\": \"44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a\",\n      \"/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro/audit-synthetic-03r8cgs_/record/saved_plans/phase5-item5-b-update-evidence_2026-09-10/sha256.json\": \"4e16730d610a2501702b68b58c903ebd8ceba73492e25390938cf139dd27d43a\",\n      \"/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro/audit-synthetic-03r8cgs_/record/saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/sha256.json\": \"44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a\"\n    },\n    \"observed_at\": \"2026-09-10T13:23:00.194521+00:00\",\n    \"original_paths\": {\n      \"/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source\": {\n        \"exists\": false,\n        \"lexists\": false\n      },\n      \"/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture\": {\n        \"exists\": false,\n        \"lexists\": false\n      }\n    },\n    \"preserved_files\": {\n      \"/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro/audit-synthetic-03r8cgs_/target-a/.git/pre-push\": {\n        \"mode\": \"0o644\",\n        \"sha256\": \"10bc8d673d5ba840a808a39c8ecfc9c68a51af78ccd8600635dbb7b8447e01a9\"\n      }\n    },\n    \"program_sha256\": \"3902a43b0ede7a08ae8b12449981a2070a05056d1b49a43be36a7932801c829d\",\n    \"record_merge_tree_equals_reviewed_head\": true,\n    \"replay_evidence\": {},\n    \"result\": \"equal-to-update-final-at-observed-checkpoints\",\n    \"revision\": \"synthetic-equal-git-object\",\n    \"trees\": {\n      \"fixture\": {\n        \"final_inventory_sha256\": \"447cd215cfe89c2e46854996284651997b7d4dc1d6297d8f42cda44b82a1758b\",\n        \"git_differences\": {},\n        \"identity\": {\n          \"revision\": \"413132b01d14c735d94753231bf325904135285f\"\n        },\n        \"inventory_differences\": {}\n      },\n      \"source\": {\n        \"final_inventory_sha256\": \"44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a\",\n        \"git_differences\": {},\n        \"identity\": {\n          \"revision\": \"60fe0dc7ad68922d064c0cf401cff2c4c6d607ac\"\n        },\n        \"inventory_differences\": {}\n      }\n    }\n  }\n}\n"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro/probe_audit.py",
+        "equal"
+      ],
+      "case": "equal",
+      "cwd": "/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro",
+      "optimized": true,
+      "returncode": 1,
+      "stderr": "Refusing optimized Python: acceptance assertions must execute\n",
+      "stdout": ""
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro/probe_audit.py",
+        "inventory"
+      ],
+      "case": "inventory",
+      "cwd": "/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro",
+      "optimized": false,
+      "returncode": 1,
+      "stderr": "",
+      "stdout": "{\n  \"case\": \"inventory\",\n  \"outcome\": \"refused\",\n  \"reason\": \"{'unauthorized-file': {'actual': {'mode': '0o644', 'kind': 'file', 'sha256': '78ecf09f8df372e1a33305e6a64792b433ea5d39c33e29d182834f9cc3201d1e'}, 'expected': None}}\",\n  \"optimization\": 0\n}\n"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro/probe_audit.py",
+        "inventory"
+      ],
+      "case": "inventory",
+      "cwd": "/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro",
+      "optimized": true,
+      "returncode": 1,
+      "stderr": "Refusing optimized Python: acceptance assertions must execute\n",
+      "stdout": ""
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro/probe_audit.py",
+        "preserved"
+      ],
+      "case": "preserved",
+      "cwd": "/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro",
+      "optimized": false,
+      "returncode": 1,
+      "stderr": "",
+      "stdout": "{\n  \"case\": \"preserved\",\n  \"outcome\": \"refused\",\n  \"reason\": \"/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro/audit-synthetic-nxdmpxoq/target-a/.git/pre-push\",\n  \"optimization\": 0\n}\n"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro/probe_audit.py",
+        "preserved"
+      ],
+      "case": "preserved",
+      "cwd": "/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro",
+      "optimized": true,
+      "returncode": 1,
+      "stderr": "Refusing optimized Python: acceptance assertions must execute\n",
+      "stdout": ""
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro/probe_audit.py",
+        "config-type"
+      ],
+      "case": "config-type",
+      "cwd": "/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro",
+      "optimized": false,
+      "returncode": 1,
+      "stderr": "",
+      "stdout": "{\n  \"case\": \"config-type\",\n  \"outcome\": \"refused\",\n  \"reason\": \"\",\n  \"optimization\": 0\n}\n"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro/probe_audit.py",
+        "config-type"
+      ],
+      "case": "config-type",
+      "cwd": "/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro",
+      "optimized": true,
+      "returncode": 1,
+      "stderr": "Refusing optimized Python: acceptance assertions must execute\n",
+      "stdout": ""
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro/probe_audit.py",
+        "inventory"
+      ],
+      "case": "inventory",
+      "cwd": "/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro",
+      "optimized": true,
+      "returncode": 0,
+      "stderr": "",
+      "stdout": "{\n  \"case\": \"inventory\",\n  \"outcome\": \"accepted\",\n  \"optimization\": 1,\n  \"report\": {\n    \"argv\": [\n      \"/opt/homebrew/opt/python@3.14/bin/python3.14\",\n      \"-B\",\n      \"/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro/repo/saved_plans/phase5-item5-b-acceptance-audit_2026-09-10.py.txt\"\n    ],\n    \"baseline\": {\n      \"content\": {\n        \"files\": {}\n      },\n      \"sha256\": \"72977a5bca3b6477ebcbf9abf97bb444c5d27d874e0109bf6d10a810519f3c24\"\n    },\n    \"configuration\": {\n      \"merged\": {\n        \"enabled\": true\n      },\n      \"tracked\": {\n        \"enabled\": true\n      }\n    },\n    \"cwd\": \"/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro/audit-synthetic-c_sq54q2/record\",\n    \"external_evidence\": {},\n    \"historical_ledger_sha256\": \"2fe92bf1d8e927aa8d130cd3a73ca5b61009e137de0d5e5e876c3402de5f3c8c\",\n    \"ledger_checks\": {\n      \"/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro/audit-synthetic-c_sq54q2/record/saved_plans/phase5-item5-b-evidence_2026-09-09/sha256.json\": \"44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a\",\n      \"/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro/audit-synthetic-c_sq54q2/record/saved_plans/phase5-item5-b-update-evidence_2026-09-10/sha256.json\": \"bc048a20d68b0aa5064e5935351602e19079814327f259a31de019be74ff85ac\",\n      \"/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro/audit-synthetic-c_sq54q2/record/saved_plans/phase5-item5-kit534-repair-evidence_2026-09-10/sha256.json\": \"44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a\"\n    },\n    \"observed_at\": \"2026-09-10T13:23:00.953560+00:00\",\n    \"original_paths\": {\n      \"/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source\": {\n        \"exists\": false,\n        \"lexists\": false\n      },\n      \"/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture\": {\n        \"exists\": false,\n        \"lexists\": false\n      }\n    },\n    \"preserved_files\": {\n      \"/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro/audit-synthetic-c_sq54q2/target-a/.git/pre-push\": {\n        \"mode\": \"0o644\",\n        \"sha256\": \"10bc8d673d5ba840a808a39c8ecfc9c68a51af78ccd8600635dbb7b8447e01a9\"\n      }\n    },\n    \"program_sha256\": \"1d7341f8b230d154fa715b770f5787788b74db9814a58264c0d4429533bde848\",\n    \"record_merge_tree_equals_reviewed_head\": true,\n    \"replay_evidence\": {},\n    \"result\": \"equal-to-update-final-at-observed-checkpoints\",\n    \"revision\": \"synthetic-equal-git-object\",\n    \"trees\": {\n      \"fixture\": {\n        \"final_inventory_sha256\": \"447cd215cfe89c2e46854996284651997b7d4dc1d6297d8f42cda44b82a1758b\",\n        \"git_differences\": {},\n        \"identity\": {\n          \"revision\": \"413132b01d14c735d94753231bf325904135285f\"\n        },\n        \"inventory_differences\": {\n          \"unauthorized-file\": {\n            \"actual\": {\n              \"kind\": \"file\",\n              \"mode\": \"0o644\",\n              \"sha256\": \"78ecf09f8df372e1a33305e6a64792b433ea5d39c33e29d182834f9cc3201d1e\"\n            },\n            \"expected\": null\n          }\n        }\n      },\n      \"source\": {\n        \"final_inventory_sha256\": \"44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a\",\n        \"git_differences\": {},\n        \"identity\": {\n          \"revision\": \"60fe0dc7ad68922d064c0cf401cff2c4c6d607ac\"\n        },\n        \"inventory_differences\": {}\n      }\n    }\n  }\n}\n"
+    },
+    {
+      "argv": [
+        "python3",
+        "-B",
+        "/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro/probe_audit.py",
+        "inventory"
+      ],
+      "case": "inventory",
+      "cwd": "/private/tmp/item5-b-acceptance-checks-bhF1FT/optimization-repro",
+      "optimized": true,
+      "returncode": 1,
+      "stderr": "Refusing optimized Python: acceptance assertions must execute\n",
+      "stdout": ""
+    }
+  ],
+  "revision": "32ba74b74e2b1b59e5e4510246a9d02f310633c3",
+  "working_tree_program_sha256": "3902a43b0ede7a08ae8b12449981a2070a05056d1b49a43be36a7932801c829d"
+}

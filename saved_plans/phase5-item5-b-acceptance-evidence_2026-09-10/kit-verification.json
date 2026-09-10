@@ -1,0 +1,20 @@
+{
+  "command": [
+    "make",
+    "test"
+  ],
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "revision": "22734da7d3aebdf31f846b7e288e50eb99ca7156",
+  "started_at": "2026-09-10T12:43:06.371932+00:00",
+  "environment": {
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "DEVKIT_STATE_ROOT": "/private/tmp/item5-b-acceptance-checks-bhF1FT/state",
+    "UV_CACHE_DIR": "/private/tmp/item5-b-acceptance-checks-bhF1FT/uv-cache",
+    "UV_TOOL_DIR": "/private/tmp/item5-b-acceptance-checks-bhF1FT/uv-tools",
+    "RUFF_CACHE_DIR": "/private/tmp/item5-b-acceptance-checks-bhF1FT/ruff-cache",
+    "TMPDIR": "/private/tmp/item5-b-acceptance-checks-bhF1FT/tmp",
+    "PYTEST_ADDOPTS": "-o cache_dir=/private/tmp/item5-b-acceptance-checks-bhF1FT/pytest-cache -ra"
+  },
+  "exit_code": 2,
+  "ended_at": "2026-09-10T12:50:18.371628+00:00"
+}
