@@ -1,5 +1,7 @@
 # Phase 5 item 5 — approved kit test repair
 
+Repair PR: [#726](https://github.com/topij/agentic-dev-kit/pull/726).
+
 On 2026-09-10 the operator approved the kit-only slice proposed in the
 [ITEM5-B execution record](phase5-item5-b-execution_2026-09-09.md). The standing
 `merge when clean` instruction applies to this repair. It does not authorize an

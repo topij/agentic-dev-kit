@@ -42,6 +42,19 @@ starts.
 
 ---
 
+## #726 — 2026-09-10
+
+- **CHANGED (installed-test semantics, #534):** If you vendor the kit tests, refresh
+  `conftest.py`, `test_init_sh.py`, `test_kit_doctor.py`, `test_kit_repo_only.py`,
+  `test_mutation_gate.py` and `test_portability.py` together under your configured
+  engine directory's `tests/` tree. Include the new `tests/fixtures/init-config.json`
+  and `tests/fixtures/entry-point-markers.json` inputs from the same source pin during
+  `/upgrade`. Keep your config, policy documents and authored adapters: behavioral
+  tests use controlled inputs, while assertions about the kit's shipped source and
+  their drift-liveness parent skip a recorded adopter baseline.
+
+---
+
 ## #709 — 2026-09-07
 
 - **CHANGED (gate semantics, `#706`):** Refresh `scripts/hooks/pre-push`. It now exits 1
