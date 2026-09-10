@@ -191,13 +191,33 @@ mismatch, stop before mutation. On a command failure, preserve logs and the atte
 state; do not silently broaden the file set, repair tests, rerun initialization, weaken
 selection or refresh another baseline.
 
-Rollback is included only for this attempt's enumerated changes. If the attempt has
-committed and no later tracked work exists, switch the fixture back to the unchanged
-`chore/adopt-agentic-dev-kit` input and the source back to its original detached pin;
-keep the attempt branch and evidence for diagnosis. Before a commit, restore only the
-replaced payloads/baseline from verified before-bytes and remove only newly added files
-whose current hashes still equal this attempt's proposed bytes. Stop for a new decision
-if another writer has changed any target. No broad reset or clean is authorized.
+Rollback is included only for this attempt's enumerated changes. Check each tree's
+recorded attempt state before restoring it; stop for a new decision if another writer
+has changed a target, index or ref. No broad reset or clean is authorized.
+
+Treat source rollback independently of whether the fixture commit happened. If the
+source advanced and its detached HEAD, index and tracked bytes still match the exact
+repair pin, run:
+
+```sh
+git -C "$KIT" switch --detach 8418118e40728c667c32a28a182697139bc7a5ef
+```
+
+This restores source HEAD, index and tracked bytes together. If it never advanced and still matches the original input, no source
+restore is needed. An intermediate or unexpected source state requires a new decision;
+restoring old file bytes while leaving HEAD/index advanced is not rollback.
+
+If the fixture attempt committed and no later tracked work exists, switch back to
+`chore/adopt-agentic-dev-kit` at the unchanged input commit. Before a fixture commit,
+restore only replaced fixture payloads/baseline from verified before-bytes and remove
+only newly added files whose current hashes still equal the attempt's proposed bytes.
+Restore the staged entries from the fixture input using
+`git -C "$REPO" restore --source=07bacf5bda3b1e7a6718c7d4528336ef81dc2143 --staged --`
+with exactly the fixture ledger pathspecs and `kit-manifest.json`, including staged
+additions; leave unrelated index entries untouched and stop if any are present.
+Then switch back to the unchanged input branch. Keep the attempt branch, if created,
+and evidence for diagnosis. Read back the original fixture branch/HEAD, original
+detached source HEAD, and empty staged/worktree diffs before declaring rollback done.
 
 Preserve pre-existing ignored/cache bytes from the before-archives. Any rollback cache
 restoration/removal is limited to proven attempt-owned differences after comparison;
@@ -215,6 +235,13 @@ special permission bits and states the historical limitation; the procedure decl
 and redirects Ruff's cache. The receipt's private baseline simulations reproduced
 the predicted baseline at the repair pin. They were disposable-clone probes, not an
 execution of this decision or a full installed-suite result.
+
+The [rollback receipt before correction](https://github.com/topij/agentic-dev-kit/pull/727#issuecomment-5615560958)
+records the adversarial failure-path finding at
+`9bbb0089fbeb960cec1d4fb2c62d9188759527c8` on 2026-09-10. Source HEAD/index restoration
+now applies before or after the fixture commit, and the uncommitted fixture path
+restores its staged entries and input branch. The receipt preserves the private
+reproduction and the separate #393 test result.
 
 ## Operator choice and remaining scope
 
