@@ -1,0 +1,24 @@
+{
+  "source_pin": "85205bb491ce7ad09b7b3e3ab1e6c3027b19c363",
+  "installed_pin": "0e04147a7dbeed332f8e589ac0dd0c7ea5b20bc9",
+  "root": "/private/tmp/kit534-repair-20260910-3pWV3M/installed",
+  "command": "",
+  "owned_sha256": {
+    "AGENTS.md": "7386ced095705801bdb838e9018f143f49ab604421d3c4612aa3a0d508191f27",
+    "CLAUDE.md": "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49",
+    ".agents/skills/wrap-up/SKILL.md": "6047141f3e37f6556a3e8ce642b29c55737b5ae5e855a66040c3565f791a048a",
+    "ROADMAP.md": "3f63b02372a2a1911aaac8a6778687114bf76dcb03a0d76b26c80815b8f44ff5",
+    "notes/history.md": "d0533ed14ea4a74605b08f141045aa45919b5663fca347249eb80c9adcbb59be",
+    "notes/friction.md": "975e7297835a0e5567e43866f1ea07d70852dbbd5f20698b92e9324ffd97fea8",
+    "notes/friction-archive.md": "890b38a076a055fae4a037d86968ed65c8af507bb0930d680c57063221b8904c",
+    ".gitignore": "6204674f1cd7cc57e36a6c177ad053ae69c3748b0e335659c094cfa31c2bb5f4",
+    "config/dev-model.yaml": "1cefdb92c970b997eaa56745f1fc8d5d9cf5ce0b86050b962f987548bdaaf8aa",
+    "config/dev-model.local.yaml": "1d7c76ab19a3c1f550cf398b52284bb12c8b662485734add5c30abc3870f5524"
+  },
+  "setup_driver": "setup-driver.py.txt",
+  "manifest_at_installed_baseline_sha256": "aca2248ef62eec87833b964837e5d0f6551be21d69f6ed7640a819508cbf620e",
+  "controlled_input_sha256": {
+    "init-config.json": "30609a5ccbba55ccbb163a64dae788b7c571031acf4e90b7bbacd6f177b56eda",
+    "entry-point-markers.json": "13573d15825139f78e3a878fbe916f8096e924cec39be399f25688173fc3b079"
+  }
+}

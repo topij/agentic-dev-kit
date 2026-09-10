@@ -1,0 +1,17 @@
+{
+  "source_pin": "919a10b4f2ef45879011c9be5e4572e979623864",
+  "installed_pin": "af217e63906d0c398474828ddf75770c9b8ba7db",
+  "copy_ledger": [
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/conftest.py",
+      "destination": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/conftest.py",
+      "sha256": "eec1aca0e46971ffe848c968c5302128a6397c08b7a1de5c555482c0ec848ed4"
+    },
+    {
+      "source": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_kit_repo_only.py",
+      "destination": "/private/tmp/kit534-repair-20260910-3pWV3M/installed/scripts/devkit/tests/test_kit_repo_only.py",
+      "sha256": "d6bac08f3e99cdf3e9c5198de779e7ee0259be5f126179f15a30e0cd5c174f94"
+    }
+  ],
+  "manifest_sha256": "1c9b8361b9412cbbcee198fc9f710b217d2fae606013bc1f30cd51a310d8b1c4"
+}

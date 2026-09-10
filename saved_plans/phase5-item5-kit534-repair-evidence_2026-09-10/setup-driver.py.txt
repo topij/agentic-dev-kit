@@ -1,0 +1,81 @@
+from pathlib import Path
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+
+OUT = Path(__file__).resolve().parent
+roots = json.loads((OUT / 'roots.json').read_text())
+KIT, REPO = Path(roots['KIT']), Path(roots['REPO'])
+assert Path.cwd() == KIT
+assert not REPO.exists()
+pin = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=KIT, text=True).strip()
+manifest = json.loads((KIT / 'kit-manifest.json').read_text())
+REPO.mkdir()
+ledger = []
+def copy(source, target):
+    assert Path.cwd() == KIT
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, target)
+    expected = hashlib.sha256(source.read_bytes()).hexdigest()
+    assert hashlib.sha256(target.read_bytes()).hexdigest() == expected
+    ledger.append({'source': str(source), 'target': str(target), 'sha256': expected})
+
+for rel, entry in manifest['files'].items():
+    if entry['role'] == 'repo-only':
+        continue
+    parts = Path(rel).parts
+    target = REPO / 'scripts/devkit' / Path(*parts[1:]) if parts[0] == 'scripts' else REPO / rel
+    copy(KIT / rel, target)
+for pattern in ('docs/templates/*.tmpl', '.claude/commands/*.md', '.agents/skills/*/SKILL.md', '.agents/skills/*/agents/openai.yaml'):
+    for source in KIT.glob(pattern):
+        copy(source, REPO / source.relative_to(KIT))
+copy(KIT / 'config/claude-lane-settings.json', REPO / 'config/claude-lane-settings.json')
+copy(KIT / 'saved_plans/phase5-item5-b-evidence_2026-09-09/config-after-init.yaml', REPO / 'config/dev-model.yaml')
+copy(KIT / 'saved_plans/phase5-item5-b-evidence_2026-09-09/synthetic-local-overlay.yaml', REPO / 'config/dev-model.local.yaml')
+owned = {
+    'AGENTS.md': '# Synthetic adopter policy\nPreserve this policy.\n',
+    'CLAUDE.md': '@AGENTS.md\n',
+    '.agents/skills/wrap-up/SKILL.md': '# Custom wrap-up\nPreserve this authored adapter.\n',
+    'ROADMAP.md': '# Synthetic handoff\n',
+    'notes/history.md': '# History\n',
+    'notes/friction.md': '# Friction\n',
+    'notes/friction-archive.md': '# Archived friction\n',
+    '.gitignore': '__pycache__/\n.pytest_cache/\nstate/\nconfig/dev-model.local.yaml\n',
+}
+for rel, text in owned.items():
+    target = REPO / rel
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(text)
+for name, target in [('codex-hooks.json', '.codex/hooks.json'), ('claude-settings.json', '.claude/settings.json')]:
+    text = (KIT / 'scripts/tests/fixtures/shipped-registrations' / name).read_text().replace('/scripts/', '/scripts/devkit/').replace('uv run scripts/', 'uv run scripts/devkit/')
+    path = REPO / target
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+(REPO / '.codex/config.toml').write_text('[features]\nhooks = true\n')
+sys.path.insert(0, str(KIT / 'scripts'))
+import panel_prompt
+for lens in ('adversarial', 'correctness'):
+    path = REPO / '.claude/agents' / (lens + '.md')
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(panel_prompt.agent_definition(REPO, lens, 'claude'))
+
+env = dict(os.environ, PYTHONDONTWRITEBYTECODE='1', DEVKIT_STATE_ROOT=str(OUT / 'setup-state'))
+def run(args):
+    assert Path.cwd() == KIT
+    p = subprocess.run(args, cwd=REPO, env=env, capture_output=True, text=True)
+    assert p.returncode == 0, (args, p.stdout, p.stderr)
+    return p.stdout
+run(['git', 'init', '-b', 'chore/synthetic-installed-check'])
+run(['git', 'config', 'user.email', 'fixture@example.invalid'])
+run(['git', 'config', 'user.name', 'Synthetic verification'])
+record = run(['python3', '-B', str(KIT / 'scripts/kit_doctor.py'), '--root', str(REPO), '--record-install', '--from-kit', str(KIT)])
+run(['git', 'add', '.'])
+run(['git', 'commit', '-m', 'Synthetic installed test baseline'])
+baseline = run(['git', 'rev-parse', 'HEAD']).strip()
+assert run(['git', 'status', '--porcelain']) == ''
+assert run(['git', 'remote']) == ''
+(OUT / 'installed-setup.json').write_text(json.dumps({'source_pin':pin, 'installed_pin':baseline, 'root':str(REPO), 'command':record, 'copy_ledger':ledger, 'owned_sha256': {rel:hashlib.sha256((REPO / rel).read_bytes()).hexdigest() for rel in owned}}, indent=2)+'\n')
+print(json.dumps({'source_pin':pin, 'installed_pin':baseline, 'root':str(REPO), 'record':record}, indent=2))

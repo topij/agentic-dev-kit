@@ -101,8 +101,8 @@ def kit_own_marker() -> str:
     nothing looks for any more. Derived, a rename fails the shipped files that
     still carry the old one, which is the failure that matters.
 
-    Call time, not module scope, for the reason `shipped_config()` gives below:
-    a read that raises during COLLECTION aborts the whole pytest session and
+    Call time, not module scope: a read that raises during COLLECTION aborts
+    the whole pytest session and
     takes unrelated modules down with it (#226/#233), long before
     `kit_repo_only` is consulted."""
     text = (REPO_ROOT / "init.sh").read_text(encoding="utf-8")

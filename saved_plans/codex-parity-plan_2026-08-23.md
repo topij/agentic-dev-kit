@@ -267,7 +267,7 @@ maintained *Sprint status* and *Delivery plan* sections below.
     author edits is the one the renderer ships; add the appended-instruction mutation
     for `adopt`, `upgrade` and `pr-watch`.
 
-## Sprint status — reconciled 2026-09-09
+## Sprint status — reconciled 2026-09-10
 
 The machine-readable inventory and current capability judgments live in
 [`runtime-parity.md`](../docs/agentic-dev-kit/runtime-parity.md); this plan supplies
@@ -430,9 +430,12 @@ historical observation it was and is not silently refreshed.
      cache bytes. The [ITEM5-B execution](phase5-item5-b-execution_2026-09-09.md)
      records the new fixture at kit pin `8418118e40728c667c32a28a182697139bc7a5ef`,
      its consumed setup approval and complete local verification results. Installed
-     verification did not establish successful adoption; the next decision is the
-     proposed kit-only #534 repair slice. No original continuity or prior field credit
-     was recreated, and the new fixture must not be rewritten without a later decision.
+     verification did not establish successful adoption. The operator approved the
+     [kit-only #534 repair](phase5-item5-kit534-repair_2026-09-10.md) on 2026-09-10;
+     its source and synthetic-layout checks do not update or verify retained ITEM5-B.
+     The next action is an exact fixture-update decision packet against the merged
+     repair pin. No original continuity or prior field credit was recreated, and the
+     new fixture must not be rewritten without that later decision.
      Delivery item 6 is independent of these paths. The approved
      [adopt continuation](codex-adopt-initialization-field-exercise_2026-09-06.md)
      executed initialization and attempted Step 4 checks; the installed suites failed.
