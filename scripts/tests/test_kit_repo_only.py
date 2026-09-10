@@ -69,6 +69,27 @@ def test_probe():
 """
 
 
+@pytest.mark.parametrize("installed", [False, True])
+def test_generated_adapter_fixture_declares_its_renderer_dependency(tmp_path, installed):
+    root = _tree(tmp_path, """
+from conftest import generated_adapter_source
+
+
+def test_probe(tmp_path):
+    source = generated_adapter_source(tmp_path / "source")
+    assert (source / ".agents/skills/wrap-up/SKILL.md").is_file()
+""")
+    if installed:
+        library = root / "scripts/devkit/lib"
+        library.mkdir()
+        shutil.copy2(ENGINE_DIR / "lib/runtime_adapters.py", library / "runtime_adapters.py")
+    out = _run(root)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert ("1 passed" if installed else "1 skipped") in out.stdout, out.stdout
+    if not installed:
+        assert "scripts/devkit/lib/runtime_adapters.py" in out.stdout, out.stdout
+
+
 def test_a_marker_naming_an_absent_path_skips(tmp_path):
     root = _tree(tmp_path, PROBE.format(paths='"init.sh"'))
     out = _run(root)

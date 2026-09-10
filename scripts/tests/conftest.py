@@ -236,6 +236,7 @@ def generated_adapter_source(root: Path) -> Path:
     This fixture does not establish that the real kit adapters match the renderer;
     that assertion remains a separate source-only test.
     """
+    require_kit_paths((ENGINE_DIR / "lib/runtime_adapters.py").relative_to(REPO_ROOT).as_posix())
     sys.path.insert(0, str(ENGINE_DIR / "lib"))
     import runtime_adapters
 

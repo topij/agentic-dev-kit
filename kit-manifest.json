@@ -237,7 +237,7 @@
     },
     "scripts/tests/conftest.py": {
       "role": "test",
-      "sha256": "de924b99de2f6f6cc2cdaf69c57f307601a2e11d43505963bffcc54f3b1acc89"
+      "sha256": "eec1aca0e46971ffe848c968c5302128a6397c08b7a1de5c555482c0ec848ed4"
     },
     "scripts/tests/fixtures/entry-point-markers.json": {
       "role": "test",
@@ -273,7 +273,7 @@
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
-      "sha256": "e361de6f7c2de76a485307521556e16d185eadebf62907d09cd63d62dff75e4a"
+      "sha256": "d6bac08f3e99cdf3e9c5198de779e7ee0259be5f126179f15a30e0cd5c174f94"
     },
     "scripts/tests/test_kitconfig.py": {
       "role": "test",
