@@ -265,7 +265,7 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "924f5a55b15dc6749f61758a4e10db9aa4eec941d8bfe5e1b831b7ef4acc36f8"
+      "sha256": "87cca005542d8dfc3ff923f5706ae77a63a4068b8c852499c2ac05718db323bc"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
@@ -273,7 +273,7 @@
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
-      "sha256": "d6bac08f3e99cdf3e9c5198de779e7ee0259be5f126179f15a30e0cd5c174f94"
+      "sha256": "2002fb473dfffedc6125303bab6523c973bf628171c986490ed9bf368836b8e7"
     },
     "scripts/tests/test_kitconfig.py": {
       "role": "test",

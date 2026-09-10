@@ -165,8 +165,11 @@ def test_missing_initializer_input_is_a_decline_only_outside_the_kit(
     witness = tmp_path / conftest.KIT_ONLY_WITNESS
     witness.parent.mkdir(parents=True)
     witness.write_text("# source witness\n", encoding="utf-8")
-    with pytest.raises(pytest.fail.Exception, match="missing from the kit"):
-        shipped_test_input(name)
+    try:
+        with pytest.raises(pytest.fail.Exception, match="missing from the kit"):
+            shipped_test_input(name)
+    except pytest.skip.Exception as exc:
+        pytest.fail(f"missing kit input skipped instead of failing: {exc}")
 
 
 # A v1-schema config with no `paths.engines`, so a run must call
