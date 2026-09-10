@@ -1,0 +1,16 @@
+{
+  "decision": "ITEM5-B-UPDATE-01",
+  "fixture_input": "07bacf5bda3b1e7a6718c7d4528336ef81dc2143",
+  "ledger_sha256": "98d67eefc4505f717298500fe91750c9f34d80bd8984e5d0a5c81f2b7b08abb8",
+  "operator_message": "I approve ITEM5-B-UPDATE-01 as scoped",
+  "packet_revision": "4ee132ae4f4a4a0d0fd600e6da6e5325e5f68b34",
+  "packet_sha256": "18aa16264d444479b27579b0e7660e1c3a04f45498fd4167c584af8ea7ab6d37",
+  "recorded_at": "2026-09-10T11:05:24.375806+00:00",
+  "repair_pin": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac",
+  "roots": {
+    "KIT": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source",
+    "OUT": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-60fe0dc-20260910",
+    "REPO": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture"
+  },
+  "source_input": "8418118e40728c667c32a28a182697139bc7a5ef"
+}

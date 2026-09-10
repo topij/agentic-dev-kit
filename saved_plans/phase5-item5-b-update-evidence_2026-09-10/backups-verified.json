@@ -1,0 +1,9 @@
+{
+  "files": {
+    "fixture-before.bundle": "5c5cb2bf8c025b52b65569b25423af40901e21dc5c7a19e22c2ad418e80552e5",
+    "fixture-before.tar": "646e2ab5a1c6832e690876f8ea39c64a48c5bfa1898f7c5ed7ace0c9529b6c18",
+    "source-before.bundle": "2d2aca4342e7a8848576755b4baf8370be758983faf567cd24bc917cecf90dad",
+    "source-before.tar": "8a0c753fd842c6b09afdb43cfd8ac3b94e6eb91e4be5f0844e03728ebe6d5562"
+  },
+  "observed_at": "2026-09-10T11:05:28.448252+00:00"
+}

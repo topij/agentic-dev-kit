@@ -1,0 +1,12 @@
+{
+  "branch": "chore/adopt-agentic-dev-kit",
+  "config_sha256": "cae33efdb02cf774435c1ff9cb16bcc1014606908530c6e1dc727615fe3e8cda",
+  "git_directory": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.git",
+  "head_bytes": "ref: refs/heads/chore/adopt-agentic-dev-kit\n",
+  "index_sha256": "66e7ebdb31deadda2f0a12b8f139dfe6fd90ef8b75b8a52bdf050e2c4fb1b448",
+  "refs": "07bacf5bda3b1e7a6718c7d4528336ef81dc2143 HEAD\n07bacf5bda3b1e7a6718c7d4528336ef81dc2143 refs/heads/chore/adopt-agentic-dev-kit\n",
+  "remotes": "",
+  "revision": "07bacf5bda3b1e7a6718c7d4528336ef81dc2143",
+  "root": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+  "status": ""
+}

@@ -1,0 +1,87 @@
+{
+  "adoption_completion_claimed": false,
+  "after_inventory_differences": {},
+  "baseline_sha256": "9e2196df3b7239b599819abcfc20271b0389b70f78f22837a0709575145b9126",
+  "client_exercises_performed": false,
+  "cockpit_revision": "4ee132ae4f4a4a0d0fd600e6da6e5325e5f68b34",
+  "decision": "ITEM5-B-UPDATE-01",
+  "fixture_branch": "chore/item5-b-update-60fe0dc",
+  "fixture_pr_created": false,
+  "fixture_remote_added": false,
+  "fixture_revision": "413132b01d14c735d94753231bf325904135285f",
+  "historical_fixture_revision": "07bacf5bda3b1e7a6718c7d4528336ef81dc2143",
+  "item6_replay_repeated": false,
+  "original_paths": {
+    "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source": {
+      "exists": false,
+      "lexists": false
+    },
+    "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture": {
+      "exists": false,
+      "lexists": false
+    }
+  },
+  "preservation_hashes_match": true,
+  "recorded_at": "2026-09-10T11:33:15.922161+00:00",
+  "rollback_evidence": "backups-verified.json",
+  "rollback_performed": false,
+  "source_revision": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac",
+  "verification": {
+    "fixture-document-budget": {
+      "exit_code": 0,
+      "failure_or_error_nodes": [],
+      "terminal_summary_lines": []
+    },
+    "installed-doctor": {
+      "exit_code": 0,
+      "failure_or_error_nodes": [],
+      "terminal_summary_lines": []
+    },
+    "installed-suite": {
+      "exit_code": 0,
+      "failure_or_error_nodes": [],
+      "terminal_summary_lines": [
+        "2129 passed, 128 skipped in 898.84s (0:14:58)"
+      ]
+    },
+    "source-adapter-report": {
+      "exit_code": 0,
+      "failure_or_error_nodes": [],
+      "terminal_summary_lines": []
+    },
+    "source-make-test": {
+      "exit_code": 2,
+      "failure_or_error_nodes": [
+        "FAILED scripts/tests/test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero"
+      ],
+      "terminal_summary_lines": [
+        "1 failed, 2497 passed, 1 skipped in 472.05s (0:07:52)"
+      ]
+    },
+    "syntax-dev-session": {
+      "exit_code": 0,
+      "failure_or_error_nodes": [],
+      "terminal_summary_lines": []
+    },
+    "syntax-init": {
+      "exit_code": 0,
+      "failure_or_error_nodes": [],
+      "terminal_summary_lines": []
+    },
+    "syntax-pre-push": {
+      "exit_code": 0,
+      "failure_or_error_nodes": [],
+      "terminal_summary_lines": []
+    },
+    "syntax-reconcile": {
+      "exit_code": 0,
+      "failure_or_error_nodes": [],
+      "terminal_summary_lines": []
+    },
+    "syntax-repo-root": {
+      "exit_code": 0,
+      "failure_or_error_nodes": [],
+      "terminal_summary_lines": []
+    }
+  }
+}

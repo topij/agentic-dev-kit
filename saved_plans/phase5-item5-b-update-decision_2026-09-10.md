@@ -1,9 +1,11 @@
 # ITEM5-B-UPDATE-01 — operator decision packet
 
-**Decision pending.** Approving this packet would authorize the bounded source advance,
-fixture update, baseline recording, local verification and evidence below. This session
-prepared the proposal read-only against the retained trees. Setup approval and the
-kit-only repair approval are consumed; neither authorizes these writes.
+**Approved on 2026-09-10.** The operator approved `ITEM5-B-UPDATE-01 as scoped`.
+The [execution record](phase5-item5-b-update-execution_2026-09-10.md) owns the applied
+update, verification and next decision. The procedure below preserves the approved
+scope; this consumed approval does not authorize repeating the update. The original
+proposal was prepared read-only, independently of the consumed setup and kit-only
+repair approvals.
 
 ## Inputs and delivery
 
@@ -261,13 +263,12 @@ owns the corrected execution steps.
 
 ## Operator choice and remaining scope
 
-Recommended decision: **`Approve ITEM5-B-UPDATE-01 as scoped`**. This authorizes only
-the source/fixture/evidence writes above, the local verification, bounded rollback,
-and an execution result plus ordinary kit wrap-up/ready-PR review path. The standing
-merge-when-clean authority applies to that kit record work; it grants no fixture remote,
-fixture PR, client exercise, tracker payload or user-profile change. **`Hold
-ITEM5-B-UPDATE-01`** preserves the inputs and leaves this proposal pending. A changed
-file set, pin, path, ownership or test strategy needs a revised packet before approval.
+The operator approved this exact scope on 2026-09-10: the source/fixture/evidence
+writes above, local verification, bounded rollback and an execution result plus ordinary
+kit wrap-up/ready-PR review. Standing merge-when-clean authority applies to that kit
+record work. It grants no fixture remote, fixture PR, client exercise, tracker payload
+or user-profile change. Any changed file set, pin, path, ownership, test strategy or
+repeat attempt requires a revised packet before approval.
 
 Phase 5 item 5 remains incomplete: final preserved-file acceptance, fixture PR lifecycle,
 adoption completion and untested systemize routes retain separate exact decisions.
@@ -278,7 +279,8 @@ stay complete at their recorded refs; do not repeat or re-credit cs-toolkit
 outside Phase 6. Kit #724 already carries the #722 record batch; this packet creates
 no replacement batch and restores no deleted explanation.
 
-**Next action:** the operator decides ITEM5-B-UPDATE-01; an approved execution begins
-with the retained-input checks, not with copying or repeating setup. The
+**Next action:** use the [execution record](phase5-item5-b-update-execution_2026-09-10.md)
+for preserved-file acceptance and the exact next field-exit decision. Do not repeat setup
+or this update under its consumed approval. The
 [maintained sprint status](codex-parity-plan_2026-08-23.md#sprint-status--reconciled-2026-09-10)
 continues to own delivery order and completion.

@@ -123,3 +123,9 @@ repeat ITEM5-B setup or reconstruct either original missing path.
 The [repair record](phase5-item5-kit534-repair_2026-09-10.md) supersedes this record's
 historical approval request and next-session instruction. The retained fixture remains
 subject to its separate update decision; this correction does not renew setup approval.
+
+**Update continuation — 2026-09-10:** the operator subsequently approved
+[ITEM5-B-UPDATE-01](phase5-item5-b-update-decision_2026-09-10.md). Its
+[execution record](phase5-item5-b-update-execution_2026-09-10.md) owns the repaired
+fixture's local verification and the next field-exit decision. The setup record and
+its retained evidence remain historical inputs, not repeat-execution authority.

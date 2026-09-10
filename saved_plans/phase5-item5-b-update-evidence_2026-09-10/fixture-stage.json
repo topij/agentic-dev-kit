@@ -1,0 +1,84 @@
+{
+  "after": {
+    "fixture": {
+      "branch": "chore/item5-b-update-60fe0dc",
+      "config_sha256": "cae33efdb02cf774435c1ff9cb16bcc1014606908530c6e1dc727615fe3e8cda",
+      "git_directory": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.git",
+      "head_bytes": "ref: refs/heads/chore/item5-b-update-60fe0dc\n",
+      "index_sha256": "1e0d88644639b8d03ae4e1bdbd68d8e7acbe89729a8affc36c84412fd1f99584",
+      "refs": "07bacf5bda3b1e7a6718c7d4528336ef81dc2143 HEAD\n07bacf5bda3b1e7a6718c7d4528336ef81dc2143 refs/heads/chore/adopt-agentic-dev-kit\n07bacf5bda3b1e7a6718c7d4528336ef81dc2143 refs/heads/chore/item5-b-update-60fe0dc\n",
+      "remotes": "",
+      "revision": "07bacf5bda3b1e7a6718c7d4528336ef81dc2143",
+      "root": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+      "status": "M  kit-manifest.json\nM  scripts/devkit/kit_doctor.py\nM  scripts/devkit/tests/conftest.py\nA  scripts/devkit/tests/fixtures/entry-point-markers.json\nA  scripts/devkit/tests/fixtures/init-config.json\nM  scripts/devkit/tests/test_init_sh.py\nM  scripts/devkit/tests/test_kit_doctor.py\nM  scripts/devkit/tests/test_kit_repo_only.py\nM  scripts/devkit/tests/test_mutation_gate.py\nM  scripts/devkit/tests/test_portability.py\n"
+    },
+    "source": {
+      "branch": "DETACHED",
+      "config_sha256": "cae33efdb02cf774435c1ff9cb16bcc1014606908530c6e1dc727615fe3e8cda",
+      "git_directory": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/.git",
+      "head_bytes": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac\n",
+      "index_sha256": "d8d3b7cc426fbb2421d928a7449a368f0be636ed2994904644bc8fb64393d43a",
+      "refs": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac HEAD\nedc199f42bc65b1850172ea79b791ef358577ae1 refs/heads/chore/item5-decision-packet-20260909\n",
+      "remotes": "",
+      "revision": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac",
+      "root": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source",
+      "status": ""
+    }
+  },
+  "argv": [
+    "git",
+    "add",
+    "--",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/kit_doctor.py",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/conftest.py",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/fixtures/entry-point-markers.json",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/fixtures/init-config.json",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_init_sh.py",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_kit_doctor.py",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_kit_repo_only.py",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_mutation_gate.py",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_portability.py",
+    "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/kit-manifest.json"
+  ],
+  "before": {
+    "fixture": {
+      "branch": "chore/item5-b-update-60fe0dc",
+      "config_sha256": "cae33efdb02cf774435c1ff9cb16bcc1014606908530c6e1dc727615fe3e8cda",
+      "git_directory": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/.git",
+      "head_bytes": "ref: refs/heads/chore/item5-b-update-60fe0dc\n",
+      "index_sha256": "66e7ebdb31deadda2f0a12b8f139dfe6fd90ef8b75b8a52bdf050e2c4fb1b448",
+      "refs": "07bacf5bda3b1e7a6718c7d4528336ef81dc2143 HEAD\n07bacf5bda3b1e7a6718c7d4528336ef81dc2143 refs/heads/chore/adopt-agentic-dev-kit\n07bacf5bda3b1e7a6718c7d4528336ef81dc2143 refs/heads/chore/item5-b-update-60fe0dc\n",
+      "remotes": "",
+      "revision": "07bacf5bda3b1e7a6718c7d4528336ef81dc2143",
+      "root": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+      "status": " M kit-manifest.json\n M scripts/devkit/kit_doctor.py\n M scripts/devkit/tests/conftest.py\n M scripts/devkit/tests/test_init_sh.py\n M scripts/devkit/tests/test_kit_doctor.py\n M scripts/devkit/tests/test_kit_repo_only.py\n M scripts/devkit/tests/test_mutation_gate.py\n M scripts/devkit/tests/test_portability.py\n?? scripts/devkit/tests/fixtures/entry-point-markers.json\n?? scripts/devkit/tests/fixtures/init-config.json\n"
+    },
+    "source": {
+      "branch": "DETACHED",
+      "config_sha256": "cae33efdb02cf774435c1ff9cb16bcc1014606908530c6e1dc727615fe3e8cda",
+      "git_directory": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source/.git",
+      "head_bytes": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac\n",
+      "index_sha256": "d8d3b7cc426fbb2421d928a7449a368f0be636ed2994904644bc8fb64393d43a",
+      "refs": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac HEAD\nedc199f42bc65b1850172ea79b791ef358577ae1 refs/heads/chore/item5-decision-packet-20260909\n",
+      "remotes": "",
+      "revision": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac",
+      "root": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source",
+      "status": ""
+    }
+  },
+  "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+  "ended_at": "2026-09-10T11:06:44.601366+00:00",
+  "environment_overrides": {
+    "DEVKIT_STATE_ROOT": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-60fe0dc-20260910/fixture-state",
+    "PYTEST_ADDOPTS": "-o cache_dir=/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-60fe0dc-20260910/fixture-pytest-cache -ra",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "RUFF_CACHE_DIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-60fe0dc-20260910/ruff-cache",
+    "TMPDIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-60fe0dc-20260910/tmp",
+    "UV_CACHE_DIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-60fe0dc-20260910/uv-cache",
+    "UV_TOOL_DIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-60fe0dc-20260910/uv-tools"
+  },
+  "exit_code": 0,
+  "started_at": "2026-09-10T11:06:44.168811+00:00",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

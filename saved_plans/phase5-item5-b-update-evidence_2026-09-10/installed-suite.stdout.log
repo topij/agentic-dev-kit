@@ -1,0 +1,63 @@
+kit tests:
+  /Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/lib/state_paths/tests/test_state_paths.py
+  /Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_check_memory_budget.py
+  /Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_ci_workflow.py
+  /Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_init_sh.py
+  /Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_kit_doctor.py
+  /Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_kit_repo_only.py
+  /Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_kitconfig.py
+  /Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_lane_launcher.py
+  /Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_mutation_gate.py
+  /Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_panel_prompt.py
+  /Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_portability.py
+  /Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_pr_followup_hook.py
+  /Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_pr_watch.py
+  /Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_pre_push_hook.py
+  /Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_reconcile_sessions.py
+  /Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_repo_layout.py
+  /Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/tests/test_state_guard.py
+........................................................................ [  3%]
+.sssssssssssssssssssssssssssssssssssssssssssssssssss.................... [  6%]
+........................................................................ [  9%]
+...............................ss....................................... [ 12%]
+........................................................................ [ 15%]
+........................................................................ [ 19%]
+..............s...................s..................................... [ 22%]
+.....................s.s..........s..................................... [ 25%]
+...................s.ss................................................. [ 28%]
+...................................s.................................... [ 31%]
+........................................................................ [ 35%]
+........................................................................ [ 38%]
+........................................................................ [ 41%]
+...................................................................sssss [ 44%]
+ssssssssssssssssssssssssssssssssssssssssssss............................ [ 47%]
+.................ssss................................................... [ 51%]
+........................................................................ [ 54%]
+........................................................................ [ 57%]
+........................................................................ [ 60%]
+...........s....ss...................................................... [ 63%]
+........................................................................ [ 66%]
+......s.s.ss......s.....s.ssss.......................................... [ 70%]
+........................................................................ [ 73%]
+........................................................................ [ 76%]
+........................................................................ [ 79%]
+........................................................................ [ 82%]
+........................................................................ [ 86%]
+........................................................................ [ 89%]
+........................................................................ [ 92%]
+........................................................................ [ 95%]
+........................................................................ [ 98%]
+.........................                                                [100%]
+=========================== short test summary info ============================
+SKIPPED [50] scripts/devkit/tests/conftest.py:326: needs: not vendored in this tree: .github/workflows/test.yml
+SKIPPED [16] scripts/devkit/tests/conftest.py:315: asserts about the kit's own shipped source; this tree carries a recorded install baseline (kit_commit present)
+SKIPPED [4] scripts/devkit/tests/conftest.py:326: needs: not vendored in this tree: CHANGELOG.md
+SKIPPED [1] scripts/devkit/tests/test_kit_doctor.py:1226: not the kit's own tree: scripts/verify_live_validation_bundle.py is absent
+SKIPPED [3] scripts/devkit/tests/conftest.py:326: needs: not vendored in this tree: scripts/kit_doctor.py
+SKIPPED [49] scripts/devkit/tests/test_kit_repo_only.py:386: not a complete kit tree — a marked path being absent here is the mechanism working, not a defect
+SKIPPED [1] scripts/devkit/tests/test_mutation_gate.py:313: no `mutation-test` target here (or no make); nothing to pin
+SKIPPED [1] scripts/devkit/tests/conftest.py:326: needs: not vendored in this tree: CHANGELOG.md, docs/CLAUDE-sections.md, docs/parallel-howto.md, scripts/dev_session.sh, scripts/hooks/pr_followup_hook.py, scripts/pr_watch.py
+SKIPPED [1] scripts/devkit/tests/conftest.py:326: needs: not vendored in this tree: CHANGELOG.md, scripts/dev_session.sh, scripts/launch_lane.py, scripts/reconcile_sessions.sh, scripts/tests/test_lane_launcher.py, scripts/tests/test_portability.py, scripts/tests/test_reconcile_sessions.py
+SKIPPED [1] scripts/devkit/tests/conftest.py:326: needs: not vendored in this tree: saved_plans/codex-hooks-live-probe/.codex/hooks.json
+SKIPPED [1] scripts/devkit/tests/conftest.py:326: needs: not vendored in this tree: saved_plans/codex-safety-doctrine-live-probe
+2129 passed, 128 skipped in 898.84s (0:14:58)

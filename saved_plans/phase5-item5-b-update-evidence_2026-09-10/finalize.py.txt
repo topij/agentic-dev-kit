@@ -1,0 +1,51 @@
+"""Retain the approved attempt's terminal observations without repairing failures."""
+import importlib.util
+import json
+import os
+import re
+spec=importlib.util.spec_from_file_location('attempt','/private/tmp/item5-b-update-execute-20260910.py')
+a=importlib.util.module_from_spec(spec)
+spec.loader.exec_module(a)
+committed=json.loads((a.OUT/'attempt-committed.json').read_text())
+for role,root in [('fixture',a.REPO),('source',a.KIT)]:
+    assert a.identity(root)==committed[role]
+    after=a.inventory(root)
+    before=json.loads((a.OUT/f'{role}-before-checks-inventory.json').read_text())
+    assert before==after
+    a.dump(f'{role}-final-inventory.json',after)
+    a.dump(f'{role}-final-git.json',a.identity(root))
+a.dump('preserved-final.json',a.preserved())
+a.dump('configuration-final.json',a.configurations())
+originals={p:{'exists':os.path.exists(p),'lexists':os.path.lexists(p)} for p in a.PROPOSAL['original_paths']}
+assert not any(v['lexists'] for v in originals.values())
+a.dump('original-paths-final.json',originals)
+source_files=json.loads((a.OUT/'source-pinned-tracked-files.json').read_text())
+replay={}
+for rel in a.PROPOSAL['replay_evidence_unchanged_between_source_pins']:
+    actual=a.digest((a.KIT/rel).read_bytes())
+    assert actual==source_files[rel]['sha256']
+    replay[rel]=actual
+a.dump('replay-evidence-final.json',replay)
+commands={}
+for name in ['installed-doctor','source-adapter-report','fixture-document-budget','installed-suite','source-make-test','syntax-dev-session','syntax-reconcile','syntax-repo-root','syntax-pre-push','syntax-init']:
+    report=json.loads((a.OUT/f'{name}.json').read_text())
+    stdout=(a.OUT/f'{name}.stdout.log').read_bytes()
+    stderr=(a.OUT/f'{name}.stderr.log').read_bytes()
+    assert a.digest(stdout)==report['stdout_sha256']
+    assert a.digest(stderr)==report['stderr_sha256']
+    lines=stdout.decode().splitlines()
+    report['terminal_summary_lines']=[line for line in lines if re.search(r'\b(?:failed|passed|skipped|error)\b.*\bin [0-9.]+s',line)]
+    report['failure_or_error_nodes']=[line for line in lines if line.startswith(('FAILED ','ERROR '))]
+    commands[name]=report
+a.dump('verification-commands.json',commands)
+a.dump('result.json',{'decision':'ITEM5-B-UPDATE-01','recorded_at':a.now(),'cockpit_revision':a.git(a.COCKPIT,'rev-parse','HEAD').decode().strip(),
+                      'source_revision':a.REPAIR,'fixture_revision':committed['fixture']['revision'],
+                      'fixture_branch':a.ATTEMPT,'historical_fixture_revision':a.FIXTURE,
+                      'baseline_sha256':a.digest((a.REPO/'kit-manifest.json').read_bytes()),
+                      'verification':{k:{'exit_code':v['exit_code'],'terminal_summary_lines':v['terminal_summary_lines'],'failure_or_error_nodes':v['failure_or_error_nodes']} for k,v in commands.items()},
+                      'after_inventory_differences':{},'preservation_hashes_match':True,
+                      'rollback_performed':False,'rollback_evidence':'backups-verified.json',
+                      'original_paths':originals,'client_exercises_performed':False,'fixture_remote_added':False,'fixture_pr_created':False,
+                      'adoption_completion_claimed':False,'item6_replay_repeated':False})
+a.dump('sha256.json',{p.name:a.digest(p.read_bytes()) for p in sorted(a.OUT.iterdir()) if p.is_file()})
+print((a.OUT/'result.json').read_text())
