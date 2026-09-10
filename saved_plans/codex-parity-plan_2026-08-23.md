@@ -433,9 +433,12 @@ historical observation it was and is not silently refreshed.
      verification did not establish successful adoption. The operator approved the
      [kit-only #534 repair](phase5-item5-kit534-repair_2026-09-10.md) on 2026-09-10;
      its source and synthetic-layout checks do not update or verify retained ITEM5-B.
-     The next action is an exact fixture-update decision packet against the merged
-     repair pin. No original continuity or prior field credit was recreated, and the
-     new fixture must not be rewritten without that later decision.
+     The [fixture-update packet](phase5-item5-b-update-decision_2026-09-10.md)
+     is prepared against repair merge `60fe0dc7ad68922d064c0cf401cff2c4c6d607ac`,
+     with the final review receipt read back and a retained read-only inventory audit.
+     The next action is the operator's exact ITEM5-B-UPDATE-01 decision. No original
+     continuity or prior field credit was recreated, and the retained fixture must
+     not be rewritten before that decision.
      Delivery item 6 is independent of these paths. The approved
      [adopt continuation](codex-adopt-initialization-field-exercise_2026-09-06.md)
      executed initialization and attempted Step 4 checks; the installed suites failed.

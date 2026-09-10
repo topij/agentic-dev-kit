@@ -14,10 +14,31 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-10 — approved kit test repair; retained ITEM5-B update is separate.
+Last updated: 2026-09-10 — ITEM5-B update decision packet prepared; execution awaits approval.
 Phase 5 delivery item 5 remains incomplete; item 6's replay remains complete.
 
-## Latest session — 2026-09-10 (kit test repair, in Codex)
+## Latest session — 2026-09-10 (ITEM5-B update packet, in Codex)
+
+The [update packet](../saved_plans/phase5-item5-b-update-decision_2026-09-10.md)
+binds the proposed source advance, fixture payloads, ownership choices, baseline,
+verification and rollback to the delivered repair pin. Its read-only audit retains
+the inventory comparisons and the exact source/fixture write ledger. PR #726's
+final receipt was read before relying on delivery. No retained fixture/source update,
+initializer, client exercise or replay was performed.
+
+The packet's execution requires a new exact operator decision. Prior setup and
+kit-only repair approvals are consumed. Completed item 6, its replay evidence,
+the accepted #723 deferral and #585's earlier placement remain as recorded.
+The budget reminder's triage intake preserved the existing completed-state record;
+no fresh sweep or tracker payload was authorized by this packet.
+
+▶ Next: `$session-start` — obtain the operator's decision on ITEM5-B-UPDATE-01 in
+`saved_plans/phase5-item5-b-update-decision_2026-09-10.md`. If approved, recheck its
+retained inputs before executing only that packet; otherwise preserve them unchanged.
+
+______________________________________________________________________
+
+## Session — 2026-09-10 (kit test repair, in Codex)
 
 The operator approved the kit-only #534 slice from the ITEM5-B execution record.
 The [repair record](../saved_plans/phase5-item5-kit534-repair_2026-09-10.md) retains
@@ -26,10 +47,7 @@ limits. Controlled initializer inputs and generated adapter fixtures replace ass
 about adopter-owned files. The drift-liveness parent follows its child's applicability.
 The retained ITEM5-B baseline and completed item 6 replay were not rewritten.
 
-▶ Next: `$session-start` — prepare an exact ITEM5-B update decision packet against
-the merged repair pin, using `saved_plans/phase5-item5-kit534-repair_2026-09-10.md`.
-Recheck the retained inventory; obtain the operator's decision before fixture writes.
-Do not repeat consumed setup or reconstruct either original missing path.
+The latest session block owns the subsequent decision packet and next action.
 
 ______________________________________________________________________
 
