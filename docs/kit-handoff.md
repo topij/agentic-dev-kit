@@ -14,32 +14,36 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-11 — approved ITEM5-B review follow-up applied; operator merge hold.
+Last updated: 2026-09-11 — ITEM5-B kit repair merged; retained-update decision remains separate.
 Phase 5 delivery item 5 remains incomplete; item 6's replay remains complete.
 
-## Latest session — 2026-09-11 (ITEM5-B review follow-up, in Codex)
+## Latest session — 2026-09-11 (ITEM5-B repair delivery, in Codex)
 
-The operator approved ITEM5-B-KIT-REVIEW-02 as scoped. The [execution record](../saved_plans/phase5-item5-b-review-followup-execution_2026-09-11.md)
-binds authority, pre-fix review receipts, original bytes and applied hashes. The kit
-documents the accepted inherited special-file-root limitation and adds root-symlink
-compatibility tests with the supplied release manifest. A FIFO can still obstruct
-engine state persistence; the approval does not claim that mechanism is repaired.
+The operator approved ITEM5-B-KIT-REVIEW-02 and subsequently said “merge when ready.”
+[PR #731](https://github.com/topij/agentic-dev-kit/pull/731) merged as
+`e6d6e77d118454349f8e8bb046e99ef3009c5f5c`, from reviewed head
+`1bd4e10b423b0b4b230fb1a481bbc477de784a61`. The
+[merge checkpoint](https://github.com/topij/agentic-dev-kit/pull/731#issuecomment-5629015678)
+retains the exact-head merge, forge readback and completed review disposition.
+The [execution record](../saved_plans/phase5-item5-b-review-followup-execution_2026-09-11.md)
+links the complete panel reports and distinguishes hosted success from the disclosed
+local #393 failure. The accepted inherited special-file-root limitation remains;
+separate shell parses covered #561's omitted checks without repairing its recipe.
 
-`make test` in `/Users/topi/Coding/agentic-dev-kit` at
-`1d6c5413148c46ee7a0a4cf86e47e403632610fb` on 2026-09-11 reached pytest's terminal summary with the disclosed #393
-failure. The execution evidence retains the actual result, manifest self-check and
-separate #561 shell parses. [PR #731](https://github.com/topij/agentic-dev-kit/pull/731)
-owns the final full-panel reports, hosted results and exact head-bound disposition.
-Repair merge remains operator-held; an earlier review is not evidence for a later head.
+The resume readback used `gh pr view 731` and `gh run list` with the kit repository
+and merge SHA from `/Users/topi/Coding/agentic-dev-kit` at
+`1bd4e10b423b0b4b230fb1a481bbc477de784a61` on 2026-09-11: merge confirmed and
+[post-merge Test run](https://github.com/topij/agentic-dev-kit/actions/runs/34558574354) succeeded.
+This record follow-up began from that protected-main merge.
 
-No retained update, baseline refresh, initialization, client/profile/tracker exercise
-or fixture merge was performed. Ownership acceptance does not establish functionality
-or field exit. Item 6's replay, #723's deferral, #585's earlier placement and #724's
-delivered #722 batch are preserved. The friction sweep stays parked.
+Ownership acceptance does not establish functionality or field exit. The repair did
+not update the retained installation. Item 6's replay, #723's deferral, #585's earlier
+placement and #724's delivered #722 batch are preserved. The friction sweep stays parked.
 
-▶ Next: `$session-start` — read back PR #731's final review/CI disposition and exact
-reviewed head, then decide operator merge. Keep retained updates separately scoped;
-do not repeat UPDATE-01 or the completed replay.
+▶ Next: prepare the exact retained-update decision packet for the merged #731 repair,
+starting from the post-acceptance checkpoint linked in the execution record. Preparation
+is authorized; execution needs its own exact decision. Do not repeat UPDATE-01 or the
+completed replay, refresh the baseline, exercise clients/profiles/trackers, or merge the fixture PR.
 
 ______________________________________________________________________
 

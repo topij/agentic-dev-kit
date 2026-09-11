@@ -4,7 +4,10 @@
 question below. The [execution record](phase5-item5-b-review-followup-execution_2026-09-11.md)
 binds that authority to the unchanged proposal ledger and applied payloads. The
 preparation evidence retains its historical approval fields and hashes. The inherited
-special-file-root limitation is accepted for this repair; it is not fixed. Merge remains operator-held.
+special-file-root limitation is accepted for this repair; it is not fixed.
+**Delivery amendment, 2026-09-11:** the operator later said “merge when ready”; the
+execution record links the verified #731 merge. That separate authorization discharged
+the merge hold without changing the preserved approval question or repair ledger.
 
 The preserved proposal and its verification/rollback requirements follow.
 

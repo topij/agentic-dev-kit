@@ -51,10 +51,10 @@ retain argv, directory, revision, timestamps, environment and output hashes.
   and `sh -n init.sh` exited successfully. These explicitly cover #561's omitted parses;
   they do not repair the recipe or establish shell behavior.
 
-The independent adversarial/correctness reports, actual rollout compute, mutations,
-restoration evidence, hosted results and final exact-head disposition belong on the
-repair PR. Read that disposition and revalidate its head before any merge decision;
-an earlier fixture or record panel does not review this implementation.
+The [follow-up execution](phase5-item5-b-review-followup-execution_2026-09-11.md)
+links the repair PR's final independent reports, actual rollout compute, mutations,
+restoration evidence, hosted results and exact-head disposition. It also records the
+subsequently authorized merge; earlier fixture or record panels do not review this implementation.
 
 ## Preservation, limits and rollback
 
@@ -90,5 +90,6 @@ pre-fix receipts remain in the [follow-up packet](phase5-item5-b-review-followup
 The operator approved that follow-up on 2026-09-11; its [execution record](phase5-item5-b-review-followup-execution_2026-09-11.md)
 owns the subsequent payloads and review handoff. The earlier panel is not a receipt for a later head.
 
-**Next:** follow that execution to PR #731's exact reviewed-head operator merge decision.
-A retained update still needs a separate exact decision; UPDATE-01 is consumed and fixture merge is excluded.
+**Next:** follow that execution's verified #731 merge and prepare the exact retained-update
+decision packet. A retained update still needs a separate exact execution decision;
+UPDATE-01 is consumed and fixture merge is excluded.
