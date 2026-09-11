@@ -1,0 +1,202 @@
+[
+  {
+    "case": "new-empty",
+    "layout": "scripts",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/uv-cache/builds-v0/.tmplfrNlG/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/probe-correctness-b018a054-f53vxl7n/scripts/lib/state_paths/tests",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/probe-correctness-b018a054-f53vxl7n",
+    "source_revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+    "date": "2026-09-10T19:37:49.789333+00:00",
+    "returncode": 1,
+    "expected_guard": true,
+    "filesystem_postcondition": true
+  },
+  {
+    "case": "delete-file",
+    "layout": "scripts",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/uv-cache/builds-v0/.tmplfrNlG/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/probe-correctness-b018a054-fipch8ej/scripts/lib/state_paths/tests",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/probe-correctness-b018a054-fipch8ej",
+    "source_revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+    "date": "2026-09-10T19:37:50.021153+00:00",
+    "returncode": 1,
+    "expected_guard": true,
+    "filesystem_postcondition": true
+  },
+  {
+    "case": "file-to-directory",
+    "layout": "scripts",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/uv-cache/builds-v0/.tmplfrNlG/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/probe-correctness-b018a054-qcg4od9q/scripts/lib/state_paths/tests",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/probe-correctness-b018a054-qcg4od9q",
+    "source_revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+    "date": "2026-09-10T19:37:50.252120+00:00",
+    "returncode": 1,
+    "expected_guard": true,
+    "filesystem_postcondition": true
+  },
+  {
+    "case": "directory-to-file",
+    "layout": "scripts",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/uv-cache/builds-v0/.tmplfrNlG/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/probe-correctness-b018a054-vonr6o57/scripts/lib/state_paths/tests",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/probe-correctness-b018a054-vonr6o57",
+    "source_revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+    "date": "2026-09-10T19:37:50.483804+00:00",
+    "returncode": 1,
+    "expected_guard": true,
+    "filesystem_postcondition": true
+  },
+  {
+    "case": "symlink-target-content",
+    "layout": "scripts",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/uv-cache/builds-v0/.tmplfrNlG/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/probe-correctness-b018a054-xv3ibu_f/scripts/lib/state_paths/tests",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/probe-correctness-b018a054-xv3ibu_f",
+    "source_revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+    "date": "2026-09-10T19:37:50.717190+00:00",
+    "returncode": 0,
+    "expected_guard": false,
+    "filesystem_postcondition": true
+  },
+  {
+    "case": "new-empty",
+    "layout": "scripts/devkit",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/uv-cache/builds-v0/.tmplfrNlG/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/probe-correctness-b018a054-qmff9o6x/scripts/devkit/lib/state_paths/tests",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/probe-correctness-b018a054-qmff9o6x",
+    "source_revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+    "date": "2026-09-10T19:37:50.949119+00:00",
+    "returncode": 1,
+    "expected_guard": true,
+    "filesystem_postcondition": true
+  },
+  {
+    "case": "delete-file",
+    "layout": "scripts/devkit",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/uv-cache/builds-v0/.tmplfrNlG/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/probe-correctness-b018a054-jdvv8r_a/scripts/devkit/lib/state_paths/tests",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/probe-correctness-b018a054-jdvv8r_a",
+    "source_revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+    "date": "2026-09-10T19:37:51.181288+00:00",
+    "returncode": 1,
+    "expected_guard": true,
+    "filesystem_postcondition": true
+  },
+  {
+    "case": "file-to-directory",
+    "layout": "scripts/devkit",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/uv-cache/builds-v0/.tmplfrNlG/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/probe-correctness-b018a054-sxbhhs6s/scripts/devkit/lib/state_paths/tests",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/probe-correctness-b018a054-sxbhhs6s",
+    "source_revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+    "date": "2026-09-10T19:37:51.414882+00:00",
+    "returncode": 1,
+    "expected_guard": true,
+    "filesystem_postcondition": true
+  },
+  {
+    "case": "directory-to-file",
+    "layout": "scripts/devkit",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/uv-cache/builds-v0/.tmplfrNlG/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/probe-correctness-b018a054-6yg3ijs4/scripts/devkit/lib/state_paths/tests",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/probe-correctness-b018a054-6yg3ijs4",
+    "source_revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+    "date": "2026-09-10T19:37:51.646701+00:00",
+    "returncode": 1,
+    "expected_guard": true,
+    "filesystem_postcondition": true
+  },
+  {
+    "case": "symlink-target-content",
+    "layout": "scripts/devkit",
+    "argv": [
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/uv-cache/builds-v0/.tmplfrNlG/bin/python",
+      "-B",
+      "-m",
+      "pytest",
+      "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/probe-correctness-b018a054-jvvryw6q/scripts/devkit/lib/state_paths/tests",
+      "-q",
+      "-p",
+      "no:cacheprovider"
+    ],
+    "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/probe-correctness-b018a054-jvvryw6q",
+    "source_revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+    "date": "2026-09-10T19:37:51.879184+00:00",
+    "returncode": 0,
+    "expected_guard": false,
+    "filesystem_postcondition": true
+  }
+]

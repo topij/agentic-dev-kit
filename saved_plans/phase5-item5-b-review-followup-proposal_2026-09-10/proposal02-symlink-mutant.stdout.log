@@ -1,0 +1,208 @@
+FFFF                                                                     [100%]
+=================================== FAILURES ===================================
+_____ test_guard_leaves_root_file_symlinks_outside_snapshot[new-link-flat] _____
+
+tmp_path = PosixPath('/private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/tmp/pytest-of-topi/pytest-1/test_guard_leaves_root_file_sy0')
+layout = 'flat', case = 'new-link'
+
+    @pytest.mark.parametrize("layout", list(_LAYOUTS), ids=list(_LAYOUTS))
+    @pytest.mark.parametrize("case", ["new-link", "target-modified"])
+    def test_guard_leaves_root_file_symlinks_outside_snapshot(
+        tmp_path: Path, layout: str, case: str
+    ) -> None:
+        """Pin the documented exclusion of a root symlink to a regular file."""
+        engine_rel = _LAYOUTS[layout]
+        _build_tree(tmp_path, leak_in=None, engine_rel=engine_rel)
+        state = tmp_path / "state"
+        target = tmp_path / "state-target"
+        target.write_text("before")
+        if case == "target-modified":
+            state.symlink_to(target)
+        statement = (
+            f"Path({str(state)!r}).symlink_to({str(target)!r})"
+            if case == "new-link"
+            else f"Path({str(target)!r}).write_text('after')"
+        )
+        probe = tmp_path / engine_rel / "lib/state_paths/tests/test_state_paths_probe.py"
+        probe.write_text(
+            "from pathlib import Path\n"
+            "def test_root_file_symlink():\n"
+            f"    {statement}\n"
+        )
+        result = _run_pytest(tmp_path, [f"{engine_rel}/lib/state_paths/tests"])
+        assert state.is_symlink() and state.resolve() == target
+        assert target.read_text() == ("before" if case == "new-link" else "after")
+>       assert result.returncode == 0, result.stdout + result.stderr
+E       AssertionError: .                                                                        [100%]======================== REAL state/ WAS WRITTEN (#428) ========================
+E         REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/tmp/pytest-of-topi/pytest-1/test_guard_leaves_root_file_sy0/state during this run instead of staying inside the per-test $DEVKIT_STATE_ROOT sandbox that _hermetic_state_root (tests/conftest.py) sets. Changed paths: ['./']. Clean these up NOW: this report is one-shot — a leak still on disk at the next run's conftest import is absorbed into that run's baseline and never reported again (#457).
+E         
+E         =============================== warnings summary ===============================
+E         ../../../../uv-cache/archive-v0/adpSw7LCHKVgY0u9/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+E           /private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/uv-cache/archive-v0/adpSw7LCHKVgY0u9/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+E           
+E             self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+E         
+E         -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+E         ! REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/tmp/pytest-of-topi/pytest-1/test_guard_leaves_root_file_sy0/state !
+E         1 passed, 1 warning in 0.00s
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/uv-cache/builds-v0/.tmpS50R5e/bin/pyth...02-env/tmp/pytest-of-topi/pytest-1/test_guard_leaves_root_file_sy0/state !\n1 passed, 1 warning in 0.00s\n', stderr='').returncode
+
+scripts/tests/test_state_guard.py:778: AssertionError
+____ test_guard_leaves_root_file_symlinks_outside_snapshot[new-link-nested] ____
+
+tmp_path = PosixPath('/private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/tmp/pytest-of-topi/pytest-1/test_guard_leaves_root_file_sy1')
+layout = 'nested', case = 'new-link'
+
+    @pytest.mark.parametrize("layout", list(_LAYOUTS), ids=list(_LAYOUTS))
+    @pytest.mark.parametrize("case", ["new-link", "target-modified"])
+    def test_guard_leaves_root_file_symlinks_outside_snapshot(
+        tmp_path: Path, layout: str, case: str
+    ) -> None:
+        """Pin the documented exclusion of a root symlink to a regular file."""
+        engine_rel = _LAYOUTS[layout]
+        _build_tree(tmp_path, leak_in=None, engine_rel=engine_rel)
+        state = tmp_path / "state"
+        target = tmp_path / "state-target"
+        target.write_text("before")
+        if case == "target-modified":
+            state.symlink_to(target)
+        statement = (
+            f"Path({str(state)!r}).symlink_to({str(target)!r})"
+            if case == "new-link"
+            else f"Path({str(target)!r}).write_text('after')"
+        )
+        probe = tmp_path / engine_rel / "lib/state_paths/tests/test_state_paths_probe.py"
+        probe.write_text(
+            "from pathlib import Path\n"
+            "def test_root_file_symlink():\n"
+            f"    {statement}\n"
+        )
+        result = _run_pytest(tmp_path, [f"{engine_rel}/lib/state_paths/tests"])
+        assert state.is_symlink() and state.resolve() == target
+        assert target.read_text() == ("before" if case == "new-link" else "after")
+>       assert result.returncode == 0, result.stdout + result.stderr
+E       AssertionError: .                                                                        [100%]======================== REAL state/ WAS WRITTEN (#428) ========================
+E         REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/tmp/pytest-of-topi/pytest-1/test_guard_leaves_root_file_sy1/state during this run instead of staying inside the per-test $DEVKIT_STATE_ROOT sandbox that _hermetic_state_root (tests/conftest.py) sets. Changed paths: ['./']. Clean these up NOW: this report is one-shot — a leak still on disk at the next run's conftest import is absorbed into that run's baseline and never reported again (#457).
+E         
+E         =============================== warnings summary ===============================
+E         ../../../../uv-cache/archive-v0/adpSw7LCHKVgY0u9/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+E           /private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/uv-cache/archive-v0/adpSw7LCHKVgY0u9/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+E           
+E             self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+E         
+E         -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+E         ! REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/tmp/pytest-of-topi/pytest-1/test_guard_leaves_root_file_sy1/state !
+E         1 passed, 1 warning in 0.00s
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/uv-cache/builds-v0/.tmpS50R5e/bin/pyth...02-env/tmp/pytest-of-topi/pytest-1/test_guard_leaves_root_file_sy1/state !\n1 passed, 1 warning in 0.00s\n', stderr='').returncode
+
+scripts/tests/test_state_guard.py:778: AssertionError
+_ test_guard_leaves_root_file_symlinks_outside_snapshot[target-modified-flat] __
+
+tmp_path = PosixPath('/private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/tmp/pytest-of-topi/pytest-1/test_guard_leaves_root_file_sy2')
+layout = 'flat', case = 'target-modified'
+
+    @pytest.mark.parametrize("layout", list(_LAYOUTS), ids=list(_LAYOUTS))
+    @pytest.mark.parametrize("case", ["new-link", "target-modified"])
+    def test_guard_leaves_root_file_symlinks_outside_snapshot(
+        tmp_path: Path, layout: str, case: str
+    ) -> None:
+        """Pin the documented exclusion of a root symlink to a regular file."""
+        engine_rel = _LAYOUTS[layout]
+        _build_tree(tmp_path, leak_in=None, engine_rel=engine_rel)
+        state = tmp_path / "state"
+        target = tmp_path / "state-target"
+        target.write_text("before")
+        if case == "target-modified":
+            state.symlink_to(target)
+        statement = (
+            f"Path({str(state)!r}).symlink_to({str(target)!r})"
+            if case == "new-link"
+            else f"Path({str(target)!r}).write_text('after')"
+        )
+        probe = tmp_path / engine_rel / "lib/state_paths/tests/test_state_paths_probe.py"
+        probe.write_text(
+            "from pathlib import Path\n"
+            "def test_root_file_symlink():\n"
+            f"    {statement}\n"
+        )
+        result = _run_pytest(tmp_path, [f"{engine_rel}/lib/state_paths/tests"])
+        assert state.is_symlink() and state.resolve() == target
+        assert target.read_text() == ("before" if case == "new-link" else "after")
+>       assert result.returncode == 0, result.stdout + result.stderr
+E       AssertionError: .                                                                        [100%]======================== REAL state/ WAS WRITTEN (#428) ========================
+E         REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/tmp/pytest-of-topi/pytest-1/test_guard_leaves_root_file_sy2/state during this run instead of staying inside the per-test $DEVKIT_STATE_ROOT sandbox that _hermetic_state_root (tests/conftest.py) sets. Changed paths: ['./']. Clean these up NOW: this report is one-shot — a leak still on disk at the next run's conftest import is absorbed into that run's baseline and never reported again (#457).
+E         
+E         =============================== warnings summary ===============================
+E         ../../../../uv-cache/archive-v0/adpSw7LCHKVgY0u9/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+E           /private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/uv-cache/archive-v0/adpSw7LCHKVgY0u9/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+E           
+E             self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+E         
+E         -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+E         ! REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/tmp/pytest-of-topi/pytest-1/test_guard_leaves_root_file_sy2/state !
+E         1 passed, 1 warning in 0.00s
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/uv-cache/builds-v0/.tmpS50R5e/bin/pyth...02-env/tmp/pytest-of-topi/pytest-1/test_guard_leaves_root_file_sy2/state !\n1 passed, 1 warning in 0.00s\n', stderr='').returncode
+
+scripts/tests/test_state_guard.py:778: AssertionError
+_ test_guard_leaves_root_file_symlinks_outside_snapshot[target-modified-nested] _
+
+tmp_path = PosixPath('/private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/tmp/pytest-of-topi/pytest-1/test_guard_leaves_root_file_sy3')
+layout = 'nested', case = 'target-modified'
+
+    @pytest.mark.parametrize("layout", list(_LAYOUTS), ids=list(_LAYOUTS))
+    @pytest.mark.parametrize("case", ["new-link", "target-modified"])
+    def test_guard_leaves_root_file_symlinks_outside_snapshot(
+        tmp_path: Path, layout: str, case: str
+    ) -> None:
+        """Pin the documented exclusion of a root symlink to a regular file."""
+        engine_rel = _LAYOUTS[layout]
+        _build_tree(tmp_path, leak_in=None, engine_rel=engine_rel)
+        state = tmp_path / "state"
+        target = tmp_path / "state-target"
+        target.write_text("before")
+        if case == "target-modified":
+            state.symlink_to(target)
+        statement = (
+            f"Path({str(state)!r}).symlink_to({str(target)!r})"
+            if case == "new-link"
+            else f"Path({str(target)!r}).write_text('after')"
+        )
+        probe = tmp_path / engine_rel / "lib/state_paths/tests/test_state_paths_probe.py"
+        probe.write_text(
+            "from pathlib import Path\n"
+            "def test_root_file_symlink():\n"
+            f"    {statement}\n"
+        )
+        result = _run_pytest(tmp_path, [f"{engine_rel}/lib/state_paths/tests"])
+        assert state.is_symlink() and state.resolve() == target
+        assert target.read_text() == ("before" if case == "new-link" else "after")
+>       assert result.returncode == 0, result.stdout + result.stderr
+E       AssertionError: .                                                                        [100%]======================== REAL state/ WAS WRITTEN (#428) ========================
+E         REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/tmp/pytest-of-topi/pytest-1/test_guard_leaves_root_file_sy3/state during this run instead of staying inside the per-test $DEVKIT_STATE_ROOT sandbox that _hermetic_state_root (tests/conftest.py) sets. Changed paths: ['./']. Clean these up NOW: this report is one-shot — a leak still on disk at the next run's conftest import is absorbed into that run's baseline and never reported again (#457).
+E         
+E         =============================== warnings summary ===============================
+E         ../../../../uv-cache/archive-v0/adpSw7LCHKVgY0u9/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+E           /private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/uv-cache/archive-v0/adpSw7LCHKVgY0u9/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+E           
+E             self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+E         
+E         -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+E         ! REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/tmp/pytest-of-topi/pytest-1/test_guard_leaves_root_file_sy3/state !
+E         1 passed, 1 warning in 0.00s
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02-env/uv-cache/builds-v0/.tmpS50R5e/bin/pyth...02-env/tmp/pytest-of-topi/pytest-1/test_guard_leaves_root_file_sy3/state !\n1 passed, 1 warning in 0.00s\n', stderr='').returncode
+
+scripts/tests/test_state_guard.py:778: AssertionError
+=========================== short test summary info ============================
+FAILED scripts/tests/test_state_guard.py::test_guard_leaves_root_file_symlinks_outside_snapshot[new-link-flat]
+FAILED scripts/tests/test_state_guard.py::test_guard_leaves_root_file_symlinks_outside_snapshot[new-link-nested]
+FAILED scripts/tests/test_state_guard.py::test_guard_leaves_root_file_symlinks_outside_snapshot[target-modified-flat]
+FAILED scripts/tests/test_state_guard.py::test_guard_leaves_root_file_symlinks_outside_snapshot[target-modified-nested]
+4 failed in 0.93s

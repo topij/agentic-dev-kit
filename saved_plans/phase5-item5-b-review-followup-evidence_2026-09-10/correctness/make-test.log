@@ -1,0 +1,14 @@
+Waiting for serial verification lock
+{"cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo", "argv": ["make", "test"], "environment": {"PYTHONDONTWRITEBYTECODE": "1", "DEVKIT_STATE_ROOT": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/state", "UV_CACHE_DIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/uv-cache", "UV_TOOL_DIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/uv-tools", "RUFF_CACHE_DIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/ruff-cache", "TMPDIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/tmp", "PYTEST_ADDOPTS": "-o cache_dir=/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/pytest-cache -ra"}}
+uvx ruff@0.16.0 check --no-fix
+WARN Retry attempt #0. Sleeping 1.939080273s before the next attempt
+WARN Retry attempt #1. Sleeping 3.148306683s before the next attempt
+WARN Retry attempt #2. Sleeping 3.259904895s before the next attempt
+error: Request failed after 3 retries in 8.4s
+  Caused by: Failed to fetch: `https://pypi.org/simple/ruff/`
+  Caused by: error sending request for url (https://pypi.org/simple/ruff/)
+  Caused by: client error (Connect)
+  Caused by: dns error
+  Caused by: failed to lookup address information: nodename nor servname provided, or not known
+make: *** [lint] Error 2
+{"returncode": 2}

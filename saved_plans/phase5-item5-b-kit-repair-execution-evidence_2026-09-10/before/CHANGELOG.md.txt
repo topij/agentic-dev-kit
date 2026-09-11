@@ -1,0 +1,1324 @@
+# Changelog
+
+**What this file is for.** An adopter refreshing kit-owned engines is told by
+`/upgrade` Step 3 *which* file to take. This file is the other half: what taking it
+will **change**. It exists so that a red test after a file copy is a five-minute
+expected edit rather than a debugging detour (`#430`).
+
+**What it records — and only this.** Changes **observable at the API surface**: the
+things that break a repo pinning the old contract.
+
+| axis | what it covers |
+|---|---|
+| report / return shape | keys and values an engine's report or a function's return grew, lost, or changed meaning |
+| gate semantics | when `converged` / `mergeable` / `done` / a hook's exit code flips |
+| config keys | a `config/dev-model.yaml` key added, removed, renamed, given a new default, or restricted to new accepted values |
+| engine CLI surface | a flag, argument, or exit code an adopter or CI invokes |
+
+Each line names the issue(s) and states **what you must do**. Nothing else belongs
+here — a change with no adopter-visible consequence gets no entry.
+
+**It is deliberately not a record of *why*.** The rationale for a change lives in the
+comment beside the code that implements it, which is the one place it stays true when
+the code moves. Duplicating it here would create a second copy to keep correct, and
+the stale copy is the one an adopter would read. If you want to know *why* the merge
+gate waits for a settle baseline, read `build_report`. This file tells you only *that*
+it does.
+
+**How to read it during an upgrade.** Do not read from the top. `/upgrade` Step 1
+resolves your recorded baseline kit commit into exactly the set of entries below that
+are new to you; follow that.
+
+**Ordering and headings.** Newest first. An entry is headed by the **PR** that made
+the change, because the entry is authored in that PR rather than stamped on
+afterwards — see `AGENTS.md`, Ground rules. There are no release tags: adopters pin a
+kit *commit*, not a version.
+
+**Axes.** `BREAKING (…)` — a repo pinning the old contract fails. `CHANGED` —
+observable but compatible. `ADDED` — new surface you may adopt or ignore.
+
+`#407` is the oldest entry; nothing before it is backfilled. This file starts where it
+starts.
+
+---
+
+## #726 — 2026-09-10
+
+- **CHANGED (installed-test semantics, #534):** If you vendor the kit tests, refresh
+  `conftest.py`, `test_init_sh.py`, `test_kit_doctor.py`, `test_kit_repo_only.py`,
+  `test_mutation_gate.py` and `test_portability.py` together under your configured
+  engine directory's `tests/` tree. Include the new `tests/fixtures/init-config.json`
+  and `tests/fixtures/entry-point-markers.json` inputs from the same source pin during
+  `/upgrade`. Keep your config, policy documents and authored adapters: behavioral
+  tests use controlled inputs, while assertions about the kit's shipped source and
+  their drift-liveness parent skip a recorded adopter baseline.
+
+---
+
+## #709 — 2026-09-07
+
+- **CHANGED (gate semantics, `#706`):** Refresh `scripts/hooks/pre-push`. It now exits 1
+  on a push whose commit carries a `kit-manifest.json` that disagrees with the kit-owned
+  files in that same commit — a class of push that previously always succeeded. Run
+  `kit_doctor.py --generate-manifest` and commit the result with your change, LAST, after
+  the final edit to a kit-owned file. **This does not fire in an adopter repo whose
+  manifest is a recorded install baseline** (one carrying `kit_commit`, written by
+  `--record-install`): there a differing hash means you edited a kit-owned file, which is
+  supported. If the check cannot run — no `python3`, or a manifest it cannot read or
+  recognise — it warns on stderr and allows the push. `git push --no-verify` still
+  bypasses the hook entirely.
+
+---
+
+## #708 — 2026-09-07
+
+- **CHANGED (report / return shape, `#698`):** Refresh `scripts/kit_doctor.py`. Codex
+  registrations gain an `unset` state, reported at `·`, for `[features].hooks` not being
+  set where a kit hook **is** registered. It was previously graded only when
+  `.codex/config.toml` existed, so if you never wrote that file your report said nothing
+  about the switch. Expect a new advisory line, and a new `state` value in `--json`
+  `registrations` — widen any exact-match parsing of that field. The exit code does not
+  change: `unset` does not fail the run, and an explicit `hooks = false` is still
+  `misconfigured` and still exits 1. To silence the line, set `[features].hooks = true`
+  in `.codex/config.toml` as `./init.sh`'s registration block asks.
+
+---
+
+## #705 — 2026-09-07
+
+- **ADDED (report / return shape, `#534`):** Refresh `scripts/kit_doctor.py` and take
+  `scripts/tests/fixtures/shipped-registrations/codex-hooks.json` and
+  `scripts/tests/fixtures/shipped-registrations/claude-settings.json`. Adopter inspection
+  and `--record-install` now walk both, so they appear in your baseline's `files`, or in
+  `not_installed` if you decline them. Declining is supported: the tests that read them
+  skip rather than fail.
+- **CHANGED (report / return shape, `#534`):** If you vendor the kit's tests, four
+  assertions that could not pass in an adopter layout no longer fail there.
+  `test_shipped_manifest_covers_every_kit_owned_file` now checks that every
+  adopter-facing kit-owned file is either hashed or recorded as declined, so it passes
+  against a `--record-install` baseline instead of reporting your declines as drift.
+  `test_kit_repo_self_check_is_clean`,
+  `test_no_shipped_kit_owned_file_hardcodes_a_bare_engine_path` and
+  `test_shipped_skeletons_carry_the_unrendered_marker` skip against such a baseline.
+  Nothing to do; expect skips where you had failures.
+
+## #670 — 2026-09-03
+
+- **CHANGED (report / return shape, `#662`):** Refresh `scripts/kit_doctor.py`,
+  `docs/agentic-dev-kit/workflows/upgrade.md`, and
+  `docs/agentic-dev-kit/runtime-parity.md`. Adopter inspection and
+  `--record-install` now omit `scripts/verify_live_validation_bundle.py`,
+  `scripts/tests/test_live_validation_bundle.py`, and
+  `docs/agentic-dev-kit/live-validation-evidence.md`; remove any copies you
+  previously installed. These repository-only promotion tools remain hashed in the
+  kit's release manifest and checked in the kit checkout, but `/upgrade` no longer
+  reports or offers them and an adopter baseline no longer records them in either
+  `files` or `not_installed`.
+
+## #667 — 2026-09-02
+
+- **ADDED (engine CLI surface, `#604`):** `scripts/pr_watch.py --record-review`
+  accepts `--disposition <text>` (or `-` to read the text from stdin). It posts one
+  comment on the pull request, bound to the recorded head, under a heading the
+  engine fixes, and records its URL on the receipt as `disposition_comment`. Add it
+  to your record-review invocation and pass what the review found and how each
+  finding was disposed. A post this engine sees fail refuses the whole command and
+  writes no receipt — but a failure it cannot distinguish from a timed-out success
+  may already have created the comment, so a re-run can leave two: the receipt is
+  written at most once, the comment at least once. Without the flag nothing is
+  posted and the receipt is unchanged from before.
+- **ADDED (report shape, `#604` / `#603`):** Every plain poll's report grows
+  `evidence_findings[]`. Entries are `{"kind": "review_disposition_missing", "head",
+  "source"}` and `{"kind": "verification_stamp_behind_head", "head", "stamped": [...]}`.
+  A consumer asserting the exact top-level key set of a `--json` poll must add it.
+  **Neither entry gates**: `converged`, `mergeable`, `done` and `merge_blockers[]`
+  are unchanged by both, so a repo reading only those needs no edit.
+- **CHANGED (per-PR state, `#604`):** `--record-review --disposition` adds the
+  posted comment's content key to `state["seen"]` in the same write as the
+  receipt, so the comment it just posted is already acknowledged and does not
+  hold `converged` false on the next poll. A consumer that treats `seen` as
+  written only by `--mark-seen` must accept this second writer. Nothing is
+  filtered by comment text: a comment carrying the disposition marker but posted
+  by anyone else is actionable exactly as before.
+- **CHANGED (engine behaviour, `#603`):** Both transports now fetch the pull
+  request `body` (`gh pr view --json …,body`; `body` in the REST view). A test
+  double that pins the exact `--json` field list, or a fake REST payload asserted
+  key-by-key, must be refreshed.
+## #668 — 2026-09-02
+
+- **CHANGED (gate semantics, #661) — `kit_doctor.py` reports `missing-required` only
+  where the installed dependent is byte-identical to the comparison manifest, not merely
+  present.** Refresh `scripts/kit_doctor.py`. An absent file whose only dependent sits at
+  another sha now lands in the ordinary absent-file split — `new-upstream`, `declined`,
+  `removed`, or `missing` — instead of `missing-required`, so a repo that gated CI on
+  exit `1` for that case sees exit `0` wherever the rest of the report is clean, and
+  `/upgrade`'s install-these-first list loses those entries. **Re-run the report after
+  *refreshing* an engine, not only after installing one:** bringing a stale dependent up
+  to the kit's version is now what reveals its new requirements. An absent file the
+  baseline records as installed is still `removed` and still fails the gate.
+- **CHANGED (report shape, #661) — the lens-definition remedy line now branches on
+  whether `<engine-dir>/panel_prompt.py` is installed.** Refresh
+  `scripts/kit_doctor.py`. A tree without that engine is told so and given the
+  kit-checkout form (`uv run <kit checkout>/scripts/panel_prompt.py --root . …`) in place
+  of a command that cannot run there. The `lens_definitions` states, the `--json`
+  payload, and the exit status are unchanged, so nothing reading those needs a change.
+
+## #659 — 2026-09-01
+
+- **CHANGED (engine CLI surface):** Refresh
+  `scripts/verify_live_validation_bundle.py` before promoting source Git proofs for a
+  commit object that has no final newline. Emit
+  `"commit_trailing_newline": false` beside `commit_lines` for that object; omit the
+  field for the existing newline-terminated form. Existing schema-version `1` proofs
+  remain valid unchanged.
+- **CHANGED (engine CLI surface):** Refresh the verifier before retaining exact Python
+  `source-file` bytes that use a credential-named local variable for a runtime helper
+  result. Those source expressions no longer trip the raw assignment backstop;
+  statically recoverable credential assignments and known secret shapes remain
+  refused.
+- **ADDED (engine CLI surface):** For a promoted claim spanning distinct review heads,
+  use `review.heads` in the bundle and `reviewed_heads` in the promotion receipt, then
+  repeat `--expect-reviewed-head` once per entry in the same order. Continue using
+  singular `review.head` and `reviewed_head` for a single-head bundle. Mixed shapes,
+  duplicate heads, and incomplete independent expectations are refused.
+
+## #655 — 2026-09-01
+
+- **BREAKING (engine CLI, #255):** Refresh or install `scripts/kit_doctor.py`
+  together with `scripts/panel_prompt.py`; the latter now imports its sibling
+  doctor as the shared definition renderer and no longer runs in an installation
+  that carries only `panel_prompt.py` and `lib/kitconfig.py`.
+- **ADDED (`kit_doctor.py` report and `--json`, #255):** Read the new
+  `lens_definitions` array and inspect any advisory `missing`, `stale`,
+  `unreadable`, or `unverifiable` entry. Regenerate the named adopter-owned file
+  with `cd '<repo-root>' && mkdir -p .claude/agents && uv run
+  '<engine-dir>/panel_prompt.py' --root . --lens <name> --agent-definition >
+  .claude/agents/<name>.md` after resolving any kit engine drift reported by the
+  existing file section. The already-running doctor computes the expected bytes
+  without importing, executing, or rewriting code from the inspected tree; engine
+  drift remains a separate report axis. These advisory states do not change the
+  doctor's exit status.
+
+## #653 — 2026-08-31
+
+- **CHANGED (gate semantics) — the PR follow-through hook treats creation URLs and
+  GitHub CLI's existing-PR diagnostic as unresolved lifecycle candidates. Creation
+  output carries no draft bit, so a successful creation requires an authoritative
+  `isDraft` check. Ready acknowledgements also require repository and host identity to
+  match the current checkout before a repository-local watcher runs. Shell and response
+  matches are candidates only: even the expanded instruction selected by a literal
+  `gh pr ready` token plus a ready/draft acknowledgement grants no mutation authority
+  until the operation and authoritative forge state are established separately.
+  Creation URLs, missing, replaced, or transformed output, indirect actions, read-only
+  lookalikes, quoted/search mentions, and response-only state acknowledgements or PR
+  URLs fail loud without granting mutation or watch authority. After
+  independent confirmation, the candidate routes assert the matching ready or bounded
+  draft state and complete the shared watch policy. Constructed shell argv is not
+  reconstructed; harmless warning false positives replace shell parsing.**
+  **Refresh
+  `scripts/hooks/pr_followup_hook.py` and `init.sh`; in Claude's `PostToolUse`
+  registration, set the command hook's `if` field to `Bash(*)` so the shared hook —
+  rather than a runtime-only prefix filter — decides which Bash calls apply.**
+- **CHANGED (config keys) — `triage.pr_draft` and `systemize.pr_draft` now accept
+  only `false`; completed workflow patches open ready for review and correct the ready
+  bit before review polling.** **Set `triage.pr_draft` and `systemize.pr_draft` to the
+  plain boolean `false` before running `triage-friction-log` or
+  `post-merge-systemize`. Refresh their shared workflow files and `pr-watch`; the
+  additive `init.sh` migration preserves an existing value instead of replacing it.**
+
+## #651 — 2026-08-30
+
+- **ADDED (engine CLI surface) —
+  `<engine-dir>/verify_live_validation_bundle.py <bundle.json>` verifies the closed,
+  redacted retained-artifact contract; `--promotion <promotion.json>` additionally
+  binds capability promotion to the manifest digest, source revision, review
+  repository, reviewed head, redaction reviewer, complete runtime object and claim
+  IDs, and `--json` returns the machine-readable verdict.
+  Promotion now requires `--expect-authority`, `--expect-source-repository`,
+  `--expect-source-revision`, `--expect-review-repository`,
+  `--expect-reviewed-head`, `--expect-redaction-reviewer`, `--expect-runtime`,
+  `--expect-client-version`, and `--expect-session-persistence`, plus repeatable
+  `--expect-claim` JSON fixing each claim's ID, evidence paths, and applied-compute
+  dependency. A promoted applied-compute claim
+  additionally requires `--expect-applied-compute` with its complete independently
+  observed object; source every expectation from the review target and authoritative
+  observers before trusting the bundle's own labels.**
+  Copy the engine and `docs/agentic-dev-kit/live-validation-evidence.md` before using
+  a live runtime observation to promote parity. Treat exit `0` as verified and exit
+  `2` as an invalid bundle or promotion; duplicate JSON members, decoded credential
+  markers, unsupported numbers, symlink traversal, and undeclared, unreadable, or
+  non-regular bundle entries are invalid. Artifact records must carry their exact
+  capture request and UTC date. Digest, scanning, parsing, source-proof, and promotion
+  checks use one descriptor-relative, no-follow byte snapshot. The `--json` result now
+  includes `snapshot_sha256`; retain it with the verification observation and require a
+  later run against the retained bundle to reproduce it. The verifier does not claim an
+  atomic mutable-directory state at process return, so run it only with no concurrent
+  writer. A file changed during its descriptor read or a directory changed during
+  snapshot capture is refused, and an ancestor substitution cannot redirect already
+  opened directory descriptors.
+  Every `runtime-attestation` has
+  the documented closed shape and runtime-session observer even when a promoted claim
+  does not depend on applied compute. A `source-digest` ledger used by a promoted claim must
+  begin with the manifest's source revision and be accompanied by the exact
+  `source-file` bytes it names plus `source-git-proof` commit/tree metadata that
+  recomputes each mandatory Git blob's membership in that revision. Every such ledger
+  must retain source-revision bytes and their proof; a fixture-base header and proof
+  are supplementary, and the fixture proof must also prove every retained source
+  dependency at the fixture revision. Unknown fields, missing observers,
+  YAML-tagged credential scalars, Unicode control or format characters in schema
+  string fields, and escaped Unicode surrogates are invalid. Credential scans also
+  remove combining marks after compatibility normalization in values and JSON keys.
+  A retained `promotion.json`
+  requires `--promotion` and all independent expectations; bundle-only verification
+  refuses it. A runtime applied-compute object needs an independent expectation only
+  when a selected claim depends on it. The declared per-artifact, aggregate,
+  artifact-count, claim-count, and artifact-tree-entry ceilings apply before unbounded
+  input work.
+  This schema version accepts Git SHA-1 object-format repositories; source revisions,
+  reviewed heads, and Git-proof object IDs must use the full lowercase SHA-1 form.
+  Do not clean up a synthetic fixture until the copied destination passes this command.
+
+---
+
+## #649 — 2026-08-29
+
+- **CHANGED (gate semantics) — behavioral changes to the profile named by
+  `parallel.claude_settings_profile` now take the shared safety-critical review and
+  operator-merge route.** Add the configured profile to your adopter-owned `AGENTS.md`
+  binding and to `.claude/rules/safety-critical-changes.md`'s path list;
+  the shipped default is `config/claude-lane-settings.json`. When you relocate the
+  profile, move the Claude rule entry with it because rule frontmatter cannot resolve
+  `config/dev-model.yaml`. The path trigger does not cover that whole config file,
+  whose unrelated keys would be swept in with `parallel.*`; the workflow-document
+  gap in `#346` and the test-side guard in `#434` stay open.
+
+---
+
+## #639 — 2026-08-29
+
+- **CHANGED (report shape) — `kit_doctor` no longer treats `Bash(:*)` as a
+  whole-tool grant.** `Bash` and `Bash(*)` still cover every engine; `Bash(:*)`
+  now covers nothing, so an engine whose only allow rule is `Bash(:*)` reports
+  `ungranted` where it previously reported nothing. Measured against Claude Code
+  2.1.251 rather than assumed — under a configuration shown to gate on `allow`,
+  that rule was refused a command no other rule named. If you rely on `Bash(:*)`
+  to pre-approve an engine, replace it with `Bash(uv run:*)` or a rule naming the
+  invocation; if you pin the old reading in a test, drop the `Bash(:*)` case. As
+  before, `ungranted` joins neither the exit code nor `dead_registrations`, so
+  nothing here can fail a run.
+
+## #637 — 2026-08-29
+
+- **ADDED (report shape) — `kit_doctor` reports a new registration state,
+  `ungranted`, for a kit engine that is installed but that no
+  `permissions.allow` rule in `.claude/settings.json` or
+  `.claude/settings.local.json` pre-approves running.** A rule counts when its
+  `:*` prefix opens the command the workflow issues (`uv run <engine> …`), read
+  as argv tokens: `Bash(uv run:*)` counts, `Bash(uv run <engine>:*)` counts, and
+  a rule that merely names the engine without running it (`Bash(cat <engine>:*)`)
+  does not. An exact rule with no `:*` matches one argument-less invocation and
+  does not count, since the workflow polls with arguments that vary. A `--json`
+  consumer reading `registrations[].state` must accept the new value; a
+  consumer that switches exhaustively on the old set needs a case for it.
+  It does **not** join the exit code — approving each invocation is a supported
+  choice, so an `ungranted` line neither fails `kit_doctor` nor appears in
+  `dead_registrations`. Only `pr_watch.py` is checked, because it is the one
+  engine a workflow invokes in a poll loop.
+- **CHANGED (installer output) — `./init.sh` now prints a cockpit
+  `permissions.allow` advisory, with the engine path taken from your
+  `paths.engines` rather than hardcoded to `scripts/`.** Nothing is written:
+  `.claude/settings.json` stays yours. **If you vendored the engines anywhere
+  other than `scripts/`, your existing allow rule names a path you do not have
+  and grants nothing** — re-run `./init.sh` for the correct rule, or take the
+  path from the new `kit_doctor` line above.
+- **CHANGED (hook coverage) — the `SessionStart` matcher is dropped from the
+  advisory `init.sh` prints for Claude, as it already was for Codex.** To adopt,
+  remove `"matcher": "startup"` from the `SessionStart` group in your
+  `.claude/settings.json`. Until you do, a resumed session starts with both
+  budget tripwires silent — measured at Claude Code 2.1.251, where `"startup"`
+  did not fire on a `--resume` that the matcher-less form did. `clear` and
+  `compact` have no headless invocation and were not exercised; the same matcher
+  semantics should cover them, but that is inference rather than measurement.
+
+---
+
+## #635 — 2026-08-28
+
+- **ADDED (engine CLI surface / report shape) — `kit_doctor.py --adapter-report`
+  classifies each shipped Claude and Codex adapter as `kit-current`, `kit-stale`,
+  `adopter-owned`, or `missing`; `--adapter-source` selects the fetched kit whose
+  renderer is authoritative, and `--json` returns the rows under `adapters`.** To
+  adopt this path, refresh `scripts/kit_doctor.py`,
+  `scripts/lib/runtime_adapters.py`, `scripts/run_installed_tests.py`, and the upgrade
+  workflow together, then run the fetched doctor's adapter report before copying
+  adapters. Refresh `kit-stale`, leave
+  `kit-current`, install `missing`, and preserve `adopter-owned`. The renderer
+  recognizes the prior generated Codex bindings for adopt, parallel, PR watch, and
+  upgrade as stale kit output rather than adopter-authored content.
+- **CHANGED (gate semantics) — upgrade Step 5 verifies only installed kit test modules
+  selected from the adopter's manifest by `run_installed_tests.py`.** Refresh the upgrade
+  workflow and that runner before the next kit update. A declined test directory no
+  longer makes the verification command
+  fail as a missing path; when the manifest selects no installed test module, Step 5
+  reports the skip explicitly instead of treating pytest's empty collection as the
+  result.
+
+---
+
+## #632 — 2026-08-28
+
+- **ADDED (config keys) — the shipped `config/claude-lane-settings.json` grants a lane
+  three more commands: `Bash(make test:*)`, `Bash(uv run scripts/kit_doctor.py:*)`, and
+  `Bash(uv run scripts/devkit/kit_doctor.py:*)`.** `init.sh` seeds this file when absent
+  and **never rewrites it**, so an installed adopter's profile is untouched by this
+  change and their lanes keep the old grants. **To adopt them, add the three entries to
+  your own profile** (or copy `config/claude-lane-settings.json` wholesale if you have
+  not diverged); take the `scripts/devkit/` spelling only if that is your
+  `paths.engines`. Without the first, a lane cannot run the `AGENTS.md` verification
+  command and its first verification is CI; without the others, a lane that edits a
+  kit-owned file cannot refresh the manifest and its PR is deterministically red. Read
+  the `make` entry as what it is: it admits a command whose argv **begins with**
+  `make test`, which is not "the `test` target". Probed at Claude Code **2.1.250** on
+  **2026-08-28** under the lane trust route (evidence in
+  `saved_plans/lane-permission-policy-evidence_2026-08-28/`): standalone
+  `make mutation-test` was refused while `make test mutation-test` ran **both** goals,
+  and the match is on argv tokens rather than raw text, so `make test-exfil` was refused
+  too. In the same probes a chained segment was permission-checked on its own, so a
+  matched prefix did not carry a denied command with it — `make test; curl …` and
+  `git status; curl …` were both refused, as were the `&&`, `||`, `|`, backtick,
+  `$()`, `<()` and env-assignment spellings.
+  `launch_lane.py`'s structural validator is unchanged and still refuses a `Bash`
+  allow with no literal command prefix, an edit tool without a worktree-relative
+  pattern, and any `permissions` key outside `allow`/`deny`/`ask`.
+- **CHANGED (gate semantics) — the lane settings profile is documented as
+  task-scoping, not a security boundary (`#631`).** No engine behaviour changes and no
+  entry is removed. If you relied on the profile to bound what a lane's *processes* can
+  reach, it does not and did not: `Edit(**)` bounds file edits to the worktree but not a
+  process, so a `Bash(<interpreter> <worktree-path>)` grant names a file the lane may
+  rewrite. What the profile does deliver is fail-closed behaviour for a lane that
+  wanders off-task. **Do not treat a lane worktree as a containment boundary**; run
+  lanes only on tasks and inputs you would run in your own session.
+- **CHANGED (gate semantics) — a lane doing kit-owned Claude-adapter work is declared
+  unsupported (`#606` deciding `#627`).** A Claude lane cannot write under `.claude/`
+  and no allow-list entry reaches that guard. **Split a runtime-parity change**: the
+  lane takes the runtime-neutral half and the Codex adapter, the cockpit takes the
+  `.claude/` half. A lane sent at `.claude/` terminalizes `failed`; that is the client's
+  guard, not a lane defect and not a profile gap to fix.
+
+---
+
+## #623 — 2026-08-27
+
+- **CHANGED (config keys) — `models.runtime_mappings` defaults are recalibrated for a
+  fresh install: `claude.expensive` is `fable` (was `opus`) and `codex.expensive` is
+  `xhigh` (was `high`).** The `init.sh` migration writes these only when `models.tiers`
+  is absent; an existing value is never rewritten, so an installed config keeps what
+  it has. If your Claude account cannot resolve `fable` (`claude -p --model fable`
+  exits 1 naming it), set `claude.expensive: opus`. Both maps remain advisory — no
+  engine reads them; the config comment now says so per runtime, with the controls
+  each value names.
+- **ADDED (engine CLI surface) — `scripts/panel_prompt.py --agent-definition` renders
+  the Claude Code agent definition for `--lens` from
+  `review.fallback_panel.lens_compute.claude`; `--head` is now required only when
+  assembling a prompt, and every prompt-only flag is refused beside
+  `--agent-definition` (exit 2).** It refuses an `effort` outside `low`, `medium`,
+  `high`, `xhigh`, `max`, a present-but-unusable `model`/`effort` value, and a lens
+  name that is not a slug (exit 2) rather than rendering a definition the runtime
+  would silently run at the parent's effort; `model` is rendered as a quoted YAML
+  string, so a value holding `: ` or ` #` — which bare would fail to parse or be
+  silently truncated — round-trips (a Bedrock id's `:0` already parsed bare). The prompt's `Run at:` line now names its carrier per runtime and states it
+  enforces nothing; a runtime with compute configured and no kit-known carrier is told
+  so. **Refresh `init.sh` and run `./init.sh --no-clobber`**: it seeds
+  `.claude/agents/<lens>.md` for each shipped lens the roster names when no file is
+  there, rendering `paths.engines` into the regenerating command; the files are
+  adopter-owned afterwards (listed in `ADOPTER_OWNED`, never reported as drift) and are
+  regenerated with the flag above after any change to the roster or
+  `lens_compute.claude`. On Claude, launch each panel lens as the agent named after it
+  — that frontmatter is what applies `model` and `effort`; the delegation tool itself
+  has no effort parameter, so a plain subagent inherits the cockpit's effort. A
+  definition added after a session starts was not launchable in the turn it was
+  written and appeared in the roster later; count on it from the next session.
+
+## #614 — 2026-08-27
+
+- **ADDED (config keys) — `parallel` now owns, per runtime, `<runtime>_approval_policy`
+  (Codex `read-only` | `workspace-write`, shipped `read-only`; Claude `dont-ask` |
+  `accept-edits`, shipped `dont-ask`) and, for Claude, `claude_settings_profile`
+  (shipped `config/claude-lane-settings.json`, which grants file editing through
+  the worktree-relative `Edit(**)` — the rule that governs every file-editing tool at
+  Claude Code 2.1.247 — bounded `git`/`gh pr` prefixes with `git remote` read-only,
+  and `Bash(git push -u origin:*)`, the push form the lane contract names). That rule bounds nothing after
+  `origin`: a `--force`/`-f` placed there, `:x`, and `+HEAD:x` all still match it, so
+  the profile does not protect branch history — keep your protected branches
+  protected on the forge; a lane-side push gate is follow-up work.** **Under `dont-ask` the allow list bounds every call the runtime does not accept on
+  its own — at Claude Code 2.1.247 a read-only Bash class (`pwd`, `cat`, `grep`,
+  `find`, …) runs regardless and never appears in `permission_denials`; declare
+  `accept-edits` only knowing that the runtime then also auto-accepts its own
+  file-system class (`rm`, `mv`, redirection writes) inside the worktree.**
+  **Refresh `init.sh` and run `./init.sh --no-clobber`: the additive migration installs
+  the three keys without replacing adopter values and seeds
+  `config/claude-lane-settings.json` only when no file is there. The profile is
+  adopter-owned lane policy outside the manifest — an upgrade never rewrites it; diff
+  it against the kit's copy yourself. Keep each policy inside the wrapper's vocabulary:
+  an unrestricted spelling (`bypassPermissions`, `danger-full-access`, any
+  `dangerously-*`) or a missing key refuses at launch, as does a profile carrying
+  any `permissions` key other than `allow`, `deny`, `ask` (`defaultMode`,
+  `additionalDirectories`, or one the wrapper does not recognise — refused, not
+  passed through), a `Bash` allow entry whose pattern has no literal
+  command prefix (`Bash`, `Bash(*)`, `Bash(**)`, `Bash(:*)`, `Bash(/*)` — the head
+  before the first wildcard, separator, or space must hold a letter or digit), or an
+  edit-tool allow with no worktree-relative path pattern (`Write`, `Write(//…)`,
+  `Edit(../**)`).**
+- **CHANGED (engine CLI surface) — `scripts/launch_lane.py` now passes the declared
+  policy in the argv slot after the command prefix, and on Claude also
+  `--setting-sources ""` and `--settings <profile>`.** **Refresh `scripts/launch_lane.py`,
+  `scripts/tests/test_lane_launcher.py`, `config/dev-model.yaml`, `init.sh`, and
+  `docs/agentic-dev-kit/workflows/parallel-headless.md` together. A Codex lane that
+  relied on the operator's host defaults now runs under `--sandbox read-only` unless
+  you declare `workspace-write`; a Claude lane no longer loads the operator's user
+  settings, the branch's project settings, or the branch's `CLAUDE.md` — put lane
+  permission rules and lane hooks in the profile, and rely on the lane contract preamble
+  for project-level instructions. The wrapper's own CLI (`--descriptor`, `--prompt-file`)
+  and exit codes are unchanged.**
+- **CHANGED (gate semantics) — a Claude lane whose runtime reports a non-empty
+  `permission_denials` list terminalizes `failed`, never `completed`, even though the
+  runtime's envelope is `subtype=success`; a result without a list-valued
+  `permission_denials` is also `failed`.** **Treat a `failed` receipt as the policy
+  verdict, not as proof the lane wrote nothing — reconcile the worktree and forge as
+  before. Read `terminal.permission_denials` for the refused calls.**
+- **CHANGED (report shape) — the launch attempt and receipt `request` object gains
+  `approval_policy` (`declared`, `argv`, `settings_profile_path`,
+  `settings_profile_sha256`); the observed receipt gains `observed.argv`; the receipt
+  `terminal` object gains `permission_denials` — the runtime's own list on a
+  `json-stdout` receipt whose result was extracted (empty on `completed`, non-empty
+  on a denial-`failed`), and `null` both for `last-message-file` and for any receipt
+  whose result could not be extracted.** **A consumer that compares `request` objects
+  must include the new key; `null` means unobservable, not "none denied".**
+
+---
+
+## #611 — 2026-08-27
+
+- **BREAKING (engine CLI surface) — the unattended lane launcher is
+  `scripts/launch_lane.py` and serves Codex and Claude; `scripts/launch_codex_lane.py`
+  is gone with no alias.** **Refresh `scripts/launch_lane.py`,
+  `scripts/tests/test_lane_launcher.py`, `config/dev-model.yaml`, `init.sh`, and the
+  shared parallel workflows `docs/agentic-dev-kit/workflows/parallel.md` and
+  `docs/agentic-dev-kit/workflows/parallel-headless.md` together; delete
+  `scripts/launch_codex_lane.py` and `scripts/tests/test_codex_lane_launcher.py`
+  (and their rendered `scripts/devkit/` paths); replace `launch_codex_lane.py` with
+  `launch_lane.py` in the adopter-owned `AGENTS.md` safety-critical ground rule and in
+  `.claude/rules/safety-critical-changes.md`'s path list — `./init.sh --no-clobber`
+  preserves those existing bindings and does not rename the route for you. Issue
+  descriptors with `new --headless --runtime <codex|claude>`; the wrapper's CLI
+  (`--descriptor`, `--prompt-file`) and its exit codes are unchanged.**
+- **ADDED (config keys) — `parallel` now owns, per runtime, `<runtime>_headless_command`
+  plus the declared `<runtime>_worktree_transport`, `<runtime>_prompt_transport`, and
+  `<runtime>_final_text_transport`; the shipped Claude command is `[claude, -p]`.**
+  **Refresh `init.sh` and run `./init.sh --no-clobber`; the additive migration installs
+  the missing flat keys without replacing adopter values. Keep each transport at the
+  value the runtime implements (Codex `cd-flag` / `stdin-dash` / `last-message-file`,
+  Claude `process-cwd` / `stdin` / `json-stdout`) — the wrapper refuses any other. A
+  user-local `claude` (for example `~/.local/bin/claude`) is outside the trusted
+  executable path: set `claude_headless_command` to the absolute binary.**
+- **CHANGED (report shape) — the launch attempt and receipt `request` object gains
+  `runtime` and `transports`, and the receipt `terminal` object gains
+  `final_text_transport` and `final_text_sha256`.** **`final_message_sha256` keeps its
+  meaning (digest of the reserved final-message evidence file). For Codex the two
+  digests are equal; for Claude `final_text_sha256` digests the `result` string
+  extracted from the JSON envelope. Read `final_text_sha256` when you want the lane's
+  final text; a `failed` receipt carries `null` there.**
+
+---
+
+## #609 — 2026-08-26
+
+- **ADDED (engine CLI surface) — unattended Codex lanes now use a one-shot,
+  environment-capable launcher and durable descriptor-seal/session-attempt/
+  observation/terminal receipt chain.** **Refresh `scripts/dev_session.sh`,
+  `scripts/launch_codex_lane.py`, `config/dev-model.yaml`, and the shared parallel
+  workflows `docs/agentic-dev-kit/workflows/parallel.md` and
+  `docs/agentic-dev-kit/workflows/parallel-headless.md` together; run
+  `./init.sh --no-clobber`; issue descriptors with
+  `new --headless --runtime codex` (or `DEVKIT_RUNTIME=codex`); and invoke the wrapper
+  rather than direct `codex exec` or runtime-native dispatch. Preserve the descriptor's
+  repository fetch/push identity, prompt contract, cross-bound environment, trusted
+  executable lookup, process authority, and one-shot evidence fields when integrating
+  the output. Add `scripts/launch_codex_lane.py` (and the rendered
+  `scripts/devkit/launch_codex_lane.py` path where applicable) beside
+  `scripts/dev_session.sh` and `scripts/pr_watch.py` in the adopter-owned `AGENTS.md`
+  safety-critical ground rule and `.claude/rules/safety-critical-changes.md` path list;
+  `./init.sh --no-clobber` preserves those existing bindings and does not add the route
+  for you. Do not invoke an internal child mode; the supported observer is fork-only
+  inside the public wrapper.**
+- **ADDED (config keys) — `parallel` now owns `codex_headless_command`,
+  `descriptor_ttl_seconds`, `observation_timeout_seconds`, and
+  `termination_grace_seconds`.** **Refresh `init.sh` and run
+  `./init.sh --no-clobber`; keep each launcher value as a flat `parallel` child. The
+  migrator preserves adopter-owned flat values and adds a shipped default when only a
+  same-named nested key exists.**
+
+---
+
+## #599 — 2026-08-25
+
+- **ADDED (config keys) — `triage` now owns the friction-triage analysis tier,
+  `triage.state_path`, `triage.gate_path`, the gate-digest-addressed
+  `triage.recovery_bundle_pattern`, frozen-inbox and report patterns, optional
+  draft/finalize engine names, commit subject, and PR
+  draft policy.** **Refresh `init.sh`, then run
+  `./init.sh --no-clobber`. The additive migration installs the block or missing flat
+  keys without replacing adopter values. Before retrying a preflight refusal, normalize
+  prompted init-owned sections to bare mappings with the shipped two-space child
+  indentation; keep a partial `triage` flat map at one consistent indentation. Rewrite
+  `review.bots` and `systemize.operator_logins` as complete same-line flow sequences,
+  and every other prompted or partial-`triage` value as a same-line scalar;
+  the shell-only migrator rejects YAML tags, anchors, aliases, block scalars, and block
+  children beneath prompted values, plus flow or quote continuations. Partial-`triage`
+  string fields also reject double-quoted backslash escapes. Quote strings
+  whose plain spelling YAML could resolve as a non-string; string fields must be
+  non-empty, and `triage.pr_draft` must be the plain boolean `true` or `false`. Block YAML on
+  other fields can still be refused; normalize any refused value to an ordinary
+  same-line form. Remove any separate
+  `config/friction-triage.yaml`; keep source/archive, engine directory, tracker,
+  notification, state root, branch pattern, and model mappings in their existing shared
+  config sections.**
+- **CHANGED (gate semantics) — `triage-friction-log` now requires merged config,
+  sandbox-aware atomic state, and an exact frozen inbox; treats its configured engine
+  pair atomically; requires notification send/thread read when unattended; permits an
+  explicit degraded interactive approval path; binds tracker authority to the exact
+  payload; reads back failed or ambiguous external writes; holds partial tracker
+  batches before finalization; sweeps only accounted byte-identical frozen blocks; and
+  prohibits tracker, source-document, and forge writes in test mode.** **Refresh
+  `docs/agentic-dev-kit/workflows/triage-friction-log.md`,
+  `.claude/commands/triage-friction-log.md`, and
+  `.agents/skills/triage-friction-log/SKILL.md` together. Replace both old adapters even
+  when locally retained: their runtime-specific approval/notification instructions do
+  not load the new shared gate. Preserve an operator-held state/report until approval,
+  tracker, sweep PR, and exact-head review evidence reach the terminal state named by
+  the workflow; never retry an ambiguous write or whole-sweep an older snapshot. Use
+  the interactive `recover` entry point for invalid live state; it preserves a recovery
+  bundle and prohibits abandonment when prior external-write absence is uncertain.
+  Keep malformed test-state recovery on the `test` entry and test sandbox; it may
+  quarantine only revalidated test state after exact approval and never selects live
+  or external-write paths. During interactive test-gate recovery, only a proven-dead
+  owner plus exact capture approval permits preserving existing test state or a
+  safe-restart receipt in an operator-held byte-preserving evidence bundle; do not
+  quarantine either artifact. With an active or uncertain owner, or during scheduled
+  or unattended execution, preserve the gate and artifact without writing a bundle or
+  intent. When the same approved interactive recovery proves state absent, publish a
+  durable `test-gate-recovery-intent`. A later `test` resumes only that intent and
+  consumes the verified `test-recovered-safe-to-restart` receipt under the replacement
+  test gate.
+  Before completing a merged sweep, read back its final `headRefOid` and require it to
+  equal the exact terminal PR-watch head and receipt persisted as `reviewed_head`;
+  keep an unsettled read-back separate as `observed_pr_head`. A replacement head or
+  missing terminal receipt remains operator-held even when the PR is merged.
+  During interactive stale-gate recovery, after proving owner termination and obtaining
+  exact approval, publish `gate-only-recovery-intent` before quarantining an old gate
+  with no active state, then retain its
+  `gate-only-operator-held` receipt and evidence bundle; do not treat gate quarantine
+  or a crash between transition steps as proof that a new draft is safe.
+  Treat an existing single-writer gate or an act-time state-digest mismatch as
+  operator-held; never replace, steal, or retry through it. Keep configured draft and
+  finalize engine fragments canonically beneath `paths.engines`; an absolute,
+  traversing, escaping-symlink, or non-regular target now hard-stops.**
+
+---
+
+## #598 — 2026-08-25
+
+- **BREAKING (gate semantics, engine CLI exit contract) — parallel reconciliation no
+  longer turns a missing `gh`, failed repository or PR read, or malformed forge payload
+  into a partial `open` / `parked` lane board; it stops with exit `64`. Operator-held
+  classification now additionally requires persisted operator class and base plus an
+  act-time `pr_watch` report for the exact repository, PR, base, head, and empty blocker
+  set. Surviving branch tips that differ from the selected PR head remain resumable
+  `open` work.** **Refresh `scripts/dev_session.sh`,
+  `scripts/reconcile_sessions.sh`,
+  `docs/agentic-dev-kit/workflows/parallel.md`,
+  `docs/agentic-dev-kit/workflows/parallel-headless.md`,
+  `scripts/tests/test_portability.py`, and
+  `scripts/tests/test_reconcile_sessions.py` as the coordinated kit-owned set for this
+  change. Ensure reconciliation callers provide
+  authenticated `gh` access, preserve exit `64` as an unknown-forge hard stop, and do
+  not parse a partial board after that exit. Do not replace repo-owned downstream engine
+  forks through a normal kit upgrade; reconcile them explicitly against the refreshed
+  kit engines. No config migration is needed.**
+- **CHANGED (gate semantics) — headless activation and descriptor lane roots are
+  canonical absolute paths, including a relative sessions container anchored before any
+  worktree write; scope review and self-merge replace inherited state/repository
+  roots, reject cross-repository PRs, and refuse before the forge write when the listed
+  PR head differs from the act-time reviewed head. Non-force `rm` now preserves a
+  worktree that becomes dirty after its initial status probe rather than retrying the
+  removal with force.** **Launch unattended lanes by
+  unconditionally applying every descriptor `env` key over the permitted inherited
+  environment. Keep runtime adapters as invocation-only bindings; do not reconstruct
+  identity or merge policy in a Claude or Codex adapter. Treat relative
+  `DEVKIT_SESSIONS_DIR` as relative to each invocation's working directory, and invoke
+  later scope commands from the same directory or pass an absolute value.**
+
+---
+
+## #596 — 2026-08-25
+
+- **CHANGED (gate semantics) — `session-start` now stops before rendering its normal
+  briefing when repository/config or repository-state reads fail; unavailable forge,
+  CI/cron, tracker, configured drift, or candidate-remediation reads produce explicit
+  degraded results instead of empty, clean, or `Now` claims.** **Refresh
+  `docs/agentic-dev-kit/workflows/session-start.md` and the corresponding Claude/Codex
+  thin adapter. If the adapter is locally customized, reconcile it so it delegates
+  merged-config resolution to the shared workflow; do not retain an instruction to read
+  only tracked `config/dev-model.yaml`. No new config key or connector name is needed.
+  Resolve config through `kitconfig.load_config()` or your equivalent merged-view
+  mechanism so the local overlay is not ignored. Treat the workflow as read-only, and let
+  non-interactive invocations render once and exit. Always attempt and classify the
+  forge, CI/cron, and tracker sources; only an explicitly unconfigured or untriggered
+  declaration may be omitted. Any degraded applicable source yields
+  `degraded-success`; `successful-completion` requires applicable sources to be
+  ready.**
+  **Treat a PR-list response as discovery only: page unfiltered review submissions,
+  issue comments, and inline comments for each returned pull request before calling the
+  forge source ready. Do not use a local acknowledgement/seen-set as resolution evidence;
+  label resolution unverified when the forge cannot prove it. Represent
+  detached HEAD as `DETACHED at <sha>` rather than accepting an empty branch value.**
+- **CHANGED (gate semantics) — `wrap-up` now stops before staging when required
+  repository/config, record-write, or document-budget capabilities fail; tracker
+  unavailability, silence, decline, or missing exact-payload approval parks the complete
+  finding in the friction log, while an interactive issue-shaped finding must be
+  searched and presented for an exact-payload decision instead of parked by default.
+  Any changed repository artifact, including an existing project-status artifact,
+  reaches a terminal state only after its branch/PR/`pr-watch` path settles and merge
+  authority either permits the merge or holds the exact head for the operator. A
+  status-only edit is not a successful no-op. Non-lane pull requests without a project
+  merge policy default to operator-authorized merge; they never default to autonomous
+  merge. Conditional
+  capabilities are classified when triggered rather than claimed ready before the
+  handoff edit. An unavailable forge path or unavailable/unsettled `pr-watch` returns
+  `incomplete-resumable` with the exact preserved diff, commit, branch, or PR evidence;
+  so does a failed or ambiguous authorized merge. First-match outcome precedence keeps
+  an earlier integration degradation from masking that incomplete repository path. A
+  verified tracker-only write is successful completion rather than a no-op, and a merge
+  response that read-back verifies as landed is successful rather than incomplete.
+  Isolated lanes run review follow-through through `dev_session.sh pr-watch <scope>`,
+  and `self` lanes merge only through `dev_session.sh merge <scope>`, keeping the
+  review receipt and merge gate in the same lane state sandbox.** **Refresh
+  `docs/agentic-dev-kit/workflows/wrap-up.md` and the corresponding Claude/Codex thin
+  adapter. If the adapter is locally customized, reconcile it so merged-config
+  resolution delegates to the shared workflow; do not retain tracked-config-only
+  wording. No config migration is needed. Do not treat a configured tracker, prior
+  approval, or standing autonomous authority as approval for a create, modification,
+  or occurrence-comment payload, or as authority to merge.**
+
+---
+
+## #595 — 2026-08-24
+
+- **ADDED (config keys) — `config/dev-model.yaml` now declares the shared
+  `systemize.*` workflow policy** (`#243`; `#7` stays open). **Re-run `./init.sh`
+  after taking this kit update to add the shipped block. If your config already
+  contains a partial `systemize:` block, the installer preserves it rather than
+  guessing your policy; merge the missing shipped keys manually before invoking the
+  workflow. Keep the shipped `{date}`, `{window}`, and `{mode}` placeholders in every
+  artifact pattern so live, test, normal-window, and backfill runs do not share a
+  same-day artifact. Set `systemize.operator_logins` to the exact forge identities
+  whose review findings the workflow may trust; `./init.sh` prompts for that list and
+  requires its one-line YAML flow-sequence form. Before re-running, rewrite tagged,
+  quoted, anchored, explicit, duplicated, or inline-commented top-level section keys
+  into unique bare YAML keys; write `systemize:` without an inline comment and keep
+  its child keys bare at the shipped two-space indentation. The installer refuses
+  tagged, anchored, aliased, typed, escaped, or ambiguous operator-login items before
+  migration writes; use simple plain login tokens or simple quoted strings.**
+- **CHANGED (gate semantics) — `post-merge-systemize` now fails closed when the
+  required repository, config, or complete merged-PR history is unavailable, and
+  when only part of the configured engine set is installed; an entirely absent
+  engine set selects the labelled agent-executed path** (`#243`; `#7` stays open).
+  **Keep the shared state-path resolver under `paths.engines`; install every configured
+  fetch/digest/heartbeat engine or none of that optional set. Treat the report as the
+  durable degraded path when an optional forge write, tracker, reviewer, or notification
+  capability is unavailable. Tracker writes additionally require the operator to
+  approve the exact payload. Resolve a local change to an intended rule destination
+  before retrying that route; it now requires a clean isolated worktree and an exact
+  staged-path set. Move or repoint any existing artifact target whose declared kind and
+  complete run identity do not match the current run; the workflow will not replace
+  it.**
+- **CHANGED (gate semantics) — the old Claude command directly creates tracker items
+  and does not load the shared approval gate** (`#243`). **`/upgrade` ordinarily keeps
+  an existing runtime adapter, so replace
+  `.claude/commands/post-merge-systemize.md` with the kit's thin binding during this
+  upgrade after diffing any local changes into config or the shared workflow. Do not
+  schedule the old command against the new config.**
+
+---
+
+## #593 — 2026-08-24
+
+- **ADDED (engine CLI, report shape) — `pr_watch.py --record-review
+  fallback:delta` accepts `--compose-parent <reviewed-parent-sha>` and reports
+  validated `review_evidence.coverage` / `coverage_error` fields for composed
+  receipts** (`#32`). **Call the flag only with the exact head named by the standing
+  full-panel receipt, keep the parent and final commits available in the local Git
+  object store, and allow the additive fields in strict JSON consumers.** Legacy
+  receipts and delta recording without the flag retain their prior shape.
+- **CHANGED (gate semantics) — a composed current-head receipt no longer authorizes
+  merge when its full parent, delta chain, Git ancestry, final head, recorded lenses,
+  exact changed paths (including both sides of a rename), or preserved per-pass
+  review caveats cannot be re-established.** **Fetch the missing objects or rerun the
+  required review at the current head; do not hand-edit the persisted receipt to
+  bypass the failed validation.**
+
+---
+
+## #590 — 2026-08-23
+
+- **BREAKING (report / return shape, gate semantics) — `kit_doctor` now reports
+  exactly identified Codex lifecycle wiring as
+  `verified`, structural drift as `misconfigured`, and unsupported object keys around
+  an exact command as `unverifiable`; the latter states make its process exit non-zero**
+  (`#243`). The bounded check applies to the portable document-budget and
+  PR-follow-through engines across `.codex/hooks.json` and inline
+  `.codex/config.toml`, including project hook enablement and duplicate recognizable
+  references. It does not assign lifecycle meaning to altered shell strings. **If you parse
+  the JSON report, accept `verified`, `misconfigured`, and `unverifiable` as
+  registration states. Reconcile an unverifiable object to the exact command and
+  structural fields printed by `./init.sh`; altered command strings receive only
+  generic path diagnostics. Then
+  review the current definition through `/hooks`. When canonical `hooks` and deprecated
+  `codex_hooks` are both present, keep the canonical value authoritative; both values
+  must still be boolean. If bare Python lacks a standard-library TOML parser, rerun the
+  doctor through `uv`.** Repository
+  inspection does not establish project trust, definition trust, or live execution.
+
+---
+
+## #588 — 2026-08-23
+
+- **CHANGED — the Codex `SessionStart` registration printed by `./init.sh` and
+  shipped in `.codex/hooks.json` no longer invokes `check_memory_budget.py`**
+  (`#243`). That engine reads Claude Code's external `MEMORY.md`; Codex keeps the
+  portable `check_doc_budget.py` registration. **Existing hook configuration is
+  adopter-owned: remove the memory-budget command by hand, reconcile the document
+  command printed by `./init.sh`, then review and trust its current definition through
+  `/hooks`.** The printed guidance now says that omitting a matcher covers every
+  supported start source.
+- **ADDED — `kit_doctor` tracks
+  `docs/agentic-dev-kit/runtime-parity.md` as kit-owned doctrine** (`#243`). An
+  older install baseline reports the absent path as `new-upstream`. **During
+  `/upgrade`, take the file to adopt the machine-readable adapter inventory and
+  capability matrix, or explicitly decline it.**
+
+---
+
+## #580 — 2026-08-22
+
+- **`kit_doctor`'s text report now opens with a dedicated block when this repo's copy
+  of `docs/agentic-dev-kit/workflows/upgrade.md` has drifted** (`#577`), above the
+  installation checks and above the drift list — which still carries the file as
+  before. The block exists because that file's drift is not like the others': an
+  upgrade runs Steps 2-3 from the copy on disk and replaces it only in Step 4, so a
+  drifted copy drives the whole run, and the paragraph telling you to check for that
+  is inside the copy you do not have yet. **If you parse the text report, expect a
+  leading block that was not there.** Nothing else moved: no flag, no `--json` key
+  (the state is still read off `files`), and no exit code — `drifted` already carried
+  this file, so a run that renders the block was already exiting non-zero. It fires on
+  every drift state and on no absent state.
+- **The `/upgrade` runtime adapters now tell you to re-read the workflow from the
+  Step 0 clone before Step 2** (`.claude/commands/upgrade.md`,
+  `.agents/skills/upgrade/SKILL.md`). **These are adopter-owned and `/upgrade` Step 4
+  keeps your version, so upgrading does not give you this — copy the new text in by
+  hand**, or the gap above stays open on the one surface that is read before any of
+  the workflow is. Same reason `#553`'s entry gives for the `triage-friction-log`
+  adapter: your copy will not be overwritten, and it will not be updated either.
+
+---
+
+## #558 — 2026-08-22
+
+- **`dev_session.sh merge` now REFUSES a `pr_watch --json` report whose `pr`,
+  `base`, or `head` carries a control character, where it previously
+  mis-parsed one and could authorize the merge** (`#537`). The gate emits those
+  fields tab-joined and the shell splits them, so a tab inside an earlier field
+  shifted every later one; measured, a report whose real base was `WRONG` and
+  whose real head was empty was AUTHORIZED. Control characters are now mapped
+  to a space before the join, which no git ref or PR number can contain, so the
+  identity checks fail closed. **If you vendor `scripts/dev_session.sh`, take
+  the new copy.** No report key, config key, or CLI flag changed, and no report
+  any real `pr_watch` emits parses differently — a lane that merged before
+  still merges.
+- **`_resolve_lane_pr` (used by both `dev_session.sh merge` and
+  `dev_session.sh pr-watch`) refuses the same shape in `gh pr list` metadata**
+  (`#537`). Its base / branch / head-repo-owner checks were bypassable by the
+  same field shift. Same scrub, same fail-closed direction.
+- Both are pinned by new tests in `scripts/tests/test_portability.py`; if you
+  vendor that file too, take it with the engine.
+
+---
+
+## #553 — 2026-08-21
+
+- **`triage-friction-log` is now a shared workflow at
+  `docs/agentic-dev-kit/workflows/triage-friction-log.md`, tracked in
+  `kit-manifest.json`** (`#243`). Its doctrine previously lived only in
+  `.claude/commands/triage-friction-log.md`, which no manifest entry covered,
+  so `/upgrade` never refreshed it and `kit_doctor` could not report it as
+  `differs` however stale it was. **Do not expect your first `kit_doctor` run to
+  name the new workflow at all.** `inspect()` iterates the `KIT_OWNED` tuple in
+  the *running* script and consults `--manifest` only for the hash of a path
+  that tuple already knows, so the run `/upgrade` Step 1 prescribes — your own
+  installed `kit_doctor.py` against the new kit's manifest — reports
+  `0 missing` and never mentions it. What that run does show is
+  `scripts/kit_doctor.py` itself as `differs`; taking that update is what makes
+  the workflow visible. **Afterwards** a pre-existing baseline gets an
+  informational `new-upstream` block — never a finding — and a repo with no
+  baseline recorded reports `missing`. No state here fails a gate, and
+  `/upgrade` offers the doc either way. **If you edited your copy of the Claude command, your edits
+  survive — and that is the hazard, not a reassurance.** `/upgrade` Step 4
+  keeps an adopter's existing runtime adapter rather than refreshing it, so
+  your thick edited copy stays in place and keeps being what your
+  `triage-friction-log` invocation runs. It will not be overwritten, and it
+  will not be updated either: every future change to this workflow lands in the
+  shared doc. Move your edits there and let the adapter become a pointer, or
+  accept that you are pinned to your fork. A new Codex binding ships at
+  `.agents/skills/triage-friction-log/`; ignore it if you do not run Codex.
+- **The workflow's paths are now resolved from `config/dev-model.yaml` instead
+  of hardcoded.** It named `docs/friction-log.md` and `scripts/<engine>.py`
+  literally; it now resolves `<friction-log>`, `<friction-log-archive>`,
+  `<engine-dir>`, `<state-dir>` and `<tracker>`. **If your `paths.friction_log`
+  or `paths.engines` is anything other than the kit default, this workflow
+  followed the wrong path before and follows yours now** — that is a behaviour
+  change, not only a wording one. No config key was added, removed, or
+  redefined; the keys it reads already existed.
+- No engine is vendored by this change and no report shape, gate semantic, or
+  CLI surface moved. `#6` still tracks the triage engine.
+
+## #538 — 2026-08-21
+
+- **A pending review bot's `identity` is now resolved on a healthy poll, not
+  only on an outage-marked one** (`#535`). `review_bots.pending[].identity` and
+  `.trusted` were `""` / `false` for every mid-review row on the `gh` backend
+  and on REST's status-context surface, because `fetch_check_details` gated the
+  identity read on a row that could *cancel* a pending block. **If you pin
+  `identity: ""` or `trusted: false` on a healthy pending entry, that
+  expectation breaks** — a real reviewer's own pending check now reports its
+  creator and `trusted: true`. A REST check-*run* is unchanged; it already
+  carried `app.slug`. Cost while a bot check is pending: **one** extra REST
+  call (the plural `/commits/{sha}/statuses`), or **up to three** extra `gh`
+  invocations on the `gh` backend — a check-runs page and a statuses page
+  always, plus the head-move recheck only when those resolved at least one
+  identity. None once every bot row is terminal and unmarked.
+- **`⚠ review coverage` and `⚠ review owed` are now silent while a trusted bot
+  is mid-review** — the suppression `#521` and `#518` documented but which
+  never fired on the `gh` backend or for a REST status context. A REST **check
+  run** already resolved its creator from `app.slug` and was unaffected, so
+  whether you see a change here depends on your transport and on which surface
+  your reviewer posts. **If you assert on either line's presence during a bot's
+  pending window, that assertion inverts.** Neither line gates anything; `mergeable`,
+  `converged` and `merge_blockers` are unchanged.
+- **`⚠ review owed` is additionally silent for a bot whose outage is announced
+  on its own TRUSTED CHECK** (`#535` item 4) — it previously told you to request a
+  review from a reviewer that had just announced it could not run, in the same
+  render that prescribed the fallback panel. Two shapes still leave the line
+  firing, deliberately: an **untrusted** outage row cancelled nothing (`#95`),
+  and a **comment**-borne outage is a statement about the past that
+  `collect_comments` returns unscoped by head or age — one stale rate-limit
+  comment would otherwise silence the line for the rest of the PR's life. In
+  both, the reviewer is still owed a look.
+
+## #527 — 2026-08-20
+
+- **`kit-manifest.json` now tracks the kit's own test suite** (`#493`): all 16
+  files under `scripts/tests/` and the 2 under `scripts/lib/state_paths/tests/`
+  are now in `KIT_OWNED`, under a new role, `"test"`. Previously a vendored
+  copy of the suite was invisible to `kit_doctor` — `0 differ` regardless of
+  how stale it was — which let a vendored `conftest.py` missing the
+  `_hermetic_state_root` fixture go undetected while its runs wrote into a
+  real `state/pr-watch/` tree. **A pre-existing baseline** gets an
+  informational `new-upstream` block naming up to 18 files on every
+  `kit_doctor` run until you run `/upgrade` to accept or decline them; the
+  intact/not-intact verdict is unaffected. **If you already vendored part or
+  all of the suite**: your next `kit_doctor` run reports real drift on those
+  files for the first time (previously silent), and `/upgrade` refreshes them
+  like any other kit-owned file. No config key or CLI surface changed.
+
+## #530 — 2026-08-20
+
+- **`review_evidence.head` is now `null` on the `bot-coverage` route** (`#495`) —
+  it previously named the receipt's head unconditionally, so a STALE receipt
+  sitting beside qualifying bot coverage at the current head reported the stale
+  sha next to `valid: true`. `head` now joins the other receipt-only keys
+  (`source`, `lenses`, `override`, `bot_signal`): populated only when `route` is
+  `"receipt"`, `null` on `"bot-coverage"`. **If you read `review_evidence.head`
+  to learn which commit the evidence covers, read the report's own top-level
+  `head` instead** — that is what the evidence is always keyed to, on either
+  route.
+
+## #525 — 2026-08-20
+
+- **`⚠ review coverage:` staleness warning now requires a TRUSTED pending bot to
+  suppress it** (`#521`), not merely a name-matching one. Previously the warning
+  ("this bot's last review was of an older commit") was silenced by ANY pending
+  entry for that bot, and `review_bots.pending` is matched by check **name** — a
+  case-insensitive substring — so a same-repo PR's own workflow (`checks: write`)
+  could post a check named e.g. `coderabbit-shim-status` and suppress the coverage
+  warning about its own diff, for up to `bot_pending_grace_minutes`. The line now
+  reads the same `identity`/`trusted` fields `#520` added to `review_bots.pending`
+  entries: a missing, forged, or unresolvable identity counts as untrusted, and the
+  warning FIRES. **No report-shape change** — `identity`/`trusted` already existed
+  on every `pending` entry. If you scrape poll output, expect this warning to fire
+  in more cases than before (specifically, wherever it used to be silenced by an
+  untrusted pending check) — that is the fix, not a regression. **The merge gate is
+  unchanged**: `blocking` still governs it, unchanged and fail-closed, exactly as
+  `#520` left it.
+
+## #520 — 2026-08-19
+
+- **New poll line `⚠ review owed:`** (`#518`) — printed when the report is
+  `converged`, `review_bots.signal` is `ok`, and at least one configured bot is
+  unaccounted for: no review of its own covering the current head, no
+  `review_bots.comment_verdicts` entry, and no review in flight. The line **names
+  the unaccounted bots**, so a multi-bot config gets one answer per reviewer rather
+  than a single verdict speaking for all of them. **Informational: it blocks
+  nothing.** `converged`, `mergeable`,
+  `review_evidence` and `merge_blockers` are unchanged, and a `fallback:panel`
+  receipt still authorizes the merge — the line still prints in that state, which is
+  the point of it. If you scrape poll output, this is a new line; **this line itself
+  adds no JSON key** — the next bullet is the one that changes the report shape.
+- **`review_bots.pending` entries grew `identity` and `trusted`** (report shape) —
+  the check creator GitHub records, and whether it is trusted to speak for that bot
+  (`#95`'s rule, the same two fields `review_bots.unavailable` already carries).
+  Additive: if you parse `review_bots`, nothing was removed or renamed.
+  **`blocking` deliberately does not read them and the merge gate is unchanged** — a
+  forged pending check still blocks, which is fail-closed, since it can only block the
+  PR that forged it and it ages out at `bot_pending_grace_minutes`. The new
+  `⚠ review owed` line is the first consumer that *does* require trust: a check name
+  is matched as a substring and is the PR's own to choose, so an untrusted row must
+  not be able to silence "nobody has reviewed this" on the PR that posted it.
+- **`docs/agentic-dev-kit/workflows/pr-watch.md`: the `converged` loop step now
+  settles the coverage request before recording the receipt**, and states that an
+  already-true `mergeable` does not discharge it. If you have vendored or forked that
+  workflow, take this step; a loop running the old wording can reach merge with the
+  configured reviewer never asked. Engine behaviour does not depend on it.
+
+## #500 — 2026-08-17
+
+- **`review_bots` grew a `comment_verdicts` key** (report shape) — configured bots
+  that announced a *completed* review of the current head in a **comment**, creating
+  no review object (`#44`). Entries are `{bot, sha}`. **Reported only: no gate reads
+  it.** `mergeable`, `review_evidence` and `merge_blockers` are unchanged, by ruling —
+  keying a merge gate on a reviewer's prose would let an upstream wording change
+  decide merges. If you parse `review_bots`, this is additive.
+- **`config/dev-model.yaml` gained `review.comment_verdict_markers`** — comment text
+  announcing a completed review, matched case-insensitively as substrings. Defaults to
+  `["no actionable comments were generated", "actionable comments posted:"]`. The
+  installer only adds absent keys, so **an existing config keeps working unchanged**
+  and inherits these defaults; set it only if your reviewer words its verdict
+  differently. A marker matching nothing costs you the report line and nothing else.
+- **New poll line `ⓘ review reported:`** on that state, naming the sha and the
+  `--record-review "<bot>:comment-verdict" --head <sha>` command. If you scrape poll
+  output, this is a new line; it is informational and never blocks.
+- Receipt source **`<bot>:comment-verdict`** is now a named literal for that case,
+  recorded with **no `--lenses`**. Deliberately outside the `fallback:` namespace —
+  those stand for a substitute pass, and this stands for the real reviewer on a
+  surface the gate cannot read. Sources are free-form, so nothing rejects the old
+  spelling; the name is for the audit trail.
+
+## #499 — 2026-08-17
+
+- **BREAKING (gate semantics)** — the `#488` objection blocker is now read from each
+  configured bot's latest **verdict** (`APPROVED` / `CHANGES_REQUESTED` /
+  `DISMISSED`) rather than from its latest **review of any kind**. A bot's own
+  follow-up `COMMENTED` or `PENDING` review at the same head no longer clears its
+  standing `CHANGES_REQUESTED` — previously it did, *and* then supplied the
+  independent-review evidence, taking a PR from two merge blockers to zero with no
+  commit pushed, nothing dismissed, and no forge audit trail. **If you rely on that
+  behaviour, you were relying on a fail-open**; the routes out are unchanged, and are
+  now exactly three — address the findings and push, dismiss the review on the forge,
+  or have the reviewer re-review this same head and approve. Each of the three leaves
+  the forge showing why the objection no longer applies — a superseding commit, a
+  dismissal, or a later approving verdict. The follow-up `COMMENTED` showed only that
+  a review happened, which nothing reads as a clearance.
+  Nothing to do on upgrade unless a PR of yours is currently merging through the old
+  path, which will now correctly refuse. Pinned by
+  `test_a_bots_own_later_non_verdict_review_cannot_clear_its_objection` and
+  `test_the_objection_read_pins_both_clauses_and_ignores_a_failed_check_read` in
+  `scripts/tests/test_pr_watch.py`.
+- **`review_bots` grew an `objections` key** (report shape) — the verdict-only
+  reduction over the same review list that `coverage` reduces newest-wins. Same entry
+  shape as `coverage` (`{bot, sha, submitted_at, covers_head, state}`). If you parse
+  `review_bots`, this is additive. **If you compute an objection yourself from
+  `review_bots.coverage`, move it to `objections`** — `coverage` deliberately still
+  reports the newest review whatever it says, because a bot's ordinary *clean* review
+  is `COMMENTED` and `#350`'s evidence route depends on that.
+- **Corrects the wording of the `#488` entry below**, which says "own latest review of
+  the **current head** is `CHANGES_REQUESTED`". Read strictly that described the
+  defect, not the intent. It should read *latest verdict*; the entry is left as
+  written rather than edited so the record stays honest about what shipped.
+
+## #488 — 2026-08-16
+
+- **BREAKING (gate semantics)** — `mergeable` (and its `done` alias) is now **false**
+  while a configured `review.bots` entry's own latest review of the **current head**
+  is `CHANGES_REQUESTED`, and a `--record-review` receipt no longer overrides that.
+  A PR your review bot has asked for changes on will stop reporting mergeable even
+  with a valid current-head receipt, so an autonomous `dev_session.sh merge` that
+  previously fired on such a PR will now refuse. **To clear it, address the findings
+  and push** — the blocker is bound to the head, so a new commit leaves the objection
+  covering an older one and it clears on the next poll; a review dismissed on the
+  forge clears it too. There is **no override flag**:
+  `--allow-pending-bot-review` covers a *silent* bot and does not apply. Only
+  `CHANGES_REQUESTED` blocks — `PENDING`, `DISMISSED`, an empty state, and any state
+  this engine does not recognize raise no blocker, so a PR whose bot review carries
+  one of those is unaffected. A repo with `review.bots: []` is unaffected entirely.
+  **This supersedes the `CHANGES_REQUESTED` caveat in `#484` below**, which recorded
+  that a receipt could authorize a merge over a standing objection and that `#484`
+  left it that way. `#485`.
+- **CHANGED (report shape)** — `merge_blockers[]` may contain a new entry,
+  `configured review bot requested changes on current head: <bot>` (comma-separated
+  when several). Anything matching on the exact blocker set must expect it. On the
+  REST backend this fires **alongside** the existing
+  `review decision is CHANGES_REQUESTED`, because `_rest_review_decision` aggregates
+  every reviewer; under `gh` it is usually the only one of the two, which is what
+  made `#485` reachable. `#485`.
+- **ADDED (return shape)** — `objecting_bot_coverage(review_bots, head)` is public
+  beside `qualifying_bot_coverage`, returning the sorted configured bots with a
+  standing objection to `head`. Unlike its sibling it does **not** require
+  `review_bots["signal"] == "ok"`: the objection is read from `pr view` review
+  objects, not from the check read that `signal` describes. `#485`.
+
+## #484 — 2026-08-15
+
+- **CHANGED (gate semantics)** — `mergeable` no longer requires a `--record-review`
+  receipt in every case. It is now satisfied by current-head independent-review
+  **evidence** from either of two routes: a receipt bound to the head (unchanged), or a
+  configured `review.bots` entry whose own review covers that exact head **and carries a
+  standing verdict** — `APPROVED` or `COMMENTED`. A review that is `DISMISSED`,
+  `PENDING`, `CHANGES_REQUESTED`, or in any state this engine does not recognize is
+  **not** evidence, and leaves the receipt requirement standing. Note especially the
+  `CHANGES_REQUESTED` case if you relied on the separate `reviewDecision` blocker to
+  cover it — **it covers it on one transport and not the other.** Under `gh`, that field
+  is GitHub's own and reflects required-reviewer rules, so it can read `""` while a
+  non-required bot asks for changes; on the REST fallback, `pr_watch`'s own
+  `_rest_review_decision` aggregates every reviewer regardless, so the blocker does fire.
+  The evidence rule above holds on both, which is why it does not defer to that blocker. **If you record a receipt
+  on a PR your review bot already reviewed, stop — you no longer need
+  to, and every available `<source>` literal names a fallback pass that did not run.**
+  A repo with `review.bots: []` is unaffected: with no configured bot there is no
+  coverage route, and the receipt stays the only way through. Nothing is loosened for
+  a PR the bot has *not* reviewed at the current head — an unusable commit SHA on the
+  review, a verdict that arrived only as a comment (`#44`), or a failed bot-state read
+  all yield no evidence and leave the receipt requirement standing. A pending bot's
+  grace blocker and an unacknowledged outage notice keep their existing authority.
+  **`CHANGES_REQUESTED` is not claimed to** — a recorded receipt has always been able
+  to authorize a merge over a bot's standing objection, because `--record-review`
+  refuses only on a bot's *pending check row*, never on its submitted verdict. That is
+  unchanged by this release and is why the new route excludes the state outright rather
+  than deferring to that blocker. `#350`.
+- **CHANGED (report shape)** — `review_evidence` grew two keys. **`route`** is
+  `"receipt"`, `"bot-coverage"`, or `null`, and names which route satisfied the gate
+  (`"receipt"` wins when both hold). **`bots`** is the sorted list of configured bots
+  whose coverage qualified, and is populated even when `route` is `"receipt"`. **If
+  you assert on the exact shape of `review_evidence`, add both keys.** The
+  receipt-describing keys — `source`, `lenses`, `override`, `bot_signal` — are
+  unchanged and stay receipt-only, so they are `null`/`[]` on the coverage route.
+  `#350`.
+- **ADDED (report shape)** — each `review_bots.coverage[]` entry gains a **`state`** key:
+  the upper-cased GitHub review state of that bot's last review, or `""` when the payload
+  carried none. **If you assert on the exact shape of a coverage entry, add it.** Coverage
+  is still reported for a non-qualifying state — the advisory display shows which commit
+  the bot last looked at regardless — so `state` is the only way to tell a reported entry
+  from a gating one. `#350`.
+- **ADDED (report shape)** — the poll render gains two lines. A coverage-route report
+  prints `review evidence: the configured review bot reviewed this head (<bots>) — no
+  receipt needed` in place of the receipt line; a receipt-route report that *also* has
+  coverage gains an indented `+ the configured review bot also reviewed this head
+  (<bots>)` beneath its existing line. **If you match the render against a fixed set of
+  shapes, add these.** `#350`.
+
+## #478 — 2026-08-15
+
+- **BREAKING (engine CLI surface)** — `<engine-dir>/reconcile_sessions.sh` gained a
+  fourth lane state, **`held`**, and a fourth exit code, **`4`**. A scope is `held`
+  when its persisted merge class is `operator` (`<sessions-dir>/<scope>/merge_class`)
+  and its open PR is merge-ready by `pr_watch.py`'s own `mergeable`. Exit `4` means
+  every launched lane is merged or held with at least one held; exit `0` still means
+  every lane **merged**, unchanged, and open or parked still outranks held at exit `3`.
+  **If you branch on this script's exit code, add `4`.** A caller that only tests
+  `== 0`, or that stops on any non-zero, needs no change; a caller that matches `3`
+  exactly will now fall through when a lane is held. `#465`.
+- **CHANGED (report shape)** — the tally line grows a `, held H` term, placed after
+  `parked K` and before the existing conditional `, open O`. It is emitted **only**
+  when `H > 0`, so a batch with no held lane prints `launched N, merged M, parked K`
+  exactly as before. **If you parse that line, accept the optional term.** `#465`.
+- **CHANGED (engine CLI surface)** — reconciling now invokes
+  `<engine-dir>/pr_watch.py` (via `uv run`, `--json --no-persist`, with
+  `$DEVKIT_STATE_ROOT` pointed at the lane's own sandbox and `$GH_REPO` pinned to the
+  repository the run resolved through `gh`) once per operator-class open lane, plus one
+  `gh repo view` to resolve that repository — **once per run when it succeeds**, and
+  retried on the next such lane when it does not, so a transient failure cannot cost
+  the rest of the batch its `held`. It writes nothing.
+  Where `uv` or the engine is absent, where the probe fails or times out, **or where
+  that `gh repo view` cannot identify the repository**, the lane reports `open` as
+  before and the reason is named on **stderr** — **if you capture stderr, expect that
+  block.** A repository the run could not identify is a refusal, never an unpinned
+  probe: `env` only adds, so an unpinned probe would inherit the caller's own
+  `$GH_REPO`. `#465`.
+- **CHANGED (report shape)** — a **second, distinct stderr block** exists: when two
+  session directories under `<sessions-dir>/` record the same branch, that branch's
+  merge class is ambiguous, so the lane is never classified `held` and a
+  `⚠ two sessions record branch '<branch>' (…)` warning names both directories. It
+  fires before any probe, so it is not the "could not evaluate" block above. **If you
+  match stderr against one expected shape, add this one.** `#465`.
+
+## #477 — 2026-08-15
+
+- **BREAKING (gate semantics)** — `"actionable comments posted: 0"` is gone from
+  the engine's `_DEFAULT_NOISE_MARKERS`. A comment body whose only match was that
+  string is no longer filtered: it surfaces in `new_comments` and holds
+  `converged` false until acknowledged. The direction is fail-closed — this can
+  only make the gate stricter — but it is a flip. **If your review bot really does
+  emit that wording, put it back in your own `review.noise_markers`**; on this
+  repo it had never matched a single comment on any PR.
+- **CHANGED (config keys)** — `review.noise_markers` ships one entry shorter, and
+  `init.sh` no longer seeds the retired entry into a *fresh* `dev-model.yaml`. An
+  existing config is left alone (`ensure_review_key` only adds absent keys), so
+  **delete the line from your own config by hand** if you want the new default.
+  While you are there, re-check the rest of your list against what your bot
+  actually posts today — a marker that matches nothing reports nothing.
+  **Do not replace it with CodeRabbit's clean-verdict sentence.** `is_noise`
+  matches the body with no author check, so that entry would also discard a human
+  comment quoting the bot; `scripts/tests/test_pr_watch.py` now fails if you add
+  it.
+
+## #475 — 2026-08-15
+
+- **CHANGED (engine CLI surface)** — `kit_doctor.py`'s two writing flags,
+  `--generate-manifest` and `--record-install`, print their `wrote <path>
+  (...)` status line to **stderr**, and now suppress it — along with any
+  secondary note or warning printed in the same run, e.g.
+  `--generate-manifest`'s "listed file(s) absent from this checkout"
+  warning — when stderr's current descriptor is the exact file just
+  written. That covers the case a stderr-only move does not, e.g. `>
+  kit-manifest.json 2>&1` or `&> kit-manifest.json` (#464). Read this
+  output from stderr, not stdout. Do not redirect stdout to select the
+  output path, and do not merge stderr onto it either — pass `--manifest` /
+  `--baseline` for a non-default one; the tool writes its target file
+  itself regardless of any redirect, and prints nothing if your redirect
+  happens to alias it — including a warning about absent files, so do not
+  rely on stderr's absence to mean nothing is missing under such a
+  redirect.
+
+## #459 — 2026-08-13
+
+- **BREAKING (gate semantics)** — the #428 guard's snapshot now records a kind
+  for every entry the walk yields under `state/`: a symlink at its own path
+  with a `symlink -> <target path>` value, the root's own presence as `./`,
+  and any entry that is none of link/dir/file as `<special>`. A pytest run's
+  exit code now flips on writes that previously passed silently — a symlink
+  created, retargeted, or deleted under the real `state/`; a bare childless
+  `state/` created by the run; a fifo or socket appearing. This widens what
+  the snapshot sees, not everything the guard can conclude — the known
+  residuals stay documented in `<engine-dir>/conftest.py`'s own docstrings.
+  If your suite deliberately makes such entries, sandbox it via
+  `$DEVKIT_STATE_ROOT` before taking the new `<engine-dir>/conftest.py`.
+
+## #453 — 2026-08-13
+
+- **BREAKING (gate semantics)** — the #428 guard is now split across **two** files
+  that must be taken **together**: `<engine-dir>/conftest.py` (new, kit-owned and
+  tracked in `kit-manifest.json`, so `/upgrade` Step 3 lists it) carries the
+  detection half, and `<engine-dir>/tests/conftest.py` keeps the prevention
+  fixture. **Taking only the second silently leaves you with no detection** —
+  nothing fails to tell you so. Not filed as `ADDED`, whose meaning in this file
+  is "new surface you may adopt or ignore": ignoring this one degrades a guard.
+- **BREAKING (gate semantics)** — with both files in place, a pytest run's exit
+  code now flips on a write into the real `<repo>/state/` for **every** collected
+  directory rather than only `<engine-dir>/tests`. **A run of
+  `<engine-dir>/lib/state_paths/tests` alone can now fail** with `REGRESSION
+  (#428)` where it previously passed. If your vendored suite writes there
+  deliberately, sandbox it via `$DEVKIT_STATE_ROOT` before upgrading.
+- **BREAKING (gate semantics)** — **any pytest run whose CWD is a test directory
+  itself no longer carries the guard**, whatever arguments it is given: `cd
+  <engine-dir>/tests && pytest`, `… && pytest test_x.py` and `… && pytest .` are
+  all silent on a leak, because pytest resolves rootdir — and with it confcutdir —
+  from the cwd, cutting off every conftest above. Invoke the test directories **by
+  path, from the repo root or the engine root**, as the Makefile does.
+
+---
+
+## #445 — 2026-08-13
+
+- **ADDED (engine CLI surface)** — `panel_prompt.py --delta-draws <text>`, for a
+  **delta pass** only. Renders the author's stated draws (prose class,
+  safety-critical boundary) into the lens prompt with the duty to dispute them and
+  the one-verdict-line-per-draw requirement `fallback-review-panel.md` asks that
+  prompt to carry. An empty value is refused, like every other optional override.
+  **Nothing to do unless you assemble delta-pass prompts**: omit the flag and no
+  draws section is rendered.
+- **CHANGED (engine CLI surface)** — `panel_prompt.py --carry-forward` renders four
+  further lines after your text, telling the lens the section is not the author's
+  view of the change and to report it as a finding if it reads that way. **A test
+  asserting the exact text of a `--carry-forward` prompt must be updated.** Draws now
+  go to `--delta-draws`; a full panel's prompt carries neither.
+- **CHANGED (engine CLI surface)** — if you also refresh
+  `docs/agentic-dev-kit/fallback-review-panel.md`, **every** rendered prompt changes
+  whatever flags you pass: the engine quotes that file's contract section verbatim,
+  and this PR adds a sentence to contract item **Scratch namespace** (reach the
+  namespace by creating a fresh path, never by removing and recreating one). **A test
+  pinning a rendered prompt's exact bytes must be updated even if you use no new
+  flag.** Take the engine without the doctrine and only the two flags above move.
+
+---
+
+## #412 — 2026-08-10
+
+- **BREAKING (report shape)** — every check row now carries an `identity` key
+  (`#95`): the row's creator, `app.slug` for a check run and `creator.login` for a
+  status context, empty string when it could not be read. Both backends set it —
+  `_rest_check_rows` builds it on the REST path, and `fetch_check_details` sets it
+  unconditionally on the `gh` path. **Exact-equality assertions on check-row dicts
+  fail.** Add `identity` to the expected dict, or compare only the keys you care
+  about.
+- **BREAKING (report shape)** — entries in `review_bots["unavailable"]` with
+  `surface: "check"` gained `identity` and `trusted` (`#95`). Same remedy as above for
+  any exact-dict assertion over them.
+- **BREAKING (gate semantics)** — an outage announcement on the **check** surface
+  cancels a review bot's pending block only when the row's `identity` is one the
+  bot's own tables admit (`#95`): the bot key, its `[bot]` form, any
+  `review.bot_author_aliases` entry, or any `review.bot_app_slugs` entry. An
+  unattributable row is still **reported** as unavailable, so the fallback-panel
+  signal is unchanged, but it no longer clears the block — the bot falls through to
+  the ordinary pending path and ages out over `review.bot_pending_grace_minutes`.
+  **A test that fabricates an outage check row and asserts the block is cancelled
+  must now set `identity`.** The direction is closed, not open: this can only delay a
+  merge, never permit one.
+- **ADDED (config key)** — `review.bot_app_slugs`, optional. Extra creator identities
+  trusted to announce an outage for a bot, for repos whose bot's app slug differs
+  from its login. Absent is the normal case; the trusted set is otherwise derived
+  from `review.bot_author_aliases`, so a repo that configures its bot by name needs
+  no edit.
+
+## #407 — 2026-08-10
+
+- **BREAKING (gate semantics)** — `mergeable` now additionally requires a **settle
+  baseline**: the check rollup must have held the same size for at least
+  `review.settle_grace_minutes` on this head (`#190`/`#39`). Until it has,
+  `merge_blockers` carries an entry **beginning** `check rollup has not settled for
+  current head` and always closing with a parenthetical — `(no settle baseline
+  recorded)` or `(stable 1.2m of 3m)` — so match on the prefix, never the whole
+  string. `mergeable` — and its alias `done` — is `False` while it is present. **A single `build_report` call
+  with no `prior_settle_since` / `prior_settle_total` is `mergeable: False` by
+  design**, because a missing baseline reads as "the rollup just moved". Adopters
+  constructing reports directly in tests must supply both: `prior_settle_total` equal
+  to the poll's `checks["total"]`, and `prior_settle_since` a timestamp at least
+  `review.settle_grace_minutes` old. In the live poll loop nothing changes except
+  latency — `read_settle_since` supplies both from the per-PR state file, and the
+  gate opens one grace window later than it used to.
+
+  Read this one before upgrading if you self-merge. A repo whose merge step reads
+  `mergeable` is changing what merges unattended. It fails **closed** — the guard is
+  additive to `merge_blockers`, so nothing merges that would not have merged before —
+  but a `require_ci: false` repo pays the extra poll plus the grace for a guard that
+  buys it nothing.
+- **ADDED (config key)** — `review.settle_grace_minutes`, optional, default `3`. How
+  long the rollup must hold its size before the merge gate believes it is complete.
+  An absent key takes the default, so no config edit is required to upgrade.

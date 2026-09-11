@@ -1,0 +1,30 @@
+{
+  "PYTHONOPTIMIZE": null,
+  "argv": [
+    "gh",
+    "run",
+    "view",
+    "34519875043",
+    "--repo",
+    "topij/agentic-dev-kit",
+    "--job",
+    "103014822984",
+    "--log"
+  ],
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "ended_at": "2026-09-10T19:27:10.017320+00:00",
+  "environment": {
+    "DEVKIT_STATE_ROOT": "/private/tmp/item5-b-kit-repair-1kc2i4t2/author/state",
+    "PYTEST_ADDOPTS": "-o cache_dir=/private/tmp/item5-b-kit-repair-1kc2i4t2/author/pytest-cache -ra",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "RUFF_CACHE_DIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/author/ruff-cache",
+    "TMPDIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/author/tmp",
+    "UV_CACHE_DIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/author/uv-cache",
+    "UV_TOOL_DIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/author/uv-tools"
+  },
+  "returncode": 0,
+  "revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+  "started_at": "2026-09-10T19:27:07.642290+00:00",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_sha256": "d29d8e4098964e07b3f2564181e4b11abc8042fa36d591f7bb5defb318981017"
+}

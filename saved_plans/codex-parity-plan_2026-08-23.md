@@ -446,7 +446,12 @@ historical observation it was and is not silently refreshed.
      and private fixture PR #1 at `f770f183bf6691f1f706c676b740cf2ef5ceb766`.
      PR-01 is paused at the recorded P2 inherited detector gap and P3 wording
      imprecision. The [kit-only repair decision](phase5-item5-b-review-repair-decision_2026-09-10.md)
-     owns the next action. Fixture merge remains excluded; the nonfunctional custom
+     was approved on 2026-09-10. The [kit repair execution](phase5-item5-b-kit-repair-execution_2026-09-10.md)
+     carries the applied kit scope and operator merge hold. Its panel recorded a P2
+     inherited FIFO-root gap and P3 root-symlink coverage gap; the [follow-up packet](phase5-item5-b-review-followup-decision_2026-09-10.md)
+     was approved as ITEM5-B-KIT-REVIEW-02 on 2026-09-11. The [follow-up execution](phase5-item5-b-review-followup-execution_2026-09-11.md)
+     owns the applied scope and exact reviewed-head operator merge decision. No retained update is authorized
+     by that approval. Fixture merge remains excluded; the nonfunctional custom
      wrap-up carries ownership acceptance only. No original continuity or prior field
      credit was recreated.
      Delivery item 6 is independent of these paths. The approved

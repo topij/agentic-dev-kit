@@ -1,0 +1,33 @@
+import json
+import runpy
+import subprocess
+import sys
+
+E=runpy.run_path('/private/tmp/item5-b-review02-20260911-303qa6cz/execute.py')
+kind,number,sequence=sys.argv[1:4]
+target=E['REPO'] if kind=='fixture' else E['KIT']
+engine=target/('scripts/devkit/pr_watch.py' if kind=='fixture' else 'scripts/pr_watch.py')
+env=E['env']('watch')
+if kind=='kit':
+    env['DEVKIT_STATE_ROOT']=str(E['OUT']/'watch/state')
+E['enter'](target)
+head=E['git'](target,'rev-parse','HEAD')
+argv=['uv','run',str(engine),number,'--json']
+if len(sys.argv)>4:
+    argv.extend(sys.argv[4:])
+started=E['now']()
+p=subprocess.run(argv,cwd=target,env=env,capture_output=True)
+folder=E['OUT']/'polls'
+folder.mkdir(exist_ok=True)
+item={'argv':argv,'cwd':str(target),'revision':head,'started_at':started,'ended_at':E['now'](),'returncode':p.returncode,'stdout':p.stdout.decode(),'stderr':p.stderr.decode(),'DEVKIT_STATE_ROOT':env['DEVKIT_STATE_ROOT']}
+try:
+    item['report']=json.loads(p.stdout)
+except ValueError:
+    pass
+E['write'](folder/(kind+'-'+sequence+'-'+head+'.json'),item)
+visible={k:v for k,v in item.items() if k!='stdout'}
+if 'report' in visible:
+    visible['report']=dict(visible['report'])
+    visible['report']['new_comments']=[{k:(v[:3000] if k=='body' else v) for k,v in c.items()} for c in visible['report'].get('new_comments',[])]
+print(json.dumps(visible,indent=2))
+sys.exit(p.returncode)

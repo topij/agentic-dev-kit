@@ -1,0 +1,129 @@
+Waiting for serial verification lock
+{"cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo", "argv": ["python3", "-B", "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/review-checks.py", "mutations"], "environment": {"PYTHONDONTWRITEBYTECODE": "1", "DEVKIT_STATE_ROOT": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/state", "UV_CACHE_DIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/uv-cache", "UV_TOOL_DIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/uv-tools", "RUFF_CACHE_DIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/ruff-cache", "TMPDIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/tmp", "PYTEST_ADDOPTS": "-o cache_dir=/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/pytest-cache -ra"}}
+{"cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo", "revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45", "date": "2026-09-10T19:36:54.358076+00:00"}
+--- reviewed/scripts/conftest.py
++++ mutant/scripts/conftest.py
+@@ -234,8 +234,6 @@
+     # A regular file here blocks engines that require a state directory. Hash
+     # it at the root entry so creation and content changes cannot look absent.
+     # Root symlinks retain the separately documented handling below.
+-    if not state_dir.is_symlink() and state_dir.is_file():
+-        return {"./": _hash_file(state_dir)}
+     if not state_dir.is_dir():
+         return {}
+     snapshot: dict[str, str] = {"./": "<dir>"}
+
+{"argv": ["uv", "run", "--with", "pytest", "--with", "pyyaml", "python", "-B", "-m", "pytest", "scripts/tests/test_state_guard.py", "scripts/tests/test_kit_doctor.py::test_kit_repo_self_check_is_clean", "-q", "-m", "not driftcheck"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo", "revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45", "date": "2026-09-10T19:36:54.373950+00:00", "returncode": 1, "stdout_sha256": "aebe8f13c6f99b8e8d4f840c2468777145eefa9ff022cd17243b3fc3020ed216", "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+str
+    ) -> None:
+        leaked = _leaked_path(root, leak_kind)
+        if not _leak_landed(root, leak_kind):
+            pytest.fail(
+                f"the planted test did not write {leaked}, so this run proves nothing "
+                f"about the guard.\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+            )
+>       assert result.returncode != 0, (
+            f"the guard did not fail the run after a write into {leaked}.\n"
+            f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        )
+E       AssertionError: the guard did not fail the run after a write into /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/tmp/pytest-of-topi/pytest-19/test_guard_observes_regular_fi5/state.
+E         stdout:
+E         .                                                                        [100%]
+E         =============================== warnings summary ===============================
+E         ../../../../uv-cache/archive-v0/UMj0e0JW5OS8h39n/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+E           /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/uv-cache/archive-v0/UMj0e0JW5OS8h39n/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+E           
+E             self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+E         
+E         -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+E         1 passed, 1 warning in 0.00s
+E         
+E         stderr:
+E         
+E       assert 0 != 0
+E        +  where 0 = CompletedProcess(args=['/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/corr...n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 0.00s\n', stderr='').returncode
+
+scripts/tests/test_state_guard.py:287: AssertionError
+=========================== short test summary info ============================
+FAILED scripts/tests/test_state_guard.py::test_guard_observes_regular_file_at_state_root[new-flat]
+FAILED scripts/tests/test_state_guard.py::test_guard_observes_regular_file_at_state_root[new-nested]
+FAILED scripts/tests/test_state_guard.py::test_guard_observes_regular_file_at_state_root[modified-flat]
+FAILED scripts/tests/test_state_guard.py::test_guard_observes_regular_file_at_state_root[modified-nested]
+4 failed, 49 passed, 1 deselected in 16.44s
+ 
+{"case": "removed-root-file-branch", "byte_equal": true, "original_sha256": "a0a82682c9431205f8c0db80176694b37800da7964e5b77ec3eba283fc7569c2", "restored_sha256": "a0a82682c9431205f8c0db80176694b37800da7964e5b77ec3eba283fc7569c2", "date": "2026-09-10T19:37:11.077475+00:00"}
+--- reviewed/scripts/conftest.py
++++ mutant/scripts/conftest.py
+@@ -235,7 +235,7 @@
+     # it at the root entry so creation and content changes cannot look absent.
+     # Root symlinks retain the separately documented handling below.
+     if not state_dir.is_symlink() and state_dir.is_file():
+-        return {"./": _hash_file(state_dir)}
++        return {"./": "<file>"}
+     if not state_dir.is_dir():
+         return {}
+     snapshot: dict[str, str] = {"./": "<dir>"}
+
+{"argv": ["uv", "run", "--with", "pytest", "--with", "pyyaml", "python", "-B", "-m", "pytest", "scripts/tests/test_state_guard.py", "scripts/tests/test_kit_doctor.py::test_kit_repo_self_check_is_clean", "-q", "-m", "not driftcheck"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo", "revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45", "date": "2026-09-10T19:37:11.078182+00:00", "returncode": 1, "stdout_sha256": "2c8ab83d3272566185950f83793b1f8d272655e706f25bc8135555de5634454a", "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+rrectness/tmp/pytest-of-topi/pytest-20/test_guard_observes_regular_fi5')
+leak_kind = 'bare-root'
+
+    def _assert_guard_fired(
+        result: subprocess.CompletedProcess[str], root: Path, leak_kind: str
+    ) -> None:
+        leaked = _leaked_path(root, leak_kind)
+        if not _leak_landed(root, leak_kind):
+            pytest.fail(
+                f"the planted test did not write {leaked}, so this run proves nothing "
+                f"about the guard.\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+            )
+>       assert result.returncode != 0, (
+            f"the guard did not fail the run after a write into {leaked}.\n"
+            f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        )
+E       AssertionError: the guard did not fail the run after a write into /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/tmp/pytest-of-topi/pytest-20/test_guard_observes_regular_fi5/state.
+E         stdout:
+E         .                                                                        [100%]
+E         =============================== warnings summary ===============================
+E         ../../../../uv-cache/archive-v0/UMj0e0JW5OS8h39n/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+E           /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/uv-cache/archive-v0/UMj0e0JW5OS8h39n/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+E           
+E             self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+E         
+E         -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+E         1 passed, 1 warning in 0.00s
+E         
+E         stderr:
+E         
+E       assert 0 != 0
+E        +  where 0 = CompletedProcess(args=['/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/corr...n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 0.00s\n', stderr='').returncode
+
+scripts/tests/test_state_guard.py:287: AssertionError
+=========================== short test summary info ============================
+FAILED scripts/tests/test_state_guard.py::test_guard_observes_regular_file_at_state_root[modified-flat]
+FAILED scripts/tests/test_state_guard.py::test_guard_observes_regular_file_at_state_root[modified-nested]
+2 failed, 51 passed, 1 deselected in 12.52s
+ 
+{"case": "constant-root-file-hash", "byte_equal": true, "original_sha256": "a0a82682c9431205f8c0db80176694b37800da7964e5b77ec3eba283fc7569c2", "restored_sha256": "a0a82682c9431205f8c0db80176694b37800da7964e5b77ec3eba283fc7569c2", "date": "2026-09-10T19:37:23.857298+00:00"}
+--- reviewed/scripts/conftest.py
++++ mutant/scripts/conftest.py
+@@ -234,7 +234,7 @@
+     # A regular file here blocks engines that require a state directory. Hash
+     # it at the root entry so creation and content changes cannot look absent.
+     # Root symlinks retain the separately documented handling below.
+-    if not state_dir.is_symlink() and state_dir.is_file():
++    if state_dir.is_file():
+         return {"./": _hash_file(state_dir)}
+     if not state_dir.is_dir():
+         return {}
+
+{"argv": ["uv", "run", "--with", "pytest", "--with", "pyyaml", "python", "-B", "-m", "pytest", "scripts/tests/test_state_guard.py", "scripts/tests/test_kit_doctor.py::test_kit_repo_self_check_is_clean", "-q", "-m", "not driftcheck"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo", "revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45", "date": "2026-09-10T19:37:23.857931+00:00", "returncode": 0, "stdout_sha256": "11f5e2e5966cdcaf0dffb35caf1f70de21ccd7a81de332aa82a6ab4a3b870f17", "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+.....................................................                    [100%]
+53 passed, 1 deselected in 12.56s
+ 
+{"case": "follow-root-file-symlink", "byte_equal": true, "original_sha256": "a0a82682c9431205f8c0db80176694b37800da7964e5b77ec3eba283fc7569c2", "restored_sha256": "a0a82682c9431205f8c0db80176694b37800da7964e5b77ec3eba283fc7569c2", "date": "2026-09-10T19:37:36.674928+00:00"}
+{"argv": ["uv", "run", "--with", "pytest", "--with", "pyyaml", "python", "-B", "-m", "pytest", "scripts/tests/test_state_guard.py", "scripts/tests/test_kit_doctor.py::test_kit_repo_self_check_is_clean", "-q"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo", "revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45", "date": "2026-09-10T19:37:36.675077+00:00", "returncode": 0, "stdout_sha256": "23715424d31057c3113d6a7a23d54f41c2882d25a353253717acfc94dd24389b", "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+......................................................                   [100%]
+54 passed in 12.56s
+ 
+{"returncode": 0}

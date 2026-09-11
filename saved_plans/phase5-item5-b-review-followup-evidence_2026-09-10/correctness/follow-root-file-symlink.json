@@ -1,0 +1,25 @@
+{
+  "argv": [
+    "uv",
+    "run",
+    "--with",
+    "pytest",
+    "--with",
+    "pyyaml",
+    "python",
+    "-B",
+    "-m",
+    "pytest",
+    "scripts/tests/test_state_guard.py",
+    "scripts/tests/test_kit_doctor.py::test_kit_repo_self_check_is_clean",
+    "-q",
+    "-m",
+    "not driftcheck"
+  ],
+  "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/mut-correctness-b018a054-x4aigsj1/repo",
+  "revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+  "date": "2026-09-10T19:37:23.857931+00:00",
+  "returncode": 0,
+  "stdout_sha256": "11f5e2e5966cdcaf0dffb35caf1f70de21ccd7a81de332aa82a6ab4a3b870f17",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

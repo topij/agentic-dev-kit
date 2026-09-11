@@ -1,0 +1,14 @@
+{
+  "/Users/topi/Coding/agentic-dev-kit/kit-manifest.json": {
+    "mode": "0o644",
+    "sha256": "4697b0e14dfa85ba86797aef85788d1ce2edb0a7001a9c6a1057109775cbad96"
+  },
+  "/Users/topi/Coding/agentic-dev-kit/scripts/conftest.py": {
+    "mode": "0o644",
+    "sha256": "a0a82682c9431205f8c0db80176694b37800da7964e5b77ec3eba283fc7569c2"
+  },
+  "/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_state_guard.py": {
+    "mode": "0o644",
+    "sha256": "8e7a7082fa4e7fcaa0ccf1985be646c7b26bb86af4cc519349cc068861b6b291"
+  }
+}

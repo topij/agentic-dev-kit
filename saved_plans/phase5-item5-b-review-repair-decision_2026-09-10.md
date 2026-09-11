@@ -1,6 +1,14 @@
 # ITEM5-B kit review repair decision
 
-**Prepared, not approved.** `ITEM5-B-KIT-REVIEW-01` is new scope. ACCEPT-01
+**Approved by the operator on 2026-09-10.** The exact response was “Yes, I Approve
+ITEM5-B-KIT-REVIEW-01 as scoped.” The [kit repair execution](phase5-item5-b-kit-repair-execution_2026-09-10.md)
+owns the subsequent application and review handoff. The proposal ledger and evidence
+retain their preparation-time fields and hashes; the execution authority record binds
+the approval without rewriting that historical input. The [review follow-up](phase5-item5-b-review-followup-decision_2026-09-10.md)
+was approved on 2026-09-11; its [execution](phase5-item5-b-review-followup-execution_2026-09-11.md)
+owns the subsequent review handoff. Repair merge remains operator-held.
+
+The preserved preparation scope follows. `ITEM5-B-KIT-REVIEW-01` is separate scope. ACCEPT-01
 accepted the preserved-file ownership outcomes. PR-01 applied its exact fixture
 payloads and created the private ready PR; its handoff is paused at review findings.
 Neither earlier approval authorizes this repair, a retained-tree update or fixture merge.
@@ -32,7 +40,7 @@ proposal changed manifest-covered files without including the release manifest.
 The [adversarial report](https://github.com/topij/agentic-dev-kit/pull/730#issuecomment-5623418113)
 and [correctness report](https://github.com/topij/agentic-dev-kit/pull/730#issuecomment-5623385214)
 were posted and read back before this amendment. The amended ledger includes that
-necessary kit-only destination; the proposal remains unapproved. The original packet
+necessary kit-only destination; the amended proposal was unapproved when prepared. The original packet
 and patch remain available at reviewed revision
 `d2d32d56e3bdedcd0b32b1210a459f6429e3d6fd`.
 

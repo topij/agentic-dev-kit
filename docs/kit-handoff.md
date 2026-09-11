@@ -14,10 +14,36 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-10 — ITEM5-B acceptance and fixture PR execution recorded.
+Last updated: 2026-09-11 — approved ITEM5-B review follow-up applied; operator merge hold.
 Phase 5 delivery item 5 remains incomplete; item 6's replay remains complete.
 
-## Latest session — 2026-09-10 (ITEM5-B acceptance execution, in Codex)
+## Latest session — 2026-09-11 (ITEM5-B review follow-up, in Codex)
+
+The operator approved ITEM5-B-KIT-REVIEW-02 as scoped. The [execution record](../saved_plans/phase5-item5-b-review-followup-execution_2026-09-11.md)
+binds authority, pre-fix review receipts, original bytes and applied hashes. The kit
+documents the accepted inherited special-file-root limitation and adds root-symlink
+compatibility tests with the supplied release manifest. A FIFO can still obstruct
+engine state persistence; the approval does not claim that mechanism is repaired.
+
+`make test` in `/Users/topi/Coding/agentic-dev-kit` at
+`1d6c5413148c46ee7a0a4cf86e47e403632610fb` on 2026-09-11 reached pytest's terminal summary with the disclosed #393
+failure. The execution evidence retains the actual result, manifest self-check and
+separate #561 shell parses. [PR #731](https://github.com/topij/agentic-dev-kit/pull/731)
+owns the final full-panel reports, hosted results and exact head-bound disposition.
+Repair merge remains operator-held; an earlier review is not evidence for a later head.
+
+No retained update, baseline refresh, initialization, client/profile/tracker exercise
+or fixture merge was performed. Ownership acceptance does not establish functionality
+or field exit. Item 6's replay, #723's deferral, #585's earlier placement and #724's
+delivered #722 batch are preserved. The friction sweep stays parked.
+
+▶ Next: `$session-start` — read back PR #731's final review/CI disposition and exact
+reviewed head, then decide operator merge. Keep retained updates separately scoped;
+do not repeat UPDATE-01 or the completed replay.
+
+______________________________________________________________________
+
+## Session — 2026-09-10 (ITEM5-B acceptance execution, in Codex)
 
 The operator approved ACCEPT-01 and PR-01 as scoped in the
 [decision packet](../saved_plans/phase5-item5-b-acceptance-decision_2026-09-10.md).
@@ -34,9 +60,7 @@ bound to the execution checkpoints. Item 5 remains incomplete, item 6's replay r
 complete, and #723's approved upstream deferral and #585's earlier placement remain.
 Kit #724 already delivered the #722 batch. The friction-log sweep stays parked.
 
-▶ Next: `$session-start` — decide ITEM5-B-KIT-REVIEW-01 from
-`saved_plans/phase5-item5-b-review-repair-decision_2026-09-10.md`. Keep retained updates,
-fixture merge and systemize separate; do not repeat UPDATE-01 or the completed replay.
+The latest session block owns the subsequent repair and next action.
 
 ______________________________________________________________________
 
@@ -361,32 +385,6 @@ without ever being checked in an adopter.
   about when it reports, and the proposed fix moves that to `scripts/hooks/pre-push`.
 
 The later replay decision and next action are in the latest session block.
-
-______________________________________________________________________
-
-## Session — 2026-09-07 (live Codex hooks batch)
-
-**Theme —** Complete the parked Codex observations and preserve their scope.
-
-- The [batch record](../saved_plans/codex-hooks-batch_2026-09-07.md) retains the live
-  `/hooks` excerpts, configuration stack, continuity audits and tracker receipts.
-  It distinguishes project trust from trust of the current hook definitions and
-  discovery from execution.
-- The fixture's registration appeared in `/hooks`; the disposable unset case also
-  exposed its registrations. See the command/date/revision-bound record for the
-  observations and their limits. The original fixture was not used for the unset case.
-- The operator approved and posted the reserved `#608`/`#255` dispositions and closed
-  those issues as completed. The credited PR #680 probe was not repeated.
-- The approved [observation on #698](https://github.com/topij/agentic-dev-kit/issues/698#issuecomment-5569204436)
-  scopes the remaining installer/doctor correction. It does not establish hook execution
-  after trust or a default shared by every Codex client.
-- The maintained [sprint status](../saved_plans/codex-parity-plan_2026-08-23.md) carries
-  those decisions without advancing Phase 5 exit. The later replay decision and
-  remaining operator-held work are in the latest session block. The `#534` repairs
-  were outside this Codex batch.
-
-The #534 repair and hooks continuation are recorded above. Preserve their credited
-exercises; the latest session block owns the next action.
 
 ______________________________________________________________________
 

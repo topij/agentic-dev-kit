@@ -1,0 +1,62 @@
+{
+  "doc_budgets": [
+    {
+      "archive": "docs/kit-handoff-history.md",
+      "budget": 400,
+      "path": "docs/kit-handoff.md",
+      "remedy": "run the wrap-up workflow to sweep old session blocks into the history file (archive_plan_sessions.py --target-lines {budget}, not --keep \u2014 this budget is in lines, not blocks)"
+    },
+    {
+      "archive": "docs/kit-friction-log-archive.md",
+      "budget": 150,
+      "path": "docs/kit-friction-log.md",
+      "remedy": "run the triage-friction-log workflow to graduate the inbox to the tracker"
+    }
+  ],
+  "paths": {
+    "engines": "scripts",
+    "friction_log": "docs/kit-friction-log.md",
+    "friction_log_archive": "docs/kit-friction-log-archive.md",
+    "handoff": "docs/kit-handoff.md",
+    "handoff_history": "docs/kit-handoff-history.md",
+    "playbook": "docs/autonomous-session-playbook.md"
+  },
+  "review_fallback_panel": {
+    "lens_compute": {
+      "claude": {
+        "effort": "high",
+        "model": "sonnet"
+      },
+      "codex": {
+        "effort": "high"
+      }
+    },
+    "lenses": [
+      {
+        "focus": "assume the change is wrong and try to prove it \u2014 bypasses, fail-open paths, wedges, and whether the new guard actually guards",
+        "name": "adversarial"
+      },
+      {
+        "focus": "assume it works and ask what it says \u2014 stale comments, claims that overstate what is verified, tests whose names promise more than their bodies check",
+        "name": "correctness"
+      }
+    ],
+    "receipt_source": "fallback:panel"
+  },
+  "state": {
+    "dirname": "state"
+  },
+  "triage": {
+    "analysis_tier": "default",
+    "commit_subject": "docs(triage): graduate friction-log entries",
+    "draft_engine": "triage_friction_log.py",
+    "finalize_engine": "finalize_triage.py",
+    "frozen_inbox_pattern": "state/triage/frozen-inbox_{mode}_{date}_{session}.json",
+    "gate_path": "state/triage/triage-pipeline-gate_{mode}.lock",
+    "pr_draft": false,
+    "recovery_bundle_pattern": "state/triage/recovery-bundle_{mode}_{gate_digest}.json",
+    "report_pattern": "reports/triage_{mode}_{date}_{session}.md",
+    "report_root": "reports",
+    "state_path": "state/triage/triage-pipeline-state_{mode}.json"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "PYTHONOPTIMIZE": null,
+  "argv": [
+    "make",
+    "test"
+  ],
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "ended_at": "2026-09-10T19:17:46.089062+00:00",
+  "environment": {
+    "DEVKIT_STATE_ROOT": "/private/tmp/item5-b-kit-repair-1kc2i4t2/author/state",
+    "PYTEST_ADDOPTS": "-o cache_dir=/private/tmp/item5-b-kit-repair-1kc2i4t2/author/pytest-cache -ra",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "RUFF_CACHE_DIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/author/ruff-cache",
+    "TMPDIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/author/tmp",
+    "UV_CACHE_DIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/author/uv-cache",
+    "UV_TOOL_DIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/author/uv-tools"
+  },
+  "returncode": 2,
+  "revision": "1f6195d64482bef4a5437c1eff3a07069e2b14b8",
+  "started_at": "2026-09-10T19:11:13.782236+00:00",
+  "stderr_sha256": "5170bf40a4cec88833e9d61b32d1c08bb3501633991b6ae99636aa959f12daec",
+  "stdout_sha256": "891fa050a11767868c3a11a5a5e3bf5e3d470b2e73709386aff2eb675aef5364"
+}

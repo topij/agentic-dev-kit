@@ -1,0 +1,98 @@
+import hashlib,json,os,runpy,stat,subprocess,sys,fcntl
+from pathlib import Path
+from datetime import datetime,timezone
+KIT=Path('/Users/topi/Coding/agentic-dev-kit')
+REPO=Path('/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture')
+SOURCE=REPO.parent/'kit-source'
+OUT=Path('/private/tmp/item5-b-kit-repair-1kc2i4t2')
+RECORD=KIT/'saved_plans/phase5-item5-b-kit-repair-execution-evidence_2026-09-10'
+PROPOSAL=KIT/'saved_plans/phase5-item5-b-review-repair-proposal_2026-09-10'
+PACKET=KIT/'saved_plans/phase5-item5-b-review-repair-decision_2026-09-10.md'
+BASE='f408039dc3a9b0d2e0e8d246c126af892839cee8'
+BRANCH='chore/item5-b-review-repair-20260910'
+OLD=runpy.run_path('/private/tmp/item5-b-pr-execution-d9i5jh0q/execute.py')
+inventory,identity=(OLD[k] for k in ['inventory','identity'])
+def now():return datetime.now(timezone.utc).isoformat()
+def sha(b):return hashlib.sha256(b).hexdigest()
+def read(p):return json.loads(p.read_bytes())
+def enter(p):
+    assert p.resolve()==p and p.is_dir() and not p.is_symlink()
+    os.chdir(p);assert Path.cwd()==p
+def write(p,obj):
+    assert p.is_absolute() and p.resolve()==p
+    if p.exists():assert p.is_file() and p.stat().st_nlink==1
+    p.write_text(json.dumps(obj,indent=2,sort_keys=True)+'\n')
+def git(p,*a):return subprocess.check_output(['git','--no-optional-locks','-C',str(p),*a],text=True).strip()
+def env(role='author'):
+    owned=OUT/role
+    enter(OUT);owned.mkdir(exist_ok=True)
+    for n in ['state','uv-cache','uv-tools','ruff-cache','pytest-cache','tmp']:(owned/n).mkdir(exist_ok=True)
+    e=dict(os.environ);e.pop('PYTHONOPTIMIZE',None)
+    e.update(PYTHONDONTWRITEBYTECODE='1',UV_CACHE_DIR=str(owned/'uv-cache'),UV_TOOL_DIR=str(owned/'uv-tools'),RUFF_CACHE_DIR=str(owned/'ruff-cache'),TMPDIR=str(owned/'tmp'),DEVKIT_STATE_ROOT=str(owned/'state'),PYTEST_ADDOPTS=f'-o cache_dir={owned/"pytest-cache"} -ra')
+    return e
+def call(name,argv,cwd=KIT,accepted=(0,),role='author'):
+    e=env(role);enter(cwd);started=now();revision=git(cwd,'rev-parse','HEAD')
+    print(json.dumps(dict(starting=name,cwd=str(cwd),argv=argv,revision=revision,started_at=started)),flush=True)
+    with (OUT/(name+'.stdout.log')).open('xb') as out,(OUT/(name+'.stderr.log')).open('xb') as err:
+        p=subprocess.run(argv,cwd=cwd,env=e,stdout=out,stderr=err)
+    obj=dict(argv=argv,cwd=str(cwd),revision=revision,started_at=started,ended_at=now(),returncode=p.returncode,environment={k:e[k] for k in ['PYTHONDONTWRITEBYTECODE','UV_CACHE_DIR','UV_TOOL_DIR','RUFF_CACHE_DIR','TMPDIR','DEVKIT_STATE_ROOT','PYTEST_ADDOPTS']},PYTHONOPTIMIZE=e.get('PYTHONOPTIMIZE'),stdout_sha256=sha((OUT/(name+'.stdout.log')).read_bytes()),stderr_sha256=sha((OUT/(name+'.stderr.log')).read_bytes()))
+    write(OUT/(name+'.json'),obj)
+    print(json.dumps(obj),flush=True)
+    print((OUT/(name+'.stdout.log')).read_text(errors='replace')[-6500:],flush=True)
+    print((OUT/(name+'.stderr.log')).read_text(errors='replace')[-2500:],flush=True)
+    assert p.returncode in accepted,(name,p.returncode)
+    return obj
+def retention():
+    oldcheck=OLD['check']()
+    return dict(observed_at=now(),cockpit_revision=git(KIT,'rev-parse','HEAD'),original_paths={p:os.path.lexists(p) for p in ['/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture','/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source']},approved_post_execution_comparison=oldcheck,trees={role:dict(path=str(p),inventory=inventory(p),identity=identity(p),administrative_inventory=inventory(p/'.git')) for role,p in [('fixture',REPO),('source',SOURCE)]})
+def preflight():
+    enter(KIT);assert git(KIT,'rev-parse','HEAD')==BASE and git(KIT,'status','--porcelain')=='' and git(KIT,'branch','--show-current')=='main'
+    assert git(KIT,'remote','get-url','origin') in ['git@github.com:topij/agentic-dev-kit.git','https://github.com/topij/agentic-dev-kit.git']
+    assert subprocess.run(['git','-C',str(KIT),'show-ref','--verify','--quiet','refs/heads/'+BRANCH]).returncode==1
+    for n,h in read(PROPOSAL/'sha256.json').items():assert sha((PROPOSAL/n).read_bytes())==h,n
+    ledger=read(PROPOSAL/'write-ledger.json');before={}
+    for row in ledger['payload_writes']+[ledger['changelog']]:
+        p=Path(row['destination']);s=p.lstat()
+        assert p.resolve()==p and stat.S_ISREG(s.st_mode) and s.st_nlink==1
+        assert sha(p.read_bytes())==row['before_sha256'],str(p)
+        if 'mode' in row:assert oct(stat.S_IMODE(s.st_mode))==row['mode']
+        before[str(p)]=dict(sha256=sha(p.read_bytes()),mode=oct(stat.S_IMODE(s.st_mode)))
+    call('protected-main-readback',['gh','api','repos/topij/agentic-dev-kit/branches/main'])
+    main=read(OUT/'protected-main-readback.stdout.log');assert main['commit']['sha']==BASE and main['protected']
+    call('pr730-readback',['gh','pr','view','730','--repo','topij/agentic-dev-kit','--json','number,url,state,isDraft,headRefOid,mergeCommit,mergedAt'])
+    pr=read(OUT/'pr730-readback.stdout.log');assert pr['state']=='MERGED' and pr['mergeCommit']['oid']==BASE and pr['headRefOid']=='0dca47fd773c53558e955414b2a10114a8528a18'
+    for n in ['5623849604','5623930596']:call('pr730-comment-'+n,['gh','api','repos/topij/agentic-dev-kit/issues/comments/'+n])
+    enter(OUT);(OUT/'before').mkdir()
+    for p in before:
+        dest=OUT/'before'/Path(p).relative_to(KIT);dest.parent.mkdir(parents=True,exist_ok=True);dest.write_bytes(Path(p).read_bytes())
+        assert sha(dest.read_bytes())==before[p]['sha256']
+    write(OUT/'before.json',before)
+    write(OUT/'retained-before.json',retention())
+    authority=dict(decision='ITEM5-B-KIT-REVIEW-01',operator_message='Yes, I Approve ITEM5-B-KIT-REVIEW-01 as scoped. Do we continue here or start the new session?',continuation_message='Umm going to sleep. Can you continue autonomously?',recorded_at=now(),base_revision=BASE,KIT=str(KIT),REPO=str(REPO),SOURCE=str(SOURCE),packet_sha256=sha(PACKET.read_bytes()),ledger_sha256=sha((PROPOSAL/'write-ledger.json').read_bytes()),proposal_index_sha256=sha((PROPOSAL/'sha256.json').read_bytes()),merge_authorized=False,retained_writes_authorized=False)
+    enter(OUT);write(OUT/'authority.json',authority)
+    print(json.dumps(dict(preflight='matched',before=before,authority=authority)))
+def apply():
+    enter(KIT);assert git(KIT,'rev-parse','HEAD')==BASE and git(KIT,'status','--porcelain')==''
+    before=read(OUT/'before.json')
+    for p,r in before.items():assert sha(Path(p).read_bytes())==r['sha256']
+    subprocess.run(['git','-C',str(KIT),'switch','-c',BRANCH],check=True)
+    assert Path.cwd()==KIT and git(KIT,'branch','--show-current')==BRANCH
+    for row in read(PROPOSAL/'write-ledger.json')['payload_writes']:
+        p=Path(row['destination']);payload=Path(row['source']).read_bytes()
+        assert sha(p.read_bytes())==row['before_sha256'] and sha(payload)==row['after_sha256']
+        p.write_bytes(payload);assert sha(p.read_bytes())==row['after_sha256']
+    write(OUT/'application.json',dict(at=now(),base=BASE,branch=BRANCH,destinations={r['destination']:sha(Path(r['destination']).read_bytes()) for r in read(PROPOSAL/'write-ledger.json')['payload_writes']}))
+def verify():
+    call('manifest-regenerate',['uv','run','--with','pyyaml','python','-B',str(KIT/'scripts/kit_doctor.py'),'--root',str(KIT),'--generate-manifest'])
+    assert (KIT/'kit-manifest.json').read_bytes()==(PROPOSAL/'kit-manifest.json.txt').read_bytes()
+    call('manifest-self-check',['uv','run','--with','pytest','--with','pyyaml','python','-B','-m','pytest','scripts/tests/test_kit_doctor.py::test_kit_repo_self_check_is_clean','-q'])
+    call('make-test',['make','test'],accepted=(0,2))
+    out=(OUT/'make-test.stdout.log').read_text()
+    assert ' passed' in out and ' in ' in out and 'FAILED scripts/tests/test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero' in out
+    assert '1 failed,' in out
+    for n,p in enumerate(['scripts/dev_session.sh','scripts/reconcile_sessions.sh','scripts/lib/repo_root.sh','scripts/hooks/pre-push','init.sh']):
+        call('parse-'+str(n),['sh' if p=='init.sh' else 'bash','-n',str(KIT/p)])
+    write(OUT/'retained-after-verification.json',retention())
+if __name__=='__main__':
+    assert not sys.flags.optimize and sys.dont_write_bytecode
+    globals()[sys.argv[1]]()

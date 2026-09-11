@@ -1,0 +1,11 @@
+{
+  "at": "2026-09-10T19:10:38.886091+00:00",
+  "base": "f408039dc3a9b0d2e0e8d246c126af892839cee8",
+  "branch": "chore/item5-b-review-repair-20260910",
+  "destinations": {
+    "/Users/topi/Coding/agentic-dev-kit/docs/agentic-dev-kit/workflows/upgrade.md": "c29baa57bc48b2d74e5e553745028f84bd2e8d400e88d891c9336d8496724cf6",
+    "/Users/topi/Coding/agentic-dev-kit/kit-manifest.json": "4697b0e14dfa85ba86797aef85788d1ce2edb0a7001a9c6a1057109775cbad96",
+    "/Users/topi/Coding/agentic-dev-kit/scripts/conftest.py": "a0a82682c9431205f8c0db80176694b37800da7964e5b77ec3eba283fc7569c2",
+    "/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_state_guard.py": "8e7a7082fa4e7fcaa0ccf1985be646c7b26bb86af4cc519349cc068861b6b291"
+  }
+}

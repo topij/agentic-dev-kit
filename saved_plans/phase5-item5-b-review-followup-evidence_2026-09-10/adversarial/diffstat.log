@@ -1,0 +1,99 @@
+ CHANGELOG.md                                       |     8 +
+ docs/agentic-dev-kit/workflows/upgrade.md          |     2 +-
+ docs/kit-handoff-history.md                        |    25 +-
+ docs/kit-handoff.md                                |    60 +-
+ kit-manifest.json                                  |     6 +-
+ saved_plans/codex-parity-plan_2026-08-23.md        |     5 +-
+ ...ase5-item5-b-acceptance-execution_2026-09-10.md |    12 +-
+ .../application.json                               |    11 +
+ .../approved-packet.md.txt                         |   144 +
+ .../approved-sha256.json                           |    26 +
+ .../approved-write-ledger.json                     |    61 +
+ .../assert-ready-initial.json                      |    26 +
+ .../assert-ready-initial.stderr.log                |     0
+ .../assert-ready-initial.stdout.log                |     1 +
+ .../authority.json                                 |    15 +
+ .../before.json                                    |    22 +
+ .../before/CHANGELOG.md.txt                        |  1324 +
+ .../docs/agentic-dev-kit/workflows/upgrade.md.txt  |   892 +
+ .../before/kit-manifest.json.txt                   |   332 +
+ .../before/scripts/conftest.py.txt                 |   368 +
+ .../before/scripts/tests/test_state_guard.py.txt   |   721 +
+ .../budget-after-archive.json                      |    24 +
+ .../budget-after-archive.stderr.log                |     0
+ .../budget-after-archive.stdout.log                |     2 +
+ .../changelog-application.json                     |    10 +
+ .../complete-ledger-manifest.json                  |    31 +
+ .../complete-ledger-manifest.stderr.log            |     1 +
+ .../complete-ledger-manifest.stdout.log            |     0
+ .../execute.py.txt                                 |    98 +
+ .../handoff-archive.json                           |    30 +
+ .../handoff-archive.stderr.log                     |     0
+ .../handoff-archive.stdout.log                     |     2 +
+ .../make-test.json                                 |    23 +
+ .../make-test.stderr.log                           |     4 +
+ .../make-test.stdout.log                           |    75 +
+ .../manifest-regenerate.json                       |    31 +
+ .../manifest-regenerate.stderr.log                 |     2 +
+ .../manifest-regenerate.stdout.log                 |     0
+ .../manifest-self-check.json                       |    33 +
+ .../manifest-self-check.stderr.log                 |     3 +
+ .../manifest-self-check.stdout.log                 |     2 +
+ .../merged-workflow-config.json                    |    62 +
+ .../parse-0.json                                   |    24 +
+ .../parse-0.stderr.log                             |     0
+ .../parse-0.stdout.log                             |     0
+ .../parse-1.json                                   |    24 +
+ .../parse-1.stderr.log                             |     0
+ .../parse-1.stdout.log                             |     0
+ .../parse-2.json                                   |    24 +
+ .../parse-2.stderr.log                             |     0
+ .../parse-2.stdout.log                             |     0
+ .../parse-3.json                                   |    24 +
+ .../parse-3.stderr.log                             |     0
+ .../parse-3.stdout.log                             |     0
+ .../parse-4.json                                   |    24 +
+ .../parse-4.stderr.log                             |     0
+ .../parse-4.stdout.log                             |     0
+ .../pr-create-intent.json                          |    10 +
+ .../pr730-comment-5623849604.json                  |    24 +
+ .../pr730-comment-5623849604.stderr.log            |     0
+ .../pr730-comment-5623849604.stdout.log            |     1 +
+ .../pr730-comment-5623930596.json                  |    24 +
+ .../pr730-comment-5623930596.stderr.log            |     0
+ .../pr730-comment-5623930596.stdout.log            |     1 +
+ .../pr730-readback.json                            |    29 +
+ .../pr730-readback.stderr.log                      |     0
+ .../pr730-readback.stdout.log                      |     1 +
+ .../protected-main-readback.json                   |    24 +
+ .../protected-main-readback.stderr.log             |     0
+ .../protected-main-readback.stdout.log             |     1 +
+ .../push-initial.json                              |    26 +
+ .../push-initial.stderr.log                        |     6 +
+ .../push-initial.stdout.log                        |     1 +
+ .../record-validation.json                         |   210 +
+ .../records.py.txt                                 |   169 +
+ .../remote-branch-after.json                       |    26 +
+ .../remote-branch-after.stderr.log                 |     0
+ .../remote-branch-after.stdout.log                 |     1 +
+ .../remote-branch-before.json                      |    26 +
+ .../remote-branch-before.stderr.log                |     0
+ .../remote-branch-before.stdout.log                |     0
+ .../repair-forge-identity.json                     |    26 +
+ .../repair-forge-identity.stderr.log               |     0
+ .../repair-forge-identity.stdout.log               |     1 +
+ .../repair-pr-create.json                          |    34 +
+ .../repair-pr-create.stderr.log                    |     0
+ .../repair-pr-create.stdout.log                    |     1 +
+ .../repair-pr-identity.json                        |    29 +
+ .../repair-pr-identity.stderr.log                  |     0
+ .../repair-pr-identity.stdout.log                  |     1 +
+ .../retained-after-verification.json               | 28060 +++++++++++++++++++
+ .../retained-before.json                           | 28060 +++++++++++++++++++
+ .../retention-comparison.json                      |    11 +
+ .../sha256.json                                    |    88 +
+ ...ase5-item5-b-kit-repair-execution_2026-09-10.md |    87 +
+ ...e5-item5-b-review-repair-decision_2026-09-10.md |    10 +-
+ scripts/conftest.py                                |     5 +
+ scripts/tests/test_state_guard.py                  |    27 +
+ 98 files changed, 61589 insertions(+), 45 deletions(-)

@@ -139,7 +139,7 @@ The correctness lens marked the newline-normalized adapter comparison's “byte-
 wording P3/imprecision, without a demonstrated behavioral regression. These findings
 are separate from #393. The original approved payloads contain neither remedy.
 
-**PR-01 is paused for a new exact decision.** Its fixture files, commit, private
+**PR-01 is paused at its inherited review findings.** Its fixture files, commit, private
 publication and hosted run were executed; the independent findings remain pending.
 No `--record-review fallback:panel` clean-review receipt or handled-round acknowledgment
 was issued. The post-review `pr_watch.py 1 --json` poll in `$REPO` at
@@ -197,9 +197,9 @@ preserves completed item 6 and its replay evidence, cs-toolkit #2222/#2223/#2255
 #724's delivery of the #722 record batch. No repeat or new credit is claimed.
 The friction-log sweep remains parked; no tracker payload or new intake was started.
 
-**Next:** decide `ITEM5-B-KIT-REVIEW-01` from the linked repair packet. Resolve that
-kit-only scope before preparing any retained-fixture update; keep the remaining
-systemize field-exit matrix and fixture merge separate.
+**Next:** follow the [approved kit repair execution](phase5-item5-b-kit-repair-execution_2026-09-10.md)
+through the approved REVIEW-02 follow-up to its operator merge decision. A later retained-fixture update still needs its own
+exact decision; keep the systemize field-exit matrix and fixture merge separate.
 
 ## Kit record review amendment
 
@@ -213,10 +213,10 @@ behavioral mutation results and restoration/handed-tree evidence.
 
 The adversarial lens reproduced a P2 omission in the new repair plan: its initial
 ledger left out the kit release manifest required after changing covered files.
-The correctness lens reported no actionable finding. The unapproved repair packet
+The correctness lens reported no actionable finding. The then-unapproved repair packet
 was amended to include the exact release-manifest payload, before/after hashes,
 deterministic generation and a failing-before/passing-after self-check. This amended
 future kit scope does not authorize any retained fixture/source or baseline write.
 The proposal evidence binds the focused preparation; full candidate `make test`
-remains required after approval. The fixture's inherited review findings remain
+is recorded by the subsequent approved kit repair execution. The fixture's inherited review findings remain
 pending under their separate decision boundary.

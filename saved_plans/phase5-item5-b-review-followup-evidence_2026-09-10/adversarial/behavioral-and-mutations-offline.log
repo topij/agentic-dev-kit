@@ -1,0 +1,307 @@
+Waiting for serial verification lock
+{"cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo", "argv": ["uv", "run", "--offline", "--with", "pytest", "--with", "pyyaml", "python", "-B", "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/review-cases.py"], "environment": {"PYTHONDONTWRITEBYTECODE": "1", "DEVKIT_STATE_ROOT": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/state", "UV_CACHE_DIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache", "UV_TOOL_DIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-tools", "RUFF_CACHE_DIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/ruff-cache", "TMPDIR": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp", "PYTEST_ADDOPTS": "-o cache_dir=/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/pytest-cache -ra"}}
+{"case": "empty-new-scripts", "argv": ["/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python", "-B", "-m", "pytest", "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-empty-new-1w05xbie/scripts/lib/state_paths/tests", "-q", "-p", "no:cacheprovider"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-empty-new-1w05xbie", "returncode": 1}
+.                                                                        [100%]======================== REAL state/ WAS WRITTEN (#428) ========================
+REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-empty-new-1w05xbie/state during this run instead of staying inside the per-test $DEVKIT_STATE_ROOT sandbox that _hermetic_state_root (tests/conftest.py) sets. Changed paths: ['./']. Clean these up NOW: this report is one-shot — a leak still on disk at the next run's conftest import is absorbed into that run's baseline and never reported again (#457).
+
+=============================== warnings summary ===============================
+../../uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+  /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+! REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-empty-new-1w05xbie/state !
+1 passed, 1 warning in 0.00s
+
+{"case": "delete-scripts", "argv": ["/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python", "-B", "-m", "pytest", "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-delete-vgj6qf0y/scripts/lib/state_paths/tests", "-q", "-p", "no:cacheprovider"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-delete-vgj6qf0y", "returncode": 1}
+.                                                                        [100%]======================== REAL state/ WAS WRITTEN (#428) ========================
+REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-delete-vgj6qf0y/state during this run instead of staying inside the per-test $DEVKIT_STATE_ROOT sandbox that _hermetic_state_root (tests/conftest.py) sets. Changed paths: ['./']. Clean these up NOW: this report is one-shot — a leak still on disk at the next run's conftest import is absorbed into that run's baseline and never reported again (#457).
+
+=============================== warnings summary ===============================
+../../uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+  /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+! REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-delete-vgj6qf0y/state !
+1 passed, 1 warning in 0.00s
+
+{"case": "file-to-dir-scripts", "argv": ["/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python", "-B", "-m", "pytest", "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-file-to-dir-ffmnaxhk/scripts/lib/state_paths/tests", "-q", "-p", "no:cacheprovider"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-file-to-dir-ffmnaxhk", "returncode": 1}
+.                                                                        [100%]======================== REAL state/ WAS WRITTEN (#428) ========================
+REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-file-to-dir-ffmnaxhk/state during this run instead of staying inside the per-test $DEVKIT_STATE_ROOT sandbox that _hermetic_state_root (tests/conftest.py) sets. Changed paths: ['./']. Clean these up NOW: this report is one-shot — a leak still on disk at the next run's conftest import is absorbed into that run's baseline and never reported again (#457).
+
+=============================== warnings summary ===============================
+../../uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+  /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+! REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-file-to-dir-ffmnaxhk/state !
+1 passed, 1 warning in 0.00s
+
+{"case": "dir-to-file-scripts", "argv": ["/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python", "-B", "-m", "pytest", "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-dir-to-file-h6tgkqok/scripts/lib/state_paths/tests", "-q", "-p", "no:cacheprovider"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-dir-to-file-h6tgkqok", "returncode": 1}
+.                                                                        [100%]======================== REAL state/ WAS WRITTEN (#428) ========================
+REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-dir-to-file-h6tgkqok/state during this run instead of staying inside the per-test $DEVKIT_STATE_ROOT sandbox that _hermetic_state_root (tests/conftest.py) sets. Changed paths: ['./']. Clean these up NOW: this report is one-shot — a leak still on disk at the next run's conftest import is absorbed into that run's baseline and never reported again (#457).
+
+=============================== warnings summary ===============================
+../../uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+  /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+! REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-dir-to-file-h6tgkqok/state !
+1 passed, 1 warning in 0.00s
+
+{"case": "fifo-new-scripts", "argv": ["/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python", "-B", "-m", "pytest", "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-c51kcqjs/scripts/lib/state_paths/tests", "-q", "-p", "no:cacheprovider"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-c51kcqjs", "returncode": 0}
+.                                                                        [100%]
+=============================== warnings summary ===============================
+../../uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+  /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1 passed, 1 warning in 0.00s
+
+NotADirectoryError(20, 'Not a directory')
+{"case": "fifo-new-scripts-save-state", "argv": ["/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python", "-B", "-c", "import sys; from pathlib import Path; sys.path.insert(0, '/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo/scripts'); import pr_watch; pr_watch.STATE_DIR=Path('/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-c51kcqjs/state/pr-watch'); pr_watch.save_state(987654, {})"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo", "returncode": 1}
+                                                                                                                                                                                                                                                                                                       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo/scripts/pr_watch.py", line 3571, in save_state
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/topi/.local/share/uv/python/cpython-3.14.7-macos-aarch64-none/lib/python3.14/pathlib/__init__.py", line 1011, in mkdir
+    os.mkdir(self, mode)
+    ~~~~~~~~^^^^^^^^^^^^
+NotADirectoryError: [Errno 20] Not a directory: '/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-c51kcqjs/state/pr-watch'
+
+{"case": "fifo-new-base-scripts", "argv": ["/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python", "-B", "-m", "pytest", "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-base-erxiqtim/scripts/lib/state_paths/tests", "-q", "-p", "no:cacheprovider"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-base-erxiqtim", "returncode": 0}
+.                                                                        [100%]
+=============================== warnings summary ===============================
+../../uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+  /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1 passed, 1 warning in 0.00s
+
+NotADirectoryError(20, 'Not a directory')
+{"case": "fifo-new-base-scripts-save-state", "argv": ["/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python", "-B", "-c", "import sys; from pathlib import Path; sys.path.insert(0, '/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo/scripts'); import pr_watch; pr_watch.STATE_DIR=Path('/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-base-erxiqtim/state/pr-watch'); pr_watch.save_state(987654, {})"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo", "returncode": 1}
+                                                                                                                                                                                                                                                                                                  ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo/scripts/pr_watch.py", line 3571, in save_state
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/topi/.local/share/uv/python/cpython-3.14.7-macos-aarch64-none/lib/python3.14/pathlib/__init__.py", line 1011, in mkdir
+    os.mkdir(self, mode)
+    ~~~~~~~~^^^^^^^^^^^^
+NotADirectoryError: [Errno 20] Not a directory: '/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-base-erxiqtim/state/pr-watch'
+
+{"case": "symlink-file-new-scripts", "argv": ["/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python", "-B", "-m", "pytest", "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-symlink-file-new-vfqr1pz9/scripts/lib/state_paths/tests", "-q", "-p", "no:cacheprovider"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-symlink-file-new-vfqr1pz9", "returncode": 0}
+.                                                                        [100%]
+=============================== warnings summary ===============================
+../../uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+  /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1 passed, 1 warning in 0.00s
+
+{"case": "empty-new-scripts-devkit", "argv": ["/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python", "-B", "-m", "pytest", "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-empty-new-j97bzyo5/scripts/devkit/lib/state_paths/tests", "-q", "-p", "no:cacheprovider"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-empty-new-j97bzyo5", "returncode": 1}
+.                                                                        [100%]======================== REAL state/ WAS WRITTEN (#428) ========================
+REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-empty-new-j97bzyo5/state during this run instead of staying inside the per-test $DEVKIT_STATE_ROOT sandbox that _hermetic_state_root (tests/conftest.py) sets. Changed paths: ['./']. Clean these up NOW: this report is one-shot — a leak still on disk at the next run's conftest import is absorbed into that run's baseline and never reported again (#457).
+
+=============================== warnings summary ===============================
+../../uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+  /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+! REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-empty-new-j97bzyo5/state !
+1 passed, 1 warning in 0.00s
+
+{"case": "delete-scripts-devkit", "argv": ["/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python", "-B", "-m", "pytest", "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-delete-uxp91ypg/scripts/devkit/lib/state_paths/tests", "-q", "-p", "no:cacheprovider"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-delete-uxp91ypg", "returncode": 1}
+.                                                                        [100%]======================== REAL state/ WAS WRITTEN (#428) ========================
+REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-delete-uxp91ypg/state during this run instead of staying inside the per-test $DEVKIT_STATE_ROOT sandbox that _hermetic_state_root (tests/conftest.py) sets. Changed paths: ['./']. Clean these up NOW: this report is one-shot — a leak still on disk at the next run's conftest import is absorbed into that run's baseline and never reported again (#457).
+
+=============================== warnings summary ===============================
+../../uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+  /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+! REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-delete-uxp91ypg/state !
+1 passed, 1 warning in 0.00s
+
+{"case": "file-to-dir-scripts-devkit", "argv": ["/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python", "-B", "-m", "pytest", "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-file-to-dir-p6a95k6w/scripts/devkit/lib/state_paths/tests", "-q", "-p", "no:cacheprovider"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-file-to-dir-p6a95k6w", "returncode": 1}
+.                                                                        [100%]======================== REAL state/ WAS WRITTEN (#428) ========================
+REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-file-to-dir-p6a95k6w/state during this run instead of staying inside the per-test $DEVKIT_STATE_ROOT sandbox that _hermetic_state_root (tests/conftest.py) sets. Changed paths: ['./']. Clean these up NOW: this report is one-shot — a leak still on disk at the next run's conftest import is absorbed into that run's baseline and never reported again (#457).
+
+=============================== warnings summary ===============================
+../../uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+  /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+! REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-file-to-dir-p6a95k6w/state !
+1 passed, 1 warning in 0.00s
+
+{"case": "dir-to-file-scripts-devkit", "argv": ["/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python", "-B", "-m", "pytest", "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-dir-to-file-sfskprjl/scripts/devkit/lib/state_paths/tests", "-q", "-p", "no:cacheprovider"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-dir-to-file-sfskprjl", "returncode": 1}
+.                                                                        [100%]======================== REAL state/ WAS WRITTEN (#428) ========================
+REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-dir-to-file-sfskprjl/state during this run instead of staying inside the per-test $DEVKIT_STATE_ROOT sandbox that _hermetic_state_root (tests/conftest.py) sets. Changed paths: ['./']. Clean these up NOW: this report is one-shot — a leak still on disk at the next run's conftest import is absorbed into that run's baseline and never reported again (#457).
+
+=============================== warnings summary ===============================
+../../uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+  /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+! REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-dir-to-file-sfskprjl/state !
+1 passed, 1 warning in 0.00s
+
+{"case": "fifo-new-scripts-devkit", "argv": ["/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python", "-B", "-m", "pytest", "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-ih8mcs0o/scripts/devkit/lib/state_paths/tests", "-q", "-p", "no:cacheprovider"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-ih8mcs0o", "returncode": 0}
+.                                                                        [100%]
+=============================== warnings summary ===============================
+../../uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+  /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1 passed, 1 warning in 0.00s
+
+NotADirectoryError(20, 'Not a directory')
+{"case": "fifo-new-scripts-devkit-save-state", "argv": ["/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python", "-B", "-c", "import sys; from pathlib import Path; sys.path.insert(0, '/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo/scripts'); import pr_watch; pr_watch.STATE_DIR=Path('/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-ih8mcs0o/state/pr-watch'); pr_watch.save_state(987654, {})"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo", "returncode": 1}
+                                                                                                                                                                                                                                                                                                       ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo/scripts/pr_watch.py", line 3571, in save_state
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/topi/.local/share/uv/python/cpython-3.14.7-macos-aarch64-none/lib/python3.14/pathlib/__init__.py", line 1011, in mkdir
+    os.mkdir(self, mode)
+    ~~~~~~~~^^^^^^^^^^^^
+NotADirectoryError: [Errno 20] Not a directory: '/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-ih8mcs0o/state/pr-watch'
+
+{"case": "fifo-new-base-scripts-devkit", "argv": ["/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python", "-B", "-m", "pytest", "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-base-d0u3x_o6/scripts/devkit/lib/state_paths/tests", "-q", "-p", "no:cacheprovider"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-base-d0u3x_o6", "returncode": 0}
+.                                                                        [100%]
+=============================== warnings summary ===============================
+../../uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+  /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1 passed, 1 warning in 0.00s
+
+NotADirectoryError(20, 'Not a directory')
+{"case": "fifo-new-base-scripts-devkit-save-state", "argv": ["/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python", "-B", "-c", "import sys; from pathlib import Path; sys.path.insert(0, '/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo/scripts'); import pr_watch; pr_watch.STATE_DIR=Path('/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-base-d0u3x_o6/state/pr-watch'); pr_watch.save_state(987654, {})"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo", "returncode": 1}
+                                                                                                                                                                                                                                                                                                  ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo/scripts/pr_watch.py", line 3571, in save_state
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/topi/.local/share/uv/python/cpython-3.14.7-macos-aarch64-none/lib/python3.14/pathlib/__init__.py", line 1011, in mkdir
+    os.mkdir(self, mode)
+    ~~~~~~~~^^^^^^^^^^^^
+NotADirectoryError: [Errno 20] Not a directory: '/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-fifo-new-base-d0u3x_o6/state/pr-watch'
+
+{"case": "symlink-file-new-scripts-devkit", "argv": ["/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python", "-B", "-m", "pytest", "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-symlink-file-new-wjpx5dqe/scripts/devkit/lib/state_paths/tests", "-q", "-p", "no:cacheprovider"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/probe-symlink-file-new-wjpx5dqe", "returncode": 0}
+.                                                                        [100%]
+=============================== warnings summary ===============================
+../../uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+  /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1 passed, 1 warning in 0.00s
+
+--- reviewed/scripts/conftest.py
++++ mutation-drop-root-file/scripts/conftest.py
+@@ -235,7 +235,7 @@
+     # it at the root entry so creation and content changes cannot look absent.
+     # Root symlinks retain the separately documented handling below.
+     if not state_dir.is_symlink() and state_dir.is_file():
+-        return {"./": _hash_file(state_dir)}
++        return {}
+     if not state_dir.is_dir():
+         return {}
+     snapshot: dict[str, str] = {"./": "<dir>"}
+
+{"case": "mutation-drop-root-file", "argv": ["/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python", "-B", "-m", "pytest", "scripts/tests/test_state_guard.py", "scripts/tests/test_kit_doctor.py::test_kit_repo_self_check_is_clean", "-q", "-m", "not driftcheck"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo", "returncode": 1}
+/pytest-of-topi/pytest-19/test_guard_observes_regular_fi5/state.
+E         stdout:
+E         .                                                                        [100%]
+E         =============================== warnings summary ===============================
+E         ../../../../uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+E           /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+E           
+E             self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+E         
+E         -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+E         1 passed, 1 warning in 0.00s
+E         
+E         stderr:
+E         
+E       assert 0 != 0
+E        +  where 0 = CompletedProcess(args=['/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adve...n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 0.00s\n', stderr='').returncode
+
+scripts/tests/test_state_guard.py:287: AssertionError
+=========================== short test summary info ============================
+FAILED scripts/tests/test_state_guard.py::test_guard_observes_regular_file_at_state_root[new-flat]
+FAILED scripts/tests/test_state_guard.py::test_guard_observes_regular_file_at_state_root[new-nested]
+FAILED scripts/tests/test_state_guard.py::test_guard_observes_regular_file_at_state_root[modified-flat]
+FAILED scripts/tests/test_state_guard.py::test_guard_observes_regular_file_at_state_root[modified-nested]
+4 failed, 49 passed, 1 deselected in 16.84s
+
+{"byte_equal": true, "sha256": "a0a82682c9431205f8c0db80176694b37800da7964e5b77ec3eba283fc7569c2"}
+--- reviewed/scripts/conftest.py
++++ mutation-constant-root-hash/scripts/conftest.py
+@@ -235,7 +235,7 @@
+     # it at the root entry so creation and content changes cannot look absent.
+     # Root symlinks retain the separately documented handling below.
+     if not state_dir.is_symlink() and state_dir.is_file():
+-        return {"./": _hash_file(state_dir)}
++        return {"./": "<file>"}
+     if not state_dir.is_dir():
+         return {}
+     snapshot: dict[str, str] = {"./": "<dir>"}
+
+{"case": "mutation-constant-root-hash", "argv": ["/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python", "-B", "-m", "pytest", "scripts/tests/test_state_guard.py", "scripts/tests/test_kit_doctor.py::test_kit_repo_self_check_is_clean", "-q", "-m", "not driftcheck"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo", "returncode": 1}
+t.stderr}"
+        )
+E       AssertionError: the guard did not fail the run after a write into /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/tmp/pytest-of-topi/pytest-20/test_guard_observes_regular_fi5/state.
+E         stdout:
+E         .                                                                        [100%]
+E         =============================== warnings summary ===============================
+E         ../../../../uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+E           /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/archive-v0/AhoLitXiFj6nBxY6/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+E           
+E             self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+E         
+E         -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+E         1 passed, 1 warning in 0.00s
+E         
+E         stderr:
+E         
+E       assert 0 != 0
+E        +  where 0 = CompletedProcess(args=['/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adve...n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n1 passed, 1 warning in 0.00s\n', stderr='').returncode
+
+scripts/tests/test_state_guard.py:287: AssertionError
+=========================== short test summary info ============================
+FAILED scripts/tests/test_state_guard.py::test_guard_observes_regular_file_at_state_root[modified-flat]
+FAILED scripts/tests/test_state_guard.py::test_guard_observes_regular_file_at_state_root[modified-nested]
+2 failed, 51 passed, 1 deselected in 12.53s
+
+{"byte_equal": true, "sha256": "a0a82682c9431205f8c0db80176694b37800da7964e5b77ec3eba283fc7569c2"}
+{"case": "restored-focused", "argv": ["/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/uv-cache/builds-v0/.tmpx0tpAh/bin/python", "-B", "-m", "pytest", "scripts/tests/test_state_guard.py", "scripts/tests/test_kit_doctor.py::test_kit_repo_self_check_is_clean", "-q"], "cwd": "/private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/adversarial/mut-adversarial-b018a054-6da874y3/repo", "returncode": 0}
+......................................................                   [100%]
+54 passed in 12.57s
+
+{"returncode": 0}

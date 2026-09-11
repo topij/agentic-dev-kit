@@ -1,0 +1,37 @@
+{
+  "acceptance_required": "Accept the documented inherited special-file-root detection limitation for this regular-file repair; no functional extension is proposed.",
+  "approved": false,
+  "changelog_sha256_unchanged": "206a09f89f48039008d5949c293bc058602ea0404ab9ae1d69fba4a4b2380ee1",
+  "decision": "ITEM5-B-KIT-REVIEW-02",
+  "merge_authorized": false,
+  "patch_sha256": "c46f4ad0b142a26314d179b434764d98d2f8aee25cc2618d59476f1ae31b2c74",
+  "preparation_clone": "/private/tmp/item5-b-kit-repair-1kc2i4t2/proposal02/repo",
+  "preparation_revision": "b018a0544c44028c21399ad073ce8a3dee3bfd45",
+  "prepared_at": "2026-09-10T19:46:48.364064+00:00",
+  "production_behavior_change": false,
+  "retained_writes": [],
+  "tracker_writes": [],
+  "writes": [
+    {
+      "after_sha256": "ecebbbc42cd6a8960e187abda41c5917e39aa1623b438ad932c7102cdf3ab03c",
+      "before_sha256": "a0a82682c9431205f8c0db80176694b37800da7964e5b77ec3eba283fc7569c2",
+      "destination": "/Users/topi/Coding/agentic-dev-kit/scripts/conftest.py",
+      "mode": "0o644",
+      "payload": "scripts--conftest.py.txt"
+    },
+    {
+      "after_sha256": "9420de32bcba5232f13e9d8258de6f5c08ccb0a398513ff83e01cd731f377613",
+      "before_sha256": "8e7a7082fa4e7fcaa0ccf1985be646c7b26bb86af4cc519349cc068861b6b291",
+      "destination": "/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_state_guard.py",
+      "mode": "0o644",
+      "payload": "scripts--tests--test_state_guard.py.txt"
+    },
+    {
+      "after_sha256": "6c701b78f79f36b171d5df67a18317d04f9b734aff489bc6a00d70455f511160",
+      "before_sha256": "4697b0e14dfa85ba86797aef85788d1ce2edb0a7001a9c6a1057109775cbad96",
+      "destination": "/Users/topi/Coding/agentic-dev-kit/kit-manifest.json",
+      "mode": "0o644",
+      "payload": "kit-manifest.json.txt"
+    }
+  ]
+}

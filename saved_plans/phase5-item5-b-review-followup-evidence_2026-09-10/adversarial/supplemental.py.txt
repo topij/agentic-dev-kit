@@ -1,0 +1,9 @@
+import subprocess,json,hashlib,os
+from pathlib import Path
+p=Path.cwd(); owned=Path(__file__).resolve().parent
+for argv in [['bash','-n',s] for s in ['scripts/dev_session.sh','scripts/reconcile_sessions.sh','scripts/lib/repo_root.sh','scripts/hooks/pre-push']]+[['sh','-n','init.sh']]:
+ r=subprocess.run(argv,capture_output=True,text=True); print(json.dumps(dict(argv=argv,returncode=r.returncode,stdout=r.stdout,stderr=r.stderr))); assert r.returncode==0
+for root in [p,owned/'handed-tree']:
+ for argv in [['git','rev-parse','HEAD'],['git','status','--short']]:
+  r=subprocess.run(argv,cwd=root,capture_output=True,text=True,env={**os.environ,'GIT_OPTIONAL_LOCKS':'0'}); print(json.dumps(dict(cwd=str(root),argv=argv,returncode=r.returncode,stdout=r.stdout,stderr=r.stderr))); assert r.returncode==0
+ target=root/'scripts/conftest.py'; original=subprocess.check_output(['git','show','b018a0544c44028c21399ad073ce8a3dee3bfd45:scripts/conftest.py'],cwd=root); print(json.dumps(dict(root=str(root),guard_byte_equal=target.read_bytes()==original,sha256=hashlib.sha256(target.read_bytes()).hexdigest()))); assert target.read_bytes()==original

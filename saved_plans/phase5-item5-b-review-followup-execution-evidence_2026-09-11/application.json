@@ -1,0 +1,10 @@
+{
+  "at": "2026-09-11T02:18:48.626111+00:00",
+  "base": "4a4820a721462ad133db861cd9819d59cd35157a",
+  "branch": "chore/item5-b-review-repair-20260910",
+  "destinations": {
+    "/Users/topi/Coding/agentic-dev-kit/kit-manifest.json": "6c701b78f79f36b171d5df67a18317d04f9b734aff489bc6a00d70455f511160",
+    "/Users/topi/Coding/agentic-dev-kit/scripts/conftest.py": "ecebbbc42cd6a8960e187abda41c5917e39aa1623b438ad932c7102cdf3ab03c",
+    "/Users/topi/Coding/agentic-dev-kit/scripts/tests/test_state_guard.py": "9420de32bcba5232f13e9d8258de6f5c08ccb0a398513ff83e01cd731f377613"
+  }
+}

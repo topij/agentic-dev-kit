@@ -1,0 +1,342 @@
+toolkit	Set up job	﻿2026-09-10T19:22:16.6775642Z Current runner version: '2.337.0'
+toolkit	Set up job	2026-09-10T19:22:16.6800899Z ##[group]Runner Image Provisioner
+toolkit	Set up job	2026-09-10T19:22:16.6801770Z Hosted Compute Agent
+toolkit	Set up job	2026-09-10T19:22:16.6802466Z Version: 20260828.587
+toolkit	Set up job	2026-09-10T19:22:16.6803104Z Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+toolkit	Set up job	2026-09-10T19:22:16.6803939Z Build Date: 2026-08-28T16:44:25Z
+toolkit	Set up job	2026-09-10T19:22:16.6804626Z Worker ID: {090caaf4-d0c7-4402-8615-46ba21e1030d}
+toolkit	Set up job	2026-09-10T19:22:16.6805322Z Azure Region: westus
+toolkit	Set up job	2026-09-10T19:22:16.6805928Z ##[endgroup]
+toolkit	Set up job	2026-09-10T19:22:16.6807420Z ##[group]Operating System
+toolkit	Set up job	2026-09-10T19:22:16.6808079Z Ubuntu
+toolkit	Set up job	2026-09-10T19:22:16.6808762Z 24.04.5
+toolkit	Set up job	2026-09-10T19:22:16.6809271Z LTS
+toolkit	Set up job	2026-09-10T19:22:16.6809811Z ##[endgroup]
+toolkit	Set up job	2026-09-10T19:22:16.6810657Z ##[group]Runner Image
+toolkit	Set up job	2026-09-10T19:22:16.6811383Z Image: ubuntu-24.04
+toolkit	Set up job	2026-09-10T19:22:16.6812020Z Version: 20260907.300.1
+toolkit	Set up job	2026-09-10T19:22:16.6813072Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260907.300/images/ubuntu/Ubuntu2404-Readme.md
+toolkit	Set up job	2026-09-10T19:22:16.6814880Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260907.300
+toolkit	Set up job	2026-09-10T19:22:16.6815857Z ##[endgroup]
+toolkit	Set up job	2026-09-10T19:22:16.6816978Z ##[group]GITHUB_TOKEN Permissions
+toolkit	Set up job	2026-09-10T19:22:16.6818812Z Contents: read
+toolkit	Set up job	2026-09-10T19:22:16.6819529Z Metadata: read
+toolkit	Set up job	2026-09-10T19:22:16.6820121Z ##[endgroup]
+toolkit	Set up job	2026-09-10T19:22:16.6822571Z Secret source: Actions
+toolkit	Set up job	2026-09-10T19:22:16.6823559Z Cache mode: write
+toolkit	Set up job	2026-09-10T19:22:16.6824275Z Prepare workflow directory
+toolkit	Set up job	2026-09-10T19:22:16.7155408Z Prepare all required actions
+toolkit	Set up job	2026-09-10T19:22:16.7206066Z Getting action download info
+toolkit	Set up job	2026-09-10T19:22:17.1083924Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+toolkit	Set up job	2026-09-10T19:22:17.2340856Z Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+toolkit	Set up job	2026-09-10T19:22:17.3231502Z Download action repository 'astral-sh/ruff-action@4919ec5cf1f49eff0871dbcea0da843445b837e6' (SHA:4919ec5cf1f49eff0871dbcea0da843445b837e6)
+toolkit	Set up job	2026-09-10T19:22:17.8287414Z Complete job name: toolkit
+toolkit	Run actions/checkout@v4	﻿2026-09-10T19:22:17.9121378Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:17.9130267Z ##[group]Run actions/checkout@v4
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:17.9131364Z with:
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:17.9131875Z   repository: topij/agentic-dev-kit
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:17.9135818Z   token: ***
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:17.9136288Z   ssh-strict: true
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:17.9136824Z   ssh-user: git
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:17.9137302Z   persist-credentials: true
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:17.9137827Z   clean: true
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:17.9138310Z   sparse-checkout-cone-mode: true
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:17.9138878Z   fetch-depth: 1
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:17.9139348Z   fetch-tags: false
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:17.9139838Z   show-progress: true
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:17.9140571Z   lfs: false
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:17.9141053Z   submodules: false
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:17.9141596Z   set-safe-directory: true
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:17.9142150Z   allow-unsafe-pr-checkout: false
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:17.9143010Z ##[endgroup]
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0164297Z Syncing repository: topij/agentic-dev-kit
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0167623Z ##[group]Getting Git version info
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0169098Z Working directory is '/home/runner/work/agentic-dev-kit/agentic-dev-kit'
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0171612Z [command]/usr/bin/git version
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0233672Z git version 2.55.0
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0266965Z ##[endgroup]
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0274288Z Temporarily overriding HOME='/home/runner/work/_temp/9801a2f3-38f2-4a78-8941-315f3bd19a15' before making global git config changes
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0276729Z Adding repository directory to the temporary git global config as a safe directory
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0278974Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/agentic-dev-kit/agentic-dev-kit
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0334615Z Deleting the contents of '/home/runner/work/agentic-dev-kit/agentic-dev-kit'
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0341128Z ##[group]Initializing the repository
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0348286Z [command]/usr/bin/git init /home/runner/work/agentic-dev-kit/agentic-dev-kit
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0482871Z hint: Using 'master' as the name for the initial branch. This default branch name
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0485181Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0486867Z hint: to use in all of your new repositories, which will suppress this warning,
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0488184Z hint: call:
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0489133Z hint:
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0492202Z hint: 	git config --global init.defaultBranch <name>
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0493619Z hint:
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0495056Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0496956Z hint: 'development'. The just-created branch can be renamed via this command:
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0498478Z hint:
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0499286Z hint: 	git branch -m <name>
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0500002Z hint:
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0501010Z hint: Disable this message with "git config set advice.defaultBranchName false"
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0502251Z Initialized empty Git repository in /home/runner/work/agentic-dev-kit/agentic-dev-kit/.git/
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0506623Z [command]/usr/bin/git remote add origin https://github.com/topij/agentic-dev-kit
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0561718Z ##[endgroup]
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0563655Z ##[group]Disabling automatic garbage collection
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0571462Z [command]/usr/bin/git config --local gc.auto 0
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0607212Z ##[endgroup]
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0608874Z ##[group]Setting up auth
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0615058Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.0653794Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.1072427Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.1116456Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.1399497Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.1403365Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.1655316Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.1694567Z ##[endgroup]
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.1695881Z ##[group]Fetching the repository
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:18.1704782Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +f1f2892266ad724964d590c2f2f533828dd4d997:refs/remotes/pull/731/merge
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.1140266Z From https://github.com/topij/agentic-dev-kit
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.1143330Z  * [new ref]         f1f2892266ad724964d590c2f2f533828dd4d997 -> pull/731/merge
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.1148708Z ##[endgroup]
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.1151623Z ##[group]Determining the checkout info
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.1154615Z ##[endgroup]
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.1157030Z [command]/usr/bin/git sparse-checkout disable
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.1224012Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.1258420Z ##[group]Checking out the ref
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.1261581Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/731/merge
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.2104417Z Note: switching to 'refs/remotes/pull/731/merge'.
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.2107358Z 
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.2109217Z You are in 'detached HEAD' state. You can look around, make experimental
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.2115089Z changes and commit them, and you can discard any commits you make in this
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.2118536Z state without impacting any branches by switching back to a branch.
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.2119937Z 
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.2121353Z If you want to create a new branch to retain commits you create, you may
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.2123954Z do so (now or later) by using -c with the switch command. Example:
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.2125326Z 
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.2125873Z   git switch -c <new-branch-name>
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.2126839Z 
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.2127373Z Or undo this operation with:
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.2128274Z 
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.2128786Z   git switch -
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.2129495Z 
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.2130954Z Turn off this advice by setting config variable advice.detachedHead to false
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.2132649Z 
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.2134495Z HEAD is now at f1f2892 Merge b018a0544c44028c21399ad073ce8a3dee3bfd45 into f408039dc3a9b0d2e0e8d246c126af892839cee8
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.2142965Z ##[endgroup]
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.2173007Z [command]/usr/bin/git log -1 --format=%H
+toolkit	Run actions/checkout@v4	2026-09-10T19:22:19.2202270Z f1f2892266ad724964d590c2f2f533828dd4d997
+toolkit	Run actions/setup-python@v5	﻿2026-09-10T19:22:19.2717104Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+toolkit	Run actions/setup-python@v5	2026-09-10T19:22:19.2723292Z ##[group]Run actions/setup-python@v5
+toolkit	Run actions/setup-python@v5	2026-09-10T19:22:19.2724599Z with:
+toolkit	Run actions/setup-python@v5	2026-09-10T19:22:19.2725628Z   python-version: 3.12
+toolkit	Run actions/setup-python@v5	2026-09-10T19:22:19.2726785Z   check-latest: false
+toolkit	Run actions/setup-python@v5	2026-09-10T19:22:19.2736647Z   token: ***
+toolkit	Run actions/setup-python@v5	2026-09-10T19:22:19.2737749Z   update-environment: true
+toolkit	Run actions/setup-python@v5	2026-09-10T19:22:19.2738972Z   allow-prereleases: false
+toolkit	Run actions/setup-python@v5	2026-09-10T19:22:19.2740181Z   freethreaded: false
+toolkit	Run actions/setup-python@v5	2026-09-10T19:22:19.2741413Z ##[endgroup]
+toolkit	Run actions/setup-python@v5	2026-09-10T19:22:19.4106637Z ##[group]Installed versions
+toolkit	Run actions/setup-python@v5	2026-09-10T19:22:19.4207651Z (node:2253) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+toolkit	Run actions/setup-python@v5	2026-09-10T19:22:19.4213485Z (Use `node --trace-deprecation ...` to show where the warning was created)
+toolkit	Run actions/setup-python@v5	2026-09-10T19:22:19.4217749Z Successfully set up CPython (3.12.14)
+toolkit	Run actions/setup-python@v5	2026-09-10T19:22:19.4221871Z ##[endgroup]
+toolkit	Install test dependencies	﻿2026-09-10T19:22:19.4426501Z ##[group]Run python -m pip install pytest pyyaml
+toolkit	Install test dependencies	2026-09-10T19:22:19.4428134Z ^[[36;1mpython -m pip install pytest pyyaml^[[0m
+toolkit	Install test dependencies	2026-09-10T19:22:19.4497881Z shell: /usr/bin/bash -e {0}
+toolkit	Install test dependencies	2026-09-10T19:22:19.4499405Z env:
+toolkit	Install test dependencies	2026-09-10T19:22:19.4500929Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	Install test dependencies	2026-09-10T19:22:19.4502878Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+toolkit	Install test dependencies	2026-09-10T19:22:19.4504735Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	Install test dependencies	2026-09-10T19:22:19.4506392Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	Install test dependencies	2026-09-10T19:22:19.4508051Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	Install test dependencies	2026-09-10T19:22:19.4509782Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+toolkit	Install test dependencies	2026-09-10T19:22:19.4511467Z ##[endgroup]
+toolkit	Install test dependencies	2026-09-10T19:22:20.4191553Z Collecting pytest
+toolkit	Install test dependencies	2026-09-10T19:22:20.4649927Z   Downloading pytest-9.1.1-py3-none-any.whl.metadata (7.6 kB)
+toolkit	Install test dependencies	2026-09-10T19:22:20.5023164Z Collecting pyyaml
+toolkit	Install test dependencies	2026-09-10T19:22:20.5054869Z   Downloading pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.4 kB)
+toolkit	Install test dependencies	2026-09-10T19:22:20.5159042Z Collecting iniconfig>=1.0.1 (from pytest)
+toolkit	Install test dependencies	2026-09-10T19:22:20.5196964Z   Downloading iniconfig-2.3.0-py3-none-any.whl.metadata (2.5 kB)
+toolkit	Install test dependencies	2026-09-10T19:22:20.5339243Z Collecting packaging>=22 (from pytest)
+toolkit	Install test dependencies	2026-09-10T19:22:20.5380261Z   Downloading packaging-26.3-py3-none-any.whl.metadata (3.5 kB)
+toolkit	Install test dependencies	2026-09-10T19:22:20.5516434Z Collecting pluggy<2,>=1.5 (from pytest)
+toolkit	Install test dependencies	2026-09-10T19:22:20.5544306Z   Downloading pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
+toolkit	Install test dependencies	2026-09-10T19:22:20.5713191Z Collecting pygments>=2.7.2 (from pytest)
+toolkit	Install test dependencies	2026-09-10T19:22:20.5739862Z   Downloading pygments-2.21.0-py3-none-any.whl.metadata (2.5 kB)
+toolkit	Install test dependencies	2026-09-10T19:22:20.5819105Z Downloading pytest-9.1.1-py3-none-any.whl (386 kB)
+toolkit	Install test dependencies	2026-09-10T19:22:20.5963084Z Downloading pluggy-1.6.0-py3-none-any.whl (20 kB)
+toolkit	Install test dependencies	2026-09-10T19:22:20.6010912Z Downloading pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (807 kB)
+toolkit	Install test dependencies	2026-09-10T19:22:20.6114461Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 807.9/807.9 kB 85.7 MB/s  0:00:00
+toolkit	Install test dependencies	2026-09-10T19:22:20.6178204Z Downloading iniconfig-2.3.0-py3-none-any.whl (7.5 kB)
+toolkit	Install test dependencies	2026-09-10T19:22:20.6227119Z Downloading packaging-26.3-py3-none-any.whl (129 kB)
+toolkit	Install test dependencies	2026-09-10T19:22:20.6276768Z Downloading pygments-2.21.0-py3-none-any.whl (1.3 MB)
+toolkit	Install test dependencies	2026-09-10T19:22:20.6381165Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.3/1.3 MB 134.4 MB/s  0:00:00
+toolkit	Install test dependencies	2026-09-10T19:22:20.6987116Z Installing collected packages: pyyaml, pygments, pluggy, packaging, iniconfig, pytest
+toolkit	Install test dependencies	2026-09-10T19:22:21.8967542Z 
+toolkit	Install test dependencies	2026-09-10T19:22:21.8981932Z Successfully installed iniconfig-2.3.0 packaging-26.3 pluggy-1.6.0 pygments-2.21.0 pytest-9.1.1 pyyaml-6.0.3
+toolkit	Lint Python (ruff)	﻿2026-09-10T19:22:21.9499137Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+toolkit	Lint Python (ruff)	2026-09-10T19:22:21.9500793Z ##[group]Run astral-sh/ruff-action@4919ec5cf1f49eff0871dbcea0da843445b837e6
+toolkit	Lint Python (ruff)	2026-09-10T19:22:21.9501183Z with:
+toolkit	Lint Python (ruff)	2026-09-10T19:22:21.9501376Z   version: 0.16.0
+toolkit	Lint Python (ruff)	2026-09-10T19:22:21.9501594Z   args: check --no-fix
+toolkit	Lint Python (ruff)	2026-09-10T19:22:21.9501882Z   src: /home/runner/work/agentic-dev-kit/agentic-dev-kit
+toolkit	Lint Python (ruff)	2026-09-10T19:22:21.9504291Z   github-token: ***
+toolkit	Lint Python (ruff)	2026-09-10T19:22:21.9504512Z env:
+toolkit	Lint Python (ruff)	2026-09-10T19:22:21.9504788Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	Lint Python (ruff)	2026-09-10T19:22:21.9505225Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+toolkit	Lint Python (ruff)	2026-09-10T19:22:21.9505683Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	Lint Python (ruff)	2026-09-10T19:22:21.9506100Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	Lint Python (ruff)	2026-09-10T19:22:21.9506488Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	Lint Python (ruff)	2026-09-10T19:22:21.9506878Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+toolkit	Lint Python (ruff)	2026-09-10T19:22:21.9507202Z ##[endgroup]
+toolkit	Lint Python (ruff)	2026-09-10T19:22:22.4761662Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/5a2f60ce-2481-4c26-9a22-92dc034c25f5 -f /home/runner/work/_temp/24ed6f9a-f046-433c-8c47-1d51c611470e
+toolkit	Lint Python (ruff)	2026-09-10T19:22:22.7045534Z Added /opt/hostedtoolcache/ruff/0.16.0/x86_64 to the path
+toolkit	Lint Python (ruff)	2026-09-10T19:22:22.7047121Z Set RUFF_OUTPUT_FORMAT to github
+toolkit	Lint Python (ruff)	2026-09-10T19:22:22.7074016Z Successfully installed ruff version 0.16.0
+toolkit	Lint Python (ruff)	2026-09-10T19:22:22.7075167Z [command]/opt/hostedtoolcache/ruff/0.16.0/x86_64/ruff check --no-fix /home/runner/work/agentic-dev-kit/agentic-dev-kit
+toolkit	Check shell syntax	﻿2026-09-10T19:22:22.7777515Z ##[group]Run bash -n scripts/dev_session.sh scripts/reconcile_sessions.sh scripts/lib/repo_root.sh scripts/hooks/pre-push
+toolkit	Check shell syntax	2026-09-10T19:22:22.7778449Z ^[[36;1mbash -n scripts/dev_session.sh scripts/reconcile_sessions.sh scripts/lib/repo_root.sh scripts/hooks/pre-push^[[0m
+toolkit	Check shell syntax	2026-09-10T19:22:22.7779003Z ^[[36;1msh -n init.sh^[[0m
+toolkit	Check shell syntax	2026-09-10T19:22:22.7816520Z shell: /usr/bin/bash -e {0}
+toolkit	Check shell syntax	2026-09-10T19:22:22.7816779Z env:
+toolkit	Check shell syntax	2026-09-10T19:22:22.7817045Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	Check shell syntax	2026-09-10T19:22:22.7817491Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+toolkit	Check shell syntax	2026-09-10T19:22:22.7817926Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	Check shell syntax	2026-09-10T19:22:22.7818302Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	Check shell syntax	2026-09-10T19:22:22.7818680Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	Check shell syntax	2026-09-10T19:22:22.7819061Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+toolkit	Check shell syntax	2026-09-10T19:22:22.7819566Z   RUFF_OUTPUT_FORMAT: github
+toolkit	Check shell syntax	2026-09-10T19:22:22.7819831Z ##[endgroup]
+toolkit	init.sh must be executable	﻿2026-09-10T19:22:22.7957648Z ##[group]Run test -x init.sh
+toolkit	init.sh must be executable	2026-09-10T19:22:22.7957965Z ^[[36;1mtest -x init.sh^[[0m
+toolkit	init.sh must be executable	2026-09-10T19:22:22.7991706Z shell: /usr/bin/bash -e {0}
+toolkit	init.sh must be executable	2026-09-10T19:22:22.7991974Z env:
+toolkit	init.sh must be executable	2026-09-10T19:22:22.7992253Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	init.sh must be executable	2026-09-10T19:22:22.7992715Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+toolkit	init.sh must be executable	2026-09-10T19:22:22.7993150Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	init.sh must be executable	2026-09-10T19:22:22.7993529Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	init.sh must be executable	2026-09-10T19:22:22.7993926Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	init.sh must be executable	2026-09-10T19:22:22.7994329Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+toolkit	init.sh must be executable	2026-09-10T19:22:22.7994673Z   RUFF_OUTPUT_FORMAT: github
+toolkit	init.sh must be executable	2026-09-10T19:22:22.7994905Z ##[endgroup]
+toolkit	Run state and portability tests	﻿2026-09-10T19:22:22.8076025Z ##[group]Run python -m pytest scripts/lib/state_paths/tests scripts/tests -q
+toolkit	Run state and portability tests	2026-09-10T19:22:22.8076604Z ^[[36;1mpython -m pytest scripts/lib/state_paths/tests scripts/tests -q^[[0m
+toolkit	Run state and portability tests	2026-09-10T19:22:22.8109792Z shell: /usr/bin/bash -e {0}
+toolkit	Run state and portability tests	2026-09-10T19:22:22.8110050Z env:
+toolkit	Run state and portability tests	2026-09-10T19:22:22.8110554Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	Run state and portability tests	2026-09-10T19:22:22.8111029Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+toolkit	Run state and portability tests	2026-09-10T19:22:22.8111470Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	Run state and portability tests	2026-09-10T19:22:22.8111853Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	Run state and portability tests	2026-09-10T19:22:22.8112244Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	Run state and portability tests	2026-09-10T19:22:22.8112635Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+toolkit	Run state and portability tests	2026-09-10T19:22:22.8112977Z   RUFF_OUTPUT_FORMAT: github
+toolkit	Run state and portability tests	2026-09-10T19:22:22.8113206Z ##[endgroup]
+toolkit	Run state and portability tests	2026-09-10T19:22:27.3174277Z ........................................................................ [  2%]
+toolkit	Run state and portability tests	2026-09-10T19:22:31.0999785Z ........................................................................ [  5%]
+toolkit	Run state and portability tests	2026-09-10T19:22:41.4258144Z ........................................................................ [  8%]
+toolkit	Run state and portability tests	2026-09-10T19:23:06.5313509Z ...........................................sss.......................... [ 11%]
+toolkit	Run state and portability tests	2026-09-10T19:23:20.0171208Z ........................................................................ [ 14%]
+toolkit	Run state and portability tests	2026-09-10T19:23:36.3627879Z ........................................................................ [ 17%]
+toolkit	Run state and portability tests	2026-09-10T19:23:41.4190175Z ........................................................................ [ 20%]
+toolkit	Run state and portability tests	2026-09-10T19:23:41.6878252Z ........................................................................ [ 22%]
+toolkit	Run state and portability tests	2026-09-10T19:23:43.0209188Z ........................................................................ [ 25%]
+toolkit	Run state and portability tests	2026-09-10T19:23:43.4640675Z ........................................................................ [ 28%]
+toolkit	Run state and portability tests	2026-09-10T19:23:43.8386007Z ........................................................................ [ 31%]
+toolkit	Run state and portability tests	2026-09-10T19:23:44.2442527Z ........................................................................ [ 34%]
+toolkit	Run state and portability tests	2026-09-10T19:23:44.6505300Z ........................................................................ [ 37%]
+toolkit	Run state and portability tests	2026-09-10T19:23:48.2465457Z ........................................................................ [ 40%]
+toolkit	Run state and portability tests	2026-09-10T19:23:48.4600098Z ........................................................................ [ 43%]
+toolkit	Run state and portability tests	2026-09-10T19:23:49.1269250Z ........................................................................ [ 45%]
+toolkit	Run state and portability tests	2026-09-10T19:24:05.7488564Z ........................................................................ [ 48%]
+toolkit	Run state and portability tests	2026-09-10T19:24:11.1478216Z ........................................................................ [ 51%]
+toolkit	Run state and portability tests	2026-09-10T19:24:21.8851397Z ........................................................................ [ 54%]
+toolkit	Run state and portability tests	2026-09-10T19:24:31.2417831Z ........................................................................ [ 57%]
+toolkit	Run state and portability tests	2026-09-10T19:24:37.5826645Z ........................................................................ [ 60%]
+toolkit	Run state and portability tests	2026-09-10T19:24:43.8162617Z ........................................................................ [ 63%]
+toolkit	Run state and portability tests	2026-09-10T19:24:54.4936143Z ........................................................................ [ 66%]
+toolkit	Run state and portability tests	2026-09-10T19:25:03.9503630Z ........................................................................ [ 68%]
+toolkit	Run state and portability tests	2026-09-10T19:25:35.5798875Z ........................................................................ [ 71%]
+toolkit	Run state and portability tests	2026-09-10T19:25:44.2503870Z ........................................................................ [ 74%]
+toolkit	Run state and portability tests	2026-09-10T19:25:46.8163053Z ........................................................................ [ 77%]
+toolkit	Run state and portability tests	2026-09-10T19:25:47.1755825Z ........................................................................ [ 80%]
+toolkit	Run state and portability tests	2026-09-10T19:25:48.6045446Z ........................................................................ [ 83%]
+toolkit	Run state and portability tests	2026-09-10T19:25:50.4838561Z ........................................................................ [ 86%]
+toolkit	Run state and portability tests	2026-09-10T19:25:52.3701437Z ........................................................................ [ 89%]
+toolkit	Run state and portability tests	2026-09-10T19:25:54.1916045Z ........................................................................ [ 91%]
+toolkit	Run state and portability tests	2026-09-10T19:25:59.8964923Z ........................................................................ [ 94%]
+toolkit	Run state and portability tests	2026-09-10T19:26:27.6548421Z ........................................................................ [ 97%]
+toolkit	Run state and portability tests	2026-09-10T19:26:38.5012087Z .........................................................                [100%]
+toolkit	Run state and portability tests	2026-09-10T19:26:38.5013121Z 2502 passed, 3 skipped in 255.21s (0:04:15)
+toolkit	kit-manifest.json must be in sync	﻿2026-09-10T19:26:38.5890666Z ##[group]Run python scripts/kit_doctor.py
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.5891173Z ^[[36;1mpython scripts/kit_doctor.py^[[0m
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.5927349Z shell: /usr/bin/bash -e {0}
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.5927611Z env:
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.5927890Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.5928366Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.5928834Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.5929243Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.5929662Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.5930073Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.5930756Z   RUFF_OUTPUT_FORMAT: github
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.5931052Z ##[endgroup]
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6873237Z kit-doctor — installation report
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6873649Z 
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6873874Z   ✓ config schema: v2
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6874324Z   ✓ paths.engines: scripts
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6874956Z   ⚠ pre-push hook: NOT installed — run ./init.sh
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6875728Z   ✓ .claude/settings.json [claude]: scripts/check_doc_budget.py resolves
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6876627Z   ✓ .claude/settings.json [claude]: scripts/check_memory_budget.py resolves
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6877595Z   ✓ .claude/settings.json [claude]: scripts/hooks/pr_followup_hook.py resolves
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6878502Z   ✓ .codex/hooks.json [codex]: scripts/check_doc_budget.py resolves
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6879386Z   ✓ .codex/hooks.json [codex]: scripts/hooks/pr_followup_hook.py resolves
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6880617Z   ✓ .codex/hooks.json [codex]: check_doc_budget.py canonical lifecycle form verified
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6881709Z   ✓ .codex/hooks.json [codex]: pr_followup_hook.py canonical lifecycle form verified
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6882948Z   · .codex/config.toml [codex]: [features].hooks is not set — ./init.sh's registration block asks for it
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6884408Z     (registrations are hand-written — ./init.sh prints both blocks; `/hooks` in a session is the authority on what loaded)
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6885908Z   ✓ .claude/agents/adversarial.md [claude lens=adversarial]: matches the running doctor's expected output
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6887302Z   ✓ .claude/agents/correctness.md [claude lens=correctness]: matches the running doctor's expected output
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6888652Z   ✓ docs/kit-handoff.md: in use
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6889168Z   ✓ docs/kit-friction-log.md: in use
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6889836Z   ⚠ AGENTS.md: still the kit's own contract, not yours — run ./init.sh
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6890801Z   ⚠ CLAUDE.md: still the kit's own contract, not yours — run ./init.sh
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6891278Z 
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6891510Z   files: 67 unchanged, 0 differ, 0 missing, 0 unknown
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6892284Z   baseline: none recorded — cannot tell stale from locally edited.
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6893052Z             Run `kit_doctor.py --record-install --from-kit <kit checkout>`
+toolkit	kit-manifest.json must be in sync	2026-09-10T19:26:38.6893777Z             to stamp one from what is installed now.
+toolkit	Engines must work without PyYAML	﻿2026-09-10T19:26:38.6986991Z ##[group]Run python -m pip uninstall -y pyyaml
+toolkit	Engines must work without PyYAML	2026-09-10T19:26:38.6987385Z ^[[36;1mpython -m pip uninstall -y pyyaml^[[0m
+toolkit	Engines must work without PyYAML	2026-09-10T19:26:38.6987744Z ^[[36;1mpython -m pytest scripts/tests/test_kitconfig.py -q^[[0m
+toolkit	Engines must work without PyYAML	2026-09-10T19:26:38.7023927Z shell: /usr/bin/bash -e {0}
+toolkit	Engines must work without PyYAML	2026-09-10T19:26:38.7024178Z env:
+toolkit	Engines must work without PyYAML	2026-09-10T19:26:38.7024446Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	Engines must work without PyYAML	2026-09-10T19:26:38.7024879Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+toolkit	Engines must work without PyYAML	2026-09-10T19:26:38.7025309Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	Engines must work without PyYAML	2026-09-10T19:26:38.7025689Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	Engines must work without PyYAML	2026-09-10T19:26:38.7026067Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+toolkit	Engines must work without PyYAML	2026-09-10T19:26:38.7026445Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+toolkit	Engines must work without PyYAML	2026-09-10T19:26:38.7026775Z   RUFF_OUTPUT_FORMAT: github
+toolkit	Engines must work without PyYAML	2026-09-10T19:26:38.7027004Z ##[endgroup]
+toolkit	Engines must work without PyYAML	2026-09-10T19:26:39.0118530Z Found existing installation: PyYAML 6.0.3
+toolkit	Engines must work without PyYAML	2026-09-10T19:26:39.0149131Z Uninstalling PyYAML-6.0.3:
+toolkit	Engines must work without PyYAML	2026-09-10T19:26:39.0161976Z   Successfully uninstalled PyYAML-6.0.3
+toolkit	Engines must work without PyYAML	2026-09-10T19:26:39.4668471Z s..s.................................................................... [ 76%]
+toolkit	Engines must work without PyYAML	2026-09-10T19:26:41.7087436Z ......................                                                   [100%]
+toolkit	Engines must work without PyYAML	2026-09-10T19:26:41.7088092Z 92 passed, 2 skipped in 2.48s
+toolkit	Post Run actions/setup-python@v5	﻿2026-09-10T19:26:41.7409244Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+toolkit	Post Run actions/setup-python@v5	2026-09-10T19:26:41.7410798Z Post job cleanup.
+toolkit	Post Run actions/setup-python@v5	2026-09-10T19:26:41.8618444Z (node:122445) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+toolkit	Post Run actions/setup-python@v5	2026-09-10T19:26:41.8619528Z (Use `node --trace-deprecation ...` to show where the warning was created)
+toolkit	Post Run actions/checkout@v4	﻿2026-09-10T19:26:41.8817601Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+toolkit	Post Run actions/checkout@v4	2026-09-10T19:26:41.8819729Z Post job cleanup.
+toolkit	Post Run actions/checkout@v4	2026-09-10T19:26:41.9713823Z [command]/usr/bin/git version
+toolkit	Post Run actions/checkout@v4	2026-09-10T19:26:41.9758012Z git version 2.55.0
+toolkit	Post Run actions/checkout@v4	2026-09-10T19:26:41.9800240Z Temporarily overriding HOME='/home/runner/work/_temp/146c5c39-48d3-4483-ac9e-5373e9e10f5a' before making global git config changes
+toolkit	Post Run actions/checkout@v4	2026-09-10T19:26:41.9802366Z Adding repository directory to the temporary git global config as a safe directory
+toolkit	Post Run actions/checkout@v4	2026-09-10T19:26:41.9806745Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/agentic-dev-kit/agentic-dev-kit
+toolkit	Post Run actions/checkout@v4	2026-09-10T19:26:41.9846167Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+toolkit	Post Run actions/checkout@v4	2026-09-10T19:26:41.9882535Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+toolkit	Post Run actions/checkout@v4	2026-09-10T19:26:42.0142158Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+toolkit	Post Run actions/checkout@v4	2026-09-10T19:26:42.0168298Z http.https://github.com/.extraheader
+toolkit	Post Run actions/checkout@v4	2026-09-10T19:26:42.0181397Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+toolkit	Post Run actions/checkout@v4	2026-09-10T19:26:42.0215762Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+toolkit	Post Run actions/checkout@v4	2026-09-10T19:26:42.0481812Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+toolkit	Post Run actions/checkout@v4	2026-09-10T19:26:42.0525902Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+toolkit	Complete job	﻿2026-09-10T19:26:42.0929939Z Cleaning up orphan processes
+toolkit	Complete job	2026-09-10T19:26:42.1197623Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-python@v5, astral-sh/ruff-action@4919ec5cf1f49eff0871dbcea0da843445b837e6. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

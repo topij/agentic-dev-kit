@@ -1,0 +1,98 @@
+import json
+import os
+from pathlib import Path
+import runpy
+import subprocess
+import sys
+
+E=runpy.run_path('/private/tmp/item5-b-review02-20260911-303qa6cz/execute.py')
+REPO,OUT,COCKPIT=(E[k] for k in ['REPO','OUT','KIT'])
+KIT=E['SOURCE']
+E['environment']=E['env']
+SERIAL = '''import fcntl,json,os,subprocess,sys
+from pathlib import Path
+cwd=Path(sys.argv[1]).resolve()
+owned=Path(sys.argv[2]).resolve()
+assert owned.is_relative_to(Path("/private/tmp/item5-b-review02-20260911-303qa6cz"))
+assert cwd.is_relative_to(owned)
+assert sys.argv[3]=="--"
+for name in ["state","uv-cache","uv-tools","ruff-cache","pytest-cache","tmp"]:
+    (owned/name).mkdir(exist_ok=True)
+env=dict(os.environ)
+env.pop("PYTHONOPTIMIZE",None)
+env.update(PYTHONDONTWRITEBYTECODE="1", DEVKIT_STATE_ROOT=str(owned/"state"),UV_CACHE_DIR=str(owned/"uv-cache"),UV_TOOL_DIR=str(owned/"uv-tools"),RUFF_CACHE_DIR=str(owned/"ruff-cache"),TMPDIR=str(owned/"tmp"),PYTEST_ADDOPTS=f"-o cache_dir={owned/'pytest-cache'} -ra")
+with Path("/private/tmp/item5-b-review02-20260911-303qa6cz/review-state/verification.lock").open("a") as lock:
+    print("Waiting for serial verification lock",flush=True)
+    fcntl.flock(lock,fcntl.LOCK_EX)
+    print(json.dumps({"cwd":str(cwd),"argv":sys.argv[4:],"environment":{k:env[k] for k in ["PYTHONDONTWRITEBYTECODE","DEVKIT_STATE_ROOT","UV_CACHE_DIR","UV_TOOL_DIR","RUFF_CACHE_DIR","TMPDIR","PYTEST_ADDOPTS"]}}),flush=True)
+    result=subprocess.run(sys.argv[4:],cwd=cwd,env=env)
+    print(json.dumps({"returncode":result.returncode}),flush=True)
+    sys.exit(result.returncode)
+'''
+
+
+def prepare(kind,number,head,previous=None):
+    target=REPO if kind=='fixture' else COCKPIT
+    remote='https://github.com/topij/'+('adk-item5-b-field-20260909' if kind=='fixture' else 'agentic-dev-kit')+'.git'
+    engine=target/('scripts/devkit/panel_prompt.py' if kind=='fixture' else 'scripts/panel_prompt.py')
+    branch=E['git'](target,'symbolic-ref','--short','HEAD')
+    (OUT/'review-state').mkdir(exist_ok=True)
+    root=OUT/'reviews'/head
+    E['enter'](OUT)
+    root.mkdir(parents=True,exist_ok=False)
+    serial=OUT/'review-state/serial-verify.py'
+    if not serial.exists():
+        serial.write_text(SERIAL)
+    else:
+        assert serial.read_text()==SERIAL
+    for lens in ['adversarial','correctness']:
+        lane=root/lens
+        lane.mkdir()
+        handed=lane/'handed-tree'
+        subprocess.run(['git','clone','--no-hardlinks','--no-checkout',str(target),str(handed)],check=True)
+        E['enter'](handed)
+        subprocess.run(['git','-C',str(handed),'checkout','--detach',head],check=True)
+        subprocess.run(['git','-C',str(handed),'remote','set-url','origin',remote],check=True)
+        assert E['git'](handed,'rev-parse','HEAD')==head
+        assert E['git'](handed,'status','--porcelain')==''
+        verification='make test' if kind=='kit' else 'uv run --with pytest --with pyyaml python -B scripts/devkit/run_installed_tests.py --root <private-review-copy>'
+        argv=['python3','-B',str(engine),'--root',str(target),'--lens',lens,'--head',head,'--branch',branch,'--base-branch','main','--scratch',str(handed),'--pr',number,'--runtime','codex','--verify-command',verification]
+        if previous:
+            argv.extend(['--carry-forward',f'Prior full-panel reports reviewed {previous}. Aim this full rerun at git diff {previous}...{head} as the highest-risk surface; the full remote-base diff remains in scope. Read the intervening commit messages as well.'])
+        p=subprocess.run(argv,cwd=target,capture_output=True,check=True,env=E['environment']('review'))
+        prompt=p.stdout.decode()+f'''
+
+Review execution boundaries:
+- Your handed tree is {handed}. It is an independent clone at the named head. Do not edit or repoint it.
+- Create your own fresh mutation/verification clone only under {lane}; use git clone --no-hardlinks, never cp -a of Git administrative pointers. Do not create scratch under the handed tree.
+- Every test or verification process must run through: python3 -B {serial} <your-private-copy> {lane} -- <command and arguments>. This wrapper holds a shared verification lock and supplies isolated caches/state. Do not impose a wall-clock kill. Poll yielded processes until terminal; a progress message is not a final report.
+- Keep raw command output, mutation diffs, behavioral results and byte restoration evidence under {lane}. Do not edit the submitted payload, repository policy, user profile, hook trust, retained baseline or historical evidence. No forge writes, repair merge, fixture merge, tracker writes or client field exercises are authorized for this review. The approved repair is operator-merge. Test and mutate the submitted production guard independently; retain full behavioral output and restore your private clone bytes.
+- Retained inputs {REPO}, {KIT} and cockpit {COCKPIT} are read-only to you. Read the supplied diff independently. The operator scope is recorded at {COCKPIT}/saved_plans/phase5-item5-b-review-followup-decision_2026-09-10.md and authority at {OUT}/authority.json; those are scope records, not reviewer verdicts.
+- Return the complete terminal review report even if verification fails. Include actual placed HEAD, reviewed SHA, remote base check, nonempty diff, scratch path, allowed/refused routes, exact command/cwd/revision/date results and restoration/handed-tree attestation. Do not start another agent.
+'''
+        (lane/'prompt.md').write_text(prompt)
+        E['write'](lane/'receipt.json',{'stage':'prepared','kind':kind,'head':head,'lens':lens,'handed_identity':E['identity'](handed),'prompt_argv':argv,'prompt_sha256':E['sha']((lane/'prompt.md').read_bytes())})
+    print(root)
+
+
+def launch(head,lens):
+    lane=OUT/'reviews'/head/lens
+    handed=lane/'handed-tree'
+    argv=['codex','exec','--approve-for-me','-c','model_reasoning_effort=high','-C',str(handed),'--add-dir',str(lane),'--json','-o',str(lane/'report.md'),'-']
+    started=E['now']()
+    with (lane/'prompt.md').open('rb') as stdin,(lane/'events.jsonl').open('xb') as stdout:
+        p=subprocess.run(argv,cwd=handed,env=E['environment']('review'),stdin=stdin,stdout=stdout,stderr=subprocess.PIPE)
+    receipt=E['read'](lane/'receipt.json')
+    receipt.update(stage='terminal',argv=argv,started_at=started,ended_at=E['now'](),returncode=p.returncode,stderr=p.stderr.decode(),handed_after=E['identity'](handed))
+    E['write'](lane/'receipt.json',receipt)
+    print(json.dumps({k:v for k,v in receipt.items() if k not in ['handed_identity','handed_after']}),flush=True)
+    if (lane/'report.md').exists():
+        print((lane/'report.md').read_text(),flush=True)
+
+
+if __name__=='__main__':
+    assert not sys.flags.optimize and sys.dont_write_bytecode
+    if sys.argv[1]=='prepare':
+        prepare(*sys.argv[2:])
+    else:
+        launch(*sys.argv[2:])

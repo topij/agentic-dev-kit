@@ -1,0 +1,12 @@
+.                                                                        [100%]======================== REAL state/ WAS WRITTEN (#428) ========================
+REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/probe-correctness-b018a054-6yg3ijs4/state during this run instead of staying inside the per-test $DEVKIT_STATE_ROOT sandbox that _hermetic_state_root (tests/conftest.py) sets. Changed paths: ['./']. Clean these up NOW: this report is one-shot — a leak still on disk at the next run's conftest import is absorbed into that run's baseline and never reported again (#457).
+
+=============================== warnings summary ===============================
+../uv-cache/archive-v0/UMj0e0JW5OS8h39n/lib/python3.14/site-packages/_pytest/config/__init__.py:1464
+  /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/uv-cache/archive-v0/UMj0e0JW5OS8h39n/lib/python3.14/site-packages/_pytest/config/__init__.py:1464: PytestConfigWarning: Unknown config option: cache_dir
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+! REGRESSION (#428): the suite wrote into the real /private/tmp/item5-b-kit-repair-1kc2i4t2/reviews/b018a0544c44028c21399ad073ce8a3dee3bfd45/correctness/probe-correctness-b018a054-6yg3ijs4/state !
+1 passed, 1 warning in 0.00s

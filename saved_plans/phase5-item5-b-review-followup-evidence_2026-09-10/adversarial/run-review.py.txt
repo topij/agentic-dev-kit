@@ -1,0 +1,11 @@
+import subprocess,sys,json,datetime
+from pathlib import Path
+owned=Path(__file__).resolve().parent
+repo=Path((owned/'scratch-path.txt').read_text())
+name=sys.argv[1]
+argv=['python3','-B','/private/tmp/item5-b-kit-repair-1kc2i4t2/review-state/serial-verify.py',str(repo),str(owned),'--',*sys.argv[2:]]
+with (owned/(name+'.log')).open('w') as out:
+ r=subprocess.run(argv,stdout=out,stderr=subprocess.STDOUT)
+(owned/(name+'.json')).write_text(json.dumps(dict(argv=argv,cwd=str(repo),revision='b018a0544c44028c21399ad073ce8a3dee3bfd45',date=datetime.datetime.now(datetime.timezone.utc).isoformat(),returncode=r.returncode),indent=2))
+print((owned/(name+'.log')).read_text())
+sys.exit(r.returncode)

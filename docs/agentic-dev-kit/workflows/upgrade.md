@@ -156,7 +156,7 @@ uv run "${KIT:?KIT is not set — re-run Step 0}"/scripts/kit_doctor.py \
 ```
 
 This comparison is deliberately outside `KIT_OWNED` and never changes the drift
-gate. `kit-current` is byte-identical to the current rendered form; `kit-stale`
+gate. `kit-current` equals the current rendered text after newline normalization; `kit-stale`
 matches an earlier rendered form and can be refreshed without losing authored
 behavior; `missing` can be installed; `adopter-owned` matches no known rendered
 form, so report it and leave it unchanged. The source kit's own adapters must first
