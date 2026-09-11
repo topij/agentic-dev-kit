@@ -92,10 +92,11 @@ field exit are separate. Item 6's completed replay is preserved without repeat o
 credit for cs-toolkit #2222/#2223/#2255. Kit #723 remains the approved upstream deferral;
 #585 stays earlier outside Phase 6; #724 delivered the #722 batch. The friction sweep stays parked.
 
-**Next:** complete the required kit review of the subsequently prepared
-[UPDATE-02 packet](phase5-item5-b-update02-decision_2026-09-11.md) after the recorded
-review-runtime restriction is resolved. Then obtain its exact decision before any
-retained update; the incomplete receipt does not authorize merge or execution.
+**Next:** obtain the separate source-scope decision in the
+[UPDATE-02 review triage](phase5-item5-b-update02-review-triage_2026-09-11.md). The
+[prepared packet](phase5-item5-b-update02-decision_2026-09-11.md) preserves its exact
+source and unanswered approval question. Required kit review remains incomplete;
+no source repair, record merge or incomplete receipt authorizes retained execution.
 That packet revalidates read-only against the
 [post-acceptance retention checkpoint](phase5-item5-b-review-followup-evidence_2026-09-10/retained-final.json.gz)
 and [fixture forge checkpoint](phase5-item5-b-acceptance-execution-evidence_2026-09-10/forge-after-exit.json).

@@ -14,7 +14,7 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-11 — ITEM5-B-UPDATE-02 prepared; kit publication awaits required review.
+Last updated: 2026-09-11 — ITEM5-B-UPDATE-02 awaits source-scope disposition and required review.
 Phase 5 delivery item 5 remains incomplete; item 6's replay remains complete.
 
 ## Latest session — 2026-09-11 (ITEM5-B retained-update preparation, in Codex)
@@ -32,8 +32,10 @@ The packet's required prepared-input validator binds the current audit program a
 result; the original observations alone do not satisfy approval or reuse.
 The [PR #733 runtime receipt](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5633204702)
 records the adversarial review stopping before a final report. This is incomplete
-review evidence, not clearance. Complete the required review and kit PR lifecycle
-after the runtime restriction is resolved; do not bypass it or reuse an older lens.
+review evidence, not clearance. The later [source-review triage](../saved_plans/phase5-item5-b-update02-review-triage_2026-09-11.md)
+records CodeRabbit findings in frozen #731 payloads and proposes a separate kit-only
+repair. Obtain that scope decision; do not silently edit the payloads or accept a
+deferral. Required review remains incomplete; do not bypass the runtime restriction.
 
 UPDATE-02 is unapproved. It proposes a local update only; fixture PR continuation
 needs a separate CI/body/publication decision because the existing workflow and body
@@ -45,10 +47,10 @@ Item 5 remains incomplete; item 6 and its replay evidence remain complete. #723'
 deferral, #585's earlier placement and #724's delivered #722 batch remain. The
 friction sweep stays parked pending its exact operator decision.
 
-▶ Next: resolve the review-runtime restriction and complete PR #733's required
-review. Then finish pr-watch under the scoped kit merge authority before obtaining
-the exact UPDATE-02 decision. No retained execution, fixture PR continuation or
-fixture merge follows from this preparation; UPDATE-01 remains consumed.
+▶ Next: obtain the source-scope decision in the linked review triage. Complete
+required review and pr-watch under the scoped kit authority before the retained-update
+decision. No retained execution, fixture PR continuation or fixture merge follows
+from this preparation; UPDATE-01 remains consumed.
 
 ______________________________________________________________________
 

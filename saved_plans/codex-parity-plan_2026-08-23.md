@@ -455,10 +455,12 @@ historical observation it was and is not silently refreshed.
      [UPDATE-02 packet](phase5-item5-b-update02-decision_2026-09-11.md), prepared on
      2026-09-11 after the #732/#731 readback and post-acceptance checkpoint audit,
      proposes the exact local retained update and remains unapproved. Obtain its
-     exact decision before execution. First complete the packet's required kit review
-     after the [recorded runtime restriction](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5633204702)
-     is resolved; incomplete review supplies no merge clearance. Neither kit repair
-     nor record merge authorizes it. Fixture PR continuation requires a separate
+     exact decision before execution. First obtain the separate source-scope decision
+     in the [current review triage](phase5-item5-b-update02-review-triage_2026-09-11.md),
+     which records findings in frozen #731 payloads. Required kit review remains
+     incomplete after the [recorded runtime restriction](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5633204702);
+     no incomplete receipt supplies merge clearance. Neither kit repair nor record
+     merge authorizes execution. Fixture PR continuation requires a separate
      CI/body/publication decision.
      Fixture merge remains excluded; the nonfunctional custom
      wrap-up carries ownership acceptance only. No original continuity or prior field

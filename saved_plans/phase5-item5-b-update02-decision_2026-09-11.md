@@ -374,6 +374,14 @@ preserves the completed correctness review and interrupted adversarial run.
 Required review of the corrected packet and kit publication
 remain pending; no further attempt is made to bypass the runtime restriction.
 
+The later [source-review triage](phase5-item5-b-update02-review-triage_2026-09-11.md)
+preserves CodeRabbit's complete review at
+`cf373efd3a4d00b36987f73574d567eef004594a` and the inherited source findings.
+It proposes a separate kit-only repair and holds the retained-update decision
+pending source-scope disposition. The frozen payloads, ledger and binding below
+remain unchanged; this record neither accepts the findings as limitations nor
+selects a replacement source. Required independent review remains incomplete.
+
 ## Exact decision and next session
 
 **Approval question:** Do you approve **ITEM5-B-UPDATE-02 as scoped in this packet
@@ -398,7 +406,7 @@ complete without repeat or new credit for cs-toolkit #2222/#2223/#2255. #723 rem
 the approved upstream deferral; #585 stays earlier outside Phase 6; #724 delivered
 the #722 batch. The friction sweep remains parked pending its exact operator decision.
 
-**Next session:** resolve the review-runtime restriction and complete kit PR #733's
-required review, then finish pr-watch under the scoped kit merge authority. Obtain
-the exact UPDATE-02 decision above before any retained execution. Preserve the
-separate fixture PR continuation and remaining field-exit decisions.
+**Next session:** obtain the source-scope decision in the linked review triage.
+Complete required review and kit PR follow-through before requesting the retained
+update decision. Preserve this exact unanswered question if a later source decision
+requires a replacement packet; fixture PR continuation and field exit stay separate.
