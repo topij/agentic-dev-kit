@@ -30,7 +30,9 @@ The [UPDATE-03 packet](../saved_plans/phase5-item5-b-update03-decision_2026-09-1
 selects that immutable source and binds payloads, write ledger, baseline prediction,
 preservation, verification, limits, rollback and an exact approval question. Its
 read-only audit and forge records retain post-acceptance checkpoint comparisons.
-PR #733 owns packet review/delivery. UPDATE-01 is consumed; UPDATE-02 and its old
+The packet retains complete review receipts before its audit-ordering correction,
+with the earlier UPDATE-03 question/evidence preserved and the current `-r2` binding
+explicit. PR #733 owns packet review/delivery. UPDATE-01 is consumed; UPDATE-02 and its old
 questions, payloads, ledgers and incomplete review receipts remain preserved.
 
 No retained update is approved. Ownership acceptance does not establish custom
