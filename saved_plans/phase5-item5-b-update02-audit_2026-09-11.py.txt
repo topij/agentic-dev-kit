@@ -29,11 +29,21 @@ def sha(data):
 
 
 def git(root, *args):
+    check_git_environment()
     return subprocess.check_output(['git', '--no-optional-locks', '-C', str(root), *args])
+
+
+def check_git_environment():
+    """Reject inherited Git controls before invoking Git, including reads."""
+    unexpected = sorted(name for name, value in os.environ.items()
+                        if name.startswith('GIT_')
+                        and not (name == 'GIT_PAGER' and value == 'cat'))
+    assert not unexpected, ('unexpected Git environment controls', unexpected)
 
 
 def check_git_administration(root):
     """Reject aliases before Git can append through administrative files."""
+    check_git_environment()
     admin = root / '.git'
     assert admin.is_dir() and not admin.is_symlink(), admin
     pending = [admin]
@@ -63,6 +73,7 @@ def main():
     if sys.flags.optimize:
         raise SystemExit('Refusing optimized Python: audit assertions must execute')
     assert sys.dont_write_bytecode and Path.cwd() == COCKPIT
+    check_git_environment()
     helper = SAVED / 'phase5-item5-b-acceptance-audit_2026-09-10.py.txt'
     # Load definitions only; the historical UPDATE FINAL main is never invoked.
     helpers = runpy.run_path(str(helper))

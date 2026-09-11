@@ -12,7 +12,7 @@ COCKPIT = Path('/Users/topi/Coding/agentic-dev-kit')
 SAVED = COCKPIT / 'saved_plans'
 EVIDENCE = SAVED / 'phase5-item5-b-update02-evidence_2026-09-11'
 AUDIT = SAVED / 'phase5-item5-b-update02-audit_2026-09-11.py.txt'
-BINDING = EVIDENCE / 'prepared-input-binding.json'
+BINDING = EVIDENCE / 'prepared-runtime-binding.json'
 
 
 def sha(data):
@@ -36,7 +36,7 @@ def main():
         SAVED / 'phase5-item5-b-acceptance-execution-evidence_2026-09-10/forge-after-exit.json',
         SAVED / 'phase5-item5-b-update-evidence_2026-09-10/configuration-final.json',
         SAVED / 'phase5-item5-b-update-evidence_2026-09-10/replay-evidence-final.json',
-        EVIDENCE / 'audit-git-administration.json.gz',
+        EVIDENCE / 'audit-runtime.json.gz',
         EVIDENCE / 'audit.json.gz', EVIDENCE / 'proposed-writes.json',
     ]}
     assert set(files) == expected, 'unexpected binding scope'
@@ -44,7 +44,7 @@ def main():
         path = COCKPIT / name
         assert path.resolve() == path and path.is_file(), name
         assert sha(path.read_bytes()) == digest, ('bound file changed', name)
-    recorded = json.loads(gzip.decompress((EVIDENCE / 'audit-git-administration.json.gz').read_bytes()))
+    recorded = json.loads(gzip.decompress((EVIDENCE / 'audit-runtime.json.gz').read_bytes()))
     program_digest = files[str(AUDIT.relative_to(COCKPIT))]
     assert recorded['program_sha256'] == program_digest, 'recorded audit/program mismatch'
     assert recorded['helper_sha256'] == files['saved_plans/phase5-item5-b-acceptance-audit_2026-09-10.py.txt']

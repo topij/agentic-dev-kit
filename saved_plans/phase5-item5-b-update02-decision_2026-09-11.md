@@ -51,11 +51,13 @@ new audit program in the working tree, on 2026-09-11. The
 `matches-post-acceptance-checkpoints; proposal-only`. It imports only the committed
 acceptance audit's read-only inventory/identity helpers; it never invokes that
 audit's historical UPDATE FINAL entry point. Optimized Python is refused before
-loading the helpers. The comparison covers full file and Git administration
-inventories, permission bits, symlink targets, ignored/cache bytes, refs, index,
+loading the helpers. The comparison covers descendant file and Git administration
+inventories, their permission bits, symlink targets, ignored/cache bytes, refs, index,
 config, remotes, branch/detached identity and the baseline. It rechecks the trees
 after reading. The complete typed tracked/merged mappings and unchanged item 6
 replay evidence are retained in the result.
+The inherited inventories omit the supplied roots' own permission modes; checkpoint
+equality does not verify the fixture/source root or `.git` root modes.
 
 The comparison uses the post-acceptance
 [retained-final checkpoint](phase5-item5-b-review-followup-evidence_2026-09-10/retained-final.json.gz).
@@ -73,10 +75,10 @@ symlinks. They were absent in that observation. Never reconstruct them:
 
 ## Required prepared-input validation
 
-The original audit and baseline-hardened observations are historical preparation
+The earlier audit observations and program/result binding are historical preparation
 evidence. Approval or reuse requires the current
-[program/result binding](phase5-item5-b-update02-evidence_2026-09-11/prepared-input-binding.json),
-SHA-256 `5da0479eb7e06d867d0836f0a700259b6f4cc031d56afc346b1b0e159d2ee7f6`.
+[program/result binding](phase5-item5-b-update02-evidence_2026-09-11/prepared-runtime-binding.json),
+SHA-256 `1e91e471c0504b33126973cd3c210323675c841c005eebfb06e52d7b2a8bf22f`.
 It binds the validator and audit program, helper, post-acceptance checkpoints,
 configuration/replay expectations, current recorded audit result and original ledger.
 It preserves the original audit's different digest as historical provenance.
@@ -86,7 +88,7 @@ from `$COCKPIT` before an approval decision and again immediately before executi
 
 ```sh
 env -u PYTHONOPTIMIZE python3 -B "$COCKPIT/saved_plans/phase5-item5-b-update02-validate_2026-09-11.py.txt" \
-  --binding-sha256 5da0479eb7e06d867d0836f0a700259b6f4cc031d56afc346b1b0e159d2ee7f6
+  --binding-sha256 1e91e471c0504b33126973cd3c210323675c841c005eebfb06e52d7b2a8bf22f
 ```
 
 The validator rejects a changed binding or bound file, a current-result/program
@@ -174,7 +176,15 @@ before accepting inputs; recheck them immediately before the baseline command.
 The fixture and source Git administration must contain only lexical directories
 and single-link regular files. The audit rejects linked reflogs and other aliased
 Git paths before any dependent write. Immediately before each Git mutation sequence
-(including rollback), recheck both retained administrations with this read-only guard:
+(including rollback), recheck both retained administrations with this read-only guard.
+
+The audit and immediate guard also reject inherited `GIT_*` environment controls,
+except an absent `GIT_PAGER` or the literal `GIT_PAGER=cat`. This includes reads:
+Git tracing can write outside the ledger during an otherwise read-only command.
+Use the same checked environment for the dependent commands, including the baseline
+writer's Git calls; any environment change requires the guard again. A refusal
+requires correcting the invoking environment and rerunning validation, not ignoring
+the check or silently stripping controls only from the audit.
 
 ```sh
 env -u PYTHONOPTIMIZE python3 -B - "$COCKPIT" "$REPO" "$KIT" <<'PYGITGUARD'
@@ -333,16 +343,30 @@ The read-only validator command in that proof also ran from
 `/Users/topi/Coding/agentic-dev-kit` at the same revision/date with those candidate
 changes. Its [result](phase5-item5-b-update02-evidence_2026-09-11/prepared-validation.json.gz)
 reports `prepared-inputs-and-program-binding-verified; proposal-only` and retains the
-fresh retained-tree audit. The binding selects the
-[current audit observation](phase5-item5-b-update02-evidence_2026-09-11/audit-git-administration.json.gz).
+fresh retained-tree audit. That historical binding selected the
+[administration audit observation](phase5-item5-b-update02-evidence_2026-09-11/audit-git-administration.json.gz).
 The source and destination ledger remain the original proposal.
+
+At `88c5b044d5a42e33d2c4b0158be0957b4014678a`, the complete
+[correctness receipt](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5633056489)
+and the [incomplete adversarial runtime receipt and author trace proof](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5633065607)
+were preserved before the environment guard and permission-coverage qualification.
+The interrupted runtime supplies no merge clearance. The
+[raw record](phase5-item5-b-update02-evidence_2026-09-11/review-round3.json.gz)
+preserves its unfinished draft and failure without completing them retrospectively.
+The required binding above selects the
+[runtime-guard audit observation](phase5-item5-b-update02-evidence_2026-09-11/audit-runtime.json.gz).
+The [guard proof](phase5-item5-b-update02-evidence_2026-09-11/runtime-guard-proof.json.gz)
+and [validator result](phase5-item5-b-update02-evidence_2026-09-11/prepared-runtime-validation.json.gz)
+retain their actual commands, candidate revision, date and boundaries. They are
+preparation evidence, not retained-update execution or independent merge clearance.
 
 ## Exact decision and next session
 
 **Approval question:** Do you approve **ITEM5-B-UPDATE-02 as scoped in this packet
 and ledger SHA-256 `8794cd60d6ac74f0611130324e4a63f6b8697008d65d53371baed830d52485a1`,
 with prepared-input binding SHA-256
-`5da0479eb7e06d867d0836f0a700259b6f4cc031d56afc346b1b0e159d2ee7f6`**:
+`1e91e471c0504b33126973cd3c210323675c841c005eebfb06e52d7b2a8bf22f`**:
 advance the retained source to `e6d6e77d118454349f8e8bb046e99ef3009c5f5c`, apply
 only the listed fixture payloads, record the predicted baseline, create the named
 local attempt branch/commit and evidence root, run the declared local verification
