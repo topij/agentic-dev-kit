@@ -71,6 +71,31 @@ symlinks. They were absent in that observation. Never reconstruct them:
 - `/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture`
 - `/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source`
 
+## Required prepared-input validation
+
+The original audit and baseline-hardened observations are historical preparation
+evidence. Approval or reuse requires the current
+[program/result binding](phase5-item5-b-update02-evidence_2026-09-11/prepared-input-binding.json),
+SHA-256 `5da0479eb7e06d867d0836f0a700259b6f4cc031d56afc346b1b0e159d2ee7f6`.
+It binds the validator and audit program, helper, post-acceptance checkpoints,
+configuration/replay expectations, current recorded audit result and original ledger.
+It preserves the original audit's different digest as historical provenance.
+
+Run the [read-only validator](phase5-item5-b-update02-validate_2026-09-11.py.txt)
+from `$COCKPIT` before an approval decision and again immediately before execution:
+
+```sh
+env -u PYTHONOPTIMIZE python3 -B "$COCKPIT/saved_plans/phase5-item5-b-update02-validate_2026-09-11.py.txt" \
+  --binding-sha256 5da0479eb7e06d867d0836f0a700259b6f4cc031d56afc346b1b0e159d2ee7f6
+```
+
+The validator rejects a changed binding or bound file, a current-result/program
+digest mismatch, changed proposal fields or changed retained inputs. It reruns the
+audit only after validating the binding and requires the fresh result to agree.
+A bare audit collection, old result or unchanged ledger alone cannot satisfy this
+gate. A mismatch requires a revised binding/packet and exact decision; do not edit
+historical evidence to make it match. No validation result grants execution authority.
+
 ## Proposed payload and write ledger
 
 The [machine-readable ledger](phase5-item5-b-update02-evidence_2026-09-11/proposed-writes.json)
@@ -145,7 +170,25 @@ Reject symlink aliases, nonregular or multiply-linked copy targets and aliased
 parents. Apply these checks explicitly to `kit-manifest.json` as well: its
 `--record-install` writer writes in place, so a hardlink would change an unlisted
 alias. The audit checks its lexical path, regular-file kind and single-link status
-before accepting inputs; recheck them immediately before the baseline command. Require complete checkpoint equality, empty status/index, exact input
+before accepting inputs; recheck them immediately before the baseline command.
+The fixture and source Git administration must contain only lexical directories
+and single-link regular files. The audit rejects linked reflogs and other aliased
+Git paths before any dependent write. Immediately before each Git mutation sequence
+(including rollback), recheck both retained administrations with this read-only guard:
+
+```sh
+env -u PYTHONOPTIMIZE python3 -B - "$COCKPIT" "$REPO" "$KIT" <<'PYGITGUARD'
+from pathlib import Path
+import runpy
+import sys
+cockpit, repo, kit = map(Path, sys.argv[1:])
+check = runpy.run_path(str(cockpit / 'saved_plans/phase5-item5-b-update02-audit_2026-09-11.py.txt'))['check_git_administration']
+check(repo)
+check(kit)
+PYGITGUARD
+```
+
+Proceed only after that guard succeeds; no Git write is authorized after a refusal. Require complete checkpoint equality, empty status/index, exact input
 refs/remotes and absent attempt branch/evidence root. Re-read the fixture forge
 tuple and original complete review receipts before any fix; a mismatch stops.
 Do not reinterpret UPDATE FINAL as today's checkpoint.
@@ -268,10 +311,38 @@ retains the disposable-copy rejection, mutation, restoration and exact packet-wr
 checks, with their command/directory/revision/date stamps. Kit PR #733 owns subsequent
 review and verification receipts; none is retained-fixture execution evidence.
 
+The subsequent complete
+[adversarial receipt](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5632476783)
+and [correctness receipt](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5632477163)
+were published at `e461b092ee66fdb20ea62aea3d193034f58d622c` before the next fix.
+The [raw round record](phase5-item5-b-update02-evidence_2026-09-11/review-round2.json.gz)
+also preserves the configured bot's complete review and inline finding before that
+fix. The adversarial reproduction demonstrated an external reflog alias changed by
+branch creation; the audit and immediate Git guard now reject aliased administration.
+The bot identified the original/current audit digest difference; the required validator
+above now binds the current result and program without rewriting the old observation.
+
+The [administration guard proof](phase5-item5-b-update02-evidence_2026-09-11/git-administration-proof.json.gz)
+retains the hostile reflog rejection and the mutation that defeats it, with byte
+restoration. The [binding proof](phase5-item5-b-update02-evidence_2026-09-11/binding-proof.json.gz)
+retains refusal of a wrong decision digest, optimized Python, changed program bytes
+and an internally inconsistent recorded result. These commands ran on 2026-09-11 in
+the named disposable copies at `e461b092ee66fdb20ea62aea3d193034f58d622c` with the
+candidate preparation changes; their actual argv/cwd and limits are preserved.
+The read-only validator command in that proof also ran from
+`/Users/topi/Coding/agentic-dev-kit` at the same revision/date with those candidate
+changes. Its [result](phase5-item5-b-update02-evidence_2026-09-11/prepared-validation.json.gz)
+reports `prepared-inputs-and-program-binding-verified; proposal-only` and retains the
+fresh retained-tree audit. The binding selects the
+[current audit observation](phase5-item5-b-update02-evidence_2026-09-11/audit-git-administration.json.gz).
+The source and destination ledger remain the original proposal.
+
 ## Exact decision and next session
 
 **Approval question:** Do you approve **ITEM5-B-UPDATE-02 as scoped in this packet
-and ledger SHA-256 `8794cd60d6ac74f0611130324e4a63f6b8697008d65d53371baed830d52485a1`**:
+and ledger SHA-256 `8794cd60d6ac74f0611130324e4a63f6b8697008d65d53371baed830d52485a1`,
+with prepared-input binding SHA-256
+`5da0479eb7e06d867d0836f0a700259b6f4cc031d56afc346b1b0e159d2ee7f6`**:
 advance the retained source to `e6d6e77d118454349f8e8bb046e99ef3009c5f5c`, apply
 only the listed fixture payloads, record the predicted baseline, create the named
 local attempt branch/commit and evidence root, run the declared local verification

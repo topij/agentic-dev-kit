@@ -28,6 +28,8 @@ in the working tree: file/Git administration and fixture-forge comparisons match
 the post-acceptance checkpoints. The packet retains the commands, original complete
 review receipts, and #732/#731 merge/checkpoint readbacks. Original missing paths
 were not reconstructed; historical questions, ledgers and evidence were preserved.
+The packet's required prepared-input validator binds the current audit program and
+result; the original observations alone do not satisfy approval or reuse.
 
 UPDATE-02 is unapproved. It proposes a local update only; fixture PR continuation
 needs a separate CI/body/publication decision because the existing workflow and body
