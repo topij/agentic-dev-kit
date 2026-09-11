@@ -1,10 +1,10 @@
 # Upgrade
 
-Upgrade this repo's agentic-dev-kit installation. Runs on a branch. Two of its file
-replacements are unconditional and named here rather than implied — Step 2 overwrites
-`init.sh` and `docs/templates/*.tmpl` with the fetched kit's copies, because refreshing the
-installer is the point of the step. **Everything else is gated**: `init.sh --no-clobber` for
-the seeded docs, and your per-file decision in Step 3 for the engines.
+Upgrade this repo's agentic-dev-kit installation. Runs on a branch. After preflight,
+Step 2 replaces `init.sh` with the fetched kit's copy to refresh the installer.
+Template refresh respects the baseline's recorded `not_installed` decisions;
+a partial record skips template copies. Seeded docs use `init.sh --no-clobber`,
+and Step 3 requires your per-file decision for engines.
 
 **Do not simplify that back to a blanket "non-destructive".** It said "never replaces a file
 without knowing it is safe to replace" for as long as Step 2 ran `init.sh` bare, which
@@ -20,8 +20,8 @@ instruction it produced was *don't bother looking*, which is the opposite of wha
 was closed to make possible. So: **run Step 1's `kit_doctor` before Step 2 overwrites
 anything** — a locally-edited installer shows up there as `LOCALLY EDITED` and an
 out-of-date one as `STALE`, which is the difference between an edit you are about to lose
-and a version you are meant to take. The unconditional `cp` itself is unchanged and
-`#339` stays open for it.
+and a version you are meant to take. Installer refresh still replaces local edits
+after preflight.
 
 > **The invariant this rests on.** Engines are **kit-owned**; config is **adopter-owned**.
 > Everything project-specific — paths, tracker, review-bot markers, CI policy, model
@@ -35,7 +35,8 @@ and a version you are meant to take. The unconditional `cp` itself is unchanged 
 Four shapes exist in the wild and they need different handling. Determine which:
 
 ```bash
-ls config/dev-model.yaml 2>/dev/null && echo "has config" || echo "NO CONFIG"
+REPO="$(git rev-parse --show-toplevel)" || exit 1
+test -f "$REPO/config/dev-model.yaml" && echo "has config" || echo "NO CONFIG"
 ```
 
 - **No `config/dev-model.yaml`** → this repo predates the config surface entirely (a kit
@@ -55,7 +56,7 @@ from here every write must name which one.** Bind both roots now, before the fir
 write, and use them for the rest of the workflow:
 
 ```bash
-REPO="$(git rev-parse --show-toplevel)"   # the repo being upgraded
+REPO="${REPO:?REPO is not set — re-run the config check}"  # the repo being upgraded
 KIT=/tmp/agentic-dev-kit                  # the kit you are upgrading TO
 echo "REPO=$REPO"; echo "KIT=$KIT"; echo "pwd=$(pwd)"
 ```
@@ -360,10 +361,9 @@ Take the fetched kit's copy first:
 
 ```bash
 cd "$REPO" || exit 1                              # every write below lands here, not in $KIT
-cp "${KIT:?KIT is not set — re-run Step 0}/init.sh" "${REPO:?REPO is not set — re-run Step 0}/init.sh"
-chmod +x "${REPO:?REPO is not set — re-run Step 0}/init.sh"  # the kit ships it 100755; a copy can lose the bit
-mkdir -p "${REPO:?REPO is not set — re-run Step 0}/docs/templates"
-_gate_failed=0
+# Collect the permitted copies without changing the destination.
+set --
+_partial=0
 for _tmpl in "${KIT:?KIT is not set — re-run Step 0}"/docs/templates/*.tmpl; do
   _rel="docs/templates/$(basename "$_tmpl")"
   python3 -c 'import json,pathlib,sys
@@ -395,10 +395,10 @@ sys.exit(0 if sys.argv[2] in declared else 1)' \
     "${REPO:?REPO is not set — re-run Step 0}" "$_rel" && _verdict=0 || _verdict=$?
   case "$_verdict" in
     0) echo "declined (recorded in not_installed) — not copied: $_rel" ;;
-    1) cp "$_tmpl" "${REPO:?REPO is not set — re-run Step 0}/$_rel" ;;
+    1) set -- "$@" "$_tmpl" ;;
     3) echo "no declared scope recorded — not copied: $_rel"; _partial=1 ;;
     *) echo "STOP: $REPO/kit-manifest.json is not a readable manifest, so the declared set is unknown. Copied nothing." >&2
-       _gate_failed=1; break ;;
+       exit 1 ;;
   esac
 done
 if [ "${_partial:-0}" -ne 0 ]; then
@@ -409,11 +409,46 @@ if [ "${_partial:-0}" -ne 0 ]; then
   echo "      whole key (see Step 5, and kit #388). Reconcile the paths Step 4 named and" >&2
   echo "      re-run this block if you want the templates refreshed." >&2
 fi
-if [ "$_gate_failed" -ne 0 ]; then
-  echo "Not running init.sh. Fix kit-manifest.json, then re-run this block." >&2
-else
-  "${REPO:?REPO is not set — re-run Step 0}/init.sh" --no-clobber
-fi
+# Check every refresh destination before the first write. No concurrent writer
+# may alter these paths between preflight and the copies.
+python3 -B - "${REPO:?REPO is not set — re-run Step 0}" "$@" <<'PYREFRESH' || exit 1
+import os
+from pathlib import Path
+import stat
+import sys
+
+repo = Path(sys.argv[1])
+try:
+    if not repo.is_absolute() or repo.resolve() != repo or not repo.is_dir():
+        raise ValueError(f"repository is not an absolute, unaliased directory: {repo}")
+    targets = [(repo / "init.sh", False), (repo / "docs", True),
+               (repo / "docs/templates", True)]
+    targets.extend((repo / "docs/templates" / Path(source).name, False)
+                   for source in sys.argv[2:])
+    for target, directory in targets:
+        for path in [*reversed(target.relative_to(repo).parents)][1:]:
+            parent = repo / path
+            if os.path.lexists(parent):
+                mode = parent.lstat().st_mode
+                if not stat.S_ISDIR(mode):
+                    raise ValueError(f"refresh parent is not a real directory: {parent}")
+        if os.path.lexists(target):
+            info = target.lstat()
+            valid = stat.S_ISDIR(info.st_mode) if directory else (
+                stat.S_ISREG(info.st_mode) and info.st_nlink == 1)
+            if not valid:
+                raise ValueError(f"refresh destination has an unexpected kind or alias: {target}")
+except (OSError, ValueError) as exc:
+    print(f"STOP: {exc}. Copied nothing.", file=sys.stderr)
+    sys.exit(1)
+PYREFRESH
+cp "${KIT:?KIT is not set — re-run Step 0}/init.sh" "${REPO:?REPO is not set — re-run Step 0}/init.sh" || exit 1
+chmod +x "${REPO:?REPO is not set — re-run Step 0}/init.sh" || exit 1
+mkdir -p "${REPO:?REPO is not set — re-run Step 0}/docs/templates" || exit 1
+for _tmpl in "$@"; do
+  cp "$_tmpl" "${REPO:?REPO is not set — re-run Step 0}/docs/templates/$(basename "$_tmpl")" || exit 1
+done
+"${REPO:?REPO is not set — re-run Step 0}/init.sh" --no-clobber || exit 1
 ```
 
 The refreshed migrator also owns the additive `parallel:` launcher block. It preserves
@@ -525,8 +560,8 @@ implementation rather than continuing to invent one:
   worse half;
 - the refusal has to stop **the workflow**, not just the loop. `break` leaves the
   `for` loop and the next line still runs `init.sh` — printing "Copied nothing" and then
-  proceeding past the point the prose calls a hard stop. `_gate_failed` is what makes the
-  stop real;
+  proceeding past the point the prose calls a hard stop. `exit 1` stops before any
+  refresh write or initialization;
 - a well-formed object is not a readable scope. `{"kit_commit": …, "not_installed": 5}`
   raised `TypeError` on the membership test and exited 1 (copy); a **string** there was
   worse than that, because `in` on a string is a SUBSTRING test — no error, and a
@@ -742,8 +777,9 @@ entries are exactly where the risk is.
   workflow, then take the rendered binding. Stop for irreconcilable local behavior
   rather than retaining an adapter that bypasses the new gate. PR `#595`'s
   `post-merge-systemize` entry is the worked instance.
-- **Templates** (`docs/templates/`) — refresh freely; the *rendered* docs are yours and
-  are never touched.
+- **Templates** (`docs/templates/`) — refresh only within the recorded install set,
+  using Step 2's gate. Preserve `not_installed` declines and skip refresh when the
+  baseline is partial. The *rendered* docs are yours and are never touched.
 - **`.claude/settings.json`** — if this repo has its own, **merge** the kit's hooks and
   permissions into it rather than replacing; it likely carries project-specific entries.
 
@@ -781,13 +817,14 @@ Commit the rewritten `kit-manifest.json` with the rest of the upgrade.
 ## Step 5 — Verify
 
 ```bash
-uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --manifest /tmp/agentic-dev-kit/kit-manifest.json
-tmp="$(mktemp -d)" && DEVKIT_STATE_ROOT="$tmp" uv run --with pytest --with pyyaml python "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/run_installed_tests.py --root "${REPO:?REPO is not set — re-run Step 0}"
-uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/check_doc_budget.py
+uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --manifest /tmp/agentic-dev-kit/kit-manifest.json || exit 1
+tmp="$(mktemp -d)" || exit 1
+DEVKIT_STATE_ROOT="$tmp" uv run --with pytest --with pyyaml python "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/run_installed_tests.py --root "${REPO:?REPO is not set — re-run Step 0}" || exit 1
+uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/check_doc_budget.py || exit 1
 ```
 
-**`DEVKIT_STATE_ROOT` is not optional here, and the `&&` is what makes it
-fail closed.** `<engine-dir>/pr_watch.py` computes its persistence root once, at import
+**`DEVKIT_STATE_ROOT` is not optional here. Each command must succeed before
+the next runs, including creation of the temporary root.** `<engine-dir>/pr_watch.py` computes its persistence root once, at import
 time — the only engine that reaches `state/` at all, and it resolves at
 import rather than per call, so an override has to be in the environment
 before the process starts. The resolution has three branches, not two:
@@ -813,13 +850,14 @@ declined directory to pytest and stopping before an installed test can run. That
 current form of the case
 `#40`/`#132` first exposed.
 
-Write it as the two-step `tmp="$(mktemp -d)" && …`, not as an inline
+Keep the separate assignment and its `|| exit 1` check before the test command,
+not an inline
 `DEVKIT_STATE_ROOT=$(mktemp -d) …`. The inline form fails **open**: a failed
 `mktemp -d` prints nothing to stdout, so the var is set to the empty string,
 and `_resolve_state_root` treats an empty value as *no override at all* and
 falls back to the repo default — landing the whole suite in live `state/`,
-which is the one outcome this line exists to prevent. The `&&` makes the
-assignment's exit status gate the run, so a failed `mktemp` skips the tests
+which is the one outcome this line exists to prevent. The explicit refusal makes
+the assignment's exit status gate the run, so a failed `mktemp` skips the tests
 instead of silently redirecting them at the thing they would damage.
 
 `kit_doctor` should now report zero mismatches of every kind — `differs`, `STALE`,

@@ -42,6 +42,16 @@ starts.
 
 ---
 
+## #734 — 2026-09-11
+
+- **CHANGED** — Refresh the shared `upgrade.md` workflow and the shipped test files
+  together. Upgrade now refuses invalid refresh destinations or unreadable manifest
+  scope before replacing the installer, preserves template declines, and stops after
+  a failed required command. Correct the named path or input before retrying.
+- **CHANGED** — CI interpreting the state-leak guard's exit status must retain
+  pytest's interruption/internal-error handling; leaks still fail an otherwise
+  successful session. Refresh `scripts/conftest.py` and its state-guard tests together.
+
 ## #731 — 2026-09-10
 
 - **CHANGED — state-write detection:** refresh the installed engine-root
