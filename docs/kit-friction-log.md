@@ -26,6 +26,25 @@
 
 ## 2026-09-11
 
+- **Case-insensitive report paths overwrote a completed review report.** During
+  PR #733's final adversarial review on 2026-09-11, the reviewer wrote `REPORT.md`
+  while the launcher used `codex exec -o report.md` in the same scratch directory.
+  Those names aliased on the filesystem, so the launcher's final-summary write
+  replaced the full report. **L** — the complete reviewer-authored text remained
+  in a completed command in `events.jsonl`; shell-token and Python-AST literal
+  parsing recovered it without executing the command. The
+  [complete receipt](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5639699233)
+  preserves that recovery before merge. Proposed remedy: give the reviewer report
+  and launcher summary distinct basenames and check their destination identities
+  before launching. This was session review orchestration, not an established kit
+  engine defect. `gh search issues --repo topij/agentic-dev-kit` with queries
+  `"case-insensitive" "report"` and `"REPORT.md"`, including PRs, at
+  `fc46efa0570f866f19cccf11834f909d5f37cf69` on 2026-09-11 in
+  `/Users/topi/Coding/agentic-dev-kit` returned no match for the combined query and
+  PR matches for the filename query; no collision issue was identified by
+  that bounded search. Parked because the operator excludes tracker payloads from
+  this work. No tracker write or friction sweep is authorized by this entry.
+
 - **The review runtime stopped before delivering required adversarial coverage.**
   PR #733's [receipt at `88c5b044d5a42e33d2c4b0158be0957b4014678a`](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5633065607)
   and [receipt at `207683b073f4d34cf22c5d9e1635f1c23239b6d4`](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5633204702)
