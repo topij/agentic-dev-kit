@@ -456,8 +456,9 @@ historical observation it was and is not silently refreshed.
      delivered by #734 at `7e0232ed871b37a315c5509c97b83d3b00b1a3fd`. The
      [UPDATE-03 packet](phase5-item5-b-update03-decision_2026-09-11.md) proposes the
      revised exact local retained update after fresh read-only checkpoint checks.
-     Its current `-r2` binding incorporates the reviewed audit-ordering correction;
-     the initial UPDATE-03 question and evidence remain historical and unanswered.
+     Its current `-r3` binding incorporates the Git-read isolation correction and
+     unresolved generic-upgrade source findings outside the proposed execution;
+     earlier UPDATE-03 questions and evidence remain historical and unanswered.
      Obtain its exact approval before execution; neither repair approval nor kit
      record merge supplies it. UPDATE-02's old question, payloads, ledger and review
      evidence remain preserved. Fixture PR continuation needs a separate exact

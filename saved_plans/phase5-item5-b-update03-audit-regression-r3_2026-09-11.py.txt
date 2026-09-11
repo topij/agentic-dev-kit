@@ -1,0 +1,149 @@
+"""Synthetic checks for the UPDATE-03 read-only audit; no retained-tree writes."""
+import gzip
+import json
+import os
+from pathlib import Path
+import runpy
+import subprocess
+import sys
+import tempfile
+import unittest
+from unittest.mock import patch
+
+COCKPIT = Path('/Users/topi/Coding/agentic-dev-kit')
+KIT = Path('/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source')
+assert not sys.flags.optimize and sys.dont_write_bytecode
+assert Path.cwd() == COCKPIT
+assert len(sys.argv) == 2
+SCRATCH = Path(sys.argv.pop()).resolve()
+assert SCRATCH.is_dir() and str(SCRATCH).startswith('/private/tmp/')
+SAVED = COCKPIT / 'saved_plans'
+AUDIT = SAVED / 'phase5-item5-b-update03-audit-r3_2026-09-11.py.txt'
+HELPER_NAME = 'phase5-item5-b-acceptance-audit_2026-09-10.py.txt'
+HELPER = SAVED / HELPER_NAME
+
+
+def git(root, *args):
+    return subprocess.check_output(['git', '--no-optional-locks', '-C', str(root),
+                                    *args], stderr=subprocess.STDOUT)
+
+
+class AuditReadBoundary(unittest.TestCase):
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp(prefix='audit-regression-', dir=SCRATCH))
+        self.ns = runpy.run_path(str(AUDIT))
+        self.helpers = runpy.run_path(str(HELPER))
+        self.identity = self.helpers['identity']
+        self.inventory = self.helpers['inventory']
+        self.fixture = self.repository('fixture')
+        self.source = self.repository('source')
+        self.expected = {'trees': {role: self.snapshot(root) for role, root in
+                                  [('fixture', self.fixture), ('source', self.source)]}}
+        self.marker = self.root / 'fsmonitor-invoked'
+        self.hook = self.root / 'fsmonitor.sh'
+        self.hook.write_text('#!/bin/sh\nprintf invoked >> "' + str(self.marker)
+                             + '"\nprintf "token\\0"\n')
+        self.hook.chmod(0o755)
+
+    def repository(self, name):
+        path = self.root / name
+        subprocess.run(['git', 'init', '-q', '-b', 'probe', str(path)], check=True)
+        (path / 'tracked.txt').write_text('retained input\n')
+        git(path, 'add', 'tracked.txt')
+        git(path, '-c', 'core.hooksPath=/dev/null', '-c', 'user.name=Audit Probe',
+            '-c', 'user.email=probe@example.invalid', 'commit', '-qm', 'Synthetic input')
+        return path
+
+    def snapshot(self, root):
+        return dict(path=str(root), identity=self.identity(root),
+                    inventory=self.inventory(root),
+                    administrative_inventory=self.inventory(root / '.git'))
+
+    def test_config_drift_in_either_tree_precedes_every_git_identity(self):
+        for role, root in [('fixture', self.fixture), ('source', self.source)]:
+            with self.subTest(role=role):
+                config = root / '.git/config'
+                before = config.read_bytes()
+                git(root, 'config', 'core.fsmonitor', str(self.hook))
+                local_saved = self.root / ('saved-' + role)
+                local_saved.mkdir()
+                (local_saved / HELPER_NAME).write_bytes(HELPER.read_bytes())
+                checkpoint = local_saved / 'phase5-item5-b-review-followup-evidence_2026-09-10'
+                checkpoint.mkdir()
+                (checkpoint / 'retained-final.json.gz').write_bytes(
+                    gzip.compress(json.dumps(self.expected).encode(), mtime=0))
+                scope = self.ns['main'].__globals__
+                with patch.dict(scope, COCKPIT=self.root, SAVED=local_saved,
+                                REPO=self.fixture, KIT=self.source), \
+                     patch.dict(scope, read_identity=lambda *_: self.fail(
+                         'Git identity attempted before drift rejection')):
+                    os.chdir(self.root)
+                    try:
+                        with self.assertRaisesRegex(AssertionError, 'checkpoint mismatch'):
+                            self.ns['main']()
+                    finally:
+                        os.chdir(COCKPIT)
+                self.assertFalse(self.marker.exists())
+                config.write_bytes(before)
+                self.assertEqual(self.inventory(root / '.git'),
+                                 self.expected['trees'][role]['administrative_inventory'])
+
+    def test_identity_disables_fsmonitor_and_restores_environment(self):
+        git(self.fixture, 'config', 'core.fsmonitor', str(self.hook))
+        before = dict(os.environ)
+        self.ns['read_identity'](self.identity, self.fixture)
+        self.assertFalse(self.marker.exists(), 'read-only identity invoked fsmonitor')
+        self.assertEqual(dict(os.environ), before)
+        # Positive control proves this host invokes the synthetic hook without
+        # the audit's override. It writes only inside this test's scratch root.
+        self.identity(self.fixture)
+        self.assertEqual(self.marker.read_text(), 'invoked')
+
+    def test_global_filter_cannot_run_in_audit_git_reads(self):
+        xdg = self.root / 'xdg'
+        (xdg / 'git').mkdir(parents=True)
+        marker = self.root / 'global-filter-invoked'
+        trace = self.root / 'global-git-trace.jsonl'
+        hook = self.root / 'global-filter.sh'
+        hook.write_text('#!/bin/sh\nprintf invoked >> "' + str(marker) + '"\ncat\n')
+        hook.chmod(0o755)
+        attributes = self.root / 'attributes'
+        attributes.write_text('* filter=auditprobe\n')
+        (xdg / 'git/config').write_text('[core]\n\tattributesFile = ' + str(attributes)
+            + '\n[filter "auditprobe"]\n\tclean = ' + str(hook)
+            + '\n[trace2]\n\teventTarget = ' + str(trace) + '\n')
+        tracked = self.fixture / 'tracked.txt'
+        st = tracked.stat()
+        os.utime(tracked, ns=(st.st_atime_ns, st.st_mtime_ns - 10_000_000_000))
+        before = dict(os.environ)
+        with patch.dict(os.environ, XDG_CONFIG_HOME=str(xdg)):
+            self.ns['checkpoint_inventory'](self.fixture, self.expected['trees']['fixture'],
+                                            self.inventory)
+            self.assertEqual(self.ns['read_identity'](self.identity, self.fixture),
+                             self.expected['trees']['fixture']['identity'])
+            self.assertEqual(self.ns['git'](self.fixture, 'status', '--porcelain=v1'), b'')
+            self.assertFalse(marker.exists(), 'audit Git read invoked global clean filter')
+            self.assertFalse(trace.exists(), 'audit Git read loaded global tracing')
+            self.assertEqual(self.inventory(self.fixture),
+                             self.expected['trees']['fixture']['inventory'])
+            self.assertEqual(self.inventory(self.fixture / '.git'),
+                             self.expected['trees']['fixture']['administrative_inventory'])
+            # This control establishes that the ambient configuration executes
+            # the filter on this host when the audit's isolation is absent.
+            self.identity(self.fixture)
+            self.assertTrue(marker.read_text().startswith('invoked'))
+            self.assertTrue(trace.is_file(), 'global trace positive control did not run')
+        self.assertEqual(dict(os.environ), before)
+
+    def test_identity_failure_restores_environment(self):
+        before = dict(os.environ)
+        def failing_identity(_root):
+            self.assertEqual(os.environ['GIT_CONFIG_VALUE_0'], 'false')
+            raise RuntimeError('synthetic helper failure')
+        with self.assertRaisesRegex(RuntimeError, 'synthetic helper failure'):
+            self.ns['read_identity'](failing_identity, self.fixture)
+        self.assertEqual(dict(os.environ), before)
+
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)
