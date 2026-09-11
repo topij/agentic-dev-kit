@@ -12,7 +12,7 @@ COCKPIT = Path('/Users/topi/Coding/agentic-dev-kit')
 SAVED = COCKPIT / 'saved_plans'
 EVIDENCE = SAVED / 'phase5-item5-b-update02-evidence_2026-09-11'
 AUDIT = SAVED / 'phase5-item5-b-update02-audit_2026-09-11.py.txt'
-BINDING = EVIDENCE / 'prepared-runtime-binding.json'
+BINDING = EVIDENCE / 'prepared-invocation-binding.json'
 
 
 def sha(data):
@@ -63,7 +63,7 @@ def main():
             assert recorded[key] == fresh[key] == ledger[key], ('proposal changed', key)
     print(json.dumps(dict(approved=False, decision=binding['decision'],
                          result='prepared-inputs-and-program-binding-verified; proposal-only',
-                         argv=[sys.executable, *sys.argv], cwd=str(COCKPIT),
+                         argv=sys.orig_argv, cwd=str(COCKPIT),
                          revision=subprocess.check_output(['git', '--no-optional-locks', '-C', str(COCKPIT), 'rev-parse', 'HEAD'], text=True).strip(),
                          observed_at=datetime.now(timezone.utc).isoformat(),
                          binding_sha256=sha(binding_bytes), audit_argv=argv,

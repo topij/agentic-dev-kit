@@ -1,0 +1,18 @@
+{
+  "approved": false,
+  "decision": "ITEM5-B-UPDATE-02",
+  "files": {
+    "saved_plans/phase5-item5-b-acceptance-audit_2026-09-10.py.txt": "3902a43b0ede7a08ae8b12449981a2070a05056d1b49a43be36a7932801c829d",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/forge-after-exit.json": "12d67b35b68dcd2efd23d43995c17c8729ee7b66b28990e9a112d9de75c9f392",
+    "saved_plans/phase5-item5-b-review-followup-evidence_2026-09-10/retained-final.json.gz": "8abb40d8d7afb212d08369870305e5fa61270e0857a4f2779ad00b38f3b04023",
+    "saved_plans/phase5-item5-b-update-evidence_2026-09-10/configuration-final.json": "b7630df29be9706f42cf7ff4cae4d93905d4126cf6efc7287e6acda34c7f4357",
+    "saved_plans/phase5-item5-b-update-evidence_2026-09-10/replay-evidence-final.json": "3d73abedb9cc48129a78e0ea37846c50c2bfcffb35ce5a5136337d8ee9df1496",
+    "saved_plans/phase5-item5-b-update02-audit_2026-09-11.py.txt": "7a2c54d46e396ca58c96d5a1c9233a2f2dcdef97c8d803c7b906a6f500d552c7",
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/audit-runtime.json.gz": "fa78fe81fdcce309c1df910405711c819b3ab97cebbe231da41f84180c0579e0",
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/audit.json.gz": "05546530b2b8a916ec09eca5f3ecc7ff8c3efc9dc6764fa8fcf41d57699c358d",
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/proposed-writes.json": "8794cd60d6ac74f0611130324e4a63f6b8697008d65d53371baed830d52485a1",
+    "saved_plans/phase5-item5-b-update02-validate_2026-09-11.py.txt": "f845ad1927b18a59b9fe1c602130a07afee5cbd19384c8dca5d69d2d1b402888"
+  },
+  "observed_at": "2026-09-11T10:54:25.619770+00:00",
+  "revision": "207683b073f4d34cf22c5d9e1635f1c23239b6d4"
+}

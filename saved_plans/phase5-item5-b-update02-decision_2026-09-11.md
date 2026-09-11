@@ -77,8 +77,8 @@ symlinks. They were absent in that observation. Never reconstruct them:
 
 The earlier audit observations and program/result binding are historical preparation
 evidence. Approval or reuse requires the current
-[program/result binding](phase5-item5-b-update02-evidence_2026-09-11/prepared-runtime-binding.json),
-SHA-256 `1e91e471c0504b33126973cd3c210323675c841c005eebfb06e52d7b2a8bf22f`.
+[program/result binding](phase5-item5-b-update02-evidence_2026-09-11/prepared-invocation-binding.json),
+SHA-256 `3aa074372b408abfbb0f1f812d474439e269d458bbda70c0228a61c2a9bc5ebd`.
 It binds the validator and audit program, helper, post-acceptance checkpoints,
 configuration/replay expectations, current recorded audit result and original ledger.
 It preserves the original audit's different digest as historical provenance.
@@ -88,7 +88,7 @@ from `$COCKPIT` before an approval decision and again immediately before executi
 
 ```sh
 env -u PYTHONOPTIMIZE python3 -B "$COCKPIT/saved_plans/phase5-item5-b-update02-validate_2026-09-11.py.txt" \
-  --binding-sha256 1e91e471c0504b33126973cd3c210323675c841c005eebfb06e52d7b2a8bf22f
+  --binding-sha256 3aa074372b408abfbb0f1f812d474439e269d458bbda70c0228a61c2a9bc5ebd
 ```
 
 The validator rejects a changed binding or bound file, a current-result/program
@@ -361,12 +361,25 @@ and [validator result](phase5-item5-b-update02-evidence_2026-09-11/prepared-runt
 retain their actual commands, candidate revision, date and boundaries. They are
 preparation evidence, not retained-update execution or independent merge clearance.
 
+The [complete correctness receipt](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5633355983)
+at `207683b073f4d34cf22c5d9e1635f1c23239b6d4` was preserved before correcting
+the validator's generated invocation metadata. It now records Python's original
+argument vector, including interpreter flags. The
+[new validation observation](phase5-item5-b-update02-evidence_2026-09-11/prepared-invocation-validation.json.gz)
+retains the actual launcher comparison; older receipts are unchanged.
+The [adversarial runtime failure](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5633204702)
+at that revision supplies no final report or merge clearance. The
+[round record](phase5-item5-b-update02-evidence_2026-09-11/review-round4.json.gz)
+preserves the completed correctness review and interrupted adversarial run.
+Required review of the corrected packet and kit publication
+remain pending; no further attempt is made to bypass the runtime restriction.
+
 ## Exact decision and next session
 
 **Approval question:** Do you approve **ITEM5-B-UPDATE-02 as scoped in this packet
 and ledger SHA-256 `8794cd60d6ac74f0611130324e4a63f6b8697008d65d53371baed830d52485a1`,
 with prepared-input binding SHA-256
-`1e91e471c0504b33126973cd3c210323675c841c005eebfb06e52d7b2a8bf22f`**:
+`3aa074372b408abfbb0f1f812d474439e269d458bbda70c0228a61c2a9bc5ebd`**:
 advance the retained source to `e6d6e77d118454349f8e8bb046e99ef3009c5f5c`, apply
 only the listed fixture payloads, record the predicted baseline, create the named
 local attempt branch/commit and evidence root, run the declared local verification
@@ -385,6 +398,7 @@ complete without repeat or new credit for cs-toolkit #2222/#2223/#2255. #723 rem
 the approved upstream deferral; #585 stays earlier outside Phase 6; #724 delivered
 the #722 batch. The friction sweep remains parked pending its exact operator decision.
 
-**Next session:** obtain the exact UPDATE-02 decision above; only if approved,
-revalidate its post-acceptance inputs and execute that local ledger. Preserve the
+**Next session:** resolve the review-runtime restriction and complete kit PR #733's
+required review, then finish pr-watch under the scoped kit merge authority. Obtain
+the exact UPDATE-02 decision above before any retained execution. Preserve the
 separate fixture PR continuation and remaining field-exit decisions.
