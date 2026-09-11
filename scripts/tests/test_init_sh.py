@@ -4794,7 +4794,7 @@ def _upgrade_init_argv() -> list[str]:
     assert len(lines) == 1, f"expected one init.sh invocation, found {lines!r}"
     argv = shlex.split(lines[0].split("#")[0])
     assert argv[0].endswith("init.sh"), argv
-    return argv[1:]
+    return argv[1:argv.index("||")] if "||" in argv else argv[1:]
 
 
 @pytest.mark.kit_repo_only("docs/templates", "docs/agentic-dev-kit/workflows/upgrade.md")
@@ -4869,51 +4869,19 @@ def test_upgrade_workflows_init_invocation_adds_the_triage_config(
 
 
 def _upgrade_template_copy_block() -> str:
-    """The Step 2 refresh block from upgrade.md, minus the two lines that need a
-    real kit checkout and a real installer.
+    """Execute the refresh block, retaining its preflight and mutation ordering.
 
-    Anchored on the `cp` of `init.sh` like `_upgrade_init_argv`, so a future code
-    block elsewhere in the document cannot be picked up instead.
+    Only the owning-directory change is omitted so the wrong-cwd regression can
+    check absolute destinations independently. The initializer is stubbed by the
+    caller; its copy and chmod now stay in the block being exercised.
     """
-    # The `init.sh` INVOCATION is kept and stubbed by `_run_template_copy`, not
-    # stripped. Stripping it is how a HIGH went uncaught: the gate's refusal used
-    # `break`, which leaves the `for` loop while the next line runs the installer
-    # anyway — "Copied nothing" followed by the workflow proceeding past its own
-    # hard stop. No test could see it while the interaction was cut out of the
-    # extract (review panel, adversarial lens).
-    #
-    # `cd` still goes, and for the opposite reason: keeping it would make
-    # `..._writes_into_repo_even_when_the_shell_sits_in_the_kit_clone` vacuous,
-    # since the block would put itself in the right tree before writing. Its
-    # presence in the SHIPPED block is asserted separately below.
-    kept = [
-        line
-        for line in _step2_refresh_block().splitlines()
-        # `cd "$REPO"` specifically, not any `cd `. An over-broad strip is how
-        # the round-2 HIGH stayed invisible: whatever the extract removes, no
-        # test can see. If Step 2 ever gains a second `cd`, this must fail
-        # loudly rather than quietly review a block that is not what ships.
-        if not re.match(
-            r'^\s*(cd "\$REPO"|cp "(\$KIT|\$\{KIT:\?[^}]*\})/init\.sh"|chmod \+x)',
-            line,
-        )
-    ]
-    body = "\n".join(kept)
-    # Asserted against the SHIPPED block, not the stripped one, and that is the
-    # point. The `cd` has to be stripped for the extracted body to run against a
-    # fixture, which left it pinned by nothing: delete `cd "$REPO"` from
-    # upgrade.md and every test in this section still passes, while `init.sh`
-    # resolves the config and `docs/templates/*.tmpl` against the KIT clone —
-    # #399's exact failure, one line over from the one being guarded. Found by
-    # the review bot on PR #401.
-    assert re.search(r'^\s*cd "\$REPO"', _step2_refresh_block(), re.M), (
-        "Step 2 no longer cds into $REPO before running init.sh — the installer "
-        "resolves config and templates against the working directory (#399)"
+    block = _step2_refresh_block()
+    assert re.search(r'^\s*cd "\$REPO"', block, re.M)
+    body = "\n".join(
+        line for line in block.splitlines()
+        if not re.match(r'^\s*cd "\$REPO"', line)
     )
-    assert "not_installed" in body, (
-        "the Step 2 code block no longer consults `not_installed` — the gate moved "
-        "into prose, or was removed (#398)"
-    )
+    assert "not_installed" in body
     return body
 
 
@@ -4922,6 +4890,7 @@ def _fake_kit_templates(tmp_path: Path) -> Path:
     source path is hardcoded (that hardcoding is #343, not this test's subject)."""
     src = tmp_path / "kit" / "docs" / "templates"
     src.mkdir(parents=True)
+    (src.parent.parent / "init.sh").write_text("#!/bin/sh\nexit 0\n")
     for name in ("handoff.md.tmpl", "friction-log.md.tmpl", "AGENTS.md.tmpl"):
         (src / name).write_text(f"# {name}\n", encoding="utf-8")
     return src
@@ -4942,7 +4911,7 @@ def _run_template_copy(
     # a fixture and tell us nothing about the guard.
     block = _upgrade_template_copy_block()
     stubbed = re.sub(
-        r'^(\s*)"(?:\$REPO|\$\{REPO:\?[^}]*\})/init\.sh" --no-clobber\s*$',
+        r'^(\s*)"(?:\$REPO|\$\{REPO:\?[^}]*\})/init\.sh" --no-clobber(?: \|\| exit 1)?\s*$',
         r'\1: > "$REPO/INIT_SH_RAN"',
         block,
         flags=re.M,
@@ -6072,3 +6041,131 @@ def test_the_permissions_advisory_says_it_is_optional(tmp_path: Path) -> None:
     flowed = " ".join(block.split())
     assert "optional" in flowed
     assert "skip this entirely if you would rather approve each command" in flowed
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+@pytest.mark.parametrize("manifest_kind", ["corrupt", "dangling", "partial"])
+def test_refresh_manifest_preflight_precedes_installer_overwrite(
+    tmp_path: Path, manifest_kind: str
+) -> None:
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    installer = repo / "init.sh"
+    installer.write_text("old installer\n")
+    installer.chmod(0o644)
+    baseline = repo / "kit-manifest.json"
+    if manifest_kind == "dangling":
+        baseline.symlink_to(repo / "absent-baseline")
+    else:
+        baseline.write_text(
+            '{"kit_commit":"source","files":{}}'
+            if manifest_kind == "partial" else "{broken"
+        )
+    result = _run_template_copy(repo, src, check=False)
+    if manifest_kind == "partial":
+        assert result.returncode == 0, result.stderr
+        assert installer.read_bytes() == (src.parent.parent / "init.sh").read_bytes()
+        assert (repo / "INIT_SH_RAN").exists()
+        assert not list((repo / "docs/templates").glob("*.tmpl"))
+    else:
+        assert result.returncode != 0
+        assert installer.read_text() == "old installer\n"
+        assert installer.stat().st_mode & 0o777 == 0o644
+        assert not (repo / "docs").exists()
+        _assert_gate_refused(repo, result, manifest_kind)
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+@pytest.mark.parametrize(
+    "relative,kind",
+    [
+        ("init.sh", "symlink"),
+        ("docs", "symlink-directory"),
+        ("docs/templates", "symlink-directory"),
+        ("docs/templates/AGENTS.md.tmpl", "symlink"),
+        ("init.sh", "fifo"),
+        ("docs/templates/AGENTS.md.tmpl", "hardlink"),
+    ],
+)
+def test_refresh_refuses_destination_aliases_before_any_copy(
+    tmp_path: Path, relative: str, kind: str
+) -> None:
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    external = outside / "sentinel"
+    external.write_text("preserve external bytes\n")
+    target = repo / relative
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if kind == "symlink-directory":
+        target.symlink_to(outside, target_is_directory=True)
+    elif kind == "symlink":
+        target.symlink_to(external)
+    elif kind == "hardlink":
+        os.link(external, target)
+    else:
+        os.mkfifo(target)
+    if relative != "init.sh":
+        (repo / "init.sh").write_text("old installer\n")
+    result = _run_template_copy(repo, src, check=False)
+    assert result.returncode != 0
+    assert "STOP" in result.stderr
+    assert not (repo / "INIT_SH_RAN").exists()
+    assert external.read_text() == "preserve external bytes\n"
+    assert sorted(p.name for p in outside.iterdir()) == ["sentinel"]
+    if relative != "init.sh":
+        assert (repo / "init.sh").read_text() == "old installer\n"
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+@pytest.mark.parametrize("failure", ["cp-init", "chmod", "mkdir", "cp-template"])
+def test_refresh_stops_after_a_failed_mutation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    src = _fake_kit_templates(tmp_path)
+    bins = tmp_path / "bin"
+    bins.mkdir()
+    trace = tmp_path / "calls"
+    for command in ("cp", "chmod", "mkdir"):
+        shim = bins / command
+        shim.write_text(
+            '#!/bin/sh\n'
+            f'kind={command}\n'
+            'if [ "$kind" = cp ]; then\n'
+            '  case "$1" in */init.sh) kind=cp-init ;; *) kind=cp-template ;; esac\n'
+            'fi\n'
+            'echo "$kind" >> "$REFRESH_TRACE"\n'
+            '[ "$kind" != "$REFRESH_FAIL" ] || exit 23\n'
+            f'exec /bin/{command} "$@"\n'
+        )
+        shim.chmod(0o755)
+    monkeypatch.setenv("PATH", str(bins) + os.pathsep + os.environ["PATH"])
+    monkeypatch.setenv("REFRESH_TRACE", str(trace))
+    monkeypatch.setenv("REFRESH_FAIL", failure)
+    result = _run_template_copy(repo, src, check=False)
+    assert result.returncode != 0
+    calls = trace.read_text().splitlines()
+    order = ["cp-init", "chmod", "mkdir", "cp-template"]
+    assert calls == order[:order.index(failure) + 1]
+    assert not (repo / "INIT_SH_RAN").exists()
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_upgrade_config_probe_resolves_the_repo_from_a_subdirectory(tmp_path: Path) -> None:
+    repo = tmp_path / "adopter"
+    (repo / "config").mkdir(parents=True)
+    (repo / "config/dev-model.yaml").write_text("kit: {}\n")
+    (repo / "docs").mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    text = (REPO_ROOT / "docs/agentic-dev-kit/workflows/upgrade.md").read_text()
+    block = text.split("## Step 0", 1)[1].split("```bash\n", 1)[1].split("```", 1)[0]
+    result = subprocess.run(
+        ["sh", "-c", block], cwd=repo / "docs", capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "has config\n"

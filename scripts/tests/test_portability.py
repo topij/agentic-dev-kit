@@ -17327,3 +17327,42 @@ def test_parallel_adapters_carry_no_approval_policy_and_the_shared_workflow_does
     # family; a spelled-out flag is a directive it must not carry (a mutation that
     # injects one fails this — panel rounds 6, 8, 11).
     assert "--dangerously-skip-permissions" not in shared
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+@pytest.mark.parametrize("failure", ["doctor", "mktemp", "suite", "budget", "none"])
+def test_upgrade_verification_stops_at_the_failed_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    bins = tmp_path / "bin"
+    bins.mkdir()
+    calls = tmp_path / "calls"
+    for name in ("uv", "mktemp"):
+        script = bins / name
+        script.write_text(
+            '#!/bin/sh\n'
+            f'kind={name}\n'
+            'if [ "$kind" = uv ]; then\n'
+            '  case "$*" in *kit_doctor.py*) kind=doctor ;; '
+            '*run_installed_tests.py*) kind=suite ;; *) kind=budget ;; esac\n'
+            'fi\n'
+            'echo "$kind" >> "$VERIFY_CALLS"\n'
+            '[ "$kind" != "$VERIFY_FAIL" ] || exit 17\n'
+            'if [ "$kind" = mktemp ]; then echo "$VERIFY_ROOT"; fi\n'
+        )
+        script.chmod(0o755)
+    monkeypatch.setenv("PATH", str(bins) + os.pathsep + os.environ["PATH"])
+    monkeypatch.setenv("VERIFY_CALLS", str(calls))
+    monkeypatch.setenv("VERIFY_FAIL", failure)
+    monkeypatch.setenv("VERIFY_ROOT", str(tmp_path / "state"))
+    monkeypatch.setenv("REPO", str(repo))
+    workflow = (REPO_ROOT / "docs/agentic-dev-kit/workflows/upgrade.md").read_text()
+    block = workflow.split("## Step 5 — Verify", 1)[1].split("```bash\n", 1)[1].split("```", 1)[0]
+    block = block.replace("<engine-dir>", "scripts")
+    result = subprocess.run(["sh", "-c", block], cwd=repo, capture_output=True, text=True)
+    order = ["doctor", "mktemp", "suite", "budget"]
+    expected = order if failure == "none" else order[:order.index(failure) + 1]
+    assert calls.read_text().splitlines() == expected
+    assert (result.returncode == 0) == (failure == "none")

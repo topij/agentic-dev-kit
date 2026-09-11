@@ -266,13 +266,19 @@ def _run_pytest(
     other than what ships.
     """
     env = {k: v for k, v in os.environ.items() if not k.startswith("DEVKIT_")}
-    return subprocess.run(
-        [sys.executable, "-m", "pytest", *args, "-q", "-p", "no:cacheprovider"],
-        cwd=cwd or root,
-        env=env,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        return subprocess.run(
+            [sys.executable, "-m", "pytest", *args, "-q", "-p", "no:cacheprovider"],
+            cwd=cwd or root,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired as exc:
+        pytest.fail(
+            f"nested pytest timed out: stdout={exc.stdout!r}; stderr={exc.stderr!r}"
+        )
 
 
 def _assert_guard_fired(
@@ -777,3 +783,55 @@ def test_guard_leaves_root_file_symlinks_outside_snapshot(
     assert target.read_text() == ("before" if case == "new-link" else "after")
     assert result.returncode == 0, result.stdout + result.stderr
     assert _BANNER not in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("exit_kind", ["interrupt", "internal-error"])
+def test_leak_report_preserves_non_ok_session_exit_status(
+    tmp_path: Path, exit_kind: str
+) -> None:
+    _build_tree(tmp_path, leak_in=None)
+    tests = tmp_path / "scripts/tests"
+    if exit_kind == "interrupt":
+        (tests / "test_tests_probe.py").write_text(
+            "from pathlib import Path\n"
+            "def test_interrupt():\n"
+            f"    (Path({str(tmp_path)!r}) / 'state').write_text('leak')\n"
+            "    raise KeyboardInterrupt\n"
+        )
+        expected = pytest.ExitCode.INTERRUPTED
+    else:
+        (tests / "conftest.py").write_text(
+            "from pathlib import Path\n"
+            "def pytest_collection_modifyitems(session, config, items):\n"
+            f"    (Path({str(tmp_path)!r}) / 'state').write_text('leak')\n"
+            "    raise RuntimeError('deliberate internal error')\n"
+        )
+        expected = pytest.ExitCode.INTERNAL_ERROR
+    result = _run_pytest(tmp_path, _SHAPES["tests-only"])
+    assert result.returncode == expected, result.stdout + result.stderr
+    assert _BANNER in result.stdout
+    assert _SUMMARY in result.stdout
+    assert (tmp_path / "state").read_text() == "leak"
+
+
+def test_nested_pytest_timeout_reports_captured_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    actual_run = subprocess.run
+    def bounded_run(*args, **kwargs):
+        assert kwargs["timeout"] == 60
+        kwargs["timeout"] = 3
+        return actual_run(*args, **kwargs)
+    monkeypatch.setattr(subprocess, "run", bounded_run)
+    _build_tree(tmp_path, leak_in=None)
+    (tmp_path / "scripts/tests/test_tests_probe.py").write_text(
+        "import sys, time\n"
+        "def test_wait():\n"
+        "    print('child stdout', flush=True)\n"
+        "    print('child stderr', file=sys.stderr, flush=True)\n"
+        "    time.sleep(30)\n"
+    )
+    with pytest.raises(pytest.fail.Exception, match="nested pytest timed out") as caught:
+        _run_pytest(tmp_path, [*_SHAPES["tests-only"], "-s"])
+    assert "child stdout" in str(caught.value)
+    assert "child stderr" in str(caught.value)

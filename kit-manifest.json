@@ -72,7 +72,7 @@
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
-      "sha256": "c29baa57bc48b2d74e5e553745028f84bd2e8d400e88d891c9336d8496724cf6"
+      "sha256": "ef328af59f53a619e373c8f9bead1daf20b1f58715fa27c1e583b66ee0513623"
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
@@ -120,7 +120,7 @@
     },
     "scripts/conftest.py": {
       "role": "engine",
-      "sha256": "ecebbbc42cd6a8960e187abda41c5917e39aa1623b438ad932c7102cdf3ab03c"
+      "sha256": "b43fc728bbb1a5a71e6f91afcd37a07940014cceb34f073a0617fe2047a75e16"
     },
     "scripts/dev_session.sh": {
       "role": "engine",
@@ -265,7 +265,7 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "87cca005542d8dfc3ff923f5706ae77a63a4068b8c852499c2ac05718db323bc"
+      "sha256": "41ad37977dad41e6ec739bef369138d93e1f4ad9ff7036172ee8e61cb36c49a4"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
@@ -297,7 +297,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "6d889025b72306a4dfe96fcf3eefa8b7c75d7f08112003e49ecec6c3f4f27e0b"
+      "sha256": "0bc0e8fc7deb7a10b580c21a10670b3a04b802518d486ebcf062cb894cd8c1ec"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
@@ -321,7 +321,7 @@
     },
     "scripts/tests/test_state_guard.py": {
       "role": "test",
-      "sha256": "9420de32bcba5232f13e9d8258de6f5c08ccb0a398513ff83e01cd731f377613"
+      "sha256": "e4a4c5614250ac46509e706507317d1cb40338b1bba51699c902b7269bc84433"
     },
     "scripts/verify_live_validation_bundle.py": {
       "role": "repo-only",

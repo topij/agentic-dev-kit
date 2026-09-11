@@ -375,4 +375,5 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         # The verdict must survive the message having nowhere to go.
         print(detail, file=sys.stderr)
     session.shouldfail = summary
-    session.exitstatus = pytest.ExitCode.TESTS_FAILED
+    if exitstatus == pytest.ExitCode.OK:
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
