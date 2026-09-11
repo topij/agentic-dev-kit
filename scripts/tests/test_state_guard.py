@@ -746,3 +746,34 @@ def test_guard_observes_regular_file_at_state_root(
         assert _BANNER not in result.stdout + result.stderr
     else:
         _assert_guard_fired(result, tmp_path, "bare-root")
+
+
+@pytest.mark.parametrize("layout", list(_LAYOUTS), ids=list(_LAYOUTS))
+@pytest.mark.parametrize("case", ["new-link", "target-modified"])
+def test_guard_leaves_root_file_symlinks_outside_snapshot(
+    tmp_path: Path, layout: str, case: str
+) -> None:
+    """Pin the documented exclusion of a root symlink to a regular file."""
+    engine_rel = _LAYOUTS[layout]
+    _build_tree(tmp_path, leak_in=None, engine_rel=engine_rel)
+    state = tmp_path / "state"
+    target = tmp_path / "state-target"
+    target.write_text("before")
+    if case == "target-modified":
+        state.symlink_to(target)
+    statement = (
+        f"Path({str(state)!r}).symlink_to({str(target)!r})"
+        if case == "new-link"
+        else f"Path({str(target)!r}).write_text('after')"
+    )
+    probe = tmp_path / engine_rel / "lib/state_paths/tests/test_state_paths_probe.py"
+    probe.write_text(
+        "from pathlib import Path\n"
+        "def test_root_file_symlink():\n"
+        f"    {statement}\n"
+    )
+    result = _run_pytest(tmp_path, [f"{engine_rel}/lib/state_paths/tests"])
+    assert state.is_symlink() and state.resolve() == target
+    assert target.read_text() == ("before" if case == "new-link" else "after")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _BANNER not in result.stdout + result.stderr

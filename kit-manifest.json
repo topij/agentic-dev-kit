@@ -120,7 +120,7 @@
     },
     "scripts/conftest.py": {
       "role": "engine",
-      "sha256": "a0a82682c9431205f8c0db80176694b37800da7964e5b77ec3eba283fc7569c2"
+      "sha256": "ecebbbc42cd6a8960e187abda41c5917e39aa1623b438ad932c7102cdf3ab03c"
     },
     "scripts/dev_session.sh": {
       "role": "engine",
@@ -321,7 +321,7 @@
     },
     "scripts/tests/test_state_guard.py": {
       "role": "test",
-      "sha256": "8e7a7082fa4e7fcaa0ccf1985be646c7b26bb86af4cc519349cc068861b6b291"
+      "sha256": "9420de32bcba5232f13e9d8258de6f5c08ccb0a398513ff83e01cd731f377613"
     },
     "scripts/verify_live_validation_bundle.py": {
       "role": "repo-only",

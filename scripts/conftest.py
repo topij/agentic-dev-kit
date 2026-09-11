@@ -216,6 +216,11 @@ def _real_state_snapshot() -> dict[str, str]:
 
       - ``state/`` ITSELF BEING A SYMLINK, which the ``is_dir()`` at the top
         of this function follows silently. Nothing in the kit creates one.
+      - ``state/`` ITSELF BEING A SPECIAL FILE. A FIFO, socket or device
+        node at the root reaches neither the regular-file branch nor the
+        directory walk, so its presence compares as absent. Special-file
+        descendants are different: the walk records them without reading
+        them. A FIFO at the root can obstruct engine state-directory creation.
       - REPLACEMENT AT A STABLE PATH, for any kind recorded as a CONSTANT. A
         directory or special file deleted and recreated at the same path
         between the two instants compares ``<dir>`` == ``<dir>`` or
