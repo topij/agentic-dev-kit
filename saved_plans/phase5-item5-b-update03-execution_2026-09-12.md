@@ -18,6 +18,9 @@ baseline, command arguments, environments, timings and complete output. The
 and [retention index](phase5-item5-b-update03-execution-evidence_2026-09-12/retention.json)
 identify the result and external backups. These programs record this completed attempt;
 they are not a reusable update authorization or a current-state proposal validator.
+The historical assessment field `installed_skip_scope_unchanged` records equality
+of normalized grouped pytest summaries. It cannot establish which individual
+test nodes skipped.
 
 ## Applied scope
 
@@ -57,7 +60,7 @@ serially to terminal summaries, without changing their selection after results.
 | Installed `kit_doctor.py --root "$REPO" --manifest "$KIT/kit-manifest.json" --json`; `$REPO` above | `4ad91c875377d8607082cd0a125ba801218187ed` | Exit `0`; installed bytes matched and baseline was trusted. Full report retained. |
 | Source `kit_doctor.py --root "$REPO" --adapter-report --adapter-source "$KIT" --json`; `$REPO` | `4ad91c875377d8607082cd0a125ba801218187ed`, source `7e0232ed871b37a315c5509c97b83d3b00b1a3fd` | Exit `0`; custom Codex wrap-up remained `adopter-owned`. Rendered-form comparison normalizes newlines; this is not client execution. |
 | Installed `check_doc_budget.py`; `$REPO` | `4ad91c875377d8607082cd0a125ba801218187ed` | Exit `0`; full configured-path report retained. No archival workflow ran in the fixture. |
-| `uv run --with pytest --with pyyaml python -B "$REPO/scripts/devkit/run_installed_tests.py" --root "$REPO"`; `$REPO` | `4ad91c875377d8607082cd0a125ba801218187ed` | `2161 passed, 128 skipped in 539.42s (0:08:59)`; runner exit `0`. Skip selections and reasons matched the earlier installed log. |
+| `uv run --with pytest --with pyyaml python -B "$REPO/scripts/devkit/run_installed_tests.py" --root "$REPO"`; `$REPO` | `4ad91c875377d8607082cd0a125ba801218187ed` | `2161 passed, 128 skipped in 539.42s (0:08:59)`; runner exit `0`. Grouped skip summaries matched the earlier installed log. |
 | `make test`; `/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-7e0232e-20260911/source-verification` | `7e0232ed871b37a315c5509c97b83d3b00b1a3fd` | `1 failed, 2529 passed, 1 skipped in 540.33s (0:09:00)`. Make exited `2`; the command runner returned `1`. |
 | Separate `bash -n` for `scripts/dev_session.sh`, `scripts/reconcile_sessions.sh`, `scripts/lib/repo_root.sh`, `scripts/hooks/pre-push`, and `sh -n init.sh`; the same source clone | `7e0232ed871b37a315c5509c97b83d3b00b1a3fd` | Each exited `0`. These parse observations cover #561's recipe gap; they do not repair it or execute shell behavior. |
 
