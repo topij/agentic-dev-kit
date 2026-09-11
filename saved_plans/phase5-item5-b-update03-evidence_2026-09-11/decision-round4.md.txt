@@ -9,12 +9,10 @@ Neither source-repair approval nor a kit record merge authorizes this update.
 The current question uses the revised audit, validator, ledger and binding named
 below. The [initial UPDATE-03 packet and unanswered question](phase5-item5-b-update03-evidence_2026-09-11/decision-round1.md.txt),
 initial programs and evidence remain unchanged as historical records. Use only the
-current `-r4` audit/command runner and `-r5` validator for validation. The [r2 packet and unanswered question](phase5-item5-b-update03-evidence_2026-09-11/decision-round2.md.txt)
+current `-r4` programs for validation. The [r2 packet and unanswered question](phase5-item5-b-update03-evidence_2026-09-11/decision-round2.md.txt)
 and its programs/evidence are also preserved. The [r3 packet and unanswered question](phase5-item5-b-update03-evidence_2026-09-11/decision-round3.md.txt)
-are historical as well. The [r4 packet and unanswered question](phase5-item5-b-update03-evidence_2026-09-11/decision-round4.md.txt)
-remain preserved after the binding provenance correction. The initial, r2 and r3
-execution instructions do not carry the corrected Git environment into dependent commands;
-use only this packet and its explicitly named current programs.
+are historical as well. Earlier execution instructions do not carry the corrected
+Git environment into dependent commands; use only this packet and its current programs.
 
 ## Delivered source and retained inputs
 
@@ -96,8 +94,8 @@ These exact original paths were absent in that observation. Never reconstruct th
 
 ## Required decision and act-time validation
 
-The [prepared-input binding](phase5-item5-b-update03-evidence_2026-09-11/prepared-input-binding-r5.json)
-SHA-256 is `51283931d2a48285d37e8de18236f0c15420a6fe1c02ef58172f7657809a9421`. It binds the current audit/validator/command runner, helper and checkpoints,
+The [prepared-input binding](phase5-item5-b-update03-evidence_2026-09-11/prepared-input-binding-r4.json)
+SHA-256 is `cc5ec672ebece9ed82cd9f2c5e4667d859396d6a28cb9c0c1c8acadeb0ad0d55`. It binds the current audit/validator/command runner, helper and checkpoints,
 config/replay expectations, recorded audit, source delivery, unresolved source findings,
 forge readback, ledger,
 supplied payloads and predicted baseline. The validator also compares supplied
@@ -107,15 +105,13 @@ fields and retained inputs to agree. These are preparation safeguards, not autho
 Run from `$COCKPIT` before deciding and again immediately before any approved execution:
 
 ```sh
-env -u PYTHONOPTIMIZE python3 -B "$COCKPIT/saved_plans/phase5-item5-b-update03-validate-r5_2026-09-11.py.txt" \
-  --binding-sha256 51283931d2a48285d37e8de18236f0c15420a6fe1c02ef58172f7657809a9421
+env -u PYTHONOPTIMIZE python3 -B "$COCKPIT/saved_plans/phase5-item5-b-update03-validate-r4_2026-09-11.py.txt" \
+  --binding-sha256 cc5ec672ebece9ed82cd9f2c5e4667d859396d6a28cb9c0c1c8acadeb0ad0d55
 ```
 
-The [prepared validation](phase5-item5-b-update03-evidence_2026-09-11/prepared-validation-r5.json.gz)
+The [prepared validation](phase5-item5-b-update03-evidence_2026-09-11/prepared-validation-r4.json.gz)
 retains the validator's `python3 -B` invocation with that binding digest and
-`PYTHONOPTIMIZE` unset, from `/Users/topi/Coding/agentic-dev-kit` at
-`21d5f341d5fd4d47aa392229c31bf46d020e661c` on 2026-09-11 with this correction
-in the working tree: `prepared-inputs-and-program-binding-verified; proposal-only`. Re-read the
+`PYTHONOPTIMIZE` unset, at the audit's revision/date/directory with candidate changes: `prepared-inputs-and-program-binding-verified; proposal-only`. Re-read the
 fixture forge tuple and original complete receipts separately at act time; the
 validator checks the bound recorded forge bytes and does not poll the forge.
 A changed source, payload, input, ownership, scope, verification requirement or
@@ -352,47 +348,40 @@ remote deletion or evidence deletion.
 
 ## Kit preparation verification
 
-The [r4 full-panel archive](phase5-item5-b-update03-evidence_2026-09-11/packet-review-round4.json.gz)
+The [r3 full-panel archive](phase5-item5-b-update03-evidence_2026-09-11/packet-review-round3.json.gz)
 retains complete reports, actual compute, commands/output, mutations and restoration
-at `21d5f341d5fd4d47aa392229c31bf46d020e661c` on 2026-09-11. Complete
-[adversarial](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5639496598)
-and [correctness](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5639497494)
-receipts preceded this correction. The P3 administration-guard mutation survived
-the old regression suite, while independent probes showed the original guard refusing
-aliases in the synthetic fixture and source. The r5 regression adds those refusal
-cases through the command runner, asserts the child never starts, and proves the
-same child executes after removing the synthetic alias. The audit and runner remain
-the reviewed r4 programs.
+at `2335396b4b4feb6420b69e8eaafac6d7e0a5f38c` on 2026-09-11. Complete
+[adversarial](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5639054172)
+and [correctness](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5639054892)
+receipts preceded this fix. Their P2 probes reproduced global hooks/tracing writes
+through later packet commands. The adversarial P3 system-isolation mutation survived
+the earlier regression suite. This revision carries isolation into dependent
+commands and adds a synthetic system-config backend with a real Git positive control.
+No host system/global config was changed to test it.
 
-The correctness report also found copied r3 observation metadata in the r4 binding.
-The new r5 binding drops that stale reading: it declares the decision, unapproved
-state and file hashes. Invocation provenance belongs to the fresh validation record.
-The validator changes only its binding path. The current ledger, selected source,
-fixture payloads and predicted baseline remain unchanged; earlier bindings and
-questions retain their original bytes.
+`python3 -B /Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-update03-audit-regression-r4_2026-09-11.py.txt /private/tmp/item5-b-update03-prep-20260911`
+from `/Users/topi/Coding/agentic-dev-kit` at `2335396b4b4feb6420b69e8eaafac6d7e0a5f38c`
+on 2026-09-11, with this correction in the working tree, returned `OK`. The
+[regression record](phase5-item5-b-update03-evidence_2026-09-11/audit-regression-r4.json.gz)
+retains the result. It covers declared and nested Git commands, caller-control
+refusal, command-failure propagation and system tracing, with executing positive
+controls, alongside the preserved read-isolation tests.
 
-`python3 -B /Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-update03-audit-regression-r5_2026-09-11.py.txt /private/tmp/item5-b-update03-prep-20260911`
-from `/Users/topi/Coding/agentic-dev-kit` at `21d5f341d5fd4d47aa392229c31bf46d020e661c`
-on 2026-09-11 with this correction in the working tree returned `OK`. The
-[regression record](phase5-item5-b-update03-evidence_2026-09-11/audit-regression-r5.json.gz)
-retains the actual output. The [author verification record](phase5-item5-b-update03-evidence_2026-09-11/author-verification-r5.json.gz)
-also retains exact binding validation, wrong-binding/optimized-Python refusals,
-separate shell parses for #561, and the Git comparison of unchanged source,
-audit/runner, ledger and payload paths against that revision.
+`make test` at `2335396b4b4feb6420b69e8eaafac6d7e0a5f38c` on 2026-09-11 in
+`/Users/topi/Coding/agentic-dev-kit`, with this correction in the working tree and
+the declared child Git controls, printed `1 failed, 2529 passed, 1 skipped in 403.26s (0:06:43)`,
+make status `2`. The actual failure was #393's deep-JSON hook-output assertion.
+This is not a passing local suite. The [author verification record](phase5-item5-b-update03-evidence_2026-09-11/author-verification-r4.json.gz)
+retains the full `env ... make test` argv, output, current binding validation,
+refusal checks and separate shell parses for #561. Its r3 forge readback matched
+the fixture checkpoint and original receipt hashes and reconfirmed #731/#732/#734
+at that revision/date/directory. Those observations do not verify a retained update.
 
-The r4 panel's `make test` runs at `21d5f341d5fd4d47aa392229c31bf46d020e661c`
-on 2026-09-11 reached pytest's terminal summaries. The adversarial private clone
-reported `1 failed, 2529 passed, 1 skipped in 421.33s`; the correctness private
-clone reported `1 failed, 2529 passed, 1 skipped in 394.36s`. Both returned make
-status `2` for documented #393's deep-JSON hook-output assertion. Their complete
-receipts name the private clone directories, command arguments and environmental
-limits. Those are source verification observations, not a passing local suite or
-retained-update verification. The packet regression programs are outside `make test`
-discovery and are executed separately.
-
-Earlier verification and source-finding dispositions remain in the
-[preserved r4 packet](phase5-item5-b-update03-evidence_2026-09-11/decision-round4.md.txt)
-and its linked records. The [preservation record](phase5-item5-b-update03-evidence_2026-09-11/preserved-artifacts-r5.json)
+Earlier preparation verification and source-finding dispositions remain in the
+[preserved r3 packet](phase5-item5-b-update03-evidence_2026-09-11/decision-round3.md.txt)
+and its linked records. The frozen fixture payloads, source revision and predicted
+baseline are unchanged. The current ledger additionally binds the dependent-command
+policy and local commit identity. The [preservation record](phase5-item5-b-update03-evidence_2026-09-11/preserved-artifacts-r4.json)
 compares historical artifacts without rewriting their evidence or questions.
 
 ## Preparation scope and exact decision
@@ -409,7 +398,7 @@ complete UPDATE-02's interrupted reviews. PR #733 owns this packet's required re
 and delivery. Kit preparation and review are not retained-field execution.
 
 **Approval question:** Do you approve **ITEM5-B-UPDATE-03 as scoped in this packet,
-ledger SHA-256 `141408cc180def2dd1bb3c1dc448f16b2b45a486dc083afeb184b7e2e71937f1` and prepared-input binding SHA-256 `51283931d2a48285d37e8de18236f0c15420a6fe1c02ef58172f7657809a9421`**: advance the
+ledger SHA-256 `141408cc180def2dd1bb3c1dc448f16b2b45a486dc083afeb184b7e2e71937f1` and prepared-input binding SHA-256 `cc5ec672ebece9ed82cd9f2c5e4667d859396d6a28cb9c0c1c8acadeb0ad0d55`**: advance the
 retained source to `7e0232ed871b37a315c5509c97b83d3b00b1a3fd`, apply only the listed fixture payloads, record the predicted
 baseline, create the named local attempt branch/commit and evidence root, run the
 declared local verification and conditional rollback, and deliver the resulting
