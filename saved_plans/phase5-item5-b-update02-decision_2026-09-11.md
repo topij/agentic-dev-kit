@@ -119,8 +119,8 @@ adapter.` body is deliberately nonfunctional; keeping it does not verify wrap-up
 Doctor or adapter classifications are not client loading/trust/execution evidence.
 
 **Accepted inherited limitation:** special-file roots remain outside this repair's
-coverage. In particular, a FIFO at the state root can obstruct the inherited
-snapshot mechanism. No special-file detection or recovery is supplied or claimed.
+coverage. In particular, a FIFO at the state root remains invisible to the inherited
+snapshot and can obstruct engine state persistence. No special-file detection or recovery is supplied or claimed.
 Regular-file/root-symlink checks do not establish special-file safety. If such a
 root or an unexpected file kind is found before execution, stop for a separate
 decision; do not open it to probe behavior or silently widen this update.
@@ -142,7 +142,10 @@ independent record reviewers are not fixture field exercises.
 Before every write sequence, enter the owning absolute root and assert `pwd -P`
 equals it. Use absolute paths for every write and hash the intended destinations.
 Reject symlink aliases, nonregular or multiply-linked copy targets and aliased
-parents. Require complete checkpoint equality, empty status/index, exact input
+parents. Apply these checks explicitly to `kit-manifest.json` as well: its
+`--record-install` writer writes in place, so a hardlink would change an unlisted
+alias. The audit checks its lexical path, regular-file kind and single-link status
+before accepting inputs; recheck them immediately before the baseline command. Require complete checkpoint equality, empty status/index, exact input
 refs/remotes and absent attempt branch/evidence root. Re-read the fixture forge
 tuple and original complete review receipts before any fix; a mismatch stops.
 Do not reinterpret UPDATE FINAL as today's checkpoint.
@@ -160,8 +163,19 @@ full typed config through the installed destination reader against the audit's
 independent expected mappings. Compare every preserved path, then run from `$REPO`:
 
 ```sh
-python3 -B "$REPO/scripts/devkit/kit_doctor.py" --root "$REPO" \
-  --record-install --from-kit "$KIT"
+env -u PYTHONOPTIMIZE python3 -B - "$REPO" "$KIT" <<'PYBASELINE'
+import stat
+import subprocess
+import sys
+from pathlib import Path
+repo, kit = map(Path, sys.argv[1:])
+p = repo / 'kit-manifest.json'
+s = p.lstat()
+assert p.resolve() == p and stat.S_ISREG(s.st_mode) and s.st_nlink == 1
+subprocess.run([sys.executable, '-B', str(repo / 'scripts/devkit/kit_doctor.py'),
+                '--root', str(repo), '--record-install', '--from-kit', str(kit)],
+               check=True)
+PYBASELINE
 ```
 
 Capture stdout/stderr under `$OUT`, never redirect into the baseline. Require
@@ -223,6 +237,36 @@ remote deletion or evidence deletion.
   administration change requires its own named restoration decision; do not
   silently erase it. Check input branch/source identity and empty tracked diffs.
   Administrative history records the attempt; it is not claimed byte-unchanged.
+
+## Preparation review and correction
+
+Before changing the submission, the complete independent
+[adversarial receipt](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5632042580)
+and [correctness receipt](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5632043110)
+were published against `7a598687a642e7ea7c66e941ee292323cfc63500`.
+The [raw review record](phase5-item5-b-update02-evidence_2026-09-11/review-round1.json.gz)
+preserves their reports, commands, logs, mutation/restoration evidence and actual
+compute readback. The original preparation evidence and ledger remain unchanged.
+
+The adversarial reproduction found that an external baseline hardlink could pass
+the original audit and receive an unlisted in-place write. This packet now checks
+the baseline explicitly and gates the doctor's invocation on the immediate check.
+The correctness reproduction established that a FIFO obstructs state persistence
+while remaining invisible to the snapshot; the accepted limitation above uses that
+explanation. These corrections change preparation safeguards and wording, not the
+selected source or fixture payloads, and grant no retained execution authority.
+
+The hardened audit ran from `/Users/topi/Coding/agentic-dev-kit` at
+`7a598687a642e7ea7c66e941ee292323cfc63500`, with the candidate guard in the working
+tree, on 2026-09-11 using the audit command above. Its
+[result](phase5-item5-b-update02-evidence_2026-09-11/audit-preflight-hardened.json.gz)
+reports `matches-post-acceptance-checkpoints; proposal-only`; stable proposal fields
+equal the original ledger. The original audit result remains the original observation,
+with its program bytes preserved in the review record and the reviewed Git revision.
+The [guard proof](phase5-item5-b-update02-evidence_2026-09-11/baseline-guard-proof.json.gz)
+retains the disposable-copy rejection, mutation, restoration and exact packet-wrapper
+checks, with their command/directory/revision/date stamps. Kit PR #733 owns subsequent
+review and verification receipts; none is retained-fixture execution evidence.
 
 ## Exact decision and next session
 

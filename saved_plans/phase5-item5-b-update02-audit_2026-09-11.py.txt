@@ -67,7 +67,13 @@ def main():
     assert originals == expected['original_paths'] and not any(originals.values())
     assert not os.path.lexists(OUT), OUT
     assert git(REPO, 'branch', '--list', BRANCH) == b'', BRANCH
-    baseline_bytes = (REPO / 'kit-manifest.json').read_bytes()
+    baseline_path = REPO / 'kit-manifest.json'
+    baseline_stat = baseline_path.lstat()
+    # record-install writes in place; an alias would add an unlisted destination.
+    assert (baseline_path.resolve() == baseline_path
+            and stat.S_ISREG(baseline_stat.st_mode)
+            and baseline_stat.st_nlink == 1), 'baseline must be a single-link regular file'
+    baseline_bytes = baseline_path.read_bytes()
     assert sha(baseline_bytes) == BASELINE
     baseline = json.loads(baseline_bytes)
     assert baseline['kit_commit'] == OLD
