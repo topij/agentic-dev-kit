@@ -288,6 +288,24 @@ remote deletion or evidence deletion.
   silently erase it. Check input branch/source identity and empty tracked diffs.
   Administrative history records the attempt; it is not claimed byte-unchanged.
 
+## Kit preparation verification
+
+The [complete author record](phase5-item5-b-update03-evidence_2026-09-11/author-verification.json.gz)
+retains `make test` from `/Users/topi/Coding/agentic-dev-kit` at
+`714261ed439655e76f01b65de5ea2e311e70b9fc` on 2026-09-11:
+`1 failed, 2529 passed, 1 skipped in 387.86s (0:06:27)`, make status `2`.
+The failure is #393's deep-JSON hook case; this is not a passing suite. The same
+record retains separate shell parses covering #561, the budget report and the
+source merge's hosted Test readback. Those checks are not fixture verification.
+
+The [committed validation](phase5-item5-b-update03-evidence_2026-09-11/committed-validation.json.gz)
+records the exact validator invocation and fresh audit at that revision/date/directory.
+The author record also preserves refusal of a wrong binding digest and optimized
+Python. The [whitespace check](phase5-item5-b-update03-evidence_2026-09-11/payload-whitespace-check.json)
+retains the intentional trailing-space input in the byte-identical portability-test
+payload; the remaining staged diff was checked separately. Historical UPDATE-02
+artifact equality is retained in the [preservation record](phase5-item5-b-update03-evidence_2026-09-11/historical-preservation.json).
+
 ## Preparation scope and exact decision
 
 The generic upgrade workflow's destination checks assume no concurrent writer to
