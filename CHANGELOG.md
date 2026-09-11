@@ -42,7 +42,7 @@ starts.
 
 ---
 
-## Pending PR identifier — 2026-09-11
+## #734 — 2026-09-11
 
 - **CHANGED** — Refresh the shared `upgrade.md` workflow and the shipped test files
   together. Upgrade now refuses invalid refresh destinations or unreadable manifest

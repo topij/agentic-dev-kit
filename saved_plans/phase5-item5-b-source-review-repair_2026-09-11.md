@@ -31,12 +31,24 @@ timeouts with captured output. The inherited special-file-root detector limitati
 remains accepted and unextended; ownership acceptance does not verify functionality
 or field exit.
 
-Validation and complete source-review/delivery receipts will be appended after the
-actual commands finish. Preserve #393 as a separate known test failure and cover
-#561's recipe gap with individual shell parses. Do not infer source coverage from
-installed-fixture results or from an incomplete reviewer.
+[PR #734](https://github.com/topij/agentic-dev-kit/pull/734) carries this source repair.
+The [author verification record](phase5-item5-b-source-review-repair-evidence_2026-09-11/author-verification.json.gz)
+retains complete argv, working directory, revision, date, status and output.
+`make test` in `/Users/topi/Coding/agentic-dev-kit` at
+`bcd497bf9e565b7f96ebc856d245a3d0c47b680d` on 2026-09-11 printed
+`2 failed, 2528 passed, 1 skipped in 390.50s (0:06:30)`. The failures were the
+known #393 deep-JSON case and the temporary changelog heading awaiting the forge's
+PR identifier. After creation assigned #734, the exact changelog extraction test
+named in the record printed `1 passed in 6.61s` at that revision/date/directory
+with the assigned heading in the working tree. This targeted correction does not
+turn the earlier full run into a passing one. The focused workflow/hook run and
+individual shell parses covering #561 are retained alongside it.
 
-**Next:** finish source verification and required review, then merge under the
+Required independent review and delivery receipts belong to PR #734. Do not infer
+source coverage from retained-fixture results or incomplete reviewers. The repair
+preserves #393 and #561 as separate limitations; it changes neither implementation.
+
+**Next:** complete PR #734's required review and pr-watch, then merge under the
 operator's scoped authority. Prepare a replacement retained-update packet against
 the delivered immutable source with a fresh read-only checkpoint comparison, new
 hash-bound payloads/ledger/baseline prediction, preservation/verification/rollback

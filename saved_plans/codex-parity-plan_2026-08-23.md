@@ -451,8 +451,11 @@ historical observation it was and is not silently refreshed.
      inherited FIFO-root gap and P3 root-symlink coverage gap; the [follow-up packet](phase5-item5-b-review-followup-decision_2026-09-10.md)
      was approved as ITEM5-B-KIT-REVIEW-02 on 2026-09-11. The [follow-up execution](phase5-item5-b-review-followup-execution_2026-09-11.md)
      records the applied scope, final panel and separately authorized merge of kit #731 as
-     `e6d6e77d118454349f8e8bb046e99ef3009c5f5c`. Prepare the next exact retained-update
-     decision packet; neither repair approval nor kit merge authorizes its execution.
+     `e6d6e77d118454349f8e8bb046e99ef3009c5f5c`. The subsequent UPDATE-02 preparation
+     in #733 led to the separately approved [source-review repair](phase5-item5-b-source-review-repair_2026-09-11.md)
+     in #734. Complete its required review and merge when clean, then prepare the
+     revised exact retained-update packet. Neither repair approval nor kit merge
+     authorizes retained execution. Preserve the old packet and review receipts.
      Fixture merge remains excluded; the nonfunctional custom
      wrap-up carries ownership acceptance only. No original continuity or prior field
      credit was recreated.
