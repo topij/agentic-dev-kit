@@ -1,0 +1,422 @@
+# ITEM5-B-UPDATE-03 — revised retained-update decision
+
+**Prepared; retained execution is not approved.** This replaces UPDATE-02 as the
+proposed next decision after the separately approved source repair. UPDATE-01 is
+consumed. The historical [UPDATE-02 packet](phase5-item5-b-update02-decision_2026-09-11.md),
+its unanswered question, payloads, ledgers and review evidence remain unchanged.
+Neither source-repair approval nor a kit record merge authorizes this update.
+
+The current question uses the revised audit, validator, ledger and binding named
+below. The [initial UPDATE-03 packet and unanswered question](phase5-item5-b-update03-evidence_2026-09-11/decision-round1.md.txt),
+initial programs and evidence remain unchanged as historical records. Use only the
+current `-r4` programs for validation. The [r2 packet and unanswered question](phase5-item5-b-update03-evidence_2026-09-11/decision-round2.md.txt)
+and its programs/evidence are also preserved. The [r3 packet and unanswered question](phase5-item5-b-update03-evidence_2026-09-11/decision-round3.md.txt)
+are historical as well. Earlier execution instructions do not carry the corrected
+Git environment into dependent commands; use only this packet and its current programs.
+
+## Delivered source and retained inputs
+
+The proposed source is exactly kit [#734](https://github.com/topij/agentic-dev-kit/pull/734)
+merge `7e0232ed871b37a315c5509c97b83d3b00b1a3fd`, reviewed at `7224547da0c766a4fd9ee5791e53ddb3f7db6cdf`.
+The [delivery checkpoint](https://github.com/topij/agentic-dev-kit/pull/734#issuecomment-5637494093)
+and [raw delivery record](phase5-item5-b-update03-evidence_2026-09-11/source-delivery.json.gz)
+retain the exact-head merge, forge readback and completed watch. The
+[complete source panel record](phase5-item5-b-update03-evidence_2026-09-11/source-review-round1.json.gz)
+retains the adversarial/correctness reports, actual compute, commands, outputs,
+mutation diffs and restoration evidence. These source reviews do not complete the
+historically interrupted UPDATE-02 reviewers or verify a retained installation.
+
+The approved source repair adds the workflow and harness corrections to #731's
+repair. The new fixture payload set therefore includes the initializer-workflow and
+portability tests as well as the workflow, conftest and state-guard test. The
+source merge and reviewed head have the same Git tree, required by the audit.
+No moving branch is a source selection.
+
+The [forge readback](phase5-item5-b-update03-evidence_2026-09-11/forge-readback.json.gz)
+retains paginated `gh api` reviews/comments and `gh pr view` from
+`/Users/topi/Coding/agentic-dev-kit` at `7224547da0c766a4fd9ee5791e53ddb3f7db6cdf` on 2026-09-11. It reconfirmed:
+
+- #732 merge `bc0c33a3af93d78545050612649f49fa72107a40`, reviewed head
+  `3927f40befb75694b1efaa7b994c2bacf0a41ece`, and the complete
+  [completion checkpoint](https://github.com/topij/agentic-dev-kit/pull/732#issuecomment-5631092756).
+- #731 merge `e6d6e77d118454349f8e8bb046e99ef3009c5f5c`, reviewed head
+  `1bd4e10b423b0b4b230fb1a481bbc477de784a61`, and the complete
+  [delivery checkpoint](https://github.com/topij/agentic-dev-kit/pull/731#issuecomment-5629015678).
+- The fixture's private repository identity, PR #1 base/head/body/file/check tuple
+  and complete original review-receipt body hashes matched
+  [forge-after-exit](phase5-item5-b-acceptance-execution-evidence_2026-09-10/forge-after-exit.json).
+
+For later approved execution, bind these literal roots:
+
+```sh
+COCKPIT=/Users/topi/Coding/agentic-dev-kit
+REPO=/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture
+KIT=/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source
+OUT=/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-7e0232e-20260911
+```
+
+Required fixture input: `f770f183bf6691f1f706c676b740cf2ef5ceb766`, branch
+`chore/item5-b-field-exit`, origin `https://github.com/topij/adk-item5-b-field-20260909.git`.
+Required source input: detached `60fe0dc7ad68922d064c0cf401cff2c4c6d607ac`, no remote.
+Required fixture baseline SHA-256:
+`9e2196df3b7239b599819abcfc20271b0389b70f78f22837a0709575145b9126`.
+
+`python3 -B /Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-update03-audit-r4_2026-09-11.py.txt`
+ran from the cockpit at `2335396b4b4feb6420b69e8eaafac6d7e0a5f38c` on 2026-09-11,
+with `PYTHONOPTIMIZE` unset and the execution-boundary correction in the working tree. The
+[audit result](phase5-item5-b-update03-evidence_2026-09-11/audit-r4.json.gz) reports
+`matches-post-acceptance-checkpoints; proposal-only`. It imports only the committed
+acceptance audit's read-only inventory/identity helpers; it never invokes historical
+UPDATE FINAL equality. Python optimization is refused before loading the helpers.
+The revised audit compares filesystem and administration inventories for both roots
+before invoking either identity helper. Its Git reads ignore global/system Git
+configuration, override the external attributes file to `/dev/null`, and disable
+fsmonitor. The helper receives those subprocess controls temporarily after inherited
+Git controls are refused; they are removed even on failure. The audit's direct Git
+reads use the same controls, and the validator reports the fresh audit's revision
+without an additional unisolated Git query. This changes no retained or host settings
+file. The [Git documentation](https://git-scm.com/docs/git)
+defines the global/system configuration overrides. Require no concurrent writers
+through the audit; inventory equality is not a race-proof snapshot and does not
+compare file timestamps.
+
+The before/after comparison matches
+[retained-final](phase5-item5-b-review-followup-evidence_2026-09-10/retained-final.json.gz):
+non-Git descendants, Git administration, file kinds/content/modes/link targets,
+ignored/cache bytes, refs/index/config/remotes and branch/detached identity. Typed
+tracked/merged config and item 6 replay hashes are compared independently. The
+inherited helpers omit the supplied fixture/source and `.git` roots' own modes;
+this observation does not verify those modes or absence of transient intervening writes.
+These exact original paths were absent in that observation. Never reconstruct them:
+
+- `/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture`
+- `/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source`
+
+## Required decision and act-time validation
+
+The [prepared-input binding](phase5-item5-b-update03-evidence_2026-09-11/prepared-input-binding-r4.json)
+SHA-256 is `cc5ec672ebece9ed82cd9f2c5e4667d859396d6a28cb9c0c1c8acadeb0ad0d55`. It binds the current audit/validator/command runner, helper and checkpoints,
+config/replay expectations, recorded audit, source delivery, unresolved source findings,
+forge readback, ledger,
+supplied payloads and predicted baseline. The validator also compares supplied
+payload bytes with the ledger, then reruns the audit and requires stable proposal
+fields and retained inputs to agree. These are preparation safeguards, not authority.
+
+Run from `$COCKPIT` before deciding and again immediately before any approved execution:
+
+```sh
+env -u PYTHONOPTIMIZE python3 -B "$COCKPIT/saved_plans/phase5-item5-b-update03-validate-r4_2026-09-11.py.txt" \
+  --binding-sha256 cc5ec672ebece9ed82cd9f2c5e4667d859396d6a28cb9c0c1c8acadeb0ad0d55
+```
+
+The [prepared validation](phase5-item5-b-update03-evidence_2026-09-11/prepared-validation-r4.json.gz)
+retains the validator's `python3 -B` invocation with that binding digest and
+`PYTHONOPTIMIZE` unset, at the audit's revision/date/directory with candidate changes: `prepared-inputs-and-program-binding-verified; proposal-only`. Re-read the
+fixture forge tuple and original complete receipts separately at act time; the
+validator checks the bound recorded forge bytes and does not poll the forge.
+A changed source, payload, input, ownership, scope, verification requirement or
+binding stops dependent work for an amended packet and exact decision. Preserve
+historical evidence instead of editing it to match.
+
+## Normative destination ledger
+
+The [ledger](phase5-item5-b-update03-evidence_2026-09-11/proposed-writes-r4.json)
+SHA-256 is `141408cc180def2dd1bb3c1dc448f16b2b45a486dc083afeb184b7e2e71937f1`. It supplies literal source/destination paths, before/after hashes,
+Git blobs and modes, the complete source checkout delta and predicted install baseline.
+The fixture source-to-destination mapping retains kit-layout manifest keys and maps
+`scripts/` to `scripts/devkit/`. Only the following fixture files may change:
+
+| Fixture destination | Bound source payload |
+|---|---|
+| `$REPO/docs/agentic-dev-kit/workflows/upgrade.md` | [workflow](phase5-item5-b-update03-evidence_2026-09-11/payloads/docs/agentic-dev-kit/workflows/upgrade.md.txt) |
+| `$REPO/scripts/devkit/conftest.py` | [leak hook](phase5-item5-b-update03-evidence_2026-09-11/payloads/scripts/conftest.py.txt) |
+| `$REPO/scripts/devkit/tests/test_init_sh.py` | [workflow tests](phase5-item5-b-update03-evidence_2026-09-11/payloads/scripts/tests/test_init_sh.py.txt) |
+| `$REPO/scripts/devkit/tests/test_portability.py` | [verification-command tests](phase5-item5-b-update03-evidence_2026-09-11/payloads/scripts/tests/test_portability.py.txt) |
+| `$REPO/scripts/devkit/tests/test_state_guard.py` | [state-guard tests](phase5-item5-b-update03-evidence_2026-09-11/payloads/scripts/tests/test_state_guard.py.txt) |
+| `$REPO/kit-manifest.json` | [predicted install baseline](phase5-item5-b-update03-evidence_2026-09-11/payloads/kit-manifest.json.txt), generated from actual destination bytes, never copied from the source release manifest |
+
+The predicted baseline SHA-256 is `e02fda03c4119b0deb9cba6fbf37818831f3244c9f3fc1e8b37fd79e9768291b`. This is a proposed constant. Change
+only `kit_commit` and the listed installed-file hashes; preserve `kit_version`,
+installed scope, `adopter_owned` and `not_installed`. Do not add release-only
+`required_by` metadata. Recording a baseline establishes bytes, not working behavior.
+
+| Other destination | Proposed write boundary |
+|---|---|
+| `$KIT` tracked paths | Advance the detached checkout to `7e0232ed871b37a315c5509c97b83d3b00b1a3fd` and apply exactly `source_checkout_writes`. This includes source-only records and release metadata, which are not fixture payloads. Preserve existing ignored bytes; add only parents needed for listed additions. |
+| `$KIT/.git` | Fetch the exact source locally from `$COCKPIT` using `--no-tags --no-write-fetch-head --no-auto-maintenance --no-recurse-submodules`, then detach at that source. Observe generated object/index/HEAD/reflog/lock changes; preserve config, remotes and existing branch refs. |
+| `$REPO/.git` | Create the absent `chore/item5-b-update-7e0232e` from the fixture input; stage only the listed fixture payloads and baseline and commit the attempt. Preserve all existing refs, including `chore/item5-b-field-exit`. Observe Git-generated objects/index/HEAD/reflog/commit-message/lock changes. No push or remote/config change. |
+| `$OUT` | Create only if absent. Store exact authority and copied packet/ledger, before/attempt/final inventories, verified byte archives and Git bundles, command/environment/time/status/output records, destination/config/baseline reports and hash index. Permit `source-verification/`, `fixture-state/`, `source-state/`, role-specific pytest caches, `uv-cache/`, `uv-tools/`, `ruff-cache/` and `tmp/` for declared verification. Do not reuse historical evidence paths. |
+| Scoped kit records | Record any later exact decision and execution in new records, maintain sprint/handoff, and finish a ready kit record PR through pr-watch and standing scoped merge authority. Preserve historical approval questions, ledgers and evidence. |
+
+## Preservation and limits
+
+The audit's `preserve_fixture_inventory` is the complete non-Git preservation set:
+every fixture path except the ledger payloads and baseline. Keep the accepted
+markerless `AGENTS.md`, `CLAUDE.md`, configured roadmap/history/friction documents,
+tracked and ignored config, lane policy, hooks/registrations, generated adapters
+and lenses, custom wrap-up, initializer, ignored/cache files and CI workflow at their
+recorded bytes, modes and file kinds. Preserve `.git/hooks/pre-push` and Git config
+from the administration checkpoint. Required fixture parents already exist.
+
+ACCEPT-01 remains ownership acceptance only. The custom wrap-up's `Preserve this
+adapter.` body is deliberately nonfunctional; keeping it does not verify wrap-up.
+Doctor or adapter classifications are not client loading/trust/execution evidence.
+
+**Accepted inherited limitation:** special-file roots remain outside this repair's
+coverage. In particular, a FIFO at the state root remains invisible to the inherited
+snapshot and can obstruct engine state persistence. No special-file detection or recovery is supplied or claimed.
+Regular-file/root-symlink checks do not establish special-file safety. If such a
+root or an unexpected file kind is found before execution, stop for a separate
+decision; do not open it to probe behavior or silently widen this update.
+
+**Unresolved source follow-ups, outside this proposed execution:** CodeRabbit's
+[kit-fetch failure](https://github.com/topij/agentic-dev-kit/pull/733#discussion_r3991936696)
+and [branch-creation failure](https://github.com/topij/agentic-dev-kit/pull/733#discussion_r3991936706)
+findings concern the generic upgrade workflow in the selected source. Its clone
+bootstrap can continue with a stale existing checkout, and its branch creation can
+fail without stopping later mutations. The [bound finding record](phase5-item5-b-update03-evidence_2026-09-11/source-followup-findings.json.gz)
+preserves the complete findings and scoped replies. This packet excludes executing
+generic upgrade and initialization and uses the ledger's own local source/branch
+preconditions and stop-on-failure requirements. No generic-upgrade functionality,
+source repair for these findings, tracker action, or operator-approved deferral is
+claimed. Any such source repair needs its own scope decision; the frozen payloads
+must not be edited independently of their selected source. These unresolved
+follow-ups are separate from the accepted inherited detector limitation and #723.
+
+This local proposal deliberately leaves fixture PR #1 at its recorded head. Its
+adopter-owned CI workflow and PR body still name source `60fe0dc...`; their retained
+hosted result cannot verify the proposed source or a new local fixture commit.
+Continuing that PR needs a separately reviewed exact CI/body/publication/review
+decision. No existing approval is used to push the new branch, retarget the PR,
+close it, change its draft state or merge it. Fixture merge remains excluded.
+
+No initialization, hook installation, configuration migration, adapter/lens refresh,
+client/trust/profile exercise, fixture settings change, tracker/notification payload,
+live triage/systemize route, broad cleanup or replay is included. The kit's own
+independent record reviewers are not fixture field exercises.
+
+## Execution order and verification, only after approval
+
+Before every write sequence, enter the owning absolute root and assert `pwd -P`
+equals it. Use absolute paths for every write and hash the intended destinations.
+Reject symlink aliases, nonregular or multiply-linked copy targets and aliased
+parents. Apply these checks explicitly to `kit-manifest.json` as well: its
+`--record-install` writer writes in place, so a hardlink would change an unlisted
+alias. The audit checks its lexical path, regular-file kind and single-link status
+before accepting inputs; recheck them immediately before the baseline command.
+The fixture and source Git administration must contain only lexical directories
+and single-link regular files. The audit rejects linked reflogs and other aliased
+Git paths before any dependent write. Immediately before each Git mutation sequence
+(including rollback), recheck both retained administrations with this read-only guard.
+
+The audit and command runner reject inherited `GIT_*` environment controls,
+except an absent `GIT_PAGER` or literal `GIT_PAGER=cat`. This includes reads.
+Correct a refused invoking environment and rerun validation; do not silently strip
+its controls. Do not export the runner's controls into the parent shell: each
+invocation checks the original caller, constructs an isolated child environment,
+and passes it explicitly to the command and its descendants. Global/system Git
+configuration is disabled; fsmonitor and the external attributes file are overridden.
+No host or retained configuration file is edited.
+
+After exact UPDATE-03 approval, define this invocation function in the checked shell:
+
+```sh
+run_declared() {
+  env -u PYTHONOPTIMIZE python3 -B "$COCKPIT/saved_plans/phase5-item5-b-update03-command-r4_2026-09-11.py.txt" "$@"
+}
+```
+
+For every declared dependent command, first enter its owning directory, assert
+`pwd -P`, and invoke `run_declared "$OWNER" <literal command and arguments>`.
+This is mandatory for Git reads/mutations, fetch/checkout/branch/stage/commit,
+bundles, baseline generation, doctor/tests and rollback, including nested Git calls.
+The runner checks both retained administrations immediately before invoking each
+command, passes the bound controls, and propagates command failure. It preserves
+stdin, so the baseline heredoc below reaches its Python child. A refusal or command
+failure stops the sequence. The runner supplies configuration isolation; it does
+not enforce the write ledger or grant approval. Preserve the packet's separate
+path/hash/ref/ownership checks and no-concurrent-writer requirement.
+
+Run the audit/validator directly with their documented invocation, outside this
+function: they already isolate their own Git reads and deliberately reject inherited
+controls. Evidence writes and ordinary filesystem operations still require their
+own ledger/path checks; the runner is not a filesystem sandbox.
+
+Require complete checkpoint equality, empty status/index, exact input
+refs/remotes and absent attempt branch/evidence root. Re-read the fixture forge
+tuple and original complete review receipts before any fix; a mismatch stops.
+Do not reinterpret UPDATE FINAL as today's checkpoint.
+
+Create and verify new fixture/source non-Git byte archives with modes and link
+targets, plus Git bundles containing input HEADs and existing refs, before changing
+either retained tree. Save administration inventories separately; a bundle is not
+a backup of ignored bytes or Git config/hooks. Verify archive membership/content
+and bundle integrity, then perform the ledger's source fetch/checkout. Check every
+tracked source destination against its Git blob, additionally check release-manifest
+hashes for manifest-listed source files, and require the full source delta to equal
+the ledger. Source-only records without manifest entries remain bound by the ledger
+and Git blobs.
+
+Create the new fixture branch from the input and copy only its payloads. Compare
+full typed config through the installed destination reader against the audit's
+independent expected mappings. Compare every preserved path, then run from `$REPO`:
+
+```sh
+run_declared "$REPO" python3 -B - "$REPO" "$KIT" <<'PYBASELINE'
+import stat
+import subprocess
+import sys
+from pathlib import Path
+repo, kit = map(Path, sys.argv[1:])
+p = repo / 'kit-manifest.json'
+s = p.lstat()
+assert p.resolve() == p and stat.S_ISREG(s.st_mode) and s.st_nlink == 1
+subprocess.run([sys.executable, '-B', str(repo / 'scripts/devkit/kit_doctor.py'),
+                '--root', str(repo), '--record-install', '--from-kit', str(kit)],
+               check=True)
+PYBASELINE
+```
+
+Capture stdout/stderr under `$OUT`, never redirect into the baseline. Require
+actual baseline bytes to equal the predicted payload. Read staged-path validation
+and `git diff --cached --check` before a separate commit invocation. Commit the
+attempt before suites so fixture results name an immutable revision. Because global
+Git identity is excluded, bind the local commit to the ledger's declared identity:
+invoke `git -c user.name="Topi Järvinen" -c user.email="topi.jarvinen@gmail.com" commit`
+through `run_declared "$REPO"`, with the reviewed local-attempt message. These per-command identity values
+change no configuration file. No concurrent
+test, checkout, stage, commit, baseline or other checkout-state writers.
+
+Route nonempty role-specific `DEVKIT_STATE_ROOT`, `UV_CACHE_DIR`, `UV_TOOL_DIR`,
+`RUFF_CACHE_DIR`, `TMPDIR` and pytest cache paths under `$OUT` before any tool starts.
+Set `PYTHONDONTWRITEBYTECODE=1`, unset `PYTHONOPTIMIZE`, and use `python -B`.
+Record actual environment, argv, cwd, input/source/attempt SHAs, date, start/end,
+exit status and full unmodified output. Run suites serially, without arbitrary
+wall-clock kills; actively wait for terminal output and read pytest's actual summary.
+
+Every command in this table must be prefixed with `run_declared` and its listed
+owning directory after entering that directory. Set the output/cache environment
+before invoking the runner, so descendants inherit both the output paths and Git
+isolation. Clone source verification from `$OUT` through the same runner.
+
+| Command / working directory | Required evidence and boundary |
+|---|---|
+| `python3 -B "$REPO/scripts/devkit/kit_doctor.py" --root "$REPO" --manifest "$KIT/kit-manifest.json" --json` / `$REPO` | Full installed-byte/dependency/baseline report; no unverified mismatch or unapproved decline. No client/function claim. |
+| `python3 -B "$KIT/scripts/kit_doctor.py" --root "$REPO" --adapter-report --adapter-source "$KIT" --json` / `$REPO` | Preserve the accepted custom wrap-up's `adopter-owned` classification and the expected generated bindings/lenses. Keep the newline-normalized comparison limit explicit. |
+| `python3 -B "$REPO/scripts/devkit/check_doc_budget.py"` / `$REPO` | Configured fixture budget report. No archival workflow execution. |
+| `uv run --with pytest --with pyyaml python -B "$REPO/scripts/devkit/run_installed_tests.py" --root "$REPO"` / `$REPO` | Complete manifest-selected installed suite at the attempt SHA; retain selection, skips/reasons, summary and status. No deselection rerun substitutes for this result. |
+| `make test` / `$OUT/source-verification` | Clone independently with `git clone --no-hardlinks --no-checkout "$KIT" "$OUT/source-verification"`, detach the clone at the proposed source, then run source lint/syntax/pytest. This avoids verification caches in retained `$KIT`. |
+| Separate `bash -n` for `scripts/dev_session.sh`, `scripts/reconcile_sessions.sh`, `scripts/lib/repo_root.sh`, `scripts/hooks/pre-push`, and `sh -n init.sh` / source verification clone | Invoke each with its absolute clone path. These cover #561's known recipe gap; they do not repair it or execute shell behavior. |
+| Destination hashes, full inventories, typed config, baseline, Git identity and replay comparison after commands / cockpit with absolute roots | Permit only declared deltas and attempt-owned output. Keep source and fixture verification observations distinct. |
+
+The retained fixture has no project Makefile: do not import one or claim fixture
+`make test`. Source `make test` remains mandatory. Disclose the known #393 deep-JSON
+failure separately, using its actual traceback; never call a failing suite passing.
+A different failure, changed skip scope, missing terminal summary, unexpected write
+or source/payload mismatch stops execution for assessment. Do not repair tests or
+change selection in this attempt. Successful installed verification would establish
+only that recorded run at that fixture SHA; it does not complete field exit.
+
+## Conditional rollback
+
+Retain logs and the attempted state before undo. Rollback is limited to this
+attempt's ledger, conditional on destinations, index and refs still matching the
+recorded attempt. Intervening work or ambiguous partial checkout/fetch stops for
+a new decision. No broad reset/clean, recursive removal, historical rollback,
+remote deletion or evidence deletion.
+
+- Before any undo of an uncommitted fixture, capture NUL-delimited staged paths
+  against `f770f183bf6691f1f706c676b740cf2ef5ceb766`; require every path to be in
+  the fixture ledger. Unrelated staged work stops both fixture and source undo.
+- If source advanced and its detached HEAD/index/tracked bytes still match the
+  proposed source, switch it detached back to `60fe0dc7ad68922d064c0cf401cff2c4c6d607ac`.
+  If it never advanced, no source undo is needed. Preserve fetched objects and
+  administrative history; do not restore old files under an advanced HEAD.
+- For an uncommitted fixture, restore only the replaced payload/baseline bytes and
+  modes from verified before-archives. Restore only the captured staged paths
+  with `git restore --source=f770f183bf6691f1f706c676b740cf2ef5ceb766 --staged --`
+  followed by literal path arguments; skip that command for an empty set. Require
+  empty staged/worktree diffs before switching back to `chore/item5-b-field-exit`.
+- For a committed fixture attempt with no later work, switch back to unchanged
+  `chore/item5-b-field-exit` at the input. Keep the attempt branch/commit and evidence.
+  No existing remote branch was moved, so no remote undo is proposed.
+- Hash restored destinations and compare complete non-Git inventories to before
+  snapshots. Preserve pre-existing ignored/cache bytes. An unexpected cache or
+  administration change requires its own named restoration decision; do not
+  silently erase it. Check input branch/source identity and empty tracked diffs.
+  Administrative history records the attempt; it is not claimed byte-unchanged.
+
+## Kit preparation verification
+
+The [r3 full-panel archive](phase5-item5-b-update03-evidence_2026-09-11/packet-review-round3.json.gz)
+retains complete reports, actual compute, commands/output, mutations and restoration
+at `2335396b4b4feb6420b69e8eaafac6d7e0a5f38c` on 2026-09-11. Complete
+[adversarial](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5639054172)
+and [correctness](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5639054892)
+receipts preceded this fix. Their P2 probes reproduced global hooks/tracing writes
+through later packet commands. The adversarial P3 system-isolation mutation survived
+the earlier regression suite. This revision carries isolation into dependent
+commands and adds a synthetic system-config backend with a real Git positive control.
+No host system/global config was changed to test it.
+
+`python3 -B /Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-update03-audit-regression-r4_2026-09-11.py.txt /private/tmp/item5-b-update03-prep-20260911`
+from `/Users/topi/Coding/agentic-dev-kit` at `2335396b4b4feb6420b69e8eaafac6d7e0a5f38c`
+on 2026-09-11, with this correction in the working tree, returned `OK`. The
+[regression record](phase5-item5-b-update03-evidence_2026-09-11/audit-regression-r4.json.gz)
+retains the result. It covers declared and nested Git commands, caller-control
+refusal, command-failure propagation and system tracing, with executing positive
+controls, alongside the preserved read-isolation tests.
+
+`make test` at `2335396b4b4feb6420b69e8eaafac6d7e0a5f38c` on 2026-09-11 in
+`/Users/topi/Coding/agentic-dev-kit`, with this correction in the working tree and
+the declared child Git controls, printed `1 failed, 2529 passed, 1 skipped in 403.26s (0:06:43)`,
+make status `2`. The actual failure was #393's deep-JSON hook-output assertion.
+This is not a passing local suite. The [author verification record](phase5-item5-b-update03-evidence_2026-09-11/author-verification-r4.json.gz)
+retains the full `env ... make test` argv, output, current binding validation,
+refusal checks and separate shell parses for #561. Its r3 forge readback matched
+the fixture checkpoint and original receipt hashes and reconfirmed #731/#732/#734
+at that revision/date/directory. Those observations do not verify a retained update.
+
+Earlier preparation verification and source-finding dispositions remain in the
+[preserved r3 packet](phase5-item5-b-update03-evidence_2026-09-11/decision-round3.md.txt)
+and its linked records. The frozen fixture payloads, source revision and predicted
+baseline are unchanged. The current ledger additionally binds the dependent-command
+policy and local commit identity. The [preservation record](phase5-item5-b-update03-evidence_2026-09-11/preserved-artifacts-r4.json)
+compares historical artifacts without rewriting their evidence or questions.
+
+## Preparation scope and exact decision
+
+The generic upgrade workflow's destination checks assume no concurrent writer to
+checked paths through refresh. CodeRabbit resolved the source finding under that
+existing condition; descriptor-based confinement was not added. This proposal does
+not execute generic upgrade or initialization. The inherited special-file-root
+limitation above remains a separate accepted detector limitation.
+
+The source repair's complete receipts preceded its delivery. This revised packet
+selects that new source and binds its expanded payload set; it does not retrospectively
+complete UPDATE-02's interrupted reviews. PR #733 owns this packet's required review
+and delivery. Kit preparation and review are not retained-field execution.
+
+**Approval question:** Do you approve **ITEM5-B-UPDATE-03 as scoped in this packet,
+ledger SHA-256 `141408cc180def2dd1bb3c1dc448f16b2b45a486dc083afeb184b7e2e71937f1` and prepared-input binding SHA-256 `cc5ec672ebece9ed82cd9f2c5e4667d859396d6a28cb9c0c1c8acadeb0ad0d55`**: advance the
+retained source to `7e0232ed871b37a315c5509c97b83d3b00b1a3fd`, apply only the listed fixture payloads, record the predicted
+baseline, create the named local attempt branch/commit and evidence root, run the
+declared local verification and conditional rollback, and deliver the resulting
+scoped kit records, while retaining the accepted special-file-root limitation and
+excluding fixture publication/PR continuation/merge, generic upgrade, initialization, client/trust/profile
+exercises, settings changes and tracker payloads?
+
+Preparation, silence, source-repair approval and kit record review/merge are not an
+answer. Retain the exact response and the packet/ledger/binding identities before
+any approved execution. UPDATE-01 remains consumed; UPDATE-02 remains unanswered.
+
+The [maintained sprint status](codex-parity-plan_2026-08-23.md#sprint-status--reconciled-2026-09-10)
+keeps Phase 5 item 5 incomplete. Ownership acceptance, functional verification and
+field-exit completion remain separate. Item 6/replay remains complete without repeat
+or new credit for cs-toolkit #2222/#2223/#2255. #723 remains the approved upstream
+deferral; #585 stays earlier outside Phase 6; #724 delivered the #722 batch.
+The friction sweep stays parked pending its exact operator decision.
+
+**Next session:** revalidate UPDATE-03's bound inputs and obtain the exact approval
+above before retained execution. Fixture PR continuation and remaining field exit
+remain separate decisions; fixture merge remains excluded.

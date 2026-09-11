@@ -14,25 +14,37 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-11 — ITEM5-B source follow-up approved; retained update remains separate.
+Last updated: 2026-09-11 — source repair delivered; revised retained-update decision prepared.
 Phase 5 delivery item 5 remains incomplete; item 6's replay remains complete.
 
-## Latest session — 2026-09-11 (ITEM5-B source-review follow-up, in Codex)
+## Latest session — 2026-09-11 (ITEM5-B revised retained-update packet, in Codex)
 
-The operator approved the kit-only source repair, tests/release metadata, required
-review and merge when clean, followed by preparation of a revised retained-update
-packet. The [source repair record](../saved_plans/phase5-item5-b-source-review-repair_2026-09-11.md)
-retains the exact approval, complete pre-fix review receipt and author verification.
-[PR #734](https://github.com/topij/agentic-dev-kit/pull/734) carries that work; #733
-preserves the earlier unapproved packet and incomplete review history.
+The operator-approved source repair [#734](https://github.com/topij/agentic-dev-kit/pull/734)
+merged as `7e0232ed871b37a315c5509c97b83d3b00b1a3fd`, from reviewed head `7224547da0c766a4fd9ee5791e53ddb3f7db6cdf`. Its
+[delivery checkpoint](https://github.com/topij/agentic-dev-kit/pull/734#issuecomment-5637494093)
+retains the exact-head watch/merge, complete panel receipts, CodeRabbit disposition
+and local #393 versus hosted verification limits. Separate shell parses account for
+#561's recipe gap. The source repair did not update the retained installation.
 
-No retained fixture/source update is approved. The special-file-root limitation,
-ownership/function/field-exit distinctions, item 6/replay completion, #723 deferral,
-#585 placement and delivered #724/#722 batch remain. The friction sweep stays parked.
+The [UPDATE-03 packet](../saved_plans/phase5-item5-b-update03-decision_2026-09-11.md)
+selects that immutable source and binds payloads, write ledger, baseline prediction,
+preservation, verification, limits, rollback and an exact approval question. Its
+read-only audit and forge records retain post-acceptance checkpoint comparisons.
+The packet retains complete review receipts before its audit-ordering correction,
+with earlier UPDATE-03 questions/evidence preserved and the current `-r5` binding
+explicit. The packet records unresolved generic-upgrade bootstrap findings outside
+its proposed execution; no further source repair or approved deferral is claimed. PR #733 owns packet review/delivery. UPDATE-01 is consumed; UPDATE-02 and its old
+questions, payloads, ledgers and incomplete review receipts remain preserved.
 
-▶ Next: complete PR #734's required review and pr-watch, merge under the explicit
-operator authority, then prepare the revised packet against the delivered source.
-Obtain its exact retained-update approval before execution. Fixture merge stays excluded.
+No retained update is approved. Ownership acceptance does not establish custom
+wrap-up functionality, client verification or field exit. The accepted inherited
+special-file-root limitation remains. Item 6/replay, #723's approved deferral,
+#585's earlier placement and #724's delivered #722 batch are preserved. The friction
+sweep stays parked; no credited exercise is repeated.
+
+▶ Next: revalidate UPDATE-03's bound inputs and obtain its exact approval before
+retained execution. Fixture PR continuation requires a separate decision; fixture
+merge stays excluded.
 
 ______________________________________________________________________
 
@@ -59,7 +71,7 @@ Ownership acceptance does not establish functionality or field exit. The repair 
 not update the retained installation. Item 6's replay, #723's deferral, #585's earlier
 placement and #724's delivered #722 batch are preserved. The friction sweep stays parked.
 
-The latest session block owns the subsequent source follow-up and next decision.
+The latest session block owns the revised packet and next decision.
 
 ______________________________________________________________________
 

@@ -1,0 +1,26 @@
+{
+  "approved": false,
+  "candidate_worktree": true,
+  "decision": "ITEM5-B-UPDATE-03",
+  "files": {
+    "saved_plans/phase5-item5-b-acceptance-audit_2026-09-10.py.txt": "3902a43b0ede7a08ae8b12449981a2070a05056d1b49a43be36a7932801c829d",
+    "saved_plans/phase5-item5-b-acceptance-execution-evidence_2026-09-10/forge-after-exit.json": "12d67b35b68dcd2efd23d43995c17c8729ee7b66b28990e9a112d9de75c9f392",
+    "saved_plans/phase5-item5-b-review-followup-evidence_2026-09-10/retained-final.json.gz": "8abb40d8d7afb212d08369870305e5fa61270e0857a4f2779ad00b38f3b04023",
+    "saved_plans/phase5-item5-b-update-evidence_2026-09-10/configuration-final.json": "b7630df29be9706f42cf7ff4cae4d93905d4126cf6efc7287e6acda34c7f4357",
+    "saved_plans/phase5-item5-b-update-evidence_2026-09-10/replay-evidence-final.json": "3d73abedb9cc48129a78e0ea37846c50c2bfcffb35ce5a5136337d8ee9df1496",
+    "saved_plans/phase5-item5-b-update03-audit_2026-09-11.py.txt": "45f1423b880e343c932b1e1aa8a159c91aeced0f435b44941ce45fdea745bcdd",
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/audit.json.gz": "0c1009d698dfac50125b6ee72a78b68d98e508c83832d864f3640a94a8178980",
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/forge-readback.json.gz": "b4d21c24c0fef519201bc98545e2d5f0bca817630655cb8ff62321bc18f9e436",
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/payloads/docs/agentic-dev-kit/workflows/upgrade.md.txt": "ef328af59f53a619e373c8f9bead1daf20b1f58715fa27c1e583b66ee0513623",
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/payloads/kit-manifest.json.txt": "e02fda03c4119b0deb9cba6fbf37818831f3244c9f3fc1e8b37fd79e9768291b",
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/payloads/scripts/conftest.py.txt": "b43fc728bbb1a5a71e6f91afcd37a07940014cceb34f073a0617fe2047a75e16",
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/payloads/scripts/tests/test_init_sh.py.txt": "41ad37977dad41e6ec739bef369138d93e1f4ad9ff7036172ee8e61cb36c49a4",
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/payloads/scripts/tests/test_portability.py.txt": "0bc0e8fc7deb7a10b580c21a10670b3a04b802518d486ebcf062cb894cd8c1ec",
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/payloads/scripts/tests/test_state_guard.py.txt": "e4a4c5614250ac46509e706507317d1cb40338b1bba51699c902b7269bc84433",
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/proposed-writes.json": "14e6cbe6a8f9be4ade5265a76d6625769a05dbfcbc4f3c4d1a380e809b1efcaa",
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/source-delivery.json.gz": "be68fb1d3baebb38d46d9ecb87158ad0ff880ef68c97cde72f77ad2d40bc2478",
+    "saved_plans/phase5-item5-b-update03-validate_2026-09-11.py.txt": "46a3abd41bc7f32926e8f48276a82331608ead047af7f5a42fd086e6edd5db8c"
+  },
+  "observed_at": "2026-09-11T16:31:28.504840+00:00",
+  "revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca"
+}

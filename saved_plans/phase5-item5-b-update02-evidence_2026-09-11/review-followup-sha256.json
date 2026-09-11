@@ -1,0 +1,8 @@
+{
+  "audit-git-administration.json.gz": "074d553d639a39c9809f69b07369d34d897b5925e9f76a29589ada3c78c5f3dd",
+  "binding-proof.json.gz": "710f86552dde9f94ddca9f53bace7fd2efc92dca021d0d9a64069f117fb1bbf2",
+  "git-administration-proof.json.gz": "a8d6c637336c2c1c617f092c84d654e5a823ebf821871c7a208dbef6f7d1204c",
+  "prepared-input-binding.json": "5da0479eb7e06d867d0836f0a700259b6f4cc031d56afc346b1b0e159d2ee7f6",
+  "prepared-validation.json.gz": "29f8b3d57b48a70d3a027032e59062b8528cbeaf6e8b97477bc0f3179eb16796",
+  "review-round2.json.gz": "92cac76f73613c0b374be71f8c64c982d11bebad893d153ff9d2d7fc5f5c7a35"
+}

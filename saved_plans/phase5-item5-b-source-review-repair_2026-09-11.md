@@ -44,16 +44,20 @@ with the assigned heading in the working tree. This targeted correction does not
 turn the earlier full run into a passing one. The focused workflow/hook run and
 individual shell parses covering #561 are retained alongside it.
 
-Required independent review and delivery receipts belong to PR #734. Do not infer
-source coverage from retained-fixture results or incomplete reviewers. The repair
-preserves #393 and #561 as separate limitations; it changes neither implementation.
+The [delivery checkpoint](https://github.com/topij/agentic-dev-kit/pull/734#issuecomment-5637494093)
+retains the completed independent reports, CodeRabbit disposition and exact-head
+watch/merge. `gh pr view 734 --repo topij/agentic-dev-kit` with the JSON fields in
+that checkpoint, from `/Users/topi/Coding/agentic-dev-kit` at
+`7224547da0c766a4fd9ee5791e53ddb3f7db6cdf` on 2026-09-11, read back merge `7e0232ed871b37a315c5509c97b83d3b00b1a3fd`.
+The source repair preserves #393 and #561 as separate limitations; their
+implementations are unchanged. No source coverage is inferred from retained-fixture
+results or historically incomplete reviewers.
 
-**Next:** complete PR #734's required review and pr-watch, then merge under the
-operator's scoped authority. Prepare a replacement retained-update packet against
-the delivered immutable source with a fresh read-only checkpoint comparison, new
-hash-bound payloads/ledger/baseline prediction, preservation/verification/rollback
-and exact approval question. Preserve UPDATE-01's consumed decision and historical
-UPDATE-02 records. No retained update follows without its separate exact approval.
+**Next decision:** the [UPDATE-03 packet](phase5-item5-b-update03-decision_2026-09-11.md)
+selects the delivered immutable source with fresh checkpoint evidence, bound payloads,
+ledger/baseline prediction, preservation/verification/rollback and an exact question.
+UPDATE-01 remains consumed and historical UPDATE-02 records remain unchanged.
+No retained update follows without its separate exact approval.
 
 Phase 5 item 5 remains incomplete; item 6 and replay evidence remain complete.
 Do not repeat or re-credit cs-toolkit #2222/#2223/#2255. #723 remains the approved

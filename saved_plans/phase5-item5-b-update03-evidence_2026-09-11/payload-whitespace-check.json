@@ -1,0 +1,36 @@
+{
+  "candidate_worktree": true,
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "full": {
+    "argv": [
+      "git",
+      "diff",
+      "--cached",
+      "--check"
+    ],
+    "returncode": 2,
+    "stderr": "",
+    "stdout": "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/payloads/scripts/tests/test_portability.py.txt:14377: trailing whitespace.\n+    \"header_trailing_space\": \"\"\"review: \n"
+  },
+  "observed_at": "2026-09-11T16:39:23.789714+00:00",
+  "payload_sha256": "0bc0e8fc7deb7a10b580c21a10670b3a04b802518d486ebcf062cb894cd8c1ec",
+  "reason": "The source test deliberately embeds a trailing-space input. Its copied payload remains byte-identical; no payload normalization is allowed.",
+  "remainder": {
+    "argv": [
+      "git",
+      "diff",
+      "--cached",
+      "--check",
+      "--",
+      ".",
+      ":(exclude)saved_plans/phase5-item5-b-update03-evidence_2026-09-11/payloads/scripts/tests/test_portability.py.txt"
+    ],
+    "returncode": 0,
+    "stderr": "",
+    "stdout": ""
+  },
+  "revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+  "source_equal": true,
+  "source_path": "scripts/tests/test_portability.py",
+  "source_revision": "7e0232ed871b37a315c5509c97b83d3b00b1a3fd"
+}

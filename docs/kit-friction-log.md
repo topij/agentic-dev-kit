@@ -24,6 +24,19 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-09-11
+
+- **The review runtime stopped before delivering required adversarial coverage.**
+  PR #733's [receipt at `88c5b044d5a42e33d2c4b0158be0957b4014678a`](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5633065607)
+  and [receipt at `207683b073f4d34cf22c5d9e1635f1c23239b6d4`](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5633204702)
+  preserve the actual `codex exec` argv, private review directories, compute readback
+  and terminal cybersecurity-content flags on 2026-09-11. **M** — required review
+  could not reach a final report. The runtime supplied no classifier diagnosis;
+  no kit mechanism or repair is established. Parked for runtime-access diagnosis,
+  with the unfinished commands distinguished from completed verification. No
+  tracker payload or sweep is authorized by this record, and incomplete coverage
+  is not merge clearance.
+
 ## 2026-09-09
 
 - **ITEM5-B exposed a drift-check applicability mismatch after #705.** The

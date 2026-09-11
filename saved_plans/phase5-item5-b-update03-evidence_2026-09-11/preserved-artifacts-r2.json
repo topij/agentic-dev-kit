@@ -1,0 +1,281 @@
+{
+  "artifacts": {
+    "saved_plans/phase5-item5-b-update02-audit_2026-09-11.py.txt": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-audit_2026-09-11.py.txt",
+      "sha256": "7a2c54d46e396ca58c96d5a1c9233a2f2dcdef97c8d803c7b906a6f500d552c7"
+    },
+    "saved_plans/phase5-item5-b-update02-decision_2026-09-11.md": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-decision_2026-09-11.md",
+      "sha256": "a603c977a1e8bb8e4b24de22130f3e421bdd05615a29b4b776a780ae07f8583e"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/audit-git-administration.json.gz": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/audit-git-administration.json.gz",
+      "sha256": "074d553d639a39c9809f69b07369d34d897b5925e9f76a29589ada3c78c5f3dd"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/audit-preflight-hardened.json.gz": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/audit-preflight-hardened.json.gz",
+      "sha256": "d41f0d21f996dc3929ebbf37070dc606e29a91c4a19b919144057631c6820bec"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/audit-runtime.json.gz": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/audit-runtime.json.gz",
+      "sha256": "fa78fe81fdcce309c1df910405711c819b3ab97cebbe231da41f84180c0579e0"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/audit.json.gz": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/audit.json.gz",
+      "sha256": "05546530b2b8a916ec09eca5f3ecc7ff8c3efc9dc6764fa8fcf41d57699c358d"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/baseline-guard-proof.json.gz": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/baseline-guard-proof.json.gz",
+      "sha256": "ffd52853c1dc77c36880c1eba81cf2f09f29fc736ea06cabca6b1bf8922054d9"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/binding-proof.json.gz": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/binding-proof.json.gz",
+      "sha256": "710f86552dde9f94ddca9f53bace7fd2efc92dca021d0d9a64069f117fb1bbf2"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/closeout-sha256.json": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/closeout-sha256.json",
+      "sha256": "729e489425f94c825830783f75d504c4a209a30efe98f5f53da9caaa8f014b44"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/coderabbit-current-review.json.gz": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/coderabbit-current-review.json.gz",
+      "sha256": "725d9045d1d931d2e0feacb36cb0d30d5ab47c1f88893639132d7db8d518ffc1"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/forge-readback.json.gz": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/forge-readback.json.gz",
+      "sha256": "23fc94949449efd0b6c68dbcd04d5cc98d1e4607103e383ba42be3c05f6faf45"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/git-administration-proof.json.gz": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/git-administration-proof.json.gz",
+      "sha256": "a8d6c637336c2c1c617f092c84d654e5a823ebf821871c7a208dbef6f7d1204c"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/payloads/docs/agentic-dev-kit/workflows/upgrade.md.txt": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/payloads/docs/agentic-dev-kit/workflows/upgrade.md.txt",
+      "sha256": "c29baa57bc48b2d74e5e553745028f84bd2e8d400e88d891c9336d8496724cf6"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/payloads/kit-manifest.json.txt": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/payloads/kit-manifest.json.txt",
+      "sha256": "61d9aaf2c8bafe6da1957111a41e0bc1d8197e08b84c9b12f24fa996535b48fe"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/payloads/scripts/conftest.py.txt": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/payloads/scripts/conftest.py.txt",
+      "sha256": "ecebbbc42cd6a8960e187abda41c5917e39aa1623b438ad932c7102cdf3ab03c"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/payloads/scripts/tests/test_state_guard.py.txt": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/payloads/scripts/tests/test_state_guard.py.txt",
+      "sha256": "9420de32bcba5232f13e9d8258de6f5c08ccb0a398513ff83e01cd731f377613"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/preparation-closeout.json.gz": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/preparation-closeout.json.gz",
+      "sha256": "5d5a329f84d2276e4f35f4816e53551b311c5f60ac0d9eccf206c37099415d7b"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/prepared-input-binding.json": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/prepared-input-binding.json",
+      "sha256": "5da0479eb7e06d867d0836f0a700259b6f4cc031d56afc346b1b0e159d2ee7f6"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/prepared-invocation-binding.json": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/prepared-invocation-binding.json",
+      "sha256": "3aa074372b408abfbb0f1f812d474439e269d458bbda70c0228a61c2a9bc5ebd"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/prepared-invocation-validation.json.gz": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/prepared-invocation-validation.json.gz",
+      "sha256": "7c58751ed34b3d6e1e9e397146eea0a7f4989acc45e4b8466bf9326619125555"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/prepared-runtime-binding.json": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/prepared-runtime-binding.json",
+      "sha256": "1e91e471c0504b33126973cd3c210323675c841c005eebfb06e52d7b2a8bf22f"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/prepared-runtime-validation.json.gz": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/prepared-runtime-validation.json.gz",
+      "sha256": "5c7ebd8990c0e368b18a49daa49f346b3e624c444f0aa99f0b51ca2750da7558"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/prepared-validation.json.gz": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/prepared-validation.json.gz",
+      "sha256": "29f8b3d57b48a70d3a027032e59062b8528cbeaf6e8b97477bc0f3179eb16796"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/proposed-writes.json": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/proposed-writes.json",
+      "sha256": "8794cd60d6ac74f0611130324e4a63f6b8697008d65d53371baed830d52485a1"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/review-fix-sha256.json": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/review-fix-sha256.json",
+      "sha256": "9295bd884b0228f9d1ce11ba787aacd1d04e17f3618615d783da28401d0031b4"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/review-followup-sha256.json": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/review-followup-sha256.json",
+      "sha256": "36ff7ec13d2cd7c2a14a8494bc4e8bea35e0f1f5a01687d2d0109198c7d0d062"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/review-round1.json.gz": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/review-round1.json.gz",
+      "sha256": "959fe4e2778141efcf5314a503cabc0312a3ac8ec63c85a4d493a40b8acffa2b"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/review-round2.json.gz": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/review-round2.json.gz",
+      "sha256": "92cac76f73613c0b374be71f8c64c982d11bebad893d153ff9d2d7fc5f5c7a35"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/review-round3.json.gz": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/review-round3.json.gz",
+      "sha256": "59890af9296e517013dc56010ab47161f4a9f3c98deb31adf10b72908506ba30"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/review-round4.json.gz": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/review-round4.json.gz",
+      "sha256": "1a29c134103960e8a094034a04f2797863da88bf141c9827bf0b21ae21c2cf22"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/runtime-followup-sha256.json": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/runtime-followup-sha256.json",
+      "sha256": "da60b5a870be3271ceccc8a3bfe04bded2bfdd3a3301eb80f2774fe7753a41a3"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/runtime-guard-proof.json.gz": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/runtime-guard-proof.json.gz",
+      "sha256": "aa512d8225b381191fba9ac69b5a22dcc8c097cfefc707573decb43bab887d03"
+    },
+    "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/sha256.json": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-evidence_2026-09-11/sha256.json",
+      "sha256": "a758eb57808338dfdfc51fc08bf2168a9dd1be193a635e4f089991a3d0608c8f"
+    },
+    "saved_plans/phase5-item5-b-update02-review-triage_2026-09-11.md": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-review-triage_2026-09-11.md",
+      "sha256": "88a76c174ee597c219773db799d393d704bf173002e1238fd70d3da69e19ee3a"
+    },
+    "saved_plans/phase5-item5-b-update02-validate_2026-09-11.py.txt": {
+      "original_revision": "57b697f7d93951ba3a1b1bd0c106e155a6ae89ca",
+      "preserved_at": "saved_plans/phase5-item5-b-update02-validate_2026-09-11.py.txt",
+      "sha256": "f845ad1927b18a59b9fe1c602130a07afee5cbd19384c8dca5d69d2d1b402888"
+    },
+    "saved_plans/phase5-item5-b-update03-audit_2026-09-11.py.txt": {
+      "original_revision": "f9629b0305e3219a819c57542b472e5bdae9a665",
+      "preserved_at": "saved_plans/phase5-item5-b-update03-audit_2026-09-11.py.txt",
+      "sha256": "45f1423b880e343c932b1e1aa8a159c91aeced0f435b44941ce45fdea745bcdd"
+    },
+    "saved_plans/phase5-item5-b-update03-decision_2026-09-11.md": {
+      "original_revision": "f9629b0305e3219a819c57542b472e5bdae9a665",
+      "preserved_at": "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/decision-round1.md.txt",
+      "sha256": "346e3529638c363036f0066ae906fe3a1be739475cabaa5a882fcdf4bfde557b"
+    },
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/audit.json.gz": {
+      "original_revision": "f9629b0305e3219a819c57542b472e5bdae9a665",
+      "preserved_at": "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/audit.json.gz",
+      "sha256": "0c1009d698dfac50125b6ee72a78b68d98e508c83832d864f3640a94a8178980"
+    },
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/author-verification.json.gz": {
+      "original_revision": "f9629b0305e3219a819c57542b472e5bdae9a665",
+      "preserved_at": "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/author-verification.json.gz",
+      "sha256": "bd24c3c4e4ca238ee2c24ab742e120baff1829a248ee2c72dc0584fdadb63412"
+    },
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/committed-validation.json.gz": {
+      "original_revision": "f9629b0305e3219a819c57542b472e5bdae9a665",
+      "preserved_at": "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/committed-validation.json.gz",
+      "sha256": "92b22d5a8b0d875802c1261409452b4aa1bfe595c6cff0bb791c1c0f23c43689"
+    },
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/forge-readback.json.gz": {
+      "original_revision": "f9629b0305e3219a819c57542b472e5bdae9a665",
+      "preserved_at": "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/forge-readback.json.gz",
+      "sha256": "b4d21c24c0fef519201bc98545e2d5f0bca817630655cb8ff62321bc18f9e436"
+    },
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/historical-preservation.json": {
+      "original_revision": "f9629b0305e3219a819c57542b472e5bdae9a665",
+      "preserved_at": "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/historical-preservation.json",
+      "sha256": "ec3a8f0fbc02a38c3843f6af9c382eb12b31bd9e0935aa662c3be9f90dea1cc6"
+    },
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/payload-whitespace-check.json": {
+      "original_revision": "f9629b0305e3219a819c57542b472e5bdae9a665",
+      "preserved_at": "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/payload-whitespace-check.json",
+      "sha256": "5627dbdc956b957cb36d467d8bb221ea4010c997d5414cc154caa5354747c34a"
+    },
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/payloads/docs/agentic-dev-kit/workflows/upgrade.md.txt": {
+      "original_revision": "f9629b0305e3219a819c57542b472e5bdae9a665",
+      "preserved_at": "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/payloads/docs/agentic-dev-kit/workflows/upgrade.md.txt",
+      "sha256": "ef328af59f53a619e373c8f9bead1daf20b1f58715fa27c1e583b66ee0513623"
+    },
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/payloads/kit-manifest.json.txt": {
+      "original_revision": "f9629b0305e3219a819c57542b472e5bdae9a665",
+      "preserved_at": "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/payloads/kit-manifest.json.txt",
+      "sha256": "e02fda03c4119b0deb9cba6fbf37818831f3244c9f3fc1e8b37fd79e9768291b"
+    },
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/payloads/scripts/conftest.py.txt": {
+      "original_revision": "f9629b0305e3219a819c57542b472e5bdae9a665",
+      "preserved_at": "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/payloads/scripts/conftest.py.txt",
+      "sha256": "b43fc728bbb1a5a71e6f91afcd37a07940014cceb34f073a0617fe2047a75e16"
+    },
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/payloads/scripts/tests/test_init_sh.py.txt": {
+      "original_revision": "f9629b0305e3219a819c57542b472e5bdae9a665",
+      "preserved_at": "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/payloads/scripts/tests/test_init_sh.py.txt",
+      "sha256": "41ad37977dad41e6ec739bef369138d93e1f4ad9ff7036172ee8e61cb36c49a4"
+    },
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/payloads/scripts/tests/test_portability.py.txt": {
+      "original_revision": "f9629b0305e3219a819c57542b472e5bdae9a665",
+      "preserved_at": "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/payloads/scripts/tests/test_portability.py.txt",
+      "sha256": "0bc0e8fc7deb7a10b580c21a10670b3a04b802518d486ebcf062cb894cd8c1ec"
+    },
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/payloads/scripts/tests/test_state_guard.py.txt": {
+      "original_revision": "f9629b0305e3219a819c57542b472e5bdae9a665",
+      "preserved_at": "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/payloads/scripts/tests/test_state_guard.py.txt",
+      "sha256": "e4a4c5614250ac46509e706507317d1cb40338b1bba51699c902b7269bc84433"
+    },
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/prepared-input-binding.json": {
+      "original_revision": "f9629b0305e3219a819c57542b472e5bdae9a665",
+      "preserved_at": "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/prepared-input-binding.json",
+      "sha256": "d96818d14989394f266f378720f156b2983c8dddb1d2a48a50b98a2177b2aa35"
+    },
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/prepared-validation.json.gz": {
+      "original_revision": "f9629b0305e3219a819c57542b472e5bdae9a665",
+      "preserved_at": "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/prepared-validation.json.gz",
+      "sha256": "dfbdc6da3f07ca57610ea7662f84e0649bfc68c0a267befd7a410bfa0c3b5a11"
+    },
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/proposed-writes.json": {
+      "original_revision": "f9629b0305e3219a819c57542b472e5bdae9a665",
+      "preserved_at": "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/proposed-writes.json",
+      "sha256": "14e6cbe6a8f9be4ade5265a76d6625769a05dbfcbc4f3c4d1a380e809b1efcaa"
+    },
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/source-delivery.json.gz": {
+      "original_revision": "f9629b0305e3219a819c57542b472e5bdae9a665",
+      "preserved_at": "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/source-delivery.json.gz",
+      "sha256": "be68fb1d3baebb38d46d9ecb87158ad0ff880ef68c97cde72f77ad2d40bc2478"
+    },
+    "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/source-review-round1.json.gz": {
+      "original_revision": "f9629b0305e3219a819c57542b472e5bdae9a665",
+      "preserved_at": "saved_plans/phase5-item5-b-update03-evidence_2026-09-11/source-review-round1.json.gz",
+      "sha256": "a783056fe683f462138b923008bd86a31e70ee19ef3ec0cb639c3ada916a65bf"
+    },
+    "saved_plans/phase5-item5-b-update03-validate_2026-09-11.py.txt": {
+      "original_revision": "f9629b0305e3219a819c57542b472e5bdae9a665",
+      "preserved_at": "saved_plans/phase5-item5-b-update03-validate_2026-09-11.py.txt",
+      "sha256": "46a3abd41bc7f32926e8f48276a82331608ead047af7f5a42fd086e6edd5db8c"
+    }
+  },
+  "observed_at": "2026-09-11T17:29:40.133319+00:00",
+  "revision": "f9629b0305e3219a819c57542b472e5bdae9a665"
+}
