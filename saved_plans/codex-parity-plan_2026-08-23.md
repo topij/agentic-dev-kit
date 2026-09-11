@@ -454,20 +454,24 @@ historical observation it was and is not silently refreshed.
      `e6d6e77d118454349f8e8bb046e99ef3009c5f5c`. UPDATE-02 preparation in #733 led
      to the separately approved [source-review repair](phase5-item5-b-source-review-repair_2026-09-11.md),
      delivered by #734 at `7e0232ed871b37a315c5509c97b83d3b00b1a3fd`. The
-     [UPDATE-03 packet](phase5-item5-b-update03-decision_2026-09-11.md) proposes the
+     [UPDATE-03 packet](phase5-item5-b-update03-decision_2026-09-11.md) prepared the
      revised exact local retained update after fresh read-only checkpoint checks.
      Kit #733 delivered that packet on 2026-09-11 as
      `e6b8e182466046a820198fa28c8cc52dc06509d0`; its
      [completion checkpoint](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5639767232)
-     preserves the review/merge evidence and unanswered exact approval question.
+     preserves the review/merge evidence and the then-unanswered approval question.
      Its current `-r5` binding retains the audit and dependent-command isolation correction,
      corrects copied provenance, and preserves unresolved generic-upgrade source findings
      outside the proposed execution;
      earlier UPDATE-03 questions and evidence remain historical and unanswered.
-     Obtain its exact approval before execution; neither repair approval nor kit
-     record merge supplies it. UPDATE-02's old question, payloads, ledger and review
-     evidence remain preserved. Fixture PR continuation needs a separate exact
-     CI/body/publication decision.
+     The operator subsequently approved ITEM5-B-UPDATE-03 as scoped. The
+     [execution record](phase5-item5-b-update03-execution_2026-09-12.md) retains the
+     consumed authority, local attempt `4ad91c875377d8607082cd0a125ba801218187ed`,
+     source `7e0232ed871b37a315c5509c97b83d3b00b1a3fd`, exact baseline, verification
+     and final preservation evidence. UPDATE-02's old question, payloads, ledger and
+     review evidence remain preserved and unanswered. Revalidate against the new
+     execution checkpoints before preparing the separate exact fixture PR
+     continuation decision for CI/body/publication/review scope.
      Fixture merge remains excluded; the nonfunctional custom
      wrap-up carries ownership acceptance only. No original continuity or prior field
      credit was recreated.

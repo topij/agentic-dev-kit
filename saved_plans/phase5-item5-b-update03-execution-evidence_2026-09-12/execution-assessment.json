@@ -1,0 +1,449 @@
+{
+  "administrative_deltas": {
+    "fixture": {
+      "COMMIT_EDITMSG": {
+        "after": {
+          "kind": "file",
+          "mode": "0o644",
+          "sha256": "8843eb533bbe52a5db9d49664988cfa5f51741709a8bd1962b096321d6dc7e0e"
+        },
+        "before": {
+          "kind": "file",
+          "mode": "0o644",
+          "sha256": "cae0ffcb700e4ed3245b1bc1580cf9ceedd3e38a57154783eab0d3c91af7b7a2"
+        }
+      },
+      "HEAD": {
+        "after": {
+          "kind": "file",
+          "mode": "0o644",
+          "sha256": "4e73c977a63e50df4328766b450eb4dd4e53416ddac2d7c466e59b47b8089244"
+        },
+        "before": {
+          "kind": "file",
+          "mode": "0o644",
+          "sha256": "b81cd27fab48fd1642ec8a0a97fbcddee6e7d7fd4c9602c9bc28c46857e73beb"
+        }
+      },
+      "index": {
+        "after": {
+          "kind": "file",
+          "mode": "0o644",
+          "sha256": "9fa5ca5a03db1755ec94c905818af17c9ce35b0af1f895146dfbc9dcaa06a9fc"
+        },
+        "before": {
+          "kind": "file",
+          "mode": "0o644",
+          "sha256": "9d9229d163d92b76e8c040a7d376e0d556042c6a395bbfc1589c7767405d5fe4"
+        }
+      },
+      "logs/HEAD": {
+        "after": {
+          "kind": "file",
+          "mode": "0o644",
+          "sha256": "724cb5d077727f23b43a2c2dffdb15825a2c23012d271fb312c1c2c6f36cb676"
+        },
+        "before": {
+          "kind": "file",
+          "mode": "0o644",
+          "sha256": "9a9c80fadff32c6444a05c1de3e9deefbe9d9a6cb195bd3233de7d82056a9212"
+        }
+      },
+      "logs/refs/heads/chore/item5-b-update-7e0232e": {
+        "after": {
+          "kind": "file",
+          "mode": "0o644",
+          "sha256": "f046522427289493bd0e1248d7838cb4ad10890ebb348d904ee6621936a6633a"
+        },
+        "before": null
+      },
+      "objects/13": {
+        "after": {
+          "kind": "directory",
+          "mode": "0o755"
+        },
+        "before": null
+      },
+      "objects/13/5749d566f77a22f89c18a1e64d846b272950ec": {
+        "after": {
+          "kind": "file",
+          "mode": "0o444",
+          "sha256": "be8c37866b2980fe9ddcd3d9020ad868888dc8500dc05abd1603ff604d9047ba"
+        },
+        "before": null
+      },
+      "objects/18/f746a07f58efe399f9d64ce2e4288ab75017a2": {
+        "after": {
+          "kind": "file",
+          "mode": "0o444",
+          "sha256": "b9798c1dc71db04f3e5647460bb2c1b46c57b491e3320de7a0ae731d963ff17e"
+        },
+        "before": null
+      },
+      "objects/3e": {
+        "after": {
+          "kind": "directory",
+          "mode": "0o755"
+        },
+        "before": null
+      },
+      "objects/3e/1444d884f115536e81e583dda3f5526c997b13": {
+        "after": {
+          "kind": "file",
+          "mode": "0o444",
+          "sha256": "8f62839aa00729721441590f110471bb51c9771d02e03ec6daf3a971aa24bea4"
+        },
+        "before": null
+      },
+      "objects/4a": {
+        "after": {
+          "kind": "directory",
+          "mode": "0o755"
+        },
+        "before": null
+      },
+      "objects/4a/d91c875377d8607082cd0a125ba801218187ed": {
+        "after": {
+          "kind": "file",
+          "mode": "0o444",
+          "sha256": "f85da0f84a5f4fbffa4784b751fafcf169483bf5fae8c8bedb3e3b1853089642"
+        },
+        "before": null
+      },
+      "objects/4b": {
+        "after": {
+          "kind": "directory",
+          "mode": "0o755"
+        },
+        "before": null
+      },
+      "objects/4b/bfbf2121724e7597540715d4d3a9afe6017d79": {
+        "after": {
+          "kind": "file",
+          "mode": "0o444",
+          "sha256": "3e7b32930b0c454e60a3940df6b7bf777b8b6f487e25d73fe19db59edb046247"
+        },
+        "before": null
+      },
+      "objects/5c": {
+        "after": {
+          "kind": "directory",
+          "mode": "0o755"
+        },
+        "before": null
+      },
+      "objects/5c/73758aa80c515f855ac147835a43206812a252": {
+        "after": {
+          "kind": "file",
+          "mode": "0o444",
+          "sha256": "375389de51ea0b4972ac2877a67ff8a11ece1661ab75b6a4a8a55384005a7727"
+        },
+        "before": null
+      },
+      "objects/6f/d16ca10b3a06191cbde20dce4898e5ba2bcf2c": {
+        "after": {
+          "kind": "file",
+          "mode": "0o444",
+          "sha256": "61a40d1ed61859049ba60ffbad24d6ebeb1bc8f6b97e2e84cac2e989faab3f14"
+        },
+        "before": null
+      },
+      "objects/99/496671dd9850f9ec9d0c5af6af31c29c6674d1": {
+        "after": {
+          "kind": "file",
+          "mode": "0o444",
+          "sha256": "6a34464edfce3f31eda02dc826f8af8a97eeda351544a641c312fb544ac5fff8"
+        },
+        "before": null
+      },
+      "objects/9f/c2edf846a1fdf036d25ab0e1933220921274dd": {
+        "after": {
+          "kind": "file",
+          "mode": "0o444",
+          "sha256": "608012687da709ce224c62ef1c1ba670226240c86bbba7ecb309122550574d2c"
+        },
+        "before": null
+      },
+      "objects/b4": {
+        "after": {
+          "kind": "directory",
+          "mode": "0o755"
+        },
+        "before": null
+      },
+      "objects/b4/8f87af6462e0161754750a5d2058054aa92ec5": {
+        "after": {
+          "kind": "file",
+          "mode": "0o444",
+          "sha256": "e42ad47fc29f044ce4d64fffd2d60f818b9b7c90592190d1f5619f064d1a384a"
+        },
+        "before": null
+      },
+      "objects/c0/623376fab861fb2fc777af96a9b46ddfcb0bcd": {
+        "after": {
+          "kind": "file",
+          "mode": "0o444",
+          "sha256": "c849a1e795e40a20b19a7717ded576e739cc130008c28832a5b4a002a771b942"
+        },
+        "before": null
+      },
+      "objects/cd/c7c8e6d5686aba770fd7856447ecb3ab093323": {
+        "after": {
+          "kind": "file",
+          "mode": "0o444",
+          "sha256": "38ebe21615f2edbe5baa245d84794567b45d688ff6bc1a839f344c419c6d4ce0"
+        },
+        "before": null
+      },
+      "objects/df": {
+        "after": {
+          "kind": "directory",
+          "mode": "0o755"
+        },
+        "before": null
+      },
+      "objects/df/a567c0b5b97d50d008b8814fb2fb4aa31b36a4": {
+        "after": {
+          "kind": "file",
+          "mode": "0o444",
+          "sha256": "d7ca840c3e2f098be10a39a44b4b467d3eb37ec3a95471f3887b7febd8011ccd"
+        },
+        "before": null
+      },
+      "objects/eb/0597001dd3006cbb8b550c8601026dd168bf8c": {
+        "after": {
+          "kind": "file",
+          "mode": "0o444",
+          "sha256": "8077e4592bf1ce58211005d5f2967e0d32cb9b6c44a5e26f30096bf1a50d7de0"
+        },
+        "before": null
+      },
+      "refs/heads/chore/item5-b-update-7e0232e": {
+        "after": {
+          "kind": "file",
+          "mode": "0o644",
+          "sha256": "8421e494a6068f6fb8cea1be3df7369e0b93f8b8781adfcec5f3dccc04cf0fcb"
+        },
+        "before": null
+      }
+    },
+    "source": {
+      "HEAD": {
+        "after": {
+          "kind": "file",
+          "mode": "0o644",
+          "sha256": "7d36a151dd7a54afe6ebad0b964b5be96bbfe7b844628976dacdefb06d1309e3"
+        },
+        "before": {
+          "kind": "file",
+          "mode": "0o644",
+          "sha256": "f67131db25e5baa127832b8ffaddf62f8711dc3a3f396936b6f72c91f11c8e34"
+        }
+      },
+      "index": {
+        "after": {
+          "kind": "file",
+          "mode": "0o644",
+          "sha256": "5d1d0bbb27b5cc0cbb33e1d2816f62f68f42dc0be532c1df8e63f2039556e41d"
+        },
+        "before": {
+          "kind": "file",
+          "mode": "0o644",
+          "sha256": "d8d3b7cc426fbb2421d928a7449a368f0be636ed2994904644bc8fb64393d43a"
+        }
+      },
+      "logs/HEAD": {
+        "after": {
+          "kind": "file",
+          "mode": "0o644",
+          "sha256": "14197715375f2af9bd25b16f86d0119d97a4af1f86643928a55a3fc8f7fb3440"
+        },
+        "before": {
+          "kind": "file",
+          "mode": "0o644",
+          "sha256": "8fafa21feed2963f0b7e9e9f9c859a7e17091e2d6d6200349329ecac1590e89e"
+        }
+      },
+      "objects/pack/pack-005408f3f469f0cbc791daf5d9eff12947272444.idx": {
+        "after": {
+          "kind": "file",
+          "mode": "0o444",
+          "sha256": "485019fb64054bdd1dad7aa3a75d32829f07c9d552de321175cc0c65f2dda747"
+        },
+        "before": null
+      },
+      "objects/pack/pack-005408f3f469f0cbc791daf5d9eff12947272444.pack": {
+        "after": {
+          "kind": "file",
+          "mode": "0o444",
+          "sha256": "9f4beefe5d6fd56864811c6bbede53fb8150c98bdf14eae9d3aba7729bc5af6d"
+        },
+        "before": null
+      },
+      "objects/pack/pack-005408f3f469f0cbc791daf5d9eff12947272444.rev": {
+        "after": {
+          "kind": "file",
+          "mode": "0o444",
+          "sha256": "d5e03d3c8f683f2a6aac59104babf9035d2f6877c7df35a3ab323b32924c64fc"
+        },
+        "before": null
+      }
+    }
+  },
+  "at": "2026-09-11T21:07:10.130005+00:00",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "fixture_revision": "4ad91c875377d8607082cd0a125ba801218187ed",
+  "historical_inputs_unchanged": true,
+  "initial_cockpit_revision": "955c6b4be4c869f1f16d43b29457ce4140cb492b",
+  "installed_skip_scope_unchanged": true,
+  "limitations": [
+    "Accepted inherited special-file-root gap remains.",
+    "Inherited inventories omit supplied root and .git root modes and file timestamps.",
+    "Checkpoint equality does not exclude transient writes.",
+    "Ownership acceptance does not establish functionality or field exit.",
+    "Fixture publication and PR continuation/merge remain excluded."
+  ],
+  "preserved_original_fixture_refs": true,
+  "rollback_performed": false,
+  "source_revision": "7e0232ed871b37a315c5509c97b83d3b00b1a3fd",
+  "verification": {
+    "installed-suite": {
+      "failures": [],
+      "metadata": {
+        "argv": [
+          "env",
+          "-u",
+          "PYTHONOPTIMIZE",
+          "python3",
+          "-B",
+          "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-update03-command-r4_2026-09-11.py.txt",
+          "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+          "uv",
+          "run",
+          "--with",
+          "pytest",
+          "--with",
+          "pyyaml",
+          "python",
+          "-B",
+          "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/run_installed_tests.py",
+          "--root",
+          "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture"
+        ],
+        "attempt_revision": "4ad91c875377d8607082cd0a125ba801218187ed",
+        "child_argv": [
+          "uv",
+          "run",
+          "--with",
+          "pytest",
+          "--with",
+          "pyyaml",
+          "python",
+          "-B",
+          "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/run_installed_tests.py",
+          "--root",
+          "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture"
+        ],
+        "cockpit_revision": "955c6b4be4c869f1f16d43b29457ce4140cb492b",
+        "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+        "ended_at": "2026-09-11T20:53:11.693006+00:00",
+        "environment": {
+          "DEVKIT_STATE_ROOT": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-7e0232e-20260911/fixture-state",
+          "PYTEST_ADDOPTS": "-o cache_dir=/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-7e0232e-20260911/fixture-pytest-cache -ra",
+          "PYTHONDONTWRITEBYTECODE": "1",
+          "RUFF_CACHE_DIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-7e0232e-20260911/ruff-cache/fixture",
+          "TMPDIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-7e0232e-20260911/tmp/fixture",
+          "UV_CACHE_DIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-7e0232e-20260911/uv-cache/fixture",
+          "UV_PROJECT_ENVIRONMENT": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-7e0232e-20260911/uv-tools/fixture-venv",
+          "UV_TOOL_DIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-7e0232e-20260911/uv-tools/fixture"
+        },
+        "fixture_input": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+        "git_environment": {
+          "GIT_CONFIG_COUNT": "2",
+          "GIT_CONFIG_GLOBAL": "/dev/null",
+          "GIT_CONFIG_KEY_0": "core.fsmonitor",
+          "GIT_CONFIG_KEY_1": "core.attributesFile",
+          "GIT_CONFIG_SYSTEM": "/dev/null",
+          "GIT_CONFIG_VALUE_0": "false",
+          "GIT_CONFIG_VALUE_1": "/dev/null"
+        },
+        "proposed_source": "7e0232ed871b37a315c5509c97b83d3b00b1a3fd",
+        "returncode": 0,
+        "source_input": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac",
+        "started_at": "2026-09-11T20:44:10.738485+00:00",
+        "stderr_sha256": "b9d61d4d20641ee925cdefbb5e2fdebeecbe51b26b01421745b6303f358da462",
+        "stdout_sha256": "dad0e7af0c369ecf400dd1bc5819fcd7d27df8c5ceec850a373a23e9e0518e17"
+      },
+      "skips": [
+        "SKIPPED [16] scripts/devkit/tests/conftest.py:LINE: asserts about the kit's own shipped source; this tree carries a recorded install baseline (kit_commit present)",
+        "SKIPPED [1] scripts/devkit/tests/conftest.py:LINE: needs: not vendored in this tree: CHANGELOG.md, docs/CLAUDE-sections.md, docs/parallel-howto.md, scripts/dev_session.sh, scripts/hooks/pr_followup_hook.py, scripts/pr_watch.py",
+        "SKIPPED [1] scripts/devkit/tests/conftest.py:LINE: needs: not vendored in this tree: CHANGELOG.md, scripts/dev_session.sh, scripts/launch_lane.py, scripts/reconcile_sessions.sh, scripts/tests/test_lane_launcher.py, scripts/tests/test_portability.py, scripts/tests/test_reconcile_sessions.py",
+        "SKIPPED [1] scripts/devkit/tests/conftest.py:LINE: needs: not vendored in this tree: saved_plans/codex-hooks-live-probe/.codex/hooks.json",
+        "SKIPPED [1] scripts/devkit/tests/conftest.py:LINE: needs: not vendored in this tree: saved_plans/codex-safety-doctrine-live-probe",
+        "SKIPPED [1] scripts/devkit/tests/test_kit_doctor.py:LINE: not the kit's own tree: scripts/verify_live_validation_bundle.py is absent",
+        "SKIPPED [1] scripts/devkit/tests/test_mutation_gate.py:LINE: no `mutation-test` target here (or no make); nothing to pin",
+        "SKIPPED [3] scripts/devkit/tests/conftest.py:LINE: needs: not vendored in this tree: scripts/kit_doctor.py",
+        "SKIPPED [49] scripts/devkit/tests/test_kit_repo_only.py:LINE: not a complete kit tree \u2014 a marked path being absent here is the mechanism working, not a defect",
+        "SKIPPED [4] scripts/devkit/tests/conftest.py:LINE: needs: not vendored in this tree: CHANGELOG.md",
+        "SKIPPED [50] scripts/devkit/tests/conftest.py:LINE: needs: not vendored in this tree: .github/workflows/test.yml"
+      ],
+      "summary": "2161 passed, 128 skipped in 539.42s (0:08:59)"
+    },
+    "source-make-test": {
+      "failures": [
+        "FAILED scripts/tests/test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero"
+      ],
+      "metadata": {
+        "argv": [
+          "env",
+          "-u",
+          "PYTHONOPTIMIZE",
+          "python3",
+          "-B",
+          "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-update03-command-r4_2026-09-11.py.txt",
+          "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-7e0232e-20260911/source-verification",
+          "make",
+          "test"
+        ],
+        "attempt_revision": "4ad91c875377d8607082cd0a125ba801218187ed",
+        "child_argv": [
+          "make",
+          "test"
+        ],
+        "cockpit_revision": "955c6b4be4c869f1f16d43b29457ce4140cb492b",
+        "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-7e0232e-20260911/source-verification",
+        "ended_at": "2026-09-11T21:03:07.221122+00:00",
+        "environment": {
+          "DEVKIT_STATE_ROOT": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-7e0232e-20260911/source-state",
+          "PYTEST_ADDOPTS": "-o cache_dir=/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-7e0232e-20260911/source-pytest-cache -ra",
+          "PYTHONDONTWRITEBYTECODE": "1",
+          "RUFF_CACHE_DIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-7e0232e-20260911/ruff-cache/source",
+          "TMPDIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-7e0232e-20260911/tmp/source",
+          "UV_CACHE_DIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-7e0232e-20260911/uv-cache/source",
+          "UV_PROJECT_ENVIRONMENT": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-7e0232e-20260911/uv-tools/source-venv",
+          "UV_TOOL_DIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/update-7e0232e-20260911/uv-tools/source"
+        },
+        "fixture_input": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+        "git_environment": {
+          "GIT_CONFIG_COUNT": "2",
+          "GIT_CONFIG_GLOBAL": "/dev/null",
+          "GIT_CONFIG_KEY_0": "core.fsmonitor",
+          "GIT_CONFIG_KEY_1": "core.attributesFile",
+          "GIT_CONFIG_SYSTEM": "/dev/null",
+          "GIT_CONFIG_VALUE_0": "false",
+          "GIT_CONFIG_VALUE_1": "/dev/null"
+        },
+        "proposed_source": "7e0232ed871b37a315c5509c97b83d3b00b1a3fd",
+        "returncode": 1,
+        "source_input": "60fe0dc7ad68922d064c0cf401cff2c4c6d607ac",
+        "started_at": "2026-09-11T20:54:04.950226+00:00",
+        "stderr_sha256": "e03127ea82166f0fdb3910ef843492d9ac100a8d63f167e2a4188d603081cbc3",
+        "stdout_sha256": "a5f9ce58a649bb412723528385dbdc3ae604050c7a045f497f99408e7f11c851"
+      },
+      "skips": [
+        "SKIPPED [1] scripts/tests/test_init_sh.py:LINE: the gate's own python3 parses 200000 nested arrays without raising, so this input cannot exercise the escape this test is about"
+      ],
+      "summary": "1 failed, 2529 passed, 1 skipped in 540.33s (0:09:00)"
+    }
+  }
+}

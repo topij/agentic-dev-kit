@@ -14,10 +14,34 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-11 — source repair and revised retained-update packet delivered.
+Last updated: 2026-09-12 — approved retained update executed locally.
 Phase 5 delivery item 5 remains incomplete; item 6's replay remains complete.
 
-## Latest session — 2026-09-11 (ITEM5-B revised retained-update packet, in Codex)
+## Latest session — 2026-09-12 (ITEM5-B approved retained update, in Codex)
+
+The operator approved ITEM5-B-UPDATE-03 as scoped in its packet. The
+[execution record](../saved_plans/phase5-item5-b-update03-execution_2026-09-12.md)
+retains exact authority, fresh r4/r5 preconditions, source advance, fixture payloads,
+predicted baseline, complete suite output, final preservation checks and backups.
+The retained source is pinned to `7e0232ed871b37a315c5509c97b83d3b00b1a3fd`;
+the local fixture attempt is `4ad91c875377d8607082cd0a125ba801218187ed`.
+No fixture push or PR continuation occurred. UPDATE-03 is consumed; UPDATE-01
+remains consumed and UPDATE-02 remains historical and unanswered.
+
+The record separates installed verification from the disclosed source #393 failure,
+and retains separate shell parses for #561's recipe gap. The accepted inherited
+special-file-root limitation remains. Ownership acceptance does not establish
+custom wrap-up functionality, client verification or field exit. Item 6/replay,
+#723's approved deferral, #585's earlier placement and #724's delivered #722 batch
+are preserved. The friction sweep stays parked; no credited exercise is repeated.
+
+▶ Next: revalidate against UPDATE-03's execution checkpoints and prepare the separate
+exact fixture PR continuation decision, including CI/body/publication/review scope.
+Fixture merge remains excluded; remaining field-exit work needs its own scope decision.
+
+______________________________________________________________________
+
+## Session — 2026-09-11 (ITEM5-B revised retained-update packet, in Codex)
 
 The operator-approved source repair [#734](https://github.com/topij/agentic-dev-kit/pull/734)
 merged as `7e0232ed871b37a315c5509c97b83d3b00b1a3fd`, from reviewed head `7224547da0c766a4fd9ee5791e53ddb3f7db6cdf`. Its
@@ -42,15 +66,13 @@ retains review, verification, merge readback and the pending exact approval ques
 UPDATE-01 is consumed; UPDATE-02 and its old questions, payloads, ledgers and
 incomplete review receipts remain preserved.
 
-No retained update is approved. Ownership acceptance does not establish custom
+Packet preparation did not approve retained execution. Ownership acceptance does not establish custom
 wrap-up functionality, client verification or field exit. The accepted inherited
 special-file-root limitation remains. Item 6/replay, #723's approved deferral,
 #585's earlier placement and #724's delivered #722 batch are preserved. The friction
 sweep stays parked; no credited exercise is repeated.
 
-▶ Next: revalidate UPDATE-03's bound inputs and obtain its exact approval before
-retained execution. Fixture PR continuation requires a separate decision; fixture
-merge stays excluded.
+The latest session block owns subsequent execution and the next decision.
 
 ______________________________________________________________________
 
@@ -314,66 +336,6 @@ ______________________________________________________________________
 - The session's desktop profile-identification friction was parked in the inbox
   after the operator left; no tracker payload was approved or posted. The
   operator-held triage and Claude prose-claims work were not performed.
-
-______________________________________________________________________
-
-## Session — 2026-09-07 (#698 doctor correction and #706 push gate, in Claude Code)
-
-**Theme —** Take the two delegate-shaped items and `#534`'s panel follow-ups, and let the
-fallback panel do its work on a gate.
-
-- [PR #708](https://github.com/topij/agentic-dev-kit/pull/708) merged as `ec75075`.
-  `kit_doctor` grades `[features].hooks` whenever a Codex registration exists rather than
-  only when `.codex/config.toml` does — this repo was itself the affected population. The
-  new `unset` state reports at `·` and does not reach the exit code, which was the
-  operator's calibration decision: the approved observation recorded a client discovering
-  registrations with the switch unset, so failing the run would assert what that probe did
-  not establish. An explicit `false` still exits 1.
-- [PR #709](https://github.com/topij/agentic-dev-kit/pull/709) merged as `6f2cc24`.
-  `scripts/hooks/pre-push` refuses a push whose commit carries a stale
-  `kit-manifest.json`. Checked against the real remote from `main` at `6f2cc24` by
-  committing an edit to `scripts/kit_doctor.py` without regenerating and attempting the
-  push, which was refused naming that file; the probe branch was then deleted. Re-run it
-  that way rather than trusting this sentence. An adopter's `--record-install` baseline is
-  exempt.
-- **Four panel rounds on `#709` produced four HIGH findings, every one the same shape:
-  the guard reporting a clean check while not having checked.** Valid-but-non-object JSON
-  crashed it into silence; an entry with no `sha256` was dropped silently; the
-  adopter-baseline skip warned on every adopter push forever, contradicting the CHANGELOG
-  written in the same commit; and a newline in a manifest key desynchronised the
-  positional `git cat-file --batch` reader, **laundering a genuinely tampered file past
-  the guard with exit 0 and an empty stderr**. The last was found by building the attack,
-  not by reading. Round 4 confirmed the repair closes the class rather than the instance.
-- [PR #710](https://github.com/topij/agentic-dev-kit/pull/710) carries `#534`'s two
-  panel follow-ups from PR #705's disposition — `is_install_baseline`'s untested except
-  arm, now pinned, and the `_shipped()` body duplicated across two test modules, now one
-  accessor in `conftest.py`. It merged as `dc6a74e`, so `#534` needs no fresh start on
-  either — only the typed decline reasons it always kept out of scope.
-- The recurring shape is now unmissable and is in `docs/kit-friction-log.md`: across every
-  round this session, each finding was in a claim the author made rather than in a
-  mechanism. The 2026-08-22 entry parked exactly that pattern for accumulation on two
-  docs-only PRs; it has now recurred on code, repeatedly. The operator subsequently approved the narrow rule, delivered by PR #717.
-  Its latest-session account above distinguishes the mechanisms.
-- **`#561` is worse than its title.** A genuinely unparseable `pre-push` passed `make
-  test`: `check-syntax` hands four filenames to one `bash -n` and `pre-push` is last, so
-  it is never parsed. `bash -n good.sh bad.sh` exits 0 with a broken second file. The hole
-  for that one file is now shut by `#709`; the general fix is still `#561`'s.
-- **A `make test` failure reproduces on clean `main` and CI cannot see it.** Recorded with
-  its stamps in the friction log; local `uv run` resolves 3.14.7 against CI's pinned 3.12,
-  and `#393` names the mechanism family but a different test. Non-deterministic, so the
-  interpreter split is a candidate contributor rather than an established cause.
-- `#698`, `#706`, `#534`, `#561` and `#393` all stay open.
-
-**Subsequent reconciliation — 2026-09-09.** The approved tracker writes landed as
-#712, #713 and the #561/#393 occurrences, and PR #717 delivered the prose-claims rule.
-The [hooks continuation](../saved_plans/codex-hooks-continuation_2026-09-09.md)
-records the later live observations and their client-specific limits. These completed
-steps are not fresh instructions.
-
-The [replay record](../saved_plans/cs-toolkit-replay_2026-09-09.md) retains the
-original paths and their missing-tree observation. The latest session block supersedes
-this block's former fixture prerequisite and pending-decision instruction; it owns
-the later ITEM5-B execution, retained baseline and next action.
 
 ______________________________________________________________________
 
