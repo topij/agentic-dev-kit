@@ -6,7 +6,8 @@ owns the subsequent application and review handoff. The proposal ledger and evid
 retain their preparation-time fields and hashes; the execution authority record binds
 the approval without rewriting that historical input. The [review follow-up](phase5-item5-b-review-followup-decision_2026-09-10.md)
 was approved on 2026-09-11; its [execution](phase5-item5-b-review-followup-execution_2026-09-11.md)
-owns the subsequent review handoff. Repair merge remains operator-held.
+owns the subsequent review and verified #731 merge. The operator separately authorized
+that merge on 2026-09-11; the preserved proposal below retains its original merge hold.
 
 The preserved preparation scope follows. `ITEM5-B-KIT-REVIEW-01` is separate scope. ACCEPT-01
 accepted the preserved-file ownership outcomes. PR-01 applied its exact fixture

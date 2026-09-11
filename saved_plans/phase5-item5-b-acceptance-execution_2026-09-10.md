@@ -198,8 +198,9 @@ preserves completed item 6 and its replay evidence, cs-toolkit #2222/#2223/#2255
 The friction-log sweep remains parked; no tracker payload or new intake was started.
 
 **Next:** follow the [approved kit repair execution](phase5-item5-b-kit-repair-execution_2026-09-10.md)
-through the approved REVIEW-02 follow-up to its operator merge decision. A later retained-fixture update still needs its own
-exact decision; keep the systemize field-exit matrix and fixture merge separate.
+through its REVIEW-02 execution record's verified #731 merge, then prepare the exact
+retained-update decision packet. Retained execution still needs its own exact decision;
+keep the systemize field-exit matrix and fixture merge separate.
 
 ## Kit record review amendment
 

@@ -42,10 +42,36 @@ The following ran in `/Users/topi/Coding/agentic-dev-kit` at `1d6c5413148c46ee7a
 
 The [evidence index](phase5-item5-b-review-followup-execution-evidence_2026-09-11/sha256.json)
 retains complete command metadata, raw output, authority, original bytes, applied hashes
-and compressed retention checkpoints. A fresh full adversarial/correctness panel and
-hosted CI are required at the published review head. Their complete reports, actual
-rollout compute and final head-bound disposition belong on PR #731; read them back
-before deciding merge. No earlier receipt automatically covers that head.
+and compressed retention checkpoints.
+
+## Final review and separately authorized delivery
+
+The full [adversarial report](https://github.com/topij/agentic-dev-kit/pull/731#issuecomment-5628936492)
+and [correctness report](https://github.com/topij/agentic-dev-kit/pull/731#issuecomment-5628930335)
+reviewed `1bd4e10b423b0b4b230fb1a481bbc477de784a61` against
+`f408039dc3a9b0d2e0e8d246c126af892839cee8` on 2026-09-11. Their complete command
+records name the private directories, actual rollout compute, terminal `make test`
+results, behavioral mutations and restoration checks. Each local suite reached the
+disclosed #393 failure; the reports do not claim a passing local suite. The
+[panel disposition](https://github.com/topij/agentic-dev-kit/pull/731#issuecomment-5628956860)
+binds their findings to that exact head. CodeRabbit declined the full-review request;
+the [refusal disposition](https://github.com/topij/agentic-dev-kit/pull/731#issuecomment-5628983875)
+records why the completed panel remains the independent review evidence.
+
+The operator subsequently said “merge when ready.” The
+[merge checkpoint](https://github.com/topij/agentic-dev-kit/pull/731#issuecomment-5629015678)
+records the `gh pr merge 731 --squash --match-head-commit` operation, final non-persisting
+watch result and forge readback from `/Users/topi/Coding/agentic-dev-kit` at that reviewed
+SHA on 2026-09-11. PR #731 merged as `e6d6e77d118454349f8e8bb046e99ef3009c5f5c`.
+This later authorization discharged the merge hold; it did not widen the repair ledger.
+
+Resume reads on 2026-09-11 in the same cockpit at the reviewed SHA used
+`gh pr view 731 --repo topij/agentic-dev-kit --json url,state,isDraft,headRefOid,mergedAt,mergeCommit,baseRefName`
+and `gh run list --repo topij/agentic-dev-kit --commit e6d6e77d118454349f8e8bb046e99ef3009c5f5c --json databaseId,name,status,conclusion,url,headSha`.
+They confirmed the merge and the successful terminal
+[post-merge Test run](https://github.com/topij/agentic-dev-kit/actions/runs/34558574354).
+`gh api repos/topij/agentic-dev-kit/branches/main` confirmed that merge as protected main.
+The ordinary record follow-up began from this merge, preserving the reviewed repair head.
 
 ## Preservation and next action
 
@@ -66,6 +92,12 @@ field exit are separate. Item 6's completed replay is preserved without repeat o
 credit for cs-toolkit #2222/#2223/#2255. Kit #723 remains the approved upstream deferral;
 #585 stays earlier outside Phase 6; #724 delivered the #722 batch. The friction sweep stays parked.
 
-**Next:** read PR #731's final review/CI disposition and decide operator merge of its
-exact reviewed head. This execution approval excludes merge. A later retained update
-needs its own exact decision; UPDATE-01 is consumed and fixture PR merge is excluded.
+**Next:** prepare the exact retained-update decision packet for the merged #731 repair.
+Revalidate read-only against the
+[post-acceptance retention checkpoint](phase5-item5-b-review-followup-evidence_2026-09-10/retained-final.json.gz)
+and [fixture forge checkpoint](phase5-item5-b-acceptance-execution-evidence_2026-09-10/forge-after-exit.json).
+Use the current checkpoint inventory/identity comparison, not the historical UPDATE
+FINAL equality assertions as a current-state check. Preserve the original missing paths.
+Preparation is authorized; retained execution needs its own exact write ledger and
+decision. UPDATE-01 is consumed; baseline refresh, initialization, client/trust/profile
+exercises, tracker payloads and fixture PR closure/merge retain their separate decisions.
