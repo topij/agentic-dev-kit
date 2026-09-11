@@ -37,10 +37,6 @@ fallback panel do its work on a gate.
   arm, now pinned, and the `_shipped()` body duplicated across two test modules, now one
   accessor in `conftest.py`. It merged as `dc6a74e`, so `#534` needs no fresh start on
   either — only the typed decline reasons it always kept out of scope.
-- The recurring shape is now unmissable and is in `docs/kit-friction-log.md`: across every
-  round this session, each finding was in a claim the author made rather than in a
-  mechanism. The 2026-08-22 entry parked exactly that pattern for accumulation on two
-  docs-only PRs; it has now recurred on code, repeatedly. The operator subsequently approved the narrow rule, delivered by PR #717.
 - **`#561` is worse than its title.** A genuinely unparseable `pre-push` passed `make
   test`: `check-syntax` hands four filenames to one `bash -n` and `pre-push` is last, so
   it is never parsed. `bash -n good.sh bad.sh` exits 0 with a broken second file. The hole
