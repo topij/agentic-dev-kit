@@ -1,0 +1,145 @@
+"""Read-only UPDATE-02 proposal audit. Emits JSON to stdout; never applies writes."""
+import gzip
+import hashlib
+import importlib.util
+import json
+import os
+from pathlib import Path
+import runpy
+import stat
+import subprocess
+import sys
+from datetime import datetime, timezone
+
+COCKPIT = Path('/Users/topi/Coding/agentic-dev-kit')
+REPO = Path('/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture')
+KIT = REPO.parent / 'kit-source'
+OLD = '60fe0dc7ad68922d064c0cf401cff2c4c6d607ac'
+FIXTURE = 'f770f183bf6691f1f706c676b740cf2ef5ceb766'
+SOURCE = 'e6d6e77d118454349f8e8bb046e99ef3009c5f5c'
+REVIEWED = '1bd4e10b423b0b4b230fb1a481bbc477de784a61'
+OUT = REPO.parent / 'update-e6d6e77-20260911'
+BRANCH = 'chore/item5-b-update-e6d6e77'
+BASELINE = '9e2196df3b7239b599819abcfc20271b0389b70f78f22837a0709575145b9126'
+SAVED = COCKPIT / 'saved_plans'
+
+
+def sha(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def git(root, *args):
+    return subprocess.check_output(['git', '--no-optional-locks', '-C', str(root), *args])
+
+
+def tree(ref):
+    result = {}
+    for row in git(COCKPIT, 'ls-tree', '-rz', ref).split(b'\0'):
+        if row:
+            meta, path = row.split(b'\t')
+            mode, kind, oid = meta.decode().split()
+            assert kind == 'blob', (ref, path, kind)
+            result[path.decode()] = {'git_mode': mode, 'blob': oid}
+    return result
+
+
+def main():
+    if sys.flags.optimize:
+        raise SystemExit('Refusing optimized Python: audit assertions must execute')
+    assert sys.dont_write_bytecode and Path.cwd() == COCKPIT
+    helper = SAVED / 'phase5-item5-b-acceptance-audit_2026-09-10.py.txt'
+    # Load definitions only; the historical UPDATE FINAL main is never invoked.
+    helpers = runpy.run_path(str(helper))
+    inventory, identity = helpers['inventory'], helpers['identity']
+    checkpoint = SAVED / 'phase5-item5-b-review-followup-evidence_2026-09-10/retained-final.json.gz'
+    expected = json.loads(gzip.decompress(checkpoint.read_bytes()))
+    observed = {}
+    for role, root, revision in [('fixture', REPO, FIXTURE), ('source', KIT, OLD)]:
+        assert root.resolve() == root and root.is_dir() and not root.is_symlink()
+        assert (root / '.git').is_dir() and not (root / '.git').is_symlink()
+        observed[role] = dict(path=str(root), identity=identity(root), inventory=inventory(root),
+                              administrative_inventory=inventory(root / '.git'))
+        assert observed[role] == expected['trees'][role], f'{role}: checkpoint mismatch'
+        assert observed[role]['identity']['revision'] == revision
+    assert observed['source']['identity']['branch'] == 'DETACHED'
+    assert observed['fixture']['identity']['branch'] == 'chore/item5-b-field-exit'
+    originals = {name: os.path.lexists(name) for name in expected['original_paths']}
+    assert originals == expected['original_paths'] and not any(originals.values())
+    assert not os.path.lexists(OUT), OUT
+    assert git(REPO, 'branch', '--list', BRANCH) == b'', BRANCH
+    baseline_bytes = (REPO / 'kit-manifest.json').read_bytes()
+    assert sha(baseline_bytes) == BASELINE
+    baseline = json.loads(baseline_bytes)
+    assert baseline['kit_commit'] == OLD
+    assert git(COCKPIT, 'rev-parse', SOURCE + '^{tree}') == git(COCKPIT, 'rev-parse', REVIEWED + '^{tree}')
+    subprocess.run(['git', '-C', str(COCKPIT), 'merge-base', '--is-ancestor', OLD, SOURCE], check=True)
+    old_tree, new_tree = tree(OLD), tree(SOURCE)
+    source_writes = []
+    for name in sorted(old_tree.keys() | new_tree.keys()):
+        if old_tree.get(name) == new_tree.get(name):
+            continue
+        sides = []
+        for item in [old_tree.get(name), new_tree.get(name)]:
+            sides.append(None if item is None else dict(item, sha256=sha(git(COCKPIT, 'cat-file', 'blob', item['blob']))))
+        source_writes.append(dict(destination=str(KIT / name), relative_path=name,
+                                  before=sides[0], after=sides[1]))
+    manifest = json.loads(git(COCKPIT, 'show', SOURCE + ':kit-manifest.json'))
+    proposed = json.loads(baseline_bytes)
+    proposed['kit_commit'] = SOURCE
+    writes = []
+    for name, item in manifest['files'].items():
+        if item['role'] == 'repo-only':
+            continue
+        destination = REPO / ('scripts/devkit/' + name[len('scripts/'):] if name.startswith('scripts/') else name)
+        target = {'role': item['role'], 'sha256': item['sha256']}
+        data = git(COCKPIT, 'cat-file', 'blob', new_tree[name]['blob'])
+        assert sha(data) == target['sha256'], name
+        if baseline['files'].get(name) == target:
+            assert sha(destination.read_bytes()) == target['sha256'], name
+            continue
+        st = destination.lstat()
+        assert destination.resolve() == destination and stat.S_ISREG(st.st_mode) and st.st_nlink == 1
+        assert sha(destination.read_bytes()) == baseline['files'][name]['sha256']
+        writes.append(dict(source_key=name, source=str(KIT / name), destination=str(destination),
+                           before=dict(sha256=sha(destination.read_bytes()), mode=oct(stat.S_IMODE(st.st_mode))),
+                           after=dict(sha256=target['sha256'], mode='0o755' if new_tree[name]['git_mode'] == '100755' else '0o644'),
+                           blob=new_tree[name]['blob'], ownership='kit-owned'))
+        proposed['files'][name] = target
+    assert {x['source_key'] for x in writes} == {'scripts/conftest.py', 'scripts/tests/test_state_guard.py', 'docs/agentic-dev-kit/workflows/upgrade.md'}
+    assert set(proposed['files']) == {p for p, x in manifest['files'].items() if x['role'] != 'repo-only'}
+    proposed_bytes = (json.dumps(proposed, indent=2, sort_keys=True) + '\n').encode()
+    spec = importlib.util.spec_from_file_location('update02_config', REPO / 'scripts/devkit/lib/kitconfig.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    config = REPO / 'config/dev-model.yaml'
+    mappings = {'tracked': module.load_config(config, overlay=False), 'merged': module.load_config(config)}
+    intended = json.loads((SAVED / 'phase5-item5-b-update-evidence_2026-09-10/configuration-final.json').read_bytes())
+    assert json.dumps(mappings, sort_keys=True) == json.dumps(intended, sort_keys=True)
+    replay = json.loads((SAVED / 'phase5-item5-b-update-evidence_2026-09-10/replay-evidence-final.json').read_bytes())
+    for name, digest in replay.items():
+        assert sha((COCKPIT / name).read_bytes()) == digest
+        assert sha((KIT / name).read_bytes()) == digest
+        assert sha(git(COCKPIT, 'show', SOURCE + ':' + name)) == digest
+    allowed = {str(Path(x['destination']).relative_to(REPO)) for x in writes} | {'kit-manifest.json'}
+    preservation = {p: x for p, x in observed['fixture']['inventory'].items() if p not in allowed}
+    result = dict(approved=False, decision='ITEM5-B-UPDATE-02', argv=[sys.executable, '-B', str(Path(__file__).resolve())],
+                  cwd=str(COCKPIT), revision=git(COCKPIT, 'rev-parse', 'HEAD').decode().strip(),
+                  observed_at=datetime.now(timezone.utc).isoformat(), program_sha256=sha(Path(__file__).read_bytes()),
+                  helper_sha256=sha(helper.read_bytes()), checkpoint_sha256=sha(checkpoint.read_bytes()),
+                  fixture_input=FIXTURE, source_input=OLD, proposed_source=SOURCE, reviewed_source_head=REVIEWED,
+                  source_tree=git(COCKPIT, 'rev-parse', SOURCE + '^{tree}').decode().strip(),
+                  original_paths=originals, proposed_execution_root=str(OUT), proposed_branch=BRANCH,
+                  retained=observed, source_checkout_writes=source_writes, fixture_payload_writes=writes,
+                  baseline_write=dict(destination=str(REPO / 'kit-manifest.json'), before_sha256=BASELINE,
+                                      after_sha256=sha(proposed_bytes), mode='0o644', content=proposed),
+                  preserve_fixture_inventory=preservation, configuration=mappings, replay_evidence=replay,
+                  result='matches-post-acceptance-checkpoints; proposal-only')
+    for role, root in [('fixture', REPO), ('source', KIT)]:
+        assert identity(root) == observed[role]['identity']
+        assert inventory(root) == observed[role]['inventory']
+        assert inventory(root / '.git') == observed[role]['administrative_inventory']
+    print(json.dumps(result, indent=2, sort_keys=True))
+
+
+if __name__ == '__main__':
+    main()

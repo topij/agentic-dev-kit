@@ -14,10 +14,38 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-11 — ITEM5-B kit repair merged; retained-update decision remains separate.
+Last updated: 2026-09-11 — ITEM5-B-UPDATE-02 packet prepared; retained execution awaits its exact decision.
 Phase 5 delivery item 5 remains incomplete; item 6's replay remains complete.
 
-## Latest session — 2026-09-11 (ITEM5-B repair delivery, in Codex)
+## Latest session — 2026-09-11 (ITEM5-B retained-update preparation, in Codex)
+
+The [UPDATE-02 decision packet](../saved_plans/phase5-item5-b-update02-decision_2026-09-11.md)
+binds the proposed source to kit #731's merge, the exact destination ledger and
+predicted baseline, preservation, local verification and conditional rollback.
+Its audit and forge readback ran from `/Users/topi/Coding/agentic-dev-kit` at
+`bc0c33a3af93d78545050612649f49fa72107a40` on 2026-09-11, with the new audit program
+in the working tree: file/Git administration and fixture-forge comparisons matched
+the post-acceptance checkpoints. The packet retains the commands, original complete
+review receipts, and #732/#731 merge/checkpoint readbacks. Original missing paths
+were not reconstructed; historical questions, ledgers and evidence were preserved.
+
+UPDATE-02 is unapproved. It proposes a local update only; fixture PR continuation
+needs a separate CI/body/publication decision because the existing workflow and body
+retain the previous source pin. Fixture merge remains excluded. The inherited
+special-file-root limitation stays explicit. Ownership acceptance does not establish
+custom wrap-up functionality, client verification or field exit.
+
+Item 5 remains incomplete; item 6 and its replay evidence remain complete. #723's
+deferral, #585's earlier placement and #724's delivered #722 batch remain. The
+friction sweep stays parked pending its exact operator decision.
+
+▶ Next: obtain the packet's exact ITEM5-B-UPDATE-02 decision; only if approved,
+revalidate the post-acceptance inputs and execute its local ledger. Do not reuse
+UPDATE-01, advance the fixture PR, repeat replay, or merge the fixture.
+
+______________________________________________________________________
+
+## Session — 2026-09-11 (ITEM5-B repair delivery, in Codex)
 
 The operator approved ITEM5-B-KIT-REVIEW-02 and subsequently said “merge when ready.”
 [PR #731](https://github.com/topij/agentic-dev-kit/pull/731) merged as
@@ -40,10 +68,7 @@ Ownership acceptance does not establish functionality or field exit. The repair 
 not update the retained installation. Item 6's replay, #723's deferral, #585's earlier
 placement and #724's delivered #722 batch are preserved. The friction sweep stays parked.
 
-▶ Next: prepare the exact retained-update decision packet for the merged #731 repair,
-starting from the post-acceptance checkpoint linked in the execution record. Preparation
-is authorized; execution needs its own exact decision. Do not repeat UPDATE-01 or the
-completed replay, refresh the baseline, exercise clients/profiles/trackers, or merge the fixture PR.
+The latest session block owns the prepared packet and its next decision.
 
 ______________________________________________________________________
 
@@ -340,55 +365,6 @@ The [replay record](../saved_plans/cs-toolkit-replay_2026-09-09.md) retains the
 original paths and their missing-tree observation. The latest session block supersedes
 this block's former fixture prerequisite and pending-decision instruction; it owns
 the later ITEM5-B execution, retained baseline and next action.
-
-______________________________________________________________________
-
-## Session — 2026-09-07 (#534 residual repairs, in Claude Code)
-
-**Theme —** Repair what `#534` still carried, and field-verify the item that merged
-without ever being checked in an adopter.
-
-- [PR #705](https://github.com/topij/agentic-dev-kit/pull/705) merged as `7cb0868`.
-  Item 1 (`_repo_layout` engine-dir resolution) was **not** re-done: it merged in
-  PR #545, and `kit-handoff-history.md`'s 2026-08-21 block records the residual — those
-  issues stayed open because nothing verified their acceptance criteria in the field.
-  That verification is what this session did.
-- **The proposed kit-repo-only marker cannot carry cause 1, and the reason generalises.**
-  It skips on a *missing path*, and the question these tests need answered is whether the
-  file at that path is the kit's copy. `conftest.py` gains the predicate it cannot
-  express, derived from `kit_commit` being written only by `--record-install`.
-  `test_shipped_manifest_covers_every_kit_owned_file` is restated rather than skipped, so
-  an adopter gains coverage where they had a permanent red.
-- **`.codex/hooks.json` and `.claude/settings.json` are the sharp case** — the kit prints
-  both and writes neither (`#303`), so in an adopter those paths hold hand-written
-  registrations and a path check accepts them. Reference copies now ship, engine-relative
-  and `KIT_OWNED`, with a drift guard pinning reference to live.
-- **Field-verified in disposable copies of the adopter fixture**, the original asserted
-  equal to `fixture-inventory-after-reg01.json` before and unchanged after each run.
-  Item 1 resolves there; a cause-1 test went from failing to passing, and others from
-  failing to skipping. The silent false pass was proven fixed **by mutation, not by a passing run** —
-  a pass is what that defect looks like — and that mutation is what caught a read site an
-  edit had missed.
-- **What the panel found is where the risk sat.** Its rounds are enumerated with their
-  heads and fixes in the [disposition](https://github.com/topij/agentic-dev-kit/pull/705#issuecomment-5574151329).
-  Every finding was in a claim the author made — a predicate said to be safe, an accessor
-  said to decline gracefully, a test said to guard a fix, a docstring describing a step
-  its function does not perform — and none was in a mechanism. Rounds whose CI was green
-  still carried them.
-- **`#534` stays open.** The typed decline reasons are deliberately out of scope; the
-  disposition also carries the follow-up candidates the panel raised and this PR did not
-  take.
-- An occurrence on [`#393`](https://github.com/topij/agentic-dev-kit/issues/393#issuecomment-5573705268)
-  records that the interpreter `uv run` resolves locally and the version
-  `.github/workflows/test.yml` pins are not the same, so a suite failure reproducible on
-  `main` is invisible to CI. That issue stays open.
-
-- **Session friction routed at close-out.** [`#706`](https://github.com/topij/agentic-dev-kit/issues/706)
-  files the manifest going stale between `--generate-manifest` and the commit, caught only
-  by the full suite. The guard is not broken — it caught every instance — so the finding is
-  about when it reports, and the proposed fix moves that to `scripts/hooks/pre-push`.
-
-The later replay decision and next action are in the latest session block.
 
 ______________________________________________________________________
 

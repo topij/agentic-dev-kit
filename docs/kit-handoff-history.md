@@ -5,6 +5,53 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+## Session — 2026-09-07 (#534 residual repairs, in Claude Code)
+
+**Theme —** Repair what `#534` still carried, and field-verify the item that merged
+without ever being checked in an adopter.
+
+- [PR #705](https://github.com/topij/agentic-dev-kit/pull/705) merged as `7cb0868`.
+  Item 1 (`_repo_layout` engine-dir resolution) was **not** re-done: it merged in
+  PR #545, and `kit-handoff-history.md`'s 2026-08-21 block records the residual — those
+  issues stayed open because nothing verified their acceptance criteria in the field.
+  That verification is what this session did.
+- **The proposed kit-repo-only marker cannot carry cause 1, and the reason generalises.**
+  It skips on a *missing path*, and the question these tests need answered is whether the
+  file at that path is the kit's copy. `conftest.py` gains the predicate it cannot
+  express, derived from `kit_commit` being written only by `--record-install`.
+  `test_shipped_manifest_covers_every_kit_owned_file` is restated rather than skipped, so
+  an adopter gains coverage where they had a permanent red.
+- **`.codex/hooks.json` and `.claude/settings.json` are the sharp case** — the kit prints
+  both and writes neither (`#303`), so in an adopter those paths hold hand-written
+  registrations and a path check accepts them. Reference copies now ship, engine-relative
+  and `KIT_OWNED`, with a drift guard pinning reference to live.
+- **Field-verified in disposable copies of the adopter fixture**, the original asserted
+  equal to `fixture-inventory-after-reg01.json` before and unchanged after each run.
+  Item 1 resolves there; a cause-1 test went from failing to passing, and others from
+  failing to skipping. The silent false pass was proven fixed **by mutation, not by a passing run** —
+  a pass is what that defect looks like — and that mutation is what caught a read site an
+  edit had missed.
+- **What the panel found is where the risk sat.** Its rounds are enumerated with their
+  heads and fixes in the [disposition](https://github.com/topij/agentic-dev-kit/pull/705#issuecomment-5574151329).
+  Every finding was in a claim the author made — a predicate said to be safe, an accessor
+  said to decline gracefully, a test said to guard a fix, a docstring describing a step
+  its function does not perform — and none was in a mechanism. Rounds whose CI was green
+  still carried them.
+- **`#534` stays open.** The typed decline reasons are deliberately out of scope; the
+  disposition also carries the follow-up candidates the panel raised and this PR did not
+  take.
+- An occurrence on [`#393`](https://github.com/topij/agentic-dev-kit/issues/393#issuecomment-5573705268)
+  records that the interpreter `uv run` resolves locally and the version
+  `.github/workflows/test.yml` pins are not the same, so a suite failure reproducible on
+  `main` is invisible to CI. That issue stays open.
+
+- **Session friction routed at close-out.** [`#706`](https://github.com/topij/agentic-dev-kit/issues/706)
+  files the manifest going stale between `--generate-manifest` and the commit, caught only
+  by the full suite. The guard is not broken — it caught every instance — so the finding is
+  about when it reports, and the proposed fix moves that to `scripts/hooks/pre-push`.
+
+The later replay decision and next action are in the latest session block.
+
 ## Session — 2026-09-07 (live Codex hooks batch)
 
 **Theme —** Complete the parked Codex observations and preserve their scope.

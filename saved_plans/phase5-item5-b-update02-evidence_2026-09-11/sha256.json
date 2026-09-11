@@ -1,0 +1,9 @@
+{
+  "audit.json.gz": "05546530b2b8a916ec09eca5f3ecc7ff8c3efc9dc6764fa8fcf41d57699c358d",
+  "forge-readback.json.gz": "23fc94949449efd0b6c68dbcd04d5cc98d1e4607103e383ba42be3c05f6faf45",
+  "payloads/docs/agentic-dev-kit/workflows/upgrade.md.txt": "c29baa57bc48b2d74e5e553745028f84bd2e8d400e88d891c9336d8496724cf6",
+  "payloads/kit-manifest.json.txt": "61d9aaf2c8bafe6da1957111a41e0bc1d8197e08b84c9b12f24fa996535b48fe",
+  "payloads/scripts/conftest.py.txt": "ecebbbc42cd6a8960e187abda41c5917e39aa1623b438ad932c7102cdf3ab03c",
+  "payloads/scripts/tests/test_state_guard.py.txt": "9420de32bcba5232f13e9d8258de6f5c08ccb0a398513ff83e01cd731f377613",
+  "proposed-writes.json": "8794cd60d6ac74f0611130324e4a63f6b8697008d65d53371baed830d52485a1"
+}
