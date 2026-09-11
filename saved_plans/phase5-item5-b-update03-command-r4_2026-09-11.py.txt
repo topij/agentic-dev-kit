@@ -1,0 +1,31 @@
+"""Run a declared packet command with Git isolation, only after separate approval.
+
+This supplies configuration controls, not approval or a destination sandbox.
+The packet's ledger, preconditions and exact operator decision remain mandatory.
+"""
+from pathlib import Path
+import runpy
+import subprocess
+import sys
+
+COCKPIT = Path('/Users/topi/Coding/agentic-dev-kit')
+REPO = Path('/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture')
+KIT = REPO.parent / 'kit-source'
+OUT = REPO.parent / 'update-7e0232e-20260911'
+
+
+def main():
+    if sys.flags.optimize or not sys.dont_write_bytecode:
+        raise SystemExit('Command runner requires unoptimized Python with -B')
+    assert len(sys.argv) >= 3, 'owner directory and declared argv required'
+    owner = Path(sys.argv[1])
+    assert owner.is_absolute() and owner.resolve() == owner
+    assert owner in {COCKPIT, REPO, KIT, OUT, OUT / 'source-verification'}
+    assert Path.cwd() == owner, 'enter and assert the owning directory first'
+    audit = runpy.run_path(str(COCKPIT / 'saved_plans/phase5-item5-b-update03-audit-r4_2026-09-11.py.txt'))
+    env = audit['command_environment']((REPO, KIT))
+    subprocess.run(sys.argv[2:], cwd=owner, env=env, check=True)
+
+
+if __name__ == '__main__':
+    main()
