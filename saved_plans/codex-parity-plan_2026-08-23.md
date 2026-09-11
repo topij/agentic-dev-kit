@@ -456,6 +456,10 @@ historical observation it was and is not silently refreshed.
      delivered by #734 at `7e0232ed871b37a315c5509c97b83d3b00b1a3fd`. The
      [UPDATE-03 packet](phase5-item5-b-update03-decision_2026-09-11.md) proposes the
      revised exact local retained update after fresh read-only checkpoint checks.
+     Kit #733 delivered that packet on 2026-09-11 as
+     `e6b8e182466046a820198fa28c8cc52dc06509d0`; its
+     [completion checkpoint](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5639767232)
+     preserves the review/merge evidence and unanswered exact approval question.
      Its current `-r5` binding retains the audit and dependent-command isolation correction,
      corrects copied provenance, and preserves unresolved generic-upgrade source findings
      outside the proposed execution;

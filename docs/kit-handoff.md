@@ -14,7 +14,7 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-11 — source repair delivered; revised retained-update decision prepared.
+Last updated: 2026-09-11 — source repair and revised retained-update packet delivered.
 Phase 5 delivery item 5 remains incomplete; item 6's replay remains complete.
 
 ## Latest session — 2026-09-11 (ITEM5-B revised retained-update packet, in Codex)
@@ -33,8 +33,14 @@ read-only audit and forge records retain post-acceptance checkpoint comparisons.
 The packet retains complete review receipts before its audit-ordering correction,
 with earlier UPDATE-03 questions/evidence preserved and the current `-r5` binding
 explicit. The packet records unresolved generic-upgrade bootstrap findings outside
-its proposed execution; no further source repair or approved deferral is claimed. PR #733 owns packet review/delivery. UPDATE-01 is consumed; UPDATE-02 and its old
-questions, payloads, ledgers and incomplete review receipts remain preserved.
+its proposed execution; no further source repair or approved deferral is claimed.
+[PR #733](https://github.com/topij/agentic-dev-kit/pull/733) merged on 2026-09-11 as
+`e6b8e182466046a820198fa28c8cc52dc06509d0`, from reviewed head
+`fc46efa0570f866f19cccf11834f909d5f37cf69`. Its
+[completion checkpoint](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5639767232)
+retains review, verification, merge readback and the pending exact approval question.
+UPDATE-01 is consumed; UPDATE-02 and its old questions, payloads, ledgers and
+incomplete review receipts remain preserved.
 
 No retained update is approved. Ownership acceptance does not establish custom
 wrap-up functionality, client verification or field exit. The accepted inherited
