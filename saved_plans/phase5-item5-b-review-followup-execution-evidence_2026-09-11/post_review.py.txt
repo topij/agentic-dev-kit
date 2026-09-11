@@ -1,0 +1,28 @@
+import json,runpy,subprocess,sys
+from pathlib import Path
+E=runpy.run_path('/private/tmp/item5-b-review02-20260911-303qa6cz/execute.py')
+OUT,REPO=(E[k] for k in ['OUT','KIT'])
+HEAD=sys.argv[3];NAME='topij/agentic-dev-kit'
+lens=sys.argv[1];assert lens in ['adversarial','correctness']
+lane=OUT/'reviews'/HEAD/lens
+full=Path(sys.argv[2]);assert full.is_relative_to(lane)
+receipt=E['read'](lane/'receipt.json');assert receipt['stage']=='terminal' and receipt['returncode']==0
+assert receipt['handed_identity']==receipt['handed_after']
+assert 'forge_comment' not in receipt
+compute=E['read'](lane/'compute.json');assert all(c['effort']=='high' for c in compute['contexts'])
+body='Independent '+lens+' review at `'+HEAD+'` on 2026-09-11. This records the completed report before disposition or fixes; it is not a clean-review gate receipt. Actual runtime: `'+compute['contexts'][0]['model']+'`, effort `high`.\n\n'+full.read_text()
+E['enter'](REPO);assert E['git'](REPO,'rev-parse','HEAD')==HEAD
+p=subprocess.run(['gh','pr','view','731','--repo',NAME,'--json','url,headRefOid,isDraft'],cwd=REPO,capture_output=True,check=True)
+pr=json.loads(p.stdout);assert pr['headRefOid']==HEAD and pr['isDraft'] is False and pr['url']=='https://github.com/'+NAME+'/pull/731'
+E['enter'](OUT);payload=OUT/'review-state'/('kit-'+HEAD+'-'+lens+'-comment.json');E['write'](payload,dict(body=body))
+argv=['gh','api','--method','POST','repos/'+NAME+'/issues/731/comments','--input',str(payload),'--jq','{id,html_url,body,created_at,updated_at,user:.user.login}']
+start=E['now']();p=subprocess.run(argv,cwd=REPO,env=E['env']('watch'),capture_output=True)
+receipt['forge_post_attempt']=dict(argv=argv,cwd=str(REPO),revision=HEAD,started_at=start,ended_at=E['now'](),returncode=p.returncode,stdout=p.stdout.decode(),stderr=p.stderr.decode())
+E['write'](lane/'receipt.json',receipt)
+if p.returncode:raise SystemExit('Review posting uncertain; inspect saved attempt and read back before retrying.')
+posted=json.loads(p.stdout)
+argv=['gh','api','repos/'+NAME+'/issues/comments/'+str(posted['id']),'--jq','{id,html_url,body,created_at,updated_at,user:.user.login}']
+p=subprocess.run(argv,cwd=REPO,env=E['env']('watch'),capture_output=True,check=True);actual=json.loads(p.stdout);assert actual['body']==body and actual['id']==posted['id']
+receipt['forge_comment']=dict(read_argv=argv,cwd=str(REPO),revision=HEAD,observed_at=E['now'](),response=actual,body_sha256=E['sha'](body.encode()),full_report=str(full),full_report_sha256=E['sha'](full.read_bytes()))
+E['enter'](OUT);E['write'](lane/'receipt.json',receipt)
+print(json.dumps(dict(url=actual['html_url'],head=HEAD,lens=lens,body_sha256=receipt['forge_comment']['body_sha256'])))

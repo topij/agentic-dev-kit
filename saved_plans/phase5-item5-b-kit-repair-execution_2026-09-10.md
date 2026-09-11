@@ -84,12 +84,11 @@ Phase 6, and kit #724 already delivered the #722 batch. The friction sweep remai
 
 ## Independent review disposition
 
-The full panel at `b018a0544c44028c21399ad073ce8a3dee3bfd45` on 2026-09-10 completed
-with the recorded P2 inherited FIFO-root gap and P3 root-symlink coverage gap.
-The [follow-up packet](phase5-item5-b-review-followup-decision_2026-09-10.md) retains
-complete pre-fix receipts, actual local/hosted results and the exact unapproved next
-decision. REVIEW-01's production payloads remain as applied; its PR handoff is paused.
-No clean-review gate receipt, handled-round acknowledgment or merge is claimed.
+The full panel at `b018a0544c44028c21399ad073ce8a3dee3bfd45` on 2026-09-10 recorded
+the P2 inherited FIFO-root gap and P3 root-symlink coverage gap. Their complete
+pre-fix receipts remain in the [follow-up packet](phase5-item5-b-review-followup-decision_2026-09-10.md).
+The operator approved that follow-up on 2026-09-11; its [execution record](phase5-item5-b-review-followup-execution_2026-09-11.md)
+owns the subsequent payloads and review handoff. The earlier panel is not a receipt for a later head.
 
-**Next:** decide ITEM5-B-KIT-REVIEW-02 from that packet. A delivered repair still needs
-a separate retained-update decision; UPDATE-01 is consumed and fixture merge is excluded.
+**Next:** follow that execution to PR #731's exact reviewed-head operator merge decision.
+A retained update still needs a separate exact decision; UPDATE-01 is consumed and fixture merge is excluded.

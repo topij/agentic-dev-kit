@@ -1,0 +1,31 @@
+{
+  "PYTHONOPTIMIZE": null,
+  "argv": [
+    "uv",
+    "run",
+    "--with",
+    "pyyaml",
+    "python",
+    "-B",
+    "/Users/topi/Coding/agentic-dev-kit/scripts/kit_doctor.py",
+    "--root",
+    "/Users/topi/Coding/agentic-dev-kit",
+    "--generate-manifest"
+  ],
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "ended_at": "2026-09-11T02:19:20.421345+00:00",
+  "environment": {
+    "DEVKIT_STATE_ROOT": "/private/tmp/item5-b-review02-20260911-303qa6cz/author/state",
+    "PYTEST_ADDOPTS": "-o cache_dir=/private/tmp/item5-b-review02-20260911-303qa6cz/author/pytest-cache -ra",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "RUFF_CACHE_DIR": "/private/tmp/item5-b-review02-20260911-303qa6cz/author/ruff-cache",
+    "TMPDIR": "/private/tmp/item5-b-review02-20260911-303qa6cz/author/tmp",
+    "UV_CACHE_DIR": "/private/tmp/item5-b-review02-20260911-303qa6cz/author/uv-cache",
+    "UV_TOOL_DIR": "/private/tmp/item5-b-review02-20260911-303qa6cz/author/uv-tools"
+  },
+  "returncode": 0,
+  "revision": "1d6c5413148c46ee7a0a4cf86e47e403632610fb",
+  "started_at": "2026-09-11T02:19:19.828928+00:00",
+  "stderr_sha256": "861435579090d6bdd6e3ec197aa26a7afa51f2de29a08a5fb5acb9f6685146af",
+  "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

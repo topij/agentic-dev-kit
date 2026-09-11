@@ -1,12 +1,11 @@
 # ITEM5-B kit review follow-up decision
 
-**Approved 2026-09-11.** The operator approved ITEM5-B-KIT-REVIEW-02 with the exact
-question below. The [execution record](phase5-item5-b-review-followup-execution_2026-09-11.md)
-binds that authority to the unchanged proposal ledger and applied payloads. The
-preparation evidence retains its historical approval fields and hashes. The inherited
-special-file-root limitation is accepted for this repair; it is not fixed. Merge remains operator-held.
-
-The preserved proposal and its verification/rollback requirements follow.
+**Prepared, not approved.** ITEM5-B-KIT-REVIEW-01 applied its exact production payloads
+and opened [kit PR #731](https://github.com/topij/agentic-dev-kit/pull/731) ready. Its
+review is paused at the findings below. Execution approval did not authorize changes
+outside that payload ledger, acceptance of a newly discovered limitation, or merge.
+The operator requested autonomous continuation while going to sleep; that request
+supplied no additional scope decision. Production bytes from REVIEW-01 remain unchanged.
 
 ## Complete review receipts before preparation
 
@@ -135,7 +134,7 @@ attempt, then restore only its saved original bytes/mode. Preserve branch, commi
 evidence. Intervening work stops undo. No broad reset/clean, historical rollback,
 remote deletion or PR closure is authorized.
 
-## Exact approval question — approved 2026-09-11
+## Exact approval question
 
 **Approve ITEM5-B-KIT-REVIEW-02 as scoped: accept and document the inherited
 special-file-root limitation for this regular-file repair, apply the hash-bound
@@ -144,5 +143,6 @@ complete ready PR #731 through independent review, holding its reviewed head for
 operator merge decision and leaving retained trees, baseline, clients, trackers and
 fixture PR merge untouched?**
 
-The approved decision does not authorize a separate functional repair. Phase 5 item 5
-remains incomplete; item 6's completed replay and the systemize field-exit gaps are preserved.
+If that limitation is unacceptable, leave this proposal unapproved and request a
+separate functional repair packet. Phase 5 item 5 remains incomplete under either
+choice; item 6's completed replay and the systemize field-exit gaps are preserved.

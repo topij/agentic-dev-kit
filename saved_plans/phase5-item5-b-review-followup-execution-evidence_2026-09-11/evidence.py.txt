@@ -1,0 +1,50 @@
+import hashlib,json,os,runpy,subprocess,sys
+from pathlib import Path
+E=runpy.run_path('/private/tmp/item5-b-review02-20260911-303qa6cz/execute.py')
+OUT,REPO,KIT,RECORD=(E[k] for k in ['OUT','REPO','KIT','RECORD'])
+NAME='topij/adk-item5-b-field-20260909'
+HEAD='f770f183bf6691f1f706c676b740cf2ef5ceb766'
+SEED='8533c334637e8776ca7a4fe3a9fd8c6c64e35707'
+
+def call(argv):
+    E['enter'](REPO)
+    started=E['now']()
+    p=subprocess.run(argv,cwd=REPO,env=E['environment']('review'),capture_output=True)
+    obj=dict(argv=argv,cwd=str(REPO),revision=HEAD,started_at=started,ended_at=E['now'](),returncode=p.returncode,stdout=p.stdout.decode(),stderr=p.stderr.decode())
+    if p.returncode: raise RuntimeError(obj)
+    return obj
+
+def ci(runid):
+    info=call(['gh','run','view',runid,'--repo',NAME,'--json','databaseId,headSha,event,status,conclusion,name,url,createdAt,updatedAt,jobs'])
+    run=json.loads(info['stdout']); assert run['headSha']==HEAD
+    d=OUT/'ci'/runid; E['enter'](OUT); d.mkdir(parents=True,exist_ok=True)
+    for job in run['jobs']:
+        item=dict(run_read=info,job=job)
+        if job['status']=='completed':
+            log=call(['gh','run','view',runid,'--repo',NAME,'--job',str(job['databaseId']),'--log'])
+            (d/(str(job['databaseId'])+'.log')).write_text(log.pop('stdout'))
+            item['log_read']=log;item['log_sha256']=E['sha']((d/(str(job['databaseId'])+'.log')).read_bytes())
+        E['write'](d/(str(job['databaseId'])+'.json'),item)
+    print(json.dumps(run,indent=2))
+
+def compute(head):
+    for events in (OUT/'reviews'/head).glob('*/events.jsonl'):
+        rows=[json.loads(s) for s in events.read_text().splitlines()]
+        ids=[r['thread_id'] for r in rows if r['type']=='thread.started']
+        assert len(ids)==1
+        paths=list((Path.home()/'.codex/sessions').glob('**/*'+ids[0]+'.jsonl'))
+        assert len(paths)==1,(ids,paths)
+        contexts=[]
+        for s in paths[0].read_text().splitlines():
+            row=json.loads(s)
+            if row['type']=='turn_context':
+                p=row['payload'];contexts.append({k:p.get(k) for k in ['cwd','model','effort','reasoning_effort','collaboration_mode']})
+        assert contexts and all(x['effort']=='high' for x in contexts),contexts
+        rec=dict(thread_id=ids[0],rollout_path=str(paths[0]),contexts=contexts,observed_at=E['now']())
+        E['enter'](OUT);E['write'](events.parent/'compute.json',rec)
+        print(json.dumps(rec))
+
+if __name__=='__main__':
+    assert not sys.flags.optimize and sys.dont_write_bytecode
+    if sys.argv[1]=='ci':ci(sys.argv[2])
+    elif sys.argv[1]=='compute':compute(sys.argv[2])

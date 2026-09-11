@@ -5,7 +5,8 @@ ITEM5-B-KIT-REVIEW-01 as scoped.” The [kit repair execution](phase5-item5-b-ki
 owns the subsequent application and review handoff. The proposal ledger and evidence
 retain their preparation-time fields and hashes; the execution authority record binds
 the approval without rewriting that historical input. The [review follow-up](phase5-item5-b-review-followup-decision_2026-09-10.md)
-owns the newly pending exact decision. Repair merge remains operator-held.
+was approved on 2026-09-11; its [execution](phase5-item5-b-review-followup-execution_2026-09-11.md)
+owns the subsequent review handoff. Repair merge remains operator-held.
 
 The preserved preparation scope follows. `ITEM5-B-KIT-REVIEW-01` is separate scope. ACCEPT-01
 accepted the preserved-file ownership outcomes. PR-01 applied its exact fixture
