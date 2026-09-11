@@ -92,12 +92,12 @@ field exit are separate. Item 6's completed replay is preserved without repeat o
 credit for cs-toolkit #2222/#2223/#2255. Kit #723 remains the approved upstream deferral;
 #585 stays earlier outside Phase 6; #724 delivered the #722 batch. The friction sweep stays parked.
 
-**Next:** obtain the separate source-scope decision in the
-[UPDATE-02 review triage](phase5-item5-b-update02-review-triage_2026-09-11.md). The
-[prepared packet](phase5-item5-b-update02-decision_2026-09-11.md) preserves its exact
-source and unanswered approval question. Required kit review remains incomplete;
-no source repair, record merge or incomplete receipt authorizes retained execution.
-That packet revalidates read-only against the
+**Next:** revalidate the [UPDATE-03 packet](phase5-item5-b-update03-decision_2026-09-11.md)
+and obtain its exact approval before retained execution. The separately approved
+source follow-up was delivered by #734; the revised packet selects its immutable
+merge. Historical UPDATE-02 questions, payloads, ledgers and review evidence remain
+preserved. Neither source repair nor kit record merge authorizes retained execution.
+The revised packet revalidates read-only against the
 [post-acceptance retention checkpoint](phase5-item5-b-review-followup-evidence_2026-09-10/retained-final.json.gz)
 and [fixture forge checkpoint](phase5-item5-b-acceptance-execution-evidence_2026-09-10/forge-after-exit.json).
 Use the current checkpoint inventory/identity comparison, not the historical UPDATE

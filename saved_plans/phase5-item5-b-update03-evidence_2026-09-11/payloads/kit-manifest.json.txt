@@ -30,10 +30,6 @@
       "role": "doctrine",
       "sha256": "b2c35c612a13e4b19fdf1ea9a73f0e7604229d2eca3e1904014dd99478cdeb1e"
     },
-    "docs/agentic-dev-kit/live-validation-evidence.md": {
-      "role": "repo-only",
-      "sha256": "4d9072247f215b3dd61883cf4a6ab11bb353a909fe9bb4569505670e92cb0f6b"
-    },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
       "sha256": "cdf5a8a1fbd97decb25acb813bc1c7b753e4569e5b1280a4fdd4142e581f9efc"
@@ -135,9 +131,6 @@
       "sha256": "3bd8321e2aea0b137a033ebe0e4c23ff7269b10be6669ed6cb5a9d738b5c155e"
     },
     "scripts/kit_doctor.py": {
-      "required_by": [
-        "scripts/panel_prompt.py"
-      ],
       "role": "engine",
       "sha256": "f8ce3862bd947211ee4e1ec1b1ad68f4c854a692455e106276802621d0a2427c"
     },
@@ -146,9 +139,6 @@
       "sha256": "7787079163e9d678284db5df15311f059a519a61db6301980784864ab02ad9e6"
     },
     "scripts/lib/atomic_write.py": {
-      "required_by": [
-        "scripts/archive_plan_sessions.py"
-      ],
       "role": "engine",
       "sha256": "f9657f36f8bbcf3741382b616ae19be19cf516fc5fa4f36c53384579e96202b3"
     },
@@ -157,17 +147,6 @@
       "sha256": "a4c29fb1808e0b3ec0a2ba80ffa97ba6c894f1a784463a5d126169542c300ef2"
     },
     "scripts/lib/kitconfig.py": {
-      "required_by": [
-        "scripts/archive_plan_sessions.py",
-        "scripts/check_doc_budget.py",
-        "scripts/check_memory_budget.py",
-        "scripts/hooks/pr_followup_hook.py",
-        "scripts/hooks/pre-push",
-        "scripts/kit_doctor.py",
-        "scripts/launch_lane.py",
-        "scripts/panel_prompt.py",
-        "scripts/pr_watch.py"
-      ],
       "role": "engine",
       "sha256": "4ab496661883d8f4ad590a6612a48b31f8cbf770283bb09794096149276634e6"
     },
@@ -176,9 +155,6 @@
       "sha256": "980cbf5596cea67033a5dd02d53630f2a92c24afd693ba7727d5fc50303ff555"
     },
     "scripts/lib/runtime_adapters.py": {
-      "required_by": [
-        "scripts/kit_doctor.py"
-      ],
       "role": "engine",
       "sha256": "589a8e33508301d683467f94a1ac0cb7418d8c799fa0751813c7028f960f1afa"
     },
@@ -187,23 +163,14 @@
       "sha256": "691a7df06a3bf9019b5faca8b8ebdb9d54463d231d492a632fd54c16cd51a2c6"
     },
     "scripts/lib/state_paths/paths.py": {
-      "required_by": [
-        "scripts/lib/state_paths/resolver.py"
-      ],
       "role": "engine",
       "sha256": "f54fd7d970402f8581f6c5080aa9614ce41cb2dafa2010c08406129731799397"
     },
     "scripts/lib/state_paths/repo_root.py": {
-      "required_by": [
-        "scripts/lib/state_paths/resolver.py"
-      ],
       "role": "engine",
       "sha256": "d9412f1fe395b944a86126bcc39f85d6838382b0fc29d68c8b29b965cd530b5a"
     },
     "scripts/lib/state_paths/resolver.py": {
-      "required_by": [
-        "scripts/lib/state_paths/__init__.py"
-      ],
       "role": "engine",
       "sha256": "e39fca241d6fbf28596ed3954f28a55e65831181cedb02c7c15e372895bb5bd2"
     },
@@ -283,10 +250,6 @@
       "role": "test",
       "sha256": "9138d6ad975c2377a1c56c22610a0c329f17e3253294d0e4b62921b3f912a60a"
     },
-    "scripts/tests/test_live_validation_bundle.py": {
-      "role": "repo-only",
-      "sha256": "c84db1469e363628bbaac15cb0f7412e23a8240532ec003901ac2c039b4442c7"
-    },
     "scripts/tests/test_mutation_gate.py": {
       "role": "test",
       "sha256": "72914ad18b3622faa05a8e5c03035ba1040e7477aeca2cf8f9742aecd2bbf334"
@@ -322,11 +285,9 @@
     "scripts/tests/test_state_guard.py": {
       "role": "test",
       "sha256": "e4a4c5614250ac46509e706507317d1cb40338b1bba51699c902b7269bc84433"
-    },
-    "scripts/verify_live_validation_bundle.py": {
-      "role": "repo-only",
-      "sha256": "99dee623c937cd6374b978fd77ac3dbd582ab759bc79b26e91e697cfb329b494"
     }
   },
-  "kit_version": 2
+  "kit_commit": "7e0232ed871b37a315c5509c97b83d3b00b1a3fd",
+  "kit_version": 2,
+  "not_installed": []
 }

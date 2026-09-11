@@ -14,43 +14,34 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-11 — ITEM5-B-UPDATE-02 awaits source-scope disposition and required review.
+Last updated: 2026-09-11 — source repair delivered; revised retained-update decision prepared.
 Phase 5 delivery item 5 remains incomplete; item 6's replay remains complete.
 
-## Latest session — 2026-09-11 (ITEM5-B retained-update preparation, in Codex)
+## Latest session — 2026-09-11 (ITEM5-B revised retained-update packet, in Codex)
 
-The [UPDATE-02 decision packet](../saved_plans/phase5-item5-b-update02-decision_2026-09-11.md)
-binds the proposed source to kit #731's merge, the exact destination ledger and
-predicted baseline, preservation, local verification and conditional rollback.
-Its audit and forge readback ran from `/Users/topi/Coding/agentic-dev-kit` at
-`bc0c33a3af93d78545050612649f49fa72107a40` on 2026-09-11, with the new audit program
-in the working tree: file/Git administration and fixture-forge comparisons matched
-the post-acceptance checkpoints. The packet retains the commands, original complete
-review receipts, and #732/#731 merge/checkpoint readbacks. Original missing paths
-were not reconstructed; historical questions, ledgers and evidence were preserved.
-The packet's required prepared-input validator binds the current audit program and
-result; the original observations alone do not satisfy approval or reuse.
-The [PR #733 runtime receipt](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5633204702)
-records the adversarial review stopping before a final report. This is incomplete
-review evidence, not clearance. The later [source-review triage](../saved_plans/phase5-item5-b-update02-review-triage_2026-09-11.md)
-records CodeRabbit findings in frozen #731 payloads and proposes a separate kit-only
-repair. Obtain that scope decision; do not silently edit the payloads or accept a
-deferral. Required review remains incomplete; do not bypass the runtime restriction.
+The operator-approved source repair [#734](https://github.com/topij/agentic-dev-kit/pull/734)
+merged as `7e0232ed871b37a315c5509c97b83d3b00b1a3fd`, from reviewed head `7224547da0c766a4fd9ee5791e53ddb3f7db6cdf`. Its
+[delivery checkpoint](https://github.com/topij/agentic-dev-kit/pull/734#issuecomment-5637494093)
+retains the exact-head watch/merge, complete panel receipts, CodeRabbit disposition
+and local #393 versus hosted verification limits. Separate shell parses account for
+#561's recipe gap. The source repair did not update the retained installation.
 
-UPDATE-02 is unapproved. It proposes a local update only; fixture PR continuation
-needs a separate CI/body/publication decision because the existing workflow and body
-retain the previous source pin. Fixture merge remains excluded. The inherited
-special-file-root limitation stays explicit. Ownership acceptance does not establish
-custom wrap-up functionality, client verification or field exit.
+The [UPDATE-03 packet](../saved_plans/phase5-item5-b-update03-decision_2026-09-11.md)
+selects that immutable source and binds payloads, write ledger, baseline prediction,
+preservation, verification, limits, rollback and an exact approval question. Its
+read-only audit and forge records retain post-acceptance checkpoint comparisons.
+PR #733 owns packet review/delivery. UPDATE-01 is consumed; UPDATE-02 and its old
+questions, payloads, ledgers and incomplete review receipts remain preserved.
 
-Item 5 remains incomplete; item 6 and its replay evidence remain complete. #723's
-deferral, #585's earlier placement and #724's delivered #722 batch remain. The
-friction sweep stays parked pending its exact operator decision.
+No retained update is approved. Ownership acceptance does not establish custom
+wrap-up functionality, client verification or field exit. The accepted inherited
+special-file-root limitation remains. Item 6/replay, #723's approved deferral,
+#585's earlier placement and #724's delivered #722 batch are preserved. The friction
+sweep stays parked; no credited exercise is repeated.
 
-▶ Next: obtain the source-scope decision in the linked review triage. Complete
-required review and pr-watch under the scoped kit authority before the retained-update
-decision. No retained execution, fixture PR continuation or fixture merge follows
-from this preparation; UPDATE-01 remains consumed.
+▶ Next: revalidate UPDATE-03's bound inputs and obtain its exact approval before
+retained execution. Fixture PR continuation requires a separate decision; fixture
+merge stays excluded.
 
 ______________________________________________________________________
 
@@ -77,7 +68,7 @@ Ownership acceptance does not establish functionality or field exit. The repair 
 not update the retained installation. Item 6's replay, #723's deferral, #585's earlier
 placement and #724's delivered #722 batch are preserved. The friction sweep stays parked.
 
-The latest session block owns the prepared packet and its next decision.
+The latest session block owns the revised packet and next decision.
 
 ______________________________________________________________________
 
