@@ -24,6 +24,27 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-09-13
+
+- **The panel path test overstates which declaration it protects.** The independent
+  correctness review at fixture `12d7d4b41abe75451ed74d7cbc068bc6b8be2db7` on
+  2026-09-12 UTC classified this as **L / P3 coverage-claim imprecision**, not a
+  demonstrated production regression. `test_the_declared_path_matches_the_doctrine_path`
+  compares `DOCTRINE` to another literal, without observing the `require_kit_paths`
+  argument in `doctrine_text()`. Changing that argument to a missing path left the
+  assertion passing while dependent tests skipped in the selected panel/marker modules.
+  The [execution record](../saved_plans/phase5-item5-b-pr02-execution_2026-09-13.md)
+  binds the full local report and mutation/restoration evidence; complete-mutant-suite
+  survival was not established. Proposed remedy: observe the actual declaration, or
+  narrow the claim if that protection is deliberately out of scope.
+  `gh search issues '"test_panel_prompt" "require_kit_paths"' --repo topij/agentic-dev-kit --limit 30 --json number,title,url,state`
+  in `/Users/topi/Coding/agentic-dev-kit` at
+  `083bccbfa4c4b066d82e7625ddf1efe70716dd2d` on 2026-09-13 local date returned
+  `[]`; this bounded search does not prove no duplicate exists. Pending an exact
+  scope decision: the approved continuation excludes additional fixture fixes and
+  tracker payloads, and the operator requested autonomous finalization before sleep.
+  No fix, tracker write or waiver is established by this entry; the sweep stays parked.
+
 ## 2026-09-11
 
 - **Case-insensitive report paths overwrote a completed review report.** During

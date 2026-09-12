@@ -14,10 +14,32 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-12 — fixture PR continuation decision prepared.
+Last updated: 2026-09-13 — approved fixture PR continuation and review handoff.
 Phase 5 delivery item 5 remains incomplete; item 6's replay remains complete.
 
-## Latest session — 2026-09-12 (ITEM5-B fixture PR continuation packet, in Codex)
+## Latest session — 2026-09-13 (ITEM5-B PR continuation execution, in Codex)
+
+The operator approved ITEM5-B-PR-02 as scoped, later approved sending its private
+review inputs to OpenAI's Codex service for the remaining adversarial review, and
+requested autonomous session finalization with merge-when-clean authority for the
+scoped kit records. The [execution record](../saved_plans/phase5-item5-b-pr02-execution_2026-09-13.md)
+owns the applied CI payload, publication, local/hosted verification, review outcomes,
+retention pointers and final preservation checks. The historical packet remains intact.
+
+The record separates the disclosed local source #393 failure from hosted success
+and accounts for #561's syntax-check gap. The inherited special-file-root limitation
+remains. Preserved-file ownership acceptance is not functional verification or field
+exit. Item 6/replay, #723's approved deferral, #585's earlier placement and #724's
+delivered #722 batch retain their existing scope. The friction sweep stays parked.
+
+▶ Next: `$session-start` — read the PR-02 execution record and its final review
+disposition, revalidate the retained checkpoint read-only, then prepare the exact
+scope decision for the pending review findings. Additional fixture fixes, remaining
+field routes, tracker writes, fixture closure and fixture merge remain excluded.
+
+______________________________________________________________________
+
+## Session — 2026-09-12 (ITEM5-B fixture PR continuation packet, in Codex)
 
 The operator selected preparation of the separate fixture PR continuation decision.
 The [PR-02 packet](../saved_plans/phase5-item5-b-pr02-decision_2026-09-12.md)
@@ -25,7 +47,8 @@ binds the retained UPDATE-03 checkpoints, existing private fixture PR identity,
 CI payload, replacement title/body, verification, publication, review and rollback.
 The packet's stamped readbacks retain the local/forge comparisons and validation
 limits. Preparation leaves the retained fixture/source and fixture PR unchanged.
-PR-02 execution is unapproved; its exact question is the next operator decision.
+The packet preserves the preparation-time question; the subsequent execution record
+owns the later approval and execution outcome.
 
 Kit [#736](https://github.com/topij/agentic-dev-kit/pull/736) delivered UPDATE-03's
 execution record as `2b272a939013538a740f68f3990a6cc961c9512f`, from reviewed head
@@ -41,9 +64,7 @@ remain. Item 5/field exit is incomplete; item 6/replay, #723's approved deferral
 #585's earlier placement and #724's delivered #722 batch are preserved. The friction
 sweep remains parked, and no credited exercise is repeated.
 
-▶ Next: obtain the exact ITEM5-B-PR-02 decision from the packet, then revalidate its
-bound inputs before any approved execution. Fixture merge/closure and additional
-fixture fixes remain excluded; remaining field-exit work needs its own scope decision.
+The latest session block owns the subsequent execution and next decision.
 
 ______________________________________________________________________
 
