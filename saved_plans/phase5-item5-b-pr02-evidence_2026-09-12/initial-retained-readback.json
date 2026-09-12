@@ -1,0 +1,49 @@
+{
+  "at": "2026-09-12T06:58:49.471899+00:00",
+  "baseline_sha256": "e02fda03c4119b0deb9cba6fbf37818831f3244c9f3fc1e8b37fd79e9768291b",
+  "checkpoint_sha256": "9802c72b448249462cb823dae5cd679ac863426e0f58b437ba099490fe75910b",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "execution_driver_sha256": "61b8eab5f0553f98a07ae7b49cbceb8ef99f9df8083147d8e42239ef101841db",
+  "fixture_revision": "4ad91c875377d8607082cd0a125ba801218187ed",
+  "limits": [
+    "Inherited special-file-root gap remains.",
+    "Supplied root and .git root modes/timestamps are outside the inherited inventory.",
+    "Checkpoint equality does not exclude transient writes."
+  ],
+  "original_paths": {
+    "/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source": false,
+    "/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture": false
+  },
+  "outcome": "retained-final-checkpoints-match",
+  "purpose": "Read-only pre-packet comparison to completed UPDATE-03 final checkpoints; no consumed proposal validator invoked.",
+  "replay_evidence": {
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/adapter-report.json": "1f1bbe5729818697804d92a626d165aa88f0798eb08742b6a067e5e489232eba",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/adopter-pr-watch-receipt.json": "f5492f11018cc9818dcbd03dad6b403e9e43cc6db48c1102469e76dd67504bda",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/adopter-pr-watch.json": "ffff9f38bba6c389b1dbab8e5f66cdac11fb240d838f3f30c5f48cf581991d54",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/approval.md": "d65a3a895f60a9397665320d564c840b26dea8d0253b42e84b9d752c8a32b11e",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/bindings.sh": "fb10d6d0444bfdc62190f669abcb6ad604699c429abfaa0a39b814fc950920a8",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/capture_tuple.py.txt": "d51dcd056d68f5fca3138a1e5ab34f395e2ab12746b7dd28f1a01609b27828ea",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/delivery-events.json": "c4540350ef57e4acfcd2e3122642b32616910af0236bf198877b820f45f1d5df",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/fixture-absence.json": "e8649721aa12c3100f516b3dac0954e36694908bf98f8006eb06fe1cccd6813f",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/fork-test-nodes.json": "86c4a9dd7074f3f2bcfe5cd0d90a752eb7ba32fd5454af548a3e15b8a2fce4c4",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/inventory-probe-receipt.json": "17094e6d9b47665f8bf0f826ef3ca60633bc664c2882fc6fe21e91a7d8b92e80",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/inventory-probe.json": "a3c0b1a2769fd2344438f001686a0265015150ff012972a5b8d885b0297e9330",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/reconcile_no_change.py.txt": "71866c9d537d58817cbbbe9463554f55d5585220bef2d8fd944fdec3324e2f9c",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/reconciliation-receipt.json": "2c2ddefcbfd5c6bca5c4cd3d6fd368780417386fc992781744c3981a9fcdb079",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/reconciliation.json": "5606709e202501f833a9cd1349f23749cd4de547ffb3335da50ab4e028f44f7d",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/review-record.md": "04a26130f370e8654061a38890794458c86d3efe72dfeb96667845c5995dba40",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/sha256.json": "e2dbb5d500cd0c0dd8b8b474a59561358a8bd0275be4a25a3a4d2be3e6cda117",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/snapshot-comparison.json": "67e28c00c18fbbf68d460bc3616cdaadf0f0031af7d7d2193c5aee10e97e64ec",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/source-doctor.json": "e72f768a3596e8a0993cf31832021164cb6821bf886b45a2a2cd05cb03c4bf11",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/test-results.json": "8e648524c74a8408dc64191bc2551925c69d1d6b1ad3f16ebfd7000456391d1a",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/tuple-after-receipt.json": "fa58baedc109bd3a1c60ba620997cf797ef1394ba586a10979e573a095485f9e",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/tuple-after.json": "99c78b8409ce5b70aa23ff10cfc6c4ee93605d7d9934c7d911b6858658fa5918",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/tuple-before-receipt.json": "a7dd0b3788dc7fe7aa994b642d3d82f7ed7eab79aa6b013cfb14cd76dc56feb7",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/tuple-before.json": "99c78b8409ce5b70aa23ff10cfc6c4ee93605d7d9934c7d911b6858658fa5918",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/verification-receipt.json": "edd520e52c50b43330d39076c12471504d849a08195d6e6679e3f51ee45f6e27",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/verification-result.json": "0dc8aa9fd9606e57962db64013bf01630b70e0667346297d0b26222d7576585f",
+    "saved_plans/cs-toolkit-replay-evidence_2026-09-09/verify_adopter_condition.py.txt": "0d92b004297f82198108c8b35cae00664d0e1af77cdb1d4f3bbe26e18b002d3d"
+  },
+  "revision": "ae6f11c4646c1a666e7049fed20b30b88c73e850",
+  "source_revision": "7e0232ed871b37a315c5509c97b83d3b00b1a3fd"
+}

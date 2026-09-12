@@ -1,0 +1,50 @@
+from pathlib import Path
+from datetime import datetime, timezone
+import difflib
+import hashlib
+import json
+import subprocess
+import yaml
+
+ROOT = Path('/Users/topi/Coding/agentic-dev-kit')
+REPO = Path('/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture')
+KIT = REPO.parent / 'kit-source'
+E = Path('/private/tmp/item5b-pr02-packet-20260912')
+P = ROOT / 'saved_plans/phase5-item5-b-pr02-evidence_2026-09-12'
+assert Path.cwd() == ROOT
+proposed = (P / 'proposed-item5-b-installed.yml.txt').read_text()
+actual = (REPO / '.github/workflows/item5-b-installed.yml').read_text()
+parsed = yaml.safe_load(proposed)
+assert parsed['permissions'] == {'contents': 'read'}
+assert list(parsed['jobs']) == ['installed-kit']
+commands = [step['run'] for step in parsed['jobs']['installed-kit']['steps'] if 'run' in step]
+records = []
+for i, body in enumerate(commands):
+    dest = E / f'ci-shell-{i}.sh'
+    with dest.open('x') as f:
+        f.write(body)
+    assert dest.read_text() == body
+    p = subprocess.run(['bash', '-n', str(dest)], capture_output=True, text=True)
+    records.append({'argv': ['bash', '-n', str(dest)], 'returncode': p.returncode,
+                    'stdout': p.stdout, 'stderr': p.stderr})
+    assert p.returncode == 0
+assert '60fe0dc7ad68922d064c0cf401cff2c4c6d607ac' not in proposed
+assert '9e2196df3b7239b599819abcfc20271b0389b70f78f22837a0709575145b9126' not in proposed
+assert 'unset PYTHONOPTIMIZE' in commands[-1]
+report = {
+    'at': datetime.now(timezone.utc).isoformat(),
+    'cwd': str(ROOT),
+    'revision': '2b272a939013538a740f68f3990a6cc961c9512f',
+    'binding_sha256': hashlib.sha256((P / 'prepared-input-binding.json').read_bytes()).hexdigest(),
+    'command': 'YAML parse and bash -n of extracted proposed run steps',
+    'records': records,
+    'diff': ''.join(difflib.unified_diff(actual.splitlines(True), proposed.splitlines(True),
+                                       fromfile='retained CI', tofile='proposed CI')),
+    'limits': 'Syntax and declared-payload inspection only; hosted workflow execution is not claimed.',
+}
+data = (json.dumps(report, indent=2, sort_keys=True) + '\n').encode()
+dest = E / 'ci-payload-check.json'
+with dest.open('xb') as f:
+    f.write(data)
+assert dest.read_bytes() == data
+print(data.decode())

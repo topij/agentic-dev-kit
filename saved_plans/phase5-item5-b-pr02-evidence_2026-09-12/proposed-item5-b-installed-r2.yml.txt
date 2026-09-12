@@ -1,0 +1,65 @@
+name: ITEM5-B installed verification
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  installed-kit:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install verification tools
+        run: python -m pip install uv pytest pyyaml
+      - name: Verify installed bytes and selected tests against the approved source
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset PYTHONOPTIMIZE
+          REPO="$GITHUB_WORKSPACE"
+          KIT="$RUNNER_TEMP/item5-b-kit-source"
+          OUT="$RUNNER_TEMP/item5-b-verification"
+          test "$(pwd -P)" = "$REPO"
+          test ! -e "$KIT"
+          test ! -e "$OUT"
+          mkdir -p "$OUT/tmp"
+          export UV_CACHE_DIR="$OUT/uv-cache" UV_TOOL_DIR="$OUT/uv-tools"
+          export RUFF_CACHE_DIR="$OUT/ruff-cache" TMPDIR="$OUT/tmp"
+          git clone --no-checkout https://github.com/topij/agentic-dev-kit.git "$KIT"
+          git -C "$KIT" checkout --detach 7e0232ed871b37a315c5509c97b83d3b00b1a3fd
+          test "$(git -C "$KIT" rev-parse HEAD)" = 7e0232ed871b37a315c5509c97b83d3b00b1a3fd
+          python -c 'import hashlib,pathlib; assert hashlib.sha256(pathlib.Path("kit-manifest.json").read_bytes()).hexdigest() == "e02fda03c4119b0deb9cba6fbf37818831f3244c9f3fc1e8b37fd79e9768291b"'
+          export DEVKIT_STATE_ROOT="$OUT/fixture-state"
+          export UV_PROJECT_ENVIRONMENT="$OUT/fixture-venv"
+          export PYTEST_ADDOPTS="-o cache_dir=$OUT/fixture-pytest-cache -ra"
+          python -B "$REPO/scripts/devkit/kit_doctor.py" --root "$REPO" --manifest "$KIT/kit-manifest.json" --json
+          python -B "$KIT/scripts/kit_doctor.py" --root "$REPO" --adapter-report --adapter-source "$KIT" --json
+          python -B "$REPO/scripts/devkit/check_doc_budget.py"
+          uv run --with pytest --with pyyaml python -B "$REPO/scripts/devkit/run_installed_tests.py" --root "$REPO"
+          fixture_status="$(git --no-optional-locks -C "$REPO" status --porcelain)"
+          test -z "$fixture_status"
+          cd "$KIT"
+          test "$(pwd -P)" = "$KIT"
+          export DEVKIT_STATE_ROOT="$OUT/source-state"
+          export UV_PROJECT_ENVIRONMENT="$OUT/source-venv"
+          export PYTEST_ADDOPTS="-o cache_dir=$OUT/source-pytest-cache -ra"
+          bash -n "$KIT/scripts/dev_session.sh"
+          bash -n "$KIT/scripts/reconcile_sessions.sh"
+          bash -n "$KIT/scripts/lib/repo_root.sh"
+          bash -n "$KIT/scripts/hooks/pre-push"
+          sh -n "$KIT/init.sh"
+          make test
+          source_status="$(git --no-optional-locks -C "$KIT" status --porcelain)"
+          test -z "$source_status"

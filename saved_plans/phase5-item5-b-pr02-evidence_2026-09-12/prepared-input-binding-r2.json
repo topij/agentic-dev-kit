@@ -1,0 +1,21 @@
+{
+  "decision": "ITEM5-B-PR-02",
+  "execution_approved": false,
+  "files": {
+    "saved_plans/phase5-item5-b-acceptance-audit_2026-09-10.py.txt": "3902a43b0ede7a08ae8b12449981a2070a05056d1b49a43be36a7932801c829d",
+    "saved_plans/phase5-item5-b-pr02-audit-r2_2026-09-12.py.txt": "86c32e39a15124bd1f7a2b9c02fd3d0e6de6491e39f63bb5b098d8a39c6ff0d7",
+    "saved_plans/phase5-item5-b-pr02-command_2026-09-12.py.txt": "e3e099cb4b0d231c6bd902231e17f0b3e0f496c108a36907057697a28f733602",
+    "saved_plans/phase5-item5-b-pr02-evidence_2026-09-12/forge-binding-r2.json": "840042d3097a1d2f27fda34ac14ff23ceda1bc6c0de22b2480accf3a177c72b1",
+    "saved_plans/phase5-item5-b-pr02-evidence_2026-09-12/forge-readback-records-r2.json.gz": "2a9d1ba148e2ddb9ca294cc8ff0b364a05cbc9a957369520bfe13dc203898da3",
+    "saved_plans/phase5-item5-b-pr02-evidence_2026-09-12/initial-retained-readback.json": "cd5c9085bcbab1fecb1deb27a5236ed2279fe0f91b60288012905960777a08dd",
+    "saved_plans/phase5-item5-b-pr02-evidence_2026-09-12/initial-retained-readback.json.gz": "d21bf02392d42f634993908c0d7436481c8f39ba7f9269395487dd3465e9fc9b",
+    "saved_plans/phase5-item5-b-pr02-evidence_2026-09-12/proposed-fixture-pr-body.md": "53fa5eecb6f2d7ed779dc8f342cb03f1c7c4b3f425a28da8b09cd69d3f51f18a",
+    "saved_plans/phase5-item5-b-pr02-evidence_2026-09-12/proposed-item5-b-installed-r2.yml.txt": "0b2e8bdda56a34856518d12d65d27ca9ac6fb7be3e48e798dcf83940d5c337dc",
+    "saved_plans/phase5-item5-b-pr02-evidence_2026-09-12/proposed-writes-r2.json": "35bcfee00567831223c37c10d3f6ebec86cd826ea4572009cc20a816193aaf4c",
+    "saved_plans/phase5-item5-b-update03-audit-r4_2026-09-11.py.txt": "d65e2b896544174e0cfb22c381dd74790005114e3ac281f992e26f5ec000910c",
+    "saved_plans/phase5-item5-b-update03-command-r4_2026-09-11.py.txt": "49d751d96a7a1205fb1f5ec61ea79a587593dd651fc81261d512e0fa772fbac8",
+    "saved_plans/phase5-item5-b-update03-execution-evidence_2026-09-12/records.json.gz": "016eaf468536d59b6bec8c3aa864c66a45d2a1e46d07fc3b48d0dbab20ccb4a5"
+  },
+  "revision": "r2",
+  "supersedes_binding_sha256": "d667a2dc82a247d63165792692bf0b5328ba688bc30c7a5a6ecce7d1b58f89c5"
+}

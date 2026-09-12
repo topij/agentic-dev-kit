@@ -1,0 +1,40 @@
+{
+  "attempt_branch": "chore/item5-b-pr02-7e0232e",
+  "baseline_sha256": "e02fda03c4119b0deb9cba6fbf37818831f3244c9f3fc1e8b37fd79e9768291b",
+  "baseline_write": false,
+  "ci_status_checks": "Capture each fixture/source git status result in a standalone assignment under set -e before testing whether its output is empty; a failed Git read must stop the workflow.",
+  "decision": "ITEM5-B-PR-02",
+  "execution_approved": false,
+  "fixture_input": "4ad91c875377d8607082cd0a125ba801218187ed",
+  "fixture_payload_writes": [
+    {
+      "after_sha256": "0b2e8bdda56a34856518d12d65d27ca9ac6fb7be3e48e798dcf83940d5c337dc",
+      "before_sha256": "ae69eae2c8fb65e5cd8b7accdda3e376b1ad7d2fc82276c09ef06e03e105e917",
+      "mode": "0o644",
+      "path": ".github/workflows/item5-b-installed.yml",
+      "payload": "saved_plans/phase5-item5-b-pr02-evidence_2026-09-12/proposed-item5-b-installed-r2.yml.txt"
+    }
+  ],
+  "fixture_root": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+  "output_root": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912",
+  "pr_body_after_sha256": "53fa5eecb6f2d7ed779dc8f342cb03f1c7c4b3f425a28da8b09cd69d3f51f18a",
+  "pr_body_before_sha256": "34e77bb8b099d5d0efe82d3bcbcf365783ae77069e96b44f82bf2c738a6dc9d6",
+  "pr_body_payload": "saved_plans/phase5-item5-b-pr02-evidence_2026-09-12/proposed-fixture-pr-body.md",
+  "pr_title_after": "Continue ITEM5-B verification at kit 7e0232e",
+  "pr_title_before": "Complete the ITEM5-B adoption fixture",
+  "preservation": "All non-Git fixture paths except the listed CI payload; complete source inventory; typed tracked/merged config; baseline; all existing local branch refs; original missing paths; replay evidence. Git-generated attempt/index/objects/reflogs and push tracking-ref changes are observed separately. Local .git/config and hooks are preserved.",
+  "publication": "After a separate exact operator approval, local verification and before/after preservation checks: ordinary non-forced fast-forward push of the resulting immutable candidate to the bound existing remote head. Never push main, create another fixture PR, change visibility/settings, merge, close or delete.",
+  "remote_base": "8533c334637e8776ca7a4fe3a9fd8c6c64e35707",
+  "remote_input": "f770f183bf6691f1f706c676b740cf2ef5ceb766",
+  "remote_ref": "refs/heads/chore/item5-b-field-exit",
+  "remote_repository": "topij/adk-item5-b-field-20260909",
+  "remote_url": "https://github.com/topij/adk-item5-b-field-20260909.git",
+  "retained_checkpoint_sha256": "9802c72b448249462cb823dae5cd679ac863426e0f58b437ba099490fe75910b",
+  "review": "Fresh independent adversarial/correctness panel over the published fixture head, complete evidence and dispositions before any additional fix. No new fixture payload fix is included. Review and verification comments may contain only scoped actual results, findings, hashes, links and head-bound dispositions; full reports/logs retained locally.",
+  "revision": "r2",
+  "rollback": "Before commit, restore only the exact attempted CI payload and staged entry after hash/ref checks; after commit, switch to unchanged input branch after proving no later work, preserving attempt branch. Remote writes are not locally undone. No cleanup of prior evidence or retained source.",
+  "source_input": "7e0232ed871b37a315c5509c97b83d3b00b1a3fd",
+  "source_root": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/kit-source",
+  "source_write": false,
+  "supersedes_ledger_sha256": "24b7fc281197a0a79483c257a5884273e90c38aa3c74da4d2e52767e8884c5c2"
+}

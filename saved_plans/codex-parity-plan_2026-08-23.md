@@ -469,9 +469,14 @@ historical observation it was and is not silently refreshed.
      consumed authority, local attempt `4ad91c875377d8607082cd0a125ba801218187ed`,
      source `7e0232ed871b37a315c5509c97b83d3b00b1a3fd`, exact baseline, verification
      and final preservation evidence. UPDATE-02's old question, payloads, ledger and
-     review evidence remain preserved and unanswered. Revalidate against the new
-     execution checkpoints before preparing the separate exact fixture PR
-     continuation decision for CI/body/publication/review scope.
+     review evidence remain preserved and unanswered. Kit #736 delivered the execution
+     record as `2b272a939013538a740f68f3990a6cc961c9512f`; its
+     [review disposition](https://github.com/topij/agentic-dev-kit/pull/736#issuecomment-5643887657)
+     retains the panel and stamped verification limits. The
+     [PR-02 continuation packet](phase5-item5-b-pr02-decision_2026-09-12.md) now binds
+     read-only checkpoint/forge comparisons, the CI payload, title/body, publication,
+     verification/review scope and rollback. Its exact operator decision remains
+     unapproved. Preparation does not publish or continue the fixture PR.
      Fixture merge remains excluded; the nonfunctional custom
      wrap-up carries ownership acceptance only. No original continuity or prior field
      credit was recreated.

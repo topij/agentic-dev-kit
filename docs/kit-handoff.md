@@ -14,10 +14,40 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-12 — approved retained update executed locally.
+Last updated: 2026-09-12 — fixture PR continuation decision prepared.
 Phase 5 delivery item 5 remains incomplete; item 6's replay remains complete.
 
-## Latest session — 2026-09-12 (ITEM5-B approved retained update, in Codex)
+## Latest session — 2026-09-12 (ITEM5-B fixture PR continuation packet, in Codex)
+
+The operator selected preparation of the separate fixture PR continuation decision.
+The [PR-02 packet](../saved_plans/phase5-item5-b-pr02-decision_2026-09-12.md)
+binds the retained UPDATE-03 checkpoints, existing private fixture PR identity,
+CI payload, replacement title/body, verification, publication, review and rollback.
+The packet's stamped readbacks retain the local/forge comparisons and validation
+limits. Preparation leaves the retained fixture/source and fixture PR unchanged.
+PR-02 execution is unapproved; its exact question is the next operator decision.
+
+Kit [#736](https://github.com/topij/agentic-dev-kit/pull/736) delivered UPDATE-03's
+execution record as `2b272a939013538a740f68f3990a6cc961c9512f`, from reviewed head
+`ae6f11c4646c1a666e7049fed20b30b88c73e850`; its
+[review disposition](https://github.com/topij/agentic-dev-kit/pull/736#issuecomment-5643887657)
+retains the panel and verification limitations. UPDATE-03 and UPDATE-01 are consumed;
+UPDATE-02 remains historical and unanswered. Source remains the approved pin
+`7e0232ed871b37a315c5509c97b83d3b00b1a3fd`; the fixture input remains the local
+attempt `4ad91c875377d8607082cd0a125ba801218187ed`.
+
+The inherited special-file-root limitation and ownership-only custom wrap-up boundary
+remain. Item 5/field exit is incomplete; item 6/replay, #723's approved deferral,
+#585's earlier placement and #724's delivered #722 batch are preserved. The friction
+sweep remains parked, and no credited exercise is repeated.
+
+▶ Next: obtain the exact ITEM5-B-PR-02 decision from the packet, then revalidate its
+bound inputs before any approved execution. Fixture merge/closure and additional
+fixture fixes remain excluded; remaining field-exit work needs its own scope decision.
+
+______________________________________________________________________
+
+## Session — 2026-09-12 (ITEM5-B approved retained update, in Codex)
 
 The operator approved ITEM5-B-UPDATE-03 as scoped in its packet. The
 [execution record](../saved_plans/phase5-item5-b-update03-execution_2026-09-12.md)
@@ -35,9 +65,7 @@ custom wrap-up functionality, client verification or field exit. Item 6/replay,
 #723's approved deferral, #585's earlier placement and #724's delivered #722 batch
 are preserved. The friction sweep stays parked; no credited exercise is repeated.
 
-▶ Next: revalidate against UPDATE-03's execution checkpoints and prepare the separate
-exact fixture PR continuation decision, including CI/body/publication/review scope.
-Fixture merge remains excluded; remaining field-exit work needs its own scope decision.
+The latest session block owns the subsequent continuation packet and next decision.
 
 ______________________________________________________________________
 

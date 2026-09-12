@@ -1,0 +1,18 @@
+{
+  "decision": "ITEM5-B-PR-02",
+  "execution_approved": false,
+  "files": {
+    "saved_plans/phase5-item5-b-acceptance-audit_2026-09-10.py.txt": "3902a43b0ede7a08ae8b12449981a2070a05056d1b49a43be36a7932801c829d",
+    "saved_plans/phase5-item5-b-pr02-audit_2026-09-12.py.txt": "eecafc4abf984b9575e73970a711cf55e24db0244146f8d7f0e9602a729ec53b",
+    "saved_plans/phase5-item5-b-pr02-command_2026-09-12.py.txt": "e3e099cb4b0d231c6bd902231e17f0b3e0f496c108a36907057697a28f733602",
+    "saved_plans/phase5-item5-b-pr02-evidence_2026-09-12/forge-binding.json": "b8c02a4211dd23233499ae64fbef3198a7ea07d458b1da947e8b6627f4bd65e9",
+    "saved_plans/phase5-item5-b-pr02-evidence_2026-09-12/initial-retained-readback.json": "cd5c9085bcbab1fecb1deb27a5236ed2279fe0f91b60288012905960777a08dd",
+    "saved_plans/phase5-item5-b-pr02-evidence_2026-09-12/initial-retained-readback.json.gz": "d21bf02392d42f634993908c0d7436481c8f39ba7f9269395487dd3465e9fc9b",
+    "saved_plans/phase5-item5-b-pr02-evidence_2026-09-12/proposed-fixture-pr-body.md": "53fa5eecb6f2d7ed779dc8f342cb03f1c7c4b3f425a28da8b09cd69d3f51f18a",
+    "saved_plans/phase5-item5-b-pr02-evidence_2026-09-12/proposed-item5-b-installed.yml.txt": "840128ebc7f3d9bc0599a752850a136670e8988b3f149ea05bcb7d1aee744373",
+    "saved_plans/phase5-item5-b-pr02-evidence_2026-09-12/proposed-writes.json": "24b7fc281197a0a79483c257a5884273e90c38aa3c74da4d2e52767e8884c5c2",
+    "saved_plans/phase5-item5-b-update03-audit-r4_2026-09-11.py.txt": "d65e2b896544174e0cfb22c381dd74790005114e3ac281f992e26f5ec000910c",
+    "saved_plans/phase5-item5-b-update03-command-r4_2026-09-11.py.txt": "49d751d96a7a1205fb1f5ec61ea79a587593dd651fc81261d512e0fa772fbac8",
+    "saved_plans/phase5-item5-b-update03-execution-evidence_2026-09-12/records.json.gz": "016eaf468536d59b6bec8c3aa864c66a45d2a1e46d07fc3b48d0dbab20ccb4a5"
+  }
+}
