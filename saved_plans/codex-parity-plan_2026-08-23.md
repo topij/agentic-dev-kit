@@ -444,7 +444,7 @@ historical observation it was and is not silently refreshed.
      2026-09-10. The [acceptance execution](phase5-item5-b-acceptance-execution_2026-09-10.md)
      records ownership acceptance, the exact friction/CI payloads, local/hosted results
      and private fixture PR #1 at `f770f183bf6691f1f706c676b740cf2ef5ceb766`.
-     PR-01 is paused at the recorded P2 inherited detector gap and P3 wording
+     PR-01 paused at the recorded P2 inherited detector gap and P3 wording
      imprecision. The [kit-only repair decision](phase5-item5-b-review-repair-decision_2026-09-10.md)
      was approved on 2026-09-10. The [kit repair execution](phase5-item5-b-kit-repair-execution_2026-09-10.md)
      carries the applied kit scope and pre-fix review receipts. Its panel recorded a P2
@@ -475,8 +475,13 @@ historical observation it was and is not silently refreshed.
      retains the panel and stamped verification limits. The
      [PR-02 continuation packet](phase5-item5-b-pr02-decision_2026-09-12.md) now binds
      read-only checkpoint/forge comparisons, the CI payload, title/body, publication,
-     verification/review scope and rollback. Its exact operator decision remains
-     unapproved. Preparation does not publish or continue the fixture PR.
+     verification/review scope and rollback. Kit #737 delivered it as
+     `083bccbfa4c4b066d82e7625ddf1efe70716dd2d`. The operator subsequently approved
+     PR-02 as scoped; the [execution record](phase5-item5-b-pr02-execution_2026-09-13.md)
+     owns the applied CI payload, publication at
+     `12d7d4b41abe75451ed74d7cbc068bc6b8be2db7`, verification, review findings and
+     retained checkpoint. Additional fixes and field-exit work retain their separate
+     decisions; publication does not establish adoption completion.
      Fixture merge remains excluded; the nonfunctional custom
      wrap-up carries ownership acceptance only. No original continuity or prior field
      credit was recreated.

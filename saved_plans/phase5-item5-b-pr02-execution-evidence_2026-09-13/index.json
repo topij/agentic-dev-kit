@@ -1,0 +1,370 @@
+{
+  "approval": {
+    "binding_sha256": "6dde63401a2d4dd451ee94f07a962e63caebdd54b0115fb9e477fab84896fa27",
+    "disclosure_response": "Yes, please send it",
+    "disclosure_scope": "Private fixture source, full PR diff and review context to OpenAI's Codex service for the remaining adversarial review; new full reports stay local.",
+    "ledger_sha256": "35bcfee00567831223c37c10d3f6ebec86cd826ea4572009cc20a816193aaf4c",
+    "response": "Approve ITEM5-B-PR-02 as scoped"
+  },
+  "baseline_sha256": "e02fda03c4119b0deb9cba6fbf37818831f3244c9f3fc1e8b37fd79e9768291b",
+  "captured_at": "2026-09-12T22:35:13.166075+00:00",
+  "ci_payload_sha256": "0b2e8bdda56a34856518d12d65d27ca9ac6fb7be3e48e798dcf83940d5c337dc",
+  "completed_panel": {
+    "at": "2026-09-12T22:32:24.205555+00:00",
+    "finding_status": "Correctness P3/Low coverage-claim imprecision remains pending; adversarial found no new actionable finding. No fix, tracker disposition or waiver.",
+    "head": "12d7d4b41abe75451ed74d7cbc068bc6b8be2db7",
+    "review_gate_receipt": false,
+    "reviews": {
+      "adversarial": {
+        "actual_turn_contexts": [
+          {
+            "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/review-adversarial-12d7d4b41abe/handed",
+            "effort": "high",
+            "model": "gpt-6-astra"
+          }
+        ],
+        "handed_inventory_and_administration_equal": true,
+        "launcher": {
+          "argv": [
+            "codex",
+            "exec",
+            "-c",
+            "model_reasoning_effort=high",
+            "--approve-for-me",
+            "-C",
+            "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/review-adversarial-12d7d4b41abe/handed",
+            "--add-dir",
+            "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/review-adversarial-12d7d4b41abe",
+            "--add-dir",
+            "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912",
+            "--json",
+            "-o",
+            "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/review-adversarial-12d7d4b41abe/launcher-summary.txt",
+            "-"
+          ],
+          "git_optional_locks": "0",
+          "head": "12d7d4b41abe75451ed74d7cbc068bc6b8be2db7",
+          "lens": "adversarial",
+          "prompt_sha256": "d3c02164889b517a92381394274cdfaf541e4668a429b53417902b1f3eccc29f",
+          "started_at": "2026-09-12T22:10:26.291079+00:00"
+        },
+        "mutation_diffs_failure_assertions_and_restoration_read": true,
+        "report_path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/review-adversarial-12d7d4b41abe/review-report.md",
+        "report_sha256": "6a2336fd3814b09e4e254e47481177074e3c16d279d460a0fe5fa35580513bcd",
+        "rollout": "/Users/topi/.codex/sessions/2026/09/13/rollout-2026-09-13T01-10-26-01a097ab-fea2-72e0-8606-40b7725df182.jsonl",
+        "runtime": {
+          "cli_version": "0.153.4",
+          "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/review-adversarial-12d7d4b41abe/handed",
+          "model_provider": "openai",
+          "timestamp": "2026-09-12T22:10:26.637Z"
+        },
+        "terminal": {
+          "ended_at": "2026-09-12T22:29:56.772580+00:00",
+          "returncode": 0
+        },
+        "terminal_report_read": true,
+        "thread_id": "01a097ab-fea2-72e0-8606-40b7725df182"
+      },
+      "correctness": {
+        "actual_turn_contexts": [
+          {
+            "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/review-correctness-12d7d4b41abe/handed",
+            "effort": "high",
+            "model": "gpt-6-astra"
+          }
+        ],
+        "handed_inventory_and_administration_equal": true,
+        "launcher": {
+          "argv": [
+            "codex",
+            "exec",
+            "-c",
+            "model_reasoning_effort=high",
+            "--approve-for-me",
+            "-C",
+            "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/review-correctness-12d7d4b41abe/handed",
+            "--add-dir",
+            "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/review-correctness-12d7d4b41abe",
+            "--add-dir",
+            "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912",
+            "--json",
+            "-o",
+            "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/review-correctness-12d7d4b41abe/launcher-summary.txt",
+            "-"
+          ],
+          "git_optional_locks": "0",
+          "head": "12d7d4b41abe75451ed74d7cbc068bc6b8be2db7",
+          "lens": "correctness",
+          "prompt_sha256": "ef01276b0a540bcfbab5bb510836ff83a358f1be96c011eb711efbf2391f6161",
+          "started_at": "2026-09-12T20:57:44.649861+00:00"
+        },
+        "mutation_diffs_failure_assertions_and_restoration_read": true,
+        "report_path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/review-correctness-12d7d4b41abe/review-report.md",
+        "report_sha256": "b2d4d1c8e2504d3574ad1f953ad724b9a50deed90e302915a1c51d2e3a087805",
+        "rollout": "/Users/topi/.codex/sessions/2026/09/12/rollout-2026-09-12T23-57-44-01a09769-70b6-7100-9849-55b905ae128b.jsonl",
+        "runtime": {
+          "cli_version": "0.153.4",
+          "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/review-correctness-12d7d4b41abe/handed",
+          "model_provider": "openai",
+          "timestamp": "2026-09-12T20:57:44.927Z"
+        },
+        "terminal": {
+          "ended_at": "2026-09-12T21:11:52.448691+00:00",
+          "returncode": 0
+        },
+        "terminal_report_read": true,
+        "thread_id": "01a09769-70b6-7100-9849-55b905ae128b"
+      }
+    }
+  },
+  "final_checkpoint": {
+    "at": "2026-09-12T22:35:12.194767+00:00",
+    "complete_forge_tuple_equal": true,
+    "decision": "ITEM5-B-PR-02",
+    "field_exit_complete": false,
+    "fixture_merge_authorized": false,
+    "fixture_pr": "https://github.com/topij/adk-item5-b-field-20260909/pull/1",
+    "forge_tuple_sha256": "611f91aaed5bd8e78f7c65cab3ae0c6358f8c64a3a50b238217641c8b8bef4bf",
+    "head": "12d7d4b41abe75451ed74d7cbc068bc6b8be2db7",
+    "next": "Prepare an exact scope decision for the pending correctness finding after read-only retained revalidation. Do not repeat completed execution or review.",
+    "panel_complete": true,
+    "pending_finding": "Correctness P3/Low coverage-claim imprecision remains pending; adversarial found no new actionable finding. No fix, tracker disposition or waiver.",
+    "pr_state": "OPEN",
+    "retained_checkpoint": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/retained-review-final.json",
+    "retained_checkpoint_sha256": "98250efb1ac3ff08a8e64153cae048120cf34607ed4fe3a02fad0e864bb7d827",
+    "retained_inventories_equal_to_paused": true,
+    "review_gate_receipt": false,
+    "review_summary": {
+      "at": "2026-09-12T22:32:34.335186+00:00",
+      "body_sha256": "0d666812f0eb69ebd7eed4878fc3340a36c878a9db6c33bb1b8594647167a1a4",
+      "comment_id": 5649128514,
+      "finding_acknowledged": false,
+      "gate_receipt_recorded": false,
+      "url": "https://github.com/topij/adk-item5-b-field-20260909/pull/1#issuecomment-5649128514"
+    },
+    "source": "7e0232ed871b37a315c5509c97b83d3b00b1a3fd",
+    "state_unchanged_by_readonly_polls": true
+  },
+  "fixture_head": "12d7d4b41abe75451ed74d7cbc068bc6b8be2db7",
+  "fixture_pr": {
+    "baseRefName": "main",
+    "baseRefOid": "8533c334637e8776ca7a4fe3a9fd8c6c64e35707",
+    "headRefName": "chore/item5-b-field-exit",
+    "headRefOid": "12d7d4b41abe75451ed74d7cbc068bc6b8be2db7",
+    "isDraft": false,
+    "state": "OPEN",
+    "title": "Continue ITEM5-B verification at kit 7e0232e",
+    "url": "https://github.com/topij/adk-item5-b-field-20260909/pull/1"
+  },
+  "hosted_verification": {
+    "at": "2026-09-12T20:57:06.808490+00:00",
+    "head": "12d7d4b41abe75451ed74d7cbc068bc6b8be2db7",
+    "job_ids": [
+      103618063515
+    ],
+    "log_sha256": "cffd52f554e07134c8ed8eb2f4ca09c57fb49208eb020bd00b5197a3fde43796",
+    "run_id": 34717806769,
+    "run_record_sha256": "2362ab3b480e418baf2f0ae056171db1c61b4fbf1ed7e7b0682600ac8d161bcd",
+    "run_url": "https://github.com/topij/adk-item5-b-field-20260909/actions/runs/34717806769",
+    "terminal_summaries": [
+      "installed-kit\tVerify installed bytes and selected tests against the approved source\t2026-09-12T20:49:57.4140196Z 2158 passed, 131 skipped in 213.61s (0:03:33)",
+      "installed-kit\tVerify installed bytes and selected tests against the approved source\t2026-09-12T20:54:03.1221088Z 2528 passed, 3 skipped in 244.80s (0:04:04)"
+    ],
+    "tool_version_lines": [
+      "installed-kit\tRun actions/setup-python@v5\t2026-09-12T20:46:13.9994585Z Successfully set up CPython (3.12.14)",
+      "installed-kit\tInstall verification tools\t2026-09-12T20:46:20.7575880Z Successfully installed iniconfig-2.3.0 packaging-26.3 pluggy-1.6.0 pygments-2.21.0 pytest-9.1.1 pyyaml-6.0.3 uv-0.12.13"
+    ]
+  },
+  "kind": "Scoped execution summary and local retention index; not a public raw-evidence bundle or capability promotion",
+  "kit_input": "083bccbfa4c4b066d82e7625ddf1efe70716dd2d",
+  "limits": [
+    "Inherited FIFO/special-file-root limitation remains.",
+    "Documented shutdown-time observation limit reproduced, without proving a shipped late write or workflow Git-status bypass.",
+    "Root and .git root modes/timestamps are omitted; endpoint equality does not rule out transient writes.",
+    "Skipped-node identities are not established by historical grouped-summary equality.",
+    "Ownership acceptance is not functionality, client verification or field exit.",
+    "The full raw private reports/logs are local retention; this index does not make them publicly available."
+  ],
+  "local_archive": {
+    "contents": "Complete execution command records and output, complete terminal reviewer reports and launch records, top-level review scratch artifacts, nested logs/jobs, mutation diffs/restoration/probe evidence and execution drivers. Verification clones, environments/caches and original backups are retained separately under their existing local paths.",
+    "path": "/Users/topi/Coding/agentic-dev-kit/state/review-evidence/item5-b-pr02-execution-20260912/completed-execution.json.gz",
+    "sha256": "d5ad0f284134157eb66005a3a93034d866f9eafceabe0be993394c4b72852d0a"
+  },
+  "local_verification": {
+    "installed-suite": {
+      "failures": [],
+      "metadata": {
+        "argv": [
+          "env",
+          "-u",
+          "PYTHONOPTIMIZE",
+          "python3",
+          "-B",
+          "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-pr02-command_2026-09-12.py.txt",
+          "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+          "uv",
+          "run",
+          "--with",
+          "pytest",
+          "--with",
+          "pyyaml",
+          "python",
+          "-B",
+          "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture/scripts/devkit/run_installed_tests.py",
+          "--root",
+          "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture"
+        ],
+        "attempt_revision": "12d7d4b41abe75451ed74d7cbc068bc6b8be2db7",
+        "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture",
+        "ended_at": "2026-09-12T20:32:11.356244+00:00",
+        "environment": {
+          "DEVKIT_STATE_ROOT": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/fixture-state",
+          "PYTEST_ADDOPTS": "-o cache_dir=/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/fixture-pytest-cache -ra --junitxml=/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/fixture-junit.xml",
+          "PYTHONDONTWRITEBYTECODE": "1",
+          "RUFF_CACHE_DIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/ruff-cache/fixture",
+          "TMPDIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/tmp/fixture",
+          "UV_CACHE_DIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/uv-cache/fixture",
+          "UV_PROJECT_ENVIRONMENT": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/fixture-venv",
+          "UV_TOOL_DIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/uv-tools/fixture"
+        },
+        "fixture_input": "4ad91c875377d8607082cd0a125ba801218187ed",
+        "git_environment": {
+          "GIT_CONFIG_COUNT": "2",
+          "GIT_CONFIG_GLOBAL": "/dev/null",
+          "GIT_CONFIG_KEY_0": "core.fsmonitor",
+          "GIT_CONFIG_KEY_1": "core.attributesFile",
+          "GIT_CONFIG_SYSTEM": "/dev/null",
+          "GIT_CONFIG_VALUE_0": "false",
+          "GIT_CONFIG_VALUE_1": "/dev/null"
+        },
+        "kit_revision": "083bccbfa4c4b066d82e7625ddf1efe70716dd2d",
+        "returncode": 0,
+        "source_revision": "7e0232ed871b37a315c5509c97b83d3b00b1a3fd",
+        "started_at": "2026-09-12T20:25:28.602703+00:00",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_sha256": "dac9c649291a6e97753978649b076948016c0645edbef4bcd730c46b0bc0290d"
+      },
+      "summary": "2161 passed, 128 skipped in 402.23s (0:06:42)"
+    },
+    "source-make-test": {
+      "failures": [
+        "FAILED scripts/tests/test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero"
+      ],
+      "metadata": {
+        "argv": [
+          "env",
+          "-u",
+          "PYTHONOPTIMIZE",
+          "python3",
+          "-B",
+          "/Users/topi/Coding/agentic-dev-kit/saved_plans/phase5-item5-b-pr02-command_2026-09-12.py.txt",
+          "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/source-verification",
+          "make",
+          "test"
+        ],
+        "attempt_revision": "12d7d4b41abe75451ed74d7cbc068bc6b8be2db7",
+        "cwd": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/source-verification",
+        "ended_at": "2026-09-12T20:39:48.418761+00:00",
+        "environment": {
+          "DEVKIT_STATE_ROOT": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/source-state",
+          "PYTEST_ADDOPTS": "-o cache_dir=/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/source-pytest-cache -ra --junitxml=/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/source-junit.xml",
+          "PYTHONDONTWRITEBYTECODE": "1",
+          "RUFF_CACHE_DIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/ruff-cache/source",
+          "TMPDIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/tmp/source",
+          "UV_CACHE_DIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/uv-cache/source",
+          "UV_PROJECT_ENVIRONMENT": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/source-venv",
+          "UV_TOOL_DIR": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/uv-tools/source"
+        },
+        "fixture_input": "4ad91c875377d8607082cd0a125ba801218187ed",
+        "git_environment": {
+          "GIT_CONFIG_COUNT": "2",
+          "GIT_CONFIG_GLOBAL": "/dev/null",
+          "GIT_CONFIG_KEY_0": "core.fsmonitor",
+          "GIT_CONFIG_KEY_1": "core.attributesFile",
+          "GIT_CONFIG_SYSTEM": "/dev/null",
+          "GIT_CONFIG_VALUE_0": "false",
+          "GIT_CONFIG_VALUE_1": "/dev/null"
+        },
+        "kit_revision": "083bccbfa4c4b066d82e7625ddf1efe70716dd2d",
+        "returncode": 1,
+        "source_revision": "7e0232ed871b37a315c5509c97b83d3b00b1a3fd",
+        "started_at": "2026-09-12T20:32:40.588129+00:00",
+        "stderr_sha256": "1f814c62b55af42d795b788b545f812c5ad1dc7354151803e88917311e3d3ec7",
+        "stdout_sha256": "4284bf234fbc6c60ec90cb5992702a9407ceee0bf31fe8c9ebe104a49fc3aee8"
+      },
+      "summary": "1 failed, 2529 passed, 1 skipped in 421.76s (0:07:01)"
+    }
+  },
+  "pr_body_sha256": "53fa5eecb6f2d7ed779dc8f342cb03f1c7c4b3f425a28da8b09cd69d3f51f18a",
+  "records": {
+    "attempt.json": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/attempt.json",
+      "sha256": "9e97d3e7b0e83bf22ad37a95d967dd0f10cf8d6ee0be9ac0df72c0e60c49e89c"
+    },
+    "backups-verified.json": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/backups-verified.json",
+      "sha256": "f7ebc03b2da08c280b444ac5bacdb9281e1163eda9c54a3477a60b900df25b77"
+    },
+    "bootstrap-authority.json": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/bootstrap-authority.json",
+      "sha256": "dae19cc1b7b708409df6967b39439ae7954aa1337dbfdbd7028deb129a14e703"
+    },
+    "completed-panel-readback.json": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/completed-panel-readback.json",
+      "sha256": "72d950e83eb6a323bd60949515dc8ed36b046350dac7b254ae514c011490aad7"
+    },
+    "completed-review-handoff-readback.stdout.log": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/completed-review-handoff-readback.stdout.log",
+      "sha256": "82f8466bd1a2ec766f2f224b673f765f7d70b1f517cbb5c214f1476986be8815"
+    },
+    "completed-review-handoff.md": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/completed-review-handoff.md",
+      "sha256": "0d666812f0eb69ebd7eed4878fc3340a36c878a9db6c33bb1b8594647167a1a4"
+    },
+    "disclosure-authority-20260913.json": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/disclosure-authority-20260913.json",
+      "sha256": "5baae7659ea458146522a07c79cf842a1b5c1a21b3aee9e98aa9787cefe0b82b"
+    },
+    "final-review-forge-a-tuple.json": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/final-review-forge-a-tuple.json",
+      "sha256": "611f91aaed5bd8e78f7c65cab3ae0c6358f8c64a3a50b238217641c8b8bef4bf"
+    },
+    "final-review-forge-b-tuple.json": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/final-review-forge-b-tuple.json",
+      "sha256": "611f91aaed5bd8e78f7c65cab3ae0c6358f8c64a3a50b238217641c8b8bef4bf"
+    },
+    "final-review-watch-a.stdout.log": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/final-review-watch-a.stdout.log",
+      "sha256": "b6158b8ba93e3b6a997a3441fbb6d0ca5f634134c52aca0639a7f72257173b69"
+    },
+    "final-review-watch-b.stdout.log": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/final-review-watch-b.stdout.log",
+      "sha256": "a4963b69913b00386b17ceadb108b708309cfdc3dab7311f372689434b247a6e"
+    },
+    "hosted-verification-limits.json": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/hosted-verification-limits.json",
+      "sha256": "a7240614dfffde795b4babc824c8fd2611dadff6ba3646b262e6a16e70f1f993"
+    },
+    "local-assessment.json": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/local-assessment.json",
+      "sha256": "24787b464caae4f3a3ba55cee9285d6fceea78d07547860bbcb0d5463d499f63"
+    },
+    "push-readback-resolution.json": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/push-readback-resolution.json",
+      "sha256": "3dd43e0b89a735eec07634f80ca4c5c788e83f24fcd7b0c3dbe49d34793bd575"
+    },
+    "resume-disclosure-audit-20260913.json": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/resume-disclosure-audit-20260913.json",
+      "sha256": "b3af0718a3aa83adfb192e11f1c4249548921fe04cca01ca7f85e6a1da6e41cd"
+    },
+    "retained-review-final.json": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/retained-review-final.json",
+      "sha256": "98250efb1ac3ff08a8e64153cae048120cf34607ed4fe3a02fad0e864bb7d827"
+    },
+    "review-final-checkpoint.json": {
+      "path": "/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-20260912/review-final-checkpoint.json",
+      "sha256": "27014d69f13bf14698db274418cd2f88b5a985f8298db76fd5182ffe04ded8f9"
+    }
+  },
+  "source_head": "7e0232ed871b37a315c5509c97b83d3b00b1a3fd"
+}
