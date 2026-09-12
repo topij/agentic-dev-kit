@@ -2,7 +2,6 @@
 
 **Prepared, not approved.** The operator's “Let's proceed” selected preparation of
 this exact decision. It does not authorize the retained changes or publication below.
-This r2 question supersedes the [initial unanswered question](phase5-item5-b-pr02-decision-r1_2026-09-12.md); its payload, ledger, binding and validation remain preserved.
 UPDATE-03 was executed locally and its approval is consumed. UPDATE-01 remains
 consumed; UPDATE-02 and earlier questions, ledgers and evidence remain historical.
 
@@ -14,11 +13,11 @@ consumed; UPDATE-02 and earlier questions, ledgers and evidence remain historica
 `ae6f11c4646c1a666e7049fed20b30b88c73e850`. Its
 [review disposition](https://github.com/topij/agentic-dev-kit/pull/736#issuecomment-5643887657)
 retains the final panel and the stamped cockpit verification result. The new
-[forge binding](phase5-item5-b-pr02-evidence_2026-09-12/forge-binding-r2.json) records
+[forge binding](phase5-item5-b-pr02-evidence_2026-09-12/forge-binding.json) records
 explicit repository/PR/comment reads at that reviewed head on 2026-09-12 (UTC),
 from `/Users/topi/Coding/agentic-dev-kit`, including the merge readback.
 
-The [local audit](phase5-item5-b-pr02-audit-r2_2026-09-12.py.txt) compares against
+The [local audit](phase5-item5-b-pr02-audit_2026-09-12.py.txt) compares against
 UPDATE-03's committed **retained-final.json**, whose SHA-256 is
 `9802c72b448249462cb823dae5cd679ac863426e0f58b437ba099490fe75910b`.
 It imports only the committed inventory/configuration-isolation helper definitions;
@@ -27,27 +26,14 @@ Both non-executing retained inventories and Git administration are checked befor
 retained Git identity or configuration-reader execution. Python optimization and
 bytecode writes are refused. The full typed tracked and merged config is compared.
 
-The [initial validation](phase5-item5-b-pr02-evidence_2026-09-12/preparation-validation.json.gz)
-remains historical evidence for the initial binding. The
-[completed review disposition](https://github.com/topij/agentic-dev-kit/pull/737#issuecomment-5644785107)
-records the inherited CI Git-read failure and the type-comparison and forge-provenance
-regressions. This revision checks Git-command success before interpreting empty status
-output, restores the inherited JSON comparison, and includes the exact preparation-time
-[raw forge records](phase5-item5-b-pr02-evidence_2026-09-12/forge-readback-records-r2.json.gz).
-Their embedded digests reproduce the original local records; their timestamps are not
-replaced by later observations. No retained repair or publication was performed during this packet revision.
-
-`env -u PYTHONOPTIMIZE python3 -B saved_plans/phase5-item5-b-pr02-audit-r2_2026-09-12.py.txt --binding-sha256 6dde63401a2d4dd451ee94f07a962e63caebdd54b0115fb9e477fab84896fa27`
-in `/Users/topi/Coding/agentic-dev-kit` at `779cc66b85e07e5055ef315e47fd4bc3926c5cd6`
-with the r2 hash-bound preparation files in its working tree, on 2026-09-12 (UTC),
-returned `local-preconditions-verified; execution-unapproved`. Its wrong-binding and
-optimized invocations refused. The companion `r2-check.py` run through
-`uv run --offline --with pyyaml python -B` at that revision/date/directory rejected
-Git-read failures and boolean/integer and integer/float mismatches, while accepting
-its unchanged controls. The earlier dependency-fetch refusal remains recorded.
-[Repair validation](phase5-item5-b-pr02-evidence_2026-09-12/review-repair-validation-r2.json.gz)
-retains the exact script, commands, dates, statuses and outputs. These are local-audit
-and synthetic behavioral results; no hosted execution or approval is established.
+`env -u PYTHONOPTIMIZE python3 -B saved_plans/phase5-item5-b-pr02-audit_2026-09-12.py.txt --binding-sha256 d667a2dc82a247d63165792692bf0b5328ba688bc30c7a5a6ecce7d1b58f89c5`
+in `/Users/topi/Coding/agentic-dev-kit` at `2b272a939013538a740f68f3990a6cc961c9512f`
+with the hash-bound preparation files in its working tree, on 2026-09-12 (UTC),
+returned `local-preconditions-verified; execution-unapproved`. The same program's
+optimized and wrong-binding invocations refused before dependent work. Their exact
+argv, directory, revision, dates, exit statuses and unmodified outputs are in
+[preparation validation](phase5-item5-b-pr02-evidence_2026-09-12/preparation-validation.json.gz).
+This local result does not establish forge preconditions or execution approval.
 
 The separate `gh pr view 1 --repo topij/adk-item5-b-field-20260909` and fully paginated
 fixture review/file reads in the forge binding matched the UPDATE-03 final PR tuple,
@@ -74,17 +60,17 @@ OUT=/Users/topi/Coding/adk-field-exercises/item5-b-20260909/pr02-7e0232e-2026091
 | New local attempt branch | `chore/item5-b-pr02-7e0232e`, absent before execution |
 | New execution evidence root | `$OUT`, absent before execution; preserve all older evidence roots |
 
-The [write ledger](phase5-item5-b-pr02-evidence_2026-09-12/proposed-writes-r2.json)
-SHA-256 is `35bcfee00567831223c37c10d3f6ebec86cd826ea4572009cc20a816193aaf4c`.
-The [prepared-input binding](phase5-item5-b-pr02-evidence_2026-09-12/prepared-input-binding-r2.json)
-SHA-256 is `6dde63401a2d4dd451ee94f07a962e63caebdd54b0115fb9e477fab84896fa27`.
+The [write ledger](phase5-item5-b-pr02-evidence_2026-09-12/proposed-writes.json)
+SHA-256 is `24b7fc281197a0a79483c257a5884273e90c38aa3c74da4d2e52767e8884c5c2`.
+The [prepared-input binding](phase5-item5-b-pr02-evidence_2026-09-12/prepared-input-binding.json)
+SHA-256 is `d667a2dc82a247d63165792692bf0b5328ba688bc30c7a5a6ecce7d1b58f89c5`.
 It binds the ledger, supplied payloads, readback records, audit, command runner and
 committed inherited helpers/checkpoint archive. Recompute these hashes immediately
 before execution; a mismatch requires a revised decision, never a silent rebind.
 
 | Destination | Exact proposed write |
 |---|---|
-| `$REPO/.github/workflows/item5-b-installed.yml` | Replace with the [complete supplied workflow](phase5-item5-b-pr02-evidence_2026-09-12/proposed-item5-b-installed-r2.yml.txt), preserving its mode. It updates the source checkout/assertion and baseline hash, unsets `PYTHONOPTIMIZE`, and puts fixture/source project environments under the declared temporary output root. It also captures each Git-status command result before testing empty output, so a failed read stops the workflow. Existing job, triggers, read-only permission, Python selection, verification order and shell parse commands remain as supplied. |
+| `$REPO/.github/workflows/item5-b-installed.yml` | Replace with the [complete supplied workflow](phase5-item5-b-pr02-evidence_2026-09-12/proposed-item5-b-installed.yml.txt), preserving its mode. It updates the source checkout/assertion and baseline hash, unsets `PYTHONOPTIMIZE`, and puts fixture/source project environments under the declared temporary output root. Existing job, triggers, read-only permission, Python selection, verification order and shell parse commands remain as supplied. |
 | `$REPO/.git` | Create the new local attempt branch from the fixture input; stage only the CI payload and commit. Preserve all existing local branch refs, including the old local `chore/item5-b-field-exit`. Record generated objects, index, HEAD, commit message, reflogs and transient lock files. After publication, observe the corresponding Git-generated remote-tracking ref change. No config or hook change. |
 | Existing remote head | After local verification, fast-forward only `refs/heads/chore/item5-b-field-exit` to the resulting immutable candidate using an ordinary non-forced push. The candidate must descend from both the fixture input and the bound remote input. Do not push `main` or a new remote branch. |
 | Existing PR #1 | Keep repository/base/head identity and ready status. Set title to `Continue ITEM5-B verification at kit 7e0232e` and replace the body with the [complete supplied text](phase5-item5-b-pr02-evidence_2026-09-12/proposed-fixture-pr-body.md). Preserve historical comments and reviews. No new fixture PR. |
@@ -185,7 +171,7 @@ earlier and outside Phase 6. #724 delivered #722; neither that batch nor the del
 exercises, settings changes, initialization, generic upgrade, tracker payloads and the
 remaining systemize/triage field routes retain their separate decisions.
 
-> Approve ITEM5-B-PR-02 as bound by ledger SHA-256 `35bcfee00567831223c37c10d3f6ebec86cd826ea4572009cc20a816193aaf4c` and prepared-input binding SHA-256 `6dde63401a2d4dd451ee94f07a962e63caebdd54b0115fb9e477fab84896fa27`: apply only the supplied CI payload on the new local attempt branch from fixture `4ad91c875377d8607082cd0a125ba801218187ed`, complete the declared verification, fast-forward the existing private fixture PR #1 head, publish the supplied title/body and scoped verification/review dispositions, obtain fresh independent review, and record the kit delivery—while excluding baseline/source refresh, additional fixture fixes, client/settings/tracker work, fixture closure or merge, and field-exit completion?
+> Approve ITEM5-B-PR-02 as bound by ledger SHA-256 `24b7fc281197a0a79483c257a5884273e90c38aa3c74da4d2e52767e8884c5c2` and prepared-input binding SHA-256 `d667a2dc82a247d63165792692bf0b5328ba688bc30c7a5a6ecce7d1b58f89c5`: apply only the supplied CI payload on the new local attempt branch from fixture `4ad91c875377d8607082cd0a125ba801218187ed`, complete the declared verification, fast-forward the existing private fixture PR #1 head, publish the supplied title/body and scoped verification/review dispositions, obtain fresh independent review, and record the kit delivery—while excluding baseline/source refresh, additional fixture fixes, client/settings/tracker work, fixture closure or merge, and field-exit completion?
 
 Reply `Approve ITEM5-B-PR-02 as scoped` to authorize that execution. Declining or
 amending leaves the retained trees and existing fixture PR unchanged. No response is

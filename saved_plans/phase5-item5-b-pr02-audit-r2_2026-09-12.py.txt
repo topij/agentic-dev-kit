@@ -1,0 +1,133 @@
+"""Read-only PR-02 local preconditions; forge validation is a separate required step."""
+import argparse
+import base64
+import gzip
+import hashlib
+import importlib.util
+import json
+import os
+from pathlib import Path
+import runpy
+import stat
+import sys
+from datetime import datetime, timezone
+
+ROOT = Path('/Users/topi/Coding/agentic-dev-kit')
+REPO = Path('/Users/topi/Coding/adk-field-exercises/item5-b-20260909/fixture')
+KIT = REPO.parent / 'kit-source'
+OUT = REPO.parent / 'pr02-7e0232e-20260912'
+SAVED = ROOT / 'saved_plans'
+PREP = SAVED / 'phase5-item5-b-pr02-evidence_2026-09-12'
+
+
+def sha(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def read_json(path):
+    return json.loads(path.read_bytes())
+
+
+def main():
+    if sys.flags.optimize or not sys.dont_write_bytecode:
+        raise SystemExit('PR-02 audit requires unoptimized Python with -B')
+    if 'PYTHONOPTIMIZE' in os.environ:
+        raise SystemExit('Remove PYTHONOPTIMIZE before the PR-02 audit')
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--binding-sha256', required=True)
+    args = parser.parse_args()
+    assert Path.cwd() == ROOT and ROOT.resolve() == ROOT
+    binding_path = PREP / 'prepared-input-binding-r2.json'
+    assert sha(binding_path.read_bytes()) == args.binding_sha256, 'binding hash mismatch'
+    binding = read_json(binding_path)
+    assert binding['decision'] == 'ITEM5-B-PR-02' and binding['execution_approved'] is False
+    for relative, digest in binding['files'].items():
+        path = ROOT / relative
+        assert path.resolve() == path and path.is_file(), ('binding path', relative)
+        assert sha(path.read_bytes()) == digest, ('bound input changed', relative)
+
+    ledger = read_json(PREP / 'proposed-writes-r2.json')
+    archive = json.loads(gzip.decompress(
+        (SAVED / 'phase5-item5-b-update03-execution-evidence_2026-09-12/records.json.gz').read_bytes()))
+    item = archive['files']['retained-final.json']
+    raw = base64.b64decode(item['base64'], validate=True)
+    assert sha(raw) == item['sha256'] == ledger['retained_checkpoint_sha256']
+    expected = json.loads(raw)
+    helper = runpy.run_path(str(SAVED / 'phase5-item5-b-acceptance-audit_2026-09-10.py.txt'))
+    guard = runpy.run_path(str(SAVED / 'phase5-item5-b-update03-audit-r4_2026-09-11.py.txt'))
+    guard['check_git_environment']()
+
+    # Compare non-executing observations in both trees before any retained Git or
+    # configuration-reader invocation. Neither historical audit main is invoked.
+    observed = {}
+    for role, root in [('fixture', REPO), ('source', KIT)]:
+        assert root.resolve() == root and root.is_dir() and not root.is_symlink()
+        guard['check_git_administration'](root)
+        observed[role] = {
+            'inventory': helper['inventory'](root),
+            'administrative_inventory': helper['inventory'](root / '.git'),
+        }
+        assert observed[role] == expected['inventories'][role], (role, 'final checkpoint mismatch')
+    identities = {}
+    for role, root in [('fixture', REPO), ('source', KIT)]:
+        identities[role] = guard['read_identity'](helper['identity'], root)
+    assert identities['fixture'] == expected['fixture_identity']
+    assert identities['fixture']['revision'] == ledger['fixture_input']
+    assert identities['source']['revision'] == ledger['source_input']
+    assert identities['source']['branch'] == 'DETACHED'
+    assert guard['git'](KIT, 'remote') == b''
+    assert guard['git'](REPO, 'branch', '--list', ledger['attempt_branch']) == b''
+    assert not os.path.lexists(OUT), 'attempt evidence root already exists'
+    for name, present in expected['original_paths'].items():
+        assert present is False and not os.path.lexists(name), ('original path changed', name)
+    for name, digest in expected['replay_evidence'].items():
+        assert sha((ROOT / name).read_bytes()) == digest
+        assert sha((KIT / name).read_bytes()) == digest
+    baseline = REPO / 'kit-manifest.json'
+    assert sha(baseline.read_bytes()) == expected['baseline_sha256'] == ledger['baseline_sha256']
+    assert read_json(baseline)['kit_commit'] == ledger['source_input']
+
+    spec = importlib.util.spec_from_file_location('pr02_installed_config', REPO / 'scripts/devkit/lib/kitconfig.py')
+    config = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(config)
+    actual_config = {
+        'tracked': config.load_config(REPO / 'config/dev-model.yaml', overlay=False),
+        'merged': config.load_config(REPO / 'config/dev-model.yaml'),
+    }
+    assert json.dumps(actual_config, sort_keys=True) == json.dumps(
+        expected['configuration'], sort_keys=True), 'typed configuration changed'
+    for row in ledger['fixture_payload_writes']:
+        destination = REPO / row['path']
+        current = destination
+        while current != REPO:
+            assert current.resolve() == current and not current.is_symlink(), current
+            current = current.parent
+        metadata = destination.lstat()
+        assert stat.S_ISREG(metadata.st_mode) and metadata.st_nlink == 1
+        assert sha(destination.read_bytes()) == row['before_sha256']
+        assert oct(stat.S_IMODE(metadata.st_mode)) == row['mode']
+        assert sha((ROOT / row['payload']).read_bytes()) == row['after_sha256']
+    guard['git'](REPO, 'merge-base', '--is-ancestor', ledger['remote_input'], ledger['fixture_input'])
+    assert guard['git'](REPO, 'rev-parse', 'refs/heads/main').decode().strip() == ledger['remote_base']
+    assert guard['git'](REPO, 'rev-parse', 'refs/heads/chore/item5-b-field-exit').decode().strip() == ledger['remote_input']
+    print(json.dumps({
+        'at': datetime.now(timezone.utc).isoformat(),
+        'command': [sys.executable, '-B', str(Path(__file__).resolve()), '--binding-sha256', args.binding_sha256],
+        'cwd': str(ROOT),
+        'revision': guard['git'](ROOT, 'rev-parse', 'HEAD').decode().strip(),
+        'result': 'local-preconditions-verified; execution-unapproved',
+        'binding_sha256': args.binding_sha256,
+        'identities': identities,
+        'baseline_sha256': ledger['baseline_sha256'],
+        'forge_validation': 'not performed by this command; mandatory separately before dependent work',
+        'limits': [
+            'Inherited special-file-root limitation remains.',
+            'Supplied root and .git root modes/timestamps are outside the inherited inventory.',
+            'Checkpoint equality does not exclude transient writes.',
+            'Ownership acceptance is not functional verification or field-exit completion.',
+        ],
+    }, indent=2, sort_keys=True))
+
+
+if __name__ == '__main__':
+    main()
