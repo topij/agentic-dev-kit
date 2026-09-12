@@ -1,0 +1,31 @@
+{
+  "at": "2026-09-12T07:17:11.836477+00:00",
+  "binding_sha256": "d667a2dc82a247d63165792692bf0b5328ba688bc30c7a5a6ecce7d1b58f89c5",
+  "command": "YAML parse and bash -n of extracted proposed run steps",
+  "cwd": "/Users/topi/Coding/agentic-dev-kit",
+  "diff": "--- retained CI\n+++ proposed CI\n@@ -27,6 +27,7 @@\n         shell: bash\n         run: |\n           set -euo pipefail\n+          unset PYTHONOPTIMIZE\n           REPO=\"$GITHUB_WORKSPACE\"\n           KIT=\"$RUNNER_TEMP/item5-b-kit-source\"\n           OUT=\"$RUNNER_TEMP/item5-b-verification\"\n@@ -37,10 +38,11 @@\n           export UV_CACHE_DIR=\"$OUT/uv-cache\" UV_TOOL_DIR=\"$OUT/uv-tools\"\n           export RUFF_CACHE_DIR=\"$OUT/ruff-cache\" TMPDIR=\"$OUT/tmp\"\n           git clone --no-checkout https://github.com/topij/agentic-dev-kit.git \"$KIT\"\n-          git -C \"$KIT\" checkout --detach 60fe0dc7ad68922d064c0cf401cff2c4c6d607ac\n-          test \"$(git -C \"$KIT\" rev-parse HEAD)\" = 60fe0dc7ad68922d064c0cf401cff2c4c6d607ac\n-          python -c 'import hashlib,pathlib; assert hashlib.sha256(pathlib.Path(\"kit-manifest.json\").read_bytes()).hexdigest() == \"9e2196df3b7239b599819abcfc20271b0389b70f78f22837a0709575145b9126\"'\n+          git -C \"$KIT\" checkout --detach 7e0232ed871b37a315c5509c97b83d3b00b1a3fd\n+          test \"$(git -C \"$KIT\" rev-parse HEAD)\" = 7e0232ed871b37a315c5509c97b83d3b00b1a3fd\n+          python -c 'import hashlib,pathlib; assert hashlib.sha256(pathlib.Path(\"kit-manifest.json\").read_bytes()).hexdigest() == \"e02fda03c4119b0deb9cba6fbf37818831f3244c9f3fc1e8b37fd79e9768291b\"'\n           export DEVKIT_STATE_ROOT=\"$OUT/fixture-state\"\n+          export UV_PROJECT_ENVIRONMENT=\"$OUT/fixture-venv\"\n           export PYTEST_ADDOPTS=\"-o cache_dir=$OUT/fixture-pytest-cache -ra\"\n           python -B \"$REPO/scripts/devkit/kit_doctor.py\" --root \"$REPO\" --manifest \"$KIT/kit-manifest.json\" --json\n           python -B \"$KIT/scripts/kit_doctor.py\" --root \"$REPO\" --adapter-report --adapter-source \"$KIT\" --json\n@@ -50,6 +52,7 @@\n           cd \"$KIT\"\n           test \"$(pwd -P)\" = \"$KIT\"\n           export DEVKIT_STATE_ROOT=\"$OUT/source-state\"\n+          export UV_PROJECT_ENVIRONMENT=\"$OUT/source-venv\"\n           export PYTEST_ADDOPTS=\"-o cache_dir=$OUT/source-pytest-cache -ra\"\n           bash -n \"$KIT/scripts/dev_session.sh\"\n           bash -n \"$KIT/scripts/reconcile_sessions.sh\"\n",
+  "limits": "Syntax and declared-payload inspection only; hosted workflow execution is not claimed.",
+  "records": [
+    {
+      "argv": [
+        "bash",
+        "-n",
+        "/private/tmp/item5b-pr02-packet-20260912/ci-shell-0.sh"
+      ],
+      "returncode": 0,
+      "stderr": "",
+      "stdout": ""
+    },
+    {
+      "argv": [
+        "bash",
+        "-n",
+        "/private/tmp/item5b-pr02-packet-20260912/ci-shell-1.sh"
+      ],
+      "returncode": 0,
+      "stderr": "",
+      "stdout": ""
+    }
+  ],
+  "revision": "2b272a939013538a740f68f3990a6cc961c9512f"
+}
