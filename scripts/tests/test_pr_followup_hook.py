@@ -73,7 +73,7 @@ def _payload_with(command: str, stdout: str = "", stderr: str = "") -> str:
 
 
 def _assert_read_only_continuation(context: str) -> None:
-    """Read-only matches end hook-derived actions without revoking task authority."""
+    """Require emitted policy to distinguish hook follow-through from task authority."""
     scoped_end = context.index("end this hook's lifecycle follow-through here")
     no_inferred_action = context.index(
         "Do not query the forge, change PR state, or start a watch loop solely "
@@ -139,7 +139,7 @@ def _no_job_name(monkeypatch):
         ("gh pr ready 42", 'Pull request owner/repo#42 is marked as "ready for review"', True),
     ],
 )
-def test_entrypoint_preserves_authorized_work_and_conditional_lifecycle(
+def test_entrypoint_emits_scoped_read_only_policy_and_lifecycle_prerequisites(
     runtime, response_shape, command, output, expanded
 ):
     """Exercise emitted policy, not an agent's interpretation or a forge operation."""
