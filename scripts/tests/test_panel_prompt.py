@@ -53,8 +53,8 @@ DOCTRINE = Path("docs") / "agentic-dev-kit" / "fallback-review-panel.md"
 # round 1.
 #
 # The dependency is instead declared where it actually arises — in
-# `doctrine_text()`, which the `repo` fixture and one test call — so a new test
-# inherits it by using the fixture rather than by remembering a decorator.
+# `doctrine_text()` — so a new test inherits it by using the fixture rather than by
+# remembering a decorator.
 
 
 def test_the_declared_path_matches_the_doctrine_path(monkeypatch):
@@ -87,8 +87,7 @@ def doctrine_text() -> str:
     name `fallback-review-panel.md` among the docs it installs, so that was not
     the extreme floor: it was a by-the-book adoption (#226).
 
-    A function and not a fixture, deliberately: one caller wants it inside a
-    test body and one inside another fixture, and a fixture would thread a
+    A function and not a fixture, deliberately: a fixture would thread a
     parameter through call sites that need nothing else.
     """
     require_kit_paths("docs/agentic-dev-kit/fallback-review-panel.md")

@@ -293,7 +293,7 @@
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
-      "sha256": "6035d28989506dd78a7f16425017170f9544914e95b25865c2edadcec17033aa"
+      "sha256": "c02df6ca9d39c544d58b96f6be736c8c5c427826fd544180b328c639dbba73a2"
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
