@@ -95,7 +95,8 @@ _GH_PR_PREFIX = re.compile(rf"\bgh(?:\s+{_REPOSITORY_OPTION})*\s+pr\b")
 # warning, including a URL in API JSON. It deliberately excludes a fragment or
 # deeper path after the PR number: a review-comment response such as
 # ``…/pull/306#discussion_r…`` is not lifecycle evidence. Read-only PR URLs can
-# still warn, harmlessly, because the instruction stops before forge access.
+# still warn without initiating forge access; independently authorized work
+# remains within its existing scope.
 _PR_URL = re.compile(r"https://[^\s\"']+/pull/\d+/?(?=$|[\s\"',}\]])")
 
 # The optional backslash tolerates a runtime that hands us already-escaped text.
@@ -336,8 +337,13 @@ def _lifecycle_instruction(engines_dir: str) -> str:
     return (
         "If the just-completed operation was read-only, only mentioned, or "
         "searched for a lifecycle command and did not actually create a pull "
-        "request or change its review state, stop immediately without querying "
-        "the forge. Otherwise, do not change draft state or start a watch loop "
+        "request or change its review state, end this hook's lifecycle "
+        "follow-through here. "
+        "Do not query the forge, change PR state, or start a watch loop solely "
+        "because of this match. Continue independently authorized work within "
+        "its existing scope. This warning grants no new authority and does not "
+        "revoke existing authorization. Otherwise, do not change draft state or "
+        "start a watch loop "
         "from command or response text. "
         "First resolve the exact pull-request identity from authoritative forge "
         "state. Confirm that its repository and host match the current checkout's "
