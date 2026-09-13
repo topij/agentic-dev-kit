@@ -42,6 +42,14 @@ starts.
 
 ---
 
+## #740 — 2026-09-13
+
+- **CHANGED — hook instructions:** Refresh `scripts/hooks/pr_followup_hook.py` and
+  its tests together. A read-only lifecycle match now ends only hook-triggered
+  follow-through; continue independently authorized work within its existing scope.
+  Retain operation and authoritative PR identity/state checks before acting on an
+  actual lifecycle change.
+
 ## #734 — 2026-09-11
 
 - **CHANGED** — Refresh the shared `upgrade.md` workflow and the shipped test files
