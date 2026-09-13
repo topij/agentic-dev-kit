@@ -53,17 +53,29 @@ DOCTRINE = Path("docs") / "agentic-dev-kit" / "fallback-review-panel.md"
 # round 1.
 #
 # The dependency is instead declared where it actually arises — in
-# `doctrine_text()`, which the `repo` fixture and one test call — so a new test
-# inherits it by using the fixture rather than by remembering a decorator.
+# `doctrine_text()` — so a new test inherits it by using the fixture rather than by
+# remembering a decorator.
 
 
-def test_the_declared_path_matches_the_doctrine_path():
-    """`doctrine_text()` names the path as a string LITERAL so
-    `test_kit_repo_only.py` can find it by scanning the source; `DOCTRINE` is a
-    `Path` built separately. Two spellings of one path drift, so this pins them
-    — without it a doctrine rename would leave the requirement naming a file
-    that no longer exists, and skip every test using it, silently."""
-    assert str(DOCTRINE) == "docs/agentic-dev-kit/fallback-review-panel.md"
+def test_the_declared_path_matches_the_doctrine_path(monkeypatch):
+    """Observe the requirement passed by doctrine_text() without reading the file.
+
+    The literal remains in doctrine_text() for source scanning. This probe
+    runs even when the doctrine is absent in an installed layout.
+    """
+    observed = []
+
+    class DeclarationObserved(Exception):
+        pass
+
+    def record_requirement(*paths: str) -> None:
+        observed.append(paths)
+        raise DeclarationObserved
+
+    monkeypatch.setitem(doctrine_text.__globals__, "require_kit_paths", record_requirement)
+    with pytest.raises(DeclarationObserved):
+        doctrine_text()
+    assert observed == [(DOCTRINE.as_posix(),)]
 
 
 def doctrine_text() -> str:
@@ -75,8 +87,7 @@ def doctrine_text() -> str:
     name `fallback-review-panel.md` among the docs it installs, so that was not
     the extreme floor: it was a by-the-book adoption (#226).
 
-    A function and not a fixture, deliberately: one caller wants it inside a
-    test body and one inside another fixture, and a fixture would thread a
+    A function and not a fixture, deliberately: a fixture would thread a
     parameter through call sites that need nothing else.
     """
     require_kit_paths("docs/agentic-dev-kit/fallback-review-panel.md")
