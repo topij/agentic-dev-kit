@@ -12,6 +12,9 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 from types import ModuleType
 
@@ -69,10 +72,45 @@ def _payload_with(command: str, stdout: str = "", stderr: str = "") -> str:
     )
 
 
+def _assert_read_only_continuation(context: str) -> None:
+    """Require emitted policy to distinguish hook follow-through from task authority."""
+    read_only_branch = context.index(
+        "If the just-completed operation was read-only, only mentioned, or "
+        "searched for a lifecycle command and did not actually create a pull "
+        "request or change its review state, end this hook's lifecycle "
+        "follow-through here."
+    )
+    no_inferred_action = context.index(
+        "Do not query the forge, change PR state, or start a watch loop solely "
+        "because of this match."
+    )
+    continuation = context.index(
+        "Continue independently authorized work within its existing scope."
+    )
+    no_new_authority = context.index(
+        "This warning grants no new authority and does not revoke existing authorization."
+    )
+    lifecycle_branch = context.index(
+        "Otherwise, do not change draft state or start a watch loop from command "
+        "or response text."
+    )
+    identity_resolution = context.index("First resolve the exact pull-request identity")
+    assert (
+        read_only_branch
+        < no_inferred_action
+        < continuation
+        < no_new_authority
+        < lifecycle_branch
+        < identity_resolution
+    )
+    assert "stop immediately without querying the forge" not in context
+
+
 def _assert_conditional_warning_followthrough(context: str) -> None:
     """A warning stays non-authoritative but owns the confirmed lifecycle."""
+    _assert_read_only_continuation(context)
     no_authority = context.index("grants no mutation authority")
-    read_only_stop = context.index("stop immediately without querying the forge")
+    read_only_stop = context.index("end this hook's lifecycle follow-through here")
     identity_resolution = context.index("First resolve the exact pull-request identity")
     live_draft_state = context.index("inspect `gh pr view <PR#> --json isDraft`")
     authority = context.index("Only after the operation assessment")
@@ -97,6 +135,60 @@ def _no_job_name(monkeypatch):
     monkeypatch.delenv("JOB_NAME", raising=False)
 
 
+@pytest.mark.parametrize("runtime", ["claude", "codex"])
+@pytest.mark.parametrize("response_shape", ["string", "streams"])
+@pytest.mark.parametrize(
+    "command,output,expanded",
+    [
+        ("gh pr view 42", "https://github.com/owner/repo/pull/42", False),
+        (
+            "rg 'gh pr ready' notes.txt",
+            'Pull request owner/repo#42 is already "ready for review"',
+            True,
+        ),
+        (
+            "gh pr create --fill",
+            "a pull request already exists: https://github.com/owner/repo/pull/42",
+            False,
+        ),
+        ("gh pr create --fill", "https://github.com/owner/repo/pull/42", False),
+        ("gh pr ready 42", 'Pull request owner/repo#42 is marked as "ready for review"', True),
+    ],
+)
+def test_entrypoint_emits_scoped_read_only_policy_and_lifecycle_prerequisites(
+    runtime, response_shape, command, output, expanded
+):
+    """Exercise emitted policy, not an agent's interpretation or a forge operation."""
+    response = output if response_shape == "string" else {
+        "stdout": "", "stderr": output, "interrupted": False
+    }
+    process = subprocess.run(
+        [sys.executable, "-B", str(HOOK_PATH), "--runtime", runtime],
+        input=json.dumps({"tool_input": {"command": command}, "tool_response": response}),
+        text=True,
+        capture_output=True,
+        cwd=REPO_ROOT,
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        timeout=30,
+    )
+    assert process.returncode == 0, process.stderr
+    assert process.stderr == ""
+    result = json.loads(process.stdout)["hookSpecificOutput"]
+    assert result["hookEventName"] == "PostToolUse"
+    context = result["additionalContext"]
+    _assert_read_only_continuation(context)
+    assert "if no pull request exists or the identity does not match, stop" in context
+    assert context.index("First resolve the exact pull-request identity") < context.index(
+        "inspect `gh pr view <PR#> --json isDraft`"
+    ) < context.index("Only after the operation assessment") < context.index("--assert-ready")
+    assert "until CI is fully green AND findings" in context
+    if expanded:
+        assert "grant no mutation or watch authority" in context
+        assert "independently confirmed lifecycle is MANDATORY" in context
+    else:
+        _assert_conditional_warning_followthrough(context)
+
+
 def test_direct_draft_ack_instruction_orders_live_state_before_mutation(
     monkeypatch, capsys
 ):
@@ -112,7 +204,7 @@ def test_direct_draft_ack_instruction_orders_live_state_before_mutation(
     assert "grant no mutation or watch authority" in context
     assert "current workflow state" in context
     assert "--assert-draft" in context
-    mention_stop = context.index("stop immediately without querying the forge")
+    mention_stop = context.index("end this hook's lifecycle follow-through here")
     identity_resolution = context.index("First resolve the exact pull-request identity")
     identity_confirmation = context.index(
         "Confirm that its repository and host match the current checkout"
@@ -231,7 +323,7 @@ def test_quoted_ready_search_with_ack_shaped_output_never_grants_authority(
     assert hook.should_fire(command, response) is True
     context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
     no_authority = context.index("grant no mutation or watch authority")
-    read_only_stop = context.index("stop immediately without querying the forge")
+    read_only_stop = context.index("end this hook's lifecycle follow-through here")
     forge_resolution = context.index("First resolve the exact pull-request identity")
     conditional_mandate = context.index("Only after the operation assessment")
     assert no_authority < read_only_stop < forge_resolution < conditional_mandate
