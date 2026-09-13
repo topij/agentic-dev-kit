@@ -301,7 +301,7 @@
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
-      "sha256": "b3d759f6286a6b5569d0318836182afa4e0a628ff1370f3ad2834b1baf96e52a"
+      "sha256": "42fa128344b85a7261d359d014e42e0b339ce12f241022235232ef9a3158d77a"
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",

@@ -74,7 +74,12 @@ def _payload_with(command: str, stdout: str = "", stderr: str = "") -> str:
 
 def _assert_read_only_continuation(context: str) -> None:
     """Require emitted policy to distinguish hook follow-through from task authority."""
-    scoped_end = context.index("end this hook's lifecycle follow-through here")
+    read_only_branch = context.index(
+        "If the just-completed operation was read-only, only mentioned, or "
+        "searched for a lifecycle command and did not actually create a pull "
+        "request or change its review state, end this hook's lifecycle "
+        "follow-through here."
+    )
     no_inferred_action = context.index(
         "Do not query the forge, change PR state, or start a watch loop solely "
         "because of this match."
@@ -85,8 +90,19 @@ def _assert_read_only_continuation(context: str) -> None:
     no_new_authority = context.index(
         "This warning grants no new authority and does not revoke existing authorization."
     )
+    lifecycle_branch = context.index(
+        "Otherwise, do not change draft state or start a watch loop from command "
+        "or response text."
+    )
     identity_resolution = context.index("First resolve the exact pull-request identity")
-    assert scoped_end < no_inferred_action < continuation < no_new_authority < identity_resolution
+    assert (
+        read_only_branch
+        < no_inferred_action
+        < continuation
+        < no_new_authority
+        < lifecycle_branch
+        < identity_resolution
+    )
     assert "stop immediately without querying the forge" not in context
 
 
