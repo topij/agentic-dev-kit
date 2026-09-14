@@ -44,7 +44,7 @@
     },
     "docs/agentic-dev-kit/workflows/adopt.md": {
       "role": "workflow",
-      "sha256": "83794fdfd9534ba7760cdd7e65335f2d21e65b81651f8ebee1295dddf065fcdf"
+      "sha256": "125cf156316a6e64a671dbb8b5b9005b2df3237e88fa3a60ceec6b8955ed4f25"
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
@@ -108,7 +108,7 @@
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
-      "sha256": "7d27ff31f4eaa7edef57e35a15f8745318cec41ca1228812207a9812f3b4e37b"
+      "sha256": "16faba66dd3a03b4bef26db1e6241d4ed12af3656fae9d818cd095017338518f"
     },
     "scripts/check_doc_budget.py": {
       "role": "engine",
@@ -293,11 +293,11 @@
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
-      "sha256": "c02df6ca9d39c544d58b96f6be736c8c5c427826fd544180b328c639dbba73a2"
+      "sha256": "fa839e1ed2a6ca3af5b4657136e39ec89e59decdee9752c8fd2843b926e44afd"
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "0bc0e8fc7deb7a10b580c21a10670b3a04b802518d486ebcf062cb894cd8c1ec"
+      "sha256": "7838df4c4d5ed73cbdbdf1ff459dca6e767a4b441acbe01955f6020c07ab6b10"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
