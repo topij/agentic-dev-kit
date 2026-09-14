@@ -1272,6 +1272,34 @@ def test_archive_preserves_trailing_quotations_across_sweeps(
     assert (plan.read_bytes(), history.read_bytes()) == before
 
 
+def test_classic_archive_preserves_complete_footer_for_another_destination(
+    tmp_path: Path,
+) -> None:
+    """Destination matching must protect a complete foreign footer at the boundary."""
+    archive = _load_module("archive_foreign_footer", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "saved" / "history.md"
+    history.parent.mkdir()
+    foreign_pointer = archive.history_pointer("elsewhere/history.md", "history.md")
+    plan.write_text(
+        "# Handoff\n\n## Session — 2026-07-03 — Newest\n\nNewest body.\n\n"
+        "## Session — 2026-07-02 — Older\n\nOlder body.\n\n"
+        + "".join(foreign_pointer)
+        + "## Backlog\n\nStanding content.\n",
+        encoding="utf-8",
+    )
+    history.write_text("# History\n\n## Session log\n", encoding="utf-8")
+
+    assert archive.main(["--keep", "1", "--plan", str(plan), "--history", str(history)]) == 0
+
+    quoted_lines = "".join(foreign_pointer[:2])
+    saved = history.read_text(encoding="utf-8")
+    live = plan.read_text(encoding="utf-8")
+    assert "Older body.\n\n" + quoted_lines in saved
+    assert quoted_lines not in live
+    assert "## Backlog\n\nStanding content.\n" in live
+
+
 def test_recent_archive_preserves_text_matching_a_classic_footer(tmp_path: Path) -> None:
     """The recent-session writer does not own classic footer syntax."""
     archive = _load_module("archive_recent_footer", ENGINE_DIR / "archive_plan_sessions.py")
