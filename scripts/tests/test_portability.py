@@ -1224,6 +1224,133 @@ Existing body.
     )
 
 
+@pytest.mark.parametrize("layout", ["classic", "recent"])
+@pytest.mark.parametrize("quotation", [
+    "> Operator decision: keep the rollback until migration is verified.\n",
+    "> Quoted decision.\n>\n> Continued rationale.\n",
+    ">> Nested quotation.\n",
+    "> Older session entries (below the live blocks above) live in [`note.md`](note.md).\n",
+    '> Active open items from them are folded into the "Open for next session" lists above.\n',
+    "> Older session entries (below the live blocks above) live in [`other.md`](other.md).\n"
+    '> Active open items from them are folded into the "Open for next session" lists above.\n',
+])
+def test_archive_preserves_trailing_quotations_across_sweeps(
+    tmp_path: Path, layout: str, quotation: str,
+) -> None:
+    """A quotation must reach the retained or archived destination verbatim."""
+    archive = _load_module("archive_quotations", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "saved" / "history.md"
+    history.parent.mkdir()
+    prefix = "# Handoff\n\n"
+    if layout == "recent":
+        prefix += "## Recent sessions\n\n"
+    fragments = {}
+    for date, title in [("2026-07-03", "Newest"), ("2026-07-02", "Middle"), ("2026-07-01", "Oldest")]:
+        heading = f"### {date} — {title}" if layout == "recent" else f"## Session — {date} — {title}"
+        fragments[title] = f"> Record: {title}.\n" + quotation
+        prefix += heading + "\n\nBody.\n\n" + fragments[title] + "\n---\n\n"
+    plan.write_text(prefix + "## Backlog\n\nStanding content.\n", encoding="utf-8")
+    history.write_text("# History\n\n## Session log\n", encoding="utf-8")
+    pointer = "".join(archive.history_pointer("saved/history.md", "history.md"))
+    for keep, retained in [("2", {"Newest", "Middle"}), ("1", {"Newest"})]:
+        assert archive.main(["--keep", keep, "--plan", str(plan), "--history", str(history)]) == 0
+        live = plan.read_text(encoding="utf-8")
+        saved = history.read_text(encoding="utf-8")
+        for title, fragment in fragments.items():
+            destination, other = (live, saved) if title in retained else (saved, live)
+            assert destination.count(fragment) == 1, (title, destination)
+            assert fragment not in other, (title, other)
+        assert "## Backlog\n\nStanding content.\n" in live
+        if layout == "classic":
+            assert live.count(pointer) == 1
+            assert "".join(archive.history_pointer("saved/history.md", "history.md")[:2]) not in saved
+        else:
+            assert pointer not in live + saved
+    before = (plan.read_bytes(), history.read_bytes())
+    assert archive.main(["--keep", "1", "--plan", str(plan), "--history", str(history)]) == 0
+    assert (plan.read_bytes(), history.read_bytes()) == before
+
+
+def test_classic_archive_preserves_complete_footer_for_another_destination(
+    tmp_path: Path,
+) -> None:
+    """Destination matching must protect a complete foreign footer at the boundary."""
+    archive = _load_module("archive_foreign_footer", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "saved" / "history.md"
+    history.parent.mkdir()
+    foreign_pointer = archive.history_pointer("elsewhere/history.md", "history.md")
+    plan.write_text(
+        "# Handoff\n\n## Session — 2026-07-03 — Newest\n\nNewest body.\n\n"
+        "## Session — 2026-07-02 — Older\n\nOlder body.\n\n"
+        + "".join(foreign_pointer)
+        + "## Backlog\n\nStanding content.\n",
+        encoding="utf-8",
+    )
+    history.write_text("# History\n\n## Session log\n", encoding="utf-8")
+
+    assert archive.main(["--keep", "1", "--plan", str(plan), "--history", str(history)]) == 0
+
+    quoted_lines = "".join(foreign_pointer[:2])
+    saved = history.read_text(encoding="utf-8")
+    live = plan.read_text(encoding="utf-8")
+    assert "Older body.\n\n" + quoted_lines in saved
+    assert quoted_lines not in live
+    assert "## Backlog\n\nStanding content.\n" in live
+
+
+@pytest.mark.parametrize("edit", ["quotation", "separator"])
+def test_classic_archive_preserves_edited_footer_at_boundary(
+    tmp_path: Path, edit: str,
+) -> None:
+    """Matching the destination alone must not discard an edited footer."""
+    archive = _load_module("archive_edited_footer", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "saved" / "history.md"
+    history.parent.mkdir()
+    edited_pointer = archive.history_pointer("saved/history.md", "history.md")
+    if edit == "quotation":
+        edited_pointer[1] = "> Operator annotation: this statement was edited.\n"
+    else:
+        edited_pointer[3] = "---\n"
+    plan.write_text(
+        "# Handoff\n\n## Session — 2026-07-03 — Newest\n\nNewest body.\n\n"
+        "## Session — 2026-07-02 — Older\n\nOlder body.\n\n"
+        + "".join(edited_pointer)
+        + "## Backlog\n\nStanding content.\n",
+        encoding="utf-8",
+    )
+    history.write_text("# History\n\n## Session log\n", encoding="utf-8")
+
+    assert archive.main(["--keep", "1", "--plan", str(plan), "--history", str(history)]) == 0
+
+    quoted_lines = "".join(edited_pointer[:2])
+    saved = history.read_text(encoding="utf-8")
+    live = plan.read_text(encoding="utf-8")
+    assert "Older body.\n\n" + quoted_lines in saved
+    assert "".join(edited_pointer) not in live
+    assert "## Backlog\n\nStanding content.\n" in live
+
+
+def test_recent_archive_preserves_text_matching_a_classic_footer(tmp_path: Path) -> None:
+    """The recent-session writer does not own classic footer syntax."""
+    archive = _load_module("archive_recent_footer", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "history.md"
+    pointer = "".join(archive.history_pointer("history.md", "history.md"))
+    plan.write_text(
+        "# Handoff\n\n## Recent sessions\n\n### 2026-07-03 — Newest\n\nBody.\n\n"
+        "### 2026-07-02 — Older\n\n" + pointer + "## Backlog\n",
+        encoding="utf-8",
+    )
+    history.write_text("# History\n\n## Session log\n", encoding="utf-8")
+    assert archive.main(["--keep", "1", "--plan", str(plan), "--history", str(history)]) == 0
+    quoted_lines = "".join(archive.history_pointer("history.md", "history.md")[:2])
+    assert quoted_lines in history.read_text(encoding="utf-8")
+    assert quoted_lines not in plan.read_text(encoding="utf-8")
+
+
 def test_recent_session_nested_h3_stays_inside_its_dated_block(tmp_path: Path) -> None:
     archive = _load_module(
         "archive_recent_nested_heading", ENGINE_DIR / "archive_plan_sessions.py"

@@ -481,7 +481,8 @@ completed Step 3c `init.sh` run. Verify that run from what it printed.**
   fixture protects a run of the suite, while the fail-closed form above
   protects against `mktemp` itself failing, which no fixture can; and an
   adopter who vendored selectively may have the tests without the conftest,
-  since no test file is tracked by `kit-manifest.json` (`#40`).
+  because manifest-tracked test modules and support files remain individually
+  declinable. A recorded install does not imply that the conftest was accepted.
 
   The two-step form is what makes the override fail closed, and `/upgrade`
   Step 5 carries the same idiom for the same reason: an inline

@@ -34,7 +34,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from conftest import require_kit_paths
+from conftest import require_kit_paths, require_kit_source
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _repo_layout import engine_dir, find_repo_root  # noqa: E402
@@ -1096,7 +1096,9 @@ def test_the_committed_lens_definitions_are_what_the_generator_renders():
     check that keeps them generated: an edit to `lens_compute.claude` or to a lens's
     focus that does not regenerate them leaves a definition the runtime WILL apply
     carrying the old compute — the silent-inherit shape one layer up. Kills: any
-    hand edit to either file, and a config change without regeneration."""
+    hand edit to either file, and a config change without regeneration.
+    Recorded adopters own their definitions and may customize them."""
+    require_kit_source()
     pp = _load()
     root = REPO_ROOT
     config = pp.load_config(root / "config" / "dev-model.yaml")
@@ -1111,12 +1113,14 @@ def test_the_committed_lens_definitions_are_what_the_generator_renders():
 
 
 @pytest.mark.parametrize("engine_rel", ["scripts", "scripts/devkit"], ids=["flat", "nested"])
-def test_committed_lens_comparison_in_relocated_layout(tmp_path, engine_rel):
-    """Exercise the real comparison after relocation, including its failure path.
+@pytest.mark.parametrize("recorded_install", [False, True], ids=["source", "adopter"])
+def test_committed_lens_comparison_in_relocated_layout(tmp_path, engine_rel, recorded_install):
+    """Exercise source drift and adopter applicability after relocation.
 
     A subprocess imports the copied module and root helper afresh. Patching its
     globals here would hide the depth-based root mistake this regression catches.
-    Synthetic definitions keep this independent of adopter-owned lens files.
+    Synthetic definitions exercise the renderer in either layout; a recorded
+    install must skip the shipped-byte assertion even after a policy edit.
     """
     root = tmp_path / "layout"
     root.mkdir()
@@ -1139,6 +1143,10 @@ def test_committed_lens_comparison_in_relocated_layout(tmp_path, engine_rel):
         "    lens_compute:\n      claude:\n        model: sonnet\n        effort: high\n",
         encoding="utf-8",
     )
+    if recorded_install:
+        (root / "kit-manifest.json").write_text(
+            json.dumps({"kit_commit": "synthetic-recorded-install"}) + "\n", encoding="utf-8",
+        )
     definitions = root / ".claude/agents"
     definitions.mkdir(parents=True)
     env = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
@@ -1174,27 +1182,36 @@ def test_committed_lens_comparison_in_relocated_layout(tmp_path, engine_rel):
     def compare(label):
         return run(label, [
             sys.executable, "-m", "pytest", "--confcutdir", str(root),
-            "--basetemp", str(tmp_path / f"{label}-pytest"), "-q", node,
+            "--basetemp", str(tmp_path / f"{label}-pytest"),
+            "--junitxml", str(tmp_path / f"{label}-junit.xml"), "-q", "-rs", node,
         ])
 
     positive = compare("comparison-clean")
     assert positive.returncode == 0, positive.stdout + positive.stderr
-    assert "1 passed" in positive.stdout, positive.stdout  # a skip is not a pass
+    expected_summary = "1 skipped" if recorded_install else "1 passed"
+    assert expected_summary in positive.stdout, positive.stdout
+    if recorded_install:
+        assert "recorded install baseline" in positive.stdout, positive.stdout
     for lens in ("adversarial", "correctness"):
         definition = definitions / f"{lens}.md"
         original = definition.read_bytes()
         try:
-            definition.write_bytes(original + b"\nrelocated definition mutation\n")
+            definition.write_bytes(original + b"\nPreserve this project-specific review instruction.\n")
             landed = definition.read_text(encoding="utf-8")
             (tmp_path / f"mutation-{lens}.diff").write_text("".join(difflib.unified_diff(
                 original.decode().splitlines(keepends=True), landed.splitlines(keepends=True),
                 fromfile=f"a/.claude/agents/{lens}.md", tofile=f"b/.claude/agents/{lens}.md",
             )), encoding="utf-8")
             negative = compare(f"comparison-mutated-{lens}")
-            assert negative.returncode == 1, negative.stdout + negative.stderr
-            assert f"AssertionError: .claude/agents/{lens}.md differs" in negative.stdout, (
-                negative.stdout + negative.stderr
-            )
+            if recorded_install:
+                assert negative.returncode == 0, negative.stdout + negative.stderr
+                assert "1 skipped" in negative.stdout, negative.stdout
+                assert "recorded install baseline" in negative.stdout, negative.stdout
+            else:
+                assert negative.returncode == 1, negative.stdout + negative.stderr
+                assert f"AssertionError: .claude/agents/{lens}.md differs" in negative.stdout, (
+                    negative.stdout + negative.stderr
+                )
         finally:
             definition.write_bytes(original)
         assert definition.read_bytes() == original

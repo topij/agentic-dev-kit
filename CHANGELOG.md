@@ -42,6 +42,17 @@ starts.
 
 ---
 
+## #741 — 2026-09-14
+
+- **CHANGED — archival content preservation:** Refresh `scripts/archive_plan_sessions.py`
+  and its portability tests together. Trailing quotations remain session content;
+  only the exact generated classic footer for the selected history destination is
+  removed before a sweep. Preserve differently addressed or edited footers as content.
+- **CHANGED — installed-test applicability:** Refresh `scripts/tests/test_panel_prompt.py`
+  under the configured engine directory. Keep the existing test conftest and your
+  authored lens definitions. Recorded adopter baselines skip the kit's committed-lens
+  byte comparison; synthetic renderer and relocation checks continue to run.
+
 ## #740 — 2026-09-13
 
 - **CHANGED — hook instructions:** Refresh `scripts/hooks/pr_followup_hook.py` and

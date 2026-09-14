@@ -302,8 +302,9 @@ def split_plan(lines: list[str]) -> tuple[list[str], list[str], list[str]]:
 def parse_blocks(region: list[str]) -> list[list[str]]:
     """Split the session region into per-block line lists, newest first.
 
-    Trailing blank/separator/pointer (``>``) lines are stripped from each block,
-    so the pointer the previous run wrote never gets absorbed into a block.
+    Trailing layout blanks and separators are stripped from each block.
+    Quotations are content; main removes only the exact generated footer
+    at the end of a classic session region before calling this parser.
     "Blank" means ``_LAYOUT_WS`` only — a line whose sole content is an exotic
     control character is kept, because this is a move and that character is
     content (issue #162).
@@ -330,7 +331,6 @@ def parse_blocks(region: list[str]) -> list[list[str]]:
         while block and (
             block[-1].strip(_LAYOUT_WS) == ""
             or _is_sep(block[-1])
-            or block[-1].startswith(">")
         ):
             block.pop()
     return blocks
@@ -528,16 +528,25 @@ def main(argv: list[str] | None = None) -> int:
     plan = texts[0].splitlines(keepends=True)
     history = texts[1].splitlines(keepends=True)
 
+    history_link = os.path.relpath(args.history, start=args.plan.parent).replace(
+        os.sep, "/"
+    )
+
     try:
         head, region, tail = split_plan(plan)
+        pointer = history_pointer(history_link, args.history.name)
+        # The classic writer owns this exact footer at the region boundary.
+        # A quotation elsewhere, an edited footer, or a footer naming another
+        # history destination is content and must survive the archival move.
+        if (
+            any(_is_session_heading(line) for line in region)
+            and region[-len(pointer):] == pointer
+        ):
+            region = region[:-len(pointer)]
         blocks = parse_blocks(region)
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
-
-    history_link = os.path.relpath(args.history, start=args.plan.parent).replace(
-        os.sep, "/"
-    )
 
     if target_lines is not None:
         plan_lines = budget_line_count("".join(plan))
