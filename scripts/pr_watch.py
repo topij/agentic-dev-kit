@@ -2307,10 +2307,11 @@ def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
 def new_actionable(comments: list[dict], seen: set[str]) -> list[dict]:
     """Comments that are new and not auto-noise.
 
-    A comment is "new" only when BOTH its platform-id key and its content key are
-    absent from ``seen`` — so a review bot's re-review that re-posts the same
-    finding under a fresh id (or an edit that bumps ``updated_at`` / re-homes
-    the line) is recognized as already handled instead of read twice.
+    A comment is "new" when its normalized content key is absent from ``seen``.
+    A platform ID cannot acknowledge a later edit to that comment. Unchanged
+    reposts remain handled; legacy ID-only state conservatively resurfaces the
+    content until it is explicitly acknowledged. Platform keys remain in the
+    report and persisted snapshot for compatibility.
 
     **The engine's own disposition comment is handled through ``seen``, not
     here**, and the difference is a merge-gate property rather than style. That
@@ -2336,8 +2337,7 @@ def new_actionable(comments: list[dict], seen: set[str]) -> list[dict]:
     return [
         c
         for c in comments
-        if c["key"] not in seen
-        and c["content_key"] not in seen
+        if c["content_key"] not in seen
         and not is_noise(c["body"], author=c["author"])
     ]
 

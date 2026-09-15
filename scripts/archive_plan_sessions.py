@@ -97,13 +97,11 @@ Exit codes:
         first, and a 26,807-byte handoff was measured going to 0 bytes under
         ENOSPC while this tool printed "no changes applied").
 
-        The exceptions are the branches where a **publish and its rollback both
-        fail**, and they say so rather than reporting cleanly. Each names both
-        documents, the state it can actually vouch for, and the swept blocks'
-        **titles** — enough to know what is missing, not enough to retype it,
-        so recovery is from git. When the run could not establish whether the
-        handoff was published, the message says that too instead of picking the
-        confident reading. Allocation is finished before any of this, so the
+        If publication fails and restoration cannot be confirmed by reading the
+        handoff back, the run warns instead of claiming restoration. It names both
+        documents and the affected blocks' **titles** to guide recovery
+        inspection. The warning does not establish that those blocks are absent
+        from either document. Allocation is finished before any of this, so the
         ordinary out-of-space route does not lead here.
 
         A *refused* write is different from a failed one and is worded
@@ -290,11 +288,15 @@ def split_plan(lines: list[str]) -> tuple[list[str], list[str], list[str]]:
         (i for i, ln in enumerate(lines) if i > recent_start and ln.startswith("## ")),
         len(lines),
     )
-    # Keep the section heading in the head; parse_blocks handles its ``###``
-    # entries and rebuild_plan preserves this layout without adding a pointer.
+    # Introductory prose belongs to the live section, not to an archived entry.
+    # Start parsing at the first dated heading so parse_blocks cannot discard it.
+    sess_start = next(
+        (i for i in range(recent_start + 1, standing) if _RECENT_SESSION_RE.match(lines[i])),
+        standing,
+    )
     return (
-        lines[: recent_start + 1],
-        lines[recent_start + 1 : standing],
+        lines[:sess_start],
+        lines[sess_start:standing],
         lines[standing:],
     )
 
@@ -379,8 +381,10 @@ def rebuild_plan(
     history_label: str = "handoff-history.md",
 ) -> list[str]:
     """Reassemble the handoff doc from the trimmed head, kept blocks, fresh pointer, and tail."""
-    if head and head[-1].rstrip("\n") == RECENT_SESSIONS_HEADING:
-        body: list[str] = ["\n"]
+    # The head includes any recent-section introduction. The retained session
+    # heading, rather than the head's last line, identifies the layout.
+    if keep_blocks and _RECENT_SESSION_RE.match(keep_blocks[0][0]):
+        body: list[str] = []
         for block in keep_blocks:
             body += block + ["\n", "---\n", "\n"]
         return head + body + tail
@@ -411,7 +415,10 @@ def insert_into_history(history: list[str], moved: list[list[str]]) -> list[str]
     chunk: list[str] = []
     for block in moved:
         chunk += demote(block) + ["\n"]
-    return history[:insert_at] + chunk + history[insert_at:]
+    prefix = history[:insert_at]
+    if prefix and not prefix[-1].endswith("\n"):
+        prefix[-1] += "\n"
+    return prefix + chunk + history[insert_at:]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -721,42 +728,35 @@ def main(argv: list[str] | None = None) -> int:
         # ONE recovery routine serves both sites. Three separate review findings
         # were "the guard/message/test exists at one site and not the other", so
         # the duplication was the defect generator rather than any single miss.
-        def restore_handoff(*, cause: BaseException, swept: bool) -> bool:
-            """Put the handoff back. ``True`` if it is now intact, else report.
-
-            ``swept`` says whether the handoff is known to have been published;
-            when it is not, the damage message must not assert that it was.
-            """
+        def restore_handoff(*, cause: BaseException) -> bool:
+            """Put the handoff back; confirm its content before reporting success."""
+            rollback_error: BaseException | None = None
             try:
                 staged_rollback.commit()
-            except BaseException as rollback_exc:
-                # The rollback may have landed anyway: an interrupt can arrive
-                # after its `os.replace` returns, and judging it by "did commit()
-                # raise" is the same unsound inference the forward publishes use
-                # `publish_state()` to avoid. Reported as damage, this sends the
-                # operator to restore a file that is already correct — and at
-                # this point in wrap-up that file holds their uncommitted block.
-                if staged_rollback.publish_state() == "published":
+            except BaseException as exc:
+                rollback_error = exc
+            # A rename can land before raising, or a removed temp can falsely
+            # suggest publication. Confirm the destination in either case.
+            # A readback interrupt must not hide the original failure and the
+            # recovery warning; it establishes uncertainty, not restoration.
+            try:
+                if args.plan.read_text(encoding="utf-8") == original_plan:
                     return True
-                state = (
-                    f"{args.plan} has been swept, so these blocks are in NEITHER "
-                    "document"
-                    if swept
-                    else f"{args.plan} could not be confirmed either way, so these "
-                    "blocks may be in NEITHER document"
-                )
-                print(
-                    f"error: publishing failed ({cause}), AND restoring "
-                    f"{args.plan} failed ({rollback_exc}). {args.history} is "
-                    f"unchanged and intact — it is never truncated — but {state}:\n"
-                    + "\n".join(f"  - {title[:88]}" for title in moved_titles)
-                    + f"\nRecover {args.plan} with `git show HEAD:{args.plan.name}` "
-                    "— do NOT `git checkout`, which discards this session's own "
-                    "edits.",
-                    file=sys.stderr,
-                )
-                return False
-            return True
+                confirmation = "destination differs from the original handoff"
+            except BaseException as exc:
+                confirmation = f"could not read back the destination ({exc})"
+            print(
+                f"error: publishing failed ({cause}), AND restoration of "
+                f"{args.plan} could not be confirmed ({confirmation}; "
+                f"rollback error: {rollback_error!r}). These blocks "
+                f"may be in NEITHER document. Inspect {args.plan} and {args.history}:\n"
+                + "\n".join(f"  - {title[:88]}" for title in moved_titles)
+                + f"\nRecover {args.plan} with `git show HEAD:{args.plan.name}` "
+                "— do NOT `git checkout`, which discards this session's own "
+                "edits.",
+                file=sys.stderr,
+            )
+            return False
 
         try:
             staged_plan.commit()
@@ -766,10 +766,10 @@ def main(argv: list[str] | None = None) -> int:
             # rollback writes the original bytes over a document that either was
             # swept (so it needs them) or was never touched (so they are what is
             # already there). At the history site the same ambiguity is not
-            # symmetric, and is handled differently. The message still must not
-            # claim a sweep it could not establish — hence `swept=`.
+            # symmetric, and is handled differently. Recovery diagnostics do
+            # not turn this temporary-file observation into proof of a sweep.
             if plan_state in ("published", "unknown") and not restore_handoff(
-                cause=exc, swept=plan_state == "published"
+                cause=exc
             ):
                 if isinstance(exc, OSError):
                     return 2
@@ -821,7 +821,7 @@ def main(argv: list[str] | None = None) -> int:
                 if isinstance(history_exc, OSError):
                     return 2
                 raise
-            if not restore_handoff(cause=history_exc, swept=True):
+            if not restore_handoff(cause=history_exc):
                 if isinstance(history_exc, OSError):
                     return 2
                 # `raise history_exc`, not a bare `raise`: a bare one re-raises

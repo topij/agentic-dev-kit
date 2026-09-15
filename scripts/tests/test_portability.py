@@ -15858,8 +15858,9 @@ def _atomic_write() -> ModuleType:
     return _load_module("atomic_write_lib", ENGINE_DIR / "lib" / "atomic_write.py")
 
 
+@pytest.mark.parametrize("failure", [OSError, KeyboardInterrupt, SystemExit])
 def test_commit_cannot_raise_once_the_replace_has_succeeded(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: type[BaseException]
 ) -> None:
     """The durability step must never turn a published write into a reported failure.
 
@@ -15877,7 +15878,7 @@ def test_commit_cannot_raise_once_the_replace_has_succeeded(
 
     def exploding_close(fd: int) -> None:
         real_close(fd)
-        raise OSError(5, "Input/output error")
+        raise failure("directory close failed after closing")
 
     staged = aw.stage_text(target, "published\n")
     monkeypatch.setattr(os, "close", exploding_close)
@@ -16552,8 +16553,9 @@ def test_an_interrupt_during_staging_leaves_no_temp(
     assert target.read_text(encoding="utf-8") == "original\n"
 
 
+@pytest.mark.parametrize("operation", ["open", "fsync"])
 def test_an_interrupt_in_the_durability_step_cannot_escape(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, operation: str
 ) -> None:
     """"Nothing here may raise. Ever." — and `except OSError` did not achieve it.
 
@@ -16577,7 +16579,14 @@ def test_an_interrupt_in_the_durability_step_cannot_escape(
             raise KeyboardInterrupt
         return real_open(path, flags, *a, **k)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(os, "open", interrupting_open)
+    if operation == "open":
+        monkeypatch.setattr(os, "open", interrupting_open)
+    else:
+        def interrupting_fsync(fd: int) -> None:
+            assert stat.S_ISDIR(os.fstat(fd).st_mode)
+            raise KeyboardInterrupt
+
+        monkeypatch.setattr(os, "fsync", interrupting_fsync)
     staged.commit()  # must not raise
     monkeypatch.undo()
 
@@ -17493,3 +17502,258 @@ def test_upgrade_verification_stops_at_the_failed_command(
     expected = order if failure == "none" else order[:order.index(failure) + 1]
     assert calls.read_text().splitlines() == expected
     assert (result.returncode == 0) == (failure == "none")
+
+
+_RECENT_INTRO = (
+    "# Handoff\n\n## Recent sessions\n\n"
+    "Keep this live introduction.\n\n> An introductory quotation.\n\n"
+    "- An introductory list item.\n<!-- introductory comment -->\n\n"
+    "### Reading this section\n\nRead the newest entry first.\n\n"
+)
+
+
+def _recent_repair_docs(plan: Path, history: Path) -> None:
+    plan.write_text(
+        _RECENT_INTRO
+        + "".join(
+            f"### 2026-09-{day} — {title}\n\n{title} unique body.\n\n---\n\n"
+            for day, title in [("15", "New"), ("14", "Middle"), ("13", "Old")]
+        )
+        + "## Standing section\n\nStanding content.\n",
+        encoding="utf-8",
+    )
+    history.write_text("# History\n\n## Session log\n", encoding="utf-8")
+
+
+def test_recent_introduction_stays_before_live_sessions_across_sweeps(tmp_path: Path) -> None:
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    _recent_repair_docs(plan, history)
+    for keep, live, archived in [
+        (2, ["New", "Middle"], ["Old"]),
+        (1, ["New"], ["Middle", "Old"]),
+    ]:
+        result = subprocess.run(
+            [sys.executable, str(ENGINE_DIR / "archive_plan_sessions.py"),
+             "--plan", str(plan), "--history", str(history), "--keep", str(keep)],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0, result.stderr
+        current, past = plan.read_text(), history.read_text()
+        assert current.startswith(_RECENT_INTRO + "### 2026-09-15 — New\n")
+        assert current.count("Keep this live introduction.") == 1
+        assert "introductory" not in past
+        assert current.endswith("## Standing section\n\nStanding content.\n")
+        for title in live:
+            assert current.count(f"{title} unique body.") == 1
+            assert f"{title} unique body." not in past
+        for title in archived:
+            assert past.count(f"{title} unique body.") == 1
+            assert f"{title} unique body." not in current
+
+
+@pytest.mark.parametrize("mode", ["budget", "unreachable", "dry-run", "keep-noop", "budget-noop"])
+def test_recent_introduction_counts_toward_budget_and_survives_nonwrites(
+    tmp_path: Path, mode: str,
+) -> None:
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    _recent_repair_docs(plan, history)
+    before = (plan.read_bytes(), history.read_bytes())
+    # The accepted budget fits the intro, newest block and standing section,
+    # but cannot also fit Middle. A budget omitting the intro is unreachable.
+    options = {
+        "budget": ["--target-lines", "26"],
+        "unreachable": ["--target-lines", "15"],
+        "dry-run": ["--keep", "1", "--dry-run"],
+        "keep-noop": ["--keep", "3"],
+        "budget-noop": ["--target-lines", "100"],
+    }[mode]
+    result = subprocess.run(
+        [sys.executable, str(ENGINE_DIR / "archive_plan_sessions.py"),
+         "--plan", str(plan), "--history", str(history), *options],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == (3 if mode == "unreachable" else 0), result.stderr
+    if mode == "budget":
+        assert plan.read_text().startswith(_RECENT_INTRO + "### 2026-09-15 — New\n")
+        assert "Middle unique body." not in plan.read_text()
+        assert "Middle unique body." in history.read_text()
+        assert "Old unique body." in history.read_text()
+        assert "introductory" not in history.read_text()
+    else:
+        assert (plan.read_bytes(), history.read_bytes()) == before
+
+
+@pytest.mark.parametrize("heading", ["## Session log", "## Recent sessions (archived)"])
+@pytest.mark.parametrize("suffix", ["", "\n", "\n\n", "\n\n### Existing\n\nExisting body.\n"])
+def test_history_insertion_keeps_a_heading_boundary_across_sweeps(
+    tmp_path: Path, heading: str, suffix: str,
+) -> None:
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    _write_four_block_plan(plan, history)
+    prefix = "# History\n\n" + heading + suffix
+    history.write_bytes(prefix.replace("\n", "\r\n").encode())
+    for keep in (2, 1):
+        before = (plan.read_bytes(), history.read_bytes())
+        argv = [sys.executable, str(ENGINE_DIR / "archive_plan_sessions.py"),
+                "--plan", str(plan), "--history", str(history), "--keep", str(keep)]
+        dry = subprocess.run([*argv, "--dry-run"], capture_output=True, text=True)
+        assert dry.returncode == 0, dry.stderr
+        assert (plan.read_bytes(), history.read_bytes()) == before
+        result = subprocess.run(argv, capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        past = history.read_text()
+        assert heading in past.splitlines()
+        assert past.startswith("# History\n\n" + heading + ("\n\n" if suffix.startswith("\n\n") else "\n"))
+        assert "\r" not in history.read_bytes().decode()
+        for title in (["Second", "First"] if keep == 2 else ["Third", "Second", "First"]):
+            assert past.count(f"{title} body line 1.") == 1
+            assert f"{title} body line 1." not in plan.read_text()
+        if "Existing body." in suffix:
+            assert past.endswith("### Existing\n\nExisting body.\n")
+        if keep == 1:
+            assert past.index("### Third") < past.index("### Second") < past.index("### First")
+    before = (plan.read_bytes(), history.read_bytes())
+    noop = subprocess.run(argv, capture_output=True, text=True)
+    assert noop.returncode == 0, noop.stderr
+    assert (plan.read_bytes(), history.read_bytes()) == before
+
+
+# Faults run through archive.main in a fresh interpreter, including its final
+# cleanup. Only synthetic documents and this child process are affected.
+_ARCHIVE_REPAIR_FAULT_DRIVER = r"""
+import importlib.util
+import os
+from pathlib import Path
+import stat
+import sys
+
+engine, plan, history = map(Path, sys.argv[1:4])
+forward, rollback, cause = sys.argv[4:]
+spec = importlib.util.spec_from_file_location("repair_archive", engine)
+archive = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(archive)
+real_replace, real_read, real_close = os.replace, Path.read_text, os.close
+plan_attempts = 0
+rollback_attempted = False
+
+def fail_forward():
+    if cause == "interrupt":
+        raise KeyboardInterrupt("original-publication")
+    raise OSError("original-publication")
+
+def replace(src, dst, **kwargs):
+    global plan_attempts, rollback_attempted
+    target = Path(dst)
+    if target == plan:
+        plan_attempts += 1
+        if plan_attempts == 1 and forward == "plan":
+            real_replace(src, dst, **kwargs)
+            fail_forward()
+        if plan_attempts == 2:
+            rollback_attempted = True
+            if rollback == "vanished":
+                Path(src).unlink()
+            elif rollback == "pending":
+                raise OSError("rollback-pending")
+            elif rollback == "landed-raise":
+                real_replace(src, dst, **kwargs)
+                raise KeyboardInterrupt("rollback-landed")
+            elif rollback == "mismatched":
+                real_replace(src, dst, **kwargs)
+                plan.write_text("external replacement\n")
+                return
+    if target == history and forward == "history":
+        fail_forward()
+    return real_replace(src, dst, **kwargs)
+
+def read(self, *args, **kwargs):
+    if self == plan and rollback_attempted:
+        faults = {
+            "missing": FileNotFoundError("readback-missing"),
+            "unreadable": PermissionError("readback-unreadable"),
+            "undecodable": UnicodeDecodeError("utf-8", b"\xff", 0, 1, "readback-undecodable"),
+            "interrupted-read": KeyboardInterrupt("readback-interrupted"),
+        }
+        if rollback in faults:
+            raise faults[rollback]
+    return real_read(self, *args, **kwargs)
+
+def close(fd):
+    directory = stat.S_ISDIR(os.fstat(fd).st_mode)
+    real_close(fd)
+    if directory:
+        raise KeyboardInterrupt("post-publication-close")
+
+os.replace = replace
+Path.read_text = read
+if forward == "close":
+    os.close = close
+raise SystemExit(archive.main(["--plan", str(plan), "--history", str(history), "--keep", "2"]))
+"""
+
+
+@pytest.mark.parametrize("forward", ["plan", "history"])
+@pytest.mark.parametrize("rollback", [
+    "vanished", "pending", "landed-raise", "mismatched", "missing",
+    "unreadable", "undecodable", "interrupted-read",
+])
+@pytest.mark.parametrize("cause", ["error", "interrupt"])
+def test_archive_rollback_confirmation_through_subprocess(
+    tmp_path: Path, forward: str, rollback: str, cause: str,
+) -> None:
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    _write_four_block_plan(plan, history)
+    original_plan, original_history = plan.read_text(), history.read_bytes()
+    plan.write_bytes(original_plan.replace("\n", "\r\n").encode())
+    result = subprocess.run(
+        [sys.executable, "-c", _ARCHIVE_REPAIR_FAULT_DRIVER,
+         str(ENGINE_DIR / "archive_plan_sessions.py"), str(plan), str(history),
+         forward, rollback, cause], capture_output=True, text=True,
+    )
+    if cause == "error":
+        assert result.returncode == 2, result.stderr
+    else:
+        assert result.returncode != 0
+        assert "KeyboardInterrupt: original-publication" in result.stderr
+    assert history.read_bytes() == original_history
+    assert "original-publication" in result.stderr
+    if rollback == "landed-raise":
+        assert plan.read_text() == original_plan
+        assert "could not be confirmed" not in result.stderr
+        assert "NEITHER document" not in result.stderr
+    else:
+        assert "restoration of" in result.stderr
+        assert "could not be confirmed" in result.stderr
+        assert "may be in NEITHER document" in result.stderr
+        assert str(plan) in result.stderr and str(history) in result.stderr
+        assert "First" in result.stderr and "Second" in result.stderr
+        assert "git show HEAD:" in result.stderr and "do NOT `git checkout`" in result.stderr
+        assert "no changes" not in result.stderr
+        assert "was restored" not in result.stderr
+        assert "unchanged and intact" not in result.stderr
+        if rollback in ("vanished", "pending", "mismatched"):
+            assert plan.read_text() != original_plan
+            assert "First body line 1." not in plan.read_text()
+            assert "First body line 1." not in history.read_text()
+        else:
+            # Readback uncertainty is not evidence that the rollback was lost.
+            assert plan.read_text() == original_plan
+    assert not list(tmp_path.glob("*.devkit-tmp"))
+
+
+def test_archive_contains_postpublication_close_interrupt_in_subprocess(tmp_path: Path) -> None:
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    _write_four_block_plan(plan, history)
+    result = subprocess.run(
+        [sys.executable, "-c", _ARCHIVE_REPAIR_FAULT_DRIVER,
+         str(ENGINE_DIR / "archive_plan_sessions.py"), str(plan), str(history),
+         "close", "unused", "unused"], capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+    for title in ("Second", "First"):
+        assert f"{title} body line 1." not in plan.read_text()
+        assert history.read_text().count(f"{title} body line 1.") == 1
+    assert "New body line 1." in plan.read_text()
+    assert "Third body line 1." in plan.read_text()
+    assert not list(tmp_path.glob("*.devkit-tmp"))

@@ -10020,3 +10020,103 @@ def test_a_composed_delta_receipt_stays_valid_with_a_disposition(
     assert receipt["disposition_comment"] == "https://example.test/c/2"
     valid, error = pr_watch._validate_composed_coverage(receipt, "final-head")
     assert (valid, error) == (True, None)
+
+
+
+def _edited_comment_view(pr_watch: ModuleType, kind: str, body: str, *,
+                         ident: str | None = "stable-id", author: str = "reviewer"):
+    raw = {"id": ident, "author": {"login": author}, "body": body,
+           "state": "COMMENTED", "commit": {"oid": HEAD_SHA},
+           "path": "example.py", "line": 10}
+    view = _reviewed_view(pr_watch)
+    inline = []
+    if kind == "inline":
+        inline = [raw]
+    else:
+        view["comments" if kind == "issue" else "reviews"] = [raw]
+    return view, inline
+
+
+@pytest.mark.parametrize("kind", ["issue", "review", "inline"])
+@pytest.mark.parametrize("ident", ["stable-id", None])
+def test_edited_acknowledged_comment_resurfaces_and_blocks_gates(kind: str, ident: str | None) -> None:
+    pr_watch = _load_pr_watch()
+    old_view, old_inline = _edited_comment_view(pr_watch, kind, "Original finding", ident=ident)
+    old = pr_watch.collect_comments(old_view, old_inline)[0]
+    seen = {old["key"], old["content_key"]}
+
+    def report(view, inline):
+        return pr_watch.build_report(
+            view, inline, seen,
+            review_receipt={"head": HEAD_SHA, "source": "fallback:panel"},
+            **_settled(view),
+        )
+
+    handled = report(old_view, old_inline)
+    assert handled["new_comments"] == []
+    assert handled["converged"] and handled["mergeable"] and handled["done"]
+    view, inline = _edited_comment_view(pr_watch, kind, "Changed finding: loses data", ident=ident)
+    changed = report(view, inline)
+    assert [c["body"] for c in changed["new_comments"]] == ["Changed finding: loses data"]
+    assert changed["converged"] is False
+    assert changed["mergeable"] is False
+    assert changed["done"] is False
+
+
+@pytest.mark.parametrize("kind", ["issue", "review", "inline"])
+def test_content_acknowledgement_keeps_normalization_and_namespace(kind: str) -> None:
+    pr_watch = _load_pr_watch()
+    view, inline = _edited_comment_view(pr_watch, kind, "Original finding")
+    comment = pr_watch.collect_comments(view, inline)[0]
+    # An ID-only legacy acknowledgement cannot suppress unacknowledged content.
+    assert pr_watch.new_actionable([comment], {comment["key"]}) == [comment]
+    seen = {comment["key"], comment["content_key"]}
+    for ident in ("stable-id", "repost-id"):
+        view, inline = _edited_comment_view(pr_watch, kind, "  ORIGINAL\n finding ", ident=ident)
+        assert pr_watch.new_actionable(pr_watch.collect_comments(view, inline), seen) == []
+    view, inline = _edited_comment_view(pr_watch, kind, "Original finding", author="another-reviewer")
+    assert pr_watch.new_actionable(pr_watch.collect_comments(view, inline), seen)
+    other_kind = "inline" if kind == "issue" else "issue"
+    view, inline = _edited_comment_view(pr_watch, other_kind, "Original finding")
+    assert pr_watch.new_actionable(pr_watch.collect_comments(view, inline), seen)
+
+
+@pytest.mark.parametrize("kind", ["issue", "review", "inline"])
+def test_edit_between_poll_and_acknowledgement_is_not_acked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], kind: str,
+) -> None:
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path / "watch-state")
+    monkeypatch.setattr(pr_watch, "resolve_pr", lambda explicit: 7)
+    polled = _edited_comment_view(pr_watch, kind, "Original finding")
+    monkeypatch.setattr(pr_watch, "fetch_pr_view", lambda pr: polled)
+    monkeypatch.setattr(pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "skipped"))
+
+    assert pr_watch.main(["7", "--json"]) == 0
+    original_report = json.loads(capsys.readouterr().out)
+    assert [c["body"] for c in original_report["new_comments"]] == ["Original finding"]
+    original_pending = pr_watch.load_state(7)["pending_seen"]
+    assert pr_watch.load_seen(7) == set()
+    polled = _edited_comment_view(pr_watch, kind, "Edited before acknowledgement")
+    # A no-persist poll can show the edit without changing what an ack covers.
+    state_bytes = (pr_watch.STATE_DIR / "7.json").read_bytes()
+    assert pr_watch.main(["7", "--json", "--no-persist"]) == 0
+    transient_report = json.loads(capsys.readouterr().out)
+    assert [c["body"] for c in transient_report["new_comments"]] == ["Edited before acknowledgement"]
+    assert (pr_watch.STATE_DIR / "7.json").read_bytes() == state_bytes
+    assert pr_watch.main(["7", "--json", "--mark-seen"]) == 0
+    ack = json.loads(capsys.readouterr().out)
+    assert ack["marked_seen_keys"] == sorted(original_pending)
+    assert pr_watch.load_seen(7) == set(original_pending)
+    assert pr_watch.main(["7", "--json"]) == 0
+    edited_report = json.loads(capsys.readouterr().out)
+    assert [c["body"] for c in edited_report["new_comments"]] == ["Edited before acknowledgement"]
+    assert pr_watch.load_seen(7) == set(original_pending)
+    assert edited_report["converged"] is False
+    assert edited_report["mergeable"] is False
+    assert edited_report["done"] is False
+    # A later explicit ack can acknowledge the edit that was actually reported.
+    assert pr_watch.main(["7", "--json", "--mark-seen"]) == 0
+    capsys.readouterr()
+    assert pr_watch.main(["7", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["new_comments"] == []
