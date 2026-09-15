@@ -15881,11 +15881,16 @@ def test_commit_cannot_raise_once_the_replace_has_succeeded(
         raise failure("directory close failed after closing")
 
     staged = aw.stage_text(target, "published\n")
-    monkeypatch.setattr(os, "close", exploding_close)
-    staged.commit()  # must not raise
-    monkeypatch.undo()
+    escaped: BaseException | None = None
+    with monkeypatch.context() as patch:
+        patch.setattr(os, "close", exploding_close)
+        try:
+            staged.commit()
+        except BaseException as exc:
+            escaped = exc
 
     assert target.read_text(encoding="utf-8") == "published\n"
+    assert escaped is None, f"post-publication close exception escaped: {escaped!r}"
 
 
 def test_ownership_that_cannot_be_carried_is_refused(
