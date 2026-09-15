@@ -16190,8 +16190,10 @@ def test_an_indeterminate_history_publish_restores_and_warns_of_duplicates(
     assert plan.read_text(encoding="utf-8") == original_plan, "the handoff was not restored"
 
 
+@pytest.mark.parametrize("readable", [True, False])
 def test_an_unconfirmed_handoff_publish_is_not_reported_as_a_sweep(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch,
+    readable: bool,
 ) -> None:
     """When the run cannot tell, the damage message must not pick the confident side.
 
@@ -16208,9 +16210,11 @@ def test_an_unconfirmed_handoff_publish_is_not_reported_as_a_sweep(
     _write_four_block_plan(plan, history)
     original_plan = plan.read_text(encoding="utf-8")
 
-    real_exists = Path.exists
+    real_exists, real_read = Path.exists, Path.read_text
+    attempts: list[Path] = []
 
     def spy(src: object, dst: object, **kwargs: object) -> None:
+        attempts.append(Path(str(dst)))
         raise OSError(13, "Permission denied")  # nothing publishes, ever
 
     def indeterminate(self: Path) -> bool:
@@ -16218,8 +16222,14 @@ def test_an_unconfirmed_handoff_publish_is_not_reported_as_a_sweep(
             raise PermissionError(13, "Permission denied")
         return real_exists(self)
 
+    def readback(self: Path, *args: object, **kwargs: object) -> str:
+        if self == plan and attempts and not readable:
+            raise PermissionError(13, "Permission denied")
+        return real_read(self, *args, **kwargs)
+
     monkeypatch.setattr(os, "replace", spy)
     monkeypatch.setattr(Path, "exists", indeterminate)
+    monkeypatch.setattr(Path, "read_text", readback)
     result = archive.main(
         ["--keep", "2", "--plan", str(plan), "--history", str(history)]
     )
@@ -16230,8 +16240,15 @@ def test_an_unconfirmed_handoff_publish_is_not_reported_as_a_sweep(
     assert plan.read_text(encoding="utf-8") == original_plan, "fixture check: untouched"
     # It must reach the recovery at all (the "unknown" arm), and must not assert
     # a sweep it could not establish.
+    assert attempts == [plan, plan]
     assert "has been swept" not in err, f"asserted a sweep that never happened: {err!r}"
-    assert "could not be confirmed either way" in err, err
+    if readable:
+        assert "no changes applied" in err
+        assert "NEITHER document" not in err
+    else:
+        assert "restoration of" in err and "could not be confirmed" in err
+        assert "may be in NEITHER document" in err
+        assert "no changes applied" not in err
 
 
 def test_a_completed_move_interrupted_afterwards_still_says_so(

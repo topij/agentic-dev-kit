@@ -3993,7 +3993,7 @@ def test_a_converged_head_with_no_reviewer_coverage_says_the_review_is_owed(
     acked = pr_watch.build_report(
         verdict_view,
         [],
-        set(unacked["all_comment_keys"]),
+        set(unacked["all_seen_keys"]),
         **_settled(verdict_view),
     )
     assert acked["converged"] is True
@@ -4203,7 +4203,7 @@ def test_a_converged_head_with_no_reviewer_coverage_says_the_review_is_owed(
     two_bot = pr_watch.build_report(
         two_bot_view,
         [],
-        set(two_bot_first["all_comment_keys"]),
+        set(two_bot_first["all_seen_keys"]),
         **_settled(two_bot_view),
     )
     assert two_bot["converged"] is True
