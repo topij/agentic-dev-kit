@@ -794,7 +794,10 @@ def main(argv: list[str] | None = None) -> int:
                 # confirmation either, and falls through to `unknown`.
                 try:
                     landed = args.history.read_text(encoding="utf-8") == "".join(new_history)
-                except (OSError, UnicodeDecodeError):
+                except BaseException:
+                    # Interrupted confirmation establishes uncertainty, not
+                    # publication. Continue through validated restoration and
+                    # preserve the original publication error below.
                     landed = False
                 if not landed:
                     history_state = "unknown"

@@ -1650,23 +1650,60 @@ def test_a_payload_carrying_no_readable_text_still_fails_loud(monkeypatch, capsy
     assert exit_code == 0 and out != ""
 
 
-def test_a_payload_too_deep_for_json_load_still_exits_zero(monkeypatch, capsys):
-    """`json.load` raises RecursionError before this module sees the payload.
+@pytest.mark.parametrize("runtime", ["claude", "codex"])
+def test_a_payload_too_deep_for_json_load_still_exits_zero(tmp_path: Path, runtime):
+    """A parser RecursionError is contained by the real entrypoint.
 
-    A lens ran the real script on a 200k-deep array and got exit 1, against a
-    docstring promising a hook never fails a session. `_iter_strings`'s depth
-    bound cannot help — the parse never completes. Pre-existing, and the
-    previous version of this test asserted the property in its docstring while
-    exercising a path `json.load` can never reach.
+    Whether deeply nested JSON parses depends on the interpreter. Inject the
+    parser failure in a fresh child so the assertion exercises containment,
+    independently of that runtime-dependent threshold.
     """
+    marker = tmp_path / "parser-called"
+    driver = r"""
+import json
+from pathlib import Path
+import runpy
+import sys
+
+hook, runtime, marker = sys.argv[1:]
+sys.argv = [hook, "--runtime", runtime]
+def parser_failure(stream):
+    Path(marker).write_text("synthetic-parser-recursion", encoding="utf-8")
+    raise RecursionError("synthetic-parser-recursion")
+json.load = parser_failure
+runpy.run_path(hook, run_name="__main__")
+"""
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", driver, str(HOOK_PATH), runtime, str(marker)],
+        input="{}", text=True, capture_output=True, cwd=REPO_ROOT,
+    )
+    assert marker.read_text(encoding="utf-8") == "synthetic-parser-recursion"
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == ""
+    assert result.stderr == ""
+
+
+@pytest.mark.parametrize("runtime", ["claude", "codex"])
+def test_a_parsed_response_past_the_walk_bound_still_warns(runtime):
+    """Successful parsing does not make unreadable lifecycle evidence conclusive."""
     hook = _load_hook()
-    text = '{"tool_input": {"command": "gh pr create"}, "tool_response": '
-    text += "[" * 200_000 + '"x"' + "]" * 200_000 + "}"
+    response: object = "https://github.com/o/r/pull/1"
+    for _ in range(hook._MAX_DEPTH + 2):
+        response = {"nested": response}
+    payload = {"tool_input": {"command": "gh pr create"}, "tool_response": response}
+    text = json.dumps(payload)
+    assert json.loads(text) == payload
+    assert hook._response_text(payload) is None
 
-    exit_code, out = _run(hook, monkeypatch, capsys, text)
-
-    assert exit_code == 0
-    assert out == ""
+    result = subprocess.run(
+        [sys.executable, "-B", str(HOOK_PATH), "--runtime", runtime],
+        input=text, text=True, capture_output=True, cwd=REPO_ROOT,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+    output = json.loads(result.stdout)["hookSpecificOutput"]
+    assert output["hookEventName"] == "PostToolUse"
+    _assert_conditional_warning_followthrough(output["additionalContext"])
 
 
 def test_walking_for_strings_is_depth_bounded(monkeypatch, capsys):

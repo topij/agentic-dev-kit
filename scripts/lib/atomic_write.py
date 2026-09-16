@@ -241,7 +241,7 @@ class StagedWrite:
         try:
             dir_fd = os.open(self.target.parent, os.O_RDONLY)
             os.fsync(dir_fd)
-        except BaseException:  # noqa: BLE001 — see the docstring; this cannot raise
+        except BaseException:  # noqa: BLE001 — contain directory open/fsync faults
             pass
         finally:
             if dir_fd is not None:

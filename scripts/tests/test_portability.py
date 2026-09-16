@@ -15859,10 +15859,10 @@ def _atomic_write() -> ModuleType:
 
 
 @pytest.mark.parametrize("failure", [OSError, KeyboardInterrupt, SystemExit])
-def test_commit_cannot_raise_once_the_replace_has_succeeded(
+def test_commit_contains_directory_close_exceptions_after_replace(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: type[BaseException]
 ) -> None:
-    """The durability step must never turn a published write into a reported failure.
+    """Directory-close exceptions are contained after publication.
 
     Found by the correctness lens. `commit()` guarded `os.open` and suppressed
     `os.fsync`, but left `os.close(dir_fd)` in a bare `finally` — and `close(2)`
@@ -16576,10 +16576,10 @@ def test_an_interrupt_during_staging_leaves_no_temp(
 
 
 @pytest.mark.parametrize("operation", ["open", "fsync"])
-def test_an_interrupt_in_the_durability_step_cannot_escape(
+def test_directory_open_and_fsync_interrupts_are_contained(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, operation: str
 ) -> None:
-    """"Nothing here may raise. Ever." — and `except OSError` did not achieve it.
+    """Contain interrupts raised by directory open/fsync after publication.
 
     `os.open`/`os.fsync` on a directory are blocking syscalls, so they are the
     realistic landing spot for an interactive Ctrl-C. An escape here reaches the
@@ -16588,6 +16588,7 @@ def test_an_interrupt_in_the_durability_step_cannot_escape(
 
     The sibling interrupt tests inject at `os.replace` and so cannot see this:
     narrowing the handler back to `OSError` survived all of them.
+    This does not establish immunity to signals at arbitrary instructions.
     """
     aw = _atomic_write()
     target = tmp_path / "doc.md"
@@ -17778,4 +17779,93 @@ def test_archive_contains_postpublication_close_interrupt_in_subprocess(tmp_path
         assert history.read_text().count(f"{title} body line 1.") == 1
     assert "New body line 1." in plan.read_text()
     assert "Third body line 1." in plan.read_text()
+    assert not list(tmp_path.glob("*.devkit-tmp"))
+
+
+_ARCHIVE_HISTORY_CONFIRMATION_DRIVER = r"""
+import importlib.util
+import os
+from pathlib import Path
+import signal
+import sys
+
+engine, plan, history = map(Path, sys.argv[1:4])
+publication, confirmation, cause = sys.argv[4:]
+spec = importlib.util.spec_from_file_location("history_confirmation_archive", engine)
+archive = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(archive)
+real_replace, real_read = os.replace, Path.read_text
+history_attempted = False
+
+def replace(src, dst, **kwargs):
+    global history_attempted
+    if Path(dst) == history:
+        history_attempted = True
+        if publication == "landed":
+            real_replace(src, dst, **kwargs)
+        else:
+            Path(src).unlink()
+        if cause == "interrupt":
+            raise KeyboardInterrupt("original-publication")
+        raise OSError("original-publication")
+    return real_replace(src, dst, **kwargs)
+
+def read(self, *args, **kwargs):
+    if self == history and history_attempted and confirmation == "sigint":
+        print("history-confirmation-sigint", file=sys.stderr, flush=True)
+        os.kill(os.getpid(), signal.SIGINT)
+    return real_read(self, *args, **kwargs)
+
+os.replace = replace
+Path.read_text = read
+raise SystemExit(archive.main(["--plan", str(plan), "--history", str(history), "--keep", "2"]))
+"""
+
+
+@pytest.mark.parametrize("publication", ["vanished", "landed"])
+@pytest.mark.parametrize("confirmation", ["normal", "sigint"])
+@pytest.mark.parametrize("cause", ["error", "interrupt"])
+def test_archive_history_confirmation_preserves_recovery_in_subprocess(
+    tmp_path: Path, publication: str, confirmation: str, cause: str,
+) -> None:
+    """An interrupted history readback cannot establish a completed move.
+
+    Use real SIGINT in the synthetic child. Confirmed publication keeps the
+    swept handoff; uncertainty restores it and warns about possible duplicates.
+    The original publication failure remains the reported cause.
+    """
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    _write_four_block_plan(plan, history)
+    original_plan, original_history = plan.read_bytes(), history.read_bytes()
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", _ARCHIVE_HISTORY_CONFIRMATION_DRIVER,
+         str(ENGINE_DIR / "archive_plan_sessions.py"), str(plan), str(history),
+         publication, confirmation, cause], capture_output=True, text=True,
+    )
+    if cause == "error":
+        assert result.returncode == 2, result.stderr
+    else:
+        assert result.returncode != 0
+        assert "KeyboardInterrupt: original-publication" in result.stderr
+    assert result.stdout == ""
+    assert "original-publication" in result.stderr
+    assert ("history-confirmation-sigint" in result.stderr) == (confirmation == "sigint")
+
+    if publication == "landed" and confirmation == "normal":
+        for title in ("First", "Second"):
+            assert f"{title} body line 1." not in plan.read_text()
+        assert "The move is complete in both documents" in result.stderr
+        assert "has been restored" not in result.stderr
+        assert "duplicates" not in result.stderr
+    else:
+        assert plan.read_bytes() == original_plan, result.stderr
+        assert "could not determine whether it landed" in result.stderr
+        assert "has been restored" in result.stderr
+        assert "CHECK" in result.stderr and "duplicates" in result.stderr
+        assert "The move is complete" not in result.stderr
+    if publication == "vanished":
+        assert history.read_bytes() == original_history
+    else:
+        for title in ("First", "Second"):
+            assert history.read_text().count(f"{title} body line 1.") == 1
     assert not list(tmp_path.glob("*.devkit-tmp"))
