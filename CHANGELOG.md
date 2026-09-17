@@ -45,15 +45,18 @@ starts.
 ## #742 — 2026-09-16
 
 - **BREAKING — review acknowledgements:** Refresh `scripts/pr_watch.py` and its
-  tests together. After upgrading, poll again and review any resurfaced content
-  before explicitly acknowledging it. Legacy platform-ID-only acknowledgements
-  no longer suppress findings. Preserve existing watcher state; do not bulk-convert
-  legacy IDs into approval of the current comment content. Edits that change
-  normalized comment content can reopen `converged`, `mergeable` and `done` gates.
-- **BREAKING — direct acknowledgement consumers:** Integrations that persist
-  acknowledged keys must use the content-bearing `all_seen_keys` from the report
-  snapshot they actually reviewed and handled. `all_comment_keys` alone no longer
-  acknowledges the content. Keep the poll/read/explicit-acknowledgement boundary.
+  tests together. After upgrading, poll again and review resurfaced comments
+  before explicitly acknowledging them. Preserve existing watcher state; do not
+  convert legacy platform or content keys into approval of current occurrences.
+  Acknowledgement requires the observed comment identity and normalized content
+  together. Content edits and reposts under a new identity reopen the review
+  gates; identical text does not acknowledge a distinct finding. Comments without
+  usable platform identity or author remain actionable.
+- **BREAKING — direct acknowledgement consumers:** Persist the complete
+  `all_seen_keys` from the report snapshot actually reviewed and handled, including
+  its occurrence-and-content tokens. Neither `all_comment_keys` nor legacy
+  content-only keys acknowledge current findings. Keep the
+  poll/read/explicit-acknowledgement boundary.
 - **CHANGED — archival content and recovery:** Refresh
   `scripts/archive_plan_sessions.py`, `scripts/lib/atomic_write.py` and the
   portability tests together. Keep recent-session introductory text live and
