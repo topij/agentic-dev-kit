@@ -17869,3 +17869,246 @@ def test_archive_history_confirmation_preserves_recovery_in_subprocess(
         for title in ("First", "Second"):
             assert history.read_text().count(f"{title} body line 1.") == 1
     assert not list(tmp_path.glob("*.devkit-tmp"))
+
+
+_ARCHIVE_ALIAS_DRIVER = r"""
+import importlib.util
+import json
+import os
+from pathlib import Path
+import signal
+import sys
+
+engine, plan_arg, history_arg, plan, history, other_plan, other_history, alias, replacement, marker = (
+    Path(value) for value in sys.argv[1:11]
+)
+mode, forward, cause = sys.argv[11:]
+spec = importlib.util.spec_from_file_location("alias_recovery_archive", engine)
+archive = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(archive)
+real_replace, real_read, real_stage = os.replace, Path.read_text, archive.stage_text
+plan_attempts = 0
+history_attempted = False
+retargeted = False
+stages = []
+
+def retarget():
+    global retargeted
+    if not retargeted:
+        alias.unlink()
+        alias.symlink_to(replacement, target_is_directory=replacement.is_dir())
+        retargeted = True
+
+def fail_forward():
+    if cause == "interrupt":
+        print("original-publication-sigint", file=sys.stderr, flush=True)
+        os.kill(os.getpid(), signal.SIGINT)
+        raise AssertionError("SIGINT did not interrupt the synthetic child")
+    raise OSError("original-publication-error")
+
+def stage(path, *args, **kwargs):
+    result = real_stage(path, *args, **kwargs)
+    stages.append(str(result.target))
+    if len(stages) == 1 and mode == "between-stages":
+        retarget()
+    if len(stages) == 3 and mode == "stage-mismatch":
+        result.target = other_plan
+    return result
+
+def replace(src, dst, **kwargs):
+    global plan_attempts, history_attempted
+    target = Path(dst)
+    if target == plan:
+        plan_attempts += 1
+        if plan_attempts == 1 and forward == "plan":
+            real_replace(src, dst, **kwargs)
+            fail_forward()
+        if plan_attempts == 2 and mode in ("rollback-pending", "rollback-landed"):
+            retarget()
+            if mode == "rollback-pending":
+                raise OSError("rollback-rename-refused")
+    if target == history:
+        history_attempted = True
+        if mode.startswith("history-"):
+            other_history.write_bytes(Path(src).read_bytes())
+            retarget()
+            if mode == "history-landed":
+                real_replace(src, dst, **kwargs)
+            else:
+                Path(src).unlink()
+            fail_forward()
+        if forward == "history":
+            fail_forward()
+    return real_replace(src, dst, **kwargs)
+
+def read(self, *args, **kwargs):
+    if self == history and history_attempted:
+        if mode == "history-unreadable":
+            raise PermissionError("staged-history-unreadable")
+        if mode == "history-sigint":
+            print("alias-confirmation-sigint", file=sys.stderr, flush=True)
+            os.kill(os.getpid(), signal.SIGINT)
+            raise AssertionError("SIGINT did not interrupt confirmation")
+    return real_read(self, *args, **kwargs)
+
+archive.stage_text = stage
+os.replace = replace
+Path.read_text = read
+try:
+    raise SystemExit(archive.main([
+        "--plan", str(plan_arg), "--history", str(history_arg), "--keep", "2",
+    ]))
+finally:
+    marker.write_text(json.dumps({
+        "plan_attempts": plan_attempts,
+        "history_attempted": history_attempted,
+        "retargeted": retargeted,
+        "staged_targets": stages,
+    }))
+"""
+
+
+def _archive_alias_case(tmp_path: Path, kind: str, subject: str) -> tuple[Path, ...]:
+    real, other = tmp_path / "real", tmp_path / "other"
+    real.mkdir()
+    other.mkdir()
+    plan, history = real / "handoff.md", real / "history.md"
+    other_plan, other_history = other / "handoff.md", other / "history.md"
+    _write_four_block_plan(plan, history)
+    other_plan.write_bytes(plan.read_bytes())
+    other_history.write_bytes(history.read_bytes())
+    target = plan if subject == "plan" else history
+    if kind == "leaf":
+        alias, replacement = tmp_path / "document-link.md", other / target.name
+        alias.symlink_to(target)
+        argument = alias
+    else:
+        alias, replacement = tmp_path / "documents", other
+        alias.symlink_to(real, target_is_directory=True)
+        argument = alias / target.name
+    return (
+        argument if subject == "plan" else plan,
+        argument if subject == "history" else history,
+        plan, history, other_plan, other_history, alias, replacement,
+        tmp_path / "child-marker.json",
+    )
+
+
+def _run_archive_alias_case(
+    paths: tuple[Path, ...], mode: str, forward: str, cause: str,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-B", "-c", _ARCHIVE_ALIAS_DRIVER,
+         str(ENGINE_DIR / "archive_plan_sessions.py"),
+         *(str(path) for path in paths), mode, forward, cause],
+        capture_output=True, text=True,
+    )
+
+
+@pytest.mark.parametrize("kind", ["leaf", "parent"])
+@pytest.mark.parametrize("forward", ["plan", "history"])
+@pytest.mark.parametrize("mode", ["rollback-pending", "rollback-landed", "between-stages"])
+@pytest.mark.parametrize("cause", ["error", "interrupt"])
+def test_archive_plan_alias_cannot_confirm_a_different_destination(
+    tmp_path: Path, kind: str, forward: str, mode: str, cause: str,
+) -> None:
+    paths = _archive_alias_case(tmp_path, kind, "plan")
+    plan_arg, history_arg, plan, history, other_plan, other_history, _, _, marker = paths
+    original, history_before = plan.read_bytes(), history.read_bytes()
+    other_before = (other_plan.read_bytes(), other_history.read_bytes())
+    result = _run_archive_alias_case(paths, mode, forward, cause)
+    observed = json.loads(marker.read_text())
+    assert observed["retargeted"]
+    assert observed["plan_attempts"] == 2
+    assert observed["staged_targets"][0] == observed["staged_targets"][2] == str(plan)
+    assert history.read_bytes() == history_before
+    assert (other_plan.read_bytes(), other_history.read_bytes()) == other_before
+    assert plan_arg.read_bytes() == original
+    assert (plan.read_bytes() == original) == (mode != "rollback-pending")
+    assert result.stdout == ""
+    if cause == "error":
+        assert result.returncode == 2, result.stderr
+        assert "original-publication-error" in result.stderr
+    else:
+        assert result.returncode != 0
+        assert "original-publication-sigint" in result.stderr
+        assert "KeyboardInterrupt" in result.stderr
+    assert "restoration of" in result.stderr and "could not be confirmed" in result.stderr
+    assert "was restored" not in result.stderr and "no changes" not in result.stderr
+    assert str(plan_arg) in result.stderr and str(plan) in result.stderr
+    assert str(history_arg) in result.stderr and str(history) in result.stderr
+    if mode == "rollback-pending":
+        assert "First body line 1." not in plan.read_text()
+        assert "First body line 1." not in history.read_text()
+    assert not list(tmp_path.rglob("*.devkit-tmp"))
+
+
+@pytest.mark.parametrize("kind", ["leaf", "parent"])
+@pytest.mark.parametrize("mode", [
+    "history-vanished", "history-landed", "history-unreadable", "history-sigint",
+])
+@pytest.mark.parametrize("cause", ["error", "interrupt"])
+def test_archive_history_alias_cannot_confirm_a_different_destination(
+    tmp_path: Path, kind: str, mode: str, cause: str,
+) -> None:
+    paths = _archive_alias_case(tmp_path, kind, "history")
+    _, history_arg, plan, history, other_plan, other_history, _, _, marker = paths
+    original, history_before = plan.read_bytes(), history.read_bytes()
+    other_plan_before = other_plan.read_bytes()
+    result = _run_archive_alias_case(paths, mode, "history", cause)
+    observed = json.loads(marker.read_text())
+    assert observed["retargeted"] and observed["history_attempted"]
+    assert plan.read_bytes() == original
+    assert other_plan.read_bytes() == other_plan_before
+    assert history_arg.read_bytes() == other_history.read_bytes()
+    assert "First body line 1." in other_history.read_text()
+    if mode == "history-landed":
+        assert history.read_bytes() == other_history.read_bytes()
+    else:
+        assert history.read_bytes() == history_before
+    assert result.stdout == ""
+    if cause == "error":
+        assert result.returncode == 2, result.stderr
+        assert "original-publication-error" in result.stderr
+    else:
+        assert result.returncode != 0
+        assert "original-publication-sigint" in result.stderr
+        assert "KeyboardInterrupt" in result.stderr
+    assert ("alias-confirmation-sigint" in result.stderr) == (mode == "history-sigint")
+    assert "could not determine whether it landed" in result.stderr
+    assert "CHECK" in result.stderr and "duplicates" in result.stderr
+    assert str(history_arg) in result.stderr and str(history) in result.stderr
+    assert "The move is complete" not in result.stderr
+    assert not list(tmp_path.rglob("*.devkit-tmp"))
+
+
+@pytest.mark.parametrize("subject", ["plan", "history"])
+@pytest.mark.parametrize("kind", ["leaf", "parent"])
+@pytest.mark.parametrize("mode", ["stable-success", "stable-rollback", "stage-mismatch"])
+def test_archive_stable_alias_and_staging_refusal_controls(
+    tmp_path: Path, subject: str, kind: str, mode: str,
+) -> None:
+    paths = _archive_alias_case(tmp_path, kind, subject)
+    _, _, plan, history, other_plan, other_history, _, _, marker = paths
+    original, history_before = plan.read_bytes(), history.read_bytes()
+    other_before = (other_plan.read_bytes(), other_history.read_bytes())
+    forward = "history" if mode == "stable-rollback" else "none"
+    result = _run_archive_alias_case(paths, mode, forward, "error")
+    observed = json.loads(marker.read_text())
+    assert not observed["retargeted"]
+    assert (other_plan.read_bytes(), other_history.read_bytes()) == other_before
+    if mode == "stable-success":
+        assert result.returncode == 0, result.stderr
+        assert "First body line 1." not in plan.read_text()
+        assert history.read_text().count("First body line 1.") == 1
+        assert result.stderr == ""
+    else:
+        assert result.returncode == 2, result.stderr
+        assert plan.read_bytes() == original and history.read_bytes() == history_before
+        assert result.stdout == ""
+        if mode == "stage-mismatch":
+            assert observed["plan_attempts"] == 0 and not observed["history_attempted"]
+            assert "refusing to write" in result.stderr
+        else:
+            assert "was restored and no changes were applied" in result.stderr
+    assert not list(tmp_path.rglob("*.devkit-tmp"))

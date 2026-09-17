@@ -90,19 +90,20 @@ Exit codes:
         unparseable handoff structure, history doc with no session-log section,
         a refused write, or a failed one.
 
-        **A failed write leaves both documents intact, and the message says so.**
+        **A failed write reports the observed recovery state.**
         Neither document is ever opened for truncation: each is published by
         renaming a fully-written temporary file over it, and both are written
         before either is published (issue #164 — ``Path.write_text`` truncates
         first, and a 26,807-byte handoff was measured going to 0 bytes under
         ENOSPC while this tool printed "no changes applied").
 
-        If publication fails and restoration cannot be confirmed by reading the
-        handoff back, the run warns instead of claiming restoration. It names both
-        documents and the affected blocks' **titles** to guide recovery
-        inspection. The warning does not establish that those blocks are absent
-        from either document. Allocation is finished before any of this, so the
-        ordinary out-of-space route does not lead here.
+        Restoration confirmation reads the staged handoff destination and checks
+        that the argument still resolves there. If either check fails, the run
+        warns instead of claiming restoration. It names the arguments, staged
+        destinations and affected blocks' **titles** to guide recovery inspection.
+        The warning does not establish that those blocks are absent from either
+        document. Allocation is finished before any of this, so the ordinary
+        out-of-space route does not lead here.
 
         A *refused* write is different from a failed one and is worded
         differently: the sweep declines to publish over a read-only or
@@ -696,8 +697,14 @@ def main(argv: list[str] | None = None) -> int:
             staged.append(staged_plan)
             staged_history = stage_text(args.history, "".join(new_history), newline="\n")
             staged.append(staged_history)
-            staged_rollback = stage_text(args.plan, original_plan, newline="\n")
+            # Reuse the destination selected for the sweep. Resolving the
+            # argument again could stage recovery for a retargeted alias.
+            staged_rollback = stage_text(staged_plan.target, original_plan, newline="\n")
             staged.append(staged_rollback)
+            if staged_rollback.target != staged_plan.target:
+                raise AtomicWriteRefused(
+                    "the handoff rollback destination changed during staging"
+                )
         except AtomicWriteRefused as exc:
             # Not an OSError and not phrased as one: nothing was attempted and
             # failed, the tool declined to publish this way. See atomic_write.
@@ -706,6 +713,9 @@ def main(argv: list[str] | None = None) -> int:
         except OSError as exc:
             print(f"error: write failed ({exc}); no changes applied", file=sys.stderr)
             return 2
+
+        plan_location = f"{args.plan} (staged destination {staged_plan.target})"
+        history_location = f"{args.history} (staged destination {staged_history.target})"
 
         # BOTH publishes catch `BaseException`, and both ask the FILESYSTEM
         # whether the rename happened rather than inferring it from where the
@@ -740,18 +750,22 @@ def main(argv: list[str] | None = None) -> int:
             # A readback interrupt must not hide the original failure and the
             # recovery warning; it establishes uncertainty, not restoration.
             try:
-                if args.plan.read_text(encoding="utf-8") == original_plan:
+                restored = staged_plan.target.read_text(encoding="utf-8") == original_plan
+                if args.plan.resolve(strict=True) != staged_plan.target:
+                    confirmation = "argument no longer resolves to the staged destination"
+                elif restored:
                     return True
-                confirmation = "destination differs from the original handoff"
+                else:
+                    confirmation = "destination differs from the original handoff"
             except BaseException as exc:
                 confirmation = f"could not read back the destination ({exc})"
             print(
                 f"error: publishing failed ({cause}), AND restoration of "
-                f"{args.plan} could not be confirmed ({confirmation}; "
+                f"{plan_location} could not be confirmed ({confirmation}; "
                 f"rollback error: {rollback_error!r}). These blocks "
-                f"may be in NEITHER document. Inspect {args.plan} and {args.history}:\n"
+                f"may be in NEITHER document. Inspect {plan_location} and {history_location}:\n"
                 + "\n".join(f"  - {title[:88]}" for title in moved_titles)
-                + f"\nRecover {args.plan} with `git show HEAD:{args.plan.name}` "
+                + f"\nRecover {plan_location} with `git show HEAD:{staged_plan.target.name}` "
                 "— do NOT `git checkout`, which discards this session's own "
                 "edits.",
                 file=sys.stderr,
@@ -793,7 +807,14 @@ def main(argv: list[str] | None = None) -> int:
                 # than trust the proxy. An unreadable destination is not a
                 # confirmation either, and falls through to `unknown`.
                 try:
-                    landed = args.history.read_text(encoding="utf-8") == "".join(new_history)
+                    # Confirm the staged destination, not a newly resolved
+                    # alias. These path observations do not lock directories
+                    # against replacement by another writer.
+                    landed = (
+                        staged_history.target.read_text(encoding="utf-8")
+                        == "".join(new_history)
+                        and args.history.resolve(strict=True) == staged_history.target
+                    )
                 except BaseException:
                     # Interrupted confirmation establishes uncertainty, not
                     # publication. Continue through validated restoration and
@@ -815,7 +836,7 @@ def main(argv: list[str] | None = None) -> int:
                 # exiting 130 in silence over it reads as "cancelled, nothing
                 # happened" when the sweep in fact succeeded.
                 print(
-                    f"error: {args.history} was published — its content was "
+                    f"error: {history_location} was published — its content was "
                     f"read back and matches — but the step after it failed "
                     f"({history_exc}). The move is complete in both documents "
                     "and nothing needs restoring.",
@@ -837,10 +858,10 @@ def main(argv: list[str] | None = None) -> int:
                 # err on — duplicates are visible and fixable, blocks in neither
                 # document are gone — but the operator has to be told to look.
                 print(
-                    f"error: publishing {args.history} failed ({history_exc}), and "
-                    f"this run could not determine whether it landed. {args.plan} "
+                    f"error: publishing {history_location} failed ({history_exc}), and "
+                    f"this run could not determine whether it landed. {plan_location} "
                     f"has been restored, so the blocks are definitely there — but "
-                    f"CHECK {args.history} for duplicates of:\n"
+                    f"CHECK {history_location} for duplicates of:\n"
                     + "\n".join(f"  - {title[:88]}" for title in moved_titles),
                     file=sys.stderr,
                 )
@@ -849,8 +870,8 @@ def main(argv: list[str] | None = None) -> int:
                 raise
             if isinstance(history_exc, OSError):
                 print(
-                    f"error: publishing {args.history} failed ({history_exc}); "
-                    f"{args.plan} was restored and no changes were applied. "
+                    f"error: publishing {history_location} failed ({history_exc}); "
+                    f"{plan_location} was restored and no changes were applied. "
                     "Neither document holds a partial write; the handoff's bytes "
                     "are the text this run read, which for a CRLF document is its "
                     "normalised form (see the module docstring).",

@@ -60,6 +60,9 @@ starts.
   include it when choosing a line budget. After an unconfirmed history publication
   or handoff restoration, inspect both files before retrying; published history
   can coexist with restored handoff content and require duplicate recovery.
+  For symlinked document paths, inspect the resolved destination named by a
+  recovery warning as well as the command-line path before retrying; a retargeted
+  alias must not establish successful restoration or publication.
 
 ## #741 — 2026-09-14
 
