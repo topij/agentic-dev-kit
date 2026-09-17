@@ -10199,7 +10199,7 @@ def test_identical_occurrence_arriving_between_poll_and_ack_stays_unhandled(
     monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path / "watch-state")
     monkeypatch.setattr(pr_watch, "resolve_pr", lambda explicit: 7)
     receipt = {"head": HEAD_SHA, "source": "fallback:panel"}
-    pr_watch.save_state(7, {"seen": [], "unrelated": {"keep": "yes"}, "review_receipt": receipt})
+    pr_watch.save_state(7, {"seen": [], "review_receipt": receipt})
     polled = _edited_comment_view(pr_watch, kind, "Repeated finding", ident="occurrence-a")
     reads = []
 
@@ -10223,7 +10223,12 @@ def test_identical_occurrence_arriving_between_poll_and_ack_stays_unhandled(
     ack = json.loads(capsys.readouterr().out)
     assert reads == reads_before_ack
     assert ack["marked_seen_keys"] == sorted(pending)
-    assert pr_watch.load_state(7)["unrelated"] == {"keep": "yes"}
+    post_ack = pr_watch.load_state(7)
+    # Acknowledgement changes only seen/pending_seen in the actual poll snapshot.
+    assert {key: value for key, value in post_ack.items() if key != "seen"} == {
+        key: value for key, value in json.loads(before).items()
+        if key not in {"seen", "pending_seen"}
+    }
     assert pr_watch.load_state(7)["review_receipt"] == receipt
     assert pr_watch.main(["7", "--json"]) == 0
     later = json.loads(capsys.readouterr().out)

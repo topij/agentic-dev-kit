@@ -305,7 +305,7 @@
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "f6c24e55dd967d325823b27a8fe894bb1ef52626c3bd1672a8b1b58bf392ed28"
+      "sha256": "84097f0c4f883a78397ddf617163bd6799f21336415cdd915b988efce1710166"
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",
