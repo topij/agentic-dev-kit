@@ -201,8 +201,8 @@ class StagedWrite:
     def commit(self) -> None:
         """Publish the staged content over the target. Atomic; no allocation.
 
-        Raises only if the *publish* itself failed. Once ``os.replace`` returns,
-        nothing this method does afterwards can raise — see :meth:`_fsync_parent`.
+        Publish failures propagate. Post-publication durability syscalls are
+        best effort and contain their exceptions — see :meth:`_fsync_parent`.
         """
         if self._settled:
             return
@@ -211,7 +211,7 @@ class StagedWrite:
         self._fsync_parent()
 
     def _fsync_parent(self) -> None:
-        """Make the rename durable. **Nothing here may raise. Ever.**
+        """Attempt directory durability, containing open/fsync/close exceptions.
 
         This runs after ``os.replace`` has already succeeded, so an exception
         escaping it would be reported by the caller as a failed write over a
@@ -233,19 +233,21 @@ class StagedWrite:
           caller's cleanup and unlinked the staged rollback, losing the swept
           blocks with no message at all.
 
-        Swallowing an interrupt is the lesser harm: the window is microseconds,
-        the document is already correct, and a second Ctrl-C still works.
+        Containment is limited to these post-publication operations; it is not
+        immunity to process termination or signals at arbitrary instructions.
         Directory fsync is also simply unsupported on some platforms.
         """
         dir_fd = None
         try:
             dir_fd = os.open(self.target.parent, os.O_RDONLY)
             os.fsync(dir_fd)
-        except BaseException:  # noqa: BLE001 — see the docstring; this cannot raise
+        except BaseException:  # noqa: BLE001 — contain directory open/fsync faults
             pass
         finally:
             if dir_fd is not None:
-                with contextlib.suppress(OSError):
+                # close may have succeeded before raising; never retry a
+                # descriptor that could already have been reused.
+                with contextlib.suppress(BaseException):
                     os.close(dir_fd)
 
     def abort(self) -> None:

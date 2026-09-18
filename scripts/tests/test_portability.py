@@ -15858,10 +15858,11 @@ def _atomic_write() -> ModuleType:
     return _load_module("atomic_write_lib", ENGINE_DIR / "lib" / "atomic_write.py")
 
 
-def test_commit_cannot_raise_once_the_replace_has_succeeded(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("failure", [OSError, KeyboardInterrupt, SystemExit])
+def test_commit_contains_directory_close_exceptions_after_replace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: type[BaseException]
 ) -> None:
-    """The durability step must never turn a published write into a reported failure.
+    """Directory-close exceptions are contained after publication.
 
     Found by the correctness lens. `commit()` guarded `os.open` and suppressed
     `os.fsync`, but left `os.close(dir_fd)` in a bare `finally` — and `close(2)`
@@ -15877,14 +15878,19 @@ def test_commit_cannot_raise_once_the_replace_has_succeeded(
 
     def exploding_close(fd: int) -> None:
         real_close(fd)
-        raise OSError(5, "Input/output error")
+        raise failure("directory close failed after closing")
 
     staged = aw.stage_text(target, "published\n")
-    monkeypatch.setattr(os, "close", exploding_close)
-    staged.commit()  # must not raise
-    monkeypatch.undo()
+    escaped: BaseException | None = None
+    with monkeypatch.context() as patch:
+        patch.setattr(os, "close", exploding_close)
+        try:
+            staged.commit()
+        except BaseException as exc:
+            escaped = exc
 
     assert target.read_text(encoding="utf-8") == "published\n"
+    assert escaped is None, f"post-publication close exception escaped: {escaped!r}"
 
 
 def test_ownership_that_cannot_be_carried_is_refused(
@@ -16189,8 +16195,10 @@ def test_an_indeterminate_history_publish_restores_and_warns_of_duplicates(
     assert plan.read_text(encoding="utf-8") == original_plan, "the handoff was not restored"
 
 
+@pytest.mark.parametrize("readable", [True, False])
 def test_an_unconfirmed_handoff_publish_is_not_reported_as_a_sweep(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch,
+    readable: bool,
 ) -> None:
     """When the run cannot tell, the damage message must not pick the confident side.
 
@@ -16207,9 +16215,11 @@ def test_an_unconfirmed_handoff_publish_is_not_reported_as_a_sweep(
     _write_four_block_plan(plan, history)
     original_plan = plan.read_text(encoding="utf-8")
 
-    real_exists = Path.exists
+    real_exists, real_read = Path.exists, Path.read_text
+    attempts: list[Path] = []
 
     def spy(src: object, dst: object, **kwargs: object) -> None:
+        attempts.append(Path(str(dst)))
         raise OSError(13, "Permission denied")  # nothing publishes, ever
 
     def indeterminate(self: Path) -> bool:
@@ -16217,8 +16227,14 @@ def test_an_unconfirmed_handoff_publish_is_not_reported_as_a_sweep(
             raise PermissionError(13, "Permission denied")
         return real_exists(self)
 
+    def readback(self: Path, *args: object, **kwargs: object) -> str:
+        if self == plan and attempts and not readable:
+            raise PermissionError(13, "Permission denied")
+        return real_read(self, *args, **kwargs)
+
     monkeypatch.setattr(os, "replace", spy)
     monkeypatch.setattr(Path, "exists", indeterminate)
+    monkeypatch.setattr(Path, "read_text", readback)
     result = archive.main(
         ["--keep", "2", "--plan", str(plan), "--history", str(history)]
     )
@@ -16229,8 +16245,15 @@ def test_an_unconfirmed_handoff_publish_is_not_reported_as_a_sweep(
     assert plan.read_text(encoding="utf-8") == original_plan, "fixture check: untouched"
     # It must reach the recovery at all (the "unknown" arm), and must not assert
     # a sweep it could not establish.
+    assert attempts == [plan, plan]
     assert "has been swept" not in err, f"asserted a sweep that never happened: {err!r}"
-    assert "could not be confirmed either way" in err, err
+    if readable:
+        assert "no changes applied" in err
+        assert "NEITHER document" not in err
+    else:
+        assert "restoration of" in err and "could not be confirmed" in err
+        assert "may be in NEITHER document" in err
+        assert "no changes applied" not in err
 
 
 def test_a_completed_move_interrupted_afterwards_still_says_so(
@@ -16552,10 +16575,11 @@ def test_an_interrupt_during_staging_leaves_no_temp(
     assert target.read_text(encoding="utf-8") == "original\n"
 
 
-def test_an_interrupt_in_the_durability_step_cannot_escape(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("operation", ["open", "fsync"])
+def test_directory_open_and_fsync_interrupts_are_contained(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, operation: str
 ) -> None:
-    """"Nothing here may raise. Ever." — and `except OSError` did not achieve it.
+    """Contain interrupts raised by directory open/fsync after publication.
 
     `os.open`/`os.fsync` on a directory are blocking syscalls, so they are the
     realistic landing spot for an interactive Ctrl-C. An escape here reaches the
@@ -16564,6 +16588,7 @@ def test_an_interrupt_in_the_durability_step_cannot_escape(
 
     The sibling interrupt tests inject at `os.replace` and so cannot see this:
     narrowing the handler back to `OSError` survived all of them.
+    This does not establish immunity to signals at arbitrary instructions.
     """
     aw = _atomic_write()
     target = tmp_path / "doc.md"
@@ -16577,7 +16602,14 @@ def test_an_interrupt_in_the_durability_step_cannot_escape(
             raise KeyboardInterrupt
         return real_open(path, flags, *a, **k)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(os, "open", interrupting_open)
+    if operation == "open":
+        monkeypatch.setattr(os, "open", interrupting_open)
+    else:
+        def interrupting_fsync(fd: int) -> None:
+            assert stat.S_ISDIR(os.fstat(fd).st_mode)
+            raise KeyboardInterrupt
+
+        monkeypatch.setattr(os, "fsync", interrupting_fsync)
     staged.commit()  # must not raise
     monkeypatch.undo()
 
@@ -17493,3 +17525,590 @@ def test_upgrade_verification_stops_at_the_failed_command(
     expected = order if failure == "none" else order[:order.index(failure) + 1]
     assert calls.read_text().splitlines() == expected
     assert (result.returncode == 0) == (failure == "none")
+
+
+_RECENT_INTRO = (
+    "# Handoff\n\n## Recent sessions\n\n"
+    "Keep this live introduction.\n\n> An introductory quotation.\n\n"
+    "- An introductory list item.\n<!-- introductory comment -->\n\n"
+    "### Reading this section\n\nRead the newest entry first.\n\n"
+)
+
+
+def _recent_repair_docs(plan: Path, history: Path) -> None:
+    plan.write_text(
+        _RECENT_INTRO
+        + "".join(
+            f"### 2026-09-{day} — {title}\n\n{title} unique body.\n\n---\n\n"
+            for day, title in [("15", "New"), ("14", "Middle"), ("13", "Old")]
+        )
+        + "## Standing section\n\nStanding content.\n",
+        encoding="utf-8",
+    )
+    history.write_text("# History\n\n## Session log\n", encoding="utf-8")
+
+
+def test_recent_introduction_stays_before_live_sessions_across_sweeps(tmp_path: Path) -> None:
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    _recent_repair_docs(plan, history)
+    for keep, live, archived in [
+        (2, ["New", "Middle"], ["Old"]),
+        (1, ["New"], ["Middle", "Old"]),
+    ]:
+        result = subprocess.run(
+            [sys.executable, str(ENGINE_DIR / "archive_plan_sessions.py"),
+             "--plan", str(plan), "--history", str(history), "--keep", str(keep)],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0, result.stderr
+        current, past = plan.read_text(), history.read_text()
+        assert current.startswith(_RECENT_INTRO + "### 2026-09-15 — New\n")
+        assert current.count("Keep this live introduction.") == 1
+        assert "introductory" not in past
+        assert current.endswith("## Standing section\n\nStanding content.\n")
+        for title in live:
+            assert current.count(f"{title} unique body.") == 1
+            assert f"{title} unique body." not in past
+        for title in archived:
+            assert past.count(f"{title} unique body.") == 1
+            assert f"{title} unique body." not in current
+
+
+@pytest.mark.parametrize("mode", ["budget", "unreachable", "dry-run", "keep-noop", "budget-noop"])
+def test_recent_introduction_counts_toward_budget_and_survives_nonwrites(
+    tmp_path: Path, mode: str,
+) -> None:
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    _recent_repair_docs(plan, history)
+    before = (plan.read_bytes(), history.read_bytes())
+    # The accepted budget fits the intro, newest block and standing section,
+    # but cannot also fit Middle. A budget omitting the intro is unreachable.
+    options = {
+        "budget": ["--target-lines", "26"],
+        "unreachable": ["--target-lines", "15"],
+        "dry-run": ["--keep", "1", "--dry-run"],
+        "keep-noop": ["--keep", "3"],
+        "budget-noop": ["--target-lines", "100"],
+    }[mode]
+    result = subprocess.run(
+        [sys.executable, str(ENGINE_DIR / "archive_plan_sessions.py"),
+         "--plan", str(plan), "--history", str(history), *options],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == (3 if mode == "unreachable" else 0), result.stderr
+    if mode == "budget":
+        assert plan.read_text().startswith(_RECENT_INTRO + "### 2026-09-15 — New\n")
+        assert "Middle unique body." not in plan.read_text()
+        assert "Middle unique body." in history.read_text()
+        assert "Old unique body." in history.read_text()
+        assert "introductory" not in history.read_text()
+    else:
+        assert (plan.read_bytes(), history.read_bytes()) == before
+
+
+@pytest.mark.parametrize("heading", ["## Session log", "## Recent sessions (archived)"])
+@pytest.mark.parametrize("suffix", ["", "\n", "\n\n", "\n\n### Existing\n\nExisting body.\n"])
+def test_history_insertion_keeps_a_heading_boundary_across_sweeps(
+    tmp_path: Path, heading: str, suffix: str,
+) -> None:
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    _write_four_block_plan(plan, history)
+    prefix = "# History\n\n" + heading + suffix
+    history.write_bytes(prefix.replace("\n", "\r\n").encode())
+    for keep in (2, 1):
+        before = (plan.read_bytes(), history.read_bytes())
+        argv = [sys.executable, str(ENGINE_DIR / "archive_plan_sessions.py"),
+                "--plan", str(plan), "--history", str(history), "--keep", str(keep)]
+        dry = subprocess.run([*argv, "--dry-run"], capture_output=True, text=True)
+        assert dry.returncode == 0, dry.stderr
+        assert (plan.read_bytes(), history.read_bytes()) == before
+        result = subprocess.run(argv, capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        past = history.read_text()
+        assert heading in past.splitlines()
+        assert past.startswith("# History\n\n" + heading + ("\n\n" if suffix.startswith("\n\n") else "\n"))
+        assert "\r" not in history.read_bytes().decode()
+        for title in (["Second", "First"] if keep == 2 else ["Third", "Second", "First"]):
+            assert past.count(f"{title} body line 1.") == 1
+            assert f"{title} body line 1." not in plan.read_text()
+        if "Existing body." in suffix:
+            assert past.endswith("### Existing\n\nExisting body.\n")
+        if keep == 1:
+            assert past.index("### Third") < past.index("### Second") < past.index("### First")
+    before = (plan.read_bytes(), history.read_bytes())
+    noop = subprocess.run(argv, capture_output=True, text=True)
+    assert noop.returncode == 0, noop.stderr
+    assert (plan.read_bytes(), history.read_bytes()) == before
+
+
+# Faults run through archive.main in a fresh interpreter, including its final
+# cleanup. Only synthetic documents and this child process are affected.
+_ARCHIVE_REPAIR_FAULT_DRIVER = r"""
+import importlib.util
+import os
+from pathlib import Path
+import stat
+import sys
+
+engine, plan, history = map(Path, sys.argv[1:4])
+forward, rollback, cause = sys.argv[4:]
+spec = importlib.util.spec_from_file_location("repair_archive", engine)
+archive = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(archive)
+real_replace, real_read, real_close = os.replace, Path.read_text, os.close
+plan_attempts = 0
+rollback_attempted = False
+
+def fail_forward():
+    if cause == "interrupt":
+        raise KeyboardInterrupt("original-publication")
+    raise OSError("original-publication")
+
+def replace(src, dst, **kwargs):
+    global plan_attempts, rollback_attempted
+    target = Path(dst)
+    if target == plan:
+        plan_attempts += 1
+        if plan_attempts == 1 and forward == "plan":
+            real_replace(src, dst, **kwargs)
+            fail_forward()
+        if plan_attempts == 2:
+            rollback_attempted = True
+            if rollback == "vanished":
+                Path(src).unlink()
+            elif rollback == "pending":
+                raise OSError("rollback-pending")
+            elif rollback == "landed-raise":
+                real_replace(src, dst, **kwargs)
+                raise KeyboardInterrupt("rollback-landed")
+            elif rollback == "mismatched":
+                real_replace(src, dst, **kwargs)
+                plan.write_text("external replacement\n")
+                return
+    if target == history and forward == "history":
+        fail_forward()
+    return real_replace(src, dst, **kwargs)
+
+def read(self, *args, **kwargs):
+    if self == plan and rollback_attempted:
+        faults = {
+            "missing": FileNotFoundError("readback-missing"),
+            "unreadable": PermissionError("readback-unreadable"),
+            "undecodable": UnicodeDecodeError("utf-8", b"\xff", 0, 1, "readback-undecodable"),
+            "interrupted-read": KeyboardInterrupt("readback-interrupted"),
+        }
+        if rollback in faults:
+            raise faults[rollback]
+    return real_read(self, *args, **kwargs)
+
+def close(fd):
+    directory = stat.S_ISDIR(os.fstat(fd).st_mode)
+    real_close(fd)
+    if directory:
+        raise KeyboardInterrupt("post-publication-close")
+
+os.replace = replace
+Path.read_text = read
+if forward == "close":
+    os.close = close
+raise SystemExit(archive.main(["--plan", str(plan), "--history", str(history), "--keep", "2"]))
+"""
+
+
+@pytest.mark.parametrize("forward", ["plan", "history"])
+@pytest.mark.parametrize("rollback", [
+    "vanished", "pending", "landed-raise", "mismatched", "missing",
+    "unreadable", "undecodable", "interrupted-read",
+])
+@pytest.mark.parametrize("cause", ["error", "interrupt"])
+def test_archive_rollback_confirmation_through_subprocess(
+    tmp_path: Path, forward: str, rollback: str, cause: str,
+) -> None:
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    _write_four_block_plan(plan, history)
+    original_plan, original_history = plan.read_text(), history.read_bytes()
+    plan.write_bytes(original_plan.replace("\n", "\r\n").encode())
+    result = subprocess.run(
+        [sys.executable, "-c", _ARCHIVE_REPAIR_FAULT_DRIVER,
+         str(ENGINE_DIR / "archive_plan_sessions.py"), str(plan), str(history),
+         forward, rollback, cause], capture_output=True, text=True,
+    )
+    if cause == "error":
+        assert result.returncode == 2, result.stderr
+    else:
+        assert result.returncode != 0
+        assert "KeyboardInterrupt: original-publication" in result.stderr
+    assert history.read_bytes() == original_history
+    assert "original-publication" in result.stderr
+    if rollback == "landed-raise":
+        assert plan.read_text() == original_plan
+        assert "could not be confirmed" not in result.stderr
+        assert "NEITHER document" not in result.stderr
+    else:
+        assert "restoration of" in result.stderr
+        assert "could not be confirmed" in result.stderr
+        assert "may be in NEITHER document" in result.stderr
+        assert str(plan) in result.stderr and str(history) in result.stderr
+        assert "First" in result.stderr and "Second" in result.stderr
+        assert "git show HEAD:" in result.stderr and "do NOT `git checkout`" in result.stderr
+        assert "no changes" not in result.stderr
+        assert "was restored" not in result.stderr
+        assert "unchanged and intact" not in result.stderr
+        if rollback in ("vanished", "pending", "mismatched"):
+            assert plan.read_text() != original_plan
+            assert "First body line 1." not in plan.read_text()
+            assert "First body line 1." not in history.read_text()
+        else:
+            # Readback uncertainty is not evidence that the rollback was lost.
+            assert plan.read_text() == original_plan
+    assert not list(tmp_path.glob("*.devkit-tmp"))
+
+
+def test_archive_contains_postpublication_close_interrupt_in_subprocess(tmp_path: Path) -> None:
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    _write_four_block_plan(plan, history)
+    result = subprocess.run(
+        [sys.executable, "-c", _ARCHIVE_REPAIR_FAULT_DRIVER,
+         str(ENGINE_DIR / "archive_plan_sessions.py"), str(plan), str(history),
+         "close", "unused", "unused"], capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+    for title in ("Second", "First"):
+        assert f"{title} body line 1." not in plan.read_text()
+        assert history.read_text().count(f"{title} body line 1.") == 1
+    assert "New body line 1." in plan.read_text()
+    assert "Third body line 1." in plan.read_text()
+    assert not list(tmp_path.glob("*.devkit-tmp"))
+
+
+_ARCHIVE_HISTORY_CONFIRMATION_DRIVER = r"""
+import importlib.util
+import os
+from pathlib import Path
+import signal
+import sys
+
+engine, plan, history = map(Path, sys.argv[1:4])
+publication, confirmation, cause = sys.argv[4:]
+spec = importlib.util.spec_from_file_location("history_confirmation_archive", engine)
+archive = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(archive)
+real_replace, real_read = os.replace, Path.read_text
+history_attempted = False
+
+def replace(src, dst, **kwargs):
+    global history_attempted
+    if Path(dst) == history:
+        history_attempted = True
+        if publication == "landed":
+            real_replace(src, dst, **kwargs)
+        else:
+            Path(src).unlink()
+        if cause == "interrupt":
+            raise KeyboardInterrupt("original-publication")
+        raise OSError("original-publication")
+    return real_replace(src, dst, **kwargs)
+
+def read(self, *args, **kwargs):
+    if self == history and history_attempted and confirmation == "sigint":
+        print("history-confirmation-sigint", file=sys.stderr, flush=True)
+        os.kill(os.getpid(), signal.SIGINT)
+    return real_read(self, *args, **kwargs)
+
+os.replace = replace
+Path.read_text = read
+raise SystemExit(archive.main(["--plan", str(plan), "--history", str(history), "--keep", "2"]))
+"""
+
+
+@pytest.mark.parametrize("publication", ["vanished", "landed"])
+@pytest.mark.parametrize("confirmation", ["normal", "sigint"])
+@pytest.mark.parametrize("cause", ["error", "interrupt"])
+def test_archive_history_confirmation_preserves_recovery_in_subprocess(
+    tmp_path: Path, publication: str, confirmation: str, cause: str,
+) -> None:
+    """An interrupted history readback cannot establish a completed move.
+
+    Use real SIGINT in the synthetic child. Confirmed publication keeps the
+    swept handoff; uncertainty restores it and warns about possible duplicates.
+    The original publication failure remains the reported cause.
+    """
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    _write_four_block_plan(plan, history)
+    original_plan, original_history = plan.read_bytes(), history.read_bytes()
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", _ARCHIVE_HISTORY_CONFIRMATION_DRIVER,
+         str(ENGINE_DIR / "archive_plan_sessions.py"), str(plan), str(history),
+         publication, confirmation, cause], capture_output=True, text=True,
+    )
+    if cause == "error":
+        assert result.returncode == 2, result.stderr
+    else:
+        assert result.returncode != 0
+        assert "KeyboardInterrupt: original-publication" in result.stderr
+    assert result.stdout == ""
+    assert "original-publication" in result.stderr
+    assert ("history-confirmation-sigint" in result.stderr) == (confirmation == "sigint")
+
+    if publication == "landed" and confirmation == "normal":
+        for title in ("First", "Second"):
+            assert f"{title} body line 1." not in plan.read_text()
+        assert "The move is complete in both documents" in result.stderr
+        assert "has been restored" not in result.stderr
+        assert "duplicates" not in result.stderr
+    else:
+        assert plan.read_bytes() == original_plan, result.stderr
+        assert "could not determine whether it landed" in result.stderr
+        assert "has been restored" in result.stderr
+        assert "CHECK" in result.stderr and "duplicates" in result.stderr
+        assert "The move is complete" not in result.stderr
+    if publication == "vanished":
+        assert history.read_bytes() == original_history
+    else:
+        for title in ("First", "Second"):
+            assert history.read_text().count(f"{title} body line 1.") == 1
+    assert not list(tmp_path.glob("*.devkit-tmp"))
+
+
+_ARCHIVE_ALIAS_DRIVER = r"""
+import importlib.util
+import json
+import os
+from pathlib import Path
+import signal
+import sys
+
+engine, plan_arg, history_arg, plan, history, other_plan, other_history, alias, replacement, marker = (
+    Path(value) for value in sys.argv[1:11]
+)
+mode, forward, cause = sys.argv[11:]
+spec = importlib.util.spec_from_file_location("alias_recovery_archive", engine)
+archive = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(archive)
+real_replace, real_read, real_stage = os.replace, Path.read_text, archive.stage_text
+plan_attempts = 0
+history_attempted = False
+retargeted = False
+stages = []
+
+def retarget():
+    global retargeted
+    if not retargeted:
+        alias.unlink()
+        alias.symlink_to(replacement, target_is_directory=replacement.is_dir())
+        retargeted = True
+
+def fail_forward():
+    if cause == "interrupt":
+        print("original-publication-sigint", file=sys.stderr, flush=True)
+        os.kill(os.getpid(), signal.SIGINT)
+        raise AssertionError("SIGINT did not interrupt the synthetic child")
+    raise OSError("original-publication-error")
+
+def stage(path, *args, **kwargs):
+    result = real_stage(path, *args, **kwargs)
+    stages.append(str(result.target))
+    if len(stages) == 1 and mode == "between-stages":
+        retarget()
+    if len(stages) == 3 and mode == "stage-mismatch":
+        result.target = other_plan
+    return result
+
+def replace(src, dst, **kwargs):
+    global plan_attempts, history_attempted
+    target = Path(dst)
+    if target == plan:
+        plan_attempts += 1
+        if plan_attempts == 1 and forward == "plan":
+            real_replace(src, dst, **kwargs)
+            fail_forward()
+        if plan_attempts == 2 and mode in ("rollback-pending", "rollback-landed"):
+            retarget()
+            if mode == "rollback-pending":
+                raise OSError("rollback-rename-refused")
+    if target == history:
+        history_attempted = True
+        if mode.startswith("history-"):
+            other_history.write_bytes(Path(src).read_bytes())
+            retarget()
+            if mode == "history-landed":
+                real_replace(src, dst, **kwargs)
+            else:
+                Path(src).unlink()
+            fail_forward()
+        if forward == "history":
+            fail_forward()
+    return real_replace(src, dst, **kwargs)
+
+def read(self, *args, **kwargs):
+    if self == history and history_attempted:
+        if mode == "history-unreadable":
+            raise PermissionError("staged-history-unreadable")
+        if mode == "history-sigint":
+            print("alias-confirmation-sigint", file=sys.stderr, flush=True)
+            os.kill(os.getpid(), signal.SIGINT)
+            raise AssertionError("SIGINT did not interrupt confirmation")
+    return real_read(self, *args, **kwargs)
+
+archive.stage_text = stage
+os.replace = replace
+Path.read_text = read
+try:
+    raise SystemExit(archive.main([
+        "--plan", str(plan_arg), "--history", str(history_arg), "--keep", "2",
+    ]))
+finally:
+    marker.write_text(json.dumps({
+        "plan_attempts": plan_attempts,
+        "history_attempted": history_attempted,
+        "retargeted": retargeted,
+        "staged_targets": stages,
+    }))
+"""
+
+
+def _archive_alias_case(tmp_path: Path, kind: str, subject: str) -> tuple[Path, ...]:
+    real, other = tmp_path / "real", tmp_path / "other"
+    real.mkdir()
+    other.mkdir()
+    plan, history = real / "handoff.md", real / "history.md"
+    other_plan, other_history = other / "handoff.md", other / "history.md"
+    _write_four_block_plan(plan, history)
+    other_plan.write_bytes(plan.read_bytes())
+    other_history.write_bytes(history.read_bytes())
+    target = plan if subject == "plan" else history
+    if kind == "leaf":
+        alias, replacement = tmp_path / "document-link.md", other / target.name
+        alias.symlink_to(target)
+        argument = alias
+    else:
+        alias, replacement = tmp_path / "documents", other
+        alias.symlink_to(real, target_is_directory=True)
+        argument = alias / target.name
+    return (
+        argument if subject == "plan" else plan,
+        argument if subject == "history" else history,
+        plan, history, other_plan, other_history, alias, replacement,
+        tmp_path / "child-marker.json",
+    )
+
+
+def _run_archive_alias_case(
+    paths: tuple[Path, ...], mode: str, forward: str, cause: str,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-B", "-c", _ARCHIVE_ALIAS_DRIVER,
+         str(ENGINE_DIR / "archive_plan_sessions.py"),
+         *(str(path) for path in paths), mode, forward, cause],
+        capture_output=True, text=True,
+    )
+
+
+@pytest.mark.parametrize("kind", ["leaf", "parent"])
+@pytest.mark.parametrize("forward", ["plan", "history"])
+@pytest.mark.parametrize("mode", ["rollback-pending", "rollback-landed", "between-stages"])
+@pytest.mark.parametrize("cause", ["error", "interrupt"])
+def test_archive_plan_alias_cannot_confirm_a_different_destination(
+    tmp_path: Path, kind: str, forward: str, mode: str, cause: str,
+) -> None:
+    paths = _archive_alias_case(tmp_path, kind, "plan")
+    plan_arg, history_arg, plan, history, other_plan, other_history, _, _, marker = paths
+    original, history_before = plan.read_bytes(), history.read_bytes()
+    other_before = (other_plan.read_bytes(), other_history.read_bytes())
+    result = _run_archive_alias_case(paths, mode, forward, cause)
+    observed = json.loads(marker.read_text())
+    assert observed["retargeted"]
+    assert observed["plan_attempts"] == 2
+    assert observed["staged_targets"][0] == observed["staged_targets"][2] == str(plan)
+    assert history.read_bytes() == history_before
+    assert (other_plan.read_bytes(), other_history.read_bytes()) == other_before
+    assert plan_arg.read_bytes() == original
+    assert (plan.read_bytes() == original) == (mode != "rollback-pending")
+    assert result.stdout == ""
+    if cause == "error":
+        assert result.returncode == 2, result.stderr
+        assert "original-publication-error" in result.stderr
+    else:
+        assert result.returncode != 0
+        assert "original-publication-sigint" in result.stderr
+        assert "KeyboardInterrupt" in result.stderr
+    assert "restoration of" in result.stderr and "could not be confirmed" in result.stderr
+    assert "was restored" not in result.stderr and "no changes" not in result.stderr
+    assert str(plan_arg) in result.stderr and str(plan) in result.stderr
+    assert str(history_arg) in result.stderr and str(history) in result.stderr
+    if mode == "rollback-pending":
+        assert "First body line 1." not in plan.read_text()
+        assert "First body line 1." not in history.read_text()
+    assert not list(tmp_path.rglob("*.devkit-tmp"))
+
+
+@pytest.mark.parametrize("kind", ["leaf", "parent"])
+@pytest.mark.parametrize("mode", [
+    "history-vanished", "history-landed", "history-unreadable", "history-sigint",
+])
+@pytest.mark.parametrize("cause", ["error", "interrupt"])
+def test_archive_history_alias_cannot_confirm_a_different_destination(
+    tmp_path: Path, kind: str, mode: str, cause: str,
+) -> None:
+    paths = _archive_alias_case(tmp_path, kind, "history")
+    _, history_arg, plan, history, other_plan, other_history, _, _, marker = paths
+    original, history_before = plan.read_bytes(), history.read_bytes()
+    other_plan_before = other_plan.read_bytes()
+    result = _run_archive_alias_case(paths, mode, "history", cause)
+    observed = json.loads(marker.read_text())
+    assert observed["retargeted"] and observed["history_attempted"]
+    assert plan.read_bytes() == original
+    assert other_plan.read_bytes() == other_plan_before
+    assert history_arg.read_bytes() == other_history.read_bytes()
+    assert "First body line 1." in other_history.read_text()
+    if mode == "history-landed":
+        assert history.read_bytes() == other_history.read_bytes()
+    else:
+        assert history.read_bytes() == history_before
+    assert result.stdout == ""
+    if cause == "error":
+        assert result.returncode == 2, result.stderr
+        assert "original-publication-error" in result.stderr
+    else:
+        assert result.returncode != 0
+        assert "original-publication-sigint" in result.stderr
+        assert "KeyboardInterrupt" in result.stderr
+    assert ("alias-confirmation-sigint" in result.stderr) == (mode == "history-sigint")
+    assert "could not determine whether it landed" in result.stderr
+    assert "CHECK" in result.stderr and "duplicates" in result.stderr
+    assert str(history_arg) in result.stderr and str(history) in result.stderr
+    assert "The move is complete" not in result.stderr
+    assert not list(tmp_path.rglob("*.devkit-tmp"))
+
+
+@pytest.mark.parametrize("subject", ["plan", "history"])
+@pytest.mark.parametrize("kind", ["leaf", "parent"])
+@pytest.mark.parametrize("mode", ["stable-success", "stable-rollback", "stage-mismatch"])
+def test_archive_stable_alias_and_staging_refusal_controls(
+    tmp_path: Path, subject: str, kind: str, mode: str,
+) -> None:
+    paths = _archive_alias_case(tmp_path, kind, subject)
+    _, _, plan, history, other_plan, other_history, _, _, marker = paths
+    original, history_before = plan.read_bytes(), history.read_bytes()
+    other_before = (other_plan.read_bytes(), other_history.read_bytes())
+    forward = "history" if mode == "stable-rollback" else "none"
+    result = _run_archive_alias_case(paths, mode, forward, "error")
+    observed = json.loads(marker.read_text())
+    assert not observed["retargeted"]
+    assert (other_plan.read_bytes(), other_history.read_bytes()) == other_before
+    if mode == "stable-success":
+        assert result.returncode == 0, result.stderr
+        assert "First body line 1." not in plan.read_text()
+        assert history.read_text().count("First body line 1.") == 1
+        assert result.stderr == ""
+    else:
+        assert result.returncode == 2, result.stderr
+        assert plan.read_bytes() == original and history.read_bytes() == history_before
+        assert result.stdout == ""
+        if mode == "stage-mismatch":
+            assert observed["plan_attempts"] == 0 and not observed["history_attempted"]
+            assert "refusing to write" in result.stderr
+        else:
+            assert "was restored and no changes were applied" in result.stderr
+    assert not list(tmp_path.rglob("*.devkit-tmp"))

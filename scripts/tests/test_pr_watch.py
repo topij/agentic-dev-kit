@@ -432,10 +432,7 @@ def test_changes_requested_and_blocked_merge_state_never_settle_done() -> None:
         reviewDecision="CHANGES_REQUESTED",
         reviews=[review],
     )
-    comments = pr_watch.collect_comments(view, [])
-    seen = {
-        key for comment in comments for key in (comment["key"], comment["content_key"])
-    }
+    seen = set(pr_watch.build_report(view, [], set())["all_seen_keys"])
 
     report = pr_watch.build_report(view, [], seen)
 
@@ -655,11 +652,7 @@ def test_legacy_prefix_outage_is_visible_but_not_authenticated() -> None:
     assert "untrusted reviewer-outage candidate" in pr_watch.render(report)
     assert "review.bot_author_aliases" in pr_watch.render(report)
 
-    seen = {
-        key
-        for comment in pr_watch.collect_comments(view, inline)
-        for key in (comment["key"], comment["content_key"])
-    }
+    seen = set(report["all_seen_keys"])
     acknowledged = pr_watch.build_report(
         view,
         inline,
@@ -680,10 +673,7 @@ def test_acknowledged_unavailable_notice_still_needs_review_evidence() -> None:
             {"id": "notice-1", "author": {"login": "coderabbitai"}, "body": body}
         ],
     )
-    comments = pr_watch.collect_comments(view, [])
-    seen = {
-        key for comment in comments for key in (comment["key"], comment["content_key"])
-    }
+    seen = set(pr_watch.build_report(view, [], set())["all_seen_keys"])
 
     report = pr_watch.build_report(view, [], seen)
 
@@ -3993,7 +3983,7 @@ def test_a_converged_head_with_no_reviewer_coverage_says_the_review_is_owed(
     acked = pr_watch.build_report(
         verdict_view,
         [],
-        set(unacked["all_comment_keys"]),
+        set(unacked["all_seen_keys"]),
         **_settled(verdict_view),
     )
     assert acked["converged"] is True
@@ -4203,7 +4193,7 @@ def test_a_converged_head_with_no_reviewer_coverage_says_the_review_is_owed(
     two_bot = pr_watch.build_report(
         two_bot_view,
         [],
-        set(two_bot_first["all_comment_keys"]),
+        set(two_bot_first["all_seen_keys"]),
         **_settled(two_bot_view),
     )
     assert two_bot["converged"] is True
@@ -5354,10 +5344,7 @@ def test_a_STALE_OUTAGE_COMMENT_still_leaves_the_review_owed() -> None:
     # `converged` by itself, so the dangerous state is only reachable AFTER
     # `--mark-seen` — the comment leaves `new_comments` and, before this fix,
     # took the `review owed` line with it while `coverage` stayed empty.
-    seen = {
-        pr_watch._comment_key("issue", raw),
-        pr_watch._content_key("issue", "coderabbitai", raw["body"]),
-    }
+    seen = set(pr_watch.build_report(view, [], set(), now=NOW)["all_seen_keys"])
 
     report = pr_watch.build_report(
         view,
@@ -9548,7 +9535,8 @@ def test_the_engines_own_disposition_is_acked_where_it_is_posted(
     seen = set(pr_watch.load_state(9)["seen"])
 
     view = _reviewed_view(
-        pr_watch, comments=[_issue_comment(posted_body, author="the-recorder")]
+        pr_watch, comments=[{**_issue_comment(posted_body, author="the-recorder"),
+                             "id": "IC_recorded"}]
     )
     report = pr_watch.build_report(
         view,
@@ -9591,7 +9579,8 @@ def test_a_created_comment_with_no_usable_author_still_records_the_receipt(
         pr_watch,
         "_gh",
         lambda args, *, timeout=60, stdin_text=None: json.dumps(
-            {"html_url": "https://example.test/c/1", "id": 1}
+            {"html_url": "https://example.test/c/1", "id": 1,
+             "node_id": "IC_recorded", "body": json.loads(stdin_text)["body"]}
         ),
     )
 
@@ -9633,6 +9622,7 @@ def _stub_gh_for_record(
             {
                 "html_url": "https://example.test/pr/9#issuecomment-1",
                 "id": 1,
+                "node_id": "IC_recorded",
                 "user": {"login": "the-recorder"},
                 "body": json.loads(stdin_text)["body"],
             }
@@ -9696,7 +9686,8 @@ def test_the_comment_the_engine_writes_is_the_one_it_reads_back(
     posted_body = json.loads(posts[0][1])["body"]
 
     view = _reviewed_view(
-        pr_watch, comments=[_issue_comment(posted_body, author="the-recorder")]
+        pr_watch, comments=[{**_issue_comment(posted_body, author="the-recorder"),
+                             "id": "IC_recorded"}]
     )
     report = _reviewed_report(pr_watch, view)
 
@@ -10020,3 +10011,302 @@ def test_a_composed_delta_receipt_stays_valid_with_a_disposition(
     assert receipt["disposition_comment"] == "https://example.test/c/2"
     valid, error = pr_watch._validate_composed_coverage(receipt, "final-head")
     assert (valid, error) == (True, None)
+
+
+
+def _edited_comment_view(pr_watch: ModuleType, kind: str, body: str, *,
+                         ident: str | None = "stable-id", author: str = "reviewer"):
+    raw = {"id": ident, "author": {"login": author}, "body": body,
+           "state": "COMMENTED", "commit": {"oid": HEAD_SHA},
+           "path": "example.py", "line": 10}
+    view = _reviewed_view(pr_watch)
+    inline = []
+    if kind == "inline":
+        inline = [raw]
+    else:
+        view["comments" if kind == "issue" else "reviews"] = [raw]
+    return view, inline
+
+
+@pytest.mark.parametrize("kind", ["issue", "review", "inline"])
+def test_edited_acknowledged_comment_resurfaces_and_blocks_gates(kind: str) -> None:
+    pr_watch = _load_pr_watch()
+    old_view, old_inline = _edited_comment_view(pr_watch, kind, "Original finding")
+    seen = set(pr_watch.build_report(old_view, old_inline, set())["all_seen_keys"])
+
+    def report(view, inline):
+        return pr_watch.build_report(
+            view, inline, seen,
+            review_receipt={"head": HEAD_SHA, "source": "fallback:panel"},
+            **_settled(view),
+        )
+
+    handled = report(old_view, old_inline)
+    assert handled["new_comments"] == []
+    assert handled["converged"] and handled["mergeable"] and handled["done"]
+    view, inline = _edited_comment_view(pr_watch, kind, "Changed finding: loses data")
+    changed = report(view, inline)
+    assert [c["body"] for c in changed["new_comments"]] == ["Changed finding: loses data"]
+    assert changed["converged"] is False
+    assert changed["mergeable"] is False
+    assert changed["done"] is False
+
+
+@pytest.mark.parametrize("kind", ["issue", "review", "inline"])
+def test_content_acknowledgement_keeps_normalization_and_namespace(kind: str) -> None:
+    pr_watch = _load_pr_watch()
+    view, inline = _edited_comment_view(pr_watch, kind, "Original finding")
+    comment = pr_watch.collect_comments(view, inline)[0]
+    # Legacy keys cannot authorize an occurrence/content pair, even together.
+    for legacy in [{comment["key"]}, {comment["content_key"]},
+                   {comment["key"], comment["content_key"]}]:
+        assert pr_watch.new_actionable([comment], legacy) == [comment]
+    seen = set(pr_watch.build_report(view, inline, set())["all_seen_keys"])
+    view, inline = _edited_comment_view(pr_watch, kind, "  ORIGINAL\n finding ")
+    assert pr_watch.new_actionable(pr_watch.collect_comments(view, inline), seen) == []
+    view, inline = _edited_comment_view(pr_watch, kind, "  ORIGINAL\n finding ", ident="repost-id")
+    assert pr_watch.new_actionable(pr_watch.collect_comments(view, inline), seen)
+    view, inline = _edited_comment_view(pr_watch, kind, "Original finding", author="another-reviewer")
+    assert pr_watch.new_actionable(pr_watch.collect_comments(view, inline), seen)
+    other_kind = "inline" if kind == "issue" else "issue"
+    view, inline = _edited_comment_view(pr_watch, other_kind, "Original finding")
+    assert pr_watch.new_actionable(pr_watch.collect_comments(view, inline), seen)
+
+
+@pytest.mark.parametrize("kind", ["issue", "review", "inline"])
+def test_edit_between_poll_and_acknowledgement_is_not_acked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], kind: str,
+) -> None:
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path / "watch-state")
+    monkeypatch.setattr(pr_watch, "resolve_pr", lambda explicit: 7)
+    polled = _edited_comment_view(pr_watch, kind, "Original finding")
+    monkeypatch.setattr(pr_watch, "fetch_pr_view", lambda pr: polled)
+    monkeypatch.setattr(pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "skipped"))
+
+    assert pr_watch.main(["7", "--json"]) == 0
+    original_report = json.loads(capsys.readouterr().out)
+    assert [c["body"] for c in original_report["new_comments"]] == ["Original finding"]
+    original_pending = pr_watch.load_state(7)["pending_seen"]
+    assert pr_watch.load_seen(7) == set()
+    polled = _edited_comment_view(pr_watch, kind, "Edited before acknowledgement")
+    # A no-persist poll can show the edit without changing what an ack covers.
+    state_bytes = (pr_watch.STATE_DIR / "7.json").read_bytes()
+    assert pr_watch.main(["7", "--json", "--no-persist"]) == 0
+    transient_report = json.loads(capsys.readouterr().out)
+    assert [c["body"] for c in transient_report["new_comments"]] == ["Edited before acknowledgement"]
+    assert (pr_watch.STATE_DIR / "7.json").read_bytes() == state_bytes
+    assert pr_watch.main(["7", "--json", "--mark-seen"]) == 0
+    ack = json.loads(capsys.readouterr().out)
+    assert ack["marked_seen_keys"] == sorted(original_pending)
+    assert pr_watch.load_seen(7) == set(original_pending)
+    assert pr_watch.main(["7", "--json"]) == 0
+    edited_report = json.loads(capsys.readouterr().out)
+    assert [c["body"] for c in edited_report["new_comments"]] == ["Edited before acknowledgement"]
+    assert pr_watch.load_seen(7) == set(original_pending)
+    assert edited_report["converged"] is False
+    assert edited_report["mergeable"] is False
+    assert edited_report["done"] is False
+    # A later explicit ack can acknowledge the edit that was actually reported.
+    assert pr_watch.main(["7", "--json", "--mark-seen"]) == 0
+    capsys.readouterr()
+    assert pr_watch.main(["7", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["new_comments"] == []
+
+
+def _occurrence_report(pr_watch: ModuleType, kind: str, rows: list[dict], seen: set[str]):
+    view = _reviewed_view(pr_watch)
+    inline = []
+    if kind == "inline":
+        inline = rows
+    else:
+        view["comments" if kind == "issue" else "reviews"] = rows
+    return pr_watch.build_report(
+        view, inline, seen,
+        review_receipt={"head": HEAD_SHA, "source": "fallback:panel"},
+        **_settled(view),
+    )
+
+
+def _occurrence(ident, body="Validate the input before writing", **overrides):
+    return {"id": ident, "author": {"login": "reviewer"}, "body": body,
+            "state": "COMMENTED", "commit": {"oid": HEAD_SHA},
+            "path": "a.py", "line": 10, **overrides}
+
+
+@pytest.mark.parametrize("kind", ["issue", "review", "inline"])
+@pytest.mark.parametrize("same_location", [False, True])
+def test_distinct_identical_occurrence_reopens_all_gates(kind: str, same_location: bool) -> None:
+    pr_watch = _load_pr_watch()
+    old = _occurrence("occurrence-a")
+    later = _occurrence("occurrence-b", path="a.py" if same_location else "b.py",
+                        line=10 if same_location else 20)
+    first = _occurrence_report(pr_watch, kind, [old], set())
+    seen = set(first["all_seen_keys"])
+    handled = _occurrence_report(pr_watch, kind, [old], seen)
+    assert handled["mergeable"] and not handled["new_comments"]
+
+    for rows in [[later], [old, later]]:
+        report = _occurrence_report(pr_watch, kind, rows, seen)
+        assert [c["body"] for c in report["new_comments"]] == [later["body"]]
+        assert not report["converged"] and not report["mergeable"] and not report["done"]
+    simultaneous = _occurrence_report(pr_watch, kind, [old, later], set())
+    assert [c["body"] for c in simultaneous["new_comments"]] == [old["body"], later["body"]]
+    acknowledged = _occurrence_report(pr_watch, kind, [old, later], set(simultaneous["all_seen_keys"]))
+    assert acknowledged["mergeable"] and not acknowledged["new_comments"]
+
+
+@pytest.mark.parametrize("kind", ["issue", "review", "inline"])
+def test_acknowledged_identity_and_content_cannot_be_recombined(kind: str) -> None:
+    pr_watch = _load_pr_watch()
+    a = _occurrence("occurrence-a", "First finding")
+    b = _occurrence("occurrence-b", "Second finding")
+    seen = set(_occurrence_report(pr_watch, kind, [a, b], set())["all_seen_keys"])
+    changed = _occurrence_report(pr_watch, kind, [{**a, "body": b["body"]}], seen)
+    assert [c["body"] for c in changed["new_comments"]] == ["Second finding"]
+    assert not changed["converged"] and not changed["mergeable"] and not changed["done"]
+
+
+@pytest.mark.parametrize("kind", ["issue", "review", "inline"])
+@pytest.mark.parametrize("overrides", [
+    {"id": None}, {"id": ""}, {"id": "   "}, {"id": True}, {"id": 0}, {"id": -1},
+    {"id": []}, {"id": {}}, {"author": {}}, {"author": {"name": "display-only"}},
+    {"author": {"login": "?"}}, {"author": {"login": "   "}},
+])
+def test_unidentifiable_occurrence_cannot_be_silenced_by_acknowledgement(kind: str, overrides: dict) -> None:
+    pr_watch = _load_pr_watch()
+    row = _occurrence("occurrence-a", **overrides)
+    first = _occurrence_report(pr_watch, kind, [row], set())
+    again = _occurrence_report(pr_watch, kind, [row], set(first["all_seen_keys"]))
+    assert [c["body"] for c in again["new_comments"]] == [row["body"]]
+    assert not again["converged"] and not again["mergeable"] and not again["done"]
+
+
+def test_same_inline_occurrence_remains_handled_when_only_metadata_moves() -> None:
+    pr_watch = _load_pr_watch()
+    old = _occurrence("occurrence-a")
+    seen = set(_occurrence_report(pr_watch, "inline", [old], set())["all_seen_keys"])
+    moved = {**old, "path": "renamed.py", "line": 90, "updated_at": "later"}
+    report = _occurrence_report(pr_watch, "inline", [moved], seen)
+    assert not report["new_comments"] and report["mergeable"]
+
+
+@pytest.mark.parametrize("kind", ["issue", "review", "inline"])
+def test_identical_occurrence_arriving_between_poll_and_ack_stays_unhandled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], kind: str,
+) -> None:
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path / "watch-state")
+    monkeypatch.setattr(pr_watch, "resolve_pr", lambda explicit: 7)
+    receipt = {"head": HEAD_SHA, "source": "fallback:panel"}
+    pr_watch.save_state(7, {"seen": [], "review_receipt": receipt})
+    polled = _edited_comment_view(pr_watch, kind, "Repeated finding", ident="occurrence-a")
+    reads = []
+
+    def fetch(pr):
+        reads.append(pr)
+        return polled
+
+    monkeypatch.setattr(pr_watch, "fetch_pr_view", fetch)
+    monkeypatch.setattr(pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "skipped"))
+    assert pr_watch.main(["7", "--json"]) == 0
+    first = json.loads(capsys.readouterr().out)
+    pending = first["all_seen_keys"]
+    polled = _edited_comment_view(pr_watch, kind, "Repeated finding", ident="occurrence-b")
+    state_path = pr_watch.STATE_DIR / "7.json"
+    before = state_path.read_bytes()
+    assert pr_watch.main(["7", "--json", "--no-persist"]) == 0
+    transient = json.loads(capsys.readouterr().out)
+    assert transient["new_comments"] and state_path.read_bytes() == before
+    reads_before_ack = list(reads)
+    assert pr_watch.main(["7", "--json", "--mark-seen"]) == 0
+    ack = json.loads(capsys.readouterr().out)
+    assert reads == reads_before_ack
+    assert ack["marked_seen_keys"] == sorted(pending)
+    post_ack = pr_watch.load_state(7)
+    # Acknowledgement changes only seen/pending_seen in the actual poll snapshot.
+    assert {key: value for key, value in post_ack.items() if key != "seen"} == {
+        key: value for key, value in json.loads(before).items()
+        if key not in {"seen", "pending_seen"}
+    }
+    assert pr_watch.load_state(7)["review_receipt"] == receipt
+    assert pr_watch.main(["7", "--json"]) == 0
+    later = json.loads(capsys.readouterr().out)
+    assert [c["body"] for c in later["new_comments"]] == ["Repeated finding"]
+    assert not later["converged"] and not later["mergeable"] and not later["done"]
+
+
+def test_posted_disposition_ack_does_not_cover_a_copy_or_edit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    posts = []
+    _stub_gh_for_record(pr_watch, monkeypatch, tmp_path, posts=posts)
+    pr_watch.record_review(9, "fallback:panel", HEAD_SHA, disposition="reviewed findings")
+    body = json.loads(posts[0][1])["body"]
+    seen = set(pr_watch.load_state(9)["seen"])
+    original = {"id": "IC_recorded", "author": {"login": "the-recorder"}, "body": body}
+    handled = _occurrence_report(pr_watch, "issue", [original], seen)
+    assert not handled["new_comments"] and handled["mergeable"]
+    for changed in [{**original, "id": "IC_copied"},
+                    {**original, "body": body + "\nA new unresolved finding"}]:
+        report = _occurrence_report(pr_watch, "issue", [changed], seen)
+        assert [c["body"] for c in report["new_comments"]] == [changed["body"]]
+        assert not report["converged"] and not report["mergeable"] and not report["done"]
+
+
+@pytest.mark.parametrize("problem", ["no-identity", "bad-identity", "no-author", "body-mismatch"])
+def test_unconfirmed_created_disposition_surfaces_on_later_poll(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, problem: str,
+) -> None:
+    pr_watch = _load_pr_watch()
+    posts = []
+    _stub_gh_for_record(pr_watch, monkeypatch, tmp_path, posts=posts)
+    created_bodies = []
+
+    def create(args, *, timeout=60, stdin_text=None):
+        body = json.loads(stdin_text)["body"]
+        created_bodies.append(body)
+        response = {"html_url": "https://example.test/c/1", "id": 1,
+                    "node_id": "IC_recorded", "user": {"login": "the-recorder"}, "body": body}
+        if problem in {"no-identity", "bad-identity"}:
+            response.pop("node_id")
+            response["id"] = None if problem == "no-identity" else True
+        elif problem == "no-author":
+            response.pop("user")
+        else:
+            response["body"] = body + "\nDifferent server response"
+        return json.dumps(response)
+
+    monkeypatch.setattr(pr_watch, "_gh", create)
+    recorded = pr_watch.record_review(9, "fallback:panel", HEAD_SHA, disposition="reviewed findings")
+    state = pr_watch.load_state(9)
+    assert state.get("seen", []) == []
+    assert recorded["review_receipt"]["disposition_comment"] == "https://example.test/c/1"
+    raw = {"id": "IC_recorded", "author": {"login": "the-recorder"}, "body": created_bodies[0]}
+    report = _occurrence_report(pr_watch, "issue", [raw], set(state.get("seen", [])))
+    assert [c["body"] for c in report["new_comments"]] == [raw["body"]]
+    assert not report["converged"] and not report["mergeable"] and not report["done"]
+
+
+def test_rest_node_identity_matches_graphql_and_other_representations_fail_closed() -> None:
+    pr_watch = _load_pr_watch()
+    rest = {"id": 10, "node_id": "IC_same", "user": {"login": "reviewer"}, "body": "Finding"}
+    graphql = {"id": "IC_same", "author": {"login": "reviewer"}, "body": "Finding"}
+    seen = set(_occurrence_report(pr_watch, "issue", [rest], set())["all_seen_keys"])
+    same = _occurrence_report(pr_watch, "issue", [graphql], seen)
+    assert not same["new_comments"] and same["mergeable"]
+    changed = _occurrence_report(pr_watch, "issue", [{**graphql, "id": "IC_distinct"}], seen)
+    assert changed["new_comments"] and not changed["mergeable"]
+    unknown_representation = _occurrence_report(pr_watch, "issue", [{**rest, "node_id": None}], seen)
+    assert unknown_representation["new_comments"] and not unknown_representation["mergeable"]
+
+
+def test_numeric_platform_identity_can_be_acknowledged_without_a_node_id() -> None:
+    pr_watch = _load_pr_watch()
+    raw = _occurrence(17)
+    seen = set(_occurrence_report(pr_watch, "inline", [raw], set())["all_seen_keys"])
+    handled = _occurrence_report(pr_watch, "inline", [{**raw, "id": "17"}], seen)
+    assert not handled["new_comments"] and handled["mergeable"]
+    distinct = _occurrence_report(pr_watch, "inline", [{**raw, "id": 18}], seen)
+    assert distinct["new_comments"] and not distinct["mergeable"]

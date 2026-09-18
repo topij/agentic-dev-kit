@@ -42,6 +42,31 @@ starts.
 
 ---
 
+## #742 — 2026-09-16
+
+- **BREAKING — review acknowledgements:** Refresh `scripts/pr_watch.py` and its
+  tests together. After upgrading, poll again and review resurfaced comments
+  before explicitly acknowledging them. Preserve existing watcher state; do not
+  convert legacy platform or content keys into approval of current occurrences.
+  Acknowledgement requires the observed comment identity and normalized content
+  together. Content edits and reposts under a new identity reopen the review
+  gates; identical text does not acknowledge a distinct finding. Comments without
+  usable platform identity or author remain actionable.
+- **BREAKING — direct acknowledgement consumers:** Persist the complete
+  `all_seen_keys` from the report snapshot actually reviewed and handled, including
+  its occurrence-and-content tokens. Neither `all_comment_keys` nor legacy
+  content-only keys acknowledge current findings. Keep the
+  poll/read/explicit-acknowledgement boundary.
+- **CHANGED — archival content and recovery:** Refresh
+  `scripts/archive_plan_sessions.py`, `scripts/lib/atomic_write.py` and the
+  portability tests together. Keep recent-session introductory text live and
+  include it when choosing a line budget. After an unconfirmed history publication
+  or handoff restoration, inspect both files before retrying; published history
+  can coexist with restored handoff content and require duplicate recovery.
+  For symlinked document paths, inspect the resolved destination named by a
+  recovery warning as well as the command-line path before retrying; a retargeted
+  alias must not establish successful restoration or publication.
+
 ## #741 — 2026-09-14
 
 - **CHANGED — archival content preservation:** Refresh `scripts/archive_plan_sessions.py`

@@ -2157,22 +2157,51 @@ def _comment_key(kind: str, raw: dict) -> str:
 
 
 def _content_key(kind: str, author: str, body: str) -> str:
-    """Content-addressed dedup key — survives an id/updated_at change on the same finding.
+    """Legacy content fingerprint, retained in reports and acknowledgement state.
 
-    A review bot may re-review after every fix push: it edits the inline
-    comment (which bumps ``updated_at`` and can re-home the line) or posts a
-    fresh review submission, so the *platform id* changes while the finding
-    text is unchanged — and an id-keyed seen-set would report it as new again
-    (each finding read twice). Keying additionally on the normalized body
-    (case- and whitespace-folded, line number deliberately excluded — that's
-    metadata, not content) lets :func:`new_actionable` treat a byte-identical
-    re-post as already handled. A *materially* changed body (e.g. the bot
-    marking it addressed) hashes differently and correctly re-surfaces.
+    Equal text does not establish equal occurrence identity. This key alone is
+    never acknowledgement authority; see :func:`_ack_key`.
     """
     normalized = " ".join((body or "").split()).lower()
     basis = f"{kind}|{author}|{normalized}"
     # usedforsecurity=False: dedup key, not a security hash (bandit B324 + ruff S324)
     return f"content:{hashlib.sha1(basis.encode(), usedforsecurity=False).hexdigest()[:16]}"
+
+
+def _ack_key(kind: str, raw: dict) -> str | None:
+    """Bind an observed platform occurrence to its author and current content.
+
+    REST create responses expose ``node_id`` while gh's GraphQL reads put that
+    same opaque value in ``id``. Prefer the node ID without decoding it. A
+    representation mismatch, missing identity or missing login resurfaces the
+    comment; text or location cannot prove that a new ID is the same finding.
+
+    Keep the pair in one token: independently acknowledged IDs and content keys
+    can otherwise combine into approval of an occurrence/content pair nobody
+    reviewed. Legacy keys remain readable, but cannot authorize suppression.
+    """
+    node_id = raw.get("node_id")
+    ident = node_id if isinstance(node_id, str) and node_id.strip() else raw.get("id")
+    if isinstance(ident, str):
+        if not ident.strip():
+            return None
+    elif isinstance(ident, int) and not isinstance(ident, bool) and ident > 0:
+        ident = str(ident)
+    else:
+        return None
+    author = raw.get("author") or raw.get("user")
+    if isinstance(author, dict):
+        author = author.get("login")
+    if not isinstance(author, str) or not author.strip() or author == "?":
+        return None
+    body = raw.get("body") or ""
+    if not isinstance(body, str):
+        return None
+    basis = json.dumps(
+        [kind, ident, author, " ".join(body.split()).lower()],
+        ensure_ascii=True, separators=(",", ":"),
+    )
+    return "ack:v1:" + hashlib.sha256(basis.encode()).hexdigest()
 
 
 def _author(raw: dict) -> str:
@@ -2229,7 +2258,8 @@ def is_noise(body: str, *, author: str | None = None) -> bool:
 def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
     """Union issue comments + review submissions + inline review comments.
 
-    Each returned dict: ``{key, kind, author, path, line, body}``. The three
+    Each dict carries platform/content keys, an optional occurrence-and-content
+    ``ack_key``, and ``kind, author, path, line, body``. The three
     surfaces use different id namespaces, so keying by ``kind:id`` is what stops
     an inline finding from being mistaken for an already-seen issue comment.
     """
@@ -2250,6 +2280,7 @@ def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
             {
                 "key": _comment_key("issue", raw),
                 "content_key": _content_key("issue", author, body),
+                "ack_key": _ack_key("issue", raw),
                 "kind": "issue",
                 "author": author,
                 "path": None,
@@ -2270,6 +2301,7 @@ def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
             {
                 "key": _comment_key("review", raw),
                 "content_key": _content_key("review", author, body),
+                "ack_key": _ack_key("review", raw),
                 "kind": "review",
                 "author": author,
                 "path": None,
@@ -2290,6 +2322,7 @@ def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
             {
                 "key": _comment_key("inline", raw),
                 "content_key": _content_key("inline", author, body),
+                "ack_key": _ack_key("inline", raw),
                 "kind": "inline",
                 "author": author,
                 "path": raw.get("path"),
@@ -2307,10 +2340,12 @@ def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
 def new_actionable(comments: list[dict], seen: set[str]) -> list[dict]:
     """Comments that are new and not auto-noise.
 
-    A comment is "new" only when BOTH its platform-id key and its content key are
-    absent from ``seen`` — so a review bot's re-review that re-posts the same
-    finding under a fresh id (or an edit that bumps ``updated_at`` / re-homes
-    the line) is recognized as already handled instead of read twice.
+    A comment is new unless its occurrence-and-content token was acknowledged.
+    Neither a legacy ID nor a legacy content key authorizes suppression. Edits
+    that change normalized content and reposts with a new ID resurface; an
+    unchanged identified occurrence remains handled across metadata movement.
+    Missing platform identity or usable author stays actionable. Compatibility
+    keys remain in reports and persisted snapshots without being approval.
 
     **The engine's own disposition comment is handled through ``seen``, not
     here**, and the difference is a merge-gate property rather than style. That
@@ -2325,7 +2360,7 @@ def new_actionable(comments: list[dict], seen: set[str]) -> list[dict]:
     ``dev_session.sh merge`` reads. GitHub's own "quote reply" reaches the same
     end by accident, since it copies the quoted body's HTML comments verbatim.
 
-    So :func:`record_review` writes the posted comment's content key into
+    So :func:`record_review` writes the posted occurrence-and-content token into
     ``seen`` at post time instead — the deterministic artifact
     `safety-critical-changes.md` rule 1 asks for, written at decision time by
     the party that made the decision. A forger cannot pre-seed that set, and if
@@ -2336,8 +2371,7 @@ def new_actionable(comments: list[dict], seen: set[str]) -> list[dict]:
     return [
         c
         for c in comments
-        if c["key"] not in seen
-        and c["content_key"] not in seen
+        if (c.get("ack_key") is None or c["ack_key"] not in seen)
         and not is_noise(c["body"], author=c["author"])
     ]
 
@@ -3705,7 +3739,7 @@ def disposition_body(receipt: dict, disposition: str) -> str:
 
 
 def _post_disposition_comment(pr: int, body: str) -> tuple[str, str | None]:
-    """Post one disposition comment on ``pr``; return ``(url, content_key)``.
+    """Post one disposition comment on ``pr``; return ``(url, ack_key)``.
 
     The REST create endpoint rather than ``gh pr comment``, which prints a URL
     and nothing else. What the caller needs back is the identity the *poll* will
@@ -3717,9 +3751,9 @@ def _post_disposition_comment(pr: int, body: str) -> tuple[str, str | None]:
     length chosen by the caller, and :mod:`json` is the encoder that cannot be
     confused by whatever is in it.
 
-    ``content_key`` is ``None`` when the response carries no usable login. That
-    is the benign direction — the comment surfaces on the next poll and is acked
-    like any other, rather than being silently suppressed.
+    ``ack_key`` is absent if the response lacks usable identity/author or does
+    not confirm the submitted body. The comment then surfaces on the next poll;
+    only a later usable observation can be explicitly acknowledged.
     """
     created = json.loads(
         _gh(
@@ -3735,12 +3769,8 @@ def _post_disposition_comment(pr: int, body: str) -> tuple[str, str | None]:
         )
     )
     url = str(created.get("html_url") or "")
-    login = _author(created)
-    # `_author` returns "?" for a payload with no usable author, which is not a
-    # login and must not be keyed on: it would match any other authorless
-    # comment with the same text.
-    content_key = _content_key("issue", login, body) if login != "?" else None
-    return url, content_key
+    ack_key = _ack_key("issue", created) if created.get("body") == body else None
+    return url, ack_key
 
 
 # The stamp `AGENTS.md` prescribes for a measured claim: a command, `at <sha>`,
@@ -4038,11 +4068,11 @@ def record_review(
         # for a review the gate does not have.
         if not disposition.strip():
             raise ValueError("--disposition must not be empty")
-        url, content_key = _post_disposition_comment(
+        url, ack_key = _post_disposition_comment(
             pr, disposition_body(receipt, disposition)
         )
         receipt["disposition_comment"] = url
-        if content_key:
+        if ack_key:
             # Acknowledge the engine's own record, here, where the exact posted
             # body is known. Without this the next poll reads it as a fresh
             # finding and `converged` — and with it `mergeable` — drops for a
@@ -4053,7 +4083,7 @@ def record_review(
             previous_seen = state.get("seen")
             state["seen"] = sorted(
                 set(previous_seen if isinstance(previous_seen, list) else [])
-                | {content_key}
+                | {ack_key}
             )
     state["review_receipt"] = receipt
     save_state(pr, state)
@@ -4431,9 +4461,9 @@ def build_report(
       one-liner for the human render; ``body`` is the FULL text so a caller never
       needs a second ``gh api`` fetch for the suggested diff.
     - ``all_comment_keys`` — every current comment's platform-id key (back-compat).
-    - ``all_seen_keys`` — the persistence set ``--mark-seen`` writes: BOTH the
-      id key AND the content key of every current comment, so a later re-post
-      under a new id stays handled.
+    - ``all_seen_keys`` — the snapshot ``--mark-seen`` writes: compatibility
+      platform/content keys and usable occurrence-and-content tokens. Only the
+      tokens authorize suppression; a new-ID repost requires acknowledgement.
     - ``review_evidence`` — whether current-head independent-review evidence
       exists, by either route (#350): a persisted receipt bound to this exact
       head SHA, or a configured bot's own review of it. ``route`` names which
@@ -4825,10 +4855,15 @@ def build_report(
             for c in fresh
         ],
         "all_comment_keys": [c["key"] for c in comments],
-        # Persistence set for --mark-seen: BOTH id and content keys, so a later
-        # re-post under a new id is matched on content and stays handled.
+        # Preserve compatibility keys, but acknowledge only the identified
+        # occurrence and content actually included in this polled snapshot.
         "all_seen_keys": sorted(
-            {k for c in comments for k in (c["key"], c["content_key"])}
+            {
+                k
+                for c in comments
+                for k in (c["key"], c["content_key"], c["ack_key"])
+                if k is not None
+            }
         ),
     }
     report["converged"] = decide_converged(checks, fresh, settling=settling)
