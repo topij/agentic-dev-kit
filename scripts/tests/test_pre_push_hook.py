@@ -392,7 +392,7 @@ def test_a_newline_in_a_manifest_path_cannot_launder_another_file(tmp_path):
 @pytest.mark.parametrize("fault", [
     "failed", "empty", "header-truncated", "header-malformed", "negative-size",
     "body-truncated", "separator-missing", "missing-response", "extra-response",
-    "wrong-type", "complete",
+    "wrong-type", "separator-corrupt", "missing-mismatched", "missing-valid", "complete",
 ])
 def test_batch_read_failures_warn_without_refusing_the_push(tmp_path, monkeypatch, fault):
     repo = _repo(tmp_path)
@@ -412,7 +412,8 @@ def test_batch_read_failures_warn_without_refusing_the_push(tmp_path, monkeypatc
         f"real_git, fault = {real_git!r}, {fault!r}\n"
         "if sys.argv[1:] != ['cat-file', '--batch']:\n"
         "    os.execv(real_git, [real_git, *sys.argv[1:]])\n"
-        "done = subprocess.run([real_git, *sys.argv[1:]], input=sys.stdin.buffer.read(), capture_output=True)\n"
+        "requests = sys.stdin.buffer.read()\n"
+        "done = subprocess.run([real_git, *sys.argv[1:]], input=requests, capture_output=True)\n"
         "assert done.returncode == 0, done.stderr\n"
         "out = done.stdout\n"
         "nl = out.index(b'\\n')\n"
@@ -421,9 +422,12 @@ def test_batch_read_failures_warn_without_refusing_the_push(tmp_path, monkeypatc
         "    'empty': b'',\n"
         "    'header-truncated': b'no newline',\n"
         "    'header-malformed': b'not a batch header\\n',\n"
-        "    'negative-size': b'0' * 40 + b' blob -1\\n',\n"
+        "    'negative-size': out[:nl].rsplit(b' ', 1)[0] + b' -1\\n' + out[end:],\n"
         "    'body-truncated': out[:nl + 2],\n"
         "    'separator-missing': out[:-1],\n"
+        "    'separator-corrupt': out[:end - 1] + b'!' + out[end:],\n"
+        "    'missing-mismatched': b'wrong-object missing\\n' + out[end:],\n"
+        "    'missing-valid': requests.splitlines()[0] + b' missing\\n' + out[end:],\n"
         "    'missing-response': out[:end],\n"
         "    'extra-response': out + b'extra\\n',\n"
         "    'wrong-type': out.replace(b' blob ', b' tree ', 1),\n"
@@ -438,7 +442,7 @@ def test_batch_read_failures_warn_without_refusing_the_push(tmp_path, monkeypatc
     done = _push(repo, sha)
 
     assert done.returncode == 0, done.stderr
-    if fault == "complete":
+    if fault in {"complete", "missing-valid"}:
         assert done.stderr.strip() == "", done.stderr
     else:
         assert "could not check kit-manifest.json" in done.stderr, done.stderr

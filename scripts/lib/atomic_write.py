@@ -317,8 +317,8 @@ def stage_text(
                 f"{target} is not writable by this process — most often a "
                 "read-only file, but a read-only mount or an unresolvable path "
                 "reports the same way. Refusing rather than replacing it by "
-                "rename, which for the read-only-file case would succeed and "
-                "delete the read-only bit."
+                "rename, which could bypass that write restriction even "
+                "though the existing mode bits would be preserved."
             )
 
     fd, temp_name = tempfile.mkstemp(

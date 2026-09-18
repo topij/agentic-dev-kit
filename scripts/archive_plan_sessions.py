@@ -107,8 +107,8 @@ Exit codes:
 
         A *refused* write is different from a failed one and is worded
         differently: the sweep declines to publish over a read-only or
-        hardlinked document, because replacing one by rename would succeed while
-        deleting the read-only bit or silently orphaning the alias. See
+        hardlinked document, because replacement could bypass the write
+        restriction while preserving mode bits, or silently orphan an alias. See
         ``lib/atomic_write.py`` for the full list and for why the exception is
         not an ``OSError``.
 

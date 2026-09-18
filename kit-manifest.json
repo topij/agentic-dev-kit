@@ -108,7 +108,7 @@
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
-      "sha256": "750b003c6c58308b67e96f8138a4c138b018a796a9bb43a7838affccc61f0152"
+      "sha256": "b90596dfe5a23089c5d006738a94faba80d07d6d2476a408a0eb5935f5cfb705"
     },
     "scripts/check_doc_budget.py": {
       "role": "engine",
@@ -150,7 +150,7 @@
         "scripts/archive_plan_sessions.py"
       ],
       "role": "engine",
-      "sha256": "af7ba097b0b42804948d96316256abd9501162611bb15721a13fa3e694deee3f"
+      "sha256": "edfb28e40a5c69df59957fc0a34875efc99a60975d736207d2cd7622e9c628fd"
     },
     "scripts/lib/devmodel_config.py": {
       "role": "engine",
@@ -309,7 +309,7 @@
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",
-      "sha256": "733d4c04f161e6681a831de6fdcdeddd1cd787a0e7755784402498c8ecedd52f"
+      "sha256": "ca8ff8d9c6b8eb5daf1c2cc4c972c5e4a954accf1553d248f6b0c86abefef69c"
     },
     "scripts/tests/test_reconcile_sessions.py": {
       "role": "test",
