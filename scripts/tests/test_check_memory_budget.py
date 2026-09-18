@@ -110,13 +110,15 @@ def test_main_json_output_shape(tmp_path, capsys):
     assert '"size_bytes"' in out
 
 
-def test_default_memory_file_uses_repo_slug(monkeypatch, tmp_path):
+@pytest.mark.parametrize(("repo_path", "slug"), [
+    ("/work/Alpha.dev_kit", "-work-Alpha-dev-kit"),
+    ("/work/another project", "-work-another-project"),
+])
+def test_default_memory_file_uses_repo_slug(monkeypatch, tmp_path, repo_path, slug):
     module = _load_module()
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
-    resolved = module.default_memory_file()
-    assert str(tmp_path) in str(resolved)
-    assert resolved.name == "MEMORY.md"
-    assert "memory" in resolved.parts
+    monkeypatch.setattr(module, "REPO_ROOT", Path(repo_path))
+    assert module.default_memory_file() == tmp_path / "projects" / slug / "memory" / "MEMORY.md"
 
 
 def test_rejects_non_positive_budgets(tmp_path):

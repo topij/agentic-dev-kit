@@ -18112,3 +18112,44 @@ def test_archive_stable_alias_and_staging_refusal_controls(
         else:
             assert "was restored and no changes were applied" in result.stderr
     assert not list(tmp_path.rglob("*.devkit-tmp"))
+
+
+@pytest.mark.parametrize("prefix", ["## Latest session — ", "## Earlier session — ", "## Session — ", "## "])
+def test_demote_supported_session_headings_preserves_body(prefix: str) -> None:
+    archive = _load_module("archive_demote_supported", ENGINE_DIR / "archive_plan_sessions.py")
+    title = "June 12 Fri — preserved title\n"
+    body = ["\n", "body with \x1c and trailing spaces  \n", "## Session — body heading\n"]
+    assert archive.demote([prefix + title, *body]) == ["### " + title, *body]
+
+
+@pytest.mark.parametrize("section", ["## Session log", "## Recent sessions (archived)"])
+def test_session_headings_keep_history_hierarchy_across_sweeps(tmp_path: Path, section: str) -> None:
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    intro = "# Handoff\n\nKeep this introduction.\n\n"
+    standing = "## Standing section\n\nStanding content.\n"
+    titles = ["June 12 Fri — New", "June 11 Thu — Middle", "June 10 Wed — Old"]
+    bodies = {title: f"{title} body with \x1c and spaces  \n" for title in titles}
+    plan.write_text(intro + "".join(
+        f"## Session — {title}\n\n{bodies[title]}\n---\n\n" for title in titles
+    ) + standing, encoding="utf-8")
+    history_intro = f"# History\n\nHistory introduction.\n\n{section}\n\n"
+    existing = "### Existing\n\nExisting body.\n"
+    history.write_text(history_intro + existing, encoding="utf-8")
+    for keep in (2, 1):
+        argv = [sys.executable, str(ENGINE_DIR / "archive_plan_sessions.py"),
+                "--plan", str(plan), "--history", str(history), "--keep", str(keep)]
+        result = subprocess.run(argv, capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        past = history.read_text(encoding="utf-8")
+        expected_entries = "".join(f"### {title}\n\n{bodies[title]}\n" for title in titles[keep:])
+        assert past == history_intro + expected_entries + existing
+        current = plan.read_text(encoding="utf-8")
+        assert current.startswith(intro) and current.endswith(standing)
+        for title in titles[:keep]:
+            assert f"## Session — {title}\n\n{bodies[title]}" in current
+        for title in titles[keep:]:
+            assert bodies[title] not in current
+        before = (plan.read_bytes(), history.read_bytes())
+        noop = subprocess.run(argv, capture_output=True, text=True)
+        assert noop.returncode == 0, noop.stderr
+        assert (plan.read_bytes(), history.read_bytes()) == before

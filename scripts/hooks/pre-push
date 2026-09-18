@@ -215,25 +215,31 @@ def _batch(paths):
         capture_output=True,
     )
     if done.returncode != 0:
-        return {}
+        return None
     out, at, found = done.stdout, 0, {}
     for path in paths:
         nl = out.find(b"\n", at)
         if nl == -1:
-            break
+            return None
         header = out[at:nl]
-        if header.endswith(b" missing"):
+        if header == f"{sha}:{path} missing".encode():
             # Recorded but not in this commit. That is the membership
             # question #47 owns, not this one.
             at = nl + 1
             continue
         try:
-            size = int(header.rsplit(b" ", 1)[1])
-        except (IndexError, ValueError):
-            break
-        found[path] = out[nl + 1 : nl + 1 + size]
-        at = nl + 1 + size + 1
-    return found
+            _, kind, raw_size = header.split(b" ")
+            size = int(raw_size)
+        except ValueError:
+            return None
+        end = nl + 1 + size
+        if kind != b"blob" or size < 0 or out[end:end + 1] != b"\n":
+            return None
+        found[path] = out[nl + 1:end]
+        at = end + 1
+    # Partial output cannot establish a completed check. Route failed reads
+    # through the existing fail-open warning rather than reporting CHECKED.
+    return found if at == len(out) else None
 
 
 # Every exit prints an outcome line FIRST, so the shell can tell the three
@@ -303,6 +309,8 @@ for path, record in files.items():
         unusable.append(path)
 
 blobs = _batch(sorted(wanted))
+if blobs is None:
+    _skip("unreadable-batch")
 print("CHECKED")
 for path, body in sorted(blobs.items()):
     if hashlib.sha256(body).hexdigest() != wanted[path]:

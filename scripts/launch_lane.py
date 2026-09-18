@@ -287,13 +287,17 @@ def _read_stable_regular_file(path: Path) -> bytes:
         raise LaunchError(f"cannot inspect {path}: {exc}") from exc
     if stat.S_ISLNK(before_path.st_mode) or not stat.S_ISREG(before_path.st_mode):
         raise LaunchError(f"refusing non-regular or symlinked file: {path}")
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    # A regular path can become a FIFO after lstat. Nonblocking open lets us
+    # inspect and reject the descriptor before any read can wait for a writer.
+    flags = os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0)
     try:
         descriptor = os.open(path, flags)
     except OSError as exc:
         raise LaunchError(f"cannot open {path}: {exc}") from exc
     try:
         before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            raise LaunchError(f"refusing non-regular opened file: {path}")
         chunks: list[bytes] = []
         while chunk := os.read(descriptor, 65536):
             chunks.append(chunk)

@@ -108,7 +108,7 @@
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
-      "sha256": "32fec278c42871f33ac399a2969e881360cc6c1762d986848a1dec7b2d66fe26"
+      "sha256": "750b003c6c58308b67e96f8138a4c138b018a796a9bb43a7838affccc61f0152"
     },
     "scripts/check_doc_budget.py": {
       "role": "engine",
@@ -132,7 +132,7 @@
     },
     "scripts/hooks/pre-push": {
       "role": "hook",
-      "sha256": "3bd8321e2aea0b137a033ebe0e4c23ff7269b10be6669ed6cb5a9d738b5c155e"
+      "sha256": "6c9c98903149a2e1898a821a94a39d43e0ffa3567d326889f50c7031c7a0acb2"
     },
     "scripts/kit_doctor.py": {
       "required_by": [
@@ -143,14 +143,14 @@
     },
     "scripts/launch_lane.py": {
       "role": "engine",
-      "sha256": "7787079163e9d678284db5df15311f059a519a61db6301980784864ab02ad9e6"
+      "sha256": "c020496e984bfb48e715478e3945a8535f25eb5ddd1efd49a9a752d15e8b29c7"
     },
     "scripts/lib/atomic_write.py": {
       "required_by": [
         "scripts/archive_plan_sessions.py"
       ],
       "role": "engine",
-      "sha256": "cb4e77764ba306fdf3c4d703564c9a20092dabd2d75802875ded566032fcebba"
+      "sha256": "af7ba097b0b42804948d96316256abd9501162611bb15721a13fa3e694deee3f"
     },
     "scripts/lib/devmodel_config.py": {
       "role": "engine",
@@ -257,7 +257,7 @@
     },
     "scripts/tests/test_check_memory_budget.py": {
       "role": "test",
-      "sha256": "8ddd343a1d1ac2a583b0ad7fbbfd76f7a63016f5c7c1f8e8074002f70fe76b4b"
+      "sha256": "6250951e27d48a2a133ab7a3199887766b8001a698c1f3d8f4fe0c4a5626bd59"
     },
     "scripts/tests/test_ci_workflow.py": {
       "role": "test",
@@ -281,7 +281,7 @@
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
-      "sha256": "9138d6ad975c2377a1c56c22610a0c329f17e3253294d0e4b62921b3f912a60a"
+      "sha256": "873a4da575883f92b044727fc5427697c26dcf386687a5d2bebc6185a217a838"
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "repo-only",
@@ -297,7 +297,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "a2459a8e34dd43073959de9450b9c999c9ca4cedaef4f0c0e51f6ab12daef298"
+      "sha256": "60edcb0dc3e393d7fc0e041070bf01116bb73b1dc0cb7aaeb7b39995d1203d35"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
@@ -309,7 +309,7 @@
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",
-      "sha256": "98d845268d4e6ebc7709070078c324cda814d64f572b8f00097746acc3a7070e"
+      "sha256": "733d4c04f161e6681a831de6fdcdeddd1cd787a0e7755784402498c8ecedd52f"
     },
     "scripts/tests/test_reconcile_sessions.py": {
       "role": "test",

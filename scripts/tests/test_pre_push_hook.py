@@ -8,6 +8,8 @@ code.
 
 import hashlib
 import json
+import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -385,3 +387,60 @@ def test_a_newline_in_a_manifest_path_cannot_launder_another_file(tmp_path):
     )
     assert f"{ENGINES}/target.py" in done.stderr
     assert "no usable sha256" in done.stderr, "the crafted entry must be reported too"
+
+
+@pytest.mark.parametrize("fault", [
+    "failed", "empty", "header-truncated", "header-malformed", "negative-size",
+    "body-truncated", "separator-missing", "missing-response", "extra-response",
+    "wrong-type", "complete",
+])
+def test_batch_read_failures_warn_without_refusing_the_push(tmp_path, monkeypatch, fault):
+    repo = _repo(tmp_path)
+    files = {f"{ENGINES}/{name}.py": b"print('original')\n" for name in ("first", "second")}
+    for name, body in files.items():
+        (repo / name).write_bytes(body)
+    _manifest(repo, files)
+    sha = _commit(repo)
+    real_git = shutil.which("git")
+    assert real_git is not None
+    shim_dir = tmp_path / "bin"
+    shim_dir.mkdir()
+    shim = shim_dir / "git"
+    shim.write_text(
+        "#!/usr/bin/env python3\n"
+        "import os, subprocess, sys\n"
+        f"real_git, fault = {real_git!r}, {fault!r}\n"
+        "if sys.argv[1:] != ['cat-file', '--batch']:\n"
+        "    os.execv(real_git, [real_git, *sys.argv[1:]])\n"
+        "done = subprocess.run([real_git, *sys.argv[1:]], input=sys.stdin.buffer.read(), capture_output=True)\n"
+        "assert done.returncode == 0, done.stderr\n"
+        "out = done.stdout\n"
+        "nl = out.index(b'\\n')\n"
+        "end = nl + 1 + int(out[:nl].rsplit(b' ', 1)[1]) + 1\n"
+        "out = {\n"
+        "    'empty': b'',\n"
+        "    'header-truncated': b'no newline',\n"
+        "    'header-malformed': b'not a batch header\\n',\n"
+        "    'negative-size': b'0' * 40 + b' blob -1\\n',\n"
+        "    'body-truncated': out[:nl + 2],\n"
+        "    'separator-missing': out[:-1],\n"
+        "    'missing-response': out[:end],\n"
+        "    'extra-response': out + b'extra\\n',\n"
+        "    'wrong-type': out.replace(b' blob ', b' tree ', 1),\n"
+        "}.get(fault, out)\n"
+        "sys.stdout.buffer.write(out)\n"
+        "raise SystemExit(128 if fault == 'failed' else 0)\n",
+        encoding="utf-8",
+    )
+    shim.chmod(0o755)
+    monkeypatch.setenv("PATH", str(shim_dir) + os.pathsep + os.environ["PATH"])
+
+    done = _push(repo, sha)
+
+    assert done.returncode == 0, done.stderr
+    if fault == "complete":
+        assert done.stderr.strip() == "", done.stderr
+    else:
+        assert "could not check kit-manifest.json" in done.stderr, done.stderr
+        assert "fail-open" in done.stderr
+        assert "Refusing to push" not in done.stderr
