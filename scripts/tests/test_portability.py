@@ -15777,10 +15777,9 @@ def test_a_read_only_handoff_is_refused_rather_than_replaced(
 ) -> None:
     """`os.replace` needs the DIRECTORY writable, not the file.
 
-    So a `chmod 0444` document is replaceable by rename — and the replacement
-    carries the temp's mode, which deletes the read-only bit permanently after
-    one run. Finding 2 of the four that reverted the first attempt. Refusing
-    preserves exactly what `write_text` did: nothing written, exit 2.
+    A `chmod 0444` document can still be replaced by rename. `stage_text`
+    preserves its mode bits, but replacement could bypass the file's write
+    restriction. Refusing keeps the contents and mode unchanged, with exit 2.
     """
     archive = _load_module("archive_readonly", ENGINE_DIR / "archive_plan_sessions.py")
     plan = tmp_path / "handoff.md"
