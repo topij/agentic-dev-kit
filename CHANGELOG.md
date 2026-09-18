@@ -42,6 +42,12 @@ starts.
 
 ---
 
+## #744 — Phase 5 review repairs
+
+- Refresh `scripts/hooks/pre-push` with its tests. Failed or incomplete source-manifest batch reads now use the existing could-not-check warning; pushes remain fail-open on an unreadable batch. Adopter install baselines retain their intentional skip.
+- Refresh `scripts/launch_lane.py` with its tests. The regular-file reader rejects a substituted special descriptor before reading and avoids waiting for a FIFO writer. Keep the existing launch-authority and timeout configuration.
+- Refresh `scripts/archive_plan_sessions.py` with its tests. Archived `## Session — …` headings become `### …` history entries. Update assertions that pinned the former heading level.
+
 ## #742 — 2026-09-16
 
 - **BREAKING — review acknowledgements:** Refresh `scripts/pr_watch.py` and its

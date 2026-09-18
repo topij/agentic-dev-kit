@@ -53,8 +53,8 @@ either carried across or refused loudly, and never discovered after the fact:
   the temp's own permissions.
 * **A read-only target is refused** (``AtomicWriteRefused``). ``os.replace``
   needs write permission on the *directory*, not on the file, so a ``0444``
-  document would otherwise be replaceable — deleting the read-only bit and the
-  guard it stands for. The *outcome* matches ``write_text`` (nothing written),
+  document would otherwise have its contents replaced despite retaining its
+  mode bits. The *outcome* matches ``write_text`` (nothing written),
   but the exception does **not**: ``AtomicWriteRefused`` is not an ``OSError``,
   so a caller porting from ``write_text`` on the strength of this bullet and
   catching ``OSError`` alone would get an uncaught traceback where it used to
@@ -82,9 +82,9 @@ Every one of these checks runs during staging, before anything is published.
 * The read-only test is ``os.access(target, os.W_OK)``, which consults the
   **real** uid/gid and returns true for **root whatever the mode**. Running as
   root — routine in devcontainers — the ``0444`` refusal does not fire and the
-  rename removes the read-only bit. ``write_text`` as root would also have
-  written the file, so this is not a regression; it is a guard that does not
-  guard for that user, which is a different thing from one that does.
+  replacement can change the contents. Staging copies the existing mode onto
+  the replacement, so the ``0444`` mode is preserved. ``write_text`` as root
+  would also have written the file; the access check does not refuse that user.
 * ``_default_mode()`` reads the umask by setting and restoring it, a
   process-global side effect. It runs only when the target does not exist, so
   the sweep never reaches it, but a threaded caller creating a new file races
@@ -317,8 +317,8 @@ def stage_text(
                 f"{target} is not writable by this process — most often a "
                 "read-only file, but a read-only mount or an unresolvable path "
                 "reports the same way. Refusing rather than replacing it by "
-                "rename, which for the read-only-file case would succeed and "
-                "delete the read-only bit."
+                "rename, which could bypass that write restriction even "
+                "though the existing mode bits would be preserved."
             )
 
     fd, temp_name = tempfile.mkstemp(

@@ -2347,3 +2347,65 @@ def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_valida
         "Bash(uv run scripts/kit_doctor.py:*)",
         "Bash(uv run scripts/devkit/kit_doctor.py:*)",
     ]
+
+
+@pytest.mark.parametrize("mode", ["regular", "symlink", "fifo-race", "directory-race", "symlink-race", "changed"])
+def test_stable_regular_reader_rejects_special_file_races_without_blocking(tmp_path: Path, mode: str) -> None:
+    driver = r"""
+import importlib.util
+import os
+import stat
+import sys
+from pathlib import Path
+
+engine, target, mode = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
+spec = importlib.util.spec_from_file_location("reader_race", engine)
+launcher = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(launcher)
+target.write_bytes(b"regular contents")
+other = target.with_name("other")
+other.write_bytes(b"other contents")
+if mode == "symlink":
+    target.unlink()
+    target.symlink_to(other)
+real_open, real_read = os.open, os.read
+def replaced_open(path, flags, *args, **kwargs):
+    if Path(path) == target and mode.endswith("-race"):
+        target.unlink()
+        if mode == "fifo-race":
+            os.mkfifo(target)
+        elif mode == "directory-race":
+            target.mkdir()
+        else:
+            target.symlink_to(other)
+    return real_open(path, flags, *args, **kwargs)
+changed = False
+def checked_read(fd, size):
+    global changed
+    assert stat.S_ISREG(os.fstat(fd).st_mode), "special descriptor reached read"
+    body = real_read(fd, size)
+    if mode == "changed" and not changed:
+        changed = True
+        target.write_bytes(b"different contents with a different size")
+    return body
+os.open, os.read = replaced_open, checked_read
+try:
+    body = launcher._read_stable_regular_file(target)
+except launcher.LaunchError as exc:
+    assert mode != "regular", str(exc)
+    print("refused:", exc)
+else:
+    assert mode == "regular", "unstable or special file accepted"
+    assert body == b"regular contents"
+    print("regular contents accepted")
+"""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", driver, str(ENGINE_DIR / "launch_lane.py"),
+             str(tmp_path / "input"), mode],
+            capture_output=True, text=True, timeout=5,
+        )
+    except subprocess.TimeoutExpired:
+        pytest.fail("the stable-file reader blocked on the substituted file")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert ("regular contents accepted" if mode == "regular" else "refused:") in result.stdout

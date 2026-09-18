@@ -107,8 +107,8 @@ Exit codes:
 
         A *refused* write is different from a failed one and is worded
         differently: the sweep declines to publish over a read-only or
-        hardlinked document, because replacing one by rename would succeed while
-        deleting the read-only bit or silently orphaning the alias. See
+        hardlinked document, because replacement could bypass the write
+        restriction while preserving mode bits, or silently orphan an alias. See
         ``lib/atomic_write.py`` for the full list and for why the exception is
         not an ``OSError``.
 
@@ -342,14 +342,14 @@ def parse_blocks(region: list[str]) -> list[list[str]]:
 def demote(block: list[str]) -> list[str]:
     """Convert a handoff session block to a history-doc ``### <date>`` entry.
 
-    Handles both the canonical ``## Latest/Earlier session — <date>`` form and a
-    bare dated ``## June 5 Fri (cont.) — …`` heading; only the block's heading line
-    matches, body lines pass through unchanged.
+    Handles ``## Latest session — <date>``, ``## Earlier session — <date>``,
+    ``## Session — <date>`` and bare dated ``## June 5 Fri (cont.) — …`` headings.
+    Only the block's heading line matches; body lines pass through unchanged.
     """
     out: list[str] = []
     for i, line in enumerate(block):
         if i == 0:
-            for prefix in ("## Earlier session — ", "## Latest session — "):
+            for prefix in ("## Earlier session — ", "## Latest session — ", "## Session — "):
                 if line.startswith(prefix):
                     line = "### " + line[len(prefix) :]
                     break
