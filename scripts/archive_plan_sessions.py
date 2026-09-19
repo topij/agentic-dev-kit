@@ -993,9 +993,6 @@ def main(argv: list[str] | None = None) -> int:
             if not restore_handoff(cause=history_exc):
                 if isinstance(history_exc, OSError):
                     return 2
-                # `raise history_exc`, not a bare `raise`: a bare one re-raises
-                # the ROLLBACK's error, so a cancelled run stopped looking
-                # cancelled and the process no longer terminated as interrupted.
                 raise history_exc
             if history_state == "unknown":
                 # The handoff is back, and whether the history also received the
@@ -1026,11 +1023,6 @@ def main(argv: list[str] | None = None) -> int:
             # Not an OSError — an interrupt. The handoff is back; let it out.
             raise
     finally:
-        # `abort` on a committed write is a no-op, so this only ever removes
-        # temps that were never published — including on the paths above that
-        # return early, and on an unexpected exception. The rollback is committed
-        # by the handler above BEFORE this runs, which is what stops it being
-        # deleted at the one moment it is needed.
         for item in staged:
             item.abort()
 

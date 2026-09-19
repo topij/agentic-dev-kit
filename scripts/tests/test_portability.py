@@ -16433,15 +16433,7 @@ def test_a_second_interrupt_during_the_rollback_still_reports_the_damage(
 def test_a_cancelled_run_still_terminates_as_cancelled(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A bare `raise` in the disaster handler re-raises the ROLLBACK's error.
-
-    The handler catches the history publish's exception, tries the rollback, and
-    on a double failure must surface the *original*. A bare `raise` inside
-    `except OSError as rollback_exc` surfaces the rollback's `OSError` instead —
-    so an interrupted run stops looking interrupted, and the documented 130
-    becomes a traceback exit 1. Reported by a review lens as pinned by nothing,
-    which it was.
-    """
+    """A history-publication interrupt still propagates when rollback fails."""
     archive = _load_module("archive_cancel_code", ENGINE_DIR / "archive_plan_sessions.py")
     plan = tmp_path / "handoff.md"
     history = tmp_path / "handoff-history.md"
