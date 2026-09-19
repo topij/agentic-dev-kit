@@ -42,6 +42,11 @@ starts.
 
 ---
 
+## #746 — Archive interruption guidance
+
+CHANGED: After an interrupted archive sweep, inspect the handoff, history and surviving staged copies before retrying. Recovery diagnostics cover the guarded publication handlers; their absence does not establish that documents are untouched or restored. Replace direct selections of `test_an_interrupt_between_the_two_publishes_restores_the_handoff` with `test_an_interrupt_during_history_replace_restores_the_handoff`.
+
+
 ## #745 — Handoff archive repairs
 
 - Refresh `scripts/archive_plan_sessions.py` with its tests. Supported fenced examples and HTML block comments remain with their containing session; update assertions that treated literal headings inside them as session or history boundaries. Inline Unicode/control separators remain content within their physical line.

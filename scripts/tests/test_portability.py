@@ -16754,21 +16754,14 @@ def test_a_separator_like_line_with_a_control_character_is_content(
     )
 
 
-def test_an_interrupt_between_the_two_publishes_restores_the_handoff(
+def test_an_interrupt_during_history_replace_restores_the_handoff(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Ctrl-C at the one unsafe instant must not cost the swept blocks.
+    """An interrupt raised inside the guarded history rename restores the handoff.
 
-    Found by the adversarial lens of the review panel. `main()`'s cleanup is
-    `finally: abort()` over every staged write, and it ran on ANY exception — so
-    a `KeyboardInterrupt` landing after the handoff was published and during the
-    history publish unlinked the rollback copy staged precisely to recover it.
-    Blocks in neither document, no message, exit 1.
-
-    The measured contrast is what makes it a HIGH: a **SIGKILL** at the same
-    instant is survivable, because no handler runs and the rollback temp is left
-    on disk. The interactive interrupt — the likely one, since `wrap-up` is
-    interactive — was the destructive case.
+    The replacement spy interrupts the history commit after handoff publication.
+    This control does not establish recovery at instruction boundaries outside
+    the guarded commit calls.
     """
     archive = _load_module("archive_sigint", ENGINE_DIR / "archive_plan_sessions.py")
     plan = tmp_path / "handoff.md"

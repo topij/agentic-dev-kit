@@ -148,22 +148,19 @@ Exit codes:
         "non-zero" would report all of them as an exhausted sweep.
 
     130 — interrupted (``KeyboardInterrupt``), the shell's usual 128+SIGINT.
-        Listed because this module *deliberately* lets an interrupt out rather
-        than converting it: an interrupt arriving around a publish is recovered
-        from first — the handoff is restored from its staged copy if it had
-        already been published, and left alone if the move had already completed,
-        since restoring it then would duplicate the blocks — and only then
-        re-raised. Suppressing it would report a completed sweep for a run the
-        operator cancelled.
+        The publication handlers attempt recovery for interrupts they catch
+        during the guarded commit calls, then re-raise. Their diagnostics
+        describe the recovery state they could establish.
 
-        **A 130 does not by itself tell you the state of the documents**, in
-        either direction. An earlier version of this paragraph said it meant no
-        damage; a review lens falsified that with two measured paths. A later
-        version said a harmless cancellation prints nothing, and that is wrong
-        too — Python prints a traceback for any escaping ``KeyboardInterrupt``,
-        so stderr is never empty here. The rule that does hold: **read the
-        message above the traceback.** Every path that changed a document, or
-        could not establish whether it had, prints one.
+        These handlers do not cover every instruction boundary around
+        publication. An interrupt outside their protected calls can escape
+        without recovery guidance after the handoff was swept but before the
+        history received its blocks. Surviving staged copies may be needed.
+
+        **Exit 130 and an absent recovery message establish neither restoration
+        nor an untouched document.** Preserve both documents and any surviving
+        staged copies, read any diagnostic above the traceback, and inspect the
+        content before retrying. Do not discard uncommitted edits with checkout.
 """
 
 from __future__ import annotations
