@@ -312,8 +312,9 @@ def _outside_fences(lines: list[str]) -> list[bool]:
                 # comment spellings inside a fence cannot outlive that fence.
                 outside.append(False)
                 comment = "-->" not in line
-            elif re.match(r"^ {0,3}<(?:/?[A-Za-z][A-Za-z0-9-]*(?:[ \t\r\n/>]|$)|[!?])", line):
-                # Raw HTML can make subsequent fence spellings literal. Refuse
+            elif re.match(r"^ {0,3}<(?:/?[A-Za-z][A-Za-z0-9-]*(?:[\s\ufeff/>]|$)|[!?])", line):
+                # Renderer whitespace includes Unicode spaces and BOM; a tag
+                # must not reveal fence spellings that its HTML block keeps literal. Refuse
                 # unsupported input before it can hide standing content.
                 raise ValueError(
                     "unsupported raw HTML tag line; wrap HTML in a fenced code block "

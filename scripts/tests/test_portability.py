@@ -18501,6 +18501,7 @@ def test_archive_review_committed_symlink_is_not_a_recovery_document(
 
 
 @pytest.mark.parametrize("html", [
+    "<div>\nRaw content.\n</div>\n",
     "<pre>\n```\n</pre>\n", "<SCRIPT>\n```\n</SCRIPT>\n",
     "<style>\n~~~\n</style>\n", "<textarea>\n```\n</textarea>\n",
     "<details open>\n```\n</details>\n", "<div>\n```\n</div>\n",
@@ -18683,3 +18684,53 @@ def test_archive_review_history_inline_separators_preserve_destination(
     before = plan.read_bytes(), history.read_bytes()
     assert archive.main(argv) == 0
     assert (plan.read_bytes(), history.read_bytes()) == before
+
+
+@pytest.mark.parametrize("fence", ["````", "~~~~"])
+def test_archive_review_closer_with_text_keeps_literal_heading_in_session(
+    tmp_path: Path, fence: str,
+) -> None:
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    body = f"{fence}\n{fence} example\n## Backlog\nLiteral task.\n{fence}\n"
+    standing = "## Standing\nKeep this live.\n"
+    plan.write_text("# Handoff\n\n## Session — New\nNew body.\n\n"
+                    + "## Session — Old\n" + body + "\n" + standing)
+    existing = "### Existing\nExisting history.\n"
+    history.write_text("# History\n\n## Session log\n\n" + existing)
+    argv = [sys.executable, str(ENGINE_DIR / "archive_plan_sessions.py"),
+            "--plan", str(plan), "--history", str(history), "--keep", "1"]
+    result = subprocess.run(argv, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert body not in plan.read_text() and history.read_text().count(body) == 1
+    assert plan.read_text().endswith(standing) and standing not in history.read_text()
+    assert history.read_text().endswith(existing)
+    before = plan.read_bytes(), history.read_bytes()
+    again = subprocess.run(argv, capture_output=True, text=True)
+    assert again.returncode == 0, again.stderr
+    assert (plan.read_bytes(), history.read_bytes()) == before
+
+
+@pytest.mark.parametrize("space", [
+    " ", "\t", "\v", "\f", "\u00a0", "\u1680", "\u2003",
+    "\u2028", "\u2029", "\u202f", "\u205f", "\u3000", "\ufeff",
+])
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_archive_review_html_tag_whitespace_preserves_standing_content(
+    tmp_path: Path, space: str, dry_run: bool,
+) -> None:
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    standing = "## Backlog\n\nThis active task must stay live.\n"
+    plan.write_text("# Handoff\n\n## Session — New\n\nKeep.\n\n"
+                    + "## Session — Old\n\nOld body.\n\n<pre" + space
+                    + ">\n```\n</pre>\n\n" + standing + "\n<!--\n```\n-->\n")
+    history.write_text("# History\n\n## Session log\n\n### Existing\n\nKeep history.\n")
+    before = plan.read_bytes(), history.read_bytes()
+    argv = [sys.executable, str(ENGINE_DIR / "archive_plan_sessions.py"),
+            "--plan", str(plan), "--history", str(history), "--keep", "1"]
+    if dry_run:
+        argv.append("--dry-run")
+    result = subprocess.run(argv, capture_output=True, text=True)
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert result.stdout == ""
+    assert (plan.read_bytes(), history.read_bytes()) == before
+    assert not list(tmp_path.glob("*.devkit-tmp"))

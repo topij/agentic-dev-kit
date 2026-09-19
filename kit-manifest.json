@@ -108,7 +108,7 @@
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
-      "sha256": "16205ccbb6cd6d20fa65bfc58c358486a789871630d8defaad83dbc9e576fb56"
+      "sha256": "7105befe619a576ec8de612845fcef034bb77bd399c26e3d254b1607760c7147"
     },
     "scripts/check_doc_budget.py": {
       "role": "engine",
@@ -297,7 +297,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "3f5ad31d30b4b606b30d7b03db64f08d0a02a3094dee2a4db0b5d0d4b1a3a849"
+      "sha256": "8daaa74c69f7f8fa26651c6a1028d8aa9eacbaff2f4a753005013db6b37cc9de"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
