@@ -18,7 +18,10 @@ match its convention), refresh the "older entries moved to history" pointer,
 and trim the line-16 quick-scan megaline to roughly the kept blocks.
 
 Fenced Markdown examples and HTML block comments are content, including their
-literal headings and separators. Lines starting with raw HTML tags, declarations
+literal headings and separators. Their openers must start at the beginning of a
+line, outside lists and quotes. Indented or container-prefixed literal markers
+outside an existing literal block are unsupported and refused before writes.
+Lines starting with raw HTML tags, declarations
 or processing instructions outside those contexts are unsupported: enclose them
 in a fenced code block before archiving. The sweep refuses them before writes.
 Handoff and history must name distinct files; overlapping destinations are refused
@@ -285,24 +288,40 @@ def _outside_fences(lines: list[str]) -> list[bool]:
                 and not match[2].strip(" \t")
             ):
                 fence = ""
-        elif comment or re.match(r"^ {0,3}<!--", line):
-            # A fence spelling inside an HTML block comment is literal; it must not
-            # hide the standing heading after the comment ends. Conversely,
-            # comment spellings inside a fence cannot outlive that fence.
+        elif comment:
             outside.append(False)
             comment = "-->" not in line
-        elif re.match(r"^ {0,3}<(?:/?[A-Za-z][A-Za-z0-9-]*(?:[ \t\r\n/>]|$)|[!?])", line):
-            # Raw HTML can make subsequent fence spellings literal. Refuse this
-            # unsupported input before a sweep can misclassify standing content.
-            raise ValueError(
-                "unsupported raw HTML tag line; wrap HTML in a fenced code block "
-                "before archiving"
-            )
-        elif match and (match[1][0] == "~" or "`" not in match[2]):
-            fence = match[1]
-            outside.append(False)
         else:
-            outside.append(True)
+            # Container termination needs a full Markdown parser. Refuse literal
+            # openers with indentation or list/quote prefixes instead of letting
+            # an indented closer hide the next standing section. Do this only
+            # outside a top-level literal block: its examples remain content.
+            content = line.lstrip(" \t")
+            while prefix := re.match(r"(?:>[ \t]*|[-+*][ \t]+|[0-9]{1,9}[.)][ \t]+)", content):
+                content = content[prefix.end():].lstrip(" \t")
+            if content != line and re.match(r"(?:`{3,}|~{3,}|<!--)", content):
+                raise ValueError(
+                    "unsupported literal block opener; put fences and HTML block "
+                    "comments at the start of a line outside lists and quotes "
+                    "before archiving"
+                )
+            if line.startswith("<!--"):
+                # Fence spellings inside an HTML block comment are literal, and
+                # comment spellings inside a fence cannot outlive that fence.
+                outside.append(False)
+                comment = "-->" not in line
+            elif re.match(r"^ {0,3}<(?:/?[A-Za-z][A-Za-z0-9-]*(?:[ \t\r\n/>]|$)|[!?])", line):
+                # Raw HTML can make subsequent fence spellings literal. Refuse
+                # unsupported input before it can hide standing content.
+                raise ValueError(
+                    "unsupported raw HTML tag line; wrap HTML in a fenced code block "
+                    "before archiving"
+                )
+            elif match and (match[1][0] == "~" or "`" not in match[2]):
+                fence = match[1]
+                outside.append(False)
+            else:
+                outside.append(True)
     return outside
 
 

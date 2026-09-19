@@ -18155,7 +18155,7 @@ def test_session_headings_keep_history_hierarchy_across_sweeps(tmp_path: Path, s
 
 
 @pytest.mark.parametrize("layout", ["classic", "recent"])
-@pytest.mark.parametrize("fence", ["```", "~~~~", "   ````"])
+@pytest.mark.parametrize("fence", ["```", "~~~~", "````"])
 def test_archive_repair_fenced_examples_stay_with_their_session(
     tmp_path: Path, layout: str, fence: str,
 ) -> None:
@@ -18396,7 +18396,7 @@ def test_archive_repair_rechecks_overlap_after_staging(
 
 
 @pytest.mark.parametrize("layout", ["classic", "recent"])
-@pytest.mark.parametrize("comment", ["<!--\n```\nHidden example.\n-->\n", "   <!-- ``` -->\n"])
+@pytest.mark.parametrize("comment", ["<!--\n```\nHidden example.\n-->\n", "<!-- ``` -->\n"])
 def test_archive_review_html_comment_fences_preserve_document_boundaries(
     tmp_path: Path, layout: str, comment: str,
 ) -> None:
@@ -18574,3 +18574,65 @@ def test_archive_review_autolinks_are_not_raw_html(tmp_path: Path, link: str) ->
     history.write_text("# History\n\n## Session log\n\n")
     assert archive.main(["--plan", str(plan), "--history", str(history), "--keep", "1"]) == 0
     assert link not in plan.read_text() and link in history.read_text()
+
+
+@pytest.mark.parametrize("literal", [
+    "- ```\n  Literal example.\n  ```\n",
+    "1. ~~~\n   Literal example.\n   ~~~\n",
+    "- Example:\n\n  ```\n  Literal example.\n",
+    "- Example:\n\n  <!--\n  Literal comment.\n",
+    "- <!--\n  Literal comment.\n  -->\n",
+    "> ```\n> Literal example.\n> ```\n",
+    "> - 1) <!--\n>    Literal comment.\n>    -->\n",
+    "  -\t>\t~~~\n",
+    " ```\nLiteral example.\n```\n",
+    "   ````\nLiteral example.\n````\n",
+    "    ~~~\n    Literal example.\n",
+    "\t```\n\tLiteral example.\n",
+    "   <!-- literal -->\n",
+    "\t<!-- literal -->\n",
+])
+@pytest.mark.parametrize("destination", ["plan", "history"])
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_archive_review_nested_literals_refuse_before_any_write(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    literal: str, destination: str, dry_run: bool,
+) -> None:
+    archive = _load_module("archive_nested_literal_refusal", ENGINE_DIR / "archive_plan_sessions.py")
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    standing = "## Backlog\n\nKeep this task live.\n"
+    plan.write_text("# Handoff\n\n## Session — New\n\nNew body.\n\n"
+                    + "## Session — Old\n\nOld body.\n\n"
+                    + (literal + "\n" if destination == "plan" else "") + standing)
+    history.write_text("# History\n\n" + (literal + "\n" if destination == "history" else "")
+                       + "## Session log\n\nExisting history.\n")
+    before = plan.read_bytes(), history.read_bytes()
+    argv = ["--plan", str(plan), "--history", str(history), "--keep", "1"]
+    if dry_run:
+        argv.append("--dry-run")
+    assert archive.main(argv) == 2
+    captured = capsys.readouterr()
+    assert "literal block opener" in captured.err and captured.out == ""
+    assert (plan.read_bytes(), history.read_bytes()) == before
+    assert not list(tmp_path.glob("*.devkit-tmp"))
+
+
+@pytest.mark.parametrize("opening,closing", [("`````", "   `````"), ("<!--", "-->")])
+def test_archive_review_top_level_literals_after_containers_preserve_boundaries(
+    tmp_path: Path, opening: str, closing: str,
+) -> None:
+    archive = _load_module("archive_top_level_after_list", ENGINE_DIR / "archive_plan_sessions.py")
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    body = ("- Ordinary list item.\n\n> Ordinary quote.\n\n" + opening
+            + "\n- ```\n  ```\n> ~~~\n   ```\n## Literal heading\n" + closing + "\n")
+    standing = "## Backlog\n\nKeep this task live.\n"
+    plan.write_text("# Handoff\n\n## Session — New\n\nNew body.\n\n"
+                    + "## Session — Old\n\n" + body + "\n" + standing)
+    history.write_text("# History\n\n## Session log\n\n")
+    argv = ["--plan", str(plan), "--history", str(history), "--keep", "1"]
+    assert archive.main(argv) == 0
+    assert plan.read_text().endswith(standing) and standing not in history.read_text()
+    assert body not in plan.read_text() and history.read_text().count(body) == 1
+    before = plan.read_bytes(), history.read_bytes()
+    assert archive.main(argv) == 0
+    assert (plan.read_bytes(), history.read_bytes()) == before
