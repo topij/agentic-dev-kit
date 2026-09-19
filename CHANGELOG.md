@@ -42,6 +42,12 @@ starts.
 
 ---
 
+## #__ASSIGNED_PR_NUMBER__ — Handoff archive repairs
+
+- Refresh `scripts/archive_plan_sessions.py` with its tests. Fenced examples remain with their containing session; update assertions that treated literal headings inside fences as session or history boundaries.
+- **BREAKING — overlapping destinations:** Configure distinct handoff and history files. A shared pathname, symlink target or hardlink now returns exit `2`, including dry-run and no-op requests.
+- **CHANGED — recovery guidance:** Follow the emitted repository-qualified read-only command for a confirmed committed handoff. Update checks pinned to the former basename-only command; untracked or unavailable Git content now receives inspection guidance. Preserve uncommitted edits separately.
+
 ## #744 — Phase 5 review repairs
 
 - Refresh `scripts/hooks/pre-push` with its tests. Failed or incomplete source-manifest batch reads now use the existing could-not-check warning; pushes remain fail-open on an unreadable batch. Adopter install baselines retain their intentional skip.

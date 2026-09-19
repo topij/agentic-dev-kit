@@ -17,6 +17,10 @@ the history file (demoting ``## Earlier session — X`` headings to ``### X`` to
 match its convention), refresh the "older entries moved to history" pointer,
 and trim the line-16 quick-scan megaline to roughly the kept blocks.
 
+Fenced Markdown examples are content, including their literal headings and
+separators. Handoff and history must name distinct files; overlapping destinations
+are refused before a sweep or dry-run can report success.
+
 It only ever *moves* content — every cross-reference (ticket ids, PR links,
 commit shas, …) is preserved. Standing sections (Security, Next up, Backlog,
 …) below the session region are left untouched. Running it when there is
@@ -105,6 +109,11 @@ Exit codes:
         document. Allocation is finished before any of this, so the ordinary
         out-of-space route does not lead here.
 
+        When a committed version is available, recovery guidance names its
+        repository and complete relative path in a quoted read-only command.
+        Otherwise it directs inspection of saved copies without promising Git
+        recovery. Committed content does not include uncommitted edits.
+
         A *refused* write is different from a failed one and is worded
         differently: the sweep declines to publish over a read-only or
         hardlinked document, because replacement could bypass the write
@@ -154,6 +163,8 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import shlex
+import subprocess
 import sys
 from pathlib import Path
 
@@ -254,6 +265,29 @@ def _is_sep(line: str) -> bool:
     return len(stripped) >= 3 and set(stripped) in ({"_"}, {"-"})
 
 
+def _outside_fences(lines: list[str]) -> list[bool]:
+    """Identify structural lines without interpreting fenced examples as headings."""
+    outside: list[bool] = []
+    fence = ""
+    for line in lines:
+        match = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line.rstrip("\r\n"))
+        if fence:
+            outside.append(False)
+            if (
+                match
+                and match[1][0] == fence[0]
+                and len(match[1]) >= len(fence)
+                and not match[2].strip(" \t")
+            ):
+                fence = ""
+        elif match and (match[1][0] == "~" or "`" not in match[2]):
+            fence = match[1]
+            outside.append(False)
+        else:
+            outside.append(True)
+    return outside
+
+
 def split_plan(lines: list[str]) -> tuple[list[str], list[str], list[str]]:
     """Return ``(head, session_region, tail)``.
 
@@ -261,8 +295,9 @@ def split_plan(lines: list[str]) -> tuple[list[str], list[str], list[str]]:
     session blocks plus any inter-block separators and the existing pointer;
     ``tail`` is the first non-session ``##`` heading (standing sections) onward.
     """
+    outside = _outside_fences(lines)
     sess_start = next(
-        (i for i, ln in enumerate(lines) if _is_session_heading(ln)), None
+        (i for i, ln in enumerate(lines) if outside[i] and _is_session_heading(ln)), None
     )
     if sess_start is not None:
         standing = next(
@@ -270,6 +305,7 @@ def split_plan(lines: list[str]) -> tuple[list[str], list[str], list[str]]:
                 i
                 for i, ln in enumerate(lines)
                 if i > sess_start
+                and outside[i]
                 and ln.startswith("## ")
                 and not _is_session_heading(ln)
             ),
@@ -278,7 +314,8 @@ def split_plan(lines: list[str]) -> tuple[list[str], list[str], list[str]]:
         return lines[:sess_start], lines[sess_start:standing], lines[standing:]
 
     recent_start = next(
-        (i for i, ln in enumerate(lines) if ln.rstrip("\n") == RECENT_SESSIONS_HEADING),
+        (i for i, ln in enumerate(lines)
+         if outside[i] and ln.rstrip("\n") == RECENT_SESSIONS_HEADING),
         None,
     )
     if recent_start is None:
@@ -286,13 +323,15 @@ def split_plan(lines: list[str]) -> tuple[list[str], list[str], list[str]]:
             "no session blocks or '## Recent sessions' section found in handoff doc"
         )
     standing = next(
-        (i for i, ln in enumerate(lines) if i > recent_start and ln.startswith("## ")),
+        (i for i, ln in enumerate(lines)
+         if i > recent_start and outside[i] and ln.startswith("## ")),
         len(lines),
     )
     # Introductory prose belongs to the live section, not to an archived entry.
     # Start parsing at the first dated heading so parse_blocks cannot discard it.
     sess_start = next(
-        (i for i in range(recent_start + 1, standing) if _RECENT_SESSION_RE.match(lines[i])),
+        (i for i in range(recent_start + 1, standing)
+         if outside[i] and _RECENT_SESSION_RE.match(lines[i])),
         standing,
     )
     return (
@@ -313,7 +352,11 @@ def parse_blocks(region: list[str]) -> list[list[str]]:
     content (issue #162).
     """
     blocks: list[list[str]] = []
-    uses_recent_sections = not any(_is_session_heading(line) for line in region)
+    outside = _outside_fences(region)
+    uses_recent_sections = not any(
+        visible and _is_session_heading(line)
+        for line, visible in zip(region, outside, strict=True)
+    )
 
     def is_block_heading(line: str) -> bool:
         if uses_recent_sections:
@@ -321,8 +364,8 @@ def parse_blocks(region: list[str]) -> list[list[str]]:
         return _is_session_heading(line)
 
     cur: list[str] | None = None
-    for line in region:
-        if is_block_heading(line):
+    for line, visible in zip(region, outside, strict=True):
+        if visible and is_block_heading(line):
             if cur is not None:
                 blocks.append(cur)
             cur = [line]
@@ -331,11 +374,13 @@ def parse_blocks(region: list[str]) -> list[list[str]]:
     if cur is not None:
         blocks.append(cur)
     for block in blocks:
-        while block and (
+        visible = _outside_fences(block)
+        while block and visible[-1] and (
             block[-1].strip(_LAYOUT_WS) == ""
             or _is_sep(block[-1])
         ):
             block.pop()
+            visible.pop()
     return blocks
 
 
@@ -363,8 +408,9 @@ def demote(block: list[str]) -> list[str]:
 def trim_megaline(head: list[str], keep: int) -> list[str]:
     """Trim the ``Last updated:`` megaline to its first ``keep`` ``|``-segments."""
     out = list(head)
+    outside = _outside_fences(head)
     for i, line in enumerate(out):
-        if line.startswith("Last updated:"):
+        if outside[i] and line.startswith("Last updated:"):
             segments = line.rstrip("\n").split(" | ")
             if len(segments) > keep:
                 out[i] = " | ".join(segments[:keep]) + "\n"
@@ -400,11 +446,12 @@ def rebuild_plan(
 
 def insert_into_history(history: list[str], moved: list[list[str]]) -> list[str]:
     """Insert demoted blocks at the top of a recognized history session section."""
+    outside = _outside_fences(history)
     try:
         sl = next(
             i
             for i, ln in enumerate(history)
-            if ln.rstrip("\n") in HISTORY_SECTION_HEADINGS
+            if outside[i] and ln.rstrip("\n") in HISTORY_SECTION_HEADINGS
         )
     except StopIteration as exc:
         expected = "' or '".join(HISTORY_SECTION_HEADINGS)
@@ -420,6 +467,37 @@ def insert_into_history(history: list[str], moved: list[list[str]]) -> list[str]
     if prefix and not prefix[-1].endswith("\n"):
         prefix[-1] += "\n"
     return prefix + chunk + history[insert_at:]
+
+
+def _recovery_hint(target: Path) -> str:
+    """Offer a read-only command only for a confirmed committed document."""
+    fallback = (
+        "No committed Git version could be confirmed for the staged handoff. "
+        "Inspect the named documents and any saved copies before restoring content."
+    )
+    try:
+        root_result = subprocess.run(
+            ["git", "-C", str(target.parent), "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, check=True, timeout=5,
+        )
+        root = Path(root_result.stdout.rstrip("\n")).resolve()
+        relative = target.relative_to(root).as_posix()
+        object_name = f"HEAD:{relative}"
+        kind = subprocess.run(
+            ["git", "-C", str(root), "cat-file", "-t", object_name],
+            capture_output=True, text=True, check=True, timeout=5,
+            env={**os.environ, "GIT_NO_LAZY_FETCH": "1"},
+        )
+        if kind.stdout.strip() != "blob":
+            return fallback
+    except (OSError, ValueError, subprocess.SubprocessError, KeyboardInterrupt):
+        return fallback
+    command = shlex.join(["git", "-C", str(root), "show", object_name])
+    return (
+        "Read the committed handoff version with:\n\n"
+        f"    {command}\n\n"
+        "This reads committed content only; preserve uncommitted edits separately."
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -514,6 +592,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: not found: {path}", file=sys.stderr)
             return 2
 
+    try:
+        if args.plan.samefile(args.history):
+            print("error: handoff and history destinations overlap; no changes applied",
+                  file=sys.stderr)
+            return 2
+    except OSError as exc:
+        print(f"error: could not compare document destinations ({exc})", file=sys.stderr)
+        return 2
+
     # A read that fails is a documented exit 2, not an uncaught traceback.
     # BOTH classes, deliberately: `is_file()` above passes for a file that exists
     # and cannot be opened, so `PermissionError` reaches these lines just as a
@@ -547,8 +634,10 @@ def main(argv: list[str] | None = None) -> int:
         # A quotation elsewhere, an edited footer, or a footer naming another
         # history destination is content and must survive the archival move.
         if (
-            any(_is_session_heading(line) for line in region)
+            any(visible and _is_session_heading(line)
+                for line, visible in zip(region, _outside_fences(region), strict=True))
             and region[-len(pointer):] == pointer
+            and all(_outside_fences(region)[-len(pointer):])
         ):
             region = region[:-len(pointer)]
         blocks = parse_blocks(region)
@@ -697,6 +786,8 @@ def main(argv: list[str] | None = None) -> int:
             staged.append(staged_plan)
             staged_history = stage_text(args.history, "".join(new_history), newline="\n")
             staged.append(staged_history)
+            if staged_plan.target.samefile(staged_history.target):
+                raise AtomicWriteRefused("handoff and history destinations overlap")
             # Reuse the destination selected for the sweep. Resolving the
             # argument again could stage recovery for a retargeted alias.
             staged_rollback = stage_text(staged_plan.target, original_plan, newline="\n")
@@ -765,8 +856,8 @@ def main(argv: list[str] | None = None) -> int:
                 f"rollback error: {rollback_error!r}). These blocks "
                 f"may be in NEITHER document. Inspect {plan_location} and {history_location}:\n"
                 + "\n".join(f"  - {title[:88]}" for title in moved_titles)
-                + f"\nRecover {plan_location} with `git show HEAD:{staged_plan.target.name}` "
-                "— do NOT `git checkout`, which discards this session's own "
+                + "\n" + _recovery_hint(staged_plan.target)
+                + "\ndo NOT `git checkout`, which discards this session's own "
                 "edits.",
                 file=sys.stderr,
             )

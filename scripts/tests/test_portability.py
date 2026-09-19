@@ -15669,7 +15669,7 @@ def test_a_failed_rollback_does_not_claim_no_changes_applied(
     # other.
     assert str(history) in err, err
     assert str(plan) in err, err
-    assert "git show HEAD:" in err, "the recovery must not be a destructive checkout"
+    assert "No committed Git version could be confirmed" in err
     assert "do NOT `git checkout`" in err, err
     # The history is published by rename or not at all, so "part-written" is a
     # state it can no longer be in and the message must not invent it.
@@ -17749,7 +17749,8 @@ def test_archive_rollback_confirmation_through_subprocess(
         assert "may be in NEITHER document" in result.stderr
         assert str(plan) in result.stderr and str(history) in result.stderr
         assert "First" in result.stderr and "Second" in result.stderr
-        assert "git show HEAD:" in result.stderr and "do NOT `git checkout`" in result.stderr
+        assert "No committed Git version could be confirmed" in result.stderr
+        assert "do NOT `git checkout`" in result.stderr
         assert "no changes" not in result.stderr
         assert "was restored" not in result.stderr
         assert "unchanged and intact" not in result.stderr
@@ -18152,3 +18153,244 @@ def test_session_headings_keep_history_hierarchy_across_sweeps(tmp_path: Path, s
         noop = subprocess.run(argv, capture_output=True, text=True)
         assert noop.returncode == 0, noop.stderr
         assert (plan.read_bytes(), history.read_bytes()) == before
+
+
+@pytest.mark.parametrize("layout", ["classic", "recent"])
+@pytest.mark.parametrize("fence", ["```", "~~~~", "   ````"])
+def test_archive_repair_fenced_examples_stay_with_their_session(
+    tmp_path: Path, layout: str, fence: str,
+) -> None:
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    closing = fence.lstrip() + fence.lstrip()[0]
+
+    def example(label: str) -> str:
+        return (
+            f"{fence}markdown\n"
+            f"Last updated: {label} | literal segment\n"
+            "## Session — Literal classic heading\n"
+            "### 2026-09-01 — Literal recent heading\n"
+            "## Standing example\n## Recent sessions\n## Session log\n"
+            "## Recent sessions (archived)\n"
+            + ("~~~\n" if fence.lstrip()[0] == "`" else "```\n")
+            + fence.lstrip()[:2] + "\n"
+            + f"{label} literal body with spaces  \n\n---\n{closing}\n"
+        )
+
+    intro = "# Handoff\n\n" + example("Introduction") + "\n"
+    if layout == "recent":
+        intro += "## Recent sessions\n\nPreserved introduction.\n\n"
+    bodies = {name: example(name) + f"End of {name}.\n" for name in ("New", "Middle", "Old")}
+    headings = {
+        name: (f"### 2026-09-{day} — {name}" if layout == "recent" else f"## Session — {name}")
+        for day, name in ((19, "New"), (18, "Middle"), (17, "Old"))
+    }
+    standing = "## Standing section\n\nStanding prose.\n"
+    plan.write_text(intro + "".join(
+        headings[name] + "\n\n" + bodies[name] + "\n---\n\n"
+        for name in ("New", "Middle", "Old")
+    ) + standing)
+    history_intro = "# History\n\n" + example("History introduction") + "\n## Session log\n\n"
+    existing = "### Existing\n\nExisting history body.\n"
+    history.write_text(history_intro + existing)
+    for keep, retained, moved in ((2, ("New", "Middle"), ("Old",)), (1, ("New",), ("Middle", "Old"))):
+        argv = [sys.executable, str(ENGINE_DIR / "archive_plan_sessions.py"),
+                "--plan", str(plan), "--history", str(history), "--keep", str(keep)]
+        result = subprocess.run(argv, capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        live, past = plan.read_text(), history.read_text()
+        assert live.startswith(intro) and live.endswith(standing)
+        assert past.startswith(history_intro) and past.endswith(existing)
+        for name in retained:
+            assert bodies[name] in live and bodies[name] not in past
+        for name in moved:
+            assert bodies[name] not in live and past.count(bodies[name]) == 1
+        before = (plan.read_bytes(), history.read_bytes())
+        again = subprocess.run(argv, capture_output=True, text=True)
+        assert again.returncode == 0, again.stderr
+        assert (plan.read_bytes(), history.read_bytes()) == before
+
+
+@pytest.mark.parametrize("fence", ["```", "~~~"])
+def test_archive_repair_fenced_history_heading_is_not_a_destination(
+    tmp_path: Path, fence: str,
+) -> None:
+    archive = _load_module("archive_fenced_history", ENGINE_DIR / "archive_plan_sessions.py")
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    _write_n_block_plan(plan, history, 3)
+    history.write_text(f"# History\n\n{fence}\n## Session log\n{fence}\n")
+    before = (plan.read_bytes(), history.read_bytes())
+    assert archive.main(["--plan", str(plan), "--history", str(history), "--keep", "1"]) == 2
+    assert (plan.read_bytes(), history.read_bytes()) == before
+
+
+@pytest.mark.parametrize("fence", ["```", "~~~"])
+def test_archive_repair_unclosed_fence_preserves_footer_and_trailing_layout(
+    tmp_path: Path, fence: str,
+) -> None:
+    archive = _load_module("archive_unclosed_fence", ENGINE_DIR / "archive_plan_sessions.py")
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    pointer = "".join(archive.history_pointer("history.md", "history.md"))
+    old_body = f"{fence}\nLiteral unfinished example.\n\n---\n\n" + pointer
+    plan.write_text("# Handoff\n\n## Session — New\n\nNew prose.\n\n"
+                    "## Session — Old\n\n" + old_body)
+    history.write_text("# History\n\n## Session log\n\n")
+    assert archive.main(["--plan", str(plan), "--history", str(history), "--keep", "1"]) == 0
+    assert old_body in history.read_text()
+    assert "Literal unfinished example." not in plan.read_text()
+
+
+@pytest.mark.parametrize("alias", ["same", "symlink", "hardlink"])
+@pytest.mark.parametrize("keep", ["1", "9"])
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_archive_repair_overlap_refuses_without_changing_documents(
+    tmp_path: Path, alias: str, keep: str, dry_run: bool,
+) -> None:
+    plan = tmp_path / "handoff.md"
+    plan.write_text("# Handoff\n\n## Session — New\n\nNew body.\n\n"
+                    "## Session — Old\n\nOld body.\n\n## Session log\n\n")
+    history = plan if alias == "same" else tmp_path / "history.md"
+    if alias == "symlink":
+        history.symlink_to(plan)
+    elif alias == "hardlink":
+        os.link(plan, history)
+    before = plan.read_bytes()
+    inode = plan.stat().st_ino
+    result = subprocess.run(
+        [sys.executable, str(ENGINE_DIR / "archive_plan_sessions.py"),
+         "--plan", str(plan), "--history", str(history), "--keep", keep,
+         *(["--dry-run"] if dry_run else [])], capture_output=True, text=True,
+    )
+    assert result.returncode == 2, result.stderr
+    assert "overlap" in result.stderr and result.stdout == ""
+    assert plan.read_bytes() == history.read_bytes() == before
+    assert plan.stat().st_ino == history.stat().st_ino == inode
+    assert not list(tmp_path.glob("*.devkit-tmp"))
+
+
+def _archive_recovery_fixture(repo: Path, relative: str) -> tuple[Path, Path]:
+    plan, history = repo / relative, repo / "docs/history.md"
+    plan.parent.mkdir(parents=True, exist_ok=True)
+    history.parent.mkdir(parents=True, exist_ok=True)
+    _write_four_block_plan(plan, history)
+    _git(repo, "init", "-q")
+    return plan, history
+
+
+def _archive_inject_recovery_failure(
+    monkeypatch: pytest.MonkeyPatch, plan: Path, history: Path, fail_rollback: bool,
+) -> None:
+    real_replace = os.replace
+    plan_attempts = 0
+
+    def replace(src: object, dst: object, **kwargs: object) -> None:
+        nonlocal plan_attempts
+        target = Path(str(dst))
+        if target == plan.resolve():
+            plan_attempts += 1
+        if target == history.resolve() or (
+            target == plan.resolve() and plan_attempts == 2 and fail_rollback
+        ):
+            raise OSError("injected publication or rollback failure")
+        real_replace(src, dst, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(os, "replace", replace)
+
+
+@pytest.mark.parametrize("relative", ["docs/handoff.md", "nested/hand 'off $(printf literal) `quoted`.md"])
+@pytest.mark.parametrize("fail_rollback", [False, True])
+def test_archive_repair_printed_recovery_reads_the_committed_document(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str], relative: str, fail_rollback: bool,
+) -> None:
+    archive = _load_module("archive_recovery_command", ENGINE_DIR / "archive_plan_sessions.py")
+    repo = tmp_path / "repo 'with spaces"
+    repo.mkdir()
+    plan, history = _archive_recovery_fixture(repo, relative)
+    _git(repo, "add", "--", relative, "docs/history.md")
+    _git(repo, "-c", "user.name=Archive fixture", "-c", "user.email=archive@example.invalid",
+         "-c", "commit.gpgsign=false", "commit", "-qm", "Synthetic archive baseline")
+    committed = plan.read_bytes()
+    plan.write_bytes(committed + b"Uncommitted note.\n")
+    original, original_history = plan.read_bytes(), history.read_bytes()
+    _archive_inject_recovery_failure(monkeypatch, plan, history, fail_rollback)
+    status = archive.main(["--plan", str(plan), "--history", str(history), "--keep", "2"])
+    captured = capsys.readouterr()
+    assert status == 2 and captured.out == ""
+    assert history.read_bytes() == original_history
+    observation = {'status':status, 'stderr':captured.err, 'before_plan':original.decode(),
+                   'after_plan':plan.read_text(), 'before_history':original_history.decode(),
+                   'after_history':history.read_text()}
+    if fail_rollback:
+        assert b"First body line 1." not in plan.read_bytes()
+        commands = [line[4:] for line in captured.err.splitlines() if line.startswith("    git ")]
+        assert commands, "a confirmed committed document must have executable recovery guidance"
+        command = commands[0]
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+        before_command = (plan.read_bytes(), history.read_bytes())
+        result = subprocess.run(["sh", "-c", command], cwd=elsewhere, capture_output=True)
+        assert result.returncode == 0, result.stderr
+        assert result.stdout == committed
+        assert (plan.read_bytes(), history.read_bytes()) == before_command
+        assert "preserve uncommitted edits" in captured.err
+        observation.update(command=command, command_status=result.returncode,
+                           command_stdout=result.stdout.decode())
+    else:
+        assert plan.read_bytes() == original
+        assert "was restored and no changes were applied" in captured.err
+    (tmp_path / "recovery-observation.json").write_text(json.dumps(observation, indent=2))
+
+
+@pytest.mark.parametrize("location", ["untracked", "outside"])
+def test_archive_repair_unavailable_git_recovery_gives_honest_guidance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str], location: str,
+) -> None:
+    archive = _load_module("archive_no_recovery_object", ENGINE_DIR / "archive_plan_sessions.py")
+    root = tmp_path / location
+    root.mkdir()
+    plan, history = root / "handoff.md", root / "history.md"
+    _write_four_block_plan(plan, history)
+    if location == "untracked":
+        _git(root, "init", "-q")
+        (root / "sentinel").write_text("tracked unrelated content\n")
+        _git(root, "add", "sentinel")
+        _git(root, "-c", "user.name=Archive fixture", "-c", "user.email=archive@example.invalid",
+             "-c", "commit.gpgsign=false", "commit", "-qm", "Synthetic unrelated baseline")
+    before = (plan.read_bytes(), history.read_bytes())
+    _archive_inject_recovery_failure(monkeypatch, plan, history, True)
+    status = archive.main(["--plan", str(plan), "--history", str(history), "--keep", "2"])
+    err = capsys.readouterr().err
+    assert status == 2
+    assert "No committed Git version could be confirmed" in err
+    assert not any(line.startswith("    git ") for line in err.splitlines())
+    assert b"First body line 1." not in plan.read_bytes()
+    assert history.read_bytes() == before[1]
+    (tmp_path / "recovery-observation.json").write_text(json.dumps({
+        'status':status, 'stderr':err, 'before_plan':before[0].decode(),
+        'after_plan':plan.read_text(), 'before_history':before[1].decode(),
+        'after_history':history.read_text(),
+    }, indent=2))
+
+
+def test_archive_repair_rechecks_overlap_after_staging(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    archive = _load_module("archive_stage_overlap", ENGINE_DIR / "archive_plan_sessions.py")
+    plan, actual_history = tmp_path / "handoff.md", tmp_path / "history.md"
+    _write_four_block_plan(plan, actual_history)
+    history = tmp_path / "history-link.md"
+    history.symlink_to(actual_history)
+    before = (plan.read_bytes(), actual_history.read_bytes())
+    real_stage = archive.stage_text
+
+    def stage(path: Path, text: str, **kwargs: object) -> object:
+        if path == history:
+            history.unlink()
+            history.symlink_to(plan)
+        return real_stage(path, text, **kwargs)
+
+    monkeypatch.setattr(archive, "stage_text", stage)
+    assert archive.main(["--plan", str(plan), "--history", str(history), "--keep", "2"]) == 2
+    assert (plan.read_bytes(), actual_history.read_bytes()) == before
+    assert not list(tmp_path.glob("*.devkit-tmp"))
