@@ -15053,9 +15053,8 @@ def test_line_counters_agree_on_exotic_separators(tmp_path: Path) -> None:
     """`archive_plan_sessions` and `check_doc_budget` must measure the same "line".
 
     `check_doc_budget` counts by iterating a text handle.
-    `archive_plan_sessions` parses structure with `str.splitlines()`, which
-    ALSO breaks on \\v \\f \\x1c \\x1d \\x1e \\x85 \\u2028 \\u2029. `--target-lines`
-    is the first path to compare a count against the budget, which makes the
+    `str.splitlines()` also breaks on \\v \\f \\x1c \\x1d \\x1e \\x85 \\u2028 \\u2029.
+    `--target-lines` compares a count against the budget, which makes the
     disagreement reachable — a doc over budget by one counter and under by the
     other, with the sweep refusing a target that is genuinely achievable.
 
@@ -18394,3 +18393,107 @@ def test_archive_repair_rechecks_overlap_after_staging(
     assert archive.main(["--plan", str(plan), "--history", str(history), "--keep", "2"]) == 2
     assert (plan.read_bytes(), actual_history.read_bytes()) == before
     assert not list(tmp_path.glob("*.devkit-tmp"))
+
+
+@pytest.mark.parametrize("layout", ["classic", "recent"])
+@pytest.mark.parametrize("comment", ["<!--\n```\nHidden example.\n-->\n", "   <!-- ``` -->\n"])
+def test_archive_review_html_comment_fences_preserve_document_boundaries(
+    tmp_path: Path, layout: str, comment: str,
+) -> None:
+    archive = _load_module("archive_comment_boundary", ENGINE_DIR / "archive_plan_sessions.py")
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    intro = "# Handoff\n\n" + comment + "\n"
+    if layout == "recent":
+        intro += "## Recent sessions\n\n"
+    new = "### 2026-09-19 — New" if layout == "recent" else "## Session — New"
+    old = "### 2026-09-18 — Old" if layout == "recent" else "## Session — Old"
+    body = "Old body.\n\n" + comment
+    standing = "## Backlog\n\nKeep this open task live.\n"
+    plan.write_text(intro + new + "\n\nNew body.\n\n" + old + "\n\n" + body + "\n" + standing)
+    history_intro = "# History\n\n" + comment + "\n## Session log\n\n"
+    history.write_text(history_intro)
+    argv = ["--plan", str(plan), "--history", str(history), "--keep", "1"]
+    assert archive.main(argv) == 0
+    live, past = plan.read_text(), history.read_text()
+    assert live.startswith(intro) and live.endswith(standing)
+    assert body not in live and past.count(body) == 1
+    assert past.startswith(history_intro) and standing not in past
+    before = plan.read_bytes(), history.read_bytes()
+    assert archive.main(argv) == 0
+    assert (plan.read_bytes(), history.read_bytes()) == before
+
+
+@pytest.mark.parametrize("separator", ["\v", "\f", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029"])
+def test_archive_review_inline_separators_do_not_open_fences(
+    tmp_path: Path, separator: str,
+) -> None:
+    archive = _load_module("archive_physical_lines", ENGINE_DIR / "archive_plan_sessions.py")
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    inline = "Inline literal: " + separator + "```\n"
+    plan.write_text("# Handoff\n\n## Session — New\n\n" + inline
+                    + "\n## Session — Old\n\nOld body.\n")
+    history.write_text("# History\n\n## Session log\n\n")
+    assert archive.main(["--plan", str(plan), "--history", str(history), "--keep", "1"]) == 0
+    assert inline in plan.read_text()
+    assert "Old body." not in plan.read_text() and "Old body." in history.read_text()
+
+
+@pytest.mark.parametrize("fence", ["````", "~~~~"])
+def test_archive_review_short_closer_keeps_literal_heading_in_session(
+    tmp_path: Path, fence: str,
+) -> None:
+    archive = _load_module("archive_short_closer", ENGINE_DIR / "archive_plan_sessions.py")
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    body = (f"{fence}\n<!--\n{fence[:3]}\n## Session — Literal example\n"
+            f"Literal content.\n{fence}\nEnd of old session.\n")
+    standing = "## Backlog\n\nKeep this live.\n"
+    plan.write_text("# Handoff\n\n## Session — New\n\nNew body.\n\n"
+                    + "## Session — Old\n\n" + body + "\n" + standing)
+    history.write_text("# History\n\n## Session log\n\n")
+    assert archive.main(["--plan", str(plan), "--history", str(history), "--keep", "1"]) == 0
+    assert body not in plan.read_text() and history.read_text().count(body) == 1
+    assert plan.read_text().endswith(standing) and standing not in history.read_text()
+
+
+def test_archive_review_backtick_in_info_does_not_hide_sessions(tmp_path: Path) -> None:
+    archive = _load_module("archive_invalid_info", ENGINE_DIR / "archive_plan_sessions.py")
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    intro = "# Handoff\n\n```invalid`info\n"
+    plan.write_text(intro + "## Session — New\n\nNew body.\n\n## Session — Old\n\nOld body.\n")
+    history.write_text("# History\n\n## Session log\n\n")
+    assert archive.main(["--plan", str(plan), "--history", str(history), "--keep", "1"]) == 0
+    assert plan.read_text().startswith(intro) and "Old body." in history.read_text()
+
+
+def test_archive_review_committed_symlink_is_not_a_recovery_document(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    archive = _load_module("archive_committed_symlink", ENGINE_DIR / "archive_plan_sessions.py")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    plan, history = _archive_recovery_fixture(repo, "docs/handoff.md")
+    committed = plan.read_bytes()
+    original = plan.with_name("original.md")
+    plan.rename(original)
+    plan.symlink_to(original.name)
+    _git(repo, "add", "docs")
+    _git(repo, "-c", "user.name=Archive fixture", "-c", "user.email=archive@example.invalid",
+         "-c", "commit.gpgsign=false", "commit", "-qm", "Synthetic symlink baseline")
+    plan.unlink()
+    plan.write_bytes(committed)
+    original_history = history.read_bytes()
+    _archive_inject_recovery_failure(monkeypatch, plan, history, True)
+    status = archive.main(["--plan", str(plan), "--history", str(history), "--keep", "2"])
+    err = capsys.readouterr().err
+    commands = [line[4:] for line in err.splitlines() if line.startswith("    git ")]
+    outputs = [subprocess.run(["sh", "-c", command], cwd=tmp_path, capture_output=True)
+               for command in commands]
+    assert status == 2 and b"First body line 1." not in plan.read_bytes()
+    assert history.read_bytes() == original_history and original.read_bytes() == committed
+    assert not commands or (outputs[0].returncode == 0 and outputs[0].stdout == committed)
+    assert "Inspect the named documents" in err
+    (tmp_path / "recovery-observation.json").write_text(json.dumps({
+        "status": status, "stderr": err, "after_plan": plan.read_text(),
+        "before_history": original_history.decode(), "after_history": history.read_text(),
+        "commands": commands, "outputs": [p.stdout.decode() for p in outputs],
+    }, indent=2))

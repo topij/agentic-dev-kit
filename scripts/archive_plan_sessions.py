@@ -17,8 +17,8 @@ the history file (demoting ``## Earlier session — X`` headings to ``### X`` to
 match its convention), refresh the "older entries moved to history" pointer,
 and trim the line-16 quick-scan megaline to roughly the kept blocks.
 
-Fenced Markdown examples are content, including their literal headings and
-separators. Handoff and history must name distinct files; overlapping destinations
+Fenced Markdown examples and HTML comments are content, including their literal
+headings and separators. Handoff and history must name distinct files; overlapping destinations
 are refused before a sweep or dry-run can report success.
 
 It only ever *moves* content — every cross-reference (ticket ids, PR links,
@@ -78,8 +78,8 @@ a block-count remedy can be a no-op against a line budget (fewer blocks than the
 ``--keep`` floor, yet still over on lines). ``--target-lines`` closes that gap: it
 sweeps oldest-first, one block at a time, until the doc is at or under the target,
 and never sweeps the last remaining block. Its line count is
-``budget_line_count`` — deliberately the same rule ``check_doc_budget`` uses, not
-this module's ``splitlines()``. If it runs out of sweepable blocks while still
+``budget_line_count`` — deliberately the same physical-line rule
+``check_doc_budget`` uses. If it runs out of sweepable blocks while still
 over the target, it fails loudly (exit **3**) rather than reporting success — a
 step that did not accomplish what it was asked must say so.
 
@@ -161,6 +161,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import io
 import os
 import re
 import shlex
@@ -183,7 +184,7 @@ def budget_line_count(text: str) -> int:
     can refuse a target that is genuinely achievable.
 
     ``check_doc_budget`` counts by iterating an open text handle.
-    ``str.splitlines()`` — which this module uses for structural parsing — breaks
+    ``str.splitlines()`` breaks
     on ``\\v \\f \\x1c \\x1d \\x1e \\x85 \\u2028 \\u2029`` as well, so a doc
     containing any of those measures LONGER under ``splitlines()`` than in the
     budget.
@@ -266,9 +267,10 @@ def _is_sep(line: str) -> bool:
 
 
 def _outside_fences(lines: list[str]) -> list[bool]:
-    """Identify structural lines without interpreting fenced examples as headings."""
+    """Identify structural physical lines outside fenced examples and comments."""
     outside: list[bool] = []
     fence = ""
+    comment = False
     for line in lines:
         match = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line.rstrip("\r\n"))
         if fence:
@@ -280,6 +282,12 @@ def _outside_fences(lines: list[str]) -> list[bool]:
                 and not match[2].strip(" \t")
             ):
                 fence = ""
+        elif comment or re.match(r"^ {0,3}<!--", line):
+            # A fence spelling inside an HTML comment is literal; it must not
+            # hide the standing heading after the comment ends. Conversely,
+            # comment spellings inside a fence cannot outlive that fence.
+            outside.append(False)
+            comment = "-->" not in line
         elif match and (match[1][0] == "~" or "`" not in match[2]):
             fence = match[1]
             outside.append(False)
@@ -483,6 +491,17 @@ def _recovery_hint(target: Path) -> str:
         root = Path(root_result.stdout.rstrip("\n")).resolve()
         relative = target.relative_to(root).as_posix()
         object_name = f"HEAD:{relative}"
+        entry = subprocess.run(
+            ["git", "--literal-pathspecs", "-C", str(root), "ls-tree", "-z",
+             "HEAD", "--", relative],
+            capture_output=True, check=True, timeout=5,
+            env={**os.environ, "GIT_NO_LAZY_FETCH": "1"},
+        )
+        metadata, path = entry.stdout.rstrip(b"\0").split(b"\t", 1)
+        # Git stores symlink targets as blobs too. Only a regular-file tree
+        # entry establishes that `git show` reads document bytes here.
+        if metadata.split()[0] not in (b"100644", b"100755") or path != os.fsencode(relative):
+            return fallback
         kind = subprocess.run(
             ["git", "-C", str(root), "cat-file", "-t", object_name],
             capture_output=True, text=True, check=True, timeout=5,
@@ -620,8 +639,10 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, UnicodeDecodeError) as exc:
             print(f"error: could not read {path}: {exc}", file=sys.stderr)
             return 2
-    plan = texts[0].splitlines(keepends=True)
-    history = texts[1].splitlines(keepends=True)
+    # read_text already normalized CR/CRLF. Unicode/control separators within
+    # a physical line are content, not a new place where a fence can open.
+    plan = io.StringIO(texts[0]).readlines()
+    history = io.StringIO(texts[1]).readlines()
 
     history_link = os.path.relpath(args.history, start=args.plan.parent).replace(
         os.sep, "/"
