@@ -42,7 +42,7 @@ starts.
 
 ---
 
-## #__ASSIGNED_PR_NUMBER__ — Handoff archive repairs
+## #745 — Handoff archive repairs
 
 - Refresh `scripts/archive_plan_sessions.py` with its tests. Fenced examples remain with their containing session; update assertions that treated literal headings inside fences as session or history boundaries.
 - **BREAKING — overlapping destinations:** Configure distinct handoff and history files. A shared pathname, symlink target or hardlink now returns exit `2`, including dry-run and no-op requests.
