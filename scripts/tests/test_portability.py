@@ -18497,3 +18497,80 @@ def test_archive_review_committed_symlink_is_not_a_recovery_document(
         "before_history": original_history.decode(), "after_history": history.read_text(),
         "commands": commands, "outputs": [p.stdout.decode() for p in outputs],
     }, indent=2))
+
+
+@pytest.mark.parametrize("html", [
+    "<pre>\n```\n</pre>\n", "<SCRIPT>\n```\n</SCRIPT>\n",
+    "<style>\n~~~\n</style>\n", "<textarea>\n```\n</textarea>\n",
+    "<details open>\n```\n</details>\n", "<div>\n```\n</div>\n",
+    "<custom-element>\n```\n</custom-element>\n", "</div>\n```\n",
+    "<?instruction\n```\n?>\n", "<!DOCTYPE\n```\n>\n",
+    "<![CDATA[\n```\n]]>\n", "   <pre\nclass=\"example\">\n```\n</pre>\n",
+])
+@pytest.mark.parametrize("destination", ["plan", "history"])
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_archive_review_raw_html_refuses_before_any_write(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    html: str, destination: str, dry_run: bool,
+) -> None:
+    archive = _load_module("archive_raw_html_refusal", ENGINE_DIR / "archive_plan_sessions.py")
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    standing = "## Backlog\n\nKeep this task live.\n"
+    plan.write_text("# Handoff\n\n## Session — New\n\nNew body.\n\n"
+                    + "## Session — Old\n\nOld body.\n\n"
+                    + (html + "\n" if destination == "plan" else "") + standing)
+    history.write_text("# History\n\n" + (html + "\n" if destination == "history" else "")
+                       + "## Session log\n\nExisting history.\n")
+    before = plan.read_bytes(), history.read_bytes()
+    argv = ["--plan", str(plan), "--history", str(history), "--keep", "1"]
+    if dry_run:
+        argv.append("--dry-run")
+    assert archive.main(argv) == 2
+    assert (plan.read_bytes(), history.read_bytes()) == before
+    assert "raw HTML" in capsys.readouterr().err
+    assert not list(tmp_path.glob("*.devkit-tmp"))
+
+
+@pytest.mark.parametrize("wrapper", ["fence", "comment"])
+def test_archive_review_raw_html_examples_can_be_archived_as_literal_content(
+    tmp_path: Path, wrapper: str,
+) -> None:
+    archive = _load_module("archive_raw_html_literal", ENGINE_DIR / "archive_plan_sessions.py")
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    raw = "<pre>\n```\n</pre>\n<div>\n<?instruction?>\n<![CDATA[example]]>\n"
+    body = ("````\n" + raw + "````\n") if wrapper == "fence" else ("<!--\n" + raw + "-->\n")
+    standing = "## Backlog\n\nKeep this task live.\n"
+    plan.write_text("# Handoff\n\n## Session — New\n\nNew body.\n\n"
+                    + "## Session — Old\n\n" + body + "\n" + standing)
+    history.write_text("# History\n\n## Session log\n\n")
+    assert archive.main(["--plan", str(plan), "--history", str(history), "--keep", "1"]) == 0
+    assert plan.read_text().endswith(standing) and standing not in history.read_text()
+    assert body not in plan.read_text() and history.read_text().count(body) == 1
+
+
+@pytest.mark.parametrize("opening", ["Old body. <!--\n", "<!-- closed --> <!--\n"])
+def test_archive_review_inline_comment_spelling_cannot_hide_a_real_fence(
+    tmp_path: Path, opening: str,
+) -> None:
+    # CommonMark block structure precedes inline parsing. A comment after prose
+    # is not an HTML block; a block comment ends at the first closing line.
+    # In these inputs the following fence is real and its heading is literal.
+    archive = _load_module("archive_inline_comment_fence", ENGINE_DIR / "archive_plan_sessions.py")
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    body = opening + "```\nLiteral example.\n-->\n\n## Backlog\n\nLiteral task example.\n"
+    plan.write_text("# Handoff\n\n## Session — New\n\nNew body.\n\n"
+                    + "## Session — Old\n\n" + body)
+    history.write_text("# History\n\n## Session log\n\n")
+    assert archive.main(["--plan", str(plan), "--history", str(history), "--keep", "1"]) == 0
+    assert body not in plan.read_text() and history.read_text().count(body) == 1
+
+
+@pytest.mark.parametrize("link", ["<https://example.invalid/>", "<person@example.invalid>"])
+def test_archive_review_autolinks_are_not_raw_html(tmp_path: Path, link: str) -> None:
+    archive = _load_module("archive_autolink", ENGINE_DIR / "archive_plan_sessions.py")
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    plan.write_text("# Handoff\n\n## Session — New\n\nNew body.\n\n"
+                    + "## Session — Old\n\n" + link + "\n")
+    history.write_text("# History\n\n## Session log\n\n")
+    assert archive.main(["--plan", str(plan), "--history", str(history), "--keep", "1"]) == 0
+    assert link not in plan.read_text() and link in history.read_text()

@@ -17,9 +17,12 @@ the history file (demoting ``## Earlier session — X`` headings to ``### X`` to
 match its convention), refresh the "older entries moved to history" pointer,
 and trim the line-16 quick-scan megaline to roughly the kept blocks.
 
-Fenced Markdown examples and HTML comments are content, including their literal
-headings and separators. Handoff and history must name distinct files; overlapping destinations
-are refused before a sweep or dry-run can report success.
+Fenced Markdown examples and HTML block comments are content, including their
+literal headings and separators. Lines starting with raw HTML tags, declarations
+or processing instructions outside those contexts are unsupported: enclose them
+in a fenced code block before archiving. The sweep refuses them before writes.
+Handoff and history must name distinct files; overlapping destinations are refused
+before a sweep or dry-run can report success.
 
 It only ever *moves* content — every cross-reference (ticket ids, PR links,
 commit shas, …) is preserved. Standing sections (Security, Next up, Backlog,
@@ -267,7 +270,7 @@ def _is_sep(line: str) -> bool:
 
 
 def _outside_fences(lines: list[str]) -> list[bool]:
-    """Identify structural physical lines outside fenced examples and comments."""
+    """Identify structural physical lines outside fences and HTML block comments."""
     outside: list[bool] = []
     fence = ""
     comment = False
@@ -283,11 +286,18 @@ def _outside_fences(lines: list[str]) -> list[bool]:
             ):
                 fence = ""
         elif comment or re.match(r"^ {0,3}<!--", line):
-            # A fence spelling inside an HTML comment is literal; it must not
+            # A fence spelling inside an HTML block comment is literal; it must not
             # hide the standing heading after the comment ends. Conversely,
             # comment spellings inside a fence cannot outlive that fence.
             outside.append(False)
             comment = "-->" not in line
+        elif re.match(r"^ {0,3}<(?:/?[A-Za-z][A-Za-z0-9-]*(?:[ \t\r\n/>]|$)|[!?])", line):
+            # Raw HTML can make subsequent fence spellings literal. Refuse this
+            # unsupported input before a sweep can misclassify standing content.
+            raise ValueError(
+                "unsupported raw HTML tag line; wrap HTML in a fenced code block "
+                "before archiving"
+            )
         elif match and (match[1][0] == "~" or "`" not in match[2]):
             fence = match[1]
             outside.append(False)
