@@ -18232,10 +18232,11 @@ def test_archive_repair_unclosed_fence_preserves_footer_and_trailing_layout(
     old_body = f"{fence}\nLiteral unfinished example.\n\n---\n\n" + pointer
     plan.write_text("# Handoff\n\n## Session — New\n\nNew prose.\n\n"
                     "## Session — Old\n\n" + old_body)
-    history.write_text("# History\n\n## Session log\n\n")
-    assert archive.main(["--plan", str(plan), "--history", str(history), "--keep", "1"]) == 0
-    assert old_body in history.read_text()
-    assert "Literal unfinished example." not in plan.read_text()
+    history.write_text("# History\n\n## Session log\n\n### Existing\n\nExisting body.\n")
+    before = plan.read_bytes(), history.read_bytes()
+    assert archive.main(["--plan", str(plan), "--history", str(history), "--keep", "1"]) == 2
+    assert (plan.read_bytes(), history.read_bytes()) == before
+    assert old_body in plan.read_text()
 
 
 @pytest.mark.parametrize("alias", ["same", "symlink", "hardlink"])
@@ -18557,7 +18558,7 @@ def test_archive_review_inline_comment_spelling_cannot_hide_a_real_fence(
     # In these inputs the following fence is real and its heading is literal.
     archive = _load_module("archive_inline_comment_fence", ENGINE_DIR / "archive_plan_sessions.py")
     plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
-    body = opening + "```\nLiteral example.\n-->\n\n## Backlog\n\nLiteral task example.\n"
+    body = opening + "```\nLiteral example.\n-->\n\n## Backlog\n\nLiteral task example.\n```\n"
     plan.write_text("# Handoff\n\n## Session — New\n\nNew body.\n\n"
                     + "## Session — Old\n\n" + body)
     history.write_text("# History\n\n## Session log\n\n")
@@ -18633,6 +18634,52 @@ def test_archive_review_top_level_literals_after_containers_preserve_boundaries(
     assert archive.main(argv) == 0
     assert plan.read_text().endswith(standing) and standing not in history.read_text()
     assert body not in plan.read_text() and history.read_text().count(body) == 1
+    before = plan.read_bytes(), history.read_bytes()
+    assert archive.main(argv) == 0
+    assert (plan.read_bytes(), history.read_bytes()) == before
+
+
+@pytest.mark.parametrize("literal", ["```", "~~~", "<!--"])
+@pytest.mark.parametrize("destination", ["plan", "history"])
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_archive_review_unterminated_literals_refuse_before_any_write(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    literal: str, destination: str, dry_run: bool,
+) -> None:
+    archive = _load_module("archive_unterminated_literal", ENGINE_DIR / "archive_plan_sessions.py")
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    unfinished = literal + "\nUnfinished example.\n"
+    plan.write_text("# Handoff\n\n## Session — New\n\nNew body.\n\n"
+                    + "## Session — Old\n\nOld body.\n\n"
+                    + (unfinished if destination == "plan" else ""))
+    history.write_text("# History\n\n## Session log\n\n### Existing\n\nExisting body.\n"
+                       + (unfinished if destination == "history" else ""))
+    before = plan.read_bytes(), history.read_bytes()
+    argv = ["--plan", str(plan), "--history", str(history), "--keep", "1"]
+    if dry_run:
+        argv.append("--dry-run")
+    assert archive.main(argv) == 2
+    captured = capsys.readouterr()
+    assert "unterminated literal block" in captured.err and captured.out == ""
+    assert (plan.read_bytes(), history.read_bytes()) == before
+    assert not list(tmp_path.glob("*.devkit-tmp"))
+
+
+@pytest.mark.parametrize("separator", ["\v", "\f", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029"])
+def test_archive_review_history_inline_separators_preserve_destination(
+    tmp_path: Path, separator: str,
+) -> None:
+    archive = _load_module("archive_history_physical_lines", ENGINE_DIR / "archive_plan_sessions.py")
+    plan, history = tmp_path / "handoff.md", tmp_path / "history.md"
+    intro = "# History\n\nInline example: " + separator + "```\n\n## Session log\n\n"
+    existing = "### Existing\n\nExisting body.\n"
+    plan.write_text("# Handoff\n\n## Session — New\n\nNew body.\n\n"
+                    + "## Session — Old\n\nOld body.\n")
+    history.write_text(intro + existing)
+    argv = ["--plan", str(plan), "--history", str(history), "--keep", "1"]
+    assert archive.main(argv) == 0
+    assert "Old body." not in plan.read_text()
+    assert history.read_text() == intro + "### Old\n\nOld body.\n\n" + existing
     before = plan.read_bytes(), history.read_bytes()
     assert archive.main(argv) == 0
     assert (plan.read_bytes(), history.read_bytes()) == before

@@ -19,7 +19,9 @@ and trim the line-16 quick-scan megaline to roughly the kept blocks.
 
 Fenced Markdown examples and HTML block comments are content, including their
 literal headings and separators. Their openers must start at the beginning of a
-line, outside lists and quotes. Indented or container-prefixed literal markers
+line, outside lists and quotes, and close before the end of the document.
+Unterminated literal blocks are refused before writes so they cannot absorb
+existing history entries. Indented or container-prefixed literal markers
 outside an existing literal block are unsupported and refused before writes.
 Lines starting with raw HTML tags, declarations
 or processing instructions outside those contexts are unsupported: enclose them
@@ -322,6 +324,10 @@ def _outside_fences(lines: list[str]) -> list[bool]:
                 outside.append(False)
             else:
                 outside.append(True)
+    if fence or comment:
+        # Prepending an unfinished literal would absorb existing history entries.
+        # Closing it on the caller's behalf would change the moved content.
+        raise ValueError("unterminated literal block; close fences and HTML block comments before archiving")
     return outside
 
 

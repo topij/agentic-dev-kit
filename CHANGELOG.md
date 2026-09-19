@@ -45,6 +45,7 @@ starts.
 ## #745 — Handoff archive repairs
 
 - Refresh `scripts/archive_plan_sessions.py` with its tests. Supported fenced examples and HTML block comments remain with their containing session; update assertions that treated literal headings inside them as session or history boundaries. Inline Unicode/control separators remain content within their physical line.
+- **BREAKING — unfinished literals:** Close every supported fence and HTML block comment before archiving. An unterminated literal now returns exit `2` before writes, preserving the live document and existing history.
 - **BREAKING — literal block placement:** Put opening fence and HTML block-comment delimiters at the beginning of a line, outside lists and quotes. Indented or container-prefixed literal markers outside an existing literal block now return exit `2` before writes.
 - **BREAKING — raw HTML:** Before archiving, enclose lines beginning with HTML tags, declarations or processing instructions in fenced code blocks. Such lines outside fences or block comments now return exit `2` before writes.
 - **BREAKING — overlapping destinations:** Configure distinct handoff and history files. A shared pathname, symlink target or hardlink now returns exit `2`, including dry-run and no-op requests.
