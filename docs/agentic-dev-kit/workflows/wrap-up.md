@@ -345,14 +345,14 @@ failure makes the overall outcome `incomplete-resumable`.
    write, or a failed one); read the message and fix that instead of reporting an
    exhausted sweep. The script's own `--help` carries the authoritative list.
 
-   **A failed write no longer truncates either document**
-   ([#164](https://github.com/topij/agentic-dev-kit/issues/164)). Neither file
-   is opened for truncation: each is published by renaming a fully-written temp
-   over it, and both are written before either is published. So the old
-   instructions here — inspect both files, `git checkout -- <handoff-history>`
-   because it is the likelier casualty — described a failure mode that no longer
-   exists. **Read the message rather than the exit code**; three of them are
-   worth acting on differently:
+   The engine stages document content before publishing it by rename. A failed
+   or interrupted sweep still needs inspection: publication and recovery are
+   separate operations, and an interruption can prevent a diagnostic. Preserve
+   the current handoff, history and any surviving staged copies before retrying
+   or removing artifacts. The absence of a warning does not establish that the
+   documents are untouched or that the move completed.
+
+   Read the message to distinguish the state the run confirmed:
 
    - **"refusing to write"** — the sweep declined; nothing was attempted. **The
      message names the cause**; read it rather than guessing. The class is
@@ -364,21 +364,28 @@ failure makes the overall outcome `incomplete-resumable`.
      with a `Permission denied` on a temp path you have never seen, because the
      sweep publishes by renaming a temp into that directory. Nothing was applied
      there either.)
-   - **"could not determine whether it landed"** — the archive write failed and
-     the run could not tell whether it had already taken effect, so it restored
-     `<handoff>` and stopped. Your session blocks are safe in `<handoff>`. **Open
-     `<handoff-history>` and check for duplicates of the titles listed**, delete
-     any, then re-run the sweep.
-   - **The messages that report damage** name both documents, the state the run
-     can actually vouch for, and the swept blocks' **titles** — enough to know
-     what is missing, not enough to retype them. They need a publish *and* its
-     rollback to fail together, so you are unlikely to see one. To recover:
-     **copy `<handoff>` aside first**, then use git as the *source of the swept
-     blocks only* — `git show HEAD:<handoff>` — and paste them back into your
-     copy. Do **not** `git checkout -- <handoff>`: that discards every
-     uncommitted edit in the file, which at this point in the workflow is this
-     whole session's block, its `▶ Next:` line, and any filing this session's
-     friction routing recorded there.
+   - **"could not determine whether it landed"** — the run confirmed restoration
+     of `<handoff>`, but could not confirm whether history received the blocks.
+     Preserve the documents, inspect `<handoff-history>` for duplicates of the
+     listed titles, and reconcile those duplicates before retrying.
+   - **"restoration ... could not be confirmed"** — treat the destination state
+     as uncertain. This can follow a failed rollback rename, or a rollback that
+     returned successfully but whose destination could not be verified. Readback
+     failure does not prove that the document was lost or that it was restored.
+     The warning names the documents, swept titles and recovery staging paths.
+     These paths are left untouched by cleanup, but their existence and contents
+     are unverified: they may be missing, unreadable, replaced or nonregular.
+
+   For recovery, preserve the current documents and any useful surviving staged
+   history or original-handoff copy. Check a reported path's file type and
+   contents before using it; do not blindly follow a substituted path or read a
+   special file that may block. Recover the swept blocks from verified surviving
+   content into a separate working copy, then check for duplicates and missing
+   edits. `git show HEAD:<handoff>` can supply committed text only; it cannot
+   recover swept uncommitted edits that were never committed. If the documents
+   and staged copies do not contain those edits, another backup may be needed.
+   Do **not** `git checkout -- <handoff>` or overwrite the surviving documents
+   with a historical version: that can discard this session's uncommitted work.
 
    Do not continue to the commit step until the sweep reported success. Stage
    **both** files (`<handoff>` + `<handoff-history>`) into this commit. If
