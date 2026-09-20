@@ -15681,10 +15681,10 @@ def test_a_failed_history_publish_restores_the_handoff_from_its_staged_copy(
     """The rollback path's happy case: history publish fails, handoff comes back.
 
     Distinct from the staging-failure test above, which never publishes anything.
-    Here the handoff HAS been replaced, and the recovery is the third staged
-    write — the one written up front precisely so this step needs no allocation
-    on a disk that has just refused one (#164). That the copy is staged up front
-    rather than built here is pinned separately, by
+    Here the handoff HAS been replaced. Recovery publishes the rollback
+    content written up front, avoiding another full-content write (#164).
+    Its directory update can still allocate or fail. That the copy is staged
+    up front rather than built here is pinned separately, by
     `test_the_rollback_is_staged_before_anything_is_published`; this test would
     pass against either, which is what let the late-staging shape survive.
 
