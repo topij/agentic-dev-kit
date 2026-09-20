@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "336d3cd3f14355876cb34ebd2f7ce67395138740962d7519bd1ce9eb57f62b4a"
+      "sha256": "cea6dd0dceb0cf735a5aa4554adb46edf2ac24945bc12bb0e8b6c7a9dffd4178"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -217,7 +217,7 @@
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
-      "sha256": "f596c5f4bb4eb2d403ba0d2c9365808b01c771ff8d38b9b9d98cc563fd1bdca4"
+      "sha256": "ffb08d4492c681dec7c0e1c3504284b2739b8dc7517cace9bdc9d320581842e7"
     },
     "scripts/pr_watch.py": {
       "role": "engine",

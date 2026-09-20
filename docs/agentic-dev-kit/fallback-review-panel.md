@@ -532,7 +532,14 @@ and post each lens's verdict before recording the composed receipt.
 
 A new LOW finding from that delta takes the same delta-or-ticket route. If the
 repair would require a broader redesign, or containment is disputed without a
-severity escalation, ticket it rather than expanding or restarting the LOW round. A reviewer-supported escalation to MED/P2 or
+severity escalation, ticket it rather than expanding or restarting the LOW round.
+If the disputed repair is already committed, withdraw that repair and delta-review
+its removal against the standing reviewed parent before proceeding. Alternatively,
+keep the candidate held for a separately scoped change; a ticket never supplies
+coverage for the disputed code still in the candidate. Never record an accepted
+delta receipt while containment remains disputed.
+
+A reviewer-supported escalation to MED/P2 or
 HIGH/P1, or an independently required change already in the round, follows its
 own severity and risk rules. State that separate trigger explicitly; a mixed
 round must not disguise a full restart as a requirement of its LOW findings.
