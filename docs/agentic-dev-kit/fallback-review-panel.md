@@ -454,9 +454,11 @@ author re-reading their own diff. **Cite them by name, never by number.**
    restoration evidence as well as the test result.
 4. Triage every finding against the *current* code — some go stale across
    rounds.
-5. Fix real findings, reply-with-reason to the rest.
+5. Dispose of LOW findings by **LOW findings: delta review or ticket** below.
+   Fix other real findings, reply-with-reason to the rest.
 6. **Re-run after the fix round.** Not optional — whether it is the full panel
-   or a delta pass is decided below: first by what the fix round's delta
+   or a delta pass is decided below: apply the LOW rule first; otherwise use
+   what the fix round's delta
    contains, then — for how many lenses the delta pass takes — by whether the
    change sits under `safety-critical-changes.md`, which never takes the
    single-lens form.
@@ -488,6 +490,56 @@ author re-reading their own diff. **Cite them by name, never by number.**
    operator puts into it. Verifying coverage needs each lens to record its own
    receipt from its own context: issue #32, not this.
 
+## LOW findings: delta review or ticket
+
+**A reviewer-marked LOW/P3 finding never restarts the whole process.** This rule
+applies to executable code, executed prose and record prose, including LOW
+regressions and findings on safety-critical changes. It takes precedence over the
+broader fix-and-re-run instructions below. The reviewer supplies severity; the
+author must not downgrade a finding to select the cheaper route.
+
+Choose and record a disposition on the PR:
+
+- **Fix with delta review.** Batch the LOW repairs. Review the exact diff and
+  commit messages from the last reviewed head, plus the affected callers,
+  invariants and tests needed to judge that diff. Use focused verification for
+  those effects; do not repeat full suites, the whole-PR panel, earlier delivery
+  stages or approval rounds solely because of a LOW finding or its repair.
+  Required current-head CI still runs. Use an isolated configured lens, or the
+  configured adversarial and correctness lenses for a safety-critical change.
+  Record what actually ran as `fallback:delta`, with `--compose-parent` and
+  `--head`, preserving the standing full-review evidence and its limitations.
+- **Ticket.** Defer the finding in the configured tracker, with its location,
+  reviewer severity, regression classification and acceptance criteria; link the
+  ticket and explain the deferral on the PR. Reuse an existing matching ticket
+  rather than duplicating it. A ticket disposition makes no candidate commit and
+  needs no re-review. It acknowledges an unresolved LOW finding, not a fix.
+  Use only authorized tracker access; if writing is unavailable or unauthorized,
+  retain the exact ticket draft and report that administrative action pending,
+  without restarting review or claiming a ticket was filed.
+
+Check for a valid full-review parent before committing a LOW-only repair. If no
+composable parent exists, choose the ticket route; do not rerun a completed review
+just to manufacture a parent. This rule does not waive an initial review that
+never happened or invent a receipt for an incomplete or wrong-revision review.
+A pending ticket write does not by itself dispose of a finding for merge.
+
+For a LOW delta, hand the lens the prior finding, its original severity and the
+exact repair boundary through `panel_prompt.py --delta-draws`. The lens checks
+that the repair is contained and evaluates its affected behavior; it is not asked
+to hunt unrelated defects across the whole PR. Do not claim behavior is record
+prose to qualify. Preserve the normal independent safety-critical boundary check
+and post each lens's verdict before recording the composed receipt.
+
+A new LOW finding from that delta takes the same delta-or-ticket route. If the
+repair would require a broader redesign, ticket it rather than starting that
+redesign inside a LOW fix round. A reviewer-supported escalation to MED/P2 or
+HIGH/P1, or an independently required change already in the round, follows its
+own severity and risk rules. State that separate trigger explicitly; a mixed
+round must not disguise a full restart as a requirement of its LOW findings.
+Unresolved formal change requests, failed required checks, missing review
+coverage and operator merge authority retain their existing gates.
+
 ## Re-running, and when to stop
 
 `safety-critical-changes.md` rule 3 says to re-review after every fix round
@@ -505,7 +557,8 @@ So the stopping criterion is **blast radius, not round count**:
 - Something **reported but never acted on** (a warning, a log line, a report
   field) — a round or two is proportionate. Worst case is a wrong message.
 
-That same classification decides **which findings to act on before merging**, and it
+After applying the LOW rule, that classification decides **which remaining
+findings to act on before merging**, and it
 **narrows step 5 rather than replacing it**. If a change does not clearly sit in one
 class, it is the first one.
 
@@ -522,7 +575,7 @@ class, it is the first one.
   *and* recorded where your project tracks deferred work, so it is a disposition
   with an artifact rather than a third option that loses it.
 
-**Severity alone is the wrong discriminator**, and this paragraph's own first
+**Outside the LOW rule, severity alone is the wrong discriminator**, and this paragraph's own first
 review round proved it — the companion has that case. Know the trade, too — a
 round that acts on nothing produces no fix round, so step 6's re-run does not fire
 and that round stands alone. Do not read the bullet above it as licence to stop
@@ -612,7 +665,7 @@ deliberately because the full diff stays in scope, and bounded by taking
 the author's memory. (Promoted to doctrine without the cost measurement `#163`
 Sink 2 asked for — the companion records that gap.)
 
-**Step 6's full panel is for a delta that contains behaviour.** A fix round
+**Outside the LOW rule, step 6's full panel is for a delta that contains behaviour.** A fix round
 that touched executable code or executed prose gets the full re-run,
 unchanged — including a fix a lens prescribed verbatim: measured across the
 loop, a remediation is its most defect-dense surface, not its safest, so a
@@ -668,7 +721,7 @@ operator-merge rule.
 executed prose by class, so the test on it is what executing it does: the
 pass requires messages that act on nothing — no closing keyword near a
 reference, no instruction to a future reader, no claim a process consumes.
-Each delta lens reads both surfaces, and its first duty is to dispute both
+For the record-prose route, each delta lens reads both surfaces, and its first duty is to dispute both
 stated draws — the prose class and the safety-critical boundary; "confirmed"
 means both are confirmed. The launch prompt requires each lens to end its
 report with **one verdict line per draw**. That prompt is assembled by
@@ -690,7 +743,7 @@ receipt: the verdict lines appear nowhere in git history, and the posted
 lines are what make "no verdict yet" distinguishable from "confirmed" — so
 they get the same outside-the-tree artifact rule the logged disposition
 carries. A dispute from either lens moves the round toward more review,
-never less. **A disputed prose class is a behaviour-containing delta** — the
+never less. **Outside the LOW route, a disputed prose class is a behaviour-containing delta** — the
 full panel is owed. **A disputed safety-critical boundary is stronger**:
 treat the change as sitting under `safety-critical-changes.md` until the
 dispute is resolved — and the resolution is an artifact the operator authors
@@ -717,8 +770,8 @@ what the recorded passes covered, not that the posted verdicts are honest. A
 logged disposition that produced no commit needs less
 still: there is no new head, so there is nothing to re-review. The
 single-lens form is the second sanctioned single-lens pass, beside Degraded
-mode — conditioned on what the delta contains, not on what the author
-considers low-stakes; the dual form joins neither list, being two-lens. The
+mode — conditioned on the record-prose boundary or a reviewer-marked LOW repair,
+not the author's own risk assessment; the dual form joins neither list, being two-lens. The
 delta pass moves no floor in either form: a PR's initial review takes the
 full panel — or Degraded mode, only where isolation is impossible — never a
 delta pass. The author still draws the class, states it in the PR, and can
@@ -734,8 +787,8 @@ running this loop before they were named:
   or replied-with-reason, per the gates above. No commit means no new head,
   so the standing receipt survives and step 6 has nothing to re-review.
 - **A fix round lands, its proportionate re-check runs at the new head, and
-  that re-check yields no further commit** — the full panel for a delta
-  containing behaviour; the delta pass for record prose, single- or
+  that re-check yields no further commit** — the delta pass for a LOW repair; otherwise the full panel for a delta
+  containing behaviour or the delta pass for record prose, single- or
   dual-lens by the class rule above. A re-check that finds something
   re-enters the loop: its findings are fixed (a new fix round) or disposed
   without a commit (the second state, at the new head).
@@ -784,8 +837,8 @@ touched it. Lens count is not bounded by class — `safety-critical-changes.md`
 rule 2 wants two disjoint lenses **before merge**, and the two sanctioned
 single-lens passes are this file's own refinements, not readings of that rule:
 **Degraded mode** below, conditioned on the runtime being unable to isolate
-reviewers, and the **record-prose delta pass** in the stopping section,
-conditioned on what a fix round's delta contains — and never single-lens for a
+reviewers, and the **delta pass** for record prose or reviewer-marked LOW repairs,
+conditioned on the boundaries above — and never single-lens for a
 change under `safety-critical-changes.md`, whose record-prose deltas take the
 dual form, both configured lenses, so the merging head keeps two-lens coverage
 whatever the last delta contained. Each condition is a fact about the

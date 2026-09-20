@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "b2c35c612a13e4b19fdf1ea9a73f0e7604229d2eca3e1904014dd99478cdeb1e"
+      "sha256": "3ba309bcdda44185a8678922c534e791035b501762d33821f2173431e5b2b60a"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -40,7 +40,7 @@
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
-      "sha256": "6dc6815ffb7fd89f00409dbd9ae620522214d0b97117ea8a0d09bf0d2344b365"
+      "sha256": "0a099d2eff11c6d6b6990c8d0f038b12d9c897f6f2956a894972e010b4a2a924"
     },
     "docs/agentic-dev-kit/workflows/adopt.md": {
       "role": "workflow",
@@ -60,7 +60,7 @@
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "4618211f4b3055b3327ba174d180c0c6282d7e4c63d0605c962c7e16cd7d60f0"
+      "sha256": "fd75d8888d9bf96d22cc022486b5fdafc1d479a51e1b05f5cd645b5eef67277e"
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
