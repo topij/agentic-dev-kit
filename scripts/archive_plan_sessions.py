@@ -114,8 +114,8 @@ Exit codes:
         warns instead of claiming restoration. It names the arguments, staged
         destinations and affected blocks' **titles** to guide recovery inspection.
         The warning does not establish that those blocks are absent from either
-        document. Allocation is finished before any of this, so the ordinary
-        out-of-space route does not lead here.
+        document. Content allocation and writing finish during staging;
+        publication and rollback renames can still fail for space or I/O errors.
 
         When a committed version is available, recovery guidance names its
         repository and complete relative path in a quoted read-only command.
@@ -170,6 +170,7 @@ import io
 import os
 import re
 import shlex
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -510,6 +511,40 @@ def insert_into_history(history: list[str], moved: list[list[str]]) -> list[str]
     return prefix + chunk + history[insert_at:]
 
 
+def _recovery_matches(target: Path, expected: str) -> bool:
+    """Confirm regular-file text without waiting for a replaced FIFO's writer.
+
+    These observations do not lock the destination or bound filesystem I/O.
+    They prevent a special-file replacement from turning recovery into a
+    blocking stream read, and refuse a pathname replaced after acquisition.
+    """
+    flags = os.O_RDONLY
+    for name in ("O_NONBLOCK", "O_NOFOLLOW"):
+        flag = getattr(os, name, None)
+        if flag is None:
+            raise OSError("safe recovery readback is unavailable")
+        flags |= flag
+    if not stat.S_ISREG(target.lstat().st_mode):
+        raise OSError("recovery destination is not a regular file")
+    # The path can change after lstat: nonblocking acquisition and fstat are
+    # both needed before reading the opened object.
+    fd = os.open(target, flags)
+    try:
+        opened = os.fstat(fd)
+        if not stat.S_ISREG(opened.st_mode):
+            raise OSError("opened recovery destination is not a regular file")
+        with os.fdopen(fd, "r", encoding="utf-8", newline=None, closefd=False) as stream:
+            matches = stream.read(len(expected) + 1) == expected
+        current = target.lstat()
+        return (
+            matches
+            and stat.S_ISREG(current.st_mode)
+            and (current.st_dev, current.st_ino) == (opened.st_dev, opened.st_ino)
+        )
+    finally:
+        os.close(fd)
+
+
 def _recovery_hint(target: Path) -> str:
     """Offer a read-only command only for a confirmed committed document."""
     fallback = (
@@ -812,16 +847,16 @@ def main(argv: list[str] | None = None) -> int:
     #      renaming a fully-written temp over it (issue #164).
     #   2. A partial *move* — handoff trimmed, history write fails — would drop
     #      the swept blocks. So BOTH documents are staged first, and only when
-    #      both are safely on disk is either published. Everything that can fail
-    #      for want of space or a bad sector now happens while nothing has been
-    #      published and aborting costs nothing.
+    #      both are safely on disk is either published. Content allocation and
+    #      writing happen before publication; the later directory updates can
+    #      still fail for space or I/O errors.
     #
     # The rollback is staged UP FRONT, for the same reason. The previous attempt
     # at this (reverted from #160) rebuilt the original handoff from memory
     # *after* the history write failed — needing more free space, on the disk
     # that had just refused a smaller write, than the write it was undoing.
-    # Staging it here means the recovery path is an `os.replace` whose cost was
-    # paid while failing was still free.
+    # Staging it here avoids another full-content write during recovery.
+    # The rollback rename itself can still fail.
     #
     # The plan is published FIRST. The order is load-bearing, not incidental:
     # publishing history first and failing on the plan would leave the blocks in
@@ -895,7 +930,7 @@ def main(argv: list[str] | None = None) -> int:
             # A readback interrupt must not hide the original failure and the
             # recovery warning; it establishes uncertainty, not restoration.
             try:
-                restored = staged_plan.target.read_text(encoding="utf-8") == original_plan
+                restored = _recovery_matches(staged_plan.target, original_plan)
                 if args.plan.resolve(strict=True) != staged_plan.target:
                     confirmation = "argument no longer resolves to the staged destination"
                 elif restored:
@@ -956,8 +991,7 @@ def main(argv: list[str] | None = None) -> int:
                     # alias. These path observations do not lock directories
                     # against replacement by another writer.
                     landed = (
-                        staged_history.target.read_text(encoding="utf-8")
-                        == "".join(new_history)
+                        _recovery_matches(staged_history.target, "".join(new_history))
                         and args.history.resolve(strict=True) == staged_history.target
                     )
                 except BaseException:

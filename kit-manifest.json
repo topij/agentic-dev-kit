@@ -108,7 +108,7 @@
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
-      "sha256": "443388115204ea55e06626891a177d1a259344a069cefdc7e31dd5994b458242"
+      "sha256": "906e32a765c2f0558ec599dae91856e896a7178f1de3cdec9cc63e7dd1c0659e"
     },
     "scripts/check_doc_budget.py": {
       "role": "engine",
@@ -150,7 +150,7 @@
         "scripts/archive_plan_sessions.py"
       ],
       "role": "engine",
-      "sha256": "edfb28e40a5c69df59957fc0a34875efc99a60975d736207d2cd7622e9c628fd"
+      "sha256": "8a7da15d2f81d582535f34b3062b423ba6ede149043008665a95aa09d4374bb8"
     },
     "scripts/lib/devmodel_config.py": {
       "role": "engine",
@@ -297,7 +297,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "40b332b662c03dbc1d34ed7fac333235d855cbfb7d2b8a90767e4e8cbbe6d832"
+      "sha256": "df25e6dd1763af0a3b27d936852d2cf133658a6a5f086e11c818804ec542fe81"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

@@ -23,12 +23,11 @@ that must move together can stage both, and only then publish both:
     plan.commit()                                     # is published yet
     history.commit()
 
-Every way a write can run out of space or hit an I/O error is now confined to
-the staging phase, where aborting costs nothing and no document has been
-touched. That is what makes a rollback affordable: a caller that needs one
-stages it up front (see ``archive_plan_sessions.py``), so the recovery path is
-an ``os.replace`` whose cost was paid while failing was still free — not a fresh
-full-size write attempted on the disk that just refused one.
+Content allocation, encoding and writing finish during staging, before any
+document is published. Publication still updates a directory entry and can
+fail for space or I/O errors. A caller that needs rollback stages it up front
+(see ``archive_plan_sessions.py``), avoiding a fresh full-size write on the
+disk that just refused one. The rollback's ``os.replace`` can still fail.
 
 An earlier attempt at #164 (reverted from #160) wrote the first document, then
 the second, then rewrote the first from memory to roll back. Under ENOSPC —
