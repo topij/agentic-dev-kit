@@ -16534,17 +16534,12 @@ def test_the_temp_is_fsynced_before_the_rename_not_after(tmp_path: Path) -> None
 def test_an_interrupt_during_staging_leaves_no_temp(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """`except BaseException` in the staging cleanup — narrowing it leaks a temp.
+    """A staging interrupt propagates after best-effort temporary-file cleanup.
 
-    The docstring promises temps are "removed on every path this module
-    controls, including exceptions", and `except Exception` satisfies neither
-    that sentence nor the reason for it: debris lands beside the living handoff,
-    where the next wrap-up step stages files for commit.
-
-    Injected at the staging `os.fsync`, which is inside the guarded block. A
-    first version of this test raised from an f-string argument instead — which
-    is evaluated at the *call site*, before `stage_text` runs, so it never
-    entered the handler and the narrowing mutant survived it.
+    With unlink succeeding, KeyboardInterrupt at the staging fsync must leave
+    the destination unchanged and remove the temporary file. Narrowing the
+    handler to Exception skips that cleanup. This case does not exercise a
+    failed or interrupted unlink and does not promise removal in those cases.
     """
     aw = _atomic_write()
     target = tmp_path / "doc.md"
