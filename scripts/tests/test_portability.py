@@ -17742,7 +17742,19 @@ def test_archive_rollback_confirmation_through_subprocess(
         else:
             # Readback uncertainty is not evidence that the rollback was lost.
             assert plan.read_text() == original_plan
-    assert not list(tmp_path.glob("*.devkit-tmp"))
+    if rollback == "landed-raise":
+        assert not list(tmp_path.glob("*.devkit-tmp"))
+        assert "Recovery staging paths" not in result.stderr
+    else:
+        retained = _archive_reported_recovery_paths(result.stderr)
+        assert retained["staged history"].read_text().count("First body line 1.") == 1
+        if rollback == "pending":
+            assert retained["original handoff"].read_text() == original_plan
+            expected = set(retained.values())
+        else:
+            assert not retained["original handoff"].exists()
+            expected = {retained["staged history"]}
+        assert set(tmp_path.glob("*.devkit-tmp")) == expected
 
 
 def test_archive_contains_postpublication_close_interrupt_in_subprocess(tmp_path: Path) -> None:
@@ -18021,7 +18033,15 @@ def test_archive_plan_alias_cannot_confirm_a_different_destination(
     if mode == "rollback-pending":
         assert "First body line 1." not in plan.read_text()
         assert "First body line 1." not in history.read_text()
-    assert not list(tmp_path.rglob("*.devkit-tmp"))
+    retained = _archive_reported_recovery_paths(result.stderr)
+    assert retained["staged history"].read_text().count("First body line 1.") == 1
+    if mode == "rollback-pending":
+        assert retained["original handoff"].read_bytes() == original
+        expected = set(retained.values())
+    else:
+        assert not retained["original handoff"].exists()
+        expected = {retained["staged history"]}
+    assert set(tmp_path.rglob("*.devkit-tmp")) == expected
 
 
 @pytest.mark.parametrize("kind", ["leaf", "parent"])
@@ -18877,7 +18897,23 @@ def test_archive_recovery_readback_handles_destination_replacement(
             assert "no changes applied" not in result.stderr
     if replacement == "read-interrupt":
         assert "recovery-read-sigint" in result.stderr
-    assert not list(tmp_path.glob("*.devkit-tmp"))
+    unconfirmed = (
+        site == "rollback" and replacement != "match"
+        or site == "history" and replacement in ("missing-nonblock", "missing-nofollow")
+    )
+    if unconfirmed:
+        retained = _archive_reported_recovery_paths(result.stderr)
+        assert not retained["original handoff"].exists()
+        if site == "rollback":
+            assert retained["staged history"].read_text().count("First body line 1.") == 1
+            expected = {retained["staged history"]}
+        else:
+            assert not retained["staged history"].exists()
+            expected = set()
+        assert set(tmp_path.glob("*.devkit-tmp")) == expected
+    else:
+        assert not list(tmp_path.glob("*.devkit-tmp"))
+        assert "Recovery staging paths" not in result.stderr
 
 
 @pytest.mark.parametrize("text", ["", "plain\ntext\n", "café\n世界\n"])
@@ -18917,3 +18953,151 @@ def test_archive_review_html_tag_whitespace_preserves_standing_content(
     assert result.stdout == ""
     assert (plan.read_bytes(), history.read_bytes()) == before
     assert not list(tmp_path.glob("*.devkit-tmp"))
+
+
+def _archive_reported_recovery_paths(stderr: str) -> dict[str, Path]:
+    assert "Recovery staging paths left untouched; existence and contents are unconfirmed:" in stderr
+    result = {}
+    for label in ("staged history", "original handoff"):
+        match = re.search(rf"^  - {label}: (.+)$", stderr, re.MULTILINE)
+        assert match, stderr
+        result[label] = Path(match.group(1))
+    assert result["staged history"] != result["original handoff"]
+    return result
+
+
+_ARCHIVE_RETENTION_DRIVER = r"""
+import errno
+import importlib.util
+import json
+import os
+from pathlib import Path
+import sys
+
+engine, plan, history, marker = map(Path, sys.argv[1:5])
+mode, error_name = sys.argv[5:]
+spec = importlib.util.spec_from_file_location("retention_archive", engine)
+archive = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(archive)
+real_replace, real_stage, real_open = os.replace, archive.stage_text, os.open
+stages = []
+plan_attempts = 0
+armed = False
+
+def stage(*args, **kwargs):
+    staged = real_stage(*args, **kwargs)
+    stages.append(staged)
+    return staged
+
+def replace(src, dst, **kwargs):
+    global plan_attempts, armed
+    if Path(dst) == history and mode != "publish-succeeds":
+        raise OSError(getattr(errno, error_name), "original-history-publication")
+    if Path(dst) == plan:
+        plan_attempts += 1
+        if plan_attempts == 2 and mode != "rollback-succeeds":
+            history_temp = stages[1].temp
+            if mode == "missing-rollback":
+                Path(src).unlink()
+            elif mode == "substituted-history":
+                history_temp.unlink()
+                history_temp.write_text("unrelated replacement\n")
+            elif mode == "unreadable-history":
+                history_temp.chmod(0)
+            elif mode == "fifo-history":
+                history_temp.unlink()
+                os.mkfifo(history_temp, 0o600)
+            armed = True
+            raise OSError(getattr(errno, error_name), "rollback-publication")
+    return real_replace(src, dst, **kwargs)
+
+def acquire(path, *args, **kwargs):
+    if armed and Path(path) in (stages[1].temp, stages[2].temp):
+        raise AssertionError("retention must not open uncertain staging paths")
+    return real_open(path, *args, **kwargs)
+
+archive.stage_text, os.replace, os.open = stage, replace, acquire
+try:
+    raise SystemExit(archive.main([
+        "--plan", str(plan), "--history", str(history), "--keep", "2",
+    ]))
+finally:
+    marker.write_text(json.dumps({
+        "stages": [str(item.temp) for item in stages],
+        "plan_attempts": plan_attempts,
+    }))
+"""
+
+
+@pytest.mark.parametrize("error_name", ["ENOSPC", "EIO"])
+@pytest.mark.parametrize("mode", [
+    "rename-fails", "rollback-succeeds", "publish-succeeds", "missing-rollback",
+    "substituted-history", "unreadable-history", "fifo-history",
+])
+def test_archive_retains_recovery_content_after_failed_rollback(
+    tmp_path: Path, mode: str, error_name: str,
+) -> None:
+    """The caller's final cleanup must preserve uncommitted recovery content."""
+    import stat
+
+    plan, history, marker = (tmp_path / name for name in ("handoff.md", "history.md", "observed.json"))
+    _write_four_block_plan(plan, history)
+    body = "Uncommitted retention regression body."
+    plan.write_text(plan.read_text().replace("First body line 1.", body))
+    original_plan, original_history = plan.read_text(), history.read_text()
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", _ARCHIVE_RETENTION_DRIVER,
+         str(ENGINE_DIR / "archive_plan_sessions.py"), str(plan), str(history), str(marker),
+         mode, error_name], capture_output=True, text=True, timeout=10,
+    )
+    observed = json.loads(marker.read_text())
+    plan_temp, history_temp, rollback_temp = map(Path, observed["stages"])
+    assert not plan_temp.exists()
+    if mode == "publish-succeeds":
+        assert result.returncode == 0, result.stderr
+        assert result.stderr == ""
+        assert body not in plan.read_text()
+        assert history.read_text().count(body) == 1
+        assert result.stdout.startswith("moved ")
+        assert observed["plan_attempts"] == 1
+    else:
+        assert result.returncode == 2, result.stderr
+        assert result.stdout == ""
+        assert "original-history-publication" in result.stderr
+        assert history.read_text() == original_history
+        assert observed["plan_attempts"] == 2
+        if mode == "rollback-succeeds":
+            assert plan.read_text() == original_plan
+            assert "was restored" in result.stderr
+        else:
+            assert body not in plan.read_text()
+            assert "rollback-publication" in result.stderr
+            assert "could not be confirmed" in result.stderr
+            assert "may be in NEITHER document" in result.stderr
+            assert "No committed Git version could be confirmed" in result.stderr
+            assert "no changes applied" not in result.stderr
+            assert "was restored" not in result.stderr
+            assert _archive_reported_recovery_paths(result.stderr) == {
+                "staged history": history_temp, "original handoff": rollback_temp,
+            }
+            if mode == "missing-rollback":
+                assert not rollback_temp.exists()
+                assert history_temp.read_text().count(body) == 1
+                expected = {history_temp}
+            else:
+                assert rollback_temp.read_text() == original_plan
+                assert stat.S_IMODE(rollback_temp.stat().st_mode) == stat.S_IMODE(plan.stat().st_mode)
+                expected = {history_temp, rollback_temp}
+            if mode == "substituted-history":
+                assert history_temp.read_text() == "unrelated replacement\n"
+            elif mode == "unreadable-history":
+                assert stat.S_IMODE(history_temp.stat().st_mode) == 0
+            elif mode == "fifo-history":
+                assert stat.S_ISFIFO(history_temp.lstat().st_mode)
+            else:
+                assert history_temp.read_text().count(body) == 1
+                assert stat.S_IMODE(history_temp.stat().st_mode) == stat.S_IMODE(history.stat().st_mode)
+            assert set(tmp_path.glob("*.devkit-tmp")) == expected
+    if mode in ("publish-succeeds", "rollback-succeeds"):
+        assert not list(tmp_path.glob("*.devkit-tmp"))
+        assert "Recovery staging paths" not in result.stderr

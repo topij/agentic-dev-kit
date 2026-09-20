@@ -41,9 +41,8 @@ fail loudly with "configured doc not found" wherever no memory has been
 saved yet — including the very SessionStart hook this check itself rides
 alongside. The byte/line-length budgets below are therefore kept as
 documented platform constants (overridable via ``--max-bytes`` /
-``--max-line-chars``), the same way ``check_doc_budget.py`` keeps its own
-`MAX_BYTES`-equivalent tuning out of adopter config. ``scripts/lib/kitconfig``
-is still reused, for the one thing that *is* config-shaped here: portable
+``--max-line-chars``). Document budgets remain in the configured
+``doc_budgets`` list. ``scripts/lib/kitconfig`` is still reused for portable
 repo-root discovery (walking up for ``.git`` rather than assuming a fixed
 ``scripts/<script>.py`` depth), so the repo-slug this script derives stays
 correct even when the kit is vendored under a nested `paths.engines` dir.

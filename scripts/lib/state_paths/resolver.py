@@ -160,9 +160,10 @@ def _marker_state_root(start: Path | None = None) -> Path | None:
 
     Returns the absolute path inside the marker, or ``None`` when no marker is
     found (fall through to the default). Raises :class:`StateRootError` for a
-    *relative* path inside the marker — mirroring the env-var rule. An
-    unreadable / empty / non-path marker is logged and treated as absent: it
-    falls through to the default, never a silent redirect.
+    *relative* path inside the marker — mirroring the env-var rule. A read
+    that raises :class:`OSError`, or an empty marker, is logged and treated as
+    absent. Malformed UTF-8 propagates :class:`UnicodeDecodeError`; it does not
+    select the default.
     """
     start = (start or Path.cwd()).resolve()
     for candidate in (start, *start.parents):
