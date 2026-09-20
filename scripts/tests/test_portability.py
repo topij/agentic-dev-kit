@@ -15630,12 +15630,9 @@ def test_a_failed_rollback_does_not_claim_no_changes_applied(
     `write_text(original_plan); raise` survived the suite. "no changes applied"
     would then be printed while the blocks sit in neither file.
 
-    Since #164 this is one of two branches that can still leave the sweep
-    half-done — its handoff-side twin is covered separately —
-    and it is far narrower than it was: everything that can fail for want of
-    space now fails during staging, before anything is published. Reaching it
-    takes two failing `os.replace` calls — the publish of the history, and the
-    publish of the rollback that was staged for exactly this.
+    Staging avoids rewriting the original content during recovery, but later
+    directory updates can still fail for space or I/O errors. This case fails
+    both the history publication and the staged rollback's `os.replace`.
     """
     archive = _load_module("archive_bad_rollback", ENGINE_DIR / "archive_plan_sessions.py")
     plan = tmp_path / "handoff.md"
@@ -15684,10 +15681,10 @@ def test_a_failed_history_publish_restores_the_handoff_from_its_staged_copy(
     """The rollback path's happy case: history publish fails, handoff comes back.
 
     Distinct from the staging-failure test above, which never publishes anything.
-    Here the handoff HAS been replaced, and the recovery is the third staged
-    write — the one written up front precisely so this step needs no allocation
-    on a disk that has just refused one (#164). That the copy is staged up front
-    rather than built here is pinned separately, by
+    Here the handoff HAS been replaced. Recovery publishes the rollback
+    content written up front, avoiding another full-content write (#164).
+    Its directory update can still allocate or fail. That the copy is staged
+    up front rather than built here is pinned separately, by
     `test_the_rollback_is_staged_before_anything_is_published`; this test would
     pass against either, which is what let the late-staging shape survive.
 
@@ -16213,7 +16210,7 @@ def test_an_unconfirmed_handoff_publish_is_not_reported_as_a_sweep(
     _write_four_block_plan(plan, history)
     original_plan = plan.read_text(encoding="utf-8")
 
-    real_exists, real_read = Path.exists, Path.read_text
+    real_exists, real_read = Path.exists, archive._recovery_matches
     attempts: list[Path] = []
 
     def spy(src: object, dst: object, **kwargs: object) -> None:
@@ -16225,14 +16222,14 @@ def test_an_unconfirmed_handoff_publish_is_not_reported_as_a_sweep(
             raise PermissionError(13, "Permission denied")
         return real_exists(self)
 
-    def readback(self: Path, *args: object, **kwargs: object) -> str:
+    def readback(self: Path, expected: str) -> bool:
         if self == plan and attempts and not readable:
             raise PermissionError(13, "Permission denied")
-        return real_read(self, *args, **kwargs)
+        return real_read(self, expected)
 
     monkeypatch.setattr(os, "replace", spy)
     monkeypatch.setattr(Path, "exists", indeterminate)
-    monkeypatch.setattr(Path, "read_text", readback)
+    monkeypatch.setattr(archive, "_recovery_matches", readback)
     result = archive.main(
         ["--keep", "2", "--plan", str(plan), "--history", str(history)]
     )
@@ -17638,7 +17635,7 @@ forward, rollback, cause = sys.argv[4:]
 spec = importlib.util.spec_from_file_location("repair_archive", engine)
 archive = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(archive)
-real_replace, real_read, real_close = os.replace, Path.read_text, os.close
+real_replace, real_read, real_close = os.replace, archive._recovery_matches, os.close
 plan_attempts = 0
 rollback_attempted = False
 
@@ -17672,7 +17669,7 @@ def replace(src, dst, **kwargs):
         fail_forward()
     return real_replace(src, dst, **kwargs)
 
-def read(self, *args, **kwargs):
+def read(self, expected):
     if self == plan and rollback_attempted:
         faults = {
             "missing": FileNotFoundError("readback-missing"),
@@ -17682,7 +17679,7 @@ def read(self, *args, **kwargs):
         }
         if rollback in faults:
             raise faults[rollback]
-    return real_read(self, *args, **kwargs)
+    return real_read(self, expected)
 
 def close(fd):
     directory = stat.S_ISDIR(os.fstat(fd).st_mode)
@@ -17691,7 +17688,7 @@ def close(fd):
         raise KeyboardInterrupt("post-publication-close")
 
 os.replace = replace
-Path.read_text = read
+archive._recovery_matches = read
 if forward == "close":
     os.close = close
 raise SystemExit(archive.main(["--plan", str(plan), "--history", str(history), "--keep", "2"]))
@@ -17778,7 +17775,7 @@ publication, confirmation, cause = sys.argv[4:]
 spec = importlib.util.spec_from_file_location("history_confirmation_archive", engine)
 archive = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(archive)
-real_replace, real_read = os.replace, Path.read_text
+real_replace, real_read = os.replace, archive._recovery_matches
 history_attempted = False
 
 def replace(src, dst, **kwargs):
@@ -17794,14 +17791,14 @@ def replace(src, dst, **kwargs):
         raise OSError("original-publication")
     return real_replace(src, dst, **kwargs)
 
-def read(self, *args, **kwargs):
+def read(self, expected):
     if self == history and history_attempted and confirmation == "sigint":
         print("history-confirmation-sigint", file=sys.stderr, flush=True)
         os.kill(os.getpid(), signal.SIGINT)
-    return real_read(self, *args, **kwargs)
+    return real_read(self, expected)
 
 os.replace = replace
-Path.read_text = read
+archive._recovery_matches = read
 raise SystemExit(archive.main(["--plan", str(plan), "--history", str(history), "--keep", "2"]))
 """
 
@@ -17870,7 +17867,7 @@ mode, forward, cause = sys.argv[11:]
 spec = importlib.util.spec_from_file_location("alias_recovery_archive", engine)
 archive = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(archive)
-real_replace, real_read, real_stage = os.replace, Path.read_text, archive.stage_text
+real_replace, real_read, real_stage = os.replace, archive._recovery_matches, archive.stage_text
 plan_attempts = 0
 history_attempted = False
 retargeted = False
@@ -17925,7 +17922,7 @@ def replace(src, dst, **kwargs):
             fail_forward()
     return real_replace(src, dst, **kwargs)
 
-def read(self, *args, **kwargs):
+def read(self, expected):
     if self == history and history_attempted:
         if mode == "history-unreadable":
             raise PermissionError("staged-history-unreadable")
@@ -17933,11 +17930,11 @@ def read(self, *args, **kwargs):
             print("alias-confirmation-sigint", file=sys.stderr, flush=True)
             os.kill(os.getpid(), signal.SIGINT)
             raise AssertionError("SIGINT did not interrupt confirmation")
-    return real_read(self, *args, **kwargs)
+    return real_read(self, expected)
 
 archive.stage_text = stage
 os.replace = replace
-Path.read_text = read
+archive._recovery_matches = read
 try:
     raise SystemExit(archive.main([
         "--plan", str(plan_arg), "--history", str(history_arg), "--keep", "2",
@@ -18693,6 +18690,207 @@ def test_archive_review_closer_with_text_keeps_literal_heading_in_session(
     again = subprocess.run(argv, capture_output=True, text=True)
     assert again.returncode == 0, again.stderr
     assert (plan.read_bytes(), history.read_bytes()) == before
+
+
+_ARCHIVE_NONREGULAR_READBACK_DRIVER = r"""
+import errno
+import importlib.util
+import json
+import os
+from pathlib import Path
+import signal
+import stat
+import sys
+
+engine, plan, history, marker = map(Path, sys.argv[1:5])
+site, replacement, cause = sys.argv[5:]
+spec = importlib.util.spec_from_file_location("nonregular_recovery_archive", engine)
+archive = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(archive)
+real_replace, real_open, real_fdopen = os.replace, os.open, os.fdopen
+target = history if site == "history" else plan
+armed = False
+plan_attempts = 0
+opened = []
+recovering_fds = set()
+stream_reads = []
+
+def fail_original():
+    if cause == "interrupt":
+        raise KeyboardInterrupt("original-publication")
+    raise OSError("original-publication")
+
+def special(kind):
+    target.unlink()
+    if kind == "fifo":
+        os.mkfifo(target)
+    else:
+        fifo = target.with_name("replacement-fifo")
+        os.mkfifo(fifo)
+        target.symlink_to(fifo)
+
+def prepare(src):
+    global armed
+    expected = Path(src).read_bytes()
+    Path(src).unlink()
+    target.unlink()
+    if replacement != "missing":
+        target.write_bytes(expected)
+    if replacement in ("fifo", "symlink-fifo"):
+        special(replacement)
+    elif replacement == "mismatch":
+        target.write_text("external replacement\n")
+    elif replacement == "undecodable":
+        target.write_bytes(b"\xff")
+    elif replacement.startswith("missing-"):
+        delattr(os, "O_" + replacement.removeprefix("missing-").upper())
+    armed = True
+
+def replace(src, dst, **kwargs):
+    global plan_attempts
+    if Path(dst) == plan:
+        plan_attempts += 1
+        if site == "rollback" and plan_attempts == 2:
+            prepare(src)
+            raise OSError("rollback-publication")
+    if Path(dst) == history:
+        if site == "history":
+            prepare(src)
+        fail_original()
+    return real_replace(src, dst, **kwargs)
+
+def acquire(path, flags, *args, **kwargs):
+    recovering = armed and Path(path) == target
+    if recovering:
+        if replacement.startswith("race-"):
+            special(replacement.removeprefix("race-"))
+        elif replacement == "unreadable":
+            raise PermissionError("recovery-open-denied")
+    fd = real_open(path, flags, *args, **kwargs)
+    if recovering:
+        opened.append(fd)
+        recovering_fds.add(fd)
+        if replacement == "replaced-after-open":
+            target.unlink()
+            target.write_text("replaced after descriptor acquisition\n")
+    else:
+        recovering_fds.discard(fd)
+    return fd
+
+def fdopen(fd, *args, **kwargs):
+    stream = real_fdopen(fd, *args, **kwargs)
+    if fd not in recovering_fds:
+        return stream
+    class ObservedRead:
+        def __enter__(self):
+            return self
+        def __exit__(self, *exc):
+            return stream.__exit__(*exc)
+        def read(self, size):
+            stream_reads.append(stat.S_ISREG(os.fstat(fd).st_mode))
+            if replacement == "read-interrupt":
+                print("recovery-read-sigint", file=sys.stderr, flush=True)
+                os.kill(os.getpid(), signal.SIGINT)
+                raise AssertionError("SIGINT did not interrupt the recovery read")
+            return stream.read(size)
+    return ObservedRead()
+
+os.replace, os.open, os.fdopen = replace, acquire, fdopen
+try:
+    raise SystemExit(archive.main([
+        "--plan", str(plan), "--history", str(history), "--keep", "2",
+    ]))
+finally:
+    leaked = []
+    for fd in opened:
+        try:
+            os.fstat(fd)
+        except OSError as exc:
+            if exc.errno != errno.EBADF:
+                raise
+        else:
+            leaked.append(fd)
+    marker.write_text(json.dumps({
+        "recovery_attempted": armed, "leaked_fds": leaked, "stream_reads": stream_reads,
+    }))
+"""
+
+
+@pytest.mark.parametrize("site", ["history", "rollback"])
+@pytest.mark.parametrize("cause", ["error", "interrupt"])
+@pytest.mark.parametrize("replacement", [
+    "fifo", "symlink-fifo", "race-fifo", "race-symlink-fifo",
+    "match", "mismatch", "missing", "undecodable", "unreadable", "read-interrupt",
+    "missing-nonblock", "missing-nofollow", "replaced-after-open",
+])
+def test_archive_recovery_readback_handles_destination_replacement(
+    tmp_path: Path, site: str, cause: str, replacement: str,
+) -> None:
+    """Failure-window replacement must finish recovery without reading a FIFO."""
+    plan, history, marker = (tmp_path / name for name in ("handoff.md", "history.md", "observed.json"))
+    _write_four_block_plan(plan, history)
+    original_plan, original_history = plan.read_text(), history.read_bytes()
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", _ARCHIVE_NONREGULAR_READBACK_DRIVER,
+         str(ENGINE_DIR / "archive_plan_sessions.py"), str(plan), str(history), str(marker),
+         site, replacement, cause], capture_output=True, text=True, timeout=10,
+    )
+    assert marker.is_file(), result.stderr
+    expected_reads = [True] if replacement in (
+        "match", "mismatch", "undecodable", "read-interrupt", "replaced-after-open",
+    ) else []
+    assert json.loads(marker.read_text()) == {
+        "recovery_attempted": True, "leaked_fds": [], "stream_reads": expected_reads,
+    }
+    if cause == "error":
+        assert result.returncode == 2, result.stderr
+    else:
+        assert result.returncode != 0
+        assert "KeyboardInterrupt: original-publication" in result.stderr
+    assert result.stdout == ""
+    assert "original-publication" in result.stderr
+    if site == "history":
+        if replacement == "match":
+            assert "The move is complete in both documents" in result.stderr
+            assert "First body line 1." not in plan.read_text()
+            assert history.read_text().count("First body line 1.") == 1
+        else:
+            assert plan.read_text() == original_plan
+            if replacement in ("missing-nonblock", "missing-nofollow"):
+                assert "could not be confirmed" in result.stderr
+                assert "has been restored" not in result.stderr
+            else:
+                assert "has been restored" in result.stderr
+                assert "could not determine whether it landed" in result.stderr
+            assert "The move is complete" not in result.stderr
+    else:
+        assert history.read_bytes() == original_history
+        if replacement == "match":
+            assert plan.read_text() == original_plan
+            if cause == "error":
+                assert "was restored" in result.stderr
+            assert "could not be confirmed" not in result.stderr
+        else:
+            assert "could not be confirmed" in result.stderr
+            assert "may be in NEITHER document" in result.stderr
+            assert "was restored" not in result.stderr
+            assert "no changes applied" not in result.stderr
+    if replacement == "read-interrupt":
+        assert "recovery-read-sigint" in result.stderr
+    assert not list(tmp_path.glob("*.devkit-tmp"))
+
+
+@pytest.mark.parametrize("text", ["", "plain\ntext\n", "café\n世界\n"])
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+def test_archive_recovery_readback_matches_normalized_text(
+    tmp_path: Path, text: str, newline: str,
+) -> None:
+    archive = _load_module("archive_readback_text", ENGINE_DIR / "archive_plan_sessions.py")
+    path = tmp_path / "document.md"
+    path.write_bytes(text.replace("\n", newline).encode())
+    assert archive._recovery_matches(path, text)
+    path.write_bytes((text.replace("\n", newline) + "unexpected suffix").encode())
+    assert not archive._recovery_matches(path, text)
 
 
 @pytest.mark.parametrize("space", [
