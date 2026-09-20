@@ -150,7 +150,7 @@
         "scripts/archive_plan_sessions.py"
       ],
       "role": "engine",
-      "sha256": "72b1bc04be0fab8c42867f803878cfb0b81c01f7285aa16fea26e1a089780ce4"
+      "sha256": "c7b2ded0f829bc0cda24103a65a9869d2b26aeb34cb2e16ee1badaf4aa4d4101"
     },
     "scripts/lib/devmodel_config.py": {
       "role": "engine",

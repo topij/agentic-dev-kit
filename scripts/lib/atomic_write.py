@@ -13,10 +13,10 @@ bytes or its new bytes; it never has a prefix of the new ones.
 Staging and publishing are separate steps on purpose
 ----------------------------------------------------
 
-:func:`stage_text` returns a :class:`StagedWrite` that has already done all the
-expensive, failure-prone work — allocation, encoding, the actual disk write —
-and left a single ``os.replace`` to perform. A caller updating **two** documents
-that must move together can stage both, and only then publish both:
+:func:`stage_text` returns a :class:`StagedWrite` whose content has been
+allocated, encoded, written and fsynced in a temporary file. Publication still
+needs ``os.replace`` and its directory update can fail. A caller updating
+**two** documents that must move together can stage both before publishing either:
 
     plan = stage_text(plan_path, new_plan)
     history = stage_text(history_path, new_history)   # may still fail — nothing
