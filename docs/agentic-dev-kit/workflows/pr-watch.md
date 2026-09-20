@@ -245,7 +245,7 @@ Repeat until the report says **converged**:
 
    - **LOW/P3 finding:** use the delta-or-ticket rule above, including for a
      low-severity regression. Do not restart the full process.
-   - **Other real finding** (a bug, a missing guard, a correctness/clarity issue): fix it in
+   - **Real finding** above LOW (a bug, a missing guard, a correctness/clarity issue): fix it in
      the code, commit, push. Re-running the local gate first.
    - **Nitpick you disagree with** (style preference, out-of-scope, already-correct):
      **reply with a brief reason** rather than changing code — `gh pr comment <PR#>

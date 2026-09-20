@@ -458,8 +458,7 @@ author re-reading their own diff. **Cite them by name, never by number.**
    Fix other real findings, reply-with-reason to the rest.
 6. **Re-run after the fix round.** Not optional — whether it is the full panel
    or a delta pass is decided below: apply the LOW rule first; otherwise use
-   what the fix round's delta
-   contains, then — for how many lenses the delta pass takes — by whether the
+   what the fix round's delta contains, then — for how many lenses the delta pass takes — by whether the
    change sits under `safety-critical-changes.md`, which never takes the
    single-lens form.
 7. Record the receipt with the lenses that actually ran:
@@ -532,8 +531,8 @@ prose to qualify. Preserve the normal independent safety-critical boundary check
 and post each lens's verdict before recording the composed receipt.
 
 A new LOW finding from that delta takes the same delta-or-ticket route. If the
-repair would require a broader redesign, ticket it rather than starting that
-redesign inside a LOW fix round. A reviewer-supported escalation to MED/P2 or
+repair would require a broader redesign, or containment is disputed without a
+severity escalation, ticket it rather than expanding or restarting the LOW round. A reviewer-supported escalation to MED/P2 or
 HIGH/P1, or an independently required change already in the round, follows its
 own severity and risk rules. State that separate trigger explicitly; a mixed
 round must not disguise a full restart as a requirement of its LOW findings.
@@ -542,8 +541,9 @@ coverage and operator merge authority retain their existing gates.
 
 ## Re-running, and when to stop
 
-`safety-critical-changes.md` rule 3 says to re-review after every fix round
-"until a full pass finds nothing new". Take that literally *and* know its limit:
+`safety-critical-changes.md` requires re-review after fix rounds, with the
+LOW delta-or-ticket exception above. The former literal stopping test — a full
+pass finding nothing new — was not a reliable termination condition:
 measured across one session, **every round found something**, and several of
 those findings were defects introduced by the *previous round's fix*. **The
 termination condition may never arrive.** The companion has both measurements —
@@ -705,21 +705,21 @@ ship-the-known-defect twice in two days instead (the companion records the
 pricing and the narrowing). What the dual form asserts is composition: both
 lenses stood on the change at the reviewed head, both lenses stand on
 everything after it, so every byte at the merging head has two-lens
-coverage — across two passes rather than in one. The assumption composition
-rests on — that a record-prose delta interacts with nothing — is exactly
+coverage — across two passes rather than in one. For the record-prose route, the assumption composition
+rests on — that the delta interacts with nothing — is exactly
 the draw both delta lenses exist to dispute, independently. And composition
 needs something to compose with: the dual form presupposes a full-panel
 review standing at the last-reviewed head. After a Degraded-mode initial
 review there is no two-lens pass to extend — rule 2 was already unmet, the
 PR must already say so plainly, and no delta pass in either form repairs
-that. The single-lens exit stays closed for this class, any disputed
-verdict still owes the full panel, and nothing here touches the class's
-operator-merge rule.
+that. The single-lens exit stays closed for this class. Disputes on a LOW
+repair take the LOW rule above; other disputed verdicts still owe the full
+panel. Nothing here changes operator merge authority.
 
 **The delta is the diff plus the commit messages that land it** (`git log
 <last-reviewed-sha>..<head>` — a message appears in no diff). A message is
 executed prose by class, so the test on it is what executing it does: the
-pass requires messages that act on nothing — no closing keyword near a
+record-prose route requires messages that act on nothing — no closing keyword near a
 reference, no instruction to a future reader, no claim a process consumes.
 For the record-prose route, each delta lens reads both surfaces, and its first duty is to dispute both
 stated draws — the prose class and the safety-critical boundary; "confirmed"
