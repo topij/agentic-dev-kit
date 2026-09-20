@@ -42,6 +42,10 @@ starts.
 
 ---
 
+## #751 — Archive recovery-copy retention
+
+CHANGED: Refresh `scripts/archive_plan_sessions.py` with its tests. When restoration cannot be confirmed, inspect the reported history and original-handoff staging paths before retrying; cleanup now leaves these paths untouched. Their existence and contents are unverified. Preserve useful content before removing retained artifacts, and update assertions that expected all staging files to disappear after failed rollback. Successful publication and confirmed restoration retain their existing cleanup behavior.
+
 ## #746 — Archive interruption guidance
 
 CHANGED: After an interrupted archive sweep, inspect the handoff, history and surviving staged copies before retrying. Recovery diagnostics cover the guarded publication handlers; their absence does not establish that documents are untouched or restored. Replace direct selections of `test_an_interrupt_between_the_two_publishes_restores_the_handoff` with `test_an_interrupt_during_history_replace_restores_the_handoff`.
