@@ -16658,23 +16658,21 @@ def test_a_directory_target_is_named_as_one(tmp_path: Path) -> None:
         aw.stage_text(tmp_path, "replacement\n")
 
 
+@pytest.mark.parametrize("mask", [0o022, 0o077, 0o002])
 def test_a_new_file_gets_the_mode_write_text_would_have_given_it(
-    tmp_path: Path,
+    tmp_path: Path, mask: int,
 ) -> None:
-    """`_default_mode()` is the nonexistent-target branch, and it was unpinned.
-
-    `mkstemp` creates `0600`, so without this the first write of a document would
-    silently be private where `write_text` would have made it `0666 & ~umask`.
-    Mutating it to a constant survived the suite.
-    """
+    """New-file permissions follow the caller's explicit umask, not a constant."""
     aw = _atomic_write()
     reference = tmp_path / "reference.md"
-    reference.write_text("x\n", encoding="utf-8")  # what write_text produces
     target = tmp_path / "new.md"
-
-    aw.stage_text(target, "y\n").commit()
-
-    assert stat.S_IMODE(target.stat().st_mode) == stat.S_IMODE(reference.stat().st_mode)
+    previous = os.umask(mask)
+    try:
+        reference.write_text("x\n", encoding="utf-8")
+        aw.stage_text(target, "y\n").commit()
+        assert stat.S_IMODE(target.stat().st_mode) == stat.S_IMODE(reference.stat().st_mode)
+    finally:
+        os.umask(previous)
 
 
 def test_a_lone_control_character_survives_the_sweep(tmp_path: Path) -> None:
@@ -18959,6 +18957,118 @@ def _archive_reported_recovery_paths(stderr: str) -> dict[str, Path]:
         result[label] = Path(match.group(1))
     assert result["staged history"] != result["original handoff"]
     return result
+
+
+_ARCHIVE_RETENTION_BOUNDARY_DRIVER = r"""
+import ast
+import errno
+import importlib.util
+import json
+import os
+from pathlib import Path
+import signal
+import sys
+
+engine, plan, history, marker = map(Path, sys.argv[1:5])
+boundary = sys.argv[5]
+spec = importlib.util.spec_from_file_location("retention_boundary_archive", engine)
+archive = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(archive)
+real_replace, real_stage = os.replace, archive.stage_text
+stages = []
+plan_attempts = 0
+injected = False
+
+def stage(*args, **kwargs):
+    item = real_stage(*args, **kwargs)
+    stages.append(item)
+    return item
+
+def replace(src, dst, **kwargs):
+    global plan_attempts
+    if Path(dst) == plan:
+        plan_attempts += 1
+        if plan_attempts == 2:
+            raise OSError(errno.ENOSPC, "rollback-publication")
+        if boundary == "plan-state":
+            real_replace(src, dst, **kwargs)
+            raise OSError(errno.EIO, "plan-after-publication")
+    if Path(dst) == history:
+        raise OSError(errno.ENOSPC, "history-publication")
+    return real_replace(src, dst, **kwargs)
+
+source = engine.read_text()
+if boundary == "after-rollback-readback":
+    restore = next(node for node in ast.walk(ast.parse(source))
+                   if isinstance(node, ast.FunctionDef) and node.name == "restore_handoff")
+    readback = [index for index, node in enumerate(restore.body)
+                if isinstance(node, ast.Try) and any(
+                    isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
+                    and call.func.id == "_recovery_matches" for call in ast.walk(node))]
+    assert len(readback) == 1
+    # The first statement outside the guarded readback used to arm retention.
+    trigger = restore.body[readback[0] + 1].lineno
+else:
+    statement = ("plan_state = staged_plan.publish_state()" if boundary == "plan-state"
+                 else "history_state = staged_history.publish_state()")
+    trigger = next(index for index, line in enumerate(source.splitlines(), 1)
+                   if line.strip() == statement)
+
+def trace(frame, event, arg):
+    global injected
+    if (event == "line" and frame.f_code.co_filename == str(engine)
+            and frame.f_lineno == trigger):
+        injected = True
+        sys.settrace(None)
+        os.kill(os.getpid(), signal.SIGINT)
+        raise AssertionError("SIGINT did not interrupt archive recovery")
+    return trace
+
+archive.stage_text, os.replace = stage, replace
+sys.settrace(trace)
+try:
+    raise SystemExit(archive.main([
+        "--plan", str(plan), "--history", str(history), "--keep", "2",
+    ]))
+finally:
+    sys.settrace(None)
+    marker.write_text(json.dumps({
+        "injected": injected, "stages": [str(item.temp) for item in stages],
+        "plan_attempts": plan_attempts,
+    }))
+"""
+
+
+@pytest.mark.parametrize("boundary", [
+    "plan-state", "history-state", "after-rollback-readback",
+])
+def test_archive_retains_recovery_across_unguarded_interrupt_boundaries(
+    tmp_path: Path, boundary: str,
+) -> None:
+    """A real SIGINT outside recovery guards must not delete the surviving copies."""
+    import signal
+
+    plan, history, marker = (tmp_path / name for name in ("handoff.md", "history.md", "observed.json"))
+    _write_four_block_plan(plan, history)
+    body = "Uncommitted interrupt-boundary recovery body."
+    plan.write_text(plan.read_text().replace("First body line 1.", body))
+    original_plan, original_history = plan.read_text(), history.read_text()
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", _ARCHIVE_RETENTION_BOUNDARY_DRIVER,
+         str(ENGINE_DIR / "archive_plan_sessions.py"), str(plan), str(history), str(marker),
+         boundary], capture_output=True, text=True, timeout=10,
+    )
+    observed = json.loads(marker.read_text())
+    assert observed["injected"], result.stderr
+    assert result.returncode == -signal.SIGINT, result.stderr
+    assert "KeyboardInterrupt" in result.stderr and result.stdout == ""
+    assert observed["plan_attempts"] == (2 if boundary == "after-rollback-readback" else 1)
+    assert body not in plan.read_text() and history.read_text() == original_history
+    plan_temp, history_temp, rollback_temp = map(Path, observed["stages"])
+    assert not plan_temp.exists()
+    assert history_temp.read_text().count(body) == 1
+    assert rollback_temp.read_text() == original_plan
+    assert set(tmp_path.glob("*.devkit-tmp")) == {history_temp, rollback_temp}
 
 
 _ARCHIVE_RETENTION_DRIVER = r"""
