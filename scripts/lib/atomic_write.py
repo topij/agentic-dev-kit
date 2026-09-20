@@ -198,8 +198,9 @@ class StagedWrite:
             return "unknown"
 
     def commit(self) -> None:
-        """Publish the staged content over the target. Atomic; no allocation.
+        """Publish atomically without another full-content write.
 
+        Directory updates may still allocate or fail for space or I/O errors.
         Publish failures propagate. Post-publication durability syscalls are
         best effort and contain their exceptions — see :meth:`_fsync_parent`.
         """

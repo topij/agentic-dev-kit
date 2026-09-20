@@ -18699,6 +18699,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import stat
 import sys
 
 engine, plan, history, marker = map(Path, sys.argv[1:5])
@@ -18712,6 +18713,7 @@ armed = False
 plan_attempts = 0
 opened = []
 recovering_fds = set()
+stream_reads = []
 
 def fail_original():
     if cause == "interrupt":
@@ -18777,18 +18779,21 @@ def acquire(path, flags, *args, **kwargs):
 
 def fdopen(fd, *args, **kwargs):
     stream = real_fdopen(fd, *args, **kwargs)
-    if fd not in recovering_fds or replacement != "read-interrupt":
+    if fd not in recovering_fds:
         return stream
-    class InterruptedRead:
+    class ObservedRead:
         def __enter__(self):
             return self
         def __exit__(self, *exc):
             return stream.__exit__(*exc)
         def read(self, size):
-            print("recovery-read-sigint", file=sys.stderr, flush=True)
-            os.kill(os.getpid(), signal.SIGINT)
-            raise AssertionError("SIGINT did not interrupt the recovery read")
-    return InterruptedRead()
+            stream_reads.append(stat.S_ISREG(os.fstat(fd).st_mode))
+            if replacement == "read-interrupt":
+                print("recovery-read-sigint", file=sys.stderr, flush=True)
+                os.kill(os.getpid(), signal.SIGINT)
+                raise AssertionError("SIGINT did not interrupt the recovery read")
+            return stream.read(size)
+    return ObservedRead()
 
 os.replace, os.open, os.fdopen = replace, acquire, fdopen
 try:
@@ -18805,7 +18810,9 @@ finally:
                 raise
         else:
             leaked.append(fd)
-    marker.write_text(json.dumps({"recovery_attempted": armed, "leaked_fds": leaked}))
+    marker.write_text(json.dumps({
+        "recovery_attempted": armed, "leaked_fds": leaked, "stream_reads": stream_reads,
+    }))
 """
 
 
@@ -18829,7 +18836,12 @@ def test_archive_recovery_readback_handles_destination_replacement(
          site, replacement, cause], capture_output=True, text=True, timeout=10,
     )
     assert marker.is_file(), result.stderr
-    assert json.loads(marker.read_text()) == {"recovery_attempted": True, "leaked_fds": []}
+    expected_reads = [True] if replacement in (
+        "match", "mismatch", "undecodable", "read-interrupt", "replaced-after-open",
+    ) else []
+    assert json.loads(marker.read_text()) == {
+        "recovery_attempted": True, "leaked_fds": [], "stream_reads": expected_reads,
+    }
     if cause == "error":
         assert result.returncode == 2, result.stderr
     else:

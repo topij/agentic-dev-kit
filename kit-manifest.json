@@ -150,7 +150,7 @@
         "scripts/archive_plan_sessions.py"
       ],
       "role": "engine",
-      "sha256": "8a7da15d2f81d582535f34b3062b423ba6ede149043008665a95aa09d4374bb8"
+      "sha256": "72b1bc04be0fab8c42867f803878cfb0b81c01f7285aa16fea26e1a089780ce4"
     },
     "scripts/lib/devmodel_config.py": {
       "role": "engine",
@@ -297,7 +297,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "df25e6dd1763af0a3b27d936852d2cf133658a6a5f086e11c818804ec542fe81"
+      "sha256": "db948a2d1999dd6790a8b17dc0d7e6a310b31c7b9a8b5ec7a6d2064791ebd700"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
