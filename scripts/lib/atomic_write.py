@@ -102,13 +102,12 @@ fsync is also not supported everywhere.
 Debris
 ------
 
-Temp files are named ``.<document>.<random>.devkit-tmp`` and every path this
-module controls *attempts* to remove them, exceptions included. Two routes still
-leave one behind, which is why ``.gitignore`` carries ``*.devkit-tmp``:
-``SIGKILL`` runs no handler at all, and an ``unlink`` that itself fails is
-deliberately swallowed rather than allowed to escape a caller's ``finally``
-(see :meth:`StagedWrite.abort`) — so a directory that has become unwritable
-leaves the debris it also caused. The name is randomised via
+Temp files are named ``.<document>.<random>.devkit-tmp``. Cleanup is best
+effort, which is why ``.gitignore`` carries ``*.devkit-tmp``: ``SIGKILL`` runs
+no handler, and a failed or interrupted cleanup can leave a temp behind.
+Cleanup suppresses ``OSError`` from ``unlink`` to preserve the caller's
+original outcome (see :meth:`StagedWrite.abort`); it does not guarantee removal.
+The name is randomised via
 ``tempfile.mkstemp`` (``O_EXCL``): a fixed name would let two concurrent runs
 write each other's bytes, and would let a pre-existing symlink at that name
 turn the write into an arbitrary-file clobber (CWE-59/CWE-377).
@@ -274,11 +273,12 @@ def stage_text(
 ) -> StagedWrite:
     """Write ``text`` to a temp file beside ``path``, ready to be published.
 
-    Does everything that can fail *except* the publish itself. Raises
-    ``OSError`` if the content could not be written, or
-    :class:`AtomicWriteRefused` if publishing by rename would lose a property of
-    the existing document (see the module docstring). In both cases nothing has
-    been published and no temp survives.
+    Prepares and flushes the content before publication. Preparation can raise
+    ``OSError``; :class:`AtomicWriteRefused` reports a document property that
+    publishing by rename would lose (see the module docstring). These failures
+    occur before publication. Cleanup attempts to remove the temporary file,
+    but a cleanup failure or process interruption can leave it behind. See the
+    module's debris guidance. Publication directory updates may still fail.
 
     ``newline`` is passed through to the underlying text stream, so a caller
     that has decided its documents are byte-preserving can pass ``""``.
@@ -350,8 +350,8 @@ def stage_text(
         # the handler can double-close it. A double close raised EBADF from the
         # cleanup path, which both replaced the real exception with a bogus
         # "Bad file descriptor" and aborted the handler before `temp.unlink()`,
-        # leaking the temp this module promises to remove — and closing a stale
-        # descriptor number is the classic route to closing an unrelated file.
+        # skipping its best-effort temp cleanup. Closing a stale descriptor
+        # number is the classic route to closing an unrelated file.
         try:
             handle = open(fd, "w", encoding=encoding, newline=newline)  # noqa: SIM115
         finally:
