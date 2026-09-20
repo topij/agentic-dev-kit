@@ -863,6 +863,7 @@ def main(argv: list[str] | None = None) -> int:
     # *both* files, and a re-run would append them to history a second time.
     original_plan = "".join(plan)
     staged = []
+    preserve_recovery_staging = False
     try:
         try:
             # `newline="\n"` states the normalisation the docstring documents
@@ -920,6 +921,7 @@ def main(argv: list[str] | None = None) -> int:
         # the duplication was the defect generator rather than any single miss.
         def restore_handoff(*, cause: BaseException) -> bool:
             """Put the handoff back; confirm its content before reporting success."""
+            nonlocal preserve_recovery_staging
             rollback_error: BaseException | None = None
             try:
                 staged_rollback.commit()
@@ -939,13 +941,21 @@ def main(argv: list[str] | None = None) -> int:
                     confirmation = "destination differs from the original handoff"
             except BaseException as exc:
                 confirmation = f"could not read back the destination ({exc})"
+            # Failed or unconfirmed restoration must not discard the remaining
+            # pre-publication copies. Their paths may have vanished or changed;
+            # leave them untouched without claiming their contents are verified.
+            preserve_recovery_staging = True
             print(
                 f"error: publishing failed ({cause}), AND restoration of "
                 f"{plan_location} could not be confirmed ({confirmation}; "
                 f"rollback error: {rollback_error!r}). These blocks "
                 f"may be in NEITHER document. Inspect {plan_location} and {history_location}:\n"
                 + "\n".join(f"  - {title[:88]}" for title in moved_titles)
-                + "\n" + _recovery_hint(staged_plan.target)
+                + "\nRecovery staging paths left untouched; existence and contents "
+                "are unconfirmed:\n"
+                f"  - staged history: {staged_history.temp}\n"
+                f"  - original handoff: {staged_rollback.temp}\n"
+                + _recovery_hint(staged_plan.target)
                 + "\ndo NOT `git checkout`, which discards this session's own "
                 "edits.",
                 file=sys.stderr,
@@ -1058,6 +1068,10 @@ def main(argv: list[str] | None = None) -> int:
             raise
     finally:
         for item in staged:
+            if preserve_recovery_staging and (
+                item is staged_history or item is staged_rollback
+            ):
+                continue
             item.abort()
 
     print(report)
