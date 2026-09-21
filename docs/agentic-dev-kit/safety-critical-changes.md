@@ -25,8 +25,12 @@ skill; do not fork the doctrine into runtime-specific copies.
    rule is the panel in [`fallback-review-panel.md`](fallback-review-panel.md) —
    a single fallback command run in the author's own context does not.
 
-1. **Adversarial review to convergence, not one pass.** Re-review after every fix
-   round until a full pass finds nothing new. Fix rounds on gate logic routinely
+1. **Adversarial review to convergence, not one pass.** Re-review after each fix
+   round using the full-panel or delta route in `fallback-review-panel.md`.
+   **LOW/P3 findings never restart the whole process:** use a contained delta
+   review with adversarial and correctness lenses, or file a ticket. This applies
+   to LOW regressions too. It does not waive higher-severity findings, initial
+   review coverage or operator merge authority. Fix rounds on gate logic routinely
    introduce their own regressions — treat "the last round found nothing" as
    provisional, not proof of safety. Be aware that "finds nothing new" may never
    arrive: see [`fallback-review-panel.md`](fallback-review-panel.md) for the
