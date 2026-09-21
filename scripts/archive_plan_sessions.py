@@ -936,6 +936,7 @@ def main(argv: list[str] | None = None) -> int:
                 if args.plan.resolve(strict=True) != staged_plan.target:
                     confirmation = "argument no longer resolves to the staged destination"
                 elif restored:
+                    preserve_recovery_staging = False
                     return True
                 else:
                     confirmation = "destination differs from the original handoff"
@@ -944,7 +945,6 @@ def main(argv: list[str] | None = None) -> int:
             # Failed or unconfirmed restoration must not discard the remaining
             # pre-publication copies. Their paths may have vanished or changed;
             # leave them untouched without claiming their contents are verified.
-            preserve_recovery_staging = True
             print(
                 f"error: publishing failed ({cause}), AND restoration of "
                 f"{plan_location} could not be confirmed ({confirmation}; "
@@ -962,10 +962,16 @@ def main(argv: list[str] | None = None) -> int:
             )
             return False
 
+        # Arm retention before publication can remove content from the handoff.
+        # An interrupt between protected calls must not let final cleanup erase
+        # the remaining recovery copies. Release only on a safe terminal path.
+        preserve_recovery_staging = True
         try:
             staged_plan.commit()
         except BaseException as exc:
             plan_state = staged_plan.publish_state()
+            if plan_state == "pending":
+                preserve_recovery_staging = False
             # "unknown" is treated as published, and that is safe *here*: the
             # rollback writes the original bytes over a document that either was
             # swept (so it needs them) or was never touched (so they are what is
@@ -1024,6 +1030,7 @@ def main(argv: list[str] | None = None) -> int:
                 # one path the code has already established is COMPLETE, and
                 # exiting 130 in silence over it reads as "cancelled, nothing
                 # happened" when the sweep in fact succeeded.
+                preserve_recovery_staging = False
                 print(
                     f"error: {history_location} was published — its content was "
                     f"read back and matches — but the step after it failed "
@@ -1066,6 +1073,8 @@ def main(argv: list[str] | None = None) -> int:
                 return 2
             # Not an OSError — an interrupt. The handoff is back; let it out.
             raise
+        else:
+            preserve_recovery_staging = False
     finally:
         for item in staged:
             if preserve_recovery_staging and (
