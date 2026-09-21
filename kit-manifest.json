@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "6740b971ebe32713e34d30aa61f96915323d363d008d633d907f4cd0317d0e05"
+      "sha256": "4dc529e0a8156d762d22d0c879f4042499a7c4c80238b61ba6afc03f78b7816f"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -104,7 +104,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "5cce07ddf5231d1944c883261f985d492530c2fa3472d992362a891aa5f17837"
+      "sha256": "a127589abcf01e2ea994a5daa2d6dbe6205fe18623a02226f0e9b2c566bbd906"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -116,7 +116,7 @@
     },
     "scripts/check_memory_budget.py": {
       "role": "engine",
-      "sha256": "22bced0d7a7b43d39b3898273950e25e612773a5602f2c1a4ad5ae0e7e0846ab"
+      "sha256": "c5a96aef2415def00e15f3e1524307d35af424517445a929f8b05925f6ea5776"
     },
     "scripts/conftest.py": {
       "role": "engine",
@@ -245,7 +245,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "30609a5ccbba55ccbb163a64dae788b7c571031acf4e90b7bbacd6f177b56eda"
+      "sha256": "609f2715b6ec332518461918bc9295d3b99277005b6b98dcae7188731ec024a8"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -257,7 +257,7 @@
     },
     "scripts/tests/test_check_memory_budget.py": {
       "role": "test",
-      "sha256": "6250951e27d48a2a133ab7a3199887766b8001a698c1f3d8f4fe0c4a5626bd59"
+      "sha256": "10508e167776cefdd7e602f6165c87cdd18731555aa41459f74c03c571f342bc"
     },
     "scripts/tests/test_ci_workflow.py": {
       "role": "test",
@@ -301,7 +301,7 @@
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
-      "sha256": "9d5e7598e66b1be35b343ef5920c9df4b4c4a4e61b8e7310200a5c27e7e9660f"
+      "sha256": "810a73c0e55c1b4cbbeb4c1209ef43d41f837f7ba841de3a97c589e80082dc68"
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",

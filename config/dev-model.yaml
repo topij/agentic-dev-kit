@@ -359,9 +359,9 @@ review:
     #                  `turn_context`. A misspelled `-c` KEY is accepted silently
     #                  at the config default (exit 0), so copy the key exactly; an
     #                  invalid LEVEL is refused by the API (exit 1).
-    #   codex.model    MECHANICAL when set (`-m <model>`); absent here on purpose,
-    #                  so a lens runs the model in the user's Codex config, which
-    #                  is the one their account is known to have.
+    #   codex.model    MECHANICAL when set (`-m <model>`); the configured reviewer
+    #                  model is independent of the cockpit model. Read the actual
+    #                  selection back from the rollout's `turn_context`.
     #
     # The `Run at:` line panel_prompt.py renders into a prompt restates these and
     # enforces nothing on either runtime; it names the carrier beside the value.
@@ -383,7 +383,8 @@ review:
         effort: high
       # runtime-status: mechanical
       codex:
-        effort: high
+        model: gpt-5.6-sol
+        effort: medium
     lenses:
       - name: adversarial
         focus: "assume the change is wrong and try to prove it — bypasses, fail-open paths, wedges, and whether the new guard actually guards"

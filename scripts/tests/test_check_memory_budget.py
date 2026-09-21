@@ -127,3 +127,29 @@ def test_rejects_non_positive_budgets(tmp_path):
     memory_file.write_text("fine\n", encoding="utf-8")
     with pytest.raises(SystemExit):
         module.main(["--memory-file", str(memory_file), "--max-bytes", "0"])
+
+
+@pytest.mark.parametrize("newline", [b"\n", b"\r\n", b"\r"])
+def test_byte_budget_measures_stored_newlines(tmp_path, capsys, newline):
+    """The byte budget measures the file while line lengths exclude terminators."""
+    import json
+
+    module = _load_module()
+    memory_file = tmp_path / "MEMORY.md"
+    payload = newline.join(["café".encode(), b"next", b""])
+    memory_file.write_bytes(payload)
+    status = module.evaluate(memory_file, max_bytes=len(payload) - 1, max_line_chars=4)
+    assert status.size_bytes == len(payload)
+    assert status.line_count == 2 and status.long_lines == []
+    assert status.over_size and status.over
+    assert module.main([
+        "--memory-file", str(memory_file), "--max-bytes", str(len(payload) - 1),
+        "--max-line-chars", "4", "--strict", "--json",
+    ]) == 1
+    report = json.loads(capsys.readouterr().out)
+    assert report["size_bytes"] == len(payload) and report["over_size"]
+    assert module.main([
+        "--memory-file", str(memory_file), "--max-bytes", str(len(payload)),
+        "--max-line-chars", "4", "--strict", "--json",
+    ]) == 0
+    assert not json.loads(capsys.readouterr().out)["over"]

@@ -1001,7 +1001,7 @@ def test_lens_compute_never_reaches_the_degraded_one_lens_branch(monkeypatch):
     assert "zzz-model" not in reminder
 
 
-def test_shipped_config_pins_the_lens_compute_the_panel_measurement_chose():
+def test_shipped_config_pins_the_selected_reviewer_compute():
     """A silent revert of this key is a silent cost/quality change.
 
     Nothing else in the suite would notice `lens_compute` disappearing from the
@@ -1013,10 +1013,8 @@ def test_shipped_config_pins_the_lens_compute_the_panel_measurement_chose():
 
     assert compute["claude"]["model"] == "sonnet"
     assert compute["claude"]["effort"] == "high"
-    # codex exposes effort only; asserting no `model` keeps the "a runtime may
-    # carry one control" case represented in the shipped file, which is what the
-    # lone-control renderer test above is written against.
-    assert "model" not in compute["codex"]
+    assert compute["codex"]["model"] == "gpt-5.6-sol"
+    assert compute["codex"]["effort"] == "medium"
 
 
 def test_lens_compute_actually_reaches_the_panel_instruction(monkeypatch):

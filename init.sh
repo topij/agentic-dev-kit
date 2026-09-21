@@ -1429,7 +1429,8 @@ migrate_kit_schema() {
         effort: high
       # runtime-status: mechanical
       codex:
-        effort: high
+        model: gpt-5.6-sol
+        effort: medium
     lenses:
       - name: adversarial
         focus: "assume the change is wrong and try to prove it — bypasses, fail-open paths, wedges, and whether the new guard actually guards"
