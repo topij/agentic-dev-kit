@@ -136,7 +136,7 @@ def test_byte_budget_measures_stored_newlines(tmp_path, capsys, newline):
 
     module = _load_module()
     memory_file = tmp_path / "MEMORY.md"
-    payload = newline.join(["café".encode("utf-8"), b"next", b""])
+    payload = newline.join(["café".encode(), b"next", b""])
     memory_file.write_bytes(payload)
     status = module.evaluate(memory_file, max_bytes=len(payload) - 1, max_line_chars=4)
     assert status.size_bytes == len(payload)

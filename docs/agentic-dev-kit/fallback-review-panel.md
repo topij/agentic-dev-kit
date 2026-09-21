@@ -181,8 +181,9 @@ its carrier and enforces nothing. The carriers are:
   `turn_context`. A misspelled `-c` *key* is accepted silently at exit 0 and the lens
   runs at the config default, so copy the key exactly; an invalid *level* is refused
   by the API at exit 1.
-- **Codex, `model`** — mechanical when set (`-m <model>`); absent in the shipped
-  config, so a lens runs the user's configured model.
+- **Codex, `model`** — mechanical when set (`-m <model>`). An omitted model
+  inherits the user's configured model; an explicit model selects reviewer compute
+  independently of the cockpit.
 
 **A receipt records what ran, never what was requested.** A lens launched as a plain
 Claude subagent ran at the cockpit's effort whatever the prompt said; a Codex lens
