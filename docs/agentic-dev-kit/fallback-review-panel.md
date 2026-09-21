@@ -534,8 +534,19 @@ A new LOW finding from that delta takes the same delta-or-ticket route. If the
 repair would require a broader redesign, or containment is disputed without a
 severity escalation, ticket it rather than expanding or restarting the LOW round.
 If the disputed repair is already committed, withdraw that repair and delta-review
-its removal against the standing reviewed parent before proceeding. Alternatively,
-keep the candidate held for a separately scoped change; a ticket never supplies
+its removal against the standing reviewed parent before proceeding. If withdrawal
+restores exactly that parent's tree, the parent-to-head file diff is empty and the
+prompt renderer refuses it. Render the withdrawal comparison instead, with
+`--base <disputed-repair-head> --head <withdrawal-head>`. In `--delta-draws`, name
+that comparison separately from the standing reviewed parent and require the lens
+to verify exact parent/withdrawal tree equality and read every commit message in
+`git log <reviewed-parent>..<withdrawal-head>`, including the withdrawn repair.
+The removal diff supplies the review material; an empty net diff is not itself a
+review. After those checks and the required verdicts, compose with
+`--compose-parent <reviewed-parent>` and `--head <withdrawal-head>`; the recorded
+net changed-path list is empty. Never substitute the disputed repair as the
+receipt parent. Alternatively, keep the candidate held for a separately scoped
+change; a ticket never supplies
 coverage for the disputed code still in the candidate. Never record an accepted
 delta receipt while containment remains disputed.
 
