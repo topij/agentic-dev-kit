@@ -132,12 +132,13 @@ def evaluate(memory_file: Path, *, max_bytes: int = MAX_BYTES, max_line_chars: i
     """
     if not memory_file.is_file():
         raise FileNotFoundError(f"memory index not found: {memory_file}")
-    text = memory_file.read_text(encoding="utf-8")
+    raw = memory_file.read_bytes()
+    text = raw.decode("utf-8")
     lines = text.splitlines()
     long_lines = [(i, len(line)) for i, line in enumerate(lines, start=1) if len(line) > max_line_chars]
     return MemoryStatus(
         path=str(memory_file),
-        size_bytes=len(text.encode("utf-8")),
+        size_bytes=len(raw),
         line_count=len(lines),
         max_bytes=max_bytes,
         max_line_chars=max_line_chars,

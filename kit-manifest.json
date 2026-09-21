@@ -116,7 +116,7 @@
     },
     "scripts/check_memory_budget.py": {
       "role": "engine",
-      "sha256": "22bced0d7a7b43d39b3898273950e25e612773a5602f2c1a4ad5ae0e7e0846ab"
+      "sha256": "c5a96aef2415def00e15f3e1524307d35af424517445a929f8b05925f6ea5776"
     },
     "scripts/conftest.py": {
       "role": "engine",
@@ -257,7 +257,7 @@
     },
     "scripts/tests/test_check_memory_budget.py": {
       "role": "test",
-      "sha256": "6250951e27d48a2a133ab7a3199887766b8001a698c1f3d8f4fe0c4a5626bd59"
+      "sha256": "8d680c6586fd67ef1e6bc746cc76ed23bc8a774a517b56101ea04db0b6d910db"
     },
     "scripts/tests/test_ci_workflow.py": {
       "role": "test",
