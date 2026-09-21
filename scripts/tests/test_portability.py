@@ -19255,6 +19255,14 @@ def replace(src, dst, **kwargs):
                     Path(src).write_text("replacement at the old staging pathname\n")
                 else:
                     Path(src).symlink_to(history.name)
+            elif mode in ("concurrent-inplace", "concurrent-replace"):
+                external = "Concurrent uncommitted handoff content.\n"
+                if mode == "concurrent-inplace":
+                    plan.write_text(external)
+                else:
+                    other = plan.with_name("concurrent.md")
+                    other.write_text(external)
+                    real_replace(other, plan)
             elif mode == "alias":
                 argument.unlink()
                 argument.symlink_to(alternate.name)
@@ -19294,30 +19302,26 @@ def _run_pending_readback_case(tmp_path, mode, fault, replacement="regular", rol
 
 @pytest.mark.parametrize("replacement", ["regular", "symlink"])
 @pytest.mark.parametrize("fault", ["error", "interrupt", "readback-interrupt"])
-@pytest.mark.parametrize("rollback", ["works", "fails"])
-def test_archive_recreated_plan_temp_cannot_release_recovery(tmp_path, replacement, fault, rollback):
-    """A recreated temp pathname cannot stand in for unchanged handoff content."""
+def test_archive_recreated_plan_temp_cannot_release_recovery(tmp_path, replacement, fault):
+    """An ambiguous first publication preserves copies without another rename."""
     import signal
 
     plan, history, body, originals, result, observed = _run_pending_readback_case(
-        tmp_path, "recreated", fault, replacement, rollback,
+        tmp_path, "recreated", fault, replacement,
     )
     assert result.returncode == (-signal.SIGINT if fault == "interrupt" else 2), result.stderr
     assert result.stdout == "" and "first-publication" in result.stderr
-    assert observed["plan_attempts"] == 2
+    assert observed["plan_attempts"] == 1
     assert history.read_text() == originals[1]
     plan_temp, history_temp, rollback_temp = map(Path, observed["stages"])
     assert not plan_temp.exists() and not plan_temp.is_symlink()
-    if rollback == "works":
-        assert plan.read_text() == originals[0]
-        assert not list(tmp_path.glob("*.devkit-tmp"))
-    else:
-        assert body not in plan.read_text()
-        assert "no changes applied" not in result.stderr
-        assert "could not be confirmed" in result.stderr
-        assert history_temp.read_text().count(body) == 1
-        assert rollback_temp.read_text() == originals[0]
-        assert set(tmp_path.glob("*.devkit-tmp")) == {history_temp, rollback_temp}
+    assert body not in plan.read_text()
+    assert "no changes applied" not in result.stderr
+    assert "could not be confirmed" in result.stderr
+    assert "rollback was not attempted" in result.stderr
+    assert history_temp.read_text().count(body) == 1
+    assert rollback_temp.read_text() == originals[0]
+    assert set(tmp_path.glob("*.devkit-tmp")) == {history_temp, rollback_temp}
 
 
 def test_archive_confirmed_pending_publication_cleans_staging(tmp_path):
@@ -19340,6 +19344,26 @@ def test_archive_pending_readback_requires_the_original_alias(tmp_path):
     assert result.returncode == 2 and result.stdout == ""
     assert "could not be confirmed" in result.stderr
     assert "no changes applied" not in result.stderr
-    assert observed["plan_attempts"] == 2
+    assert observed["plan_attempts"] == 1
     assert (plan.read_text(), history.read_text()) == originals
     assert Path(observed["stages"][1]).read_text().count(body) == 1
+
+
+@pytest.mark.parametrize("mode", ["concurrent-inplace", "concurrent-replace"])
+@pytest.mark.parametrize("fault", ["error", "interrupt", "readback-interrupt"])
+def test_archive_unconfirmed_pending_preserves_concurrent_edit(tmp_path, mode, fault):
+    """An uncertain first publication must not roll back another writer's bytes."""
+    import signal
+
+    plan, history, body, originals, result, observed = _run_pending_readback_case(
+        tmp_path, mode, fault,
+    )
+    assert result.returncode == (-signal.SIGINT if fault == "interrupt" else 2)
+    assert plan.read_bytes() == b"Concurrent uncommitted handoff content.\n"
+    assert history.read_text() == originals[1]
+    assert observed["plan_attempts"] == 1
+    assert "no changes applied" not in result.stderr
+    assert "could not be confirmed" in result.stderr
+    assert "rollback was not attempted" in result.stderr
+    assert Path(observed["stages"][1]).read_text().count(body) == 1
+    assert Path(observed["stages"][2]).read_text() == originals[0]
