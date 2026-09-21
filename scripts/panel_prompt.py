@@ -460,8 +460,13 @@ def render(
         f"{delta_draws.strip()}\n\n"
         "End your report with **one verdict line per draw**: name the draw, then\n"
         "`confirmed` or `disputed`, with your reason. Confirm a draw only if you checked\n"
-        'it yourself — "confirmed" means every draw is confirmed. A dispute moves the\n'
-        "round toward more review, never less, so raising one costs you nothing.\n"
+        'it yourself — "confirmed" means every draw is confirmed. Report disputes\n'
+        "without changing their severity to fit a disposition. For a reviewer-marked\n"
+        "LOW/P3 repair, follow the shared LOW delta-or-ticket rule: a containment\n"
+        "dispute without severity escalation calls for a ticket, not a full restart.\n"
+        "Do not confirm coverage for disputed code remaining in the candidate; the\n"
+        "coordinator must withdraw it and delta-review the removal, or hold it.\n"
+        "Other disputes follow the shared panel policy for their severity and scope.\n"
         if delta_draws is not None and delta_draws.strip()
         else ""
     )

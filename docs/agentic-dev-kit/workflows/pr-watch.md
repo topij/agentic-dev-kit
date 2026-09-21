@@ -43,6 +43,14 @@ Engine: `<engine-dir>/pr_watch.py` (deterministic — check rollup + comment uni
 issue/review/inline surfaces, noise-filtered, diffed against a per-PR seen-set). You
 drive the loop + apply the judgment.
 
+**LOW/P3 findings take delta review or a ticket, never a full-process restart.**
+Apply [LOW findings: delta review or ticket](../fallback-review-panel.md#low-findings-delta-review-or-ticket)
+to bot, human and fallback findings alike. Batch contained repairs, verify their
+affected behavior and preserve prior review evidence; otherwise file and link the
+deferred work. A new LOW finding does not restart full suites, whole-PR panels,
+delivery stages or approval rounds. Required CI, initial review coverage, formal
+change requests and higher-severity blockers remain separate obligations.
+
 For a lane coordinated from the cockpit, invoke the same engine through
 `<engine-dir>/dev_session.sh pr-watch <scope> ...`. That scope-aware wrapper pins the
 repository and stores polls, acknowledgments, and review receipts in the lane sandbox
@@ -222,7 +230,7 @@ Repeat until the report says **converged**:
      the engine records it and shows it at merge time, but cannot verify it. If your
      runtime cannot isolate a reviewer, run `review.fallback_commands` instead
      and record it as `fallback:<runtime>` with the single lens named. The
-     other single-lens receipt is the record-prose **delta pass** (the panel
+     other single-lens receipt is the **delta pass** for record prose or LOW repairs (the panel
      doc's stopping section): an isolated lens over a fix round's delta,
      recorded as the literal `fallback:delta` with its one lens named — never
      `fallback:<runtime>`, which is reserved for the author-context degraded
@@ -235,7 +243,9 @@ Repeat until the report says **converged**:
      If another reviewer is pending, leave the notice unacknowledged and re-poll;
      the blocker must clear before the panel runs or its receipt will be refused.
 
-   - **Real finding** (a bug, a missing guard, a correctness/clarity issue): fix it in
+   - **LOW/P3 finding:** use the delta-or-ticket rule above, including for a
+     low-severity regression. Do not restart the full process.
+   - **Real finding** above LOW (a bug, a missing guard, a correctness/clarity issue): fix it in
      the code, commit, push. Re-running the local gate first.
    - **Nitpick you disagree with** (style preference, out-of-scope, already-correct):
      **reply with a brief reason** rather than changing code — `gh pr comment <PR#>
