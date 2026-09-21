@@ -971,7 +971,19 @@ def main(argv: list[str] | None = None) -> int:
         except BaseException as exc:
             plan_state = staged_plan.publish_state()
             if plan_state == "pending":
-                preserve_recovery_staging = False
+                # An old temp pathname can be recreated after its rename. Its
+                # existence alone cannot establish that the handoff is intact.
+                try:
+                    unchanged = (
+                        _recovery_matches(staged_plan.target, original_plan)
+                        and args.plan.resolve(strict=True) == staged_plan.target
+                    )
+                except BaseException:
+                    unchanged = False
+                if unchanged:
+                    preserve_recovery_staging = False
+                else:
+                    plan_state = "unknown"
             # "unknown" is treated as published, and that is safe *here*: the
             # rollback writes the original bytes over a document that either was
             # swept (so it needs them) or was never touched (so they are what is
