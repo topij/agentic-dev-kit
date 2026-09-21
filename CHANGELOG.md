@@ -42,6 +42,11 @@ starts.
 
 ---
 
+## #759 — Memory byte budgets and reviewer defaults
+
+- **CHANGED — memory budget gate:** `check_memory_budget.py` measures stored UTF-8 bytes, including CRLF terminators. Update byte-count expectations for CRLF files; shorten files that exceed `--max-bytes` before using `--strict`.
+- **CHANGED — Codex reviewer defaults:** the reference config and newly seeded panels select `review.fallback_panel.lens_compute.codex.model: gpt-5.6-sol` and `effort: medium`. Existing panel configuration is preserved; set these leaves explicitly to adopt the defaults, or choose a model available to your account. Claude retains `sonnet` / `high`.
+
 ## #758 — Pending archive publication recovery
 
 CHANGED: Refresh `scripts/archive_plan_sessions.py` and its tests. Update checks that expect every pending publication failure to report no changes and remove all staging files. For unconfirmed pending publication, automatic rollback is not attempted and the reported original-handoff and history staging paths are retained. Inspect the handoff, history and retained copies before retrying; their existence and contents are unverified, so preserve useful content before removing artifacts.
