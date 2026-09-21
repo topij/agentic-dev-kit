@@ -19206,3 +19206,164 @@ def test_archive_retains_recovery_content_after_failed_rollback(
     if mode in ("publish-succeeds", "rollback-succeeds"):
         assert not list(tmp_path.glob("*.devkit-tmp"))
         assert "Recovery staging paths" not in result.stderr
+
+
+_ARCHIVE_PENDING_READBACK_DRIVER = r"""
+import errno
+import importlib.util
+import json
+import os
+from pathlib import Path
+import sys
+
+engine, plan, history, marker = map(Path, sys.argv[1:5])
+mode, fault, replacement, rollback = sys.argv[5:9]
+spec = importlib.util.spec_from_file_location("pending_readback_archive", engine)
+archive = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(archive)
+real_replace, real_stage, real_matches = os.replace, archive.stage_text, archive._recovery_matches
+stages = []
+attempts = 0
+readbacks = 0
+argument = plan
+if mode == "alias":
+    argument = plan.with_name("argument.md")
+    argument.symlink_to(plan.name)
+    alternate = plan.with_name("alternate.md")
+    alternate.write_bytes(plan.read_bytes())
+
+def stage(*args, **kwargs):
+    item = real_stage(*args, **kwargs)
+    stages.append(item)
+    return item
+
+def matches(*args, **kwargs):
+    global readbacks
+    readbacks += 1
+    if fault == "readback-interrupt" and readbacks == 1:
+        raise KeyboardInterrupt("pending-readback")
+    return real_matches(*args, **kwargs)
+
+def replace(src, dst, **kwargs):
+    global attempts
+    if Path(dst) == plan:
+        attempts += 1
+        if attempts == 1:
+            if mode == "recreated":
+                real_replace(src, dst, **kwargs)
+                if replacement == "regular":
+                    Path(src).write_text("replacement at the old staging pathname\n")
+                else:
+                    Path(src).symlink_to(history.name)
+            elif mode in ("concurrent-inplace", "concurrent-replace"):
+                external = "Concurrent uncommitted handoff content.\n"
+                if mode == "concurrent-inplace":
+                    plan.write_text(external)
+                else:
+                    other = plan.with_name("concurrent.md")
+                    other.write_text(external)
+                    real_replace(other, plan)
+            elif mode == "alias":
+                argument.unlink()
+                argument.symlink_to(alternate.name)
+            if fault == "interrupt":
+                raise KeyboardInterrupt("first-publication")
+            raise OSError(errno.EIO, "first-publication")
+        if rollback == "fails":
+            raise OSError(errno.ENOSPC, "rollback-publication")
+    return real_replace(src, dst, **kwargs)
+
+archive.stage_text, archive._recovery_matches, os.replace = stage, matches, replace
+try:
+    raise SystemExit(archive.main([
+        "--plan", str(argument), "--history", str(history), "--keep", "2",
+    ]))
+finally:
+    marker.write_text(json.dumps({
+        "stages": [str(item.temp) for item in stages],
+        "plan_attempts": attempts, "readbacks": readbacks,
+    }))
+"""
+
+
+def _run_pending_readback_case(tmp_path, mode, fault, replacement="regular", rollback="works"):
+    plan, history, marker = (tmp_path / name for name in ("handoff.md", "history.md", "observed.json"))
+    _write_four_block_plan(plan, history)
+    body = "Uncommitted pending-publication recovery body."
+    plan.write_text(plan.read_text().replace("First body line 1.", body))
+    originals = plan.read_text(), history.read_text()
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", _ARCHIVE_PENDING_READBACK_DRIVER,
+         str(ENGINE_DIR / "archive_plan_sessions.py"), str(plan), str(history), str(marker),
+         mode, fault, replacement, rollback], capture_output=True, text=True, timeout=10,
+    )
+    return plan, history, body, originals, result, json.loads(marker.read_text())
+
+
+@pytest.mark.parametrize("replacement", ["regular", "symlink"])
+@pytest.mark.parametrize("fault", ["error", "interrupt", "readback-interrupt"])
+def test_archive_recreated_plan_temp_cannot_release_recovery(tmp_path, replacement, fault):
+    """An ambiguous first publication preserves copies without another rename."""
+    import signal
+
+    plan, history, body, originals, result, observed = _run_pending_readback_case(
+        tmp_path, "recreated", fault, replacement,
+    )
+    assert result.returncode == (-signal.SIGINT if fault == "interrupt" else 2), result.stderr
+    assert result.stdout == "" and "first-publication" in result.stderr
+    assert observed["plan_attempts"] == 1
+    assert history.read_text() == originals[1]
+    plan_temp, history_temp, rollback_temp = map(Path, observed["stages"])
+    assert not plan_temp.exists() and not plan_temp.is_symlink()
+    assert body not in plan.read_text()
+    assert "no changes applied" not in result.stderr
+    assert "could not be confirmed" in result.stderr
+    assert "rollback was not attempted" in result.stderr
+    assert history_temp.read_text().count(body) == 1
+    assert rollback_temp.read_text() == originals[0]
+    assert set(tmp_path.glob("*.devkit-tmp")) == {history_temp, rollback_temp}
+
+
+def test_archive_confirmed_pending_publication_cleans_staging(tmp_path):
+    """A failed first rename with an unchanged handoff still releases staging."""
+    plan, history, _, originals, result, observed = _run_pending_readback_case(
+        tmp_path, "pending", "error",
+    )
+    assert result.returncode == 2 and result.stdout == ""
+    assert "no changes applied" in result.stderr
+    assert observed["plan_attempts"] == 1
+    assert (plan.read_text(), history.read_text()) == originals
+    assert not list(tmp_path.glob("*.devkit-tmp"))
+
+
+def test_archive_pending_readback_requires_the_original_alias(tmp_path):
+    """Matching destination content cannot confirm a retargeted plan argument."""
+    plan, history, body, originals, result, observed = _run_pending_readback_case(
+        tmp_path, "alias", "error",
+    )
+    assert result.returncode == 2 and result.stdout == ""
+    assert "could not be confirmed" in result.stderr
+    assert "no changes applied" not in result.stderr
+    assert observed["plan_attempts"] == 1
+    assert (plan.read_text(), history.read_text()) == originals
+    assert Path(observed["stages"][1]).read_text().count(body) == 1
+
+
+@pytest.mark.parametrize("mode", ["concurrent-inplace", "concurrent-replace"])
+@pytest.mark.parametrize("fault", ["error", "interrupt", "readback-interrupt"])
+def test_archive_unconfirmed_pending_preserves_concurrent_edit(tmp_path, mode, fault):
+    """An uncertain first publication must not roll back another writer's bytes."""
+    import signal
+
+    plan, history, body, originals, result, observed = _run_pending_readback_case(
+        tmp_path, mode, fault,
+    )
+    assert result.returncode == (-signal.SIGINT if fault == "interrupt" else 2)
+    assert plan.read_bytes() == b"Concurrent uncommitted handoff content.\n"
+    assert history.read_text() == originals[1]
+    assert observed["plan_attempts"] == 1
+    assert "no changes applied" not in result.stderr
+    assert "could not be confirmed" in result.stderr
+    assert "rollback was not attempted" in result.stderr
+    assert Path(observed["stages"][1]).read_text().count(body) == 1
+    assert Path(observed["stages"][2]).read_text() == originals[0]

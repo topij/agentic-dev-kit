@@ -42,6 +42,10 @@ starts.
 
 ---
 
+## #758 — Pending archive publication recovery
+
+CHANGED: Refresh `scripts/archive_plan_sessions.py` and its tests. Update checks that expect every pending publication failure to report no changes and remove all staging files. For unconfirmed pending publication, automatic rollback is not attempted and the reported original-handoff and history staging paths are retained. Inspect the handoff, history and retained copies before retrying; their existence and contents are unverified, so preserve useful content before removing artifacts.
+
 ## #751 — Archive recovery-copy retention
 
 CHANGED: Refresh `scripts/archive_plan_sessions.py` with its tests. When restoration cannot be confirmed, inspect the reported history and original-handoff staging paths before retrying; cleanup now leaves these paths untouched. Their existence and contents are unverified. Preserve useful content before removing retained artifacts, and update assertions that expected all staging files to disappear after failed rollback. Successful publication and confirmed restoration retain their existing cleanup behavior.

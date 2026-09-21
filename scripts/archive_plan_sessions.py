@@ -919,6 +919,31 @@ def main(argv: list[str] | None = None) -> int:
         # ONE recovery routine serves both sites. Three separate review findings
         # were "the guard/message/test exists at one site and not the other", so
         # the duplication was the defect generator rather than any single miss.
+        def report_unconfirmed_restoration(
+            *, cause: BaseException, confirmation: str,
+            rollback_error: BaseException | None = None,
+        ) -> bool:
+            """Report uncertainty while leaving the recovery copies untouched."""
+            # Failed or unconfirmed restoration must not discard the remaining
+            # pre-publication copies. Their paths may have vanished or changed;
+            # leave them untouched without claiming their contents are verified.
+            print(
+                f"error: publishing failed ({cause}), AND restoration of "
+                f"{plan_location} could not be confirmed ({confirmation}; "
+                f"rollback error: {rollback_error!r}). These blocks "
+                f"may be in NEITHER document. Inspect {plan_location} and {history_location}:\n"
+                + "\n".join(f"  - {title[:88]}" for title in moved_titles)
+                + "\nRecovery staging paths left untouched; existence and contents "
+                "are unconfirmed:\n"
+                f"  - staged history: {staged_history.temp}\n"
+                f"  - original handoff: {staged_rollback.temp}\n"
+                + _recovery_hint(staged_plan.target)
+                + "\ndo NOT `git checkout`, which discards this session's own "
+                "edits.",
+                file=sys.stderr,
+            )
+            return False
+
         def restore_handoff(*, cause: BaseException) -> bool:
             """Put the handoff back; confirm its content before reporting success."""
             nonlocal preserve_recovery_staging
@@ -942,25 +967,9 @@ def main(argv: list[str] | None = None) -> int:
                     confirmation = "destination differs from the original handoff"
             except BaseException as exc:
                 confirmation = f"could not read back the destination ({exc})"
-            # Failed or unconfirmed restoration must not discard the remaining
-            # pre-publication copies. Their paths may have vanished or changed;
-            # leave them untouched without claiming their contents are verified.
-            print(
-                f"error: publishing failed ({cause}), AND restoration of "
-                f"{plan_location} could not be confirmed ({confirmation}; "
-                f"rollback error: {rollback_error!r}). These blocks "
-                f"may be in NEITHER document. Inspect {plan_location} and {history_location}:\n"
-                + "\n".join(f"  - {title[:88]}" for title in moved_titles)
-                + "\nRecovery staging paths left untouched; existence and contents "
-                "are unconfirmed:\n"
-                f"  - staged history: {staged_history.temp}\n"
-                f"  - original handoff: {staged_rollback.temp}\n"
-                + _recovery_hint(staged_plan.target)
-                + "\ndo NOT `git checkout`, which discards this session's own "
-                "edits.",
-                file=sys.stderr,
+            return report_unconfirmed_restoration(
+                cause=cause, confirmation=confirmation, rollback_error=rollback_error,
             )
-            return False
 
         # Arm retention before publication can remove content from the handoff.
         # An interrupt between protected calls must not let final cleanup erase
@@ -971,13 +980,32 @@ def main(argv: list[str] | None = None) -> int:
         except BaseException as exc:
             plan_state = staged_plan.publish_state()
             if plan_state == "pending":
-                preserve_recovery_staging = False
-            # "unknown" is treated as published, and that is safe *here*: the
-            # rollback writes the original bytes over a document that either was
-            # swept (so it needs them) or was never touched (so they are what is
-            # already there). At the history site the same ambiguity is not
-            # symmetric, and is handled differently. Recovery diagnostics do
-            # not turn this temporary-file observation into proof of a sweep.
+                # An old temp pathname can be recreated after its rename. Its
+                # existence alone cannot establish that the handoff is intact.
+                try:
+                    unchanged = (
+                        _recovery_matches(staged_plan.target, original_plan)
+                        and args.plan.resolve(strict=True) == staged_plan.target
+                    )
+                except BaseException:
+                    unchanged = False
+                if unchanged:
+                    preserve_recovery_staging = False
+                else:
+                    # A failed first rename can leave another writer's content
+                    # here. Do not overwrite it with our earlier snapshot.
+                    report_unconfirmed_restoration(
+                        cause=exc,
+                        confirmation="pending publication is ambiguous; rollback was not attempted",
+                    )
+                    if isinstance(exc, OSError):
+                        return 2
+                    raise
+            # Keep the rollback policy for absent or unreadable plan temps.
+            # Those path observations do not prove a sweep or exclude another
+            # writer. Ambiguous pending publication returned above without
+            # overwriting the destination; recovery diagnostics preserve that
+            # distinction instead of claiming that nothing changed.
             if plan_state in ("published", "unknown") and not restore_handoff(
                 cause=exc
             ):
