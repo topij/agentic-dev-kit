@@ -226,6 +226,31 @@ REPO_ONLY_ROLE = "repo-only"
 # config/dev-model.yaml. `role` groups the report; `engine_relative` marks the
 # paths that move with `paths.engines`.
 KIT_OWNED: tuple[tuple[str, str], ...] = (
+    # Triage engines, shared dependencies, and their installed verification.
+    ("scripts/triage_friction_log.py", "engine"),
+    ("scripts/finalize_triage.py", "engine"),
+    ("scripts/lib/triage/__init__.py", "engine"),
+    ("scripts/lib/triage/canonical.py", "engine"),
+    ("scripts/lib/triage/model.py", "engine"),
+    ("scripts/lib/triage/storage.py", "engine"),
+    ("scripts/lib/triage/gate.py", "engine"),
+    ("scripts/lib/triage/recovery.py", "engine"),
+    ("scripts/lib/triage/inbox.py", "engine"),
+    ("scripts/lib/triage/approval.py", "engine"),
+    ("scripts/lib/triage/providers.py", "engine"),
+    ("scripts/lib/triage/finalize.py", "engine"),
+    ("scripts/lib/triage/engine.py", "engine"),
+    ("scripts/tests/test_triage_canonical.py", "test"),
+    ("scripts/tests/test_triage_config.py", "test"),
+    ("scripts/tests/test_triage_gate.py", "test"),
+    ("scripts/tests/test_triage_state.py", "test"),
+    ("scripts/tests/test_triage_inputs.py", "test"),
+    ("scripts/tests/test_triage_recovery.py", "test"),
+    ("scripts/tests/test_triage_inbox.py", "test"),
+    ("scripts/tests/test_triage_approval.py", "test"),
+    ("scripts/tests/test_triage_providers.py", "test"),
+    ("scripts/tests/test_triage_engine.py", "test"),
+    ("scripts/tests/test_finalize_triage.py", "test"),
     # engines (move with paths.engines)
     ("scripts/pr_watch.py", "engine"),
     ("scripts/check_doc_budget.py", "engine"),

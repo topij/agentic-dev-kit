@@ -1061,6 +1061,64 @@ discarding the observation; never mark an unreviewed replacement head complete. 
 completion to the report and state before optionally deleting active state; the
 completed report remains durable.
 
+## Engine CLI
+
+The configured entry points are `<engine-dir>/triage_friction_log.py` for draft,
+approval, accounting, recovery and continuation, and `<engine-dir>/finalize_triage.py`
+for a `resume`-defaulting finalization invocation; `paths.engines` and the two
+`triage.*_engine` fragments select their installed locations. Both accept canonical RFC 8785
+JSON through `--request`. A request file and an `--approval-context` file must be
+single-link regular files. The approval-context file is a runtime-attested boundary:
+an embedding runtime supplies the current operator or independently read notification
+thread there. Proposal or approval JSON cannot establish that identity by repeating a
+name. A person who invokes the CLI directly and creates that file is explicitly
+attesting the current-session identity and read-back; the engine cannot authenticate a
+freestanding local file as a service observation.
+
+Invoke one recognized entry and an explicit context, for example:
+
+```console
+uv run <engine-dir>/triage_friction_log.py new --context interactive --request /absolute/path/freeze-request.json
+uv run <engine-dir>/triage_friction_log.py resume --context interactive --request /absolute/path/analysis-request.json
+uv run <engine-dir>/triage_friction_log.py resume --context interactive --request /absolute/path/approval-request.json --approval-context /absolute/path/runtime-approval-context.json
+uv run <engine-dir>/triage_friction_log.py recover --context interactive --request /absolute/path/recovery-request.json --approval-context /absolute/path/runtime-recovery-context.json
+uv run <engine-dir>/triage_friction_log.py test --context interactive --request /absolute/path/test-request.json --approval-context /absolute/path/runtime-test-context.json
+uv run <engine-dir>/finalize_triage.py --context interactive --request /absolute/path/finalize-request.json --enable-github-forge
+```
+
+The freeze request is `{}`. It returns the durable frozen path and candidate index while
+the state remains `reserved`. The later analysis request has `proposals`, an ordered
+array whose objects contain `candidate_id`, `source_block_digest`, `title`,
+`body_without_marker`, `project`, and string-array `labels`; it carries no approval.
+The later approval request is
+`{"approval":{"command":"approve all","proposal_set_digest":"<digest>"}}`.
+Its trusted context is `{"source":"current-session","operator_identity":"<operator>",
+"source_read_back":{"approver_identity":"<operator>","text":"approve all",
+"proposal_set_digest":"<digest>","payload_digests":["<ordered-digest>"]}}`.
+Recovery first returns `recovery_plan` without mutating a gate-only capture. A later
+request contains `recovery_approval` with `decision`, `source`, `approver_identity`, and
+`core_digest`; the trusted current-session read-back binds those same values.
+Finalization additionally requires `finalize: true` and an absolute isolated `worktree`
+on its first continuation.
+
+External adapters are disabled unless selected explicitly. `--enable-github-tracker`
+permits only approved GitHub Issues transitions. `--enable-github-forge` permits the
+configured isolated-worktree, push, ready pull-request and read-back transitions; the
+adapter has no merge action. The CLI has no notification-service flag. A nonempty
+unattended new draft therefore hard-stops before creating session artifacts unless an
+embedding runtime supplies a notification provider and configured target. An existing
+unattended session remains operator-held if that provider later becomes unavailable.
+Arbitrary response or receipt JSON in `--request` is transport data and never
+substitutes for a provider read-back.
+
+Conventional `--help` prints argparse help and exits. Every execution attempt otherwise
+prints a canonical JSON result and returns success for a completed, degraded, or
+operator-held transition. A hard stop returns a nonzero status. The result
+always reports the capability map, outcome, execution and engine modes, retained
+report/snapshot paths, verified tracker identifiers, recovery plan when present, safe
+resume action and detail, observed protected head when a write preflight ran, and the
+retained pull-request URL and observed/reviewed heads when authoritative evidence exists.
+
 ## Final output
 
 List every capability with terminal status, then report exactly one overall outcome.
