@@ -245,7 +245,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "30609a5ccbba55ccbb163a64dae788b7c571031acf4e90b7bbacd6f177b56eda"
+      "sha256": "609f2715b6ec332518461918bc9295d3b99277005b6b98dcae7188731ec024a8"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -301,7 +301,7 @@
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
-      "sha256": "9d5e7598e66b1be35b343ef5920c9df4b4c4a4e61b8e7310200a5c27e7e9660f"
+      "sha256": "810a73c0e55c1b4cbbeb4c1209ef43d41f837f7ba841de3a97c589e80082dc68"
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
