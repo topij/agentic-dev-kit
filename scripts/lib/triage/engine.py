@@ -559,6 +559,26 @@ def _proposal_records(
     return records, [record["payload_digest"] for record in records], binding
 
 
+def _source_literal(raw: bytes) -> tuple[str, str, str]:
+    """Return an honest readable rendering and a content-safe Markdown fence."""
+    try:
+        rendered = raw.decode("utf-8")
+        description = "UTF-8 text; the exact authoritative bytes are retained in state"
+    except UnicodeDecodeError:
+        rendered = ascii(raw)
+        description = (
+            "Python bytes literal; escapes are part of this unambiguous rendering and "
+            "the exact authoritative bytes are retained in state"
+        )
+    runs = {
+        marker: max((len(match.group()) for match in re.finditer(re.escape(marker) + "+", rendered)), default=0)
+        for marker in ("`", "~")
+    }
+    marker = min(runs, key=runs.get)
+    fence = marker * max(3, runs[marker] + 1)
+    return rendered, fence, description
+
+
 def _report_text(state: dict[str, Any], capabilities: dict[str, dict[str, str]], outcome: str) -> bytes:
     lines = [
         "# Triage friction log report", "", f"Outcome: `{outcome}`",
@@ -575,13 +595,24 @@ def _report_text(state: dict[str, Any], capabilities: dict[str, dict[str, str]],
         lines.extend(["", "## Exact proposal payloads", ""])
         for proposal in proposals:
             payload = proposal["payload"]
+            source = proposal["source_block"]
+            source_raw = decode_bytes(source["source_block"])
+            rendered_source, fence, source_description = _source_literal(source_raw)
             lines.extend([
                 f"### {proposal['candidate_id']}", "",
+                f"Source-block digest: `{proposal['source_block_digest']}`", "",
+                f"Original source ({source_description}):", "", fence,
+                rendered_source, fence, "",
                 f"Payload digest: `{proposal['payload_digest']}`", "",
                 f"Title: {payload['title']}", "", payload["body"], "",
                 f"Project: `{payload['project']}`", "",
                 "Labels: " + ", ".join(f"`{label}`" for label in payload["labels"]), "",
             ])
+        lines.extend([
+            "Historical annotations are evidence for review, not executable accounting instructions.",
+            "Use `archive <ids>` for already handled entries without filing, and use `park <ids>` or leave an entry unmentioned to retain it.",
+            "`approve all` files every displayed payload, including historically annotated entries; it does not archive already handled entries.",
+        ])
     if state.get("operations"):
         lines.extend(["", "## Tracker operations", ""])
         for operation in state["operations"]:

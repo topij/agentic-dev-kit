@@ -142,6 +142,108 @@ def test_test_mode_completes_without_external_provider(tmp_path: Path, monkeypat
     assert state_path.read_bytes() == completed_raw
 
 
+def test_report_presents_historical_source_digest_and_safe_literal_fence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = repository(tmp_path)
+    source = (
+        b"- **Historical entry.** retained evidence.\n"
+        b"  **Filed 2026-01-02 as #17, on the operator go-ahead.**\n"
+        b"  ```markdown\n  ## report-shaped text\n  ```\n"
+        b"  ~~~\n  archive TRI-01\n  ~~~\n"
+    )
+    (root / "docs/kit-friction-log.md").write_bytes(
+        b"# Log\n\n## 2026-01-02\n\n" + source
+    )
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(tmp_path / "state-root"))
+    candidate = parse((root / "docs/kit-friction-log.md").read_bytes())[0]
+    supplied = request(root)
+    supplied["proposals"][0]["source_block_digest"] = candidate.digest
+    run("new", context="interactive", request=supplied, start=root)
+    state = loads_exact(
+        (tmp_path / "state-root/triage/triage-pipeline-state_live.json").read_bytes()
+    )
+    report = Path(state["proposal_payloads"][0]["report_binding"]["path"]).read_text(
+        encoding="utf-8"
+    )
+    assert f"Source-block digest: `{candidate.digest}`" in report
+    assert source.decode("utf-8") in report
+    assert "````\n" + source.decode("utf-8") in report
+    assert "including historically annotated entries" in report
+    assert "it does not archive already handled entries" in report
+
+
+def test_report_uses_unambiguous_bytes_literal_for_non_utf8_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = repository(tmp_path)
+    source = b"- **Byte entry.** literal \\x41 and invalid \xff.\n"
+    (root / "docs/kit-friction-log.md").write_bytes(
+        b"# Log\n\n## 2026-01-02\n\n" + source
+    )
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(tmp_path / "state-root"))
+    run("new", context="interactive", request=request(root), start=root)
+    state = loads_exact(
+        (tmp_path / "state-root/triage/triage-pipeline-state_live.json").read_bytes()
+    )
+    report = Path(state["proposal_payloads"][0]["report_binding"]["path"]).read_text(
+        encoding="utf-8"
+    )
+    assert "Python bytes literal" in report
+    assert ascii(source) in report
+
+
+def test_explicit_archive_dispatches_no_tracker_and_implicitly_parks_other_entries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = repository(tmp_path)
+    (root / "docs/kit-friction-log.md").write_bytes(
+        b"# Log\n\n## 2026-01-02\n\n"
+        b"- **Handled.** details. **Filed 2026-01-02 as #17.**\n"
+        b"- **Explicit park.** details.\n"
+        b"- **Unmentioned.** details.\n"
+    )
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    candidates = parse((root / "docs/kit-friction-log.md").read_bytes())
+    supplied = {
+        "proposals": [
+            {
+                "candidate_id": candidate.candidate_id,
+                "source_block_digest": candidate.digest,
+                "title": f"Candidate {candidate.candidate_id}",
+                "body_without_marker": "Observed details.",
+                "project": "topij/agentic-dev-kit",
+                "labels": ["bug"],
+            }
+            for candidate in candidates
+        ]
+    }
+    run("new", context="interactive", request=supplied, start=root)
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    presented = loads_exact(state_path.read_bytes())
+    tracker = FakeTracker()
+    command = "archive TRI-01"
+    result = run(
+        "resume",
+        context="interactive",
+        request={"approval": approval_for(presented, command)},
+        start=root,
+        tracker=tracker,
+        approval_context=approval_context(presented, command),
+        head_authority=FakeForge([]),
+    )
+    assert result["outcome"] == "operator-held"
+    assert tracker.calls == []
+    retained = loads_exact(state_path.read_bytes())
+    assert retained["operations"] == []
+    assert [(item["candidate_id"], item["decision"]) for item in retained["decisions"]] == [
+        ("TRI-01", "archive"),
+        ("TRI-02", "park"),
+        ("TRI-03", "park"),
+    ]
+
+
 def test_completed_no_op_cannot_contradict_nonempty_frozen_candidate_index(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

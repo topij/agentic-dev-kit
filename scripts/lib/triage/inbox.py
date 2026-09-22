@@ -1,4 +1,4 @@
-"""Exact-byte friction inbox parsing and accounted-block transformation."""
+"""Exact-byte friction inbox parsing and block transformation."""
 
 from __future__ import annotations
 
@@ -12,19 +12,6 @@ from .model import TriageError
 SECTION_RE = re.compile(rb"(?m)^## (?P<title>[^\n]+)\n")
 DATED_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(?:\s|$)")
 ENTRY_RE = re.compile(rb"(?m)^- \*\*")
-# Accounted annotations are bold, dated workflow records. They may start an
-# indented continuation line or follow a completed sentence on the same line;
-# code literals and ordinary narrative mentions are not annotations.
-ACCOUNTED_RE = re.compile(
-    rb"(?:^[ \t]*|(?<=[.!?])[ \t]+)\*\*(?:"
-    rb"Filed\s+\d{4}-\d{2}-\d{2}\s+as|"
-    rb"Routed\s+\d{4}-\d{2}-\d{2}\s+to|"
-    rb"Reconciled\s+\d{4}-\d{2}-\d{2}\s+under"
-    rb")\b(?:(?!\*\*).)*\*\*",
-    re.MULTILINE | re.DOTALL,
-)
-
-
 def _markdown_mask(raw: bytes) -> bytes:
     """Blank fenced and inline code while preserving byte offsets and newlines."""
     masked = bytearray(raw)
@@ -129,8 +116,6 @@ def parse(raw: bytes) -> list[Candidate]:
         for entry_index, entry in enumerate(entries):
             end = entries[entry_index + 1].start() if entry_index + 1 < len(entries) else section_end
             block = raw[entry.start():end]
-            if ACCOUNTED_RE.search(visible[entry.start():end]):
-                continue
             block_digest = digest_bytes(block)
             if block_digest in seen:
                 raise TriageError("duplicate active source block")

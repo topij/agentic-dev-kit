@@ -44,7 +44,9 @@ def repository(tmp_path: Path) -> Path:
     config.write_text(config.read_text(encoding="utf-8").replace("  engines: scripts/devkit\n", "  engines: scripts\n"), encoding="utf-8")
     (root / "docs").mkdir()
     (root / "docs/kit-friction-log.md").write_bytes(
-        b"# Log\n\n## 2026-01-02\n\n- **Approved archive.** exact bytes.\n\n- **Window addition.** keep me.\n"
+        b"# Log\n\n## 2026-01-02\n\n"
+        b"- **Approved archive.** exact bytes. **Filed 2026-01-02 as #17.**\n\n"
+        b"- **Window addition.** The prior Filed annotation is discussed; keep me.\n"
     )
     (root / "docs/kit-friction-log-archive.md").write_bytes(b"# Archive\n")
     (root / "scripts").mkdir()
@@ -186,6 +188,9 @@ def test_archive_only_finalize_retains_exact_new_block_and_waits_for_merge(
     assert b"Approved archive" not in (worktree / "docs/kit-friction-log.md").read_bytes()
     assert b"Window addition" in (worktree / "docs/kit-friction-log.md").read_bytes()
     assert b"Approved archive" in (worktree / "docs/kit-friction-log-archive.md").read_bytes()
+    assert b"Filed 2026-01-02 as #17" in (
+        worktree / "docs/kit-friction-log-archive.md"
+    ).read_bytes()
 
     scalar_operation = {**state, "finalization_operations": [17]}
     with pytest.raises(TriageError, match="finalization operation order mismatch"):

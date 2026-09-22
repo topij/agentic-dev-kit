@@ -16,10 +16,13 @@ from triage.inbox import exact_sweep, parse  # noqa: E402
 from triage.model import TriageError  # noqa: E402
 
 
-def test_mixed_section_keeps_unaccounted_entry() -> None:
+def test_mixed_section_keeps_historically_annotated_and_open_entries() -> None:
     raw = b"# Log\n\n## 2026-01-02\n\n- **Already done.** details\n  **Filed 2026-01-02 as #1.**\n\n- **Still active.** parked.\n"
     candidates = parse(raw)
-    assert [candidate.raw for candidate in candidates] == [b"- **Still active.** parked.\n"]
+    assert [candidate.raw for candidate in candidates] == [
+        b"- **Already done.** details\n  **Filed 2026-01-02 as #1.**\n\n",
+        b"- **Still active.** parked.\n",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -31,13 +34,28 @@ def test_mixed_section_keeps_unaccounted_entry() -> None:
     ],
 )
 @pytest.mark.parametrize("placement", [b"  {annotation}\n", b"Details complete.   {annotation}\n"])
-def test_dated_accounting_annotations_are_independent_of_hard_wrapping(
+def test_dated_accounting_annotations_remain_visible_across_hard_wrapping(
     annotation: bytes, placement: bytes
 ) -> None:
     raw = b"# Log\n\n## 2026-01-02\n\n- **Already done.** body\n" + placement.replace(
         b"{annotation}", annotation
     )
-    assert parse(raw) == []
+    assert [candidate.raw for candidate in parse(raw)] == [raw[raw.index(b"- **Already done."):]]
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        b"- **Parser bug.** The prior entry was handled. **Filed 2026-01-02 as #1** was its annotation, not ours.\n",
+        b"- **Title.** Some text ends here. **Filed 2026-01-01 as** duplicate, but actually still open.\n",
+        b"- **Parser bug.** We fixed it. **Filed 2026-01-02 as #1, on the operator go-ahead.**\n",
+        b"- **Parser bug.** The phrase **Filed 2026-01-02 as #1** is discussed, not asserted.\n",
+    ],
+)
+def test_submitted_accounting_regressions_remain_candidates(entry: bytes) -> None:
+    other = b"- **Unrelated open entry.** Still needs triage.\n"
+    raw = b"# Log\n\n## 2026-01-02\n\n" + entry + other
+    assert [candidate.raw for candidate in parse(raw)] == [entry, other]
 
 
 def test_accounting_words_inside_an_entry_are_not_substring_authority() -> None:
@@ -81,7 +99,8 @@ def test_inline_code_requires_equal_delimiters_and_ends_before_real_annotation()
 '''
     candidates = parse(raw)
     assert [candidate.raw for candidate in candidates] == [
-        b"- **Literal only.** The code says `prefix `` Example. **Filed 2026-01-02 as #1.**`.\n"
+        b"- **Literal only.** The code says `prefix `` Example. **Filed 2026-01-02 as #1.**`.\n",
+        b"- **Already done.** The code says `prefix `` Example. **Filed 2026-01-02 as #1.**`.\n  Complete. **Routed 2026-01-02 to #1.**\n",
     ]
 
 
@@ -97,6 +116,27 @@ def test_unclosed_inline_code_does_not_mask_the_next_entry() -> None:
         b"- **First.** An unmatched `code span stays literal.\n",
         b"- **Second.** Its own `code` remains inside this active entry.\n",
     ]
+
+
+def test_graduation_marker_section_remains_excluded() -> None:
+    raw = (
+        b"# Log\n\n"
+        b"## 2026-01-01 \xe2\x80\x94 Backlog migrated by triage session retained\n\n"
+        b"- **Graduated.** archive record.\n"
+        b"## 2026-01-02\n\n"
+        b"- **Inbox.** review me.\n"
+    )
+    assert [candidate.raw for candidate in parse(raw)] == [b"- **Inbox.** review me.\n"]
+
+
+def test_duplicate_active_source_blocks_remain_refused() -> None:
+    raw = (
+        b"# Log\n\n## 2026-01-02\n\n"
+        b"- **Repeated.** same bytes.\n"
+        b"- **Repeated.** same bytes.\n"
+    )
+    with pytest.raises(TriageError, match="duplicate active source block"):
+        parse(raw)
 
 
 def test_exact_sweep_uses_parsed_boundaries_and_preserves_same_date_addition() -> None:

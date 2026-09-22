@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -9,12 +10,17 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _repo_layout import engine_dir  # noqa: E402
+from _repo_layout import engine_dir, find_repo_root  # noqa: E402
 
 ENGINE_DIR = engine_dir(Path(__file__))
+REPO_ROOT = find_repo_root(ENGINE_DIR)
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
+from triage.canonical import dumps, loads_exact  # noqa: E402
+from triage.engine import run  # noqa: E402
+from triage.inbox import parse  # noqa: E402
 from triage.model import TriageError  # noqa: E402
+from triage.providers import FakeTracker  # noqa: E402
 from triage.storage import (  # noqa: E402
     atomic_replace,
     exclusive_create,
@@ -22,6 +28,78 @@ from triage.storage import (  # noqa: E402
     preflight_artifacts,
     quarantine_inode,
 )
+
+
+def _triage_repository(tmp_path: Path) -> Path:
+    repo = tmp_path / "repo"
+    (repo / "config").mkdir(parents=True)
+    source_config = REPO_ROOT / "config/dev-model.yaml"
+    shutil.copy2(source_config, repo / "config/dev-model.yaml")
+    config = repo / "config/dev-model.yaml"
+    config.write_text(
+        config.read_text(encoding="utf-8").replace(
+            "  engines: scripts/devkit\n", "  engines: scripts\n"
+        ),
+        encoding="utf-8",
+    )
+    (repo / "docs").mkdir()
+    (repo / "docs/kit-friction-log.md").write_bytes(
+        b"# Log\n\n## 2026-01-02\n\n"
+        b"- **Handled.** details. **Filed 2026-01-02 as #17.**\n"
+        b"- **Open.** details.\n"
+    )
+    (repo / "docs/kit-friction-log-archive.md").write_bytes(b"# Archive\n")
+    (repo / "scripts").mkdir()
+    (repo / "scripts/triage_friction_log.py").write_text("# engine\n", encoding="utf-8")
+    (repo / "scripts/finalize_triage.py").write_text("# engine\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "init", "-b", "main"], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "test@example.invalid"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "Test"], check=True)
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-m", "fixture"], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(repo), "remote", "add", "origin", "https://github.com/example/project.git"], check=True)
+    subprocess.run(["git", "-C", str(repo), "update-ref", "refs/remotes/origin/main", "HEAD"], check=True)
+    return repo
+
+
+def test_saved_index_that_omits_historical_entry_is_refused_before_tracker_calls(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _triage_repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    candidates = parse((repo / "docs/kit-friction-log.md").read_bytes())
+    proposals = [
+        {
+            "candidate_id": candidate.candidate_id,
+            "source_block_digest": candidate.digest,
+            "title": candidate.title,
+            "body_without_marker": "Observed details.",
+            "project": "topij/agentic-dev-kit",
+            "labels": ["bug"],
+        }
+        for candidate in candidates
+    ]
+    drafted = run("new", context="interactive", request={"proposals": proposals}, start=repo)
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    state = loads_exact(state_path.read_bytes())
+    old_open = {
+        **state["frozen_snapshot"]["content"]["candidate_index"][1],
+        "candidate_id": "TRI-01",
+    }
+    state["frozen_snapshot"]["content"]["candidate_index"] = [old_open]
+    frozen_path = Path(drafted["frozen_snapshot"])
+    frozen = loads_exact(frozen_path.read_bytes())
+    frozen["frozen_snapshot"] = state["frozen_snapshot"]
+    frozen_path.write_bytes(dumps(frozen))
+    retained = dumps(state)
+    state_path.write_bytes(retained)
+    tracker = FakeTracker()
+    result = run("resume", context="interactive", request={}, start=repo, tracker=tracker)
+    assert result["outcome"] == "operator-held"
+    assert result["detail"] == "frozen snapshot candidate index mismatch"
+    assert tracker.calls == []
+    assert state_path.read_bytes() == retained
 
 
 def test_preflight_rejects_tracked_and_control_artifact_targets(tmp_path: Path) -> None:
