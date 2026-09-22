@@ -22,9 +22,81 @@ def test_mixed_section_keeps_unaccounted_entry() -> None:
     assert [candidate.raw for candidate in candidates] == [b"- **Still active.** parked.\n"]
 
 
+@pytest.mark.parametrize(
+    "annotation",
+    [
+        b"**Filed 2026-01-02\n  as [#1](https://example.test/1), on approval.**",
+        b"**Routed\n  2026-01-02 to\n  [#1](https://example.test/1) as an occurrence.**",
+        b"**Reconciled 2026-01-02 under #1:** the prior filing accounts for it.",
+    ],
+)
+@pytest.mark.parametrize("placement", [b"  {annotation}\n", b"Details complete.   {annotation}\n"])
+def test_dated_accounting_annotations_are_independent_of_hard_wrapping(
+    annotation: bytes, placement: bytes
+) -> None:
+    raw = b"# Log\n\n## 2026-01-02\n\n- **Already done.** body\n" + placement.replace(
+        b"{annotation}", annotation
+    )
+    assert parse(raw) == []
+
+
 def test_accounting_words_inside_an_entry_are_not_substring_authority() -> None:
     raw = b'# Log\n\n## 2026-01-02\n\n- **Parser bug.** The quoted example says "**Filed someday**" but no filing happened.\n'
     assert len(parse(raw)) == 1
+
+
+@pytest.mark.parametrize(
+    "mention",
+    [
+        b'The quoted example says "**Filed 2026-01-02 as #1.**" but no filing happened.',
+        b"The inline code says `Example. **Filed 2026-01-02 as #1.**` but records nothing.",
+        b"The phrase **Reconciled 2026-01-02 under #1:** is discussed, not asserted.",
+        b"The words Filed, Routed, and Reconciled are ordinary narrative.",
+    ],
+)
+def test_accounting_words_and_inline_literals_are_not_annotation_authority(mention: bytes) -> None:
+    raw = b"# Log\n\n## 2026-01-02\n\n- **Parser bug.** " + mention + b"\n"
+    assert len(parse(raw)) == 1
+
+
+def test_wrapped_inline_code_annotation_example_remains_active() -> None:
+    raw = b'''# Log
+
+## 2026-01-02
+
+- **Parser bug.** The code says `Example.
+  **Filed 2026-01-02 as #1.**` but records nothing.
+'''
+    assert len(parse(raw)) == 1
+
+
+def test_inline_code_requires_equal_delimiters_and_ends_before_real_annotation() -> None:
+    raw = b'''# Log
+
+## 2026-01-02
+
+- **Literal only.** The code says `prefix `` Example. **Filed 2026-01-02 as #1.**`.
+- **Already done.** The code says `prefix `` Example. **Filed 2026-01-02 as #1.**`.
+  Complete. **Routed 2026-01-02 to #1.**
+'''
+    candidates = parse(raw)
+    assert [candidate.raw for candidate in candidates] == [
+        b"- **Literal only.** The code says `prefix `` Example. **Filed 2026-01-02 as #1.**`.\n"
+    ]
+
+
+def test_unclosed_inline_code_does_not_mask_the_next_entry() -> None:
+    raw = b'''# Log
+
+## 2026-01-02
+
+- **First.** An unmatched `code span stays literal.
+- **Second.** Its own `code` remains inside this active entry.
+'''
+    assert [candidate.raw for candidate in parse(raw)] == [
+        b"- **First.** An unmatched `code span stays literal.\n",
+        b"- **Second.** Its own `code` remains inside this active entry.\n",
+    ]
 
 
 def test_exact_sweep_uses_parsed_boundaries_and_preserves_same_date_addition() -> None:

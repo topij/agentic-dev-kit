@@ -15,7 +15,8 @@ ENGINE_DIR = engine_dir(Path(__file__))
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
 from triage.canonical import digest, dumps, loads_exact  # noqa: E402
-from triage.model import Paths, Settings, TriageError, state_base  # noqa: E402
+from triage.gate import acquire  # noqa: E402
+from triage.model import Paths, Settings, TriageError, repository_identity, state_base  # noqa: E402
 from triage.recovery import (  # noqa: E402
     capture_state_present,
     gate_only_plan,
@@ -196,3 +197,36 @@ def test_gate_capture_rejects_foreign_repository_even_with_self_consistent_core(
     store.gate_path.write_bytes(dumps(record))
     with pytest.raises(Exception, match="repository identity is foreign"):
         gate_only_plan(store, settings(tmp_path))
+
+
+@pytest.mark.parametrize("observed_start", [None, "ps-lstart:different-owner"])
+def test_gate_only_recovery_refuses_uncertain_live_owner_without_persisted_change(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    observed_start: str | None,
+) -> None:
+    configured = settings(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    store = ArtifactStore(configured, "live")
+    lease = acquire(
+        store,
+        repository_identity=repository_identity(configured),
+        config_fingerprint=configured.fingerprint,
+        run_identity=None,
+    )
+    before = {
+        path.relative_to(state_root): path.read_bytes()
+        for path in state_root.rglob("*")
+        if path.is_file()
+    }
+    monkeypatch.setattr("triage.gate._process_start", lambda _pid: observed_start)
+    with pytest.raises(TriageError, match="owner is active or uncertain"):
+        gate_only_plan(store, configured)
+    after = {
+        path.relative_to(state_root): path.read_bytes()
+        for path in state_root.rglob("*")
+        if path.is_file()
+    }
+    assert after == before
+    lease.release()

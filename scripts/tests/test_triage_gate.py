@@ -15,7 +15,7 @@ ENGINE_DIR = engine_dir(Path(__file__))
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
 from triage.canonical import digest, loads_exact  # noqa: E402
-from triage.gate import acquire, validate_record  # noqa: E402
+from triage.gate import acquire, owner_status, validate_record  # noqa: E402
 from triage.model import Paths, Settings, TriageError, repository_identity  # noqa: E402
 from triage.recovery import gate_only_plan, prepare_gate_only, resume_gate_only  # noqa: E402
 from triage.storage import ArtifactStore  # noqa: E402
@@ -79,6 +79,25 @@ def test_gate_acquire_refuses_unavailable_process_identity_before_publication(
     assert not store.gate_path.exists()
     assert not list(store.gate_path.parent.glob(f".{store.gate_path.name}.*.tmp"))
     assert unrelated.read_bytes() == b"preserve"
+
+
+@pytest.mark.parametrize("observed_start", [None, "ps-lstart:different-owner"])
+def test_owner_status_is_uncertain_when_live_process_start_cannot_be_matched(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    observed_start: str | None,
+) -> None:
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(tmp_path / "sandbox"))
+    store = ArtifactStore(settings(tmp_path), "test")
+    lease = acquire(
+        store,
+        repository_identity={"root": str(tmp_path)},
+        config_fingerprint="0" * 64,
+        run_identity=None,
+    )
+    monkeypatch.setattr("triage.gate._process_start", lambda _pid: observed_start)
+    assert owner_status(lease.record) == "uncertain"
+    lease.release()
 
 
 @pytest.mark.parametrize("cutpoint", ["before-link", "after-link"])

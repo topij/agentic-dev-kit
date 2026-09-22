@@ -12,11 +12,21 @@ from .model import TriageError
 SECTION_RE = re.compile(rb"(?m)^## (?P<title>[^\n]+)\n")
 DATED_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(?:\s|$)")
 ENTRY_RE = re.compile(rb"(?m)^- \*\*")
-ACCOUNTED_RE = re.compile(rb"(?m)^\s*\*\*(?:Filed|Routed|Reconciled)\b")
+# Accounted annotations are bold, dated workflow records. They may start an
+# indented continuation line or follow a completed sentence on the same line;
+# code literals and ordinary narrative mentions are not annotations.
+ACCOUNTED_RE = re.compile(
+    rb"(?:^[ \t]*|(?<=[.!?])[ \t]+)\*\*(?:"
+    rb"Filed\s+\d{4}-\d{2}-\d{2}\s+as|"
+    rb"Routed\s+\d{4}-\d{2}-\d{2}\s+to|"
+    rb"Reconciled\s+\d{4}-\d{2}-\d{2}\s+under"
+    rb")\b(?:(?!\*\*).)*\*\*",
+    re.MULTILINE | re.DOTALL,
+)
 
 
 def _markdown_mask(raw: bytes) -> bytes:
-    """Blank fenced-code lines while preserving every byte offset and newline."""
+    """Blank fenced and inline code while preserving byte offsets and newlines."""
     masked = bytearray(raw)
     offset = 0
     fence: tuple[int, int] | None = None
@@ -45,6 +55,37 @@ def _markdown_mask(raw: bytes) -> bytes:
                 if masked[index] not in (10, 13):
                     masked[index] = 32
         offset += len(line)
+    cursor = 0
+    while cursor < len(masked):
+        start = masked.find(b"`", cursor)
+        if start < 0:
+            break
+        length = len(masked[start:]) - len(masked[start:].lstrip(b"`"))
+        remainder = masked[start + length :]
+        boundaries = [
+            match.start()
+            for pattern in (rb"\r?\n[ \t]*\r?\n", rb"(?m)^(?:## |- \*\*)")
+            if (match := re.search(pattern, remainder)) is not None
+        ]
+        limit = len(masked) if not boundaries else start + length + min(boundaries)
+        search = start + length
+        closing = -1
+        while search < limit:
+            candidate = masked.find(b"`", search, limit)
+            if candidate < 0:
+                break
+            candidate_length = len(masked[candidate:]) - len(masked[candidate:].lstrip(b"`"))
+            if candidate_length == length:
+                closing = candidate
+                break
+            search = candidate + candidate_length
+        if closing < 0:
+            cursor = start + length
+            continue
+        for index in range(start, closing + length):
+            if masked[index] not in (10, 13):
+                masked[index] = 32
+        cursor = closing + length
     return bytes(masked)
 
 
