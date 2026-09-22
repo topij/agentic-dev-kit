@@ -563,13 +563,24 @@ def _source_literal(raw: bytes) -> tuple[str, str, str]:
     """Return an honest readable rendering and a content-safe Markdown fence."""
     try:
         rendered = raw.decode("utf-8")
-        description = "UTF-8 text; the exact authoritative bytes are retained in state"
     except UnicodeDecodeError:
         rendered = ascii(raw)
         description = (
             "Python bytes literal; escapes are part of this unambiguous rendering and "
             "the exact authoritative bytes are retained in state"
         )
+    else:
+        if all(character.isprintable() or character in "\n\t" for character in rendered):
+            description = (
+                "printable UTF-8 text with LF/TAB whitespace; the exact authoritative "
+                "bytes are retained in state"
+            )
+        else:
+            rendered = ascii(raw)
+            description = (
+                "Python bytes literal; escapes are part of this unambiguous rendering and "
+                "the exact authoritative bytes are retained in state"
+            )
     runs = {
         marker: max((len(match.group()) for match in re.finditer(re.escape(marker) + "+", rendered)), default=0)
         for marker in ("`", "~")

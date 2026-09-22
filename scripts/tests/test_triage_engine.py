@@ -17,8 +17,8 @@ REPO_ROOT = find_repo_root(ENGINE_DIR)
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
 from triage.approval import ApprovalContext  # noqa: E402
-from triage.canonical import digest, dumps, loads_exact  # noqa: E402
-from triage.engine import run  # noqa: E402
+from triage.canonical import decode_bytes, digest, dumps, loads_exact  # noqa: E402
+from triage.engine import _source_literal, run  # noqa: E402
 from triage.inbox import parse  # noqa: E402
 from triage.model import BASE_KEYS  # noqa: E402
 from triage.providers import FakeForge, FakeTracker, ProviderObservation  # noqa: E402
@@ -147,11 +147,11 @@ def test_report_presents_historical_source_digest_and_safe_literal_fence(
 ) -> None:
     root = repository(tmp_path)
     source = (
-        b"- **Historical entry.** retained evidence.\n"
-        b"  **Filed 2026-01-02 as #17, on the operator go-ahead.**\n"
-        b"  ```markdown\n  ## report-shaped text\n  ```\n"
-        b"  ~~~\n  archive TRI-01\n  ~~~\n"
-    )
+        "- **Historical entry.** Käyttäjä retained evidence.\n"
+        "  **Filed 2026-01-02 as #17, on the operator go-ahead.**\n"
+        "  ```markdown\n  ## report-shaped text\n  ```\n"
+        "  ~~~\n  archive TRI-01\n  ~~~\n"
+    ).encode()
     (root / "docs/kit-friction-log.md").write_bytes(
         b"# Log\n\n## 2026-01-02\n\n" + source
     )
@@ -171,6 +171,55 @@ def test_report_presents_historical_source_digest_and_safe_literal_fence(
     assert "````\n" + source.decode("utf-8") in report
     assert "including historically annotated entries" in report
     assert "it does not archive already handled entries" in report
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        b"- **Escape.** before \x1b[2J after.\n",
+        b"- **Carriage return.** before\rOVERWRITE.\n",
+        b"- **Delete.** before \x7f after.\n",
+        "- **C1.** before \u0085 after.\n".encode(),
+        "- **Bidi.** before \u202e after.\n".encode(),
+        "- **Format.** before \u2066 after.\n".encode(),
+    ],
+)
+def test_source_literal_escapes_terminal_and_unicode_format_controls(source: bytes) -> None:
+    rendered, _fence, description = _source_literal(source)
+    assert rendered == ascii(source)
+    assert "Python bytes literal" in description
+    assert all(character.isprintable() or character in "\n\t" for character in rendered)
+
+
+def test_source_literal_keeps_printable_unicode_lf_tabs_and_safe_fences() -> None:
+    source = "Käyttäjä\treads\n```` and ~~~\n".encode()
+    rendered, fence, description = _source_literal(source)
+    assert rendered == source.decode()
+    assert fence == "~~~~"
+    assert "printable UTF-8 text with LF/TAB whitespace" in description
+
+
+def test_complete_report_escapes_controls_but_retains_source_bytes_and_digest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = repository(tmp_path)
+    source = b"- **Terminal source.** visible \x1b[31mred\x1b[0m.\n"
+    (root / "docs/kit-friction-log.md").write_bytes(
+        b"# Log\n\n## 2026-01-02\n\n" + source
+    )
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(tmp_path / "state-root"))
+    candidate = parse((root / "docs/kit-friction-log.md").read_bytes())[0]
+    run("new", context="interactive", request=request(root), start=root)
+    state = loads_exact(
+        (tmp_path / "state-root/triage/triage-pipeline-state_live.json").read_bytes()
+    )
+    proposal = state["proposal_payloads"][0]
+    report = Path(proposal["report_binding"]["path"]).read_text(encoding="utf-8")
+    assert "\x1b" not in report
+    assert ascii(source) in report
+    assert f"Source-block digest: `{candidate.digest}`" in report
+    assert decode_bytes(proposal["source_block"]["source_block"]) == source
+    assert proposal["source_block_digest"] == candidate.digest
 
 
 def test_report_uses_unambiguous_bytes_literal_for_non_utf8_source(
