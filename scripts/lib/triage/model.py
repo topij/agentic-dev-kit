@@ -642,6 +642,44 @@ def validate_state(value: Any, *, settings: Settings, mode: str) -> dict[str, An
                 raise TriageError("finalization operation is malformed", outcome="operator-held")
             if position < len(finalization) - 1 and operation.get("status") != "verified":
                 raise TriageError("finalization operation prefix is not verified", outcome="operator-held")
+            if operation.get("kind") == "commit":
+                intent = operation["intent"]
+                expected_paths = sorted([
+                    str(settings.paths.friction_log.relative_to(settings.paths.repo)),
+                    str(settings.paths.archive.relative_to(settings.paths.repo)),
+                ])
+                updates = intent.get("updates")
+                authority = intent.get("authority_read_back")
+                if (
+                    intent.get("paths") != expected_paths
+                    or not isinstance(updates, list)
+                    or len(updates) != len(expected_paths)
+                    or any(not isinstance(update, dict) for update in updates)
+                    or [update.get("path") for update in updates] != expected_paths
+                    or any(
+                        set(update) != {
+                            "path", "previous_content", "previous_digest",
+                            "content", "content_digest",
+                        }
+                        for update in updates
+                    )
+                    or not isinstance(authority, dict)
+                    or authority.get("paths") != expected_paths
+                    or not isinstance(authority.get("staged_tree"), str)
+                    or not isinstance(intent.get("migration_marker"), str)
+                ):
+                    raise TriageError("commit update intent is malformed", outcome="operator-held")
+                try:
+                    for update in updates:
+                        previous = decode_bytes(update["previous_content"])
+                        content = decode_bytes(update["content"])
+                        if (
+                            digest_bytes(previous) != update["previous_digest"]
+                            or digest_bytes(content) != update["content_digest"]
+                        ):
+                            raise TriageError("commit update intent digest mismatch", outcome="operator-held")
+                except (KeyError, TypeError, ValueError, CanonicalError) as exc:
+                    raise TriageError("commit update intent is malformed", outcome="operator-held") from exc
             attempts = operation.get("attempts")
             if not isinstance(attempts, list) or not attempts:
                 raise TriageError("finalization attempt history is missing", outcome="operator-held")

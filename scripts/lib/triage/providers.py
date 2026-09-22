@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import urlparse
 
-from .canonical import digest
+from .canonical import decode_bytes, digest, digest_bytes
 from .model import TriageError, terminal_pr_watch_receipt
 
 
@@ -111,11 +111,25 @@ class GitHubIssues:
             expected_api_host = "api.github.com" if host == "github.com" else host
             if observed_repository != repository or destination.get("project") != observed_repository or observed_host != expected_api_host:
                 raise TriageError("tracker destination read-back mismatch", outcome="operator-held")
+            labels = issue.get("labels")
+            if (
+                not isinstance(labels, list)
+                or any(
+                    not isinstance(label, dict)
+                    or not isinstance(label.get("name"), str)
+                    or not label["name"]
+                    for label in labels
+                )
+            ):
+                raise TriageError("tracker label read-back is malformed", outcome="operator-held")
+            label_names = [label["name"] for label in labels]
+            if len(label_names) != len(set(label_names)):
+                raise TriageError("tracker label read-back is ambiguous", outcome="operator-held")
             payload = {
                 "title": issue.get("title"),
                 "body": issue_body,
                 "project": observed_repository,
-                "labels": sorted(label.get("name") for label in issue.get("labels", []) if isinstance(label, dict)),
+                "labels": sorted(label_names),
             }
             observed.append({"identifier": str(number), "payload": payload, "payload_digest": digest(payload), "marker": marker, "destination": destination})
         return observed
@@ -221,7 +235,10 @@ class GitHubForge:
         result = self._run(["gh", "pr", "view", pr, "--repo", f"{host}/{repository}", "--json", "url,baseRefName,headRefName,headRefOid,isDraft,mergedAt,files"])
         if result.returncode:
             raise TriageError("pull-request read-back failed", outcome="operator-held")
-        value = json.loads(result.stdout)
+        try:
+            value = json.loads(result.stdout)
+        except json.JSONDecodeError as exc:
+            raise TriageError("pull-request read-back returned invalid JSON", outcome="operator-held") from exc
         if not isinstance(value, dict):
             raise TriageError("pull-request read-back is malformed", outcome="operator-held")
         url = value.get("url")
@@ -233,6 +250,48 @@ class GitHubForge:
             raise TriageError("pull-request file read-back is malformed", outcome="operator-held")
         value = {**value, "files": [item["path"] for item in files]}
         return value
+
+    @staticmethod
+    def _commit_updates(request: dict[str, Any]) -> list[tuple[str, bytes]]:
+        updates = request.get("updates")
+        paths = request.get("paths")
+        if (
+            not isinstance(updates, list)
+            or not isinstance(paths, list)
+            or any(not isinstance(path, str) for path in paths)
+            or any(
+                not isinstance(update, dict)
+                or set(update) != {
+                    "path", "previous_content", "previous_digest", "content", "content_digest",
+                }
+                or not isinstance(update.get("path"), str)
+                or not isinstance(update.get("previous_digest"), str)
+                or not isinstance(update.get("previous_content"), str)
+                or not isinstance(update.get("content"), str)
+                or not isinstance(update.get("content_digest"), str)
+                for update in updates
+            )
+            or [update["path"] for update in updates] != paths
+            or any(
+                Path(path).is_absolute() or ".." in Path(path).parts
+                for path in paths
+            )
+        ):
+            raise TriageError("commit update authority is malformed", outcome="operator-held")
+        decoded: list[tuple[str, bytes]] = []
+        for update in updates:
+            try:
+                raw = decode_bytes(update["content"])
+                previous = decode_bytes(update["previous_content"])
+            except (TypeError, ValueError) as exc:
+                raise TriageError("commit update content is malformed", outcome="operator-held") from exc
+            if (
+                digest_bytes(raw) != update["content_digest"]
+                or digest_bytes(previous) != update["previous_digest"]
+            ):
+                raise TriageError("commit update content digest mismatch", outcome="operator-held")
+            decoded.append((update["path"], raw))
+        return decoded
 
     @staticmethod
     def _pr_number(url: Any, *, host: str, repository: str) -> str:
@@ -292,13 +351,34 @@ class GitHubForge:
             worktree = Path(request["worktree"]).resolve()
             import tempfile
 
+            updates = self._commit_updates(request)
             with tempfile.NamedTemporaryFile(prefix="triage-index-", dir=worktree, delete=True) as index:
                 env = {**os.environ, "GIT_INDEX_FILE": index.name}
                 seed = subprocess.run(["git", "read-tree", "HEAD"], cwd=worktree, env=env, check=False, capture_output=True, text=True)
-                staged = subprocess.run(["git", "add", "--", *request["paths"]], cwd=worktree, env=env, check=False, capture_output=True, text=True)
+                update_results = []
+                for (path, raw), update in zip(updates, request["updates"], strict=True):
+                    if digest_bytes((worktree / path).read_bytes()) != update["previous_digest"]:
+                        raise TriageError("commit update source changed before authority", outcome="operator-held")
+                    mode = subprocess.run(
+                        ["git", "ls-files", "-s", "--", path], cwd=worktree,
+                        check=False, capture_output=True, text=True,
+                    )
+                    fields = mode.stdout.split()
+                    if mode.returncode or len(fields) < 4:
+                        raise TriageError("commit update path is not tracked", outcome="operator-held")
+                    blob = subprocess.run(
+                        ["git", "hash-object", "-w", "--stdin"], cwd=worktree,
+                        env=env, input=raw, check=False, capture_output=True,
+                    )
+                    if blob.returncode:
+                        raise TriageError("commit update blob authority failed", outcome="operator-held")
+                    update_results.append(subprocess.run(
+                        ["git", "update-index", "--add", "--cacheinfo", fields[0], blob.stdout.decode().strip(), path],
+                        cwd=worktree, env=env, check=False, capture_output=True, text=True,
+                    ))
                 names = subprocess.run(["git", "diff", "--cached", "--name-only"], cwd=worktree, env=env, check=False, capture_output=True, text=True)
                 tree = subprocess.run(["git", "write-tree"], cwd=worktree, env=env, check=False, capture_output=True, text=True)
-                if any(item.returncode for item in (seed, staged, names, tree)):
+                if any(item.returncode for item in (seed, *update_results, names, tree)):
                     raise TriageError("staged-tree authority read-back failed", outcome="operator-held")
                 return {"paths": names.stdout.strip().splitlines(), "staged_tree": tree.stdout.strip()}
         raise TriageError(f"unsupported forge authority action {action}", outcome="operator-held")
@@ -318,6 +398,12 @@ class GitHubForge:
         worktree = Path(intent["worktree"]).resolve() if intent.get("worktree") else self.repo
         if action == "commit":
             paths = intent["paths"]
+            updates = self._commit_updates(intent)
+            if any(
+                digest_bytes((worktree / path).read_bytes()) != digest_bytes(raw)
+                for path, raw in updates
+            ):
+                return ProviderObservation("ambiguous", None, {"reason": "commit update bytes changed"})
             add = self._run(["git", "add", "--", *paths], worktree)
             if add.returncode:
                 return ProviderObservation("failed", {"stderr": add.stderr}, {"effect": "unverified"})

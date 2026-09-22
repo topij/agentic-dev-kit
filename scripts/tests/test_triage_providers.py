@@ -110,6 +110,38 @@ def test_malformed_list_item_invalidates_absence_readback() -> None:
         GitHubIssues(runner).search(DESTINATION, MARKER)
 
 
+def test_unsorted_authoritative_labels_reconcile_to_canonical_payload_order() -> None:
+    payload = {
+        "title": "title",
+        "body": "body\n" + MARKER,
+        "project": "owner/repo",
+        "labels": ["alpha", "zeta"],
+    }
+    read_back = issue(101, payload)
+    read_back["labels"] = [{"name": "zeta"}, {"name": "alpha"}]
+    runner = Runner([(0, [{"number": 101, "body": payload["body"]}]), (0, read_back)])
+    observed = GitHubIssues(runner).search(DESTINATION, MARKER)
+    assert observed[0]["payload"] == payload
+    assert observed[0]["payload_digest"] == digest(payload)
+
+
+@pytest.mark.parametrize(
+    "labels",
+    [
+        {"name": "bug"},
+        [{"name": "bug"}, {"color": "red"}],
+        [{"name": "bug"}, {"name": "bug"}],
+    ],
+)
+def test_malformed_or_ambiguous_label_readback_is_held(labels: object) -> None:
+    payload = {"title": "title", "body": "body\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
+    read_back = issue(101, payload)
+    read_back["labels"] = labels
+    runner = Runner([(0, [{"number": 101, "body": payload["body"]}]), (0, read_back)])
+    with pytest.raises(TriageError, match="label read-back"):
+        GitHubIssues(runner).search(DESTINATION, MARKER)
+
+
 @pytest.mark.parametrize("backend", [None, "linear", "jira"])
 def test_github_adapter_refuses_foreign_tracker_backend_before_provider_call(backend: str | None) -> None:
     runner = Runner([])
@@ -200,3 +232,15 @@ def test_pr_watch_transport_matches_numeric_shared_cli_contract(tmp_path: Path) 
             "pr-watch",
             {**watch_intent("a" * 40), "pr": "https://example.com/owner/repo/pull/17"},
         )
+
+
+def test_malformed_successful_pull_request_json_is_a_canonical_provider_hold(tmp_path: Path) -> None:
+    intent = {
+        "host": "github.com",
+        "repository": "owner/repo",
+        "pr": "https://github.com/owner/repo/pull/17",
+        "base": "main",
+        "reviewed_head": "a" * 40,
+    }
+    with pytest.raises(TriageError, match="invalid JSON"):
+        GitHubForge(tmp_path, Runner([(0, "not-json")])).perform("merge-read-back", intent)

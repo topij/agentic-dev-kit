@@ -240,6 +240,68 @@ def test_live_attempt_is_persisted_before_fake_create(tmp_path: Path, monkeypatc
     assert [call[0] for call in tracker.calls] == ["search", "create"]
 
 
+def test_labels_are_canonical_before_approval_and_changed_readback_cannot_verify(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    supplied = request(root)
+    supplied["proposals"][0]["labels"] = ["zeta", "alpha"]
+    run("new", context="interactive", request=supplied, start=root)
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    presented = loads_exact(state_path.read_bytes())
+    proposal = presented["proposal_payloads"][0]
+    assert proposal["payload"]["labels"] == ["alpha", "zeta"]
+
+    first = FakeTracker([], ProviderObservation("ambiguous", {"accepted": True}, {"effect": "unknown"}))
+    run(
+        "resume",
+        context="interactive",
+        request={"approval": approval_for(presented)},
+        start=root,
+        tracker=first,
+        approval_context=approval_context(presented),
+        head_authority=FakeForge([]),
+    )
+    retained = loads_exact(state_path.read_bytes())
+    destination = retained["operations"][0]["destination"]
+    changed_payload = {**proposal["payload"], "labels": ["alpha", "changed"]}
+    changed = {
+        "identifier": "17",
+        "payload": changed_payload,
+        "payload_digest": digest(changed_payload),
+        "marker": proposal["marker"],
+        "destination": destination,
+    }
+    refused = run(
+        "resume",
+        context="interactive",
+        request={},
+        start=root,
+        tracker=FakeTracker([changed]),
+        head_authority=FakeForge([]),
+    )
+    assert refused["outcome"] == "operator-held"
+    assert loads_exact(state_path.read_bytes())["operations"][0]["status"] == "ambiguous"
+    exact = {
+        "identifier": "17",
+        "payload": proposal["payload"],
+        "payload_digest": proposal["payload_digest"],
+        "marker": proposal["marker"],
+        "destination": destination,
+    }
+    resumed = run(
+        "resume",
+        context="interactive",
+        request={},
+        start=root,
+        tracker=FakeTracker([exact]),
+        head_authority=FakeForge([]),
+    )
+    assert resumed["verified_tracker_identifiers"] == ["17"]
+
+
 def test_unknown_entry_stops_before_repository_probe(tmp_path: Path) -> None:
     result = run("resume new", context="interactive", start=tmp_path)
     assert result["outcome"] == "hard-stop"
@@ -307,6 +369,9 @@ def test_new_refuses_live_active_state_without_changing_approval_bound_bytes(
     refused = run("new", context="interactive", request={}, start=root)
     assert refused["outcome"] == "operator-held"
     assert refused["detail"] == "new refuses to overwrite active state"
+    retained = loads_exact(before)
+    assert refused["report"] == retained["proposal_payloads"][0]["report_binding"]["path"]
+    assert refused["frozen_snapshot"]
     assert state_path.read_bytes() == before
 
 
@@ -540,6 +605,9 @@ def test_stale_display_digest_is_rejected(tmp_path: Path, monkeypatch: pytest.Mo
     result = run("test", context="interactive", request={"approval": stale}, start=root, approval_context=approval_context(state))
     assert result["outcome"] == "operator-held"
     assert "not bound" in result["detail"]
+    assert result["engine_mode"] == state["engine_mode"]
+    assert result["frozen_snapshot"]
+    assert result["report"] == state["proposal_payloads"][0]["report_binding"]["path"]
 
 
 def test_modify_replaces_payload_digest_and_requires_later_approval(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

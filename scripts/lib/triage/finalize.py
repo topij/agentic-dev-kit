@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 from .canonical import digest
-from .inbox import Candidate, exact_sweep
+from .inbox import Candidate, _markdown_mask, exact_sweep
 from .model import TriageError
 
 
@@ -32,7 +32,7 @@ def render_sweep(current: bytes, archive: bytes, candidates: list[Candidate], st
     active, archived = exact_sweep(current, candidates, ids)
     if marker:
         marker_bytes = marker + (b"\n" if not marker.endswith(b"\n") else b"")
-        first_section = re.search(rb"(?m)^## ", active)
+        first_section = re.search(rb"(?m)^## ", _markdown_mask(active))
         offset = first_section.start() if first_section else len(active)
         new_active = active[:offset] + marker_bytes + active[offset:]
     else:

@@ -1114,10 +1114,13 @@ substitutes for a provider read-back.
 Conventional `--help` prints argparse help and exits. Every execution attempt otherwise
 prints a canonical JSON result and returns success for a completed, degraded, or
 operator-held transition. A hard stop returns a nonzero status. The result
-always reports the capability map, outcome, execution and engine modes, retained
-report/snapshot paths, verified tracker identifiers, recovery plan when present, safe
+always reports the capability map, outcome, execution mode, verified tracker
+identifiers, recovery plan when present, safe
 resume action and detail, observed protected head when a write preflight ran, and the
 retained pull-request URL and observed/reviewed heads when authoritative evidence exists.
+It reports the configured engine mode after configuration has loaded, the frozen
+snapshot path after active-state validation, and the report path when that state carries
+an exact report binding; those fields are null before their respective authority exists.
 
 ## Final output
 

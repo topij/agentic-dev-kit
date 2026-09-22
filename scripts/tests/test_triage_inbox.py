@@ -11,6 +11,7 @@ from _repo_layout import engine_dir  # noqa: E402
 ENGINE_DIR = engine_dir(Path(__file__))
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
+from triage.finalize import render_sweep  # noqa: E402
 from triage.inbox import exact_sweep, parse  # noqa: E402
 from triage.model import TriageError  # noqa: E402
 
@@ -41,3 +42,75 @@ def test_matching_excerpt_inside_changed_block_is_not_a_sweep_match() -> None:
     current = b"# Log\n\n## 2026-01-02\n\n- **Changed.** quote follows:\n  - **First.** body\n"
     with pytest.raises(TriageError, match="changed or is ambiguous"):
         exact_sweep(current, frozen, {"TRI-01"})
+
+
+def test_fenced_headings_entries_and_accounting_markers_are_literal_examples() -> None:
+    raw = b'''# Log
+
+```markdown
+## 2026-01-01
+
+- **Quoted fake.** not active
+```
+
+## 2026-01-02
+
+- **Real entry.** body
+
+  ~~~~markdown
+  - **Nested quoted entry.** example
+  **Filed:** example only
+  ~~~~
+'''
+    candidates = parse(raw)
+    assert [candidate.title for candidate in candidates] == ["2026-01-02"]
+    assert len(candidates) == 1
+    assert b"Nested quoted entry" in candidates[0].raw
+
+
+def test_exact_sweep_preserves_fenced_examples_without_splitting_them_into_archive() -> None:
+    raw = b'''# Log
+
+```markdown
+## 2026-01-01
+- **Quoted fake.** not active
+```
+
+## 2026-01-02
+
+- **Real entry.** body
+'''
+    candidates = parse(raw)
+    active, archive = exact_sweep(raw, candidates, {"TRI-01"})
+    assert b"Quoted fake" in active
+    assert b"Quoted fake" not in archive
+    assert archive == b"## 2026-01-02\n\n- **Real entry.** body\n"
+
+
+def test_render_sweep_places_migration_marker_before_first_real_section() -> None:
+    raw = b'''# Log
+
+```markdown
+## quoted heading
+```
+
+## 2026-01-02
+
+- **Real entry.** body
+'''
+    candidates = parse(raw)
+    marker = "## 2026-01-02 — migrated\n\n".encode()
+    active, archive = render_sweep(
+        raw,
+        b"# Archive\n",
+        candidates,
+        {
+            "operations": [],
+            "decisions": [{"candidate_id": "TRI-01", "decision": "archive"}],
+        },
+        marker,
+    )
+    assert active.index(b"```markdown") < active.index(marker)
+    assert active.index(b"```\n") < active.index(marker)
+    assert b"quoted heading" in active
+    assert b"quoted heading" not in archive

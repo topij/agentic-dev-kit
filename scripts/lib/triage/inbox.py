@@ -15,6 +15,39 @@ ENTRY_RE = re.compile(rb"(?m)^- \*\*")
 ACCOUNTED_RE = re.compile(rb"(?m)^\s*\*\*(?:Filed|Routed|Reconciled)\b")
 
 
+def _markdown_mask(raw: bytes) -> bytes:
+    """Blank fenced-code lines while preserving every byte offset and newline."""
+    masked = bytearray(raw)
+    offset = 0
+    fence: tuple[int, int] | None = None
+    for line in raw.splitlines(keepends=True):
+        content = line.rstrip(b"\r\n")
+        indent = len(content) - len(content.lstrip(b" "))
+        tail = content[indent:] if indent <= 3 else b""
+        opening: tuple[int, int] | None = None
+        if tail:
+            marker = tail[0]
+            if marker in (ord("`"), ord("~")):
+                length = len(tail) - len(tail.lstrip(bytes([marker])))
+                remainder = tail[length:]
+                if length >= 3 and (marker != ord("`") or b"`" not in remainder):
+                    opening = (marker, length)
+        blank = fence is not None or opening is not None
+        if fence is not None and tail:
+            marker, minimum = fence
+            length = len(tail) - len(tail.lstrip(bytes([marker])))
+            if length >= minimum and not tail[length:].strip(b" \t"):
+                fence = None
+        elif opening is not None:
+            fence = opening
+        if blank:
+            for index in range(offset, offset + len(line)):
+                if masked[index] not in (10, 13):
+                    masked[index] = 32
+        offset += len(line)
+    return bytes(masked)
+
+
 def _title(raw: bytes) -> str:
     try:
         return raw.decode("utf-8")
@@ -42,7 +75,8 @@ class Candidate:
 
 
 def parse(raw: bytes) -> list[Candidate]:
-    matches = list(SECTION_RE.finditer(raw))
+    visible = _markdown_mask(raw)
+    matches = list(SECTION_RE.finditer(visible))
     candidates: list[Candidate] = []
     seen: set[str] = set()
     for index, match in enumerate(matches):
@@ -50,11 +84,11 @@ def parse(raw: bytes) -> list[Candidate]:
         if not DATED_RE.match(title) or "Backlog migrated" in title:
             continue
         section_end = matches[index + 1].start() if index + 1 < len(matches) else len(raw)
-        entries = list(ENTRY_RE.finditer(raw, match.end(), section_end))
+        entries = list(ENTRY_RE.finditer(visible, match.end(), section_end))
         for entry_index, entry in enumerate(entries):
             end = entries[entry_index + 1].start() if entry_index + 1 < len(entries) else section_end
             block = raw[entry.start():end]
-            if ACCOUNTED_RE.search(block):
+            if ACCOUNTED_RE.search(visible[entry.start():end]):
                 continue
             block_digest = digest_bytes(block)
             if block_digest in seen:
@@ -79,13 +113,14 @@ def exact_sweep(current: bytes, frozen: list[Candidate], sweep_ids: set[str]) ->
     if unknown:
         raise TriageError(f"unknown sweep candidate: {sorted(unknown)!r}", outcome="operator-held")
     current_blocks: list[tuple[int, int, bytes, str]] = []
-    sections = list(SECTION_RE.finditer(current))
+    visible = _markdown_mask(current)
+    sections = list(SECTION_RE.finditer(visible))
     for index, section in enumerate(sections):
         title = _title(section.group("title"))
         if not DATED_RE.match(title):
             continue
         section_end = sections[index + 1].start() if index + 1 < len(sections) else len(current)
-        entries = list(ENTRY_RE.finditer(current, section.end(), section_end))
+        entries = list(ENTRY_RE.finditer(visible, section.end(), section_end))
         for entry_index, entry in enumerate(entries):
             end = entries[entry_index + 1].start() if entry_index + 1 < len(entries) else section_end
             current_blocks.append((entry.start(), end, current[entry.start():end], title))
@@ -106,12 +141,13 @@ def exact_sweep(current: bytes, frozen: list[Candidate], sweep_ids: set[str]) ->
         active = active[:start] + active[end:]
     # A date heading remains when another entry, including a newly added one,
     # still occupies its section. Remove only now-empty dated sections.
-    sections = list(SECTION_RE.finditer(active))
+    visible_active = _markdown_mask(active)
+    sections = list(SECTION_RE.finditer(visible_active))
     empty_sections: list[tuple[int, int]] = []
     for index, section in enumerate(sections):
         title = _title(section.group("title"))
         end = sections[index + 1].start() if index + 1 < len(sections) else len(active)
-        if DATED_RE.match(title) and not ENTRY_RE.search(active, section.end(), end) and not active[section.end():end].strip():
+        if DATED_RE.match(title) and not ENTRY_RE.search(visible_active, section.end(), end) and not active[section.end():end].strip():
             empty_sections.append((section.start(), end))
     for start, end in reversed(empty_sections):
         active = active[:start] + active[end:]

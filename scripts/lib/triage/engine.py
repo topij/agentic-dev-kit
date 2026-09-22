@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import difflib
+import re
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -517,13 +518,24 @@ def _proposal_records(
             raise TriageError("proposal source authority mismatch", outcome="operator-held")
         if not isinstance(item["title"], str) or not item["title"] or not isinstance(item["body_without_marker"], str):
             raise TriageError("proposal title/body is invalid", outcome="operator-held")
-        if not isinstance(item["project"], str) or not isinstance(item["labels"], list) or any(not isinstance(label, str) for label in item["labels"]):
+        if (
+            not isinstance(item["project"], str)
+            or not isinstance(item["labels"], list)
+            or any(not isinstance(label, str) or not label for label in item["labels"])
+            or len(item["labels"]) != len(set(item["labels"]))
+        ):
             raise TriageError("proposal project/labels are invalid", outcome="operator-held")
-        core = {name: item[name] for name in ("title", "body_without_marker", "project", "labels")}
+        labels = sorted(item["labels"])
+        core = {
+            "title": item["title"],
+            "body_without_marker": item["body_without_marker"],
+            "project": item["project"],
+            "labels": labels,
+        }
         core_digest = digest(core)
         marker = _marker(run_identity["session"], candidate.candidate_id, core_digest)
         body = item["body_without_marker"].rstrip() + "\n\n" + marker
-        payload = {"title": item["title"], "body": body, "project": item["project"], "labels": item["labels"]}
+        payload = {"title": item["title"], "body": body, "project": item["project"], "labels": labels}
         intermediate.append({
             "candidate_id": candidate.candidate_id,
             "payload_core": core,
@@ -1090,6 +1102,82 @@ def _test_render_diff(settings: Settings, state: dict[str, Any]) -> str:
     return "\n".join(pieces) + "\n"
 
 
+def _branch_date(settings: Settings, branch: Any) -> str:
+    pattern_parts = settings.triage_branch_pattern.split("{date}")
+    if (
+        len(pattern_parts) != 2
+        or not isinstance(branch, str)
+        or not branch.startswith(pattern_parts[0])
+        or not branch.endswith(pattern_parts[1])
+    ):
+        raise TriageError("commit update branch date is not bound", outcome="operator-held")
+    end = len(branch) - len(pattern_parts[1]) if pattern_parts[1] else len(branch)
+    branch_date = branch[len(pattern_parts[0]):end]
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", branch_date):
+        raise TriageError("commit update branch date is not bound", outcome="operator-held")
+    return branch_date
+
+
+def _validate_commit_updates(
+    state: dict[str, Any], settings: Settings, intent: dict[str, Any]
+) -> None:
+    inbox_rel = str(settings.paths.friction_log.relative_to(settings.paths.repo))
+    archive_rel = str(settings.paths.archive.relative_to(settings.paths.repo))
+    expected_paths = sorted([inbox_rel, archive_rel])
+    updates = intent.get("updates")
+    if (
+        intent.get("paths") != expected_paths
+        or not isinstance(updates, list)
+        or [update.get("path") for update in updates if isinstance(update, dict)] != expected_paths
+        or any(
+            not isinstance(update, dict)
+            or set(update) != {
+                "path", "previous_content", "previous_digest", "content", "content_digest",
+            }
+            for update in updates
+        )
+    ):
+        raise TriageError("commit update path set is invalid", outcome="operator-held")
+    decoded: dict[str, tuple[bytes, bytes]] = {}
+    try:
+        for update in updates:
+            previous = decode_bytes(update["previous_content"])
+            content = decode_bytes(update["content"])
+            if (
+                digest_bytes(previous) != update["previous_digest"]
+                or digest_bytes(content) != update["content_digest"]
+            ):
+                raise TriageError("commit update digest mismatch", outcome="operator-held")
+            decoded[update["path"]] = (previous, content)
+    except (KeyError, TypeError, ValueError, CanonicalError) as exc:
+        raise TriageError("commit update content is malformed", outcome="operator-held") from exc
+    branch_date = _branch_date(settings, intent.get("branch"))
+    marker_text = intent.get("migration_marker")
+    expected_marker = (
+        f"## {branch_date} — Backlog migrated by triage session "
+        f"{state['run_identity']['session']}\n\n"
+    )
+    if marker_text != expected_marker:
+        raise TriageError("commit migration marker is not bound to its branch", outcome="operator-held")
+    marker = expected_marker.encode()
+    expected_inbox, expected_archive = render_sweep(
+        decoded[inbox_rel][0],
+        decoded[archive_rel][0],
+        _frozen_candidates(state),
+        state,
+        marker,
+    )
+    if decoded[inbox_rel][1] != expected_inbox or decoded[archive_rel][1] != expected_archive:
+        raise TriageError("commit updates do not match the approved sweep", outcome="operator-held")
+    authority = intent.get("authority_read_back")
+    if (
+        not isinstance(authority, dict)
+        or authority.get("paths") != expected_paths
+        or not isinstance(authority.get("staged_tree"), str)
+    ):
+        raise TriageError("commit updates lack staged-tree authority", outcome="operator-held")
+
+
 def _forge_attempt(
     store: ArtifactStore,
     lease: GateLease,
@@ -1111,6 +1199,18 @@ def _forge_attempt(
         operations.append(operation)
     attempting = {**state, "phase": "forge-finalize", "finalization_operations": operations}
     state_digest = _persist(store, lease, attempting, previous_digest=state_digest)
+    if kind == "commit":
+        _validate_commit_updates(state, store.settings, intent)
+        worktree = Path(intent["worktree"]).resolve()
+        for update in intent.get("updates", []):
+            relative = Path(update["path"])
+            target = (worktree / relative).resolve()
+            if relative.is_absolute() or not target.is_relative_to(worktree):
+                raise TriageError("commit update path escapes the isolated worktree", outcome="operator-held")
+            content = decode_bytes(update["content"])
+            if digest_bytes(content) != update.get("content_digest"):
+                raise TriageError("commit update content digest mismatch", outcome="operator-held")
+            atomic_replace(target, content, expected_digest=update.get("previous_digest"))
     observed = forge.perform(kind, intent)
     if observed.status == "verified":
         if not isinstance(observed.read_back, dict):
@@ -1180,8 +1280,12 @@ def _verify_forge_read_back(kind: str, intent: dict[str, Any], read_back: dict[s
         raise TriageError(f"{kind} authoritative read-back does not match its intent", outcome="operator-held")
 
 
-def _validate_forge_prefix(operations: list[dict[str, Any]]) -> None:
+def _validate_forge_prefix(
+    operations: list[dict[str, Any]], state: dict[str, Any], settings: Settings
+) -> None:
     for operation in operations:
+        if operation.get("kind") == "commit" and isinstance(operation.get("intent"), dict):
+            _validate_commit_updates(state, settings, operation["intent"])
         if operation.get("status") == "verified":
             read_back = operation.get("read_back")
             if not isinstance(read_back, dict):
@@ -1250,7 +1354,7 @@ def _advance_finalize(
     if state["phase"] != "forge-finalize":
         return state, state_digest, "operator-held"
     operations = state["finalization_operations"]
-    _validate_forge_prefix(operations)
+    _validate_forge_prefix(operations, state, settings)
     order = ["branch-create", "commit", "push", "pull-request", "pr-watch", "merge-read-back"]
     if operations and operations[-1].get("status") != "verified":
         if operations[-1].get("status") != "unsettled" or operations[-1].get("kind") not in {"pr-watch", "merge-read-back"}:
@@ -1295,16 +1399,36 @@ def _advance_finalize(
             raise TriageError("finalization worktree is not clean", outcome="operator-held")
         current = (worktree_path / inbox_rel).read_bytes()
         archive_bytes = (worktree_path / archive_rel).read_bytes()
-        marker = f"## {today_string()} — Backlog migrated by triage session {state['run_identity']['session']}\n\n".encode()
+        branch_date = _branch_date(settings, previous["branch"])
+        marker = (
+            f"## {branch_date} — Backlog migrated by triage session "
+            f"{state['run_identity']['session']}\n\n"
+        ).encode()
         new_inbox, new_archive = render_sweep(current, archive_bytes, _frozen_candidates(state), state, marker)
-        atomic_replace(worktree_path / inbox_rel, new_inbox)
-        atomic_replace(worktree_path / archive_rel, new_archive)
         paths = sorted([inbox_rel, archive_rel])
-        request_core = {"host": forge_host, "repository": repository, "base": previous["base"], "branch": previous["branch"], "worktree": previous["worktree"], "subject": settings.commit_subject, "paths": paths}
+        updates = [
+            {
+                "path": inbox_rel,
+                "previous_content": encode_bytes(current),
+                "previous_digest": digest_bytes(current),
+                "content": encode_bytes(new_inbox),
+                "content_digest": digest_bytes(new_inbox),
+            },
+            {
+                "path": archive_rel,
+                "previous_content": encode_bytes(archive_bytes),
+                "previous_digest": digest_bytes(archive_bytes),
+                "content": encode_bytes(new_archive),
+                "content_digest": digest_bytes(new_archive),
+            },
+        ]
+        updates.sort(key=lambda item: item["path"])
+        request_core = {"host": forge_host, "repository": repository, "base": previous["base"], "branch": previous["branch"], "worktree": previous["worktree"], "subject": settings.commit_subject, "paths": paths, "migration_marker": marker.decode(), "updates": updates}
         authority = forge.authority("commit", request_core)
         if not isinstance(authority, dict) or authority.get("paths") != paths or not isinstance(authority.get("staged_tree"), str):
             raise TriageError("commit staged-tree authority is incomplete", outcome="operator-held")
         intent = {**request_core, "authority_read_back": authority}
+        _validate_commit_updates(state, settings, intent)
     elif next_kind == "push":
         intent = {"host": forge_host, "repository": repository, "base": previous["base"], "branch": previous["branch"], "worktree": previous["worktree"], "commit": previous["commit"], "tree": previous["tree"]}
     elif next_kind == "pull-request":
@@ -1373,10 +1497,15 @@ def run(
         return _result(capabilities, "hard-stop", mode="unknown", engine_mode=None, report=None, frozen=None, resume_action="supply an explicit execution context", detail="invalid execution context")
     mode = "test" if entry == "test" else "live"
     observed_protected_head = None
+    result_engine_mode: str | None = None
+    result_report: str | None = None
+    result_frozen: str | None = None
+    result_state: dict[str, Any] | None = None
     if context == "unattended" and entry == "recover":
         return _result(capabilities, "operator-held", mode=mode, engine_mode=None, report=None, frozen=None, resume_action="rerun recover interactively", detail="unattended recovery does not inspect or change artifacts")
     try:
         settings = load_settings(start)
+        result_engine_mode = settings.engine_mode
         capabilities["repository-config-read"] = {"status": "ready", "mechanism": "merged kitconfig and repository inputs validated"}
         capabilities["shared-state-resolver"] = {"status": "ready", "mechanism": "own-session resolve_write_path"}
         capabilities["draft-finalize-engine-set"] = {"status": "ready", "mechanism": settings.engine_mode}
@@ -1473,9 +1602,29 @@ def run(
                     return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="restart test only from the exact recovery receipt", detail=str(receipt.get("kind")))
             state = canonical_state(state_raw, settings=settings, mode=mode)
             frozen_path = _validate_frozen_artifact(store, state)
+            result_state = state
+            result_frozen = str(frozen_path)
+            if state.get("proposal_payloads"):
+                result_report = state["proposal_payloads"][0]["report_binding"]["path"]
+            if state.get("finalization_operations"):
+                _validate_forge_prefix(
+                    state["finalization_operations"], state, settings
+                )
             if entry == "new":
                 lease.release()
-                return _result(capabilities, "operator-held", mode=mode, engine_mode=state["engine_mode"], report=None, frozen=None, resume_action="resume", detail="new refuses to overwrite active state")
+                return _result(
+                    capabilities,
+                    "operator-held",
+                    mode=mode,
+                    engine_mode=state["engine_mode"],
+                    report=result_report,
+                    frozen=result_frozen,
+                    resume_action="resume",
+                    detail="new refuses to overwrite active state",
+                    identifiers=state.get("verified_tracker_identifiers"),
+                    candidate_index=state["frozen_snapshot"]["content"]["candidate_index"],
+                    **_pr_result_fields(state),
+                )
             if state["phase"] == "completed":
                 completion = state["completion"]
                 lease.release()
@@ -1484,7 +1633,7 @@ def run(
                     completion["outcome"],
                     mode=mode,
                     engine_mode=state["engine_mode"],
-                    report=None,
+                    report=result_report,
                     frozen=str(frozen_path),
                     resume_action="preserve the completed receipt",
                     detail=f"completed/{completion['route']}",
@@ -1558,4 +1707,17 @@ def run(
             # remains when durable state may need recovery classification.
             raise
     except TriageError as exc:
-        return _result(capabilities, exc.outcome, mode=mode, engine_mode=None, report=None, frozen=None, resume_action="inspect retained evidence and follow the named recovery route", detail=str(exc))
+        retained = result_state or {}
+        return _result(
+            capabilities,
+            exc.outcome,
+            mode=mode,
+            engine_mode=result_engine_mode,
+            report=result_report,
+            frozen=result_frozen,
+            resume_action="inspect retained evidence and follow the named recovery route",
+            detail=str(exc),
+            identifiers=retained.get("verified_tracker_identifiers"),
+            candidate_index=retained.get("frozen_snapshot", {}).get("content", {}).get("candidate_index"),
+            **_pr_result_fields(retained),
+        )

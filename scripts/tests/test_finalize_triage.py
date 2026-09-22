@@ -17,7 +17,14 @@ REPO_ROOT = find_repo_root(ENGINE_DIR)
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
 from triage.approval import ApprovalContext  # noqa: E402
-from triage.canonical import digest, dumps, loads_exact  # noqa: E402
+from triage.canonical import (  # noqa: E402
+    decode_bytes,
+    digest,
+    digest_bytes,
+    dumps,
+    encode_bytes,
+    loads_exact,
+)
 from triage.engine import _pr_result_fields, _verify_forge_read_back, run  # noqa: E402
 from triage.finalize import sweep_ids  # noqa: E402
 from triage.inbox import parse  # noqa: E402
@@ -302,6 +309,7 @@ def test_archive_only_finalize_retains_exact_new_block_and_waits_for_merge(
     assert completed["pull_request_url"] == pr_url
     assert completed["observed_pr_head"] == commit
     assert completed["reviewed_head"] == commit
+    assert completed["report"] == pending_state["proposal_payloads"][0]["report_binding"]["path"]
     terminal = loads_exact(state_path.read_bytes())
     assert terminal["phase"] == "completed"
     assert terminal["completion"]["route"] == "archive-sweep"
@@ -334,6 +342,170 @@ def test_archive_only_finalize_retains_exact_new_block_and_waits_for_merge(
     )
     with pytest.raises(TriageError, match="verified finalization chain"):
         canonical_state(dumps(shortened), settings=load_settings(root), mode="live")
+
+
+def test_commit_authority_failure_leaves_clean_worktree_and_fresh_retry_can_continue(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    draft_request, candidate_id = proposal_request(root)
+    run("new", context="interactive", request=draft_request, start=root)
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    presented = loads_exact(state_path.read_bytes())
+    approved, context = approval(presented, f"archive {candidate_id}")
+    worktree = tmp_path / "isolated-finalize"
+    shutil.copytree(root, worktree)
+    shutil.rmtree(worktree / "reports")
+    inbox_before = (worktree / "docs/kit-friction-log.md").read_bytes()
+    archive_before = (worktree / "docs/kit-friction-log-archive.md").read_bytes()
+    base = git(root, "rev-parse", "HEAD")
+    branch = f"chore/triage-{date.today().isoformat()}"
+
+    class FailingCommitAuthority(FakeForge):
+        def authority(self, action, request):
+            if action == "worktree-clean":
+                return {"clean": True}
+            if action == "commit":
+                raise TriageError("synthetic staged-tree authority outage", outcome="operator-held")
+            return super().authority(action, request)
+
+    first_forge = FailingCommitAuthority([verified({
+        "repository": "topij/agentic-dev-kit",
+        "base": base,
+        "branch": branch,
+        "worktree": str(worktree),
+        "head": base,
+        "tree": "0" * 40,
+    })])
+    first = run(
+        "resume",
+        context="interactive",
+        request={**approved, "finalize": True, "worktree": str(worktree)},
+        start=root,
+        approval_context=context,
+        forge=first_forge,
+    )
+    assert first["outcome"] == "operator-held"
+    assert first["detail"] == "synthetic staged-tree authority outage"
+    assert (worktree / "docs/kit-friction-log.md").read_bytes() == inbox_before
+    assert (worktree / "docs/kit-friction-log-archive.md").read_bytes() == archive_before
+    retained = loads_exact(state_path.read_bytes())
+    assert [operation["kind"] for operation in retained["finalization_operations"]] == ["branch-create"]
+    monkeypatch.setattr("triage.engine.today_string", lambda: "2099-01-01")
+
+    tree = "1" * 40
+    commit = "2" * 40
+    paths = ["docs/kit-friction-log-archive.md", "docs/kit-friction-log.md"]
+    pr_url = "https://github.com/topij/agentic-dev-kit/pull/999"
+    retry_forge = FakeForge([
+        verified({
+            "repository": "topij/agentic-dev-kit", "base": base,
+            "branch": branch, "worktree": str(worktree), "commit": commit,
+            "tree": tree, "subject": "docs(triage): graduate friction-log entries",
+            "paths": paths,
+        }),
+        verified({
+            "repository": "topij/agentic-dev-kit", "base": base,
+            "branch": branch, "worktree": str(worktree), "remote_head": commit,
+            "tree": tree,
+        }),
+        verified({
+            "url": pr_url, "baseRefName": "main", "headRefName": branch,
+            "headRefOid": commit, "isDraft": False, "files": paths,
+        }),
+        verified({
+            "url": pr_url, "baseRefName": "main", "headRefName": branch,
+            "headRefOid": commit, "isDraft": False, "files": paths,
+            "reviewed_head": commit, "receipt": native_watch_receipt(pr_url, commit),
+        }),
+    ])
+    retried = run(
+        "resume", context="interactive", request={"finalize": True},
+        start=root, forge=retry_forge,
+    )
+    assert retried["outcome"] == "operator-held"
+    assert loads_exact(state_path.read_bytes())["phase"] == "archive-sweep"
+    assert b"Approved archive" not in (worktree / "docs/kit-friction-log.md").read_bytes()
+    assert b"Approved archive" in (worktree / "docs/kit-friction-log-archive.md").read_bytes()
+
+
+@pytest.mark.parametrize("mutation", ["derived-content", "foreign-path"])
+def test_fresh_process_refuses_mutated_retained_commit_updates_before_rebind(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
+) -> None:
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    draft_request, candidate_id = proposal_request(root)
+    run("new", context="interactive", request=draft_request, start=root)
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    presented = loads_exact(state_path.read_bytes())
+    approved, context = approval(presented, f"archive {candidate_id}")
+    worktree = tmp_path / "isolated-finalize"
+    shutil.copytree(root, worktree)
+    shutil.rmtree(worktree / "reports")
+    base = git(root, "rev-parse", "HEAD")
+    branch = f"chore/triage-{date.today().isoformat()}"
+    tree = "1" * 40
+    forge = FakeForge([
+        verified({
+            "repository": "topij/agentic-dev-kit", "base": base,
+            "branch": branch, "worktree": str(worktree), "head": base,
+            "tree": "0" * 40,
+        }),
+        ProviderObservation("ambiguous", {"accepted": True}, {
+            "repository": "topij/agentic-dev-kit", "base": base,
+            "branch": branch, "worktree": str(worktree), "tree": tree,
+        }),
+    ])
+    held = run(
+        "resume", context="interactive",
+        request={**approved, "finalize": True, "worktree": str(worktree)},
+        start=root, approval_context=context, forge=forge,
+    )
+    assert held["outcome"] == "operator-held"
+    state = loads_exact(state_path.read_bytes())
+    operation = state["finalization_operations"][-1]
+    assert operation["kind"] == "commit"
+    intent = deepcopy(operation["intent"])
+    if mutation == "derived-content":
+        raw = decode_bytes(intent["updates"][0]["content"]) + b"tampered\n"
+        intent["updates"][0]["content"] = encode_bytes(raw)
+        intent["updates"][0]["content_digest"] = digest_bytes(raw)
+        expected_detail = "commit updates do not match the approved sweep"
+    else:
+        intent["updates"][0]["path"] = "aaa-foreign.md"
+        intent["paths"][0] = "aaa-foreign.md"
+        intent["authority_read_back"]["paths"][0] = "aaa-foreign.md"
+        expected_detail = "commit update intent is malformed"
+    intent_digest = digest(intent)
+    operation["intent"] = intent
+    operation["intent_digest"] = intent_digest
+    for attempt in operation["attempts"]:
+        attempt["intent"] = deepcopy(intent)
+        attempt["intent_digest"] = intent_digest
+    state_path.write_bytes(dumps(state))
+    state_before = state_path.read_bytes()
+    inbox_before = (worktree / "docs/kit-friction-log.md").read_bytes()
+    archive_before = (worktree / "docs/kit-friction-log-archive.md").read_bytes()
+    code = (
+        "from pathlib import Path; from triage.engine import run; "
+        f"print(__import__('triage.canonical', fromlist=['dumps']).dumps(run('resume', context='interactive', request={{'finalize': True}}, start=Path({str(root)!r}))).decode())"
+    )
+    environment = dict(__import__("os").environ)
+    environment["PYTHONPATH"] = str(ENGINE_DIR / "lib")
+    restarted = subprocess.run(
+        [sys.executable, "-c", code], check=True, capture_output=True,
+        text=True, env=environment,
+    )
+    result = loads_exact(restarted.stdout.strip().encode())
+    assert result["outcome"] == "operator-held"
+    assert result["detail"] == expected_detail
+    assert state_path.read_bytes() == state_before
+    assert (worktree / "docs/kit-friction-log.md").read_bytes() == inbox_before
+    assert (worktree / "docs/kit-friction-log-archive.md").read_bytes() == archive_before
 
 
 def test_unsettled_merge_is_retained_and_retried_without_a_merge_call(
