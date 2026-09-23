@@ -14,10 +14,73 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-23 — Phase 5 D systemize engines delivered.
+Last updated: 2026-09-23 — Phase 5 D-SYSTEMIZE-LIVE run completed; its rule PR merged.
 Phase 5 delivery item 5 remains incomplete; item 6's replay remains complete.
 
-## Latest session — 2026-09-23 (Phase 5 D systemize engines delivered, in Claude Code)
+## Latest session — 2026-09-23 (Phase 5 D-SYSTEMIZE-LIVE run, in Claude Code)
+
+**Approval.**
+- The operator approved PHASE5-D-SYSTEMIZE-LIVE-01 Stage 1 as written in its packet,
+  then each Stage 2 payload individually.
+- The packet is `saved_plans/phase5-d-systemize-live_2026-09-23.md` (local, not
+  committed).
+- The approval records, logs, raw bundle, digest, final report and checksums are under
+  `state/review-evidence/phase5-d-systemize-live-01/`.
+
+**The run.**
+- A live, engine-backed `post-merge-systemize backfill` with run date 2026-09-22, so
+  the window was 2026-08-26..2026-09-22.
+- It ran in a fresh clone at `63f169d` under
+  `/private/tmp/adk-phase5-d-systemize-live-20260923/`.
+- Fetch, digest, `--verify` and every heartbeat step exited `0`, and the heartbeat
+  completed.
+- The window did not trigger the cap or batching branches, so those stay with
+  D-SYSTEMIZE-BOUNDARIES.
+
+**Routes.**
+- **Rule:** [PR #771](https://github.com/topij/agentic-dev-kit/pull/771) merged as
+  `5165a3c`, whose tree equals the reviewed head `347d323`.
+  - It adds "Evidence outside a promotion bundle" to `live-validation-evidence.md`, and
+    makes `upgrade.md`'s kit fetch and branch creation stop on failure.
+  - Review: a fallback panel at `6b25617`, where both lenses reported the same LOW
+    imprecision. The operator approved amended wording, and a LOW `fallback:delta`
+    review followed at `347d323`.
+- **Notification:** one Slack DM, read back as channel `D083840DP7B`, ts
+  `1790183998.138169`. It lands in the operator's self-DM because the connector acts
+  as the operator. An occurrence was added to #198.
+- **Tracker and friction:** no write. Every single-PR cluster was already addressed or
+  superseded, and the operator declined each proposed entry. No tracker payload was
+  drafted. Whether these two routes still need a live positive write is an open
+  operator decision under the Stage A rows.
+
+**Filed this session, on the operator's direction:**
+- #772: fallback-panel findings are invisible to systemize;
+- #773: the digest's `TEXT_LIMIT` truncates CodeRabbit findings before their substance;
+- #774: routing of an addressed single-PR cluster.
+
+**Verification.** `make test` in `/private/tmp/adk-phase5-d-systemize-live-20260923/rule`
+at `6b25617148ecd042d0ce20f5c3cbb2a734a305dc` on 2026-09-23 exited `0` and printed
+`3494 passed, 1 skipped`. The wording repair `347d323` got focused `pytest` runs in the
+same worktree, and CI passed at both heads.
+
+**Not established:**
+- installation into a field checkout;
+- scheduler wiring (#747);
+- D-SYSTEMIZE-RECOVERY, D-SYSTEMIZE-BOUNDARIES and D-FRESH-CONTEXT;
+- the triage side of D-SERVICE;
+- any live tracker or friction write from systemize.
+
+Also still open: #748 and #7 await a judgment on whether #769 discharges them, and
+#722's owed record edits were not taken in this wrap-up.
+
+▶ Next: `/session-start` — then get the operator's decision on whether systemize's
+tracker and friction routes still need a live positive write, and pick the next D
+package (D-SYSTEMIZE-BOUNDARIES, D-SYSTEMIZE-RECOVERY or D-TRIAGE-RESIDUAL) from the
+D proposal's table (`saved_plans/phase5-d-proposal_2026-09-21.md`, local).
+
+______________________________________________________________________
+
+## Session — 2026-09-23 (Phase 5 D systemize engines delivered, in Claude Code)
 
 **What merged.** [PR #769](https://github.com/topij/agentic-dev-kit/pull/769) merged as
 `cf83f2000f9745eb8e1428c467d890d26ae7f643`. Its tree matches the reviewed head
@@ -61,10 +124,7 @@ control checkout. A mode-000 file inside the gitignored
 state snapshot at import, which is #461's mechanism; an occurrence was added to #461.
 This session verified every candidate in a clean clone instead.
 
-▶ Next: `/session-start` — then prepare the D-SYSTEMIZE-LIVE approval packet, from the
-"Subsequent D packages" table in the D proposal
-(`saved_plans/phase5-d-proposal_2026-09-21.md`, local and not committed; ask the
-operator for it if it is missing).
+The next session ran D-SYSTEMIZE-LIVE; the latest session block owns its outcome.
 
 ______________________________________________________________________
 
@@ -115,7 +175,7 @@ An occurrence was also added to #416.
 The friction inbox therefore waits for `triage-friction-log` under separate
 authorization.
 
-The next session took D-SYSTEMIZE-ENGINE; the latest session block owns its outcome.
+The next session took D-SYSTEMIZE-ENGINE; the 2026-09-23 systemize-engines block owns its outcome.
 
 ______________________________________________________________________
 
@@ -329,68 +389,6 @@ about adopter-owned files. The drift-liveness parent follows its child's applica
 The retained ITEM5-B baseline and completed item 6 replay were not rewritten.
 
 The latest session block owns the subsequent decision packet and next action.
-
-______________________________________________________________________
-
-## Session — 2026-09-09 (ITEM5-B decision and execution, in Codex)
-
-The operator approved ITEM5-B from the
-[decision packet](../saved_plans/phase5-item5-decision_2026-09-09.md), then requested
-autonomous continuation. The [execution record](../saved_plans/phase5-item5-b-execution_2026-09-09.md)
-retains the new fixture/source, initialization, registrations, local checks and baseline.
-The original missing paths were not reconstructed. No client session was launched in
-the new fixture, and no cs-toolkit write occurred.
-
-The [retained audit](../saved_plans/phase5-item5-baseline-audit_2026-09-09.json) remains
-the read-only assessment of the old baselines. The new execution's complete suite logs
-separate installed config/adapter assumptions and the #705 drift-liveness interaction
-from #393. Its record proposed the kit-only #534 repair slice later approved in the
-session above. Source pin, fixture commit, commands, directories and actual results
-are retained there. #585's earlier placement and #723's accepted upstream deferral are unchanged.
-
-`gh pr view 724` and `gh pr view 2255`, with their explicit kit/adopter repositories,
-read back the merges on 2026-09-09 at kit `8418118e40728c667c32a28a182697139bc7a5ef`.
-Kit #724 contains the #722 batch. This packet does not repeat that batch or re-credit
-the initial adopter pass or replay. The prior replay's snapshots remain historical.
-
-The latest session block owns the subsequent repair and next action.
-
-______________________________________________________________________
-
-## Session — 2026-09-09 (cs-toolkit replay, in Codex)
-
-The operator approved REPLAY-01 in this session. The [replay record](../saved_plans/cs-toolkit-replay_2026-09-09.md)
-retains the upgrade, separate no-change reconciliation, test limits, independent reviews,
-and the byte-identical authoritative snapshots. Item 6's verification is complete at the
-named refs; this is not completion of Phase 5. The operator later authorized
-`merge when clean`; the replay record separates that decision from the exit evidence.
-
-- [cs-toolkit #2255](https://github.com/in-parallel-oy/cs-toolkit/pull/2255) contains the
-  upgrade from kit `bde4c234eaa9005e90b987007101aba98281ce88` to protected kit source
-  `e698ec47d6284ccd31af5ba9d8bc5657fe992310`. Its base is `main` and its head is
-  `21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351`. No reconciliation PR was needed; the
-  stage's exact invocation, unchanged output/tree and preceding-stage linkage are retained.
-- `uv run scripts/devkit/pr_watch.py 2255 --json` in
-  `/Users/topi/Coding/in-parallel/cs-toolkit` at that exact head on 2026-09-09 reported
-  `converged: true`, `mergeable: true`, `done: true`. After the later authorization,
-  `gh pr view 2255` read back its merge as `c4119f85e07f2a089ab8d5decc94cf2cd1635d14`
-  on 2026-09-09; the read-back is retained in the replay record.
-- The original checkout's `make test` failed in support-docs on ignored local artifact
-  inventory; unchanged original test source reproduced the assertions there. Independent
-  fresh clones passed `make test` at the same head. Commands, directories, dates and
-  actual results are in the replay record; this failure is separate from kit #393.
-- CodeRabbit found the imported non-object-manifest helper defect that the panel missed.
-  The operator approved its exact filing as [#723](https://github.com/topij/agentic-dev-kit/issues/723)
-  and deferral, retaining source byte identity. The PR carries that accepted limitation.
-- The #722 batch is folded into this ordinary wrap-up: #578/#721 routing annotations,
-  removal of the `/tmp` mechanism explanation, the missing-tree blocker, #585's settled
-  earlier placement, and this next action. Existing credited exercises were not repeated.
-- [Kit PR #724](https://github.com/topij/agentic-dev-kit/pull/724) carries the ordinary
-  wrap-up from `chore/kit-replay-handoff-20260909`. It merged on 2026-09-09 as
-  `8418118e40728c667c32a28a182697139bc7a5ef`, read back with `gh pr view 724`.
-  Its commit is not the kit source used for the replay; the snapshots retain that source.
-
-The latest session block owns the item 5 status and next action.
 
 ______________________________________________________________________
 
