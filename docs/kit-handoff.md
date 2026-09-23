@@ -73,9 +73,10 @@ operator.
   - The third, an honest "unknown", is only partly met. A failed forge read stops the
     run, but a thread with no resolution field digests as `unaddressed`
     (`normalize.thread_addressed`).
-  - The choice is to close #748, or to narrow it to that mapping.
+  - The options are to retire #748 as delivered, or to narrow it to that mapping.
 - **#7.** #769 shipped its work items 1–3, and #781 carries item 4. Field installation
-  is Phase 5's own row, not #7's, so #7 can close once item 4 merges.
+  is Phase 5's own row, not #7's, so nothing in #7's list is outstanding once item 4
+  merges.
 
 **Still open from earlier sessions:** #722's owed record edits.
 
