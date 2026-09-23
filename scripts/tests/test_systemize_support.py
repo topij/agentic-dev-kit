@@ -24,6 +24,8 @@ ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
+from kitconfig import loads  # noqa: E402
+
 ENGINES = ("fetch_merged_prs.py", "digest_merged_prs.py", "heartbeat_cli.py")
 LIB_FILES = ("kitconfig.py", "triage/__init__.py", "triage/canonical.py")
 LIB_DIRS = ("state_paths", "systemize")
@@ -114,7 +116,9 @@ def make_repo(tmp_path: Path, *, engines: tuple[str, ...] = ENGINES, config_edit
     if config_edit is not None:
         text = config_edit(text)
     (root / "config/dev-model.yaml").write_text(text, encoding="utf-8")
-    scripts = root / "scripts"
+    # Install where the config says, so a vendored layout (scripts/devkit) is
+    # exercised as the adopter has it rather than assumed to be scripts/.
+    scripts = root / engines_rel(root)
     for name in LIB_FILES:
         (scripts / "lib" / name).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ENGINE_DIR / "lib" / name, scripts / "lib" / name)
@@ -131,6 +135,10 @@ def make_repo(tmp_path: Path, *, engines: tuple[str, ...] = ENGINES, config_edit
         check=True,
     )
     return root
+
+
+def engines_rel(root: Path) -> str:
+    return loads((root / "config/dev-model.yaml").read_text(encoding="utf-8"))["paths"]["engines"]
 
 
 def comment(cid: int, login: str, body: str) -> dict[str, Any]:
@@ -170,7 +178,7 @@ def fake_env(tmp_path: Path, fixture: dict[str, Any], root: Path, state: Path) -
 
 
 def run_engine(root: Path, name: str, args: list[str], env: dict[str, str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run([sys.executable, str(root / "scripts" / name), *args], cwd=root, env=env,
+    return subprocess.run([sys.executable, "-B", str(root / engines_rel(root) / name), *args], cwd=root, env=env,
                           capture_output=True, text=True, check=False)
 
 

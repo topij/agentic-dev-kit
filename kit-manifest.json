@@ -561,7 +561,7 @@
     },
     "scripts/tests/test_systemize_config.py": {
       "role": "test",
-      "sha256": "09337cce3ee0ece0af0e7f203c3969048da8cac475ddfc543228d4bb9c3cdbb0"
+      "sha256": "00a29eeb6c86f67f5fb86607266dce02a41ff5d1074325a1917d4c5ac364c78c"
     },
     "scripts/tests/test_systemize_digest.py": {
       "role": "test",
@@ -577,7 +577,7 @@
     },
     "scripts/tests/test_systemize_support.py": {
       "role": "test",
-      "sha256": "9f84e0b4640415ceb7db960eb6b16b69f8deb70e43cabc696a92d12cc17bb2cf"
+      "sha256": "a132cf45c93af1fd5816025f06f3e47972a66f27177f6386d4ae68a515001c17"
     },
     "scripts/tests/test_triage_approval.py": {
       "role": "test",

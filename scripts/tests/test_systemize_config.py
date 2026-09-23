@@ -21,7 +21,7 @@ from systemize.config import (  # noqa: E402
     normalize_login,
 )
 from systemize.errors import SystemizeError  # noqa: E402
-from test_systemize_support import ENGINES, make_repo  # noqa: E402
+from test_systemize_support import ENGINES, engines_rel, make_repo  # noqa: E402
 
 
 def _set(key: str, value: str):
@@ -115,7 +115,7 @@ def test_login_normalization_lowercases_ascii_only() -> None:
 
 def test_the_state_resolver_is_required(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
-    (root / "scripts/lib/state_paths/__init__.py").unlink()
+    (root / engines_rel(root) / "lib/state_paths/__init__.py").unlink()
     with pytest.raises(SystemizeError, match="state-path resolver missing"):
         load_settings(root)
 
