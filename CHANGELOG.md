@@ -42,7 +42,7 @@ starts.
 
 ---
 
-## #PRNUM — Deterministic systemize engines
+## #769 — Deterministic systemize engines
 
 - **ADDED — systemize engines:** Install `fetch_merged_prs.py`, `digest_merged_prs.py`, `heartbeat_cli.py` and the complete `lib/systemize/` set together under `paths.engines`, with `lib/triage/canonical.py`, which they import. Their presence selects engine-backed mode, and a partial set stops every entry point. Invoke them as the workflow's *Engine interface* section documents (`--mode`, `--window-days`, `--date`; exit `0` / `1` / `2`), and use `digest_merged_prs.py --verify` to check an agent-built digest.
 - **ADDED — config keys:** `systemize.heartbeat_job` and `systemize.heartbeat_pattern`. They are required only once the engine set is installed: add both, with the shipped values, before installing the engines, or every engine stops naming the missing key. LLM-only runs neither read nor require them.

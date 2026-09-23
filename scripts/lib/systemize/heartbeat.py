@@ -17,7 +17,7 @@ import os
 import re
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -35,7 +35,7 @@ _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 
 
 def _now() -> str:
-    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 @contextmanager

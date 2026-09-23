@@ -305,7 +305,7 @@
         "scripts/lib/systemize/heartbeat.py"
       ],
       "role": "engine",
-      "sha256": "1e3621ab4da5c566660ddfd319c3314bf7eea06daf7904f6289e8362fe179619"
+      "sha256": "ac7afc7542e551f7b956a18a5686c82632fd6c99e2ce94b145ddb3fdd6f8a550"
     },
     "scripts/lib/systemize/forge.py": {
       "required_by": [
@@ -320,7 +320,7 @@
         "scripts/heartbeat_cli.py"
       ],
       "role": "engine",
-      "sha256": "f6378d7538cff1d24937b2fea3c7444bee8c94a4a39c9aeec0695a5e6ad321fb"
+      "sha256": "27000c7c87d9b5461f8d7c4873ac193f82654453164e4efaef34b0de4d467a1b"
     },
     "scripts/lib/systemize/identity.py": {
       "required_by": [
@@ -473,7 +473,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "609f2715b6ec332518461918bc9295d3b99277005b6b98dcae7188731ec024a8"
+      "sha256": "34b9503b2ad7b62e57d45eeced8763a790ccbde311e77948faed886090a93951"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",

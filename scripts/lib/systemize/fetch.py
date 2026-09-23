@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime, time, timedelta
 from datetime import date as Date
+from datetime import datetime, time, timedelta, timezone
 from typing import Any
 
 from triage.canonical import CanonicalError, dumps
@@ -17,7 +17,7 @@ from .forge import GitHubReader
 
 def window_bounds(date: str, window_days: int) -> tuple[datetime, datetime]:
     """``window_days`` whole UTC days ending with ``date``, end-exclusive."""
-    end = datetime.combine(Date.fromisoformat(date) + timedelta(days=1), time(0), tzinfo=UTC)
+    end = datetime.combine(Date.fromisoformat(date) + timedelta(days=1), time(0), tzinfo=timezone.utc)
     return end - timedelta(days=window_days), end
 
 
@@ -116,7 +116,7 @@ def run(settings: Settings, reader: GitHubReader, *, mode: str, window_days: int
     bundle = {
         **identity.header(identity.RAW_KIND, run_id),
         "window": {"days": window_days, "date": date, "start": _iso(start), "end": _iso(end)},
-        "fetched_at": _iso(datetime.now(UTC)),
+        "fetched_at": _iso(datetime.now(timezone.utc)),
         "population": {"merged_in_window": len(prs), "scanned": scanned},
         "prs": prs,
     }
