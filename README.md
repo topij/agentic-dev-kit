@@ -297,30 +297,32 @@ clients, and interactive-TUI `systemMessage` presentation remains unverified.
 Principle #7 (model/effort tiering) is doctrine actually woven into the pieces
 above, not just described by them: the tier table lives in `config/dev-model.yaml`
 and travels with each lane through `parallel`. **Principle #9 (deterministic
-scaffolding around LLM steps) is only partly real in the shipped kit.**
-`scripts/pr_watch.py`'s seen-set is a durable intermediate state the kit ships.
-`post-merge-systemize` now specifies its cache, digest, report, input cap,
-resumability, and map-reduce behavior in the shared workflow. It can produce those
-artifacts through either runtime's LLM-only path, while deterministic heartbeat,
-fetch, and digest execution remains unavailable until the configured engines are
-vendored. [Issue #7](https://github.com/topij/agentic-dev-kit/issues/7) owns that
-integration. Read `PRINCIPLES.md` for both principles' full statement.
+scaffolding around LLM steps) ships in these places:**
+
+- `scripts/pr_watch.py`'s seen-set, a durable intermediate state;
+- `post-merge-systemize`'s fetch, digest and heartbeat engines
+  (`scripts/fetch_merged_prs.py`, `scripts/digest_merged_prs.py`,
+  `scripts/heartbeat_cli.py`), which produce the cache, digest, input cap and progress
+  record its shared workflow specifies, around the clustering step;
+- `triage-friction-log`'s draft and finalize engines (`scripts/triage_friction_log.py`,
+  `scripts/finalize_triage.py`), around the proposal step.
+
+Both recurring workflows keep an LLM-only path for a repository where their engine set
+is wholly absent, and a partial set fails closed. Read `PRINCIPLES.md` for both
+principles' full statement.
 
 **Runtime coverage and engine wiring are independent.** The aligned entries in
 `runtime-parity.md` point to a runtime-neutral definition plus thin Claude and Codex
 adapters.
-`parallel` and `pr-watch` ship deterministic engines. `session-start`, `wrap-up`, and
-`triage-friction-log` use shared workflow doctrine, configured runtime-native
-integrations, and the particular shipped helpers each definition names.
-`post-merge-systemize` follows the same shared-contract pattern. Runtime parity still
-does not imply that an optional deterministic engine or external client is installed;
-the absent integration surfaces are enumerated here:
-
-- a tracker client and notification channel;
-- `scripts/fetch_merged_prs.py`, `scripts/digest_merged_prs.py`, and
-  `scripts/heartbeat_cli.py` for `post-merge-systemize`;
-- `triage.draft_engine` and `triage.finalize_engine` beneath `paths.engines` for
-  engine-backed `triage-friction-log`.
+`parallel` and `pr-watch` ship deterministic engines, and so do `triage-friction-log`
+(`triage.draft_engine` and `triage.finalize_engine`) and `post-merge-systemize` (its
+configured fetch, digest and heartbeat engines). `session-start` and `wrap-up` use
+shared workflow doctrine, configured runtime-native integrations, and the particular
+shipped helpers each definition names. Runtime parity still does not imply that an
+optional engine is installed in a given repository: for the two recurring workflows,
+the complete configured set beneath `paths.engines` selects engine-backed mode, its
+absence selects the LLM-only path, and a partial set fails closed. The kit ships no
+tracker client or notification channel; those stay runtime-native.
 
 Both triage modes use `triage.state_path` and `triage.gate_path` as separate logical
 state locations. Expand `{mode}`, remove the configured `state.dirname` prefix, and
@@ -406,9 +408,8 @@ carried `true` now hard-stops rather than opening completed work as a draft. Blo
 on other fields can still be refused when its continuation resembles migrator-owned
 structure; normalize any refused value to an ordinary same-line form before retrying.
 
-[Issue #6](https://github.com/topij/agentic-dev-kit/issues/6) tracks the triage engine
-behind a tracker adapter; [issue #7](https://github.com/topij/agentic-dev-kit/issues/7)
-tracks the systemize side.
+The triage engines' tracker adapter covers GitHub Issues; see
+[issue #6](https://github.com/topij/agentic-dev-kit/issues/6) for other trackers.
 
 ## Parallel dev sessions
 

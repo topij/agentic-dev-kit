@@ -215,12 +215,10 @@ and one that fills with things you could have filed at session end means `/wrap-
 friction-routing step is being skipped — not that triage is overdue.
 
 > **Note:** these workflows share their doctrine across Claude and Codex. External
-> tracker and notification clients remain runtime-native, and the optional deterministic
-> engines remain project-specific and left for you to wire
-> ([#6](https://github.com/topij/agentic-dev-kit/issues/6),
-> [#7](https://github.com/topij/agentic-dev-kit/issues/7)). Both recurring workflows
-> have explicit LLM-only paths when their configured engine sets are wholly absent;
-> a partial set fails closed. `triage-friction-log` reads its additive `triage` block
+> tracker and notification clients remain runtime-native. The optional deterministic
+> engines ship with the kit beneath `paths.engines`; both recurring workflows have
+> explicit LLM-only paths when their configured engine sets are wholly absent, and a
+> partial set fails closed. `triage-friction-log` reads its additive `triage` block
 > from merged `config/dev-model.yaml`; rerunning refreshed `./init.sh --no-clobber`
 > installs missing keys without replacing adopter values. Configure exact trusted forge identities in
 > `systemize.operator_logins`; other human reviewers are excluded, while bot sources
