@@ -14,10 +14,85 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-23 — Phase 5 D-SYSTEMIZE-LIVE run completed; its rule PR merged.
-Phase 5 delivery item 5 remains incomplete; item 6's replay remains complete.
+Last updated: 2026-09-23 — Phase 5 D-SYSTEMIZE-BOUNDARIES ran; its synthetic evidence
+was accepted. Phase 5 delivery item 5 remains incomplete; item 6's replay remains
+complete.
 
-## Latest session — 2026-09-23 (Phase 5 D-SYSTEMIZE-LIVE run, in Claude Code)
+## Latest session — 2026-09-23 (Phase 5 D-SYSTEMIZE-BOUNDARIES, in Claude Code)
+
+**Operator decisions, taken interactively.** They are recorded in
+`state/review-evidence/phase5-d-systemize-boundaries-01/APPROVAL.md`.
+
+- **Systemize live friction and tracker routes.** D-SYSTEMIZE-LIVE ran reconcile →
+  propose → decline, with no write. That path is accepted as these routes' Phase 5
+  evidence, as an acceptance amendment.
+  - The first genuine positive write is a residual carried to the scheduled run
+    (#747), not an exit gate.
+- **PHASE5-D-SYSTEMIZE-BOUNDARIES-01.** Stage 1 was approved as written; the packet is
+  `saved_plans/phase5-d-systemize-boundaries_2026-09-23.md` (local).
+- **Its evidence was accepted** for these Stage A rows: cap-triggered omission, batched
+  analysis, competing cache mtimes and hostile artifact targets. The acceptance is for
+  labelled synthetic coverage, not live coverage.
+
+**The run.**
+
+- **Setup:** the real engine entry points, driven against the kit's own `FAKE_GH` at
+  the shipped thresholds. They ran in an isolated clone at `a6b281a` under
+  `/private/tmp/adk-phase5-d-systemize-boundaries-20260923/`.
+- **Exercised:**
+  - synthetic corpora at and across the cap and single-pass thresholds;
+  - blind subagent clustering of a batched corpus, scored against a key sealed before
+    the agents ran;
+  - competing sandbox and production caches;
+  - planted hostile artifact targets.
+- **Records:** `RESULTS.md` in the same evidence directory owns the outcomes,
+  deviations and limits.
+- **Writes:** nothing was written to the kit, config, forge, friction log or
+  notifications.
+- **Baseline:** `uv run --with pytest --with pyyaml pytest -q -p no:cacheprovider
+  scripts/tests/test_systemize_*.py`, run in that clone at `a6b281a` on 2026-09-23,
+  exited `0` and printed `169 passed`.
+
+**Filed this session, on the operator's direction:**
+
+- #777: after a mid-run parent retarget, cleanup by lexical path leaves a stale lock and
+  a temp file behind;
+- #778: the digest accepts a raw bundle fetched for another run date.
+
+An occurrence was also added to #643, which is about prompts rendered to a file but
+launched inline.
+
+**Not established:**
+
+- live cap or batching behaviour;
+- D-SYSTEMIZE-RECOVERY, D-FRESH-CONTEXT and D-TRIAGE-RESIDUAL;
+- installation into a field checkout;
+- scheduler wiring (#747).
+
+**Still open from earlier sessions:**
+
+- #748 and #7 await a judgment on whether #769 discharges them;
+- #722's owed record edits.
+
+**Sweep caveat (#776).** This wrap-up did two things to the footer:
+
+- before sweeping, it restored the trailing blank line so the archive helper would
+  recognise the footer;
+- after sweeping, it trimmed that line again so `git diff --check` passes.
+
+Until #776 lands, the next sweep needs the same restore first.
+
+▶ Next: `/session-start` — then draft the PHASE5-D-SYSTEMIZE-RECOVERY approval packet
+from the D proposal's table (`saved_plans/phase5-d-proposal_2026-09-21.md`, local).
+
+- **Reuse:** the BOUNDARIES harness and fake forge
+  (`state/review-evidence/phase5-d-systemize-boundaries-01/harness.py`).
+- **Open design point:** the post-dispatch, pre-receipt cutpoint needs an operator
+  decision, because systemize's external writes are made by the agent, not an engine.
+
+______________________________________________________________________
+
+## Session — 2026-09-23 (Phase 5 D-SYSTEMIZE-LIVE run, in Claude Code)
 
 **Approval.**
 - The operator approved PHASE5-D-SYSTEMIZE-LIVE-01 Stage 1 as written in its packet,
@@ -50,8 +125,8 @@ Phase 5 delivery item 5 remains incomplete; item 6's replay remains complete.
   as the operator. An occurrence was added to #198.
 - **Tracker and friction:** no write. Every single-PR cluster was already addressed or
   superseded, and the operator declined each proposed entry. No tracker payload was
-  drafted. Whether these two routes still need a live positive write is an open
-  operator decision under the Stage A rows.
+  drafted. Whether these two routes still needed a live positive write was left as an
+  operator decision under the Stage A rows; the next session's block records it.
 
 **Filed this session, on the operator's direction:**
 - #772: fallback-panel findings are invisible to systemize;
@@ -73,10 +148,8 @@ same worktree, and CI passed at both heads.
 Also still open: #748 and #7 await a judgment on whether #769 discharges them, and
 #722's owed record edits were not taken in this wrap-up.
 
-▶ Next: `/session-start` — then get the operator's decision on whether systemize's
-tracker and friction routes still need a live positive write, and pick the next D
-package (D-SYSTEMIZE-BOUNDARIES, D-SYSTEMIZE-RECOVERY or D-TRIAGE-RESIDUAL) from the
-D proposal's table (`saved_plans/phase5-d-proposal_2026-09-21.md`, local).
+The next session took the positive-write decision and ran D-SYSTEMIZE-BOUNDARIES; the
+latest session block owns both outcomes.
 
 ______________________________________________________________________
 
@@ -308,87 +381,6 @@ not update the retained installation. Item 6's replay, #723's deferral, #585's e
 placement and #724's delivered #722 batch are preserved. The friction sweep stays parked.
 
 The latest session block owns the revised packet and next decision.
-
-______________________________________________________________________
-
-## Session — 2026-09-10 (ITEM5-B acceptance execution, in Codex)
-
-The operator approved ACCEPT-01 and PR-01 as scoped in the
-[decision packet](../saved_plans/phase5-item5-b-acceptance-decision_2026-09-10.md).
-The [execution record](../saved_plans/phase5-item5-b-acceptance-execution_2026-09-10.md)
-retains the fresh UPDATE FINAL audit, PR #729 merge/review readback, exact authority,
-applied friction/CI payloads and private fixture PR #1. PR-01 is paused at the recorded
-P2 inherited state-root detector gap and P3 wording imprecision; fixture merge remains
-excluded. The custom wrap-up acceptance is ownership only, with no client/function claim.
-
-The execution record retains actual local and hosted commands, revisions, dates and
-terminal summaries, with #393 separated from installed coverage.
-The fixture baseline, retained source and historical update/replay evidence remain
-bound to the execution checkpoints. Item 5 remains incomplete, item 6's replay remains
-complete, and #723's approved upstream deferral and #585's earlier placement remain.
-Kit #724 already delivered the #722 batch. The friction-log sweep stays parked.
-
-The latest session block owns the subsequent repair and next action.
-
-______________________________________________________________________
-
-## Session — 2026-09-10 (ITEM5-B acceptance preparation, in Codex)
-
-The [decision packet](../saved_plans/phase5-item5-b-acceptance-decision_2026-09-10.md)
-binds preserved-file acceptance to the update's FINAL evidence, and separately proposes
-the fixture friction/CI files, private publication, verification and ready-PR handoff.
-It explains the custom wrap-up's ownership-only role and the remaining systemize routes.
-Preparation itself did not approve execution; no fixture/source update or client exercise
-ran in that pass.
-
-The packet retains the readback of kit #728 and its final review receipt, the new
-read-only audit, exact proposed payloads and rollback boundaries. The maintained sprint
-status keeps item 5 incomplete and preserves item 6's completed replay. #723's approved
-deferral, #585's earlier placement and the delivered #722 batch in #724 remain unchanged.
-The budget reminder's bounded triage intake preserved prior state and parked decisions;
-it started no new draft, recovery, tracker payload or archive sweep.
-
-`make test` in `/Users/topi/Coding/agentic-dev-kit` at
-`22734da7d3aebdf31f846b7e288e50eb99ca7156` on 2026-09-10 finished with the
-recorded #393 deep-JSON failure; the packet retains the actual summary and full log.
-The operator selected the proposed private fixture destination without authorizing
-creation or PR execution.
-The [kit review receipt](https://github.com/topij/agentic-dev-kit/pull/729#issuecomment-5619355511)
-preceded the audit optimization-refusal fix. The packet preserves the initial audit
-bytes and the follow-up refusal/mutation evidence; this defect is separate from #393.
-
-The latest session block owns the subsequent operator approval and execution.
-
-______________________________________________________________________
-
-## Session — 2026-09-10 (ITEM5-B update execution, in Codex)
-
-The operator approved ITEM5-B-UPDATE-01. The [execution record](../saved_plans/phase5-item5-b-update-execution_2026-09-10.md)
-retains the source advance, fixture attempt, recorded baseline, complete local suite
-results and preservation evidence. Its byte archives and Git bundles preserve the
-bounded rollback route. No retained-tree initialization or client exercise was repeated.
-
-The [packet](../saved_plans/phase5-item5-b-update-decision_2026-09-10.md) records the
-consumed approval. Preserved-file acceptance, fixture PR lifecycle, adoption completion
-and the untested systemize routes retain their separate boundaries. Completed item 6,
-its replay evidence, #723's accepted deferral and #585's earlier placement are preserved.
-The friction-budget reminder's intake again preserved the existing triage state;
-no new sweep or tracker payload was started.
-
-The latest session block owns the subsequent acceptance packet and next action.
-
-______________________________________________________________________
-
-## Session — 2026-09-10 (kit test repair, in Codex)
-
-The operator approved the kit-only #534 slice from the ITEM5-B execution record.
-The [repair record](../saved_plans/phase5-item5-kit534-repair_2026-09-10.md) retains
-source and synthetic installed verification, command/directory/revision stamps and
-limits. Controlled initializer inputs and generated adapter fixtures replace assumptions
-about adopter-owned files. The drift-liveness parent follows its child's applicability.
-The retained ITEM5-B baseline and completed item 6 replay were not rewritten.
-
-The latest session block owns the subsequent decision packet and next action.
 
 ______________________________________________________________________
 
