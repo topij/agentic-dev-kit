@@ -210,13 +210,18 @@ systemize:
   # points at source or config while keeping the filename configurable.
   report_root: reports
   report_pattern: "reports/post-merge-systemize_{window}_{mode}_{date}.md"
-  # Optional deterministic integration, resolved beneath paths.engines. The
-  # shipped kit does not vendor these yet: all absent selects the documented
-  # LLM-only path, all present selects engine-backed mode, and a partial set
-  # stops rather than mixing incompatible artifacts.
+  # Optional deterministic integration, resolved beneath paths.engines: all
+  # absent selects the documented LLM-only path, all present selects
+  # engine-backed mode, and a partial set stops rather than mixing
+  # incompatible artifacts.
   fetch_engine: fetch_merged_prs.py
   digest_engine: digest_merged_prs.py
   heartbeat_engine: heartbeat_cli.py
+  # Engine-backed mode only. The heartbeat's job name and its local state file,
+  # a logical state.dirname path under the same placeholder and target-safety
+  # rules as the cache and digest. LLM-only runs never read these.
+  heartbeat_job: post-merge-systemize
+  heartbeat_pattern: "state/automation-progress/post-merge-systemize_{window}_{mode}_{date}.json"
   commit_subject: "docs(systemize): promote recurring review patterns"
   # This workflow completes its patch before PR creation, so false is the only
   # valid value. True hard-stops instead of manufacturing a draft window. The

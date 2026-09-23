@@ -13565,6 +13565,8 @@ def test_post_merge_systemize_is_shared_thin_and_config_owned() -> None:
         "fetch_engine",
         "digest_engine",
         "heartbeat_engine",
+        "heartbeat_job",
+        "heartbeat_pattern",
         "commit_subject",
         "pr_draft",
     }
@@ -13600,12 +13602,14 @@ def test_post_merge_systemize_is_shared_thin_and_config_owned() -> None:
     cache_path = Path(systemize["cache_pattern"])
     digest_path = Path(systemize["digest_cache_pattern"])
     report_path = Path(systemize["report_pattern"])
+    heartbeat_path = Path(systemize["heartbeat_pattern"])
     for configured_path in (
         state_root,
         report_root,
         cache_path,
         digest_path,
         report_path,
+        heartbeat_path,
     ):
         assert not configured_path.is_absolute()
         assert ".." not in configured_path.parts
@@ -13614,8 +13618,9 @@ def test_post_merge_systemize_is_shared_thin_and_config_owned() -> None:
     assert cache_path.is_relative_to(state_root)
     assert digest_path.is_relative_to(state_root)
     assert report_path.is_relative_to(report_root)
-    assert len({cache_path, digest_path, report_path}) == 3
-    for artifact_pattern in (cache_path, digest_path, report_path):
+    assert heartbeat_path.is_relative_to(state_root)
+    assert len({cache_path, digest_path, report_path, heartbeat_path}) == 4
+    for artifact_pattern in (cache_path, digest_path, report_path, heartbeat_path):
         assert all(
             placeholder in artifact_pattern.parts[-1]
             for placeholder in ("{date}", "{window}", "{mode}")
