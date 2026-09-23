@@ -24,6 +24,19 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-09-23
+
+- **A handoff archive sweep left an extra blank line at the end of the handoff.** On
+  branch `chore/update-handoff-2026-09-23` (from `b808061`),
+  `uv run scripts/archive_plan_sessions.py --target-lines 400` exited `0` and moved the
+  2026-09-09 session blocks into the history file. The handoff then ended with its final separator line
+  followed by an empty line. At `b808061` it had ended directly after that separator.
+  `git diff HEAD --check` reported `new blank line at EOF`, and the wrap-up trimmed it
+  by hand.
+  - **Not established:** which code path adds the line, and whether every sweep does it.
+    So this is parked rather than filed.
+  - **Severity:** L.
+
 ## 2026-09-13
 
 - **The panel path test overstates which declaration it protects.** The independent
