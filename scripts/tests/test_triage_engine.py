@@ -17,10 +17,10 @@ REPO_ROOT = find_repo_root(ENGINE_DIR)
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
 from triage.approval import ApprovalContext  # noqa: E402
-from triage.canonical import decode_bytes, digest, dumps, loads_exact  # noqa: E402
-from triage.engine import _source_literal, run  # noqa: E402
+from triage.canonical import decode_bytes, digest, dumps, encode_bytes, loads_exact  # noqa: E402
+from triage.engine import _inline_literal, _report_text, _source_literal, run  # noqa: E402
 from triage.inbox import parse  # noqa: E402
-from triage.model import BASE_KEYS  # noqa: E402
+from triage.model import BASE_KEYS, CAPABILITIES  # noqa: E402
 from triage.providers import FakeForge, FakeTracker, ProviderObservation  # noqa: E402
 
 
@@ -240,6 +240,260 @@ def test_report_uses_unambiguous_bytes_literal_for_non_utf8_source(
     )
     assert "Python bytes literal" in report
     assert ascii(source) in report
+
+
+CANARY = "FORGED-CANARY"
+CONTROL_HOSTILE = f"x\x1b[2J‮ `` ```\n## {CANARY} heading\n<!-- {CANARY} -->\r"
+PRINTABLE_HOSTILE = f"`` <!-- {CANARY} --> ## {CANARY} *em* [link](https://example.invalid)"
+PRINTABLE_BLOCK_HOSTILE = f"```\n## {CANARY} heading\n<!-- {CANARY} -->\n ```\n~~~~ tail"
+REPORT_HEADINGS = [
+    "# Triage friction log report",
+    "## Capabilities",
+    "## Exact proposal payloads",
+    "## Tracker operations",
+    "## Finalization operations",
+    "## Proposed source diff",
+]
+
+
+def hostile_report_state(line: str, block: str) -> dict:
+    """Synthetic state whose every report-read string carries ``line`` or ``block``."""
+    return {
+        "mode": line,
+        "engine_mode": line,
+        "run_identity": {"session": line, "repository_identity": {"remote": line}},
+        "frozen_inbox_digest": line,
+        "proposal_payloads": [{
+            "candidate_id": line,
+            "source_block": {"source_block": encode_bytes(block.encode("utf-8"))},
+            "source_block_digest": line,
+            "payload_digest": line,
+            "payload": {"title": line, "body": block, "project": line, "labels": [line, line + "2"]},
+        }],
+        "operations": [{"candidate_id": line, "status": line, "returned_identifier": line}],
+        "finalization_operations": [
+            {
+                "kind": "pull-request", "status": "verified",
+                "intent": {"base_branch": line, "head": line},
+                "read_back": {"baseRefName": line, "headRefOid": line, "url": line},
+            },
+            {
+                "kind": "pr-watch", "status": "verified",
+                "intent": {"pr": line, "base_branch": line, "head": line},
+                "read_back": {"url": line, "baseRefName": line, "headRefOid": line, "reviewed_head": line, "receipt": {"x": 1}},
+            },
+        ],
+        "completion": {"receipt_core": {"proposed_diff": block}},
+    }
+
+
+def fenced_blocks(report: str) -> tuple[list[str], list[str]]:
+    """Split by CommonMark fence rules into (fenced contents, lines outside fences)."""
+    blocks: list[str] = []
+    outside: list[str] = []
+    fence: tuple[str, int] | None = None
+    content: list[str] = []
+    for line in report.split("\n"):
+        indent = len(line) - len(line.lstrip(" "))
+        stripped = line.lstrip(" ") if indent <= 3 else ""
+        run_char = stripped[:1]
+        run_length = len(stripped) - len(stripped.lstrip(run_char)) if run_char in ("`", "~") else 0
+        if fence is None:
+            if run_length >= 3 and not (run_char == "`" and "`" in stripped[run_length:]):
+                fence = (run_char, run_length)
+                content = []
+            else:
+                outside.append(line)
+        elif run_char == fence[0] and run_length >= fence[1] and not stripped[run_length:].strip(" \t"):
+            blocks.append("\n".join(content))
+            fence = None
+        else:
+            content.append(line)
+    assert fence is None, "a fence opened in the report is never closed"
+    return blocks, outside
+
+
+def without_code_spans(line: str) -> str:
+    """Remove CommonMark code spans (matching backtick runs) from one line."""
+    kept = []
+    index = 0
+    while index < len(line):
+        if line[index] != "`":
+            kept.append(line[index])
+            index += 1
+            continue
+        length = len(line[index:]) - len(line[index:].lstrip("`"))
+        search = index + length
+        closing = -1
+        while search < len(line):
+            if line[search] != "`":
+                search += 1
+                continue
+            run_length = len(line[search:]) - len(line[search:].lstrip("`"))
+            if run_length == length:
+                closing = search
+                break
+            search += run_length
+        if closing < 0:
+            kept.append(line[index:index + length])
+            index += length
+        else:
+            kept.append("<span>")
+            index = closing + length
+    return "".join(kept)
+
+
+@pytest.mark.parametrize(
+    ("line", "block"),
+    [(CONTROL_HOSTILE, CONTROL_HOSTILE), (PRINTABLE_HOSTILE, PRINTABLE_BLOCK_HOSTILE)],
+    ids=["control-bearing", "printable-markup"],
+)
+def test_report_renders_every_state_value_as_literal_content(line: str, block: str) -> None:
+    state = hostile_report_state(line, block)
+    capabilities = {name: {"status": line, "mechanism": line} for name in CAPABILITIES}
+    report = _report_text(state, capabilities, line).decode("utf-8")
+
+    assert all(character.isprintable() or character == "\n" for character in report)
+    blocks, outside = fenced_blocks(report)
+    assert blocks == [_source_literal(block.encode("utf-8"))[0]] * 2 + [
+        _source_literal(block.rstrip().encode("utf-8"))[0]
+    ]
+    assert [item for item in outside if item.startswith("#")] == [
+        *REPORT_HEADINGS[:3], f"### {_inline_literal(line)}", *REPORT_HEADINGS[3:]
+    ]
+    assert all(CANARY not in without_code_spans(item) for item in outside)
+    assert not any(item.lstrip().startswith("<") for item in outside)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("plain", "`plain`"),
+        ("Käyttäjä", "`Käyttäjä`"),
+        ("<!-- c -->", "`<!-- c -->`"),
+        ("a`b", "``a`b``"),
+        ("`lead", "`` `lead ``"),
+        ("trail`", "`` trail` ``"),
+        (None, "`None`"),
+        (" edge", "`' edge'` (escaped Python string literal)"),
+        ("   ", "`'   '` (escaped Python string literal)"),
+        ("", "`''` (escaped Python string literal)"),
+        (" nbsp", "`'\\xa0nbsp'` (escaped Python string literal)"),
+        ("x\ny", "`'x\\ny'` (escaped Python string literal)"),
+        ("\x1b[2K`", "``'\\x1b[2K`'`` (escaped Python string literal)"),
+    ],
+)
+def test_inline_literal_is_verbatim_only_for_safe_printable_text(value: object, expected: str) -> None:
+    assert _inline_literal(value) == expected
+
+
+def test_report_shows_payload_body_verbatim_in_a_fence_and_keeps_stored_payload(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = repository(tmp_path)
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(tmp_path / "state-root"))
+    supplied = request(root)
+    supplied["proposals"][0]["body_without_marker"] = "Summary.\n\n<!-- hidden? -->\n\n## Not a heading\n```\ncode\n```"
+    run("new", context="interactive", request=supplied, start=root)
+    state = loads_exact((tmp_path / "state-root/triage/triage-pipeline-state_live.json").read_bytes())
+    proposal = state["proposal_payloads"][0]
+    body = proposal["payload"]["body"]
+    assert body == supplied["proposals"][0]["body_without_marker"] + "\n\n" + proposal["marker"]
+    report = Path(proposal["report_binding"]["path"]).read_text(encoding="utf-8")
+    fence = _source_literal(body.encode("utf-8"))[1]
+    assert "Body (printable UTF-8 text with LF/TAB whitespace;" in report
+    assert f"\n{fence}\n{body}\n{fence}\n" in report
+    assert "\n## Not a heading" not in report.replace(f"{fence}\n{body}\n{fence}", "")
+
+
+def test_report_escapes_a_control_bearing_payload_body_but_stores_it_unchanged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = repository(tmp_path)
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(tmp_path / "state-root"))
+    supplied = request(root)
+    supplied["proposals"][0]["body_without_marker"] = "ok \x1b[8mhidden\x1b[0m\x1b[2K\x1b[1AFAKE"
+    supplied["proposals"][0]["title"] = "ok \x1b[8mhidden\x1b[0m"
+    run("new", context="interactive", request=supplied, start=root)
+    state = loads_exact((tmp_path / "state-root/triage/triage-pipeline-state_live.json").read_bytes())
+    proposal = state["proposal_payloads"][0]
+    assert proposal["payload"]["title"] == "ok \x1b[8mhidden\x1b[0m"
+    assert proposal["payload"]["body"].startswith("ok \x1b[8mhidden\x1b[0m\x1b[2K\x1b[1AFAKE\n\n")
+    report = Path(proposal["report_binding"]["path"]).read_text(encoding="utf-8")
+    assert "\x1b" not in report
+    assert ascii(proposal["payload"]["body"].encode("utf-8")) in report
+    assert f"Title: {_inline_literal(proposal['payload']['title'])}" in report
+    assert f"Payload digest: `{proposal['payload_digest']}`" in report
+
+
+def test_proposed_diff_fence_outlasts_a_fence_shaped_context_line() -> None:
+    diff = "--- a/log\n+++ b/log\n@@ -1,3 +1,2 @@\n ```\n-- **Entry.**\n ```\n"
+    state = {**hostile_report_state("plain", "plain"), "completion": {"receipt_core": {"proposed_diff": diff}}}
+    capabilities = {name: {"status": "ready", "mechanism": "fixture"} for name in CAPABILITIES}
+    report = _report_text(state, capabilities, "operator-held").decode("utf-8")
+    fence = _source_literal(diff.rstrip().encode("utf-8"))[1]
+    assert f"\n{fence}diff\n{diff.rstrip()}\n{fence}\n" in report
+    assert fenced_blocks(report)[0][-1] == diff.rstrip()
+
+
+def test_control_bearing_proposed_diff_is_a_literal_without_diff_highlighting() -> None:
+    diff = "--- a/log\n+++ b/log\n@@ -1 +0,0 @@\n-- **Entry.** \x1b[2Jhidden\n"
+    state = {**hostile_report_state("plain", "plain"), "completion": {"receipt_core": {"proposed_diff": diff}}}
+    capabilities = {name: {"status": "ready", "mechanism": "fixture"} for name in CAPABILITIES}
+    report = _report_text(state, capabilities, "operator-held").decode("utf-8")
+    assert "\x1b" not in report
+    assert f"\n```\n{ascii(diff.rstrip().encode('utf-8'))}\n```\n" in report
+    assert "```diff" not in report
+
+
+def presented_live_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path, dict]:
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    run("new", context="interactive", request=request(root), start=root)
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    return root, state_path, loads_exact(state_path.read_bytes())
+
+
+def test_archive_only_approval_without_tracker_reports_tracker_not_triggered(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, state_path, presented = presented_live_state(tmp_path, monkeypatch)
+    command = "archive TRI-01"
+    approved = run(
+        "resume", context="interactive",
+        request={"approval": approval_for(presented, command)}, start=root,
+        approval_context=approval_context(presented, command),
+    )
+    expected = {"status": "not-triggered", "mechanism": "archive-only approval files no tracker payload; continue with finalize"}
+    assert approved["outcome"] == "operator-held"
+    assert approved["capabilities"]["tracker-write-readback"] == expected
+    assert loads_exact(state_path.read_bytes())["phase"] == "tracker-write"
+    resumed = run("resume", context="interactive", request={}, start=root)
+    assert resumed["outcome"] == "operator-held"
+    assert resumed["capabilities"]["tracker-write-readback"] == expected
+    report = Path(approved["report"]).read_text(encoding="utf-8")
+    assert "archive-only approval files no tracker payload" in report
+    assert "requires tracker provider" not in report
+
+
+def test_filing_approval_without_tracker_still_holds_for_the_tracker(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _state_path, presented = presented_live_state(tmp_path, monkeypatch)
+    approved = run(
+        "resume", context="interactive",
+        request={"approval": approval_for(presented)}, start=root,
+        approval_context=approval_context(presented),
+    )
+    assert approved["outcome"] == "operator-held"
+    assert approved["capabilities"]["tracker-write-readback"] == {
+        "status": "operator-held", "mechanism": "approved payload requires tracker provider",
+    }
+    resumed = run("resume", context="interactive", request={}, start=root)
+    assert resumed["capabilities"]["tracker-write-readback"] == {
+        "status": "operator-held", "mechanism": "retained tracker batch requires a read-back provider",
+    }
 
 
 def test_explicit_archive_dispatches_no_tracker_and_implicitly_parks_other_entries(

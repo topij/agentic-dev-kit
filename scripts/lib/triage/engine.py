@@ -590,34 +590,67 @@ def _source_literal(raw: bytes) -> tuple[str, str, str]:
     return rendered, fence, description
 
 
+def _literal_block(label: str, raw: bytes, *, info: str = "") -> list[str]:
+    """Return captioned literal-block lines; ``info`` applies only to verbatim text."""
+    rendered, fence, description = _source_literal(raw)
+    try:
+        verbatim = rendered == raw.decode("utf-8")
+    except UnicodeDecodeError:
+        verbatim = False
+    return [f"{label} ({description}):", "", fence + info if verbatim else fence, rendered, fence]
+
+
+def _inline_literal(value: Any) -> str:
+    """Return a one-line code span that no backtick run in the value can close.
+
+    Only non-empty printable text without edge whitespace is shown verbatim. Anything
+    else is shown as its escaped Python string literal, labelled outside the span so
+    the escape cannot be mistaken for the value itself.
+    """
+    text = value if isinstance(value, str) else str(value)
+    verbatim = bool(text) and text == text.strip() and text.isprintable()
+    shown = text if verbatim else ascii(text)
+    longest = max((len(match.group()) for match in re.finditer("`+", shown)), default=0)
+    delimiter = "`" * (longest + 1)
+    padding = " " if shown.startswith("`") or shown.endswith("`") else ""
+    span = f"{delimiter}{padding}{shown}{padding}{delimiter}"
+    return span if verbatim else span + " (escaped Python string literal)"
+
+
 def _report_text(state: dict[str, Any], capabilities: dict[str, dict[str, str]], outcome: str) -> bytes:
+    # Every value taken from state, configuration or a service enters the report
+    # through _inline_literal or _literal_block and in no other way. The report's
+    # Markdown structure is the engine's own; no inbox, proposal-analysis or
+    # read-back text is ever rendered as report Markdown.
     lines = [
-        "# Triage friction log report", "", f"Outcome: `{outcome}`",
-        f"Mode: `{state['mode']}`", f"Engine mode: `{state['engine_mode']}`",
-        f"Run identity: `{dumps(state['run_identity']).decode()}`",
-        f"Frozen inbox digest: `{state['frozen_inbox_digest']}`",
+        "# Triage friction log report", "", f"Outcome: {_inline_literal(outcome)}",
+        f"Mode: {_inline_literal(state['mode'])}",
+        f"Engine mode: {_inline_literal(state['engine_mode'])}",
+        f"Run identity: {_inline_literal(dumps(state['run_identity']).decode())}",
+        f"Frozen inbox digest: {_inline_literal(state['frozen_inbox_digest'])}",
         "", "## Capabilities", "",
     ]
     for name in CAPABILITIES:
         entry = capabilities[name]
-        lines.append(f"- `{name}`: `{entry['status']}` — {entry['mechanism']}")
+        lines.append(
+            f"- {_inline_literal(name)}: {_inline_literal(entry['status'])}"
+            f" — {_inline_literal(entry['mechanism'])}"
+        )
     proposals = state.get("proposal_payloads", [])
     if proposals:
         lines.extend(["", "## Exact proposal payloads", ""])
         for proposal in proposals:
             payload = proposal["payload"]
-            source = proposal["source_block"]
-            source_raw = decode_bytes(source["source_block"])
-            rendered_source, fence, source_description = _source_literal(source_raw)
+            source_raw = decode_bytes(proposal["source_block"]["source_block"])
             lines.extend([
-                f"### {proposal['candidate_id']}", "",
-                f"Source-block digest: `{proposal['source_block_digest']}`", "",
-                f"Original source ({source_description}):", "", fence,
-                rendered_source, fence, "",
-                f"Payload digest: `{proposal['payload_digest']}`", "",
-                f"Title: {payload['title']}", "", payload["body"], "",
-                f"Project: `{payload['project']}`", "",
-                "Labels: " + ", ".join(f"`{label}`" for label in payload["labels"]), "",
+                f"### {_inline_literal(proposal['candidate_id'])}", "",
+                f"Source-block digest: {_inline_literal(proposal['source_block_digest'])}", "",
+                *_literal_block("Original source", source_raw), "",
+                f"Payload digest: {_inline_literal(proposal['payload_digest'])}", "",
+                f"Title: {_inline_literal(payload['title'])}", "",
+                *_literal_block("Body", payload["body"].encode("utf-8")), "",
+                f"Project: {_inline_literal(payload['project'])}", "",
+                "Labels: " + ", ".join(_inline_literal(label) for label in payload["labels"]), "",
             ])
         lines.extend([
             "Historical annotations are evidence for review, not executable accounting instructions.",
@@ -627,23 +660,30 @@ def _report_text(state: dict[str, Any], capabilities: dict[str, dict[str, str]],
     if state.get("operations"):
         lines.extend(["", "## Tracker operations", ""])
         for operation in state["operations"]:
-            lines.append(f"- `{operation['candidate_id']}`: `{operation['status']}` — `{operation.get('returned_identifier')}`")
+            lines.append(
+                f"- {_inline_literal(operation['candidate_id'])}: {_inline_literal(operation['status'])}"
+                f" — {_inline_literal(operation.get('returned_identifier'))}"
+            )
     if state.get("finalization_operations"):
         lines.extend(["", "## Finalization operations", ""])
         for operation in state["finalization_operations"]:
-            lines.append(f"- `{operation['kind']}`: `{operation['status']}`")
+            lines.append(f"- {_inline_literal(operation['kind'])}: {_inline_literal(operation['status'])}")
         pr_fields = _pr_result_fields(state)
         lines.extend([
             "",
-            f"Pull request: `{pr_fields['pull_request_url']}`",
-            f"Observed PR head: `{pr_fields['observed_pr_head']}`",
-            f"Reviewed head: `{pr_fields['reviewed_head']}`",
+            f"Pull request: {_inline_literal(pr_fields['pull_request_url'])}",
+            f"Observed PR head: {_inline_literal(pr_fields['observed_pr_head'])}",
+            f"Reviewed head: {_inline_literal(pr_fields['reviewed_head'])}",
         ])
     completion = state.get("completion")
     if isinstance(completion, dict):
         proposed_diff = completion.get("receipt_core", {}).get("proposed_diff")
         if isinstance(proposed_diff, str):
-            lines.extend(["", "## Proposed source diff", "", "```diff", proposed_diff.rstrip(), "```", ""])
+            lines.extend([
+                "", "## Proposed source diff", "",
+                *_literal_block("Proposed source diff", proposed_diff.rstrip().encode("utf-8"), info="diff"),
+                "",
+            ])
     return ("\n".join(lines).rstrip() + "\n").encode()
 
 
@@ -903,9 +943,16 @@ def _apply_approval(
         state_digest = atomic_replace(store.state_path, dumps(completed), expected_digest=state_digest)
         return completed, state_digest, receipt_core["outcome"]
     if tracker is None:
-        capabilities["tracker-write-readback"] = {"status": "operator-held", "mechanism": "approved payload requires tracker provider"}
+        capabilities["tracker-write-readback"] = _tracker_unavailable(decisions, "approved payload requires tracker provider")
         return writing, state_digest, "operator-held"
     return _advance_tracker_batch(settings, store, lease, writing, state_digest, capabilities, tracker)
+
+
+def _tracker_unavailable(decisions: list[dict[str, Any]], held_mechanism: str) -> dict[str, str]:
+    """Report a missing tracker as holding only when an approved decision files."""
+    if not any(decision["decision"] == "file" for decision in decisions):
+        return {"status": "not-triggered", "mechanism": "archive-only approval files no tracker payload; continue with finalize"}
+    return {"status": "operator-held", "mechanism": held_mechanism}
 
 
 def _advance_tracker_batch(
@@ -1721,7 +1768,9 @@ def run(
                     state, state_digest, terminal = _apply_approval(settings, store, lease, state, state_digest, request, capabilities, tracker, approval_context)
             if state["phase"] == "tracker-write" and not isinstance(request.get("approval"), dict):
                 if tracker is None:
-                    capabilities["tracker-write-readback"] = {"status": "operator-held", "mechanism": "retained tracker batch requires a read-back provider"}
+                    capabilities["tracker-write-readback"] = _tracker_unavailable(
+                        state["decisions"], "retained tracker batch requires a read-back provider"
+                    )
                 else:
                     state, state_digest, terminal = _advance_tracker_batch(
                         settings, store, lease, state, state_digest, capabilities, tracker
