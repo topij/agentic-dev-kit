@@ -66,13 +66,14 @@ def run(settings: Settings, *, mode: str, window_days: int, date: str, verify_pa
     targets = all_targets(settings, date=date, window_days=window_days, mode=mode)
     artifacts.check_targets(settings, targets)
     digest_target = next(t for t in targets if t.label == "digest")
-    artifacts.require_replaceable(digest_target, kind=identity.DIGEST_KIND, identity=raw["run_identity"])
     try:
         data = dumps(expected)
     except CanonicalError as exc:
         raise SystemizeError(f"digest is not canonical JSON: {exc}") from exc
-    artifacts.check_targets(settings, targets)
-    artifacts.publish(digest_target, data)
+    with artifacts.locked(digest_target):
+        artifacts.check_targets(settings, targets)
+        artifacts.require_replaceable(digest_target, kind=identity.DIGEST_KIND, identity=raw["run_identity"])
+        artifacts.publish(digest_target, data)
     return {
         "engine": "digest",
         "cache_path": str(raw_path),

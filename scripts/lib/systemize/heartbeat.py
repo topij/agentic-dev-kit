@@ -15,10 +15,7 @@ from __future__ import annotations
 
 import os
 import re
-from collections.abc import Iterator
-from contextlib import contextmanager, suppress
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 from triage.canonical import dumps
@@ -36,26 +33,6 @@ _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 
 def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-@contextmanager
-def _locked(target: artifacts.Target) -> Iterator[None]:
-    lock = lock_path(target)
-    lock.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        descriptor = os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o644)
-    except FileExistsError as exc:
-        raise SystemizeError(
-            f"heartbeat lock {lock} is held: another writer is running, or one died mid-write; "
-            "confirm no systemize process is running, then remove the lock"
-        ) from exc
-    try:
-        os.write(descriptor, str(os.getpid()).encode())
-        os.close(descriptor)
-        yield
-    finally:
-        with suppress(FileNotFoundError):
-            os.unlink(lock)
 
 
 class Heartbeat:
@@ -94,7 +71,7 @@ class Heartbeat:
 
     def start(self) -> dict[str, Any]:
         artifacts.check_targets(self.settings, self.targets)
-        with _locked(self.target):
+        with artifacts.locked(self.target):
             previous = self._read()
             now = _now()
             state = {
@@ -124,7 +101,7 @@ class Heartbeat:
         if run_digest is not None and not _DIGEST.fullmatch(run_digest):
             raise SystemizeError(f"invalid --run-identity-digest {run_digest!r}")
         artifacts.check_targets(self.settings, self.targets)
-        with _locked(self.target):
+        with artifacts.locked(self.target):
             state = self._running()
             prior = state.get("slice")
             if current is not None and isinstance(prior, dict):
@@ -149,7 +126,7 @@ class Heartbeat:
         if reason not in REASONS:
             raise SystemizeError(f"invalid completion reason {reason!r}")
         artifacts.check_targets(self.settings, self.targets)
-        with _locked(self.target):
+        with artifacts.locked(self.target):
             state = self._read()
             if state is None:
                 raise SystemizeError(f"no heartbeat started at {self.target.path}; nothing to complete")
@@ -166,5 +143,4 @@ class Heartbeat:
             return self._write(state)
 
 
-def lock_path(target: artifacts.Target) -> Path:
-    return target.path.with_name(target.path.name + ".lock")
+lock_path = artifacts.lock_path

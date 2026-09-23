@@ -339,9 +339,11 @@ partial engine set.
 5. `heartbeat_engine complete --reason complete|error` — the final write.
 
 A concurrent heartbeat writer, a tick or completion without a start, a write after
-completion, or a foreign heartbeat identity is a hard stop. A held heartbeat lock
-beside the state file means a writer is running or died mid-write; confirm no run is
-active before removing it.
+completion, or a foreign heartbeat identity is a hard stop. Fetch and digest likewise
+hold a lock beside their artifact from the ownership check through the write, and
+re-check ownership just before replacing it, so a concurrent run of the same window,
+date and mode is refused rather than overwritten. A held lock means a writer is running
+or died mid-write; confirm no run is active before removing it.
 
 ## Step 2 — Cluster by root cause
 

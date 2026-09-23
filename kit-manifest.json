@@ -56,7 +56,7 @@
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
-      "sha256": "2c39db758c82131c7a17035ea18176e0a870ddd59e56a95abeb69fbd04aa09f3"
+      "sha256": "0621fe489a9390a0632939735ccb10bf6dd9b4b29693ca88864fbca66ca02827"
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
@@ -253,7 +253,7 @@
         "scripts/lib/systemize/heartbeat.py"
       ],
       "role": "engine",
-      "sha256": "b817d2ff308cfe424b912b064a8114b970585c9c3386ab40e489dafd9bd9be5d"
+      "sha256": "d5c92c1b3d4ce39b057bc5fbc7f6c4b378cbeba1865cc0d5267bf6322db79c5e"
     },
     "scripts/lib/systemize/cli.py": {
       "required_by": [
@@ -281,7 +281,7 @@
         "scripts/digest_merged_prs.py"
       ],
       "role": "engine",
-      "sha256": "7ec9bc1940f324895037db5d3dfd12f3082e047c1eca52ca5bbdd1c6e1f21f26"
+      "sha256": "bdbfd50616f587dbae64759b1a607ca920af3268ae4c314b07abfb9121c19653"
     },
     "scripts/lib/systemize/errors.py": {
       "required_by": [
@@ -305,7 +305,7 @@
         "scripts/lib/systemize/heartbeat.py"
       ],
       "role": "engine",
-      "sha256": "ac7afc7542e551f7b956a18a5686c82632fd6c99e2ce94b145ddb3fdd6f8a550"
+      "sha256": "988dfd2ff3c393404c52c0579c1f64e4cd64d345a9eadf9d2530dda4868d2826"
     },
     "scripts/lib/systemize/forge.py": {
       "required_by": [
@@ -320,7 +320,7 @@
         "scripts/heartbeat_cli.py"
       ],
       "role": "engine",
-      "sha256": "27000c7c87d9b5461f8d7c4873ac193f82654453164e4efaef34b0de4d467a1b"
+      "sha256": "8f95356921d1ffa1376a4ce4458c6b79613765ca74b88605d5d2a871f4898ad7"
     },
     "scripts/lib/systemize/identity.py": {
       "required_by": [
@@ -557,7 +557,7 @@
     },
     "scripts/tests/test_systemize_artifacts.py": {
       "role": "test",
-      "sha256": "c29eb2ee873da5eca5e38d931943c297189f08446c44efe57ce829f914ce68e7"
+      "sha256": "8fd9452edccb8b5190d2631d011f6d8f27638ab1d529b52195f2ef400d3ed6f9"
     },
     "scripts/tests/test_systemize_config.py": {
       "role": "test",

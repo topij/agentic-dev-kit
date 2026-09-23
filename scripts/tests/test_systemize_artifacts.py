@@ -194,3 +194,53 @@ def test_a_run_identity_is_the_canonical_digest() -> None:
     canonical = ('{"config_fingerprint":"sha256:x","execution_mode":"live","forge_repo":"o/r",'
                  f'"protected_branch_head":"{HEAD}","schema":"post-merge-systemize-run-v1","window_days":7}}')
     assert identity.identity_digest(run_id) == "sha256:" + hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def test_a_foreign_artifact_appearing_mid_fetch_is_not_overwritten(ctx) -> None:
+    """The ownership check is repeated after the (slow) forge read, under the lock."""
+    from systemize import fetch
+
+    settings, targets, _, _ = ctx
+    cache = _target(targets, "cache")
+    foreign = json.dumps(identity.header(identity.RAW_KIND, _run_id(settings, head="b" * 40))).encode()
+
+    class Reader:
+        def repository(self):
+            return "o/r"
+
+        def branch_head(self, repo, branch):
+            return HEAD
+
+        def merged_prs(self, repo, start, end):
+            cache.path.parent.mkdir(parents=True, exist_ok=True)
+            cache.path.write_bytes(foreign)
+            return [], 0
+
+    with pytest.raises(SystemizeError, match="different run"):
+        fetch.run(settings, Reader(), mode="test", window_days=7, date=DATE)
+    assert cache.path.read_bytes() == foreign
+    assert not artifacts.lock_path(cache).exists()
+
+
+def test_a_held_artifact_lock_refuses_a_concurrent_fetch(ctx) -> None:
+    from systemize import fetch
+
+    settings, targets, _, _ = ctx
+    cache = _target(targets, "cache")
+    lock = artifacts.lock_path(cache)
+    lock.parent.mkdir(parents=True)
+    lock.write_text("4242")
+
+    class Reader:
+        def repository(self):
+            return "o/r"
+
+        def branch_head(self, repo, branch):
+            return HEAD
+
+        def merged_prs(self, repo, start, end):
+            raise AssertionError("the forge must not be read while another run holds the lock")
+
+    with pytest.raises(SystemizeError, match="lock .* is held"):
+        fetch.run(settings, Reader(), mode="test", window_days=7, date=DATE)
+    assert lock.read_text() == "4242" and not cache.path.exists()

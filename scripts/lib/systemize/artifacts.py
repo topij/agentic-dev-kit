@@ -16,7 +16,8 @@ import os
 import stat
 import subprocess
 import uuid
-from contextlib import suppress
+from collections.abc import Iterator
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -168,6 +169,37 @@ def read_regular(path: Path, label: str) -> bytes:
 def require_replaceable(target: Target, *, kind: str, identity: dict) -> None:
     if os.path.lexists(target.path):
         require_same_run(read_regular(target.path, target.label), kind=kind, identity=identity, path=str(target.path))
+
+
+def lock_path(target: Target) -> Path:
+    return target.path.with_name(target.path.name + ".lock")
+
+
+@contextmanager
+def locked(target: Target) -> Iterator[None]:
+    """Hold an exclusive per-target lock across an ownership check and its write.
+
+    Without it, a concurrent run of the same window, date and mode could publish
+    its own artifact after this run's ownership check and have it silently
+    replaced. A held lock is refused rather than waited on: a stale one needs a
+    human to confirm no run is active.
+    """
+    lock = lock_path(target)
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        descriptor = os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o644)
+    except FileExistsError as exc:
+        raise SystemizeError(
+            f"{target.label}: lock {lock} is held: another run is writing this artifact, or one died "
+            "mid-write; confirm no systemize process is running, then remove the lock"
+        ) from exc
+    try:
+        os.write(descriptor, str(os.getpid()).encode())
+        os.close(descriptor)
+        yield
+    finally:
+        with suppress(FileNotFoundError):
+            os.unlink(lock)
 
 
 def publish(target: Target, data: bytes) -> None:

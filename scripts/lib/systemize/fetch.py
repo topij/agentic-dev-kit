@@ -108,24 +108,28 @@ def run(settings: Settings, reader: GitHubReader, *, mode: str, window_days: int
     run_id = identity.run_identity(
         forge_repo=repo, window_days=window_days, head=head, fingerprint=settings.fingerprint, mode=mode
     )
-    artifacts.require_replaceable(raw_target, kind=identity.RAW_KIND, identity=run_id)
+    with artifacts.locked(raw_target):
+        artifacts.require_replaceable(raw_target, kind=identity.RAW_KIND, identity=run_id)
 
-    start, end = window_bounds(date, window_days)
-    nodes, scanned = reader.merged_prs(repo, start, end)
-    prs = sorted((collect_pr(reader, repo, n) for n in nodes), key=lambda p: p["number"])
-    bundle = {
-        **identity.header(identity.RAW_KIND, run_id),
-        "window": {"days": window_days, "date": date, "start": _iso(start), "end": _iso(end)},
-        "fetched_at": _iso(datetime.now(timezone.utc)),
-        "population": {"merged_in_window": len(prs), "scanned": scanned},
-        "prs": prs,
-    }
-    try:
-        data = dumps(bundle)
-    except CanonicalError as exc:
-        raise SystemizeError(f"raw bundle is not canonical JSON: {exc}") from exc
-    artifacts.check_targets(settings, targets)
-    artifacts.publish(raw_target, data)
+        start, end = window_bounds(date, window_days)
+        nodes, scanned = reader.merged_prs(repo, start, end)
+        prs = sorted((collect_pr(reader, repo, n) for n in nodes), key=lambda p: p["number"])
+        bundle = {
+            **identity.header(identity.RAW_KIND, run_id),
+            "window": {"days": window_days, "date": date, "start": _iso(start), "end": _iso(end)},
+            "fetched_at": _iso(datetime.now(timezone.utc)),
+            "population": {"merged_in_window": len(prs), "scanned": scanned},
+            "prs": prs,
+        }
+        try:
+            data = dumps(bundle)
+        except CanonicalError as exc:
+            raise SystemizeError(f"raw bundle is not canonical JSON: {exc}") from exc
+        # The forge read can be long: re-check both the paths and the ownership
+        # of anything that appeared at the target since, just before replacing it.
+        artifacts.check_targets(settings, targets)
+        artifacts.require_replaceable(raw_target, kind=identity.RAW_KIND, identity=run_id)
+        artifacts.publish(raw_target, data)
     return {
         "engine": "fetch",
         "cache_path": str(raw_target.path),
