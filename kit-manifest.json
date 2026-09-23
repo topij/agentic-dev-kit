@@ -32,7 +32,7 @@
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
-      "sha256": "4d9072247f215b3dd61883cf4a6ab11bb353a909fe9bb4569505670e92cb0f6b"
+      "sha256": "70997a06b59316dde96400aa0e35ee6f730786d9ccb48e64a2985388056741b8"
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
@@ -72,7 +72,7 @@
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
-      "sha256": "ef328af59f53a619e373c8f9bead1daf20b1f58715fa27c1e583b66ee0513623"
+      "sha256": "b1b61d2be9c0a4f3769d78b27579abfca57a3d44f28c73fd445091260f9c1172"
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
