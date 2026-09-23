@@ -1367,6 +1367,9 @@ migrate_kit_schema() {
   fetch_engine: fetch_merged_prs.py
   digest_engine: digest_merged_prs.py
   heartbeat_engine: heartbeat_cli.py
+  # Engine-backed mode only: the heartbeat job name and local state file.
+  heartbeat_job: post-merge-systemize
+  heartbeat_pattern: "state/automation-progress/post-merge-systemize_{window}_{mode}_{date}.json"
   commit_subject: "docs(systemize): promote recurring review patterns"
   pr_draft: false
 '

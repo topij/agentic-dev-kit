@@ -35,12 +35,15 @@ Every value used below comes from that merged configuration:
   `systemize.cache_pattern`, `systemize.digest_cache_pattern`,
   `systemize.report_root`, `systemize.report_pattern`, `systemize.fetch_engine`,
   `systemize.digest_engine`, `systemize.heartbeat_engine`,
-  `systemize.commit_subject`, and `systemize.pr_draft`. Their values are not
-  restated here.
+  `systemize.commit_subject`, and `systemize.pr_draft`, plus — in engine-backed
+  mode only — `systemize.heartbeat_job` and `systemize.heartbeat_pattern`. Their
+  values are not restated here.
 - A workflow invocation means the current runtime's native adapter: `/name` in Claude
   Code or `$name` in Codex.
 
-Validate every required `<systemize>` key before fetching anything. A missing key is a
+Validate every required `<systemize>` key before fetching anything. The two heartbeat
+keys are required only when the complete engine set selects engine-backed mode; an
+LLM-only run neither reads nor requires them. A missing key is a
 hard stop that names the key and tells the operator to rerun `./init.sh` or add the
 documented value. Do not silently substitute the shipped default: doing so would make
 the tracked config stop being the effective contract.
@@ -59,7 +62,8 @@ Validate values as well as presence:
   trimming ASCII whitespace and lowercasing ASCII letters while preserving every other
   character, then require uniqueness and compare exactly. Never use a prefix, display
   name, inferred repository owner, or current authentication identity as a substitute.
-- cache, digest, and report patterns are non-empty repository-relative paths;
+- cache, digest, report, and (engine-backed) heartbeat patterns are non-empty
+  repository-relative paths; `heartbeat_job` is a non-empty string;
   `report_root` is a non-empty repository-relative directory other than the repository
   root; configured engine names and `commit_subject` are non-empty strings; and
   `systemize.pr_draft` must be `false`. This workflow completes the proposed patch before
@@ -70,8 +74,8 @@ Validate values as well as presence:
 Before any derived write, substitute the selected date, `{window}` as the selected
 lookback followed by `d`, and `{mode}` as `live` or `test`. Require all three placeholders
 in each artifact pattern so normal, backfill, test, and combined entry points cannot
-overwrite one another on the same date. Treat the configured cache and digest patterns
-as logical `state.dirname` paths. Resolve the shared state-path package beneath
+overwrite one another on the same date. Treat the configured cache, digest, and
+heartbeat patterns as logical `state.dirname` paths. Resolve the shared state-path package beneath
 `<engine-dir>` at `<engine-dir>/lib/state_paths`; its absence is a required-capability
 failure even in LLM-only mode. Require `state.dirname` to match that resolver's declared
 `STATE_DIRNAME`; a mismatch is a hard stop because the resolver does not take that
@@ -201,8 +205,8 @@ with an instruction to configure at least one trusted review source.
 | Notification | optional | Missing backend or target degrades to the report plus final output. Notification is never the only durable result. |
 | Configured reviewer | optional for this workflow | A ready PR may engage it. Unavailability follows `pr-watch`'s shared fallback policy; it never waives review or authorizes merge. |
 
-The engine-backed set is an enhancement, not a prerequisite for runtime parity. The kit
-does not vendor those engines yet; issue `#7` owns that integration. LLM-only mode must
+The engine-backed set is an enhancement, not a prerequisite for runtime parity; its
+interface is under *Engine interface* below. LLM-only mode must
 produce the same normalized digest and report fields, but it must label clustering and
 source classification as agent-executed rather than engine-verified.
 
@@ -249,8 +253,18 @@ In LLM-only mode, use the proven forge-read capability to fetch every merged pul
 request in the selected window with complete pagination. For each pull request collect:
 identity and merge revision, review comments and review objects, configured-reviewer
 findings, operator review findings, file paths, source text, source identity, severity
-when the source supplies one, addressed state when evidenced, and originating tracker
+when the source supplies one, addressed state, and originating tracker
 references. Plain discussion without a review finding is not evidence for a cluster.
+
+A finding is the root comment of a review thread, or the non-empty body of a review
+object, whose author is a trusted source; replies and pull-request discussion comments
+are context, not findings. **Addressed state comes from the forge's thread resolution,
+never from reply text.** A thread the forge reports resolved is `addressed`; an
+unresolved thread the forge reports outdated is `outdated`, which is inconclusive and
+stays distinct; any other unresolved thread is `unaddressed`; a review-object body has
+no thread and is `unevidenced`. Every state except `addressed` counts toward the
+unaddressed finding count below. Reply text such as "fixed in `<sha>`" is not
+evidence: it misses resolutions made without a reply and decays as threads go outdated.
 Classify a collected finding as operator or configured-reviewer evidence only after its
 source identity exactly matches the trusted set established during preflight.
 
@@ -278,7 +292,9 @@ below:
 - `window`, `forge_repo`, `protected_branch_head`, and `config_fingerprint`;
 - `prs[]`, each with pull-request identity, tracker references, and `findings[]`;
 - each finding's source, path, original severity, normalized severity, addressed state,
-  guideline-citation state, and cleaned text;
+  guideline-citation state, and cleaned text — the citation state is `cited` when the
+  finding names an active instruction or shared-workflow path or carries the reviewer's
+  own guideline marker, with the matched evidence recorded;
 - input-cap state and the configured batching values;
 - `findings_pr_count = len(prs)` after the cap,
   `single_pass_recommended = (findings_pr_count <=
@@ -298,6 +314,36 @@ engine-backed mode, and exit successfully.
 
 After the digest is durable, tick the configured heartbeat for clustering in
 engine-backed mode.
+
+## Engine interface
+
+The three configured engines are installed together beneath `<engine-dir>` and
+resolve the merged configuration themselves. Each takes `--mode live|test`,
+`--window-days <n>` (the selected `lookback_days` or `backfill_days`; any other value
+stops), and `--date YYYY-MM-DD` (the selected UTC date). The window is the `<n>` whole
+UTC days ending with that date. Exit `0` prints one JSON envelope naming the
+artifact paths and `run_identity_digest`; exit `1` is a hard stop with one stderr line
+naming the failed check; exit `2` is a rejected invocation. Each refuses to run from a
+partial engine set.
+
+1. `heartbeat_engine start` — before the fetch. The heartbeat state is bound to the
+   job, window, date, mode and config fingerprint, because the run identity needs the
+   protected-branch head the fetch has not read yet.
+2. `fetch_engine` — writes the raw bundle and prints the run identity digest.
+3. `digest_engine` — writes the capped digest. With `--verify <path>` it writes
+   nothing and instead checks the digest at `<path>` against the raw bundle; use it on
+   an LLM-only digest too.
+4. `heartbeat_engine tick --step digest --run-identity-digest <digest>`, then one
+   `tick --step cluster --slice <i>/<n>` per analysis slice. The recorded run identity
+   may not change and a slice may not regress.
+5. `heartbeat_engine complete --reason complete|error` — the final write.
+
+A concurrent heartbeat writer, a tick or completion without a start, a write after
+completion, or a foreign heartbeat identity is a hard stop. Fetch and digest likewise
+hold a lock beside their artifact from the ownership check through the write, and
+re-check ownership just before replacing it, so a concurrent run of the same window,
+date and mode is refused rather than overwritten. A held lock means a writer is running
+or died mid-write; confirm no run is active before removing it.
 
 ## Step 2 — Cluster by root cause
 

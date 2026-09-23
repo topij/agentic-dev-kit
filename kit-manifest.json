@@ -56,7 +56,7 @@
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
-      "sha256": "0995bc61338fd3c4919b74f1bdad72823bd4fc1224bd81a9dcfdb6faad40364b"
+      "sha256": "0621fe489a9390a0632939735ccb10bf6dd9b4b29693ca88864fbca66ca02827"
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
@@ -104,7 +104,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "a127589abcf01e2ea994a5daa2d6dbe6205fe18623a02226f0e9b2c566bbd906"
+      "sha256": "4067a518dd8ac591a4dceb588de098f1c8f0c662231d8f3a82abfaab11e45f40"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -126,9 +126,21 @@
       "role": "engine",
       "sha256": "f696372d912ba5f9ab9bbbbd3ea2a14689ea8c9fdda57e1c00aa5962d376012f"
     },
+    "scripts/digest_merged_prs.py": {
+      "role": "engine",
+      "sha256": "13c9f3d97b100160292687799ed335ce9feec3030d61141ff2cb0e556d332373"
+    },
+    "scripts/fetch_merged_prs.py": {
+      "role": "engine",
+      "sha256": "a58a7821c00f73fef36334f14dc13435f0898a56f787e44acd9ee7eb22b7afab"
+    },
     "scripts/finalize_triage.py": {
       "role": "engine",
       "sha256": "9b4a31e8675c538365de3d2375978fa4163c41f95cf275bb11563cc5d847662f"
+    },
+    "scripts/heartbeat_cli.py": {
+      "role": "engine",
+      "sha256": "ec0b5b37da793b9a2b5882bc5936760311e81e8fb7de32969e34b43b44a1f9eb"
     },
     "scripts/hooks/pr_followup_hook.py": {
       "role": "hook",
@@ -143,7 +155,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "53ec49fbf965094b5f3813b21772c474b3c99f5217133da1053387c0184c2b7b"
+      "sha256": "4fdbe5d5d3f2fe383e2309c03c56c6071cc7b9bb849e1fa8a5663eb97149d7dc"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -169,6 +181,7 @@
         "scripts/hooks/pre-push",
         "scripts/kit_doctor.py",
         "scripts/launch_lane.py",
+        "scripts/lib/systemize/config.py",
         "scripts/lib/triage/model.py",
         "scripts/panel_prompt.py",
         "scripts/pr_watch.py"
@@ -189,6 +202,7 @@
     },
     "scripts/lib/state_paths/__init__.py": {
       "required_by": [
+        "scripts/lib/systemize/artifacts.py",
         "scripts/lib/triage/model.py",
         "scripts/lib/triage/storage.py"
       ],
@@ -197,7 +211,8 @@
     },
     "scripts/lib/state_paths/paths.py": {
       "required_by": [
-        "scripts/lib/state_paths/resolver.py"
+        "scripts/lib/state_paths/resolver.py",
+        "scripts/lib/systemize/artifacts.py"
       ],
       "role": "engine",
       "sha256": "f54fd7d970402f8581f6c5080aa9614ce41cb2dafa2010c08406129731799397"
@@ -212,6 +227,8 @@
     "scripts/lib/state_paths/resolver.py": {
       "required_by": [
         "scripts/lib/state_paths/__init__.py",
+        "scripts/lib/systemize/artifacts.py",
+        "scripts/lib/systemize/config.py",
         "scripts/lib/triage/storage.py"
       ],
       "role": "engine",
@@ -224,6 +241,104 @@
     "scripts/lib/state_paths/tests/test_state_paths.py": {
       "role": "test",
       "sha256": "b474703decdd2304d7460762fe5b5aa7fed9a81a9a422df61be0825b0c2ed88d"
+    },
+    "scripts/lib/systemize/__init__.py": {
+      "role": "engine",
+      "sha256": "47324c97056a45e8ae16bb2470dde494441f20bf58df826dcf18ede7d42709e9"
+    },
+    "scripts/lib/systemize/artifacts.py": {
+      "required_by": [
+        "scripts/lib/systemize/digest.py",
+        "scripts/lib/systemize/fetch.py",
+        "scripts/lib/systemize/heartbeat.py"
+      ],
+      "role": "engine",
+      "sha256": "d5c92c1b3d4ce39b057bc5fbc7f6c4b378cbeba1865cc0d5267bf6322db79c5e"
+    },
+    "scripts/lib/systemize/cli.py": {
+      "required_by": [
+        "scripts/digest_merged_prs.py",
+        "scripts/fetch_merged_prs.py",
+        "scripts/heartbeat_cli.py"
+      ],
+      "role": "engine",
+      "sha256": "47ead8cd17a3af4e5ff74219c94cfd8ad7bac2e83c3b140c62129e73800a6054"
+    },
+    "scripts/lib/systemize/config.py": {
+      "required_by": [
+        "scripts/lib/systemize/artifacts.py",
+        "scripts/lib/systemize/cli.py",
+        "scripts/lib/systemize/digest.py",
+        "scripts/lib/systemize/fetch.py",
+        "scripts/lib/systemize/heartbeat.py",
+        "scripts/lib/systemize/normalize.py"
+      ],
+      "role": "engine",
+      "sha256": "195a169f687edd73fdc62fc94325a925ce9254562f5c8dd8e6c3df1e252afa9c"
+    },
+    "scripts/lib/systemize/digest.py": {
+      "required_by": [
+        "scripts/digest_merged_prs.py"
+      ],
+      "role": "engine",
+      "sha256": "bdbfd50616f587dbae64759b1a607ca920af3268ae4c314b07abfb9121c19653"
+    },
+    "scripts/lib/systemize/errors.py": {
+      "required_by": [
+        "scripts/lib/systemize/artifacts.py",
+        "scripts/lib/systemize/cli.py",
+        "scripts/lib/systemize/config.py",
+        "scripts/lib/systemize/digest.py",
+        "scripts/lib/systemize/fetch.py",
+        "scripts/lib/systemize/forge.py",
+        "scripts/lib/systemize/heartbeat.py",
+        "scripts/lib/systemize/identity.py",
+        "scripts/lib/systemize/normalize.py"
+      ],
+      "role": "engine",
+      "sha256": "6de23644343401dff1835592b386bbb0126b1e2399c105a91cf995a248db934b"
+    },
+    "scripts/lib/systemize/fetch.py": {
+      "required_by": [
+        "scripts/fetch_merged_prs.py",
+        "scripts/lib/systemize/digest.py",
+        "scripts/lib/systemize/heartbeat.py"
+      ],
+      "role": "engine",
+      "sha256": "988dfd2ff3c393404c52c0579c1f64e4cd64d345a9eadf9d2530dda4868d2826"
+    },
+    "scripts/lib/systemize/forge.py": {
+      "required_by": [
+        "scripts/fetch_merged_prs.py",
+        "scripts/lib/systemize/fetch.py"
+      ],
+      "role": "engine",
+      "sha256": "cad4a256d0026750d2c6312817d41793451141cfa4c48597ffab0f3dc323570e"
+    },
+    "scripts/lib/systemize/heartbeat.py": {
+      "required_by": [
+        "scripts/heartbeat_cli.py"
+      ],
+      "role": "engine",
+      "sha256": "8f95356921d1ffa1376a4ce4458c6b79613765ca74b88605d5d2a871f4898ad7"
+    },
+    "scripts/lib/systemize/identity.py": {
+      "required_by": [
+        "scripts/lib/systemize/artifacts.py",
+        "scripts/lib/systemize/digest.py",
+        "scripts/lib/systemize/fetch.py",
+        "scripts/lib/systemize/heartbeat.py",
+        "scripts/lib/systemize/normalize.py"
+      ],
+      "role": "engine",
+      "sha256": "0bb97cfc784ccd3389ce635f71190a1d97f2ff5d1563268afccc890f2d4c34a7"
+    },
+    "scripts/lib/systemize/normalize.py": {
+      "required_by": [
+        "scripts/lib/systemize/digest.py"
+      ],
+      "role": "engine",
+      "sha256": "6e31b7eafc642dbdfccf2099d5b11e95bc6851d87a6768302fff90e5d8e32480"
     },
     "scripts/lib/triage/__init__.py": {
       "role": "engine",
@@ -239,6 +354,11 @@
     },
     "scripts/lib/triage/canonical.py": {
       "required_by": [
+        "scripts/lib/systemize/config.py",
+        "scripts/lib/systemize/digest.py",
+        "scripts/lib/systemize/fetch.py",
+        "scripts/lib/systemize/heartbeat.py",
+        "scripts/lib/systemize/identity.py",
         "scripts/lib/triage/engine.py",
         "scripts/lib/triage/finalize.py",
         "scripts/lib/triage/gate.py",
@@ -353,7 +473,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "609f2715b6ec332518461918bc9295d3b99277005b6b98dcae7188731ec024a8"
+      "sha256": "34b9503b2ad7b62e57d45eeced8763a790ccbde311e77948faed886090a93951"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -381,7 +501,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "403074c9b3325495d2c95aaa44474ec0cda6886bdf89b8917054c805cfcc3162"
+      "sha256": "8f42372ddb7b74e2d8a961ad897a0e4ed2d858ec464f046b46f948f8899d8050"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -409,7 +529,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "2e8721783585909256536fbf846984473c1c3c21c050e58ef5fd169ae34e6fe6"
+      "sha256": "25e2fd37a230e5af91fe692da859db78289605fbcf448f0990c8fc6488263399"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
@@ -434,6 +554,30 @@
     "scripts/tests/test_state_guard.py": {
       "role": "test",
       "sha256": "e4a4c5614250ac46509e706507317d1cb40338b1bba51699c902b7269bc84433"
+    },
+    "scripts/tests/test_systemize_artifacts.py": {
+      "role": "test",
+      "sha256": "18ead8732301f2dfd6a33fd2c8868b6a3476206c7c01cff2ec9f3d36ba2fa775"
+    },
+    "scripts/tests/test_systemize_config.py": {
+      "role": "test",
+      "sha256": "00a29eeb6c86f67f5fb86607266dce02a41ff5d1074325a1917d4c5ac364c78c"
+    },
+    "scripts/tests/test_systemize_digest.py": {
+      "role": "test",
+      "sha256": "3d256cdd72d622d28ca5552de7b8d2c1e74abdec38abef7f1041cf2d36acb078"
+    },
+    "scripts/tests/test_systemize_engines.py": {
+      "role": "test",
+      "sha256": "c2d0ed6e13dabc094803bddb2962acd5053708aa8666866daa65bbfa9a1d20d8"
+    },
+    "scripts/tests/test_systemize_heartbeat.py": {
+      "role": "test",
+      "sha256": "aa28ec8a021b3ba73ba900a641dd23b4ddb47ccf310ec1e1ee055dcf2c4cf9d9"
+    },
+    "scripts/tests/test_systemize_support.py": {
+      "role": "test",
+      "sha256": "a132cf45c93af1fd5816025f06f3e47972a66f27177f6386d4ae68a515001c17"
     },
     "scripts/tests/test_triage_approval.py": {
       "role": "test",

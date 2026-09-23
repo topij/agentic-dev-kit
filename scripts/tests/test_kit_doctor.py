@@ -2084,6 +2084,7 @@ def test_dependency_graph_of_the_real_kit_names_kitconfigs_importers():
         "scripts/panel_prompt.py",
         "scripts/pr_watch.py",
         "scripts/lib/triage/model.py",
+        "scripts/lib/systemize/config.py",
     }
 
 
@@ -2152,6 +2153,16 @@ def test_the_shell_source_dependency_is_a_KNOWN_GAP_not_an_oversight():
         "scripts/lib/triage/recovery.py",
         "scripts/lib/triage/storage.py",
         "scripts/triage_friction_log.py",
+        "scripts/lib/systemize/artifacts.py",
+        "scripts/lib/systemize/cli.py",
+        "scripts/lib/systemize/config.py",
+        "scripts/lib/systemize/digest.py",
+        "scripts/lib/systemize/errors.py",
+        "scripts/lib/systemize/fetch.py",
+        "scripts/lib/systemize/forge.py",
+        "scripts/lib/systemize/heartbeat.py",
+        "scripts/lib/systemize/identity.py",
+        "scripts/lib/systemize/normalize.py",
     }
 
 

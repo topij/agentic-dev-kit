@@ -42,6 +42,12 @@ starts.
 
 ---
 
+## #769 — Deterministic systemize engines
+
+- **ADDED — systemize engines:** Install `fetch_merged_prs.py`, `digest_merged_prs.py`, `heartbeat_cli.py` and the complete `lib/systemize/` set together under `paths.engines`, with `lib/triage/canonical.py`, which they import. Their presence selects engine-backed mode, and a partial set stops every entry point. Invoke them as the workflow's *Engine interface* section documents (`--mode`, `--window-days`, `--date`; exit `0` / `1` / `2`), and use `digest_merged_prs.py --verify` to check an agent-built digest.
+- **ADDED — config keys:** `systemize.heartbeat_job` and `systemize.heartbeat_pattern`. They are required only once the engine set is installed: add both, with the shipped values, before installing the engines, or every engine stops naming the missing key. LLM-only runs neither read nor require them.
+- **CHANGED — addressed state:** The shared workflow now takes a finding's addressed state from the forge's thread resolution (`addressed`, `outdated`, `unaddressed`, or `unevidenced` for a review body), in LLM-only runs too, and never from reply text. Update any report consumer that expected a yes/no value or reply-text detection.
+
 ## #765 — Deterministic triage engines
 
 - **ADDED — triage engines:** Install `triage_friction_log.py`, `finalize_triage.py` and the complete `lib/triage/` dependency set together under `paths.engines`, with the matching workflow, inventory, manifest and tests. Follow the workflow's JSON request and runtime-attested approval-context interfaces. A partial configured engine pair refuses to proceed.
