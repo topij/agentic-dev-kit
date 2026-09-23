@@ -42,6 +42,13 @@ starts.
 
 ---
 
+## #765 — Deterministic triage engines
+
+- **ADDED — triage engines:** Install `triage_friction_log.py`, `finalize_triage.py` and the complete `lib/triage/` dependency set together under `paths.engines`, with the matching workflow, inventory, manifest and tests. Follow the workflow's JSON request and runtime-attested approval-context interfaces. A partial configured engine pair refuses to proceed.
+- **ADDED — explicit service adapters:** Enable the GitHub tracker or forge adapter only for an approved live transition. Keep test and live state separate, inspect the emitted JSON outcome, and use the documented interactive recovery route for interrupted state. Runtime proposal analysis and notification delivery require their runtime integrations; an operator-held outcome is not completion.
+- **CHANGED — inbox accounting:** Entries that remain in the inbox are presented even when their prose contains historical filing, routing or reconciliation annotations. Review the displayed original source and use explicit `archive` for already-handled entries, or `park` when uncertain. `approve all` approves filing every displayed payload; it does not archive historical entries automatically. Old saved candidate indexes that omitted entries are refused on revalidation; preserve that state and follow the documented recovery route, and do not reuse its approvals for newly visible entries.
+- **CHANGED — report display:** Triage reports show every value taken from the inbox, the proposal analysis, configuration or a service read-back as literal content: multi-line text (source excerpts, payload bodies, the test-mode proposed diff) in a fence it cannot close, single-line values in code spans it cannot close, and anything containing non-printable characters as a labelled escaped literal. Read the caption beside each block, and compare exact content through the retained bytes and digests rather than the escaped display. LLM-only reports follow the same rule through the shared workflow.
+
 ## #759 — Memory byte budgets and reviewer defaults
 
 - **CHANGED — memory budget gate:** `check_memory_budget.py` measures stored UTF-8 bytes, including CRLF terminators. Update byte-count expectations for CRLF files; shorten files that exceed `--max-bytes` before using `--strict`.
