@@ -285,6 +285,28 @@ load-bearing but private, use a stable placeholder in a bounded read-back and re
 the independently checked mapping outside the repository; do not promote a claim that
 requires a later reader to recover that private mapping.
 
+## Evidence outside a promotion bundle
+
+<!-- systemize:2026-09-22 pattern; PRs #689,#716,#724,#725 -->
+The exclusions and redaction rules above bind every evidence artifact committed to a
+repository, not only a promotion bundle: a decision packet's evidence directory, a
+session record's captures, and a retained harness's own output. Replace an operator
+home path, account name, or workstation directory with a stable placeholder before the
+commit, and keep the mapping outside the repository.
+
+<!-- systemize:2026-09-22 pattern; PRs #684,#688,#690,#704,#725,#726,#733 -->
+A harness retained as evidence — a driver, audit, or publisher script committed beside
+its outputs — must enforce what its records claim. Verify each input's revision, pin,
+or hash before using it, including any helper it imports or executes; check
+completeness before writing any manifest or success record; and fail with a non-zero
+status rather than through `assert`, which `python -O` removes. A record states only
+what its harness enforced (`#205` tracks the wider shape).
+
+<!-- systemize:2026-09-22 pattern; PRs #688,#733 -->
+Bound every child process such a harness starts with a finite timeout, and record the
+timeout outcome beside its exit status, so a hung child fails the harness instead of
+stalling it.
+
 ## Applied compute and ephemeral carriers
 
 An argv model or effort is an instruction, not the authoritative observer of what the

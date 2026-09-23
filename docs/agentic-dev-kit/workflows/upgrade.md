@@ -45,10 +45,13 @@ test -f "$REPO/config/dev-model.yaml" && echo "has config" || echo "NO CONFIG"
 - **Config present** → continue. `kit.version` tells you the schema generation; its
   absence means v1 (pre-`runtime:`, pre-`models.tiers`).
 
-Also fetch the kit you are upgrading *to*, if it isn't already local:
+Also fetch the kit you are upgrading *to*. If `/tmp/agentic-dev-kit` already exists the
+clone fails and the step stops — inspect that checkout or move it aside rather than
+upgrading from a tree of unknown revision:
+<!-- systemize:2026-09-22 pattern; PRs #733,#734 -->
 
 ```bash
-git clone --depth 1 https://github.com/topij/agentic-dev-kit /tmp/agentic-dev-kit
+git clone --depth 1 https://github.com/topij/agentic-dev-kit /tmp/agentic-dev-kit || exit 1
 ```
 
 Everything below copies **from** that checkout **into** this repo — **two trees, and
@@ -351,7 +354,7 @@ mutation, not before the file copies in Step 3:
 
 ```bash
 cd "$REPO" || exit 1
-git checkout -b chore/kit-upgrade
+git checkout -b chore/kit-upgrade || exit 1
 ```
 
 **Then refresh `init.sh` itself before running it.** This is the step that is easy to get
