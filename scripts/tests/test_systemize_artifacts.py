@@ -244,3 +244,42 @@ def test_a_held_artifact_lock_refuses_a_concurrent_fetch(ctx) -> None:
     with pytest.raises(SystemizeError, match="lock .* is held"):
         fetch.run(settings, Reader(), mode="test", window_days=7, date=DATE)
     assert lock.read_text() == "4242" and not cache.path.exists()
+
+
+def _fetched_raw(settings) -> None:
+    """Publish a same-run raw bundle so digest.run has something to read."""
+    cache = next(t for t in _all(settings) if t.label == "cache")
+    raw = {**identity.header(identity.RAW_KIND, _run_id(settings)),
+           "window": {"start": "s", "end": "e"}, "prs": []}
+    artifacts.publish(cache, json.dumps(raw).encode())
+
+
+def _all(settings):
+    return all_targets(settings, date=DATE, window_days=7, mode="test")
+
+
+def test_a_held_artifact_lock_refuses_a_concurrent_digest(ctx) -> None:
+    from systemize import digest
+
+    settings, targets, _, _ = ctx
+    _fetched_raw(settings)
+    target = _target(targets, "digest")
+    lock = artifacts.lock_path(target)
+    lock.write_text("4242")
+    with pytest.raises(SystemizeError, match="lock .* is held"):
+        digest.run(settings, mode="test", window_days=7, date=DATE, verify_path=None)
+    assert lock.read_text() == "4242" and not target.path.exists()
+
+
+def test_a_foreign_digest_at_the_target_is_preserved(ctx) -> None:
+    from systemize import digest
+
+    settings, targets, _, _ = ctx
+    _fetched_raw(settings)
+    target = _target(targets, "digest")
+    foreign = json.dumps(identity.header(identity.DIGEST_KIND, _run_id(settings, head="b" * 40))).encode()
+    target.path.write_bytes(foreign)
+    with pytest.raises(SystemizeError, match="different run"):
+        digest.run(settings, mode="test", window_days=7, date=DATE, verify_path=None)
+    assert target.path.read_bytes() == foreign
+    assert not artifacts.lock_path(target).exists()

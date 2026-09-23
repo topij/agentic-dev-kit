@@ -557,7 +557,7 @@
     },
     "scripts/tests/test_systemize_artifacts.py": {
       "role": "test",
-      "sha256": "8fd9452edccb8b5190d2631d011f6d8f27638ab1d529b52195f2ef400d3ed6f9"
+      "sha256": "18ead8732301f2dfd6a33fd2c8868b6a3476206c7c01cff2ec9f3d36ba2fa775"
     },
     "scripts/tests/test_systemize_config.py": {
       "role": "test",
