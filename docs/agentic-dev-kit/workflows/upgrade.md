@@ -45,9 +45,9 @@ test -f "$REPO/config/dev-model.yaml" && echo "has config" || echo "NO CONFIG"
 - **Config present** → continue. `kit.version` tells you the schema generation; its
   absence means v1 (pre-`runtime:`, pre-`models.tiers`).
 
-Also fetch the kit you are upgrading *to*. If `/tmp/agentic-dev-kit` already exists the
-clone fails and the step stops — inspect that checkout or move it aside rather than
-upgrading from a tree of unknown revision:
+Also fetch the kit you are upgrading *to*. If a non-empty `/tmp/agentic-dev-kit` already
+exists the clone fails and the step stops — inspect that checkout or move it aside rather
+than upgrading from a tree of unknown revision:
 <!-- systemize:2026-09-22 pattern; PRs #733,#734 -->
 
 ```bash
