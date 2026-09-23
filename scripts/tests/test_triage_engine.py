@@ -244,7 +244,7 @@ def test_report_uses_unambiguous_bytes_literal_for_non_utf8_source(
 
 CANARY = "FORGED-CANARY"
 CONTROL_HOSTILE = f"x\x1b[2J‮ `` ```\n## {CANARY} heading\n<!-- {CANARY} -->\r"
-PRINTABLE_HOSTILE = f"`` <!-- {CANARY} --> ## {CANARY} *em* [link](https://example.invalid)"
+PRINTABLE_HOSTILE = f"`` a`b <!-- {CANARY} --> ## {CANARY} *em* [link](https://example.invalid)"
 PRINTABLE_BLOCK_HOSTILE = f"```\n## {CANARY} heading\n<!-- {CANARY} -->\n ```\n~~~~ tail"
 REPORT_HEADINGS = [
     "# Triage friction log report",
