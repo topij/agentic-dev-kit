@@ -2083,6 +2083,7 @@ def test_dependency_graph_of_the_real_kit_names_kitconfigs_importers():
         "scripts/launch_lane.py",
         "scripts/panel_prompt.py",
         "scripts/pr_watch.py",
+        "scripts/lib/triage/model.py",
     }
 
 
@@ -2139,6 +2140,18 @@ def test_the_shell_source_dependency_is_a_KNOWN_GAP_not_an_oversight():
         "scripts/lib/state_paths/paths.py",
         "scripts/lib/state_paths/repo_root.py",
         "scripts/lib/state_paths/resolver.py",
+        "scripts/lib/state_paths/__init__.py",
+        "scripts/lib/triage/approval.py",
+        "scripts/lib/triage/canonical.py",
+        "scripts/lib/triage/engine.py",
+        "scripts/lib/triage/finalize.py",
+        "scripts/lib/triage/gate.py",
+        "scripts/lib/triage/inbox.py",
+        "scripts/lib/triage/model.py",
+        "scripts/lib/triage/providers.py",
+        "scripts/lib/triage/recovery.py",
+        "scripts/lib/triage/storage.py",
+        "scripts/triage_friction_log.py",
     }
 
 
