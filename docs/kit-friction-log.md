@@ -40,6 +40,9 @@
     `uv run scripts/archive_plan_sessions.py --target-lines 400` exited `0` after moving
     the 2026-09-09 blocks, and `git diff HEAD --check` reported
     `docs/kit-handoff.md:399: new blank line at EOF`. Trimmed by hand again.
+  - **Diagnosed in #776.** `history_pointer()` ended the generated footer with a blank
+    line, and the reader matched the footer only with that line present. So every
+    sweep added the line, and a hand-trimmed footer was swept into the history file.
   - **Severity:** L.
 
 ## 2026-09-13
