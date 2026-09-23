@@ -5,6 +5,69 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-09-09 (ITEM5-B decision and execution, in Codex)
+
+The operator approved ITEM5-B from the
+[decision packet](../saved_plans/phase5-item5-decision_2026-09-09.md), then requested
+autonomous continuation. The [execution record](../saved_plans/phase5-item5-b-execution_2026-09-09.md)
+retains the new fixture/source, initialization, registrations, local checks and baseline.
+The original missing paths were not reconstructed. No client session was launched in
+the new fixture, and no cs-toolkit write occurred.
+
+The [retained audit](../saved_plans/phase5-item5-baseline-audit_2026-09-09.json) remains
+the read-only assessment of the old baselines. The new execution's complete suite logs
+separate installed config/adapter assumptions and the #705 drift-liveness interaction
+from #393. Its record proposed the kit-only #534 repair slice later approved in the
+session above. Source pin, fixture commit, commands, directories and actual results
+are retained there. #585's earlier placement and #723's accepted upstream deferral are unchanged.
+
+`gh pr view 724` and `gh pr view 2255`, with their explicit kit/adopter repositories,
+read back the merges on 2026-09-09 at kit `8418118e40728c667c32a28a182697139bc7a5ef`.
+Kit #724 contains the #722 batch. This packet does not repeat that batch or re-credit
+the initial adopter pass or replay. The prior replay's snapshots remain historical.
+
+The latest session block owns the subsequent repair and next action.
+
+### 2026-09-09 (cs-toolkit replay, in Codex)
+
+The operator approved REPLAY-01 in this session. The [replay record](../saved_plans/cs-toolkit-replay_2026-09-09.md)
+retains the upgrade, separate no-change reconciliation, test limits, independent reviews,
+and the byte-identical authoritative snapshots. Item 6's verification is complete at the
+named refs; this is not completion of Phase 5. The operator later authorized
+`merge when clean`; the replay record separates that decision from the exit evidence.
+
+- [cs-toolkit #2255](https://github.com/in-parallel-oy/cs-toolkit/pull/2255) contains the
+  upgrade from kit `bde4c234eaa9005e90b987007101aba98281ce88` to protected kit source
+  `e698ec47d6284ccd31af5ba9d8bc5657fe992310`. Its base is `main` and its head is
+  `21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351`. No reconciliation PR was needed; the
+  stage's exact invocation, unchanged output/tree and preceding-stage linkage are retained.
+- `uv run scripts/devkit/pr_watch.py 2255 --json` in
+  `/Users/topi/Coding/in-parallel/cs-toolkit` at that exact head on 2026-09-09 reported
+  `converged: true`, `mergeable: true`, `done: true`. After the later authorization,
+  `gh pr view 2255` read back its merge as `c4119f85e07f2a089ab8d5decc94cf2cd1635d14`
+  on 2026-09-09; the read-back is retained in the replay record.
+- The original checkout's `make test` failed in support-docs on ignored local artifact
+  inventory; unchanged original test source reproduced the assertions there. Independent
+  fresh clones passed `make test` at the same head. Commands, directories, dates and
+  actual results are in the replay record; this failure is separate from kit #393.
+- CodeRabbit found the imported non-object-manifest helper defect that the panel missed.
+  The operator approved its exact filing as [#723](https://github.com/topij/agentic-dev-kit/issues/723)
+  and deferral, retaining source byte identity. The PR carries that accepted limitation.
+- The #722 batch is folded into this ordinary wrap-up: #578/#721 routing annotations,
+  removal of the `/tmp` mechanism explanation, the missing-tree blocker, #585's settled
+  earlier placement, and this next action. Existing credited exercises were not repeated.
+- [Kit PR #724](https://github.com/topij/agentic-dev-kit/pull/724) carries the ordinary
+  wrap-up from `chore/kit-replay-handoff-20260909`. It merged on 2026-09-09 as
+  `8418118e40728c667c32a28a182697139bc7a5ef`, read back with `gh pr view 724`.
+  Its commit is not the kit source used for the replay; the snapshots retain that source.
+
+The latest session block owns the item 5 status and next action.
+
+______________________________________________________________________
+
+> Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
+> Active open items from them are folded into the "Open for next session" lists above.
+
 ### 2026-09-09 (the prose-claims rule, in Claude Code)
 
 **Theme —** Write the rule the 2026-08-22 entry parked, and keep the two mechanisms apart.

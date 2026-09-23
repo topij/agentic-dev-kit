@@ -35,6 +35,11 @@
   by hand.
   - **Not established:** which code path adds the line, and whether every sweep does it.
     So this is parked rather than filed.
+  - **Recurred** the same day, in the D-SYSTEMIZE-LIVE wrap-up on branch
+    `chore/update-handoff-2026-09-23-systemize-live` (from `5165a3c`):
+    `uv run scripts/archive_plan_sessions.py --target-lines 400` exited `0` after moving
+    the 2026-09-09 blocks, and `git diff HEAD --check` reported
+    `docs/kit-handoff.md:399: new blank line at EOF`. Trimmed by hand again.
   - **Severity:** L.
 
 ## 2026-09-13
