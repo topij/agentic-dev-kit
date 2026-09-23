@@ -64,9 +64,13 @@ An occurrence was also added to #416.
 The friction inbox therefore waits for `triage-friction-log` under separate
 authorization.
 
-▶ Next: `/session-start` — then choose the next Phase 5 D package from "Subsequent D
-packages" in `saved_plans/phase5-d-proposal_2026-09-21.md`. D-SYSTEMIZE-ENGINE is the row
-listed as following the triage slice.
+▶ Next: `/session-start` — then choose the next Phase 5 D package. The first follow-on
+after the triage slice is D-SYSTEMIZE-ENGINE: adapt `fetch_merged_prs.py`,
+`digest_merged_prs.py` and `heartbeat_cli.py` to the shared contract, and make the
+heartbeat's path, job and invocation configuration explicit. That package and the
+later ones are specified under "Subsequent D packages" in the D proposal,
+`saved_plans/phase5-d-proposal_2026-09-21.md`. The proposal is a local file, not
+committed at this wrap-up; ask the operator for it if it is missing.
 
 ______________________________________________________________________
 
