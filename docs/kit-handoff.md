@@ -14,10 +14,63 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-13 — approved fixture PR continuation and review handoff.
+Last updated: 2026-09-23 — Phase 5 D triage engines delivered.
 Phase 5 delivery item 5 remains incomplete; item 6's replay remains complete.
 
-## Latest session — 2026-09-13 (ITEM5-B PR continuation execution, in Codex)
+## Latest session — 2026-09-23 (Phase 5 D triage engines delivered, in Claude Code)
+
+**Session switch and the gap in this handoff.** The operator moved Phase 5 D from Codex
+to Claude Code during review of the report rendering. The Codex sessions of 2026-09-14
+through 2026-09-22 did not update this handoff. Those sessions were Phase 5 Stage A,
+the B/C archive work and the D proposal, and kit PRs merged during that span
+(`git log --since=2026-09-14 origin/main`). Their records are:
+
+- the `saved_plans/phase5-*` files, which are not committed at this wrap-up;
+- the gitignored evidence under `state/review-evidence/`;
+- those PRs.
+
+**What merged.** [PR #765](https://github.com/topij/agentic-dev-kit/pull/765) merged as
+`b808061ffd2b813e5dc11e67d118d9b7519fc085` from reviewed head
+`20ef06b5a95a685367f1172266a8d909f82f0201`, and its tree matches that head. It delivers
+the configured triage draft and finalize engines: `scripts/triage_friction_log.py`,
+`scripts/finalize_triage.py` and `scripts/lib/triage/`. The approvals were
+PHASE5-D-TRIAGE-ENGINE-01 plus its inventory, accounting, source-rendering and
+report-boundary amendments.
+
+**How the repair loop ended.** Earlier rounds had fixed one report field at a time. The
+final repair renders every report value as literal content at one boundary. The ready PR
+opened once that candidate was verified. The operator's delta disposition and both
+Claude fallback lenses then ran on it, under a blast-radius stopping rule that the
+operator chose. The PR's comments carry the head verification stamp and the panel disposition.
+The local evidence index is
+`state/review-evidence/phase5-d-triage-engine-01/CLAUDE-CONTINUATION-20260923.md` and
+its addenda.
+
+**Tracker activity this session.** The original platform-stopped Codex adversarial
+request was not retried. Filed this session:
+
+- #766: a LOW coverage gap in `_markdown_mask`;
+- #767: this package's per-site repair loop, and the delta-review route it lacked
+  without a PR.
+
+An occurrence was also added to #416.
+
+**Not established by this delivery**, and each still needs its own approval:
+
+- live tracker or notification operation;
+- engine installation into any field checkout;
+- a production friction-log sweep.
+
+The friction inbox therefore waits for `triage-friction-log` under separate
+authorization.
+
+▶ Next: `/session-start` — then choose the next Phase 5 D package from "Subsequent D
+packages" in `saved_plans/phase5-d-proposal_2026-09-21.md`. D-SYSTEMIZE-ENGINE is the row
+listed as following the triage slice.
+
+______________________________________________________________________
+
+## Session — 2026-09-13 (ITEM5-B PR continuation execution, in Codex)
 
 The operator approved ITEM5-B-PR-02 as scoped, later approved sending its private
 review inputs to OpenAI's Codex service for the remaining adversarial review, and
@@ -32,10 +85,7 @@ remains. Preserved-file ownership acceptance is not functional verification or f
 exit. Item 6/replay, #723's approved deferral, #585's earlier placement and #724's
 delivered #722 batch retain their existing scope. The friction sweep stays parked.
 
-▶ Next: `$session-start` — read the PR-02 execution record and its final review
-disposition, revalidate the retained checkpoint read-only, then prepare the exact
-scope decision for the pending review findings. Additional fixture fixes, remaining
-field routes, tracker writes, fixture closure and fixture merge remain excluded.
+The latest session block owns the subsequent state and next decision.
 
 ______________________________________________________________________
 
@@ -292,99 +342,6 @@ named refs; this is not completion of Phase 5. The operator later authorized
   Its commit is not the kit source used for the replay; the snapshots retain that source.
 
 The latest session block owns the item 5 status and next action.
-
-______________________________________________________________________
-
-## Session — 2026-09-09 (the prose-claims rule, in Claude Code)
-
-**Theme —** Write the rule the 2026-08-22 entry parked, and keep the two mechanisms apart.
-
-- [PR #717](https://github.com/topij/agentic-dev-kit/pull/717) merged as `b866298`,
-  on the operator's word after `uv run scripts/pr_watch.py 717` reported
-  `DONE — green, reviewed, merge-ready` at `d6b06466f62202fb438608bd42bcdca929349a17`.
-  The merge was read back rather than inferred from the command: `gh pr view 717`
-  returned state `MERGED`, and the new section is present in `AGENTS.md` on
-  `origin/main`. `AGENTS.md` gains *Prose that goes false*, placed next to *Numbers in prose* because it
-  is that section's other half: one governs the number you write, the other the sentence
-  you ship without rewriting.
-- **The two PR #711 instances stayed distinct, and the section says why neither read
-  catches the other's case.** One is bounded by the commit — the paragraph the diff lands
-  in, then a grep on the subject changed. The other is bounded by the kind of sentence:
-  could this go false while the repository sits untouched.
-- **The second mechanism needed its own rule, and the gap is exact.** *Numbers in prose*
-  prohibits a number, a quantity word, or a verdict resting on one; an instruction to
-  watch a merged pull request is none of those, and the dated hedge in front of it is a
-  permission that section grants. So: dating the observation does not date the
-  instruction built on it. Where the sentence is numeric, the new section defers.
-- **The broad reading was not written, and the section records why** — `#709`'s findings
-  in that same session were real defects in a mechanism. `#120` is named as enforcement,
-  `#586` ruled out against its own body text.
-- Placement was the open judgement call: `AGENTS.md` binds authors and both runtimes,
-  which `fallback-review-panel.md` and `.claude/rules/` do not. No `wrap-up.md`
-  counterpart, so it binds this repository and not an adopter's. No adopter-counterpart decision was made in that session.
-- **Applying the rule to its own commit found a hole in the draft.** The first read was
-  bounded by the diff's neighbourhood and could not reach a sentence the same commit
-  falsified elsewhere in the file. The 2026-08-29 marker is left as written and the
-  correction appended to the entry it points at, which is `#696`'s proposed remedy.
-- Two instance claims taken from PR #711's round dispositions did not survive checking
-  against the diffs, and both were corrected rather than carried: `1bcb04e` puts the
-  stale count on the line it rewrote, and `8942cea` replaced the dated hedge with the
-  merge sha. Check them at those commits rather than here.
-- The 2026-08-22 friction entry now records its park condition as discharged to the rule
-  rather than to the tracker, so triage reconciles instead of re-filing. `#712` and `#713`
-  were left untouched and the inbox was not swept.
-- **This session's issue-shaped friction went to the tracker on the operator's go-ahead:**
-  [`#719`](https://github.com/topij/agentic-dev-kit/issues/719) (a lens correcting its own
-  report after that round's receipt is written) and
-  [`#720`](https://github.com/topij/agentic-dev-kit/issues/720) (`--lenses` takes one
-  comma-separated value while the doctrine's example reads as space-separated), plus an
-  occurrence comment on [`#574`](https://github.com/topij/agentic-dev-kit/issues/574) for a
-  lens writing into its handed tree — searched first, and it widens `#574` past base
-  currency rather than opening a second issue. Each was read back from the tracker after
-  landing. The self-imposed-timeout entry was later routed to #578 on 2026-09-09;
-  the #722 reconciliation is appended to that entry.
-
-**Verification.** `make test` in `/Users/topi/Coding/agentic-dev-kit` at
-`d6b06466f62202fb438608bd42bcdca929349a17` on 2026-09-09 printed `1 failed, 2484 passed,
-1 skipped in 393.65s (0:06:33)`, failing the pre-existing
-`test_pr_followup_hook.py::test_a_payload_too_deep_for_json_load_still_exits_zero` that
-`#393` tracks; `make` exited non-zero for it. Both lenses ran the same command
-independently in their own worktrees at that sha and reached the same single failure.
-
-**Review.** Panel rounds at `06ff7d7` and `d6b0646`, each receipt recorded before that
-round's fixes; both dispositions are on the pull request. The second was a full panel
-rather than a delta pass because the first round's fix touched executed prose.
-Correctness reported nothing in either round; adversarial's round-1 citation-style finding
-was fixed and its other findings replied to as disclosed limitations. CodeRabbit was asked
-at the converged head, because automatic review is off here and `#518` says a panel receipt
-does not discharge that request; it answered *"No actionable comments were generated"* in a
-comment rather than a review object, which the engine reports and deliberately does not
-count as evidence. The panel receipt was left standing rather than replaced by
-`coderabbit:comment-verdict`.
-
-The current replay decision and next-session starter are in the latest session block.
-
-______________________________________________________________________
-
-## Session — 2026-09-09 (hooks continuation, in Codex)
-
-**Theme —** Finish the authorized live observations and retain their limits.
-
-- The [continuation record](../saved_plans/codex-hooks-continuation_2026-09-09.md)
-  binds CLI `/hooks`, the operator's desktop Settings → Hooks capture, engine-entry
-  evidence and the doctor invocations to their commands, revisions and dates.
-  It distinguishes execution after trust from discovery, and scopes the disabled
-  observation to the CLI. The desktop result does not assert every client's default.
-- The operator approved temporarily removing the ordinary user hooks setting for
-  the desktop observation, then restoring it. The record retains the config
-  amendment, fresh local task, script restoration and original-tree audits.
-  The disposable desktop project remains in the app.
-- Earlier discovery, tracker dispositions and field exercises were not credited
-  again. REPLAY-01 subsequently supplied the cs-toolkit replay decision; the
-  latest session block owns that result and the remaining operator-held work.
-- The session's desktop profile-identification friction was parked in the inbox
-  after the operator left; no tracker payload was approved or posted. The
-  operator-held triage and Claude prose-claims work were not performed.
 
 ______________________________________________________________________
 
