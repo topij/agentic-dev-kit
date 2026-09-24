@@ -42,6 +42,12 @@ starts.
 
 ---
 
+## #790 — Systemize dispatch idempotency
+
+- **CHANGED — report shape:** The `post-merge-systemize` report gains one dispatch record per tracker create and per notification send: operation, cluster id, marker, payload digests, destination, approval evidence, a status of `proposed` / `attempting` / `verified` / `failed` / `ambiguous`, verified route, returned identifier and marker-search result. Refresh the shared workflow and `scripts/tests/test_portability.py`, and update any report consumer to read those records.
+- **CHANGED — tracker payload and notification text:** A proposed tracker body now ends with a `<!-- systemize-payload:… -->` marker, and it is part of the payload the operator approves. A systemize notification's final line is its `systemize-notify:…` key. Update any consumer that matches either text exactly.
+- **CHANGED — resume semantics:** A tracker create is preceded by a marker search and an `attempting` record, and a resume re-searches rather than re-creating. Finish or discard any systemize run in flight before taking the new workflow: a report written before this change has no dispatch record, so a resume holds its attempted tracker route for you instead of creating.
+
 ## #780 — Handoff footer layout
 
 CHANGED: Refresh `scripts/archive_plan_sessions.py` with its tests. `history_pointer()` now ends at the footer's separator line: a sweep leaves no blank line after the footer when it ends the handoff, and keeps one before any following section. The sweep recognises its footer whatever blank lines follow it, so a hand-trimmed footer is no longer moved into history. Update assertions that expected the footer to end in a blank line. Search your history file for `Older session entries` and remove any footer an earlier sweep moved there.

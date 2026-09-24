@@ -13468,6 +13468,9 @@ def _assert_post_merge_semantics(workflow: str) -> None:
         "tracker-without-payload-approval": (
             "flagged-friction-route-no-tracker-write"
         ),
+        "unverified-external-dispatch": (
+            "marker-read-back-before-dispatch-or-operator-hold"
+        ),
         "dirty-caller-destination": "stop-rule-route-preserve-operator-edit",
         "runtime-policy-override": "shared-declaration-wins-and-stop",
     }
@@ -13559,6 +13562,87 @@ def _assert_post_merge_semantics(workflow: str) -> None:
     assert (
         "stop the route and preserve the proposal in the report; do not blend an "
         "operator's local edit into the systemize patch"
+    ) in flattened
+    # #786: a resumed run must be able to tell "never sent" from "sent, receipt
+    # lost". These are the clauses that make the dispatch record decide that.
+    assert (
+        "`<!-- systemize-payload:<run_identity_digest>:<cluster-id>:"
+        "<payload_core_digest> -->`"
+    ) in flattened
+    assert "`systemize-notify:<run_identity_digest>:<kind>`" in flattened
+    assert "Approval binds `payload_digest`" in flattened
+    assert (
+        "Atomically replace the report with the record set to `attempting`. "
+        "If that write fails, do not dispatch."
+    ) in flattened
+    assert "never re-derives them from a fresh clustering pass" in flattened
+    assert (
+        "record `ambiguous`, create nothing, and hold the route for the operator"
+        in flattened
+    )
+    assert "never creates on the strength of the record alone" in flattened
+    assert (
+        "Recompute `payload_digest` from the recorded payload and require it to "
+        "equal the approved digest"
+    ) in flattened
+    assert (
+        "record `verified` with `found-by-read-back` and its identifier. Do not "
+        "create."
+    ) in flattened
+    assert "**An authoritative empty result:** continue." in flattened
+    assert (
+        "read the item back and require the exact project, title, body, labels, "
+        "marker, and returned identifier before recording `verified`"
+    ) in flattened
+    assert (
+        "An authoritative empty result is `failed`: the create provably did not "
+        "land. Anything else is `ambiguous`."
+    ) in flattened
+    assert "Persist `attempting` before the send" in flattened
+    assert (
+        "That covers every tracker create, which searches for its marker before "
+        "the first create as well as a retry."
+    ) in flattened
+    assert (
+        "Create access without an authoritative search for the idempotency marker "
+        "is also unavailable access."
+    ) in flattened
+    assert (
+        "**Several matches, a match whose payload differs, or a search that is "
+        "unavailable, incomplete or unreadable:** record `ambiguous`"
+    ) in flattened
+    assert "search by the marker again before anything else" in flattened
+    assert (
+        "A read-back that is unavailable or does not match exactly is `ambiguous`: "
+        "create nothing further"
+    ) in flattened
+    assert (
+        "The marker is therefore part of the exact payload the operator reviews"
+        in flattened
+    )
+    assert (
+        "the first send needs no read-back: a validated same-run report with no "
+        "record for the key permits it"
+    ) in flattened
+    assert (
+        "permits another send only after a complete, authoritative read-back of the "
+        "destination finds no message carrying the key"
+    ) in flattened
+    assert (
+        "One message carrying it is `verified` with `found-by-read-back`, and "
+        "several are `ambiguous`."
+    ) in flattened
+    assert (
+        "gives a resume no marker to search by: hold that route for the operator "
+        "and create nothing"
+    ) in flattened
+    assert (
+        "A `failed` create is retried only after the operator confirms the same "
+        "`payload_digest` again"
+    ) in flattened
+    assert (
+        "A destination that cannot be read back leaves the record `ambiguous` and "
+        "the notification unsent"
     ) in flattened
     for rejected_path_shape in (
         "`..` traversal",
@@ -13952,6 +14036,141 @@ def test_post_merge_systemize_semantic_mutations_are_rejected() -> None:
         re.sub(
             r"with no prior payload-specific approval, take the flagged\s+friction-log route",
             "with no prior payload-specific approval, create the tracker item",
+            workflow,
+            count=1,
+        ),
+        workflow.replace(
+            "`unverified-external-dispatch` | "
+            "`marker-read-back-before-dispatch-or-operator-hold`",
+            "`unverified-external-dispatch` | `retry-dispatch-after-restart`",
+            1,
+        ),
+        re.sub(
+            r"If\s+that\s+write\s+fails,\s+do\s+not\s+dispatch\.",
+            "If that write fails, dispatch anyway.",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"record\s+`ambiguous`,\s+create\s+nothing,\s+and\s+hold\s+the\s+route\s+for"
+            r"\s+the\s+operator",
+            "pick the newest match and record it `verified`",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"never\s+re-derives\s+them\s+from\s+a\s+fresh\s+clustering\s+pass",
+            "re-derives them from a fresh clustering pass",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"its\s+identifier\.\s+Do\s+not\s+create\.",
+            "its identifier. Create another copy anyway.",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"require\s+it\s+to\s+equal\s+the\s+approved\s+digest",
+            "ignore the approved digest",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"require\s+the\s+exact\s+project,\s+title,\s+body,\s+labels,\s+marker,\s+and"
+            r"\s+returned\s+identifier",
+            "trust the response",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"Anything\s+else\s+is\s+`ambiguous`\.",
+            "Anything else is `failed`.",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"searches\s+for\s+its\s+marker\s+before\s+the\s+first\s+create\s+as\s+well"
+            r"\s+as\s+a\s+retry",
+            "searches for its marker only before a retry",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"Create\s+access\s+without\s+an\s+authoritative\s+search\s+for\s+the"
+            r"\s+idempotency\s+marker\s+is\s+also\s+unavailable\s+access\.",
+            "",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"a\s+match\s+whose\s+payload\s+differs,\s+or\s+a\s+search\s+that\s+is"
+            r"\s+unavailable,\s+incomplete\s+or\s+unreadable:\*\*",
+            "or a match whose payload differs:**",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"\*\*An\s+authoritative\s+empty\s+result:\*\*\s+continue\.",
+            "**An empty or unavailable result:** continue.",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"does\s+not\s+match\s+exactly\s+is\s+`ambiguous`:\s+create\s+nothing\s+further",
+            "does not match exactly is `failed`: create it again",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"search\s+by\s+the\s+marker\s+again\s+before\s+anything\s+else",
+            "retry the create",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"The\s+marker\s+is\s+therefore\s+part\s+of\s+the\s+exact\s+payload\s+the"
+            r"\s+operator\s+reviews",
+            "The marker is added after the operator reviews the payload",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"with\s+no\s+record\s+for\s+the\s+key\s+permits\s+it",
+            "with any record for the key permits it",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"permits\s+another\s+send\s+only\s+after\s+a\s+complete,\s+authoritative"
+            r"\s+read-back\s+of\s+the\s+destination\s+finds\s+no\s+message\s+carrying"
+            r"\s+the\s+key",
+            "permits another send",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"and\s+several\s+are\s+`ambiguous`\.",
+            "and several are `verified`.",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"hold\s+that\s+route\s+for\s+the\s+operator\s+and\s+create\s+nothing",
+            "create the item again",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"Persist\s+`attempting`\s+before\s+the\s+send",
+            "Persist `attempting` after the send",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"A\s+destination\s+that\s+cannot\s+be\s+read\s+back\s+leaves\s+the\s+record"
+            r"\s+`ambiguous`\s+and\s+the\s+notification\s+unsent",
+            "A destination that cannot be read back permits another send",
             workflow,
             count=1,
         ),
