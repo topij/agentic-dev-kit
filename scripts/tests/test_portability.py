@@ -13582,6 +13582,24 @@ def _assert_post_merge_semantics(workflow: str) -> None:
     )
     assert "never creates on the strength of the record alone" in flattened
     assert (
+        "Recompute `payload_digest` from the recorded payload and require it to "
+        "equal the approved digest"
+    ) in flattened
+    assert (
+        "record `verified` with `found-by-read-back` and its identifier. Do not "
+        "create."
+    ) in flattened
+    assert "**An authoritative empty result:** continue." in flattened
+    assert (
+        "read the item back and require the exact project, title, body, labels, "
+        "marker, and returned identifier before recording `verified`"
+    ) in flattened
+    assert (
+        "An authoritative empty result is `failed`: the create provably did not "
+        "land. Anything else is `ambiguous`."
+    ) in flattened
+    assert "Persist `attempting` before the send" in flattened
+    assert (
         "A `failed` create is retried only after the operator confirms the same "
         "`payload_digest` again"
     ) in flattened
@@ -14006,6 +14024,37 @@ def test_post_merge_systemize_semantic_mutations_are_rejected() -> None:
         re.sub(
             r"never\s+re-derives\s+them\s+from\s+a\s+fresh\s+clustering\s+pass",
             "re-derives them from a fresh clustering pass",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"its\s+identifier\.\s+Do\s+not\s+create\.",
+            "its identifier. Create another copy anyway.",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"require\s+it\s+to\s+equal\s+the\s+approved\s+digest",
+            "ignore the approved digest",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"require\s+the\s+exact\s+project,\s+title,\s+body,\s+labels,\s+marker,\s+and"
+            r"\s+returned\s+identifier",
+            "trust the response",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"Anything\s+else\s+is\s+`ambiguous`\.",
+            "Anything else is `failed`.",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"Persist\s+`attempting`\s+before\s+the\s+send",
+            "Persist `attempting` after the send",
             workflow,
             count=1,
         ),
