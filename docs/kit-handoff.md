@@ -51,8 +51,8 @@ owns the outcomes.
 - **The stop.** P wrote scratch files to literal `/tmp` paths, which is a packet stop, and
   it had read the fake `gh` source and the harness's environment variables. The operator
   stopped Stage 2 and kept P as partial evidence.
-- **Not established:** the post-dispatch/pre-receipt cutpoint, and P2 presenting the
-  payload again after a restart. Both go to the Phase 5 E audit as open residuals.
+- **Not established:** the post-dispatch/pre-receipt cutpoint, and a restarted run
+  presenting the payload again. Both go to the Phase 5 E audit as open residuals.
 - **What a rerun needs:** an agent that can neither read the harness nor write outside
   its roots.
 
