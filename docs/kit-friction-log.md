@@ -26,6 +26,20 @@
 
 ## 2026-09-24
 
+- **Each fallback-panel round on #790 found another unpinned fail-closed clause.** #790
+  added normative prose to `post-merge-systemize.md` and pinned part of it in
+  `_assert_post_merge_semantics`. The adversarial lens at `2b9dae8` and again at
+  `ae54d68` proved, by a surviving mutant, that another guarding clause was not pinned.
+  Only at `d873b68`, after every fail-closed clause in the section was pinned with an
+  inverting mutation, did a round find no unpinned clause.
+  - **Why it is parked:** it is one instance, and the point is whether it recurs. If it
+    does, a candidate rule is that a change adding normative workflow prose pins every
+    fail-closed clause in the first commit, not only the ones the author considers
+    central.
+  - **Not established:** whether the partial first pinning was an authoring slip or
+    something the panel doctrine could prompt.
+  - **Severity:** L. Each round cost a full panel, and no defect shipped.
+
 - **A fresh Codex context ran `post-merge-systemize` out of the workflow's order in two
   places.** This was PHASE5-D-FRESH-CONTEXT-01: `codex exec` given only
   `$post-merge-systemize test`, run on 2026-09-24 in a clone at `1cc86cd` plus one config

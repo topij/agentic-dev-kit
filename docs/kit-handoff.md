@@ -14,11 +14,50 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-24 — RECOVERY's post-dispatch rerun waits for #786, and
-PHASE5-D-FRESH-CONTEXT-01 ran to completion. Phase 5 delivery item 5 remains incomplete;
-item 6's replay remains complete.
+Last updated: 2026-09-24 — #786's fix merged as #790, so RECOVERY's post-dispatch rerun
+is unblocked. Phase 5 delivery item 5 remains incomplete; item 6's replay remains
+complete.
 
-## Latest session — 2026-09-24 (RECOVERY decision and Phase 5 D-FRESH-CONTEXT run, in Claude Code)
+## Latest session — 2026-09-24 (systemize dispatch idempotency, #790, in Claude Code)
+
+**Shipped.** [#790](https://github.com/topij/agentic-dev-kit/pull/790) merged as
+`4c69ab2c7eb6c33f537d553e5c168566b297edee` on the operator's direction, and #786 was
+closed on the operator's direction.
+
+- `post-merge-systemize.md` gains *External dispatch records*: an idempotency marker and
+  a report record for each tracker create and notification, `attempting` persisted
+  before the write, and a marker search before any create.
+- A new safety row, `unverified-external-dispatch`, makes the read-back normative.
+- `CHANGELOG.md` carries the adopter entry.
+
+**Review.** CodeRabbit skipped, because automatic reviews are disabled. The fallback panel
+ran at `2b9dae8`, `ae54d68` and `d873b68`, and each round found another fail-closed
+clause the contract test did not pin. The receipt is bound to `d873b68`, and the PR's
+disposition comments own the findings.
+
+**Filed on the operator's approval of the exact payloads:**
+
+- #791: the dispatch protocol is tested only as pinned prose, so an added contradicting
+  instruction passes;
+- #792: two concurrent LLM-only runs can both pass the marker search and create.
+
+**Verification.** `make test` at `d873b68dfc96e87b2787e886207dcc9feb48d3df` on
+2026-09-24, in a detached worktree under this session's scratchpad, printed
+`3500 passed, 1 skipped`. It did not run in the main checkout, because a mode-000 file
+under the gitignored `state/review-evidence/` crashes the suite's state snapshot. That
+is #461's mechanism, now live.
+
+**Still open from earlier sessions:** the #748 and #7 judgments, and #722's owed record
+edits.
+
+▶ Next: `/session-start`, then draft the RECOVERY post-dispatch rerun packet against the
+workflow at `4c69ab2`, from `saved_plans/phase5-d-systemize-recovery_2026-09-23.md`
+(local). The alternative is the D-TRIAGE-RESIDUAL packet, from
+`saved_plans/phase5-d-proposal_2026-09-21.md` (local).
+
+______________________________________________________________________
+
+## Session — 2026-09-24 (RECOVERY decision and Phase 5 D-FRESH-CONTEXT run, in Claude Code)
 
 **Decisions, taken interactively.**
 
@@ -80,6 +119,9 @@ edits.
 ▶ Next: `/session-start`, then choose between #786's fix, which unblocks RECOVERY's
 post-dispatch rerun, and drafting the D-TRIAGE-RESIDUAL packet from
 `saved_plans/phase5-d-proposal_2026-09-21.md` (local).
+
+The next session took #786's fix; the 2026-09-24 block on systemize dispatch
+idempotency owns it.
 
 ______________________________________________________________________
 
@@ -311,67 +353,6 @@ from the D proposal's table (`saved_plans/phase5-d-proposal_2026-09-21.md`, loca
 
 The next session drafted that packet; the 2026-09-23 D-SYSTEMIZE-RECOVERY packet block
 owns it.
-
-______________________________________________________________________
-
-## Session — 2026-09-23 (Phase 5 D-SYSTEMIZE-LIVE run, in Claude Code)
-
-**Approval.**
-- The operator approved PHASE5-D-SYSTEMIZE-LIVE-01 Stage 1 as written in its packet,
-  then each Stage 2 payload individually.
-- The packet is `saved_plans/phase5-d-systemize-live_2026-09-23.md` (local, not
-  committed).
-- The approval records, logs, raw bundle, digest, final report and checksums are under
-  `state/review-evidence/phase5-d-systemize-live-01/`.
-
-**The run.**
-- A live, engine-backed `post-merge-systemize backfill` with run date 2026-09-22, so
-  the window was 2026-08-26..2026-09-22.
-- It ran in a fresh clone at `63f169d` under
-  `/private/tmp/adk-phase5-d-systemize-live-20260923/`.
-- Fetch, digest, `--verify` and every heartbeat step exited `0`, and the heartbeat
-  completed.
-- The window did not trigger the cap or batching branches, so those stay with
-  D-SYSTEMIZE-BOUNDARIES.
-
-**Routes.**
-- **Rule:** [PR #771](https://github.com/topij/agentic-dev-kit/pull/771) merged as
-  `5165a3c`, whose tree equals the reviewed head `347d323`.
-  - It adds "Evidence outside a promotion bundle" to `live-validation-evidence.md`, and
-    makes `upgrade.md`'s kit fetch and branch creation stop on failure.
-  - Review: a fallback panel at `6b25617`, where both lenses reported the same LOW
-    imprecision. The operator approved amended wording, and a LOW `fallback:delta`
-    review followed at `347d323`.
-- **Notification:** one Slack DM, read back as channel `D083840DP7B`, ts
-  `1790183998.138169`. It lands in the operator's self-DM because the connector acts
-  as the operator. An occurrence was added to #198.
-- **Tracker and friction:** no write. Every single-PR cluster was already addressed or
-  superseded, and the operator declined each proposed entry. No tracker payload was
-  drafted. Whether these two routes still needed a live positive write was left as an
-  operator decision under the Stage A rows; the next session's block records it.
-
-**Filed this session, on the operator's direction:**
-- #772: fallback-panel findings are invisible to systemize;
-- #773: the digest's `TEXT_LIMIT` truncates CodeRabbit findings before their substance;
-- #774: routing of an addressed single-PR cluster.
-
-**Verification.** `make test` in `/private/tmp/adk-phase5-d-systemize-live-20260923/rule`
-at `6b25617148ecd042d0ce20f5c3cbb2a734a305dc` on 2026-09-23 exited `0` and printed
-`3494 passed, 1 skipped`. The wording repair `347d323` got focused `pytest` runs in the
-same worktree, and CI passed at both heads.
-
-**Not established:**
-- installation into a field checkout;
-- scheduler wiring (#747);
-- D-SYSTEMIZE-RECOVERY, D-SYSTEMIZE-BOUNDARIES and D-FRESH-CONTEXT;
-- the triage side of D-SERVICE;
-- any live tracker or friction write from systemize.
-
-Also still open: #748 and #7 await a judgment on whether #769 discharges them, and
-#722's owed record edits were not taken in this wrap-up.
-
-The next session took the positive-write decision and ran D-SYSTEMIZE-BOUNDARIES; the
-2026-09-23 D-SYSTEMIZE-BOUNDARIES block owns both outcomes.
 
 ______________________________________________________________________
 
