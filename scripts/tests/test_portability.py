@@ -13600,6 +13600,10 @@ def _assert_post_merge_semantics(workflow: str) -> None:
     ) in flattened
     assert "Persist `attempting` before the send" in flattened
     assert (
+        "That covers every tracker create, which searches for its marker before "
+        "the first create as well as a retry."
+    ) in flattened
+    assert (
         "A `failed` create is retried only after the operator confirms the same "
         "`payload_digest` again"
     ) in flattened
@@ -14049,6 +14053,13 @@ def test_post_merge_systemize_semantic_mutations_are_rejected() -> None:
         re.sub(
             r"Anything\s+else\s+is\s+`ambiguous`\.",
             "Anything else is `failed`.",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"searches\s+for\s+its\s+marker\s+before\s+the\s+first\s+create\s+as\s+well"
+            r"\s+as\s+a\s+retry",
+            "searches for its marker only before a retry",
             workflow,
             count=1,
         ),

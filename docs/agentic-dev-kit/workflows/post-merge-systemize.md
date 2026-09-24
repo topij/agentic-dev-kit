@@ -251,6 +251,12 @@ dispatch record in the report, so a resumed process can tell "never sent" from "
 but the receipt was lost" by searching the destination for the marker. Without the
 marker a resume can search only by title, which proves nothing.
 
+The `unverified-external-dispatch` row governs every dispatch whose outcome is not yet
+known. That covers every tracker create, which searches for its marker before the
+first create as well as a retry. For a notification it means a record left at
+`attempting`, `failed`, or `ambiguous`. A notification's first send, with no record for
+its key, has no earlier attempt to verify.
+
 **Tracker marker.** Give each cluster an id when the report first records it, made of
 lowercase ASCII letters and digits only, unique within the run. When the tracker route
 builds a proposal, canonicalize `{title, body_without_marker, project, labels}` with RFC
