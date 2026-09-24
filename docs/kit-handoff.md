@@ -99,10 +99,10 @@ approved packet by SHA-256.
 - **PHASE5-D-SYSTEMIZE-RECOVERY-01:** Stage 1 is approved as scoped. Stage 2 is
   approved with options A1 and B1.
 - **Merges:** the operator directed the merges.
-  - #780 merged as `c8497c6295bdf21c073faa5470fb20e1337f5d7c`, tree equal to the
-    reviewed head's, so the next block's footer restore is no longer needed.
-  - #781 merged as `902dbf64bc5a3301ab5817b1cbc78c3effa29f1d`. Its changed docs are
-    byte-identical to the reviewed head.
+  - #780 merged as `c8497c6295bdf21c073faa5470fb20e1337f5d7c`; on 2026-09-24 `git rev-parse
+    <sha>^{tree}` matched its reviewed head's. The next block's footer restore is not needed.
+  - #781 merged as `902dbf64bc5a3301ab5817b1cbc78c3effa29f1d`; on 2026-09-24 `git diff` from its
+    reviewed head over the three docs it changed was empty.
 
 ▶ Next: execute PHASE5-D-SYSTEMIZE-RECOVERY-01 — Stage 1, then Stage 2 with A1 and B1 —
 from `state/review-evidence/phase5-d-systemize-recovery-01/packet.md`. If that
