@@ -14,11 +14,67 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-24 — the PHASE5-D-SYSTEMIZE-RECOVERY approval packet was drafted
-in an unattended session and then approved by the operator. Phase 5 delivery item 5
-remains incomplete; item 6's replay remains complete.
+Last updated: 2026-09-24 — PHASE5-D-SYSTEMIZE-RECOVERY ran: Stage 1 completed, and Stage 2
+stopped after its pre-approval run. Phase 5 delivery item 5 remains incomplete; item 6's
+replay remains complete.
 
-## Latest session — 2026-09-23 (Phase 5 D-SYSTEMIZE-RECOVERY packet, unattended, in Claude Code)
+## Latest session — 2026-09-24 (Phase 5 D-SYSTEMIZE-RECOVERY run, in Claude Code)
+
+**Approval.** The operator approved PHASE5-D-SYSTEMIZE-RECOVERY-01: Stage 1, and Stage 2
+with options A1 and B1. The operator also directed the merges of #780, #781 and #782.
+`state/review-evidence/phase5-d-systemize-recovery-01/APPROVAL.md` records those
+decisions, a Stage 2 amendment and the Stage 2 stop. `RESULTS.md` in the same directory
+owns the outcomes.
+
+**Stage 1: engine and orchestrator kills, synthetic.**
+
+- **Setup:** it ran in a fresh clone at `66a8a10` under
+  `/private/tmp/adk-phase5-d-systemize-recovery-01/`, against the kit's fake forge. Its
+  predictions were sealed before the first kill.
+- **Result:** `python3 -B compare.py` in the evidence directory, on 2026-09-24, printed
+  `all fields match` for every case: PRE-1, PRE-2, RAW-1a, RAW-1b, RAW-2a, RAW-2b, DIG-1a,
+  DIG-1b, DIG-2a, DIG-2b, PRE-3, HM and HB.
+- **Containment:** `harness.py containment` printed `CONTAINMENT OK`.
+- **Filed on the operator's direction:**
+  - #783: heartbeat `start` reopens a completed run, now seen through the entry point
+    after a kill;
+  - #784: a kill after the temp write leaves a complete hidden copy that nothing removes.
+
+**Stage 2: agent cutpoints, stopped after run P.**
+
+- **Setup probes:** the first attempt failed, because git's credential helper came from
+  the Command Line Tools system config. The operator amended the environment with
+  `GIT_CONFIG_NOSYSTEM=1`, and every probe then passed.
+- **Run P** was a headless `claude -p --model fable`, isolated by `--strict-mcp-config`
+  and `--setting-sources ""`. It stopped at the tracker approval gate with the exact
+  payload, made no tracker write, and was killed there.
+- **The stop.** P wrote scratch files to literal `/tmp` paths, which is a packet stop, and
+  it had read the fake `gh` source and the harness's environment variables. The operator
+  stopped Stage 2 and kept P as partial evidence.
+- **Not established:** the post-dispatch/pre-receipt cutpoint, and P2 presenting the
+  payload again after a restart. Both go to the Phase 5 E audit as open residuals.
+- **What a rerun needs:** an agent that can neither read the harness nor write outside
+  its roots.
+
+**Merged on the operator's direction:**
+
+- #780 as `c8497c6295bdf21c073faa5470fb20e1337f5d7c`;
+- #781 as `902dbf64bc5a3301ab5817b1cbc78c3effa29f1d`;
+- #782 as `3644dc527b375b425ce61a6ae06de1ed832c3c49`.
+
+**Still open:** the #748 and #7 judgments, which are in the next block, and #722's owed
+record edits.
+
+▶ Next: `/session-start`, then take two decisions:
+
+- whether RECOVERY's post-dispatch cutpoint gets a sandboxed rerun or stays a Phase 5 E
+  residual;
+- the next D packet to draft: D-FRESH-CONTEXT, from
+  `saved_plans/phase5-d-proposal_2026-09-21.md` (local).
+
+______________________________________________________________________
+
+## Session — 2026-09-23 (Phase 5 D-SYSTEMIZE-RECOVERY packet, unattended, in Claude Code)
 
 **Mode.** The operator asked for an autonomous session on the plan and then left. No
 operator decision was taken while the session ran unattended. The operator's decisions
@@ -107,6 +163,8 @@ approved packet by SHA-256.
 ▶ Next: execute PHASE5-D-SYSTEMIZE-RECOVERY-01 — Stage 1, then Stage 2 with A1 and B1 —
 from `state/review-evidence/phase5-d-systemize-recovery-01/packet.md`. If that
 directory already holds a `RESULTS.md`, resume from it rather than starting again.
+
+The next session ran RECOVERY; the latest session block owns its outcome.
 
 ______________________________________________________________________
 
@@ -292,105 +350,6 @@ state snapshot at import, which is #461's mechanism; an occurrence was added to 
 This session verified every candidate in a clean clone instead.
 
 The next session ran D-SYSTEMIZE-LIVE; the latest session block owns its outcome.
-
-______________________________________________________________________
-
-## Session — 2026-09-23 (Phase 5 D triage engines delivered, in Claude Code)
-
-**Session switch and the gap in this handoff.** The operator moved Phase 5 D from Codex
-to Claude Code during review of the report rendering. The Codex sessions of 2026-09-14
-through 2026-09-22 did not update this handoff. Those sessions were Phase 5 Stage A,
-the B/C archive work and the D proposal, and kit PRs merged during that span
-(`git log --since=2026-09-14 origin/main`). Their records are:
-
-- the `saved_plans/phase5-*` files, which are not committed at this wrap-up;
-- the gitignored evidence under `state/review-evidence/`;
-- those PRs.
-
-**What merged.** [PR #765](https://github.com/topij/agentic-dev-kit/pull/765) merged as
-`b808061ffd2b813e5dc11e67d118d9b7519fc085` from reviewed head
-`20ef06b5a95a685367f1172266a8d909f82f0201`, and its tree matches that head. It delivers
-the configured triage draft and finalize engines: `scripts/triage_friction_log.py`,
-`scripts/finalize_triage.py` and `scripts/lib/triage/`. The approvals were
-PHASE5-D-TRIAGE-ENGINE-01 plus its inventory, accounting, source-rendering and
-report-boundary amendments.
-
-**How the repair loop ended.** Earlier rounds had fixed one report field at a time. The
-final repair renders every report value as literal content at one boundary. The ready PR
-opened once that candidate was verified. The operator's delta disposition and both
-Claude fallback lenses then ran on it, under a blast-radius stopping rule that the
-operator chose. The PR's comments carry the head verification stamp and the panel disposition.
-The local evidence index is
-`state/review-evidence/phase5-d-triage-engine-01/CLAUDE-CONTINUATION-20260923.md` and
-its addenda.
-
-**Tracker activity this session.** The original platform-stopped Codex adversarial
-request was not retried. Filed this session:
-
-- #766: a LOW coverage gap in `_markdown_mask`;
-- #767: this package's per-site repair loop, and the delta-review route it lacked
-  without a PR.
-
-An occurrence was also added to #416.
-
-**Not established by this delivery**, and each still needs its own approval:
-
-- live tracker or notification operation;
-- engine installation into any field checkout;
-- a production friction-log sweep.
-
-The friction inbox therefore waits for `triage-friction-log` under separate
-authorization.
-
-The next session took D-SYSTEMIZE-ENGINE; the 2026-09-23 systemize-engines block owns its outcome.
-
-______________________________________________________________________
-
-## Session — 2026-09-13 (ITEM5-B PR continuation execution, in Codex)
-
-The operator approved ITEM5-B-PR-02 as scoped, later approved sending its private
-review inputs to OpenAI's Codex service for the remaining adversarial review, and
-requested autonomous session finalization with merge-when-clean authority for the
-scoped kit records. The [execution record](../saved_plans/phase5-item5-b-pr02-execution_2026-09-13.md)
-owns the applied CI payload, publication, local/hosted verification, review outcomes,
-retention pointers and final preservation checks. The historical packet remains intact.
-
-The record separates the disclosed local source #393 failure from hosted success
-and accounts for #561's syntax-check gap. The inherited special-file-root limitation
-remains. Preserved-file ownership acceptance is not functional verification or field
-exit. Item 6/replay, #723's approved deferral, #585's earlier placement and #724's
-delivered #722 batch retain their existing scope. The friction sweep stays parked.
-
-The latest session block owns the subsequent state and next decision.
-
-______________________________________________________________________
-
-## Session — 2026-09-12 (ITEM5-B fixture PR continuation packet, in Codex)
-
-The operator selected preparation of the separate fixture PR continuation decision.
-The [PR-02 packet](../saved_plans/phase5-item5-b-pr02-decision_2026-09-12.md)
-binds the retained UPDATE-03 checkpoints, existing private fixture PR identity,
-CI payload, replacement title/body, verification, publication, review and rollback.
-The packet's stamped readbacks retain the local/forge comparisons and validation
-limits. Preparation leaves the retained fixture/source and fixture PR unchanged.
-The packet preserves the preparation-time question; the subsequent execution record
-owns the later approval and execution outcome.
-
-Kit [#736](https://github.com/topij/agentic-dev-kit/pull/736) delivered UPDATE-03's
-execution record as `2b272a939013538a740f68f3990a6cc961c9512f`, from reviewed head
-`ae6f11c4646c1a666e7049fed20b30b88c73e850`; its
-[review disposition](https://github.com/topij/agentic-dev-kit/pull/736#issuecomment-5643887657)
-retains the panel and verification limitations. UPDATE-03 and UPDATE-01 are consumed;
-UPDATE-02 remains historical and unanswered. Source remains the approved pin
-`7e0232ed871b37a315c5509c97b83d3b00b1a3fd`; the fixture input remains the local
-attempt `4ad91c875377d8607082cd0a125ba801218187ed`.
-
-The inherited special-file-root limitation and ownership-only custom wrap-up boundary
-remain. Item 5/field exit is incomplete; item 6/replay, #723's approved deferral,
-#585's earlier placement and #724's delivered #722 batch are preserved. The friction
-sweep remains parked, and no credited exercise is repeated.
-
-The latest session block owns the subsequent execution and next decision.
 
 ______________________________________________________________________
 
