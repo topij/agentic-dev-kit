@@ -14,11 +14,76 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-24 — PHASE5-D-SYSTEMIZE-RECOVERY ran: Stage 1 completed, and Stage 2
-stopped after its pre-approval run. Phase 5 delivery item 5 remains incomplete; item 6's
-replay remains complete.
+Last updated: 2026-09-24 — RECOVERY's post-dispatch rerun waits for #786, and
+PHASE5-D-FRESH-CONTEXT-01 ran to completion. Phase 5 delivery item 5 remains incomplete;
+item 6's replay remains complete.
 
-## Latest session — 2026-09-24 (Phase 5 D-SYSTEMIZE-RECOVERY run, in Claude Code)
+## Latest session — 2026-09-24 (RECOVERY decision and Phase 5 D-FRESH-CONTEXT run, in Claude Code)
+
+**Decisions, taken interactively.**
+
+- **RECOVERY's post-dispatch cutpoint: fix the gap first, rerun later.**
+  - The record is
+    `state/review-evidence/phase5-d-systemize-recovery-01/DECISION-post-dispatch-20260924.md`.
+  - The cutpoint stays an open Phase 5 E residual. The exit criteria allow no required
+    row to be "covered only by a proposed deferral", so at E it needs evidence or an
+    approved amendment.
+  - The systemize workflow declares no idempotency key and no pre-dispatch attempted
+    record for a tracker create or notification. #786 was filed for that, and the
+    rerun waits for its fix.
+- **PHASE5-D-FRESH-CONTEXT-01 approved** with A1 (ignore the Codex user config), B1
+  (untrusted), C1 (`gpt-5.6-sol` at medium) and D1 (an extended fake forge, network off).
+  Amendment 1 permitted Codex's automatic trust entry for the run's clone, followed by
+  guarded removal. `APPROVAL.md` and `AMENDMENT-1.md` are in
+  `state/review-evidence/phase5-d-fresh-context-01/`.
+- **The Phase 5 packets stay local.** Whether to commit the whole untracked
+  `saved_plans/phase5-*` set is a decision for the Phase 5 E audit.
+
+**The packet.** `saved_plans/phase5-d-fresh-context_2026-09-24.md` is local and not
+committed, like the other D packets. Fresh subagents checked successive drafts
+read-only, and their corrections are listed in its *Preparation check*. The approved
+bytes are also in the evidence directory as `packet.md`.
+
+**The run.** `RESULTS.md` in `state/review-evidence/phase5-d-fresh-context-01/`
+(gitignored) owns the outcomes.
+
+- **Setup:** one `codex exec`, given only `$post-merge-systemize test`. It ran in a
+  neutral clone at `1cc86cd` plus one disclosed config commit (`lookback_days: 10`),
+  against a fake forge with the network off.
+- **Observed:**
+  - it found the adapter (by injection) and the shared workflow;
+  - it read the config, overlay included, and passed `--window-days 10`;
+  - it chose engine-backed mode;
+  - its routes matched the sealed prediction, and containment was clean.
+- **Not matched:** it made no merged-PR preflight read of its own before heartbeat
+  `start`, and it ran `--verify` late. Both are parked in the friction log.
+- **Scope of the result:** one sample. Whether it discharges the row is the E audit's
+  call.
+
+**The Codex trust entries.** `codex exec` wrote `trust_level = "trusted"` entries into
+`~/.codex/config.toml` for its working directories, despite `--ignore-user-config
+--ephemeral`, sometimes late. That stopped the gate at S3, before the run. After the run,
+a guarded edit removed the three `/private/tmp` entries, and the file's SHA-256 matched
+its value before this session's first probe. The finding is parked in the friction log.
+
+**Filed this session, each on the operator's approval of the exact payload:**
+
+- #786: systemize has no idempotency key or pre-dispatch attempted record;
+- #787: the workflows' "merged per leaf" overlay wording omits the one-leaf allowlist;
+- #788: the systemize tests' `FAKE_GH` over-answers and crashes on unknown forms.
+
+**Retained:** `/private/tmp/w-83c93ce1`, the run's namespace, as the packet specifies.
+
+**Still open from earlier sessions:** the #748 and #7 judgments, and #722's owed record
+edits.
+
+▶ Next: `/session-start`, then choose between #786's fix, which unblocks RECOVERY's
+post-dispatch rerun, and drafting the D-TRIAGE-RESIDUAL packet from
+`saved_plans/phase5-d-proposal_2026-09-21.md` (local).
+
+______________________________________________________________________
+
+## Session — 2026-09-24 (Phase 5 D-SYSTEMIZE-RECOVERY run, in Claude Code)
 
 **Approval.** The operator approved PHASE5-D-SYSTEMIZE-RECOVERY-01: Stage 1, and Stage 2
 with options A1 and B1. The operator also directed the merges of #780, #781 and #782.
@@ -71,6 +136,9 @@ record edits.
   residual;
 - the next D packet to draft: D-FRESH-CONTEXT, from
   `saved_plans/phase5-d-proposal_2026-09-21.md` (local).
+
+The next session took both decisions; the 2026-09-24 block on the RECOVERY decision and
+D-FRESH-CONTEXT owns them.
 
 ______________________________________________________________________
 
@@ -164,7 +232,8 @@ approved packet by SHA-256.
 from `state/review-evidence/phase5-d-systemize-recovery-01/packet.md`. If that
 directory already holds a `RESULTS.md`, resume from it rather than starting again.
 
-The next session ran RECOVERY; the latest session block owns its outcome.
+The next session ran RECOVERY; the 2026-09-24 D-SYSTEMIZE-RECOVERY run block owns its
+outcome.
 
 ______________________________________________________________________
 
@@ -240,7 +309,8 @@ from the D proposal's table (`saved_plans/phase5-d-proposal_2026-09-21.md`, loca
 - **Open design point:** the post-dispatch, pre-receipt cutpoint needs an operator
   decision, because systemize's external writes are made by the agent, not an engine.
 
-The next session drafted that packet; the latest session block owns it.
+The next session drafted that packet; the 2026-09-23 D-SYSTEMIZE-RECOVERY packet block
+owns it.
 
 ______________________________________________________________________
 
@@ -301,55 +371,7 @@ Also still open: #748 and #7 await a judgment on whether #769 discharges them, a
 #722's owed record edits were not taken in this wrap-up.
 
 The next session took the positive-write decision and ran D-SYSTEMIZE-BOUNDARIES; the
-latest session block owns both outcomes.
-
-______________________________________________________________________
-
-## Session — 2026-09-23 (Phase 5 D systemize engines delivered, in Claude Code)
-
-**What merged.** [PR #769](https://github.com/topij/agentic-dev-kit/pull/769) merged as
-`cf83f2000f9745eb8e1428c467d890d26ae7f643`. Its tree matches the reviewed head
-`d4c003c73ecfada2b0244a2396b5b0347578345b`. The PR delivers the configured
-post-merge-systemize engine set:
-
-- `scripts/fetch_merged_prs.py`;
-- `scripts/digest_merged_prs.py`;
-- `scripts/heartbeat_cli.py`;
-- `scripts/lib/systemize/`.
-
-With all three files present, this repository's own systemize runs are now
-engine-backed. The PR also adds `systemize.heartbeat_job` and
-`systemize.heartbeat_pattern`, which are required only in engine-backed mode. And the
-shared workflow now takes addressed state from forge thread resolution, not reply
-text. #748 stays open, so review can judge whether that definition discharges it.
-
-**Approval.** The operator approved PHASE5-D-SYSTEMIZE-ENGINE-01 interactively, then
-its inventory amendment for `scripts/kit_doctor.py` and `scripts/tests/test_kit_doctor.py`.
-The operator then directed the merge. The packet is
-`saved_plans/phase5-d-systemize-engine_2026-09-23.md`, which is local and not
-committed, like the D proposal. The requirement ledger, approval records and
-installed-check evidence are under `state/review-evidence/phase5-d-systemize-engine-01/`.
-
-**Review.** CodeRabbit skipped the review because auto-review is disabled on this
-repository. The fallback panel ran instead, and the PR comments carry each round's
-disposition and the verification stamps. The receipt at the merged head is a
-correctness delta composed on a full-panel receipt at
-`69db4479f335bcae9306c5c4b1954271fd989c8f`.
-
-**Not established by this delivery**, and each still needs its own approval:
-
-- a live or test systemize run with routing;
-- installation into any field checkout;
-- scheduler wiring;
-- tracker or notification writes.
-
-**Local `make test` hazard.** On 2026-09-23, `make test` could not start in this
-control checkout. A mode-000 file inside the gitignored
-`state/review-evidence/item5-b-p3-update04-*` tree crashed `scripts/conftest.py`'s
-state snapshot at import, which is #461's mechanism; an occurrence was added to #461.
-This session verified every candidate in a clean clone instead.
-
-The next session ran D-SYSTEMIZE-LIVE; the latest session block owns its outcome.
+2026-09-23 D-SYSTEMIZE-BOUNDARIES block owns both outcomes.
 
 ______________________________________________________________________
 

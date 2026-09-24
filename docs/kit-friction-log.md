@@ -24,6 +24,47 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-09-24
+
+- **A fresh Codex context ran `post-merge-systemize` out of the workflow's order in two
+  places.** This was PHASE5-D-FRESH-CONTEXT-01: `codex exec` given only
+  `$post-merge-systemize test`, run on 2026-09-24 in a clone at `1cc86cd` plus one config
+  commit. The evidence is `state/review-evidence/phase5-d-fresh-context-01/RESULTS.md`
+  (local, gitignored).
+  - **Preflight:** it made no bounded merged-PR read of its own before heartbeat
+    `start`. It ran only `gh auth status`, `gh repo view` and the branch API. Its report
+    then marked "Forge merged-PR read" `ready`, citing the fetch engine's read, which
+    came after `start`. The workflow says to finish preflight before any heartbeat
+    write.
+  - **`--verify`:** it ran digest `--verify` after the ticks and the report write. The
+    *Engine interface* lists `--verify` under the digest step but does not say it must
+    precede the ticks.
+  - **Why it is parked:** it is one instance, and the point is whether it recurs. It is
+    not established whether the order is too easy to miss, or whether the engine-backed
+    path should name what proves forge access before `start`.
+  - **Severity:** M. A capability was reported `ready` on evidence gathered after the
+    point the workflow requires.
+
+- **`codex exec` writes a `trust_level = "trusted"` entry for its working directory into
+  `~/.codex/config.toml`, even under `--ignore-user-config --ephemeral`.**
+  - **Observed** on 2026-09-24, with codex-cli 0.153.4 and the ChatGPT desktop app
+    running, for three working directories: a preparation clone, a gate probe clone and
+    the PHASE5-D-FRESH-CONTEXT-01 run clone.
+  - **The write can land late.** SHA-256 hashes taken before the first probe and right
+    after the second were identical, yet an entry for that probes' directory was
+    present later.
+  - **Cleanup:** the three entries were removed with a guarded edit, on the operator's
+    approval. The file's SHA-256 afterwards matched its value before the first probe.
+  - **Probably accumulating from kit review lenses.** On 2026-09-24,
+    `grep -c -E '^\[projects\."/private/(tmp|var)/[^"]*lens-' ~/.codex/config.toml`
+    printed `19`, which suggests the kit's Codex review-lens launches leave these
+    entries behind. None of those entries was touched.
+  - **Not established:** whether the CLI or the desktop app's Codex service writes them.
+  - **Proposed direction:** remove an entry after the launch that caused it, or run
+    lenses under a separate `CODEX_HOME`. Neither has been tried.
+  - **Severity:** L. The paths are temporary and mostly random-suffixed, but a trusted
+    path that is later reused would load that directory's project config and hooks.
+
 ## 2026-09-23
 
 - **`heartbeat_cli.py start` reopens a completed run, though the workflow calls a write

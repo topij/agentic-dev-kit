@@ -5,6 +5,52 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-09-23 (Phase 5 D systemize engines delivered, in Claude Code)
+
+**What merged.** [PR #769](https://github.com/topij/agentic-dev-kit/pull/769) merged as
+`cf83f2000f9745eb8e1428c467d890d26ae7f643`. Its tree matches the reviewed head
+`d4c003c73ecfada2b0244a2396b5b0347578345b`. The PR delivers the configured
+post-merge-systemize engine set:
+
+- `scripts/fetch_merged_prs.py`;
+- `scripts/digest_merged_prs.py`;
+- `scripts/heartbeat_cli.py`;
+- `scripts/lib/systemize/`.
+
+With all three files present, this repository's own systemize runs are now
+engine-backed. The PR also adds `systemize.heartbeat_job` and
+`systemize.heartbeat_pattern`, which are required only in engine-backed mode. And the
+shared workflow now takes addressed state from forge thread resolution, not reply
+text. #748 stays open, so review can judge whether that definition discharges it.
+
+**Approval.** The operator approved PHASE5-D-SYSTEMIZE-ENGINE-01 interactively, then
+its inventory amendment for `scripts/kit_doctor.py` and `scripts/tests/test_kit_doctor.py`.
+The operator then directed the merge. The packet is
+`saved_plans/phase5-d-systemize-engine_2026-09-23.md`, which is local and not
+committed, like the D proposal. The requirement ledger, approval records and
+installed-check evidence are under `state/review-evidence/phase5-d-systemize-engine-01/`.
+
+**Review.** CodeRabbit skipped the review because auto-review is disabled on this
+repository. The fallback panel ran instead, and the PR comments carry each round's
+disposition and the verification stamps. The receipt at the merged head is a
+correctness delta composed on a full-panel receipt at
+`69db4479f335bcae9306c5c4b1954271fd989c8f`.
+
+**Not established by this delivery**, and each still needs its own approval:
+
+- a live or test systemize run with routing;
+- installation into any field checkout;
+- scheduler wiring;
+- tracker or notification writes.
+
+**Local `make test` hazard.** On 2026-09-23, `make test` could not start in this
+control checkout. A mode-000 file inside the gitignored
+`state/review-evidence/item5-b-p3-update04-*` tree crashed `scripts/conftest.py`'s
+state snapshot at import, which is #461's mechanism; an occurrence was added to #461.
+This session verified every candidate in a clean clone instead.
+
+The next session ran D-SYSTEMIZE-LIVE; the latest session block owns its outcome.
+
 ### 2026-09-23 (Phase 5 D triage engines delivered, in Claude Code)
 
 **Session switch and the gap in this handoff.** The operator moved Phase 5 D from Codex
