@@ -26,9 +26,9 @@
 
 ## 2026-09-24
 
-- **Each fallback-panel round on #790 found another unpinned fail-closed clause.** #790
-  added normative prose to `post-merge-systemize.md` and pinned part of it in
-  `_assert_post_merge_semantics`. The adversarial lens at `2b9dae8` and again at
+- **The first two fallback-panel rounds on #790 each found another unpinned fail-closed
+  clause.** #790 added normative prose to `post-merge-systemize.md` and pinned part of it
+  in `_assert_post_merge_semantics`. The adversarial lens at `2b9dae8` and again at
   `ae54d68` proved, by a surviving mutant, that another guarding clause was not pinned.
   Only at `d873b68`, after every fail-closed clause in the section was pinned with an
   inverting mutation, did a round find no unpinned clause.

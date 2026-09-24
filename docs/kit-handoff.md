@@ -31,9 +31,8 @@ closed on the operator's direction.
 - `CHANGELOG.md` carries the adopter entry.
 
 **Review.** CodeRabbit skipped, because automatic reviews are disabled. The fallback panel
-ran at `2b9dae8`, `ae54d68` and `d873b68`, and each round found another fail-closed
-clause the contract test did not pin. The receipt is bound to `d873b68`, and the PR's
-disposition comments own the findings.
+ran at `2b9dae8`, `ae54d68` and `d873b68`. The receipt is bound to `d873b68`, and the
+PR's disposition comments own the findings.
 
 **Filed on the operator's approval of the exact payloads:**
 
