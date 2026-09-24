@@ -5,6 +5,65 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-09-23 (Phase 5 D-SYSTEMIZE-LIVE run, in Claude Code)
+
+**Approval.**
+- The operator approved PHASE5-D-SYSTEMIZE-LIVE-01 Stage 1 as written in its packet,
+  then each Stage 2 payload individually.
+- The packet is `saved_plans/phase5-d-systemize-live_2026-09-23.md` (local, not
+  committed).
+- The approval records, logs, raw bundle, digest, final report and checksums are under
+  `state/review-evidence/phase5-d-systemize-live-01/`.
+
+**The run.**
+- A live, engine-backed `post-merge-systemize backfill` with run date 2026-09-22, so
+  the window was 2026-08-26..2026-09-22.
+- It ran in a fresh clone at `63f169d` under
+  `/private/tmp/adk-phase5-d-systemize-live-20260923/`.
+- Fetch, digest, `--verify` and every heartbeat step exited `0`, and the heartbeat
+  completed.
+- The window did not trigger the cap or batching branches, so those stay with
+  D-SYSTEMIZE-BOUNDARIES.
+
+**Routes.**
+- **Rule:** [PR #771](https://github.com/topij/agentic-dev-kit/pull/771) merged as
+  `5165a3c`, whose tree equals the reviewed head `347d323`.
+  - It adds "Evidence outside a promotion bundle" to `live-validation-evidence.md`, and
+    makes `upgrade.md`'s kit fetch and branch creation stop on failure.
+  - Review: a fallback panel at `6b25617`, where both lenses reported the same LOW
+    imprecision. The operator approved amended wording, and a LOW `fallback:delta`
+    review followed at `347d323`.
+- **Notification:** one Slack DM, read back as channel `D083840DP7B`, ts
+  `1790183998.138169`. It lands in the operator's self-DM because the connector acts
+  as the operator. An occurrence was added to #198.
+- **Tracker and friction:** no write. Every single-PR cluster was already addressed or
+  superseded, and the operator declined each proposed entry. No tracker payload was
+  drafted. Whether these two routes still needed a live positive write was left as an
+  operator decision under the Stage A rows; the next session's block records it.
+
+**Filed this session, on the operator's direction:**
+- #772: fallback-panel findings are invisible to systemize;
+- #773: the digest's `TEXT_LIMIT` truncates CodeRabbit findings before their substance;
+- #774: routing of an addressed single-PR cluster.
+
+**Verification.** `make test` in `/private/tmp/adk-phase5-d-systemize-live-20260923/rule`
+at `6b25617148ecd042d0ce20f5c3cbb2a734a305dc` on 2026-09-23 exited `0` and printed
+`3494 passed, 1 skipped`. The wording repair `347d323` got focused `pytest` runs in the
+same worktree, and CI passed at both heads.
+
+**Not established:**
+- installation into a field checkout;
+- scheduler wiring (#747);
+- D-SYSTEMIZE-RECOVERY, D-SYSTEMIZE-BOUNDARIES and D-FRESH-CONTEXT;
+- the triage side of D-SERVICE;
+- any live tracker or friction write from systemize.
+
+Also still open: #748 and #7 await a judgment on whether #769 discharges them, and
+#722's owed record edits were not taken in this wrap-up.
+
+The next session took the positive-write decision and ran D-SYSTEMIZE-BOUNDARIES; the
+2026-09-23 D-SYSTEMIZE-BOUNDARIES block owns both outcomes.
+
 ### 2026-09-23 (Phase 5 D systemize engines delivered, in Claude Code)
 
 **What merged.** [PR #769](https://github.com/topij/agentic-dev-kit/pull/769) merged as
