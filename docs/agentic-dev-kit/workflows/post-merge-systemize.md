@@ -301,7 +301,9 @@ verified route, the returned identifier, and the marker-search result. The statu
    fails, do not dispatch.
 4. Create. On a success response, read the item back and require the exact project,
    title, body, labels, marker, and returned identifier before recording `verified` with
-   `created-and-read-back`.
+   `created-and-read-back`. A read-back that is unavailable or does not match exactly is
+   `ambiguous`: create nothing further and hold the route for the operator with the
+   response and the read-back in the report.
 5. On a failed or missing response, search by the marker again before anything else.
    One exact match is `verified` with `found-by-read-back`. An authoritative empty
    result is `failed`: the create provably did not land. Anything else is `ambiguous`.
@@ -320,9 +322,8 @@ left at `attempting`, `failed`, or `ambiguous` permits another send only after a
 complete, authoritative read-back of the destination finds no message carrying the key.
 One message carrying it is `verified` with `found-by-read-back`, and several are
 `ambiguous`. A destination that cannot be read back leaves the record `ambiguous` and
-the notification unsent. The report and
-final output still carry the summary, because notification is never the only durable
-result.
+the notification unsent. The report and final output still carry the summary, because
+notification is never the only durable result.
 
 An `ambiguous` or `failed` record leaves its route incomplete, not the run failed. The
 report names the marker, the match set, and the operator's next action.

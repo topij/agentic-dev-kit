@@ -13604,6 +13604,39 @@ def _assert_post_merge_semantics(workflow: str) -> None:
         "the first create as well as a retry."
     ) in flattened
     assert (
+        "Create access without an authoritative search for the idempotency marker "
+        "is also unavailable access."
+    ) in flattened
+    assert (
+        "**Several matches, a match whose payload differs, or a search that is "
+        "unavailable, incomplete or unreadable:** record `ambiguous`"
+    ) in flattened
+    assert "search by the marker again before anything else" in flattened
+    assert (
+        "A read-back that is unavailable or does not match exactly is `ambiguous`: "
+        "create nothing further"
+    ) in flattened
+    assert (
+        "The marker is therefore part of the exact payload the operator reviews"
+        in flattened
+    )
+    assert (
+        "the first send needs no read-back: a validated same-run report with no "
+        "record for the key permits it"
+    ) in flattened
+    assert (
+        "permits another send only after a complete, authoritative read-back of the "
+        "destination finds no message carrying the key"
+    ) in flattened
+    assert (
+        "One message carrying it is `verified` with `found-by-read-back`, and "
+        "several are `ambiguous`."
+    ) in flattened
+    assert (
+        "gives a resume no marker to search by: hold that route for the operator "
+        "and create nothing"
+    ) in flattened
+    assert (
         "A `failed` create is retried only after the operator confirms the same "
         "`payload_digest` again"
     ) in flattened
@@ -14060,6 +14093,71 @@ def test_post_merge_systemize_semantic_mutations_are_rejected() -> None:
             r"searches\s+for\s+its\s+marker\s+before\s+the\s+first\s+create\s+as\s+well"
             r"\s+as\s+a\s+retry",
             "searches for its marker only before a retry",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"Create\s+access\s+without\s+an\s+authoritative\s+search\s+for\s+the"
+            r"\s+idempotency\s+marker\s+is\s+also\s+unavailable\s+access\.",
+            "",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"a\s+match\s+whose\s+payload\s+differs,\s+or\s+a\s+search\s+that\s+is"
+            r"\s+unavailable,\s+incomplete\s+or\s+unreadable:\*\*",
+            "or a match whose payload differs:**",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"\*\*An\s+authoritative\s+empty\s+result:\*\*\s+continue\.",
+            "**An empty or unavailable result:** continue.",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"does\s+not\s+match\s+exactly\s+is\s+`ambiguous`:\s+create\s+nothing\s+further",
+            "does not match exactly is `failed`: create it again",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"search\s+by\s+the\s+marker\s+again\s+before\s+anything\s+else",
+            "retry the create",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"The\s+marker\s+is\s+therefore\s+part\s+of\s+the\s+exact\s+payload\s+the"
+            r"\s+operator\s+reviews",
+            "The marker is added after the operator reviews the payload",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"with\s+no\s+record\s+for\s+the\s+key\s+permits\s+it",
+            "with any record for the key permits it",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"permits\s+another\s+send\s+only\s+after\s+a\s+complete,\s+authoritative"
+            r"\s+read-back\s+of\s+the\s+destination\s+finds\s+no\s+message\s+carrying"
+            r"\s+the\s+key",
+            "permits another send",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"and\s+several\s+are\s+`ambiguous`\.",
+            "and several are `verified`.",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"hold\s+that\s+route\s+for\s+the\s+operator\s+and\s+create\s+nothing",
+            "create the item again",
             workflow,
             count=1,
         ),
