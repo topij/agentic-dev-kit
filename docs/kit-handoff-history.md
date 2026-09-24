@@ -138,9 +138,6 @@ The latest session block owns the item 5 status and next action.
 
 ______________________________________________________________________
 
-> Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
-> Active open items from them are folded into the "Open for next session" lists above.
-
 ### 2026-09-09 (the prose-claims rule, in Claude Code)
 
 **Theme —** Write the rule the 2026-08-22 entry parked, and keep the two mechanisms apart.
@@ -231,9 +228,6 @@ The current replay decision and next-session starter are in the latest session b
   operator-held triage and Claude prose-claims work were not performed.
 
 ______________________________________________________________________
-
-> Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
-> Active open items from them are folded into the "Open for next session" lists above.
 
 ## Session — 2026-09-07 (#698 doctor correction and #706 push gate, in Claude Code)
 

@@ -234,12 +234,14 @@ _RECENT_SESSION_RE = re.compile(r"^### \d{4}-\d{2}-\d{2}\b")
 
 
 def history_pointer(link: str, label: str) -> list[str]:
+    # The footer ends at its separator. When it closes the document, a blank
+    # line after it is what `git diff --check` reports as a new blank line at
+    # EOF (#776); `rebuild_plan` adds the blank line only when a tail follows.
     return [
         f"> Older session entries (below the live blocks above) live in [`{label}`]({link}).\n",
         '> Active open items from them are folded into the "Open for next session" lists above.\n',
         "\n",
         SEP,
-        "\n",
     ]
 
 
@@ -483,6 +485,8 @@ def rebuild_plan(
     for block in keep_blocks:
         body += block + ["\n", SEP, "\n"]
     body += history_pointer(history_link, history_label)
+    if tail:
+        body.append("\n")
     return head + body + tail
 
 
@@ -722,13 +726,21 @@ def main(argv: list[str] | None = None) -> int:
         # The classic writer owns this exact footer at the region boundary.
         # A quotation elsewhere, an edited footer, or a footer naming another
         # history destination is content and must survive the archival move.
+        # Blank lines after it are layout: an older writer left one, and a
+        # hand edit may trim it. Matching them exactly left a trimmed footer
+        # in the oldest block, and the sweep moved it into history (#776).
+        end = len(region)
+        while end and region[end - 1].strip(_LAYOUT_WS) == "":
+            end -= 1
+        start = end - len(pointer)
         if (
-            any(visible and _is_session_heading(line)
-                for line, visible in zip(region, _outside_fences(region), strict=True))
-            and region[-len(pointer):] == pointer
-            and all(_outside_fences(region)[-len(pointer):])
+            start >= 0
+            and any(visible and _is_session_heading(line)
+                    for line, visible in zip(region, _outside_fences(region), strict=True))
+            and region[start:end] == pointer
+            and all(_outside_fences(region)[start:end])
         ):
-            region = region[:-len(pointer)]
+            region = region[:start]
         blocks = parse_blocks(region)
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)

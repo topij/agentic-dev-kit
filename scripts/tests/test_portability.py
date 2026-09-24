@@ -1333,6 +1333,69 @@ def test_classic_archive_preserves_edited_footer_at_boundary(
     assert "## Backlog\n\nStanding content.\n" in live
 
 
+@pytest.mark.parametrize("trailing", ["", "\n", "\n\n", " \n"], ids=["trimmed", "legacy", "extra", "space"])
+def test_classic_archive_recognises_its_footer_whatever_blank_lines_follow(
+    tmp_path: Path, trailing: str,
+) -> None:
+    """#776: blank lines after the footer are layout, not part of the oldest block.
+
+    Matching them exactly left a hand-trimmed footer in the oldest block, and the
+    sweep moved it into history, where it told a reader already there that older
+    entries live in that same file.
+    """
+    archive = _load_module("archive_footer_layout", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "saved" / "history.md"
+    history.parent.mkdir()
+    pointer = archive.history_pointer("saved/history.md", "history.md")
+    plan.write_text(
+        "# Handoff\n\n## Session — 2026-07-03 — Newest\n\nNewest body.\n\n"
+        + archive.SEP + "\n## Session — 2026-07-02 — Older\n\nOlder body.\n\n"
+        + "".join(pointer) + trailing,
+        encoding="utf-8",
+    )
+    history.write_text("# History\n\n## Session log\n", encoding="utf-8")
+
+    assert archive.main(["--keep", "1", "--plan", str(plan), "--history", str(history)]) == 0
+
+    live = plan.read_text(encoding="utf-8")
+    saved = history.read_text(encoding="utf-8")
+    assert "Older body." in saved
+    assert pointer[0] not in saved
+    assert live.count(pointer[0]) == 1
+    assert live.endswith("".join(pointer))
+
+
+@pytest.mark.parametrize("tail", ["", "## Backlog\n\nStanding content.\n"], ids=["eof", "tail"])
+def test_consecutive_classic_sweeps_leave_one_footer_and_no_blank_line_at_eof(
+    tmp_path: Path, tail: str,
+) -> None:
+    """#776: the footer ends the document at its separator, or precedes the tail.
+
+    A trailing blank line after it is what `git diff --check` reports as a new
+    blank line at EOF, so the writer must not emit one; before a tail it keeps
+    the blank line that separates the footer from the next heading.
+    """
+    archive = _load_module("archive_footer_eof", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "saved" / "history.md"
+    history.parent.mkdir()
+    blocks = "".join(
+        f"## Session — 2026-07-0{day} — Block {day}\n\nBody {day}.\n\n" for day in (4, 3, 2, 1)
+    )
+    plan.write_text("# Handoff\n\n" + blocks + tail, encoding="utf-8")
+    history.write_text("# History\n\n## Session log\n", encoding="utf-8")
+    footer = "".join(archive.history_pointer("saved/history.md", "history.md"))
+
+    for keep in ("3", "2", "1"):
+        assert archive.main(["--keep", keep, "--plan", str(plan), "--history", str(history)]) == 0
+        live = plan.read_text(encoding="utf-8")
+        assert live.count(footer) == 1
+        assert live.endswith(footer + ("\n" + tail if tail else ""))
+        assert not live.endswith("\n\n")
+        assert "Older session entries" not in history.read_text(encoding="utf-8")
+
+
 def test_recent_archive_preserves_text_matching_a_classic_footer(tmp_path: Path) -> None:
     """The recent-session writer does not own classic footer syntax."""
     archive = _load_module("archive_recent_footer", ENGINE_DIR / "archive_plan_sessions.py")

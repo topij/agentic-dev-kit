@@ -42,6 +42,10 @@ starts.
 
 ---
 
+## #780 — Handoff footer layout
+
+CHANGED: Refresh `scripts/archive_plan_sessions.py` with its tests. `history_pointer()` now ends at the footer's separator line: a sweep leaves no blank line after the footer when it ends the handoff, and keeps one before any following section. The sweep recognises its footer whatever blank lines follow it, so a hand-trimmed footer is no longer moved into history. Update assertions that expected the footer to end in a blank line. Search your history file for `Older session entries` and remove any footer an earlier sweep moved there.
+
 ## #769 — Deterministic systemize engines
 
 - **ADDED — systemize engines:** Install `fetch_merged_prs.py`, `digest_merged_prs.py`, `heartbeat_cli.py` and the complete `lib/systemize/` set together under `paths.engines`, with `lib/triage/canonical.py`, which they import. Their presence selects engine-backed mode, and a partial set stops every entry point. Invoke them as the workflow's *Engine interface* section documents (`--mode`, `--window-days`, `--date`; exit `0` / `1` / `2`), and use `digest_merged_prs.py --verify` to check an agent-built digest.
