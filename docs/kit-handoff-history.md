@@ -5,6 +5,84 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-09-12 (ITEM5-B approved retained update, in Codex)
+
+The operator approved ITEM5-B-UPDATE-03 as scoped in its packet. The
+[execution record](../saved_plans/phase5-item5-b-update03-execution_2026-09-12.md)
+retains exact authority, fresh r4/r5 preconditions, source advance, fixture payloads,
+predicted baseline, complete suite output, final preservation checks and backups.
+The retained source is pinned to `7e0232ed871b37a315c5509c97b83d3b00b1a3fd`;
+the local fixture attempt is `4ad91c875377d8607082cd0a125ba801218187ed`.
+No fixture push or PR continuation occurred. UPDATE-03 is consumed; UPDATE-01
+remains consumed and UPDATE-02 remains historical and unanswered.
+
+The record separates installed verification from the disclosed source #393 failure,
+and retains separate shell parses for #561's recipe gap. The accepted inherited
+special-file-root limitation remains. Ownership acceptance does not establish
+custom wrap-up functionality, client verification or field exit. Item 6/replay,
+#723's approved deferral, #585's earlier placement and #724's delivered #722 batch
+are preserved. The friction sweep stays parked; no credited exercise is repeated.
+
+The latest session block owns the subsequent continuation packet and next decision.
+
+### 2026-09-11 (ITEM5-B revised retained-update packet, in Codex)
+
+The operator-approved source repair [#734](https://github.com/topij/agentic-dev-kit/pull/734)
+merged as `7e0232ed871b37a315c5509c97b83d3b00b1a3fd`, from reviewed head `7224547da0c766a4fd9ee5791e53ddb3f7db6cdf`. Its
+[delivery checkpoint](https://github.com/topij/agentic-dev-kit/pull/734#issuecomment-5637494093)
+retains the exact-head watch/merge, complete panel receipts, CodeRabbit disposition
+and local #393 versus hosted verification limits. Separate shell parses account for
+#561's recipe gap. The source repair did not update the retained installation.
+
+The [UPDATE-03 packet](../saved_plans/phase5-item5-b-update03-decision_2026-09-11.md)
+selects that immutable source and binds payloads, write ledger, baseline prediction,
+preservation, verification, limits, rollback and an exact approval question. Its
+read-only audit and forge records retain post-acceptance checkpoint comparisons.
+The packet retains complete review receipts before its audit-ordering correction,
+with earlier UPDATE-03 questions/evidence preserved and the current `-r5` binding
+explicit. The packet records unresolved generic-upgrade bootstrap findings outside
+its proposed execution; no further source repair or approved deferral is claimed.
+[PR #733](https://github.com/topij/agentic-dev-kit/pull/733) merged on 2026-09-11 as
+`e6b8e182466046a820198fa28c8cc52dc06509d0`, from reviewed head
+`fc46efa0570f866f19cccf11834f909d5f37cf69`. Its
+[completion checkpoint](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5639767232)
+retains review, verification, merge readback and the pending exact approval question.
+UPDATE-01 is consumed; UPDATE-02 and its old questions, payloads, ledgers and
+incomplete review receipts remain preserved.
+
+Packet preparation did not approve retained execution. Ownership acceptance does not establish custom
+wrap-up functionality, client verification or field exit. The accepted inherited
+special-file-root limitation remains. Item 6/replay, #723's approved deferral,
+#585's earlier placement and #724's delivered #722 batch are preserved. The friction
+sweep stays parked; no credited exercise is repeated.
+
+The latest session block owns subsequent execution and the next decision.
+
+### 2026-09-11 (ITEM5-B repair delivery, in Codex)
+
+The operator approved ITEM5-B-KIT-REVIEW-02 and subsequently said “merge when ready.”
+[PR #731](https://github.com/topij/agentic-dev-kit/pull/731) merged as
+`e6d6e77d118454349f8e8bb046e99ef3009c5f5c`, from reviewed head
+`1bd4e10b423b0b4b230fb1a481bbc477de784a61`. The
+[merge checkpoint](https://github.com/topij/agentic-dev-kit/pull/731#issuecomment-5629015678)
+retains the exact-head merge, forge readback and completed review disposition.
+The [execution record](../saved_plans/phase5-item5-b-review-followup-execution_2026-09-11.md)
+links the complete panel reports and distinguishes hosted success from the disclosed
+local #393 failure. The accepted inherited special-file-root limitation remains;
+separate shell parses covered #561's omitted checks without repairing its recipe.
+
+The resume readback used `gh pr view 731` and `gh run list` with the kit repository
+and merge SHA from `/Users/topi/Coding/agentic-dev-kit` at
+`1bd4e10b423b0b4b230fb1a481bbc477de784a61` on 2026-09-11: merge confirmed and
+[post-merge Test run](https://github.com/topij/agentic-dev-kit/actions/runs/34558574354) succeeded.
+This record follow-up began from that protected-main merge.
+
+Ownership acceptance does not establish functionality or field exit. The repair did
+not update the retained installation. Item 6's replay, #723's deferral, #585's earlier
+placement and #724's delivered #722 batch are preserved. The friction sweep stays parked.
+
+The latest session block owns the revised packet and next decision.
+
 ### 2026-09-10 (ITEM5-B acceptance execution, in Codex)
 
 The operator approved ACCEPT-01 and PR-01 as scoped in the

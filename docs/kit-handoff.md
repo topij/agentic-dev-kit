@@ -14,11 +14,103 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-23 — Phase 5 D-SYSTEMIZE-BOUNDARIES ran; its synthetic evidence
-was accepted. Phase 5 delivery item 5 remains incomplete; item 6's replay remains
-complete.
+Last updated: 2026-09-24 — the PHASE5-D-SYSTEMIZE-RECOVERY approval packet was drafted
+in an unattended session and then approved by the operator. Phase 5 delivery item 5
+remains incomplete; item 6's replay remains complete.
 
-## Latest session — 2026-09-23 (Phase 5 D-SYSTEMIZE-BOUNDARIES, in Claude Code)
+## Latest session — 2026-09-23 (Phase 5 D-SYSTEMIZE-RECOVERY packet, unattended, in Claude Code)
+
+**Mode.** The operator asked for an autonomous session on the plan and then left. No
+operator decision was taken while the session ran unattended. The operator's decisions
+on its return are under *Operator decisions* at the end of this block.
+
+**The packet.** `saved_plans/phase5-d-systemize-recovery_2026-09-23.md` (local, not
+committed) splits the D-SYSTEMIZE-RECOVERY row into a Stage 1 and a Stage 2, each
+approved separately:
+
+- **Stage 1** kills the real engines, or the process driving them, at and just before
+  the raw and digest cutpoints, then restarts fresh processes from durable files alone.
+  It uses a fake forge in a new clone at `66a8a10`, and it is approvable as written.
+- **Stage 2** covers the pre-approval and post-dispatch cutpoints, which sit inside the
+  agent. It needs operator decisions on which agent process to use (A) and on what
+  the post-dispatch cutpoint may touch (B).
+  - The packet recommends A1: a headless `claude -p`, isolated by
+    `--strict-mcp-config` and `--setting-sources ""`.
+  - It recommends B1: a fake tracker only.
+- A fresh subagent checked the draft against the code at `66a8a10`. Its corrections are
+  folded in, and the packet's *Preparation check* lists them.
+
+**Preparation evidence** is in
+`state/review-evidence/phase5-d-systemize-recovery-prep-20260923/` (gitignored). Its
+headless probes are what option A1 rests on:
+
+- without isolation, a headless run loaded the claude.ai connectors, Slack included;
+- with `--strict-mcp-config` and an empty MCP config it loaded none;
+- the user `SessionStart` hook and a synced plugin loaded all the same.
+
+**Found and parked:** `heartbeat_cli.py start` reopens a completed run, which contradicts
+the workflow's *Engine interface*. The entry is in the friction log rather than the
+tracker, because nobody was present to approve a payload.
+
+**Pull requests opened ready for review:**
+
+- [#780](https://github.com/topij/agentic-dev-kit/pull/780) fixes the handoff footer
+  layout that #776 diagnosed. Reviewed head
+  `20451840fec7ba74923134ef7c49fc776272bc00`.
+- [#781](https://github.com/topij/agentic-dev-kit/pull/781) stops README,
+  getting-started and runtime-parity from describing the shipped engines as absent. It
+  is #7's fourth work item. Reviewed head `c32189c4acd76b4b150c1e744fe1dd5dbb5ec3d5`.
+
+Each has a fallback panel receipt bound to its reviewed head, and each PR's
+disposition comment records the lens results. Both were held for the operator, whose
+merges are under *Operator decisions*.
+
+**Judgments prepared, not taken.** Each is the operator's to make.
+
+- **#748.** #769 delivered its first two suggestions: forge thread resolution is
+  authoritative, and `outdated` is a state of its own.
+  - The third, an honest "unknown", is only partly met. A failed forge read stops the
+    run, but a thread with no resolution field digests as `unaddressed`
+    (`normalize.thread_addressed`).
+  - The options are to retire #748 as delivered, or to narrow it to that mapping.
+- **#7.** #769 shipped its work items 1–3, and #781 carries item 4. Field installation
+  is Phase 5's own row, not #7's, so nothing in #7's list is outstanding once item 4
+  merges.
+
+**Still open from earlier sessions:** #722's owed record edits.
+
+**Sweep.** #780 is not merged at this block's base. So this wrap-up swept with the
+repo's own helper, applying the footer restore and trim that the next block describes.
+It also swept the same pre-sweep files a second time, as scratch copies, with #780's
+helper at `2045184`. On 2026-09-24 the two gave different results:
+
+| Helper | Input | Printed |
+|---|---|---|
+| repo's own, at `66a8a10` | with the blank line restored | `moved 3 block(s) … (463 -> 379 plan lines)` |
+| #780's, at `2045184` | untouched | `moved 2 block(s) … (462 -> 400 plan lines)` |
+
+The old helper counts the blank line it writes itself toward `--target-lines`. This
+commit keeps the first result.
+
+**Operator decisions, 2026-09-24.** The approval record is
+`state/review-evidence/phase5-d-systemize-recovery-01/APPROVAL.md`, which binds the
+approved packet by SHA-256.
+
+- **PHASE5-D-SYSTEMIZE-RECOVERY-01:** Stage 1 is approved as scoped. Stage 2 is
+  approved with options A1 and B1.
+- **Merges:** the operator directed the merges.
+  - #780 merged as `c8497c6295bdf21c073faa5470fb20e1337f5d7c`; on 2026-09-24 `git rev-parse
+    <sha>^{tree}` matched its reviewed head's. The next block's footer restore is not needed.
+  - #781 merged as `902dbf64bc5a3301ab5817b1cbc78c3effa29f1d`; on 2026-09-24 `git diff` from its
+    reviewed head over the three docs it changed was empty.
+
+▶ Next: execute PHASE5-D-SYSTEMIZE-RECOVERY-01 — Stage 1, then Stage 2 with A1 and B1 —
+from `state/review-evidence/phase5-d-systemize-recovery-01/packet.md`. If that
+directory already holds a `RESULTS.md`, resume from it rather than starting again.
+
+______________________________________________________________________
+
+## Session — 2026-09-23 (Phase 5 D-SYSTEMIZE-BOUNDARIES, in Claude Code)
 
 **Operator decisions, taken interactively.** They are recorded in
 `state/review-evidence/phase5-d-systemize-boundaries-01/APPROVAL.md`.
@@ -89,6 +181,8 @@ from the D proposal's table (`saved_plans/phase5-d-proposal_2026-09-21.md`, loca
   (`state/review-evidence/phase5-d-systemize-boundaries-01/harness.py`).
 - **Open design point:** the post-dispatch, pre-receipt cutpoint needs an operator
   decision, because systemize's external writes are made by the agent, not an engine.
+
+The next session drafted that packet; the latest session block owns it.
 
 ______________________________________________________________________
 
@@ -297,90 +391,6 @@ remain. Item 5/field exit is incomplete; item 6/replay, #723's approved deferral
 sweep remains parked, and no credited exercise is repeated.
 
 The latest session block owns the subsequent execution and next decision.
-
-______________________________________________________________________
-
-## Session — 2026-09-12 (ITEM5-B approved retained update, in Codex)
-
-The operator approved ITEM5-B-UPDATE-03 as scoped in its packet. The
-[execution record](../saved_plans/phase5-item5-b-update03-execution_2026-09-12.md)
-retains exact authority, fresh r4/r5 preconditions, source advance, fixture payloads,
-predicted baseline, complete suite output, final preservation checks and backups.
-The retained source is pinned to `7e0232ed871b37a315c5509c97b83d3b00b1a3fd`;
-the local fixture attempt is `4ad91c875377d8607082cd0a125ba801218187ed`.
-No fixture push or PR continuation occurred. UPDATE-03 is consumed; UPDATE-01
-remains consumed and UPDATE-02 remains historical and unanswered.
-
-The record separates installed verification from the disclosed source #393 failure,
-and retains separate shell parses for #561's recipe gap. The accepted inherited
-special-file-root limitation remains. Ownership acceptance does not establish
-custom wrap-up functionality, client verification or field exit. Item 6/replay,
-#723's approved deferral, #585's earlier placement and #724's delivered #722 batch
-are preserved. The friction sweep stays parked; no credited exercise is repeated.
-
-The latest session block owns the subsequent continuation packet and next decision.
-
-______________________________________________________________________
-
-## Session — 2026-09-11 (ITEM5-B revised retained-update packet, in Codex)
-
-The operator-approved source repair [#734](https://github.com/topij/agentic-dev-kit/pull/734)
-merged as `7e0232ed871b37a315c5509c97b83d3b00b1a3fd`, from reviewed head `7224547da0c766a4fd9ee5791e53ddb3f7db6cdf`. Its
-[delivery checkpoint](https://github.com/topij/agentic-dev-kit/pull/734#issuecomment-5637494093)
-retains the exact-head watch/merge, complete panel receipts, CodeRabbit disposition
-and local #393 versus hosted verification limits. Separate shell parses account for
-#561's recipe gap. The source repair did not update the retained installation.
-
-The [UPDATE-03 packet](../saved_plans/phase5-item5-b-update03-decision_2026-09-11.md)
-selects that immutable source and binds payloads, write ledger, baseline prediction,
-preservation, verification, limits, rollback and an exact approval question. Its
-read-only audit and forge records retain post-acceptance checkpoint comparisons.
-The packet retains complete review receipts before its audit-ordering correction,
-with earlier UPDATE-03 questions/evidence preserved and the current `-r5` binding
-explicit. The packet records unresolved generic-upgrade bootstrap findings outside
-its proposed execution; no further source repair or approved deferral is claimed.
-[PR #733](https://github.com/topij/agentic-dev-kit/pull/733) merged on 2026-09-11 as
-`e6b8e182466046a820198fa28c8cc52dc06509d0`, from reviewed head
-`fc46efa0570f866f19cccf11834f909d5f37cf69`. Its
-[completion checkpoint](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5639767232)
-retains review, verification, merge readback and the pending exact approval question.
-UPDATE-01 is consumed; UPDATE-02 and its old questions, payloads, ledgers and
-incomplete review receipts remain preserved.
-
-Packet preparation did not approve retained execution. Ownership acceptance does not establish custom
-wrap-up functionality, client verification or field exit. The accepted inherited
-special-file-root limitation remains. Item 6/replay, #723's approved deferral,
-#585's earlier placement and #724's delivered #722 batch are preserved. The friction
-sweep stays parked; no credited exercise is repeated.
-
-The latest session block owns subsequent execution and the next decision.
-
-______________________________________________________________________
-
-## Session — 2026-09-11 (ITEM5-B repair delivery, in Codex)
-
-The operator approved ITEM5-B-KIT-REVIEW-02 and subsequently said “merge when ready.”
-[PR #731](https://github.com/topij/agentic-dev-kit/pull/731) merged as
-`e6d6e77d118454349f8e8bb046e99ef3009c5f5c`, from reviewed head
-`1bd4e10b423b0b4b230fb1a481bbc477de784a61`. The
-[merge checkpoint](https://github.com/topij/agentic-dev-kit/pull/731#issuecomment-5629015678)
-retains the exact-head merge, forge readback and completed review disposition.
-The [execution record](../saved_plans/phase5-item5-b-review-followup-execution_2026-09-11.md)
-links the complete panel reports and distinguishes hosted success from the disclosed
-local #393 failure. The accepted inherited special-file-root limitation remains;
-separate shell parses covered #561's omitted checks without repairing its recipe.
-
-The resume readback used `gh pr view 731` and `gh run list` with the kit repository
-and merge SHA from `/Users/topi/Coding/agentic-dev-kit` at
-`1bd4e10b423b0b4b230fb1a481bbc477de784a61` on 2026-09-11: merge confirmed and
-[post-merge Test run](https://github.com/topij/agentic-dev-kit/actions/runs/34558574354) succeeded.
-This record follow-up began from that protected-main merge.
-
-Ownership acceptance does not establish functionality or field exit. The repair did
-not update the retained installation. Item 6's replay, #723's deferral, #585's earlier
-placement and #724's delivered #722 batch are preserved. The friction sweep stays parked.
-
-The latest session block owns the revised packet and next decision.
 
 ______________________________________________________________________
 

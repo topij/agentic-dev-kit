@@ -26,6 +26,28 @@
 
 ## 2026-09-23
 
+- **`heartbeat_cli.py start` reopens a completed run, though the workflow calls a write
+  after completion a hard stop.** A unit-level probe used the kit's own test helpers
+  (`make_repo`, `fake_env`, `run_engine`) in a temp repo, against `66a8a10`, on
+  2026-09-23. It ran `start`, then `complete --reason complete`, then `start`. All three
+  exited `0`, and the final state read `status: running`, `restarts: 1`,
+  `exit_reason: null`. The probe and its output are in
+  `state/review-evidence/phase5-d-systemize-recovery-prep-20260923/heartbeat-start-after-complete/`
+  (local, gitignored).
+  - **Mechanism:** `Heartbeat.start()` in `scripts/lib/systemize/heartbeat.py` replaces
+    any same-identity state without reading its `status`, whereas `tick` and `complete`
+    both check it. `test_a_same_identity_restart_counts_and_resets` covers restarting a
+    *running* heartbeat only.
+  - **Proposed fix:** a design choice between two options:
+    - refuse `start` on a completed state, so that rerunning the same date needs an
+      explicit step;
+    - amend the workflow's *Engine interface* to say that `start` deliberately reopens
+      a same-identity run.
+  - **Why it is parked:** it is issue-shaped, but the session that found it ran
+    unattended, so nobody could approve a tracker payload.
+  - **Severity:** L. The heartbeat is progress state, and the scheduler wiring that
+    would act on it is #747's scope.
+
 - **A handoff archive sweep left an extra blank line at the end of the handoff.** On
   branch `chore/update-handoff-2026-09-23` (from `b808061`),
   `uv run scripts/archive_plan_sessions.py --target-lines 400` exited `0` and moved the
