@@ -150,6 +150,7 @@ when a safe report path is already available, and perform no disputed write.
 | `existing-artifact-identity` | `stop-unless-kind-and-run-identity-match` |
 | `test-mode-route-write` | `prohibit-branch-commit-pr-friction-tracker` |
 | `tracker-without-payload-approval` | `flagged-friction-route-no-tracker-write` |
+| `unverified-external-dispatch` | `marker-read-back-before-dispatch-or-operator-hold` |
 | `dirty-caller-destination` | `stop-rule-route-preserve-operator-edit` |
 | `runtime-policy-override` | `shared-declaration-wins-and-stop` |
 
@@ -177,7 +178,8 @@ failed run, inspect the report and configured cache/digest paths for the same wi
 Reuse an input only when its recorded forge repository, window, protected-branch head,
 and config fingerprint match the new run. Never repeat an external write merely because
 the previous process ended before its final summary; verify the pull request,
-notification, and tracker destination first.
+notification, and tracker destination first. A tracker create or notification send is
+verified by its idempotency marker under *External dispatch records* below.
 
 ## Capability contract and preflight
 
@@ -201,7 +203,7 @@ with an instruction to configure at least one trusted review source.
 | Deterministic fetch/digest/heartbeat set | optional, atomic | Resolve every configured engine under `<engine-dir>`. All present selects engine-backed mode; all absent selects LLM-only mode; a partial set stops rather than mixing incompatible artifacts. |
 | Forge/git PR write | conditional | Required only for a qualifying rule route. If unavailable, preserve the proposed patch and evidence in the report; make no partial branch or PR write. |
 | `pr-watch` workflow | conditional | Required before calling a created rule PR complete. If unavailable, leave the PR unmerged, mark review follow-through owed, and report the gap. |
-| Tracker create | optional and approval-gated | Missing access degrades to a flagged friction-log proposal. Available access still does not authorize a write. |
+| Tracker create | optional and approval-gated | Missing access degrades to a flagged friction-log proposal. Available access still does not authorize a write. Create access without an authoritative search for the idempotency marker is also unavailable access. |
 | Notification | optional | Missing backend or target degrades to the report plus final output. Notification is never the only durable result. |
 | Configured reviewer | optional for this workflow | A ready PR may engage it. Unavailability follows `pr-watch`'s shared fallback policy; it never waives review or authorizes merge. |
 
@@ -235,11 +237,89 @@ The report is load-bearing. Write it before any external route and update it aft
 attempt so a retry can distinguish proposed, attempted, and completed actions. Include:
 the forge repository, window, protected-branch head, config fingerprint, execution mode,
 capability preflight, cache/digest locations, capped-input status, candidate clusters,
-route dispositions, external identifiers actually created, incomplete actions, and the
-next safe resume step. Do not record a tracker identifier, notification receipt, review
-receipt, or pull-request URL that was not actually returned by that integration.
+route dispositions, the dispatch records below, external identifiers actually created,
+incomplete actions, and the next safe resume step. Do not record a tracker identifier,
+notification receipt, review receipt, or pull-request URL that was not actually returned
+by that integration or observed by the marker read-back below.
 
 Cache, digest, state, and report files are derived output. Do not add them to a rule PR.
+
+### External dispatch records
+
+A tracker create and a notification send each carry an idempotency marker and a
+dispatch record in the report, so a resumed process can tell "never sent" from "sent,
+but the receipt was lost" by searching the destination for the marker. Without the
+marker a resume can search only by title, which proves nothing.
+
+**Tracker marker.** Give each cluster an id when the report first records it, made of
+lowercase ASCII letters and digits only, unique within the run. When the tracker route
+builds a proposal, canonicalize `{title, body_without_marker, project, labels}` with RFC
+8785 and hash it with SHA-256 as `payload_core_digest: sha256:<lowercase-hex>`. The
+marker is
+`<!-- systemize-payload:<run_identity_digest>:<cluster-id>:<payload_core_digest> -->`.
+Append it to the body after a blank line, then canonicalize the final
+`{title, body, project, labels}` and hash it separately as `payload_digest`. The marker is
+therefore part of the exact payload the operator reviews, and no digest is hashed into
+itself. Approval binds `payload_digest`. The flagged friction-log route preserves the
+same final payload, marker included.
+
+**Notification marker.** The key is `systemize-notify:<run_identity_digest>:<kind>`, where
+`<kind>` is `summary` or `failure`. It is the message's final line, verbatim, because a
+notification backend may render an HTML comment literally. A failure notification sent
+before the run identity and the report exist carries no key and has no record, because
+neither exists yet.
+
+**The record.** Each operation has one record in the report, written before the operation
+is first attempted: the operation (`tracker-create` or `notification`), the cluster id
+for a tracker create, the marker, both digests for a tracker create or the rendered
+payload's digest for a notification, the destination, the approval evidence for a
+tracker create (who approved, and the approved `payload_digest`), the status, the
+verified route, the returned identifier, and the marker-search result. The status is
+`proposed`, `attempting`, `verified`, `failed`, or `ambiguous`. The verified route is
+`created-and-read-back` or `found-by-read-back`.
+
+**Dispatch order.** Before a tracker create, whether first attempt or resume:
+
+1. Recompute `payload_digest` from the recorded payload and require it to equal the
+   approved digest. A resumed run takes the payload and marker from the report and never
+   re-derives them from a fresh clustering pass.
+2. Search the tracker destination for the exact marker, completely and
+   authoritatively, and record the complete match set.
+   - **One match whose read-back payload digest equals the approved digest:** record
+     `verified` with `found-by-read-back` and its identifier. Do not create.
+   - **Several matches, a match whose payload differs, or a search that is unavailable,
+     incomplete or unreadable:** record `ambiguous`, create nothing, and hold the route for
+     the operator with the match set in the report.
+   - **An authoritative empty result:** continue.
+3. Atomically replace the report with the record set to `attempting`. If that write
+   fails, do not dispatch.
+4. Create. On a success response, read the item back and require the exact project,
+   title, body, labels, marker, and returned identifier before recording `verified` with
+   `created-and-read-back`.
+5. On a failed or missing response, search by the marker again before anything else.
+   One exact match is `verified` with `found-by-read-back`. An authoritative empty
+   result is `failed`: the create provably did not land. Anything else is `ambiguous`.
+
+A `failed` create is retried only after the operator confirms the same `payload_digest`
+again. A resumed process that finds `attempting` or `ambiguous` begins at step 1 and
+never creates on the strength of the record alone. A report that shows a tracker route
+past `proposed` without a complete dispatch record, including one written before these
+records existed, gives a resume no marker to search by: hold that route for the
+operator and create nothing.
+
+A notification send uses its key the same way, except that the first send needs no
+read-back: a validated same-run report with no record for the key permits it. Persist
+`attempting` before the send and record the returned receipt as `verified`. A record
+left at `attempting`, `failed`, or `ambiguous` permits another send only after a
+complete, authoritative read-back of the destination finds no message carrying the key.
+One message carrying it is `verified` with `found-by-read-back`, and several are
+`ambiguous`. A destination that cannot be read back leaves the record `ambiguous` and
+the notification unsent. The report and
+final output still carry the summary, because notification is never the only durable
+result.
+
+An `ambiguous` or `failed` record leaves its route incomplete, not the run failed. The
+report names the marker, the match set, and the operator's next action.
 
 ## Step 1 — Fetch and normalize merged-PR evidence
 
@@ -455,21 +535,25 @@ payload preserved in the report.
 ### Tracker route
 
 Construct the proposed title, description, project, and labels from `<tracker>` and the
-cluster evidence. Show that exact payload to the operator. Create or modify nothing
+cluster evidence, append the idempotency marker under *External dispatch records*, and
+record the proposal before presenting it. Show that exact payload to the operator,
+marker included. Create or modify nothing
 unless the operator explicitly confirms that payload. Configuration, a scheduler launch,
 a prior approval for another payload, and tracker availability are not confirmation.
 
 In a non-interactive run with no prior payload-specific approval, take the flagged
 friction-log route and report `approval unavailable`; never pause. In an interactive run,
-decline or silence takes the same route. If the tracker write is approved but fails,
-preserve the payload and failure in the report and do not claim an identifier.
+decline or silence takes the same route. An approved write follows the dispatch order
+under *External dispatch records*. If it fails, preserve the payload and failure in the
+report and do not claim an identifier.
 
 ## Step 4 — Report, notify, and stop
 
 Finalize the report with the actual routes and unresolved actions. If notification is
 available, send a concise summary containing the window, evidence scope, cluster routes,
-created identifiers, degraded capabilities, cap disclosure, and report location. Prefix
-the notification and final output with `[TEST]` in test mode.
+created identifiers, degraded capabilities, cap disclosure, and report location, and
+send it under the dispatch order in *External dispatch records*. Prefix the
+notification and final output with `[TEST]` in test mode.
 
 In engine-backed mode, the configured heartbeat completion is the final write before the
 run summary. Use the successful completion reason for a zero-PR or no-pattern run. Use an

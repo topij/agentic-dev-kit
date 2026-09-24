@@ -13468,6 +13468,9 @@ def _assert_post_merge_semantics(workflow: str) -> None:
         "tracker-without-payload-approval": (
             "flagged-friction-route-no-tracker-write"
         ),
+        "unverified-external-dispatch": (
+            "marker-read-back-before-dispatch-or-operator-hold"
+        ),
         "dirty-caller-destination": "stop-rule-route-preserve-operator-edit",
         "runtime-policy-override": "shared-declaration-wins-and-stop",
     }
@@ -13559,6 +13562,32 @@ def _assert_post_merge_semantics(workflow: str) -> None:
     assert (
         "stop the route and preserve the proposal in the report; do not blend an "
         "operator's local edit into the systemize patch"
+    ) in flattened
+    # #786: a resumed run must be able to tell "never sent" from "sent, receipt
+    # lost". These are the clauses that make the dispatch record decide that.
+    assert (
+        "`<!-- systemize-payload:<run_identity_digest>:<cluster-id>:"
+        "<payload_core_digest> -->`"
+    ) in flattened
+    assert "`systemize-notify:<run_identity_digest>:<kind>`" in flattened
+    assert "Approval binds `payload_digest`" in flattened
+    assert (
+        "Atomically replace the report with the record set to `attempting`. "
+        "If that write fails, do not dispatch."
+    ) in flattened
+    assert "never re-derives them from a fresh clustering pass" in flattened
+    assert (
+        "record `ambiguous`, create nothing, and hold the route for the operator"
+        in flattened
+    )
+    assert "never creates on the strength of the record alone" in flattened
+    assert (
+        "A `failed` create is retried only after the operator confirms the same "
+        "`payload_digest` again"
+    ) in flattened
+    assert (
+        "A destination that cannot be read back leaves the record `ambiguous` and "
+        "the notification unsent"
     ) in flattened
     for rejected_path_shape in (
         "`..` traversal",
@@ -13952,6 +13981,38 @@ def test_post_merge_systemize_semantic_mutations_are_rejected() -> None:
         re.sub(
             r"with no prior payload-specific approval, take the flagged\s+friction-log route",
             "with no prior payload-specific approval, create the tracker item",
+            workflow,
+            count=1,
+        ),
+        workflow.replace(
+            "`unverified-external-dispatch` | "
+            "`marker-read-back-before-dispatch-or-operator-hold`",
+            "`unverified-external-dispatch` | `retry-dispatch-after-restart`",
+            1,
+        ),
+        re.sub(
+            r"If\s+that\s+write\s+fails,\s+do\s+not\s+dispatch\.",
+            "If that write fails, dispatch anyway.",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"record\s+`ambiguous`,\s+create\s+nothing,\s+and\s+hold\s+the\s+route\s+for"
+            r"\s+the\s+operator",
+            "pick the newest match and record it `verified`",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"never\s+re-derives\s+them\s+from\s+a\s+fresh\s+clustering\s+pass",
+            "re-derives them from a fresh clustering pass",
+            workflow,
+            count=1,
+        ),
+        re.sub(
+            r"A\s+destination\s+that\s+cannot\s+be\s+read\s+back\s+leaves\s+the\s+record"
+            r"\s+`ambiguous`\s+and\s+the\s+notification\s+unsent",
+            "A destination that cannot be read back permits another send",
             workflow,
             count=1,
         ),
