@@ -45,6 +45,7 @@
       a same-identity run.
   - **Why it is parked:** it is issue-shaped, but the session that found it ran
     unattended, so nobody could approve a tracker payload.
+  - **Filed as #783** on the operator's direction, 2026-09-24.
   - **Severity:** L. The heartbeat is progress state, and the scheduler wiring that
     would act on it is #747's scope.
 
