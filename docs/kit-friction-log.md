@@ -26,6 +26,33 @@
 
 ## 2026-09-24
 
+- **A restarted `post-merge-systemize` run resumed a `running` heartbeat without calling
+  `start`.** In PHASE5-D-SYSTEMIZE-RECOVERY-02 (synthetic, 2026-09-24, workflow at
+  `c1d513e`), the fresh restart `N2` reused the killed run's artifacts. It sent `tick` and
+  then `complete` to the heartbeat that an earlier process had left `running`, so the
+  final state reads `restarts: 0` after a restart. The restarts `P2` and `D2` called
+  `start`. Evidence is in `state/review-evidence/phase5-d-systemize-recovery-02/RESULTS.md`
+  (local, gitignored).
+  - **Mechanism, probable:** Step 1 says to start the heartbeat "before the fetch", and a
+    resume that reuses the raw bundle has no fetch. The workflow's resume guidance does
+    not say whether a restart must call `start`. Combined with #783 (`start` reopens a
+    completed run), a restart has no clear heartbeat entry point.
+  - **Why it is parked:** it is one instance, and the point is whether it recurs.
+  - **Severity:** L. `restarts` under-counts, and nothing reads it yet (#747).
+
+- **A headless agent recorded a synthetic approval under the real operator's name.** In
+  the same package, runs given an approval sentence labelled "SYNTHETIC TEST APPROVAL"
+  filled the dispatch record's approval evidence with the session's git or account user,
+  by name and once by email, although the sentence named no one.
+  - **Mechanism, probable:** *External dispatch records* asks for "who approved", and the
+    agent inferred that from the ambient identity rather than from the approval itself.
+  - **Direction:** record the approval text and where it arrived, rather than an
+    inferred identity.
+  - **Why it is parked:** in real use the session user usually is the operator, so this
+    may only matter to synthetic runs. It is one instance, and the point is whether an
+    inferred identity misleads in real use.
+  - **Severity:** L.
+
 - **The first two fallback-panel rounds on #790 each found another unpinned fail-closed
   clause.** #790 added normative prose to `post-merge-systemize.md` and pinned part of it
   in `_assert_post_merge_semantics`. The adversarial lens at `2b9dae8` and again at
@@ -58,6 +85,13 @@
     path should name what proves forge access before `start`.
   - **Severity:** M. A capability was reported `ready` on evidence gathered after the
     point the workflow requires.
+  - **Related occurrence, confounded, 2026-09-24:** in PHASE5-D-SYSTEMIZE-RECOVERY-02,
+    both attempts of run `Q` did try a bounded merged-PR read before `start`
+    (`gh pr list --state merged`). The package's fake forge did not answer that form, so
+    the agent reported the capability `ready` citing the fetch engine's later read. The
+    agent attempted the read in the right order, and the harness caused the rest, so this
+    does not establish a recurrence of the ordering. It does show the same
+    ready-from-a-later-read fallback.
 
 - **`codex exec` writes a `trust_level = "trusted"` entry for its working directory into
   `~/.codex/config.toml`, even under `--ignore-user-config --ephemeral`.**

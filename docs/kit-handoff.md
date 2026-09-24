@@ -14,11 +14,56 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-24 — #786's fix merged as #790, so RECOVERY's post-dispatch rerun
-is unblocked. Phase 5 delivery item 5 remains incomplete; item 6's replay remains
-complete.
+Last updated: 2026-09-24 — RECOVERY's agent-cutpoint rerun ran as
+PHASE5-D-SYSTEMIZE-RECOVERY-02. Phase 5 delivery item 5 remains incomplete; item 6's
+replay remains complete.
 
-## Latest session — 2026-09-24 (systemize dispatch idempotency, #790, in Claude Code)
+## Latest session — 2026-09-24 (Phase 5 D-SYSTEMIZE-RECOVERY-02 rerun, in Claude Code)
+
+**Approved and run.** The operator approved PHASE5-D-SYSTEMIZE-RECOVERY-02 with options
+A1, B1, C1, R1 and E1. The packet is
+`saved_plans/phase5-d-systemize-recovery-rerun_2026-09-24.md` (local, not committed, like
+the other D packets). `APPROVAL.md`, `RESULTS.md`, the harness and
+`EVIDENCE-SHA256SUMS` are in
+`state/review-evidence/phase5-d-systemize-recovery-02/` (gitignored). `RESULTS.md` owns
+the outcomes.
+
+- **Design:**
+  - headless `claude -p --model fable` runs, isolated by Claude Code's sandbox;
+  - `denyRead` covered the harness, the control repository, `~/.claude` and the
+    `/private/tmp` entries that existed at setup;
+  - a socket-served fake forge and tracker, whose kills the server performs;
+  - the clones were at `c1d513e` plus one commit resetting the living docs.
+- **Outcome:** in both chains a fresh restart after a kill made **no second create**.
+  The landed-before-receipt chain recorded `found-by-read-back`. The
+  killed-before-landing chain made one create and recorded `created-and-read-back`.
+- **Operator amendments during the run**, recorded in `APPROVAL.md`:
+  - **§2:** a second fake-form gap, in `Q`'s preflight, did not stop the chain.
+  - **§3:** the harness's process-group kill missed the Bash tool's own process groups,
+    so the kill became a whole-tree kill and the `Q` chain was redone.
+    `launch_lane.py` already covers this case with its lineage kill.
+- **Scope of the result:** one synthetic sample per cutpoint. Whether it discharges the
+  residuals is the E audit's call. The real tracker's marker search is still a residual
+  (R1).
+
+**Filed and closed, each on the operator's approval of the exact payload:**
+
+- #794: the marker search defines neither the query nor the match set;
+- #722 closed as done: every owed record edit was already in the tree.
+
+**Parked in the friction log:** a restart that resumed the heartbeat without `start`; a
+synthetic approval recorded under the operator's real name; and a confounded related
+occurrence on the FRESH-CONTEXT preflight entry.
+
+**Still open from earlier sessions:** the #748 and #7 judgments.
+
+▶ Next: `/session-start`, then draft the D-TRIAGE-RESIDUAL packet from
+`saved_plans/phase5-d-proposal_2026-09-21.md` (local). The alternative is #794's
+workflow fix.
+
+______________________________________________________________________
+
+## Session — 2026-09-24 (systemize dispatch idempotency, #790, in Claude Code)
 
 **Shipped.** [#790](https://github.com/topij/agentic-dev-kit/pull/790) merged as
 `4c69ab2c7eb6c33f537d553e5c168566b297edee` on the operator's direction, and #786 was
@@ -53,6 +98,9 @@ edits.
 workflow at `4c69ab2`, from `saved_plans/phase5-d-systemize-recovery_2026-09-23.md`
 (local). The alternative is the D-TRIAGE-RESIDUAL packet, from
 `saved_plans/phase5-d-proposal_2026-09-21.md` (local).
+
+The next session took the rerun, and closed #722 as done. The 2026-09-24 block on
+D-SYSTEMIZE-RECOVERY-02 owns both.
 
 ______________________________________________________________________
 
@@ -275,83 +323,6 @@ directory already holds a `RESULTS.md`, resume from it rather than starting agai
 
 The next session ran RECOVERY; the 2026-09-24 D-SYSTEMIZE-RECOVERY run block owns its
 outcome.
-
-______________________________________________________________________
-
-## Session — 2026-09-23 (Phase 5 D-SYSTEMIZE-BOUNDARIES, in Claude Code)
-
-**Operator decisions, taken interactively.** They are recorded in
-`state/review-evidence/phase5-d-systemize-boundaries-01/APPROVAL.md`.
-
-- **Systemize live friction and tracker routes.** D-SYSTEMIZE-LIVE ran reconcile →
-  propose → decline, with no write. That path is accepted as these routes' Phase 5
-  evidence, as an acceptance amendment.
-  - The first genuine positive write is a residual carried to the scheduled run
-    (#747), not an exit gate.
-- **PHASE5-D-SYSTEMIZE-BOUNDARIES-01.** Stage 1 was approved as written; the packet is
-  `saved_plans/phase5-d-systemize-boundaries_2026-09-23.md` (local).
-- **Its evidence was accepted** for these Stage A rows: cap-triggered omission, batched
-  analysis, competing cache mtimes and hostile artifact targets. The acceptance is for
-  labelled synthetic coverage, not live coverage.
-
-**The run.**
-
-- **Setup:** the real engine entry points, driven against the kit's own `FAKE_GH` at
-  the shipped thresholds. They ran in an isolated clone at `a6b281a` under
-  `/private/tmp/adk-phase5-d-systemize-boundaries-20260923/`.
-- **Exercised:**
-  - synthetic corpora at and across the cap and single-pass thresholds;
-  - blind subagent clustering of a batched corpus, scored against a key sealed before
-    the agents ran;
-  - competing sandbox and production caches;
-  - planted hostile artifact targets.
-- **Records:** `RESULTS.md` in the same evidence directory owns the outcomes,
-  deviations and limits.
-- **Writes:** nothing was written to the kit, config, forge, friction log or
-  notifications.
-- **Baseline:** `uv run --with pytest --with pyyaml pytest -q -p no:cacheprovider
-  scripts/tests/test_systemize_*.py`, run in that clone at `a6b281a` on 2026-09-23,
-  exited `0` and printed `169 passed`.
-
-**Filed this session, on the operator's direction:**
-
-- #777: after a mid-run parent retarget, cleanup by lexical path leaves a stale lock and
-  a temp file behind;
-- #778: the digest accepts a raw bundle fetched for another run date.
-
-An occurrence was also added to #643, which is about prompts rendered to a file but
-launched inline.
-
-**Not established:**
-
-- live cap or batching behaviour;
-- D-SYSTEMIZE-RECOVERY, D-FRESH-CONTEXT and D-TRIAGE-RESIDUAL;
-- installation into a field checkout;
-- scheduler wiring (#747).
-
-**Still open from earlier sessions:**
-
-- #748 and #7 await a judgment on whether #769 discharges them;
-- #722's owed record edits.
-
-**Sweep caveat (#776).** This wrap-up did two things to the footer:
-
-- before sweeping, it restored the trailing blank line so the archive helper would
-  recognise the footer;
-- after sweeping, it trimmed that line again so `git diff --check` passes.
-
-Until #776 lands, the next sweep needs the same restore first.
-
-▶ Next: `/session-start` — then draft the PHASE5-D-SYSTEMIZE-RECOVERY approval packet
-from the D proposal's table (`saved_plans/phase5-d-proposal_2026-09-21.md`, local).
-
-- **Reuse:** the BOUNDARIES harness and fake forge
-  (`state/review-evidence/phase5-d-systemize-boundaries-01/harness.py`).
-- **Open design point:** the post-dispatch, pre-receipt cutpoint needs an operator
-  decision, because systemize's external writes are made by the agent, not an engine.
-
-The next session drafted that packet; the 2026-09-23 D-SYSTEMIZE-RECOVERY packet block
-owns it.
 
 ______________________________________________________________________
 

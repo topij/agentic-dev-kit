@@ -5,6 +5,81 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-09-23 (Phase 5 D-SYSTEMIZE-BOUNDARIES, in Claude Code)
+
+**Operator decisions, taken interactively.** They are recorded in
+`state/review-evidence/phase5-d-systemize-boundaries-01/APPROVAL.md`.
+
+- **Systemize live friction and tracker routes.** D-SYSTEMIZE-LIVE ran reconcile →
+  propose → decline, with no write. That path is accepted as these routes' Phase 5
+  evidence, as an acceptance amendment.
+  - The first genuine positive write is a residual carried to the scheduled run
+    (#747), not an exit gate.
+- **PHASE5-D-SYSTEMIZE-BOUNDARIES-01.** Stage 1 was approved as written; the packet is
+  `saved_plans/phase5-d-systemize-boundaries_2026-09-23.md` (local).
+- **Its evidence was accepted** for these Stage A rows: cap-triggered omission, batched
+  analysis, competing cache mtimes and hostile artifact targets. The acceptance is for
+  labelled synthetic coverage, not live coverage.
+
+**The run.**
+
+- **Setup:** the real engine entry points, driven against the kit's own `FAKE_GH` at
+  the shipped thresholds. They ran in an isolated clone at `a6b281a` under
+  `/private/tmp/adk-phase5-d-systemize-boundaries-20260923/`.
+- **Exercised:**
+  - synthetic corpora at and across the cap and single-pass thresholds;
+  - blind subagent clustering of a batched corpus, scored against a key sealed before
+    the agents ran;
+  - competing sandbox and production caches;
+  - planted hostile artifact targets.
+- **Records:** `RESULTS.md` in the same evidence directory owns the outcomes,
+  deviations and limits.
+- **Writes:** nothing was written to the kit, config, forge, friction log or
+  notifications.
+- **Baseline:** `uv run --with pytest --with pyyaml pytest -q -p no:cacheprovider
+  scripts/tests/test_systemize_*.py`, run in that clone at `a6b281a` on 2026-09-23,
+  exited `0` and printed `169 passed`.
+
+**Filed this session, on the operator's direction:**
+
+- #777: after a mid-run parent retarget, cleanup by lexical path leaves a stale lock and
+  a temp file behind;
+- #778: the digest accepts a raw bundle fetched for another run date.
+
+An occurrence was also added to #643, which is about prompts rendered to a file but
+launched inline.
+
+**Not established:**
+
+- live cap or batching behaviour;
+- D-SYSTEMIZE-RECOVERY, D-FRESH-CONTEXT and D-TRIAGE-RESIDUAL;
+- installation into a field checkout;
+- scheduler wiring (#747).
+
+**Still open from earlier sessions:**
+
+- #748 and #7 await a judgment on whether #769 discharges them;
+- #722's owed record edits.
+
+**Sweep caveat (#776).** This wrap-up did two things to the footer:
+
+- before sweeping, it restored the trailing blank line so the archive helper would
+  recognise the footer;
+- after sweeping, it trimmed that line again so `git diff --check` passes.
+
+Until #776 lands, the next sweep needs the same restore first.
+
+▶ Next: `/session-start` — then draft the PHASE5-D-SYSTEMIZE-RECOVERY approval packet
+from the D proposal's table (`saved_plans/phase5-d-proposal_2026-09-21.md`, local).
+
+- **Reuse:** the BOUNDARIES harness and fake forge
+  (`state/review-evidence/phase5-d-systemize-boundaries-01/harness.py`).
+- **Open design point:** the post-dispatch, pre-receipt cutpoint needs an operator
+  decision, because systemize's external writes are made by the agent, not an engine.
+
+The next session drafted that packet; the 2026-09-23 D-SYSTEMIZE-RECOVERY packet block
+owns it.
+
 ### 2026-09-23 (Phase 5 D-SYSTEMIZE-LIVE run, in Claude Code)
 
 **Approval.**
