@@ -49,7 +49,8 @@ control checkout. A mode-000 file inside the gitignored
 state snapshot at import, which is #461's mechanism; an occurrence was added to #461.
 This session verified every candidate in a clean clone instead.
 
-The next session ran D-SYSTEMIZE-LIVE; the latest session block owns its outcome.
+The next session ran D-SYSTEMIZE-LIVE; the 2026-09-23 D-SYSTEMIZE-LIVE run block owns its
+outcome.
 
 ### 2026-09-23 (Phase 5 D triage engines delivered, in Claude Code)
 
