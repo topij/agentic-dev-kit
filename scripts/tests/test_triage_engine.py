@@ -2526,7 +2526,7 @@ def _write_live_state(
         git(root, "commit", "-q", "--allow-empty", "-m", "never merged")
         merge_commit = git(root, "rev-parse", "HEAD")
         git(root, "checkout", "-q", "main")
-    elif history in {"f" * 40, "not-a-sha"}:
+    elif history in {"f" * 40, "f" * 64, "not-a-sha"}:
         merge_commit = history
     else:
         if history != "archive-only-commit":
@@ -2591,7 +2591,7 @@ def test_recover_still_holds_an_invalid_state_with_an_unfinished_write(
 
 
 @pytest.mark.parametrize("history", [
-    "f" * 40, "not-a-sha", "unmerged-branch", "unrelated-reachable",
+    "f" * 40, "f" * 64, "not-a-sha", "unmerged-branch", "unrelated-reachable",
     "still-in-inbox", "missing-from-archive", "archive-only-commit",
 ])
 def test_recover_holds_a_finished_looking_state_whose_sweep_is_not_proven(

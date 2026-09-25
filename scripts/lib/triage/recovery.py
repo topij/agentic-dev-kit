@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import re
 import subprocess
 from pathlib import Path
 from typing import Any
 
 from .canonical import decode_bytes, digest, digest_bytes, dumps, encode_bytes, loads_exact
 from .gate import acquire, owner_status, validate_record
-from .model import BASE_KEYS, Settings, TriageError, canonical_state, repository_identity
+from .model import BASE_KEYS, OID_RE, Settings, TriageError, canonical_state, repository_identity
 from .storage import (
     ArtifactStore,
     Observation,
@@ -383,7 +382,6 @@ def prepare_state_action(
 
 
 _SETTLED = {"verified"}
-_COMMIT = re.compile(r"[0-9a-f]{40}")
 _FORGE_SETTLED = {"verified", "unsettled"}
 
 
@@ -487,7 +485,7 @@ def _sweep_landed(settings: Settings, parsed: dict[str, Any], merge_commit: Any)
     current inbox and present in the archive.
     """
     swept = _swept_blocks(parsed)
-    if swept is None or not isinstance(merge_commit, str) or not _COMMIT.fullmatch(merge_commit):
+    if swept is None or not isinstance(merge_commit, str) or not OID_RE.fullmatch(merge_commit):
         return None
     repo = str(settings.paths.repo)
     ref = f"refs/remotes/origin/{settings.protected_branch}"

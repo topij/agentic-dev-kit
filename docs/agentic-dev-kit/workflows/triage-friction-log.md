@@ -803,7 +803,7 @@ notification record `verified`, every forge operation and nested attempt `verifi
 (a `pr-watch` observation may also be `unsettled`, since it writes nothing), and a
 verified `merge-read-back` as the last forge operation. Those bytes are claims, not
 proof, and any merged commit would pass a reachability test, so the engine checks this
-run's own sweep: the recorded `merge_commit` must be a full commit id that git finds
+run's own sweep: the recorded `merge_commit` must be a full object id (40 to 64 lowercase hex) that git finds
 reachable from the protected branch's remote-tracking ref and whose change set includes
 `<friction-log>`, and every frozen block the run decided to file or archive must be
 absent from the current `<friction-log>` and present in `<friction-log-archive>`. That
