@@ -279,3 +279,15 @@ def test_branch_create_absence_holds_when_the_remote_cannot_be_read(tmp_path: Pa
     _git(repo, "remote", "add", "origin", str(tmp_path / "missing.git"))
     with pytest.raises(TriageError, match="remote branch read-back failed"):
         GitHubForge(repo).authority("branch-create-absent", {"branch": "b", "worktree": str(tmp_path / "w")})
+
+
+def test_branch_create_absence_holds_when_local_refs_cannot_be_read(tmp_path: Path) -> None:
+    """An unreadable ref store is not proof the branch is absent."""
+    repo = tmp_path / "repo"
+    subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+    _git(repo, "-c", "user.email=t@example.invalid", "-c", "user.name=T", "commit", "-q", "--allow-empty", "-m", "base")
+    _git(repo, "branch", "chore/triage-2099-01-01")
+    _git(repo, "pack-refs", "--all")
+    (repo / ".git/packed-refs").write_text("garbage that is not a packed ref\n", encoding="utf-8")
+    with pytest.raises(TriageError, match="local branch read-back failed"):
+        GitHubForge(repo).authority("branch-create-absent", {"branch": "chore/triage-2099-01-01", "worktree": str(tmp_path / "w")})

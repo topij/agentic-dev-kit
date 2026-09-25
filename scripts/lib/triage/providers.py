@@ -340,10 +340,14 @@ class GitHubForge:
             branch = request["branch"]
             local = self._run(["git", "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"], self.repo)
             remote = self._run(["git", "ls-remote", "origin", f"refs/heads/{branch}"], self.repo)
+            # rev-parse --verify --quiet exits 1 only for a missing ref; any other
+            # failure means the refs could not be read, which proves nothing.
+            if local.returncode not in (0, 1):
+                raise TriageError("local branch read-back failed", outcome="operator-held")
             if remote.returncode:
                 raise TriageError("remote branch read-back failed", outcome="operator-held")
             return {
-                "local_branch_absent": local.returncode != 0,
+                "local_branch_absent": local.returncode == 1,
                 "worktree_absent": not Path(request["worktree"]).exists(),
                 "remote_branch_absent": not remote.stdout.strip(),
             }
