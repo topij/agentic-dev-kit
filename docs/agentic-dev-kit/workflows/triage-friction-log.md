@@ -763,8 +763,8 @@ validate only the captured bytes, never the still-live path. Record the parse
 result and current and recorded identities in a candidate `action_core`. The prepared
 envelope embeds the complete immutable capture core and digest, the action core and
 digest, and the exact decision plus approver identity bound to `action_core_digest`.
-Only the two declared actions are valid: `preserve-valid-state-and-quarantine-old-gate`
-and `abandon-invalid-state`. An absent, empty, or unknown action or approving decision is
+Only the three declared actions are valid: `preserve-valid-state-and-quarantine-old-gate`,
+`abandon-invalid-state`, and `retire-terminal-invalid-state`. An absent, empty, or unknown action or approving decision is
 not recovery authority and stops operator-held.
 Before selecting either transition, require the exact `state-present-capture` or
 `state-present-prepared` kind, recompute the embedded old-gate digest, require its
@@ -794,6 +794,28 @@ second time or start work under an unowned gate.
 Classify invalid captured state conservatively. Only a readable state that proves it
 never reached `attempting` and contains no verified tracker identifier or repository/PR
 evidence may offer `abandon <action-core-digest>` to the present interactive operator.
+The one other invalid state that leaves the held route is a **finished** run in the
+layout an LLM-only session records — an engine-written finished run is valid and is
+retired by *Completed-state retirement* instead: phase `completed`, completion route
+`archive-sweep` with a `completion.merge_read_back` of `merged: true` whose
+`final_head` equals the recorded `reviewed_head`, every tracker, attempt and
+notification record `verified`, every forge operation and nested attempt `verified`
+(a `pr-watch` observation may also be `unsettled`, since it writes nothing), and a
+verified `merge-read-back` as the last forge operation. Those bytes are claims, not
+proof; neither a reachable commit (any merged commit is one) nor the working tree
+(uncommitted edits can say anything) proves the sweep, so the engine reads the evidence
+from git. The recorded `merge_commit` must be a full object id (40 to 64 lowercase hex)
+reachable from the protected branch's remote-tracking ref, and it must be the sweep
+itself: every frozen block the run decided to file or archive is in `<friction-log>` at
+its parent, absent from `<friction-log>` and present in `<friction-log-archive>` at that
+commit, and absent from `<friction-log>` at the protected ref. That shows this run's
+blocks left the inbox, so a new session cannot re-file them. Nothing
+such a run recorded is in flight, so it may offer `retire-terminal-invalid-state` under the same quarantine,
+receipt, and approval sequence as abandonment; its action core additionally binds a
+`terminal_evidence` summary of the session, verified tracker identifiers, pull request,
+merge commit, the ref it was found on, the swept candidate ids, and final head, so the approved digest names the finished writes. The
+bytes are retained at the quarantine path, never rewritten. Any other or unreadable
+value keeps the state held.
 The action core binds the capture-core digest, exact engine-derived quarantine target,
 exact `recovered-safe-to-restart` receipt core, old-gate capture, repository identity,
 and gate disposition. An owned disposition binds the current recovery invocation's
@@ -846,13 +868,14 @@ The bundle, quarantined bytes, and receipt remain durable.
 | `capture-state` | Old gate and state present; exclusively publish `state-present-capture` before parsing. |
 | `prepare-valid-gate-release` | Valid captured state under a proven-stale gate; record exact action approval by digest-checked bundle replacement. |
 | `release-valid-state` | Prepared valid action present; revalidate state and quarantine only every unchanged proven-stale gate name. |
-| `prepare-invalid-abandonment` | Abandonable invalid state unchanged; record exact action approval, quarantine target, and receipt payload by digest-checked bundle replacement. |
+| `prepare-invalid-abandonment` | Abandonable or finished invalid state unchanged; record exact action approval, quarantine target, and receipt payload by digest-checked bundle replacement. |
 | `quarantine-invalid-state` | Prepared invalid action present; revalidate and rename only the unchanged state to the prepared target. |
 | `publish-restart-receipt` | Prepared quarantine target present and state absent; exclusively create and flush the exact prepared receipt. |
 | `release-restart-receipt` | Exact prepared receipt present; release the matching owned gate or quarantine only every unchanged proven-stale gate name. |
 
 If any external attempt or verified identifier is present, or absence of either cannot
-be proved from readable evidence, abandonment is prohibited. Digest-check and atomically
+be proved from readable evidence, abandonment is prohibited, and only the finished-run
+retirement above may move the state. Digest-check and atomically
 replace the capture bundle with a terminal `state-present-held` envelope without moving,
 replacing, or deleting the active bytes or old gate. That envelope retains the complete
 immutable capture core and digest plus the terminal classification. Reconcile

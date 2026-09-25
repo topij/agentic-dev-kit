@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import Any
 
 from .canonical import decode_bytes, digest, digest_bytes, dumps, encode_bytes, loads_exact
 from .gate import acquire, owner_status, validate_record
-from .model import BASE_KEYS, Settings, TriageError, canonical_state, repository_identity
+from .model import BASE_KEYS, OID_RE, Settings, TriageError, canonical_state, repository_identity
 from .storage import (
     ArtifactStore,
     Observation,
@@ -380,6 +381,148 @@ def prepare_state_action(
     return prepared
 
 
+_SETTLED = {"verified"}
+_FORGE_SETTLED = {"verified", "unsettled"}
+
+
+def _terminal_evidence(parsed: Any) -> dict[str, Any] | None:
+    """Summarise an invalid but finished run, or return None to keep it held.
+
+    An invalid state that records external writes cannot be abandoned, because
+    nothing proves none is still in flight. A run whose own bytes record every
+    tracker and forge operation as verified, and a verified merge whose final
+    head is the reviewed head, has nothing in flight: it can be retired to its
+    quarantine path like an abandoned one, keeping every byte. `unsettled` is
+    accepted only on a `pr-watch` observation, which writes nothing. Anything
+    unrecognised keeps the state held.
+    """
+    if (
+        not isinstance(parsed, dict)
+        or parsed.get("kind") != "triage-run-state"
+        or isinstance(parsed.get("schema_version"), bool)
+        or parsed.get("schema_version") != 1
+        or parsed.get("phase") != "completed"
+    ):
+        return None
+    completion = parsed.get("completion")
+    merge = completion.get("merge_read_back") if isinstance(completion, dict) else None
+    reviewed_head = parsed.get("reviewed_head")
+    identifiers = parsed.get("verified_tracker_identifiers")
+    if (
+        not isinstance(completion, dict)
+        or completion.get("route") != "archive-sweep"
+        or not isinstance(merge, dict)
+        or merge.get("merged") is not True
+        or not isinstance(reviewed_head, str)
+        or merge.get("final_head") != reviewed_head
+        or not isinstance(identifiers, list)
+        or any(not isinstance(item, str) for item in identifiers)
+    ):
+        return None
+    records: list[tuple[dict[str, Any], set[str]]] = []
+    for name in ("operations", "attempts", "notification_operations"):
+        entries = parsed.get(name, [])
+        if not isinstance(entries, list) or any(not isinstance(entry, dict) for entry in entries):
+            return None
+        records.extend((entry, _SETTLED) for entry in entries)
+    forge = parsed.get("finalization_operations")
+    if not isinstance(forge, list) or not forge or any(not isinstance(entry, dict) for entry in forge):
+        return None
+    for entry in forge:
+        allowed = _FORGE_SETTLED if entry.get("kind") == "pr-watch" else _SETTLED
+        records.append((entry, allowed))
+        nested = entry.get("attempts", [])
+        if not isinstance(nested, list) or any(not isinstance(attempt, dict) for attempt in nested):
+            return None
+        records.extend((attempt, allowed) for attempt in nested)
+    if any(record.get("status") not in allowed for record, allowed in records):
+        return None
+    if forge[-1].get("kind") != "merge-read-back" or forge[-1].get("status") != "verified":
+        return None
+    run_identity = parsed.get("run_identity")
+    return {
+        "session": run_identity.get("session") if isinstance(run_identity, dict) else None,
+        "verified_tracker_identifiers": identifiers,
+        "pull_request": merge.get("pull_request"),
+        "merge_commit": merge.get("merge_commit"),
+        "final_head": reviewed_head,
+    }
+
+
+def _swept_blocks(parsed: dict[str, Any]) -> dict[str, str] | None:
+    """The frozen source text of every block the run decided to file or archive."""
+    snapshot = parsed.get("frozen_snapshot")
+    content = snapshot.get("content") if isinstance(snapshot, dict) else None
+    blocks = content.get("blocks") if isinstance(content, dict) else None
+    decisions = parsed.get("decisions")
+    if not isinstance(blocks, list) or not isinstance(decisions, list):
+        return None
+    texts: dict[str, str] = {}
+    for block in blocks:
+        if not isinstance(block, dict) or not isinstance(block.get("candidate_id"), str) or not isinstance(block.get("source_block"), str):
+            return None
+        texts[block["candidate_id"]] = block["source_block"]
+    swept: dict[str, str] = {}
+    for decision in decisions:
+        if not isinstance(decision, dict) or not isinstance(decision.get("candidate_id"), str):
+            return None
+        if decision.get("decision") in {"file", "archive"}:
+            text = texts.get(decision["candidate_id"])
+            if not text or not text.strip():
+                return None
+            swept[decision["candidate_id"]] = text
+    return swept or None
+
+
+def _git_show(settings: Settings, revision: str, path: Path) -> str | None:
+    rel = path.relative_to(settings.paths.repo).as_posix()
+    result = subprocess.run(
+        ["git", "-C", str(settings.paths.repo), "show", f"{revision}:{rel}"],
+        check=False, capture_output=True,
+    )
+    if result.returncode:
+        return None
+    try:
+        return result.stdout.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+
+
+def _sweep_landed(settings: Settings, parsed: dict[str, Any], merge_commit: Any) -> str | None:
+    """Return the protected ref the run's own sweep is proven on, or None.
+
+    The bytes of an invalid state are claims, not proof, and neither a reachable
+    commit nor the working tree proves the sweep: any merged commit is
+    reachable, and uncommitted edits can say anything. What makes a new session
+    safe is that this run's swept blocks left the inbox, so it cannot re-file
+    them. Everything is therefore read from git: the recorded merge commit must
+    be reachable from the protected ref and be the sweep itself, so each block
+    the run filed or archived is in its parent's friction log, gone from its own
+    and present in its archive, and still gone from the protected ref's.
+    """
+    swept = _swept_blocks(parsed)
+    if swept is None or not isinstance(merge_commit, str) or not OID_RE.fullmatch(merge_commit):
+        return None
+    ref = f"refs/remotes/origin/{settings.protected_branch}"
+    reachable = subprocess.run(
+        ["git", "-C", str(settings.paths.repo), "merge-base", "--is-ancestor", merge_commit, ref],
+        check=False, capture_output=True,
+    )
+    if reachable.returncode:
+        return None
+    log, archive = settings.paths.friction_log, settings.paths.archive
+    before = _git_show(settings, f"{merge_commit}^", log)
+    after = _git_show(settings, merge_commit, log)
+    archived = _git_show(settings, merge_commit, archive)
+    current = _git_show(settings, ref, log)
+    if None in (before, after, archived, current):
+        return None
+    for text in swept.values():
+        if text not in before or text in after or text not in archived or text in current:
+            return None
+    return ref
+
+
 def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str, Any]) -> dict[str, Any]:
     core = bundle.get("capture_core")
     if not isinstance(core, dict) or digest(core) != bundle.get("capture_core_digest"):
@@ -411,11 +554,20 @@ def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str
             }
             and all(parsed.get(name) == [] for name in evidence_names)
         )
-        if not abandonable:
+        terminal_evidence = None if abandonable else _terminal_evidence(parsed)
+        if terminal_evidence is not None:
+            landed = _sweep_landed(settings, parsed, terminal_evidence["merge_commit"])
+            terminal_evidence = {
+                **terminal_evidence,
+                "merge_commit_reachable_from": landed,
+                "swept_candidates": sorted(_swept_blocks(parsed) or {}),
+            } if landed else None
+        if not abandonable and terminal_evidence is None:
             held = {**bundle, "kind": "state-present-held", "terminal_classification": "external-attempt-absence-unproven"}
             return {"held": held}
-        action = "abandon-invalid-state"
+        action = "abandon-invalid-state" if abandonable else "retire-terminal-invalid-state"
     quarantine_path = str(store.state_path) + f".quarantine-{core['state_digest'][:16]}"
+    moves_state = action in {"abandon-invalid-state", "retire-terminal-invalid-state"}
     receipt_core = {
         "kind": "test-recovered-safe-to-restart" if store.mode == "test" else "recovered-safe-to-restart",
         "mode": store.mode,
@@ -428,9 +580,13 @@ def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str
         "capture_core_digest": bundle["capture_core_digest"],
         "old_gate_digest": core["old_gate_digest"],
         "action": action,
-        "quarantine_path": quarantine_path if action == "abandon-invalid-state" else None,
-        "receipt_core": receipt_core if action == "abandon-invalid-state" else None,
+        "quarantine_path": quarantine_path if moves_state else None,
+        "receipt_core": receipt_core if moves_state else None,
     }
+    if action == "retire-terminal-invalid-state":
+        # Bound into the digest the operator approves, so the approval names
+        # the external writes the retired bytes record as finished.
+        action_core["terminal_evidence"] = terminal_evidence
     return {"action_core": action_core, "action_core_digest": digest(action_core), "held": None}
 
 

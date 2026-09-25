@@ -5997,7 +5997,7 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
             "Prepared valid action present; revalidate state and quarantine only every unchanged proven-stale gate name.",
         ),
         "prepare-invalid-abandonment": (
-            "Abandonable invalid state unchanged; record exact action approval, quarantine target, and receipt payload by digest-checked bundle replacement.",
+            "Abandonable or finished invalid state unchanged; record exact action approval, quarantine target, and receipt payload by digest-checked bundle replacement.",
         ),
         "quarantine-invalid-state": (
             "Prepared invalid action present; revalidate and rename only the unchanged state to the prepared target.",
