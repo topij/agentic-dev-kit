@@ -14,11 +14,28 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-25 — Phase 5 D-TRIAGE-RESIDUAL ran: the engine-backed live
-triage path was exercised end to end twice, on the kit's own inbox. Its notification
-row stays a residual.
+Last updated: 2026-09-26 — developer and architecture documentation refreshed
+through PR #810.
 
-## Latest session — 2026-09-25 (Phase 5 D-TRIAGE-RESIDUAL, in Claude Code)
+## Latest session — 2026-09-26 (documentation refresh, in Codex)
+
+**Shipped.** [#810](https://github.com/topij/agentic-dev-kit/pull/810) merged as
+`09fcbe874249ea773e25acd7a591487170acd07d` on the operator's direction. The new
+developer guide gives task-oriented routes; the architecture guide illustrates
+components, PR flow, lane state, and friction routing with Mermaid. Entry guides and
+the shared parallel workflow now agree with the supported upgrade, activation,
+merge-authority, and model-tier behavior.
+
+**Review.** CodeRabbit reported that automatic review was skipped. The PR carries
+the fallback panel and composed delta review evidence; its comments own the findings
+and dispositions.
+
+▶ Next: `/session-start` — re-read the Phase 5 block below and live tracker state
+before choosing the next task.
+
+______________________________________________________________________
+
+## Session — 2026-09-25 (Phase 5 D-TRIAGE-RESIDUAL, in Claude Code)
 
 The packets are `saved_plans/phase5-d-triage-residual_2026-09-25.md` and
 `saved_plans/phase5-d-triage-retire-completed_2026-09-25.md`. They are local and not
