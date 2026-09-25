@@ -136,10 +136,14 @@ def test_test_mode_completes_without_external_provider(tmp_path: Path, monkeypat
     assert "## Proposed source diff" in report
     assert proposed_diff.rstrip() in report
     completed_raw = state_path.read_bytes()
-    replay = run("test", context="interactive", request={}, start=root)
-    assert replay["outcome"] == "degraded-success"
-    assert replay["detail"] == "completed/test-render"
-    assert state_path.read_bytes() == completed_raw
+    # A completed test session no longer ends test mode (#425): the next test
+    # entry retires it byte-for-byte and starts a fresh test draft.
+    restarted = run("test", context="interactive", request={}, start=root)
+    assert restarted["outcome"] == "operator-held"
+    assert restarted["detail"].startswith("retired completed state to ")
+    retired = state_path.with_name(f"{state_path.name}.completed-{state['completion']['completed_receipt_digest'][:16]}")
+    assert retired.read_bytes() == completed_raw
+    assert loads_exact(state_path.read_bytes())["phase"] == "reserved"
 
 
 def test_report_presents_historical_source_digest_and_safe_literal_fence(
@@ -605,8 +609,9 @@ def test_decision_only_completion_is_durable_without_tracker_or_forge(
     assert resumed["detail"] == "completed/decision-only"
     assert state_path.read_bytes() == terminal_raw
     implicit = run(None, context="interactive", request={}, start=root)
-    assert implicit["outcome"] == "degraded-success"
-    assert state_path.read_bytes() == terminal_raw
+    assert implicit["outcome"] == "operator-held"
+    assert implicit["detail"].startswith("retired completed state to ")
+    assert loads_exact(state_path.read_bytes())["phase"] == "reserved"
 
 
 def test_live_attempt_is_persisted_before_fake_create(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
