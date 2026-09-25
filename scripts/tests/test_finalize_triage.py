@@ -671,14 +671,22 @@ def test_failed_branch_create_is_retried_with_its_intent_once_read_back_shows_no
     assert [attempt["status"] for attempt in operation["attempts"]] == ["attempting", "failed", "attempting", "verified"]
 
 
+_MISSING = object()
+
+
 @pytest.mark.parametrize("left", ["local_branch_absent", "worktree_absent", "remote_branch_absent"])
+@pytest.mark.parametrize("answer", [False, None, "yes", 1, _MISSING], ids=["false", "none", "truthy-str", "one", "missing"])
 def test_failed_branch_create_stays_held_while_anything_it_could_have_left_exists(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, left: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, left: str, answer: object
 ) -> None:
+    """Only a literal True from the provider counts as absent; anything else holds."""
     root, state_path, worktree, base, failed = _failed_branch_create(tmp_path, monkeypatch)
     before = failed["finalization_operations"]
     retry = _BaseAuthority([], base)
-    retry.branch_create_absence[left] = False
+    if answer is _MISSING:
+        del retry.branch_create_absence[left]
+    else:
+        retry.branch_create_absence[left] = answer
     result = run("resume", context="interactive", request={"finalize": True}, start=root, forge=retry)
     assert result["outcome"] == "operator-held"
     assert result["capabilities"]["forge-pr-write-readback"]["mechanism"] == (
