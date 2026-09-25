@@ -79,10 +79,11 @@ Don't spin up lanes ticket-by-ticket. Compose the batch deliberately:
 4. **Scope outward-safe** — a lane that would push to an external system or send a
    notification is scoped to its *in-repo half*; the outward step stays an operator
    action after merge.
-5. **Assign an effort tier and a merge class per lane** — decide *up front* how much
-   reasoning each lane gets (cheap → top) and whether it may **self-merge** once green
-   or must **hand back for operator sign-off**. Deciding the merge boundary at plan
-   time stops a batch stalling on ad-hoc "can I merge this?" calls.
+5. **Suggest an effort tier and assign a merge class per lane** — decide *up front*
+   what compute to request (`cheap`, `default`, or `expensive`) and whether it may
+   **self-merge** once green or must **hand back for operator sign-off**. Deciding
+   the merge boundary at plan time stops a batch stalling on ad-hoc "can I merge
+   this?" calls.
 
 The exact per-step commands, plus the effort-tier and merge-class tables, are in
 [`workflows/parallel.md`](agentic-dev-kit/workflows/parallel.md#planning-a-batch--parallel-plan-focus)
@@ -90,13 +91,14 @@ The exact per-step commands, plus the effort-tier and merge-class tables, are in
 
 ### 2 · Launch each lane — `dev_session.sh new`
 
-Each `new` creates the worktree + branch + sandbox, persists the merge class, and
-hands off to the lane: a copy-paste line for an interactive operator, or (`--headless`)
-a sticky on-disk marker plus a canonical one-shot JSON descriptor for an unattended
-launcher. Codex headless lanes use the kit-owned wrapper, whose child independently
-observes Git, filesystem, state, and process identity before `exec` and whose receipt
-binds that observation to the launch request. Native agent dispatch is not a substitute
-for the descriptor environment/receipt chain. Omitting `--merge-class` fails safe to
+Each `new` creates the worktree + branch + sandbox and persists the merge class.
+For an interactive operator it prints launch or activation guidance. With
+`--headless`, it writes a sticky on-disk marker and a canonical one-shot JSON
+descriptor. Codex and Claude headless lanes use the kit-owned wrapper. Its child
+independently observes Git, filesystem, state, and process identity before `exec`;
+the receipt binds that observation to the launch request. Native agent dispatch
+does not replace the descriptor environment and receipt chain. Omitting
+`--merge-class` fails safe to
 `operator`.
 The exact command, every flag, and the headless JSON descriptor are in
 [`workflows/parallel.md`](agentic-dev-kit/workflows/parallel.md#starting-a-new-session)
@@ -152,15 +154,17 @@ keeps only the reconcile-before-merge reasoning.
 
 ## Model / effort tiering per lane
 
-The risk read from planning also sets each lane's reasoning budget (Principle #7): a
-mechanical sweep gets a cheap tier; the one lane whose decision is expensive to get
-wrong gets the top tier. The tier travels **with the lane** as an explicit field, not
-an assumption the lane has to infer — a cheap-tier agent handed a subtle-invariant task
-will confidently ship the wrong thing.
+The risk read from planning suggests a neutral tier (Principle #7): a mechanical
+sweep may use `cheap`, while a subtle decision may warrant `expensive`. Keep the
+recommendation in the lane handoff. Interactive `new` prints launch guidance; the
+operator applies a model or effort control if the runtime exposes one. The headless
+wrapper does not apply a tier from this recommendation. Read the
+[shared tier route](agentic-dev-kit/workflows/parallel.md#per-lane-effort-tier-risk--reasoning-effort--model)
+before claiming that a lane ran at a particular model or effort.
 
 ## A worked example
 
-You have four open tickets. Planning clusters them by footprint:
+Suppose a project has this ticket set. Planning clusters it by footprint:
 
 | Ticket | Touches | Cluster |
 |---|---|---|
@@ -169,22 +173,25 @@ You have four open tickets. Planning clusters them by footprint:
 | Fix a typo in the CLI help | `cli/help.py` | C |
 | Tighten the auth token TTL | `auth/` | A |
 
-Two of them share `auth/` (cluster A) — so you run **one** of them now and defer the
-other. You launch three disjoint lanes:
+The auth tickets share `auth/` (cluster A), so run one now and defer the other.
+Prepare the disjoint interactive lanes:
 
 ```bash
-scripts/dev_session.sh new auth-ratelimit --headless --merge-class operator --runtime codex  # cluster A · top tier
-scripts/dev_session.sh new metrics-rename --headless --merge-class self --runtime codex      # cluster B · cheap tier
-scripts/dev_session.sh new cli-help-typo --headless --merge-class self --runtime codex       # cluster C · cheap tier
+scripts/dev_session.sh new auth-ratelimit --merge-class operator --runtime codex
+scripts/dev_session.sh new metrics-rename --merge-class self --runtime codex
+scripts/dev_session.sh new cli-help-typo --merge-class self --runtime codex
 ```
 
-Each lane works to a green, ready-for-review PR while you watch `list --watch` from the
-cockpit — each flipping its own PR ready as it finishes, so the review bots pick them up
-staggered rather than all at once.
-The two cheap self-merge lanes land through `dev_session.sh merge`; the auth rate-limit
-lane (security-adjacent) hands back for operator review. You reconcile all three,
-merge, and only then update the handoff (`paths.handoff`) with what shipped — from the
-cockpit, once.
+These commands prepare isolation, runtime guidance, and merge class; they do not
+start an agent or set a model tier. Use each printed launch or activation command
+in another terminal, then apply the suggested tier through the runtime when that
+control is available. Each lane works to a green, ready-for-review PR while you
+watch `list --watch` from the cockpit — each flipping its own PR ready as it
+finishes, so the review bots pick them up at different times. The self-class
+lanes can land through `dev_session.sh merge` only when project and current-request
+authority permit it. The auth rate-limit lane hands back for an operator decision.
+Reconcile the lanes and update the handoff (`paths.handoff`) from the cockpit with
+what actually shipped and what remains held.
 
 ## See also
 

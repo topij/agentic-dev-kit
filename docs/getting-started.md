@@ -20,8 +20,9 @@ shells out to — `awk`, `grep`, `sed`, `mv`, `rm`, `cat`, `head`, `mkdir`, `chm
 `basename`, `dirname`, `date` and `git` — all standard on macOS
 and Linux. The engines additionally need
 [`uv`](https://docs.astral.sh/uv/) (they're PEP-723 single-file scripts) and, for
-`pr-watch` / `parallel`, the GitHub CLI `gh`, authenticated (`gh auth status`). No
-PyYAML — `kitconfig.py`, the config reader every engine imports, is stdlib-only.
+`pr-watch` / `parallel`, the GitHub CLI `gh`, authenticated (`gh auth status`).
+Runtime engines use the stdlib-only `kitconfig.py` reader; this repository's
+test command supplies PyYAML separately.
 
 ## 1 · Adopt the kit
 
@@ -115,9 +116,12 @@ What to do next
 ```
 
 The tags are the plan: **size** (S/M/L), which **model tier** the step warrants
-(cheap / default / top — match the tier to the difficulty, not the session), and
+(`cheap` / `default` / `expensive` — match the tier to the difficulty, not the session), and
 **mode** — `inline` (work it here) or `delegate` (hand a self-contained task to a
 cheaper agent and review the result).
+
+For a shorter task index, use the [Developer guide](developer-guide.md). For the
+component relationships behind this loop, use [Architecture](architecture.md).
 
 ## 3 · Do the work
 
