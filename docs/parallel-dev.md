@@ -178,8 +178,8 @@ Prepare the disjoint interactive lanes:
 
 ```bash
 scripts/dev_session.sh new auth-ratelimit --merge-class operator --runtime codex
-scripts/dev_session.sh new metrics-rename --merge-class self --runtime codex
-scripts/dev_session.sh new cli-help-typo --merge-class self --runtime codex
+scripts/dev_session.sh new metrics-rename --merge-class operator --runtime codex
+scripts/dev_session.sh new cli-help-typo --merge-class operator --runtime codex
 ```
 
 These commands prepare isolation, runtime guidance, and merge class; they do not
@@ -187,9 +187,9 @@ start an agent or set a model tier. Use each printed launch or activation comman
 in another terminal, then apply the suggested tier through the runtime when that
 control is available. Each lane works to a green, ready-for-review PR while you
 watch `list --watch` from the cockpit — each flipping its own PR ready as it
-finishes, so the review bots pick them up at different times. The self-class
-lanes can land through `dev_session.sh merge` only when project and current-request
-authority permit it. The auth rate-limit lane hands back for an operator decision.
+finishes, so the review bots pick them up at different times. Interactive lanes
+hand their PRs back for an operator merge decision; `dev_session.sh merge` is for
+autonomous self-class lanes with project and current-request authority.
 Reconcile the lanes and update the handoff (`paths.handoff`) from the cockpit with
 what actually shipped and what remains held.
 
