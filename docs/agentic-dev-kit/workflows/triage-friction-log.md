@@ -1093,6 +1093,13 @@ binding the validated `false` `triage.pr_draft` directly. Immediately run the na
 head, draft bit, PR URL, and changed paths, and require the read-back draft bit to be
 `false` before the normal `pr-watch` loop. A failed assertion or a failed, ambiguous, or
 draft response triggers read-back before retry and otherwise remains operator-held.
+A failed `branch-create` is local. It often leaves nothing (a same-day branch-name
+collision is refused before any write), but git can create the branch ref before it fails
+to create the worktree, so a resume verifies rather than assumes. It is the one failed
+operation a later finalization resume retries: only when it is the sole recorded
+operation, only after the provider reads back that the local branch, the worktree path,
+and a remote branch of that name are all absent, and only by appending another attempt
+with the same intent. Any of them present keeps it operator-held.
 
 Run `pr-watch` for the exact head and persist an `unsettled` review observation whenever
 it has not reached terminal exact-head evidence. This workflow never merges the sweep pull request.
