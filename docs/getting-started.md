@@ -20,8 +20,9 @@ shells out to — `awk`, `grep`, `sed`, `mv`, `rm`, `cat`, `head`, `mkdir`, `chm
 `basename`, `dirname`, `date` and `git` — all standard on macOS
 and Linux. The engines additionally need
 [`uv`](https://docs.astral.sh/uv/) (they're PEP-723 single-file scripts) and, for
-`pr-watch` / `parallel`, the GitHub CLI `gh`, authenticated (`gh auth status`). No
-PyYAML — `kitconfig.py`, the config reader every engine imports, is stdlib-only.
+`pr-watch` / `parallel`, the GitHub CLI `gh`, authenticated (`gh auth status`).
+Runtime engines use the stdlib-only `kitconfig.py` reader; this repository's
+test command supplies PyYAML separately.
 
 ## 1 · Adopt the kit
 
@@ -33,25 +34,27 @@ cp -r /path/to/agentic-dev-kit/. .
 ./init.sh
 ```
 
-> Already adopted the kit in this repo before? Don't repeat this from scratch —
-> pull the new kit files and re-run `./init.sh`. See the README's
-> [Upgrading an already-adopted repo](../README.md#upgrading-an-already-adopted-repo)
-> section for what that does and doesn't touch.
+> Already adopted the kit in this repo before? Follow the
+> [upgrade workflow](agentic-dev-kit/workflows/upgrade.md). Re-running `./init.sh`
+> updates supported configuration and unclaimed templates, but does not inspect
+> or refresh installed engines. The README's
+> [upgrade section](../README.md#upgrading-an-already-adopted-repo) explains the route.
 
 `init.sh` prompts you for a handful of values — project name, agent runtime, tracker board,
 the protected branch, your review bot — and stamps them into `config/dev-model.yaml`.
-It renders the four narrative docs and both root entry points — `AGENTS.md`, which holds
+It renders the narrative docs and root entry points — `AGENTS.md`, which holds
 the contract, and `CLAUDE.md`, which imports it with `@AGENTS.md` because Claude Code reads
 `CLAUDE.md` and not `AGENTS.md` — from `docs/templates/`, installs the pre-push hook, and
 adds the state sandbox to `.gitignore`.
 
 It renders a target when it is **missing, or its first line opens an HTML comment
-carrying one of two markers** — so a handoff you are actually using is left
-byte-identical, which is what makes re-running it the supported upgrade path.
+carrying a kit marker** — so a handoff you are actually using is left
+byte-identical. This makes re-running it safe for configuration and template
+rendering; use `upgrade` to refresh installed kit files.
 
-- `devkit-template: unrendered` marks a **shipped skeleton** — the four narrative docs.
+- `devkit-template: unrendered` marks a **shipped skeleton** — the narrative docs.
 - `devkit-source: kit-own` marks the **kit's own** root `AGENTS.md` and `CLAUDE.md`. The
-  kit ships those two because a session working in the kit needs a contract too, and the
+  kit ships those files because a session working in the kit needs a contract too, and the
   `cp -r` quickstart therefore lands them in your root. This marker is what lets `init.sh`
   render yours over them instead of mistaking them for files you are already using.
 
@@ -115,9 +118,12 @@ What to do next
 ```
 
 The tags are the plan: **size** (S/M/L), which **model tier** the step warrants
-(cheap / default / top — match the tier to the difficulty, not the session), and
+(`cheap` / `default` / `expensive` — match the tier to the difficulty, not the session), and
 **mode** — `inline` (work it here) or `delegate` (hand a self-contained task to a
 cheaper agent and review the result).
+
+For a shorter task index, use the [Developer guide](developer-guide.md). For the
+component relationships behind this loop, use [Architecture](architecture.md).
 
 ## 3 · Do the work
 

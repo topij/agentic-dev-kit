@@ -160,8 +160,10 @@ deliberately:
    tells each lane whether it may self-merge or must hand back.
 
 1. **Launch each + relay a kickoff.** Run `<engine-dir>/dev_session.sh new <scope>
-   --merge-class <self|operator>` per chosen ticket (see below) and relay each copy-paste line **with a kickoff prompt**
-   the operator pastes as the session's first message:
+   --merge-class <self|operator>` per chosen ticket (see below) and relay its printed
+   launch or activation command **with a kickoff prompt** the operator pastes as the
+   session's first message. If the command only activates the lane, the operator
+   starts the agent after activation:
 
    **Ground each lane brief in the ticket body, not in a summary of it.** Before drafting
    a lane's kickoff, read the ticket itself from your tracker. A brief written from
@@ -190,10 +192,10 @@ deliberately:
    > parallel session owns `<other-area>` — if you need to touch `<shared-file>`,
    > flag it before committing.
 
-   Interactive `new` prints the configured agent CLI command for the **operator's own
+   Interactive `new` prints launch or activation guidance for the **operator's own
    shell**, so it can only *suggest* the tier — the operator applies it (model and
-   reasoning effort, if exposed) when starting the session. An **unattended/headless**
-   launcher may set the tier when its runtime exposes that control — see
+   reasoning effort, if exposed) when starting the session. The supported
+   **unattended/headless** wrapper does not apply the suggested tier; see
    [Unattended / headless launch](parallel-headless.md#unattended--headless-launch--new---headless).
 
 After launch, **this** session is the cockpit: `list` (or `list --watch` for an
@@ -264,9 +266,9 @@ cannot become a headless-lane shortcut merely because it exposes model or effort
 controls; without the complete descriptor environment and observer/receipt chain it
 remains unsupported for state-writing lanes on either runtime.
 
-**Default-safe.** A lane with no assigned tier inherits the cockpit's current
-effort/model — i.e. unspecified ⇒ today's behavior, no regression. The tier is an
-*optimization* of a working default, never a prerequisite.
+**Unspecified tier.** Without an explicit model or effort selection, an interactive
+lane uses the agent client's defaults when started. A supported headless lane uses
+the trust-route resolution above. A suggested tier alone changes neither.
 
 ### Joint wrap-up — the cockpit owns the handoff
 
@@ -365,8 +367,10 @@ terminal there). When asked to prepare one, run:
 substituting a lowercase slug for `<scope>` (e.g. `feat-graduation-flow`). Pass
 `--runtime <name>` to select a configured launcher or `--launcher <command>` to
 override it for this lane. The script
-prints a copy-paste line — `cd <worktree> && export DEVKIT_STATE_ROOT=… && export
-DEVKIT_ROOT=… && <your agent CLI>`. **Relay that line to the operator** and tell them
+prints a copy-paste launch line — `cd <worktree> && export DEVKIT_STATE_ROOT=… && export
+DEVKIT_ROOT=… && <your agent CLI>` — when a launcher is configured. Without a
+launcher, it prints `source <session>/activate`; the operator activates the lane
+and starts the agent. **Relay the printed command to the operator** and tell them
 to run it in a new terminal; don't try to start the session yourself. Options:
 `--base <branch>` (default `vcs.protected_branch`), `--prefix <p>` (default
 `vcs.dev_branch_prefix` — parallel-session

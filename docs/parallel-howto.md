@@ -29,16 +29,16 @@ The single most common surprise:
 > **An in-agent workflow cannot open a new interactive terminal for you.**
 
 A `parallel` skill runs *inside* your current agent process — it can't `cd` your
-terminal into a new directory or spawn a fresh REPL there. So for an interactive lane,
-`new` does all the setup and then hands you a **copy-paste line**; *you* paste it into
-a new terminal to actually start the session. (Headless lanes are the exception — see
+terminal into a new directory or spawn a fresh REPL there. For an interactive lane,
+`new` does the setup and hands you launch or activation guidance; *you* use it in
+a new terminal to start the session. (Headless lanes are the exception — see
 [Use case 4](#use-case-4--launch-an-unattended-headless-lane) — because there is no
 human terminal to hand the line to.)
 
 So "what is `parallel new` for, if I still have to open the terminal myself?" — it
-does everything *except* the one step that fundamentally needs your shell: it creates
-the worktree, branch, and sandbox correctly, and emits the exact line to launch into
-them. The manual paste is a two-second hand-off, not the work.
+creates the worktree, branch, and sandbox and emits launch guidance. When a launcher
+is configured, that guidance includes a copy-paste launch command. Otherwise it
+prints the lane's `source .../activate` command; start your agent after activating.
 
 Keep that three-way split in mind and every verb below makes sense.
 
@@ -49,9 +49,9 @@ Keep that three-way split in mind and every verb below makes sense.
 | `parallel` &nbsp;or&nbsp; `… list` | Prints the board of active lanes | No | Yes |
 | `parallel list --watch` | Same board, auto-refreshing | No | Yes |
 | `parallel plan` | Proposes a disjoint batch to launch | No | Yes (until you confirm) |
-| `dev_session.sh new <scope> --merge-class <class>` | Creates worktree + branch + sandbox, persists merge policy, prints a launch line | No | No — writes to disk, but **not** to your checkout |
+| `dev_session.sh new <scope> --merge-class <class>` | Creates worktree + branch + sandbox, persists merge policy, prints launch or activation guidance | No | No — writes to disk, but **not** to your checkout |
 | `dev_session.sh merge <scope>` | Re-polls and merges an eligible self-merge lane; refuses operator/missing metadata | No | No |
-| *(you paste the launch line)* | Starts the new session in a **new terminal** | No | — |
+| *(you use the printed guidance)* | Launches or activates the lane in a **new terminal** | No | — |
 
 Even `new` doesn't touch *your* working tree: the worktree it creates is a separate
 directory under a sibling `dev-model-sessions/` folder (override with
@@ -109,14 +109,15 @@ What this does:
    inherit or disturb your in-progress work.
 3. Sets up an isolated state sandbox (`DEVKIT_STATE_ROOT`) so the new session's
    scratch-state writes never collide with yours.
-4. Prints a **copy-paste line** and stops:
+4. Prints a **copy-paste launch line** when the selected runtime has a launcher:
 
    ```text
    cd <worktree> && export DEVKIT_STATE_ROOT=<sandbox> && export DEVKIT_ROOT=<repo> && <configured-launcher>
    ```
 
-**Then you** open a new terminal and paste that line. That — not the workflow —
-is what starts the new agent process. Your current session keeps running, unchanged, on its
+If no launcher is configured, `new` instead prints `source <session>/activate`.
+**Then you** open a new terminal, use the printed line, and start your agent if
+you only activated the lane. Your current session keeps running, unchanged, on its
 own branch.
 
 Useful options:
@@ -152,8 +153,9 @@ parallel plan            # or: parallel plan <focus-area-or-ticket-list>
 It gathers candidate work, **clusters it by file footprint**, drops stale-premise
 candidates, and proposes a disjoint batch — at most one lane per cluster — each tagged
 with an **effort tier** and a **merge class** (self-merge vs operator-merge). You
-confirm the set, then it launches a lane per pick with `dev_session.sh new` and relays
-each launch line.
+confirm the set, then it prepares a lane per pick with `dev_session.sh new` and relays
+its launch or activation guidance. The tier remains a recommendation until the
+runtime applies a model or effort control.
 
 From there, **this session becomes the cockpit**: it owns the shared narrative files
 and the merges, watches `list --watch`, and does the reconcile + wrap-up at the end.
@@ -282,8 +284,8 @@ clean. Pass `--base <branch>` if you specifically want it based on something els
 **Why can't `parallel new` just open the new session for me?**
 Because an in-agent workflow runs inside your current agent process. It can't move your
 terminal into a new directory or start a fresh agent process there — that needs your shell.
-So it does everything up to that point and hands you the launch line. Headless lanes
-skip the hand-off because there's no terminal involved.
+So it does everything up to that point and hands you launch or activation
+guidance. Headless lanes skip the hand-off because there's no terminal involved.
 
 **Is running `parallel` (no argument) ever destructive?**
 No. With no argument it just prints the board and stops. It's the `git status` of your

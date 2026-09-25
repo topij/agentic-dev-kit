@@ -12,6 +12,14 @@ upstream dependency at runtime. Edit the config, rename things, delete a skill
 you don't need. A future packaged version (a plugin plus an installable engine)
 waits until the template has proven itself across a few real projects.
 
+**Find your route:** [Developer guide](docs/developer-guide.md) has practical
+commands and recovery pointers; [Architecture](docs/architecture.md) shows the
+components, ownership boundaries, and workflow flows. The
+[worked first session](docs/getting-started.md) and
+[parallel task recipes](docs/parallel-howto.md) go deeper. The
+[shared workflows](docs/agentic-dev-kit/workflows/) remain the behavioral
+contract.
+
 > **A personal note.** I built this for my own development work with AI coding agents.
 > The principles and choices here reflect my own preferences and workflows — not a
 > universal best practice. Take what's useful, change what isn't, and shape it to fit
@@ -57,7 +65,7 @@ back into the next session's briefing.
 flowchart TD
     A([session start]) --> B["session-start<br/>reads handoff + friction-log<br/>+ tracker + open PRs + CI"]
     B --> C{"pick next work<br/>by urgency"}
-    C -->|self-contained| D["parallel<br/>isolated worktree lanes<br/>· cheaper model tier"]
+    C -->|self-contained| D["parallel<br/>isolated worktree lanes<br/>· suggested model tier"]
     C -->|judgment / interactive| E["cockpit<br/>work inline"]
     D --> F["open PR"]
     E --> F
@@ -67,20 +75,22 @@ flowchart TD
     H -->|no| J["merge"]
     I --> J
     J --> K["wrap-up<br/>update handoff + log friction"]
+    J -. review evidence .-> R[(merged PR reviews)]
     K --> L([session end])
 
     K -. friction accrues .-> M[(friction-log)]
-    M -. weekly .-> N["/triage-friction-log<br/>single incident → tracker"]
-    M -. weekly .-> O["post-merge-systemize<br/>configured threshold → a rule"]
-    N -. tickets .-> P[(tracker + handoff)]
-    O -. new rule .-> Q[(agent rules)]
+    M -. cadence .-> N["triage-friction-log<br/>frozen inbox · exact decisions"]
+    R[(merged PR reviews)] -. scheduled .-> O["post-merge-systemize<br/>cluster root causes"]
+    N -. approved filing .-> P[(tracker)]
+    O -. qualifying pattern .-> Q["shared rule proposal"]
+    Q -. reviewed and merged .-> S[(shared rules)]
     P -. seeds next session .-> B
-    Q -. binds next session .-> B
+    S -. binds next session .-> B
 ```
 
 Solid arrows are one session's flow; dotted arrows are the asynchronous flywheel
-(**down** by default — incidents to the tracker — and **up** only on repetition —
-patterns to rules).
+(**down** through approved tracker filing and **up** through recurring-pattern
+rule proposals).
 
 ## Quickstart
 
@@ -89,11 +99,10 @@ shells out to — `awk`, `grep`, `sed`, `mv`, `rm`, `cat`, `head`, `mkdir`, `chm
 `basename`, `dirname`, `date` and `git` — all standard on macOS
 and Linux, none of them a runtime you have to install. The engines need [`uv`](https://docs.astral.sh/uv/) (they're PEP-723 single-file
 scripts), `git`, and — for `pr-watch` / `parallel` — the GitHub CLI `gh`,
-authenticated. **No PyYAML in anything you run:** `scripts/lib/kitconfig.py`, the reader
-every engine imports, is stdlib-only. (`scripts/lib/devmodel_config.py` *is*
-PyYAML-backed, but no engine imports it and the parity tests compare `kitconfig` against
-`yaml.safe_load` directly rather than against it — so PyYAML is a test-time dependency at
-most.)
+authenticated. **Runtime engines do not require PyYAML:**
+`scripts/lib/kitconfig.py`, the config reader they use, is stdlib-only.
+`scripts/lib/devmodel_config.py` is PyYAML-backed but is not an engine dependency;
+this repository's test command supplies PyYAML for its parity tests.
 
 ```sh
 # Click "Use this template" on GitHub and clone the result — or, into an
@@ -131,13 +140,16 @@ the kit's own root `AGENTS.md` / `CLAUDE.md`. A doc that merely *mentions* a mar
 below line 1, or inside a line-1 comment that says anything else first — is in use, and
 is left alone.
 
-Ten minutes, start to finish. For a full worked example of a first session — from
+For a full worked example of a first session — from
 adoption through `wrap-up` — see **[`docs/getting-started.md`](docs/getting-started.md)**.
 
 ## Upgrading an already-adopted repo
 
-**Pull the new kit files, then re-run `./init.sh`.** That is the supported upgrade
-path, and it is safe to run any number of times:
+**Use the [`upgrade` workflow](docs/agentic-dev-kit/workflows/upgrade.md)** for an
+already-adopted repository. It inspects the installation, handles config migration,
+and refreshes kit-owned files according to their recorded state. Re-running
+`./init.sh` handles the config and unclaimed templates; by itself it does not
+inspect or replace installed engines. The workflow accounts for these surfaces:
 
 - **Config** — `init.sh` migrates an older schema forward *in place*, only ever
   adding missing keys. Your existing values are never guessed over. `kit.version`
@@ -186,7 +198,7 @@ It also checks installation properties the file hashes cannot establish:
 `kit-manifest.json` is the hash set it compares against, regenerated at release
 (`--generate-manifest`) and gated in CI so it can't go stale.
 
-**[`/upgrade`](docs/agentic-dev-kit/workflows/upgrade.md)** drives the whole sequence — shape detection,
+**[`upgrade`](docs/agentic-dev-kit/workflows/upgrade.md)** drives the whole sequence — shape detection,
 config migration, then per-file refresh keyed on those states — non-destructively, on a
 branch. It's the counterpart to [`/adopt`](docs/agentic-dev-kit/workflows/adopt.md) (first install). A
 repo with no `config/dev-model.yaml` at all predates the config surface and routes to

@@ -48,11 +48,11 @@
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
-      "sha256": "8b0f2cb8b923449122721aa1d4d2f64c0babf4b4621aebd015cdacf68e8767bf"
+      "sha256": "5ae5296d342a6242cad2d64b51281a98c77d68a4f4cb69f524476c2d44b15f26"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
-      "sha256": "6b1d4246ce89999a900e34a2986cb1d0047d738684f33c45ce82bb13c4f8689a"
+      "sha256": "597d1cdfe5d2ffe91d37a5ea77f14b51c3aec7e9f4f3fbb46bb140307c220bc4"
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",

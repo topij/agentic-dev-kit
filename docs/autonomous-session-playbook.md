@@ -11,8 +11,10 @@
 > [`AGENTS.md` template](templates/AGENTS.md.tmpl), and Claude imports the generated
 > root file through `@AGENTS.md`.
 > [`CLAUDE-sections.md`](CLAUDE-sections.md) is ready-to-paste material for an existing
-> guide. This contract is the autonomous **superset**. Its distinguishing behaviors are
-> **self-merging low-risk work** and **not yielding the turn until the work is merged**.
+> guide. This contract is the autonomous **superset**. It drives work through
+> review to an authorized merge, or preserves the exact head for an operator
+> decision when merge authority is absent. Self-merge requires project policy
+> and current-request authority; the autonomous request alone is not that grant.
 > The always-on guardrails still hold — pause before security-sensitive changes, and
 > respect whatever data-handling / PII confirmation rules your project's agent guide
 > defines; a broad-but-sensitive config file (a customer/contact roster, a secrets
@@ -21,7 +23,7 @@
 
 Follow this top to bottom, per ticket.
 
-## PR lifecycle / merge model — don't yield the turn until merged
+## PR lifecycle / merge model — merge with authority or hold the exact head
 
 ### Branch hygiene
 
@@ -102,7 +104,10 @@ Follow this top to bottom, per ticket.
   merge class at act time: `self` lanes merge through
   `<engine-dir>/dev_session.sh merge <scope>` (which re-polls `pr-watch`); missing,
   unknown, or `operator` metadata refuses autonomous merge and requires operator
-  sign-off. For non-lane/operator merges:
+  sign-off. A non-lane PR with no project merge policy defaults to the operator
+  route and needs authorization for the exact PR; an autonomous-session request
+  alone does not grant that merge. Only after the applicable authority is established,
+  a non-lane/operator merge uses:
   ```sh
   gh pr merge <PR#> --squash --delete-branch
   git checkout <protected_branch> && git pull --ff-only origin <protected_branch>

@@ -103,6 +103,12 @@ file-type-specific conventions live as path-scoped rules under `.claude/rules/`,
 a `paths:` glob so it loads only when a matching file is in context. Keep CLAUDE.md lean:
 when a convention only matters for *some* files, it belongs in a rule, not in CLAUDE.md.
 
+This layout is Claude-specific. If a rule must also bind Codex, put its shared
+policy in `AGENTS.md` or a shared document routed from the Claude Code and Codex
+entry points;
+`.claude/rules/` alone does not reach Codex. The
+[architecture guide](architecture.md) shows the shared-definition route.
+
 Example rules layout (name and scope these to your own stack — the kit ships
 [`safety-critical-changes.md`](../.claude/rules/safety-critical-changes.md), the rest are
 illustrative):

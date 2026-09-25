@@ -1,5 +1,11 @@
 # Convergence plan — one kit, two runtimes, one adopter
 
+> **Historical project record.** This plan preserves the decisions and evidence from
+> the convergence campaign. It is not the live install guide or current runtime
+> capability inventory. Use the [developer guide](developer-guide.md) for current
+> tasks, the [runtime parity contract](agentic-dev-kit/runtime-parity.md) for
+> declared support, and the [kit handoff](kit-handoff.md) for current project work.
+
 > **The planning session ran on 2026-08-06 and this document now records its
 > result: the questions are settled and the sequence below is agreed, no longer
 > a proposal.** Anything here stated as fact names how it was established;

@@ -11,10 +11,11 @@ launch must inject verbatim, and the fan-out recipe.
 
 ### Unattended / headless launch — `new --headless`
 
-Interactive `new` is operator-launched by design (it prints a copy-paste line and the
-rule above says *don't start the session yourself*). That's the wrong shape for an
-**unattended** batch — a background sub-agent or a cloud session that should drive a
-*sandboxed* lane without a human in the loop. `--headless` is for exactly that:
+Interactive `new` is operator-launched by design (it prints launch or activation
+guidance, and the shared workflow says *don't start the session yourself*). That's
+the wrong shape for an **unattended** batch — a background sub-agent or cloud
+session that should drive a *sandboxed* lane without a human in the loop.
+`--headless` is for exactly that:
 
 ```bash
 <engine-dir>/dev_session.sh new --headless <scope> --merge-class <self|operator> --runtime <codex|claude>
