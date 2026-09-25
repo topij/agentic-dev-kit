@@ -14,11 +14,57 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-25 — assessed an adopter's move from CodeRabbit to an internal
-reviewer and filed the kit's generic gaps (#796, #797). This session did not touch
-Phase 5.
+Last updated: 2026-09-25 — Phase 5 D-TRIAGE-RESIDUAL ran: the engine-backed live
+triage path was exercised end to end twice, on the kit's own inbox. Its notification
+row stays a residual.
 
-## Latest session — 2026-09-25 (reviewer switching assessment, in Claude Code)
+## Latest session — 2026-09-25 (Phase 5 D-TRIAGE-RESIDUAL, in Claude Code)
+
+The packets are `saved_plans/phase5-d-triage-residual_2026-09-25.md` and
+`saved_plans/phase5-d-triage-retire-completed_2026-09-25.md`. They are local and not
+committed, like the other D packets. The evidence is in `state/review-evidence/`
+(gitignored):
+
+- `phase5-d-triage-residual-01/`: Stage T;
+- `phase5-d-triage-retire-01-stage0/`: the K1 classification;
+- `phase5-d-triage-residual-01-stage-l/`: the live stage, and its `RESULTS.md` owns the
+  outcomes.
+
+**Stage T** (test mode, in a throwaway clone) worked, and showed that a completed session
+ended its mode for good. **K1** (a read-only copy of the 2026-09-06 LLM-only state) found
+it invalid but finished.
+
+**Shipped, each on the operator's direction, with fallback panels:**
+
+- #798: `new`, no argument and `test` retire a valid completed triage state.
+- #799: a guard test compares `KIT_OWNED` with `git ls-files scripts`.
+- #801: `recover` retires an invalid but finished run, proven from git.
+- #804: a failed branch-create is retried once read-back shows it left nothing.
+
+The operator also asked for #800 (another session's handoff) to be merged.
+
+**Live triage.** The 2026-09-06 state was retired through #801. Session A filed TRI-05 as
+#802 and swept it (#803). Session B archived the already-ticketed entries (#805). Both
+completed as `archive-sweep` / `degraded-success`. The markers' record blocks in
+`docs/kit-friction-log.md` were restored by hand in this wrap-up.
+
+**Filed, on the operator's approval of the exact payloads:** #806, #807, #808. An
+occurrence comment went on #425.
+
+**Not established:** notification-thread approval (the CLI has no notification provider;
+#198), and D-TRIAGE-RECOVERY.
+
+**Verification.** Each PR body stamps its own `make test` run. All ran in linked
+worktrees under this session's scratchpad, because the main checkout's
+`state/review-evidence/` holds unreadable files (#461).
+
+▶ Next: `/session-start`, then choose between drafting the D-TRIAGE-RECOVERY packet from
+`saved_plans/phase5-d-proposal_2026-09-21.md` (local) and fixing #806 and #807 before the
+next engine-backed sweep.
+
+______________________________________________________________________
+
+## Session — 2026-09-25 (reviewer switching assessment, in Claude Code)
 
 **Why.** An In Parallel adopter repository is replacing CodeRabbit with an internal PR
 reviewer. The operator wants the kit to treat any reviewer as "just another review
@@ -262,101 +308,6 @@ record edits.
 
 The next session took both decisions; the 2026-09-24 block on the RECOVERY decision and
 D-FRESH-CONTEXT owns them.
-
-______________________________________________________________________
-
-## Session — 2026-09-23 (Phase 5 D-SYSTEMIZE-RECOVERY packet, unattended, in Claude Code)
-
-**Mode.** The operator asked for an autonomous session on the plan and then left. No
-operator decision was taken while the session ran unattended. The operator's decisions
-on its return are under *Operator decisions* at the end of this block.
-
-**The packet.** `saved_plans/phase5-d-systemize-recovery_2026-09-23.md` (local, not
-committed) splits the D-SYSTEMIZE-RECOVERY row into a Stage 1 and a Stage 2, each
-approved separately:
-
-- **Stage 1** kills the real engines, or the process driving them, at and just before
-  the raw and digest cutpoints, then restarts fresh processes from durable files alone.
-  It uses a fake forge in a new clone at `66a8a10`, and it is approvable as written.
-- **Stage 2** covers the pre-approval and post-dispatch cutpoints, which sit inside the
-  agent. It needs operator decisions on which agent process to use (A) and on what
-  the post-dispatch cutpoint may touch (B).
-  - The packet recommends A1: a headless `claude -p`, isolated by
-    `--strict-mcp-config` and `--setting-sources ""`.
-  - It recommends B1: a fake tracker only.
-- A fresh subagent checked the draft against the code at `66a8a10`. Its corrections are
-  folded in, and the packet's *Preparation check* lists them.
-
-**Preparation evidence** is in
-`state/review-evidence/phase5-d-systemize-recovery-prep-20260923/` (gitignored). Its
-headless probes are what option A1 rests on:
-
-- without isolation, a headless run loaded the claude.ai connectors, Slack included;
-- with `--strict-mcp-config` and an empty MCP config it loaded none;
-- the user `SessionStart` hook and a synced plugin loaded all the same.
-
-**Found and parked:** `heartbeat_cli.py start` reopens a completed run, which contradicts
-the workflow's *Engine interface*. The entry is in the friction log rather than the
-tracker, because nobody was present to approve a payload.
-
-**Pull requests opened ready for review:**
-
-- [#780](https://github.com/topij/agentic-dev-kit/pull/780) fixes the handoff footer
-  layout that #776 diagnosed. Reviewed head
-  `20451840fec7ba74923134ef7c49fc776272bc00`.
-- [#781](https://github.com/topij/agentic-dev-kit/pull/781) stops README,
-  getting-started and runtime-parity from describing the shipped engines as absent. It
-  is #7's fourth work item. Reviewed head `c32189c4acd76b4b150c1e744fe1dd5dbb5ec3d5`.
-
-Each has a fallback panel receipt bound to its reviewed head, and each PR's
-disposition comment records the lens results. Both were held for the operator, whose
-merges are under *Operator decisions*.
-
-**Judgments prepared, not taken.** Each is the operator's to make.
-
-- **#748.** #769 delivered its first two suggestions: forge thread resolution is
-  authoritative, and `outdated` is a state of its own.
-  - The third, an honest "unknown", is only partly met. A failed forge read stops the
-    run, but a thread with no resolution field digests as `unaddressed`
-    (`normalize.thread_addressed`).
-  - The options are to retire #748 as delivered, or to narrow it to that mapping.
-- **#7.** #769 shipped its work items 1–3, and #781 carries item 4. Field installation
-  is Phase 5's own row, not #7's, so nothing in #7's list is outstanding once item 4
-  merges.
-
-**Still open from earlier sessions:** #722's owed record edits.
-
-**Sweep.** #780 is not merged at this block's base. So this wrap-up swept with the
-repo's own helper, applying the footer restore and trim that the next block describes.
-It also swept the same pre-sweep files a second time, as scratch copies, with #780's
-helper at `2045184`. On 2026-09-24 the two gave different results:
-
-| Helper | Input | Printed |
-|---|---|---|
-| repo's own, at `66a8a10` | with the blank line restored | `moved 3 block(s) … (463 -> 379 plan lines)` |
-| #780's, at `2045184` | untouched | `moved 2 block(s) … (462 -> 400 plan lines)` |
-
-The old helper counts the blank line it writes itself toward `--target-lines`. This
-commit keeps the first result.
-
-**Operator decisions, 2026-09-24.** The approval record is
-`state/review-evidence/phase5-d-systemize-recovery-01/APPROVAL.md`, which binds the
-approved packet by SHA-256.
-
-- **PHASE5-D-SYSTEMIZE-RECOVERY-01:** Stage 1 is approved as scoped. Stage 2 is
-  approved with options A1 and B1.
-- **Merges:** the operator directed the merges.
-  - #780 merged as `c8497c6295bdf21c073faa5470fb20e1337f5d7c`; on 2026-09-24 `git rev-parse
-    <sha>^{tree}` matched its reviewed head's. The next block's footer restore is not needed.
-  - #781 merged as `902dbf64bc5a3301ab5817b1cbc78c3effa29f1d`; on 2026-09-24 `git diff` from its
-    reviewed head over the three docs it changed was empty.
-
-▶ Next: execute PHASE5-D-SYSTEMIZE-RECOVERY-01 — Stage 1, then Stage 2 with A1 and B1 —
-from `state/review-evidence/phase5-d-systemize-recovery-01/packet.md`. If that
-directory already holds a `RESULTS.md`, resume from it rather than starting again.
-
-The next session ran RECOVERY; the 2026-09-24 D-SYSTEMIZE-RECOVERY run block owns its
-outcome.
 
 ______________________________________________________________________
 
