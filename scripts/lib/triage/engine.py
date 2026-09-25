@@ -1710,7 +1710,16 @@ def run(
                 retired_path = Path(f"{store.state_path}.completed-{state['completion']['completed_receipt_digest'][:16]}")
                 quarantine_inode(store.state_path, retired_path, state_observation, state_raw)
                 retired = f"retired completed state to {retired_path} (sha256 {digest_bytes(state_raw)})"
-                state, state_digest, report_path, frozen_path, candidates, terminal = _new_draft(settings, store, lease, capabilities, request, context=context, notification=notification)
+                # The retired session is no longer active evidence: a draft that
+                # fails from here must not report its report, snapshot or
+                # candidates, and must say the state path is now empty.
+                result_state = None
+                result_frozen = None
+                result_report = None
+                try:
+                    state, state_digest, report_path, frozen_path, candidates, terminal = _new_draft(settings, store, lease, capabilities, request, context=context, notification=notification)
+                except TriageError as exc:
+                    raise TriageError(f"{retired}; the new draft did not start, so the next run starts fresh: {exc}", outcome=exc.outcome) from exc
                 _write_report(report_path, state, capabilities, terminal or "operator-held")
                 lease.release()
                 return _result(capabilities, terminal or "operator-held", mode=mode, engine_mode=settings.engine_mode, report=str(report_path), frozen=str(frozen_path), resume_action="resume with analysis bound to the frozen candidate index" if state["phase"] == "reserved" else "rerun with the exact pending approval or provider action", detail=f"{retired}; durable triage state retained", identifiers=state.get("verified_tracker_identifiers"), candidate_index=state["frozen_snapshot"]["content"]["candidate_index"])
