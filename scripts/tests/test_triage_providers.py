@@ -244,3 +244,38 @@ def test_malformed_successful_pull_request_json_is_a_canonical_provider_hold(tmp
     }
     with pytest.raises(TriageError, match="invalid JSON"):
         GitHubForge(tmp_path, Runner([(0, "not-json")])).perform("merge-read-back", intent)
+
+
+def _git(cwd: Path, *args: str) -> str:
+    return subprocess.run(["git", "-C", str(cwd), *args], check=True, capture_output=True, text=True).stdout.strip()
+
+
+@pytest.mark.parametrize("leftover", [None, "local-branch", "worktree", "remote-branch"])
+def test_branch_create_absence_reads_the_real_repository(tmp_path: Path, leftover: str | None) -> None:
+    """Each thing a failed branch-create could have left is read from git and the filesystem."""
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
+    repo = tmp_path / "repo"
+    subprocess.run(["git", "clone", "-q", str(origin), str(repo)], check=True)
+    _git(repo, "-c", "user.email=t@example.invalid", "-c", "user.name=T", "commit", "-q", "--allow-empty", "-m", "base")
+    _git(repo, "push", "-q", "origin", "HEAD:main")
+    branch, worktree = "chore/triage-2099-01-01", tmp_path / "sweep"
+    if leftover == "local-branch":
+        _git(repo, "branch", branch)
+    elif leftover == "worktree":
+        worktree.mkdir()
+    elif leftover == "remote-branch":
+        _git(repo, "push", "-q", "origin", f"HEAD:refs/heads/{branch}")
+    absence = GitHubForge(repo).authority("branch-create-absent", {"branch": branch, "worktree": str(worktree)})
+    expected = {"local_branch_absent": True, "worktree_absent": True, "remote_branch_absent": True}
+    if leftover is not None:
+        expected[{"local-branch": "local_branch_absent", "worktree": "worktree_absent", "remote-branch": "remote_branch_absent"}[leftover]] = False
+    assert absence == expected
+
+
+def test_branch_create_absence_holds_when_the_remote_cannot_be_read(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+    _git(repo, "remote", "add", "origin", str(tmp_path / "missing.git"))
+    with pytest.raises(TriageError, match="remote branch read-back failed"):
+        GitHubForge(repo).authority("branch-create-absent", {"branch": "b", "worktree": str(tmp_path / "w")})

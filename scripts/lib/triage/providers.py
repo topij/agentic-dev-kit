@@ -187,6 +187,7 @@ class FakeForge:
     def __init__(self, observations: list[ProviderObservation]) -> None:
         self.observations = list(observations)
         self.calls: list[tuple[str, dict[str, Any]]] = []
+        self.branch_create_absence = {"local_branch_absent": True, "worktree_absent": True, "remote_branch_absent": True}
 
     def authority(self, action: str, request: dict[str, Any]) -> dict[str, Any]:
         self.calls.append((f"authority:{action}", request))
@@ -196,6 +197,8 @@ class FakeForge:
                 "observed_head": request["draft_head"],
                 "descends_from_draft": True,
             }
+        if action == "branch-create-absent":
+            return dict(self.branch_create_absence)
         if not self.observations or not isinstance(self.observations[0].read_back, dict):
             raise AssertionError(f"no fake forge authority source configured for {action}")
         read_back = self.observations[0].read_back
@@ -330,6 +333,19 @@ class GitHubForge:
                 "draft_head": request["draft_head"],
                 "observed_head": observed,
                 "descends_from_draft": ancestor.returncode == 0,
+            }
+        if action == "branch-create-absent":
+            # What a failed branch-create could have left behind: the local
+            # branch, the worktree directory, or a remote branch of that name.
+            branch = request["branch"]
+            local = self._run(["git", "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"], self.repo)
+            remote = self._run(["git", "ls-remote", "origin", f"refs/heads/{branch}"], self.repo)
+            if remote.returncode:
+                raise TriageError("remote branch read-back failed", outcome="operator-held")
+            return {
+                "local_branch_absent": local.returncode != 0,
+                "worktree_absent": not Path(request["worktree"]).exists(),
+                "remote_branch_absent": not remote.stdout.strip(),
             }
         if action == "branch-create":
             branch_ref = f"refs/heads/{request['protected_branch']}"

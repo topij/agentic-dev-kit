@@ -606,3 +606,84 @@ def test_conflicting_worktree_is_refused_before_branch_authority_or_dispatch(
     assert result["detail"] == "finalization worktree conflicts with caller checkout"
     assert [call[0] for call in forge.calls] == ["authority:protected-head"]
     assert not (root / "nested").exists()
+
+
+class _BaseAuthority(FakeForge):
+    """A fake forge whose branch-create authority does not depend on an observation."""
+
+    def __init__(self, observations, base: str) -> None:
+        super().__init__(observations)
+        self.base = base
+
+    def authority(self, action, request):
+        if action == "branch-create":
+            self.calls.append(("authority:branch-create", request))
+            return {"finalize_base_head": self.base, "descends_from_draft": True}
+        if action == "worktree-clean":
+            return {"clean": True}
+        if action == "commit":
+            raise TriageError("stop after branch-create", outcome="operator-held")
+        return super().authority(action, request)
+
+
+def _failed_branch_create(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Drive a live archive session to a single failed branch-create, as a same-day branch collision leaves it."""
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    draft_request, candidate_id = proposal_request(root)
+    run("new", context="interactive", request=draft_request, start=root)
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    approved, context = approval(loads_exact(state_path.read_bytes()), f"archive {candidate_id}")
+    worktree = tmp_path / "isolated-finalize"
+    base = git(root, "rev-parse", "HEAD")
+    failing = _BaseAuthority([ProviderObservation(
+        "failed", {"stderr": "fatal: a branch named 'chore/triage-x' already exists\n"}, {"effect": "unverified"},
+    )], base)
+    held = run(
+        "resume", context="interactive",
+        request={**approved, "finalize": True, "worktree": str(worktree)},
+        start=root, approval_context=context, forge=failing,
+    )
+    assert held["outcome"] == "operator-held"
+    retained = loads_exact(state_path.read_bytes())
+    assert [(op["kind"], op["status"]) for op in retained["finalization_operations"]] == [("branch-create", "failed")]
+    return root, state_path, worktree, base, retained
+
+
+def test_failed_branch_create_is_retried_with_its_intent_once_read_back_shows_nothing_was_left(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, state_path, worktree, base, failed = _failed_branch_create(tmp_path, monkeypatch)
+    intent = failed["finalization_operations"][0]["intent"]
+    shutil.copytree(root, worktree)  # what the real branch-create produces
+    shutil.rmtree(worktree / "reports", ignore_errors=True)
+    retry = _BaseAuthority([verified({
+        "repository": "topij/agentic-dev-kit", "base": base, "branch": intent["branch"],
+        "worktree": str(worktree), "head": base, "tree": "0" * 40,
+    })], base)
+    result = run("resume", context="interactive", request={"finalize": True}, start=root, forge=retry)
+    assert result["detail"] == "stop after branch-create"
+    assert ("authority:branch-create-absent", {"branch": intent["branch"], "worktree": intent["worktree"]}) in retry.calls
+    assert [call for call in retry.calls if call[0] == "branch-create"] == [("branch-create", intent)]
+    operation = loads_exact(state_path.read_bytes())["finalization_operations"][0]
+    assert (operation["kind"], operation["status"], operation["intent"]) == ("branch-create", "verified", intent)
+    assert [attempt["status"] for attempt in operation["attempts"]] == ["attempting", "failed", "attempting", "verified"]
+
+
+@pytest.mark.parametrize("left", ["local_branch_absent", "worktree_absent", "remote_branch_absent"])
+def test_failed_branch_create_stays_held_while_anything_it_could_have_left_exists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, left: str
+) -> None:
+    root, state_path, worktree, base, failed = _failed_branch_create(tmp_path, monkeypatch)
+    before = failed["finalization_operations"]
+    retry = _BaseAuthority([], base)
+    retry.branch_create_absence[left] = False
+    result = run("resume", context="interactive", request={"finalize": True}, start=root, forge=retry)
+    assert result["outcome"] == "operator-held"
+    assert result["capabilities"]["forge-pr-write-readback"]["mechanism"] == (
+        "failed branch-create left an artifact read-back cannot rule out"
+    )
+    assert not [call for call in retry.calls if call[0] == "branch-create"]
+    # A resume rebinds the gate claim, so compare the operation record, not the bytes.
+    assert loads_exact(state_path.read_bytes())["finalization_operations"] == before

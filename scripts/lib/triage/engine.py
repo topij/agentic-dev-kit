@@ -1278,7 +1278,11 @@ def _forge_attempt(
     intent: dict[str, Any],
 ) -> tuple[dict[str, Any], str, ProviderObservation]:
     operations = deepcopy(state.get("finalization_operations", []))
-    retry = bool(operations and operations[-1].get("kind") == kind and operations[-1].get("status") == "unsettled")
+    retry = bool(
+        operations
+        and operations[-1].get("kind") == kind
+        and (operations[-1].get("status") == "unsettled" or (kind == "branch-create" and operations[-1].get("status") == "failed"))
+    )
     attempt = {"kind": kind, "intent": intent, "intent_digest": digest(intent), "status": "attempting", "response": None, "read_back": None}
     if retry:
         prior_attempts = operations[-1].get("attempts", [])
@@ -1446,20 +1450,39 @@ def _advance_finalize(
     operations = state["finalization_operations"]
     _validate_forge_prefix(operations, state, settings)
     order = ["branch-create", "commit", "push", "pull-request", "pr-watch", "merge-read-back"]
-    if operations and operations[-1].get("status") != "verified":
+    failed_branch_create = (
+        len(operations) == 1
+        and operations[0].get("kind") == "branch-create"
+        and operations[0].get("status") == "failed"
+    )
+    if failed_branch_create:
+        # A failed branch-create is local, and git refuses before writing, so
+        # it may be retried with the same intent once read-back shows it left
+        # nothing: no local branch, no worktree, no remote branch of that name.
+        prior = operations[0]["intent"]
+        absence = forge.authority("branch-create-absent", {"branch": prior["branch"], "worktree": prior["worktree"]})
+        if not isinstance(absence, dict) or any(
+            absence.get(name) is not True
+            for name in ("local_branch_absent", "worktree_absent", "remote_branch_absent")
+        ):
+            capabilities["forge-pr-write-readback"] = {"status": "operator-held", "mechanism": "failed branch-create left an artifact read-back cannot rule out"}
+            return state, state_digest, "operator-held"
+    if operations and operations[-1].get("status") != "verified" and not failed_branch_create:
         if operations[-1].get("status") != "unsettled" or operations[-1].get("kind") not in {"pr-watch", "merge-read-back"}:
             return state, state_digest, "operator-held"
         next_kind = operations[-1]["kind"]
+    elif failed_branch_create:
+        next_kind = "branch-create"
     else:
         next_kind = order[len(operations)] if len(operations) < len(order) else None
     if next_kind is None:
         return state, state_digest, "operator-held"
     retry_intent = (
         deepcopy(operations[-1]["intent"])
-        if operations and operations[-1].get("status") == "unsettled"
+        if operations and (operations[-1].get("status") == "unsettled" or failed_branch_create)
         else None
     )
-    previous = operations[-1]["read_back"] if operations else None
+    previous = operations[-1]["read_back"] if operations and not failed_branch_create else None
     forge_host, repository = _forge_destination(state["run_identity"]["repository_identity"]["remote"])
     branch = settings.triage_branch_pattern.replace("{date}", today_string())
     worktree = request.get("worktree")
