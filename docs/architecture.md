@@ -143,9 +143,13 @@ flowchart LR
     Decision -->|archive| Archive["friction archive"]
     Decision -->|park| Inbox
     Merged["merged PR reviews"] --> Systemize["post-merge-systemize<br/>cluster root causes"]
-    Systemize -->|single incident| Inbox
     Systemize -->|qualifying pattern| Rule["shared rule proposal"]
-    Systemize -->|approved tracker route| Tracker
+    Systemize -->|other below-threshold cluster| Inbox
+    Systemize -->|below-threshold single| Severity{"tracker severity?"}
+    Severity -->|below| Inbox
+    Severity -->|at or above| Approval{"exact operator approval"}
+    Approval -->|approved and verified| Tracker
+    Approval -->|unavailable or declined| Inbox
 ```
 
 The routes have different inputs. Triage works from frozen inbox blocks and
@@ -170,7 +174,7 @@ This source repository keeps its live work in [the kit handoff](kit-handoff.md).
 Its dated plans and retained evidence describe the revisions they name; use the
 handoff and current contracts when making a new change.
 
-For code changes in this repository, `make test` is the verification entry point.
+For changes in this repository, `make test` is the verification entry point.
 Changes to gate, launch-authority, or merge-authority behavior in the engines
 named by [AGENTS.md](../AGENTS.md) also require the
 [safety-critical review doctrine](agentic-dev-kit/safety-critical-changes.md).
