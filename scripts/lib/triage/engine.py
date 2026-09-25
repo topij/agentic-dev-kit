@@ -1456,9 +1456,10 @@ def _advance_finalize(
         and operations[0].get("status") == "failed"
     )
     if failed_branch_create:
-        # A failed branch-create is local, and git refuses before writing, so
-        # it may be retried with the same intent once read-back shows it left
-        # nothing: no local branch, no worktree, no remote branch of that name.
+        # A failed branch-create is local, but git can create the branch ref
+        # before failing to create the worktree, so it is retried with the same
+        # intent only once read-back shows it left nothing: no local branch, no
+        # worktree, no remote branch of that name.
         prior = operations[0]["intent"]
         absence = forge.authority("branch-create-absent", {"branch": prior["branch"], "worktree": prior["worktree"]})
         if not isinstance(absence, dict) or any(
