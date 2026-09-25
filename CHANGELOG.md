@@ -42,6 +42,10 @@ starts.
 
 ---
 
+## #798 — Retire a completed triage session
+
+CHANGED — gate semantics: Refresh `lib/triage/engine.py`, the shared triage workflow, `kit-manifest.json`, `scripts/tests/test_triage_engine.py` and `scripts/tests/test_portability.py`. A valid `completed` triage state no longer ends its mode: no argument or `new` (live), and `test` (test mode), now rename it under the gate to `<state path>.completed-<16 hex>` beside it and start a new draft, reporting the retained path in the result's `detail` (also when the new draft then fails, in which case the state path is left empty for the next run). `resume` still reports the completed receipt and `recover` still refuses valid state. Update any check that expected a no-argument, `new` or `test` run over completed state to replay or refuse. An adopter that retires completed state with its own script (`#425`) can remove that script after upgrading. An invalid state is not retired: it stays on the recovery route.
+
 ## #790 — Systemize dispatch idempotency
 
 - **CHANGED — report shape:** The `post-merge-systemize` report gains one dispatch record per tracker create and per notification send: operation, cluster id, marker, payload digests, destination, approval evidence, a status of `proposed` / `attempting` / `verified` / `failed` / `ambiguous`, verified route, returned identifier and marker-search result. Refresh the shared workflow and `scripts/tests/test_portability.py`, and update any report consumer to read those records.

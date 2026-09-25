@@ -3555,11 +3555,13 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     assert set(inputs) == {
         "Unknown or combined entry keyword",
         "No argument, neither active state nor gate-only receipt",
-        "No argument, valid active state",
+        "No argument, valid completed live state",
+        "No argument, valid active state in any other phase",
         "resume, neither valid active state nor gate-only receipt",
         "resume, valid active state",
         "new, neither active state nor gate-only receipt",
-        "new, active live state",
+        "new, valid completed live state",
+        "new, active live state in any other phase",
         "Interactive recover, active live state and no blocking gate",
         "Interactive recover, blocking gate without a gate-only receipt",
         "Interactive recover, blocking gate with a valid matching gate-only-prepared bundle and captured state absent",
@@ -3571,7 +3573,8 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         "Any live invocation with a gate-only held receipt",
         "Scheduled or unattended recover",
         "test, no test state, test gate, or test recovery receipt",
-        "test, valid test state and no blocking test gate",
+        "test, valid completed test state and no blocking test gate",
+        "test, valid test state in any other phase and no blocking test gate",
         "test, test-recovered-safe-to-restart receipt and no blocking test gate",
         "Interactive test, blocking test gate, no held bundle, and owner active or uncertain",
         "Interactive test, blocking test gate, no held bundle, proven-dead owner, and exact capture approval pending, refused, or unavailable",
@@ -3606,7 +3609,16 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         "Interactive recover, active live state and no blocking gate"
     ][0]
     assert "Resume the recorded phase and mode" in inputs[
-        "No argument, valid active state"
+        "No argument, valid active state in any other phase"
+    ][0]
+    for completed_row in (
+        "No argument, valid completed live state",
+        "new, valid completed live state",
+        "test, valid completed test state and no blocking test gate",
+    ):
+        assert "retire the completed" in inputs[completed_row][0]
+    assert "Refuse; never overwrite an approval-bound session" in inputs[
+        "new, active live state in any other phase"
     ][0]
     assert "never replace the active session" in inputs["resume, valid active state"][0]
     assert "Start a new live draft" in inputs[
@@ -3646,7 +3658,7 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         "test, no test state, test gate, or test recovery receipt"
     ][0]
     assert "never read, replace, or resume live state" in inputs[
-        "test, valid test state and no blocking test gate"
+        "test, valid test state in any other phase and no blocking test gate"
     ][0]
     assert "test-recovered-safe-to-restart" in inputs[
         "Interactive test, invalid test state and no blocking test gate"
@@ -3780,7 +3792,7 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
             "valid-state",
             "absent",
             "not applicable",
-            "Resume only the valid test state.",
+            "Resume only the valid test state, unless its phase is completed: then retire it and start a new isolated test draft.",
         ),
         "ungated-safe-restart": (
             "any",
@@ -13129,8 +13141,8 @@ def test_triage_semantic_and_adapter_mutations_are_rejected(tmp_path: Path) -> N
             1,
         ),
         workflow.replace(
-            "| No argument, valid active state | Resume the recorded phase and mode. |",
-            "| No argument, valid active state | Start a new live draft and replace the active session. |",
+            "| No argument, valid active state in any other phase | Resume the recorded phase and mode. |",
+            "| No argument, valid active state in any other phase | Start a new live draft and replace the active session. |",
             1,
         ),
         workflow.replace(

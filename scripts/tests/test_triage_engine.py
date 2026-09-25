@@ -16,11 +16,12 @@ ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
+from triage import engine as triage_engine  # noqa: E402
 from triage.approval import ApprovalContext  # noqa: E402
 from triage.canonical import decode_bytes, digest, dumps, encode_bytes, loads_exact  # noqa: E402
 from triage.engine import _inline_literal, _report_text, _source_literal, run  # noqa: E402
 from triage.inbox import parse  # noqa: E402
-from triage.model import BASE_KEYS, CAPABILITIES  # noqa: E402
+from triage.model import BASE_KEYS, CAPABILITIES, TriageError  # noqa: E402
 from triage.providers import FakeForge, FakeTracker, ProviderObservation  # noqa: E402
 
 
@@ -136,10 +137,14 @@ def test_test_mode_completes_without_external_provider(tmp_path: Path, monkeypat
     assert "## Proposed source diff" in report
     assert proposed_diff.rstrip() in report
     completed_raw = state_path.read_bytes()
-    replay = run("test", context="interactive", request={}, start=root)
-    assert replay["outcome"] == "degraded-success"
-    assert replay["detail"] == "completed/test-render"
-    assert state_path.read_bytes() == completed_raw
+    # A completed test session no longer ends test mode (#425): the next test
+    # entry retires it byte-for-byte and starts a fresh test draft.
+    restarted = run("test", context="interactive", request={}, start=root)
+    assert restarted["outcome"] == "operator-held"
+    assert restarted["detail"].startswith("retired completed state to ")
+    retired = state_path.with_name(f"{state_path.name}.completed-{state['completion']['completed_receipt_digest'][:16]}")
+    assert retired.read_bytes() == completed_raw
+    assert loads_exact(state_path.read_bytes())["phase"] == "reserved"
 
 
 def test_report_presents_historical_source_digest_and_safe_literal_fence(
@@ -605,8 +610,9 @@ def test_decision_only_completion_is_durable_without_tracker_or_forge(
     assert resumed["detail"] == "completed/decision-only"
     assert state_path.read_bytes() == terminal_raw
     implicit = run(None, context="interactive", request={}, start=root)
-    assert implicit["outcome"] == "degraded-success"
-    assert state_path.read_bytes() == terminal_raw
+    assert implicit["outcome"] == "operator-held"
+    assert implicit["detail"].startswith("retired completed state to ")
+    assert loads_exact(state_path.read_bytes())["phase"] == "reserved"
 
 
 def test_live_attempt_is_persisted_before_fake_create(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -2269,3 +2275,126 @@ print(dumps(run(sys.argv[2],context='interactive',request={},start=Path(sys.argv
     retained = loads_exact(state_path.read_bytes())
     assert retained["phase"] == original_state["phase"]
     assert retained["proposal_payload_digests"] == original_state["proposal_payload_digests"]
+
+
+# --- Completed-state retirement (#425) --------------------------------------
+# Before this route, a valid ``completed`` state ended its mode: ``new`` refused
+# it, every other entry replayed its receipt, and nothing removed it.
+
+LIVE_STATE = "triage/triage-pipeline-state_live.json"
+
+
+
+def completed_live(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path, bytes, Path]:
+    """Drive a live session to a decision-only completion; return root, state, bytes, retired path."""
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    run("new", context="interactive", request=request(root), start=root)
+    state_path = state_root / LIVE_STATE
+    presented = loads_exact(state_path.read_bytes())
+    completed = run(
+        "resume", context="interactive",
+        request={"approval": approval_for(presented, "park TRI-01")}, start=root,
+        approval_context=approval_context(presented, "park TRI-01"),
+    )
+    assert completed["outcome"] == "degraded-success"
+    raw = state_path.read_bytes()
+    receipt = loads_exact(raw)["completion"]["completed_receipt_digest"]
+    return root, state_path, raw, state_path.with_name(f"{state_path.name}.completed-{receipt[:16]}")
+
+
+@pytest.mark.parametrize("entry", [None, "new"])
+def test_session_starting_entry_retires_completed_live_state_and_drafts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, entry: str | None
+) -> None:
+    root, state_path, completed_raw, retired = completed_live(tmp_path, monkeypatch)
+    previous_session = loads_exact(completed_raw)["run_identity"]["session"]
+    result = run(entry, context="interactive", request={}, start=root)
+    assert result["outcome"] == "operator-held"
+    assert result["detail"].startswith(f"retired completed state to {retired} ")
+    assert retired.read_bytes() == completed_raw
+    fresh = loads_exact(state_path.read_bytes())
+    assert fresh["phase"] == "reserved"
+    assert fresh["run_identity"]["session"] != previous_session
+
+
+@pytest.mark.parametrize(
+    ("entry", "detail"),
+    [("resume", "completed/decision-only"), ("recover", "captured state is valid; recovery refused")],
+)
+def test_resume_and_recover_leave_completed_state_in_place(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, entry: str, detail: str
+) -> None:
+    root, state_path, completed_raw, retired = completed_live(tmp_path, monkeypatch)
+    result = run(entry, context="interactive", request={}, start=root)
+    assert result["detail"] == detail
+    assert state_path.read_bytes() == completed_raw
+    assert not retired.exists()
+
+
+def test_non_completed_state_is_never_retired(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    run("new", context="interactive", request=request(root), start=root)
+    state_path = state_root / LIVE_STATE
+    awaiting = state_path.read_bytes()
+    assert loads_exact(awaiting)["phase"] == "awaiting-approval"
+    refused = run("new", context="interactive", request={}, start=root)
+    assert refused["detail"] == "new refuses to overwrite active state"
+    resumed = run(None, context="interactive", request={}, start=root)
+    assert resumed["detail"] == "active session resumed"
+    assert loads_exact(state_path.read_bytes())["phase"] == "awaiting-approval"
+    assert [path.name for path in state_path.parent.iterdir() if ".completed-" in path.name] == []
+
+
+def test_foreign_bytes_at_retired_path_hold_without_changing_either_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, state_path, completed_raw, retired = completed_live(tmp_path, monkeypatch)
+    retired.write_bytes(b"foreign\n")
+    result = run(None, context="interactive", request={}, start=root)
+    assert result["outcome"] == "operator-held"
+    assert state_path.read_bytes() == completed_raw
+    assert retired.read_bytes() == b"foreign\n"
+
+
+def test_interrupted_claim_after_retirement_starts_fresh_on_the_next_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, state_path, completed_raw, retired = completed_live(tmp_path, monkeypatch)
+    original = triage_engine._new_draft
+
+    def interrupted(*args, **kwargs):
+        raise TriageError("simulated interruption after retirement")
+
+    monkeypatch.setattr(triage_engine, "_new_draft", interrupted)
+    failed = run(None, context="interactive", request={}, start=root)
+    assert failed["outcome"] == "hard-stop"
+    assert failed["detail"].startswith(f"retired completed state to {retired} ")
+    assert "the next run starts fresh" in failed["detail"]
+    # The retired session is not reported as retained evidence of the failed run.
+    assert (failed["report"], failed["frozen_snapshot"], failed["candidate_index"]) == (None, None, [])
+    assert not state_path.exists()
+    assert retired.read_bytes() == completed_raw
+    monkeypatch.setattr(triage_engine, "_new_draft", original)
+    fresh = run(None, context="interactive", request={}, start=root)
+    assert fresh["detail"] == "durable triage state retained"
+    assert loads_exact(state_path.read_bytes())["phase"] == "reserved"
+    assert retired.read_bytes() == completed_raw
+
+
+def test_unattended_retirement_then_holds_for_notification_like_a_fresh_draft(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, state_path, completed_raw, retired = completed_live(tmp_path, monkeypatch)
+    result = run(None, context="unattended", request={}, start=root)
+    assert retired.read_bytes() == completed_raw
+    assert not state_path.exists()
+    assert (result["report"], result["frozen_snapshot"], result["candidate_index"]) == (None, None, [])
+    fresh_root = repository(tmp_path / "fresh")
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(tmp_path / "fresh-state-root"))
+    baseline = run(None, context="unattended", request={}, start=fresh_root)
+    assert result["outcome"] == baseline["outcome"]
+    assert result["detail"].endswith(baseline["detail"])
