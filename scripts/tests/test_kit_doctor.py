@@ -1155,6 +1155,31 @@ def test_shipped_manifest_covers_every_kit_owned_file():
     assert not holes, f"manifest has null hashes (files absent at generation): {holes}"
 
 
+def test_every_tracked_file_under_scripts_is_kit_owned():
+    """Every file git tracks under `scripts/` must have a `KIT_OWNED` entry.
+
+    `test_shipped_manifest_covers_every_kit_owned_file` compares `KIT_OWNED`
+    with the manifest, and `--generate-manifest` walks `KIT_OWNED`, so a new
+    file missing from both passes it: #798's first cut added a test module that
+    neither listed, and a manifest-driven install would never have run it.
+    This compares the list with the tree instead. A file that must not ship
+    still gets an entry, with the `repo-only` role.
+
+    Kit source only: an adopter's `scripts/` holds its own files as well.
+    """
+    require_kit_source()
+    tracked = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "ls-files", "-z", "--", "scripts"],
+        check=True, capture_output=True,
+    ).stdout.decode("utf-8").split("\0")
+    owned = {rel for rel, _ in kit_doctor.KIT_OWNED}
+    unlisted = sorted(rel for rel in tracked if rel and rel not in owned)
+    assert not unlisted, (
+        f"tracked under scripts/ but absent from KIT_OWNED: {unlisted}. Add each "
+        "to KIT_OWNED (role `repo-only` if it must not ship), then run "
+        "kit_doctor.py --generate-manifest."
+    )
+
 def test_the_reference_registrations_match_the_shipped_files():
     """The reference copies under `tests/fixtures/shipped-registrations/` must
     equal the registrations the kit actually ships (#534).
@@ -1538,6 +1563,7 @@ def test_repo_only_paths_are_hashed_but_not_offered_to_an_adopter(tmp_path):
     repo_only = {
         "scripts/verify_live_validation_bundle.py",
         "scripts/tests/test_live_validation_bundle.py",
+        "scripts/tests/fixtures/codex_parallel_batch_expected.json",
         "docs/agentic-dev-kit/live-validation-evidence.md",
     }
     assert {
