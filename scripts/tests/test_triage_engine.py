@@ -2487,8 +2487,20 @@ def test_terminal_evidence_refuses_anything_unfinished(change: str) -> None:
     assert _terminal_evidence(_unfinished(change)) is None
 
 
-def _write_live_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, state: dict) -> tuple[Path, Path, bytes]:
+def _write_live_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, state: dict, merge_commit: str = "landed"
+) -> tuple[Path, Path, bytes]:
+    """Write `state` as live state; `merge_commit` "landed" records the fixture's origin/main head."""
     root = repository(tmp_path)
+    if merge_commit == "landed":
+        merge_commit = git(root, "rev-parse", "refs/remotes/origin/main")
+    elif merge_commit == "unmerged-branch":
+        git(root, "checkout", "-q", "-b", "side")
+        git(root, "commit", "-q", "--allow-empty", "-m", "never merged")
+        merge_commit = git(root, "rev-parse", "HEAD")
+        git(root, "checkout", "-q", "main")
+    if "completion" in state and isinstance(state["completion"].get("merge_read_back"), dict):
+        state["completion"]["merge_read_back"]["merge_commit"] = merge_commit
     state_root = tmp_path / "state-root"
     monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
     state_path = state_root / "triage/triage-pipeline-state_live.json"
@@ -2507,9 +2519,9 @@ def test_recover_retires_a_terminal_invalid_state_on_exact_approval_then_new_dra
     planned = run("recover", context="interactive", request={}, start=root)
     plan = planned["recovery_plan"]
     assert plan["action_core"]["action"] == "retire-terminal-invalid-state"
-    assert plan["action_core"]["terminal_evidence"]["verified_tracker_identifiers"] == [
-        "https://github.com/example/project/issues/9"
-    ]
+    evidence = plan["action_core"]["terminal_evidence"]
+    assert evidence["verified_tracker_identifiers"] == ["https://github.com/example/project/issues/9"]
+    assert evidence["merge_commit_reachable_from"] == "refs/remotes/origin/main"
     assert state_path.read_bytes() == raw
     core_digest = plan["action_core_digest"]
     supplied = {"decision": "approve", "source": "current-session", "approver_identity": "operator", "core_digest": core_digest}
@@ -2529,6 +2541,18 @@ def test_recover_still_holds_an_invalid_state_with_an_unfinished_write(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root, state_path, raw = _write_live_state(tmp_path, monkeypatch, _unfinished("tracker-attempting"))
+    held = run("recover", context="interactive", request={}, start=root)
+    assert held["outcome"] == "operator-held"
+    assert held["detail"] == "external-attempt-absence-unproven"
+    assert state_path.read_bytes() == raw
+
+
+@pytest.mark.parametrize("merge_commit", ["f" * 40, "unmerged-branch", "not-a-sha"])
+def test_recover_holds_a_finished_looking_state_whose_merge_never_landed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, merge_commit: str
+) -> None:
+    """The file's own claims are not enough: the merge must be reachable from the protected ref."""
+    root, state_path, raw = _write_live_state(tmp_path, monkeypatch, terminal_invalid_state(), merge_commit)
     held = run("recover", context="interactive", request={}, start=root)
     assert held["outcome"] == "operator-held"
     assert held["detail"] == "external-attempt-absence-unproven"

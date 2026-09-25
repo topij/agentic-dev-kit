@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -381,6 +383,7 @@ def prepare_state_action(
 
 
 _SETTLED = {"verified"}
+_COMMIT = re.compile(r"[0-9a-f]{40}")
 _FORGE_SETTLED = {"verified", "unsettled"}
 
 
@@ -448,6 +451,24 @@ def _terminal_evidence(parsed: Any) -> dict[str, Any] | None:
     }
 
 
+def _merge_landed(settings: Settings, merge_commit: Any) -> str | None:
+    """Return the protected ref the recorded merge commit is reachable from.
+
+    The bytes of an invalid state are not evidence on their own: a file that
+    says the right words would otherwise pass. What makes a new session safe is
+    that the old sweep really landed, so its blocks have left the inbox; git
+    answers that without trusting the file.
+    """
+    if not isinstance(merge_commit, str) or not _COMMIT.fullmatch(merge_commit):
+        return None
+    ref = f"refs/remotes/origin/{settings.protected_branch}"
+    result = subprocess.run(
+        ["git", "-C", str(settings.paths.repo), "merge-base", "--is-ancestor", merge_commit, ref],
+        check=False, capture_output=True,
+    )
+    return ref if result.returncode == 0 else None
+
+
 def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str, Any]) -> dict[str, Any]:
     core = bundle.get("capture_core")
     if not isinstance(core, dict) or digest(core) != bundle.get("capture_core_digest"):
@@ -480,6 +501,9 @@ def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str
             and all(parsed.get(name) == [] for name in evidence_names)
         )
         terminal_evidence = None if abandonable else _terminal_evidence(parsed)
+        if terminal_evidence is not None:
+            landed = _merge_landed(settings, terminal_evidence["merge_commit"])
+            terminal_evidence = {**terminal_evidence, "merge_commit_reachable_from": landed} if landed else None
         if not abandonable and terminal_evidence is None:
             held = {**bundle, "kind": "state-present-held", "terminal_classification": "external-attempt-absence-unproven"}
             return {"held": held}
