@@ -2398,3 +2398,138 @@ def test_unattended_retirement_then_holds_for_notification_like_a_fresh_draft(
     baseline = run(None, context="unattended", request={}, start=fresh_root)
     assert result["outcome"] == baseline["outcome"]
     assert result["detail"].endswith(baseline["detail"])
+
+
+# --- Retiring a finished run whose state no longer validates -----------------
+# An invalid state that records external writes is held, because nothing proves
+# none is in flight. A run whose own bytes record every write verified and a
+# verified merge of the reviewed head has nothing in flight, and is retired.
+
+REVIEWED = "a" * 40
+
+
+def terminal_invalid_state() -> dict:
+    return {
+        "kind": "triage-run-state",
+        "schema_version": 1,
+        "phase": "completed",
+        "schema_deviations": [{"id": "hand-recorded"}],
+        "run_identity": {"session": "old-llm-only-session"},
+        "reviewed_head": REVIEWED,
+        "verified_tracker_identifiers": ["https://github.com/example/project/issues/9"],
+        "operations": [{"candidate_id": "TRI-01", "status": "verified"}],
+        "attempts": [{"status": "verified"}],
+        "notification_operations": [],
+        "finalization_operations": [
+            {"kind": "commit", "status": "verified", "attempts": [{"status": "verified"}]},
+            {"kind": "pr-watch", "status": "unsettled", "attempts": [{"status": "unsettled"}]},
+            {"kind": "pr-watch", "status": "verified", "attempts": [{"status": "verified"}]},
+            {"kind": "merge-read-back", "status": "verified", "attempts": [{"status": "verified"}]},
+        ],
+        "completion": {
+            "route": "archive-sweep",
+            "merge_read_back": {"merged": True, "final_head": REVIEWED, "pull_request": "10", "merge_commit": "b" * 40},
+        },
+    }
+
+
+def test_terminal_evidence_summarises_a_finished_run() -> None:
+    from triage.recovery import _terminal_evidence
+
+    assert _terminal_evidence(terminal_invalid_state()) == {
+        "session": "old-llm-only-session",
+        "verified_tracker_identifiers": ["https://github.com/example/project/issues/9"],
+        "pull_request": "10",
+        "merge_commit": "b" * 40,
+        "final_head": REVIEWED,
+    }
+
+
+def _unfinished(change: str) -> dict:
+    state = terminal_invalid_state()
+    if change == "phase":
+        state["phase"] = "forge-finalize"
+    elif change == "route":
+        state["completion"]["route"] = "decision-only"
+    elif change == "unmerged":
+        state["completion"]["merge_read_back"]["merged"] = False
+    elif change == "other-head":
+        state["completion"]["merge_read_back"]["final_head"] = "c" * 40
+    elif change == "tracker-attempting":
+        state["operations"][0]["status"] = "attempting"
+    elif change == "attempt-ambiguous":
+        state["attempts"][0]["status"] = "ambiguous"
+    elif change == "nested-failed":
+        state["finalization_operations"][0]["attempts"][0]["status"] = "failed"
+    elif change == "unsettled-write":
+        state["finalization_operations"][0]["status"] = "unsettled"
+    elif change == "no-merge-read-back-last":
+        state["finalization_operations"].pop()
+    elif change == "no-forge":
+        state["finalization_operations"] = []
+    elif change == "notification-attempting":
+        state["notification_operations"] = [{"status": "attempting"}]
+    elif change == "identifier-type":
+        state["verified_tracker_identifiers"] = [9]
+    elif change == "schema-bool":
+        state["schema_version"] = True
+    return state
+
+
+@pytest.mark.parametrize("change", [
+    "phase", "route", "unmerged", "other-head", "tracker-attempting", "attempt-ambiguous",
+    "nested-failed", "unsettled-write", "no-merge-read-back-last", "no-forge",
+    "notification-attempting", "identifier-type", "schema-bool",
+])
+def test_terminal_evidence_refuses_anything_unfinished(change: str) -> None:
+    from triage.recovery import _terminal_evidence
+
+    assert _terminal_evidence(_unfinished(change)) is None
+
+
+def _write_live_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, state: dict) -> tuple[Path, Path, bytes]:
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    state_path.parent.mkdir(parents=True)
+    raw = dumps(state)
+    state_path.write_bytes(raw)
+    return root, state_path, raw
+
+
+def test_recover_retires_a_terminal_invalid_state_on_exact_approval_then_new_drafts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, state_path, raw = _write_live_state(tmp_path, monkeypatch, terminal_invalid_state())
+    blocked = run("new", context="interactive", request={}, start=root)
+    assert blocked["outcome"] in {"operator-held", "hard-stop"}
+    planned = run("recover", context="interactive", request={}, start=root)
+    plan = planned["recovery_plan"]
+    assert plan["action_core"]["action"] == "retire-terminal-invalid-state"
+    assert plan["action_core"]["terminal_evidence"]["verified_tracker_identifiers"] == [
+        "https://github.com/example/project/issues/9"
+    ]
+    assert state_path.read_bytes() == raw
+    core_digest = plan["action_core_digest"]
+    supplied = {"decision": "approve", "source": "current-session", "approver_identity": "operator", "core_digest": core_digest}
+    context = ApprovalContext("current-session", "operator", {"decision": "approve", "approver_identity": "operator", "core_digest": core_digest})
+    recovered = run("recover", context="interactive", request={"recovery_approval": supplied}, start=root, approval_context=context)
+    assert recovered["outcome"] == "operator-held"
+    assert loads_exact(state_path.read_bytes())["kind"] == "recovered-safe-to-restart"
+    retained = Path(plan["action_core"]["quarantine_path"])
+    assert retained.read_bytes() == raw
+    restarted = run("new", context="interactive", request={}, start=root)
+    assert restarted["detail"] == "verified recovery receipt replaced by reserved new state"
+    assert loads_exact(state_path.read_bytes())["phase"] == "reserved"
+    assert retained.read_bytes() == raw
+
+
+def test_recover_still_holds_an_invalid_state_with_an_unfinished_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, state_path, raw = _write_live_state(tmp_path, monkeypatch, _unfinished("tracker-attempting"))
+    held = run("recover", context="interactive", request={}, start=root)
+    assert held["outcome"] == "operator-held"
+    assert held["detail"] == "external-attempt-absence-unproven"
+    assert state_path.read_bytes() == raw

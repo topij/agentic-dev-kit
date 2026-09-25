@@ -380,6 +380,74 @@ def prepare_state_action(
     return prepared
 
 
+_SETTLED = {"verified"}
+_FORGE_SETTLED = {"verified", "unsettled"}
+
+
+def _terminal_evidence(parsed: Any) -> dict[str, Any] | None:
+    """Summarise an invalid but finished run, or return None to keep it held.
+
+    An invalid state that records external writes cannot be abandoned, because
+    nothing proves none is still in flight. A run whose own bytes record every
+    tracker and forge operation as verified, and a verified merge whose final
+    head is the reviewed head, has nothing in flight: it can be retired to its
+    quarantine path like an abandoned one, keeping every byte. `unsettled` is
+    accepted only on a `pr-watch` observation, which writes nothing. Anything
+    unrecognised keeps the state held.
+    """
+    if (
+        not isinstance(parsed, dict)
+        or parsed.get("kind") != "triage-run-state"
+        or isinstance(parsed.get("schema_version"), bool)
+        or parsed.get("schema_version") != 1
+        or parsed.get("phase") != "completed"
+    ):
+        return None
+    completion = parsed.get("completion")
+    merge = completion.get("merge_read_back") if isinstance(completion, dict) else None
+    reviewed_head = parsed.get("reviewed_head")
+    identifiers = parsed.get("verified_tracker_identifiers")
+    if (
+        not isinstance(completion, dict)
+        or completion.get("route") != "archive-sweep"
+        or not isinstance(merge, dict)
+        or merge.get("merged") is not True
+        or not isinstance(reviewed_head, str)
+        or merge.get("final_head") != reviewed_head
+        or not isinstance(identifiers, list)
+        or any(not isinstance(item, str) for item in identifiers)
+    ):
+        return None
+    records: list[tuple[dict[str, Any], set[str]]] = []
+    for name in ("operations", "attempts", "notification_operations"):
+        entries = parsed.get(name, [])
+        if not isinstance(entries, list) or any(not isinstance(entry, dict) for entry in entries):
+            return None
+        records.extend((entry, _SETTLED) for entry in entries)
+    forge = parsed.get("finalization_operations")
+    if not isinstance(forge, list) or not forge or any(not isinstance(entry, dict) for entry in forge):
+        return None
+    for entry in forge:
+        allowed = _FORGE_SETTLED if entry.get("kind") == "pr-watch" else _SETTLED
+        records.append((entry, allowed))
+        nested = entry.get("attempts", [])
+        if not isinstance(nested, list) or any(not isinstance(attempt, dict) for attempt in nested):
+            return None
+        records.extend((attempt, allowed) for attempt in nested)
+    if any(record.get("status") not in allowed for record, allowed in records):
+        return None
+    if forge[-1].get("kind") != "merge-read-back" or forge[-1].get("status") != "verified":
+        return None
+    run_identity = parsed.get("run_identity")
+    return {
+        "session": run_identity.get("session") if isinstance(run_identity, dict) else None,
+        "verified_tracker_identifiers": identifiers,
+        "pull_request": merge.get("pull_request"),
+        "merge_commit": merge.get("merge_commit"),
+        "final_head": reviewed_head,
+    }
+
+
 def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str, Any]) -> dict[str, Any]:
     core = bundle.get("capture_core")
     if not isinstance(core, dict) or digest(core) != bundle.get("capture_core_digest"):
@@ -411,11 +479,13 @@ def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str
             }
             and all(parsed.get(name) == [] for name in evidence_names)
         )
-        if not abandonable:
+        terminal_evidence = None if abandonable else _terminal_evidence(parsed)
+        if not abandonable and terminal_evidence is None:
             held = {**bundle, "kind": "state-present-held", "terminal_classification": "external-attempt-absence-unproven"}
             return {"held": held}
-        action = "abandon-invalid-state"
+        action = "abandon-invalid-state" if abandonable else "retire-terminal-invalid-state"
     quarantine_path = str(store.state_path) + f".quarantine-{core['state_digest'][:16]}"
+    moves_state = action in {"abandon-invalid-state", "retire-terminal-invalid-state"}
     receipt_core = {
         "kind": "test-recovered-safe-to-restart" if store.mode == "test" else "recovered-safe-to-restart",
         "mode": store.mode,
@@ -428,9 +498,13 @@ def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str
         "capture_core_digest": bundle["capture_core_digest"],
         "old_gate_digest": core["old_gate_digest"],
         "action": action,
-        "quarantine_path": quarantine_path if action == "abandon-invalid-state" else None,
-        "receipt_core": receipt_core if action == "abandon-invalid-state" else None,
+        "quarantine_path": quarantine_path if moves_state else None,
+        "receipt_core": receipt_core if moves_state else None,
     }
+    if action == "retire-terminal-invalid-state":
+        # Bound into the digest the operator approves, so the approval names
+        # the external writes the retired bytes record as finished.
+        action_core["terminal_evidence"] = terminal_evidence
     return {"action_core": action_core, "action_core_digest": digest(action_core), "held": None}
 
 
