@@ -118,7 +118,7 @@ Run these from the repository whose installation you are inspecting, with
 
 ```sh
 uv run scripts/kit_doctor.py
-python3 scripts/check_doc_budget.py
+uv run scripts/check_doc_budget.py
 ```
 
 `kit_doctor` reports kit-owned file drift and installation properties. A `differs`

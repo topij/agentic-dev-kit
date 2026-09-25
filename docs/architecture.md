@@ -43,9 +43,9 @@ the adapters and documented differences. Keep a workflow change in the shared
 definition so Claude and Codex receive it.
 
 The root [AGENTS.md](../AGENTS.md) binds repository-wide instructions for Codex;
-[CLAUDE.md](../CLAUDE.md) imports it for Claude Code. Policy that must reach both
-clients belongs in that common route or a shared workflow, not solely in
-`.claude/rules/`.
+[CLAUDE.md](../CLAUDE.md) imports it for Claude Code. Policy that must reach
+Claude Code and Codex belongs in that common route or a shared workflow, not
+solely in `.claude/rules/`.
 
 `init.sh` migrates supported config and renders unclaimed templates. An adopted
 repository owns its rendered narrative docs and root agent guides. The
