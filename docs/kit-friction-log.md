@@ -26,6 +26,42 @@
 
 ## 2026-09-25 — Backlog migrated by triage session 68e767ab2a9a400798b79cf780b3070e
 
+Engine-backed (`engine-verified`) sweep, merged as #805. The engine writes no record
+under its marker (#806), so this block was written in the session's wrap-up.
+
+**Archived without filing,** on the operator's in-session command `archive TRI-05 TRI-06
+TRI-12 TRI-13 TRI-14 TRI-15 TRI-16 TRI-18 TRI-19 TRI-20 TRI-21 TRI-22 TRI-23 TRI-24
+TRI-25 TRI-28`. Each swept entry already had a home:
+
+- on the tracker: #783, #776, #574, #719, #720, #578 (two entries), #721, #393, #561,
+  #712 (two entries), #713;
+- the bash 3.2 heredoc entry and the `#666` ordering entry were recorded knowledge, with
+  no fix owed;
+- the eight-panel-rounds entry had already graduated to `AGENTS.md`'s *Prose that goes
+  false*.
+
+**Kept active below:** every other entry, parked by default. That includes the
+2026-08-27 `claude -p --output-format json` and `panel_prompt.py` entries, whose source
+bytes are unchanged since the 2026-09-06 park.
+
+**Degraded:** the notification thread. Approval was in the current session, which the
+interactive route permits.
+
+## 2026-09-25 — Backlog migrated by triage session a382ee5c31814a2390cce79eeee5a903
+
+Engine-backed (`engine-verified`) sweep, merged as #803. This session's marker was
+deleted by the next sweep's empty-section removal (#806), so the wrap-up restored it
+with this record.
+
+**Graduated:** [#802](https://github.com/topij/agentic-dev-kit/issues/802), from the
+2026-09-24 `codex exec` trust-entry entry, on the operator's in-session command
+`approve TRI-05`. The create's first read-back came back empty because the issue list
+lagged (#808). A resume then verified #802 by its exact marker, with no duplicate.
+
+**Before this session,** the 2026-09-06 LLM-only session's state was retired through
+`recover`'s `retire-terminal-invalid-state` (#801), on the operator's approval of the
+exact action digest. Its bytes are kept under `state/triage/`.
+
 ## 2026-09-24
 
 - **A restarted `post-merge-systemize` run resumed a `running` heartbeat without calling
@@ -360,4 +396,3 @@ could exist; the digest was recomputed from the file being swept immediately bef
 the rewrite and matched.
 
 Swept entries are verbatim in the archive under `Graduated 2026-08-22`.
-

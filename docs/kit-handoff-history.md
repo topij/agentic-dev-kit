@@ -5,6 +5,99 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-09-23 (Phase 5 D-SYSTEMIZE-RECOVERY packet, unattended, in Claude Code)
+
+**Mode.** The operator asked for an autonomous session on the plan and then left. No
+operator decision was taken while the session ran unattended. The operator's decisions
+on its return are under *Operator decisions* at the end of this block.
+
+**The packet.** `saved_plans/phase5-d-systemize-recovery_2026-09-23.md` (local, not
+committed) splits the D-SYSTEMIZE-RECOVERY row into a Stage 1 and a Stage 2, each
+approved separately:
+
+- **Stage 1** kills the real engines, or the process driving them, at and just before
+  the raw and digest cutpoints, then restarts fresh processes from durable files alone.
+  It uses a fake forge in a new clone at `66a8a10`, and it is approvable as written.
+- **Stage 2** covers the pre-approval and post-dispatch cutpoints, which sit inside the
+  agent. It needs operator decisions on which agent process to use (A) and on what
+  the post-dispatch cutpoint may touch (B).
+  - The packet recommends A1: a headless `claude -p`, isolated by
+    `--strict-mcp-config` and `--setting-sources ""`.
+  - It recommends B1: a fake tracker only.
+- A fresh subagent checked the draft against the code at `66a8a10`. Its corrections are
+  folded in, and the packet's *Preparation check* lists them.
+
+**Preparation evidence** is in
+`state/review-evidence/phase5-d-systemize-recovery-prep-20260923/` (gitignored). Its
+headless probes are what option A1 rests on:
+
+- without isolation, a headless run loaded the claude.ai connectors, Slack included;
+- with `--strict-mcp-config` and an empty MCP config it loaded none;
+- the user `SessionStart` hook and a synced plugin loaded all the same.
+
+**Found and parked:** `heartbeat_cli.py start` reopens a completed run, which contradicts
+the workflow's *Engine interface*. The entry is in the friction log rather than the
+tracker, because nobody was present to approve a payload.
+
+**Pull requests opened ready for review:**
+
+- [#780](https://github.com/topij/agentic-dev-kit/pull/780) fixes the handoff footer
+  layout that #776 diagnosed. Reviewed head
+  `20451840fec7ba74923134ef7c49fc776272bc00`.
+- [#781](https://github.com/topij/agentic-dev-kit/pull/781) stops README,
+  getting-started and runtime-parity from describing the shipped engines as absent. It
+  is #7's fourth work item. Reviewed head `c32189c4acd76b4b150c1e744fe1dd5dbb5ec3d5`.
+
+Each has a fallback panel receipt bound to its reviewed head, and each PR's
+disposition comment records the lens results. Both were held for the operator, whose
+merges are under *Operator decisions*.
+
+**Judgments prepared, not taken.** Each is the operator's to make.
+
+- **#748.** #769 delivered its first two suggestions: forge thread resolution is
+  authoritative, and `outdated` is a state of its own.
+  - The third, an honest "unknown", is only partly met. A failed forge read stops the
+    run, but a thread with no resolution field digests as `unaddressed`
+    (`normalize.thread_addressed`).
+  - The options are to retire #748 as delivered, or to narrow it to that mapping.
+- **#7.** #769 shipped its work items 1–3, and #781 carries item 4. Field installation
+  is Phase 5's own row, not #7's, so nothing in #7's list is outstanding once item 4
+  merges.
+
+**Still open from earlier sessions:** #722's owed record edits.
+
+**Sweep.** #780 is not merged at this block's base. So this wrap-up swept with the
+repo's own helper, applying the footer restore and trim that the next block describes.
+It also swept the same pre-sweep files a second time, as scratch copies, with #780's
+helper at `2045184`. On 2026-09-24 the two gave different results:
+
+| Helper | Input | Printed |
+|---|---|---|
+| repo's own, at `66a8a10` | with the blank line restored | `moved 3 block(s) … (463 -> 379 plan lines)` |
+| #780's, at `2045184` | untouched | `moved 2 block(s) … (462 -> 400 plan lines)` |
+
+The old helper counts the blank line it writes itself toward `--target-lines`. This
+commit keeps the first result.
+
+**Operator decisions, 2026-09-24.** The approval record is
+`state/review-evidence/phase5-d-systemize-recovery-01/APPROVAL.md`, which binds the
+approved packet by SHA-256.
+
+- **PHASE5-D-SYSTEMIZE-RECOVERY-01:** Stage 1 is approved as scoped. Stage 2 is
+  approved with options A1 and B1.
+- **Merges:** the operator directed the merges.
+  - #780 merged as `c8497c6295bdf21c073faa5470fb20e1337f5d7c`; on 2026-09-24 `git rev-parse
+    <sha>^{tree}` matched its reviewed head's. The next block's footer restore is not needed.
+  - #781 merged as `902dbf64bc5a3301ab5817b1cbc78c3effa29f1d`; on 2026-09-24 `git diff` from its
+    reviewed head over the three docs it changed was empty.
+
+▶ Next: execute PHASE5-D-SYSTEMIZE-RECOVERY-01 — Stage 1, then Stage 2 with A1 and B1 —
+from `state/review-evidence/phase5-d-systemize-recovery-01/packet.md`. If that
+directory already holds a `RESULTS.md`, resume from it rather than starting again.
+
+The next session ran RECOVERY; the 2026-09-24 D-SYSTEMIZE-RECOVERY run block owns its
+outcome.
+
 ### 2026-09-23 (Phase 5 D-SYSTEMIZE-BOUNDARIES, in Claude Code)
 
 **Operator decisions, taken interactively.** They are recorded in
