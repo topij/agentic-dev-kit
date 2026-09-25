@@ -802,12 +802,14 @@ retired by *Completed-state retirement* instead: phase `completed`, completion r
 notification record `verified`, every forge operation and nested attempt `verified`
 (a `pr-watch` observation may also be `unsettled`, since it writes nothing), and a
 verified `merge-read-back` as the last forge operation. Those bytes are claims, not
-proof, and any merged commit would pass a reachability test, so the engine checks this
-run's own sweep: the recorded `merge_commit` must be a full object id (40 to 64 lowercase hex) that git finds
-reachable from the protected branch's remote-tracking ref and whose change set includes
-`<friction-log>`, and every frozen block the run decided to file or archive must be
-absent from the current `<friction-log>` and present in `<friction-log-archive>`. That
-is what shows its blocks left the inbox, so a new session cannot re-file them. Nothing
+proof; neither a reachable commit (any merged commit is one) nor the working tree
+(uncommitted edits can say anything) proves the sweep, so the engine reads the evidence
+from git. The recorded `merge_commit` must be a full object id (40 to 64 lowercase hex)
+reachable from the protected branch's remote-tracking ref, and it must be the sweep
+itself: every frozen block the run decided to file or archive is in `<friction-log>` at
+its parent, absent from `<friction-log>` and present in `<friction-log-archive>` at that
+commit, and absent from `<friction-log>` at the protected ref. That shows this run's
+blocks left the inbox, so a new session cannot re-file them. Nothing
 such a run recorded is in flight, so it may offer `retire-terminal-invalid-state` under the same quarantine,
 receipt, and approval sequence as abandonment; its action core additionally binds a
 `terminal_evidence` summary of the session, verified tracker identifiers, pull request,

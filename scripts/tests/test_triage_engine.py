@@ -2517,7 +2517,32 @@ def _write_live_state(
 
     inbox.write_text(inbox.read_text(encoding="utf-8") + "\n" + SWEPT_BLOCK + "\n", encoding="utf-8")
     entry_added = commit("add the entry the old run will sweep")
-    if history == "unrelated-reachable":
+    if history == "uncommitted-local-sweep":
+        # The working tree says the block moved, but no commit did.
+        inbox.write_text(inbox.read_text(encoding="utf-8").replace("\n" + SWEPT_BLOCK + "\n", ""), encoding="utf-8")
+        archive.write_text(archive.read_text(encoding="utf-8") + "\n" + SWEPT_BLOCK + "\n", encoding="utf-8")
+        merge_commit = entry_added
+    elif history == "side-branch-sweep":
+        # A complete sweep on a branch that never merged, while main swept the
+        # block separately: only reachability tells the cited commit apart.
+        git(root, "checkout", "-q", "-b", "side")
+        inbox.write_text(inbox.read_text(encoding="utf-8").replace("\n" + SWEPT_BLOCK + "\n", ""), encoding="utf-8")
+        archive.write_text(archive.read_text(encoding="utf-8") + "\n" + SWEPT_BLOCK + "\n", encoding="utf-8")
+        git(root, "add", "-A")
+        git(root, "commit", "-q", "-m", "unmerged sweep")
+        merge_commit = git(root, "rev-parse", "HEAD")
+        git(root, "checkout", "-q", "main")
+        inbox.write_text(inbox.read_text(encoding="utf-8").replace("\n" + SWEPT_BLOCK + "\n", "\n- **Other.** edit.\n"), encoding="utf-8")
+        archive.write_text(archive.read_text(encoding="utf-8") + "\n" + SWEPT_BLOCK + "\n\n", encoding="utf-8")
+        commit("main's own sweep")
+    elif history == "archived-after-removal":
+        # The block left the inbox in one commit and reached the archive in a
+        # later one; the cited later commit did not take it out of the inbox.
+        inbox.write_text(inbox.read_text(encoding="utf-8").replace("\n" + SWEPT_BLOCK + "\n", ""), encoding="utf-8")
+        commit("drop the block")
+        archive.write_text(archive.read_text(encoding="utf-8") + "\n" + SWEPT_BLOCK + "\n", encoding="utf-8")
+        merge_commit = commit("archive it later")
+    elif history == "unrelated-reachable":
         # Reachable and it changes the friction log, but it is not this run's
         # sweep: the block is still in the inbox and not in the archive.
         merge_commit = entry_added
@@ -2539,6 +2564,9 @@ def _write_live_state(
             # later commit removes it there.
             inbox.write_text(inbox.read_text(encoding="utf-8").replace("\n" + SWEPT_BLOCK + "\n", ""), encoding="utf-8")
             commit("later inbox edit")
+        elif history == "decoy-commit":
+            # The real sweep landed, but the state cites a different commit.
+            merge_commit = entry_added
         elif history == "claims-unmerged-sweep":
             # The real sweep is on main, but the recorded merge is a side-branch
             # commit that also touches the friction log and never merged: only
@@ -2603,6 +2631,7 @@ def test_recover_still_holds_an_invalid_state_with_an_unfinished_write(
 @pytest.mark.parametrize("history", [
     "f" * 40, "f" * 64, "not-a-sha", "unmerged-branch", "unrelated-reachable",
     "still-in-inbox", "missing-from-archive", "archive-only-commit", "claims-unmerged-sweep",
+    "uncommitted-local-sweep", "decoy-commit", "side-branch-sweep", "archived-after-removal",
 ])
 def test_recover_holds_a_finished_looking_state_whose_sweep_is_not_proven(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, history: str

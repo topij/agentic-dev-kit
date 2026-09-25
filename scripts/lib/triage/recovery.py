@@ -474,39 +474,52 @@ def _swept_blocks(parsed: dict[str, Any]) -> dict[str, str] | None:
     return swept or None
 
 
+def _git_show(settings: Settings, revision: str, path: Path) -> str | None:
+    rel = path.relative_to(settings.paths.repo).as_posix()
+    result = subprocess.run(
+        ["git", "-C", str(settings.paths.repo), "show", f"{revision}:{rel}"],
+        check=False, capture_output=True,
+    )
+    if result.returncode:
+        return None
+    try:
+        return result.stdout.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+
+
 def _sweep_landed(settings: Settings, parsed: dict[str, Any], merge_commit: Any) -> str | None:
     """Return the protected ref the run's own sweep is proven on, or None.
 
-    The bytes of an invalid state are claims, not proof, and a reachable commit
-    alone could be any merged commit. What makes a new session safe is that this
-    run's swept blocks left the inbox, so it cannot re-file them. So the recorded
-    merge commit must be reachable from the protected ref and change the friction
-    log, and every block the run filed or archived must be absent from the
-    current inbox and present in the archive.
+    The bytes of an invalid state are claims, not proof, and neither a reachable
+    commit nor the working tree proves the sweep: any merged commit is
+    reachable, and uncommitted edits can say anything. What makes a new session
+    safe is that this run's swept blocks left the inbox, so it cannot re-file
+    them. Everything is therefore read from git: the recorded merge commit must
+    be reachable from the protected ref and be the sweep itself, so each block
+    the run filed or archived is in its parent's friction log, gone from its own
+    and present in its archive, and still gone from the protected ref's.
     """
     swept = _swept_blocks(parsed)
     if swept is None or not isinstance(merge_commit, str) or not OID_RE.fullmatch(merge_commit):
         return None
-    repo = str(settings.paths.repo)
     ref = f"refs/remotes/origin/{settings.protected_branch}"
     reachable = subprocess.run(
-        ["git", "-C", repo, "merge-base", "--is-ancestor", merge_commit, ref],
+        ["git", "-C", str(settings.paths.repo), "merge-base", "--is-ancestor", merge_commit, ref],
         check=False, capture_output=True,
     )
-    changed = subprocess.run(
-        ["git", "-C", repo, "diff-tree", "--no-commit-id", "--name-only", "-r", "-z", merge_commit],
-        check=False, capture_output=True,
-    )
-    log_path = settings.paths.friction_log.relative_to(settings.paths.repo).as_posix()
-    if reachable.returncode or changed.returncode or log_path not in changed.stdout.decode("utf-8", "replace").split("\0"):
+    if reachable.returncode:
         return None
-    try:
-        inbox = settings.paths.friction_log.read_text(encoding="utf-8")
-        archive = settings.paths.archive.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
+    log, archive = settings.paths.friction_log, settings.paths.archive
+    before = _git_show(settings, f"{merge_commit}^", log)
+    after = _git_show(settings, merge_commit, log)
+    archived = _git_show(settings, merge_commit, archive)
+    current = _git_show(settings, ref, log)
+    if None in (before, after, archived, current):
         return None
-    if any(text in inbox or text not in archive for text in swept.values()):
-        return None
+    for text in swept.values():
+        if text not in before or text in after or text not in archived or text in current:
+            return None
     return ref
 
 
