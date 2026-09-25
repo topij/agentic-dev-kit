@@ -3455,3 +3455,25 @@ failure — closed by PR #28).
   before acting on it. **Proposed fix:** rule 1 could name a threshold ("a second
   tightening of the same matcher is a design signal, not a bug fix") so the decision
   point is written down rather than requiring the author to notice it.
+## 2026-09-24
+
+- **`codex exec` writes a `trust_level = "trusted"` entry for its working directory into
+  `~/.codex/config.toml`, even under `--ignore-user-config --ephemeral`.**
+  - **Observed** on 2026-09-24, with codex-cli 0.153.4 and the ChatGPT desktop app
+    running, for three working directories: a preparation clone, a gate probe clone and
+    the PHASE5-D-FRESH-CONTEXT-01 run clone.
+  - **The write can land late.** SHA-256 hashes taken before the first probe and right
+    after the second were identical, yet an entry for that probes' directory was
+    present later.
+  - **Cleanup:** the three entries were removed with a guarded edit, on the operator's
+    approval. The file's SHA-256 afterwards matched its value before the first probe.
+  - **Probably accumulating from kit review lenses.** On 2026-09-24,
+    `grep -c -E '^\[projects\."/private/(tmp|var)/[^"]*lens-' ~/.codex/config.toml`
+    printed `19`, which suggests the kit's Codex review-lens launches leave these
+    entries behind. None of those entries was touched.
+  - **Not established:** whether the CLI or the desktop app's Codex service writes them.
+  - **Proposed direction:** remove an entry after the launch that caused it, or run
+    lenses under a separate `CODEX_HOME`. Neither has been tried.
+  - **Severity:** L. The paths are temporary and mostly random-suffixed, but a trusted
+    path that is later reused would load that directory's project config and hooks.
+
