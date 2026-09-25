@@ -14,11 +14,45 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-24 — RECOVERY's agent-cutpoint rerun ran as
-PHASE5-D-SYSTEMIZE-RECOVERY-02. Phase 5 delivery item 5 remains incomplete; item 6's
-replay remains complete.
+Last updated: 2026-09-25 — assessed an adopter's move from CodeRabbit to an internal
+reviewer and filed the kit's generic gaps (#796, #797). This session did not touch
+Phase 5.
 
-## Latest session — 2026-09-24 (Phase 5 D-SYSTEMIZE-RECOVERY-02 rerun, in Claude Code)
+## Latest session — 2026-09-25 (reviewer switching assessment, in Claude Code)
+
+**Why.** An In Parallel adopter repository is replacing CodeRabbit with an internal PR
+reviewer. The operator wants the kit to treat any reviewer as "just another review
+bot" and to make switching between CodeRabbit and internal tooling a config choice.
+
+**Decisions (operator):**
+
+- The kit repo stays on CodeRabbit (free OSS tier).
+- The kit ships **no** settings for the internal reviewer. The kit may be used by
+  external repos, so the adopter defines its reviewer's profile itself. Kit code, docs
+  and tests stay reviewer-neutral and use a made-up reviewer.
+- How the internal reviewer behaves (trigger, label semantics, login, latency) is
+  settled by watching it once it is live on the adopter. If the kit can't accommodate
+  it, the fallback is asking the reviewer's developer for a change. On 2026-09-25
+  the operator asked that developer to have the reviewer post a GitHub check run, which would make the kit's existing
+  check-based pending path work unchanged.
+
+**Filed on the operator's go-ahead:**
+
+- #796: reviewer profiles, with adopter-defined profiles and a configured
+  review-request method;
+- #797: the merge gate can't see a reviewer whose only in-progress signal is a
+  comment, and pending grace is one value for all reviewers.
+
+The reviewer-specific notes and the checklist of things to observe once it is live are
+in `saved_plans/fabro-review-tool-assessment_2026-09-25.md` (local, not committed). The
+public issues leave those details out on purpose.
+
+▶ Next: `/session-start`. For this thread, #796 can start any time; #797 can wait for
+the reviewer developer's answer about a check run.
+
+______________________________________________________________________
+
+## Session — 2026-09-24 (Phase 5 D-SYSTEMIZE-RECOVERY-02 rerun, in Claude Code)
 
 **Approved and run.** The operator approved PHASE5-D-SYSTEMIZE-RECOVERY-02 with options
 A1, B1, C1, R1 and E1. The packet is
