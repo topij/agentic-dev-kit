@@ -451,22 +451,65 @@ def _terminal_evidence(parsed: Any) -> dict[str, Any] | None:
     }
 
 
-def _merge_landed(settings: Settings, merge_commit: Any) -> str | None:
-    """Return the protected ref the recorded merge commit is reachable from.
-
-    The bytes of an invalid state are not evidence on their own: a file that
-    says the right words would otherwise pass. What makes a new session safe is
-    that the old sweep really landed, so its blocks have left the inbox; git
-    answers that without trusting the file.
-    """
-    if not isinstance(merge_commit, str) or not _COMMIT.fullmatch(merge_commit):
+def _swept_blocks(parsed: dict[str, Any]) -> dict[str, str] | None:
+    """The frozen source text of every block the run decided to file or archive."""
+    snapshot = parsed.get("frozen_snapshot")
+    content = snapshot.get("content") if isinstance(snapshot, dict) else None
+    blocks = content.get("blocks") if isinstance(content, dict) else None
+    decisions = parsed.get("decisions")
+    if not isinstance(blocks, list) or not isinstance(decisions, list):
         return None
+    texts: dict[str, str] = {}
+    for block in blocks:
+        if not isinstance(block, dict) or not isinstance(block.get("candidate_id"), str) or not isinstance(block.get("source_block"), str):
+            return None
+        texts[block["candidate_id"]] = block["source_block"]
+    swept: dict[str, str] = {}
+    for decision in decisions:
+        if not isinstance(decision, dict) or not isinstance(decision.get("candidate_id"), str):
+            return None
+        if decision.get("decision") in {"file", "archive"}:
+            text = texts.get(decision["candidate_id"])
+            if not text or not text.strip():
+                return None
+            swept[decision["candidate_id"]] = text
+    return swept or None
+
+
+def _sweep_landed(settings: Settings, parsed: dict[str, Any], merge_commit: Any) -> str | None:
+    """Return the protected ref the run's own sweep is proven on, or None.
+
+    The bytes of an invalid state are claims, not proof, and a reachable commit
+    alone could be any merged commit. What makes a new session safe is that this
+    run's swept blocks left the inbox, so it cannot re-file them. So the recorded
+    merge commit must be reachable from the protected ref and change the friction
+    log, and every block the run filed or archived must be absent from the
+    current inbox and present in the archive.
+    """
+    swept = _swept_blocks(parsed)
+    if swept is None or not isinstance(merge_commit, str) or not _COMMIT.fullmatch(merge_commit):
+        return None
+    repo = str(settings.paths.repo)
     ref = f"refs/remotes/origin/{settings.protected_branch}"
-    result = subprocess.run(
-        ["git", "-C", str(settings.paths.repo), "merge-base", "--is-ancestor", merge_commit, ref],
+    reachable = subprocess.run(
+        ["git", "-C", repo, "merge-base", "--is-ancestor", merge_commit, ref],
         check=False, capture_output=True,
     )
-    return ref if result.returncode == 0 else None
+    changed = subprocess.run(
+        ["git", "-C", repo, "diff-tree", "--no-commit-id", "--name-only", "-r", "-z", merge_commit],
+        check=False, capture_output=True,
+    )
+    log_path = settings.paths.friction_log.relative_to(settings.paths.repo).as_posix()
+    if reachable.returncode or changed.returncode or log_path not in changed.stdout.decode("utf-8", "replace").split("\0"):
+        return None
+    try:
+        inbox = settings.paths.friction_log.read_text(encoding="utf-8")
+        archive = settings.paths.archive.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    if any(text in inbox or text not in archive for text in swept.values()):
+        return None
+    return ref
 
 
 def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str, Any]) -> dict[str, Any]:
@@ -502,8 +545,12 @@ def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str
         )
         terminal_evidence = None if abandonable else _terminal_evidence(parsed)
         if terminal_evidence is not None:
-            landed = _merge_landed(settings, terminal_evidence["merge_commit"])
-            terminal_evidence = {**terminal_evidence, "merge_commit_reachable_from": landed} if landed else None
+            landed = _sweep_landed(settings, parsed, terminal_evidence["merge_commit"])
+            terminal_evidence = {
+                **terminal_evidence,
+                "merge_commit_reachable_from": landed,
+                "swept_candidates": sorted(_swept_blocks(parsed) or {}),
+            } if landed else None
         if not abandonable and terminal_evidence is None:
             held = {**bundle, "kind": "state-present-held", "terminal_classification": "external-attempt-absence-unproven"}
             return {"held": held}

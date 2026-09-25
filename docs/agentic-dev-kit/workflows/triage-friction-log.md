@@ -802,13 +802,16 @@ retired by *Completed-state retirement* instead: phase `completed`, completion r
 notification record `verified`, every forge operation and nested attempt `verified`
 (a `pr-watch` observation may also be `unsettled`, since it writes nothing), and a
 verified `merge-read-back` as the last forge operation. Those bytes are claims, not
-proof, so the engine also requires the recorded `merge_commit` to be a full commit id
-that git finds reachable from the protected branch's remote-tracking ref; that is what
-shows the old sweep landed and its blocks left the inbox. Nothing such a run recorded is
-in flight, so it may offer `retire-terminal-invalid-state` under the same quarantine,
+proof, and any merged commit would pass a reachability test, so the engine checks this
+run's own sweep: the recorded `merge_commit` must be a full commit id that git finds
+reachable from the protected branch's remote-tracking ref and whose change set includes
+`<friction-log>`, and every frozen block the run decided to file or archive must be
+absent from the current `<friction-log>` and present in `<friction-log-archive>`. That
+is what shows its blocks left the inbox, so a new session cannot re-file them. Nothing
+such a run recorded is in flight, so it may offer `retire-terminal-invalid-state` under the same quarantine,
 receipt, and approval sequence as abandonment; its action core additionally binds a
 `terminal_evidence` summary of the session, verified tracker identifiers, pull request,
-merge commit, the ref it was found on, and final head, so the approved digest names the finished writes. The
+merge commit, the ref it was found on, the swept candidate ids, and final head, so the approved digest names the finished writes. The
 bytes are retained at the quarantine path, never rewritten. Any other or unreadable
 value keeps the state held.
 The action core binds the capture-core digest, exact engine-derived quarantine target,

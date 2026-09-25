@@ -2406,6 +2406,7 @@ def test_unattended_retirement_then_holds_for_notification_like_a_fresh_draft(
 # verified merge of the reviewed head has nothing in flight, and is retired.
 
 REVIEWED = "a" * 40
+SWEPT_BLOCK = "- **Swept defect.** filed by the old run."
 
 
 def terminal_invalid_state() -> dict:
@@ -2430,6 +2431,14 @@ def terminal_invalid_state() -> dict:
             "route": "archive-sweep",
             "merge_read_back": {"merged": True, "final_head": REVIEWED, "pull_request": "10", "merge_commit": "b" * 40},
         },
+        "frozen_snapshot": {"content": {"blocks": [
+            {"candidate_id": "TRI-01", "source_block": SWEPT_BLOCK},
+            {"candidate_id": "TRI-02", "source_block": "- **Parked defect.** still active."},
+        ]}},
+        "decisions": [
+            {"candidate_id": "TRI-01", "decision": "file"},
+            {"candidate_id": "TRI-02", "decision": "park"},
+        ],
     }
 
 
@@ -2488,19 +2497,52 @@ def test_terminal_evidence_refuses_anything_unfinished(change: str) -> None:
 
 
 def _write_live_state(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, state: dict, merge_commit: str = "landed"
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, state: dict, history: str = "landed"
 ) -> tuple[Path, Path, bytes]:
-    """Write `state` as live state; `merge_commit` "landed" records the fixture's origin/main head."""
+    """Write `state` as live state after building the repository `history` it claims.
+
+    `landed` commits the swept block into the inbox, then a sweep commit moving it
+    to the archive, and records that sweep as the merge. The other histories each
+    break one thing the retirement check relies on.
+    """
     root = repository(tmp_path)
-    if merge_commit == "landed":
-        merge_commit = git(root, "rev-parse", "refs/remotes/origin/main")
-    elif merge_commit == "unmerged-branch":
+    inbox = root / "docs/kit-friction-log.md"
+    archive = root / "docs/kit-friction-log-archive.md"
+
+    def commit(message: str) -> str:
+        git(root, "add", "-A")
+        git(root, "commit", "-q", "--allow-empty", "-m", message)
+        git(root, "update-ref", "refs/remotes/origin/main", "HEAD")
+        return git(root, "rev-parse", "HEAD")
+
+    inbox.write_text(inbox.read_text(encoding="utf-8") + "\n" + SWEPT_BLOCK + "\n", encoding="utf-8")
+    entry_added = commit("add the entry the old run will sweep")
+    if history == "unrelated-reachable":
+        # Reachable and it changes the friction log, but it is not this run's
+        # sweep: the block is still in the inbox and not in the archive.
+        merge_commit = entry_added
+    elif history == "unmerged-branch":
         git(root, "checkout", "-q", "-b", "side")
         git(root, "commit", "-q", "--allow-empty", "-m", "never merged")
         merge_commit = git(root, "rev-parse", "HEAD")
         git(root, "checkout", "-q", "main")
-    if "completion" in state and isinstance(state["completion"].get("merge_read_back"), dict):
-        state["completion"]["merge_read_back"]["merge_commit"] = merge_commit
+    elif history in {"f" * 40, "not-a-sha"}:
+        merge_commit = history
+    else:
+        if history != "archive-only-commit":
+            inbox.write_text(inbox.read_text(encoding="utf-8").replace("\n" + SWEPT_BLOCK + "\n", ""), encoding="utf-8")
+        if history != "missing-from-archive":
+            archive.write_text(archive.read_text(encoding="utf-8") + "\n" + SWEPT_BLOCK + "\n", encoding="utf-8")
+        merge_commit = commit("docs(triage): graduate friction-log entries")
+        if history == "archive-only-commit":
+            # The block is archived, but the commit never touched the inbox; a
+            # later commit removes it there.
+            inbox.write_text(inbox.read_text(encoding="utf-8").replace("\n" + SWEPT_BLOCK + "\n", ""), encoding="utf-8")
+            commit("later inbox edit")
+        elif history == "still-in-inbox":
+            inbox.write_text(inbox.read_text(encoding="utf-8") + "\n" + SWEPT_BLOCK + "\n", encoding="utf-8")
+            commit("block re-added to the inbox")
+    state["completion"]["merge_read_back"]["merge_commit"] = merge_commit
     state_root = tmp_path / "state-root"
     monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
     state_path = state_root / "triage/triage-pipeline-state_live.json"
@@ -2522,6 +2564,7 @@ def test_recover_retires_a_terminal_invalid_state_on_exact_approval_then_new_dra
     evidence = plan["action_core"]["terminal_evidence"]
     assert evidence["verified_tracker_identifiers"] == ["https://github.com/example/project/issues/9"]
     assert evidence["merge_commit_reachable_from"] == "refs/remotes/origin/main"
+    assert evidence["swept_candidates"] == ["TRI-01"]
     assert state_path.read_bytes() == raw
     core_digest = plan["action_core_digest"]
     supplied = {"decision": "approve", "source": "current-session", "approver_identity": "operator", "core_digest": core_digest}
@@ -2547,12 +2590,16 @@ def test_recover_still_holds_an_invalid_state_with_an_unfinished_write(
     assert state_path.read_bytes() == raw
 
 
-@pytest.mark.parametrize("merge_commit", ["f" * 40, "unmerged-branch", "not-a-sha"])
-def test_recover_holds_a_finished_looking_state_whose_merge_never_landed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, merge_commit: str
+@pytest.mark.parametrize("history", [
+    "f" * 40, "not-a-sha", "unmerged-branch", "unrelated-reachable",
+    "still-in-inbox", "missing-from-archive", "archive-only-commit",
+])
+def test_recover_holds_a_finished_looking_state_whose_sweep_is_not_proven(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, history: str
 ) -> None:
-    """The file's own claims are not enough: the merge must be reachable from the protected ref."""
-    root, state_path, raw = _write_live_state(tmp_path, monkeypatch, terminal_invalid_state(), merge_commit)
+    """The file's own claims are not enough, and neither is any merged commit: this
+    run's sweep must be on the protected ref and its swept blocks out of the inbox."""
+    root, state_path, raw = _write_live_state(tmp_path, monkeypatch, terminal_invalid_state(), history)
     held = run("recover", context="interactive", request={}, start=root)
     assert held["outcome"] == "operator-held"
     assert held["detail"] == "external-attempt-absence-unproven"
