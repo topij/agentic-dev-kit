@@ -44,7 +44,7 @@ it invalid but finished.
 The operator also asked for #800 (another session's handoff) to be merged.
 
 **Live triage.** The 2026-09-06 state was retired through #801. Session A filed TRI-05 as
-#802 and swept it (#803). Session B archived the already-ticketed entries (#805). Both
+#802 and swept it (#803). Session B archived the entries that already had a home (#805). Both
 completed as `archive-sweep` / `degraded-success`. The markers' record blocks in
 `docs/kit-friction-log.md` were restored by hand in this wrap-up.
 
@@ -54,8 +54,8 @@ occurrence comment went on #425.
 **Not established:** notification-thread approval (the CLI has no notification provider;
 #198), and D-TRIAGE-RECOVERY.
 
-**Verification.** Each PR body stamps its own `make test` run. All ran in linked
-worktrees under this session's scratchpad, because the main checkout's
+**Verification.** The bodies of #798, #799, #801 and #804 each stamp their own
+`make test` run. All ran in linked worktrees under this session's scratchpad, because the main checkout's
 `state/review-evidence/` holds unreadable files (#461).
 
 ▶ Next: `/session-start`, then choose between drafting the D-TRIAGE-RECOVERY packet from
