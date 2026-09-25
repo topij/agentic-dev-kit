@@ -2539,6 +2539,16 @@ def _write_live_state(
             # later commit removes it there.
             inbox.write_text(inbox.read_text(encoding="utf-8").replace("\n" + SWEPT_BLOCK + "\n", ""), encoding="utf-8")
             commit("later inbox edit")
+        elif history == "claims-unmerged-sweep":
+            # The real sweep is on main, but the recorded merge is a side-branch
+            # commit that also touches the friction log and never merged: only
+            # the reachability check can tell.
+            git(root, "checkout", "-q", "-b", "side")
+            inbox.write_text(inbox.read_text(encoding="utf-8") + "side\n", encoding="utf-8")
+            git(root, "add", "-A")
+            git(root, "commit", "-q", "-m", "unmerged friction-log edit")
+            merge_commit = git(root, "rev-parse", "HEAD")
+            git(root, "checkout", "-q", "main")
         elif history == "still-in-inbox":
             inbox.write_text(inbox.read_text(encoding="utf-8") + "\n" + SWEPT_BLOCK + "\n", encoding="utf-8")
             commit("block re-added to the inbox")
@@ -2592,7 +2602,7 @@ def test_recover_still_holds_an_invalid_state_with_an_unfinished_write(
 
 @pytest.mark.parametrize("history", [
     "f" * 40, "f" * 64, "not-a-sha", "unmerged-branch", "unrelated-reachable",
-    "still-in-inbox", "missing-from-archive", "archive-only-commit",
+    "still-in-inbox", "missing-from-archive", "archive-only-commit", "claims-unmerged-sweep",
 ])
 def test_recover_holds_a_finished_looking_state_whose_sweep_is_not_proven(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, history: str
