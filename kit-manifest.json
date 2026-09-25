@@ -52,7 +52,7 @@
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
-      "sha256": "df0a5bdb9bed78572af4c9df7f261e82202abf1dea264090409f3d76c24f298b"
+      "sha256": "597d1cdfe5d2ffe91d37a5ea77f14b51c3aec7e9f4f3fbb46bb140307c220bc4"
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",

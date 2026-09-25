@@ -192,10 +192,10 @@ deliberately:
    > parallel session owns `<other-area>` — if you need to touch `<shared-file>`,
    > flag it before committing.
 
-   Interactive `new` prints the configured agent CLI command for the **operator's own
+   Interactive `new` prints launch or activation guidance for the **operator's own
    shell**, so it can only *suggest* the tier — the operator applies it (model and
-   reasoning effort, if exposed) when starting the session. An **unattended/headless**
-   launcher may set the tier when its runtime exposes that control — see
+   reasoning effort, if exposed) when starting the session. The supported
+   **unattended/headless** wrapper does not apply the suggested tier; see
    [Unattended / headless launch](parallel-headless.md#unattended--headless-launch--new---headless).
 
 After launch, **this** session is the cockpit: `list` (or `list --watch` for an
@@ -266,9 +266,9 @@ cannot become a headless-lane shortcut merely because it exposes model or effort
 controls; without the complete descriptor environment and observer/receipt chain it
 remains unsupported for state-writing lanes on either runtime.
 
-**Default-safe.** A lane with no assigned tier inherits the cockpit's current
-effort/model — i.e. unspecified ⇒ today's behavior, no regression. The tier is an
-*optimization* of a working default, never a prerequisite.
+**Unspecified tier.** Without an explicit model or effort selection, an interactive
+lane uses the agent client's defaults when started. A supported headless lane uses
+the trust-route resolution above. A suggested tier alone changes neither.
 
 ### Joint wrap-up — the cockpit owns the handoff
 
