@@ -226,3 +226,140 @@ def test_render_sweep_places_migration_marker_before_first_real_section() -> Non
     assert active.index(b"```\n") < active.index(marker)
     assert b"quoted heading" in active
     assert b"quoted heading" not in archive
+
+
+def test_graduation_marker_section_is_never_removed_as_empty_even_at_eof() -> None:
+    """#806: the empty-section removal used to delete a bare marker heading —
+    exactly the shape a prior sweep's own marker takes — because it has no
+    entries of its own. It must reuse `parse`'s own recognizer, not a second
+    one, and must not touch it even when it is the file's last section."""
+    raw = (
+        b"# Log\n\n"
+        b"## 2026-01-01 \xe2\x80\x94 Backlog migrated by triage session retained\n\n"
+        b"## 2026-01-02\n\n"
+        b"- **Only entry.** gets swept\n"
+    )
+    candidates = parse(raw)
+    assert len(candidates) == 1
+    active, archive = exact_sweep(raw, candidates, {candidates[0].candidate_id})
+    assert b"Backlog migrated by triage session retained" in active
+    assert not active.endswith(b"\n\n"), "emptied trailing section left a blank line at EOF"
+    assert active == (
+        b"# Log\n\n## 2026-01-01 \xe2\x80\x94 Backlog migrated by triage session retained\n"
+    )
+
+
+def test_exact_sweep_trims_the_separating_blank_line_when_the_last_section_empties() -> None:
+    """#806: removing an empty dated section deleted from its `## ` heading to
+    the next section or EOF, but never the blank line that separated it from
+    whatever precedes it — which is harmless mid-file (a single blank line
+    still separates the surviving neighbours) but becomes a trailing blank
+    line when the emptied section was the file's last."""
+    raw = (
+        b"# Log\n\n## 2026-09-20\n\n- **Kept.** still open\n\n"
+        b"## 2026-09-10\n\n- **Sole entry.** gets swept\n"
+    )
+    candidates = parse(raw)
+    sole = next(candidate for candidate in candidates if b"Sole entry" in candidate.raw)
+    active, archive = exact_sweep(raw, candidates, {sole.candidate_id})
+    assert active == b"# Log\n\n## 2026-09-20\n\n- **Kept.** still open\n"
+    assert archive == b"## 2026-09-10\n\n- **Sole entry.** gets swept\n"
+
+
+def _render_sweep_state(*, filed: list[tuple[str, str]] | None = None, archived: list[str] | None = None, approval: tuple[str, str] | None = None, engine_mode: str | None = "engine-backed") -> dict:
+    operations = []
+    decisions = []
+    for candidate_id, identifier in filed or []:
+        operations.append({
+            "candidate_id": candidate_id,
+            "decision": "file",
+            "status": "verified",
+            "returned_identifier": identifier,
+            "destination": {
+                "backend": "github-issues",
+                "host": "github.com",
+                "repository": "topij/agentic-dev-kit",
+                "project": "topij/agentic-dev-kit",
+            },
+        })
+        decisions.append({"candidate_id": candidate_id, "decision": "file"})
+    for candidate_id in archived or []:
+        decisions.append({"candidate_id": candidate_id, "decision": "archive"})
+    state: dict = {"operations": operations, "decisions": decisions}
+    if engine_mode is not None:
+        state["engine_mode"] = engine_mode
+    if approval is not None:
+        command, approver = approval
+        state["approval"] = {"approver_identity": approver, "source_read_back": {"text": command}}
+    return state
+
+
+def test_render_sweep_writes_a_record_block_under_the_marker() -> None:
+    raw = b"# Log\n\n## 2026-09-20\n\n- **Filed one.** body\n\n- **Archived one.** body\n"
+    candidates = parse(raw)
+    filed_id, archived_id = candidates[0].candidate_id, candidates[1].candidate_id
+    state = _render_sweep_state(
+        filed=[(filed_id, "793")],
+        archived=[archived_id],
+        approval=(f"approve {filed_id}", "topi"),
+    )
+    marker = "## 2026-09-26 — Backlog migrated by triage session abc123\n\n".encode()
+    active, archive = render_sweep(raw, b"# Archive\n", candidates, state, marker)
+    assert b"Engine mode: engine-backed." in active
+    assert b"Filed: [#793](https://github.com/topij/agentic-dev-kit/issues/793)." in active
+    assert f"Archived without filing: {archived_id}.".encode() in active
+    assert f"Approval command: `approve {filed_id}`. Approver: `topi`.".encode() in active
+    # Marker was inserted at absolute EOF (the sole section emptied and was
+    # removed), so the record's own trailing blank line must not survive either.
+    assert not active.endswith(b"\n\n")
+
+
+def test_render_sweep_record_block_omits_lines_it_has_no_data_for() -> None:
+    raw = b"# Log\n\n## 2026-09-20\n\n- **Archived one.** body\n"
+    candidates = parse(raw)
+    state = _render_sweep_state(archived=[candidates[0].candidate_id], engine_mode=None)
+    marker = "## 2026-09-26 — Backlog migrated by triage session abc123\n\n".encode()
+    active, _archive = render_sweep(raw, b"# Archive\n", candidates, state, marker)
+    assert b"Engine mode:" not in active
+    assert b"Filed:" not in active
+    assert b"Archived without filing:" in active
+    assert b"Approval command:" not in active
+
+
+def test_render_sweep_second_sweep_same_day_keeps_the_first_markers_record() -> None:
+    """#806's own reproduction: a second engine-backed sweep the same day must
+    not delete the first sweep's marker or the record now recorded under it."""
+    raw = (
+        b"# Log\n\n## 2026-09-20\n\n- **First.** body\n\n"
+        b"## 2026-09-10\n\n- **Older.** still open\n"
+    )
+    candidates_a = parse(raw)
+    state_a = _render_sweep_state(archived=[candidates_a[0].candidate_id], approval=("archive TRI-01", "topi"))
+    marker_a = "## 2026-09-26 — Backlog migrated by triage session AAA\n\n".encode()
+    active_a, archive_a = render_sweep(raw, b"# Archive\n", candidates_a, state_a, marker_a)
+
+    candidates_b = parse(active_a)
+    assert len(candidates_b) == 1  # only "Older." remains, freshly numbered TRI-01
+    state_b = _render_sweep_state(
+        filed=[(candidates_b[0].candidate_id, "900")],
+        approval=(f"approve {candidates_b[0].candidate_id}", "topi"),
+    )
+    marker_b = "## 2026-09-26 — Backlog migrated by triage session BBB\n\n".encode()
+    active_b, archive_b = render_sweep(active_a, archive_a, candidates_b, state_b, marker_b)
+
+    assert b"session AAA" in active_b
+    assert b"Archived without filing: TRI-01." in active_b
+    assert b"session BBB" in active_b
+    assert b"Filed: [#900](https://github.com/topij/agentic-dev-kit/issues/900)." in active_b
+    # The second marker sits above the first: newest at the top, per the
+    # friction log's own "appended at the top" convention.
+    assert active_b.index(b"session BBB") < active_b.index(b"session AAA")
+
+
+def test_render_sweep_adds_a_blank_line_before_the_appended_archive_heading() -> None:
+    raw = b"# Log\n\n## 2026-09-20\n\n- **Archived one.** body\n"
+    candidates = parse(raw)
+    state = _render_sweep_state(archived=[candidates[0].candidate_id], approval=("archive TRI-01", "topi"))
+    marker = "## 2026-09-26 — Backlog migrated by triage session abc123\n\n".encode()
+    _active, archive = render_sweep(raw, b"# Archive\n\nprior content\n", candidates, state, marker)
+    assert archive == b"# Archive\n\nprior content\n\n## 2026-09-20\n\n- **Archived one.** body\n"
