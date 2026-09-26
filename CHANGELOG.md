@@ -42,6 +42,25 @@ starts.
 
 ---
 
+## #PR — Triage sweep branches bind to their session and retire after merge
+
+CHANGED (config keys) — `vcs.triage_branch_pattern` ships a new default,
+`chore/triage-{date}-{session}` in place of `chore/triage-{date}`: two triage
+finalizations on the same day used to collide on `git worktree add -b`; the new
+`{session}` placeholder expands to the first 8 characters of the run's own session
+id, so each finalization gets its own branch. A config already pinning
+`chore/triage-{date}` keeps working exactly as before, collision included — **edit
+the line in your own `config/dev-model.yaml` to `chore/triage-{date}-{session}`** to
+adopt the fix. `{date}` must still appear exactly once; `{session}` is optional but
+may appear at most once, and a pattern without it keeps the same-day collision.
+CHANGED (report shape) — a completed `archive-sweep` triage state's
+`completion` gains an optional `sweep_cleanup` field, outside the digest-checked
+`receipt_core`: after a verified merge read-back, the engine retires its own
+finalize worktree, local branch, and remote branch (each guarded and idempotent,
+result `removed` / `absent` / `kept` with a reason) before writing completion. A
+consumer of the completed receipt that enumerates `completion`'s keys should accept
+this one; its absence is still valid on a state completed before this change.
+
 ## #822 — Handoffs keep each workstream's next step in a standing section
 
 CHANGED — report shape: Refresh `scripts/archive_plan_sessions.py`, `docs/agentic-dev-kit/workflows/wrap-up.md`, `docs/agentic-dev-kit/workflows/session-start.md`, `docs/agentic-dev-kit/workflows/parallel.md`, `docs/templates/handoff.md.tmpl`, `kit-manifest.json`, `scripts/tests/test_portability.py` and `scripts/tests/test_init_sh.py`. The handoff gains a standing `## Workstreams` section at its end: one `### <name>` entry per open line of work, each with a status line, an owner pointer and its own `▶ Next:`. Session entries (`## Session — <date> (<theme>)`) no longer carry a `▶ Next:`, and the workflows neither write nor read `Last updated:` (the archive sweep still trims one it finds in a handoff not yet migrated). `wrap-up` updates only the entry for the workstream the session worked on, confirmed with the operator, and closing an entry is the operator's decision; `session-start` offers every entry's `▶ Next:` as a candidate and follows a workstream the operator names. No hand migration is needed: the first `wrap-up` on a handoff without the section creates it from the newest session entry's `▶ Next:`, lists older ones that nothing took up for the operator, and removes `Last updated:`. The archive sweep's generated footer has a new second line, `> Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".`, in place of `> Active open items from them are folded into the "Open for next session" lists above.`; a footer in the old wording is still recognised, and the next sweep replaces it. Update any script or test that matches the old footer line, or that reads the next step from the newest session block.
