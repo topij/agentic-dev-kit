@@ -1158,8 +1158,8 @@ retire this sweep's own artifacts and write completion to the report and state; 
 session-starting run retires that state; the completed report remains durable.
 
 Before writing completion, retire the sweep's own worktree, local branch, and remote
-branch — each guarded and idempotent, and each result `removed`, `absent`, or `kept` with
-a reason: the worktree recorded in the branch-create intent only when it is clean
+branch — each guarded and idempotent. Each result is `removed` or `absent` with no reason,
+or `kept` with a non-empty reason: the worktree recorded in the branch-create intent only when it is clean
 (`git worktree remove` without `--force`; the caller-checkout conflict guard applies, so
 the caller's own checkout is never removed); the local branch only with a safe delete (`git branch -d`, never
 `-D`); the remote branch only when its head still equals the exact commit this run pushed

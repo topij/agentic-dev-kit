@@ -425,3 +425,9 @@ def test_sweep_cleanup_never_touches_the_caller_checkout(tmp_path: Path) -> None
     # out at the caller's own checkout.
     local = subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"], capture_output=True, text=True)
     assert local.returncode == 0
+    # The provider's own guard also refuses a path inside the caller's
+    # checkout, and one that contains it, without reaching git.
+    for conflicting in (repo / "nested", repo.parent):
+        observed = GitHubForge(repo).perform("sweep-cleanup", _cleanup_intent(conflicting, branch, pushed_head))
+        assert all("caller checkout" in entry["reason"] for entry in observed.read_back.values())
+    assert subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"], capture_output=True, text=True).returncode == 0

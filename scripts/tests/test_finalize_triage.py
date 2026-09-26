@@ -782,6 +782,22 @@ def test_legacy_no_session_branch_still_parses_under_the_new_default_pattern(tmp
     assert _branch_date(settings, legacy_branch, "c" * 32) == "2026-01-02"
 
 
+@pytest.mark.parametrize(
+    ("pattern", "legacy_branch"),
+    [
+        ("chore/triage-{date}__{session}", "chore/triage-2026-01-02"),
+        ("chore/triage-{date}/-{session}", "chore/triage-2026-01-02"),
+        ("chore/triage-{session}--{date}", "chore/triage-2026-01-02"),
+        ("chore/{session}-triage-{date}", "chore/triage-2026-01-02"),
+    ],
+)
+def test_legacy_fallback_drops_the_whole_separator_beside_session(
+    tmp_path: Path, pattern: str, legacy_branch: str
+) -> None:
+    settings = _branch_date_settings(tmp_path, pattern)
+    assert _branch_date(settings, legacy_branch, "c" * 32) == "2026-01-02"
+
+
 def test_retained_old_pattern_finalization_state_replays_cleanly_under_the_new_default(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1010,6 +1026,7 @@ def test_sweep_cleanup_never_hands_the_caller_checkout_to_the_provider(tmp_path:
         {"worktree": {"result": "removed", "reason": None}, "local_branch": {"result": "removed", "reason": None}},
         {"worktree": {"result": "gone", "reason": None}, "local_branch": {"result": "removed", "reason": None}, "remote_branch": {"result": "removed", "reason": None}},
         {"worktree": {"result": "kept", "reason": None}, "local_branch": {"result": "removed", "reason": None}, "remote_branch": {"result": "removed", "reason": None}},
+        {"worktree": {"result": "kept", "reason": ""}, "local_branch": {"result": "removed", "reason": None}, "remote_branch": {"result": "removed", "reason": None}},
         {"worktree": {"result": "removed", "reason": "invented"}, "local_branch": {"result": "removed", "reason": None}, "remote_branch": {"result": "removed", "reason": None}},
         {"worktree": "removed", "local_branch": {"result": "removed", "reason": None}, "remote_branch": {"result": "removed", "reason": None}},
     ],

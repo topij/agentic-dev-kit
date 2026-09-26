@@ -1178,26 +1178,31 @@ def _test_render_diff(settings: Settings, state: dict[str, Any]) -> str:
 def _branch_pattern_regex(pattern: str) -> re.Pattern[str]:
     escaped = re.escape(pattern)
     escaped = escaped.replace(re.escape("{date}"), r"(?P<date>\d{4}-\d{2}-\d{2})")
+    # Sessions come from `new_run_identity`, which uses `uuid4().hex`.
     escaped = escaped.replace(re.escape("{session}"), r"(?P<session>[0-9a-f]{8})")
     return re.compile(escaped)
 
 
 def _legacy_pattern_without_session(pattern: str) -> str | None:
     """The pattern a previous engine without `{session}` would have rendered
-    (#807): the placeholder and one adjacent literal separator removed. This
-    repo's own upgrade — the default moving from `chore/triage-{date}` to
-    `chore/triage-{date}-{session}` — is the motivating case; a branch that
-    shape wrote before the upgrade must still parse under the new default,
-    since #2b requires retained old-pattern state to keep validating."""
+    (#807): the placeholder and the run of separator characters beside it
+    removed. The motivating case is this repo's own upgrade, the default moving
+    from `chore/triage-{date}` to `chore/triage-{date}-{session}`; a branch the
+    old default wrote must still parse under the new one. For a custom pattern
+    this is a best guess at its session-less form, and a miss fails closed."""
     index = pattern.find("{session}")
     if index == -1:
         return None
-    end = index + len("{session}")
-    if index > 0:
-        return pattern[: index - 1] + pattern[end:]
-    if end < len(pattern):
-        return pattern[:index] + pattern[end + 1 :]
-    return pattern[:index] + pattern[end:]
+    start, end = index, index + len("{session}")
+    # Drop the separator on the side facing `{date}`: the text between the two
+    # placeholders is what `{session}` was added into.
+    if index > pattern.find("{date}"):
+        while start > 0 and not pattern[start - 1].isalnum() and pattern[start - 1] != "}":
+            start -= 1
+    else:
+        while end < len(pattern) and not pattern[end].isalnum() and pattern[end] != "{":
+            end += 1
+    return pattern[:start] + pattern[end:]
 
 
 def _branch_date(settings: Settings, branch: Any, session: str) -> str:
@@ -1400,7 +1405,7 @@ def _sweep_cleanup(
     if not isinstance(result, dict) or set(result) != {"worktree", "local_branch", "remote_branch"} or any(
         not isinstance(result[name], dict)
         or result[name].get("result") not in {"removed", "absent", "kept"}
-        or (result[name].get("result") == "kept" and not isinstance(result[name].get("reason"), str))
+        or (result[name].get("result") == "kept" and (not isinstance(result[name].get("reason"), str) or not result[name]["reason"]))
         or (result[name].get("result") != "kept" and result[name].get("reason") is not None)
         for name in ("worktree", "local_branch", "remote_branch")
     ):
