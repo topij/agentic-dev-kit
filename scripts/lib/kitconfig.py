@@ -102,7 +102,7 @@ def _strip_comment(value: str) -> str:
         elif quote is not None and ch == quote:
             quote = None
         # Only a `#` preceded by whitespace (or at the start) opens a comment,
-        # matching YAML — so `chore/triage-{date}#1` keeps its suffix.
+        # matching YAML — so `chore/triage-{date}-{session}#1` keeps its suffix.
         elif quote is None and ch == "#" and (i == 0 or value[i - 1] in (" ", "\t")):
             return value[:i]
     return value

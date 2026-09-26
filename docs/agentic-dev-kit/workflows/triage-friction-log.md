@@ -16,7 +16,11 @@ per leaf. Do not fall back to the tracked file alone. In this workflow:
 - `<friction-log>`, `<friction-log-archive>`, and `<engine-dir>` mean
   `paths.friction_log`, `paths.friction_log_archive`, and `paths.engines`.
 - `<protected-branch>` and `<triage-branch>` mean `vcs.protected_branch` and
-  `vcs.triage_branch_pattern` after documented date substitution.
+  `vcs.triage_branch_pattern` after documented substitution: `{date}` for today's
+  ISO date, and, when the pattern carries it, `{session}` for the first 8
+  characters of the run's own `run_identity.session`. `{session}` may appear at
+  most once and never directly against `{date}`. A pattern without `{session}`
+  keeps the same-day collision risk two sessions can hit.
 - `<tracker>`, `<notify>`, and `<state-dir>` mean the configured `tracker`, `notify`,
   and `state.dirname` sections.
 - `<triage>` means the complete `triage` section: `triage.analysis_tier`,
@@ -549,7 +553,10 @@ phase are forbidden earlier.
   `archive-sweep` route retains the complete archive-sweep shape, appends a verified
   `merge-read-back` operation, and stores its authoritative `merged: true`, final head,
   PR identity, and receipt binding in `completion`; the final head must equal the
-  retained reviewed head. The `no-op` route is
+  retained reviewed head. Its `completion` also carries an optional `sweep_cleanup`,
+  outside the receipt core the digest binds, recording this sweep's own worktree,
+  local branch, and remote branch retirement (below); its absence is valid — a state
+  a previous engine completed before that field existed. The `no-op` route is
   the exact base plus completion, requires `successful-completion`, an independently
   parsed empty candidate index in the frozen snapshot, empty evidence arrays, and a
   completed-receipt digest recomputed from the exact no-op receipt core containing the
@@ -1146,9 +1153,22 @@ equals `reviewed_head` recorded in state, and the retained terminal PR-watch rec
 must still bind that same head. A missing or mismatched final head or receipt is
 operator-held; an authoritative matching `merged: false` read-back is retained as an
 unsettled attempt and permits a later read-back attempt without issuing a merge or
-discarding the observation; never mark an unreviewed replacement head complete. Only then write
-completion to the report and state; the next session-starting run retires that state; the
-completed report remains durable.
+discarding the observation; never mark an unreviewed replacement head complete. Only then
+retire this sweep's own artifacts and write completion to the report and state; the next
+session-starting run retires that state; the completed report remains durable.
+
+Before writing completion, retire the sweep's own worktree, local branch, and remote
+branch — each guarded and idempotent. Each result is `removed` or `absent` with no reason,
+or `kept` with a non-empty reason: the worktree recorded in the branch-create intent only when it is clean
+(`git worktree remove` without `--force`; the caller-checkout conflict guard applies, so
+the caller's own checkout is never removed); the local branch only with a safe delete (`git branch -d`, never
+`-D`); the remote branch only when its head still equals the exact commit this run pushed
+(a compare-and-delete, so a later push by someone else is never deleted). A cleanup
+failure never withholds completion: record what each guard found and complete anyway. The
+results live in `completion.sweep_cleanup`, outside `receipt_core`, so a completed state
+written before this field existed still validates without it, and the field is absent
+whenever it was never computed. Re-running cleanup after a partial prior attempt reads an
+already-removed artifact back as `absent` rather than failing.
 
 ## Engine CLI
 

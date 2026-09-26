@@ -481,4 +481,55 @@ class GitHubForge:
             merged = bool(read_back.get("mergedAt"))
             exact = read_back.get("headRefOid") == intent["reviewed_head"]
             return ProviderObservation("verified" if merged and exact else "unsettled" if not merged and exact else "ambiguous", None, {**read_back, "merged": merged})
+        if action == "sweep-cleanup":
+            return ProviderObservation("verified", None, self._sweep_cleanup(intent))
         raise TriageError(f"unsupported forge action {action}", outcome="operator-held")
+
+    def _sweep_cleanup(self, intent: dict[str, Any]) -> dict[str, Any]:
+        """Retire this sweep's own worktree, local branch, and remote branch
+        after its merge read-back verified (#807). Each artifact is guarded and
+        idempotent, so a rerun after a partial cleanup reads the rest back as
+        `absent` or `removed` rather than failing: never `--force`, never `-D`,
+        and the remote branch only when its head still equals the exact commit
+        this run pushed (a compare-and-delete, so a later push by someone else
+        is never deleted)."""
+        worktree = Path(intent["worktree"]).resolve()
+        branch = intent["branch"]
+        pushed_head = intent["pushed_head"]
+        if worktree == self.repo or self.repo.is_relative_to(worktree) or worktree.is_relative_to(self.repo):
+            reason = "sweep-cleanup worktree conflicts with the caller checkout"
+            return {name: {"result": "kept", "reason": reason} for name in ("worktree", "local_branch", "remote_branch")}
+        if not worktree.exists():
+            worktree_result: dict[str, Any] = {"result": "absent", "reason": None}
+        else:
+            removed = self._run(["git", "worktree", "remove", str(worktree)], self.repo)
+            if removed.returncode:
+                worktree_result = {"result": "kept", "reason": f"git worktree remove refused: {removed.stderr.strip()}"}
+            else:
+                worktree_result = {"result": "removed", "reason": None}
+        local = self._run(["git", "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"], self.repo)
+        if local.returncode:
+            local_result: dict[str, Any] = {"result": "absent", "reason": None}
+        else:
+            deleted = self._run(["git", "branch", "-d", branch], self.repo)
+            if deleted.returncode:
+                local_result = {"result": "kept", "reason": f"git branch -d refused: {deleted.stderr.strip()}"}
+            else:
+                local_result = {"result": "removed", "reason": None}
+        remote = self._run(["git", "ls-remote", "origin", f"refs/heads/{branch}"], self.repo)
+        if remote.returncode:
+            remote_result: dict[str, Any] = {"result": "kept", "reason": f"remote branch read-back failed: {remote.stderr.strip()}"}
+        elif not remote.stdout.strip():
+            remote_result = {"result": "absent", "reason": None}
+        else:
+            remote_head = remote.stdout.split()[0]
+            if remote_head != pushed_head:
+                remote_result = {"result": "kept", "reason": "remote branch head moved since this run pushed it"}
+            else:
+                lease = f"refs/heads/{branch}:{remote_head}"
+                deleted = self._run(["git", "push", f"--force-with-lease={lease}", "origin", f":refs/heads/{branch}"], self.repo)
+                if deleted.returncode:
+                    remote_result = {"result": "kept", "reason": f"compare-and-delete push refused: {deleted.stderr.strip()}"}
+                else:
+                    remote_result = {"result": "removed", "reason": None}
+        return {"worktree": worktree_result, "local_branch": local_result, "remote_branch": remote_result}

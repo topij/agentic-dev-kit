@@ -154,8 +154,11 @@ vcs:
   # files. Cockpit branches are anything outside that prefix — chore/*, feat/*, a
   # hand-named PR branch; the hook skips them all, it does not require a name.
   dev_branch_prefix: dev
-  # {date} expands to today's ISO date at skill runtime.
-  triage_branch_pattern: "chore/triage-{date}"
+  # {date} expands to today's ISO date at skill runtime; the optional {session}
+  # expands to the first 8 characters of the run's session id, so two triage
+  # sessions finalizing the same day get distinct branches instead of colliding.
+  # A pattern without {session} keeps that collision risk.
+  triage_branch_pattern: "chore/triage-{date}-{session}"
   systemize_branch_pattern: "chore/systemize-{date}"
 
 triage:

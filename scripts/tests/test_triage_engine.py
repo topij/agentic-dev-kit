@@ -21,7 +21,13 @@ from triage.approval import ApprovalContext  # noqa: E402
 from triage.canonical import decode_bytes, digest, dumps, encode_bytes, loads_exact  # noqa: E402
 from triage.engine import _inline_literal, _report_text, _source_literal, run  # noqa: E402
 from triage.inbox import parse  # noqa: E402
-from triage.model import BASE_KEYS, CAPABILITIES, TriageError  # noqa: E402
+from triage.model import (  # noqa: E402
+    BASE_KEYS,
+    CAPABILITIES,
+    TriageError,
+    canonical_state,
+    load_settings,
+)
 from triage.providers import FakeForge, FakeTracker, ProviderObservation  # noqa: E402
 
 
@@ -605,6 +611,12 @@ def test_decision_only_completion_is_durable_without_tracker_or_forge(
     assert retained["completion"]["route"] == "decision-only"
     assert retained["completion"]["receipt_core"]["operations"] == []
     terminal_raw = state_path.read_bytes()
+    # A sweep-cleanup record belongs to an archive-sweep completion only (#807).
+    tampered = {**retained, "completion": {**retained["completion"], "sweep_cleanup": {
+        name: {"result": "absent", "reason": None} for name in ("worktree", "local_branch", "remote_branch")
+    }}}
+    with pytest.raises(TriageError, match="outside an archive-sweep completion"):
+        canonical_state(dumps(tampered), settings=load_settings(root), mode="live")
     resumed = run("resume", context="interactive", request={}, start=root)
     assert resumed["outcome"] == "degraded-success"
     assert resumed["detail"] == "completed/decision-only"

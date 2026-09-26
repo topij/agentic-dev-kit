@@ -56,6 +56,26 @@ def test_live_and_test_artifact_paths_are_distinct(tmp_path: Path, monkeypatch: 
         (lambda text: text.replace("  report_root: reports\n", "  report_root: ../reports\n"), "contained relative"),
         (lambda text: text[: text.index("tracker:\n")] + "tracker: []\n" + text[text.index("notify:\n") :], "must be mappings"),
         (lambda text: text.replace("  protected_branch: main", "  protected_branch: 7"), "non-empty string"),
+        (
+            lambda text: text.replace('triage_branch_pattern: "chore/triage-{date}-{session}"', 'triage_branch_pattern: "chore/triage-{session}"'),
+            "exactly once",
+        ),
+        (
+            lambda text: text.replace('triage_branch_pattern: "chore/triage-{date}-{session}"', 'triage_branch_pattern: "chore/triage-{date}-{date}"'),
+            "exactly once",
+        ),
+        (
+            lambda text: text.replace('triage_branch_pattern: "chore/triage-{date}-{session}"', 'triage_branch_pattern: "chore/triage-{date}-{session}-{session}"'),
+            "at most once",
+        ),
+        (
+            lambda text: text.replace('triage_branch_pattern: "chore/triage-{date}-{session}"', 'triage_branch_pattern: "chore/triage-{date}{session}"'),
+            "must separate",
+        ),
+        (
+            lambda text: text.replace('triage_branch_pattern: "chore/triage-{date}-{session}"', 'triage_branch_pattern: "chore/triage-{session}{date}"'),
+            "must separate",
+        ),
     ],
 )
 def test_malformed_or_colliding_config_stops_before_artifact_resolution(
