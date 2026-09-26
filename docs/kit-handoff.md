@@ -54,7 +54,7 @@ The operator scheduled #762 ahead of the next cs-toolkit upgrade, and asked for 
 run in a fresh session at higher effort.
 
 **Not established:** where the next cs-toolkit upgrade sits in the sprint plan. Neither
-`saved_plans/phase5-completion-plan_2026-09-18.md` nor Phase 6 in
+`saved_plans/phase5-completion-plan_2026-09-18.md` (local, not committed) nor Phase 6 in
 `saved_plans/codex-parity-plan_2026-08-23.md` names one.
 
 ▶ Next: implement #762 from its design comment — shared `wrap-up.md` and
