@@ -20,6 +20,39 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-09-26 (handoff workstreams, in Claude Code)
+
+**Shipped.** [#822](https://github.com/topij/agentic-dev-kit/pull/822) merged as `76b883c`
+on the operator's direction. Each open line of work now keeps its `▶ Next:` in the
+standing `## Workstreams` section, and session entries record what happened. `wrap-up`
+updates only its own workstream's entry and leaves closing to the operator;
+`session-start` offers every workstream's next step and follows the operator's choice.
+This file was migrated by hand in the same PR.
+
+**Beyond the design comment**, each set out in #822's body: `Last updated:` is removed,
+not only demoted; session headings no longer say `Latest`; the top of the session log is
+a shared conflict point, with its resolution stated; the first-run migration lists older
+`▶ Next:` lines nothing took up; and the archive sweep's footer is reworded, with the
+old one still recognised.
+
+**Review.** CodeRabbit skipped. The fallback panel ran at `3d2cc9e` and a correctness
+delta at `113a97b`, for a Minor `CHANGELOG.md` imprecision; the PR's disposition comments
+own the findings.
+
+**Verification.** `make test` at `3d2cc9e2f369c326c7b1b85280d457e1b0873a33` on 2026-09-26,
+in a detached worktree under this session's scratchpad, printed `3586 passed, 1 skipped`.
+It did not run in the main checkout, because of #461. CI's `Test` run at `113a97b`
+passed, and a PR comment carries its figures.
+
+**Not established by the suite:** a Codex wrap-up under the contract, two workstreams
+wrapping up in either order, a resumed older workstream, and an unrelated chosen task.
+This wrap-up is the layout's first live use, in Claude Code.
+
+Closed workstream Handoff workstreams: the layout shipped and this wrap-up used it; the
+scenarios above are left to ordinary use, on the operator's decision.
+
+______________________________________________________________________
+
 ## Session — 2026-09-26 (triage engine fixes, friction sweeps, #762 design, in Claude Code)
 
 **Shipped, each with a fallback panel because CodeRabbit's automatic review is off:**
@@ -365,16 +398,3 @@ review-request method.
 
 ▶ Next: fix #807 — two triage sessions on one day collide on `chore/triage-{date}` —
 before the next same-day engine-backed sweep.
-
-### Handoff workstreams
-
-**Status:** the layout this section belongs to is implemented by the pull request that
-added it, from [#762's design comment](https://github.com/topij/agentic-dev-kit/issues/762#issuecomment-5845903370).
-Its behaviour for wrap-ups in either order, a resumed older workstream, and an unrelated
-chosen task is prose an agent executes, so it is exercised by use rather than by the
-suite. **Owner:** [#762](https://github.com/topij/agentic-dev-kit/issues/762).
-
-▶ Next: check the first wrap-ups under this layout, in both runtimes, against #762's
-acceptance criteria, then ask the operator whether to close this workstream. The next
-cs-toolkit upgrade carries this contract; where that upgrade sits in the sprint plan is
-not established.
