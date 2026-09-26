@@ -48,7 +48,7 @@ def _record_lines(state: dict[str, Any]) -> list[str]:
     lines: list[str] = []
     engine_mode = state.get("engine_mode")
     if isinstance(engine_mode, str) and engine_mode:
-        lines.append(f"Engine mode: {engine_mode}.")
+        lines.append(f"Engine mode: {_inline_literal(engine_mode)}.")
     operations = state.get("operations") or []
     filed = sorted(
         (

@@ -11,7 +11,7 @@ from _repo_layout import engine_dir  # noqa: E402
 ENGINE_DIR = engine_dir(Path(__file__))
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
-from triage.finalize import render_sweep  # noqa: E402
+from triage.finalize import _issue_link, _record_lines, render_sweep  # noqa: E402
 from triage.inbox import exact_sweep, parse  # noqa: E402
 from triage.model import TriageError  # noqa: E402
 
@@ -305,7 +305,7 @@ def test_render_sweep_writes_a_record_block_under_the_marker() -> None:
     )
     marker = "## 2026-09-26 — Backlog migrated by triage session abc123\n\n".encode()
     active, archive = render_sweep(raw, b"# Archive\n", candidates, state, marker)
-    assert b"Engine mode: engine-backed." in active
+    assert b"Engine mode: `engine-backed`." in active
     assert b"Filed: [#793](https://github.com/topij/agentic-dev-kit/issues/793)." in active
     assert f"Archived without filing: {archived_id}.".encode() in active
     assert f"Approval command: `approve {filed_id}`. Approver: `topi`.".encode() in active
@@ -314,7 +314,31 @@ def test_render_sweep_writes_a_record_block_under_the_marker() -> None:
     assert not active.endswith(b"\n\n")
 
 
-def test_render_sweep_record_block_omits_lines_it_has_no_data_for() -> None:
+def test_render_sweep_record_orders_candidates_numerically_not_lexically() -> None:
+    state = _render_sweep_state(filed=[("TRI-10", "910"), ("TRI-2", "902")], archived=["TRI-10", "TRI-2"])
+    # Lexical order would put TRI-10 before TRI-2.
+    lines = _record_lines(state)
+    assert "Filed: [#902](https://github.com/topij/agentic-dev-kit/issues/902), [#910](https://github.com/topij/agentic-dev-kit/issues/910)." in lines
+    assert "Archived without filing: TRI-2, TRI-10." in lines
+
+
+@pytest.mark.parametrize(
+    ("destination", "identifier"),
+    [
+        ({"backend": "github-issues", "host": "github.com", "repository": "topij/agentic-dev-kit"}, "DROP TABLE #1"),
+        ({"backend": "github-issues", "host": "github.com", "repository": "topij/agentic-dev-kit"}, "0793"),
+        ({"backend": "github-issues", "host": "github.com", "repository": "topij/agentic-dev-kit"}, "793\n## Injected"),
+        ({"backend": "github-issues", "host": "evil.example/x", "repository": "topij/agentic-dev-kit"}, "793"),
+        ({"backend": "github-issues", "host": "github.com", "repository": "a/b)[x](y"}, "793"),
+        ({"backend": "linear", "host": "github.com", "repository": "topij/agentic-dev-kit"}, "793"),
+        (None, "793"),
+    ],
+)
+def test_issue_link_falls_back_to_an_inline_literal_for_any_unverified_shape(destination, identifier) -> None:
+    rendered = _issue_link(destination, identifier)
+    assert "](" not in rendered
+    assert rendered.startswith("`")
+    assert "\n" not in rendered
     raw = b"# Log\n\n## 2026-09-20\n\n- **Archived one.** body\n"
     candidates = parse(raw)
     state = _render_sweep_state(archived=[candidates[0].candidate_id], engine_mode=None)

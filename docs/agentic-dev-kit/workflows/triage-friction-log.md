@@ -1061,9 +1061,10 @@ snapshot or widen to the whole inbox. Window-added blocks stay active verbatim.
 
 Write the graduation-marker heading with a record block under it, from this run's own
 state and nothing else: the engine mode, any filed issue links, any archived candidate
-ids, and the verbatim approval command with its approver. A bare heading with nothing
-under it is indistinguishable from an empty dated section and a later sweep will delete
-it; the record is what keeps it. State-derived free text (an approval command, an
+ids, and the verbatim approval command with its approver. The engine's state and
+report are not committed, so the record is the only account of what the sweep did that
+the repository keeps. It is not what keeps the marker: that is the title recognizer
+below, which keeps a bare marker too. State-derived free text (an approval command, an
 operator identity) goes through the same literal-content rule as report rendering, so it
 can never open a heading or entry line of its own. Recognise a graduation marker by the
 same substring the draft session already excludes candidates on — never a second,
