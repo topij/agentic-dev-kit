@@ -36,6 +36,7 @@ from .model import (
     terminal_pr_watch_receipt,
     today_string,
     validate_state,
+    validate_sweep_cleanup,
 )
 from .providers import ForgeProvider, NotificationProvider, ProviderObservation, TrackerProvider
 from .recovery import (
@@ -1401,14 +1402,15 @@ def _sweep_cleanup(
         observed = forge.perform("sweep-cleanup", intent)
     except Exception as exc:  # noqa: BLE001 - cleanup never un-completes a verified merge
         return _sweep_cleanup_kept(f"sweep-cleanup raised: {exc}")
-    result = observed.read_back if isinstance(observed.read_back, dict) else None
-    if not isinstance(result, dict) or set(result) != {"worktree", "local_branch", "remote_branch"} or any(
-        not isinstance(result[name], dict)
-        or result[name].get("result") not in {"removed", "absent", "kept"}
-        or (result[name].get("result") == "kept" and (not isinstance(result[name].get("reason"), str) or not result[name]["reason"]))
-        or (result[name].get("result") != "kept" and result[name].get("reason") is not None)
-        for name in ("worktree", "local_branch", "remote_branch")
-    ):
+    # The completion validator is the one definition of a well-formed record,
+    # so the write accepts exactly what every later read will: anything it
+    # refuses is recorded as `kept` rather than written through.
+    result = observed.read_back
+    try:
+        if not isinstance(result, dict):
+            raise TriageError("sweep cleanup record has the wrong shape")
+        validate_sweep_cleanup(result)
+    except TriageError:
         return _sweep_cleanup_kept("sweep-cleanup provider returned a malformed result")
     return result
 

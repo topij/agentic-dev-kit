@@ -36,7 +36,14 @@ from triage.engine import (  # noqa: E402
 )
 from triage.finalize import render_sweep, sweep_ids  # noqa: E402
 from triage.inbox import parse  # noqa: E402
-from triage.model import Paths, Settings, TriageError, canonical_state, load_settings  # noqa: E402
+from triage.model import (  # noqa: E402
+    Paths,
+    Settings,
+    TriageError,
+    canonical_state,
+    load_settings,
+    validate_sweep_cleanup,
+)
 from triage.providers import FakeForge, ProviderObservation  # noqa: E402
 
 
@@ -1027,6 +1034,9 @@ def test_sweep_cleanup_never_hands_the_caller_checkout_to_the_provider(tmp_path:
         {"worktree": {"result": "gone", "reason": None}, "local_branch": {"result": "removed", "reason": None}, "remote_branch": {"result": "removed", "reason": None}},
         {"worktree": {"result": "kept", "reason": None}, "local_branch": {"result": "removed", "reason": None}, "remote_branch": {"result": "removed", "reason": None}},
         {"worktree": {"result": "kept", "reason": ""}, "local_branch": {"result": "removed", "reason": None}, "remote_branch": {"result": "removed", "reason": None}},
+        {"worktree": {"result": "removed", "reason": None, "note": "extra"}, "local_branch": {"result": "removed", "reason": None}, "remote_branch": {"result": "removed", "reason": None}},
+        {"worktree": {"result": "removed"}, "local_branch": {"result": "absent"}, "remote_branch": {"result": "kept", "reason": "moved"}},
+        {"worktree": {"result": "removed", "reason": None}, "local_branch": {"result": "removed", "reason": None}, "remote_branch": {"result": "removed", "reason": None}, "extra": {"result": "removed", "reason": None}},
         {"worktree": {"result": "removed", "reason": "invented"}, "local_branch": {"result": "removed", "reason": None}, "remote_branch": {"result": "removed", "reason": None}},
         {"worktree": "removed", "local_branch": {"result": "removed", "reason": None}, "remote_branch": {"result": "removed", "reason": None}},
     ],
@@ -1042,3 +1052,5 @@ def test_sweep_cleanup_records_a_malformed_provider_answer_as_kept(tmp_path: Pat
         name: {"result": "kept", "reason": "sweep-cleanup provider returned a malformed result"}
         for name in ("worktree", "local_branch", "remote_branch")
     }
+    # What the write accepts, every later read accepts too.
+    validate_sweep_cleanup(result)

@@ -301,7 +301,7 @@ BASE_KEYS = set(state_base(
 SWEEP_CLEANUP_ARTIFACTS = ("worktree", "local_branch", "remote_branch")
 
 
-def _validate_sweep_cleanup(sweep_cleanup: Any) -> None:
+def validate_sweep_cleanup(sweep_cleanup: Any) -> None:
     """Validate an optional `completion.sweep_cleanup` (#807): one guarded,
     idempotent result per retired artifact, `removed`/`absent` with no reason or
     `kept` with one. Absent entirely is valid — a state a previous engine
@@ -759,7 +759,7 @@ def validate_state(value: Any, *, settings: Settings, mode: str) -> dict[str, An
             raise TriageError("completed receipt digest mismatch", outcome="operator-held")
         if "sweep_cleanup" in completion and completion.get("route") != "archive-sweep":
             raise TriageError("sweep cleanup recorded outside an archive-sweep completion", outcome="operator-held")
-        _validate_sweep_cleanup(completion.get("sweep_cleanup"))
+        validate_sweep_cleanup(completion.get("sweep_cleanup"))
         receipt = completion["receipt_core"]
         if not isinstance(receipt, dict) or receipt.get("route") != completion["route"] or receipt.get("outcome") != completion["outcome"] or receipt.get("run_identity") != identity or receipt.get("frozen_inbox_digest") != value["frozen_inbox_digest"]:
             raise TriageError("completed receipt authority mismatch", outcome="operator-held")
