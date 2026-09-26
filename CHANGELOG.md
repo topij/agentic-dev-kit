@@ -42,24 +42,11 @@ starts.
 
 ---
 
-## #PR — Triage sweep branches bind to their session and retire after merge
+## #824 — Triage sweep branches bind to their session and retire after merge
 
-CHANGED (config keys) — `vcs.triage_branch_pattern` ships a new default,
-`chore/triage-{date}-{session}` in place of `chore/triage-{date}`: two triage
-finalizations on the same day used to collide on `git worktree add -b`; the new
-`{session}` placeholder expands to the first 8 characters of the run's own session
-id, so each finalization gets its own branch. A config already pinning
-`chore/triage-{date}` keeps working exactly as before, collision included — **edit
-the line in your own `config/dev-model.yaml` to `chore/triage-{date}-{session}`** to
-adopt the fix. `{date}` must still appear exactly once; `{session}` is optional but
-may appear at most once, and a pattern without it keeps the same-day collision.
-CHANGED (report shape) — a completed `archive-sweep` triage state's
-`completion` gains an optional `sweep_cleanup` field, outside the digest-checked
-`receipt_core`: after a verified merge read-back, the engine retires its own
-finalize worktree, local branch, and remote branch (each guarded and idempotent,
-result `removed` / `absent` / `kept` with a reason) before writing completion. A
-consumer of the completed receipt that enumerates `completion`'s keys should accept
-this one; its absence is still valid on a state completed before this change.
+CHANGED — config key: Refresh `lib/triage/engine.py`, `lib/triage/model.py`, `lib/triage/providers.py`, `lib/kitconfig.py`, the shared triage workflow, `kit-manifest.json`, `scripts/tests/fixtures/init-config.json`, `scripts/tests/test_finalize_triage.py`, `scripts/tests/test_triage_config.py` and `scripts/tests/test_triage_providers.py`. `vcs.triage_branch_pattern` accepts a new optional `{session}` placeholder, the first 8 characters of the run's `run_identity.session`, and its default is now `chore/triage-{date}-{session}`. `{date}` must appear exactly once and `{session}` at most once; a pattern breaking either is refused at load. A config pinning `chore/triage-{date}` keeps working, and two triage runs finalizing on one day still collide on it: change that line in your `config/dev-model.yaml` to `chore/triage-{date}-{session}` to stop that. A state an older engine wrote under the session-less pattern still validates.
+
+CHANGED — report shape: after a verified merge read-back, a completed `archive-sweep` state's `completion` gains `sweep_cleanup`, beside `receipt_core` and outside its digest: one entry each for `worktree`, `local_branch` and `remote_branch`, with `result` `removed`, `absent` or `kept` and a `reason` that is a string only when `kept`. The engine removes the sweep's own clean worktree, deletes its local branch with `git branch -d`, and deletes the remote branch only while its head equals the pushed head; nothing it keeps withholds completion. A custom `ForgeProvider` must answer the new `sweep-cleanup` action with that three-entry shape, or the run records all three as `kept`. A consumer that enumerates `completion`'s keys must accept `sweep_cleanup`, and its absence on a state completed before this change.
 
 ## #822 — Handoffs keep each workstream's next step in a standing section
 
