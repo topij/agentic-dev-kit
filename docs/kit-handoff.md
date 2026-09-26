@@ -14,10 +14,56 @@
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
 > this file crosses its line budget (`scripts/check_doc_budget.py`).
 
-Last updated: 2026-09-26 — developer and architecture documentation refreshed
-through PR #810.
+Last updated: 2026-09-26 — #806 fixed and the triage inbox swept; #762 designed for a
+fresh session.
 
-## Latest session — 2026-09-26 (documentation refresh, in Codex)
+## Latest session — 2026-09-26 (triage engine fixes, friction sweeps, #762 design, in Claude Code)
+
+**Shipped, each with a fallback panel because CodeRabbit's automatic review is off:**
+
+- [#812](https://github.com/topij/agentic-dev-kit/pull/812) merged as `cee1f6f`. Engine
+  sweeps write a record block under their marker, a later sweep keeps the marker, and
+  neither the EOF nor the archive heading spacing is mangled. It resolves #806, which
+  was closed by hand. A delta lens caught that the first repair commit had spliced an
+  existing test into a new one; `4ac95bb` restored it before merge.
+- [#813](https://github.com/topij/agentic-dev-kit/pull/813) merged as `c8b9be5`. It fixes
+  forward a regression #812 introduced: commit validation re-rendered retained sweeps
+  with the new renderer, so the 2026-09-25 `completed` state could not be retired and
+  triage refused to start. Validation now also accepts the pre-#812 rendering. Its PR
+  body carries the `make test` stamp and the offline replay against that state.
+- [#817](https://github.com/topij/agentic-dev-kit/pull/817) (`d027c66`) and
+  [#819](https://github.com/topij/agentic-dev-kit/pull/819) (`fe93d98`) are engine-backed
+  triage sweeps, both merged on the operator's direction. The run behind #817 filed
+  [#814](https://github.com/topij/agentic-dev-kit/issues/814),
+  [#815](https://github.com/topij/agentic-dev-kit/issues/815) and
+  [#816](https://github.com/topij/agentic-dev-kit/issues/816). #819 archived three
+  entries whose fixes had already shipped. The run needed two sweeps because one
+  approval carries one command ([#820](https://github.com/topij/agentic-dev-kit/issues/820)).
+
+**Filed at wrap-up, on the operator's approval of the exact payloads:** #820, and an
+occurrence comment on #808 (every create in the #817 run read back `ambiguous` and was
+verified on resume). [#818](https://github.com/topij/agentic-dev-kit/issues/818) was
+filed earlier as the ticket disposition for the #817 panel's low-severity rendering
+findings.
+
+**#762 design decided.** Continuations move into a standing `## Workstreams` section.
+Session blocks become an event log. The design, the defaults for workstream naming and
+closing, and the migration are in the
+[design comment](https://github.com/topij/agentic-dev-kit/issues/762#issuecomment-5845903370).
+The operator scheduled #762 ahead of the next cs-toolkit upgrade, and asked for it to
+run in a fresh session at higher effort.
+
+**Not established:** where the next cs-toolkit upgrade sits in the sprint plan. Neither
+`saved_plans/phase5-completion-plan_2026-09-18.md` nor Phase 6 in
+`saved_plans/codex-parity-plan_2026-08-23.md` names one.
+
+▶ Next: implement #762 from its design comment — shared `wrap-up.md` and
+`session-start.md`, `docs/templates/handoff.md.tmpl`, archiver tests, a `CHANGELOG.md`
+entry, and the hand migration of this file into workstream entries.
+
+______________________________________________________________________
+
+## Session — 2026-09-26 (documentation refresh, in Codex)
 
 **Shipped.** [#810](https://github.com/topij/agentic-dev-kit/pull/810) merged as
 `09fcbe874249ea773e25acd7a591487170acd07d` on the operator's direction. The new
@@ -78,6 +124,9 @@ occurrence comment went on #425.
 ▶ Next: `/session-start`, then choose between drafting the D-TRIAGE-RECOVERY packet from
 `saved_plans/phase5-d-proposal_2026-09-21.md` (local) and fixing #806 and #807 before the
 next engine-backed sweep.
+
+The 2026-09-26 session took #806 (#812, then #813 for the regression it caused). #807
+stays open; the D-TRIAGE-RECOVERY packet was not drafted.
 
 ______________________________________________________________________
 

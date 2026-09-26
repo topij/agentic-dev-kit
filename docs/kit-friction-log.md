@@ -24,6 +24,19 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-09-26
+
+- **Changing a renderer that also validates retained state broke every older state.**
+  #812 changed `render_sweep`, and `_validate_commit_updates` re-renders retained sweep
+  commits with the current renderer. So the 2026-09-25 `completed` state, committed by
+  the older engine, no longer validated, and the next triage refused to start. #813 fixed
+  it forward by accepting either rendering. #812's panels exercised only fresh sweeps.
+  None of them replayed a state an older engine had left.
+  - **Why it is parked:** it is one instance. If it recurs, a candidate rule is that a
+    change to a function that doubles as a validator for persisted state is tested
+    against a state the previous version produced.
+  - **Severity:** M. Triage was blocked until the fix merged, and nothing was lost.
+
 ## 2026-09-26 — Backlog migrated by triage session 97117a88d33c4b79a6e3574420ba35a7
 
 Engine mode: `engine-backed`.
