@@ -21,7 +21,7 @@ from .canonical import (
 )
 from .finalize import render_sweep, sweep_ids, validate_reviewed_head
 from .gate import GateLease, acquire, validate_record
-from .inbox import Candidate, parse, snapshot_content
+from .inbox import Candidate, _inline_literal, parse, snapshot_content
 from .model import (
     CAPABILITIES,
     OID_RE,
@@ -599,23 +599,6 @@ def _literal_block(label: str, raw: bytes, *, info: str = "") -> list[str]:
     except UnicodeDecodeError:
         verbatim = False
     return [f"{label} ({description}):", "", fence + info if verbatim else fence, rendered, fence]
-
-
-def _inline_literal(value: Any) -> str:
-    """Return a one-line code span that no backtick run in the value can close.
-
-    Only non-empty printable text without edge whitespace is shown verbatim. Anything
-    else is shown as its escaped Python string literal, labelled outside the span so
-    the escape cannot be mistaken for the value itself.
-    """
-    text = value if isinstance(value, str) else str(value)
-    verbatim = bool(text) and text == text.strip() and text.isprintable()
-    shown = text if verbatim else ascii(text)
-    longest = max((len(match.group()) for match in re.finditer("`+", shown)), default=0)
-    delimiter = "`" * (longest + 1)
-    padding = " " if shown.startswith("`") or shown.endswith("`") else ""
-    span = f"{delimiter}{padding}{shown}{padding}{delimiter}"
-    return span if verbatim else span + " (escaped Python string literal)"
 
 
 def _report_text(state: dict[str, Any], capabilities: dict[str, dict[str, str]], outcome: str) -> bytes:

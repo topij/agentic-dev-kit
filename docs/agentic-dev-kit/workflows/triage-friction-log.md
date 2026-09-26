@@ -1059,6 +1059,21 @@ Re-read the current inbox and require every proposed sweep block to be byte-iden
 its frozen block. An edited approved block is operator-held; do not archive a stale
 snapshot or widen to the whole inbox. Window-added blocks stay active verbatim.
 
+Write the graduation-marker heading with a record block under it, from this run's own
+state and nothing else: the engine mode, any filed issue links, any archived candidate
+ids, and the verbatim approval command with its approver. The engine's state and
+report are not committed, so the record is the only account of what the sweep did that
+the repository keeps. It is not what keeps the marker: that is the title recognizer
+below, which keeps a bare marker too. State-derived free text (an approval command, an
+operator identity) goes through the same literal-content rule as report rendering, so it
+can never open a heading or entry line of its own. Recognise a graduation marker by the
+same substring the draft session already excludes candidates on — never a second,
+independently maintained pattern — and never delete one as an empty section, including
+when it is the file's last section. When removing a dated section that genuinely is
+empty, also remove the blank line that separated it from whatever precedes it if nothing
+follows: otherwise an emptied trailing section leaves a blank line at EOF. The archive
+append gets a blank line before its own appended heading on the same rule.
+
 Test mode stops after rendering the proposed diff in the report. Render that diff by the
 same literal-content rule. It does not edit
 `<friction-log>` or `<friction-log-archive>` on disk and does not create a branch,

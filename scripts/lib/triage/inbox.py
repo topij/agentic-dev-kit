@@ -12,6 +12,40 @@ from .model import TriageError
 SECTION_RE = re.compile(rb"(?m)^## (?P<title>[^\n]+)\n")
 DATED_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(?:\s|$)")
 ENTRY_RE = re.compile(rb"(?m)^- \*\*")
+
+# The literal a graduation-marker heading carries, e.g. "## 2026-09-25 — Backlog
+# migrated by triage session <id>". `parse` excludes a marker section from the
+# active candidate set on this substring; `exact_sweep`'s empty-section removal
+# reuses the same recognizer so it never deletes a marker that carries no entry
+# of its own (#806) — one recognizer, not two independently-maintained checks.
+MIGRATION_MARKER_TITLE = "Backlog migrated"
+
+
+def is_migration_marker(title: str) -> bool:
+    return MIGRATION_MARKER_TITLE in title
+
+
+def _inline_literal(value: Any) -> str:
+    """Return a one-line code span that no backtick run in the value can close.
+
+    Only non-empty printable text without edge whitespace is shown verbatim. Anything
+    else is shown as its escaped Python string literal, labelled outside the span so
+    the escape cannot be mistaken for the value itself. Shared by the engine's report
+    renderer and the friction-log record block: both embed state-derived text (an
+    operator identity, a verbatim command) into a Markdown document neither of them
+    controls the shape of, so both need the same guarantee that the embedded value
+    cannot open a new heading or entry line.
+    """
+    text = value if isinstance(value, str) else str(value)
+    verbatim = bool(text) and text == text.strip() and text.isprintable()
+    shown = text if verbatim else ascii(text)
+    longest = max((len(match.group()) for match in re.finditer("`+", shown)), default=0)
+    delimiter = "`" * (longest + 1)
+    padding = " " if shown.startswith("`") or shown.endswith("`") else ""
+    span = f"{delimiter}{padding}{shown}{padding}{delimiter}"
+    return span if verbatim else span + " (escaped Python string literal)"
+
+
 def _markdown_mask(raw: bytes) -> bytes:
     """Blank fenced and inline code while preserving byte offsets and newlines."""
     masked = bytearray(raw)
@@ -109,7 +143,7 @@ def parse(raw: bytes) -> list[Candidate]:
     seen: set[str] = set()
     for index, match in enumerate(matches):
         title = _title(match.group("title"))
-        if not DATED_RE.match(title) or "Backlog migrated" in title:
+        if not DATED_RE.match(title) or is_migration_marker(title):
             continue
         section_end = matches[index + 1].start() if index + 1 < len(matches) else len(raw)
         entries = list(ENTRY_RE.finditer(visible, match.end(), section_end))
@@ -173,10 +207,24 @@ def exact_sweep(current: bytes, frozen: list[Candidate], sweep_ids: set[str]) ->
     for index, section in enumerate(sections):
         title = _title(section.group("title"))
         end = sections[index + 1].start() if index + 1 < len(sections) else len(active)
-        if DATED_RE.match(title) and not ENTRY_RE.search(visible_active, section.end(), end) and not active[section.end():end].strip():
+        if (
+            DATED_RE.match(title)
+            and not is_migration_marker(title)
+            and not ENTRY_RE.search(visible_active, section.end(), end)
+            and not active[section.end():end].strip()
+        ):
             empty_sections.append((section.start(), end))
     for start, end in reversed(empty_sections):
-        active = active[:start] + active[end:]
+        if end >= len(active):
+            # The removed section was the file's last, so the blank line that
+            # separated it from whatever now precedes it would otherwise become
+            # a trailing blank line at EOF (#806). Collapse to a single newline,
+            # or to nothing when no content precedes it.
+            active = active[:start].rstrip(b"\n")
+            if active:
+                active += b"\n"
+        else:
+            active = active[:start] + active[end:]
     archived = bytearray()
     for title, blocks in archived_by_title.items():
         archived.extend(f"## {title}\n\n".encode())
