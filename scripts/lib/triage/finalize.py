@@ -115,9 +115,28 @@ def sweep_ids(state: dict[str, Any]) -> set[str]:
     return verified | archived
 
 
-def render_sweep(current: bytes, archive: bytes, candidates: list[Candidate], state: dict[str, Any], marker: bytes) -> tuple[bytes, bytes]:
+def render_sweep(
+    current: bytes,
+    archive: bytes,
+    candidates: list[Candidate],
+    state: dict[str, Any],
+    marker: bytes,
+    *,
+    legacy: bool = False,
+) -> tuple[bytes, bytes]:
     ids = sweep_ids(state)
-    active, archived = exact_sweep(current, candidates, ids)
+    active, archived = exact_sweep(current, candidates, ids, legacy=legacy)
+    if legacy:
+        # The pre-#812 rendering, kept byte-for-byte: a bare marker with no record,
+        # no separator management, and an archive append with no blank line before
+        # its heading. Only commit validation asks for it (see `exact_sweep`).
+        if marker:
+            marker_bytes = marker + (b"\n" if not marker.endswith(b"\n") else b"")
+            first_section = re.search(rb"(?m)^## ", _markdown_mask(active))
+            offset = first_section.start() if first_section else len(active)
+            active = active[:offset] + marker_bytes + active[offset:]
+        separator = b"" if not archive or archive.endswith(b"\n") else b"\n"
+        return active, archive + separator + archived
     if marker:
         marker_bytes = marker + (b"\n" if not marker.endswith(b"\n") else b"")
         record_bytes = _record_block(state)
