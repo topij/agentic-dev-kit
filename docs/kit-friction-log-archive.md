@@ -3794,3 +3794,53 @@ failure — closed by PR #28).
     does not establish a recurrence of the ordering. It does show the same
     ready-from-a-later-read fallback.
 
+## 2026-09-13
+
+- **The panel path test overstates which declaration it protects.** The independent
+  correctness review at fixture `12d7d4b41abe75451ed74d7cbc068bc6b8be2db7` on
+  2026-09-12 UTC classified this as **L / P3 coverage-claim imprecision**, not a
+  demonstrated production regression. `test_the_declared_path_matches_the_doctrine_path`
+  compares `DOCTRINE` to another literal, without observing the `require_kit_paths`
+  argument in `doctrine_text()`. Changing that argument to a missing path left the
+  assertion passing while dependent tests skipped in the selected panel/marker modules.
+  The [execution record](../saved_plans/phase5-item5-b-pr02-execution_2026-09-13.md)
+  binds the full local report and mutation/restoration evidence; complete-mutant-suite
+  survival was not established. Proposed remedy: observe the actual declaration, or
+  narrow the claim if that protection is deliberately out of scope.
+  `gh search issues '"test_panel_prompt" "require_kit_paths"' --repo topij/agentic-dev-kit --limit 30 --json number,title,url,state`
+  in `/Users/topi/Coding/agentic-dev-kit` at
+  `083bccbfa4c4b066d82e7625ddf1efe70716dd2d` on 2026-09-13 local date returned
+  `[]`; this bounded search does not prove no duplicate exists. Pending an exact
+  scope decision: the approved continuation excludes additional fixture fixes and
+  tracker payloads, and the operator requested autonomous finalization before sleep.
+  No fix, tracker write or waiver is established by this entry; the sweep stays parked.
+
+## 2026-09-09
+
+- **ITEM5-B exposed a drift-check applicability mismatch after #705.** The
+  [approved execution](../saved_plans/phase5-item5-b-execution_2026-09-09.md) retains
+  the installed runner's complete command, fixture/source SHAs, output and failure
+  excerpts. **M** — `test_the_drift_test_actually_executes` requires its child never
+  to skip, while #705 added `require_kit_source()` to that child so an adopter's
+  recorded baseline intentionally skips it. Proposed repair: align the parent's
+  applicability with the child and prove the liveness check still detects an improper
+  skip in a kit source tree. The same execution retains config/adapter assumptions
+  already represented on #534; neither class is #393. Searched the exact parent test
+  name with `gh search issues` and read #534's body and comments on 2026-09-09 at
+  `edc199f42bc65b1850172ea79b791ef358577ae1`; the search returned no matching item,
+  while #534 supplies the cross-test and kit-only-invariant scope. Parked for an exact
+  occurrence-payload decision because the operator went to sleep; no tracker write.
+
+- **A following shell line committed after staged validation failed.** During this
+  wrap-up, `git diff --cached --check` rejected trailing whitespace in a copied
+  pytest log, but the following `git commit` still ran because the shell command
+  did not stop on the Python validator's failure. **L** — the unpublished record
+  was corrected; the log now declares its whitespace-only transformation. Keep
+  dependent commit work in a later tool call after reading validation, as the
+  wrap-up workflow already prescribes. Parked for accumulation; no tracker write.
+  **Recurred during ITEM5-B on 2026-09-09:** the combined validation/commit command
+  again continued after `git diff --cached --check` flagged raw transcript whitespace,
+  producing `38af832b8d044a12866dcdfb0ab3346558b392a2`. Those raw bytes were retained;
+  an explicit raw-log exclusion and separate authored-file check were read afterward.
+  Subsequent commit work moved to a separate tool call. No new tracker write.
+
