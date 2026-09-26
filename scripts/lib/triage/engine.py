@@ -1175,20 +1175,56 @@ def _test_render_diff(settings: Settings, state: dict[str, Any]) -> str:
     return "\n".join(pieces) + "\n"
 
 
-def _branch_date(settings: Settings, branch: Any) -> str:
-    pattern_parts = settings.triage_branch_pattern.split("{date}")
-    if (
-        len(pattern_parts) != 2
-        or not isinstance(branch, str)
-        or not branch.startswith(pattern_parts[0])
-        or not branch.endswith(pattern_parts[1])
-    ):
+def _branch_pattern_regex(pattern: str) -> re.Pattern[str]:
+    escaped = re.escape(pattern)
+    escaped = escaped.replace(re.escape("{date}"), r"(?P<date>\d{4}-\d{2}-\d{2})")
+    # Sessions come from `new_run_identity`, which uses `uuid4().hex`.
+    escaped = escaped.replace(re.escape("{session}"), r"(?P<session>[0-9a-f]{8})")
+    return re.compile(escaped)
+
+
+def _legacy_pattern_without_session(pattern: str) -> str | None:
+    """The pattern a previous engine without `{session}` would have rendered
+    (#807): the placeholder and the run of separator characters beside it
+    removed. The motivating case is this repo's own upgrade, the default moving
+    from `chore/triage-{date}` to `chore/triage-{date}-{session}`; a branch the
+    old default wrote must still parse under the new one. For a custom pattern
+    this is a best guess at its session-less form, and a miss fails closed."""
+    index = pattern.find("{session}")
+    if index == -1:
+        return None
+    start, end = index, index + len("{session}")
+    # Drop the separator on the side facing `{date}`: the text between the two
+    # placeholders is what `{session}` was added into.
+    if index > pattern.find("{date}"):
+        while start > 0 and not pattern[start - 1].isalnum() and pattern[start - 1] != "}":
+            start -= 1
+    else:
+        while end < len(pattern) and not pattern[end].isalnum() and pattern[end] != "{":
+            end += 1
+    return pattern[:start] + pattern[end:]
+
+
+def _branch_date(settings: Settings, branch: Any, session: str) -> str:
+    """Parse the date out of a finalization branch, binding it to `session`
+    (this run's own `run_identity.session`) whenever the configured pattern
+    carries `{session}`. A branch a previous engine wrote under a pattern
+    lacking `{session}` (this repo's own pre-#807 default) still parses: no
+    session segment means no session to bind."""
+    if not isinstance(branch, str):
         raise TriageError("commit update branch date is not bound", outcome="operator-held")
-    end = len(branch) - len(pattern_parts[1]) if pattern_parts[1] else len(branch)
-    branch_date = branch[len(pattern_parts[0]):end]
-    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", branch_date):
-        raise TriageError("commit update branch date is not bound", outcome="operator-held")
-    return branch_date
+    pattern = settings.triage_branch_pattern
+    match = _branch_pattern_regex(pattern).fullmatch(branch)
+    if match is not None:
+        if "{session}" in pattern and match.group("session") != session[:8]:
+            raise TriageError("commit update branch session prefix does not bind this run", outcome="operator-held")
+        return match.group("date")
+    legacy_pattern = _legacy_pattern_without_session(pattern)
+    if legacy_pattern is not None:
+        legacy_match = _branch_pattern_regex(legacy_pattern).fullmatch(branch)
+        if legacy_match is not None:
+            return legacy_match.group("date")
+    raise TriageError("commit update branch date is not bound", outcome="operator-held")
 
 
 def _validate_commit_updates(
@@ -1224,7 +1260,7 @@ def _validate_commit_updates(
             decoded[update["path"]] = (previous, content)
     except (KeyError, TypeError, ValueError, CanonicalError) as exc:
         raise TriageError("commit update content is malformed", outcome="operator-held") from exc
-    branch_date = _branch_date(settings, intent.get("branch"))
+    branch_date = _branch_date(settings, intent.get("branch"), state["run_identity"]["session"])
     marker_text = intent.get("migration_marker")
     expected_marker = (
         f"## {branch_date} — Backlog migrated by triage session "
@@ -1330,6 +1366,51 @@ def _archive_summary(state: dict[str, Any], settings: Settings) -> dict[str, Any
         "reviewed_head": review["reviewed_head"],
         "pr_watch_receipt": review["receipt"],
     }
+
+
+def _sweep_cleanup_kept(reason: str) -> dict[str, Any]:
+    return {"worktree": {"result": "kept", "reason": reason}, "local_branch": {"result": "kept", "reason": reason}, "remote_branch": {"result": "kept", "reason": reason}}
+
+
+def _sweep_cleanup(
+    settings: Settings, forge: ForgeProvider | None, state: dict[str, Any], archive: dict[str, Any]
+) -> dict[str, Any]:
+    """Best-effort retirement of this sweep's own worktree, local branch, and
+    remote branch after a verified merge read-back (#807). Each artifact's guard
+    is independent and idempotent, and nothing here can prevent completion: a
+    provider outage or an unexpected exception is recorded as `kept` with a
+    reason, never raised, since a run whose merge verified must still complete."""
+    branch_operation = next(
+        (item for item in state["finalization_operations"] if item.get("kind") == "branch-create"), None
+    )
+    if forge is None or not isinstance(branch_operation, dict) or not isinstance(branch_operation.get("read_back"), dict):
+        return _sweep_cleanup_kept("sweep-cleanup provider or branch-create read-back is unavailable")
+    worktree_path = Path(branch_operation["read_back"]["worktree"]).resolve()
+    if worktree_path == settings.paths.repo or settings.paths.repo.is_relative_to(worktree_path) or worktree_path.is_relative_to(settings.paths.repo):
+        # The same conflict guard `_advance_finalize` applies before ever using an
+        # isolated worktree: retirement never touches the caller's own checkout.
+        return _sweep_cleanup_kept("sweep-cleanup worktree conflicts with the caller checkout")
+    intent = {
+        "repository": archive["repository"],
+        "branch": archive["branch"],
+        "worktree": str(worktree_path),
+        "base": archive["base"],
+        "pushed_head": archive["commit"],
+    }
+    try:
+        observed = forge.perform("sweep-cleanup", intent)
+    except Exception as exc:  # noqa: BLE001 - cleanup never un-completes a verified merge
+        return _sweep_cleanup_kept(f"sweep-cleanup raised: {exc}")
+    result = observed.read_back if isinstance(observed.read_back, dict) else None
+    if not isinstance(result, dict) or set(result) != {"worktree", "local_branch", "remote_branch"} or any(
+        not isinstance(result[name], dict)
+        or result[name].get("result") not in {"removed", "absent", "kept"}
+        or (result[name].get("result") == "kept" and (not isinstance(result[name].get("reason"), str) or not result[name]["reason"]))
+        or (result[name].get("result") != "kept" and result[name].get("reason") is not None)
+        for name in ("worktree", "local_branch", "remote_branch")
+    ):
+        return _sweep_cleanup_kept("sweep-cleanup provider returned a malformed result")
+    return result
 
 
 def _verify_forge_read_back(kind: str, intent: dict[str, Any], read_back: dict[str, Any]) -> None:
@@ -1470,7 +1551,9 @@ def _advance_finalize(
     )
     previous = operations[-1]["read_back"] if operations and not failed_branch_create else None
     forge_host, repository = _forge_destination(state["run_identity"]["repository_identity"]["remote"])
-    branch = settings.triage_branch_pattern.replace("{date}", today_string())
+    branch = settings.triage_branch_pattern.replace("{date}", today_string()).replace(
+        "{session}", state["run_identity"]["session"][:8]
+    )
     worktree = request.get("worktree")
     if retry_intent is not None:
         intent = retry_intent
@@ -1498,7 +1581,7 @@ def _advance_finalize(
             raise TriageError("finalization worktree is not clean", outcome="operator-held")
         current = (worktree_path / inbox_rel).read_bytes()
         archive_bytes = (worktree_path / archive_rel).read_bytes()
-        branch_date = _branch_date(settings, previous["branch"])
+        branch_date = _branch_date(settings, previous["branch"], state["run_identity"]["session"])
         marker = (
             f"## {branch_date} — Backlog migrated by triage session "
             f"{state['run_identity']['session']}\n\n"
@@ -1554,7 +1637,11 @@ def _advance_finalize(
             else "successful-completion"
         )
         receipt_core = {"route": "archive-sweep", "outcome": outcome, "run_identity": state["run_identity"], "frozen_inbox_digest": state["frozen_inbox_digest"], "tracker_operations": state["operations"], "finalization_operations": state["finalization_operations"], "archive_sweep": archive, "merge_read_back": observed.read_back}
-        completed = {**state, "phase": "completed", "archive_sweep": archive, "completion": {"route": "archive-sweep", "outcome": outcome, "receipt_core": receipt_core, "completed_receipt_digest": digest(receipt_core)}}
+        # Retirement is best-effort and sits outside receipt_core (#807): its
+        # result can never change the completed-receipt digest, and a state
+        # completed before this field existed still validates without it.
+        sweep_cleanup = _sweep_cleanup(settings, forge, state, archive)
+        completed = {**state, "phase": "completed", "archive_sweep": archive, "completion": {"route": "archive-sweep", "outcome": outcome, "receipt_core": receipt_core, "completed_receipt_digest": digest(receipt_core), "sweep_cleanup": sweep_cleanup}}
         state_digest = atomic_replace(store.state_path, dumps(completed), expected_digest=state_digest)
         return completed, state_digest, outcome
     if next_kind == "pr-watch":

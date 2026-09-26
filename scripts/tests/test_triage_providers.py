@@ -13,6 +13,8 @@ from _repo_layout import engine_dir  # noqa: E402
 ENGINE_DIR = engine_dir(Path(__file__))
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
+from datetime import date  # noqa: E402
+
 from triage.canonical import digest  # noqa: E402
 from triage.model import TriageError  # noqa: E402
 from triage.providers import GitHubForge, GitHubIssues  # noqa: E402
@@ -291,3 +293,141 @@ def test_branch_create_absence_holds_when_local_refs_cannot_be_read(tmp_path: Pa
     (repo / ".git/packed-refs").write_text("garbage that is not a packed ref\n", encoding="utf-8")
     with pytest.raises(TriageError, match="local branch read-back failed"):
         GitHubForge(repo).authority("branch-create-absent", {"branch": "chore/triage-2099-01-01", "worktree": str(tmp_path / "w")})
+
+
+def test_two_same_day_branch_creates_bound_to_distinct_sessions_do_not_collide(tmp_path: Path) -> None:
+    """#807: the shipped default binds the branch to `{session}`, so two
+    finalizations on the same day create distinct branches and neither
+    fails; the exact same branch twice still collides, which is the failure
+    `{session}` exists to avoid."""
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
+    repo = tmp_path / "repo"
+    subprocess.run(["git", "clone", "-q", str(origin), str(repo)], check=True)
+    _git(repo, "-c", "user.email=t@example.invalid", "-c", "user.name=T", "commit", "-q", "--allow-empty", "-m", "base")
+    _git(repo, "push", "-q", "origin", "HEAD:main")
+    base = _git(repo, "rev-parse", "HEAD")
+    day = date.today().isoformat()
+    pattern = "chore/triage-{date}-{session}"
+    branch_a = pattern.replace("{date}", day).replace("{session}", "a" * 8)
+    branch_b = pattern.replace("{date}", day).replace("{session}", "b" * 8)
+    assert branch_a != branch_b
+    forge = GitHubForge(repo)
+    session_a = forge.perform("branch-create", {
+        "repository": "owner/repo", "branch": branch_a,
+        "worktree": str(tmp_path / "sweep-a"), "finalize_base_head": base,
+    })
+    session_b = forge.perform("branch-create", {
+        "repository": "owner/repo", "branch": branch_b,
+        "worktree": str(tmp_path / "sweep-b"), "finalize_base_head": base,
+    })
+    assert session_a.status == "verified"
+    assert session_b.status == "verified"
+    # The failure #807 reports: the same branch name, twice on the same day, collides.
+    collision = forge.perform("branch-create", {
+        "repository": "owner/repo", "branch": branch_a,
+        "worktree": str(tmp_path / "sweep-a-again"), "finalize_base_head": base,
+    })
+    assert collision.status == "failed"
+
+
+def _pushed_sweep_branch(tmp_path: Path) -> tuple[Path, Path, str, str]:
+    """A repo with a triage-style branch pushed from its own isolated
+    worktree, as branch-create, commit, and push leave it before its PR
+    merges — the state `_sweep_cleanup` retires (#807)."""
+    origin = tmp_path / "origin.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
+    repo = tmp_path / "repo"
+    subprocess.run(["git", "clone", "-q", str(origin), str(repo)], check=True)
+    _git(repo, "-c", "user.email=t@example.invalid", "-c", "user.name=T", "commit", "-q", "--allow-empty", "-m", "base")
+    _git(repo, "push", "-q", "origin", "HEAD:main")
+    base = _git(repo, "rev-parse", "HEAD")
+    branch = "chore/triage-2099-01-01-deadbeef"
+    worktree = tmp_path / "sweep"
+    _git(repo, "worktree", "add", "-q", "-b", branch, str(worktree), base)
+    _git(worktree, "-c", "user.email=t@example.invalid", "-c", "user.name=T", "commit", "-q", "--allow-empty", "-m", "sweep")
+    pushed_head = _git(worktree, "rev-parse", "HEAD")
+    _git(worktree, "push", "-q", "-u", "origin", branch)
+    return repo, worktree, branch, pushed_head
+
+
+def _cleanup_intent(worktree: Path, branch: str, pushed_head: str) -> dict:
+    return {"repository": "owner/repo", "branch": branch, "worktree": str(worktree), "base": "main", "pushed_head": pushed_head}
+
+
+def test_sweep_cleanup_removes_clean_worktree_merged_branch_and_unchanged_remote(tmp_path: Path) -> None:
+    repo, worktree, branch, pushed_head = _pushed_sweep_branch(tmp_path)
+    observed = GitHubForge(repo).perform("sweep-cleanup", _cleanup_intent(worktree, branch, pushed_head))
+    assert observed.status == "verified"
+    assert observed.read_back == {
+        "worktree": {"result": "removed", "reason": None},
+        "local_branch": {"result": "removed", "reason": None},
+        "remote_branch": {"result": "removed", "reason": None},
+    }
+    assert not worktree.exists()
+    local = subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"], capture_output=True, text=True)
+    assert local.returncode != 0
+    remote = _git(repo, "ls-remote", "origin", f"refs/heads/{branch}")
+    assert remote == ""
+
+
+def test_sweep_cleanup_keeps_a_dirty_worktree_and_its_checked_out_branch(tmp_path: Path) -> None:
+    repo, worktree, branch, pushed_head = _pushed_sweep_branch(tmp_path)
+    (worktree / "untracked.txt").write_text("dirty\n", encoding="utf-8")
+    observed = GitHubForge(repo).perform("sweep-cleanup", _cleanup_intent(worktree, branch, pushed_head))
+    result = observed.read_back
+    assert result["worktree"]["result"] == "kept"
+    assert isinstance(result["worktree"]["reason"], str) and result["worktree"]["reason"]
+    # The branch is still checked out at the kept worktree, so its own safe
+    # delete is refused too -- never removed while something still uses it.
+    assert result["local_branch"]["result"] == "kept"
+    assert result["remote_branch"]["result"] == "removed"
+    assert worktree.exists()
+    local = subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"], capture_output=True, text=True)
+    assert local.returncode == 0
+
+
+def test_sweep_cleanup_keeps_a_remote_branch_whose_head_moved(tmp_path: Path) -> None:
+    repo, worktree, branch, pushed_head = _pushed_sweep_branch(tmp_path)
+    intruder = tmp_path / "intruder"
+    subprocess.run(["git", "clone", "-q", "--branch", branch, str(tmp_path / "origin.git"), str(intruder)], check=True)
+    _git(intruder, "-c", "user.email=x@example.invalid", "-c", "user.name=X", "commit", "-q", "--allow-empty", "-m", "someone else's push")
+    _git(intruder, "push", "-q", "origin", branch)
+    observed = GitHubForge(repo).perform("sweep-cleanup", _cleanup_intent(worktree, branch, pushed_head))
+    result = observed.read_back
+    assert result["worktree"]["result"] == "removed"
+    assert result["local_branch"]["result"] == "removed"
+    assert result["remote_branch"]["result"] == "kept"
+    assert "moved" in result["remote_branch"]["reason"]
+    remote = _git(repo, "ls-remote", "origin", f"refs/heads/{branch}")
+    assert remote.split()[0] != pushed_head
+
+
+def test_sweep_cleanup_is_idempotent_on_rerun(tmp_path: Path) -> None:
+    repo, worktree, branch, pushed_head = _pushed_sweep_branch(tmp_path)
+    intent = _cleanup_intent(worktree, branch, pushed_head)
+    forge = GitHubForge(repo)
+    first = forge.perform("sweep-cleanup", intent)
+    assert {entry["result"] for entry in first.read_back.values()} == {"removed"}
+    second = forge.perform("sweep-cleanup", intent)
+    assert second.status == "verified"
+    assert {entry["result"] for entry in second.read_back.values()} == {"absent"}
+    assert all(entry["reason"] is None for entry in second.read_back.values())
+
+
+def test_sweep_cleanup_never_touches_the_caller_checkout(tmp_path: Path) -> None:
+    repo, _worktree, branch, pushed_head = _pushed_sweep_branch(tmp_path)
+    observed = GitHubForge(repo).perform("sweep-cleanup", _cleanup_intent(repo, branch, pushed_head))
+    result = observed.read_back
+    assert all(entry["result"] == "kept" for entry in result.values())
+    assert all("caller checkout" in entry["reason"] for entry in result.values())
+    # Nothing was touched: the branch this run pushed is still there, checked
+    # out at the caller's own checkout.
+    local = subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"], capture_output=True, text=True)
+    assert local.returncode == 0
+    # The provider's own guard also refuses a path inside the caller's
+    # checkout, and one that contains it, without reaching git.
+    for conflicting in (repo / "nested", repo.parent):
+        observed = GitHubForge(repo).perform("sweep-cleanup", _cleanup_intent(conflicting, branch, pushed_head))
+        assert all("caller checkout" in entry["reason"] for entry in observed.read_back.values())
+    assert subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"], capture_output=True, text=True).returncode == 0

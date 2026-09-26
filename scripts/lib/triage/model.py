@@ -189,8 +189,14 @@ def load_settings(start: Path | None = None) -> Settings:
     branch_pattern = _required(config, "vcs.triage_branch_pattern")
     if not isinstance(protected_branch, str) or not protected_branch:
         raise TriageError("vcs.protected_branch must be a non-empty string")
-    if not isinstance(branch_pattern, str) or "{date}" not in branch_pattern:
-        raise TriageError("vcs.triage_branch_pattern must be a string containing {date}")
+    if not isinstance(branch_pattern, str) or branch_pattern.count("{date}") != 1:
+        raise TriageError("vcs.triage_branch_pattern must contain {date} exactly once")
+    if branch_pattern.count("{session}") > 1:
+        raise TriageError("vcs.triage_branch_pattern may contain {session} at most once")
+    if "{date}{session}" in branch_pattern or "{session}{date}" in branch_pattern:
+        # The engine's legacy-branch fallback drops `{session}` with one adjacent
+        # separator; with no separator it would cut into `{date}` instead (#807).
+        raise TriageError("vcs.triage_branch_pattern must separate {session} from {date}")
     subject = _required(config, "triage.commit_subject")
     if not isinstance(subject, str) or not subject:
         raise TriageError("triage.commit_subject must be non-empty")
@@ -290,6 +296,29 @@ BASE_KEYS = set(state_base(
     {},
     "engine-backed",
 ))
+
+
+SWEEP_CLEANUP_ARTIFACTS = ("worktree", "local_branch", "remote_branch")
+
+
+def _validate_sweep_cleanup(sweep_cleanup: Any) -> None:
+    """Validate an optional `completion.sweep_cleanup` (#807): one guarded,
+    idempotent result per retired artifact, `removed`/`absent` with no reason or
+    `kept` with one. Absent entirely is valid — a state a previous engine
+    completed before this field existed, or a run whose merge verified before the
+    cleanup step existed."""
+    if sweep_cleanup is None:
+        return
+    if not isinstance(sweep_cleanup, dict) or set(sweep_cleanup) != set(SWEEP_CLEANUP_ARTIFACTS):
+        raise TriageError("sweep cleanup record has the wrong shape", outcome="operator-held")
+    for entry in sweep_cleanup.values():
+        if not isinstance(entry, dict) or set(entry) != {"result", "reason"} or entry.get("result") not in {"removed", "absent", "kept"}:
+            raise TriageError("sweep cleanup entry has the wrong shape", outcome="operator-held")
+        if entry["result"] == "kept":
+            if not isinstance(entry.get("reason"), str) or not entry["reason"]:
+                raise TriageError("sweep cleanup kept entry lacks a reason", outcome="operator-held")
+        elif entry.get("reason") is not None:
+            raise TriageError("sweep cleanup removed or absent entry fabricates a reason", outcome="operator-held")
 
 
 def terminal_pr_watch_receipt(receipt: Any, *, head: str, url: str) -> bool:
@@ -720,8 +749,17 @@ def validate_state(value: Any, *, settings: Settings, mode: str) -> dict[str, An
         raise TriageError("forge evidence exists before finalization", outcome="operator-held")
     completion = value.get("completion")
     if completion is not None:
-        if not isinstance(completion, dict) or set(completion) != {"route", "outcome", "receipt_core", "completed_receipt_digest"} or digest(completion.get("receipt_core")) != completion.get("completed_receipt_digest"):
+        # `sweep_cleanup` (#807) sits beside `receipt_core`, never inside it, so a
+        # completed state written before it existed keeps its exact receipt digest
+        # and still validates without the key.
+        completion_keys = {"route", "outcome", "receipt_core", "completed_receipt_digest"}
+        if isinstance(completion, dict) and "sweep_cleanup" in completion:
+            completion_keys = completion_keys | {"sweep_cleanup"}
+        if not isinstance(completion, dict) or set(completion) != completion_keys or digest(completion.get("receipt_core")) != completion.get("completed_receipt_digest"):
             raise TriageError("completed receipt digest mismatch", outcome="operator-held")
+        if "sweep_cleanup" in completion and completion.get("route") != "archive-sweep":
+            raise TriageError("sweep cleanup recorded outside an archive-sweep completion", outcome="operator-held")
+        _validate_sweep_cleanup(completion.get("sweep_cleanup"))
         receipt = completion["receipt_core"]
         if not isinstance(receipt, dict) or receipt.get("route") != completion["route"] or receipt.get("outcome") != completion["outcome"] or receipt.get("run_identity") != identity or receipt.get("frozen_inbox_digest") != value["frozen_inbox_digest"]:
             raise TriageError("completed receipt authority mismatch", outcome="operator-held")

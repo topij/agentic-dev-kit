@@ -26,14 +26,17 @@ from triage.canonical import (  # noqa: E402
     loads_exact,
 )
 from triage.engine import (  # noqa: E402
+    _branch_date,
     _frozen_candidates,
     _pr_result_fields,
+    _sweep_cleanup,
+    _validate_commit_updates,
     _verify_forge_read_back,
     run,
 )
 from triage.finalize import render_sweep, sweep_ids  # noqa: E402
 from triage.inbox import parse  # noqa: E402
-from triage.model import TriageError, canonical_state, load_settings  # noqa: E402
+from triage.model import Paths, Settings, TriageError, canonical_state, load_settings  # noqa: E402
 from triage.providers import FakeForge, ProviderObservation  # noqa: E402
 
 
@@ -101,6 +104,13 @@ def verified(read_back: dict) -> ProviderObservation:
     return ProviderObservation("verified", {"synthetic": True}, read_back)
 
 
+def finalize_branch(state: dict) -> str:
+    """The branch `_advance_finalize` computes under the shipped default
+    pattern, `chore/triage-{date}-{session}`: today's date bound to this run's
+    own session prefix (#807)."""
+    return f"chore/triage-{date.today().isoformat()}-{state['run_identity']['session'][:8]}"
+
+
 def native_watch_receipt(url: str, head: str) -> dict:
     return {
         "converged": True, "mergeable": True, "done": True,
@@ -154,7 +164,7 @@ def test_archive_only_finalize_retains_exact_new_block_and_waits_for_merge(
 
     worktree = tmp_path / "isolated-finalize"
     shutil.copytree(root, worktree)
-    branch = f"chore/triage-{date.today().isoformat()}"
+    branch = finalize_branch(presented)
     base = git(root, "rev-parse", "HEAD")
     tree = "1" * 40
     commit = "2" * 40
@@ -371,7 +381,7 @@ def test_commit_authority_failure_leaves_clean_worktree_and_fresh_retry_can_cont
     inbox_before = (worktree / "docs/kit-friction-log.md").read_bytes()
     archive_before = (worktree / "docs/kit-friction-log-archive.md").read_bytes()
     base = git(root, "rev-parse", "HEAD")
-    branch = f"chore/triage-{date.today().isoformat()}"
+    branch = finalize_branch(presented)
 
     class FailingCommitAuthority(FakeForge):
         def authority(self, action, request):
@@ -457,7 +467,7 @@ def test_fresh_process_refuses_mutated_retained_commit_updates_before_rebind(
     shutil.copytree(root, worktree)
     shutil.rmtree(worktree / "reports")
     base = git(root, "rev-parse", "HEAD")
-    branch = f"chore/triage-{date.today().isoformat()}"
+    branch = finalize_branch(presented)
     tree = "1" * 40
     forge = FakeForge([
         verified({
@@ -721,3 +731,314 @@ def test_failed_branch_create_stays_held_while_anything_it_could_have_left_exist
     assert not [call for call in retry.calls if call[0] == "branch-create"]
     # A resume rebinds the gate claim, so compare the operation record, not the bytes.
     assert loads_exact(state_path.read_bytes())["finalization_operations"] == before
+
+
+def _branch_date_settings(tmp_path: Path, pattern: str) -> Settings:
+    paths = Paths(
+        tmp_path, tmp_path / "inbox", tmp_path / "archive", tmp_path / "scripts",
+        "state/triage/state_{mode}.json", "state/triage/gate_{mode}.lock",
+        "state/triage/recovery_{mode}_{gate_digest}.json",
+        "state/triage/frozen_{mode}_{date}_{session}.json", tmp_path / "reports",
+        "reports/triage_{mode}_{date}_{session}.md",
+    )
+    return Settings({}, "0" * 64, paths, "main", pattern, "default", tmp_path / "draft", tmp_path / "finalize", "engine-backed", "subject", {}, {})
+
+
+def test_branch_date_binds_the_session_prefix_and_rejects_another_sessions_branch(tmp_path: Path) -> None:
+    """#807 point 2a: a branch produced under the new pattern binds both the
+    date and the state's own session prefix; a branch carrying a different
+    session's prefix is rejected."""
+    settings = _branch_date_settings(tmp_path, "chore/triage-{date}-{session}")
+    session = "a" * 32
+    branch = f"chore/triage-2026-09-26-{session[:8]}"
+    assert _branch_date(settings, branch, session) == "2026-09-26"
+    other_session = "b" * 32
+    with pytest.raises(TriageError, match="session prefix"):
+        _branch_date(settings, branch, other_session)
+
+
+def test_branch_date_rejects_a_branch_that_does_not_match_the_pattern_at_all(tmp_path: Path) -> None:
+    settings = _branch_date_settings(tmp_path, "chore/triage-{date}-{session}")
+    session = "a" * 32
+    with pytest.raises(TriageError, match="branch date is not bound"):
+        _branch_date(settings, "some/other-branch-2026-09-26", session)
+
+
+def test_branch_date_without_session_placeholder_never_checks_a_session(tmp_path: Path) -> None:
+    """A pattern that never adopted `{session}` keeps its collision risk, but
+    still parses the date, and binds no session — matching either run's."""
+    settings = _branch_date_settings(tmp_path, "chore/triage-{date}")
+    branch = "chore/triage-2026-09-26"
+    assert _branch_date(settings, branch, "a" * 32) == "2026-09-26"
+    assert _branch_date(settings, branch, "b" * 32) == "2026-09-26"
+
+
+def test_legacy_no_session_branch_still_parses_under_the_new_default_pattern(tmp_path: Path) -> None:
+    """#807 point 2b: a branch a previous engine wrote under the old default
+    (`chore/triage-{date}`, no `{session}`) still parses once this repo's
+    config carries the new default (`chore/triage-{date}-{session}`)."""
+    settings = _branch_date_settings(tmp_path, "chore/triage-{date}-{session}")
+    legacy_branch = "chore/triage-2026-01-02"
+    assert _branch_date(settings, legacy_branch, "c" * 32) == "2026-01-02"
+
+
+@pytest.mark.parametrize(
+    ("pattern", "legacy_branch"),
+    [
+        ("chore/triage-{date}__{session}", "chore/triage-2026-01-02"),
+        ("chore/triage-{date}/-{session}", "chore/triage-2026-01-02"),
+        ("chore/triage-{session}--{date}", "chore/triage-2026-01-02"),
+        ("chore/{session}-triage-{date}", "chore/triage-2026-01-02"),
+    ],
+)
+def test_legacy_fallback_drops_the_whole_separator_beside_session(
+    tmp_path: Path, pattern: str, legacy_branch: str
+) -> None:
+    settings = _branch_date_settings(tmp_path, pattern)
+    assert _branch_date(settings, legacy_branch, "c" * 32) == "2026-01-02"
+
+
+def test_retained_old_pattern_finalization_state_replays_cleanly_under_the_new_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#807 point 2b, at the shape the previous engine actually wrote: a
+    verified branch-create whose branch has no `{session}` segment, replayed
+    through the current engine's own commit-validation function against this
+    repo's shipped config, which now defaults `vcs.triage_branch_pattern` to
+    `chore/triage-{date}-{session}`."""
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    draft_request, candidate_id = proposal_request(root)
+    run("new", context="interactive", request=draft_request, start=root)
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    presented = loads_exact(state_path.read_bytes())
+    request, context = approval(presented, f"archive {candidate_id}")
+    worktree = tmp_path / "isolated-finalize"
+    shutil.copytree(root, worktree)
+    shutil.rmtree(worktree / "reports", ignore_errors=True)
+    base = git(root, "rev-parse", "HEAD")
+    # What a previous engine (no {session}) wrote: a branch of exactly that shape.
+    legacy_branch = f"chore/triage-{date.today().isoformat()}"
+    forge = FakeForge([verified({
+        "repository": "topij/agentic-dev-kit", "base": base, "branch": legacy_branch,
+        "worktree": str(worktree), "head": base, "tree": "0" * 40,
+    })])
+    result = run(
+        "resume", context="interactive",
+        request={**request, "finalize": True, "worktree": str(worktree)},
+        start=root, approval_context=context, forge=forge,
+    )
+    assert result["outcome"] == "operator-held"
+    state = loads_exact(state_path.read_bytes())
+    assert state["finalization_operations"][0]["read_back"]["branch"] == legacy_branch
+
+    settings = load_settings(root)
+    assert settings.triage_branch_pattern == "chore/triage-{date}-{session}"
+    inbox_rel = "docs/kit-friction-log.md"
+    archive_rel = "docs/kit-friction-log-archive.md"
+    current = (worktree / inbox_rel).read_bytes()
+    archive_bytes = (worktree / archive_rel).read_bytes()
+    branch_date = date.today().isoformat()
+    marker = f"## {branch_date} — Backlog migrated by triage session {state['run_identity']['session']}\n\n".encode()
+    new_inbox, new_archive = render_sweep(current, archive_bytes, _frozen_candidates(state), state, marker)
+    paths = sorted([inbox_rel, archive_rel])
+    updates = sorted([
+        {
+            "path": inbox_rel, "previous_content": encode_bytes(current),
+            "previous_digest": digest_bytes(current), "content": encode_bytes(new_inbox),
+            "content_digest": digest_bytes(new_inbox),
+        },
+        {
+            "path": archive_rel, "previous_content": encode_bytes(archive_bytes),
+            "previous_digest": digest_bytes(archive_bytes), "content": encode_bytes(new_archive),
+            "content_digest": digest_bytes(new_archive),
+        },
+    ], key=lambda item: item["path"])
+    intent = {
+        "host": "github.com", "repository": "topij/agentic-dev-kit", "base": base,
+        "branch": legacy_branch, "worktree": str(worktree), "subject": settings.commit_subject,
+        "paths": paths, "migration_marker": marker.decode(), "updates": updates,
+        "authority_read_back": {"paths": paths, "staged_tree": "f" * 40},
+    }
+    _validate_commit_updates(state, settings, intent)  # must not raise
+
+
+def test_verified_merge_read_back_retires_the_sweeps_own_artifacts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#807 point 3: a verified merge read-back retires this sweep's own
+    worktree, local branch, and remote branch before writing completion. The
+    result lands in `completion.sweep_cleanup`, outside `receipt_core`, so
+    the completed-receipt digest is unaffected, and a completed state
+    written before this field existed still validates without it."""
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    draft_request, candidate_id = proposal_request(root)
+    run("new", context="interactive", request=draft_request, start=root)
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    presented = loads_exact(state_path.read_bytes())
+    request, context = approval(presented, f"archive {candidate_id}")
+    worktree = tmp_path / "isolated-finalize"
+    shutil.copytree(root, worktree)
+    shutil.rmtree(worktree / "reports", ignore_errors=True)
+    branch = finalize_branch(presented)
+    base = git(root, "rev-parse", "HEAD")
+    tree = "1" * 40
+    commit = "2" * 40
+    pr_url = "https://github.com/topij/agentic-dev-kit/pull/999"
+    paths = ["docs/kit-friction-log-archive.md", "docs/kit-friction-log.md"]
+    forge = FakeForge([
+        verified({"repository": "topij/agentic-dev-kit", "base": base, "branch": branch, "worktree": str(worktree), "head": base, "tree": "0" * 40}),
+        verified({"repository": "topij/agentic-dev-kit", "base": base, "branch": branch, "worktree": str(worktree), "commit": commit, "tree": tree, "subject": "docs(triage): graduate friction-log entries", "paths": paths}),
+        verified({"repository": "topij/agentic-dev-kit", "base": base, "branch": branch, "worktree": str(worktree), "remote_head": commit, "tree": tree}),
+        verified({"url": pr_url, "baseRefName": "main", "headRefName": branch, "headRefOid": commit, "isDraft": False, "files": paths}),
+        verified({"url": pr_url, "baseRefName": "main", "headRefName": branch, "headRefOid": commit, "isDraft": False, "files": paths, "reviewed_head": commit, "receipt": native_watch_receipt(pr_url, commit)}),
+    ])
+    swept = run(
+        "resume", context="interactive",
+        request={**request, "finalize": True, "worktree": str(worktree)},
+        start=root, approval_context=context, forge=forge,
+    )
+    assert swept["outcome"] == "operator-held"
+
+    cleanup_result = {
+        "worktree": {"result": "removed", "reason": None},
+        "local_branch": {"result": "removed", "reason": None},
+        "remote_branch": {"result": "kept", "reason": "remote branch head moved since this run pushed it"},
+    }
+    merge_forge = FakeForge([
+        verified({"url": pr_url, "baseRefName": "main", "headRefName": branch, "headRefOid": commit, "merged": True}),
+        ProviderObservation("verified", None, cleanup_result),
+    ])
+    completed = run("resume", context="interactive", request={"finalize": True}, start=root, forge=merge_forge)
+    assert completed["outcome"] == "degraded-success"
+    assert [call[0] for call in merge_forge.calls][-2:] == ["merge-read-back", "sweep-cleanup"]
+    terminal = loads_exact(state_path.read_bytes())
+    assert terminal["completion"]["sweep_cleanup"] == cleanup_result
+    receipt_core = terminal["completion"]["receipt_core"]
+    assert "sweep_cleanup" not in receipt_core
+    assert terminal["completion"]["completed_receipt_digest"] == digest(receipt_core)
+    canonical_state(dumps(terminal), settings=load_settings(root), mode="live")  # revalidates with the field present
+
+    # A completed state written before this field existed (no `sweep_cleanup`
+    # key at all) must still validate and retire.
+    legacy_completed = deepcopy(terminal)
+    del legacy_completed["completion"]["sweep_cleanup"]
+    canonical_state(dumps(legacy_completed), settings=load_settings(root), mode="live")
+
+    # The recorded field is validated, not only tolerated: a reason accompanies
+    # `kept` and nothing else. The route restriction is covered from a
+    # decision-only completion in test_triage_engine.py.
+    for mutate, message in (
+        (lambda completion: completion["sweep_cleanup"]["remote_branch"].update(reason=None), "kept entry lacks a reason"),
+        (lambda completion: completion["sweep_cleanup"]["remote_branch"].update(reason=""), "kept entry lacks a reason"),
+        (lambda completion: completion["sweep_cleanup"]["worktree"].update(reason="invented"), "fabricates a reason"),
+        (lambda completion: completion["sweep_cleanup"].pop("local_branch"), "wrong shape"),
+    ):
+        tampered = deepcopy(terminal)
+        mutate(tampered["completion"])
+        with pytest.raises(TriageError, match=message):
+            canonical_state(dumps(tampered), settings=load_settings(root), mode="live")
+
+
+def test_sweep_cleanup_never_un_completes_a_verified_merge(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A cleanup provider that raises, or answers with a malformed result,
+    never withholds completion (#807 point 3): the run still completes, with
+    every artifact recorded `kept` and a reason naming what went wrong."""
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    draft_request, candidate_id = proposal_request(root)
+    run("new", context="interactive", request=draft_request, start=root)
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    presented = loads_exact(state_path.read_bytes())
+    request, context = approval(presented, f"archive {candidate_id}")
+    worktree = tmp_path / "isolated-finalize"
+    shutil.copytree(root, worktree)
+    shutil.rmtree(worktree / "reports", ignore_errors=True)
+    branch = finalize_branch(presented)
+    base = git(root, "rev-parse", "HEAD")
+    tree = "1" * 40
+    commit = "2" * 40
+    pr_url = "https://github.com/topij/agentic-dev-kit/pull/999"
+    paths = ["docs/kit-friction-log-archive.md", "docs/kit-friction-log.md"]
+    forge = FakeForge([
+        verified({"repository": "topij/agentic-dev-kit", "base": base, "branch": branch, "worktree": str(worktree), "head": base, "tree": "0" * 40}),
+        verified({"repository": "topij/agentic-dev-kit", "base": base, "branch": branch, "worktree": str(worktree), "commit": commit, "tree": tree, "subject": "docs(triage): graduate friction-log entries", "paths": paths}),
+        verified({"repository": "topij/agentic-dev-kit", "base": base, "branch": branch, "worktree": str(worktree), "remote_head": commit, "tree": tree}),
+        verified({"url": pr_url, "baseRefName": "main", "headRefName": branch, "headRefOid": commit, "isDraft": False, "files": paths}),
+        verified({"url": pr_url, "baseRefName": "main", "headRefName": branch, "headRefOid": commit, "isDraft": False, "files": paths, "reviewed_head": commit, "receipt": native_watch_receipt(pr_url, commit)}),
+    ])
+    run(
+        "resume", context="interactive",
+        request={**request, "finalize": True, "worktree": str(worktree)},
+        start=root, approval_context=context, forge=forge,
+    )
+
+    class RaisingCleanupForge(FakeForge):
+        def perform(self, action, intent):
+            if action == "sweep-cleanup":
+                self.calls.append((action, intent))
+                raise RuntimeError("synthetic cleanup outage")
+            return super().perform(action, intent)
+
+    merge_forge = RaisingCleanupForge([
+        verified({"url": pr_url, "baseRefName": "main", "headRefName": branch, "headRefOid": commit, "merged": True}),
+    ])
+    completed = run("resume", context="interactive", request={"finalize": True}, start=root, forge=merge_forge)
+    assert completed["outcome"] == "degraded-success"
+    terminal = loads_exact(state_path.read_bytes())
+    assert terminal["phase"] == "completed"
+    sweep_cleanup = terminal["completion"]["sweep_cleanup"]
+    assert all(entry["result"] == "kept" for entry in sweep_cleanup.values())
+    assert all("synthetic cleanup outage" in entry["reason"] for entry in sweep_cleanup.values())
+
+
+def _cleanup_inputs(root: Path, worktree: Path) -> tuple[Settings, dict, dict]:
+    settings = load_settings(root)
+    state = {"finalization_operations": [{"kind": "branch-create", "read_back": {"worktree": str(worktree)}}]}
+    archive = {"repository": "topij/agentic-dev-kit", "branch": "chore/triage-2026-09-26-abcdef12", "base": "main", "commit": "2" * 40}
+    return settings, state, archive
+
+
+def test_sweep_cleanup_never_hands_the_caller_checkout_to_the_provider(tmp_path: Path) -> None:
+    """The engine's own caller-checkout guard (#807), independent of the one in
+    `GitHubForge`: a recorded worktree that is, contains, or sits inside the
+    caller's repository is kept without the provider ever being asked."""
+    root = repository(tmp_path)
+    for worktree in (root, root / "nested", tmp_path):
+        settings, state, archive = _cleanup_inputs(root, worktree)
+        forge = FakeForge([])
+        result = _sweep_cleanup(settings, forge, state, archive)
+        assert forge.calls == []
+        assert {entry["result"] for entry in result.values()} == {"kept"}
+        assert all("conflicts with the caller checkout" in entry["reason"] for entry in result.values())
+
+
+@pytest.mark.parametrize(
+    "read_back",
+    [
+        None,
+        {"worktree": {"result": "removed", "reason": None}, "local_branch": {"result": "removed", "reason": None}},
+        {"worktree": {"result": "gone", "reason": None}, "local_branch": {"result": "removed", "reason": None}, "remote_branch": {"result": "removed", "reason": None}},
+        {"worktree": {"result": "kept", "reason": None}, "local_branch": {"result": "removed", "reason": None}, "remote_branch": {"result": "removed", "reason": None}},
+        {"worktree": {"result": "kept", "reason": ""}, "local_branch": {"result": "removed", "reason": None}, "remote_branch": {"result": "removed", "reason": None}},
+        {"worktree": {"result": "removed", "reason": "invented"}, "local_branch": {"result": "removed", "reason": None}, "remote_branch": {"result": "removed", "reason": None}},
+        {"worktree": "removed", "local_branch": {"result": "removed", "reason": None}, "remote_branch": {"result": "removed", "reason": None}},
+    ],
+)
+def test_sweep_cleanup_records_a_malformed_provider_answer_as_kept(tmp_path: Path, read_back) -> None:
+    """A provider that answers `sweep-cleanup` with anything but the three-entry
+    shape is recorded as `kept` for every artifact, never passed through."""
+    settings, state, archive = _cleanup_inputs(repository(tmp_path), tmp_path / "isolated-finalize")
+    forge = FakeForge([ProviderObservation("verified", None, read_back)])
+    result = _sweep_cleanup(settings, forge, state, archive)
+    assert [call[0] for call in forge.calls] == ["sweep-cleanup"]
+    assert result == {
+        name: {"result": "kept", "reason": "sweep-cleanup provider returned a malformed result"}
+        for name in ("worktree", "local_branch", "remote_branch")
+    }
