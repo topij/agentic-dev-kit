@@ -20,6 +20,32 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-09-26 (triage sweep branches, #807, in Claude Code)
+
+**Shipped.** [#824](https://github.com/topij/agentic-dev-kit/pull/824) merged as `2c2844e`
+on the operator's direction in this session ("Merge when clean"); #807 closed with it. The
+default `vcs.triage_branch_pattern` is now `chore/triage-{date}-{session}`, and after a
+verified merge read-back the engine retires its own worktree, local branch and remote
+branch, recording each result in `completion.sweep_cleanup`. The CHANGELOG entry says
+what an adopter must do.
+
+**Review.** CodeRabbit skipped. The fallback panel ran full rounds at `782532a`,
+`ee209ed`, `5c9ec35` and `fbce09c`; the PR's disposition comments own the findings. The
+second and third rounds each found a way for a custom provider's cleanup record to pass
+the write and fail every later read. The fix that ended it was structural: the engine
+now runs the completion validator itself (`validate_sweep_cleanup`) instead of keeping
+its own copy of the rules.
+
+**Verification.** `make test` at `fbce09c46c100c721deec254cb81762d5b3450b6` on
+2026-09-26, in the PR's worktree under `.claude/worktrees/`, printed
+`3619 passed, 1 skipped`. The same command's results at the earlier heads are on the PR.
+
+**Not established:** a real same-day pair of triage runs, and retirement against the
+real forge; both are covered only by tests with real git in temporary directories. The
+stale `chore/triage-*` branches from before this change were not deleted.
+
+______________________________________________________________________
+
 ## Session — 2026-09-26 (handoff workstreams, in Claude Code)
 
 **Shipped.** [#822](https://github.com/topij/agentic-dev-kit/pull/822) merged as `76b883c`
@@ -310,52 +336,6 @@ its value before this session's first probe. The finding is parked in the fricti
 
 ______________________________________________________________________
 
-## Session — 2026-09-24 (Phase 5 D-SYSTEMIZE-RECOVERY run, in Claude Code)
-
-**Approval.** The operator approved PHASE5-D-SYSTEMIZE-RECOVERY-01: Stage 1, and Stage 2
-with options A1 and B1. The operator also directed the merges of #780, #781 and #782.
-`state/review-evidence/phase5-d-systemize-recovery-01/APPROVAL.md` records those
-decisions, a Stage 2 amendment and the Stage 2 stop. `RESULTS.md` in the same directory
-owns the outcomes.
-
-**Stage 1: engine and orchestrator kills, synthetic.**
-
-- **Setup:** it ran in a fresh clone at `66a8a10` under
-  `/private/tmp/adk-phase5-d-systemize-recovery-01/`, against the kit's fake forge. Its
-  predictions were sealed before the first kill.
-- **Result:** `python3 -B compare.py` in the evidence directory, on 2026-09-24, printed
-  `all fields match` for every case: PRE-1, PRE-2, RAW-1a, RAW-1b, RAW-2a, RAW-2b, DIG-1a,
-  DIG-1b, DIG-2a, DIG-2b, PRE-3, HM and HB.
-- **Containment:** `harness.py containment` printed `CONTAINMENT OK`.
-- **Filed on the operator's direction:**
-  - #783: heartbeat `start` reopens a completed run, now seen through the entry point
-    after a kill;
-  - #784: a kill after the temp write leaves a complete hidden copy that nothing removes.
-
-**Stage 2: agent cutpoints, stopped after run P.**
-
-- **Setup probes:** the first attempt failed, because git's credential helper came from
-  the Command Line Tools system config. The operator amended the environment with
-  `GIT_CONFIG_NOSYSTEM=1`, and every probe then passed.
-- **Run P** was a headless `claude -p --model fable`, isolated by `--strict-mcp-config`
-  and `--setting-sources ""`. It stopped at the tracker approval gate with the exact
-  payload, made no tracker write, and was killed there.
-- **The stop.** P wrote scratch files to literal `/tmp` paths, which is a packet stop, and
-  it had read the fake `gh` source and the harness's environment variables. The operator
-  stopped Stage 2 and kept P as partial evidence.
-- **Not established:** the post-dispatch/pre-receipt cutpoint, and a restarted run
-  presenting the payload again. Both go to the Phase 5 E audit as open residuals.
-- **What a rerun needs:** an agent that can neither read the harness nor write outside
-  its roots.
-
-**Merged on the operator's direction:**
-
-- #780 as `c8497c6295bdf21c073faa5470fb20e1337f5d7c`;
-- #781 as `902dbf64bc5a3301ab5817b1cbc78c3effa29f1d`;
-- #782 as `3644dc527b375b425ce61a6ae06de1ed832c3c49`.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -390,11 +370,14 @@ review-request method.
 
 ### Triage engine hardening
 
-**Status:** the sweep-marker defect (#806) is fixed by #812 and #813. **Owner:**
-[#807](https://github.com/topij/agentic-dev-kit/issues/807),
+**Status:** same-day sweep branches and post-merge retirement shipped in #824. **Owner:**
 [#808](https://github.com/topij/agentic-dev-kit/issues/808),
 [#818](https://github.com/topij/agentic-dev-kit/issues/818),
-[#820](https://github.com/topij/agentic-dev-kit/issues/820).
+[#820](https://github.com/topij/agentic-dev-kit/issues/820). The merge-read-back resume
+gap and the custom-provider cleanup-contract gaps are parked, unfiled, in the friction
+log's 2026-09-27 section.
 
-▶ Next: fix #807 — two triage sessions on one day collide on `chore/triage-{date}` —
-before the next same-day engine-backed sweep.
+▶ Next: file or discard the parked 2026-09-27 triage follow-ups (the
+merge-read-back resume gap is issue-shaped), then fix #808. Before the next sweep,
+delete the pre-#824 `chore/triage-*` branches by hand; the new engine retires only its
+own.
