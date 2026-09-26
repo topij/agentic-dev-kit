@@ -24,6 +24,42 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-09-27
+
+- **A resumed triage run cannot finish a verified merge read-back it did not complete.**
+  Seen by reading, not by a crash, while #824 was built. `_forge_attempt` persists the
+  verified `merge-read-back` operation, then a second `atomic_replace` in
+  `_advance_finalize` writes the completed state. A process that dies between the two
+  leaves every finalization operation verified with no completion, so the next resume
+  computes no next step and holds the run for the operator.
+  - **Proposed fix:** when the last operation is a verified `merge-read-back` and the
+    state is not completed, complete it from the recorded read-back.
+  - **Why it is parked:** issue-shaped, but this wrap-up ran with no operator to approve
+    a tracker write. File it on the operator's word.
+  - **Severity:** L. The window is narrow, and the hold is recoverable by hand.
+- **A write-time guard that restated a validator drifted from it twice in one PR.**
+  On #824, `_sweep_cleanup` kept its own copy of `validate_sweep_cleanup`'s rules. Round
+  2 of the panel found an empty `kept` reason passing the write and failing every later
+  read; round 3 found an extra key and a missing key doing the same after round 2's
+  fix. Calling the validator from the write ended it. This is the mirror of the
+  2026-09-26 entry below: that one validated with a function that also renders, and
+  this one rendered against a second copy of the validation.
+  - **Why it is parked:** accumulation. A candidate rule, if it recurs: a write that
+    persists state a validator will read calls that validator, rather than restating it.
+  - **Severity:** M. Each instance would have held every later triage run.
+- **Two cleanup-contract gaps left open on #824, both only reachable through a custom
+  `ForgeProvider`.** `_sweep_cleanup` accepts a well-formed record without checking
+  `observed.status`, so a non-`verified` answer can still record `removed`. And
+  `_sweep_cleanup_kept` spells out the three artifact names instead of reading
+  `SWEEP_CLEANUP_ARTIFACTS`; that drift would fail closed. The PR's round-4 disposition
+  records both.
+  - **Severity:** L.
+- **`vcs.systemize_branch_pattern` is still date-only.** `post-merge-systemize.md`
+  applies `chore/systemize-{date}` itself, with no engine, so two same-day runs would
+  collide as triage did before #824. Not observed.
+  - **Why it is parked:** no occurrence yet.
+  - **Severity:** L.
+
 ## 2026-09-26
 
 - **Changing a renderer that also validates retained state broke every older state.**

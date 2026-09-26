@@ -5,6 +5,50 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-09-24 (Phase 5 D-SYSTEMIZE-RECOVERY run, in Claude Code)
+
+**Approval.** The operator approved PHASE5-D-SYSTEMIZE-RECOVERY-01: Stage 1, and Stage 2
+with options A1 and B1. The operator also directed the merges of #780, #781 and #782.
+`state/review-evidence/phase5-d-systemize-recovery-01/APPROVAL.md` records those
+decisions, a Stage 2 amendment and the Stage 2 stop. `RESULTS.md` in the same directory
+owns the outcomes.
+
+**Stage 1: engine and orchestrator kills, synthetic.**
+
+- **Setup:** it ran in a fresh clone at `66a8a10` under
+  `/private/tmp/adk-phase5-d-systemize-recovery-01/`, against the kit's fake forge. Its
+  predictions were sealed before the first kill.
+- **Result:** `python3 -B compare.py` in the evidence directory, on 2026-09-24, printed
+  `all fields match` for every case: PRE-1, PRE-2, RAW-1a, RAW-1b, RAW-2a, RAW-2b, DIG-1a,
+  DIG-1b, DIG-2a, DIG-2b, PRE-3, HM and HB.
+- **Containment:** `harness.py containment` printed `CONTAINMENT OK`.
+- **Filed on the operator's direction:**
+  - #783: heartbeat `start` reopens a completed run, now seen through the entry point
+    after a kill;
+  - #784: a kill after the temp write leaves a complete hidden copy that nothing removes.
+
+**Stage 2: agent cutpoints, stopped after run P.**
+
+- **Setup probes:** the first attempt failed, because git's credential helper came from
+  the Command Line Tools system config. The operator amended the environment with
+  `GIT_CONFIG_NOSYSTEM=1`, and every probe then passed.
+- **Run P** was a headless `claude -p --model fable`, isolated by `--strict-mcp-config`
+  and `--setting-sources ""`. It stopped at the tracker approval gate with the exact
+  payload, made no tracker write, and was killed there.
+- **The stop.** P wrote scratch files to literal `/tmp` paths, which is a packet stop, and
+  it had read the fake `gh` source and the harness's environment variables. The operator
+  stopped Stage 2 and kept P as partial evidence.
+- **Not established:** the post-dispatch/pre-receipt cutpoint, and a restarted run
+  presenting the payload again. Both go to the Phase 5 E audit as open residuals.
+- **What a rerun needs:** an agent that can neither read the harness nor write outside
+  its roots.
+
+**Merged on the operator's direction:**
+
+- #780 as `c8497c6295bdf21c073faa5470fb20e1337f5d7c`;
+- #781 as `902dbf64bc5a3301ab5817b1cbc78c3effa29f1d`;
+- #782 as `3644dc527b375b425ce61a6ae06de1ed832c3c49`.
+
 ### 2026-09-23 (Phase 5 D-SYSTEMIZE-RECOVERY packet, unattended, in Claude Code)
 
 **Mode.** The operator asked for an autonomous session on the plan and then left. No
