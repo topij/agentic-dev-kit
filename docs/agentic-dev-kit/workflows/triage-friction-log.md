@@ -18,8 +18,9 @@ per leaf. Do not fall back to the tracked file alone. In this workflow:
 - `<protected-branch>` and `<triage-branch>` mean `vcs.protected_branch` and
   `vcs.triage_branch_pattern` after documented substitution: `{date}` for today's
   ISO date, and, when the pattern carries it, `{session}` for the first 8
-  characters of the run's own `run_identity.session`. A pattern without
-  `{session}` keeps the same-day collision risk two sessions can hit.
+  characters of the run's own `run_identity.session`. `{session}` may appear at
+  most once and never directly against `{date}`. A pattern without `{session}`
+  keeps the same-day collision risk two sessions can hit.
 - `<tracker>`, `<notify>`, and `<state-dir>` mean the configured `tracker`, `notify`,
   and `state.dirname` sections.
 - `<triage>` means the complete `triage` section: `triage.analysis_tier`,

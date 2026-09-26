@@ -68,6 +68,14 @@ def test_live_and_test_artifact_paths_are_distinct(tmp_path: Path, monkeypatch: 
             lambda text: text.replace('triage_branch_pattern: "chore/triage-{date}-{session}"', 'triage_branch_pattern: "chore/triage-{date}-{session}-{session}"'),
             "at most once",
         ),
+        (
+            lambda text: text.replace('triage_branch_pattern: "chore/triage-{date}-{session}"', 'triage_branch_pattern: "chore/triage-{date}{session}"'),
+            "must separate",
+        ),
+        (
+            lambda text: text.replace('triage_branch_pattern: "chore/triage-{date}-{session}"', 'triage_branch_pattern: "chore/triage-{session}{date}"'),
+            "must separate",
+        ),
     ],
 )
 def test_malformed_or_colliding_config_stops_before_artifact_resolution(

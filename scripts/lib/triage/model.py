@@ -193,6 +193,10 @@ def load_settings(start: Path | None = None) -> Settings:
         raise TriageError("vcs.triage_branch_pattern must contain {date} exactly once")
     if branch_pattern.count("{session}") > 1:
         raise TriageError("vcs.triage_branch_pattern may contain {session} at most once")
+    if "{date}{session}" in branch_pattern or "{session}{date}" in branch_pattern:
+        # The engine's legacy-branch fallback drops `{session}` with one adjacent
+        # separator; with no separator it would cut into `{date}` instead (#807).
+        raise TriageError("vcs.triage_branch_pattern must separate {session} from {date}")
     subject = _required(config, "triage.commit_subject")
     if not isinstance(subject, str) or not subject:
         raise TriageError("triage.commit_subject must be non-empty")

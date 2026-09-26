@@ -29,6 +29,7 @@ from triage.engine import (  # noqa: E402
     _branch_date,
     _frozen_candidates,
     _pr_result_fields,
+    _sweep_cleanup,
     _validate_commit_updates,
     _verify_forge_read_back,
     run,
@@ -911,6 +912,20 @@ def test_verified_merge_read_back_retires_the_sweeps_own_artifacts(
     del legacy_completed["completion"]["sweep_cleanup"]
     canonical_state(dumps(legacy_completed), settings=load_settings(root), mode="live")
 
+    # The recorded field is validated, not only tolerated: a reason accompanies
+    # `kept` and nothing else. The route restriction is covered from a
+    # decision-only completion in test_triage_engine.py.
+    for mutate, message in (
+        (lambda completion: completion["sweep_cleanup"]["remote_branch"].update(reason=None), "kept entry lacks a reason"),
+        (lambda completion: completion["sweep_cleanup"]["remote_branch"].update(reason=""), "kept entry lacks a reason"),
+        (lambda completion: completion["sweep_cleanup"]["worktree"].update(reason="invented"), "fabricates a reason"),
+        (lambda completion: completion["sweep_cleanup"].pop("local_branch"), "wrong shape"),
+    ):
+        tampered = deepcopy(terminal)
+        mutate(tampered["completion"])
+        with pytest.raises(TriageError, match=message):
+            canonical_state(dumps(tampered), settings=load_settings(root), mode="live")
+
 
 def test_sweep_cleanup_never_un_completes_a_verified_merge(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -965,3 +980,48 @@ def test_sweep_cleanup_never_un_completes_a_verified_merge(
     sweep_cleanup = terminal["completion"]["sweep_cleanup"]
     assert all(entry["result"] == "kept" for entry in sweep_cleanup.values())
     assert all("synthetic cleanup outage" in entry["reason"] for entry in sweep_cleanup.values())
+
+
+def _cleanup_inputs(root: Path, worktree: Path) -> tuple[Settings, dict, dict]:
+    settings = load_settings(root)
+    state = {"finalization_operations": [{"kind": "branch-create", "read_back": {"worktree": str(worktree)}}]}
+    archive = {"repository": "topij/agentic-dev-kit", "branch": "chore/triage-2026-09-26-abcdef12", "base": "main", "commit": "2" * 40}
+    return settings, state, archive
+
+
+def test_sweep_cleanup_never_hands_the_caller_checkout_to_the_provider(tmp_path: Path) -> None:
+    """The engine's own caller-checkout guard (#807), independent of the one in
+    `GitHubForge`: a recorded worktree that is, contains, or sits inside the
+    caller's repository is kept without the provider ever being asked."""
+    root = repository(tmp_path)
+    for worktree in (root, root / "nested", tmp_path):
+        settings, state, archive = _cleanup_inputs(root, worktree)
+        forge = FakeForge([])
+        result = _sweep_cleanup(settings, forge, state, archive)
+        assert forge.calls == []
+        assert {entry["result"] for entry in result.values()} == {"kept"}
+        assert all("conflicts with the caller checkout" in entry["reason"] for entry in result.values())
+
+
+@pytest.mark.parametrize(
+    "read_back",
+    [
+        None,
+        {"worktree": {"result": "removed", "reason": None}, "local_branch": {"result": "removed", "reason": None}},
+        {"worktree": {"result": "gone", "reason": None}, "local_branch": {"result": "removed", "reason": None}, "remote_branch": {"result": "removed", "reason": None}},
+        {"worktree": {"result": "kept", "reason": None}, "local_branch": {"result": "removed", "reason": None}, "remote_branch": {"result": "removed", "reason": None}},
+        {"worktree": {"result": "removed", "reason": "invented"}, "local_branch": {"result": "removed", "reason": None}, "remote_branch": {"result": "removed", "reason": None}},
+        {"worktree": "removed", "local_branch": {"result": "removed", "reason": None}, "remote_branch": {"result": "removed", "reason": None}},
+    ],
+)
+def test_sweep_cleanup_records_a_malformed_provider_answer_as_kept(tmp_path: Path, read_back) -> None:
+    """A provider that answers `sweep-cleanup` with anything but the three-entry
+    shape is recorded as `kept` for every artifact, never passed through."""
+    settings, state, archive = _cleanup_inputs(repository(tmp_path), tmp_path / "isolated-finalize")
+    forge = FakeForge([ProviderObservation("verified", None, read_back)])
+    result = _sweep_cleanup(settings, forge, state, archive)
+    assert [call[0] for call in forge.calls] == ["sweep-cleanup"]
+    assert result == {
+        name: {"result": "kept", "reason": "sweep-cleanup provider returned a malformed result"}
+        for name in ("worktree", "local_branch", "remote_branch")
+    }
