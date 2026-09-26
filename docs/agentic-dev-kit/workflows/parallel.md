@@ -115,8 +115,8 @@ deliberately:
    are file territory already claimed; exclude their footprints from the new batch.
 
 1. **Gather candidates.** Pull open tickets from your tracker (project
-   `tracker.project_name`, states In Progress + Todo) and the `▶ Next` deferred items
-   in `<handoff>`. If a `<focus>` argument was given (a
+   `tracker.project_name`, states In Progress + Todo) and each workstream's `▶ Next:`
+   under `## Workstreams` in `<handoff>`. If a `<focus>` argument was given (a
    theme, an area, or an explicit ticket list), scope to it.
 
    **That call needs a row limit and field selection**, on the terms
@@ -339,10 +339,11 @@ wrap-up **from this cockpit session**:
    per merged or held batch PR (parked scopes have no landed narrative to read; a held
    one has a finished PR body and is exactly what you need in order to rule on it).
 
-1. Write **one** "Latest session" block for the whole batch via `wrap-up` — open
+1. Write **one** session entry for the whole batch via `wrap-up` — open
    with the tally line, then PRs landed, collisions avoided, each parked scope with
    its reason, and each held scope with its PR number and what it is waiting on. Not
-   one block per session.
+   one entry per session. Update the `## Workstreams` entry of each workstream a lane
+   advanced, as `wrap-up` describes; a lane never edits `<handoff>` itself.
 
 1. Open it as its own `chore: update handoff` PR (this checkout sits on the protected
    branch, so the handoff edit goes through a branch + PR like everything else;

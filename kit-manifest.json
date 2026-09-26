@@ -52,7 +52,7 @@
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
-      "sha256": "597d1cdfe5d2ffe91d37a5ea77f14b51c3aec7e9f4f3fbb46bb140307c220bc4"
+      "sha256": "8cce058a85806337fbf64e69426da19dee2f55a94e557c4853575986c2b69ed3"
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
@@ -64,7 +64,7 @@
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
-      "sha256": "f280ee4eb9e8aa37d277aaeb3806b34d4377b5afe149f8063ad25eb7e66d2a2a"
+      "sha256": "443c4eb24b82f7bf064d22dd24528a30bd1691cb0f9b29182978c4b3cfb31525"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
@@ -76,7 +76,7 @@
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "b8e8d0b7d8073df93082ac874c3e4dfb21d233813f32b51a8dd742ef36ee88b9"
+      "sha256": "08e46912309fe90da2a6398b2355e6b6b6b4c40ee3cd8e07cba5561da1d41e28"
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
@@ -100,7 +100,7 @@
     },
     "docs/templates/handoff.md.tmpl": {
       "role": "template",
-      "sha256": "1654465836a9e70a6e81d76208783e9a12d65343d1e9c3091f1d30c25a437ce7"
+      "sha256": "aeb907a1597038afe373488eb1345285e01083b8b661b9875599816b05f023fe"
     },
     "init.sh": {
       "role": "installer",
@@ -108,7 +108,7 @@
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
-      "sha256": "ca02cc41f1b1cd0d9d09d81691857401c04639c2ece97e386f1999b99e90ff3d"
+      "sha256": "cdd7185baa9422e02e2681dbfed7486f048c6a38b5264b5f0b06a4916992e04f"
     },
     "scripts/check_doc_budget.py": {
       "role": "engine",
@@ -501,7 +501,7 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "41ad37977dad41e6ec739bef369138d93e1f4ad9ff7036172ee8e61cb36c49a4"
+      "sha256": "14dafbc581e1ee7de6a1c869fa7e6ff491339188bfe74d7b03557b3745a2b24d"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
@@ -533,7 +533,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "0e41d75a744417aff8a59c9a3c75d15a6219c831164c225ad711632669b37117"
+      "sha256": "8f9a53c71f6b8cd69542d1ba9533275ffb3e5bd61de202f7d6eab2ca0906fc90"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

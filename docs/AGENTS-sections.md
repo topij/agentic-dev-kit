@@ -21,7 +21,8 @@ status in the configured handoff, not in `AGENTS.md`.
 - Use `parallel` only for lanes with disjoint source-file footprints. The cockpit
   owns the configured handoff and friction log; lanes report through their PR bodies.
 - At the end of every meaningful session, use `wrap-up` to update the configured
-  handoff, capture workflow friction, and leave one clear next step.
+  handoff, capture workflow friction, and leave one clear next step on the
+  workstream the session worked on.
 - For customer-facing gates, destructive operations, recovery paths, security work,
   and behavioral changes to the configured `<engine-dir>/pr_watch.py`,
   `<engine-dir>/dev_session.sh`, `<engine-dir>/launch_lane.py`, or the profile named
