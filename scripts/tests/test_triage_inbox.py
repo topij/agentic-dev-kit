@@ -390,3 +390,22 @@ def test_render_sweep_adds_a_blank_line_before_the_appended_archive_heading() ->
     marker = "## 2026-09-26 — Backlog migrated by triage session abc123\n\n".encode()
     _active, archive = render_sweep(raw, b"# Archive\n\nprior content\n", candidates, state, marker)
     assert archive == b"# Archive\n\nprior content\n\n## 2026-09-20\n\n- **Archived one.** body\n"
+
+
+def test_render_sweep_legacy_reproduces_the_pre_812_bytes() -> None:
+    """`legacy=True` exists so a sweep an engine before #812 committed still
+    validates. These bytes are what that engine rendered for this input: the older
+    bare marker deleted as empty, the new marker bare, and no blank line before the
+    appended archive heading."""
+    raw = (
+        "# Log\n\n## 2026-09-20 — Backlog migrated by triage session older\n\n"
+        "## 2026-09-10\n\n- **Swept.** body\n"
+    ).encode()
+    candidates = parse(raw)
+    state = _render_sweep_state(archived=[candidates[0].candidate_id], approval=("archive TRI-01", "topi"))
+    marker = "## 2026-09-26 — Backlog migrated by triage session new\n\n".encode()
+    active, archive = render_sweep(raw, b"# Archive\nprior", candidates, state, marker, legacy=True)
+    assert active == "# Log\n\n## 2026-09-26 — Backlog migrated by triage session new\n\n".encode()
+    assert archive == b"# Archive\nprior\n## 2026-09-10\n\n- **Swept.** body\n"
+    current_active, current_archive = render_sweep(raw, b"# Archive\nprior", candidates, state, marker)
+    assert current_active != active and current_archive != archive

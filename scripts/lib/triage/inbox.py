@@ -167,7 +167,16 @@ def snapshot_content(raw: bytes, candidates: list[Candidate]) -> dict[str, Any]:
     }
 
 
-def exact_sweep(current: bytes, frozen: list[Candidate], sweep_ids: set[str]) -> tuple[bytes, bytes]:
+def exact_sweep(
+    current: bytes, frozen: list[Candidate], sweep_ids: set[str], *, legacy: bool = False
+) -> tuple[bytes, bytes]:
+    """Remove the swept blocks from `current` and return (active, archived).
+
+    `legacy=True` reproduces the pre-#812 bytes exactly: a bare graduation marker
+    counts as an empty section, and a removed trailing section keeps its separating
+    blank line. It exists only so a sweep an older engine already committed still
+    validates; nothing renders a new sweep that way.
+    """
     selected = [candidate for candidate in frozen if candidate.candidate_id in sweep_ids]
     unknown = sweep_ids - {candidate.candidate_id for candidate in frozen}
     if unknown:
@@ -209,13 +218,13 @@ def exact_sweep(current: bytes, frozen: list[Candidate], sweep_ids: set[str]) ->
         end = sections[index + 1].start() if index + 1 < len(sections) else len(active)
         if (
             DATED_RE.match(title)
-            and not is_migration_marker(title)
+            and (legacy or not is_migration_marker(title))
             and not ENTRY_RE.search(visible_active, section.end(), end)
             and not active[section.end():end].strip()
         ):
             empty_sections.append((section.start(), end))
     for start, end in reversed(empty_sections):
-        if end >= len(active):
+        if end >= len(active) and not legacy:
             # The removed section was the file's last, so the blank line that
             # separated it from whatever now precedes it would otherwise become
             # a trailing blank line at EOF (#806). Collapse to a single newline,

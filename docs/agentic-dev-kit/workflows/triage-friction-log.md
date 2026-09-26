@@ -1074,6 +1074,12 @@ empty, also remove the blank line that separated it from whatever precedes it if
 follows: otherwise an emptied trailing section leaves a blank line at EOF. The archive
 append gets a blank line before its own appended heading on the same rule.
 
+Commit validation, which re-renders a retained sweep commit from state, also accepts the
+rendering engines used before the marker record existed: a bare marker, a bare marker
+treated as an empty section, and no separator management. A completed or in-flight state
+that such an engine committed must stay valid after an upgrade. New sweeps are never
+rendered that way, and a commit matching neither rendering is operator-held.
+
 Test mode stops after rendering the proposed diff in the report. Render that diff by the
 same literal-content rule. It does not edit
 `<friction-log>` or `<friction-log-archive>` on disk and does not create a branch,

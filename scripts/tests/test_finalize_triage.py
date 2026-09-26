@@ -25,8 +25,13 @@ from triage.canonical import (  # noqa: E402
     encode_bytes,
     loads_exact,
 )
-from triage.engine import _pr_result_fields, _verify_forge_read_back, run  # noqa: E402
-from triage.finalize import sweep_ids  # noqa: E402
+from triage.engine import (  # noqa: E402
+    _frozen_candidates,
+    _pr_result_fields,
+    _verify_forge_read_back,
+    run,
+)
+from triage.finalize import render_sweep, sweep_ids  # noqa: E402
 from triage.inbox import parse  # noqa: E402
 from triage.model import TriageError, canonical_state, load_settings  # noqa: E402
 from triage.providers import FakeForge, ProviderObservation  # noqa: E402
@@ -436,7 +441,7 @@ def test_commit_authority_failure_leaves_clean_worktree_and_fresh_retry_can_cont
     assert b"Approved archive" in (worktree / "docs/kit-friction-log-archive.md").read_bytes()
 
 
-@pytest.mark.parametrize("mutation", ["derived-content", "foreign-path"])
+@pytest.mark.parametrize("mutation", ["derived-content", "foreign-path", "legacy-rendering"])
 def test_fresh_process_refuses_mutated_retained_commit_updates_before_rebind(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
 ) -> None:
@@ -480,6 +485,21 @@ def test_fresh_process_refuses_mutated_retained_commit_updates_before_rebind(
         intent["updates"][0]["content"] = encode_bytes(raw)
         intent["updates"][0]["content_digest"] = digest_bytes(raw)
         expected_detail = "commit updates do not match the approved sweep"
+    elif mutation == "legacy-rendering":
+        # A commit an engine before #812 rendered (bare marker, no record) must
+        # still validate, so the restart gets past the content check instead of
+        # holding on it.
+        updates = {update["path"]: update for update in intent["updates"]}
+        inbox, archive = updates["docs/kit-friction-log.md"], updates["docs/kit-friction-log-archive.md"]
+        legacy = render_sweep(
+            decode_bytes(inbox["previous_content"]), decode_bytes(archive["previous_content"]),
+            _frozen_candidates(state), state, intent["migration_marker"].encode(), legacy=True,
+        )
+        assert legacy != (decode_bytes(inbox["content"]), decode_bytes(archive["content"]))
+        for update, raw in zip((inbox, archive), legacy, strict=True):
+            update["content"] = encode_bytes(raw)
+            update["content_digest"] = digest_bytes(raw)
+        expected_detail = None
     else:
         intent["updates"][0]["path"] = "aaa-foreign.md"
         intent["paths"][0] = "aaa-foreign.md"
@@ -506,9 +526,15 @@ def test_fresh_process_refuses_mutated_retained_commit_updates_before_rebind(
         text=True, env=environment,
     )
     result = loads_exact(restarted.stdout.strip().encode())
-    assert result["outcome"] == "operator-held"
-    assert result["detail"] == expected_detail
-    assert state_path.read_bytes() == state_before
+    if expected_detail is None:
+        # Past the content check, the restart stops at the next step this
+        # subprocess cannot perform: it has no forge to refresh the protected
+        # branch through.
+        assert (result["outcome"], result["detail"]) == ("hard-stop", "protected branch refresh authority is unavailable")
+    else:
+        assert result["outcome"] == "operator-held"
+        assert result["detail"] == expected_detail
+        assert state_path.read_bytes() == state_before
     assert (worktree / "docs/kit-friction-log.md").read_bytes() == inbox_before
     assert (worktree / "docs/kit-friction-log-archive.md").read_bytes() == archive_before
 
