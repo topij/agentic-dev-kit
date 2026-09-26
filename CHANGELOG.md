@@ -44,13 +44,6 @@ starts.
 
 ## #812 — Triage sweep markers carry a record and survive the next sweep
 
-**`#812` is a placeholder, not this PR's real number** — pinned here only to satisfy
-`test_real_changelog_headings_match_the_extraction_pattern`'s `#\d+` heading format
-(the highest number known at authoring time was `#811`; `#806` is the *issue*, not
-this PR). Whoever opens this PR must replace `#812` above with the actual PR number
-before merge and delete this paragraph, or `/upgrade`'s extraction silently treats
-this entry as unindexed.
-
 CHANGED — report shape: Refresh `lib/triage/finalize.py`, `lib/triage/inbox.py`, `lib/triage/engine.py`, the shared triage workflow, `kit-manifest.json` and `scripts/tests/test_triage_inbox.py`. `render_sweep` now writes a record block under a sweep's `## <date> — Backlog migrated by triage session <id>` marker heading — engine mode, filed issue links, archived candidate ids, and the verbatim approval command with its approver, all read from the run's own state — instead of leaving the heading bare. `exact_sweep`'s empty-section removal now recognises that marker form (the same substring `parse` already excludes candidates on, not a second pattern) and never deletes it, so a same-day second sweep no longer erases the first sweep's marker and record; a genuinely empty dated section it does remove also has its separating blank line trimmed when nothing follows, so an emptied trailing section no longer leaves a blank line at EOF. The archive append now inserts a blank line before its own appended heading, where it previously inserted none. A script that parsed the old bare, no-record marker, that relied on a marker being deleted by a later sweep, or that parsed the archive file expecting no blank line before an appended heading, must be updated for all three.
 
 ## #804 — Retry a failed triage branch-create once nothing it could leave exists
