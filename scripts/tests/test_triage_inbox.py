@@ -339,6 +339,9 @@ def test_issue_link_falls_back_to_an_inline_literal_for_any_unverified_shape(des
     assert "](" not in rendered
     assert rendered.startswith("`")
     assert "\n" not in rendered
+
+
+def test_render_sweep_record_block_omits_lines_it_has_no_data_for() -> None:
     raw = b"# Log\n\n## 2026-09-20\n\n- **Archived one.** body\n"
     candidates = parse(raw)
     state = _render_sweep_state(archived=[candidates[0].candidate_id], engine_mode=None)
