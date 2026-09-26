@@ -1396,6 +1396,103 @@ def test_consecutive_classic_sweeps_leave_one_footer_and_no_blank_line_at_eof(
         assert "Older session entries" not in history.read_text(encoding="utf-8")
 
 
+_WORKSTREAMS = (
+    "## Workstreams\n\n"
+    "### Alpha\n\n**Status:** open. **Owner:** #1.\n\n▶ Next: finish alpha.\n\n"
+    # A workstream named like a recent-layout session heading must stay put too.
+    "### 2026-07-01 lookalike\n\n**Status:** open. **Owner:** #2.\n\n▶ Next: finish beta.\n"
+)
+
+
+@pytest.mark.parametrize("layout", ["classic", "recent"])
+@pytest.mark.parametrize(
+    "after", ["", "\n## Backlog\n\nStanding content.\n"], ids=["only-tail", "with-backlog"]
+)
+@pytest.mark.parametrize("mode", ["keep", "target-lines"])
+def test_archive_never_sweeps_the_workstreams_section(
+    tmp_path: Path, layout: str, after: str, mode: str,
+) -> None:
+    """#762: open continuations live under `## Workstreams`, which no sweep moves.
+
+    Session entries go to history oldest-first because nothing live remains in
+    them; that is only safe while the section holding every next step is a
+    standing tail, including when it is the only content after the sessions.
+    """
+    archive = _load_module("archive_workstreams", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "history.md"
+    head = "# Handoff\n\n" + ("## Recent sessions\n\n" if layout == "recent" else "")
+    blocks = "".join(
+        (f"### 2026-07-0{day} — Block {day}" if layout == "recent"
+         else f"## Session — 2026-07-0{day} (block {day})")
+        + f"\n\nBody {day}.\n\n"
+        + ("---\n\n" if layout == "recent" else archive.SEP + "\n")
+        for day in (4, 3, 2)
+    )
+    original = head + blocks + _WORKSTREAMS + after
+    plan.write_text(original, encoding="utf-8")
+    history.write_text("# History\n\n## Session log\n", encoding="utf-8")
+    if mode == "keep":
+        argv = ["--keep", "1"]
+    else:
+        # The line count `--keep 1` produces, reached by the line-budget route.
+        probe_plan, probe_history = tmp_path / "probe.md", tmp_path / "probe-history.md"
+        probe_plan.write_text(original, encoding="utf-8")
+        probe_history.write_text(history.read_text(encoding="utf-8"), encoding="utf-8")
+        assert archive.main(
+            ["--keep", "1", "--plan", str(probe_plan), "--history", str(probe_history)]
+        ) == 0
+        target = archive.budget_line_count(probe_plan.read_text(encoding="utf-8"))
+        argv = ["--target-lines", str(target)]
+
+    assert archive.main([*argv, "--plan", str(plan), "--history", str(history)]) == 0
+
+    live = plan.read_text(encoding="utf-8")
+    saved = history.read_text(encoding="utf-8")
+    assert live.endswith(_WORKSTREAMS + after)
+    assert live.count("## Workstreams") == 1
+    assert "Body 4." in live
+    assert "Body 3." in saved and "Body 2." in saved
+    for line in ("## Workstreams", "▶ Next: finish alpha.", "▶ Next: finish beta."):
+        assert line not in saved
+    before = (plan.read_bytes(), history.read_bytes())
+    assert archive.main([*argv, "--plan", str(plan), "--history", str(history)]) == 0
+    assert (plan.read_bytes(), history.read_bytes()) == before
+
+
+def test_classic_archive_replaces_the_pre_762_footer(tmp_path: Path) -> None:
+    """A footer an older sweep wrote is the archiver's own, not the oldest block's.
+
+    Its second line pointed at lists no handoff carried. Treated as content, it
+    would travel into history with the oldest entry and leave a second footer
+    live; recognised, it is replaced by the current one.
+    """
+    archive = _load_module("archive_legacy_footer", ENGINE_DIR / "archive_plan_sessions.py")
+    plan = tmp_path / "handoff.md"
+    history = tmp_path / "saved" / "history.md"
+    history.parent.mkdir()
+    legacy = archive._legacy_history_pointer("saved/history.md", "history.md")
+    current = archive.history_pointer("saved/history.md", "history.md")
+    assert legacy != current
+    plan.write_text(
+        "# Handoff\n\n## Session — 2026-07-03 (newest)\n\nNewest body.\n\n"
+        + archive.SEP + "\n## Session — 2026-07-02 (older)\n\nOlder body.\n\n"
+        + archive.SEP + "\n" + "".join(legacy) + "\n" + _WORKSTREAMS,
+        encoding="utf-8",
+    )
+    history.write_text("# History\n\n## Session log\n", encoding="utf-8")
+
+    assert archive.main(["--keep", "1", "--plan", str(plan), "--history", str(history)]) == 0
+
+    live = plan.read_text(encoding="utf-8")
+    saved = history.read_text(encoding="utf-8")
+    assert "Older body." in saved
+    assert legacy[0] not in saved and legacy[1] not in saved
+    assert legacy[1] not in live
+    assert live.count("".join(current)) == 1
+    assert live.endswith("".join(current) + "\n" + _WORKSTREAMS)
+
+
 def test_recent_archive_preserves_text_matching_a_classic_footer(tmp_path: Path) -> None:
     """The recent-session writer does not own classic footer syntax."""
     archive = _load_module("archive_recent_footer", ENGINE_DIR / "archive_plan_sessions.py")
@@ -2639,6 +2736,26 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "Do not mark `forge-pr-read` ready from list metadata or an "
             "acknowledgement-filtered view alone"
         ) in flattened
+        # #762: workstreams, not recency, carry the handoff's next steps.
+        assert (
+            "**no entry is promoted for being the most recently updated**"
+            in flattened
+        )
+        assert (
+            "**the most recent one is not an instruction to this session**"
+            in flattened
+        )
+        assert (
+            "**When the operator names a workstream or a task** in the invocation "
+            "or its context, that is the pick."
+        ) in flattened
+        assert (
+            "a 🔴 item stays in the briefing beside it rather than overriding the choice"
+            in flattened
+        )
+        assert "choosing it changes no other workstream's entry" in flattened
+        assert "none of them stands in for the others" in flattened
+        assert "Recency is not among them" in flattened
     else:
         assert capabilities == {
             "repository-config-read": (
@@ -2777,6 +2894,34 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             in flattened
         )
         assert "a runtime-native direct merge is forbidden" in flattened
+        # #762: a wrap-up owns its session entry and its own workstream's entry.
+        assert "since **this session began**" in flattened
+        assert "Not since the handoff's newest entry" in flattened
+        assert "confirm it with the operator in one line" in flattened
+        assert (
+            "**With no operator to confirm**, update an existing entry only when "
+            "the session's work is on that entry's own plan or issue"
+        ) in flattened
+        assert "**It carries no `▶ Next:`**" in flattened
+        assert "Do not rename or edit earlier session entries" in flattened
+        assert "**Leave every other workstream's entry alone.**" in flattened
+        assert (
+            "If the falsified line is that entry's `▶ Next:`, ask the operator "
+            "rather than rewriting it"
+        ) in flattened
+        assert "**Closing a workstream is the operator's decision.**" in flattened
+        assert "Never close one because its `▶ Next:` looks finished" in flattened
+        assert (
+            "list those for the operator, and give each one they name its own entry"
+            in flattened
+        )
+        assert "and never keep one side's `▶ Next:` silently" in flattened
+        assert "`## Workstreams` is a standing section and is never swept" in flattened
+        assert "for the workstream this session worked on, never in the session entry" in flattened
+        assert (
+            "Closing a workstream is not among them: it is the operator's call"
+            in flattened
+        )
         precedence = list(
             _integration_table(workflow, "Overall outcome precedence", 3).items()
         )
@@ -3213,6 +3358,86 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
         ("wrap-up", wrap, wrap.replace(
             "Never repeat a tracker create",
             "Repeat a tracker create", 1
+        )),
+        ("session-start", session, session.replace(
+            "**no entry is promoted for being the most recently updated**",
+            "**the most recently updated entry is promoted**", 1
+        )),
+        ("session-start", session, session.replace(
+            "**the most recent one is not", "**the most recent one is", 1
+        )),
+        ("session-start", session, session.replace(
+            "context, that is the pick.", "context, it is one candidate.", 1
+        )),
+        ("session-start", session, session.replace(
+            "beside it rather than overriding the choice",
+            "and overrides the choice", 1
+        )),
+        ("session-start", session, session.replace(
+            "choosing it changes no", "choosing it replaces the", 1
+        )),
+        ("session-start", session, session.replace(
+            "none of them stands in for the others",
+            "the newest stands in for the others", 1
+        )),
+        ("session-start", session, session.replace(
+            "Recency is not among them", "Recency breaks ties", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "**this session began**", "**the handoff's newest entry**", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "Not since the handoff's newest entry",
+            "Since the handoff's newest entry", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "confirm it with the operator in one line",
+            "record it without asking the operator", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "entry only when the session's work is on that entry's own plan or issue;",
+            "entry whenever the session's work looks related to it;", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "**It carries no `▶ Next:`**", "**It carries the `▶ Next:`**", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "Do not rename or edit earlier session entries",
+            "Rename earlier session entries as needed", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "**Leave every other workstream's entry alone.**",
+            "**Update any workstream's entry that looks stale.**", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "the operator rather than rewriting it",
+            "the operator, or rewrite it yourself", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "**Closing a workstream is the operator's decision.**",
+            "**Closing a workstream is the agent's decision.**", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "Never close one because its `▶ Next:` looks finished",
+            "Close one when its `▶ Next:` looks finished", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "list those for the operator, and give each one they name its own entry.",
+            "leave those for the sweep.", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "and never keep one", "and keep either", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "is a standing section and is never swept",
+            "is swept with the oldest entries", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "worked on, never in the session entry", "worked on, and in the session entry", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "Closing a workstream is not among them",
+            "Closing a workstream is among them", 1
         )),
     )
     for mutation_index, (name, original, mutated) in enumerate(mutations):

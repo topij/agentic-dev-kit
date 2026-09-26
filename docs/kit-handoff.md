@@ -11,13 +11,16 @@
 > unrendered marker would be gone. An adopter's config uses the plain names; only the
 > template repo needs this indirection.
 >
+> **Two parts.** Session entries are a log of what happened, newest first, and carry no
+> next step. Each open line of work keeps its own `▶ Next:` in its entry under
+> **Workstreams** at the end of this file, until the operator closes it
+> ([#762](https://github.com/topij/agentic-dev-kit/issues/762)).
+>
 > Older session blocks graduate to [`kit-handoff-history.md`](kit-handoff-history.md) once
-> this file crosses its line budget (`scripts/check_doc_budget.py`).
+> this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
+> section is never swept.
 
-Last updated: 2026-09-26 — #806 fixed and the triage inbox swept; #762 designed for a
-fresh session.
-
-## Latest session — 2026-09-26 (triage engine fixes, friction sweeps, #762 design, in Claude Code)
+## Session — 2026-09-26 (triage engine fixes, friction sweeps, #762 design, in Claude Code)
 
 **Shipped, each with a fallback panel because CodeRabbit's automatic review is off:**
 
@@ -57,10 +60,6 @@ run in a fresh session at higher effort.
 `saved_plans/phase5-completion-plan_2026-09-18.md` (local, not committed) nor Phase 6 in
 `saved_plans/codex-parity-plan_2026-08-23.md` names one.
 
-▶ Next: implement #762 from its design comment — shared `wrap-up.md` and
-`session-start.md`, `docs/templates/handoff.md.tmpl`, archiver tests, a `CHANGELOG.md`
-entry, and the hand migration of this file into workstream entries.
-
 ______________________________________________________________________
 
 ## Session — 2026-09-26 (documentation refresh, in Codex)
@@ -75,9 +74,6 @@ merge-authority, and model-tier behavior.
 **Review.** CodeRabbit reported that automatic review was skipped. The PR carries
 the fallback panel and composed delta review evidence; its comments own the findings
 and dispositions.
-
-▶ Next: `/session-start` — re-read the Phase 5 block below and live tracker state
-before choosing the next task.
 
 ______________________________________________________________________
 
@@ -121,13 +117,6 @@ occurrence comment went on #425.
 `make test` run. All ran in linked worktrees under this session's scratchpad, because the main checkout's
 `state/review-evidence/` holds unreadable files (#461).
 
-▶ Next: `/session-start`, then choose between drafting the D-TRIAGE-RECOVERY packet from
-`saved_plans/phase5-d-proposal_2026-09-21.md` (local) and fixing #806 and #807 before the
-next engine-backed sweep.
-
-The 2026-09-26 session took #806 (#812, then #813 for the regression it caused). #807
-stays open; the D-TRIAGE-RECOVERY packet was not drafted.
-
 ______________________________________________________________________
 
 ## Session — 2026-09-25 (reviewer switching assessment, in Claude Code)
@@ -158,9 +147,6 @@ bot" and to make switching between CodeRabbit and internal tooling a config choi
 The reviewer-specific notes and the checklist of things to observe once it is live are
 in `saved_plans/fabro-review-tool-assessment_2026-09-25.md` (local, not committed). The
 public issues leave those details out on purpose.
-
-▶ Next: `/session-start`. For this thread, #796 can start any time; #797 can wait for
-the reviewer developer's answer about a check run.
 
 ______________________________________________________________________
 
@@ -201,12 +187,6 @@ the outcomes.
 synthetic approval recorded under the operator's real name; and a confounded related
 occurrence on the FRESH-CONTEXT preflight entry.
 
-**Still open from earlier sessions:** the #748 and #7 judgments.
-
-▶ Next: `/session-start`, then draft the D-TRIAGE-RESIDUAL packet from
-`saved_plans/phase5-d-proposal_2026-09-21.md` (local). The alternative is #794's
-workflow fix.
-
 ______________________________________________________________________
 
 ## Session — 2026-09-24 (systemize dispatch idempotency, #790, in Claude Code)
@@ -236,17 +216,6 @@ PR's disposition comments own the findings.
 `3500 passed, 1 skipped`. It did not run in the main checkout, because a mode-000 file
 under the gitignored `state/review-evidence/` crashes the suite's state snapshot. That
 is #461's mechanism, now live.
-
-**Still open from earlier sessions:** the #748 and #7 judgments, and #722's owed record
-edits.
-
-▶ Next: `/session-start`, then draft the RECOVERY post-dispatch rerun packet against the
-workflow at `4c69ab2`, from `saved_plans/phase5-d-systemize-recovery_2026-09-23.md`
-(local). The alternative is the D-TRIAGE-RESIDUAL packet, from
-`saved_plans/phase5-d-proposal_2026-09-21.md` (local).
-
-The next session took the rerun, and closed #722 as done. The 2026-09-24 block on
-D-SYSTEMIZE-RECOVERY-02 owns both.
 
 ______________________________________________________________________
 
@@ -306,16 +275,6 @@ its value before this session's first probe. The finding is parked in the fricti
 
 **Retained:** `/private/tmp/w-83c93ce1`, the run's namespace, as the packet specifies.
 
-**Still open from earlier sessions:** the #748 and #7 judgments, and #722's owed record
-edits.
-
-▶ Next: `/session-start`, then choose between #786's fix, which unblocks RECOVERY's
-post-dispatch rerun, and drafting the D-TRIAGE-RESIDUAL packet from
-`saved_plans/phase5-d-proposal_2026-09-21.md` (local).
-
-The next session took #786's fix; the 2026-09-24 block on systemize dispatch
-idempotency owns it.
-
 ______________________________________________________________________
 
 ## Session — 2026-09-24 (Phase 5 D-SYSTEMIZE-RECOVERY run, in Claude Code)
@@ -362,22 +321,60 @@ owns the outcomes.
 - #781 as `902dbf64bc5a3301ab5817b1cbc78c3effa29f1d`;
 - #782 as `3644dc527b375b425ce61a6ae06de1ed832c3c49`.
 
-**Still open:** the #748 and #7 judgments, which are in the next block, and #722's owed
-record edits.
-
-▶ Next: `/session-start`, then take two decisions:
-
-- whether RECOVERY's post-dispatch cutpoint gets a sandboxed rerun or stays a Phase 5 E
-  residual;
-- the next D packet to draft: D-FRESH-CONTEXT, from
-  `saved_plans/phase5-d-proposal_2026-09-21.md` (local).
-
-The next session took both decisions; the 2026-09-24 block on the RECOVERY decision and
-D-FRESH-CONTEXT owns them.
-
 ______________________________________________________________________
 
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
-> Active open items from them are folded into the "Open for next session" lists above.
+> Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
 ______________________________________________________________________
+
+## Workstreams
+
+### Phase 5 exit
+
+**Status:** the D runs' open residuals go to the E audit, which also decides whether to
+commit the local `saved_plans/phase5-*` packets. #748 and #7 were both open on
+2026-09-26, awaiting the operator's judgment of whether #769 discharges them; the
+2026-09-23 D-SYSTEMIZE-RECOVERY packet block in
+[`kit-handoff-history.md`](kit-handoff-history.md) sets out the options.
+**Owner:** `saved_plans/phase5-completion-plan_2026-09-18.md` (local, not committed).
+
+▶ Next: draft the D-TRIAGE-RECOVERY packet from
+`saved_plans/phase5-d-proposal_2026-09-21.md` (local). The alternative is #794's
+workflow fix: the real tracker's marker search is still residual R1 of the
+D-SYSTEMIZE-RECOVERY-02 run.
+
+### Reviewer profiles
+
+**Status:** on 2026-09-25 the operator asked the reviewer's developer to post a GitHub
+check run, which would let the merge gate's existing check-based path see it; #797 can
+wait for that answer. **Owner:** [#796](https://github.com/topij/agentic-dev-kit/issues/796),
+[#797](https://github.com/topij/agentic-dev-kit/issues/797); the adopter-specific notes are
+in `saved_plans/fabro-review-tool-assessment_2026-09-25.md` (local, not committed).
+
+▶ Next: implement #796 — adopter-defined reviewer profiles and a configured
+review-request method.
+
+### Triage engine hardening
+
+**Status:** the sweep-marker defect (#806) is fixed by #812 and #813. **Owner:**
+[#807](https://github.com/topij/agentic-dev-kit/issues/807),
+[#808](https://github.com/topij/agentic-dev-kit/issues/808),
+[#818](https://github.com/topij/agentic-dev-kit/issues/818),
+[#820](https://github.com/topij/agentic-dev-kit/issues/820).
+
+▶ Next: fix #807 — two triage sessions on one day collide on `chore/triage-{date}` —
+before the next same-day engine-backed sweep.
+
+### Handoff workstreams
+
+**Status:** the layout this section belongs to is implemented by the pull request that
+added it, from [#762's design comment](https://github.com/topij/agentic-dev-kit/issues/762#issuecomment-5845903370).
+Its behaviour for wrap-ups in either order, a resumed older workstream, and an unrelated
+chosen task is prose an agent executes, so it is exercised by use rather than by the
+suite. **Owner:** [#762](https://github.com/topij/agentic-dev-kit/issues/762).
+
+▶ Next: check the first wrap-ups under this layout, in both runtimes, against #762's
+acceptance criteria, then ask the operator whether to close this workstream. The next
+cs-toolkit upgrade carries this contract; where that upgrade sits in the sprint plan is
+not established.

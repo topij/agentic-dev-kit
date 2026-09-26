@@ -84,7 +84,7 @@ source that failed on the retry.
 
 | Source          | How                                                                                                                                     |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Living handoff   | `<handoff>` — latest session block + every "Next:" / "Follow-ups:" trail                                                              |
+| Living handoff   | `<handoff>` — every entry under `## Workstreams` (status, owner, `▶ Next:`), plus the newest session entries as context                  |
 | Friction inbox   | `<friction-log>` — entries since the last "Backlog migrated" marker                                                                  |
 | Tracker backlog  | your tracker's list-issues command/script — project `tracker.project_name` (open only — drop `completed`/`canceled`). Pass an explicit row limit *and* select fields; see the gather for why these are two separate limits and why a full page must be treated as truncated |
 | Open PRs         | `gh pr list` plus the configured read-only review-health mechanism — anything draft / CI-red / awaiting-review (the PR-follow-through rule). Page both the list and review findings completely |
@@ -145,7 +145,12 @@ like good news, it looks like a missing handoff.
   bot feedback.
 - your cron/CI health command (adapt to your infra)
 - your config-drift check, if you have one (parse its output for a 🔴-worthy line in *Render the briefing*)
-- Read `<handoff>` (focus: the **"Latest session"** block and its `Next:` / `Follow-ups:` lines, plus the top-of-file "Last updated" trail for the active sprint)
+- Read `<handoff>`. The focus is the `## Workstreams` section: each `### <name>` entry's
+  status line, owner pointer and `▶ Next:`. The newest session entries are context
+  for what just happened; they carry no next step, and **the most recent one is not
+  an instruction to this session**. A handoff with no `## Workstreams` section is
+  in the older layout: read its latest session block's `Next:` / `Follow-ups:` lines
+  as a single workstream's, and its top-of-file trail for the active sprint.
 - Read `<friction-log>` (the inbox — entries above the most-recent `## … — Backlog migrated to <tracker>` marker; everything below it is already ticketed)
 - **Tracker** (optional — if the script/key fails, note the gap and continue): a
   field-limited list-issues call against `tracker.project_name`
@@ -238,8 +243,9 @@ pointer**.
   whose resolution cannot be verified: your
   cron runner's job-name guard means `pr-watch`
   never watched it, so adopting it (run `pr-watch <PR#>`) is this session's job;
-  uncommitted work from last session that should be finished or committed; the
-  handoff's explicit current `Next:` **iff** it's the active sprint's blocking step;
+  uncommitted work from last session that should be finished or committed; a
+  workstream's `▶ Next:` **iff** it is the active sprint's blocking step, judged
+  entry by entry — **no entry is promoted for being the most recently updated**;
   any entry your config-drift check flags — a merged config change that's inert on
   the host until applied is an **operator host-action** reminder, not a delegatable
   build candidate — render it without model/mode tags (see *Render the briefing*).
@@ -293,7 +299,9 @@ interactive/exploratory ⇒ inline on expensive`. When in doubt, default `inline
 (no regression vs today).
 
 **Source pointer** — every item shows where it came from so you can drill in:
-`handoff`, `friction-log <date>`, a tracker ticket id, `PR #NNN`, or the job name.
+`handoff:<workstream>`, `friction-log <date>`, a tracker ticket id, `PR #NNN`, or the
+job name. Every workstream's `▶ Next:` is a candidate under its own
+`handoff:<workstream>` pointer; none of them stands in for the others.
 
 **Rules:**
 
@@ -392,8 +400,8 @@ something already classified 🟡 is later raised to 🔴, it gets the check the
 
 Where things stand
   • <branch> (<clean | N uncommitted/untracked>) · <N open PRs | PRs unavailable: reason> · CI/cron: <all green | N failed/skipped | unavailable: reason>
-  • Active sprint: <one line, from handoff top trail>
-  • Last session: <one-line theme from the latest handoff block>
+  • Workstreams: <the entry names under ## Workstreams, one line>
+  • Last session: <one-line theme from the newest session entry — context, not an assignment>
 
 What to do next
 
@@ -433,9 +441,16 @@ workflow first, then continue under that authority.
    Want me to start it, or pick another?   # interactive only
 ```
 
-Rationale heuristics: prefer 🔴 Now if the bucket is non-empty; otherwise the active
-sprint's blocking next step; break ties toward the highest value-per-effort (small +
-high-leverage).
+**When the operator names a workstream or a task** in the invocation or its
+context, that is the pick. Render the briefing as usual and recommend the named
+work; a 🔴 item stays in the briefing beside it rather than overriding the choice.
+The named work need not be any workstream's `▶ Next:`, and choosing it changes no
+other workstream's entry.
+
+Otherwise, rationale heuristics: prefer 🔴 Now if the bucket is non-empty; otherwise
+the active sprint's blocking next step; break ties toward the highest value-per-effort
+(small + high-leverage). Recency is not among them: the workstream a session last
+wrapped up gets no preference for it.
 
 ## Notes
 

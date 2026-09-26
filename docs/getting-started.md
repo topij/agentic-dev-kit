@@ -164,15 +164,22 @@ self-merge.
 
 ## 5 · Close the loop — `wrap-up`
 
-At the end of the session, `wrap-up` updates `docs/handoff.md` with what shipped
-and what's next…
+At the end of the session, `wrap-up` updates `docs/handoff.md`. It adds a session
+entry saying what happened, and updates the next step of the workstream the session
+worked on. Other workstreams' next steps stay as they were…
 
 ```markdown
-## Latest session — 2026-01-05
+## Session — 2026-01-05 (password-reset endpoint)
 
-**Theme —** Wired the password-reset endpoint (#42, merged).
+- Endpoint + token-expiry check shipped in #42; rate-limit deferred.
 
-- Endpoint + token-expiry check shipped; rate-limit deferred.
+…
+
+## Workstreams
+
+### Password reset
+
+**Status:** endpoint live; email and rate limit outstanding. **Owner:** #40.
 
 ▶ Next: add the reset-email template and the rate-limit guard.
 ```

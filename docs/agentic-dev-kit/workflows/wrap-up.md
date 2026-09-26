@@ -129,20 +129,71 @@ failure makes the overall outcome `incomplete-resumable`.
 
 ## Steps
 
-1. **Read the current handoff** — `<handoff>`.
+1. **Read the current handoff** — `<handoff>`, including its `## Workstreams`
+   section.
 
-1. **Review what changed this session** — check `git diff` and `git log` since the
-   handoff's "Last updated" date
+1. **Review what changed this session** — check `git diff` and `git log` since
+   **this session began**: its branch's fork point from the protected branch, or the
+   time it started. Not since the handoff's newest entry — another session working a
+   different workstream may have wrapped up after this one started, and its work is
+   not yours to record.
 
-1. **Update `<handoff>`**:
+1. **Update `<handoff>`.** It has two parts with different owners. The session
+   entries are a log of what happened, newest first. `## Workstreams`, at the end
+   of the file, holds one `### <name>` entry per open line of work: a one-line
+   status, a pointer to the plan or tracker issue that owns the detail, and that
+   workstream's own `▶ Next:`. **Finishing last gives a session no say over
+   another workstream**, which is why the two parts are kept apart
+   ([#762](https://github.com/topij/agentic-dev-kit/issues/762)).
 
-   - Move completed work from "In Progress" to "Done" (with a one-line summary of
-     what shipped)
-   - Add any new items discovered during the session to the appropriate section
-   - Update sprint status if a sprint boundary was crossed
-   - Remove resolved housekeeping items
-   - Update the "Last updated" date to today
-   - Keep it concise — the handoff is a handoff document, not a changelog
+   - **Name the workstream this session worked on.** Infer it from the session's
+     work and confirm it with the operator in one line — *"Recording this under
+     `<name>` — right?"*. A session whose work belongs to no entry creates a new
+     one. A session that genuinely advanced more than one workstream updates each,
+     confirmed the same way. **With no operator to confirm**, update an existing
+     entry only when the session's work is on that entry's own plan or issue;
+     otherwise create a new entry, and say in the session entry that the
+     assignment was not confirmed. A new entry cannot replace another
+     workstream's next step; a wrong guess about an existing entry can.
+   - **Add a session entry** at the top of the session log: `## Session —
+     <date> (<theme>)`, then what shipped, what was decided, and what was not
+     established. **It carries no `▶ Next:`** — that lives in the workstream's
+     entry. Do not rename or edit earlier session entries: they are a record,
+     and the archive sweep moves them oldest-first because nothing live remains
+     in them.
+   - **Update only that workstream's entry** — its status line, its owner
+     pointer, and its `▶ Next:` (the starter step below). Detail stays in the
+     owner, not here. **Leave every other workstream's entry alone.** The one
+     exception is a line this session's own work made false — a pull request it
+     names has merged, an issue it names has closed: correct that line and say
+     so to the operator. If the falsified line is that entry's `▶ Next:`, ask
+     the operator rather than rewriting it, and in a run with no operator leave
+     it and name it in the session entry.
+   - **Closing a workstream is the operator's decision.** When the operator
+     says a workstream is done or superseded, remove its entry and put one line
+     in this session's entry — `Closed workstream <name>: <why>` — so the
+     history keeps it. Never close one because its `▶ Next:` looks finished;
+     ask.
+   - **First run on a handoff with no `## Workstreams` section** — a handoff
+     written before this layout. Create the section at the end of the file.
+     Turn the newest session entry's `▶ Next:` into a single workstream entry,
+     confirmed with the operator as above, and leave older session entries as
+     they are. An older entry's `▶ Next:` that no later entry took up may still
+     be a live continuation, and the archive sweep would carry it into history:
+     list those for the operator, and give each one they name its own entry.
+     Remove a `Last updated:` line from the top of the file: it
+     frames one session as the latest for the whole repository, which is the
+     framing this layout replaces, and nothing reads it any more. An older
+     layout's "In Progress", "Done", and sprint-status sections are standing
+     content; migrate them only on the operator's word.
+   - **Concurrent wrap-ups reconcile explicitly.** Two wrap-ups on *different*
+     workstreams edit different entries, so those merge cleanly; both add an
+     entry at the top of the session log, which git reports as a conflict at
+     that one point — resolve it by keeping both entries, newest first. Two
+     wrap-ups on the *same* workstream conflict in its entry, and that conflict
+     is correct: reconcile the entry with the operator, and never keep one
+     side's `▶ Next:` silently.
+   - Keep it concise — the handoff is a handoff document, not a changelog.
 
    **Author record prose defensively** — review findings concentrate in
    narration of work already done, so write claims a later round cannot refute:
@@ -306,19 +357,22 @@ failure makes the overall outcome `incomplete-resumable`.
    sweep are `triage-friction-log`'s writes and need tracker state this workflow does
    not gather. Skip the step entirely if nothing workflow-specific came up.
 
-1. **Suggest a next-session starter** — if the session ends with a *clear* follow-up,
-   hand the next session a running start:
+1. **Set the workstream's next-session starter** — the `▶ Next:` line in the entry
+   for the workstream this session worked on, never in the session entry. It is a
+   suggestion for whoever next picks up *that* workstream, not an assignment for the
+   next session to start in the repository; `session-start` presents every
+   workstream's starter and follows the operator's choice.
 
-   - **One obvious next thing** → add it as a final `▶ Next: <starter>` line at the end
-     of the latest session block in `<handoff>`, and print the same starter in
-     the chat. Make it concrete and copy-pasteable: a native workflow invocation or a
-     one-line task prompt that names the file / ticket / PR (e.g. `▶ Next: pr-watch
-     1131 — fix review findings then self-merge`). The `▶ Next:` line is an allowed
-     addition (like the archive sweep), not a structure change to ask about.
-   - **Diffuse / several threads** → don't invent a false single thread; tell the
-     operator to open next session with `session-start` (it re-reads handoff +
-     inbox + tracker + live repo/CI state and re-proposes what to do).
-   - **No clear follow-up** → skip this step.
+   - **A clear next step** → write it as the entry's `▶ Next: <starter>`, replacing
+     the one there, and print the same starter in the chat. Make it concrete and
+     copy-pasteable: a native workflow invocation or a one-line task prompt that
+     names the file / ticket / PR (e.g. `▶ Next: pr-watch 1131 — fix review
+     findings then self-merge`). Updating the entry is an allowed edit (like the
+     archive sweep), not a structure change to ask about.
+   - **No clear next step** → say so in the entry's status line and drop its
+     `▶ Next:` rather than leave one the session has already done. If the work
+     looks finished, ask the operator whether to close the workstream; closing is
+     theirs.
 
 1. **Update any project-status doc** (e.g. a dashboard snapshot) if any metrics
    changed this session — adapt this step to whatever presentation artifact your
@@ -331,7 +385,12 @@ failure makes the overall outcome `incomplete-resumable`.
    budget, run `uv run <engine-dir>/archive_plan_sessions.py --target-lines
    <handoff-budget>` — it sweeps oldest-first, one block at a time, until
    `<handoff>` is at or under that line budget, moves the swept blocks into
-   `<handoff-history>`, and trims the megaline. **Do not use plain `--keep`
+   `<handoff-history>`, and trims the megaline. It moves session entries only:
+   `## Workstreams` is a standing section and is never swept, so an old session
+   entry can go to history without taking an open workstream's next step with it.
+   If the workstream entries alone keep `<handoff>` over budget — the sweep exits
+   **3** — shorten them, since their detail belongs in their owners; never move
+   them to history. **Do not use plain `--keep`
    here** (or run the script with no flags, which defaults to `--keep 6`):
    `check_doc_budget.py` measures **lines** while `--keep` counts **blocks**, so
    the default can report "nothing to move" while `<handoff>` stays over budget
@@ -494,12 +553,14 @@ failure makes the overall outcome `incomplete-resumable`.
 
 ## Rules
 
-- Do NOT add session-specific detail (decisions, debugging steps, conversation
-  context) — that belongs in session-scoped scratch notes or memory, not the living
-  handoff
+- Do NOT add session working detail (debugging steps, conversation context) — that
+  belongs in session-scoped scratch notes or memory, not the living handoff. A
+  decision the session took is not working detail: its session entry records it
 - Do NOT change the handoff's structure or add new sections without asking — but the
-  `archive_plan_sessions.py` sweep (moving old session blocks to `<handoff-history>`)
-  and a single `▶ Next:` starter line at the end of the latest session block are both
-  documented additions, not structure changes, so do them without asking
+  `archive_plan_sessions.py` sweep (moving old session blocks to `<handoff-history>`),
+  this session's own entry in the session log, the entry for the workstream it
+  worked on (new or existing, `▶ Next:` included), and the first-run creation of
+  `## Workstreams` are all documented edits, not structure changes, so do them
+  without asking. Closing a workstream is not among them: it is the operator's call
 - If a backlog item was promoted to a sprint epic, move it (don't duplicate)
 - If the session produced no repository-artifact changes, say so and skip the commit

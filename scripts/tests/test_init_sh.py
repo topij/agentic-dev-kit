@@ -1342,6 +1342,54 @@ def test_seeds_narrative_docs_with_tokens_rendered(tmp_path: Path) -> None:
 
 
 @pytest.mark.kit_repo_only("docs/templates")
+def test_seeded_handoff_keeps_its_workstreams_through_an_archive_sweep(
+    tmp_path: Path,
+) -> None:
+    """#762: the seeded handoff is one the archive sweep can work on unaided.
+
+    Three properties of the template make that true, and each failed silently
+    before it was pinned here. Its footer must be the archiver's own, or the
+    first sweep archives the footer with the oldest entry. `## Workstreams` must
+    sit in the standing tail, or a sweep moves open next steps into history. And
+    no placeholder line may open like a raw HTML tag (`<one-line status> …`),
+    because the archiver refuses such a document outright with exit 2.
+    """
+    config = shipped_config()
+    repo = _fixture(tmp_path, config=config, templates=True)
+    _run_init(repo)
+    paths = yaml.safe_load(config)["paths"]
+    plan = repo / paths["handoff"]
+    history = repo / paths["handoff_history"]
+    seeded = plan.read_text(encoding="utf-8")
+    workstreams = seeded[seeded.index("\n## Workstreams\n") + 1 :]
+    assert "▶ Next:" in workstreams
+    first_entry = seeded.index("## Session — ")
+    newer = "".join(
+        f"## Session — 2099-01-0{day} (entry {day})\n\n- Body {day}.\n\n"
+        + "_" * 70 + "\n\n"
+        for day in (3, 2)
+    )
+    plan.write_text(seeded[:first_entry] + newer + seeded[first_entry:], encoding="utf-8")
+
+    result = subprocess.run(
+        [sys.executable, str(ENGINE_DIR / "archive_plan_sessions.py"), "--keep", "1",
+         "--plan", str(plan), "--history", str(history)],
+        capture_output=True, text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    live = plan.read_text(encoding="utf-8")
+    saved = history.read_text(encoding="utf-8")
+    assert "- Body 3." in live
+    assert "- Body 2." in saved
+    assert live.endswith(workstreams)
+    assert "## Workstreams" not in saved
+    footer = "Older session entries (below the live blocks above)"
+    assert footer not in saved
+    assert live.count(footer) == 1
+
+
+@pytest.mark.kit_repo_only("docs/templates")
 def test_blank_tracker_url_renders_the_set_it_instruction(tmp_path: Path) -> None:
     """The {{TRACKER_URL}} fallback branch, pinned independently of what the
     shipped config holds.

@@ -30,9 +30,11 @@ Handoff and history must name distinct files; overlapping destinations are refus
 before a sweep or dry-run can report success.
 
 It only ever *moves* content — every cross-reference (ticket ids, PR links,
-commit shas, …) is preserved. Standing sections (Security, Next up, Backlog,
-…) below the session region are left untouched. Running it when there is
-nothing to move is a clean no-op.
+commit shas, …) is preserved. Standing sections (Workstreams, Security, Next
+up, Backlog, …) below the session region are left untouched. ``## Workstreams``
+is where a handoff keeps each line of work's open continuation, so session
+blocks carry nothing live and sweeping them oldest-first loses no next step
+(issue #762). Running it when there is nothing to move is a clean no-op.
 
 **One documented exception to "moves", and it is not byte-for-byte: the sweep
 NORMALISES LINE ENDINGS.** Both documents are read and written as text with
@@ -237,6 +239,20 @@ def history_pointer(link: str, label: str) -> list[str]:
     # The footer ends at its separator. When it closes the document, a blank
     # line after it is what `git diff --check` reports as a new blank line at
     # EOF (#776); `rebuild_plan` adds the blank line only when a tail follows.
+    # `docs/templates/handoff.md.tmpl` writes this same footer, so a freshly
+    # seeded handoff's first sweep recognises it rather than archiving it.
+    return [
+        f"> Older session entries (below the live blocks above) live in [`{label}`]({link}).\n",
+        '> Continuations are not kept in them: each workstream\'s next step lives in its entry under "Workstreams".\n',
+        "\n",
+        SEP,
+    ]
+
+
+def _legacy_history_pointer(link: str, label: str) -> list[str]:
+    # The footer before #762, whose second line pointed at lists no handoff
+    # carried. Still recognised, so a handoff written by an older sweep has it
+    # replaced by the current footer rather than archived with the oldest block.
     return [
         f"> Older session entries (below the live blocks above) live in [`{label}`]({link}).\n",
         '> Active open items from them are folded into the "Open for next session" lists above.\n',
@@ -722,8 +738,8 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         head, region, tail = split_plan(plan)
-        pointer = history_pointer(history_link, args.history.name)
-        # The classic writer owns this exact footer at the region boundary.
+        # The classic writer owns this exact footer at the region boundary,
+        # in its current or pre-#762 wording.
         # A quotation elsewhere, an edited footer, or a footer naming another
         # history destination is content and must survive the archival move.
         # Blank lines after it are layout: an older writer left one, and a
@@ -732,15 +748,18 @@ def main(argv: list[str] | None = None) -> int:
         end = len(region)
         while end and region[end - 1].strip(_LAYOUT_WS) == "":
             end -= 1
-        start = end - len(pointer)
-        if (
-            start >= 0
-            and any(visible and _is_session_heading(line)
-                    for line, visible in zip(region, _outside_fences(region), strict=True))
-            and region[start:end] == pointer
-            and all(_outside_fences(region)[start:end])
-        ):
-            region = region[:start]
+        for owned in (history_pointer, _legacy_history_pointer):
+            pointer = owned(history_link, args.history.name)
+            start = end - len(pointer)
+            if (
+                start >= 0
+                and any(visible and _is_session_heading(line)
+                        for line, visible in zip(region, _outside_fences(region), strict=True))
+                and region[start:end] == pointer
+                and all(_outside_fences(region)[start:end])
+            ):
+                region = region[:start]
+                break
         blocks = parse_blocks(region)
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
