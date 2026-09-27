@@ -42,7 +42,7 @@ starts.
 
 ---
 
-## #PRNUM — A completed triage state retires after the configuration changed
+## #834 — A completed triage state retires after the configuration changed
 
 CHANGED — gate semantics: Refresh `lib/triage/model.py`, `lib/triage/engine.py`, the shared triage workflow, `kit-manifest.json` and `scripts/tests/test_triage_engine.py`. A session-starting triage entry (no argument, `new`, or `test`) used to hold on `configuration identity mismatch` when the retained `completed` state had been written under a configuration that has since changed, so any `config/dev-model.yaml` change after a sweep blocked every later run of that mode. Such an entry now retires the completed state as long as its two recorded config fingerprints agree with each other; `resume`, and every non-completed phase, still require the current fingerprint. `canonical_state` and `validate_state` take a new keyword, `retiring`, defaulting to `False`. If a run is held with that detail over a completed state, refresh these files and run the same entry again.
 
