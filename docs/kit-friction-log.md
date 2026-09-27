@@ -24,6 +24,19 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-09-27
+
+- **Record text written from expectation, not read back.** Twice on 2026-09-27 a PR
+  comment named a commit sha before the command that made the commit had printed it, and
+  both guesses were wrong (#832's LOW-delta disposition, #834's round-2 disposition);
+  each was corrected by editing the comment. Separately, a one-line workflow-doc edit
+  on #834 went out without a test run and broke a string `test_portability.py` pins.
+  Both are the *Numbers in prose* failure of writing a figure from expectation, applied
+  to an identifier and to "this edit is inert".
+  - **Why it is parked:** accumulation. If it recurs, a candidate rule: an identifier
+    goes into a record only after it has been read back from the command that made it.
+  - **Severity:** L. Both were caught before merge.
+
 ## 2026-09-27 — Backlog migrated by triage session 7110f64d78354d608f4008e55dce1ee1
 
 Engine mode: `engine-backed`.

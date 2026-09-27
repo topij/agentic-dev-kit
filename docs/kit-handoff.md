@@ -20,6 +20,26 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-09-27 (mixed triage approval, sweep rendering, retirement across config, in Claude Code)
+
+**Shipped.** [#831](https://github.com/topij/agentic-dev-kit/pull/831) merged as `96d7632`: one triage approval carries `approve`, `archive` and `park` commands, one per line (#820).
+[#832](https://github.com/topij/agentic-dev-kit/pull/832) merged as `318173c`: the sweep record names each source entry, the archive gains no trailing blank line, and a same-date group joins the archive's existing section. `render_sweep` keeps a `pre-818` rendering, so the 2026-09-26 sweep still validates (#818).
+[#834](https://github.com/topij/agentic-dev-kit/pull/834) merged as `11599e6`: a session-starting entry retires a completed state written under an earlier config. The first sweep attempt held on `configuration identity mismatch`, because #824 had changed the config after the 2026-09-26 sweep completed.
+[#840](https://github.com/topij/agentic-dev-kit/pull/840) merged as `c842931`: the sweep of triage session `7110f64d`, approved in one mixed reply. It filed #835, #836, #837, #838 and #839, and archived TRI-01, TRI-03, TRI-05 and TRI-06, each already carried elsewhere. The 2026-09-11 runtime entry, the 2026-09-09 process-list entry, and the 2026-08-27 `claude -p` and `panel_prompt.py` entries stay parked.
+Each merged on the operator's "merge when clean". The pre-#824 `chore/triage-*` branches were deleted by hand on 2026-09-27, before this session.
+
+**Decided.** The operator chose fixing the engine over `recover` or a hand rename. `recover` would have written a terminal `state-present-held` bundle, because its finished-run check knows only the LLM-only layout (#833).
+
+**Filed or reopened this session:** #833, #841, and #187 reopened with the marker-accumulation recurrence. #835 carries this session's lens-fetch occurrences.
+
+**Review.** CodeRabbit skipped every PR, and the fallback panel carried each one; the disposition comments on the PRs own the findings. The #834 round-1 delta lens found that a doc-row edit pushed without a test run broke a pinned `test_portability.py` string.
+
+**Verification.** `make test`, each in its PR's worktree under `.claude/worktrees/` on 2026-09-27: `3658 passed, 1 skipped` at `1c4c6ede786e0c06c9954dc3dea0dba168c8838b` (#831), `3668 passed, 1 skipped` at `a0978fe6670c3f1221cb43dfec84a0b5a7d4b69c` (#832), and `3680 passed, 1 skipped` at `2daf1d835306a8eff43c26aaeef00e304a0a3551` (#834). The final LOW-repair heads of #832 and #834 got focused suites and the delta lenses' own runs, not a cockpit `make test`.
+
+**Not established:** `check_doc_budget.py` at `c842931` on 2026-09-27 still warned on `docs/kit-friction-log.md` after the sweep; #187 owns why.
+
+______________________________________________________________________
+
 ## Session — 2026-09-27 (triage resume completion and create read-back lag, in Claude Code)
 
 **Shipped.** [#828](https://github.com/topij/agentic-dev-kit/pull/828) merged as `76ef6be`: a resumed triage run completes a
@@ -342,11 +362,12 @@ review-request method.
 
 ### Triage engine hardening
 
-**Status:** same-day sweep branches and post-merge retirement shipped in #824; its
-follow-ups #826 and #827 shipped in #828, and the GitHub tracker's lagging post-create
-read-back (#808) in #829. **Owner:**
-[#818](https://github.com/topij/agentic-dev-kit/issues/818),
-[#820](https://github.com/topij/agentic-dev-kit/issues/820).
+**Status:** mixed approvals (#831), sweep-record rendering (#832) and completed-state
+retirement across a config change (#834) shipped on 2026-09-27, and the first sweep under
+them merged as #840. **Owner:**
+[#187](https://github.com/topij/agentic-dev-kit/issues/187),
+[#833](https://github.com/topij/agentic-dev-kit/issues/833),
+[#841](https://github.com/topij/agentic-dev-kit/issues/841).
 
-▶ Next: before the next sweep, delete the pre-#824 `chore/triage-*` branches by hand;
-the new engine retires only its own. Then fix #818 or #820.
+▶ Next: fix #187 — a sweep moves every earlier graduation-marker section to the archive
+and keeps only its own; test it against an inbox holding several engine-written markers.
