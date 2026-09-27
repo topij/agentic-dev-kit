@@ -55,8 +55,9 @@ def _entry_lead(raw: bytes) -> str:
 
     The lead may itself contain bold (`- **Do **not** panic.** …`), so its end is the
     first `**` that closes rather than opens: a `**` preceded by whitespace and
-    followed by a non-space opens a nested span, and each nested span's closer is
-    skipped. A `**` inside a code span is text, not a delimiter. The lead never runs
+    followed by a non-space opens a nested span, a `**` preceded by a non-space
+    closes one, and each nested span's closer is skipped. A `**` with whitespace on
+    both sides, or inside a code span, is text, not a delimiter. The lead never runs
     past a blank line."""
     if not raw.startswith(b"- **"):
         return ""
@@ -68,6 +69,8 @@ def _entry_lead(raw: bytes) -> str:
         before, after = visible[start - 1:start], visible[end:end + 1]
         if after and not after.isspace() and (not before or before.isspace()):
             depth += 1
+        elif not before or before.isspace():
+            continue
         elif depth:
             depth -= 1
         else:

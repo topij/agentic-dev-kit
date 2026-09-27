@@ -550,6 +550,8 @@ def test_a_wrapped_lead_is_collapsed_and_an_entry_without_one_names_only_its_dat
         (b"- **Uses `**` literally.** body\n", "Uses `**` literally."),
         (b"- **Ends at the first closer.** then **bold** later\n", "Ends at the first closer."),
         (b"- **Opens **nested but never closes it.** body\n", ""),
+        (b"- **Lead has ** stray stars ** and more.** body\n", "Lead has ** stray stars ** and more."),
+        (b"- **No closer before the blank line\n\nnext paragraph** body\n", ""),
     ],
 )
 def test_a_lead_with_nested_bold_ends_at_its_own_closer(entry: bytes, lead: str) -> None:
