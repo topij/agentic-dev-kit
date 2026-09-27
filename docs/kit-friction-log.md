@@ -26,6 +26,23 @@
 
 ## 2026-09-27
 
+- **A second verification path dropped a property the first one enforced.** On #829's
+  first head, `GitHubIssues.create` gained a direct read of the created issue for when the
+  issue list lagged. The list path verified only when exactly one issue carried the
+  marker; the direct read checked the one issue alone, so a duplicate hidden by the same
+  lag could verify past it. The panel's adversarial lens found it; the fix routed the
+  lagging case back through the list path instead. Same family as the validator entry
+  below: a path added beside an existing check restated part of it rather than reusing it.
+  - **Why it is parked:** accumulation. If it recurs, a candidate rule: a new route to
+    a verdict an existing function already reaches goes through that function.
+  - **Severity:** M. It would have hidden a duplicate tracker issue, and no test covered it.
+- **Panel lenses left writes outside their scratch namespace.** On #829's round 1 the
+  correctness lens mutated in the worktree it was handed, then restored and attested it,
+  and the adversarial lens registered its own `git worktree` copies of the shared repo,
+  which stayed in `git worktree list` until the cockpit removed them.
+  - **Why it is parked:** one round, no harm done. If it recurs, look at whether
+    `panel_prompt.py` should name how to make a writable copy.
+  - **Severity:** L.
 - **A resumed triage run cannot finish a verified merge read-back it did not complete.**
   Seen by reading, not by a crash, while #824 was built. `_forge_attempt` persists the
   verified `merge-read-back` operation, then a second `atomic_replace` in
