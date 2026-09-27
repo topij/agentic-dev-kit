@@ -42,9 +42,9 @@ starts.
 
 ---
 
-## #829 — A GitHub tracker create verifies through a direct read when the issue list lags
+## #829 — A GitHub tracker create waits for the lagging issue list before judging it
 
-CHANGED — gate semantics: Refresh `lib/triage/providers.py`, the shared triage workflow, `kit-manifest.json` and `scripts/tests/test_triage_providers.py`. When a GitHub Issues create succeeds and returns an issue number but the issue list does not yet show the payload's marker, `GitHubIssues.create` now reads that issue directly and records it `verified` with route `created-and-read-back` if its title, body, labels, repository and marker match exactly. Before, that case was recorded `ambiguous` and the run held until a later resume reconciled it. Any mismatch or failed direct read is still `ambiguous`, and a list showing any marker match is judged as before. Nothing to change; a run held this way before the upgrade still reconciles on resume.
+CHANGED — gate semantics: Refresh `lib/triage/providers.py`, the shared triage workflow, `kit-manifest.json` and `scripts/tests/test_triage_providers.py`. When a GitHub Issues create succeeds and returns an issue number that the post-create issue list does not show yet, `GitHubIssues.create` now re-reads the list after 1, 2, 4 and 8 seconds until it shows that issue, then judges the marker matches exactly as before. A create that used to be recorded `ambiguous` only because the list lagged is now `verified` / `created-and-read-back` without a resume; a list that never catches up is still `ambiguous`, and a caught-up list that also shows another issue with the same marker is still `ambiguous`. `GitHubIssues` takes two new keyword arguments, `sleep` and `create_listing_retry_delays`, both defaulted. Nothing to change; a run held this way before the upgrade still reconciles on resume.
 
 ## #828 — A resumed triage run completes a merge read-back it had already verified
 

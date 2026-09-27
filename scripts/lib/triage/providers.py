@@ -6,6 +6,7 @@ import json
 import os
 import re
 import subprocess
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,8 +50,21 @@ def subprocess_runner(argv: list[str], cwd: Path | None = None) -> subprocess.Co
 class GitHubIssues:
     """GitHub Issues adapter. Tests inject a runner; live use invokes `gh api`."""
 
-    def __init__(self, runner: Runner = subprocess_runner) -> None:
+    # GitHub's issue list lags a fresh create (#808). After a successful
+    # create, the listing is re-read on this schedule, in seconds, until it
+    # shows the returned issue; uniqueness is then judged exactly as before.
+    CREATE_LISTING_RETRY_DELAYS = (1.0, 2.0, 4.0, 8.0)
+
+    def __init__(
+        self,
+        runner: Runner = subprocess_runner,
+        *,
+        sleep: Callable[[float], None] = time.sleep,
+        create_listing_retry_delays: tuple[float, ...] = CREATE_LISTING_RETRY_DELAYS,
+    ) -> None:
         self.runner = runner
+        self.sleep = sleep
+        self.create_listing_retry_delays = create_listing_retry_delays
 
     def _json(self, argv: list[str]) -> Any:
         result = self.runner(argv, None)
@@ -98,46 +112,41 @@ class GitHubIssues:
                 raise TriageError("tracker marker multiplicity is ambiguous", outcome="operator-held")
             if not isinstance(body, str) or marker not in body:
                 continue
-            observed.append(self._read_issue(destination, item.get("number"), marker))
+            number = item.get("number")
+            issue = self._json(["gh", "api", "--hostname", host, f"repos/{repository}/issues/{number}"])
+            if not isinstance(issue, dict) or issue.get("number") != number or "pull_request" in issue:
+                raise TriageError("tracker issue read-back identity mismatch", outcome="operator-held")
+            issue_body = issue.get("body")
+            if not isinstance(issue_body, str) or issue_body.count(marker) != 1:
+                raise TriageError("tracker marker changed during read-back", outcome="operator-held")
+            repository_url = issue.get("repository_url")
+            observed_repository = repository_url.rsplit("/repos/", 1)[-1] if isinstance(repository_url, str) and "/repos/" in repository_url else None
+            observed_host = urlparse(repository_url).hostname if isinstance(repository_url, str) else None
+            expected_api_host = "api.github.com" if host == "github.com" else host
+            if observed_repository != repository or destination.get("project") != observed_repository or observed_host != expected_api_host:
+                raise TriageError("tracker destination read-back mismatch", outcome="operator-held")
+            labels = issue.get("labels")
+            if (
+                not isinstance(labels, list)
+                or any(
+                    not isinstance(label, dict)
+                    or not isinstance(label.get("name"), str)
+                    or not label["name"]
+                    for label in labels
+                )
+            ):
+                raise TriageError("tracker label read-back is malformed", outcome="operator-held")
+            label_names = [label["name"] for label in labels]
+            if len(label_names) != len(set(label_names)):
+                raise TriageError("tracker label read-back is ambiguous", outcome="operator-held")
+            payload = {
+                "title": issue.get("title"),
+                "body": issue_body,
+                "project": observed_repository,
+                "labels": sorted(label_names),
+            }
+            observed.append({"identifier": str(number), "payload": payload, "payload_digest": digest(payload), "marker": marker, "destination": destination})
         return observed
-
-    def _read_issue(self, destination: dict[str, Any], number: Any, marker: str) -> dict[str, Any]:
-        """Read one issue directly and bind it to the destination and marker,
-        in the shape `search` records for each match."""
-        repository, host = self._repository(destination)
-        issue = self._json(["gh", "api", "--hostname", host, f"repos/{repository}/issues/{number}"])
-        if not isinstance(issue, dict) or issue.get("number") != number or "pull_request" in issue:
-            raise TriageError("tracker issue read-back identity mismatch", outcome="operator-held")
-        issue_body = issue.get("body")
-        if not isinstance(issue_body, str) or issue_body.count(marker) != 1:
-            raise TriageError("tracker marker changed during read-back", outcome="operator-held")
-        repository_url = issue.get("repository_url")
-        observed_repository = repository_url.rsplit("/repos/", 1)[-1] if isinstance(repository_url, str) and "/repos/" in repository_url else None
-        observed_host = urlparse(repository_url).hostname if isinstance(repository_url, str) else None
-        expected_api_host = "api.github.com" if host == "github.com" else host
-        if observed_repository != repository or destination.get("project") != observed_repository or observed_host != expected_api_host:
-            raise TriageError("tracker destination read-back mismatch", outcome="operator-held")
-        labels = issue.get("labels")
-        if (
-            not isinstance(labels, list)
-            or any(
-                not isinstance(label, dict)
-                or not isinstance(label.get("name"), str)
-                or not label["name"]
-                for label in labels
-            )
-        ):
-            raise TriageError("tracker label read-back is malformed", outcome="operator-held")
-        label_names = [label["name"] for label in labels]
-        if len(label_names) != len(set(label_names)):
-            raise TriageError("tracker label read-back is ambiguous", outcome="operator-held")
-        payload = {
-            "title": issue.get("title"),
-            "body": issue_body,
-            "project": observed_repository,
-            "labels": sorted(label_names),
-        }
-        return {"identifier": str(number), "payload": payload, "payload_digest": digest(payload), "marker": marker, "destination": destination}
 
     def create(self, destination: dict[str, Any], payload: dict[str, Any]) -> ProviderObservation:
         repository, host = self._repository(destination)
@@ -156,24 +165,20 @@ class GitHubIssues:
         if (
             result.returncode == 0
             and marker
-            and not matches
             and isinstance(response_identifier, int)
             and not isinstance(response_identifier, bool)
             and response_identifier > 0
         ):
-            # GitHub's issue list lags a fresh create (#808), so an empty
-            # listing after a successful create is read as lag, not absence:
-            # the issue the response names is read directly and must carry
-            # the exact payload and marker. A listing that does show a match
-            # takes the path below, so a second issue with this marker still
-            # reads as ambiguous.
-            try:
-                direct = self._read_issue(destination, response_identifier, marker)
-            except TriageError:
-                return ProviderObservation("ambiguous", response, {"matches": []})
-            if direct["payload_digest"] == digest(payload):
-                return ProviderObservation("verified", response, direct, "created-and-read-back")
-            return ProviderObservation("ambiguous", response, {"matches": []})
+            # Wait, bounded, for a listing that shows the issue this create
+            # returned (#808). Such a listing is at least as fresh as the
+            # create, so an earlier issue carrying the same marker shows in it
+            # too and still makes the result ambiguous below. A listing that
+            # never catches up leaves the result ambiguous, as before.
+            for delay in self.create_listing_retry_delays:
+                if any(item["identifier"] == str(response_identifier) for item in matches):
+                    break
+                self.sleep(delay)
+                matches = self.search(destination, marker)
         exact = [item for item in matches if item["payload_digest"] == digest(payload)]
         if len(exact) == 1 and len(matches) == 1:
             if result.returncode == 0 and response_identifier is not None and str(response_identifier) != exact[0]["identifier"]:

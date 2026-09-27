@@ -59,86 +59,104 @@ def test_search_paginates_full_issue_listing_and_filters_pull_requests() -> None
     assert "page=2" in runner.argv[1][-1]
 
 
+def adapter(runner: Runner, delays: tuple[float, ...] = (1.0,)) -> tuple[GitHubIssues, list[float]]:
+    """A GitHub adapter whose post-create listing retries record their delays
+    instead of sleeping."""
+    slept: list[float] = []
+    return GitHubIssues(runner, sleep=slept.append, create_listing_retry_delays=delays), slept
+
+
 def test_create_refuses_success_identifier_that_differs_from_readback() -> None:
     payload = {"title": "title", "body": "body\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
     runner = Runner([
         (0, {"number": 99}),
         (0, [{"number": 101, "body": payload["body"]}]),
         (0, issue(101, payload)),
+        (0, [{"number": 101, "body": payload["body"]}]),
+        (0, issue(101, payload)),
     ])
-    observed = GitHubIssues(runner).create(DESTINATION, payload)
+    tracker, slept = adapter(runner)
+    observed = tracker.create(DESTINATION, payload)
     assert observed.status == "ambiguous"
+    assert slept == [1.0]  # waited for #99 to appear; it never did
 
 
-def test_create_verifies_through_a_direct_read_when_the_issue_list_lags() -> None:
-    """#808: GitHub's issue list lags a fresh create. An empty listing after a
-    successful create reads the issue the response names directly, and the
-    exact payload and marker there verify it."""
+def test_create_waits_for_a_lagging_listing_to_show_the_created_issue() -> None:
+    """#808: GitHub's issue list lags a fresh create. The listing is re-read
+    until it shows the returned issue, and only then judged."""
     payload = {"title": "title", "body": "body\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
     runner = Runner([
         (0, {"number": 101}),
         (0, []),
-        (0, issue(101, payload)),
-    ])
-    observed = GitHubIssues(runner).create(DESTINATION, payload)
-    assert observed.status == "verified"
-    assert observed.verified_route == "created-and-read-back"
-    assert observed.read_back == {"identifier": "101", "payload": payload, "payload_digest": digest(payload), "marker": MARKER, "destination": DESTINATION}
-    assert runner.argv[2][-1] == "repos/owner/repo/issues/101"
-
-
-def _lagging_create(direct: tuple[int, object]) -> tuple[object, Runner]:
-    payload = {"title": "title", "body": "body\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
-    runner = Runner([(0, {"number": 101}), (0, []), direct])
-    return GitHubIssues(runner).create(DESTINATION, payload), runner
-
-
-def _foreign_repository(value: dict) -> dict:
-    return {**value, "repository_url": "https://api.github.com/repos/other/repo"}
-
-
-@pytest.mark.parametrize(
-    "direct",
-    [
-        (1, "not found"),
-        (0, "not json"),
-        (0, {**issue(101, {"title": "other", "body": "body\n" + MARKER, "labels": ["bug"]})}),
-        (0, {**issue(101, {"title": "title", "body": "body\n" + MARKER, "labels": []})}),
-        (0, {**issue(101, {"title": "title", "body": "body without the marker", "labels": ["bug"]})}),
-        (0, {**issue(102, {"title": "title", "body": "body\n" + MARKER, "labels": ["bug"]})}),
-        (0, {**issue(101, {"title": "title", "body": "body\n" + MARKER, "labels": ["bug"]}, pull_request=True)}),
-        (0, _foreign_repository(issue(101, {"title": "title", "body": "body\n" + MARKER, "labels": ["bug"]}))),
-    ],
-    ids=["read-failed", "invalid-json", "other-title", "other-labels", "no-marker", "other-number", "pull-request", "foreign-repository"],
-)
-def test_create_direct_read_that_does_not_match_exactly_is_ambiguous(direct: tuple[int, object]) -> None:
-    observed, _runner = _lagging_create(direct)
-    assert observed.status == "ambiguous"
-    assert observed.read_back == {"matches": []}
-
-
-@pytest.mark.parametrize("returned", [{}, {"number": True}, {"number": "101"}, {"number": 0}, None])
-def test_create_without_a_usable_returned_number_does_not_read_directly(returned: object) -> None:
-    payload = {"title": "title", "body": "body\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
-    runner = Runner([(0, returned if returned is not None else ""), (0, [])])
-    observed = GitHubIssues(runner).create(DESTINATION, payload)
-    assert observed.status == "ambiguous"
-    assert len(runner.argv) == 2  # the create and the listing; no direct read
-
-
-def test_create_with_another_listed_match_stays_ambiguous_without_a_direct_read() -> None:
-    """The direct read replaces only an empty listing: a listing that shows a
-    different issue carrying this marker is a possible duplicate, and stays
-    ambiguous."""
-    payload = {"title": "title", "body": "body\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
-    runner = Runner([
-        (0, {"number": 102}),
         (0, [{"number": 101, "body": payload["body"]}]),
         (0, issue(101, payload)),
     ])
-    observed = GitHubIssues(runner).create(DESTINATION, payload)
+    tracker, slept = adapter(runner, (1.0, 2.0))
+    observed = tracker.create(DESTINATION, payload)
+    assert observed.status == "verified"
+    assert observed.verified_route == "created-and-read-back"
+    assert observed.read_back["identifier"] == "101"
+    assert slept == [1.0]
+
+
+def test_create_listing_that_already_shows_the_issue_does_not_wait() -> None:
+    payload = {"title": "title", "body": "body\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
+    runner = Runner([
+        (0, {"number": 101}),
+        (0, [{"number": 101, "body": payload["body"]}]),
+        (0, issue(101, payload)),
+    ])
+    tracker, slept = adapter(runner, (1.0, 2.0))
+    assert tracker.create(DESTINATION, payload).status == "verified"
+    assert slept == []
+
+
+def test_create_listing_that_never_shows_the_issue_stays_ambiguous() -> None:
+    payload = {"title": "title", "body": "body\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
+    runner = Runner([(0, {"number": 101}), (0, []), (0, []), (0, [])])
+    tracker, slept = adapter(runner, (1.0, 2.0))
+    observed = tracker.create(DESTINATION, payload)
     assert observed.status == "ambiguous"
-    assert [argv[-1] for argv in runner.argv[1:]] == ["repos/owner/repo/issues?state=all&per_page=100&page=1", "repos/owner/repo/issues/101"]
+    assert observed.read_back == {"matches": []}
+    assert slept == [1.0, 2.0]
+    assert len(runner.argv) == 4  # the create and one listing per wait, bounded
+
+
+def test_create_whose_caught_up_listing_shows_a_duplicate_stays_ambiguous() -> None:
+    """A listing fresh enough to show the created issue also shows an earlier
+    issue carrying the same marker — for example one a failed-looking create
+    actually made — so the duplicate is not hidden behind the lag."""
+    payload = {"title": "title", "body": "body\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
+    runner = Runner([
+        (0, {"number": 101}),
+        (0, []),
+        (0, [{"number": 55, "body": payload["body"]}, {"number": 101, "body": payload["body"]}]),
+        (0, issue(55, payload)),
+        (0, issue(101, payload)),
+    ])
+    tracker, slept = adapter(runner)
+    observed = tracker.create(DESTINATION, payload)
+    assert observed.status == "ambiguous"
+    assert [item["identifier"] for item in observed.read_back["matches"]] == ["55", "101"]
+    assert slept == [1.0]
+
+
+@pytest.mark.parametrize("returned", [{}, {"number": True}, {"number": "101"}, {"number": 0}, None])
+def test_create_without_a_usable_returned_number_does_not_wait(returned: object) -> None:
+    payload = {"title": "title", "body": "body\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
+    runner = Runner([(0, returned if returned is not None else ""), (0, [])])
+    tracker, slept = adapter(runner)
+    assert tracker.create(DESTINATION, payload).status == "ambiguous"
+    assert slept == []
+    assert len(runner.argv) == 2
+
+
+def test_failed_create_does_not_wait_for_the_listing() -> None:
+    payload = {"title": "title", "body": "body\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
+    runner = Runner([(1, {"number": 101}), (0, [])])
+    tracker, slept = adapter(runner)
+    assert tracker.create(DESTINATION, payload).status == "failed"
+    assert slept == []
 
 
 def test_failed_response_can_verify_only_through_exact_independent_readback() -> None:
