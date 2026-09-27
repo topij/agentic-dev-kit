@@ -369,5 +369,6 @@ them merged as #840. **Owner:**
 [#833](https://github.com/topij/agentic-dev-kit/issues/833),
 [#841](https://github.com/topij/agentic-dev-kit/issues/841).
 
-▶ Next: fix #187 — a sweep moves every earlier graduation-marker section to the archive
-and keeps only its own; test it against an inbox holding several engine-written markers.
+▶ Next: implement #187's acceptance — a sweep moves every earlier graduation-marker
+section to the archive and keeps only its own; test it against an inbox holding several
+engine-written markers.
