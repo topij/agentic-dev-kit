@@ -34,8 +34,8 @@
   computes no next step and holds the run for the operator.
   - **Proposed fix:** when the last operation is a verified `merge-read-back` and the
     state is not completed, complete it from the recorded read-back.
-  - **Why it is parked:** issue-shaped, but this wrap-up ran with no operator to approve
-    a tracker write. File it on the operator's word.
+  - **Filed 2026-09-27 as [`#826`](https://github.com/topij/agentic-dev-kit/issues/826)** on the
+    operator's word.
   - **Severity:** L. The window is narrow, and the hold is recoverable by hand.
 - **A write-time guard that restated a validator drifted from it twice in one PR.**
   On #824, `_sweep_cleanup` kept its own copy of `validate_sweep_cleanup`'s rules. Round
@@ -53,11 +53,15 @@
   `_sweep_cleanup_kept` spells out the three artifact names instead of reading
   `SWEEP_CLEANUP_ARTIFACTS`; that drift would fail closed. The PR's round-4 disposition
   records both.
+  - **Filed 2026-09-27 as [`#827`](https://github.com/topij/agentic-dev-kit/issues/827)** on the
+    operator's word.
   - **Severity:** L.
 - **`vcs.systemize_branch_pattern` is still date-only.** `post-merge-systemize.md`
   applies `chore/systemize-{date}` itself, with no engine, so two same-day runs would
   collide as triage did before #824. Not observed.
-  - **Why it is parked:** no occurrence yet.
+  - **Routed 2026-09-27 as a comment on
+    [`#256`](https://github.com/topij/agentic-dev-kit/issues/256)**, the same date-only branch-pattern
+    class, on the operator's word.
   - **Severity:** L.
 
 ## 2026-09-26
