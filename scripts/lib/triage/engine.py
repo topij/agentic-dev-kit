@@ -1795,7 +1795,7 @@ def run(
                 return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="resume", detail="captured state is valid; recovery refused")
             if entry == "test":
                 try:
-                    canonical_state(state_raw, settings=settings, mode=mode)
+                    canonical_state(state_raw, settings=settings, mode=mode, retiring=True)
                 except TriageError:
                     if context == "unattended":
                         lease.release()
@@ -1814,7 +1814,9 @@ def run(
                     receipt = resume_state_action(store, prepared)
                     lease.held = False
                     return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="restart test only from the exact recovery receipt", detail=str(receipt.get("kind")))
-            state = canonical_state(state_raw, settings=settings, mode=mode)
+            # A session-starting entry retires a completed state below, so it may
+            # accept one written under an earlier configuration; see `validate_state`.
+            state = canonical_state(state_raw, settings=settings, mode=mode, retiring=entry in {None, "new", "test"})
             frozen_path = _validate_frozen_artifact(store, state)
             result_state = state
             result_frozen = str(frozen_path)

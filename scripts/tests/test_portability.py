@@ -3819,13 +3819,15 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         "Interactive invocation with notification unavailable",
         "Scheduled or unattended invocation with notification unavailable",
         "Missing, malformed, or identity-mismatched live frozen snapshot/state "
-        "outside recover",
+        "outside recover, other than a completed state a session-starting entry "
+        "retires across a configuration change (*Completed-state retirement*)",
         "Tracker or finalization write fails or is ambiguous",
         "Test mode",
     }
     assert "never whole-sweep" in inputs[
         "Missing, malformed, or identity-mismatched live frozen snapshot/state "
-        "outside recover"
+        "outside recover, other than a completed state a session-starting entry "
+        "retires across a configuration change (*Completed-state retirement*)"
     ][0]
     assert "prohibit tracker, source-document, and forge writes" in inputs[
         "Test mode"

@@ -2392,6 +2392,122 @@ def test_session_starting_entry_retires_completed_live_state_and_drafts(
     assert fresh["run_identity"]["session"] != previous_session
 
 
+def change_config(root: Path) -> None:
+    """Change a configuration value the triage run does not read, as a later
+    PR does to `config/dev-model.yaml`: the effective config fingerprint moves."""
+    config = root / "config/dev-model.yaml"
+    before = config.read_text(encoding="utf-8")
+    after = before.replace('systemize_branch_pattern: "chore/systemize-{date}"', 'systemize_branch_pattern: "chore/systemize-{date}-later"')
+    assert after != before
+    config.write_text(after, encoding="utf-8")
+
+
+@pytest.mark.parametrize("entry", [None, "new"])
+def test_a_completed_state_retires_after_the_configuration_changed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, entry: str | None
+) -> None:
+    """A config change after a run finished held every later session-starting
+    run on `configuration identity mismatch`, because retirement validated the
+    completed state against the current fingerprint."""
+    root, state_path, completed_raw, retired = completed_live(tmp_path, monkeypatch)
+    before = load_settings(root).fingerprint
+    change_config(root)
+    assert load_settings(root).fingerprint != before
+    with pytest.raises(TriageError, match="configuration identity mismatch"):
+        canonical_state(completed_raw, settings=load_settings(root), mode="live")
+    result = run(entry, context="interactive", request={}, start=root)
+    assert result["detail"].startswith(f"retired completed state to {retired} ")
+    assert retired.read_bytes() == completed_raw
+    fresh = loads_exact(state_path.read_bytes())
+    assert fresh["phase"] == "reserved"
+    assert fresh["config_fingerprint"] == load_settings(root).fingerprint
+
+
+def test_resume_of_a_completed_state_stays_bound_to_the_current_configuration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, state_path, completed_raw, retired = completed_live(tmp_path, monkeypatch)
+    change_config(root)
+    held = run("resume", context="interactive", request={}, start=root)
+    assert held["outcome"] == "operator-held"
+    assert held["detail"] == "configuration identity mismatch"
+    assert state_path.read_bytes() == completed_raw
+    assert not retired.exists()
+
+
+def test_an_active_state_stays_bound_to_the_current_configuration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    run("new", context="interactive", request=request(root), start=root)
+    state_path = state_root / LIVE_STATE
+    awaiting = state_path.read_bytes()
+    assert loads_exact(awaiting)["phase"] == "awaiting-approval"
+    change_config(root)
+    for entry in (None, "new"):
+        held = run(entry, context="interactive", request={}, start=root)
+        assert held["outcome"] == "operator-held"
+        assert held["detail"] == "configuration identity mismatch"
+    assert state_path.read_bytes() == awaiting
+
+
+def with_recorded_fingerprint(state: dict, fingerprint: str) -> dict:
+    """Record `fingerprint` in both of a completed decision-only state's fields and
+    recompute every digest that embeds its run identity, so that only the
+    fingerprint check can refuse the result."""
+    state["config_fingerprint"] = state["run_identity"]["config_fingerprint"] = fingerprint
+    for proposal in state["proposal_payloads"]:
+        binding = proposal["report_binding"]
+        binding["report_core"]["run_identity"] = state["run_identity"]
+        binding["report_core_digest"] = digest(binding["report_core"])
+    core = state["completion"]["receipt_core"]
+    core["run_identity"] = state["run_identity"]
+    core["proposal_payloads"] = state["proposal_payloads"]
+    state["completion"]["completed_receipt_digest"] = digest(core)
+    return state
+
+
+def test_a_completed_state_that_disagrees_with_itself_is_not_retired(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _state_path, completed_raw, _retired = completed_live(tmp_path, monkeypatch)
+    change_config(root)
+    settings = load_settings(root)
+    split = loads_exact(completed_raw)
+    split["config_fingerprint"] = "f" * 64
+    with pytest.raises(TriageError, match="configuration identity mismatch"):
+        canonical_state(dumps(split), settings=settings, mode="live", retiring=True)
+    # Every identity-bound digest is recomputed, so a well-formed recorded
+    # fingerprint validates and only the digest-format check refuses a malformed one.
+    reshaped = with_recorded_fingerprint(loads_exact(completed_raw), "e" * 64)
+    assert canonical_state(dumps(reshaped), settings=settings, mode="live", retiring=True)["phase"] == "completed"
+    malformed = with_recorded_fingerprint(loads_exact(completed_raw), "not-a-digest")
+    with pytest.raises(TriageError, match="configuration identity mismatch"):
+        canonical_state(dumps(malformed), settings=settings, mode="live", retiring=True)
+    assert canonical_state(completed_raw, settings=settings, mode="live", retiring=True)["phase"] == "completed"
+
+
+def test_a_completed_test_state_retires_after_the_configuration_changed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = repository(tmp_path)
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(tmp_path / "state-root"))
+    run("test", context="interactive", request=request(root), start=root)
+    state_path = tmp_path / "state-root/triage/triage-pipeline-state_test.json"
+    presented = loads_exact(state_path.read_bytes())
+    finished = run("test", context="interactive", request={"approval": approval_for(presented)}, start=root, approval_context=approval_context(presented), head_authority=FakeForge([]))
+    assert finished["outcome"] == "degraded-success"
+    completed_raw = state_path.read_bytes()
+    change_config(root)
+    restarted = run("test", context="interactive", request={}, start=root)
+    assert restarted["detail"].startswith("retired completed state to ")
+    receipt = loads_exact(completed_raw)["completion"]["completed_receipt_digest"]
+    assert state_path.with_name(f"{state_path.name}.completed-{receipt[:16]}").read_bytes() == completed_raw
+    assert loads_exact(state_path.read_bytes())["phase"] == "reserved"
+
+
 @pytest.mark.parametrize(
     ("entry", "detail"),
     [("resume", "completed/decision-only"), ("recover", "captured state is valid; recovery refused")],
