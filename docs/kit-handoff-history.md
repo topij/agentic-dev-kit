@@ -5,6 +5,62 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-09-24 (RECOVERY decision and Phase 5 D-FRESH-CONTEXT run, in Claude Code)
+
+**Decisions, taken interactively.**
+
+- **RECOVERY's post-dispatch cutpoint: fix the gap first, rerun later.**
+  - The record is
+    `state/review-evidence/phase5-d-systemize-recovery-01/DECISION-post-dispatch-20260924.md`.
+  - The cutpoint stays an open Phase 5 E residual. The exit criteria allow no required
+    row to be "covered only by a proposed deferral", so at E it needs evidence or an
+    approved amendment.
+  - The systemize workflow declares no idempotency key and no pre-dispatch attempted
+    record for a tracker create or notification. #786 was filed for that, and the
+    rerun waits for its fix.
+- **PHASE5-D-FRESH-CONTEXT-01 approved** with A1 (ignore the Codex user config), B1
+  (untrusted), C1 (`gpt-5.6-sol` at medium) and D1 (an extended fake forge, network off).
+  Amendment 1 permitted Codex's automatic trust entry for the run's clone, followed by
+  guarded removal. `APPROVAL.md` and `AMENDMENT-1.md` are in
+  `state/review-evidence/phase5-d-fresh-context-01/`.
+- **The Phase 5 packets stay local.** Whether to commit the whole untracked
+  `saved_plans/phase5-*` set is a decision for the Phase 5 E audit.
+
+**The packet.** `saved_plans/phase5-d-fresh-context_2026-09-24.md` is local and not
+committed, like the other D packets. Fresh subagents checked successive drafts
+read-only, and their corrections are listed in its *Preparation check*. The approved
+bytes are also in the evidence directory as `packet.md`.
+
+**The run.** `RESULTS.md` in `state/review-evidence/phase5-d-fresh-context-01/`
+(gitignored) owns the outcomes.
+
+- **Setup:** one `codex exec`, given only `$post-merge-systemize test`. It ran in a
+  neutral clone at `1cc86cd` plus one disclosed config commit (`lookback_days: 10`),
+  against a fake forge with the network off.
+- **Observed:**
+  - it found the adapter (by injection) and the shared workflow;
+  - it read the config, overlay included, and passed `--window-days 10`;
+  - it chose engine-backed mode;
+  - its routes matched the sealed prediction, and containment was clean.
+- **Not matched:** it made no merged-PR preflight read of its own before heartbeat
+  `start`, and it ran `--verify` late. Both are parked in the friction log.
+- **Scope of the result:** one sample. Whether it discharges the row is the E audit's
+  call.
+
+**The Codex trust entries.** `codex exec` wrote `trust_level = "trusted"` entries into
+`~/.codex/config.toml` for its working directories, despite `--ignore-user-config
+--ephemeral`, sometimes late. That stopped the gate at S3, before the run. After the run,
+a guarded edit removed the three `/private/tmp` entries, and the file's SHA-256 matched
+its value before this session's first probe. The finding is parked in the friction log.
+
+**Filed this session, each on the operator's approval of the exact payload:**
+
+- #786: systemize has no idempotency key or pre-dispatch attempted record;
+- #787: the workflows' "merged per leaf" overlay wording omits the one-leaf allowlist;
+- #788: the systemize tests' `FAKE_GH` over-answers and crashes on unknown forms.
+
+**Retained:** `/private/tmp/w-83c93ce1`, the run's namespace, as the packet specifies.
+
 ### 2026-09-24 (Phase 5 D-SYSTEMIZE-RECOVERY run, in Claude Code)
 
 **Approval.** The operator approved PHASE5-D-SYSTEMIZE-RECOVERY-01: Stage 1, and Stage 2

@@ -20,6 +20,36 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-09-27 (triage resume completion and create read-back lag, in Claude Code)
+
+**Shipped.** [#828](https://github.com/topij/agentic-dev-kit/pull/828) merged as `76ef6be`: a resumed triage run completes a
+merge read-back it had already verified (#826), and sweep cleanup believes only a
+`verified` provider answer and builds its fallback from `SWEEP_CLEANUP_ARTIFACTS` (#827).
+[#829](https://github.com/topij/agentic-dev-kit/pull/829) merged as `563e694`: after a successful GitHub tracker create, the
+adapter waits, bounded, for the issue list to show the created issue before judging the
+marker matches (#808). Both merged on the operator's "merge when clean". #828 also
+carried the record fixes naming #826, #827 and the #256 comment.
+
+**Review.** CodeRabbit skipped both PRs; the fallback panel reviewed each, and the
+disposition comments on the PRs own the findings. On #829 the first approach, reading the
+created issue directly when the list was empty, dropped the list's duplicate check under
+lag, and was replaced by the wait.
+
+**Verification.** `make test` on 2026-09-27, each in its PR's worktree under
+`.claude/worktrees/`: at `f783e18a8be6fd689718f726a25910798b1d5633` it printed
+`3624 passed, 1 skipped`, and at `a447d2041fc0bfb4e8abaebe56c78c80df528cda`
+`3634 passed, 1 skipped`. In the main checkout it stops at conftest import on #461's
+unreadable `state/` file.
+
+**Left open:** #829 keeps the retry schedule as a class constant in `GitHubIssues` rather
+than a `config/dev-model.yaml` key; its PR body raises the question.
+
+**Not established:** the #826 resume against a real crash, and #829's wait against the
+live GitHub API, including whether its bounded wait covers GitHub's actual lag. Both rest
+on tests with scripted providers.
+
+______________________________________________________________________
+
 ## Session — 2026-09-26 (triage sweep branches, #807, in Claude Code)
 
 **Shipped.** [#824](https://github.com/topij/agentic-dev-kit/pull/824) merged as `2c2844e`
@@ -278,64 +308,6 @@ is #461's mechanism, now live.
 
 ______________________________________________________________________
 
-## Session — 2026-09-24 (RECOVERY decision and Phase 5 D-FRESH-CONTEXT run, in Claude Code)
-
-**Decisions, taken interactively.**
-
-- **RECOVERY's post-dispatch cutpoint: fix the gap first, rerun later.**
-  - The record is
-    `state/review-evidence/phase5-d-systemize-recovery-01/DECISION-post-dispatch-20260924.md`.
-  - The cutpoint stays an open Phase 5 E residual. The exit criteria allow no required
-    row to be "covered only by a proposed deferral", so at E it needs evidence or an
-    approved amendment.
-  - The systemize workflow declares no idempotency key and no pre-dispatch attempted
-    record for a tracker create or notification. #786 was filed for that, and the
-    rerun waits for its fix.
-- **PHASE5-D-FRESH-CONTEXT-01 approved** with A1 (ignore the Codex user config), B1
-  (untrusted), C1 (`gpt-5.6-sol` at medium) and D1 (an extended fake forge, network off).
-  Amendment 1 permitted Codex's automatic trust entry for the run's clone, followed by
-  guarded removal. `APPROVAL.md` and `AMENDMENT-1.md` are in
-  `state/review-evidence/phase5-d-fresh-context-01/`.
-- **The Phase 5 packets stay local.** Whether to commit the whole untracked
-  `saved_plans/phase5-*` set is a decision for the Phase 5 E audit.
-
-**The packet.** `saved_plans/phase5-d-fresh-context_2026-09-24.md` is local and not
-committed, like the other D packets. Fresh subagents checked successive drafts
-read-only, and their corrections are listed in its *Preparation check*. The approved
-bytes are also in the evidence directory as `packet.md`.
-
-**The run.** `RESULTS.md` in `state/review-evidence/phase5-d-fresh-context-01/`
-(gitignored) owns the outcomes.
-
-- **Setup:** one `codex exec`, given only `$post-merge-systemize test`. It ran in a
-  neutral clone at `1cc86cd` plus one disclosed config commit (`lookback_days: 10`),
-  against a fake forge with the network off.
-- **Observed:**
-  - it found the adapter (by injection) and the shared workflow;
-  - it read the config, overlay included, and passed `--window-days 10`;
-  - it chose engine-backed mode;
-  - its routes matched the sealed prediction, and containment was clean.
-- **Not matched:** it made no merged-PR preflight read of its own before heartbeat
-  `start`, and it ran `--verify` late. Both are parked in the friction log.
-- **Scope of the result:** one sample. Whether it discharges the row is the E audit's
-  call.
-
-**The Codex trust entries.** `codex exec` wrote `trust_level = "trusted"` entries into
-`~/.codex/config.toml` for its working directories, despite `--ignore-user-config
---ephemeral`, sometimes late. That stopped the gate at S3, before the run. After the run,
-a guarded edit removed the three `/private/tmp` entries, and the file's SHA-256 matched
-its value before this session's first probe. The finding is parked in the friction log.
-
-**Filed this session, each on the operator's approval of the exact payload:**
-
-- #786: systemize has no idempotency key or pre-dispatch attempted record;
-- #787: the workflows' "merged per leaf" overlay wording omits the one-leaf allowlist;
-- #788: the systemize tests' `FAKE_GH` over-answers and crashes on unknown forms.
-
-**Retained:** `/private/tmp/w-83c93ce1`, the run's namespace, as the packet specifies.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -371,9 +343,8 @@ review-request method.
 ### Triage engine hardening
 
 **Status:** same-day sweep branches and post-merge retirement shipped in #824; its
-follow-ups #826 and #827 shipped in #828. The GitHub tracker's lagging post-create
-read-back ([#808](https://github.com/topij/agentic-dev-kit/issues/808)) is fixed by the
-pull request that carries this line. **Owner:**
+follow-ups #826 and #827 shipped in #828, and the GitHub tracker's lagging post-create
+read-back (#808) in #829. **Owner:**
 [#818](https://github.com/topij/agentic-dev-kit/issues/818),
 [#820](https://github.com/topij/agentic-dev-kit/issues/820).
 
