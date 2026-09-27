@@ -98,41 +98,46 @@ class GitHubIssues:
                 raise TriageError("tracker marker multiplicity is ambiguous", outcome="operator-held")
             if not isinstance(body, str) or marker not in body:
                 continue
-            number = item.get("number")
-            issue = self._json(["gh", "api", "--hostname", host, f"repos/{repository}/issues/{number}"])
-            if not isinstance(issue, dict) or issue.get("number") != number or "pull_request" in issue:
-                raise TriageError("tracker issue read-back identity mismatch", outcome="operator-held")
-            issue_body = issue.get("body")
-            if not isinstance(issue_body, str) or issue_body.count(marker) != 1:
-                raise TriageError("tracker marker changed during read-back", outcome="operator-held")
-            repository_url = issue.get("repository_url")
-            observed_repository = repository_url.rsplit("/repos/", 1)[-1] if isinstance(repository_url, str) and "/repos/" in repository_url else None
-            observed_host = urlparse(repository_url).hostname if isinstance(repository_url, str) else None
-            expected_api_host = "api.github.com" if host == "github.com" else host
-            if observed_repository != repository or destination.get("project") != observed_repository or observed_host != expected_api_host:
-                raise TriageError("tracker destination read-back mismatch", outcome="operator-held")
-            labels = issue.get("labels")
-            if (
-                not isinstance(labels, list)
-                or any(
-                    not isinstance(label, dict)
-                    or not isinstance(label.get("name"), str)
-                    or not label["name"]
-                    for label in labels
-                )
-            ):
-                raise TriageError("tracker label read-back is malformed", outcome="operator-held")
-            label_names = [label["name"] for label in labels]
-            if len(label_names) != len(set(label_names)):
-                raise TriageError("tracker label read-back is ambiguous", outcome="operator-held")
-            payload = {
-                "title": issue.get("title"),
-                "body": issue_body,
-                "project": observed_repository,
-                "labels": sorted(label_names),
-            }
-            observed.append({"identifier": str(number), "payload": payload, "payload_digest": digest(payload), "marker": marker, "destination": destination})
+            observed.append(self._read_issue(destination, item.get("number"), marker))
         return observed
+
+    def _read_issue(self, destination: dict[str, Any], number: Any, marker: str) -> dict[str, Any]:
+        """Read one issue directly and bind it to the destination and marker,
+        in the shape `search` records for each match."""
+        repository, host = self._repository(destination)
+        issue = self._json(["gh", "api", "--hostname", host, f"repos/{repository}/issues/{number}"])
+        if not isinstance(issue, dict) or issue.get("number") != number or "pull_request" in issue:
+            raise TriageError("tracker issue read-back identity mismatch", outcome="operator-held")
+        issue_body = issue.get("body")
+        if not isinstance(issue_body, str) or issue_body.count(marker) != 1:
+            raise TriageError("tracker marker changed during read-back", outcome="operator-held")
+        repository_url = issue.get("repository_url")
+        observed_repository = repository_url.rsplit("/repos/", 1)[-1] if isinstance(repository_url, str) and "/repos/" in repository_url else None
+        observed_host = urlparse(repository_url).hostname if isinstance(repository_url, str) else None
+        expected_api_host = "api.github.com" if host == "github.com" else host
+        if observed_repository != repository or destination.get("project") != observed_repository or observed_host != expected_api_host:
+            raise TriageError("tracker destination read-back mismatch", outcome="operator-held")
+        labels = issue.get("labels")
+        if (
+            not isinstance(labels, list)
+            or any(
+                not isinstance(label, dict)
+                or not isinstance(label.get("name"), str)
+                or not label["name"]
+                for label in labels
+            )
+        ):
+            raise TriageError("tracker label read-back is malformed", outcome="operator-held")
+        label_names = [label["name"] for label in labels]
+        if len(label_names) != len(set(label_names)):
+            raise TriageError("tracker label read-back is ambiguous", outcome="operator-held")
+        payload = {
+            "title": issue.get("title"),
+            "body": issue_body,
+            "project": observed_repository,
+            "labels": sorted(label_names),
+        }
+        return {"identifier": str(number), "payload": payload, "payload_digest": digest(payload), "marker": marker, "destination": destination}
 
     def create(self, destination: dict[str, Any], payload: dict[str, Any]) -> ProviderObservation:
         repository, host = self._repository(destination)
@@ -147,9 +152,30 @@ class GitHubIssues:
             response = {"raw": result.stdout}
         marker = next((line for line in payload["body"].splitlines() if "triage-payload:" in line), "")
         matches = self.search(destination, marker) if marker else []
+        response_identifier = response.get("number") if isinstance(response, dict) else None
+        if (
+            result.returncode == 0
+            and marker
+            and not matches
+            and isinstance(response_identifier, int)
+            and not isinstance(response_identifier, bool)
+            and response_identifier > 0
+        ):
+            # GitHub's issue list lags a fresh create (#808), so an empty
+            # listing after a successful create is read as lag, not absence:
+            # the issue the response names is read directly and must carry
+            # the exact payload and marker. A listing that does show a match
+            # takes the path below, so a second issue with this marker still
+            # reads as ambiguous.
+            try:
+                direct = self._read_issue(destination, response_identifier, marker)
+            except TriageError:
+                return ProviderObservation("ambiguous", response, {"matches": []})
+            if direct["payload_digest"] == digest(payload):
+                return ProviderObservation("verified", response, direct, "created-and-read-back")
+            return ProviderObservation("ambiguous", response, {"matches": []})
         exact = [item for item in matches if item["payload_digest"] == digest(payload)]
         if len(exact) == 1 and len(matches) == 1:
-            response_identifier = response.get("number") if isinstance(response, dict) else None
             if result.returncode == 0 and response_identifier is not None and str(response_identifier) != exact[0]["identifier"]:
                 return ProviderObservation("ambiguous", response, {"matches": matches})
             if result.returncode != 0:

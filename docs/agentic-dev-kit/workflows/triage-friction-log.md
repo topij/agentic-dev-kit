@@ -1216,7 +1216,10 @@ Finalization additionally requires `finalize: true` and an absolute isolated `wo
 on its first continuation.
 
 External adapters are disabled unless selected explicitly. `--enable-github-tracker`
-permits only approved GitHub Issues transitions. `--enable-github-forge` permits the
+permits only approved GitHub Issues transitions. Because GitHub's issue list lags a fresh
+create, that adapter reads the issue a successful create response names directly when
+the list does not yet show the marker, and verifies it only on an exact payload and
+marker; a list that shows any match keeps the list's verdict. `--enable-github-forge` permits the
 configured isolated-worktree, push, ready pull-request and read-back transitions; the
 adapter has no merge action. The CLI has no notification-service flag. A nonempty
 unattended new draft therefore hard-stops before creating session artifacts unless an

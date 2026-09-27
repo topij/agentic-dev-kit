@@ -70,6 +70,77 @@ def test_create_refuses_success_identifier_that_differs_from_readback() -> None:
     assert observed.status == "ambiguous"
 
 
+def test_create_verifies_through_a_direct_read_when_the_issue_list_lags() -> None:
+    """#808: GitHub's issue list lags a fresh create. An empty listing after a
+    successful create reads the issue the response names directly, and the
+    exact payload and marker there verify it."""
+    payload = {"title": "title", "body": "body\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
+    runner = Runner([
+        (0, {"number": 101}),
+        (0, []),
+        (0, issue(101, payload)),
+    ])
+    observed = GitHubIssues(runner).create(DESTINATION, payload)
+    assert observed.status == "verified"
+    assert observed.verified_route == "created-and-read-back"
+    assert observed.read_back == {"identifier": "101", "payload": payload, "payload_digest": digest(payload), "marker": MARKER, "destination": DESTINATION}
+    assert runner.argv[2][-1] == "repos/owner/repo/issues/101"
+
+
+def _lagging_create(direct: tuple[int, object]) -> tuple[object, Runner]:
+    payload = {"title": "title", "body": "body\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
+    runner = Runner([(0, {"number": 101}), (0, []), direct])
+    return GitHubIssues(runner).create(DESTINATION, payload), runner
+
+
+def _foreign_repository(value: dict) -> dict:
+    return {**value, "repository_url": "https://api.github.com/repos/other/repo"}
+
+
+@pytest.mark.parametrize(
+    "direct",
+    [
+        (1, "not found"),
+        (0, "not json"),
+        (0, {**issue(101, {"title": "other", "body": "body\n" + MARKER, "labels": ["bug"]})}),
+        (0, {**issue(101, {"title": "title", "body": "body\n" + MARKER, "labels": []})}),
+        (0, {**issue(101, {"title": "title", "body": "body without the marker", "labels": ["bug"]})}),
+        (0, {**issue(102, {"title": "title", "body": "body\n" + MARKER, "labels": ["bug"]})}),
+        (0, {**issue(101, {"title": "title", "body": "body\n" + MARKER, "labels": ["bug"]}, pull_request=True)}),
+        (0, _foreign_repository(issue(101, {"title": "title", "body": "body\n" + MARKER, "labels": ["bug"]}))),
+    ],
+    ids=["read-failed", "invalid-json", "other-title", "other-labels", "no-marker", "other-number", "pull-request", "foreign-repository"],
+)
+def test_create_direct_read_that_does_not_match_exactly_is_ambiguous(direct: tuple[int, object]) -> None:
+    observed, _runner = _lagging_create(direct)
+    assert observed.status == "ambiguous"
+    assert observed.read_back == {"matches": []}
+
+
+@pytest.mark.parametrize("returned", [{}, {"number": True}, {"number": "101"}, {"number": 0}, None])
+def test_create_without_a_usable_returned_number_does_not_read_directly(returned: object) -> None:
+    payload = {"title": "title", "body": "body\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
+    runner = Runner([(0, returned if returned is not None else ""), (0, [])])
+    observed = GitHubIssues(runner).create(DESTINATION, payload)
+    assert observed.status == "ambiguous"
+    assert len(runner.argv) == 2  # the create and the listing; no direct read
+
+
+def test_create_with_another_listed_match_stays_ambiguous_without_a_direct_read() -> None:
+    """The direct read replaces only an empty listing: a listing that shows a
+    different issue carrying this marker is a possible duplicate, and stays
+    ambiguous."""
+    payload = {"title": "title", "body": "body\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
+    runner = Runner([
+        (0, {"number": 102}),
+        (0, [{"number": 101, "body": payload["body"]}]),
+        (0, issue(101, payload)),
+    ])
+    observed = GitHubIssues(runner).create(DESTINATION, payload)
+    assert observed.status == "ambiguous"
+    assert [argv[-1] for argv in runner.argv[1:]] == ["repos/owner/repo/issues?state=all&per_page=100&page=1", "repos/owner/repo/issues/101"]
+
+
 def test_failed_response_can_verify_only_through_exact_independent_readback() -> None:
     payload = {"title": "title", "body": "body\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
     runner = Runner([
