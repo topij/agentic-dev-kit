@@ -42,6 +42,10 @@ starts.
 
 ---
 
+## #831 — One triage approval can file some candidates and archive others
+
+CHANGED — engine CLI surface: Refresh `lib/triage/approval.py`, `lib/triage/engine.py`, `lib/triage/finalize.py`, the shared triage workflow, `kit-manifest.json`, `scripts/tests/test_triage_approval.py`, `scripts/tests/test_triage_engine.py` and `scripts/tests/test_triage_inbox.py`. An approval's `command` may now carry several `approve <ids>`, `archive <ids>` and `park <ids>` commands, one per line, where it used to be refused as mixed. Each id may appear in only one command, a blank or padded line refuses the whole reply, and unmentioned ids still park. `approve all`, `modify` and `cancel` must be sent alone, and a `modify` body containing a line that is itself a complete command for the batch is now refused. The marker record renders a multi-command approval as `Approval commands:` followed by one code span per command; a single command, or a `modify` whose body spans lines, renders as before. Nothing to change unless a test of yours expects a newline-separated command to be refused.
+
 ## #829 — A GitHub tracker create waits for the lagging issue list before judging it
 
 CHANGED — gate semantics: Refresh `lib/triage/providers.py`, the shared triage workflow, `kit-manifest.json` and `scripts/tests/test_triage_providers.py`. When a GitHub Issues create succeeds and returns an issue number that the post-create issue list does not show yet, `GitHubIssues.create` now re-reads the list after 1, 2, 4 and 8 seconds until it shows that issue, then judges the marker matches exactly as before. A create that used to be recorded `ambiguous` only because the list lagged is now `verified` / `created-and-read-back` without a resume; a list that never catches up is still `ambiguous`, and a caught-up list that also shows another issue with the same marker is still `ambiguous`. `GitHubIssues` takes two new keyword arguments, `sleep` and `create_listing_retry_delays`, both defaulted. Nothing to change; a run held this way before the upgrade still reconciles on resume.

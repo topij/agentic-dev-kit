@@ -22,6 +22,14 @@ class ApprovalContext:
 
 
 def parse_commands(text: str, proposal_digests: dict[str, str]) -> list[dict[str, Any]]:
+    """Normalize one approval message into a decision for every displayed candidate.
+
+    A message is `cancel`, one `modify`, or one or more `approve`/`archive`/`park`
+    commands, one per line (#820), so a single reply can file some candidates and
+    archive others. Each id may appear in only one command; an unmentioned id parks.
+    `approve all`, `modify` and `cancel` each cover the whole reply and must be sent
+    alone.
+    """
     if text != text.strip() or not text:
         raise TriageError("approval command must be exact", outcome="operator-held")
     if text == "cancel":
@@ -32,30 +40,53 @@ def parse_commands(text: str, proposal_digests: dict[str, str]) -> list[dict[str
         candidate_id, body = modify.groups()
         if candidate_id not in proposal_digests:
             raise TriageError("unknown modify candidate", outcome="operator-held")
+        # The body may span lines, so a command line after it would silently become
+        # part of the replacement body rather than a decision.
+        if any(_names_this_batch(line, proposal_digests) for line in body.split("\n")):
+            raise TriageError("modify must be sent alone", outcome="operator-held")
         decisions[candidate_id] = {"candidate_id": candidate_id, "decision": "modify", "replacement_body": body, "proposal_digest": proposal_digests[candidate_id]}
     else:
-        match = COMMAND_RE.fullmatch(text)
-        if not match:
-            raise TriageError("unknown or mixed approval command", outcome="operator-held")
-        verb, ids_text = match.groups()
-        if "," in ids_text or re.search(r"\b(?:approve|archive|park|modify|cancel)\b", ids_text):
-            raise TriageError("mixed or malformed approval command", outcome="operator-held")
-        if ids_text == "all":
-            if verb != "approve":
-                raise TriageError("only approve all is supported", outcome="operator-held")
-            ids = list(proposal_digests)
-        else:
-            ids = ids_text.split(" ")
-            if any(not candidate_id for candidate_id in ids):
-                raise TriageError("malformed candidate list", outcome="operator-held")
-        decision = "file" if verb == "approve" else verb
-        for candidate_id in ids:
-            if candidate_id not in proposal_digests or candidate_id in decisions:
-                raise TriageError("unknown or duplicate approval candidate", outcome="operator-held")
-            decisions[candidate_id] = {"candidate_id": candidate_id, "decision": decision, "proposal_digest": proposal_digests[candidate_id]}
+        lines = text.split("\n")
+        for line in lines:
+            if line != line.strip() or not line:
+                raise TriageError("approval command lines must be exact and non-empty", outcome="operator-held")
+            match = COMMAND_RE.fullmatch(line)
+            if not match:
+                raise TriageError("unknown or mixed approval command", outcome="operator-held")
+            verb, ids_text = match.groups()
+            if "," in ids_text or re.search(r"\b(?:approve|archive|park|modify|cancel)\b", ids_text):
+                raise TriageError("mixed or malformed approval command", outcome="operator-held")
+            if ids_text == "all":
+                if verb != "approve":
+                    raise TriageError("only approve all is supported", outcome="operator-held")
+                if len(lines) != 1:
+                    raise TriageError("approve all must be sent alone", outcome="operator-held")
+                ids = list(proposal_digests)
+            else:
+                ids = ids_text.split(" ")
+                if any(not candidate_id for candidate_id in ids):
+                    raise TriageError("malformed candidate list", outcome="operator-held")
+            decision = "file" if verb == "approve" else verb
+            for candidate_id in ids:
+                if candidate_id not in proposal_digests or candidate_id in decisions:
+                    raise TriageError("unknown or duplicate approval candidate", outcome="operator-held")
+                decisions[candidate_id] = {"candidate_id": candidate_id, "decision": decision, "proposal_digest": proposal_digests[candidate_id]}
     for candidate_id, proposal_digest in proposal_digests.items():
         decisions.setdefault(candidate_id, {"candidate_id": candidate_id, "decision": "park", "proposal_digest": proposal_digest})
     return [decisions[candidate_id] for candidate_id in proposal_digests]
+
+
+def _names_this_batch(line: str, proposal_digests: dict[str, str]) -> bool:
+    """Whether `line` is itself a complete command for the displayed batch."""
+    if line == "cancel":
+        return True
+    match = COMMAND_RE.fullmatch(line)
+    if not match:
+        return False
+    verb, ids_text = match.groups()
+    if ids_text == "all":
+        return verb == "approve"
+    return all(candidate_id in proposal_digests for candidate_id in ids_text.split(" "))
 
 
 def approval_record(

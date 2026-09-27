@@ -322,6 +322,22 @@ def test_render_sweep_record_orders_candidates_numerically_not_lexically() -> No
     assert "Archived without filing: TRI-2, TRI-10." in lines
 
 
+def test_record_shows_each_command_of_a_multi_command_approval_as_its_own_span() -> None:
+    # #820: one reply may carry several commands, one per line.
+    state = _render_sweep_state(filed=[("TRI-01", "900")], archived=["TRI-02"], approval=("approve TRI-01\narchive TRI-02", "topi"))
+    lines = _record_lines(state)
+    assert "Approval commands: `approve TRI-01`, `archive TRI-02`. Approver: `topi`." in lines
+    assert not any("\n" in line or "escaped" in line for line in lines)
+
+
+def test_record_keeps_a_multi_line_modify_as_one_escaped_literal() -> None:
+    # A modify body may span lines; its body lines must not read as commands.
+    command = "modify TRI-01: First line.\napprove the change once reviewed"
+    lines = _record_lines(_render_sweep_state(approval=(command, "topi")))
+    assert f"Approval command: `{command!r}` (escaped Python string literal). Approver: `topi`." in lines
+    assert not any(line.startswith("Approval commands:") for line in lines)
+
+
 @pytest.mark.parametrize(
     ("destination", "identifier"),
     [

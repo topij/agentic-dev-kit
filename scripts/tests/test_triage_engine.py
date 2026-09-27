@@ -20,6 +20,7 @@ from triage import engine as triage_engine  # noqa: E402
 from triage.approval import ApprovalContext  # noqa: E402
 from triage.canonical import decode_bytes, digest, dumps, encode_bytes, loads_exact  # noqa: E402
 from triage.engine import _inline_literal, _report_text, _source_literal, run  # noqa: E402
+from triage.finalize import sweep_ids  # noqa: E402
 from triage.inbox import parse  # noqa: E402
 from triage.model import (  # noqa: E402
     BASE_KEYS,
@@ -625,6 +626,66 @@ def test_decision_only_completion_is_durable_without_tracker_or_forge(
     assert implicit["outcome"] == "operator-held"
     assert implicit["detail"].startswith("retired completed state to ")
     assert loads_exact(state_path.read_bytes())["phase"] == "reserved"
+
+
+def test_one_approval_files_one_candidate_and_archives_another(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#820: a reply carrying both `approve` and `archive` records both decisions, files
+    only the approved payload, and leaves the unmentioned entry parked."""
+    root = repository(tmp_path)
+    (root / "docs/kit-friction-log.md").write_bytes(
+        b"# Log\n\n## 2026-01-02\n\n"
+        b"- **To file.** details.\n"
+        b"- **Handled.** details. **Filed 2026-01-02 as #17.**\n"
+        b"- **Unmentioned.** details.\n"
+    )
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    candidates = parse((root / "docs/kit-friction-log.md").read_bytes())
+    supplied = {
+        "proposals": [
+            {
+                "candidate_id": candidate.candidate_id,
+                "source_block_digest": candidate.digest,
+                "title": f"Candidate {candidate.candidate_id}",
+                "body_without_marker": "Observed details.",
+                "project": "topij/agentic-dev-kit",
+                "labels": ["bug"],
+            }
+            for candidate in candidates
+        ]
+    }
+    run("new", context="interactive", request=supplied, start=root)
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    presented = loads_exact(state_path.read_bytes())
+    proposal = presented["proposal_payloads"][0]
+    assert proposal["candidate_id"] == "TRI-01"
+    destination = {"backend": "github-issues", "host": "github.com", "repository": "topij/agentic-dev-kit", "project": "topij/agentic-dev-kit"}
+    observed = {"identifier": "40", "payload": proposal["payload"], "payload_digest": proposal["payload_digest"], "marker": proposal["marker"], "destination": destination}
+    tracker = FakeTracker([], ProviderObservation("verified", {"number": 40}, observed, "created-and-read-back"))
+    command = "approve TRI-01\narchive TRI-02"
+    result = run(
+        "resume",
+        context="interactive",
+        request={"approval": approval_for(presented, command)},
+        start=root,
+        tracker=tracker,
+        approval_context=approval_context(presented, command),
+        head_authority=FakeForge([]),
+    )
+    assert result["verified_tracker_identifiers"] == ["40"]
+    assert [call[0] for call in tracker.calls] == ["search", "create"]
+    assert tracker.calls[1][1]["payload"] == proposal["payload"]
+    retained = loads_exact(state_path.read_bytes())
+    assert [(item["candidate_id"], item["decision"]) for item in retained["decisions"]] == [
+        ("TRI-01", "file"),
+        ("TRI-02", "archive"),
+        ("TRI-03", "park"),
+    ]
+    assert retained["approval"]["source_read_back"]["text"] == command
+    assert [(item["candidate_id"], item["status"]) for item in retained["operations"]] == [("TRI-01", "verified")]
+    assert sweep_ids(retained) == {"TRI-01", "TRI-02"}
 
 
 def test_live_attempt_is_persisted_before_fake_create(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
