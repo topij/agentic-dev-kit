@@ -2453,6 +2453,22 @@ def test_an_active_state_stays_bound_to_the_current_configuration(
     assert state_path.read_bytes() == awaiting
 
 
+def with_recorded_fingerprint(state: dict, fingerprint: str) -> dict:
+    """Record `fingerprint` in both of a completed decision-only state's fields and
+    recompute every digest that embeds its run identity, so that only the
+    fingerprint check can refuse the result."""
+    state["config_fingerprint"] = state["run_identity"]["config_fingerprint"] = fingerprint
+    for proposal in state["proposal_payloads"]:
+        binding = proposal["report_binding"]
+        binding["report_core"]["run_identity"] = state["run_identity"]
+        binding["report_core_digest"] = digest(binding["report_core"])
+    core = state["completion"]["receipt_core"]
+    core["run_identity"] = state["run_identity"]
+    core["proposal_payloads"] = state["proposal_payloads"]
+    state["completion"]["completed_receipt_digest"] = digest(core)
+    return state
+
+
 def test_a_completed_state_that_disagrees_with_itself_is_not_retired(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2463,8 +2479,11 @@ def test_a_completed_state_that_disagrees_with_itself_is_not_retired(
     split["config_fingerprint"] = "f" * 64
     with pytest.raises(TriageError, match="configuration identity mismatch"):
         canonical_state(dumps(split), settings=settings, mode="live", retiring=True)
-    malformed = loads_exact(completed_raw)
-    malformed["config_fingerprint"] = malformed["run_identity"]["config_fingerprint"] = "not-a-digest"
+    # Every identity-bound digest is recomputed, so a well-formed recorded
+    # fingerprint validates and only the digest-format check refuses a malformed one.
+    reshaped = with_recorded_fingerprint(loads_exact(completed_raw), "e" * 64)
+    assert canonical_state(dumps(reshaped), settings=settings, mode="live", retiring=True)["phase"] == "completed"
+    malformed = with_recorded_fingerprint(loads_exact(completed_raw), "not-a-digest")
     with pytest.raises(TriageError, match="configuration identity mismatch"):
         canonical_state(dumps(malformed), settings=settings, mode="live", retiring=True)
     assert canonical_state(completed_raw, settings=settings, mode="live", retiring=True)["phase"] == "completed"
