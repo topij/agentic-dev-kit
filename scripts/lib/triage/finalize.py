@@ -78,7 +78,13 @@ def _record_lines(state: dict[str, Any]) -> list[str]:
         command = source_read_back.get("text") if isinstance(source_read_back, dict) else None
         approver = approval.get("approver_identity")
         if isinstance(command, str) and command and isinstance(approver, str) and approver:
-            lines.append(f"Approval command: {_inline_literal(command)}. Approver: {_inline_literal(approver)}.")
+            if "\n" in command:
+                # A multi-command approval (#820) shows each command as its own span
+                # rather than one escaped literal with its newlines spelled out.
+                shown = ", ".join(_inline_literal(line) for line in command.split("\n"))
+                lines.append(f"Approval commands: {shown}. Approver: {_inline_literal(approver)}.")
+            else:
+                lines.append(f"Approval command: {_inline_literal(command)}. Approver: {_inline_literal(approver)}.")
     return lines
 
 

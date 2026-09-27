@@ -642,6 +642,7 @@ def _report_text(state: dict[str, Any], capabilities: dict[str, dict[str, str]],
             "Historical annotations are evidence for review, not executable accounting instructions.",
             "Use `archive <ids>` for already handled entries without filing, and use `park <ids>` or leave an entry unmentioned to retain it.",
             "`approve all` files every displayed payload, including historically annotated entries; it does not archive already handled entries.",
+            "One reply may carry several commands, one per line, such as `approve <ids>` on one line and `archive <ids>` on the next; each id may appear in only one of them. `approve all`, `modify` and `cancel` must each be sent alone.",
         ])
     if state.get("operations"):
         lines.extend(["", "## Tracker operations", ""])

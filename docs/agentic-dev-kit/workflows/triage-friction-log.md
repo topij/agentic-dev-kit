@@ -1016,6 +1016,11 @@ operator. Parse complete commands, never keyword substrings. Supported commands 
   payload, and leave it unapproved until a later `approve <id>`;
 - the exact command `cancel` — cancel the batch and keep every source block active.
 
+One reply may carry several `approve <ids>`, `archive <ids>` and `park <ids>` commands,
+one per line, so a single decision can file some candidates and archive others. Each id
+may appear in only one command, and each line is one complete command. `approve all`,
+`modify` and `cancel` each cover the whole reply and must be sent alone.
+
 For an entry already handled, review its retained annotation and referenced evidence
 before choosing `archive <ids>`, which files no tracker item. If its disposition is
 uncertain, use `park <ids>` or leave it unmentioned. `approve all` approves filing
@@ -1024,7 +1029,8 @@ it does not mean archive already-handled entries. The engine does not establish 
 historical filing from prose alone. An archive decision remains subject to the exact
 frozen-block and reviewed-sweep requirements below.
 
-Reject unknown ids, mixed verbs, substring matches, messages from other identities, or
+Reject unknown ids, an id named by more than one command, two verbs on one line, blank
+or padded lines, substring matches, messages from other identities, or
 an approval whose current payload digest differs from the displayed digest. Unmentioned
 items default to `park`, never archive. Persist normalized decisions and exact approval
 evidence atomically before any tracker capability is triggered.
