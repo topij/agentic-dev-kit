@@ -24,75 +24,29 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
-## 2026-09-27
+## 2026-09-27 — Backlog migrated by triage session 7110f64d78354d608f4008e55dce1ee1
 
-- **A second verification path dropped a property the first one enforced.** On #829's
-  first head, `GitHubIssues.create` gained a direct read of the created issue for when the
-  issue list lagged. The list path verified only when exactly one issue carried the
-  marker; the direct read checked the one issue alone, so a duplicate hidden by the same
-  lag could verify past it. The panel's adversarial lens found it; the fix routed the
-  lagging case back through the list path instead. Same family as the validator entry
-  below: a path added beside an existing check restated part of it rather than reusing it.
-  - **Why it is parked:** accumulation. If it recurs, a candidate rule: a new route to
-    a verdict an existing function already reaches goes through that function.
-  - **Severity:** M. It would have hidden a duplicate tracker issue, and no test covered it.
-- **Panel lenses left writes outside their scratch namespace.** On #829's round 1 the
-  correctness lens mutated in the worktree it was handed, then restored and attested it,
-  and the adversarial lens registered its own `git worktree` copies of the shared repo,
-  which stayed in `git worktree list` until the cockpit removed them.
-  - **Why it is parked:** one round, no harm done. If it recurs, look at whether
-    `panel_prompt.py` should name how to make a writable copy.
-  - **Severity:** L.
-- **A resumed triage run cannot finish a verified merge read-back it did not complete.**
-  Seen by reading, not by a crash, while #824 was built. `_forge_attempt` persists the
-  verified `merge-read-back` operation, then a second `atomic_replace` in
-  `_advance_finalize` writes the completed state. A process that dies between the two
-  leaves every finalization operation verified with no completion, so the next resume
-  computes no next step and holds the run for the operator.
-  - **Proposed fix:** when the last operation is a verified `merge-read-back` and the
-    state is not completed, complete it from the recorded read-back.
-  - **Filed 2026-09-27 as [`#826`](https://github.com/topij/agentic-dev-kit/issues/826)** on the
-    operator's word.
-  - **Severity:** L. The window is narrow, and the hold is recoverable by hand.
-- **A write-time guard that restated a validator drifted from it twice in one PR.**
-  On #824, `_sweep_cleanup` kept its own copy of `validate_sweep_cleanup`'s rules. Round
-  2 of the panel found an empty `kept` reason passing the write and failing every later
-  read; round 3 found an extra key and a missing key doing the same after round 2's
-  fix. Calling the validator from the write ended it. This is the mirror of the
-  2026-09-26 entry below: that one validated with a function that also renders, and
-  this one rendered against a second copy of the validation.
-  - **Why it is parked:** accumulation. A candidate rule, if it recurs: a write that
-    persists state a validator will read calls that validator, rather than restating it.
-  - **Severity:** M. Each instance would have held every later triage run.
-- **Two cleanup-contract gaps left open on #824, both only reachable through a custom
-  `ForgeProvider`.** `_sweep_cleanup` accepts a well-formed record without checking
-  `observed.status`, so a non-`verified` answer can still record `removed`. And
-  `_sweep_cleanup_kept` spells out the three artifact names instead of reading
-  `SWEEP_CLEANUP_ARTIFACTS`; that drift would fail closed. The PR's round-4 disposition
-  records both.
-  - **Filed 2026-09-27 as [`#827`](https://github.com/topij/agentic-dev-kit/issues/827)** on the
-    operator's word.
-  - **Severity:** L.
-- **`vcs.systemize_branch_pattern` is still date-only.** `post-merge-systemize.md`
-  applies `chore/systemize-{date}` itself, with no engine, so two same-day runs would
-  collide as triage did before #824. Not observed.
-  - **Routed 2026-09-27 as a comment on
-    [`#256`](https://github.com/topij/agentic-dev-kit/issues/256)**, the same date-only branch-pattern
-    class, on the operator's word.
-  - **Severity:** L.
+Engine mode: `engine-backed`.
 
-## 2026-09-26
+Filed [#835](https://github.com/topij/agentic-dev-kit/issues/835) from TRI-02, the `2026-09-27` entry `Panel lenses left writes outside their scratch namespace.`.
 
-- **Changing a renderer that also validates retained state broke every older state.**
-  #812 changed `render_sweep`, and `_validate_commit_updates` re-renders retained sweep
-  commits with the current renderer. So the 2026-09-25 `completed` state, committed by
-  the older engine, no longer validated, and the next triage refused to start. #813 fixed
-  it forward by accepting either rendering. #812's panels exercised only fresh sweeps.
-  None of them replayed a state an older engine had left.
-  - **Why it is parked:** it is one instance. If it recurs, a candidate rule is that a
-    change to a function that doubles as a validator for persisted state is tested
-    against a state the previous version produced.
-  - **Severity:** M. Triage was blocked until the fix merged, and nothing was lost.
+Filed [#836](https://github.com/topij/agentic-dev-kit/issues/836) from TRI-04, the `2026-09-27` entry `A write-time guard that restated a validator drifted from it twice in one PR.`.
+
+Filed [#837](https://github.com/topij/agentic-dev-kit/issues/837) from TRI-07, the `2026-09-26` entry `Changing a renderer that also validates retained state broke every older state.`.
+
+Filed [#838](https://github.com/topij/agentic-dev-kit/issues/838) from TRI-08, the `2026-09-24` entry `The first two fallback-panel rounds on #790 each found another unpinned fail-closed clause.`.
+
+Filed [#839](https://github.com/topij/agentic-dev-kit/issues/839) from TRI-09, the `2026-09-11` entry `Case-insensitive report paths overwrote a completed review report.`.
+
+Archived without filing: TRI-01, the `2026-09-27` entry `A second verification path dropped a property the first one enforced.`.
+
+Archived without filing: TRI-03, the `2026-09-27` entry `A resumed triage run cannot finish a verified merge read-back it did not complete.`.
+
+Archived without filing: TRI-05, the `2026-09-27` entry ``Two cleanup-contract gaps left open on #824, both only reachable through a custom `ForgeProvider`.``.
+
+Archived without filing: TRI-06, the `2026-09-27` entry `` `vcs.systemize_branch_pattern` is still date-only. ``.
+
+Approval commands: `approve TRI-02 TRI-04 TRI-07 TRI-08 TRI-09`, `archive TRI-01 TRI-03 TRI-05 TRI-06`. Approver: `topij`.
 
 ## 2026-09-26 — Backlog migrated by triage session 97117a88d33c4b79a6e3574420ba35a7
 
@@ -148,42 +102,7 @@ lagged (#808). A resume then verified #802 by its exact marker, with no duplicat
 `recover`'s `retire-terminal-invalid-state` (#801), on the operator's approval of the
 exact action digest. Its bytes are kept under `state/triage/`.
 
-## 2026-09-24
-
-- **The first two fallback-panel rounds on #790 each found another unpinned fail-closed
-  clause.** #790 added normative prose to `post-merge-systemize.md` and pinned part of it
-  in `_assert_post_merge_semantics`. The adversarial lens at `2b9dae8` and again at
-  `ae54d68` proved, by a surviving mutant, that another guarding clause was not pinned.
-  Only at `d873b68`, after every fail-closed clause in the section was pinned with an
-  inverting mutation, did a round find no unpinned clause.
-  - **Why it is parked:** it is one instance, and the point is whether it recurs. If it
-    does, a candidate rule is that a change adding normative workflow prose pins every
-    fail-closed clause in the first commit, not only the ones the author considers
-    central.
-  - **Not established:** whether the partial first pinning was an authoring slip or
-    something the panel doctrine could prompt.
-  - **Severity:** L. Each round cost a full panel, and no defect shipped.
-
 ## 2026-09-11
-
-- **Case-insensitive report paths overwrote a completed review report.** During
-  PR #733's final adversarial review on 2026-09-11, the reviewer wrote `REPORT.md`
-  while the launcher used `codex exec -o report.md` in the same scratch directory.
-  Those names aliased on the filesystem, so the launcher's final-summary write
-  replaced the full report. **L** — the complete reviewer-authored text remained
-  in a completed command in `events.jsonl`; shell-token and Python-AST literal
-  parsing recovered it without executing the command. The
-  [complete receipt](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5639699233)
-  preserves that recovery before merge. Proposed remedy: give the reviewer report
-  and launcher summary distinct basenames and check their destination identities
-  before launching. This was session review orchestration, not an established kit
-  engine defect. `gh search issues --repo topij/agentic-dev-kit` with queries
-  `"case-insensitive" "report"` and `"REPORT.md"`, including PRs, at
-  `fc46efa0570f866f19cccf11834f909d5f37cf69` on 2026-09-11 in
-  `/Users/topi/Coding/agentic-dev-kit` returned no match for the combined query and
-  PR matches for the filename query; no collision issue was identified by
-  that bounded search. Parked because the operator excludes tracker payloads from
-  this work. No tracker write or friction sweep is authorized by this entry.
 
 - **The review runtime stopped before delivering required adversarial coverage.**
   PR #733's [receipt at `88c5b044d5a42e33d2c4b0158be0957b4014678a`](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5633065607)
