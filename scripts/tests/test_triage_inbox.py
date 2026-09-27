@@ -11,7 +11,7 @@ from _repo_layout import engine_dir  # noqa: E402
 ENGINE_DIR = engine_dir(Path(__file__))
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
-from triage.finalize import _issue_link, _record_lines, render_sweep  # noqa: E402
+from triage.finalize import _entry_lead, _issue_link, _record_lines, render_sweep  # noqa: E402
 from triage.inbox import exact_sweep, parse  # noqa: E402
 from triage.model import TriageError  # noqa: E402
 
@@ -541,6 +541,20 @@ def test_a_wrapped_lead_is_collapsed_and_an_entry_without_one_names_only_its_dat
     lines = _record_lines(_render_sweep_state(archived=["TRI-01", "TRI-02"]), sources)
     assert "Archived without filing: TRI-01, the `2026-09-20` entry `A lead that wraps onto a second line.`." in lines
     assert "Archived without filing: TRI-02, the `2026-09-20` entry." in lines
+
+
+@pytest.mark.parametrize(
+    ("entry", "lead"),
+    [
+        (b"- **Do **not** panic.** body\n", "Do **not** panic."),
+        (b"- **Uses `**` literally.** body\n", "Uses `**` literally."),
+        (b"- **Ends at the first closer.** then **bold** later\n", "Ends at the first closer."),
+        (b"- **Opens **nested but never closes it.** body\n", ""),
+    ],
+)
+def test_a_lead_with_nested_bold_ends_at_its_own_closer(entry: bytes, lead: str) -> None:
+    raw = b"# Log\n\n## 2026-09-20\n\n" + entry
+    assert _entry_lead(parse(raw)[0].raw) == lead
 
 
 def test_a_hostile_lead_cannot_open_a_heading_or_close_its_span() -> None:

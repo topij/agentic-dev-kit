@@ -21,7 +21,6 @@ CANDIDATE_ID_RE = re.compile(r"TRI-(\d+)")
 GITHUB_REPOSITORY_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 GITHUB_HOST_RE = re.compile(r"[A-Za-z0-9.-]+")
 NUMERIC_IDENTIFIER_RE = re.compile(r"[1-9][0-9]*")
-ENTRY_LEAD_RE = re.compile(rb"- \*\*((?:(?!\n\n).)+?)\*\*", re.DOTALL)
 RENDERINGS = ("current", "pre-818", "pre-812")
 
 
@@ -52,9 +51,28 @@ def _issue_link(destination: Any, identifier: Any) -> str:
 
 def _entry_lead(raw: bytes) -> str:
     """The bold lead an inbox entry opens with (`- **Lead.** …`), whitespace-collapsed
-    because a long lead wraps across source lines; empty when there is none."""
-    match = ENTRY_LEAD_RE.match(raw)
-    return " ".join(match.group(1).decode("utf-8", "replace").split()) if match else ""
+    because a long lead wraps across source lines; empty when there is none.
+
+    The lead may itself contain bold (`- **Do **not** panic.** …`), so its end is the
+    first `**` that closes rather than opens: a `**` preceded by whitespace and
+    followed by a non-space opens a nested span, and each nested span's closer is
+    skipped. A `**` inside a code span is text, not a delimiter. The lead never runs
+    past a blank line."""
+    if not raw.startswith(b"- **"):
+        return ""
+    text = raw[4:].split(b"\n\n", 1)[0]
+    visible = _markdown_mask(text)
+    depth = 0
+    for match in re.finditer(rb"\*\*", visible):
+        start, end = match.span()
+        before, after = visible[start - 1:start], visible[end:end + 1]
+        if after and not after.isspace() and (not before or before.isspace()):
+            depth += 1
+        elif depth:
+            depth -= 1
+        else:
+            return " ".join(text[:start].decode("utf-8", "replace").split())
+    return ""
 
 
 def _source_entry(candidate_id: Any, sources: dict[str, Candidate]) -> str:
