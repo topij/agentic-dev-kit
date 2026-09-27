@@ -68,7 +68,7 @@
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
-      "sha256": "6aed103d93fe7f094b9c880e1a5fae132c8a1e8b53ba97220c9da6298b1bf5c4"
+      "sha256": "3783396b25777e45be1c9237eb94aeafc579047c00c6b7a65231472811a3ee7d"
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",

@@ -189,7 +189,7 @@ intent or held receipt.
 | Only one configured engine present | Hard-stop before artifact or external write. |
 | Interactive invocation with notification unavailable | Present exact payloads in-session and persist exact decisions; record degradation. |
 | Scheduled or unattended invocation with notification unavailable | Hard-stop before creating a new approval session; preserve an existing session as operator-held. |
-| Missing, malformed, or identity-mismatched live frozen snapshot/state outside `recover` | Hard-stop before tracker writes; name `recover` as the safe interactive transition; after an attempted or verified write, preserve operator-held evidence and never whole-sweep. Test-state remediation stays on the isolated `test` entry. |
+| Missing, malformed, or identity-mismatched live frozen snapshot/state outside `recover`, other than a `completed` state a session-starting entry retires across a configuration change (*Completed-state retirement*) | Hard-stop before tracker writes; name `recover` as the safe interactive transition; after an attempted or verified write, preserve operator-held evidence and never whole-sweep. Test-state remediation stays on the isolated `test` entry. |
 | Tracker or finalization write fails or is ambiguous | Read back before retry; unresolved state is operator-held. |
 | Test mode | Permit declared local artifacts and optional `[TEST]` notification only; prohibit tracker, source-document, and forge writes. |
 
