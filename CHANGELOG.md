@@ -42,6 +42,10 @@ starts.
 
 ---
 
+## #829 — A GitHub tracker create waits for the lagging issue list before judging it
+
+CHANGED — gate semantics: Refresh `lib/triage/providers.py`, the shared triage workflow, `kit-manifest.json` and `scripts/tests/test_triage_providers.py`. When a GitHub Issues create succeeds and returns an issue number that the post-create issue list does not show yet, `GitHubIssues.create` now re-reads the list after 1, 2, 4 and 8 seconds until it shows that issue, then judges the marker matches exactly as before. A create that used to be recorded `ambiguous` only because the list lagged is now `verified` / `created-and-read-back` without a resume; a list that never catches up is still `ambiguous`, and a caught-up list that also shows another issue with the same marker is still `ambiguous`. `GitHubIssues` takes two new keyword arguments, `sleep` and `create_listing_retry_delays`, both defaulted. Nothing to change; a run held this way before the upgrade still reconciles on resume.
+
 ## #828 — A resumed triage run completes a merge read-back it had already verified
 
 CHANGED — gate semantics: Refresh `lib/triage/engine.py`, the shared triage workflow, `kit-manifest.json` and `scripts/tests/test_finalize_triage.py`. A `finalize_triage.py` resume over a `forge-finalize` state whose last operation is a verified `merge-read-back` with no completion written — a run that stopped between persisting that read-back and writing completion — used to stay `operator-held` with no next step. It now revalidates the recorded read-back and writes the same `archive-sweep` completion the live path writes, sweep cleanup included, without a second merge read-back. If a run is held in that state, refresh these files and re-run the same resume.

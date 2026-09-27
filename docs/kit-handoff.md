@@ -370,14 +370,12 @@ review-request method.
 
 ### Triage engine hardening
 
-**Status:** same-day sweep branches and post-merge retirement shipped in #824. The two
-follow-ups it left were filed on 2026-09-27 as
-[#826](https://github.com/topij/agentic-dev-kit/issues/826) (merge-read-back resume gap)
-and [#827](https://github.com/topij/agentic-dev-kit/issues/827) (custom-provider
-cleanup contract), and the pull request that carries this line fixes both. **Owner:**
-[#808](https://github.com/topij/agentic-dev-kit/issues/808),
+**Status:** same-day sweep branches and post-merge retirement shipped in #824; its
+follow-ups #826 and #827 shipped in #828. The GitHub tracker's lagging post-create
+read-back ([#808](https://github.com/topij/agentic-dev-kit/issues/808)) is fixed by the
+pull request that carries this line. **Owner:**
 [#818](https://github.com/topij/agentic-dev-kit/issues/818),
 [#820](https://github.com/topij/agentic-dev-kit/issues/820).
 
-▶ Next: fix #808. Before the next sweep, delete the pre-#824 `chore/triage-*` branches
-by hand; the new engine retires only its own.
+▶ Next: before the next sweep, delete the pre-#824 `chore/triage-*` branches by hand;
+the new engine retires only its own. Then fix #818 or #820.

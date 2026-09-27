@@ -59,15 +59,104 @@ def test_search_paginates_full_issue_listing_and_filters_pull_requests() -> None
     assert "page=2" in runner.argv[1][-1]
 
 
+def adapter(runner: Runner, delays: tuple[float, ...] = (1.0,)) -> tuple[GitHubIssues, list[float]]:
+    """A GitHub adapter whose post-create listing retries record their delays
+    instead of sleeping."""
+    slept: list[float] = []
+    return GitHubIssues(runner, sleep=slept.append, create_listing_retry_delays=delays), slept
+
+
 def test_create_refuses_success_identifier_that_differs_from_readback() -> None:
     payload = {"title": "title", "body": "body\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
     runner = Runner([
         (0, {"number": 99}),
         (0, [{"number": 101, "body": payload["body"]}]),
         (0, issue(101, payload)),
+        (0, [{"number": 101, "body": payload["body"]}]),
+        (0, issue(101, payload)),
     ])
-    observed = GitHubIssues(runner).create(DESTINATION, payload)
+    tracker, slept = adapter(runner)
+    observed = tracker.create(DESTINATION, payload)
     assert observed.status == "ambiguous"
+    assert slept == [1.0]  # waited for #99 to appear; it never did
+
+
+def test_create_waits_for_a_lagging_listing_to_show_the_created_issue() -> None:
+    """#808: GitHub's issue list lags a fresh create. The listing is re-read
+    until it shows the returned issue, and only then judged."""
+    payload = {"title": "title", "body": "body\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
+    runner = Runner([
+        (0, {"number": 101}),
+        (0, []),
+        (0, [{"number": 101, "body": payload["body"]}]),
+        (0, issue(101, payload)),
+    ])
+    tracker, slept = adapter(runner, (1.0, 2.0))
+    observed = tracker.create(DESTINATION, payload)
+    assert observed.status == "verified"
+    assert observed.verified_route == "created-and-read-back"
+    assert observed.read_back["identifier"] == "101"
+    assert slept == [1.0]
+
+
+def test_create_listing_that_already_shows_the_issue_does_not_wait() -> None:
+    payload = {"title": "title", "body": "body\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
+    runner = Runner([
+        (0, {"number": 101}),
+        (0, [{"number": 101, "body": payload["body"]}]),
+        (0, issue(101, payload)),
+    ])
+    tracker, slept = adapter(runner, (1.0, 2.0))
+    assert tracker.create(DESTINATION, payload).status == "verified"
+    assert slept == []
+
+
+def test_create_listing_that_never_shows_the_issue_stays_ambiguous() -> None:
+    payload = {"title": "title", "body": "body\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
+    runner = Runner([(0, {"number": 101}), (0, []), (0, []), (0, [])])
+    tracker, slept = adapter(runner, (1.0, 2.0))
+    observed = tracker.create(DESTINATION, payload)
+    assert observed.status == "ambiguous"
+    assert observed.read_back == {"matches": []}
+    assert slept == [1.0, 2.0]
+    assert len(runner.argv) == 4  # the create and one listing per wait, bounded
+
+
+def test_create_whose_caught_up_listing_shows_a_duplicate_stays_ambiguous() -> None:
+    """A listing fresh enough to show the created issue also shows an earlier
+    issue carrying the same marker — for example one a failed-looking create
+    actually made — so the duplicate is not hidden behind the lag."""
+    payload = {"title": "title", "body": "body\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
+    runner = Runner([
+        (0, {"number": 101}),
+        (0, []),
+        (0, [{"number": 55, "body": payload["body"]}, {"number": 101, "body": payload["body"]}]),
+        (0, issue(55, payload)),
+        (0, issue(101, payload)),
+    ])
+    tracker, slept = adapter(runner)
+    observed = tracker.create(DESTINATION, payload)
+    assert observed.status == "ambiguous"
+    assert [item["identifier"] for item in observed.read_back["matches"]] == ["55", "101"]
+    assert slept == [1.0]
+
+
+@pytest.mark.parametrize("returned", [{}, {"number": True}, {"number": "101"}, {"number": 0}, None])
+def test_create_without_a_usable_returned_number_does_not_wait(returned: object) -> None:
+    payload = {"title": "title", "body": "body\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
+    runner = Runner([(0, returned if returned is not None else ""), (0, [])])
+    tracker, slept = adapter(runner)
+    assert tracker.create(DESTINATION, payload).status == "ambiguous"
+    assert slept == []
+    assert len(runner.argv) == 2
+
+
+def test_failed_create_does_not_wait_for_the_listing() -> None:
+    payload = {"title": "title", "body": "body\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
+    runner = Runner([(1, {"number": 101}), (0, [])])
+    tracker, slept = adapter(runner)
+    assert tracker.create(DESTINATION, payload).status == "failed"
+    assert slept == []
 
 
 def test_failed_response_can_verify_only_through_exact_independent_readback() -> None:

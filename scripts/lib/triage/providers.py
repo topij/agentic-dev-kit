@@ -6,6 +6,7 @@ import json
 import os
 import re
 import subprocess
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,8 +50,21 @@ def subprocess_runner(argv: list[str], cwd: Path | None = None) -> subprocess.Co
 class GitHubIssues:
     """GitHub Issues adapter. Tests inject a runner; live use invokes `gh api`."""
 
-    def __init__(self, runner: Runner = subprocess_runner) -> None:
+    # GitHub's issue list lags a fresh create (#808). After a successful
+    # create, the listing is re-read on this schedule, in seconds, until it
+    # shows the returned issue; uniqueness is then judged exactly as before.
+    CREATE_LISTING_RETRY_DELAYS = (1.0, 2.0, 4.0, 8.0)
+
+    def __init__(
+        self,
+        runner: Runner = subprocess_runner,
+        *,
+        sleep: Callable[[float], None] = time.sleep,
+        create_listing_retry_delays: tuple[float, ...] = CREATE_LISTING_RETRY_DELAYS,
+    ) -> None:
         self.runner = runner
+        self.sleep = sleep
+        self.create_listing_retry_delays = create_listing_retry_delays
 
     def _json(self, argv: list[str]) -> Any:
         result = self.runner(argv, None)
@@ -147,9 +161,26 @@ class GitHubIssues:
             response = {"raw": result.stdout}
         marker = next((line for line in payload["body"].splitlines() if "triage-payload:" in line), "")
         matches = self.search(destination, marker) if marker else []
+        response_identifier = response.get("number") if isinstance(response, dict) else None
+        if (
+            result.returncode == 0
+            and marker
+            and isinstance(response_identifier, int)
+            and not isinstance(response_identifier, bool)
+            and response_identifier > 0
+        ):
+            # Wait, bounded, for a listing that shows the issue this create
+            # returned (#808). Such a listing is at least as fresh as the
+            # create, so an earlier issue carrying the same marker shows in it
+            # too and still makes the result ambiguous below. A listing that
+            # never catches up leaves the result ambiguous, as before.
+            for delay in self.create_listing_retry_delays:
+                if any(item["identifier"] == str(response_identifier) for item in matches):
+                    break
+                self.sleep(delay)
+                matches = self.search(destination, marker)
         exact = [item for item in matches if item["payload_digest"] == digest(payload)]
         if len(exact) == 1 and len(matches) == 1:
-            response_identifier = response.get("number") if isinstance(response, dict) else None
             if result.returncode == 0 and response_identifier is not None and str(response_identifier) != exact[0]["identifier"]:
                 return ProviderObservation("ambiguous", response, {"matches": matches})
             if result.returncode != 0:
