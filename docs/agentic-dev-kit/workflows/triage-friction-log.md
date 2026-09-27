@@ -207,7 +207,12 @@ file is read back. The workflow never deletes a retained file. A crash after the
 and before the claim leaves the state path absent, which the next run treats as a fresh
 start. `resume` reports the completed receipt and `recover` refuses valid state, as
 before; neither retires. Retirement applies only to valid state: an invalid state,
-however terminal its recorded phase, stays on *Invalid-state recovery*.
+however terminal its recorded phase, stays on *Invalid-state recovery*. A configuration
+change made after the run completed does not make its state invalid for retirement: the
+session-starting entry accepts a `completed` state whose recorded config fingerprint
+differs from the current one, provided its two recorded fingerprints agree with each
+other. Every other validation still applies, and every other phase and entry stays bound
+to the current configuration.
 
 ### Gate-only input precedence
 

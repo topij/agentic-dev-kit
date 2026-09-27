@@ -336,7 +336,7 @@ def terminal_pr_watch_receipt(receipt: Any, *, head: str, url: str) -> bool:
     )
 
 
-def validate_state(value: Any, *, settings: Settings, mode: str) -> dict[str, Any]:
+def validate_state(value: Any, *, settings: Settings, mode: str, retiring: bool = False) -> dict[str, Any]:
     if (
         not isinstance(value, dict)
         or value.get("kind") != "triage-run-state"
@@ -372,7 +372,20 @@ def validate_state(value: Any, *, settings: Settings, mode: str) -> dict[str, An
     if identity["mode"] != mode or value.get("mode") != mode:
         raise TriageError("cross-mode state", outcome="operator-held")
     if identity["config_fingerprint"] != settings.fingerprint or value.get("config_fingerprint") != settings.fingerprint:
-        raise TriageError("configuration identity mismatch", outcome="operator-held")
+        # A completed run holds nothing pending, so a config change made after it
+        # finished must not stop a session-starting entry from retiring it (the
+        # retirement would otherwise block every later run of the mode). The run
+        # still has to agree with itself; every other phase and entry stays bound
+        # to the current configuration.
+        drifted_completed = (
+            retiring
+            and phase == "completed"
+            and isinstance(identity["config_fingerprint"], str)
+            and SHA256_RE.fullmatch(identity["config_fingerprint"]) is not None
+            and value.get("config_fingerprint") == identity["config_fingerprint"]
+        )
+        if not drifted_completed:
+            raise TriageError("configuration identity mismatch", outcome="operator-held")
     if identity.get("repository_identity") != repository_identity(settings):
         raise TriageError("repository identity mismatch", outcome="operator-held")
     if identity.get("friction_log") != str(settings.paths.friction_log.relative_to(settings.paths.repo)):
@@ -940,12 +953,15 @@ def _forge_predecessor_matches(
     return False
 
 
-def canonical_state(raw: bytes, *, settings: Settings, mode: str) -> dict[str, Any]:
+def canonical_state(raw: bytes, *, settings: Settings, mode: str, retiring: bool = False) -> dict[str, Any]:
+    """Parse and validate state bytes. `retiring` is for a session-starting entry
+    only: it lets a `completed` state written under an earlier configuration
+    validate so that it can be retired (see `validate_state`)."""
     try:
         value = loads_exact(raw)
     except CanonicalError as exc:
         raise TriageError(str(exc), outcome="operator-held") from exc
-    return validate_state(value, settings=settings, mode=mode)
+    return validate_state(value, settings=settings, mode=mode, retiring=retiring)
 
 
 def today_string() -> str:
