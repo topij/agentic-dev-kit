@@ -30,6 +30,7 @@ from triage.engine import (  # noqa: E402
     _frozen_candidates,
     _pr_result_fields,
     _sweep_cleanup,
+    _sweep_cleanup_kept,
     _validate_commit_updates,
     _verify_forge_read_back,
     run,
@@ -37,6 +38,7 @@ from triage.engine import (  # noqa: E402
 from triage.finalize import render_sweep, sweep_ids  # noqa: E402
 from triage.inbox import parse  # noqa: E402
 from triage.model import (  # noqa: E402
+    SWEEP_CLEANUP_ARTIFACTS,
     Paths,
     Settings,
     TriageError,
@@ -1054,3 +1056,102 @@ def test_sweep_cleanup_records_a_malformed_provider_answer_as_kept(tmp_path: Pat
     }
     # What the write accepts, every later read accepts too.
     validate_sweep_cleanup(result)
+
+
+@pytest.mark.parametrize("status", ["failed", "ambiguous", "unsettled"])
+def test_sweep_cleanup_records_a_non_verified_answer_as_kept(tmp_path: Path, status: str) -> None:
+    """#827: a well-formed record that says `removed` is believed only under a
+    `verified` status; any other answer keeps every artifact."""
+    settings, state, archive = _cleanup_inputs(repository(tmp_path), tmp_path / "isolated-finalize")
+    removed = {name: {"result": "removed", "reason": None} for name in SWEEP_CLEANUP_ARTIFACTS}
+    forge = FakeForge([ProviderObservation(status, None, removed)])
+    result = _sweep_cleanup(settings, forge, state, archive)
+    assert [call[0] for call in forge.calls] == ["sweep-cleanup"]
+    assert result == {
+        name: {"result": "kept", "reason": f"sweep-cleanup provider answered {status}"}
+        for name in SWEEP_CLEANUP_ARTIFACTS
+    }
+    validate_sweep_cleanup(result)
+
+
+def test_sweep_cleanup_fallback_follows_the_artifact_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#827: the `kept` fallback is built from `SWEEP_CLEANUP_ARTIFACTS`, so a
+    change to the set cannot leave the fallback failing its own validator."""
+    widened = (*SWEEP_CLEANUP_ARTIFACTS, "extra_artifact")
+    monkeypatch.setattr("triage.model.SWEEP_CLEANUP_ARTIFACTS", widened)
+    monkeypatch.setattr("triage.engine.SWEEP_CLEANUP_ARTIFACTS", widened)
+    fallback = _sweep_cleanup_kept("synthetic reason")
+    assert set(fallback) == set(widened)
+    validate_sweep_cleanup(fallback)
+
+
+def test_resume_completes_a_verified_merge_read_back_whose_completion_was_never_written(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#826: a run that dies after persisting its verified `merge-read-back`
+    but before writing completion leaves every finalization operation verified
+    in `forge-finalize`. A resume completes it from the recorded read-back,
+    without a second merge read-back, and writes the same completion the live
+    path would have."""
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    draft_request, candidate_id = proposal_request(root)
+    run("new", context="interactive", request=draft_request, start=root)
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    presented = loads_exact(state_path.read_bytes())
+    request, context = approval(presented, f"archive {candidate_id}")
+    worktree = tmp_path / "isolated-finalize"
+    shutil.copytree(root, worktree)
+    shutil.rmtree(worktree / "reports", ignore_errors=True)
+    branch = finalize_branch(presented)
+    base = git(root, "rev-parse", "HEAD")
+    tree = "1" * 40
+    commit = "2" * 40
+    pr_url = "https://github.com/topij/agentic-dev-kit/pull/999"
+    paths = ["docs/kit-friction-log-archive.md", "docs/kit-friction-log.md"]
+    forge = FakeForge([
+        verified({"repository": "topij/agentic-dev-kit", "base": base, "branch": branch, "worktree": str(worktree), "head": base, "tree": "0" * 40}),
+        verified({"repository": "topij/agentic-dev-kit", "base": base, "branch": branch, "worktree": str(worktree), "commit": commit, "tree": tree, "subject": "docs(triage): graduate friction-log entries", "paths": paths}),
+        verified({"repository": "topij/agentic-dev-kit", "base": base, "branch": branch, "worktree": str(worktree), "remote_head": commit, "tree": tree}),
+        verified({"url": pr_url, "baseRefName": "main", "headRefName": branch, "headRefOid": commit, "isDraft": False, "files": paths}),
+        verified({"url": pr_url, "baseRefName": "main", "headRefName": branch, "headRefOid": commit, "isDraft": False, "files": paths, "reviewed_head": commit, "receipt": native_watch_receipt(pr_url, commit)}),
+    ])
+    swept = run(
+        "resume", context="interactive",
+        request={**request, "finalize": True, "worktree": str(worktree)},
+        start=root, approval_context=context, forge=forge,
+    )
+    assert swept["outcome"] == "operator-held"
+
+    cleanup_result = {name: {"result": "removed", "reason": None} for name in SWEEP_CLEANUP_ARTIFACTS}
+    live = run("resume", context="interactive", request={"finalize": True}, start=root, forge=FakeForge([
+        verified({"url": pr_url, "baseRefName": "main", "headRefName": branch, "headRefOid": commit, "merged": True}),
+        ProviderObservation("verified", None, cleanup_result),
+    ]))
+    assert live["outcome"] == "degraded-success"
+    terminal = loads_exact(state_path.read_bytes())
+
+    # What `_forge_attempt` persisted before the process died: the verified
+    # merge read-back in `forge-finalize`, with no derived summary and no
+    # completion. It is a valid retained state in its own right.
+    interrupted = deepcopy(terminal)
+    interrupted["phase"] = "forge-finalize"
+    del interrupted["archive_sweep"]
+    del interrupted["completion"]
+    assert [(op["kind"], op["status"]) for op in interrupted["finalization_operations"]][-1] == ("merge-read-back", "verified")
+    canonical_state(dumps(interrupted), settings=load_settings(root), mode="live")
+    state_path.write_bytes(dumps(interrupted))
+
+    resume_forge = FakeForge([ProviderObservation("verified", None, cleanup_result)])
+    resumed = run("resume", context="interactive", request={"finalize": True}, start=root, forge=resume_forge)
+    assert resumed["outcome"] == "degraded-success"
+    assert resumed["pull_request_url"] == pr_url
+    assert resumed["reviewed_head"] == commit
+    assert "merge-read-back" not in [call[0] for call in resume_forge.calls]
+    assert [call[0] for call in resume_forge.calls][-1] == "sweep-cleanup"
+    completed = loads_exact(state_path.read_bytes())
+    assert completed["phase"] == "completed"
+    assert completed["archive_sweep"] == terminal["archive_sweep"]
+    assert completed["completion"] == terminal["completion"]
+    canonical_state(dumps(completed), settings=load_settings(root), mode="live")

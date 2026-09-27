@@ -26,6 +26,7 @@ from .model import (
     CAPABILITIES,
     OID_RE,
     SHA256_RE,
+    SWEEP_CLEANUP_ARTIFACTS,
     Settings,
     TriageError,
     canonical_state,
@@ -1370,7 +1371,7 @@ def _archive_summary(state: dict[str, Any], settings: Settings) -> dict[str, Any
 
 
 def _sweep_cleanup_kept(reason: str) -> dict[str, Any]:
-    return {"worktree": {"result": "kept", "reason": reason}, "local_branch": {"result": "kept", "reason": reason}, "remote_branch": {"result": "kept", "reason": reason}}
+    return {name: {"result": "kept", "reason": reason} for name in SWEEP_CLEANUP_ARTIFACTS}
 
 
 def _sweep_cleanup(
@@ -1402,6 +1403,10 @@ def _sweep_cleanup(
         observed = forge.perform("sweep-cleanup", intent)
     except Exception as exc:  # noqa: BLE001 - cleanup never un-completes a verified merge
         return _sweep_cleanup_kept(f"sweep-cleanup raised: {exc}")
+    # Only a verified answer is evidence of what cleanup did (#827): a record
+    # that says `removed` under any other status is not believed.
+    if observed.status != "verified":
+        return _sweep_cleanup_kept(f"sweep-cleanup provider answered {observed.status}")
     # The completion validator is the one definition of a well-formed record,
     # so the write accepts exactly what every later read will: anything it
     # refuses is recorded as `kept` rather than written through.
@@ -1489,6 +1494,34 @@ def _forge_destination(remote: str) -> tuple[str, str]:
     return host.lower(), repository
 
 
+def _complete_archive_sweep(
+    settings: Settings,
+    store: ArtifactStore,
+    state: dict[str, Any],
+    state_digest: str,
+    forge: ForgeProvider | None,
+    merge_read_back: dict[str, Any],
+) -> tuple[dict[str, Any], str, str]:
+    """Write the archive-sweep completion from a verified merge read-back that
+    is already the last persisted finalization operation in `state`."""
+    archive = _archive_summary(state, settings)
+    validate_reviewed_head({"archive_sweep": archive}, merge_read_back)
+    outcome = (
+        "degraded-success"
+        if state.get("notification_thread_reference") is None
+        and state.get("notification_operations") == []
+        else "successful-completion"
+    )
+    receipt_core = {"route": "archive-sweep", "outcome": outcome, "run_identity": state["run_identity"], "frozen_inbox_digest": state["frozen_inbox_digest"], "tracker_operations": state["operations"], "finalization_operations": state["finalization_operations"], "archive_sweep": archive, "merge_read_back": merge_read_back}
+    # Retirement is best-effort and sits outside receipt_core (#807): its
+    # result can never change the completed-receipt digest, and a state
+    # completed before this field existed still validates without it.
+    sweep_cleanup = _sweep_cleanup(settings, forge, state, archive)
+    completed = {**state, "phase": "completed", "archive_sweep": archive, "completion": {"route": "archive-sweep", "outcome": outcome, "receipt_core": receipt_core, "completed_receipt_digest": digest(receipt_core), "sweep_cleanup": sweep_cleanup}}
+    state_digest = atomic_replace(store.state_path, dumps(completed), expected_digest=state_digest)
+    return completed, state_digest, outcome
+
+
 def _advance_finalize(
     settings: Settings,
     store: ArtifactStore,
@@ -1545,6 +1578,12 @@ def _advance_finalize(
     else:
         next_kind = order[len(operations)] if len(operations) < len(order) else None
     if next_kind is None:
+        if operations[-1].get("kind") == "merge-read-back" and operations[-1].get("status") == "verified":
+            # A run that died between persisting its verified merge read-back
+            # and writing completion (#826). `_validate_forge_prefix` above has
+            # already re-verified that read-back against its intent, so the
+            # recorded observation completes the run; no second read-back.
+            return _complete_archive_sweep(settings, store, state, state_digest, forge, operations[-1]["read_back"])
         return state, state_digest, "operator-held"
     retry_intent = (
         deepcopy(operations[-1]["intent"])
@@ -1630,22 +1669,7 @@ def _advance_finalize(
         return state, state_digest, "operator-held"
     _verify_forge_read_back(next_kind, intent, observed.read_back)
     if next_kind == "merge-read-back":
-        archive = _archive_summary(state, settings)
-        validate_reviewed_head({"archive_sweep": archive}, observed.read_back)
-        outcome = (
-            "degraded-success"
-            if state.get("notification_thread_reference") is None
-            and state.get("notification_operations") == []
-            else "successful-completion"
-        )
-        receipt_core = {"route": "archive-sweep", "outcome": outcome, "run_identity": state["run_identity"], "frozen_inbox_digest": state["frozen_inbox_digest"], "tracker_operations": state["operations"], "finalization_operations": state["finalization_operations"], "archive_sweep": archive, "merge_read_back": observed.read_back}
-        # Retirement is best-effort and sits outside receipt_core (#807): its
-        # result can never change the completed-receipt digest, and a state
-        # completed before this field existed still validates without it.
-        sweep_cleanup = _sweep_cleanup(settings, forge, state, archive)
-        completed = {**state, "phase": "completed", "archive_sweep": archive, "completion": {"route": "archive-sweep", "outcome": outcome, "receipt_core": receipt_core, "completed_receipt_digest": digest(receipt_core), "sweep_cleanup": sweep_cleanup}}
-        state_digest = atomic_replace(store.state_path, dumps(completed), expected_digest=state_digest)
-        return completed, state_digest, outcome
+        return _complete_archive_sweep(settings, store, state, state_digest, forge, observed.read_back)
     if next_kind == "pr-watch":
         read_back = observed.read_back
         if read_back.get("headRefOid") != read_back.get("reviewed_head") or not read_back.get("receipt"):

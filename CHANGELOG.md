@@ -42,6 +42,12 @@ starts.
 
 ---
 
+## #828 — A resumed triage run completes a merge read-back it had already verified
+
+CHANGED — gate semantics: Refresh `lib/triage/engine.py`, the shared triage workflow, `kit-manifest.json` and `scripts/tests/test_finalize_triage.py`. A `finalize_triage.py` resume over a `forge-finalize` state whose last operation is a verified `merge-read-back` with no completion written — a run that stopped between persisting that read-back and writing completion — used to stay `operator-held` with no next step. It now revalidates the recorded read-back and writes the same `archive-sweep` completion the live path writes, sweep cleanup included, without a second merge read-back. If a run is held in that state, refresh these files and re-run the same resume.
+
+CHANGED — report shape: a custom `ForgeProvider`'s `sweep-cleanup` answer is recorded only when its status is `verified`. Any other status records all three artifacts as `kept` with the reason `sweep-cleanup provider answered <status>`, whatever the record says. A provider whose cleanup record should be believed must answer `verified`.
+
 ## #824 — Triage sweep branches bind to their session and retire after merge
 
 CHANGED — config key: Refresh `lib/triage/engine.py`, `lib/triage/model.py`, `lib/triage/providers.py`, `lib/kitconfig.py`, the shared triage workflow, `kit-manifest.json`, `scripts/tests/fixtures/init-config.json`, `scripts/tests/test_finalize_triage.py`, `scripts/tests/test_triage_config.py`, `scripts/tests/test_triage_engine.py` and `scripts/tests/test_triage_providers.py`. `vcs.triage_branch_pattern` accepts a new optional `{session}` placeholder, the first 8 characters of the run's `run_identity.session`, and its default is now `chore/triage-{date}-{session}`. `{date}` must appear exactly once, `{session}` at most once and never directly against `{date}`; a pattern breaking any of these is refused at load. A config pinning `chore/triage-{date}` keeps working, and two triage runs finalizing on one day still collide on it: change that line in your `config/dev-model.yaml` to `chore/triage-{date}-{session}` to stop that. A state an older engine wrote under the previous default still validates; for a custom pattern the engine infers the session-less form by dropping `{session}` and the separator facing `{date}`.

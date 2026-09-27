@@ -1155,7 +1155,10 @@ operator-held; an authoritative matching `merged: false` read-back is retained a
 unsettled attempt and permits a later read-back attempt without issuing a merge or
 discarding the observation; never mark an unreviewed replacement head complete. Only then
 retire this sweep's own artifacts and write completion to the report and state; the next
-session-starting run retires that state; the completed report remains durable.
+session-starting run retires that state; the completed report remains durable. A resume
+that finds a verified `merge-read-back` already persisted as the last operation with no
+completion written — a run that stopped between those two writes — revalidates that
+recorded read-back and completes from it, without issuing another.
 
 Before writing completion, retire the sweep's own worktree, local branch, and remote
 branch — each guarded and idempotent. Each result is `removed` or `absent` with no reason,
@@ -1164,7 +1167,9 @@ or `kept` with a non-empty reason: the worktree recorded in the branch-create in
 the caller's own checkout is never removed); the local branch only with a safe delete (`git branch -d`, never
 `-D`); the remote branch only when its head still equals the exact commit this run pushed
 (a compare-and-delete, so a later push by someone else is never deleted). A cleanup
-failure never withholds completion: record what each guard found and complete anyway. The
+failure never withholds completion: record what each guard found and complete anyway. A
+provider answer whose status is not `verified` records every artifact `kept`, whatever
+its record says. The
 results live in `completion.sweep_cleanup`, outside `receipt_core`, so a completed state
 written before this field existed still validates without it, and the field is absent
 whenever it was never computed. Re-running cleanup after a partial prior attempt reads an

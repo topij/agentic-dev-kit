@@ -370,14 +370,14 @@ review-request method.
 
 ### Triage engine hardening
 
-**Status:** same-day sweep branches and post-merge retirement shipped in #824. **Owner:**
+**Status:** same-day sweep branches and post-merge retirement shipped in #824. The two
+follow-ups it left were filed on 2026-09-27 as
+[#826](https://github.com/topij/agentic-dev-kit/issues/826) (merge-read-back resume gap)
+and [#827](https://github.com/topij/agentic-dev-kit/issues/827) (custom-provider
+cleanup contract), and the pull request that carries this line fixes both. **Owner:**
 [#808](https://github.com/topij/agentic-dev-kit/issues/808),
 [#818](https://github.com/topij/agentic-dev-kit/issues/818),
-[#820](https://github.com/topij/agentic-dev-kit/issues/820). The merge-read-back resume
-gap and the custom-provider cleanup-contract gaps are parked, unfiled, in the friction
-log's 2026-09-27 section.
+[#820](https://github.com/topij/agentic-dev-kit/issues/820).
 
-▶ Next: file or discard the parked 2026-09-27 triage follow-ups (the
-merge-read-back resume gap is issue-shaped), then fix #808. Before the next sweep,
-delete the pre-#824 `chore/triage-*` branches by hand; the new engine retires only its
-own.
+▶ Next: fix #808. Before the next sweep, delete the pre-#824 `chore/triage-*` branches
+by hand; the new engine retires only its own.
