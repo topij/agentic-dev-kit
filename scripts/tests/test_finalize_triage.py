@@ -209,9 +209,9 @@ def test_archive_only_finalize_retains_exact_new_block_and_waits_for_merge(
     ]
     branch_intent = next(call[1] for call in forge.calls if call[0] == "branch-create")
     assert branch_intent["repository"] == "topij/agentic-dev-kit"
-    assert b"Approved archive" not in (worktree / "docs/kit-friction-log.md").read_bytes()
+    assert b"- **Approved archive.**" not in (worktree / "docs/kit-friction-log.md").read_bytes()
     assert b"Window addition" in (worktree / "docs/kit-friction-log.md").read_bytes()
-    assert b"Approved archive" in (worktree / "docs/kit-friction-log-archive.md").read_bytes()
+    assert b"- **Approved archive.**" in (worktree / "docs/kit-friction-log-archive.md").read_bytes()
     assert b"Filed 2026-01-02 as #17" in (
         worktree / "docs/kit-friction-log-archive.md"
     ).read_bytes()
@@ -456,11 +456,11 @@ def test_commit_authority_failure_leaves_clean_worktree_and_fresh_retry_can_cont
     )
     assert retried["outcome"] == "operator-held"
     assert loads_exact(state_path.read_bytes())["phase"] == "archive-sweep"
-    assert b"Approved archive" not in (worktree / "docs/kit-friction-log.md").read_bytes()
-    assert b"Approved archive" in (worktree / "docs/kit-friction-log-archive.md").read_bytes()
+    assert b"- **Approved archive.**" not in (worktree / "docs/kit-friction-log.md").read_bytes()
+    assert b"- **Approved archive.**" in (worktree / "docs/kit-friction-log-archive.md").read_bytes()
 
 
-@pytest.mark.parametrize("mutation", ["derived-content", "foreign-path", "legacy-rendering"])
+@pytest.mark.parametrize("mutation", ["derived-content", "foreign-path", "legacy-rendering", "pre-818-rendering"])
 def test_fresh_process_refuses_mutated_retained_commit_updates_before_rebind(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
 ) -> None:
@@ -504,15 +504,17 @@ def test_fresh_process_refuses_mutated_retained_commit_updates_before_rebind(
         intent["updates"][0]["content"] = encode_bytes(raw)
         intent["updates"][0]["content_digest"] = digest_bytes(raw)
         expected_detail = "commit updates do not match the approved sweep"
-    elif mutation == "legacy-rendering":
-        # A commit an engine before #812 rendered (bare marker, no record) must
+    elif mutation in {"legacy-rendering", "pre-818-rendering"}:
+        # A commit an engine before #812 rendered (bare marker, no record), or one
+        # before #818 rendered (no source entries, archive heading repeated), must
         # still validate, so the restart gets past the content check instead of
         # holding on it.
         updates = {update["path"]: update for update in intent["updates"]}
         inbox, archive = updates["docs/kit-friction-log.md"], updates["docs/kit-friction-log-archive.md"]
         legacy = render_sweep(
             decode_bytes(inbox["previous_content"]), decode_bytes(archive["previous_content"]),
-            _frozen_candidates(state), state, intent["migration_marker"].encode(), legacy=True,
+            _frozen_candidates(state), state, intent["migration_marker"].encode(),
+            rendering="pre-812" if mutation == "legacy-rendering" else "pre-818",
         )
         assert legacy != (decode_bytes(inbox["content"]), decode_bytes(archive["content"]))
         for update, raw in zip((inbox, archive), legacy, strict=True):

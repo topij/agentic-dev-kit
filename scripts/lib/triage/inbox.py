@@ -172,10 +172,32 @@ def exact_sweep(
 ) -> tuple[bytes, bytes]:
     """Remove the swept blocks from `current` and return (active, archived).
 
+    `archived` is every swept block under its own `## <date>` heading, blocks kept
+    byte for byte. That is the pre-#818 archive text; the current renderer merges
+    the same groups into the archive with `append_archive_groups` instead.
+
     `legacy=True` reproduces the pre-#812 bytes exactly: a bare graduation marker
     counts as an empty section, and a removed trailing section keeps its separating
     blank line. It exists only so a sweep an older engine already committed still
     validates; nothing renders a new sweep that way.
+    """
+    active, groups = sweep_groups(current, frozen, sweep_ids, legacy=legacy)
+    archived = bytearray()
+    for title, blocks in groups:
+        archived.extend(f"## {title}\n\n".encode())
+        for block in blocks:
+            archived.extend(block)
+            if not archived.endswith(b"\n"):
+                archived.extend(b"\n")
+    return active, bytes(archived)
+
+
+def sweep_groups(
+    current: bytes, frozen: list[Candidate], sweep_ids: set[str], *, legacy: bool = False
+) -> tuple[bytes, list[tuple[str, list[bytes]]]]:
+    """Remove the swept blocks from `current`; return (active, [(date title, blocks)]).
+
+    Groups are in first-swept order and each block is its exact frozen bytes.
     """
     selected = [candidate for candidate in frozen if candidate.candidate_id in sweep_ids]
     unknown = sweep_ids - {candidate.candidate_id for candidate in frozen}
@@ -234,11 +256,34 @@ def exact_sweep(
                 active += b"\n"
         else:
             active = active[:start] + active[end:]
-    archived = bytearray()
-    for title, blocks in archived_by_title.items():
-        archived.extend(f"## {title}\n\n".encode())
+    return active, list(archived_by_title.items())
+
+
+def append_archive_groups(archive: bytes, groups: list[tuple[str, list[bytes]]]) -> bytes:
+    """Add swept groups to `archive` the way the current renderer does (#818).
+
+    A group whose `## <date>` heading already exists in the archive joins the last
+    section carrying that exact heading, so each date appears once; any other group
+    is appended as a new section at the end. Blank-line separation is normalized
+    around what is added, and nothing added leaves a trailing blank line at EOF.
+    Existing archive text is only inserted into; the blank lines at the insertion
+    point are the one thing normalized.
+    """
+    for title, blocks in groups:
+        body = bytearray()
         for block in blocks:
-            archived.extend(block)
-            if not archived.endswith(b"\n"):
-                archived.extend(b"\n")
-    return active, bytes(archived)
+            body.extend(block)
+            if not body.endswith(b"\n"):
+                body.extend(b"\n")
+        added = bytes(body).rstrip(b"\n") + b"\n"
+        sections = list(SECTION_RE.finditer(_markdown_mask(archive)))
+        existing = [index for index, section in enumerate(sections) if _title(section.group("title")) == title]
+        if existing:
+            index = existing[-1]
+            end = sections[index + 1].start() if index + 1 < len(sections) else len(archive)
+            head = archive[:end].rstrip(b"\n") + b"\n\n" + added
+            archive = head + (b"\n" + archive[end:] if end < len(archive) else b"")
+        else:
+            separator = b"" if not archive or archive.endswith(b"\n\n") else (b"\n" if archive.endswith(b"\n") else b"\n\n")
+            archive = archive + separator + f"## {title}\n\n".encode() + added
+    return archive
