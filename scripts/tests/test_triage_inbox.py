@@ -502,6 +502,25 @@ def test_a_same_date_group_joins_an_earlier_section_and_keeps_the_next_heading_a
     )
 
 
+def test_a_same_date_group_joins_the_last_of_several_sections_with_that_heading() -> None:
+    # The archive may already repeat a date heading (older sweeps did); the join
+    # goes to the newest copy, and the older one is left exactly as it was.
+    raw = b"# Log\n\n## 2026-09-24\n\n- **Swept.** body\n"
+    archive = (
+        b"# Archive\n\n## 2026-09-24\n\n- **Oldest.** body\n\n"
+        b"## 2026-09-10\n\n- **Between.** body\n\n"
+        b"## 2026-09-24\n\n- **Newer.** body\n\n"
+        b"## 2026-09-25\n\n- **Last.** body\n"
+    )
+    _active, rendered = render_sweep(raw, archive, parse(raw), _render_sweep_state(archived=["TRI-01"]), _818_MARKER)
+    assert rendered == (
+        b"# Archive\n\n## 2026-09-24\n\n- **Oldest.** body\n\n"
+        b"## 2026-09-10\n\n- **Between.** body\n\n"
+        b"## 2026-09-24\n\n- **Newer.** body\n\n- **Swept.** body\n\n"
+        b"## 2026-09-25\n\n- **Last.** body\n"
+    )
+
+
 def test_a_fenced_date_heading_in_the_archive_is_not_a_section_to_join() -> None:
     raw = b"# Log\n\n## 2026-09-20\n\n- **Swept.** body\n"
     archive = b"# Archive\n\n```\n## 2026-09-20\n```\n"
