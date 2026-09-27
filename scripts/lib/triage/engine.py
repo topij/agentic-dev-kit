@@ -19,7 +19,7 @@ from .canonical import (
     encode_bytes,
     loads_exact,
 )
-from .finalize import render_sweep, sweep_ids, validate_reviewed_head
+from .finalize import RENDERINGS, render_sweep, sweep_ids, validate_reviewed_head
 from .gate import GateLease, acquire, validate_record
 from .inbox import Candidate, _inline_literal, parse, snapshot_content
 from .model import (
@@ -1273,13 +1273,14 @@ def _validate_commit_updates(
         raise TriageError("commit migration marker is not bound to its branch", outcome="operator-held")
     marker = expected_marker.encode()
     committed = (decoded[inbox_rel][1], decoded[archive_rel][1])
-    # A sweep committed before #812 was rendered without the marker record, so a
-    # state it left behind (completed, or mid-finalization across an upgrade) must
-    # still validate. Both renderings are deterministic functions of the same
-    # approved state and prior bytes; a commit matching neither is rejected.
+    # A sweep an older engine committed — before #812 without the marker record,
+    # before #818 without source entries and with a separate same-date archive
+    # section — left states (completed, or mid-finalization across an upgrade) that
+    # must still validate. Every rendering is a deterministic function of the same
+    # approved state and prior bytes; a commit matching none of them is rejected.
     renderings = (
-        render_sweep(decoded[inbox_rel][0], decoded[archive_rel][0], _frozen_candidates(state), state, marker, legacy=legacy)
-        for legacy in (False, True)
+        render_sweep(decoded[inbox_rel][0], decoded[archive_rel][0], _frozen_candidates(state), state, marker, rendering=rendering)
+        for rendering in RENDERINGS
     )
     if not any(committed == rendered for rendered in renderings):
         raise TriageError("commit updates do not match the approved sweep", outcome="operator-held")

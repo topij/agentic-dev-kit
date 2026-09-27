@@ -306,8 +306,8 @@ def test_render_sweep_writes_a_record_block_under_the_marker() -> None:
     marker = "## 2026-09-26 — Backlog migrated by triage session abc123\n\n".encode()
     active, archive = render_sweep(raw, b"# Archive\n", candidates, state, marker)
     assert b"Engine mode: `engine-backed`." in active
-    assert b"Filed: [#793](https://github.com/topij/agentic-dev-kit/issues/793)." in active
-    assert f"Archived without filing: {archived_id}.".encode() in active
+    assert f"Filed [#793](https://github.com/topij/agentic-dev-kit/issues/793) from {filed_id}, the `2026-09-20` entry `Filed one.`.".encode() in active
+    assert f"Archived without filing: {archived_id}, the `2026-09-20` entry `Archived one.`.".encode() in active
     assert f"Approval command: `approve {filed_id}`. Approver: `topi`.".encode() in active
     # Marker was inserted at absolute EOF (the sole section emptied and was
     # removed), so the record's own trailing blank line must not survive either.
@@ -391,9 +391,9 @@ def test_render_sweep_second_sweep_same_day_keeps_the_first_markers_record() -> 
     active_b, archive_b = render_sweep(active_a, archive_a, candidates_b, state_b, marker_b)
 
     assert b"session AAA" in active_b
-    assert b"Archived without filing: TRI-01." in active_b
+    assert b"Archived without filing: TRI-01, the `2026-09-20` entry `First.`." in active_b
     assert b"session BBB" in active_b
-    assert b"Filed: [#900](https://github.com/topij/agentic-dev-kit/issues/900)." in active_b
+    assert b"Filed [#900](https://github.com/topij/agentic-dev-kit/issues/900) from TRI-01, the `2026-09-10` entry `Older.`." in active_b
     # The second marker sits above the first: newest at the top, per the
     # friction log's own "appended at the top" convention.
     assert active_b.index(b"session BBB") < active_b.index(b"session AAA")
@@ -409,7 +409,7 @@ def test_render_sweep_adds_a_blank_line_before_the_appended_archive_heading() ->
 
 
 def test_render_sweep_legacy_reproduces_the_pre_812_bytes() -> None:
-    """`legacy=True` exists so a sweep an engine before #812 committed still
+    """`rendering="pre-812"` exists so a sweep an engine before #812 committed still
     validates. These bytes are what that engine rendered for this input: the older
     bare marker deleted as empty, the new marker bare, and no blank line before the
     appended archive heading."""
@@ -420,8 +420,114 @@ def test_render_sweep_legacy_reproduces_the_pre_812_bytes() -> None:
     candidates = parse(raw)
     state = _render_sweep_state(archived=[candidates[0].candidate_id], approval=("archive TRI-01", "topi"))
     marker = "## 2026-09-26 — Backlog migrated by triage session new\n\n".encode()
-    active, archive = render_sweep(raw, b"# Archive\nprior", candidates, state, marker, legacy=True)
+    active, archive = render_sweep(raw, b"# Archive\nprior", candidates, state, marker, rendering="pre-812")
     assert active == "# Log\n\n## 2026-09-26 — Backlog migrated by triage session new\n\n".encode()
     assert archive == b"# Archive\nprior\n## 2026-09-10\n\n- **Swept.** body\n"
     current_active, current_archive = render_sweep(raw, b"# Archive\nprior", candidates, state, marker)
     assert current_active != active and current_archive != archive
+
+
+# #818: an inbox and archive where the old renderer shows all three defects — the
+# record does not name its sources, the archive already has a `## 2026-09-20`
+# section, and the swept block's trailing separator lands at the archive's EOF.
+_818_INBOX = (
+    b"# Log\n\n## 2026-09-20\n\n- **Filed one.** body\n\n- **Archived one.** body\n\n- **Kept.** stays\n\n"
+    b"## 2026-09-10\n\n- **Older.** body\n"
+)
+_818_ARCHIVE = b"# Archive\n\n## 2026-09-20\n\n- **Earlier.** body\n"
+_818_MARKER = "## 2026-09-26 — Backlog migrated by triage session abc123\n\n".encode()
+_818_RECORD_HEAD = "# Log\n\n## 2026-09-26 — Backlog migrated by triage session abc123\n\nEngine mode: `engine-backed`.\n\n"
+
+# Exactly what the engine at 9968905 (after #812, before #818) rendered for these
+# inputs — captured by running that commit's `render_sweep`, not derived from this
+# one — for its two possible single-command approvals.
+_PRE_818_BYTES = {
+    "archive TRI-02": (
+        (_818_RECORD_HEAD + "Archived without filing: TRI-02.\n\nApproval command: `archive TRI-02`. Approver: `topi`.\n\n"
+         "## 2026-09-20\n\n- **Filed one.** body\n\n- **Kept.** stays\n\n## 2026-09-10\n\n- **Older.** body\n").encode(),
+        b"# Archive\n\n## 2026-09-20\n\n- **Earlier.** body\n\n## 2026-09-20\n\n- **Archived one.** body\n\n",
+    ),
+    "approve TRI-01": (
+        (_818_RECORD_HEAD + "Filed: [#793](https://github.com/topij/agentic-dev-kit/issues/793).\n\n"
+         "Approval command: `approve TRI-01`. Approver: `topi`.\n\n"
+         "## 2026-09-20\n\n- **Archived one.** body\n\n- **Kept.** stays\n\n## 2026-09-10\n\n- **Older.** body\n").encode(),
+        b"# Archive\n\n## 2026-09-20\n\n- **Earlier.** body\n\n## 2026-09-20\n\n- **Filed one.** body\n\n",
+    ),
+}
+
+
+def _818_state(command: str) -> dict:
+    if command == "archive TRI-02":
+        return _render_sweep_state(archived=["TRI-02"], approval=(command, "topi"))
+    return _render_sweep_state(filed=[("TRI-01", "793")], approval=(command, "topi"))
+
+
+@pytest.mark.parametrize("command", sorted(_PRE_818_BYTES))
+def test_pre_818_rendering_reproduces_what_the_older_engine_committed(command: str) -> None:
+    candidates = parse(_818_INBOX)
+    state = _818_state(command)
+    rendered = render_sweep(_818_INBOX, _818_ARCHIVE, candidates, state, _818_MARKER, rendering="pre-818")
+    assert rendered == _PRE_818_BYTES[command]
+    assert render_sweep(_818_INBOX, _818_ARCHIVE, candidates, state, _818_MARKER) != rendered
+
+
+def test_current_rendering_fixes_all_three_818_defects() -> None:
+    candidates = parse(_818_INBOX)
+    state = _render_sweep_state(filed=[("TRI-01", "793")], archived=["TRI-02", "TRI-04"], approval=("approve TRI-01\narchive TRI-02 TRI-04", "topi"))
+    active, archive = render_sweep(_818_INBOX, _818_ARCHIVE, candidates, state, _818_MARKER)
+    assert active == (
+        _818_RECORD_HEAD
+        + "Filed [#793](https://github.com/topij/agentic-dev-kit/issues/793) from TRI-01, the `2026-09-20` entry `Filed one.`.\n\n"
+        + "Archived without filing: TRI-02, the `2026-09-20` entry `Archived one.`.\n\n"
+        + "Archived without filing: TRI-04, the `2026-09-10` entry `Older.`.\n\n"
+        + "Approval commands: `approve TRI-01`, `archive TRI-02 TRI-04`. Approver: `topi`.\n\n"
+        + "## 2026-09-20\n\n- **Kept.** stays\n"
+    ).encode()
+    # The swept 2026-09-20 blocks join the archive's existing section rather than
+    # repeating its heading, and the archive ends in exactly one newline.
+    assert archive == (
+        b"# Archive\n\n## 2026-09-20\n\n- **Earlier.** body\n\n- **Filed one.** body\n\n- **Archived one.** body\n\n"
+        b"## 2026-09-10\n\n- **Older.** body\n"
+    )
+
+
+def test_a_same_date_group_joins_an_earlier_section_and_keeps_the_next_heading_apart() -> None:
+    candidates = parse(b"# Log\n\n## 2026-09-20\n\n- **Swept.** body\n\n")
+    state = _render_sweep_state(archived=["TRI-01"])
+    archive = b"# Archive\n\n## 2026-09-20\n\n- **Earlier.** body\n\n## 2026-09-24\n\n- **Later.** body\n"
+    _active, rendered = render_sweep(b"# Log\n\n## 2026-09-20\n\n- **Swept.** body\n\n", archive, candidates, state, _818_MARKER)
+    assert rendered == (
+        b"# Archive\n\n## 2026-09-20\n\n- **Earlier.** body\n\n- **Swept.** body\n\n"
+        b"## 2026-09-24\n\n- **Later.** body\n"
+    )
+
+
+def test_a_fenced_date_heading_in_the_archive_is_not_a_section_to_join() -> None:
+    raw = b"# Log\n\n## 2026-09-20\n\n- **Swept.** body\n"
+    archive = b"# Archive\n\n```\n## 2026-09-20\n```\n"
+    _active, rendered = render_sweep(raw, archive, parse(raw), _render_sweep_state(archived=["TRI-01"]), _818_MARKER)
+    assert rendered == archive + b"\n## 2026-09-20\n\n- **Swept.** body\n"
+
+
+def test_the_archive_append_leaves_no_trailing_blank_line() -> None:
+    raw = b"# Log\n\n## 2026-09-20\n\n- **Swept.** body\n\n- **Kept.** stays\n"
+    _active, rendered = render_sweep(raw, b"# Archive\n", parse(raw), _render_sweep_state(archived=["TRI-01"]), _818_MARKER)
+    assert rendered == b"# Archive\n\n## 2026-09-20\n\n- **Swept.** body\n"
+
+
+def test_a_wrapped_lead_is_collapsed_and_an_entry_without_one_names_only_its_date() -> None:
+    raw = b"# Log\n\n## 2026-09-20\n\n- **A lead that wraps\n  onto a second line.** body\n\n- **Unclosed bold\n\nlater `**` text\n"
+    candidates = parse(raw)
+    sources = {candidate.candidate_id: candidate for candidate in candidates}
+    lines = _record_lines(_render_sweep_state(archived=["TRI-01", "TRI-02"]), sources)
+    assert "Archived without filing: TRI-01, the `2026-09-20` entry `A lead that wraps onto a second line.`." in lines
+    assert "Archived without filing: TRI-02, the `2026-09-20` entry." in lines
+
+
+def test_a_hostile_lead_cannot_open_a_heading_or_close_its_span() -> None:
+    raw = b"# Log\n\n## 2026-09-20\n\n- **x``\n  ## Injected** body\n"
+    candidates = parse(raw)
+    lines = _record_lines(_render_sweep_state(archived=["TRI-01"]), {candidate.candidate_id: candidate for candidate in candidates})
+    line = next(line for line in lines if line.startswith("Archived"))
+    assert "\n" not in line
+    assert line == "Archived without filing: TRI-01, the `2026-09-20` entry ```x`` ## Injected```."

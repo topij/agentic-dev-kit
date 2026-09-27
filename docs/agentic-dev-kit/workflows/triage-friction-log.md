@@ -1073,25 +1073,34 @@ its frozen block. An edited approved block is operator-held; do not archive a st
 snapshot or widen to the whole inbox. Window-added blocks stay active verbatim.
 
 Write the graduation-marker heading with a record block under it, from this run's own
-state and nothing else: the engine mode, any filed issue links, any archived candidate
-ids, and the verbatim approval command with its approver. The engine's state and
+state and nothing else: the engine mode, one line per filed issue link and per archived
+candidate naming the source entry it came from (candidate id, the entry's date heading
+and its bold lead), and the verbatim approval command with its approver, one span per
+command line. The engine's state and
 report are not committed, so the record is the only account of what the sweep did that
 the repository keeps. It is not what keeps the marker: that is the title recognizer
 below, which keeps a bare marker too. State-derived free text (an approval command, an
 operator identity) goes through the same literal-content rule as report rendering, so it
-can never open a heading or entry line of its own. Recognise a graduation marker by the
+can never open a heading or entry line of its own; so do a source entry's date heading
+and lead. Recognise a graduation marker by the
 same substring the draft session already excludes candidates on — never a second,
 independently maintained pattern — and never delete one as an empty section, including
 when it is the file's last section. When removing a dated section that genuinely is
 empty, also remove the blank line that separated it from whatever precedes it if nothing
-follows: otherwise an emptied trailing section leaves a blank line at EOF. The archive
-append gets a blank line before its own appended heading on the same rule.
+follows: otherwise an emptied trailing section leaves a blank line at EOF. In the archive,
+swept blocks whose date heading the archive already has join the last section with that
+exact heading (outside fenced code) instead of repeating it; others go in a new section
+appended at the end, with a blank line before its heading. Either way the archive ends in
+exactly one newline.
 
 Commit validation, which re-renders a retained sweep commit from state, also accepts the
-rendering engines used before the marker record existed: a bare marker, a bare marker
-treated as an empty section, and no separator management. A completed or in-flight state
-that such an engine committed must stay valid after an upgrade. New sweeps are never
-rendered that way, and a commit matching neither rendering is operator-held.
+two renderings older engines committed: the one before source entries (lists of issue
+links and candidate ids, each swept date group appended under its own heading, the last
+block's trailing blank line kept), and the one before the marker record existed (a bare
+marker, a bare marker treated as an empty section, and no separator management). A
+completed or in-flight state that such an engine committed must stay valid after an
+upgrade. New sweeps are never rendered those ways, and a commit matching none of the
+renderings is operator-held.
 
 Test mode stops after rendering the proposed diff in the report. Render that diff by the
 same literal-content rule. It does not edit

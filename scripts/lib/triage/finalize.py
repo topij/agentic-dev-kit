@@ -7,13 +7,15 @@ from typing import Any
 
 from .approval import COMMAND_RE
 from .canonical import digest
-from .inbox import Candidate, _inline_literal, _markdown_mask, exact_sweep
+from .inbox import Candidate, _inline_literal, _markdown_mask, append_archive_groups, exact_sweep, sweep_groups
 from .model import TriageError
 
 CANDIDATE_ID_RE = re.compile(r"TRI-(\d+)")
 GITHUB_REPOSITORY_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 GITHUB_HOST_RE = re.compile(r"[A-Za-z0-9.-]+")
 NUMERIC_IDENTIFIER_RE = re.compile(r"[1-9][0-9]*")
+ENTRY_LEAD_RE = re.compile(rb"- \*\*((?:(?!\n\n).)+?)\*\*", re.DOTALL)
+RENDERINGS = ("current", "pre-818", "pre-812")
 
 
 def _candidate_sort_key(candidate_id: Any) -> tuple[int, str]:
@@ -41,11 +43,35 @@ def _issue_link(destination: Any, identifier: Any) -> str:
     return _inline_literal(identifier)
 
 
-def _record_lines(state: dict[str, Any]) -> list[str]:
+def _entry_lead(raw: bytes) -> str:
+    """The bold lead an inbox entry opens with (`- **Lead.** …`), whitespace-collapsed
+    because a long lead wraps across source lines; empty when there is none."""
+    match = ENTRY_LEAD_RE.match(raw)
+    return " ".join(match.group(1).decode("utf-8", "replace").split()) if match else ""
+
+
+def _source_entry(candidate_id: Any, sources: dict[str, Candidate]) -> str:
+    """Name the inbox entry a swept candidate came from (#818): its id, date heading
+    and bold lead, the last two through `_inline_literal` because they are copied
+    from operator-written text."""
+    shown = candidate_id if isinstance(candidate_id, str) and CANDIDATE_ID_RE.fullmatch(candidate_id) else _inline_literal(candidate_id)
+    candidate = sources.get(candidate_id) if isinstance(candidate_id, str) else None
+    if candidate is None:
+        return shown
+    lead = _entry_lead(candidate.raw)
+    entry = f"{shown}, the {_inline_literal(candidate.title)} entry"
+    return f"{entry} {_inline_literal(lead)}" if lead else entry
+
+
+def _record_lines(state: dict[str, Any], sources: dict[str, Candidate] | None = None) -> list[str]:
     """Build the record a marker's own block carries: what an engine-backed sweep
     filed, archived, and ran under, from data the engine already holds in `state` —
     never invented, and never state text placed where it could open a heading or
-    entry line of its own (`_inline_literal` guarantees the latter)."""
+    entry line of its own (`_inline_literal` guarantees the latter).
+
+    With `sources` (the frozen candidates by id) each filed and archived candidate
+    gets its own line naming the entry it came from (#818). Without it the lines are
+    the pre-#818 lists, kept so a sweep an older engine committed still validates."""
     lines: list[str] = []
     engine_mode = state.get("engine_mode")
     if isinstance(engine_mode, str) and engine_mode:
@@ -59,9 +85,13 @@ def _record_lines(state: dict[str, Any]) -> list[str]:
         ),
         key=lambda operation: _candidate_sort_key(operation.get("candidate_id")),
     )
-    if filed:
+    if filed and sources is None:
         links = [_issue_link(operation.get("destination"), operation.get("returned_identifier")) for operation in filed]
         lines.append("Filed: " + ", ".join(links) + ".")
+    elif filed:
+        for operation in filed:
+            link = _issue_link(operation.get("destination"), operation.get("returned_identifier"))
+            lines.append(f"Filed {link} from {_source_entry(operation.get('candidate_id'), sources)}.")
     decisions = state.get("decisions") or []
     archived = sorted(
         (
@@ -71,8 +101,11 @@ def _record_lines(state: dict[str, Any]) -> list[str]:
         ),
         key=_candidate_sort_key,
     )
-    if archived:
+    if archived and sources is None:
         lines.append("Archived without filing: " + ", ".join(archived) + ".")
+    elif archived:
+        for candidate_id in archived:
+            lines.append(f"Archived without filing: {_source_entry(candidate_id, sources)}.")
     approval = state.get("approval")
     if isinstance(approval, dict):
         source_read_back = approval.get("source_read_back")
@@ -91,8 +124,8 @@ def _record_lines(state: dict[str, Any]) -> list[str]:
     return lines
 
 
-def _record_block(state: dict[str, Any]) -> bytes:
-    lines = _record_lines(state)
+def _record_block(state: dict[str, Any], sources: dict[str, Candidate] | None = None) -> bytes:
+    lines = _record_lines(state, sources)
     return ("\n\n".join(lines) + "\n").encode("utf-8") if lines else b""
 
 
@@ -131,11 +164,20 @@ def render_sweep(
     state: dict[str, Any],
     marker: bytes,
     *,
-    legacy: bool = False,
+    rendering: str = "current",
 ) -> tuple[bytes, bytes]:
+    """Render a sweep's new inbox and archive bytes from the approved `state`.
+
+    `rendering` picks one of `RENDERINGS`. Only `current` renders a new sweep; the
+    older ones reproduce, byte for byte, what an engine before #818 or before #812
+    committed, so commit validation can still accept a sweep such an engine left.
+    """
+    if rendering not in RENDERINGS:
+        raise ValueError(f"unknown sweep rendering: {rendering!r}")
     ids = sweep_ids(state)
-    active, archived = exact_sweep(current, candidates, ids, legacy=legacy)
+    legacy = rendering == "pre-812"
     if legacy:
+        active, archived = exact_sweep(current, candidates, ids, legacy=True)
         # The pre-#812 rendering, kept byte-for-byte: a bare marker with no record,
         # no separator management, and an archive append with no blank line before
         # its heading. Only commit validation asks for it (see `exact_sweep`).
@@ -146,9 +188,17 @@ def render_sweep(
             active = active[:offset] + marker_bytes + active[offset:]
         separator = b"" if not archive or archive.endswith(b"\n") else b"\n"
         return active, archive + separator + archived
+    if rendering == "pre-818":
+        active, archived = exact_sweep(current, candidates, ids)
+        new_archive = archive + _blank_line_separator(archive) + archived
+        sources = None
+    else:
+        active, groups = sweep_groups(current, candidates, ids)
+        new_archive = append_archive_groups(archive, groups)
+        sources = {candidate.candidate_id: candidate for candidate in candidates}
     if marker:
         marker_bytes = marker + (b"\n" if not marker.endswith(b"\n") else b"")
-        record_bytes = _record_block(state)
+        record_bytes = _record_block(state, sources)
         first_section = re.search(rb"(?m)^## ", _markdown_mask(active))
         offset = first_section.start() if first_section else len(active)
         prefix = active[:offset]
@@ -165,7 +215,7 @@ def render_sweep(
         new_active = prefix + _blank_line_separator(prefix) + body + gap + tail
     else:
         new_active = active
-    return new_active, archive + _blank_line_separator(archive) + archived
+    return new_active, new_archive
 
 
 def next_forge_operation(state: dict[str, Any], kind: str, intent: dict[str, Any]) -> dict[str, Any]:
