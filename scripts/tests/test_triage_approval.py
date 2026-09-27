@@ -112,3 +112,9 @@ def test_a_modify_body_may_still_span_lines_and_use_command_words() -> None:
     body = "First line.\napprove the change once reviewed\narchive TRI-09 is not in this batch"
     decisions = parse_commands(f"modify TRI-01: {body}", THREE)
     assert decisions[0] == {"candidate_id": "TRI-01", "decision": "modify", "replacement_body": body, "proposal_digest": "a" * 64}
+
+
+@pytest.mark.parametrize("line", ["archive all", "park all", "approve TRI-01 TRI-09"])
+def test_a_modify_body_line_that_is_no_valid_command_for_this_batch_is_body_text(line: str) -> None:
+    decisions = parse_commands(f"modify TRI-01: First line.\n{line}", THREE)
+    assert decisions[0]["replacement_body"] == f"First line.\n{line}"

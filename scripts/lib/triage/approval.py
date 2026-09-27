@@ -83,8 +83,10 @@ def _names_this_batch(line: str, proposal_digests: dict[str, str]) -> bool:
     match = COMMAND_RE.fullmatch(line)
     if not match:
         return False
-    ids = match.group(2).split(" ")
-    return ids == ["all"] or all(candidate_id in proposal_digests for candidate_id in ids)
+    verb, ids_text = match.groups()
+    if ids_text == "all":
+        return verb == "approve"
+    return all(candidate_id in proposal_digests for candidate_id in ids_text.split(" "))
 
 
 def approval_record(

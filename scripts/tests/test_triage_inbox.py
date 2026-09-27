@@ -330,6 +330,14 @@ def test_record_shows_each_command_of_a_multi_command_approval_as_its_own_span()
     assert not any("\n" in line or "escaped" in line for line in lines)
 
 
+def test_record_keeps_a_multi_line_modify_as_one_escaped_literal() -> None:
+    # A modify body may span lines; its body lines must not read as commands.
+    command = "modify TRI-01: First line.\napprove the change once reviewed"
+    lines = _record_lines(_render_sweep_state(approval=(command, "topi")))
+    assert f"Approval command: `{command!r}` (escaped Python string literal). Approver: `topi`." in lines
+    assert not any(line.startswith("Approval commands:") for line in lines)
+
+
 @pytest.mark.parametrize(
     ("destination", "identifier"),
     [

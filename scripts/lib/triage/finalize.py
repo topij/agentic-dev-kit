@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .approval import COMMAND_RE
 from .canonical import digest
 from .inbox import Candidate, _inline_literal, _markdown_mask, exact_sweep
 from .model import TriageError
@@ -78,9 +79,11 @@ def _record_lines(state: dict[str, Any]) -> list[str]:
         command = source_read_back.get("text") if isinstance(source_read_back, dict) else None
         approver = approval.get("approver_identity")
         if isinstance(command, str) and command and isinstance(approver, str) and approver:
-            if "\n" in command:
+            if "\n" in command and all(COMMAND_RE.fullmatch(line) for line in command.split("\n")):
                 # A multi-command approval (#820) shows each command as its own span
-                # rather than one escaped literal with its newlines spelled out.
+                # rather than one escaped literal with its newlines spelled out. Any
+                # other multi-line text — a `modify` body that spans lines — stays
+                # one escaped literal, so its body lines never read as commands.
                 shown = ", ".join(_inline_literal(line) for line in command.split("\n"))
                 lines.append(f"Approval commands: {shown}. Approver: {_inline_literal(approver)}.")
             else:
