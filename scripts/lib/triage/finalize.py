@@ -7,7 +7,14 @@ from typing import Any
 
 from .approval import COMMAND_RE
 from .canonical import digest
-from .inbox import Candidate, _inline_literal, _markdown_mask, append_archive_groups, exact_sweep, sweep_groups
+from .inbox import (
+    Candidate,
+    _inline_literal,
+    _markdown_mask,
+    append_archive_groups,
+    exact_sweep,
+    sweep_groups,
+)
 from .model import TriageError
 
 CANDIDATE_ID_RE = re.compile(r"TRI-(\d+)")
