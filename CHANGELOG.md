@@ -42,7 +42,7 @@ starts.
 
 ---
 
-## #PRNUM — Triage sweep records name their source entries and the archive keeps each date once
+## #832 — Triage sweep records name their source entries and the archive keeps each date once
 
 CHANGED — report shape: Refresh `lib/triage/finalize.py`, `lib/triage/inbox.py`, `lib/triage/engine.py`, the shared triage workflow, `kit-manifest.json`, `scripts/tests/test_finalize_triage.py` and `scripts/tests/test_triage_inbox.py`. A new sweep's marker record gives each filed issue and each archived candidate its own line naming the inbox entry it came from: a line starting `Filed [#N](…) from TRI-01, the` or `Archived without filing: TRI-02, the`, followed by the entry's date heading and bold lead as code spans. It used to list them on one line each, as `Filed: [#N](…), [#M](…).` and `Archived without filing: TRI-02, TRI-05.`. In the archive, swept blocks whose `## <date>` heading the archive already has join the last section with that heading instead of repeating it, and the archive no longer gains a trailing blank line. `render_sweep`'s `legacy: bool` keyword is replaced by `rendering`, one of `finalize.RENDERINGS` (`current`, `pre-818`, `pre-812`); pass `rendering="pre-812"` where you passed `legacy=True`. Commit validation accepts all three, so a sweep an older engine committed still validates. `inbox.exact_sweep` is unchanged, and `inbox.sweep_groups` and `inbox.append_archive_groups` are new. Update any script that parses the record's `Filed:` list or expects a repeated date heading in the archive.
 
