@@ -120,7 +120,7 @@
     },
     "scripts/conftest.py": {
       "role": "engine",
-      "sha256": "46cbb89524c823602ad593f894322ffdf0dded3952cfbe99fc9552754f49e8f1"
+      "sha256": "cbd806414f7e51e8722fd99d41e3b9a1040a18125059322fd212a78cb03de6d7"
     },
     "scripts/dev_session.sh": {
       "role": "engine",
@@ -478,7 +478,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "4281306a94b5cc88912012d0e02882787293fb4f3cb0322647cc6578fbc89153"
+      "sha256": "711d00f3cda460a5771dfbe68ff08defdd95fd0e6ac32d641a3ca4305abbd1f6"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -562,7 +562,7 @@
     },
     "scripts/tests/test_state_guard.py": {
       "role": "test",
-      "sha256": "8edc097c61adcf8abdae5c3f411333369a0f9fb102df7e6e6cd1cad2ebbbe2d9"
+      "sha256": "7f16413fd3e8f11871c0dddbd55aab1c321c86e27519cad0b7509643061009ba"
     },
     "scripts/tests/test_systemize_artifacts.py": {
       "role": "test",

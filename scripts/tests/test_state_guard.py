@@ -865,6 +865,9 @@ def _excluding_tree(
     (root / "config").mkdir()
     (root / "config" / "dev-model.yaml").write_text(
         f"state:\n  dirname: state\n  test_guard_exclude:{exclude_yaml}\n"
+        # An engine path the guard must derive its refusal from, as the real
+        # config's triage block does.
+        'triage:\n  state_path: "state/triage/triage-pipeline-state_{mode}.json"\n'
     )
     if overlay_yaml is not None:
         (root / "config" / "dev-model.local.yaml").write_text(
@@ -936,6 +939,41 @@ def test_removing_an_excluded_directory_is_caught(tmp_path: Path) -> None:
 )
 def test_an_invalid_exclusion_falls_back_to_the_full_walk(tmp_path: Path, exclude_yaml: str) -> None:
     _excluding_tree(tmp_path, exclude_yaml, _WRITE_IN_EVIDENCE)
+    result = _run_pytest(tmp_path, _SHAPES["tests-only"])
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert f"{_EVIDENCE}/new.json" in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    ("exclude_yaml", "engine_dir"),
+    [
+        (f"\n    - {_EVIDENCE}\n    - pr-watch", "pr-watch"),
+        (f"\n    - {_EVIDENCE}\n    - triage", "triage"),
+    ],
+    ids=["pr-watch", "config-derived-triage"],
+)
+def test_naming_an_engines_directory_voids_the_whole_exclusion(
+    tmp_path: Path, exclude_yaml: str, engine_dir: str
+) -> None:
+    """`pr-watch` is the store this guard exists for; excluding it would let a
+    fabricated receipt through (#851's adversarial lens built exactly that). The
+    valid neighbour is voided too, so the write inside it is caught."""
+    _excluding_tree(
+        tmp_path,
+        exclude_yaml,
+        f"    (STATE / {engine_dir!r}).mkdir(exist_ok=True)\n"
+        f"    (STATE / {engine_dir!r} / '9999.json').write_text('{{\"fabricated\": 1}}')\n"
+        + _WRITE_IN_EVIDENCE,
+    )
+    result = _run_pytest(tmp_path, _SHAPES["tests-only"])
+    combined = result.stdout + result.stderr
+    assert result.returncode != 0, combined
+    assert f"{engine_dir}/9999.json" in combined, combined
+    assert f"{_EVIDENCE}/new.json" in combined, combined
+
+
+def test_one_invalid_entry_voids_its_valid_neighbours(tmp_path: Path) -> None:
+    _excluding_tree(tmp_path, f"\n    - {_EVIDENCE}\n    - bad/entry", _WRITE_IN_EVIDENCE)
     result = _run_pytest(tmp_path, _SHAPES["tests-only"])
     assert result.returncode != 0, result.stdout + result.stderr
     assert f"{_EVIDENCE}/new.json" in result.stdout + result.stderr

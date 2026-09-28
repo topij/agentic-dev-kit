@@ -627,8 +627,9 @@ state:
   # (<engines>/conftest.py) records as present but does not walk. The guard reads
   # every file under state/ in each pytest process, so a large directory of
   # retained artifacts makes the local suite slow. List only directories no engine
-  # writes: a test writing inside one goes unseen. Plain names, not paths; an
-  # invalid list excludes nothing. What sits in state/ is a fact about one
+  # writes: a test writing inside one goes unseen. Plain names, not paths. A list
+  # with any invalid entry, or naming a directory an engine writes (pr-watch, or
+  # any top-level directory a state/... path in this file names), excludes nothing. What sits in state/ is a fact about one
   # checkout, so set this in the gitignored config/dev-model.local.yaml.
   test_guard_exclude: []
   # The unsandboxed-write guard skips a legitimate scheduled/CI writer, detected by

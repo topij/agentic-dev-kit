@@ -186,10 +186,20 @@ def _excluded_state_dirs() -> frozenset[str]:
     and not walked, so a write inside it is outside this guard's sight; list only
     directories no engine writes.
 
-    FAILS CLOSED. Anything short of a readable list of plain names — no
-    ``lib/kitconfig.py`` beside this file, no config, a parse error, a non-list,
-    an entry that is not a single path component — excludes nothing, which is
-    the full walk this guard always did. ``kitconfig`` is loaded by file path so
+    NEVER AN ENGINE'S DIRECTORY. Excluding ``pr-watch`` would switch this guard
+    off for the store the module docstring says it exists to protect, with one
+    config line (#851's adversarial lens demonstrated a fabricated receipt passing
+    that way). So a name is refused when an engine writes there: ``pr-watch``,
+    which `pr_watch.py` hard-codes, and every top-level directory the config's own
+    ``state/...`` paths name. A new engine directory missing from both is the
+    residual: nothing here can know about it.
+
+    FAILS CLOSED, for the whole list. Anything short of a readable list of
+    acceptable names — no ``lib/kitconfig.py`` beside this file, no config, a
+    parse error, a non-list, or any one entry that is not a single plain name or
+    is an engine's directory — excludes nothing, which is the full walk this
+    guard always did. One bad entry voids its valid neighbours too, so a mistake
+    in the list shows up as a slow suite rather than as a narrower guard. ``kitconfig`` is loaded by file path so
     nothing here puts ``lib/`` on ``sys.path``; it is a config reader and resolves
     no state path, so the independence argument in the module docstring does not
     reach it. The local overlay is read — that is where a checkout names its own
@@ -213,13 +223,29 @@ def _excluded_state_dirs() -> frozenset[str]:
         return frozenset()
     if not isinstance(names, list):
         return frozenset()
-    return frozenset(
-        name
-        for name in names
-        if isinstance(name, str)
-        and name not in ("", ".", "..")
-        and not any(sep in name for sep in ("/", "\\", "\0"))
-    )
+    protected = {"pr-watch", *_configured_state_dirs(config)}
+    for name in names:
+        if (
+            not isinstance(name, str)
+            or name in ("", ".", "..")
+            or any(sep in name for sep in ("/", "\\", "\0"))
+            or name in protected
+        ):
+            return frozenset()
+    return frozenset(names)
+
+
+def _configured_state_dirs(node) -> set[str]:
+    """Top-level ``state/`` directories named by any ``state/<dir>/...`` string
+    value in the config — where the configured engines write."""
+    if isinstance(node, dict):
+        return set().union(*(_configured_state_dirs(v) for v in node.values()))
+    if isinstance(node, list):
+        return set().union(*(_configured_state_dirs(v) for v in node))
+    if isinstance(node, str) and node.startswith("state/"):
+        top = node.split("/")[1]
+        return {top} if top else set()
+    return set()
 
 
 def _walk_state(state_dir: Path, excluded: frozenset[str]):
