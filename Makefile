@@ -55,6 +55,9 @@
 # could reach pytest at all (#848). The cost is the other direction: a new
 # .py file is not linted locally until it is `git add`ed — CI still lints it.
 # A tracked file deleted without `git rm` fails here as a missing path.
+# `-r` matters: with no paths, ruff defaults to `.` and walks the tree again,
+# and GNU xargs runs the command once on empty input unless told not to.
+# scripts/tests/test_make_lint.py runs this recipe against a stub `uvx`.
 #
 # test
 # ----
@@ -131,7 +134,7 @@ install-hooks:
 	install_hooks
 
 lint:
-	git ls-files -z '*.py' | xargs -0 uvx ruff@0.16.0 check --no-fix --force-exclude
+	git ls-files -z '*.py' | xargs -0 -r uvx ruff@0.16.0 check --no-fix --force-exclude
 
 check-syntax:
 	bash -n scripts/dev_session.sh scripts/reconcile_sessions.sh scripts/lib/repo_root.sh scripts/hooks/pre-push
