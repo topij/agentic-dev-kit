@@ -1090,7 +1090,12 @@ can never open a heading or entry line of its own; so do a source entry's date h
 and lead. Recognise a graduation marker by the
 same substring the draft session already excludes candidates on — never a second,
 independently maintained pattern — and never delete one as an empty section, including
-when it is the file's last section. When removing a dated section that genuinely is
+when it is the file's last section. Instead, before writing its own marker, move every
+earlier graduation-marker section (its heading through to the next heading outside code)
+to the archive unchanged, in file order and ahead of the swept blocks, so the inbox keeps
+only this sweep's marker and each sweep leaves the file no longer than the entries it
+kept. A marker-titled section that holds an entry line is not a marker record and stays,
+as do parked entries' dated sections. When removing a dated section that genuinely is
 empty, also remove the blank line that separated it from whatever precedes it if nothing
 follows: otherwise an emptied trailing section leaves a blank line at EOF. In the archive,
 swept blocks whose date heading the archive already has join the last section with that
@@ -1099,7 +1104,8 @@ appended at the end, with a blank line before its heading. Either way the archiv
 exactly one newline.
 
 Commit validation, which re-renders a retained sweep commit from state, also accepts the
-two renderings older engines committed: the one before source entries (lists of issue
+three renderings older engines committed: the one that left earlier markers in the inbox,
+the one before source entries (lists of issue
 links and candidate ids, each swept date group appended under its own heading, the last
 block's trailing blank line kept), and the one before the marker record existed (a bare
 marker, a bare marker treated as an empty section, and no separator management). A

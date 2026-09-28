@@ -1275,7 +1275,7 @@ def _validate_commit_updates(
     committed = (decoded[inbox_rel][1], decoded[archive_rel][1])
     # A sweep an older engine committed — before #812 without the marker record,
     # before #818 without source entries and with a separate same-date archive
-    # section — left states (completed, or mid-finalization across an upgrade) that
+    # section, before #187 with earlier markers left in the inbox — left states (completed, or mid-finalization across an upgrade) that
     # must still validate. Every rendering is a deterministic function of the same
     # approved state and prior bytes; a commit matching none of them is rejected.
     renderings = (

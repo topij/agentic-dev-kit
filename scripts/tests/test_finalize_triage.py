@@ -53,15 +53,19 @@ def git(repo: Path, *args: str) -> str:
     return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True).stdout.strip()
 
 
-def repository(tmp_path: Path) -> Path:
+def repository(tmp_path: Path, *, prior_marker: bool = False) -> Path:
     root = tmp_path / "repo"
     (root / "config").mkdir(parents=True)
     shutil.copy2(REPO_ROOT / "config/dev-model.yaml", root / "config/dev-model.yaml")
     config = root / "config/dev-model.yaml"
     config.write_text(config.read_text(encoding="utf-8").replace("  engines: scripts/devkit\n", "  engines: scripts\n"), encoding="utf-8")
     (root / "docs").mkdir()
+    # `prior_marker` adds an earlier sweep's graduation marker, which a current
+    # sweep moves to the archive and a pre-#187 one left in place.
     (root / "docs/kit-friction-log.md").write_bytes(
-        b"# Log\n\n## 2026-01-02\n\n"
+        b"# Log\n\n"
+        + ("## 2026-01-01 — Backlog migrated by triage session earlier\n\nEngine mode: `engine-backed`.\n\n".encode() if prior_marker else b"")
+        + b"## 2026-01-02\n\n"
         b"- **Approved archive.** exact bytes. **Filed 2026-01-02 as #17.**\n\n"
         b"- **Window addition.** The prior Filed annotation is discussed; keep me.\n"
     )
@@ -460,11 +464,11 @@ def test_commit_authority_failure_leaves_clean_worktree_and_fresh_retry_can_cont
     assert b"- **Approved archive.**" in (worktree / "docs/kit-friction-log-archive.md").read_bytes()
 
 
-@pytest.mark.parametrize("mutation", ["derived-content", "foreign-path", "legacy-rendering", "pre-818-rendering"])
+@pytest.mark.parametrize("mutation", ["derived-content", "foreign-path", "legacy-rendering", "pre-818-rendering", "pre-187-rendering"])
 def test_fresh_process_refuses_mutated_retained_commit_updates_before_rebind(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
 ) -> None:
-    root = repository(tmp_path)
+    root = repository(tmp_path, prior_marker=mutation == "pre-187-rendering")
     state_root = tmp_path / "state-root"
     monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
     draft_request, candidate_id = proposal_request(root)
@@ -504,17 +508,18 @@ def test_fresh_process_refuses_mutated_retained_commit_updates_before_rebind(
         intent["updates"][0]["content"] = encode_bytes(raw)
         intent["updates"][0]["content_digest"] = digest_bytes(raw)
         expected_detail = "commit updates do not match the approved sweep"
-    elif mutation in {"legacy-rendering", "pre-818-rendering"}:
-        # A commit an engine before #812 rendered (bare marker, no record), or one
-        # before #818 rendered (no source entries, archive heading repeated), must
-        # still validate, so the restart gets past the content check instead of
-        # holding on it.
+    elif mutation in {"legacy-rendering", "pre-818-rendering", "pre-187-rendering"}:
+        # A commit an engine before #812 rendered (bare marker, no record), one
+        # before #818 rendered (no source entries, archive heading repeated), or one
+        # before #187 rendered (earlier marker left in the inbox) must still
+        # validate, so the restart gets past the content check instead of holding
+        # on it.
         updates = {update["path"]: update for update in intent["updates"]}
         inbox, archive = updates["docs/kit-friction-log.md"], updates["docs/kit-friction-log-archive.md"]
         legacy = render_sweep(
             decode_bytes(inbox["previous_content"]), decode_bytes(archive["previous_content"]),
             _frozen_candidates(state), state, intent["migration_marker"].encode(),
-            rendering="pre-812" if mutation == "legacy-rendering" else "pre-818",
+            rendering={"legacy-rendering": "pre-812", "pre-818-rendering": "pre-818", "pre-187-rendering": "pre-187"}[mutation],
         )
         assert legacy != (decode_bytes(inbox["content"]), decode_bytes(archive["content"]))
         for update, raw in zip((inbox, archive), legacy, strict=True):

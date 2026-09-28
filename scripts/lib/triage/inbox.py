@@ -17,7 +17,8 @@ ENTRY_RE = re.compile(rb"(?m)^- \*\*")
 # migrated by triage session <id>". `parse` excludes a marker section from the
 # active candidate set on this substring; `exact_sweep`'s empty-section removal
 # reuses the same recognizer so it never deletes a marker that carries no entry
-# of its own (#806) — one recognizer, not two independently-maintained checks.
+# of its own (#806), and `take_migration_markers` moves earlier markers to the
+# archive on it (#187) — one recognizer, not independently-maintained checks.
 MIGRATION_MARKER_TITLE = "Backlog migrated"
 
 
@@ -257,6 +258,48 @@ def sweep_groups(
         else:
             active = active[:start] + active[end:]
     return active, list(archived_by_title.items())
+
+
+def take_migration_markers(active: bytes) -> tuple[bytes, list[bytes]]:
+    """Remove every graduation-marker section from `active`; return (active, sections).
+
+    A section is a dated `## ` heading the marker recognizer accepts, through to the
+    next `## ` heading outside code, returned in file order with its bytes unchanged
+    except that trailing blank lines are dropped. A marker-titled section holding an
+    entry line stays: no marker record contains one, so it is an entry whose heading
+    merely mentions the phrase, and moving it would archive it with no record of
+    why. Every other section, including the dated sections of parked entries, stays
+    where it is. Without this every sweep
+    left one more permanent record block in the inbox, so the sweep the budget
+    tripwire prescribes could not bring the file back under budget (#187).
+    """
+    visible = _markdown_mask(active)
+    sections = list(SECTION_RE.finditer(visible))
+    spans: list[tuple[int, int]] = []
+    for index, section in enumerate(sections):
+        title = _title(section.group("title"))
+        end = sections[index + 1].start() if index + 1 < len(sections) else len(active)
+        if DATED_RE.match(title) and is_migration_marker(title) and not ENTRY_RE.search(visible, section.end(), end):
+            spans.append((section.start(), end))
+    taken = [active[start:end].rstrip(b"\n") + b"\n" for start, end in spans]
+    for start, end in reversed(spans):
+        if end >= len(active):
+            # Same rule as an emptied trailing dated section (#806): the blank line
+            # that separated the removed section must not become one at EOF.
+            active = active[:start].rstrip(b"\n")
+            if active:
+                active += b"\n"
+        else:
+            active = active[:start] + active[end:]
+    return active, taken
+
+
+def append_archive_sections(archive: bytes, sections: list[bytes]) -> bytes:
+    """Append whole sections to `archive`, each after exactly one blank line."""
+    for section in sections:
+        separator = b"" if not archive or archive.endswith(b"\n\n") else (b"\n" if archive.endswith(b"\n") else b"\n\n")
+        archive = archive + separator + section
+    return archive
 
 
 def append_archive_groups(archive: bytes, groups: list[tuple[str, list[bytes]]]) -> bytes:
