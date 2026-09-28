@@ -259,6 +259,45 @@ def sweep_groups(
     return active, list(archived_by_title.items())
 
 
+def take_migration_markers(active: bytes) -> tuple[bytes, list[bytes]]:
+    """Remove every graduation-marker section from `active`; return (active, sections).
+
+    A section is a dated `## ` heading the marker recognizer accepts, through to the
+    next `## ` heading outside code, returned in file order with its bytes unchanged
+    except that trailing blank lines are dropped. Every other section, including the
+    dated sections of parked entries, stays where it is. Without this every sweep
+    left one more permanent record block in the inbox, so the sweep the budget
+    tripwire prescribes could not bring the file back under budget (#187).
+    """
+    visible = _markdown_mask(active)
+    sections = list(SECTION_RE.finditer(visible))
+    spans: list[tuple[int, int]] = []
+    for index, section in enumerate(sections):
+        title = _title(section.group("title"))
+        if DATED_RE.match(title) and is_migration_marker(title):
+            end = sections[index + 1].start() if index + 1 < len(sections) else len(active)
+            spans.append((section.start(), end))
+    taken = [active[start:end].rstrip(b"\n") + b"\n" for start, end in spans]
+    for start, end in reversed(spans):
+        if end >= len(active):
+            # Same rule as an emptied trailing dated section (#806): the blank line
+            # that separated the removed section must not become one at EOF.
+            active = active[:start].rstrip(b"\n")
+            if active:
+                active += b"\n"
+        else:
+            active = active[:start] + active[end:]
+    return active, taken
+
+
+def append_archive_sections(archive: bytes, sections: list[bytes]) -> bytes:
+    """Append whole sections to `archive`, each after exactly one blank line."""
+    for section in sections:
+        separator = b"" if not archive or archive.endswith(b"\n\n") else (b"\n" if archive.endswith(b"\n") else b"\n\n")
+        archive = archive + separator + section
+    return archive
+
+
 def append_archive_groups(archive: bytes, groups: list[tuple[str, list[bytes]]]) -> bytes:
     """Add swept groups to `archive` the way the current renderer does (#818).
 

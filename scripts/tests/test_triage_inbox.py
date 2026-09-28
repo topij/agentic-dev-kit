@@ -369,9 +369,10 @@ def test_render_sweep_record_block_omits_lines_it_has_no_data_for() -> None:
     assert b"Approval command:" not in active
 
 
-def test_render_sweep_second_sweep_same_day_keeps_the_first_markers_record() -> None:
-    """#806's own reproduction: a second engine-backed sweep the same day must
-    not delete the first sweep's marker or the record now recorded under it."""
+def test_render_sweep_second_sweep_same_day_moves_the_first_markers_record_to_the_archive() -> None:
+    """#806's own reproduction, under #187: a second engine-backed sweep the same day
+    must not delete the first sweep's marker or its record. It moves them, byte for
+    byte, to the archive, and keeps only its own marker in the inbox."""
     raw = (
         b"# Log\n\n## 2026-09-20\n\n- **First.** body\n\n"
         b"## 2026-09-10\n\n- **Older.** still open\n"
@@ -380,6 +381,7 @@ def test_render_sweep_second_sweep_same_day_keeps_the_first_markers_record() -> 
     state_a = _render_sweep_state(archived=[candidates_a[0].candidate_id], approval=("archive TRI-01", "topi"))
     marker_a = "## 2026-09-26 — Backlog migrated by triage session AAA\n\n".encode()
     active_a, archive_a = render_sweep(raw, b"# Archive\n", candidates_a, state_a, marker_a)
+    section_a = active_a[active_a.index(marker_a):active_a.index(b"## 2026-09-10")]
 
     candidates_b = parse(active_a)
     assert len(candidates_b) == 1  # only "Older." remains, freshly numbered TRI-01
@@ -390,13 +392,61 @@ def test_render_sweep_second_sweep_same_day_keeps_the_first_markers_record() -> 
     marker_b = "## 2026-09-26 — Backlog migrated by triage session BBB\n\n".encode()
     active_b, archive_b = render_sweep(active_a, archive_a, candidates_b, state_b, marker_b)
 
-    assert b"session AAA" in active_b
-    assert b"Archived without filing: TRI-01, the `2026-09-20` entry `First.`." in active_b
+    assert b"session AAA" not in active_b
     assert b"session BBB" in active_b
     assert b"Filed [#900](https://github.com/topij/agentic-dev-kit/issues/900) from TRI-01, the `2026-09-10` entry `Older.`." in active_b
-    # The second marker sits above the first: newest at the top, per the
-    # friction log's own "appended at the top" convention.
-    assert active_b.index(b"session BBB") < active_b.index(b"session AAA")
+    assert b"Archived without filing: TRI-01, the `2026-09-20` entry `First.`." in section_a
+    assert archive_b == (
+        archive_a + b"\n" + section_a.rstrip(b"\n") + b"\n"
+        + b"\n## 2026-09-10\n\n- **Older.** still open\n"
+    )
+
+
+def test_render_sweep_moves_every_earlier_marker_and_keeps_parked_entries_in_place() -> None:
+    """#187's acceptance: against an inbox holding several engine-written markers,
+    a hand-written one and parked entries between them, the sweep moves every earlier
+    marker section to the archive in file order and keeps only its own marker. Parked
+    sections keep their place, and a marker heading inside a code fence is text."""
+    engine_1 = "## 2026-09-27 — Backlog migrated by triage session one\n\nEngine mode: `engine-backed`.\n\nFiled [#1](https://github.com/o/r/issues/1) from TRI-01.\n".encode()
+    engine_2 = "## 2026-09-26 — Backlog migrated by triage session two\n\nEngine mode: `engine-backed`.\n\nArchived without filing: TRI-02.\n".encode()
+    engine_3 = "## 2026-09-25 — Backlog migrated by triage session three\n\nEngine mode: `engine-backed`.\n".encode()
+    hand = "## 2026-09-06 — Backlog migrated to GitHub Issues (#693)\n\nA hand-written record.\n".encode()
+    parked_1 = b"## 2026-09-11\n\n- **Parked one.** stays\n"
+    parked_2 = b"## 2026-08-27\n\n- **Parked two.** stays\n\n```markdown\n## 2026-01-01 \xe2\x80\x94 Backlog migrated quoted\n```\n"
+    raw = (
+        b"# Log\n\nIntro.\n\n## 2026-09-28\n\n- **Swept.** body\n\n"
+        + engine_1 + b"\n" + engine_2 + b"\n" + engine_3 + b"\n"
+        + parked_1 + b"\n" + hand + b"\n" + parked_2
+    )
+    candidates = parse(raw)
+    assert [candidate.title for candidate in candidates] == ["2026-09-28", "2026-09-11", "2026-08-27"]
+    swept = candidates[0].candidate_id
+    state = _render_sweep_state(archived=[swept], approval=(f"archive {swept}", "topi"))
+    marker = "## 2026-09-28 — Backlog migrated by triage session new\n\n".encode()
+    active, archive = render_sweep(raw, b"# Archive\n", candidates, state, marker)
+
+    record = f"Engine mode: `engine-backed`.\n\nArchived without filing: {swept}, the `2026-09-28` entry `Swept.`.\n\nApproval command: `archive {swept}`. Approver: `topi`.\n".encode()
+    assert active == b"# Log\n\nIntro.\n\n" + marker + record + b"\n" + parked_1 + b"\n" + parked_2
+    assert archive == (
+        b"# Archive\n\n" + engine_1 + b"\n" + engine_2 + b"\n" + engine_3 + b"\n" + hand
+        + b"\n## 2026-09-28\n\n- **Swept.** body\n"
+    )
+    assert [candidate.raw for candidate in parse(active)] == [candidate.raw for candidate in candidates[1:]]
+
+
+def test_render_sweep_pre_187_keeps_earlier_markers_in_the_inbox() -> None:
+    """`rendering="pre-187"` is the renderer before #187, kept so a sweep it committed
+    still validates: the earlier marker stays, below the new one."""
+    earlier = "## 2026-09-20 — Backlog migrated by triage session older\n\nEngine mode: `engine-backed`.\n".encode()
+    raw = b"# Log\n\n## 2026-09-26\n\n- **Swept.** body\n\n" + earlier
+    candidates = parse(raw)
+    state = _render_sweep_state(archived=[candidates[0].candidate_id], engine_mode=None)
+    marker = "## 2026-09-26 — Backlog migrated by triage session new\n\n".encode()
+    active, archive = render_sweep(raw, b"# Archive\n", candidates, state, marker, rendering="pre-187")
+    assert active == b"# Log\n\n" + marker + b"Archived without filing: TRI-01, the `2026-09-26` entry `Swept.`.\n\n" + earlier
+    assert archive == b"# Archive\n\n## 2026-09-26\n\n- **Swept.** body\n"
+    current_active, current_archive = render_sweep(raw, b"# Archive\n", candidates, state, marker)
+    assert earlier not in current_active and earlier in current_archive
 
 
 def test_render_sweep_adds_a_blank_line_before_the_appended_archive_heading() -> None:

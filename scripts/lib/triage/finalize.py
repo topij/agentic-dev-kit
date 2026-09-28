@@ -12,8 +12,10 @@ from .inbox import (
     _inline_literal,
     _markdown_mask,
     append_archive_groups,
+    append_archive_sections,
     exact_sweep,
     sweep_groups,
+    take_migration_markers,
 )
 from .model import TriageError
 
@@ -21,7 +23,7 @@ CANDIDATE_ID_RE = re.compile(r"TRI-(\d+)")
 GITHUB_REPOSITORY_RE = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 GITHUB_HOST_RE = re.compile(r"[A-Za-z0-9.-]+")
 NUMERIC_IDENTIFIER_RE = re.compile(r"[1-9][0-9]*")
-RENDERINGS = ("current", "pre-818", "pre-812")
+RENDERINGS = ("current", "pre-187", "pre-818", "pre-812")
 
 
 def _candidate_sort_key(candidate_id: Any) -> tuple[int, str]:
@@ -197,8 +199,10 @@ def render_sweep(
     """Render a sweep's new inbox and archive bytes from the approved `state`.
 
     `rendering` picks one of `RENDERINGS`. Only `current` renders a new sweep; the
-    older ones reproduce, byte for byte, what an engine before #818 or before #812
+    older ones reproduce, byte for byte, what an engine before #187, #818 or #812
     committed, so commit validation can still accept a sweep such an engine left.
+    `current` differs from `pre-187` only in moving every earlier graduation-marker
+    section to the archive, ahead of this sweep's groups, before writing its own.
     """
     if rendering not in RENDERINGS:
         raise ValueError(f"unknown sweep rendering: {rendering!r}")
@@ -222,6 +226,9 @@ def render_sweep(
         sources = None
     else:
         active, groups = sweep_groups(current, candidates, ids)
+        if rendering == "current":
+            active, markers = take_migration_markers(active)
+            archive = append_archive_sections(archive, markers)
         new_archive = append_archive_groups(archive, groups)
         sources = {candidate.candidate_id: candidate for candidate in candidates}
     if marker:
