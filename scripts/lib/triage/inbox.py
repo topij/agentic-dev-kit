@@ -17,7 +17,8 @@ ENTRY_RE = re.compile(rb"(?m)^- \*\*")
 # migrated by triage session <id>". `parse` excludes a marker section from the
 # active candidate set on this substring; `exact_sweep`'s empty-section removal
 # reuses the same recognizer so it never deletes a marker that carries no entry
-# of its own (#806) — one recognizer, not two independently-maintained checks.
+# of its own (#806), and `take_migration_markers` moves earlier markers to the
+# archive on it (#187) — one recognizer, not independently-maintained checks.
 MIGRATION_MARKER_TITLE = "Backlog migrated"
 
 
