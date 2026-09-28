@@ -1563,6 +1563,7 @@ def test_repo_only_paths_are_hashed_but_not_offered_to_an_adopter(tmp_path):
     repo_only = {
         "scripts/verify_live_validation_bundle.py",
         "scripts/tests/test_live_validation_bundle.py",
+        "scripts/tests/test_make_lint.py",
         "scripts/tests/fixtures/codex_parallel_batch_expected.json",
         "docs/agentic-dev-kit/live-validation-evidence.md",
     }
