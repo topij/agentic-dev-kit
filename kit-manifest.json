@@ -155,7 +155,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "86323107660a5adf829b0ba6a0c0cddd57e2c315a10e9bdd50b476b470e699eb"
+      "sha256": "588130c8a7a88845658ee0af6a6140cc745fc312a7a27caf0a896f1101d4152b"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -506,7 +506,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "18cebe12752a7dea97d8b355401f549dda6e782fe7d769edf2d6fc1e9524576b"
+      "sha256": "6df93ac7429b24bbe81414da91c9eab927f7d490ec907e9f000543c6de7035c4"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -523,6 +523,10 @@
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "repo-only",
       "sha256": "c84db1469e363628bbaac15cb0f7412e23a8240532ec003901ac2c039b4442c7"
+    },
+    "scripts/tests/test_make_lint.py": {
+      "role": "repo-only",
+      "sha256": "f1b5e8a3c79ffef62e64c3a0fb24d060b318c9f7530492f9c91bbee854c2b9ec"
     },
     "scripts/tests/test_mutation_gate.py": {
       "role": "test",

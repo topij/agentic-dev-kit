@@ -343,6 +343,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/test_repo_layout.py", "test"),
     ("scripts/tests/test_state_guard.py", "test"),
     ("scripts/tests/test_live_validation_bundle.py", REPO_ONLY_ROLE),
+    ("scripts/tests/test_make_lint.py", REPO_ONLY_ROLE),
     # Read only by that module's kit_repo_only test, so it ships nowhere either.
     ("scripts/tests/fixtures/codex_parallel_batch_expected.json", REPO_ONLY_ROLE),
     # Reference copies of the two registrations the kit SHIPS but does not write
