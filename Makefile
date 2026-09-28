@@ -48,6 +48,14 @@
 # away. See ruff.toml's own header for why config lives there and not in a
 # root pyproject.toml.
 #
+# It lints the files git tracks, not the working tree. CI's ruff step runs
+# on a fresh checkout, which holds only tracked files; a bare `ruff check`
+# here walked everything .gitignore does not exclude, so an operator's local
+# untracked scripts (under `saved_plans/`, say) decided whether `make test`
+# could reach pytest at all (#848). The cost is the other direction: a new
+# .py file is not linted locally until it is `git add`ed — CI still lints it.
+# A tracked file deleted without `git rm` fails here as a missing path.
+#
 # test
 # ----
 # Runs the same gates the `toolkit` job in `.github/workflows/test.yml` runs
@@ -123,7 +131,7 @@ install-hooks:
 	install_hooks
 
 lint:
-	uvx ruff@0.16.0 check --no-fix
+	git ls-files -z '*.py' | xargs -0 uvx ruff@0.16.0 check --no-fix --force-exclude
 
 check-syntax:
 	bash -n scripts/dev_session.sh scripts/reconcile_sessions.sh scripts/lib/repo_root.sh scripts/hooks/pre-push
