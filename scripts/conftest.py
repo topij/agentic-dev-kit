@@ -192,7 +192,8 @@ def _excluded_state_dirs() -> frozenset[str]:
     the full walk this guard always did. ``kitconfig`` is loaded by file path so
     nothing here puts ``lib/`` on ``sys.path``; it is a config reader and resolves
     no state path, so the independence argument in the module docstring does not
-    reach it. The overlay is not read: ``kitconfig`` refuses this key there.
+    reach it. The local overlay is read — that is where a checkout names its own
+    retained directories — and an overlay ``kitconfig`` refuses excludes nothing.
     """
     try:
         import importlib.util
@@ -205,7 +206,7 @@ def _excluded_state_dirs() -> frozenset[str]:
         kitconfig = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(kitconfig)
         config = kitconfig.load_config(
-            REPO_ROOT / kitconfig.DEFAULT_CONFIG_PATH, overlay=False
+            REPO_ROOT / kitconfig.DEFAULT_CONFIG_PATH
         )
         names = kitconfig.get(config, "state.test_guard_exclude", [])
     except Exception:

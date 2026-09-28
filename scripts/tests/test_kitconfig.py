@@ -695,11 +695,10 @@ def test_deep_merge_replaces_a_list_rather_than_appending():
     """`_deep_merge` replaces lists so an overlay could express "none of these"
     rather than only ever adding.
 
-    Pinned directly on `_deep_merge`, not through `load_config`: nothing in
-    OVERLAYABLE_PREFIXES is a list, so no overlay can reach this today. The
-    previous version of this test claimed `review.bots: []` as its motivation —
-    a key the same file asserts can never be set (panel, correctness lens). Kept
-    because the merge is general and the allowlist may widen."""
+    Pinned directly on `_deep_merge`; `state.test_guard_exclude` is the list an
+    overlay reaches through `load_config`. An earlier version of this test
+    claimed `review.bots: []` as its motivation — a key the same file asserts can
+    never be set (panel, correctness lens)."""
     problems: list[str] = []
     out = kitconfig._deep_merge({"a": [1, 2, 3]}, {"a": []}, "", problems)
     assert out["a"] == []

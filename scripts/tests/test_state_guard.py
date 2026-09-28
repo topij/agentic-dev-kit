@@ -844,10 +844,14 @@ def test_nested_pytest_timeout_reports_captured_output(
 _EVIDENCE = "review-evidence"
 
 
-def _excluding_tree(root: Path, exclude_yaml: str, probe: str) -> Path:
+def _excluding_tree(
+    root: Path, exclude_yaml: str, probe: str, *, overlay_yaml: str | None = None
+) -> Path:
     """A flat tree whose config sets ``state.test_guard_exclude``.
 
     ``exclude_yaml`` is the key's value as YAML, written verbatim after the key.
+    ``overlay_yaml``, when given, is written the same way into the gitignored
+    ``config/dev-model.local.yaml`` beside it.
     A retained packet is seeded under ``state/review-evidence/`` before pytest
     starts, so it is in the baseline, and ``probe`` is the planted test's body.
     """
@@ -862,6 +866,10 @@ def _excluding_tree(root: Path, exclude_yaml: str, probe: str) -> Path:
     (root / "config" / "dev-model.yaml").write_text(
         f"state:\n  dirname: state\n  test_guard_exclude:{exclude_yaml}\n"
     )
+    if overlay_yaml is not None:
+        (root / "config" / "dev-model.local.yaml").write_text(
+            f"state:\n  test_guard_exclude:{overlay_yaml}\n"
+        )
     evidence = root / "state" / _EVIDENCE
     evidence.mkdir(parents=True)
     (evidence / "packet.json").write_text("{}")
@@ -884,6 +892,19 @@ def test_a_write_inside_an_excluded_directory_is_not_walked(tmp_path: Path) -> N
         pytest.fail(f"the planted write did not land, so this proves nothing:\n{combined}")
     assert result.returncode == 0, f"a write the config excludes failed the run:\n{combined}"
     assert _BANNER not in combined, combined
+
+
+def test_the_local_overlay_supplies_the_exclusion(tmp_path: Path) -> None:
+    """The shipped config lists nothing; a checkout names its own directories
+    in the gitignored overlay, so the guard must read with the overlay applied."""
+    state = _excluding_tree(
+        tmp_path, " []", _WRITE_IN_EVIDENCE, overlay_yaml=f"\n    - {_EVIDENCE}"
+    )
+    result = _run_pytest(tmp_path, _SHAPES["tests-only"])
+    combined = result.stdout + result.stderr
+    if not (state / _EVIDENCE / "new.json").is_file():
+        pytest.fail(f"the planted write did not land, so this proves nothing:\n{combined}")
+    assert result.returncode == 0, f"the overlay's exclusion was not applied:\n{combined}"
 
 
 def test_a_write_outside_an_excluded_directory_is_still_caught(tmp_path: Path) -> None:

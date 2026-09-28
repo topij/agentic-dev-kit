@@ -368,7 +368,10 @@ def _deep_merge(
 #: readers that are prose instructions to an agent rather than code. Widening this
 #: list means enumerating them and checking each. `tracker.*` was here and failed
 #: that bar; `test_tracker_is_not_overlayable` records why.
-OVERLAYABLE_PREFIXES = ("notify.user_key",)
+#:
+#: ``state.test_guard_exclude`` names directories in THIS checkout's ``state/``;
+#: its one reader is ``<engine-dir>/conftest.py``, which loads with the overlay.
+OVERLAYABLE_PREFIXES = ("notify.user_key", "state.test_guard_exclude")
 
 
 def _overlay_paths(node: Any, where: str = "") -> list[str]:

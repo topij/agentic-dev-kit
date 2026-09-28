@@ -44,7 +44,7 @@ starts.
 
 ## #851 — The state guard skips configured retained-artifact directories
 
-ADDED — config key: Refresh `conftest.py` in your engine directory, `kit-manifest.json` and `tests/test_state_guard.py`. New optional `state.test_guard_exclude` in `config/dev-model.yaml`: a list of top-level directory names under `state/` that the test suite's state guard records as present but does not read. Add it if your `state/` holds large retained artifacts that no engine writes and your local suite is slow; a write inside a listed directory is not caught. Leave it unset to keep the full walk.
+ADDED — config key: Refresh `conftest.py` and `lib/kitconfig.py` in your engine directory, `kit-manifest.json`, `tests/test_state_guard.py` and `tests/test_kitconfig.py`. New `state.test_guard_exclude` in `config/dev-model.yaml`, shipped as `[]`: a list of top-level directory names under `state/` that the test suite's state guard records as present but does not read. It is the second key a local overlay may set, beside `notify.user_key`, so add `test_guard_exclude: []` under `state:` in your tracked config and list the directories in `config/dev-model.local.yaml`. Use it if your `state/` holds large retained artifacts no engine writes and your local suite is slow; a write inside a listed directory is not caught. Leave the list empty to keep the full walk.
 
 ## #843 — A triage sweep moves earlier graduation markers to the archive
 

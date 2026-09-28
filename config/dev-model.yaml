@@ -628,9 +628,9 @@ state:
   # every file under state/ in each pytest process, so a large directory of
   # retained artifacts makes the local suite slow. List only directories no engine
   # writes: a test writing inside one goes unseen. Plain names, not paths; an
-  # invalid list excludes nothing. Missing key: [].
-  test_guard_exclude:
-    - review-evidence
+  # invalid list excludes nothing. What sits in state/ is a fact about one
+  # checkout, so set this in the gitignored config/dev-model.local.yaml.
+  test_guard_exclude: []
   # The unsandboxed-write guard skips a legitimate scheduled/CI writer, detected by
   # env var. state_paths stays import-free (it must work from a git hook), so this is
   # an ENV contract, not a value it reads from here — documented here for

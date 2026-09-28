@@ -120,7 +120,7 @@
     },
     "scripts/conftest.py": {
       "role": "engine",
-      "sha256": "7b99d69e6c6de2f5a737028f4f0b05040eb799114573058e365d6e271798ea8b"
+      "sha256": "46cbb89524c823602ad593f894322ffdf0dded3952cfbe99fc9552754f49e8f1"
     },
     "scripts/dev_session.sh": {
       "role": "engine",
@@ -187,7 +187,7 @@
         "scripts/pr_watch.py"
       ],
       "role": "engine",
-      "sha256": "9999ec6c2dc02b16109aa29d00c3cacc03a2fdc3310a68dc5fd592a9325aa012"
+      "sha256": "428fa7e24e9efec1a8f65f15ba2d1673df819196bce3ccabe1a850afa7ff988a"
     },
     "scripts/lib/repo_root.sh": {
       "role": "engine",
@@ -478,7 +478,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "67bdd7686c3cd0477ca51dceeb6463cb18395d9fd86515f12757da21ab73b20b"
+      "sha256": "4281306a94b5cc88912012d0e02882787293fb4f3cb0322647cc6578fbc89153"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -514,7 +514,7 @@
     },
     "scripts/tests/test_kitconfig.py": {
       "role": "test",
-      "sha256": "a4a77ccffd183350625b5c48d0d395f37941f155fc24ff85e34d1c577ec058b9"
+      "sha256": "3d894134c2fec431530e1d90a45830b90309ccaa49f9c0860cec0196b45cea8c"
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
@@ -562,7 +562,7 @@
     },
     "scripts/tests/test_state_guard.py": {
       "role": "test",
-      "sha256": "24b5cac1296c754afc46534daded15bbc4c48e53e3af52bec874d70693a7be12"
+      "sha256": "8edc097c61adcf8abdae5c3f411333369a0f9fb102df7e6e6cd1cad2ebbbe2d9"
     },
     "scripts/tests/test_systemize_artifacts.py": {
       "role": "test",
