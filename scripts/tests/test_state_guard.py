@@ -835,3 +835,86 @@ def test_nested_pytest_timeout_reports_captured_output(
         _run_pytest(tmp_path, [*_SHAPES["tests-only"], "-s"])
     assert "child stdout" in str(caught.value)
     assert "child stderr" in str(caught.value)
+
+
+# `state.test_guard_exclude` (#848's slow-suite follow-up). The guard reads
+# `lib/kitconfig.py` and `config/dev-model.yaml` from the tree it guards, so these
+# cases copy both in; every case above copies neither, which is the no-config
+# fallback (the full walk) exercised on every run of this file.
+_EVIDENCE = "review-evidence"
+
+
+def _excluding_tree(root: Path, exclude_yaml: str, probe: str) -> Path:
+    """A flat tree whose config sets ``state.test_guard_exclude``.
+
+    ``exclude_yaml`` is the key's value as YAML, written verbatim after the key.
+    A retained packet is seeded under ``state/review-evidence/`` before pytest
+    starts, so it is in the baseline, and ``probe`` is the planted test's body.
+    """
+    root.mkdir(parents=True, exist_ok=True)
+    (root / ".git").mkdir()
+    engine = root / "scripts"
+    (engine / "tests").mkdir(parents=True)
+    (engine / "lib").mkdir()
+    (engine / "conftest.py").write_bytes(ENGINE_CONFTEST.read_bytes())
+    (engine / "lib" / "kitconfig.py").write_bytes((ENGINE_DIR / "lib" / "kitconfig.py").read_bytes())
+    (root / "config").mkdir()
+    (root / "config" / "dev-model.yaml").write_text(
+        f"state:\n  dirname: state\n  test_guard_exclude:{exclude_yaml}\n"
+    )
+    evidence = root / "state" / _EVIDENCE
+    evidence.mkdir(parents=True)
+    (evidence / "packet.json").write_text("{}")
+    (engine / "tests" / "test_tests_probe.py").write_text(
+        "import shutil\nfrom pathlib import Path\n"
+        f"STATE = Path({str(root / 'state')!r})\n"
+        "def test_probe():\n" + probe
+    )
+    return root / "state"
+
+
+_WRITE_IN_EVIDENCE = f"    (STATE / {_EVIDENCE!r} / 'new.json').write_text('x')\n"
+
+
+def test_a_write_inside_an_excluded_directory_is_not_walked(tmp_path: Path) -> None:
+    state = _excluding_tree(tmp_path, f"\n    - {_EVIDENCE}", _WRITE_IN_EVIDENCE)
+    result = _run_pytest(tmp_path, _SHAPES["tests-only"])
+    combined = result.stdout + result.stderr
+    if not (state / _EVIDENCE / "new.json").is_file():
+        pytest.fail(f"the planted write did not land, so this proves nothing:\n{combined}")
+    assert result.returncode == 0, f"a write the config excludes failed the run:\n{combined}"
+    assert _BANNER not in combined, combined
+
+
+def test_a_write_outside_an_excluded_directory_is_still_caught(tmp_path: Path) -> None:
+    _excluding_tree(
+        tmp_path,
+        f"\n    - {_EVIDENCE}",
+        "    (STATE / 'pr-watch').mkdir()\n    (STATE / 'pr-watch' / '9999.json').write_text('{}')\n",
+    )
+    result = _run_pytest(tmp_path, _SHAPES["tests-only"])
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "pr-watch/9999.json" in result.stdout + result.stderr
+
+
+def test_removing_an_excluded_directory_is_caught(tmp_path: Path) -> None:
+    """Excluded means not walked, not unrecorded: its presence is still an entry."""
+    state = _excluding_tree(
+        tmp_path, f"\n    - {_EVIDENCE}", f"    shutil.rmtree(STATE / {_EVIDENCE!r})\n"
+    )
+    result = _run_pytest(tmp_path, _SHAPES["tests-only"])
+    assert not (state / _EVIDENCE).exists(), "the planted removal did not happen"
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert f"{_EVIDENCE}/" in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    "exclude_yaml",
+    [f" {_EVIDENCE}", f"\n    - {_EVIDENCE}/", f"\n    - ./{_EVIDENCE}", "\n    - .."],
+    ids=["not-a-list", "trailing-slash", "dot-path", "dotdot"],
+)
+def test_an_invalid_exclusion_falls_back_to_the_full_walk(tmp_path: Path, exclude_yaml: str) -> None:
+    _excluding_tree(tmp_path, exclude_yaml, _WRITE_IN_EVIDENCE)
+    result = _run_pytest(tmp_path, _SHAPES["tests-only"])
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert f"{_EVIDENCE}/new.json" in result.stdout + result.stderr

@@ -174,6 +174,68 @@ def _hash_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _excluded_state_dirs() -> frozenset[str]:
+    """Top-level ``state/`` directories named in ``state.test_guard_exclude``.
+
+    WHY IT EXISTS. The snapshot hashes every file under ``state/``, twice per
+    pytest process, and the suite starts nested pytest processes of its own. A
+    repo that keeps retained artifacts there — this one keeps evidence packets
+    under ``state/review-evidence/``, which no engine writes — pays for reading
+    all of it each time, which CI, starting from an empty ``state/``, never does.
+    A listed directory is recorded as present
+    and not walked, so a write inside it is outside this guard's sight; list only
+    directories no engine writes.
+
+    FAILS CLOSED. Anything short of a readable list of plain names — no
+    ``lib/kitconfig.py`` beside this file, no config, a parse error, a non-list,
+    an entry that is not a single path component — excludes nothing, which is
+    the full walk this guard always did. ``kitconfig`` is loaded by file path so
+    nothing here puts ``lib/`` on ``sys.path``; it is a config reader and resolves
+    no state path, so the independence argument in the module docstring does not
+    reach it. The overlay is not read: ``kitconfig`` refuses this key there.
+    """
+    try:
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "_state_guard_kitconfig", ENGINE_DIR / "lib" / "kitconfig.py"
+        )
+        if spec is None or spec.loader is None:
+            return frozenset()
+        kitconfig = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(kitconfig)
+        config = kitconfig.load_config(
+            REPO_ROOT / kitconfig.DEFAULT_CONFIG_PATH, overlay=False
+        )
+        names = kitconfig.get(config, "state.test_guard_exclude", [])
+    except Exception:
+        return frozenset()
+    if not isinstance(names, list):
+        return frozenset()
+    return frozenset(
+        name
+        for name in names
+        if isinstance(name, str)
+        and name not in ("", ".", "..")
+        and not any(sep in name for sep in ("/", "\\", "\0"))
+    )
+
+
+def _walk_state(state_dir: Path, excluded: frozenset[str]):
+    """``state_dir.rglob("*")``, minus the descendants of excluded directories.
+
+    Same entries in the same traversal as the ``rglob`` it replaces: a
+    top-level entry is yielded, and its descendants follow only when it is a real
+    directory, which is how ``rglob`` treats a symlinked one. An excluded
+    directory is yielded for its presence entry and not entered.
+    """
+    for top in sorted(state_dir.iterdir()):
+        yield top
+        if top.is_symlink() or not top.is_dir() or top.name in excluded:
+            continue
+        yield from sorted(top.rglob("*"))
+
+
 def _real_state_snapshot() -> dict[str, str]:
     """``{relpath: recorded kind}`` for every entry under the REAL ``<repo>/state/``.
 
@@ -244,8 +306,13 @@ def _real_state_snapshot() -> dict[str, str]:
     if not state_dir.is_dir():
         return {}
     snapshot: dict[str, str] = {"./": "<dir>"}
-    for path in sorted(state_dir.rglob("*")):
+    excluded = _excluded_state_dirs()
+    for path in _walk_state(state_dir, excluded):
         relative = str(path.relative_to(state_dir))
+        if relative in excluded and not path.is_symlink() and path.is_dir():
+            # Presence only: creating, deleting or replacing it still shows.
+            snapshot[f"{relative}/"] = "<dir, not walked: state.test_guard_exclude>"
+            continue
         if path.is_symlink():
             # The KIND marker lives in the VALUE, never in a key suffix. `@`
             # is a legal filename character, so a `{relative}@` key collided
