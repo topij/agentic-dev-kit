@@ -42,6 +42,10 @@ starts.
 
 ---
 
+## #843 — A triage sweep moves earlier graduation markers to the archive
+
+CHANGED — report shape: Refresh `lib/triage/finalize.py`, `lib/triage/inbox.py`, the shared triage workflow, `kit-manifest.json`, `scripts/tests/test_finalize_triage.py` and `scripts/tests/test_triage_inbox.py`. A new sweep moves every earlier `## <date> — Backlog migrated …` section in the inbox (heading and record, engine-written or hand-written) to the archive, unchanged and in file order, ahead of the swept blocks, so the inbox keeps only the newest sweep's marker. Parked entries stay where they are. `finalize.RENDERINGS` gains `pre-187`, the previous layout, and commit validation accepts it, so a sweep an older engine committed still validates. `inbox.take_migration_markers` and `inbox.append_archive_sections` are new. Update any script or test that expects an earlier marker to remain in the inbox after a later sweep.
+
 ## #834 — A completed triage state retires after the configuration changed
 
 CHANGED — gate semantics: Refresh `lib/triage/model.py`, `lib/triage/engine.py`, the shared triage workflow, `kit-manifest.json`, `scripts/tests/test_triage_engine.py` and `scripts/tests/test_portability.py`. A session-starting triage entry (no argument, `new`, or `test`) used to hold on `configuration identity mismatch` when the retained `completed` state had been written under a configuration that has since changed, so any `config/dev-model.yaml` change after a sweep blocked every later run of that mode. Such an entry now retires the completed state as long as its two recorded config fingerprints are SHA-256 digests that agree with each other; `resume`, and every non-completed phase, still require the current fingerprint. `canonical_state` and `validate_state` take a new keyword, `retiring`, defaulting to `False`. If a run is held with that detail over a completed state, refresh these files and run the same entry again.
