@@ -382,6 +382,6 @@ sweep under it merged as #847. **Owner:**
 [#833](https://github.com/topij/agentic-dev-kit/issues/833),
 [#841](https://github.com/topij/agentic-dev-kit/issues/841).
 
-▶ Next: fix #841 — say in the triage workflow and the engine's refusal that finalize's
+▶ Next: #841 — say in the triage workflow and the engine's refusal that finalize's
 `worktree` must lie outside the repository — then #833's finished-run retirement for
 engine-written layouts.
