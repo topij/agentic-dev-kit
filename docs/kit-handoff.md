@@ -20,6 +20,21 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-09-28 (sweep moves earlier graduation markers, friction sweep, in Claude Code)
+
+**Shipped.** [#843](https://github.com/topij/agentic-dev-kit/pull/843) merged as `5ac1293`; #187 is closed. A sweep moves every earlier graduation-marker section to the archive and keeps only its own; a marker-titled section holding an entry line stays. The previous layout validates as the `pre-187` rendering.
+[#847](https://github.com/topij/agentic-dev-kit/pull/847) merged as `261cc83`: the first sweep under #843, triage session `3058c6ec`. It filed #844, #845 and #846, and archived TRI-04 and TRI-05 (the 2026-08-27 `claude -p` and `panel_prompt.py` entries). Both merged on the operator's word.
+
+**Decided.** #847's record named the approver `topi`: the cockpit wrote that into the approval context, while earlier records and the GitHub login use `topij`. On the operator's word, #847 merged as produced and this commit corrects the line, since editing the engine-rendered sweep would have broken its forge chain.
+
+**Filed this session:** #848 (`make test` stops at lint on untracked Python files). #461 carries an occurrence: unreadable leftover fixtures under `state/review-evidence/` stopped the conftest import; the cockpit restored owner read permission on them and deleted nothing.
+
+**Review.** CodeRabbit skipped both PRs, so the fallback panel carried each; the disposition comments on the PRs own the findings. #843's round 1 found that a dated entry whose heading merely mentions "Backlog migrated" would have been archived unannotated.
+
+**Verification.** In `/Users/topi/Coding/agentic-dev-kit` on 2026-09-28, `uvx ruff@0.16.0 check --no-fix --extend-exclude saved_plans`, `make check-syntax` and `uv run --with pytest --with pyyaml python -m pytest scripts/lib/state_paths/tests scripts/tests -q` passed at `f59e46aac0f7fcef772587a77c4e49793e1ec9d7`, pytest printing `3689 passed`. Plain `make test` was not usable there: #848.
+
+______________________________________________________________________
+
 ## Session — 2026-09-27 (mixed triage approval, sweep rendering, retirement across config, in Claude Code)
 
 **Shipped.** [#831](https://github.com/topij/agentic-dev-kit/pull/831) merged as `96d7632`: one triage approval carries `approve`, `archive` and `park` commands, one per line (#820).
@@ -362,13 +377,11 @@ review-request method.
 
 ### Triage engine hardening
 
-**Status:** mixed approvals (#831), sweep-record rendering (#832) and completed-state
-retirement across a config change (#834) shipped on 2026-09-27, and the first sweep under
-them merged as #840. **Owner:**
-[#187](https://github.com/topij/agentic-dev-kit/issues/187),
+**Status:** a sweep now moves earlier graduation markers to the archive (#843); the first
+sweep under it merged as #847. **Owner:**
 [#833](https://github.com/topij/agentic-dev-kit/issues/833),
 [#841](https://github.com/topij/agentic-dev-kit/issues/841).
 
-▶ Next: implement #187's acceptance — a sweep moves every earlier graduation-marker
-section to the archive and keeps only its own; test it against an inbox holding several
-engine-written markers.
+▶ Next: #841 — say in the triage workflow and the engine's refusal that finalize's
+`worktree` must lie outside the repository — then #833's finished-run retirement for
+engine-written layouts.

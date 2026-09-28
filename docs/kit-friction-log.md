@@ -38,4 +38,4 @@ Archived without filing: TRI-04, the `2026-08-27` entry `` `claude -p --output-f
 
 Archived without filing: TRI-05, the `2026-08-27` entry `` `panel_prompt.py` produced an empty prompt file and hung until the tool timeout, then rendered in about a second on an identical re-run. ``.
 
-Approval commands: `approve TRI-01 TRI-02 TRI-03`, `archive TRI-04 TRI-05`. Approver: `topi`.
+Approval commands: `approve TRI-01 TRI-02 TRI-03`, `archive TRI-04 TRI-05`. Approver: `topij`.
