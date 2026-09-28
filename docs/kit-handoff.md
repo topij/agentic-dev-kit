@@ -31,7 +31,7 @@
 
 **Review.** CodeRabbit skipped both PRs, so the fallback panel carried each; the disposition comments on the PRs own the findings. #843's round 1 found that a dated entry whose heading merely mentions "Backlog migrated" would have been archived unannotated.
 
-**Verification.** In `/Users/topi/Coding/agentic-dev-kit` on 2026-09-28, `uvx ruff@0.16.0 check --no-fix --extend-exclude saved_plans`, `make check-syntax` and `uv run --with pytest --with pyyaml python -m pytest scripts/lib/state_paths/tests scripts/tests -q` passed at `f59e46aac0f7fcef772587a77c4e49793e1ec9d7` (#843's merged head), pytest printing `3689 passed`. Plain `make test` was not usable there: #848.
+**Verification.** In `/Users/topi/Coding/agentic-dev-kit` on 2026-09-28, `uvx ruff@0.16.0 check --no-fix --extend-exclude saved_plans`, `make check-syntax` and `uv run --with pytest --with pyyaml python -m pytest scripts/lib/state_paths/tests scripts/tests -q` passed at `f59e46aac0f7fcef772587a77c4e49793e1ec9d7`, pytest printing `3689 passed`. Plain `make test` was not usable there: #848.
 
 ______________________________________________________________________
 
