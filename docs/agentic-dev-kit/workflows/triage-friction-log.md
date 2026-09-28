@@ -1094,7 +1094,8 @@ when it is the file's last section. Instead, before writing its own marker, move
 earlier graduation-marker section (its heading through to the next heading outside code)
 to the archive unchanged, in file order and ahead of the swept blocks, so the inbox keeps
 only this sweep's marker and each sweep leaves the file no longer than the entries it
-kept. Parked entries' dated sections stay where they are. When removing a dated section that genuinely is
+kept. A marker-titled section that holds an entry line is not a marker record and stays,
+as do parked entries' dated sections. When removing a dated section that genuinely is
 empty, also remove the blank line that separated it from whatever precedes it if nothing
 follows: otherwise an emptied trailing section leaves a blank line at EOF. In the archive,
 swept blocks whose date heading the archive already has join the last section with that

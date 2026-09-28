@@ -12,7 +12,12 @@ ENGINE_DIR = engine_dir(Path(__file__))
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
 from triage.finalize import _entry_lead, _issue_link, _record_lines, render_sweep  # noqa: E402
-from triage.inbox import exact_sweep, parse  # noqa: E402
+from triage.inbox import (  # noqa: E402
+    append_archive_sections,
+    exact_sweep,
+    parse,
+    take_migration_markers,
+)
 from triage.model import TriageError  # noqa: E402
 
 
@@ -432,6 +437,30 @@ def test_render_sweep_moves_every_earlier_marker_and_keeps_parked_entries_in_pla
         + b"\n## 2026-09-28\n\n- **Swept.** body\n"
     )
     assert [candidate.raw for candidate in parse(active)] == [candidate.raw for candidate in candidates[1:]]
+
+
+def test_marker_titled_section_holding_an_entry_is_not_moved() -> None:
+    """A dated entry whose heading only mentions the marker phrase carries an entry
+    line, which no marker record does; moving it would archive it unannotated."""
+    lookalike = "## 2026-09-15 — Backlog migrated leaves too many markers\n\n- **Marker growth.** each sweep leaves a record\n".encode()
+    marker = "## 2026-09-14 — Backlog migrated by triage session old\n\nEngine mode: `engine-backed`.\n".encode()
+    active, taken = take_migration_markers(b"# Log\n\n" + lookalike + b"\n" + marker)
+    assert active == b"# Log\n\n" + lookalike
+    assert taken == [marker]
+
+
+@pytest.mark.parametrize(
+    ("archive", "expected"),
+    [
+        (b"", b"## A\n"),
+        (b"# Archive\n", b"# Archive\n\n## A\n"),
+        (b"# Archive\n\n", b"# Archive\n\n## A\n"),
+        (b"# Archive", b"# Archive\n\n## A\n"),
+    ],
+)
+def test_append_archive_sections_leaves_exactly_one_blank_line_before_each(archive: bytes, expected: bytes) -> None:
+    assert append_archive_sections(archive, [b"## A\n"]) == expected
+    assert append_archive_sections(archive, [b"## A\n", b"## B\n"]) == expected + b"\n## B\n"
 
 
 def test_render_sweep_pre_187_keeps_earlier_markers_in_the_inbox() -> None:
