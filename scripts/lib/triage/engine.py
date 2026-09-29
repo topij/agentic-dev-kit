@@ -20,7 +20,7 @@ from .canonical import (
     loads_exact,
 )
 from .finalize import RENDERINGS, render_sweep, sweep_ids, validate_reviewed_head
-from .gate import GateLease, acquire, validate_record
+from .gate import GateLease, acquire, owner_status, validate_record
 from .inbox import Candidate, _inline_literal, parse, snapshot_content
 from .model import (
     CAPABILITIES,
@@ -251,7 +251,9 @@ def _gate_only_state_value(store: ArtifactStore, state_raw: bytes | None) -> dic
     return value
 
 
-def _prepared_gate_only_bundle(store: ArtifactStore, state_value: dict[str, Any]) -> dict[str, Any]:
+def _prepared_gate_only_bundle(
+    store: ArtifactStore, state_value: dict[str, Any], *, own_gate_raw: bytes | None = None
+) -> dict[str, Any]:
     bundle_path = Path(state_value["configured_bundle_path"])
     _, bundle_raw = observe(bundle_path)
     if bundle_raw is None:
@@ -295,9 +297,21 @@ def _prepared_gate_only_bundle(store: ArtifactStore, state_value: dict[str, Any]
             if raw is None or observed != approved:
                 raise TriageError("gate-only held receipt quarantine changed", outcome="operator-held")
         _, gate_raw = observe(store.gate_path, allow_links=True)
-        if gate_raw is not None and gate_raw != dumps(record):
+        # An entry that acquired the gate before reading the receipt finds its own
+        # lease at the path, not a changed replacement gate (#864).
+        if gate_raw is not None and gate_raw != dumps(record) and gate_raw != own_gate_raw:
             raise TriageError("gate-only held receipt replacement gate changed", outcome="operator-held")
     return bundle
+
+
+def _require_terminated_owner(settings: Settings, gate_raw: bytes) -> None:
+    try:
+        record = loads_exact(gate_raw)
+    except Exception as exc:
+        raise TriageError("blocking gate is malformed", outcome="operator-held") from exc
+    validate_record(record, repository_identity=repository_identity(settings), config_fingerprint=settings.fingerprint)
+    if owner_status(record) != "terminated":
+        raise TriageError("blocking gate owner is active or uncertain", outcome="operator-held")
 
 
 def _blocking_recovery(
@@ -326,6 +340,11 @@ def _blocking_recovery(
         except Exception as exc:
             raise TriageError("current-gate recovery bundle is malformed", outcome="operator-held") from exc
         kind = bundle.get("kind") if isinstance(bundle, dict) else None
+        if kind in {"state-present-capture", "state-present-prepared"}:
+            # An ungated `recover` leaves its capture bound to its own gate, so this
+            # bundle's owner may still be running. Plan from it or act on it only
+            # once that owner is proven dead (#863).
+            _require_terminated_owner(settings, gate_raw)
         if kind in {"gate-only-prepared", "test-gate-only-prepared"}:
             receipt = resume_gate_only(store, settings, bundle)
             return "operator-held", receipt["kind"], None
@@ -1752,7 +1771,7 @@ def run(
                 return _result(capabilities, terminal or "operator-held", mode=mode, engine_mode=settings.engine_mode, report=str(report_path), frozen=str(frozen_path), resume_action="resume with analysis bound to the frozen candidate index" if state["phase"] == "reserved" else "rerun with the exact pending approval or provider action", detail="durable triage state retained", identifiers=state.get("verified_tracker_identifiers"), candidate_index=state["frozen_snapshot"]["content"]["candidate_index"])
             gate_only_state = _gate_only_state_value(store, state_raw)
             if gate_only_state is not None:
-                bundle = _prepared_gate_only_bundle(store, gate_only_state)
+                bundle = _prepared_gate_only_bundle(store, gate_only_state, own_gate_raw=lease.verify())
                 if gate_only_state["kind"] == "gate-only-operator-held":
                     lease.release()
                     return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="preserve the terminal gate-only evidence", detail="gate-only-operator-held")
