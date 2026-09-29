@@ -5,6 +5,75 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-09-25 (Phase 5 D-TRIAGE-RESIDUAL, in Claude Code)
+
+The packets are `saved_plans/phase5-d-triage-residual_2026-09-25.md` and
+`saved_plans/phase5-d-triage-retire-completed_2026-09-25.md`. They are local and not
+committed, like the other D packets. The evidence is in `state/review-evidence/`
+(gitignored):
+
+- `phase5-d-triage-residual-01/`: Stage T;
+- `phase5-d-triage-retire-01-stage0/`: the K1 classification;
+- `phase5-d-triage-residual-01-stage-l/`: the live stage, and its `RESULTS.md` owns the
+  outcomes.
+
+**Stage T** (test mode, in a throwaway clone) worked, and showed that a completed session
+ended its mode for good. **K1** (a read-only copy of the 2026-09-06 LLM-only state) found
+it invalid but finished.
+
+**Shipped, each on the operator's direction, with fallback panels:**
+
+- #798: `new`, no argument and `test` retire a valid completed triage state.
+- #799: a guard test compares `KIT_OWNED` with `git ls-files scripts`.
+- #801: `recover` retires an invalid but finished run, proven from git.
+- #804: a failed branch-create is retried once read-back shows it left nothing.
+
+The operator also asked for #800 (another session's handoff) to be merged.
+
+**Live triage.** The 2026-09-06 state was retired through #801. Session A filed TRI-05 as
+#802 and swept it (#803). Session B archived the entries that already had a home (#805). Both
+completed as `archive-sweep` / `degraded-success`. The markers' record blocks in
+`docs/kit-friction-log.md` were restored by hand in this wrap-up.
+
+**Filed, on the operator's approval of the exact payloads:** #806, #807, #808. An
+occurrence comment went on #425.
+
+**Not established:** notification-thread approval (the CLI has no notification provider;
+#198), and D-TRIAGE-RECOVERY.
+
+**Verification.** The bodies of #798, #799, #801 and #804 each stamp their own
+`make test` run. All ran in linked worktrees under this session's scratchpad, because the main checkout's
+`state/review-evidence/` holds unreadable files (#461).
+
+### 2026-09-25 (reviewer switching assessment, in Claude Code)
+
+**Why.** An In Parallel adopter repository is replacing CodeRabbit with an internal PR
+reviewer. The operator wants the kit to treat any reviewer as "just another review
+bot" and to make switching between CodeRabbit and internal tooling a config choice.
+
+**Decisions (operator):**
+
+- The kit repo stays on CodeRabbit (free OSS tier).
+- The kit ships **no** settings for the internal reviewer. The kit may be used by
+  external repos, so the adopter defines its reviewer's profile itself. Kit code, docs
+  and tests stay reviewer-neutral and use a made-up reviewer.
+- How the internal reviewer behaves (trigger, label semantics, login, latency) is
+  settled by watching it once it is live on the adopter. If the kit can't accommodate
+  it, the fallback is asking the reviewer's developer for a change. On 2026-09-25
+  the operator asked that developer to have the reviewer post a GitHub check run, which would make the kit's existing
+  check-based pending path work unchanged.
+
+**Filed on the operator's go-ahead:**
+
+- #796: reviewer profiles, with adopter-defined profiles and a configured
+  review-request method;
+- #797: the merge gate can't see a reviewer whose only in-progress signal is a
+  comment, and pending grace is one value for all reviewers.
+
+The reviewer-specific notes and the checklist of things to observe once it is live are
+in `saved_plans/fabro-review-tool-assessment_2026-09-25.md` (local, not committed). The
+public issues leave those details out on purpose.
+
 ### 2026-09-24 (Phase 5 D-SYSTEMIZE-RECOVERY-02 rerun, in Claude Code)
 
 **Approved and run.** The operator approved PHASE5-D-SYSTEMIZE-RECOVERY-02 with options
