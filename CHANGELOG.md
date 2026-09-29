@@ -42,6 +42,10 @@ starts.
 
 ---
 
+## #851 — The state guard skips configured retained-artifact directories
+
+ADDED — config key: Refresh `conftest.py` and `lib/kitconfig.py` in your engine directory, `kit-manifest.json`, `tests/test_state_guard.py` and `tests/test_kitconfig.py`. New `state.test_guard_exclude` in `config/dev-model.yaml`, shipped as `[]`: a list of top-level directory names under `state/` that the test suite's state guard records as present but does not read. It is the second key a local overlay may set, beside `notify.user_key`, so add `test_guard_exclude: []` under `state:` in your tracked config and list the directories in `config/dev-model.local.yaml`. Use it if your `state/` holds large retained artifacts no engine writes and your local suite is slow; a write inside a listed directory is not caught. A list naming `pr-watch`, a directory a `state/...` path in the config points into, or any entry that is not a plain name excludes nothing. Leave the list empty to keep the full walk.
+
 ## #843 — A triage sweep moves earlier graduation markers to the archive
 
 CHANGED — report shape: Refresh `lib/triage/finalize.py`, `lib/triage/inbox.py`, the shared triage workflow, `kit-manifest.json`, `scripts/tests/test_finalize_triage.py` and `scripts/tests/test_triage_inbox.py`. A new sweep moves every earlier `## <date> — Backlog migrated …` section in the inbox (heading and record, engine-written or hand-written) to the archive, unchanged and in file order, ahead of the swept blocks, so the inbox keeps only the newest sweep's marker. A marker-titled section that holds an entry line (`- **…`) stays, as do parked entries. `finalize.RENDERINGS` gains `pre-187`, the previous layout, and commit validation accepts it, so a sweep an older engine committed still validates. `inbox.take_migration_markers` and `inbox.append_archive_sections` are new. Update any script or test that expects an earlier marker to remain in the inbox after a later sweep.
