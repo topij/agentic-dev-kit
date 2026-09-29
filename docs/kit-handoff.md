@@ -22,7 +22,7 @@
 
 ## Session — 2026-09-29 (triage finalize worktree, recover for engine-written runs, in Claude Code)
 
-**Shipped.** [#855](https://github.com/topij/agentic-dev-kit/pull/855) merged as `e265c36`; #841 is closed. Finalize's refusal and the triage workflow now say the `worktree` must lie outside the repository checkout and not exist yet.
+**Shipped.** [#855](https://github.com/topij/agentic-dev-kit/pull/855) merged as `e265c36`; #841 is closed. Finalize's refusal now says the `worktree` must lie outside the repository checkout, and the triage workflow adds that it must not exist yet.
 [#858](https://github.com/topij/agentic-dev-kit/pull/858) merged as `369e9ee`; #833 is closed. `recover` reads the engine's finished layout. Its merge read-back names no merge commit, so `recover` takes the one first-parent commit on the protected ref, after the run's `protected_branch_head`, that moves every swept block into the archive, and holds otherwise. `recover` also refuses a config-drifted completed state as valid. #858 was reviewed as a safety-critical recovery path and merged on the operator's word.
 
 **Decided.** An LLM-only state that names no merge commit stays held; the git lookup is the engine layout's route only (#858's round 1). The dead end filed as #859 was ticketed rather than fixed in #858, because the fix is a new mechanism on a recovery path. On the operator's word, both PRs merged and this session's work is recorded under *Triage engine hardening*.
