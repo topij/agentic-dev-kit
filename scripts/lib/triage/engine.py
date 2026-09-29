@@ -1605,7 +1605,10 @@ def _advance_finalize(
             raise TriageError("finalization worktree must be an explicit absolute path", outcome="operator-held")
         worktree_path = Path(worktree).resolve()
         if worktree_path == settings.paths.repo or settings.paths.repo.is_relative_to(worktree_path) or worktree_path.is_relative_to(settings.paths.repo):
-            raise TriageError("finalization worktree conflicts with caller checkout", outcome="operator-held")
+            raise TriageError(
+                "finalization worktree must lie outside the repository checkout, neither inside it nor containing it",
+                outcome="operator-held",
+            )
         request_core = {"host": forge_host, "repository": repository, "protected_branch": settings.protected_branch, "draft_head": state["run_identity"]["protected_branch_head"], "branch": branch, "worktree": worktree}
         authority = forge.authority("branch-create", request_core)
         if not isinstance(authority, dict) or authority.get("descends_from_draft") is not True or not isinstance(authority.get("finalize_base_head"), str):
@@ -1616,7 +1619,10 @@ def _advance_finalize(
             raise TriageError("branch read-back is missing", outcome="operator-held")
         worktree_path = Path(previous["worktree"]).resolve()
         if worktree_path == settings.paths.repo or settings.paths.repo.is_relative_to(worktree_path) or worktree_path.is_relative_to(settings.paths.repo):
-            raise TriageError("finalization worktree conflicts with caller checkout", outcome="operator-held")
+            raise TriageError(
+                "finalization worktree must lie outside the repository checkout, neither inside it nor containing it",
+                outcome="operator-held",
+            )
         inbox_rel = str(settings.paths.friction_log.relative_to(settings.paths.repo))
         archive_rel = str(settings.paths.archive.relative_to(settings.paths.repo))
         clean = forge.authority("worktree-clean", {"repository": repository, "worktree": str(worktree_path)})
