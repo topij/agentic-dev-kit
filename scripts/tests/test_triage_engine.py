@@ -96,6 +96,24 @@ def approval_context(state: dict, command: str = "approve all", operator: str = 
     )
 
 
+def plan_in_own_process(root: Path, entry: str = "recover") -> dict:
+    """Run an ungated planning call as the CLI does: in its own process.
+
+    Its capture stays bound to that process's gate, and a later approval may act on it
+    only once that owner is proven dead (#863). Planning in-process would leave the
+    live test process as the owner.
+    """
+    child = (
+        "import sys\nfrom pathlib import Path\nfrom triage.canonical import dumps\n"
+        "from triage.engine import run\n"
+        "print(dumps(run(sys.argv[2], context='interactive', request={}, start=Path(sys.argv[1]))).decode(), flush=True)\n"
+    )
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(ENGINE_DIR / "lib") + os.pathsep + str(ENGINE_DIR)
+    completed = subprocess.run([sys.executable, "-c", child, str(root), entry], check=True, capture_output=True, text=True, env=environment)
+    return loads_exact(completed.stdout.strip().encode())
+
+
 def recover_dead_valid_gate(root: Path) -> None:
     planned = run("recover", context="interactive", request={}, start=root)
     plan = planned["recovery_plan"]
@@ -1633,7 +1651,7 @@ def test_blocking_test_gate_with_state_publishes_only_approved_terminal_held_evi
         invalid = loads_exact(state.read_bytes())
         invalid["phase"] = "unknown-phase"
         state.write_bytes(dumps(invalid))
-        recovery_plan = run("test", context="interactive", request={}, start=root)["recovery_plan"]
+        recovery_plan = plan_in_own_process(root, "test")["recovery_plan"]
         recovery_digest = recovery_plan["action_core_digest"]
         supplied_recovery = {
             "decision": "approve",
@@ -2862,7 +2880,7 @@ def test_recover_retires_a_terminal_invalid_state_on_exact_approval_then_new_dra
     root, state_path, raw = _write_live_state(tmp_path, monkeypatch, terminal_invalid_state())
     blocked = run("new", context="interactive", request={}, start=root)
     assert blocked["outcome"] in {"operator-held", "hard-stop"}
-    planned = run("recover", context="interactive", request={}, start=root)
+    planned = plan_in_own_process(root)
     plan = planned["recovery_plan"]
     assert plan["action_core"]["action"] == "retire-terminal-invalid-state"
     evidence = plan["action_core"]["terminal_evidence"]
@@ -2910,3 +2928,264 @@ def test_recover_holds_a_finished_looking_state_whose_sweep_is_not_proven(
     assert held["outcome"] == "operator-held"
     assert held["detail"] == "external-attempt-absence-unproven"
     assert state_path.read_bytes() == raw
+
+
+# A gate owner in its own process, for the recovery routes that must prove the owner
+# dead (#863), quarantine every same-inode gate name (#862), and report a released
+# gate-only receipt as itself (#864). `alias` links the name a kill between the gate's
+# link and its temporary's unlink leaves; `capture` and `prepared` publish the
+# state-present bundle an ungated `recover` leaves bound to its own gate.
+GATE_OWNER_CHILD = r'''
+import os, sys, time
+from pathlib import Path
+from triage.gate import acquire
+from triage.model import load_settings, repository_identity
+from triage.recovery import capture_state_present, prepare_state_action, state_action_plan
+from triage.storage import ArtifactStore
+root = Path(sys.argv[1]); mode = sys.argv[2]; options = set(sys.argv[3:])
+settings = load_settings(root); store = ArtifactStore(settings, mode)
+lease = acquire(store, repository_identity=repository_identity(settings), config_fingerprint=settings.fingerprint, run_identity=None)
+if "alias" in options:
+    os.link(store.gate_path, store.gate_path.with_name("." + store.gate_path.name + "." + lease.owner_token + ".tmp"))
+if "capture" in options or "prepared" in options:
+    bundle = capture_state_present(store, settings, require_terminated=False, publish=True)
+    if "prepared" in options:
+        plan = state_action_plan(store, settings, bundle)
+        prepare_state_action(store, settings, bundle, approval={"decision": "approve", "source": "current-session", "approver_identity": "operator", "core_digest": plan["action_core_digest"]}, operator="operator")
+print("ready", flush=True)
+time.sleep(300)
+'''
+
+
+def _gate_owner(root: Path, *, mode: str = "live", options: tuple[str, ...] = (), hold: bool = False) -> subprocess.Popen[str]:
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(ENGINE_DIR / "lib") + os.pathsep + str(ENGINE_DIR)
+    owner = subprocess.Popen(
+        [sys.executable, "-c", GATE_OWNER_CHILD, str(root), mode, *options],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment,
+    )
+    try:
+        assert owner.stdout is not None and owner.stdout.readline().strip() == "ready"
+    finally:
+        if not hold or owner.poll() is not None:
+            owner.terminate()
+            owner.wait(timeout=10)
+    return owner
+
+
+def _approve_recovery(root: Path, core_digest: str, entry: str = "recover") -> dict:
+    supplied = {"decision": "approve", "source": "current-session", "approver_identity": "operator", "core_digest": core_digest}
+    context = ApprovalContext("current-session", "operator", {"decision": "approve", "approver_identity": "operator", "core_digest": core_digest})
+    return run(entry, context="interactive", request={"recovery_approval": supplied}, start=root, approval_context=context)
+
+
+def _abandonable(state_path: Path) -> None:
+    state = loads_exact(state_path.read_bytes())
+    kept = {key: state[key] for key in BASE_KEYS}
+    kept["phase"] = "synthetic-unknown-phase"
+    state_path.write_bytes(dumps(kept))
+
+
+def _triage_files(state_root: Path) -> dict[str, tuple[bytes, int, int]]:
+    return {
+        path.name: (path.read_bytes(), path.lstat().st_ino, path.lstat().st_nlink)
+        for path in (state_root / "triage").iterdir()
+    }
+
+
+@pytest.mark.parametrize("state_shape", ["valid", "abandonable"])
+def test_state_present_recovery_quarantines_every_same_inode_gate_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, state_shape: str
+) -> None:
+    """A gate killed between its link and its temporary's unlink has two names. Recovery
+    must move both, or the survivor blocks every later acquisition (#862)."""
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    run("new", context="interactive", request=request(root), start=root)
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    if state_shape == "abandonable":
+        _abandonable(state_path)
+    _gate_owner(root, options=("alias",))
+    planned = run("recover", context="interactive", request={}, start=root)
+    expected_action = "preserve-valid-state-and-quarantine-old-gate" if state_shape == "valid" else "abandon-invalid-state"
+    assert planned["recovery_plan"]["action_core"]["action"] == expected_action
+    recovered = _approve_recovery(root, planned["recovery_plan"]["action_core_digest"])
+    assert recovered["detail"] == ("resume" if state_shape == "valid" else "recovered-safe-to-restart")
+    names = sorted(path.name for path in (state_root / "triage").iterdir())
+    assert not [name for name in names if name.endswith(".tmp")]
+    assert not (state_root / "triage/triage-pipeline-gate_live.lock").exists()
+    quarantined = [state_root / "triage" / name for name in names if name.startswith((".triage-pipeline-gate_live.lock.", "triage-pipeline-gate_live.lock.quarantine-"))]
+    assert len(quarantined) == 2
+    assert len({path.lstat().st_ino for path in quarantined}) == 1
+    after = run("resume" if state_shape == "valid" else "new", context="interactive", request={}, start=root)
+    assert after["detail"] == ("active session resumed" if state_shape == "valid" else "verified recovery receipt replaced by reserved new state")
+
+
+@pytest.mark.parametrize("bundle_kind", ["capture", "prepared"])
+def test_recover_holds_a_state_present_bundle_while_its_gate_owner_lives(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, bundle_kind: str
+) -> None:
+    """An ungated `recover` leaves its capture bound to its own gate. While that owner
+    lives, no other invocation may plan from the bundle or act on it (#863)."""
+    from triage.recovery import state_action_plan
+    from triage.storage import ArtifactStore
+
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    run("new", context="interactive", request=request(root), start=root)
+    _abandonable(state_root / "triage/triage-pipeline-state_live.json")
+    owner = _gate_owner(root, options=(bundle_kind,), hold=True)
+    try:
+        before = _triage_files(state_root)
+        planned = run("recover", context="interactive", request={}, start=root)
+        assert planned["outcome"] == "operator-held"
+        assert planned["detail"] == "blocking gate owner is active or uncertain"
+        assert planned["recovery_plan"] is None
+        bundle_path = next((state_root / "triage").glob("recovery-bundle_live_*.json"))
+        bundle = loads_exact(bundle_path.read_bytes())
+        store = ArtifactStore(load_settings(root), "live")
+        capture = bundle if bundle["kind"] == "state-present-capture" else {
+            "kind": "state-present-capture", "schema_version": 1,
+            "capture_core": bundle["capture_core"], "capture_core_digest": bundle["capture_core_digest"],
+        }
+        core_digest = state_action_plan(store, load_settings(root), capture)["action_core_digest"]
+        approved = _approve_recovery(root, core_digest)
+        assert approved["outcome"] == "operator-held"
+        assert approved["detail"] == "blocking gate owner is active or uncertain"
+        assert _triage_files(state_root) == before
+        assert owner.poll() is None
+    finally:
+        owner.terminate()
+        owner.wait(timeout=10)
+    if bundle_kind == "capture":
+        planned = run("recover", context="interactive", request={}, start=root)
+        assert planned["recovery_plan"]["action_core"]["action"] == "abandon-invalid-state"
+        recovered = _approve_recovery(root, planned["recovery_plan"]["action_core_digest"])
+    else:
+        recovered = run("recover", context="interactive", request={}, start=root)
+    assert recovered["detail"] == "recovered-safe-to-restart"
+
+
+@pytest.mark.parametrize("mode", ["live", "test"])
+def test_a_released_gate_only_receipt_reports_itself_to_every_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    """The entry's own freshly acquired gate is not a changed replacement gate (#864)."""
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    _gate_owner(root, mode=mode)
+    entry = "recover" if mode == "live" else "test"
+    planned = run(entry, context="interactive", request={}, start=root)
+    assert planned["detail"] == "gate-only recovery capture awaits exact approval"
+    assert _approve_recovery(root, planned["recovery_plan"]["prepared_core_digest"], entry)["detail"] == "gate-only-operator-held"
+    before = _triage_files(state_root)
+    for later in ([None, "new", "resume", "recover"] if mode == "live" else ["test"]):
+        reported = run(later, context="interactive", request={}, start=root)
+        assert reported["outcome"] == "operator-held"
+        assert reported["detail"] == "gate-only-operator-held"
+        assert reported["resume_action"] == "preserve the terminal gate-only evidence"
+        assert _triage_files(state_root) == before
+
+
+@pytest.mark.parametrize("route", ["gate-only", "valid-state"])
+def test_a_stop_between_gate_name_moves_leaves_recovery_resumable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, route: str
+) -> None:
+    """Recovery moves a gate's alias before the gate itself. A stop between the two
+    leaves the gate blocking, so `recover` resumes the move; the other order would
+    leave only the alias, which acquisition refuses and `recover` cannot find (#862)."""
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    if route == "valid-state":
+        run("new", context="interactive", request=request(root), start=root)
+    _gate_owner(root, options=("alias",))
+    planned = run("recover", context="interactive", request={}, start=root)
+    core_digest = planned["recovery_plan"]["prepared_core_digest" if route == "gate-only" else "action_core_digest"]
+    supplied = {"decision": "approve", "source": "current-session", "approver_identity": "operator", "core_digest": core_digest}
+    context_value = {"source": "current-session", "operator_identity": "operator", "source_read_back": {"decision": "approve", "approver_identity": "operator", "core_digest": core_digest}}
+    marker = tmp_path / "first-gate-name-moved"
+    child = r'''
+import sys, time
+from pathlib import Path
+import triage.recovery as recovery
+from triage.approval import ApprovalContext
+from triage.canonical import loads_exact
+from triage.engine import run
+root = Path(sys.argv[1]); marker = Path(sys.argv[2])
+request = loads_exact(bytes.fromhex(sys.argv[3])); context = ApprovalContext(**loads_exact(bytes.fromhex(sys.argv[4])))
+original = recovery._quarantine
+def stop_after_first(path, *args, **kwargs):
+    result = original(path, *args, **kwargs)
+    if "gate_live.lock" in path.name:
+        marker.write_text(path.name); time.sleep(300)
+    return result
+recovery._quarantine = stop_after_first
+run("recover", context="interactive", request=request, start=root, approval_context=context)
+'''
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(ENGINE_DIR / "lib") + os.pathsep + str(ENGINE_DIR)
+    process = subprocess.Popen([
+        sys.executable, "-c", child, str(root), str(marker),
+        dumps({"recovery_approval": supplied}).hex(), dumps(context_value).hex(),
+    ], env=environment)
+    try:
+        deadline = time.monotonic() + 10
+        while not marker.exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert marker.exists()
+    finally:
+        if process.poll() is None:
+            process.terminate()
+        process.wait(timeout=10)
+    assert marker.read_text().startswith(".triage-pipeline-gate_live.lock.")
+    assert (state_root / "triage/triage-pipeline-gate_live.lock").exists()
+    restarted = run("recover", context="interactive", request={}, start=root)
+    assert restarted["detail"] == ("gate-only-operator-held" if route == "gate-only" else "resume")
+    assert not [path for path in (state_root / "triage").iterdir() if path.name.endswith(".tmp")]
+    after = run("new" if route == "gate-only" else "resume", context="interactive", request={}, start=root)
+    assert after["detail"] == ("gate-only-operator-held" if route == "gate-only" else "active session resumed")
+
+
+@pytest.mark.parametrize("bundle_kind", ["capture", "prepared"])
+def test_a_state_present_bundle_resumes_after_a_configuration_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, bundle_kind: str
+) -> None:
+    """The owner proof checks liveness, not the current configuration: the bundle is
+    bound to its gate's exact bytes, so an approved transition still completes after
+    an unrelated configuration change (#863)."""
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    run("new", context="interactive", request=request(root), start=root)
+    _abandonable(state_root / "triage/triage-pipeline-state_live.json")
+    _gate_owner(root, options=(bundle_kind,))
+    config = root / "config/dev-model.yaml"
+    config.write_text(config.read_text(encoding="utf-8") + "synthetic_configuration_change: true\n", encoding="utf-8")
+    if bundle_kind == "capture":
+        planned = run("recover", context="interactive", request={}, start=root)
+        assert planned["recovery_plan"]["action_core"]["action"] == "abandon-invalid-state"
+        recovered = _approve_recovery(root, planned["recovery_plan"]["action_core_digest"])
+    else:
+        recovered = run("recover", context="interactive", request={}, start=root)
+    assert recovered["detail"] == "recovered-safe-to-restart"
+
+
+def test_an_uncertain_state_present_bundle_owner_holds(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only a proven-dead owner releases the bundle: `uncertain` (a foreign host, a
+    reused process id, an unreadable start time) holds like a live owner (#863)."""
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    run("new", context="interactive", request=request(root), start=root)
+    _abandonable(state_root / "triage/triage-pipeline-state_live.json")
+    _gate_owner(root, options=("capture",))
+    monkeypatch.setattr(triage_engine, "owner_status", lambda record: "uncertain")
+    before = _triage_files(state_root)
+    held = run("recover", context="interactive", request={}, start=root)
+    assert held["outcome"] == "operator-held"
+    assert held["detail"] == "blocking gate owner is active or uncertain"
+    assert _triage_files(state_root) == before

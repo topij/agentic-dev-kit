@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -1265,7 +1266,16 @@ def test_recover_retires_an_invalid_engine_written_completed_sweep_found_in_git(
     with pytest.raises(TriageError):
         canonical_state(raw, settings=load_settings(root), mode="live", retiring=True)
 
-    planned = run("recover", context="interactive", request={}, start=root)
+    # Planned in its own process, as through the CLI: the capture's gate owner must be
+    # proven dead before the approval acts on it (#863).
+    child = (
+        "import sys\nfrom pathlib import Path\nfrom triage.canonical import dumps\n"
+        "from triage.engine import run\n"
+        "print(dumps(run('recover', context='interactive', request={}, start=Path(sys.argv[1]))).decode(), flush=True)\n"
+    )
+    environment = {**os.environ, "PYTHONPATH": str(ENGINE_DIR / "lib") + os.pathsep + str(ENGINE_DIR)}
+    completed = subprocess.run([sys.executable, "-c", child, str(root)], check=True, capture_output=True, text=True, env=environment)
+    planned = loads_exact(completed.stdout.strip().encode())
     plan = planned["recovery_plan"]
     assert plan["action_core"]["action"] == "retire-terminal-invalid-state"
     evidence = plan["action_core"]["terminal_evidence"]

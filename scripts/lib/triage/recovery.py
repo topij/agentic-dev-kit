@@ -79,7 +79,7 @@ def _quarantine_group(items: list[tuple[Path, Path, Observation]], approved_raw:
         if source_raw is not None:
             if source_raw != approved_raw or (source_observation.device, source_observation.inode) != expected_inode:
                 raise TriageError("gate source changed before quarantine", outcome="operator-held")
-            target_observation = quarantine_inode(source, target, approved, approved_raw)
+            target_observation = Observation(**_quarantine(source, target, approved, approved_raw))
             target_raw = approved_raw
             source_raw = None
             if target_raw != approved_raw or (target_observation.device, target_observation.inode) != expected_inode:
@@ -96,6 +96,22 @@ def _quarantine_group(items: list[tuple[Path, Path, Observation]], approved_raw:
     if results[0]["links"] != len(items) or any(result["links"] != len(items) for result in results):
         raise TriageError("unaccounted same-inode gate name", outcome="operator-held")
     return results
+
+
+def _old_gate_quarantine_items(store: ArtifactStore, core: dict[str, Any]) -> list[tuple[Path, Path, Observation]]:
+    """Every name the captured old gate had, each with its quarantine target.
+
+    A process killed between publishing its gate and unlinking the gate's temporary
+    leaves both names on one inode (`_gate_capture` records the second). Each must be
+    quarantined, or the survivor blocks every later acquisition (#862). The aliases
+    come first: a stop between two moves then leaves the primary gate in place, still
+    blocking, so `recover` resumes the move. The other order leaves only an alias,
+    which acquisition refuses and `recover` cannot find.
+    """
+    suffix = core["old_gate_digest"][:16]
+    sources = [(Path(alias["path"]), Observation(**alias)) for alias in core["old_gate_alias_observations"]]
+    sources.append((store.gate_path, Observation(**core["old_gate_observation"])))
+    return [(source, source.with_name(source.name + f".quarantine-{suffix}"), observation) for source, observation in sources]
 
 
 def gate_only_plan(store: ArtifactStore, settings: Settings) -> dict[str, Any]:
@@ -208,15 +224,7 @@ def resume_gate_only(store: ArtifactStore, settings: Settings, envelope: dict[st
         exclusive_create(store.state_path, intent_raw)
     elif state_raw != intent_raw:
         raise TriageError("gate-only intent path contains foreign bytes", outcome="operator-held")
-    gate_observation = Observation(**core["old_gate_observation"])
-    sources = [(store.gate_path, gate_observation)]
-    for alias in core["old_gate_alias_observations"]:
-        sources.append((Path(alias["path"]), Observation(**alias)))
-    quarantine_items = []
-    for source, observation in sources:
-        suffix = core["old_gate_digest"][:16]
-        target = source.with_name(source.name + f".quarantine-{suffix}")
-        quarantine_items.append((source, target, observation))
+    quarantine_items = _old_gate_quarantine_items(store, core)
     current_gate_observation, current_gate_raw = observe(store.gate_path, allow_links=True)
     replacement_quarantine: list[dict[str, Any]] = []
     if current_gate_raw == gate_raw:
@@ -735,7 +743,7 @@ def resume_state_action(store: ArtifactStore, prepared: dict[str, Any]) -> dict[
     state_observation = Observation(**core["state_observation"])
     gate_raw = decode_bytes(core["old_gate_bytes"])
     if action["action"] == "preserve-valid-state-and-quarantine-old-gate":
-        _quarantine(store.gate_path, store.gate_path.with_name(store.gate_path.name + f".quarantine-{core['old_gate_digest'][:16]}"), Observation(**core["old_gate_observation"]), gate_raw)
+        _quarantine_group(_old_gate_quarantine_items(store, core), gate_raw)
         return {"result": "resume", "state_digest": core["state_digest"]}
     target = Path(action["quarantine_path"])
     current_state_observation, current_state_raw = observe(store.state_path)
@@ -758,7 +766,5 @@ def resume_state_action(store: ArtifactStore, prepared: dict[str, Any]) -> dict[
         exclusive_create(store.state_path, dumps(receipt))
     elif current_state_raw != dumps(receipt):
         raise TriageError("state path contains neither source nor exact receipt", outcome="operator-held")
-    gate_observation = Observation(**core["old_gate_observation"])
-    if store.gate_path.exists():
-        _quarantine(store.gate_path, store.gate_path.with_name(store.gate_path.name + f".quarantine-{core['old_gate_digest'][:16]}"), gate_observation, gate_raw)
+    _quarantine_group(_old_gate_quarantine_items(store, core), gate_raw)
     return receipt

@@ -42,6 +42,16 @@ starts.
 
 ---
 
+## #865 — Triage recovery proves a capture's owner dead, moves every gate name, and reports a released gate-only receipt as itself
+
+CHANGED — gate semantics: Refresh `lib/triage/recovery.py`, `lib/triage/engine.py`, the shared triage workflow, `kit-manifest.json`, `scripts/tests/test_triage_engine.py` and `scripts/tests/test_finalize_triage.py`. The changes:
+
+- **The owner of a state-present bundle must be proven dead.** An interactive `recover` or `test` over a blocking gate with a `state-present-capture` or `state-present-prepared` bundle used to plan from that bundle, or act on it, whatever the state of the gate's owner. It now reports `operator-held` / `blocking gate owner is active or uncertain` until that owner is proven dead. So an ungated plan followed by a separate approval must run as separate processes, which the CLI already does. An in-process caller that plans and then approves in the same live process is now held.
+- **Every name of the gate is quarantined.** Valid-state and invalid-state recovery now quarantine the gate's same-inode `.<gate>.<token>.tmp` name along with the gate itself. Both routes, the gate-only one included, now move that name before the gate.
+- **A released gate-only receipt reports itself.** `new`, `resume`, `recover` and `test` over a released `gate-only-operator-held` receipt now report `gate-only-operator-held`, with resume action `preserve the terminal gate-only evidence`. They used to report `gate-only held receipt replacement gate changed`.
+
+A `.tmp` gate name that an earlier recovery left behind still blocks acquisition. This change prevents new ones; it does not move an existing one.
+
 ## #858 — Triage `recover` retires an engine-written finished run and refuses a config-drifted completed state as valid
 
 CHANGED — gate semantics: Refresh `lib/triage/recovery.py`, `lib/triage/engine.py`, the shared triage workflow, `kit-manifest.json`, `scripts/tests/test_finalize_triage.py` and `scripts/tests/test_triage_engine.py`. `recover` over an invalid `completed` / `archive-sweep` state in the engine's own layout used to hold it for good as `external-attempt-absence-unproven`. It now offers `retire-terminal-invalid-state` when every attempt log is settled and exactly one first-parent commit on the protected branch's remote-tracking ref after the run's `protected_branch_head` moves every swept block from the inbox to the archive; the approved `terminal_evidence` gains `merge_commit_source` (`recorded` or `found-in-git`). A state in the LLM-only layout still needs its recorded merge commit and is held without one. An `attempting` attempt-log entry directly followed by a settled entry with the same `intent_digest` now counts as settled. `recover` over a completed state that is valid but for a later configuration change now answers `captured state is valid; recovery refused` instead of capturing it as invalid; retire it with a session-starting entry (#834). If a run is held as `external-attempt-absence-unproven` over an engine-written completed state, refresh these files and run `recover` again.
