@@ -5,6 +5,43 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-09-24 (Phase 5 D-SYSTEMIZE-RECOVERY-02 rerun, in Claude Code)
+
+**Approved and run.** The operator approved PHASE5-D-SYSTEMIZE-RECOVERY-02 with options
+A1, B1, C1, R1 and E1. The packet is
+`saved_plans/phase5-d-systemize-recovery-rerun_2026-09-24.md` (local, not committed, like
+the other D packets). `APPROVAL.md`, `RESULTS.md`, the harness and
+`EVIDENCE-SHA256SUMS` are in
+`state/review-evidence/phase5-d-systemize-recovery-02/` (gitignored). `RESULTS.md` owns
+the outcomes.
+
+- **Design:**
+  - headless `claude -p --model fable` runs, isolated by Claude Code's sandbox;
+  - `denyRead` covered the harness, the control repository, `~/.claude` and the
+    `/private/tmp` entries that existed at setup;
+  - a socket-served fake forge and tracker, whose kills the server performs;
+  - the clones were at `c1d513e` plus one commit resetting the living docs.
+- **Outcome:** in both chains a fresh restart after a kill made **no second create**.
+  The landed-before-receipt chain recorded `found-by-read-back`. The
+  killed-before-landing chain made one create and recorded `created-and-read-back`.
+- **Operator amendments during the run**, recorded in `APPROVAL.md`:
+  - **§2:** a second fake-form gap, in `Q`'s preflight, did not stop the chain.
+  - **§3:** the harness's process-group kill missed the Bash tool's own process groups,
+    so the kill became a whole-tree kill and the `Q` chain was redone.
+    `launch_lane.py` already covers this case with its lineage kill.
+- **Scope of the result:** one synthetic sample per cutpoint. Whether it discharges the
+  residuals is the E audit's call. The real tracker's marker search is still a residual
+  (R1).
+
+**Filed and closed, each on the operator's approval of the exact payload:**
+
+- #794: the marker search defines neither the query nor the match set;
+- #722 closed as done: every owed record edit was already in the tree.
+
+**Parked in the friction log:** a restart that resumed the heartbeat without `start`; a
+synthetic approval recorded under the operator's real name; and a confounded related
+occurrence on the FRESH-CONTEXT preflight entry.
+
 ### 2026-09-24 (systemize dispatch idempotency, #790, in Claude Code)
 
 **Shipped.** [#790](https://github.com/topij/agentic-dev-kit/pull/790) merged as
