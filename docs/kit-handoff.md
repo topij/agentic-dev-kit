@@ -20,6 +20,21 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-09-29 (triage finalize worktree, recover for engine-written runs, in Claude Code)
+
+**Shipped.** [#855](https://github.com/topij/agentic-dev-kit/pull/855) merged as `e265c36`; #841 is closed. Finalize's refusal now says the `worktree` must lie outside the repository checkout, and the triage workflow adds that it must not exist yet.
+[#858](https://github.com/topij/agentic-dev-kit/pull/858) merged as `369e9ee`; #833 is closed. `recover` reads the engine's finished layout. Its merge read-back names no merge commit, so `recover` takes the one first-parent commit on the protected ref, after the run's `protected_branch_head`, that moves every swept block into the archive, and holds otherwise. `recover` also refuses a config-drifted completed state as valid. #858 was reviewed as a safety-critical recovery path and merged on the operator's word.
+
+**Decided.** An LLM-only state that names no merge commit stays held; the git lookup is the engine layout's route only (#858's round 1). The dead end filed as #859 was ticketed rather than fixed in #858, because the fix is a new mechanism on a recovery path. On the operator's word, both PRs merged and this session's work is recorded under *Triage engine hardening*.
+
+**Filed this session:** #856 (the worktree guard compares paths by case), #857 (the commit-step re-check has no test), #859 (`recover` calls a state valid that `new` then hard-stops on). Occurrence comments on #852 (record the round's receipt before pushing its fix; chained deltas composed) and #643 (lenses launched by naming the rendered prompt file).
+
+**Review.** CodeRabbit skipped both PRs; the fallback panel carried each, and the disposition comments on the PRs own the findings.
+
+**Verification.** In `/Users/topi/Coding/agentic-dev-kit` on 2026-09-29, `make test` at `11b2d7f0e76034e22da0a5097763036f98b6b6dc` (#855's head) printed `3702 passed, 1 skipped in 547.40s`, and at `b540930b3adb3a52290822f3761977975f8da5b3` (#858's head) printed `3728 passed, 1 skipped in 585.33s`.
+
+______________________________________________________________________
+
 ## Session — 2026-09-28 (make lint scope, state-guard exclusion, in Claude Code)
 
 **Shipped.** [#850](https://github.com/topij/agentic-dev-kit/pull/850) merged as `6a21e59`; #848 is closed. `make lint` hands ruff only the Python files git tracks, and `scripts/tests/test_make_lint.py` runs the recipe against a stub `uvx`.
@@ -362,11 +377,11 @@ review-request method.
 
 ### Triage engine hardening
 
-**Status:** a sweep now moves earlier graduation markers to the archive (#843); the first
-sweep under it merged as #847. **Owner:**
-[#833](https://github.com/topij/agentic-dev-kit/issues/833),
-[#841](https://github.com/topij/agentic-dev-kit/issues/841).
+**Status:** `recover` retires an engine-written finished run by finding its sweep in git
+(#858); finalize names where its `worktree` must lie (#855). **Owner:**
+[#856](https://github.com/topij/agentic-dev-kit/issues/856),
+[#857](https://github.com/topij/agentic-dev-kit/issues/857),
+[#859](https://github.com/topij/agentic-dev-kit/issues/859).
 
-▶ Next: #841 — say in the triage workflow and the engine's refusal that finalize's
-`worktree` must lie outside the repository — then #833's finished-run retirement for
-engine-written layouts.
+▶ Next: #857 — pin finalize's commit-step worktree re-check with a test that reaches the
+commit step with a recorded worktree inside, then containing, the checkout.
