@@ -1781,7 +1781,10 @@ def run(
             if entry == "recover":
                 captured = capture_state_present(store, settings, require_terminated=False, publish=False)
                 try:
-                    canonical_state(state_raw, settings=settings, mode=mode)
+                    # A completed state that is valid but for a later config
+                    # change is one a session-starting entry retires; treating
+                    # it as invalid here would hold it for good (#833).
+                    canonical_state(state_raw, settings=settings, mode=mode, retiring=True)
                 except TriageError:
                     captured = capture_state_present(store, settings, require_terminated=False, publish=True)
                     plan = state_action_plan(store, settings, captured)

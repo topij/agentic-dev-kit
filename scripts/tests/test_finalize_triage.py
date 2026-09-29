@@ -1166,3 +1166,159 @@ def test_resume_completes_a_verified_merge_read_back_whose_completion_was_never_
     assert completed["archive_sweep"] == terminal["archive_sweep"]
     assert completed["completion"] == terminal["completion"]
     canonical_state(dumps(completed), settings=load_settings(root), mode="live")
+
+
+def _engine_completed_sweep(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path, Path, dict]:
+    """Drive a real engine run to a completed archive-sweep state (#833).
+
+    Returns the repository, the live state path, the finalization worktree
+    holding the rendered sweep, and the completed state. Nothing is committed
+    to the repository's own history: each caller builds the history it needs.
+    """
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    draft_request, candidate_id = proposal_request(root)
+    run("new", context="interactive", request=draft_request, start=root)
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    presented = loads_exact(state_path.read_bytes())
+    request, context = approval(presented, f"archive {candidate_id}")
+    worktree = tmp_path / "isolated-finalize"
+    shutil.copytree(root, worktree)
+    shutil.rmtree(worktree / "reports", ignore_errors=True)
+    branch = finalize_branch(presented)
+    base = git(root, "rev-parse", "HEAD")
+    tree, commit = "1" * 40, "2" * 40
+    pr_url = "https://github.com/topij/agentic-dev-kit/pull/999"
+    paths = ["docs/kit-friction-log-archive.md", "docs/kit-friction-log.md"]
+    run(
+        "resume", context="interactive",
+        request={**request, "finalize": True, "worktree": str(worktree)},
+        start=root, approval_context=context, forge=FakeForge([
+            verified({"repository": "topij/agentic-dev-kit", "base": base, "branch": branch, "worktree": str(worktree), "head": base, "tree": "0" * 40}),
+            verified({"repository": "topij/agentic-dev-kit", "base": base, "branch": branch, "worktree": str(worktree), "commit": commit, "tree": tree, "subject": "docs(triage): graduate friction-log entries", "paths": paths}),
+            verified({"repository": "topij/agentic-dev-kit", "base": base, "branch": branch, "worktree": str(worktree), "remote_head": commit, "tree": tree}),
+            verified({"url": pr_url, "baseRefName": "main", "headRefName": branch, "headRefOid": commit, "isDraft": False, "files": paths}),
+            verified({"url": pr_url, "baseRefName": "main", "headRefName": branch, "headRefOid": commit, "isDraft": False, "files": paths, "reviewed_head": commit, "receipt": native_watch_receipt(pr_url, commit)}),
+        ]),
+    )
+    cleanup_result = {name: {"result": "kept", "reason": "fixture"} for name in SWEEP_CLEANUP_ARTIFACTS}
+    completed = run("resume", context="interactive", request={"finalize": True}, start=root, forge=FakeForge([
+        verified({"url": pr_url, "baseRefName": "main", "headRefName": branch, "headRefOid": commit, "merged": True}),
+        ProviderObservation("verified", None, cleanup_result),
+    ]))
+    assert completed["outcome"] == "degraded-success"
+    terminal = loads_exact(state_path.read_bytes())
+    assert terminal["phase"] == "completed" and "merge_read_back" not in terminal["completion"]
+    return root, state_path, worktree, terminal
+
+
+def _commit_to_main(root: Path, message: str) -> str:
+    git(root, "add", "docs/kit-friction-log.md", "docs/kit-friction-log-archive.md")
+    git(root, "commit", "-q", "--allow-empty", "-m", message)
+    git(root, "update-ref", "refs/remotes/origin/main", "HEAD")
+    return git(root, "rev-parse", "HEAD")
+
+
+def _land_sweep(root: Path, worktree: Path) -> str:
+    for rel in ("docs/kit-friction-log.md", "docs/kit-friction-log-archive.md"):
+        shutil.copy2(worktree / rel, root / rel)
+    return _commit_to_main(root, "docs(triage): graduate friction-log entries (#999)")
+
+
+def _invalidate(state_path: Path, terminal: dict) -> bytes:
+    """Make the completed state invalid in one field, the way an older or
+    hand-edited state fails validation, and keep its finished evidence."""
+    raw = dumps({**terminal, "schema_deviations": [{"id": "hand-recorded"}]})
+    state_path.write_bytes(raw)
+    return raw
+
+
+def _recover_approval(core_digest: str) -> tuple[dict, ApprovalContext]:
+    supplied = {"decision": "approve", "source": "current-session", "approver_identity": "operator", "core_digest": core_digest}
+    context = ApprovalContext("current-session", "operator", {"decision": "approve", "approver_identity": "operator", "core_digest": core_digest})
+    return {"recovery_approval": supplied}, context
+
+
+def test_recover_retires_an_invalid_engine_written_completed_sweep_found_in_git(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#833: the engine's finished layout names no merge commit, so `recover`
+    finds this run's sweep on the protected ref and retires the run on exact
+    approval instead of holding it for good."""
+    root, state_path, worktree, terminal = _engine_completed_sweep(tmp_path, monkeypatch)
+    sweep = _land_sweep(root, worktree)
+    raw = _invalidate(state_path, terminal)
+    with pytest.raises(TriageError):
+        canonical_state(raw, settings=load_settings(root), mode="live", retiring=True)
+
+    planned = run("recover", context="interactive", request={}, start=root)
+    plan = planned["recovery_plan"]
+    assert plan["action_core"]["action"] == "retire-terminal-invalid-state"
+    evidence = plan["action_core"]["terminal_evidence"]
+    assert evidence["merge_commit"] == sweep
+    assert evidence["merge_commit_source"] == "found-in-git"
+    assert evidence["merge_commit_reachable_from"] == "refs/remotes/origin/main"
+    assert evidence["final_head"] == terminal["archive_sweep"]["reviewed_head"]
+    assert evidence["pull_request"] == "https://github.com/topij/agentic-dev-kit/pull/999"
+    assert evidence["swept_candidates"] == [terminal["decisions"][0]["candidate_id"]]
+    assert state_path.read_bytes() == raw
+
+    request, context = _recover_approval(plan["action_core_digest"])
+    recovered = run("recover", context="interactive", request=request, start=root, approval_context=context)
+    assert recovered["detail"] == "recovered-safe-to-restart"
+    assert loads_exact(state_path.read_bytes())["kind"] == "recovered-safe-to-restart"
+    assert Path(plan["action_core"]["quarantine_path"]).read_bytes() == raw
+    restarted = run("new", context="interactive", request={}, start=root)
+    assert restarted["detail"] == "verified recovery receipt replaced by reserved new state"
+
+
+@pytest.mark.parametrize("history", ["not-landed", "swept-twice", "block-back-in-inbox"])
+def test_recover_holds_an_invalid_engine_written_completed_sweep_git_does_not_prove(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, history: str
+) -> None:
+    """No commit, or more than one, is this run's sweep, or the swept block is
+    back in the protected ref's inbox: the run stays held, bytes untouched."""
+    root, state_path, worktree, terminal = _engine_completed_sweep(tmp_path, monkeypatch)
+    inbox = root / "docs/kit-friction-log.md"
+    if history != "not-landed":
+        _land_sweep(root, worktree)
+        block = next(
+            decode_bytes(record["source_block"]).decode("utf-8").rstrip("\n")
+            for record in terminal["frozen_snapshot"]["content"]["candidate_index"]
+            if record["candidate_id"] == terminal["decisions"][0]["candidate_id"]
+        )
+        swept_inbox = inbox.read_text(encoding="utf-8")
+        inbox.write_text(swept_inbox + "\n" + block + "\n", encoding="utf-8")
+        _commit_to_main(root, "block re-added to the inbox")
+        if history == "swept-twice":
+            inbox.write_text(swept_inbox, encoding="utf-8")
+            _commit_to_main(root, "a second commit sweeps the same block")
+    raw = _invalidate(state_path, terminal)
+    held = run("recover", context="interactive", request={}, start=root)
+    assert held["outcome"] == "operator-held"
+    assert held["detail"] == "external-attempt-absence-unproven"
+    assert state_path.read_bytes() == raw
+
+
+def test_recover_refuses_a_completed_state_valid_but_for_a_later_config_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#833's second reproduction: a self-consistent completed state written
+    under an earlier configuration is valid for retirement, so `recover` refuses
+    it as valid rather than capturing it as invalid and holding it for good."""
+    root, state_path, _worktree, _terminal = _engine_completed_sweep(tmp_path, monkeypatch)
+    config = root / "config/dev-model.yaml"
+    config.write_text(
+        config.read_text(encoding="utf-8").replace("bot_pending_grace_minutes: 15", "bot_pending_grace_minutes: 16"),
+        encoding="utf-8",
+    )
+    raw = state_path.read_bytes()
+    with pytest.raises(TriageError, match="configuration identity mismatch"):
+        canonical_state(raw, settings=load_settings(root), mode="live")
+    result = run("recover", context="interactive", request={}, start=root)
+    assert result["outcome"] == "operator-held"
+    assert result["detail"] == "captured state is valid; recovery refused"
+    assert state_path.read_bytes() == raw
+    restarted = run("new", context="interactive", request={}, start=root)
+    assert loads_exact(state_path.read_bytes())["phase"] == "reserved", restarted

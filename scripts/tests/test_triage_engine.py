@@ -2685,6 +2685,78 @@ def test_terminal_evidence_refuses_anything_unfinished(change: str) -> None:
     assert _terminal_evidence(_unfinished(change)) is None
 
 
+@pytest.mark.parametrize(("entries", "settled"), [
+    ([], True),
+    ([{"status": "verified"}], True),
+    ([{"status": "attempting", "intent_digest": "d1"}, {"status": "verified", "intent_digest": "d1"}], True),
+    ([{"status": "attempting", "intent_digest": "d1"}], False),
+    ([{"status": "attempting", "intent_digest": "d1"}, {"status": "verified", "intent_digest": "d2"}], False),
+    ([{"status": "attempting", "intent_digest": "d1"}, {"status": "failed", "intent_digest": "d1"}], False),
+    ([{"status": "attempting"}, {"status": "verified"}], False),
+    ([{"status": "attempting", "intent_digest": "d1"}, {"status": "attempting", "intent_digest": "d1"}, {"status": "verified", "intent_digest": "d1"}], False),
+    ([{"status": "ambiguous", "intent_digest": "d1"}, {"status": "verified", "intent_digest": "d1"}], False),
+    ("not-a-list", False),
+])
+def test_attempt_log_is_settled_only_when_each_attempting_entry_is_answered(entries, settled: bool) -> None:
+    """#833: the engine writes `attempting` before each external call and the
+    outcome after it; only an exactly paired answer settles it."""
+    from triage.recovery import _SETTLED, _attempt_log_settled
+
+    assert _attempt_log_settled(entries, _SETTLED) is settled
+
+
+def _engine_finished(change: str | None = None) -> dict:
+    """The engine's finished layout: reviewed head under `archive_sweep`, the
+    merge read-back as the last finalization operation, and no merge commit."""
+    pair = [{"status": "attempting", "intent_digest": "i"}, {"status": "verified", "intent_digest": "i"}]
+    state = {
+        "kind": "triage-run-state", "schema_version": 1, "phase": "completed",
+        "run_identity": {"session": "engine-session"},
+        "verified_tracker_identifiers": [],
+        "operations": [], "attempts": [], "notification_operations": [],
+        "archive_sweep": {"reviewed_head": REVIEWED},
+        "finalization_operations": [
+            {"kind": "pr-watch", "status": "verified", "attempts": list(pair)},
+            {"kind": "merge-read-back", "status": "verified", "attempts": list(pair), "read_back": {
+                "url": "https://github.com/example/project/pull/10", "headRefOid": REVIEWED, "merged": True,
+            }},
+        ],
+        "completion": {"route": "archive-sweep", "outcome": "degraded-success", "receipt_core": {}, "completed_receipt_digest": "x"},
+    }
+    read_back = state["finalization_operations"][-1]["read_back"]
+    if change == "unmerged":
+        read_back["merged"] = False
+    elif change == "other-head":
+        read_back["headRefOid"] = "c" * 40
+    elif change == "no-reviewed-head":
+        state["archive_sweep"] = {}
+    elif change == "short-reviewed-head":
+        state["archive_sweep"]["reviewed_head"] = "abc"
+        read_back["headRefOid"] = "abc"
+    elif change == "unanswered-attempt":
+        state["finalization_operations"][0]["attempts"].pop()
+    return state
+
+
+def test_terminal_evidence_reads_the_engine_finished_layout() -> None:
+    from triage.recovery import _terminal_evidence
+
+    assert _terminal_evidence(_engine_finished()) == {
+        "session": "engine-session",
+        "verified_tracker_identifiers": [],
+        "pull_request": "https://github.com/example/project/pull/10",
+        "merge_commit": None,
+        "final_head": REVIEWED,
+    }
+
+
+@pytest.mark.parametrize("change", ["unmerged", "other-head", "no-reviewed-head", "short-reviewed-head", "unanswered-attempt"])
+def test_terminal_evidence_refuses_an_unfinished_engine_layout(change: str) -> None:
+    from triage.recovery import _terminal_evidence
+
+    assert _terminal_evidence(_engine_finished(change)) is None
+
+
 def _write_live_state(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, state: dict, history: str = "landed"
 ) -> tuple[Path, Path, bytes]:
