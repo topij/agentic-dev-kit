@@ -365,10 +365,10 @@ which also decides whether to commit the local `saved_plans/phase5-*` packets.
 completion plan), which reconciles each D row's evidence and open residuals against the
 Phase 5 contract.
 
-- **Its first question** is whether any D row is still owed. Two history entries list
-  gaps: the 2026-09-23 D-SYSTEMIZE-LIVE entry lists the triage side of D-SERVICE as not
-  established, and the 2026-09-25 D-TRIAGE-RESIDUAL entry lists notification-thread
-  approval, citing #198.
+- **Its first question** is whether any D row is still owed. The history entries'
+  "Not established" lists hold the candidates. Among them, the 2026-09-23
+  D-SYSTEMIZE-LIVE entry names the triage side of D-SERVICE, and the 2026-09-25
+  D-TRIAGE-RESIDUAL entry names notification-thread approval, citing #198.
 - **Also open for the audit to weigh:** #794's workflow fix, which is residual R1 of the
   D-SYSTEMIZE-RECOVERY-02 run.
 
