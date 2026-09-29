@@ -3082,7 +3082,7 @@ def test_a_released_gate_only_receipt_reports_itself_to_every_entry(
     assert planned["detail"] == "gate-only recovery capture awaits exact approval"
     assert _approve_recovery(root, planned["recovery_plan"]["prepared_core_digest"], entry)["detail"] == "gate-only-operator-held"
     before = _triage_files(state_root)
-    for later in (["new", "resume", "recover"] if mode == "live" else ["test"]):
+    for later in ([None, "new", "resume", "recover"] if mode == "live" else ["test"]):
         reported = run(later, context="interactive", request={}, start=root)
         assert reported["outcome"] == "operator-held"
         assert reported["detail"] == "gate-only-operator-held"
@@ -3148,3 +3148,44 @@ run("recover", context="interactive", request=request, start=root, approval_cont
     assert not [path for path in (state_root / "triage").iterdir() if path.name.endswith(".tmp")]
     after = run("new" if route == "gate-only" else "resume", context="interactive", request={}, start=root)
     assert after["detail"] == ("gate-only-operator-held" if route == "gate-only" else "active session resumed")
+
+
+@pytest.mark.parametrize("bundle_kind", ["capture", "prepared"])
+def test_a_state_present_bundle_resumes_after_a_configuration_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, bundle_kind: str
+) -> None:
+    """The owner proof checks liveness, not the current configuration: the bundle is
+    bound to its gate's exact bytes, so an approved transition still completes after
+    an unrelated configuration change (#863)."""
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    run("new", context="interactive", request=request(root), start=root)
+    _abandonable(state_root / "triage/triage-pipeline-state_live.json")
+    _gate_owner(root, options=(bundle_kind,))
+    config = root / "config/dev-model.yaml"
+    config.write_text(config.read_text(encoding="utf-8") + "synthetic_configuration_change: true\n", encoding="utf-8")
+    if bundle_kind == "capture":
+        planned = run("recover", context="interactive", request={}, start=root)
+        assert planned["recovery_plan"]["action_core"]["action"] == "abandon-invalid-state"
+        recovered = _approve_recovery(root, planned["recovery_plan"]["action_core_digest"])
+    else:
+        recovered = run("recover", context="interactive", request={}, start=root)
+    assert recovered["detail"] == "recovered-safe-to-restart"
+
+
+def test_an_uncertain_state_present_bundle_owner_holds(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only a proven-dead owner releases the bundle: `uncertain` (a foreign host, a
+    reused process id, an unreadable start time) holds like a live owner (#863)."""
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    run("new", context="interactive", request=request(root), start=root)
+    _abandonable(state_root / "triage/triage-pipeline-state_live.json")
+    _gate_owner(root, options=("capture",))
+    monkeypatch.setattr(triage_engine, "owner_status", lambda record: "uncertain")
+    before = _triage_files(state_root)
+    held = run("recover", context="interactive", request={}, start=root)
+    assert held["outcome"] == "operator-held"
+    assert held["detail"] == "blocking gate owner is active or uncertain"
+    assert _triage_files(state_root) == before

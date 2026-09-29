@@ -304,12 +304,19 @@ def _prepared_gate_only_bundle(
     return bundle
 
 
-def _require_terminated_owner(settings: Settings, gate_raw: bytes) -> None:
+def _require_terminated_owner(gate_raw: bytes) -> None:
+    """Hold unless the owner of these exact gate bytes is proven dead (#863).
+
+    Only the record's shape is validated here, not its repository or configuration
+    identity: the bundle was found by this gate's exact digest and its capture already
+    checked that identity. Re-checking against the current configuration would hold
+    an approved, half-done transition for good after any configuration change.
+    """
     try:
         record = loads_exact(gate_raw)
     except Exception as exc:
         raise TriageError("blocking gate is malformed", outcome="operator-held") from exc
-    validate_record(record, repository_identity=repository_identity(settings), config_fingerprint=settings.fingerprint)
+    validate_record(record)
     if owner_status(record) != "terminated":
         raise TriageError("blocking gate owner is active or uncertain", outcome="operator-held")
 
@@ -344,7 +351,7 @@ def _blocking_recovery(
             # An ungated `recover` leaves its capture bound to its own gate, so this
             # bundle's owner may still be running. Plan from it or act on it only
             # once that owner is proven dead (#863).
-            _require_terminated_owner(settings, gate_raw)
+            _require_terminated_owner(gate_raw)
         if kind in {"gate-only-prepared", "test-gate-only-prepared"}:
             receipt = resume_gate_only(store, settings, bundle)
             return "operator-held", receipt["kind"], None

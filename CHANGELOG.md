@@ -44,7 +44,7 @@ starts.
 
 ## #865 — Triage recovery proves a capture's owner dead, moves every gate name, and reports a released gate-only receipt as itself
 
-CHANGED — gate semantics: Refresh `lib/triage/recovery.py`, `lib/triage/engine.py`, `kit-manifest.json`, `scripts/tests/test_triage_engine.py` and `scripts/tests/test_finalize_triage.py`. The changes:
+CHANGED — gate semantics: Refresh `lib/triage/recovery.py`, `lib/triage/engine.py`, the shared triage workflow, `kit-manifest.json`, `scripts/tests/test_triage_engine.py` and `scripts/tests/test_finalize_triage.py`. The changes:
 
 - **The owner of a state-present bundle must be proven dead.** An interactive `recover` or `test` over a blocking gate with a `state-present-capture` or `state-present-prepared` bundle used to plan from that bundle, or act on it, whatever the state of the gate's owner. It now reports `operator-held` / `blocking gate owner is active or uncertain` until that owner is proven dead. So an ungated plan followed by a separate approval must run as separate processes, which the CLI already does. An in-process caller that plans and then approves in the same live process is now held.
 - **Every name of the gate is quarantined.** Valid-state and invalid-state recovery now quarantine the gate's same-inode `.<gate>.<token>.tmp` name along with the gate itself. Both routes, the gate-only one included, now move that name before the gate.
