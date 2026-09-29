@@ -20,6 +20,45 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-09-29 (Phase 5 D-TRIAGE-RECOVERY packet and Stage 1, recovery fixes, in Claude Code)
+
+**Packet.** `saved_plans/phase5-d-triage-recovery_2026-09-29.md` is local and not committed, like the other D packets. It scopes the D-TRIAGE-RECOVERY row as engine-level cases, driven through the real `recover` and `test` CLI, with no agent run.
+
+- A fresh subagent checked the draft against the code, and its corrections are folded in.
+- Preparation found F-1, F-2 and F-3. They were filed as #862, #863 and #864 on the operator's approval of the exact payloads.
+- The operator chose Decision A1: run Stage 1 at `197a242`, fix, then rerun the affected cases as Stage 2.
+
+**Stage 1 (synthetic).** It ran in a disposable workspace under `/private/tmp`. The harness, the fixture's setup and the fake `gh` are with the evidence in `state/review-evidence/phase5-d-triage-recovery-01/` (gitignored). `RESULTS.md` owns the outcomes, and `APPROVAL.md` holds the approval and the run's disclosures. `python3 verify_summaries.py` there, over the engine at `197a242` plus fixture commit `f4f261f`, printed `problems []` on 2026-09-29. So every predicted step matched, including the predicted F-1, F-2 and F-3 divergences.
+
+**Shipped.** [#865](https://github.com/topij/agentic-dev-kit/pull/865) merged as `b13abb3`, a squash of its reviewed head `a904080` with the same tree. #862, #863 and #864 are closed. Recovery now:
+
+- acts on a state-present bundle only once its gate owner is proven dead, by liveness alone;
+- quarantines every same-inode gate name, aliases first, in the gate-only route too;
+- reports a released gate-only receipt as itself.
+
+An ungated plan followed by an approval must now run as separate processes, as the CLI does.
+
+**Decided.** The action core gets no gate-disposition field. The owner is bound through `old_gate_digest`, and ownership is proven at act time; #865's body gives the reasoning.
+
+**Review.** CodeRabbit skipped #865, so the fallback panel ran two full rounds. Round 1 found a regression: the owner check re-validated the current config fingerprint, which held an approved resume after any config change. It was fixed in the PR, and #865's disposition comments own the findings.
+
+**Filed this session:**
+
+- #862, #863 and #864;
+- #867: `owner_status` reads a changed hostname as `uncertain`. `hostname` changed during this session.
+
+Occurrence comments went on #643 and #835.
+
+**Verification.** In `/Users/topi/Coding/agentic-dev-kit`, `make test` at `a9040803f84c198a14ee101c115a2a0d027a2c72` (#865's reviewed head) on 2026-09-29 printed `3739 passed, 1 skipped in 571.40s`.
+
+**Not established:**
+
+- recovery evidence at the fixed engine, which is Stage 2;
+- real-service ambiguity from a crash;
+- concurrent recovery races.
+
+______________________________________________________________________
+
 ## Session — 2026-09-29 (triage finalize worktree, recover for engine-written runs, in Claude Code)
 
 **Shipped.** [#855](https://github.com/topij/agentic-dev-kit/pull/855) merged as `e265c36`; #841 is closed. Finalize's refusal now says the `worktree` must lie outside the repository checkout, and the triage workflow adds that it must not exist yet.
@@ -304,45 +343,6 @@ public issues leave those details out on purpose.
 
 ______________________________________________________________________
 
-## Session — 2026-09-24 (Phase 5 D-SYSTEMIZE-RECOVERY-02 rerun, in Claude Code)
-
-**Approved and run.** The operator approved PHASE5-D-SYSTEMIZE-RECOVERY-02 with options
-A1, B1, C1, R1 and E1. The packet is
-`saved_plans/phase5-d-systemize-recovery-rerun_2026-09-24.md` (local, not committed, like
-the other D packets). `APPROVAL.md`, `RESULTS.md`, the harness and
-`EVIDENCE-SHA256SUMS` are in
-`state/review-evidence/phase5-d-systemize-recovery-02/` (gitignored). `RESULTS.md` owns
-the outcomes.
-
-- **Design:**
-  - headless `claude -p --model fable` runs, isolated by Claude Code's sandbox;
-  - `denyRead` covered the harness, the control repository, `~/.claude` and the
-    `/private/tmp` entries that existed at setup;
-  - a socket-served fake forge and tracker, whose kills the server performs;
-  - the clones were at `c1d513e` plus one commit resetting the living docs.
-- **Outcome:** in both chains a fresh restart after a kill made **no second create**.
-  The landed-before-receipt chain recorded `found-by-read-back`. The
-  killed-before-landing chain made one create and recorded `created-and-read-back`.
-- **Operator amendments during the run**, recorded in `APPROVAL.md`:
-  - **§2:** a second fake-form gap, in `Q`'s preflight, did not stop the chain.
-  - **§3:** the harness's process-group kill missed the Bash tool's own process groups,
-    so the kill became a whole-tree kill and the `Q` chain was redone.
-    `launch_lane.py` already covers this case with its lineage kill.
-- **Scope of the result:** one synthetic sample per cutpoint. Whether it discharges the
-  residuals is the E audit's call. The real tracker's marker search is still a residual
-  (R1).
-
-**Filed and closed, each on the operator's approval of the exact payload:**
-
-- #794: the marker search defines neither the query nor the match set;
-- #722 closed as done: every owed record edit was already in the tree.
-
-**Parked in the friction log:** a restart that resumed the heartbeat without `start`; a
-synthetic approval recorded under the operator's real name; and a confounded related
-occurrence on the FRESH-CONTEXT preflight entry.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -352,17 +352,25 @@ ______________________________________________________________________
 
 ### Phase 5 exit
 
-**Status:** the D runs' open residuals go to the E audit, which also decides whether to
-commit the local `saved_plans/phase5-*` packets. #748 and #7 were both open on
-2026-09-26, awaiting the operator's judgment of whether #769 discharges them; the
-2026-09-23 D-SYSTEMIZE-RECOVERY packet block in
+**Status:** D-TRIAGE-RECOVERY Stage 1 ran synthetically at `197a242`, and the fixes it
+led to merged as #865 (`b13abb3`). The D runs' open residuals go to the E audit, which
+also decides whether to commit the local `saved_plans/phase5-*` packets. #748 and #7
+were both open on 2026-09-29, awaiting the operator's judgment of whether #769
+discharges them; the 2026-09-23 D-SYSTEMIZE-RECOVERY packet block in
 [`kit-handoff-history.md`](kit-handoff-history.md) sets out the options.
-**Owner:** `saved_plans/phase5-completion-plan_2026-09-18.md` (local, not committed).
+**Owner:** `saved_plans/phase5-completion-plan_2026-09-18.md` and
+`saved_plans/phase5-d-triage-recovery_2026-09-29.md`, both local and not committed.
 
-▶ Next: draft the D-TRIAGE-RECOVERY packet from
-`saved_plans/phase5-d-proposal_2026-09-21.md` (local). The alternative is #794's
-workflow fix: the real tracker's marker search is still residual R1 of the
-D-SYSTEMIZE-RECOVERY-02 run.
+▶ Next: prepare the D-TRIAGE-RECOVERY Stage 2 packet, then run it after approval.
+
+- **What it reruns:** the whole Stage 1 matrix, at `b13abb3`, which is wider than A1's
+  "affected cases". The packet must say so and why, name the cases #865's changes reach,
+  and rerun the rest as controls, for the operator's approval.
+- **What it reuses:** Stage 1's harness, fixture and fake `gh`, in a new namespace. The
+  Stage 1 harness hardcodes `197a242` and its own paths.
+- **What changes:** the predictions, wherever #865 fixed F-1, F-2 or F-3.
+- **The alternative** is still #794's workflow fix, which is residual R1 of the
+  D-SYSTEMIZE-RECOVERY-02 run.
 
 ### Reviewer profiles
 
