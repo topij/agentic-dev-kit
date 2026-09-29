@@ -385,6 +385,33 @@ _SETTLED = {"verified"}
 _FORGE_SETTLED = {"verified", "unsettled"}
 
 
+def _attempt_log_settled(entries: Any, allowed: set[str]) -> bool:
+    """Whether every attempt in a log is settled.
+
+    The engine persists an `attempting` entry before each external call and a
+    second entry with the call's outcome after it (#833), so an `attempting`
+    entry is settled only when the very next entry carries the same
+    `intent_digest` with a status in `allowed`. One left without that answer,
+    or answered by anything else, may still be in flight.
+    """
+    if not isinstance(entries, list) or any(not isinstance(entry, dict) for entry in entries):
+        return False
+    for index, entry in enumerate(entries):
+        if entry.get("status") in allowed:
+            continue
+        following = entries[index + 1] if index + 1 < len(entries) else None
+        intent = entry.get("intent_digest")
+        if (
+            entry.get("status") != "attempting"
+            or following is None
+            or not isinstance(intent, str)
+            or following.get("intent_digest") != intent
+            or following.get("status") not in allowed
+        ):
+            return False
+    return True
+
+
 def _terminal_evidence(parsed: Any) -> dict[str, Any] | None:
     """Summarise an invalid but finished run, or return None to keep it held.
 
@@ -395,6 +422,13 @@ def _terminal_evidence(parsed: Any) -> dict[str, Any] | None:
     quarantine path like an abandoned one, keeping every byte. `unsettled` is
     accepted only on a `pr-watch` observation, which writes nothing. Anything
     unrecognised keeps the state held.
+
+    Two finished layouts are recognised. An LLM-only session records a top-level
+    `reviewed_head` and `completion.merge_read_back`, including the merge commit.
+    The engine keeps the reviewed head under `archive_sweep` and its merge
+    read-back as the last finalization operation, and that read-back names no
+    merge commit (#833): `merge_commit` is then None and `state_action_plan`
+    looks for the sweep in git instead of trusting a recorded one.
     """
     if (
         not isinstance(parsed, dict)
@@ -405,63 +439,118 @@ def _terminal_evidence(parsed: Any) -> dict[str, Any] | None:
     ):
         return None
     completion = parsed.get("completion")
-    merge = completion.get("merge_read_back") if isinstance(completion, dict) else None
-    reviewed_head = parsed.get("reviewed_head")
     identifiers = parsed.get("verified_tracker_identifiers")
     if (
         not isinstance(completion, dict)
         or completion.get("route") != "archive-sweep"
-        or not isinstance(merge, dict)
-        or merge.get("merged") is not True
-        or not isinstance(reviewed_head, str)
-        or merge.get("final_head") != reviewed_head
         or not isinstance(identifiers, list)
         or any(not isinstance(item, str) for item in identifiers)
     ):
         return None
-    records: list[tuple[dict[str, Any], set[str]]] = []
-    for name in ("operations", "attempts", "notification_operations"):
-        entries = parsed.get(name, [])
-        if not isinstance(entries, list) or any(not isinstance(entry, dict) for entry in entries):
+    if "merge_read_back" in completion:
+        merge = completion["merge_read_back"]
+        reviewed_head = parsed.get("reviewed_head")
+        if (
+            not isinstance(merge, dict)
+            or merge.get("merged") is not True
+            or not isinstance(reviewed_head, str)
+            or merge.get("final_head") != reviewed_head
+            # This layout records its merge commit; one that does not is
+            # held rather than looked for in git, which is the engine
+            # layout's route only.
+            or merge.get("merge_commit") is None
+        ):
             return None
-        records.extend((entry, _SETTLED) for entry in entries)
+        pull_request, merge_commit = merge.get("pull_request"), merge.get("merge_commit")
+    else:
+        archive = parsed.get("archive_sweep")
+        reviewed_head = archive.get("reviewed_head") if isinstance(archive, dict) else None
+        operations = parsed.get("finalization_operations")
+        last = operations[-1] if isinstance(operations, list) and operations else None
+        read_back = last.get("read_back") if isinstance(last, dict) else None
+        if (
+            not isinstance(reviewed_head, str)
+            or not OID_RE.fullmatch(reviewed_head)
+            or not isinstance(read_back, dict)
+            or read_back.get("merged") is not True
+            or read_back.get("headRefOid") != reviewed_head
+        ):
+            return None
+        pull_request, merge_commit = read_back.get("url"), None
+    for name in ("operations", "notification_operations"):
+        entries = parsed.get(name, [])
+        if not isinstance(entries, list) or any(not isinstance(entry, dict) or entry.get("status") not in _SETTLED for entry in entries):
+            return None
+    if not _attempt_log_settled(parsed.get("attempts", []), _SETTLED):
+        return None
     forge = parsed.get("finalization_operations")
     if not isinstance(forge, list) or not forge or any(not isinstance(entry, dict) for entry in forge):
         return None
     for entry in forge:
         allowed = _FORGE_SETTLED if entry.get("kind") == "pr-watch" else _SETTLED
-        records.append((entry, allowed))
-        nested = entry.get("attempts", [])
-        if not isinstance(nested, list) or any(not isinstance(attempt, dict) for attempt in nested):
+        if entry.get("status") not in allowed or not _attempt_log_settled(entry.get("attempts", []), allowed):
             return None
-        records.extend((attempt, allowed) for attempt in nested)
-    if any(record.get("status") not in allowed for record, allowed in records):
-        return None
     if forge[-1].get("kind") != "merge-read-back" or forge[-1].get("status") != "verified":
         return None
     run_identity = parsed.get("run_identity")
     return {
         "session": run_identity.get("session") if isinstance(run_identity, dict) else None,
         "verified_tracker_identifiers": identifiers,
-        "pull_request": merge.get("pull_request"),
-        "merge_commit": merge.get("merge_commit"),
+        "pull_request": pull_request,
+        "merge_commit": merge_commit,
         "final_head": reviewed_head,
     }
 
 
+def _engine_block_text(record: Any) -> tuple[str, str] | None:
+    """One engine `candidate_index` record as (candidate id, source text).
+
+    The engine stores each block base64-encoded with its trailing newlines, and
+    the archive keeps the block's bytes but may drop those newlines where it
+    joins the group, so they are trimmed off the needle.
+    """
+    if (
+        not isinstance(record, dict)
+        or not isinstance(record.get("candidate_id"), str)
+        or record.get("source_block_encoding") != "base64"
+    ):
+        return None
+    try:
+        text = decode_bytes(record.get("source_block")).decode("utf-8")
+    except Exception:
+        return None
+    return record["candidate_id"], text.rstrip("\n")
+
+
 def _swept_blocks(parsed: dict[str, Any]) -> dict[str, str] | None:
-    """The frozen source text of every block the run decided to file or archive."""
+    """The frozen source text of every block the run decided to file or archive.
+
+    Reads the LLM-only layout's `content.blocks` or the engine's
+    `content.candidate_index` (#833), whichever the snapshot carries.
+    """
     snapshot = parsed.get("frozen_snapshot")
     content = snapshot.get("content") if isinstance(snapshot, dict) else None
-    blocks = content.get("blocks") if isinstance(content, dict) else None
     decisions = parsed.get("decisions")
-    if not isinstance(blocks, list) or not isinstance(decisions, list):
+    if not isinstance(content, dict) or not isinstance(decisions, list):
         return None
     texts: dict[str, str] = {}
-    for block in blocks:
-        if not isinstance(block, dict) or not isinstance(block.get("candidate_id"), str) or not isinstance(block.get("source_block"), str):
+    if "blocks" in content:
+        blocks = content["blocks"]
+        if not isinstance(blocks, list):
             return None
-        texts[block["candidate_id"]] = block["source_block"]
+        for block in blocks:
+            if not isinstance(block, dict) or not isinstance(block.get("candidate_id"), str) or not isinstance(block.get("source_block"), str):
+                return None
+            texts[block["candidate_id"]] = block["source_block"]
+    else:
+        records = content.get("candidate_index")
+        if not isinstance(records, list):
+            return None
+        for record in records:
+            entry = _engine_block_text(record)
+            if entry is None:
+                return None
+            texts[entry[0]] = entry[1]
     swept: dict[str, str] = {}
     for decision in decisions:
         if not isinstance(decision, dict) or not isinstance(decision.get("candidate_id"), str):
@@ -523,6 +612,45 @@ def _sweep_landed(settings: Settings, parsed: dict[str, Any], merge_commit: Any)
     return ref
 
 
+def _find_sweep_commit(settings: Settings, parsed: dict[str, Any]) -> str | None:
+    """Find the sweep of a run in the engine's layout, which names no merge commit (#833).
+
+    Walks the protected ref's first-parent history from the run's own draft head,
+    and only commits that change the friction log. A candidate is a commit that
+    takes every block the run filed or archived out of the inbox and has each in
+    its archive. Exactly one candidate is the sweep; none, or more than one,
+    returns None and the state stays held. `_sweep_landed` then re-checks the
+    commit it returns exactly as it checks a recorded one.
+    """
+    swept = _swept_blocks(parsed)
+    identity = parsed.get("run_identity")
+    since = identity.get("protected_branch_head") if isinstance(identity, dict) else None
+    if swept is None or not isinstance(since, str) or not OID_RE.fullmatch(since):
+        return None
+    repo = str(settings.paths.repo)
+    ref = f"refs/remotes/origin/{settings.protected_branch}"
+    log, archive = settings.paths.friction_log, settings.paths.archive
+    ancestor = subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor", since, ref], check=False, capture_output=True)
+    if ancestor.returncode:
+        return None
+    listed = subprocess.run(
+        ["git", "-C", repo, "rev-list", "--first-parent", f"{since}..{ref}", "--", log.relative_to(settings.paths.repo).as_posix()],
+        check=False, capture_output=True, text=True,
+    )
+    if listed.returncode:
+        return None
+    found: list[str] = []
+    for commit in listed.stdout.split():
+        before = _git_show(settings, f"{commit}^", log)
+        after = _git_show(settings, commit, log)
+        archived = _git_show(settings, commit, archive)
+        if None in (before, after, archived):
+            continue
+        if all(text in before and text not in after and text in archived for text in swept.values()):
+            found.append(commit)
+    return found[0] if len(found) == 1 else None
+
+
 def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str, Any]) -> dict[str, Any]:
     core = bundle.get("capture_core")
     if not isinstance(core, dict) or digest(core) != bundle.get("capture_core_digest"):
@@ -556,9 +684,17 @@ def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str
         )
         terminal_evidence = None if abandonable else _terminal_evidence(parsed)
         if terminal_evidence is not None:
-            landed = _sweep_landed(settings, parsed, terminal_evidence["merge_commit"])
+            merge_commit = terminal_evidence["merge_commit"]
+            source = "recorded"
+            if merge_commit is None:
+                # Only the engine's layout gets here: `_terminal_evidence` holds
+                # an LLM-only state that names no merge commit.
+                merge_commit, source = _find_sweep_commit(settings, parsed), "found-in-git"
+            landed = _sweep_landed(settings, parsed, merge_commit)
             terminal_evidence = {
                 **terminal_evidence,
+                "merge_commit": merge_commit,
+                "merge_commit_source": source,
                 "merge_commit_reachable_from": landed,
                 "swept_candidates": sorted(_swept_blocks(parsed) or {}),
             } if landed else None

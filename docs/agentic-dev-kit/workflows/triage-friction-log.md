@@ -806,18 +806,32 @@ second time or start work under an unowned gate.
 Classify invalid captured state conservatively. Only a readable state that proves it
 never reached `attempting` and contains no verified tracker identifier or repository/PR
 evidence may offer `abandon <action-core-digest>` to the present interactive operator.
-The one other invalid state that leaves the held route is a **finished** run in the
-layout an LLM-only session records — an engine-written finished run is valid and is
-retired by *Completed-state retirement* instead: phase `completed`, completion route
-`archive-sweep` with a `completion.merge_read_back` of `merged: true` whose
-`final_head` equals the recorded `reviewed_head`, every tracker, attempt and
-notification record `verified`, every forge operation and nested attempt `verified`
-(a `pr-watch` observation may also be `unsettled`, since it writes nothing), and a
-verified `merge-read-back` as the last forge operation. Those bytes are claims, not
-proof; neither a reachable commit (any merged commit is one) nor the working tree
-(uncommitted edits can say anything) proves the sweep, so the engine reads the evidence
-from git. The recorded `merge_commit` must be a full object id (40 to 64 lowercase hex)
-reachable from the protected branch's remote-tracking ref, and it must be the sweep
+`recover` judges validity the way a session-starting entry does, so a completed state
+that is valid but for a configuration change made after it finished is refused as valid
+(`captured state is valid; recovery refused`) and left for *Completed-state retirement*
+rather than captured as invalid.
+The one other invalid state that leaves the held route is a **finished** run, in either
+layout. Both need phase `completed`, completion route `archive-sweep`, every tracker and
+notification operation `verified`, every forge operation `verified` (a `pr-watch`
+observation may also be `unsettled`, since it writes nothing), and a verified
+`merge-read-back` as the last forge operation. In each attempt log, top-level or nested,
+every entry is settled in the same way, except that an `attempting` entry, which the
+engine writes before each external call, is settled when the very next entry carries the
+same `intent_digest` with a settled status. The layout an LLM-only session records adds a
+`completion.merge_read_back` of `merged: true` whose `final_head` equals the top-level
+`reviewed_head` and which must name the `merge_commit`; one that does not stays held.
+The engine's layout keeps the reviewed head under `archive_sweep`, and its last forge
+operation's read-back must be `merged: true` at that head. That read-back names no merge
+commit, so the engine looks for one (below). Those bytes are claims, not proof; neither a
+reachable commit (any merged commit is one) nor the working tree (uncommitted edits can
+say anything) proves the sweep, so the engine reads the evidence from git. For a state in
+the engine's layout, which names no merge commit, the engine walks the protected branch's
+remote-tracking ref first-parent from the run's own `protected_branch_head`, which must be
+its ancestor, over commits that change `<friction-log>`. It takes a commit only when the
+commit moves every block the run decided to file or archive out of `<friction-log>` and
+into `<friction-log-archive>`, and only when exactly one commit does; otherwise the state
+stays held. The merge commit, recorded or found, must be a full object id (40 to 64
+lowercase hex) reachable from that ref, and it must be the sweep
 itself: every frozen block the run decided to file or archive is in `<friction-log>` at
 its parent, absent from `<friction-log>` and present in `<friction-log-archive>` at that
 commit, and absent from `<friction-log>` at the protected ref. That shows this run's
@@ -825,7 +839,8 @@ blocks left the inbox, so a new session cannot re-file them. Nothing
 such a run recorded is in flight, so it may offer `retire-terminal-invalid-state` under the same quarantine,
 receipt, and approval sequence as abandonment; its action core additionally binds a
 `terminal_evidence` summary of the session, verified tracker identifiers, pull request,
-merge commit, the ref it was found on, the swept candidate ids, and final head, so the approved digest names the finished writes. The
+merge commit and whether it was `recorded` or `found-in-git`, the ref it was found on,
+the swept candidate ids, and final head, so the approved digest names the finished writes. The
 bytes are retained at the quarantine path, never rewritten. Any other or unreadable
 value keeps the state held.
 The action core binds the capture-core digest, exact engine-derived quarantine target,
