@@ -613,7 +613,7 @@ def _sweep_landed(settings: Settings, parsed: dict[str, Any], merge_commit: Any)
 
 
 def _find_sweep_commit(settings: Settings, parsed: dict[str, Any]) -> str | None:
-    """Find this run's sweep in git when its state names no merge commit (#833).
+    """Find the sweep of a run in the engine's layout, which names no merge commit (#833).
 
     Walks the protected ref's first-parent history from the run's own draft head,
     and only commits that change the friction log. A candidate is a commit that
@@ -687,6 +687,8 @@ def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str
             merge_commit = terminal_evidence["merge_commit"]
             source = "recorded"
             if merge_commit is None:
+                # Only the engine's layout gets here: `_terminal_evidence` holds
+                # an LLM-only state that names no merge commit.
                 merge_commit, source = _find_sweep_commit(settings, parsed), "found-in-git"
             landed = _sweep_landed(settings, parsed, merge_commit)
             terminal_evidence = {

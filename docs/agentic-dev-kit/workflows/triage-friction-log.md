@@ -819,13 +819,13 @@ every entry is settled in the same way, except that an `attempting` entry, which
 engine writes before each external call, is settled when the very next entry carries the
 same `intent_digest` with a settled status. The layout an LLM-only session records adds a
 `completion.merge_read_back` of `merged: true` whose `final_head` equals the top-level
-`reviewed_head` and which must name the `merge_commit`; one that does not stays held. The engine's layout keeps the reviewed
-head under `archive_sweep`, and its last forge operation's read-back must be `merged: true`
-at that head. That read-back names no merge commit, so the engine looks for one (below).
-Those bytes are claims, not
-proof; neither a reachable commit (any merged commit is one) nor the working tree
-(uncommitted edits can say anything) proves the sweep, so the engine reads the evidence
-from git. Where the state names no merge commit, the engine walks the protected branch's
+`reviewed_head` and which must name the `merge_commit`; one that does not stays held.
+The engine's layout keeps the reviewed head under `archive_sweep`, and its last forge
+operation's read-back must be `merged: true` at that head. That read-back names no merge
+commit, so the engine looks for one (below). Those bytes are claims, not proof; neither a
+reachable commit (any merged commit is one) nor the working tree (uncommitted edits can
+say anything) proves the sweep, so the engine reads the evidence from git. For a state in
+the engine's layout, which names no merge commit, the engine walks the protected branch's
 remote-tracking ref first-parent from the run's own `protected_branch_head`, which must be
 its ancestor, over commits that change `<friction-log>`. It takes a commit only when the
 commit moves every block the run decided to file or archive out of `<friction-log>` and
