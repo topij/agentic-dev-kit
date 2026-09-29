@@ -363,8 +363,9 @@ discharges them; the 2026-09-23 D-SYSTEMIZE-RECOVERY packet block in
 
 ▶ Next: prepare the D-TRIAGE-RECOVERY Stage 2 packet, then run it after approval.
 
-- **What it reruns:** the whole Stage 1 matrix, at `b13abb3`. The packet names which
-  cases #865's changes reach; the rest rerun as controls.
+- **What it reruns:** the whole Stage 1 matrix, at `b13abb3`, which is wider than A1's
+  "affected cases". The packet must say so and why, name the cases #865's changes reach,
+  and rerun the rest as controls, for the operator's approval.
 - **What it reuses:** Stage 1's harness, fixture and fake `gh`, in a new namespace. The
   Stage 1 harness hardcodes `197a242` and its own paths.
 - **What changes:** the predictions, wherever #865 fixed F-1, F-2 or F-3.
