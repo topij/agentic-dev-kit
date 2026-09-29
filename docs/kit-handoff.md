@@ -363,8 +363,9 @@ discharges them; the 2026-09-23 D-SYSTEMIZE-RECOVERY packet block in
 
 ▶ Next: prepare the D-TRIAGE-RECOVERY Stage 2 packet, then run it after approval.
 
-- **What it reruns:** the whole Stage 1 matrix, at `b13abb3`. #865 changed both the
-  gate-only and the state-present recovery routes.
+- **What it reruns:** the whole Stage 1 matrix, at `b13abb3`. That is A1's rule, rerun
+  what passes through changed code, applied to #865: it changed `_blocking_recovery` and
+  both the gate-only and the state-present recovery routes.
 - **What it reuses:** Stage 1's harness, fixture and fake `gh`, in a new namespace. The
   Stage 1 harness hardcodes `197a242` and its own paths.
 - **What changes:** the predictions, wherever #865 fixed F-1, F-2 or F-3.
