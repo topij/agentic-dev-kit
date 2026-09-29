@@ -455,6 +455,10 @@ def _terminal_evidence(parsed: Any) -> dict[str, Any] | None:
             or merge.get("merged") is not True
             or not isinstance(reviewed_head, str)
             or merge.get("final_head") != reviewed_head
+            # This layout records its merge commit; one that does not is
+            # held rather than looked for in git, which is the engine
+            # layout's route only.
+            or merge.get("merge_commit") is None
         ):
             return None
         pull_request, merge_commit = merge.get("pull_request"), merge.get("merge_commit")

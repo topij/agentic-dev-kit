@@ -819,7 +819,7 @@ every entry is settled in the same way, except that an `attempting` entry, which
 engine writes before each external call, is settled when the very next entry carries the
 same `intent_digest` with a settled status. The layout an LLM-only session records adds a
 `completion.merge_read_back` of `merged: true` whose `final_head` equals the top-level
-`reviewed_head` and which names the `merge_commit`. The engine's layout keeps the reviewed
+`reviewed_head` and which must name the `merge_commit`; one that does not stays held. The engine's layout keeps the reviewed
 head under `archive_sweep`, and its last forge operation's read-back must be `merged: true`
 at that head. That read-back names no merge commit, so the engine looks for one (below).
 Those bytes are claims, not

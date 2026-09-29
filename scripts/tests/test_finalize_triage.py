@@ -1168,14 +1168,27 @@ def test_resume_completes_a_verified_merge_read_back_whose_completion_was_never_
     canonical_state(dumps(completed), settings=load_settings(root), mode="live")
 
 
-def _engine_completed_sweep(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path, Path, dict]:
+def _engine_completed_sweep(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, swept_before_draft: bool = False
+) -> tuple[Path, Path, Path, dict]:
     """Drive a real engine run to a completed archive-sweep state (#833).
 
     Returns the repository, the live state path, the finalization worktree
-    holding the rendered sweep, and the completed state. Nothing is committed
-    to the repository's own history: each caller builds the history it needs.
+    holding the rendered sweep, and the completed state. Nothing after the
+    draft is committed to the repository's own history: each caller builds the
+    history it needs. `swept_before_draft` first sweeps the entry the run will
+    archive and puts it back, both before the run's draft head.
     """
     root = repository(tmp_path)
+    if swept_before_draft:
+        inbox, archive = root / "docs/kit-friction-log.md", root / "docs/kit-friction-log-archive.md"
+        original = inbox.read_text(encoding="utf-8")
+        block = "- **Approved archive.** exact bytes. **Filed 2026-01-02 as #17.**"
+        inbox.write_text(original.replace(block + "\n\n", ""), encoding="utf-8")
+        archive.write_text(archive.read_text(encoding="utf-8") + "\n" + block + "\n", encoding="utf-8")
+        _commit_to_main(root, "an earlier sweep of the same entry")
+        inbox.write_text(original, encoding="utf-8")
+        _commit_to_main(root, "the entry is back in the inbox")
     state_root = tmp_path / "state-root"
     monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
     draft_request, candidate_id = proposal_request(root)
@@ -1322,3 +1335,56 @@ def test_recover_refuses_a_completed_state_valid_but_for_a_later_config_change(
     assert state_path.read_bytes() == raw
     restarted = run("new", context="interactive", request={}, start=root)
     assert loads_exact(state_path.read_bytes())["phase"] == "reserved", restarted
+
+
+def test_recover_takes_the_first_parent_merge_commit_of_a_merge_landed_sweep(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A sweep landed by a merge commit moves the block in both the branch
+    commit and the merge; only the first-parent walk makes the merge the one
+    candidate, so the run retires rather than being held as ambiguous."""
+    root, state_path, worktree, terminal = _engine_completed_sweep(tmp_path, monkeypatch)
+    git(root, "checkout", "-q", "-b", "sweep-branch")
+    branch_commit = _land_sweep(root, worktree)
+    git(root, "checkout", "-q", "main")
+    git(root, "merge", "-q", "--no-ff", "-m", "Merge the sweep", "sweep-branch")
+    git(root, "update-ref", "refs/remotes/origin/main", "HEAD")
+    merge = git(root, "rev-parse", "HEAD")
+    assert git(root, "rev-parse", f"{merge}^2") == branch_commit
+    _invalidate(state_path, terminal)
+    plan = run("recover", context="interactive", request={}, start=root)["recovery_plan"]
+    assert plan["action_core"]["action"] == "retire-terminal-invalid-state"
+    assert plan["action_core"]["terminal_evidence"]["merge_commit"] == merge
+
+
+def test_recover_looks_for_the_sweep_only_after_the_runs_draft_head(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same entry was swept once and put back before this run drafted: that
+    earlier commit is not this run's sweep, so only the one after the draft head
+    counts and the run retires."""
+    root, state_path, worktree, terminal = _engine_completed_sweep(tmp_path, monkeypatch, swept_before_draft=True)
+    sweep = _land_sweep(root, worktree)
+    _invalidate(state_path, terminal)
+    plan = run("recover", context="interactive", request={}, start=root)["recovery_plan"]
+    assert plan["action_core"]["action"] == "retire-terminal-invalid-state"
+    assert plan["action_core"]["terminal_evidence"]["merge_commit"] == sweep
+
+
+def test_recover_holds_when_the_runs_draft_head_is_not_on_the_protected_ref(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A recorded draft head the protected ref does not contain bounds nothing,
+    so the state stays held even though a sweep is on the ref."""
+    root, state_path, worktree, terminal = _engine_completed_sweep(tmp_path, monkeypatch)
+    git(root, "checkout", "-q", "-b", "elsewhere")
+    git(root, "commit", "-q", "--allow-empty", "-m", "never merged")
+    foreign = git(root, "rev-parse", "HEAD")
+    git(root, "checkout", "-q", "main")
+    _land_sweep(root, worktree)
+    moved = deepcopy(terminal)
+    moved["run_identity"]["protected_branch_head"] = foreign
+    raw = _invalidate(state_path, moved)
+    held = run("recover", context="interactive", request={}, start=root)
+    assert held["detail"] == "external-attempt-absence-unproven"
+    assert state_path.read_bytes() == raw

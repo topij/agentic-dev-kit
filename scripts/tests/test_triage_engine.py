@@ -2671,6 +2671,10 @@ def _unfinished(change: str) -> dict:
         state["verified_tracker_identifiers"] = [9]
     elif change == "schema-bool":
         state["schema_version"] = True
+    elif change == "no-merge-commit":
+        del state["completion"]["merge_read_back"]["merge_commit"]
+    elif change == "null-merge-commit":
+        state["completion"]["merge_read_back"]["merge_commit"] = None
     return state
 
 
@@ -2678,6 +2682,7 @@ def _unfinished(change: str) -> dict:
     "phase", "route", "unmerged", "other-head", "tracker-attempting", "attempt-ambiguous",
     "nested-failed", "unsettled-write", "no-merge-read-back-last", "no-forge",
     "notification-attempting", "identifier-type", "schema-bool",
+    "no-merge-commit", "null-merge-commit",
 ])
 def test_terminal_evidence_refuses_anything_unfinished(change: str) -> None:
     from triage.recovery import _terminal_evidence
@@ -2863,6 +2868,7 @@ def test_recover_retires_a_terminal_invalid_state_on_exact_approval_then_new_dra
     evidence = plan["action_core"]["terminal_evidence"]
     assert evidence["verified_tracker_identifiers"] == ["https://github.com/example/project/issues/9"]
     assert evidence["merge_commit_reachable_from"] == "refs/remotes/origin/main"
+    assert evidence["merge_commit_source"] == "recorded"
     assert evidence["swept_candidates"] == ["TRI-01"]
     assert state_path.read_bytes() == raw
     core_digest = plan["action_core_digest"]
