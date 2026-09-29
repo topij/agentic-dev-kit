@@ -5,6 +5,34 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-09-24 (systemize dispatch idempotency, #790, in Claude Code)
+
+**Shipped.** [#790](https://github.com/topij/agentic-dev-kit/pull/790) merged as
+`4c69ab2c7eb6c33f537d553e5c168566b297edee` on the operator's direction, and #786 was
+closed on the operator's direction.
+
+- `post-merge-systemize.md` gains *External dispatch records*: an idempotency marker and
+  a report record for each tracker create and notification, `attempting` persisted
+  before the write, and a marker search before any create.
+- A new safety row, `unverified-external-dispatch`, makes the read-back normative.
+- `CHANGELOG.md` carries the adopter entry.
+
+**Review.** CodeRabbit skipped, because automatic reviews are disabled. The fallback panel
+ran at `2b9dae8`, `ae54d68` and `d873b68`. The receipt is bound to `d873b68`, and the
+PR's disposition comments own the findings.
+
+**Filed on the operator's approval of the exact payloads:**
+
+- #791: the dispatch protocol is tested only as pinned prose, so an added contradicting
+  instruction passes;
+- #792: two concurrent LLM-only runs can both pass the marker search and create.
+
+**Verification.** `make test` at `d873b68dfc96e87b2787e886207dcc9feb48d3df` on
+2026-09-24, in a detached worktree under this session's scratchpad, printed
+`3500 passed, 1 skipped`. It did not run in the main checkout, because a mode-000 file
+under the gitignored `state/review-evidence/` crashes the suite's state snapshot. That
+is #461's mechanism, now live.
+
 ### 2026-09-24 (RECOVERY decision and Phase 5 D-FRESH-CONTEXT run, in Claude Code)
 
 **Decisions, taken interactively.**

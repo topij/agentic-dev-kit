@@ -20,6 +20,21 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-09-28 (make lint scope, state-guard exclusion, in Claude Code)
+
+**Shipped.** [#850](https://github.com/topij/agentic-dev-kit/pull/850) merged as `6a21e59`; #848 is closed. `make lint` hands ruff only the Python files git tracks, and `scripts/tests/test_make_lint.py` runs the recipe against a stub `uvx`.
+[#851](https://github.com/topij/agentic-dev-kit/pull/851) merged as `6e87d25`. The #428 state guard read every file under `state/` in each pytest process, so this checkout's `state/review-evidence/` made the local suite far slower than CI's. New `state.test_guard_exclude`, shipped as `[]` and settable in the local overlay: a listed top-level directory is recorded as present and not walked. A list naming `pr-watch`, a directory a configured `state/...` path points into, or any invalid entry excludes nothing.
+
+**Decided.** The exclusion is set in this checkout's gitignored `config/dev-model.local.yaml` (`review-evidence`), not the tracked config, which is also `init.sh`'s template. On the operator's word, this session's work takes no workstream. Raised and not settled: whether `models.runtime_mappings.claude` should name Opus 5.5 for a tier.
+
+**Filed this session:** #852 (a fix round cannot compose a delta receipt without a receipt at its parent), #853 (a repo-only test file fails CI twice).
+
+**Review.** CodeRabbit skipped both PRs, so the fallback panel carried each; the disposition comments on the PRs own the findings. #851's round-1 adversarial lens built a fabricated `pr-watch` receipt that passed the guard when `pr-watch` was listed; the refusal of engine directories came from that.
+
+**Verification.** In `/Users/topi/Coding/agentic-dev-kit` on 2026-09-28, `make test` at `37830b8349665d2c0218b696f67808add988d9b9` printed `3701 passed, 1 skipped in 494.89s`; the same command at `5a58e1a0081494f2d9c2ce75a5e9a27c3c9526e1`, before #851, printed `3688 passed, 1 skipped in 3375.64s`. #461 stays open: an unreadable file anywhere the guard still walks stops the conftest import.
+
+______________________________________________________________________
+
 ## Session — 2026-09-28 (sweep moves earlier graduation markers, friction sweep, in Claude Code)
 
 **Shipped.** [#843](https://github.com/topij/agentic-dev-kit/pull/843) merged as `5ac1293`; #187 is closed. A sweep moves every earlier graduation-marker section to the archive and keeps only its own; a marker-titled section holding an entry line stays. The previous layout validates as the `pre-187` rendering.
@@ -310,36 +325,6 @@ the outcomes.
 **Parked in the friction log:** a restart that resumed the heartbeat without `start`; a
 synthetic approval recorded under the operator's real name; and a confounded related
 occurrence on the FRESH-CONTEXT preflight entry.
-
-______________________________________________________________________
-
-## Session — 2026-09-24 (systemize dispatch idempotency, #790, in Claude Code)
-
-**Shipped.** [#790](https://github.com/topij/agentic-dev-kit/pull/790) merged as
-`4c69ab2c7eb6c33f537d553e5c168566b297edee` on the operator's direction, and #786 was
-closed on the operator's direction.
-
-- `post-merge-systemize.md` gains *External dispatch records*: an idempotency marker and
-  a report record for each tracker create and notification, `attempting` persisted
-  before the write, and a marker search before any create.
-- A new safety row, `unverified-external-dispatch`, makes the read-back normative.
-- `CHANGELOG.md` carries the adopter entry.
-
-**Review.** CodeRabbit skipped, because automatic reviews are disabled. The fallback panel
-ran at `2b9dae8`, `ae54d68` and `d873b68`. The receipt is bound to `d873b68`, and the
-PR's disposition comments own the findings.
-
-**Filed on the operator's approval of the exact payloads:**
-
-- #791: the dispatch protocol is tested only as pinned prose, so an added contradicting
-  instruction passes;
-- #792: two concurrent LLM-only runs can both pass the marker search and create.
-
-**Verification.** `make test` at `d873b68dfc96e87b2787e886207dcc9feb48d3df` on
-2026-09-24, in a detached worktree under this session's scratchpad, printed
-`3500 passed, 1 skipped`. It did not run in the main checkout, because a mode-000 file
-under the gitignored `state/review-evidence/` crashes the suite's state snapshot. That
-is #461's mechanism, now live.
 
 ______________________________________________________________________
 
