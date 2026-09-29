@@ -31,7 +31,7 @@
 
 **Review.** CodeRabbit skipped both PRs, so the fallback panel carried each; the disposition comments on the PRs own the findings. #851's round-1 adversarial lens built a fabricated `pr-watch` receipt that passed the guard when `pr-watch` was listed; the refusal of engine directories came from that.
 
-**Verification.** In `/Users/topi/Coding/agentic-dev-kit` on 2026-09-28, `make test` at `37830b8349665d2c0218b696f67808add988d9b9` printed `3701 passed, 1 skipped in 494.89s`; the same command at `5a58e1a0081494f2d9c2ce75a5e9a27c3c9526e1`, before #851, printed `3688 passed, 1 skipped in 3375.64s`. #461 stays open: an unreadable file anywhere the guard still walks stops the conftest import.
+**Verification.** In `/Users/topi/Coding/agentic-dev-kit` on 2026-09-28, `make test` at `37830b8349665d2c0218b696f67808add988d9b9` printed `3701 passed, 1 skipped in 494.89s`; the same command at `5a58e1a0081494f2d9c2ce75a5e9a27c3c9526e1`, #850's first commit and so without #851 or #850's own test, printed `3688 passed, 1 skipped in 3375.64s`. #461 stays open: an unreadable file anywhere the guard still walks stops the conftest import.
 
 ______________________________________________________________________
 
