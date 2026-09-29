@@ -634,8 +634,9 @@ def test_provider_verified_mismatch_is_persisted_ambiguous_and_cannot_advance(
     assert [call[0] for call in unused.calls] == ["authority:protected-head"]
 
 
+@pytest.mark.parametrize("placement", ["inside", "containing"])
 def test_conflicting_worktree_is_refused_before_branch_authority_or_dispatch(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, placement: str
 ) -> None:
     root = repository(tmp_path)
     state_root = tmp_path / "state-root"
@@ -646,16 +647,19 @@ def test_conflicting_worktree_is_refused_before_branch_authority_or_dispatch(
     presented = loads_exact(state_path.read_bytes())
     approved, context = approval(presented, f"archive {candidate_id}")
     forge = FakeForge([])
+    worktree = root / "nested" if placement == "inside" else root.parent
     result = run(
         "resume",
         context="interactive",
-        request={**approved, "finalize": True, "worktree": str(root / "nested")},
+        request={**approved, "finalize": True, "worktree": str(worktree)},
         start=root,
         approval_context=context,
         forge=forge,
     )
     assert result["outcome"] == "operator-held"
-    assert result["detail"] == "finalization worktree conflicts with caller checkout"
+    assert result["detail"] == (
+        "finalization worktree must lie outside the repository checkout, neither inside it nor containing it"
+    )
     assert [call[0] for call in forge.calls] == ["authority:protected-head"]
     assert not (root / "nested").exists()
 

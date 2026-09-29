@@ -1239,7 +1239,9 @@ Recovery first returns `recovery_plan` without mutating a gate-only capture. A l
 request contains `recovery_approval` with `decision`, `source`, `approver_identity`, and
 `core_digest`; the trusted current-session read-back binds those same values.
 Finalization additionally requires `finalize: true` and an absolute isolated `worktree`
-on its first continuation.
+on its first continuation. The `worktree` path must lie outside the repository checkout:
+a path inside it, such as a `.claude/worktrees/` directory, or one that contains it is
+refused operator-held before the branch or worktree is created. A path under the session scratch directory works.
 
 External adapters are disabled unless selected explicitly. `--enable-github-tracker`
 permits only approved GitHub Issues transitions. Because GitHub's issue list lags a fresh
