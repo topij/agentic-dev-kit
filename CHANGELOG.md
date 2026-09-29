@@ -42,7 +42,7 @@ starts.
 
 ---
 
-## #PRNUM — Triage recovery proves a capture's owner dead, moves every gate name, and reports a released gate-only receipt as itself
+## #865 — Triage recovery proves a capture's owner dead, moves every gate name, and reports a released gate-only receipt as itself
 
 CHANGED — gate semantics: Refresh `lib/triage/recovery.py`, `lib/triage/engine.py`, `kit-manifest.json`, `scripts/tests/test_triage_engine.py` and `scripts/tests/test_finalize_triage.py`. The changes:
 
