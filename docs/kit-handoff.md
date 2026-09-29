@@ -50,7 +50,8 @@ owns the outcomes. The runs below were in that directory, over the engine at `b1
 plus fixture commit `fa61085`, on 2026-09-29.
 
 - `python3 verify_summaries.py` printed `cases 32 steps 215 problems []`.
-- `harness.py containment` printed `true` for each of its three surfaces.
+- `harness.py containment` printed `true` for `git_status`, `state_listing` and
+  `state_triage_lstat`.
 - In that run, F-1, F-2 and F-3 passed through the CLI, in V-ALIAS, O-CAPTURE, and G0,
   G-ALIAS and T-GATE.
 - The preparation check counter-ran the same predictions at `197a242`. It failed the
@@ -65,7 +66,8 @@ plus fixture commit `fa61085`, on 2026-09-29.
 - An occurrence comment on #861: the harness's containment listing of all of `state/`
   grows with `state/`.
 
-**Not established:** everything Stage 1 lists, and:
+**Not established:** Stage 1's list, except the recovery evidence at the fixed engine
+that it left to Stage 2, which this run supplies. Also not established:
 
 - a `state-present-prepared` bundle whose owner is alive, which the CLI cannot reach;
 - a real hostname change (#867);
@@ -74,8 +76,8 @@ plus fixture commit `fa61085`, on 2026-09-29.
 **Left for the operator:**
 
 - the row's acceptance;
-- removing `/private/tmp/adk-phase5-d-triage-recovery-02` and its two `-prepcheck-*`
-  siblings, which this session did not attempt;
+- removing `/private/tmp/adk-phase5-d-triage-recovery-02` and its `-prepcheck-b13` and
+  `-prepcheck-197a` siblings, which this session did not attempt;
 - deleting the control checkout's local branches of the merged #865 and #868,
   `fix/triage-recovery-owner-alias` and `chore/update-handoff-2026-09-29-triage-recovery`.
 
@@ -340,7 +342,7 @@ ______________________________________________________________________
 
 ### Phase 5 exit
 
-**Status:** D-TRIAGE-RECOVERY ran in two stages:
+**Status:** D-TRIAGE-RECOVERY ran in stages:
 
 - Stage 1 at `197a242` found F-1, F-2 and F-3, which #865 (`b13abb3`) fixed.
 - Stage 2 ran at `b13abb3` on 2026-09-29; its `RESULTS.md` owns the outcome.
@@ -358,14 +360,17 @@ which also decides whether to commit the local `saved_plans/phase5-*` packets.
 - `saved_plans/phase5-d-triage-recovery_2026-09-29.md`;
 - `saved_plans/phase5-d-triage-recovery-02_2026-09-29.md`.
 
-▶ Next: the operator accepts or rejects D-TRIAGE-RECOVERY from its two `RESULTS.md`
-files. Then prepare the Phase 5 E audit packet (milestone E of the completion plan),
-which reconciles each D row's evidence and open residuals against the Phase 5 contract.
+▶ Next: the operator accepts or rejects D-TRIAGE-RECOVERY from the Stage 1 and Stage 2
+`RESULTS.md` files. Then prepare the Phase 5 E audit packet (milestone E of the
+completion plan), which reconciles each D row's evidence and open residuals against the
+Phase 5 contract.
 
-- **Its first question** is whether any D row is still owed. The triage side of D-SERVICE,
-  notification-thread approval, waits on #198.
-- **Still an alternative** for systemize: #794's workflow fix, which is residual R1 of
-  the D-SYSTEMIZE-RECOVERY-02 run.
+- **Its first question** is whether any D row is still owed. Two history entries list
+  gaps: the 2026-09-23 D-SYSTEMIZE-LIVE entry lists the triage side of D-SERVICE as not
+  established, and the 2026-09-25 D-TRIAGE-RESIDUAL entry lists notification-thread
+  approval, citing #198.
+- **Also open for the audit to weigh:** #794's workflow fix, which is residual R1 of the
+  D-SYSTEMIZE-RECOVERY-02 run.
 
 ### Reviewer profiles
 
