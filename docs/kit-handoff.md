@@ -27,9 +27,8 @@
 - PR #882, squash `12629ab`, from the headless Claude lane `triage-857-874` (merge class
   operator). It pins finalize's commit-step worktree re-check with a test (#857), and
   corrects the *Completed-state retirement* doctrine, with kill-cutpoint tests (#874).
-  The cockpit's review rounds narrowed the doctrine: only a `TriageError` from the claim
-  releases the gate, and a kill or any other exception keeps it held. #857 and #874
-  closed on merge.
+  #883 carries the doctrine points the review rounds left open. #857 and #874 closed on
+  merge.
 - PR #881, squash `7290e31`: the parity plan's *Phase 6* section, ordered with an owner
   for each item, and the Phase 6 workstream.
 
@@ -47,11 +46,13 @@ on #852 (the receipt workaround below).
 **Review.** CodeRabbit's auto-review is off, so the fallback panel reviewed both PRs.
 Round 1's receipt was recorded at its reviewed head, with its findings in the
 disposition, before the fix round was pushed. Each fix round then composed a delta
-receipt on the one before it. #882 took the dual form throughout, because it changes recovery doctrine.
-Its residual LOW findings went to #883 under the blast-radius stopping rule.
+receipt on the one before it. #882 took the dual form throughout, because it changes
+recovery doctrine. Its residual LOW findings went to #883 under the blast-radius
+stopping rule.
 
 **Lane.** The lane's work completed, but its receipt terminalized `failed` on permission
-denials the work did not need:
+denials the work did not need. The receipt listed them, until `dev_session.sh rm`
+removed its session directory:
 
 - a Read of a gitignored file outside its worktree, which the cockpit's brief had pointed
   it at;
@@ -64,8 +65,8 @@ denials the work did not need:
 
 - #881 at `adb6324`, in `/Users/topi/Coding/agentic-dev-kit`: `3739 passed, 1 skipped,
   3 warnings in 679.30s`;
-- #882 at `425dbfe`, in the lane worktree: `3745 passed, 1 skipped, 3 warnings in
-  578.74s`.
+- #882 at `425dbfe`, in the lane worktree `/Users/topi/Coding/dev-model-sessions/triage-857-874/wt`:
+  `3745 passed, 1 skipped, 3 warnings in 578.74s`.
 
 The `env -u` form is because the shell began exporting `FORCE_COLOR=3` partway through
 the session (#884).
@@ -385,9 +386,9 @@ review-request method.
 ### Triage engine hardening
 
 **Status:** finalize's commit-step worktree re-check is pinned by a test (#857), and the
-*Completed-state retirement* doctrine names what each stop leaves (#874), both in #882.
-Whether that doctrine should prescribe a way out of the two-link state is the operator's
-call. **Owner:**
+*Completed-state retirement* doctrine names each live-mode kill cutpoint (#874), both in
+#882. #883 carries its residual points. Whether the doctrine should prescribe a way out
+of the two-link state is the operator's call. **Owner:**
 [#856](https://github.com/topij/agentic-dev-kit/issues/856),
 [#859](https://github.com/topij/agentic-dev-kit/issues/859),
 [#883](https://github.com/topij/agentic-dev-kit/issues/883).
