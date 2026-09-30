@@ -203,9 +203,33 @@ unchanged state bytes to `<state path>.completed-<first 16 hex of completed_rece
 beside it, then claims a new draft. The rename reuses the declared quarantine
 publication: the captured identity and bytes must still match, a target that already
 exists with other bytes stops operator-held with both files preserved, and the retained
-file is read back. The workflow never deletes a retained file. A crash after the rename
-and before the claim leaves the state path absent, which the next run treats as a fresh
-start. `resume` reports the completed receipt and `recover` refuses valid state, as
+file is read back. The workflow never deletes a retained file. The rename and the claim
+both run under the held gate. A claim that fails with a `TriageError` after the rename
+releases that gate over the absent state path, and the next run starts fresh. A killed
+process never does, and neither does an exception other than `TriageError` raised by the
+rename or the claim (an `OSError`, for example): either leaves the gate held. Once that
+process has exited, the gate's owner is dead, and every later session-starting entry of
+that mode stops operator-held. In live mode, no argument, `new` and `resume` report
+`single-writer gate is already held`, and unattended `recover` reports its own refusal.
+Where the gate stays held, what interactive `recover` can do depends on where retirement
+stopped. In live mode:
+
+- **Before the rename's link.** The state is intact. Interactive `recover` releases the
+  old gate through `preserve-valid-state-and-quarantine-old-gate`, and the next
+  session-starting entry retires the state again.
+- **Between the rename's link and its unlink.** The state path and the retired name are
+  one inode, and every read refuses a state with a second link (`unsafe artifact at held
+  parent`), `recover` included. No engine route clears it: it stays operator-held for
+  the operator to resolve outside this workflow.
+- **After the unlink, before the claim.** The state path is absent and only the retired
+  file remains. Interactive `recover` takes the gate-only route, which ends in the
+  terminal `gate-only-operator-held` receipt, not in a fresh start.
+
+In test mode the same cutpoints leave a blocking test gate, and interactive `test`
+follows the blocking-gate rows of *Test input precedence*. Each of those rows ends held,
+so unlike live mode's first cutpoint, no test-mode cutpoint leads back to a retirement.
+
+`resume` reports the completed receipt and `recover` refuses valid state, as
 before; neither retires. Retirement applies only to valid state: an invalid state,
 however terminal its recorded phase, stays on *Invalid-state recovery*. A configuration
 change made after the run completed does not make its state invalid for retirement: the

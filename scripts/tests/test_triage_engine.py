@@ -3189,3 +3189,126 @@ def test_an_uncertain_state_present_bundle_owner_holds(tmp_path: Path, monkeypat
     assert held["outcome"] == "operator-held"
     assert held["detail"] == "blocking gate owner is active or uncertain"
     assert _triage_files(state_root) == before
+
+
+# A `new` that stops for good at one of completed-state retirement's cutpoints. It
+# wraps the link and unlink `quarantine_inode` makes on the state and the claim that
+# follows, writes the marker at the named cut and waits there to be killed, still
+# holding the gate it acquired.
+RETIREMENT_CUT_CHILD = r'''
+import os, sys, time
+from pathlib import Path
+import triage.engine as engine
+root = Path(sys.argv[1]); marker = Path(sys.argv[2]); cut = sys.argv[3]
+state_name = "triage-pipeline-state_live.json"
+def stop():
+    marker.write_text(cut); time.sleep(300)
+real_link, real_unlink, real_new_draft = os.link, os.unlink, engine._new_draft
+def link(source, target, *args, **kwargs):
+    retiring = str(target).startswith(state_name + ".completed-")
+    if retiring and cut == "before-link":
+        stop()
+    result = real_link(source, target, *args, **kwargs)
+    if retiring and cut == "after-link":
+        stop()
+    return result
+def unlink(path, *args, **kwargs):
+    result = real_unlink(path, *args, **kwargs)
+    if str(path) == state_name and cut == "after-unlink":
+        stop()
+    return result
+def new_draft(*args, **kwargs):
+    if cut == "before-claim":
+        stop()
+    return real_new_draft(*args, **kwargs)
+os.link, os.unlink, engine._new_draft = link, unlink, new_draft
+engine.run("new", context="interactive", request={}, start=root)
+'''
+
+
+@pytest.mark.parametrize("cut", ["before-link", "after-link", "after-unlink", "before-claim"])
+def test_a_kill_during_completed_state_retirement_holds_rather_than_starting_fresh(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cut: str
+) -> None:
+    """Retirement runs under the held gate, so a kill anywhere in it leaves that gate
+    with a dead owner. The interactive no-argument, `new` and `resume` entries each hold,
+    and none starts fresh (#874). What `recover` can do next depends on where the kill
+    landed: the state still whole, the state and its retired name sharing one inode, or
+    the state gone with only the retired name."""
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    run("new", context="interactive", request=request(root), start=root)
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    presented = loads_exact(state_path.read_bytes())
+    completed = run(
+        "resume", context="interactive",
+        request={"approval": approval_for(presented, "park TRI-01")}, start=root,
+        approval_context=approval_context(presented, "park TRI-01"),
+    )
+    assert completed["outcome"] == "degraded-success"
+    completed_raw = state_path.read_bytes()
+    assert loads_exact(completed_raw)["phase"] == "completed"
+    receipt_digest = loads_exact(completed_raw)["completion"]["completed_receipt_digest"]
+    retired = state_path.with_name(f"{state_path.name}.completed-{receipt_digest[:16]}")
+    marker = tmp_path / "retirement-cut"
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(ENGINE_DIR / "lib") + os.pathsep + str(ENGINE_DIR)
+    process = subprocess.Popen([sys.executable, "-c", RETIREMENT_CUT_CHILD, str(root), str(marker), cut], env=environment)
+    try:
+        deadline = time.monotonic() + 10
+        while not marker.exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert marker.exists()
+    finally:
+        if process.poll() is None:
+            process.kill()
+        process.wait(timeout=10)
+    assert (state_root / "triage/triage-pipeline-gate_live.lock").exists()
+    if cut == "before-link":
+        assert state_path.read_bytes() == completed_raw
+        assert state_path.lstat().st_nlink == 1
+        assert not retired.exists()
+    elif cut == "after-link":
+        assert state_path.read_bytes() == completed_raw
+        assert state_path.lstat().st_ino == retired.lstat().st_ino
+        assert state_path.lstat().st_nlink == 2
+    else:
+        assert not state_path.exists()
+        assert retired.read_bytes() == completed_raw
+        assert retired.lstat().st_nlink == 1
+    before = _triage_files(state_root)
+    for entry in (None, "new", "resume"):
+        held = run(entry, context="interactive", request={}, start=root)
+        assert (held["outcome"], held["detail"]) == ("operator-held", "single-writer gate is already held")
+        assert _triage_files(state_root) == before
+    if cut == "after-link":
+        # Neither name can be read while the inode has two links, so no engine route
+        # clears it and the workflow leaves it to the operator. Were the retired name
+        # removed, the same bytes would stay at the state path, and the engine's own
+        # routes then treat it as the before-link case.
+        held = run("recover", context="interactive", request={}, start=root)
+        assert held["outcome"] == "operator-held"
+        assert held["detail"].startswith("unsafe artifact at held parent: ")
+        assert held["detail"].endswith(f"/{state_path.name}")
+        assert _triage_files(state_root) == before
+        retired.unlink()
+    if cut in {"before-link", "after-link"}:
+        planned = run("recover", context="interactive", request={}, start=root)
+        assert planned["detail"] == "state-present recovery action awaits exact approval"
+        assert planned["recovery_plan"]["action_core"]["action"] == "preserve-valid-state-and-quarantine-old-gate"
+        assert _approve_recovery(root, planned["recovery_plan"]["action_core_digest"])["detail"] == "resume"
+        restarted = run("new", context="interactive", request={}, start=root)
+        assert restarted["detail"].startswith("retired completed state to ")
+        assert retired.name in restarted["detail"]
+        assert retired.read_bytes() == completed_raw
+        assert loads_exact(state_path.read_bytes())["phase"] == "reserved"
+        return
+    # The state is gone, so this is the gate-only route. Its receipt is terminal:
+    # every entry reports it, and none starts a new draft.
+    planned = run("recover", context="interactive", request={}, start=root)
+    assert planned["detail"] == "gate-only recovery capture awaits exact approval"
+    assert _approve_recovery(root, planned["recovery_plan"]["prepared_core_digest"])["detail"] == "gate-only-operator-held"
+    for entry in (None, "new", "resume", "recover"):
+        assert run(entry, context="interactive", request={}, start=root)["detail"] == "gate-only-operator-held"
+    assert retired.read_bytes() == completed_raw

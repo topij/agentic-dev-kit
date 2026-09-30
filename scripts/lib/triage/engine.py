@@ -1865,9 +1865,18 @@ def run(
                 # A completed session holds no pending approval, attempt or merge,
                 # so a session-starting entry retires it rather than letting it end
                 # the mode (#425). The bytes are renamed, never deleted, under the
-                # held gate and only after the full validation above; a crash
-                # between the rename and the claim leaves the state absent, which
-                # the next run treats as a fresh start.
+                # held gate and only after the full validation above. A draft that
+                # fails with a TriageError after the rename releases that gate over
+                # an absent state, so the next run starts fresh. A kill, or an
+                # exception other than TriageError (the `except Exception` below
+                # re-raises with the gate kept), leaves the gate held instead, and
+                # every later session-starting entry of this mode holds (#874).
+                # With the gate held and retirement stopped before the rename's
+                # link, the state is intact and `recover` releases the gate over
+                # it; between the link and the unlink, every read refuses the
+                # two-link state and no route clears it; after the unlink, the
+                # state is absent and the gate-only route ends in its terminal
+                # held receipt.
                 retired_path = Path(f"{store.state_path}.completed-{state['completion']['completed_receipt_digest'][:16]}")
                 quarantine_inode(store.state_path, retired_path, state_observation, state_raw)
                 retired = f"retired completed state to {retired_path} (sha256 {digest_bytes(state_raw)})"
