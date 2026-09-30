@@ -36,7 +36,7 @@
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
-      "sha256": "862847a2e5f35e7d8c1ae90832c2a31ca317c9f230859b7f4dadf5cdbc7e5dbf"
+      "sha256": "9e75bd17b4d7253a27b4f076419d5569f4fbf69371e6b823ee83a6ac67b94bb7"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",

@@ -112,7 +112,8 @@ Policy carriers. **Claude:** the trust route is the wrapper's — `--setting-sou
 plus the cockpit-owned `parallel.claude_settings_profile` through `--settings`, because a
 lane worktree is untrusted, its branch settings' allow-list is ignored while its hooks
 still run, and the operator's user settings would otherwise apply. **Codex** receives
-`--sandbox <policy>`, validated the same way.
+`--sandbox <policy>`, validated against the same engine-owned vocabulary as Claude's
+approval policy (`parallel.<runtime>_approval_policy`, in the row above).
 
 | Runtime | Record | Promoted | Not promoted |
 |---|---|---|---|

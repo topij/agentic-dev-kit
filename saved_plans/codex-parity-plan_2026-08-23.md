@@ -273,9 +273,9 @@ maintained *Sprint status* and *Delivery plan* sections below.
 
 Each phase's exit, owner and order, and nothing else. The capability claims and their
 evidence links are owned by [`runtime-parity.md`](../docs/agentic-dev-kit/runtime-parity.md),
-and the session narrative by the living handoff. Each exit condition is the *Done when*
-paragraph of that phase's *Delivery plan* section below; this list links it rather than
-restating it. A phase's owner is where its outcome is maintained now: a document for a
+and the session narrative by the living handoff. Each exit condition is the paragraph of
+that phase's *Delivery plan* section below that says when the phase is done; this list
+links it rather than restating it. A phase's owner is where its outcome is maintained now: a document for a
 closed phase, and a tracker issue for each item of an open one. The per-pull-request
 status this section carried before #877 is in git history, and the stamped
 pre-implementation baseline below remains the historical observation it was.
