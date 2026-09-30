@@ -5,6 +5,37 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-09-26 (handoff workstreams, in Claude Code)
+
+**Shipped.** [#822](https://github.com/topij/agentic-dev-kit/pull/822) merged as `76b883c`
+on the operator's direction. Each open line of work now keeps its `▶ Next:` in the
+standing `## Workstreams` section, and session entries record what happened. `wrap-up`
+updates only its own workstream's entry and leaves closing to the operator;
+`session-start` offers every workstream's next step and follows the operator's choice.
+This file was migrated by hand in the same PR.
+
+**Beyond the design comment**, each set out in #822's body: `Last updated:` is removed,
+not only demoted; session headings no longer say `Latest`; the top of the session log is
+a shared conflict point, with its resolution stated; the first-run migration lists older
+`▶ Next:` lines nothing took up; and the archive sweep's footer is reworded, with the
+old one still recognised.
+
+**Review.** CodeRabbit skipped. The fallback panel ran at `3d2cc9e` and a correctness
+delta at `113a97b`, for a Minor `CHANGELOG.md` imprecision; the PR's disposition comments
+own the findings.
+
+**Verification.** `make test` at `3d2cc9e2f369c326c7b1b85280d457e1b0873a33` on 2026-09-26,
+in a detached worktree under this session's scratchpad, printed `3586 passed, 1 skipped`.
+It did not run in the main checkout, because of #461. CI's `Test` run at `113a97b`
+passed, and a PR comment carries its figures.
+
+**Not established by the suite:** a Codex wrap-up under the contract, two workstreams
+wrapping up in either order, a resumed older workstream, and an unrelated chosen task.
+This wrap-up is the layout's first live use, in Claude Code.
+
+Closed workstream Handoff workstreams: the layout shipped and this wrap-up used it; the
+scenarios above are left to ordinary use, on the operator's decision.
+
 ### 2026-09-26 (triage engine fixes, friction sweeps, #762 design, in Claude Code)
 
 **Shipped, each with a fallback panel because CodeRabbit's automatic review is off:**

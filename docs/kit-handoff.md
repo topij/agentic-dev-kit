@@ -20,6 +20,51 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-09-30 (Phase 5 exit declared, in Claude Code)
+
+**Declared.** Topi declared Phase 5 complete under PHASE5-E-AUDIT-01
+(`saved_plans/phase5-e-audit_2026-09-30.md`) by answering "Declare, approve all
+(Recommended)" to a question that quoted the packet's declaration wording, which that
+answer adopts:
+
+> I declare Phase 5 complete under PHASE5-E-AUDIT-01, on these amendments to its
+> acceptance contract:
+>
+> - the systemize friction and tracker no-write amendment of 2026-09-23;
+> - the synthetic acceptances of 2026-09-23 (systemize boundaries) and 2026-09-30
+>   (D-TRIAGE-RECOVERY);
+> - E-1a to E-1f, each with the gaps its row names;
+> - E-2a to E-2e;
+> - E-3.
+>
+> The accepted limitations in its residual register are limits of this exit.
+
+The declaration names its acceptance amendments; the packet's residual register owns
+each residual's carrier. Topi took E-1 to E-6 as the packet recommends. Each answer is
+recorded verbatim in `state/review-evidence/phase5-e-audit-20260930/DECISIONS.md`
+(gitignored).
+
+**Recorded.** The parity plan's Phase 5 items are checked (payload P-1), and the
+`saved_plans/phase5-*` packet markdowns are committed (E-5 option A). Tracker, each
+read back identical to its payload:
+
+- P-2 on #243, which stays open:
+  [issuecomment-5906532047](https://github.com/topij/agentic-dev-kit/issues/243#issuecomment-5906532047);
+- P-3a on #7, then set completed:
+  [issuecomment-5906532328](https://github.com/topij/agentic-dev-kit/issues/7#issuecomment-5906532328);
+- P-3b on #748, then set completed:
+  [issuecomment-5906532589](https://github.com/topij/agentic-dev-kit/issues/748#issuecomment-5906532589);
+- P-6 filed as [#872](https://github.com/topij/agentic-dev-kit/issues/872).
+
+**Not established:** a third full check of the packet against its evidence records.
+Before the decisions, the packet's SHA-256, P-1's anchors, the facts P-3a and P-3b
+state and the named issues' states were re-read from the repository root at `3bcb3a3`,
+and matched.
+
+Closed workstream Phase 5 exit: the exit is declared.
+
+______________________________________________________________________
+
 ## Session — 2026-09-30 (Phase 5 E audit packet, in Claude Code)
 
 **Accepted.** The operator accepted D-TRIAGE-RECOVERY: "I accept the Stage 1 and Stage 2
@@ -302,67 +347,12 @@ stale `chore/triage-*` branches from before this change were not deleted.
 
 ______________________________________________________________________
 
-## Session — 2026-09-26 (handoff workstreams, in Claude Code)
-
-**Shipped.** [#822](https://github.com/topij/agentic-dev-kit/pull/822) merged as `76b883c`
-on the operator's direction. Each open line of work now keeps its `▶ Next:` in the
-standing `## Workstreams` section, and session entries record what happened. `wrap-up`
-updates only its own workstream's entry and leaves closing to the operator;
-`session-start` offers every workstream's next step and follows the operator's choice.
-This file was migrated by hand in the same PR.
-
-**Beyond the design comment**, each set out in #822's body: `Last updated:` is removed,
-not only demoted; session headings no longer say `Latest`; the top of the session log is
-a shared conflict point, with its resolution stated; the first-run migration lists older
-`▶ Next:` lines nothing took up; and the archive sweep's footer is reworded, with the
-old one still recognised.
-
-**Review.** CodeRabbit skipped. The fallback panel ran at `3d2cc9e` and a correctness
-delta at `113a97b`, for a Minor `CHANGELOG.md` imprecision; the PR's disposition comments
-own the findings.
-
-**Verification.** `make test` at `3d2cc9e2f369c326c7b1b85280d457e1b0873a33` on 2026-09-26,
-in a detached worktree under this session's scratchpad, printed `3586 passed, 1 skipped`.
-It did not run in the main checkout, because of #461. CI's `Test` run at `113a97b`
-passed, and a PR comment carries its figures.
-
-**Not established by the suite:** a Codex wrap-up under the contract, two workstreams
-wrapping up in either order, a resumed older workstream, and an unrelated chosen task.
-This wrap-up is the layout's first live use, in Claude Code.
-
-Closed workstream Handoff workstreams: the layout shipped and this wrap-up used it; the
-scenarios above are left to ordinary use, on the operator's decision.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
 ______________________________________________________________________
 
 ## Workstreams
-
-### Phase 5 exit
-
-**Status:** the operator accepted D-TRIAGE-RECOVERY on 2026-09-30; `ACCEPTANCE.md`
-beside each run's `RESULTS.md` records it. The Phase 5 E audit packet is prepared and
-awaits the operator's decisions. No exit is declared.
-
-**Owner:** `saved_plans/phase5-e-audit_2026-09-30.md` and the
-`saved_plans/phase5-completion-plan_2026-09-18.md` it audits against. Both are local and
-not committed; the packet's E-5 decides whether they are committed.
-
-▶ Next: the operator takes decisions E-1 to E-7 in
-`saved_plans/phase5-e-audit_2026-09-30.md`:
-
-- accept the B, C and D rows still awaiting acceptance;
-- approve or decline each scope amendment and the custody disposition;
-- decide #7 and #748;
-- decide whether to commit the `saved_plans/phase5-*` packets;
-- approve the #243 comment.
-
-On a declaration, open the exit record PR with the packet's payloads P-1 and P-5, and
-post each tracker payload the operator approves by its exact text.
 
 ### Reviewer profiles
 
