@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "4dc529e0a8156d762d22d0c879f4042499a7c4c80238b61ba6afc03f78b7816f"
+      "sha256": "58f4411c394170ed38bcf7696a974d427452d838785ec9b8268c9ff745a8c344"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
