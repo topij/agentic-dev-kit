@@ -208,10 +208,11 @@ both run under the held gate. A claim that fails with a `TriageError` after the 
 releases that gate over the absent state path, and the next run starts fresh. A killed
 process never does, and neither does an exception other than `TriageError` raised by the
 rename or the claim (an `OSError`, for example): either leaves the gate held. Once that
-process has exited, the gate's owner is dead and every later entry stops operator-held:
-no argument, `new` and `resume` report `single-writer gate is already held`, and
-unattended `recover` reports its own refusal. What interactive `recover` can do depends
-on where retirement stopped. In live mode:
+process has exited, the gate's owner is dead, and every later session-starting entry of
+that mode stops operator-held. In live mode, no argument, `new` and `resume` report
+`single-writer gate is already held`, and unattended `recover` reports its own refusal.
+Where the gate stays held, what interactive `recover` can do depends on where retirement
+stopped. In live mode:
 
 - **Before the rename's link.** The state is intact. Interactive `recover` releases the
   old gate through `preserve-valid-state-and-quarantine-old-gate`, and the next
@@ -225,9 +226,8 @@ on where retirement stopped. In live mode:
   terminal `gate-only-operator-held` receipt, not in a fresh start.
 
 In test mode the same cutpoints leave a blocking test gate, and interactive `test`
-follows the blocking-gate rows of *Test input precedence*. Each of those rows ends in
-held evidence, so unlike live mode's first cutpoint, no test-mode cutpoint leads back to
-a retirement.
+follows the blocking-gate rows of *Test input precedence*. Each of those rows ends held,
+so unlike live mode's first cutpoint, no test-mode cutpoint leads back to a retirement.
 
 `resume` reports the completed receipt and `recover` refuses valid state, as
 before; neither retires. Retirement applies only to valid state: an invalid state,
