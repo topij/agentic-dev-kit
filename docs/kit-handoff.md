@@ -64,8 +64,8 @@ lists what each round changed.
 - **A wrong earlier judgment.** The judgment on #7 in the history's 2026-09-23
   D-SYSTEMIZE-RECOVERY packet block is wrong. #769 shipped #7's fetch/digest pair
   behind systemize's own forge boundary, not #6's. The threshold and operator-login
-  keys predate #769, which added the heartbeat keys. `nightly_digest.py` was not
-  shipped. E-4 carries the corrected facts.
+  keys predate #769, which added `heartbeat_job` and `heartbeat_pattern`.
+  `nightly_digest.py` was not shipped. E-4 carries the corrected facts.
 
 **Filed this session**, on the operator's approval of the exact revised text: an
 occurrence comment on #861
