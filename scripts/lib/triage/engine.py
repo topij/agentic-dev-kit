@@ -1867,9 +1867,11 @@ def run(
                 # the mode (#425). The bytes are renamed, never deleted, under the
                 # held gate and only after the full validation above. A draft that
                 # fails with a TriageError after the rename releases that gate over
-                # an absent state, so the next run starts fresh. A kill leaves the
-                # gate with a dead owner instead, and every entry holds (#874).
-                # Killed before the rename's link, the state is intact and
+                # an absent state, so the next run starts fresh. A kill, or an
+                # exception other than TriageError (the `except Exception` below
+                # re-raises with the gate kept), leaves the gate held instead, and
+                # every entry holds (#874). Stopped before the rename's link, the
+                # state is intact and
                 # `recover` releases the gate over it; between the link and the
                 # unlink, every read refuses the two-link state and no route
                 # clears it; after the unlink, the state is absent and the

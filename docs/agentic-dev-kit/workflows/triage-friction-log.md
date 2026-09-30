@@ -204,12 +204,14 @@ beside it, then claims a new draft. The rename reuses the declared quarantine
 publication: the captured identity and bytes must still match, a target that already
 exists with other bytes stops operator-held with both files preserved, and the retained
 file is read back. The workflow never deletes a retained file. The rename and the claim
-both run under the held gate. A claim that fails with a handled error after the rename
-releases that gate over the absent state path, and the next run starts fresh. A
-process killed during retirement never does: its gate stays with a dead owner, so every
-entry except the interactive recovery entry reports operator-held (`single-writer gate
-is already held`), and what recovery can do depends on where the kill landed. In live
-mode:
+both run under the held gate. A claim that fails with a `TriageError` after the rename
+releases that gate over the absent state path, and the next run starts fresh. A killed
+process never does, and neither does an exception other than `TriageError` raised by the
+rename or the claim (an `OSError`, for example): either leaves the gate held. Once that
+process has exited, the gate's owner is dead and every later entry stops operator-held:
+no argument, `new` and `resume` report `single-writer gate is already held`, and
+unattended `recover` reports its own refusal. What interactive `recover` can do depends
+on where retirement stopped. In live mode:
 
 - **Before the rename's link.** The state is intact. Interactive `recover` releases the
   old gate through `preserve-valid-state-and-quarantine-old-gate`, and the next
@@ -223,7 +225,9 @@ mode:
   terminal `gate-only-operator-held` receipt, not in a fresh start.
 
 In test mode the same cutpoints leave a blocking test gate, and interactive `test`
-follows the blocking-gate rows of *Test input precedence*.
+follows the blocking-gate rows of *Test input precedence*. Each of those rows ends in
+held evidence, so unlike live mode's first cutpoint, no test-mode cutpoint leads back to
+a retirement.
 
 `resume` reports the completed receipt and `recover` refuses valid state, as
 before; neither retires. Retirement applies only to valid state: an invalid state,

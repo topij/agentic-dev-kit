@@ -3231,7 +3231,8 @@ def test_a_kill_during_completed_state_retirement_holds_rather_than_starting_fre
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cut: str
 ) -> None:
     """Retirement runs under the held gate, so a kill anywhere in it leaves that gate
-    with a dead owner and every entry holds; none starts fresh (#874). What `recover`
+    with a dead owner. The interactive no-argument, `new` and `resume` entries each hold,
+    and none starts fresh (#874). What `recover`
     can do next depends on where the kill landed: the state still whole, the state and
     its retired name sharing one inode, or the state gone with only the retired name."""
     root = repository(tmp_path)
