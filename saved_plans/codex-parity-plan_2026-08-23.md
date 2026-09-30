@@ -1087,9 +1087,9 @@ final footprint depends on its own durations reading. So re-check the footprints
 the batch is planned (`parallel`'s `plan`), land the items one at a time, and regenerate
 the manifest on each rebase. Keep these pairs in order, because each shares a file: item 2
 before item 5 (`fallback-review-panel.md`), and item 3 before item 9 (`runtime-parity.md`
-and this plan). Item 1 may also touch test files that item 5 edits:
-`scripts/tests/conftest.py` iterates `_CURRENT_CONTEXTS`, and
-`scripts/tests/test_portability.py` holds the adapter hostile mutations. The order
+and this plan). Item 1 may also touch test files that item 5 is likely to edit, a
+prediction like those above: `scripts/tests/conftest.py` iterates `_CURRENT_CONTEXTS`,
+and `scripts/tests/test_portability.py` holds the adapter hostile mutations. The order
 already puts item 5 after item 1.
 
 Done when the parity matrix is enforced by deterministic checks and confirmed by the
