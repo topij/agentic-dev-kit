@@ -354,6 +354,24 @@ ______________________________________________________________________
 
 ## Workstreams
 
+### Phase 6 — gate parity and roll it out
+
+**Status:** ordered, with an owner for each item, on 2026-09-30, in the *Phase 6*
+section of `saved_plans/codex-parity-plan_2026-08-23.md`. That section owns the order,
+the dependencies and the exit. **Owner:**
+[#875](https://github.com/topij/agentic-dev-kit/issues/875),
+[#876](https://github.com/topij/agentic-dev-kit/issues/876),
+[#877](https://github.com/topij/agentic-dev-kit/issues/877),
+[#663](https://github.com/topij/agentic-dev-kit/issues/663),
+[#243](https://github.com/topij/agentic-dev-kit/issues/243),
+[#878](https://github.com/topij/agentic-dev-kit/issues/878),
+[#879](https://github.com/topij/agentic-dev-kit/issues/879),
+[#880](https://github.com/topij/agentic-dev-kit/issues/880).
+
+▶ Next: [#875](https://github.com/topij/agentic-dev-kit/issues/875) — measure the suite
+with `--durations`, mark its evidence-walking tests, and add `make test-fast`. Items 2 to
+4 can run beside it; the plan's *Phase 6* section has the dependencies.
+
 ### Reviewer profiles
 
 **Status:** on 2026-09-25 the operator asked the reviewer's developer to post a GitHub
