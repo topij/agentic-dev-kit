@@ -754,6 +754,67 @@ def test_failed_branch_create_stays_held_while_anything_it_could_have_left_exist
     assert loads_exact(state_path.read_bytes())["finalization_operations"] == before
 
 
+@pytest.mark.parametrize("placement", ["inside", "containing"])
+def test_commit_step_refuses_a_recorded_worktree_that_conflicts_with_the_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, placement: str
+) -> None:
+    """The commit step re-checks the worktree the branch-create read-back recorded,
+    not the one the request named (#857). Every other route reaches it with a
+    worktree the branch-create guard already passed, so this rewrites the retained
+    read-back, through the state validator, to one inside or containing the checkout."""
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    draft_request, candidate_id = proposal_request(root)
+    run("new", context="interactive", request=draft_request, start=root)
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    presented = loads_exact(state_path.read_bytes())
+    approved, context = approval(presented, f"archive {candidate_id}")
+    worktree = tmp_path / "isolated-finalize"
+    shutil.copytree(root, worktree)
+    shutil.rmtree(worktree / "reports")
+    base = git(root, "rev-parse", "HEAD")
+    first = run(
+        "resume", context="interactive",
+        request={**approved, "finalize": True, "worktree": str(worktree)},
+        start=root, approval_context=context,
+        forge=_BaseAuthority([verified({
+            "repository": "topij/agentic-dev-kit", "base": base, "branch": finalize_branch(presented),
+            "worktree": str(worktree), "head": base, "tree": "0" * 40,
+        })], base),
+    )
+    assert first["detail"] == "stop after branch-create"
+    state = loads_exact(state_path.read_bytes())
+    operation = state["finalization_operations"][0]
+    assert (operation["kind"], operation["status"]) == ("branch-create", "verified")
+    assert state["repository_evidence"] == [operation]
+    recorded = str(root / "nested" if placement == "inside" else root.parent)
+    intent = {**operation["intent"], "worktree": recorded}
+    read_back = {**operation["read_back"], "worktree": recorded}
+    attempts = [
+        {**attempt, "intent": intent, "intent_digest": digest(intent), "read_back": read_back if attempt["read_back"] is not None else None}
+        for attempt in operation["attempts"]
+    ]
+    operation = {**operation, "intent": intent, "intent_digest": digest(intent), "read_back": read_back, "attempts": attempts}
+    state = {**state, "finalization_operations": [operation], "repository_evidence": [operation]}
+    canonical_state(dumps(state), settings=load_settings(root), mode="live")
+    state_path.write_bytes(dumps(state))
+    inbox_before = (root / "docs/kit-friction-log.md").read_bytes()
+    archive_before = (root / "docs/kit-friction-log-archive.md").read_bytes()
+    forge = FakeForge([])
+    result = run("resume", context="interactive", request={"finalize": True}, start=root, forge=forge)
+    assert result["outcome"] == "operator-held"
+    assert result["detail"] == (
+        "finalization worktree must lie outside the repository checkout, neither inside it nor containing it"
+    )
+    # Held before the worktree-clean authority, and before any commit was attempted.
+    assert [call[0] for call in forge.calls] == ["authority:protected-head"]
+    assert loads_exact(state_path.read_bytes())["finalization_operations"] == [operation]
+    assert (root / "docs/kit-friction-log.md").read_bytes() == inbox_before
+    assert (root / "docs/kit-friction-log-archive.md").read_bytes() == archive_before
+    assert not (root / "nested").exists()
+
+
 def _branch_date_settings(tmp_path: Path, pattern: str) -> Settings:
     paths = Paths(
         tmp_path, tmp_path / "inbox", tmp_path / "archive", tmp_path / "scripts",
