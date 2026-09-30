@@ -1031,9 +1031,9 @@ carries the item's scope. Work the items in this order:
 1. Measure the suite (`pytest --durations`, stamped), register an `evidence` marker for
    the bundle-walking and copytree fixture tests, add `make test-fast`, keep `make test`
    as the verification command. Owner:
-   [#875](https://github.com/topij/agentic-dev-kit/issues/875). It comes first because each
-   slice after it iterates against the suite, and `make test-fast` shortens that inner
-   loop. `make test` stays every slice's verification command.
+   [#875](https://github.com/topij/agentic-dev-kit/issues/875). It comes first because items
+   5 to 9 iterate against the suite, and `make test-fast` shortens that inner loop.
+   `make test` stays every slice's verification command.
 2. Distill `review-process-learnings_2026-08-24.md` into `fallback-review-panel.md`
    doctrine and archive its per-PR sections. Owner:
    [#876](https://github.com/topij/agentic-dev-kit/issues/876).
@@ -1044,19 +1044,26 @@ carries the item's scope. Work the items in this order:
 4. Route `session-start`'s open-pull-request reads through `pr_watch.py --json
    --no-persist`; fold the REST backend's repeated fetch inside `pr_watch.py`. Owner:
    [#663](https://github.com/topij/agentic-dev-kit/issues/663). #663 also proposes passing
-   the `headRefOid` that `scripts/dev_session.sh` already holds down to `pr_watch.py`. A
+   the `headRefOid` that `scripts/dev_session.sh` already holds down to `pr_watch.py`.
+   That piece is in its scope but not in this item's text, so the slice decides it. A
    behavioural change to either `scripts/pr_watch.py` or `scripts/dev_session.sh` is
    safety-critical: `AGENTS.md` routes both through
-   `docs/agentic-dev-kit/safety-critical-changes.md`.
+   `docs/agentic-dev-kit/safety-critical-changes.md`, which makes the item
+   operator-merge, even inside the parallel batch below.
 5. Move adapter bodies from `_CURRENT_CONTEXTS` to per-runtime templates and add the
    appended-instruction mutation for `adopt`, `upgrade` and `pr-watch`. Owner:
    [#243](https://github.com/topij/agentic-dev-kit/issues/243), whose Phase 6 residue
    this is, together with the stale "`SKILL.md` step 5" citation in
-   `fallback-review-panel.md`. If the move changes any rendered Claude adapter under
-   `.claude/`, split the item as `runtime-parity.md` prescribes for a runtime-parity
+   `fallback-review-panel.md`. #243's body predates the thinning, so its
+   [2026-09-30 comment](https://github.com/topij/agentic-dev-kit/issues/243#issuecomment-5906532047)
+   is where that residue is stated. If the move changes any rendered Claude adapter under
+   `.claude/`, split the work as `runtime-parity.md` prescribes for a runtime-parity
    change. A lane takes the runtime-neutral half and the Codex adapter under `.agents/`.
    The cockpit takes the `.claude/` half, which a headless Claude lane cannot write
-   ([#627](https://github.com/topij/agentic-dev-kit/issues/627)).
+   ([#627](https://github.com/topij/agentic-dev-kit/issues/627)). The halves still land as
+   one PR, with the cockpit's `.claude/` commit on the lane's branch.
+   `test_shipped_runtime_adapters_equal_the_renderer_for_both_runtimes` pins both
+   adapter sets to the renderer, so neither half passes alone.
 6. Add fresh-repository fixtures for Codex-only, Claude-only, and dual-runtime
    adoption. Owner: [#878](https://github.com/topij/agentic-dev-kit/issues/878). It follows
    item 5, so that the fixtures pin the rendered templates.
@@ -1078,9 +1085,12 @@ another of them edits, apart from `kit-manifest.json` and `CHANGELOG.md`, which 
 kit-owned change may touch. That is a prediction from the issue bodies, and item 1's
 final footprint depends on its own durations reading. So re-check the footprints when
 the batch is planned (`parallel`'s `plan`), land the items one at a time, and regenerate
-the manifest on each rebase. These run in order because they share a file: item 2 before
-item 5 (`fallback-review-panel.md`), and item 3 before item 9 (`runtime-parity.md` and
-this plan).
+the manifest on each rebase. Keep these pairs in order, because each shares a file: item 2
+before item 5 (`fallback-review-panel.md`), and item 3 before item 9 (`runtime-parity.md`
+and this plan). Item 1 may also touch test files that item 5 edits:
+`scripts/tests/conftest.py` iterates `_CURRENT_CONTEXTS`, and
+`scripts/tests/test_portability.py` holds the adapter hostile mutations. The order
+already puts item 5 after item 1.
 
 Done when the parity matrix is enforced by deterministic checks and confirmed by the
 Phase 5 adopter run.
