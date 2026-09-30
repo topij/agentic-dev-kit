@@ -369,8 +369,8 @@ the dependencies and the exit. **Owner:**
 [#880](https://github.com/topij/agentic-dev-kit/issues/880).
 
 ▶ Next: [#875](https://github.com/topij/agentic-dev-kit/issues/875) — measure the suite
-with `--durations`, mark its evidence-walking tests, and add `make test-fast`. Items 1 to
-4 can run as one parallel batch.
+with `--durations`, mark its evidence-walking tests, and add `make test-fast`. Items 2 to
+4 can run beside it; the plan's *Phase 6* section has the dependencies.
 
 ### Reviewer profiles
 
