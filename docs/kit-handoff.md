@@ -54,17 +54,18 @@ lists what each round changed.
   client coverage. Also open as scope decisions (E-2):
   - notification approval provenance (#198) and the triage notification route;
   - scheduling and worktree runners, beside #747;
-  - real-service crash ambiguity (#794, #792);
+  - real-service crash ambiguity (#794) and concurrent systemize runs (#792);
   - engine installation in an adopter.
 - **Missing sealed fixtures.** The `fixtures/` files that the manifests in
   `phase5-d-systemize-recovery-01/` and `phase5-d-systemize-boundaries-01/` bind are
   gone. Both directories' modification times fall in the window of the 2026-09-29
   cleanup that #861 describes. That the cleanup removed them is an inference from those
   times (E-3).
-- **A wrong earlier judgment.** The 2026-09-23 judgment on #7 in the history is wrong.
-  #769 shipped #7's fetch/digest pair behind systemize's own forge boundary, not #6's.
-  The config keys predate #769. `nightly_digest.py` was not shipped. E-4 carries the
-  corrected facts.
+- **A wrong earlier judgment.** The judgment on #7 in the history's 2026-09-23
+  D-SYSTEMIZE-RECOVERY packet block is wrong. #769 shipped #7's fetch/digest pair
+  behind systemize's own forge boundary, not #6's. The threshold and operator-login
+  keys predate #769, which added the heartbeat keys. `nightly_digest.py` was not
+  shipped. E-4 carries the corrected facts.
 
 **Filed this session**, on the operator's approval of the exact revised text: an
 occurrence comment on #861
