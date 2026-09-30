@@ -20,6 +20,65 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-09-30 (Phase 5 E audit packet, in Claude Code)
+
+**Accepted.** The operator accepted D-TRIAGE-RECOVERY: "I accept the Stage 1 and Stage 2
+RESULTS.md files." `ACCEPTANCE.md` beside each run's `RESULTS.md` records it. Each run's
+*Not established* list goes to the E audit.
+
+**Packet.** `saved_plans/phase5-e-audit_2026-09-30.md` is local and not committed, like
+the D packets. It is milestone E's audit, and it approves nothing. It contains:
+
+- an exit ledger over every Stage A row and every D package;
+- a custody check of the D evidence;
+- the operator's decisions E-1 to E-7, each with a recommendation;
+- exact payloads for the parity plan and the tracker.
+
+Its grounding reads and `collect.sh` are in
+`state/review-evidence/phase5-e-audit-20260930/` (gitignored). Fresh subagents
+checked successive drafts against the records, and the packet's *Preparation check*
+lists what each round changed.
+
+**What the audit found.** The packet owns the detail.
+
+- **Acceptances on record.** Besides D-TRIAGE-RECOVERY, the acceptances are:
+  - the 2026-09-23 decisions in `phase5-d-systemize-boundaries-01/APPROVAL.md`: the
+    systemize friction and tracker no-write amendment, and the cap, batching,
+    competing-cache and hostile-target rows as synthetic;
+  - RECOVERY-01's run P as the pre-approval cutpoint's evidence;
+  - milestone B's accepted limits.
+
+  No acceptance covers B or C as a whole, or the other D rows. The packet asks for
+  those under E-1, and each gap it names is an amendment the declaration names.
+- **Scope decisions.** The packet's searches found no recorded decision on additional
+  client coverage. Also open as scope decisions (E-2):
+  - notification approval provenance (#198) and the triage notification route;
+  - scheduling and worktree runners, beside #747;
+  - real-service crash ambiguity (#794) and concurrent systemize runs (#792);
+  - engine installation in an adopter.
+- **Missing sealed fixtures.** The `fixtures/` files that the manifests in
+  `phase5-d-systemize-recovery-01/` and `phase5-d-systemize-boundaries-01/` bind are
+  gone. Both directories' modification times fall in the window of the 2026-09-29
+  cleanup that #861 describes. That the cleanup removed them is an inference from those
+  times (E-3).
+- **A wrong earlier judgment.** The judgment on #7 in the history's 2026-09-23
+  D-SYSTEMIZE-RECOVERY packet block is wrong. #769 shipped #7's fetch/digest pair
+  behind systemize's own forge boundary, not #6's. The threshold and operator-login
+  keys predate #769, which added `heartbeat_job` and `heartbeat_pattern`.
+  `nightly_digest.py` was not shipped. E-4 carries the corrected facts.
+
+**Filed this session**, on the operator's approval of the exact revised text: an
+occurrence comment on #861
+([issuecomment-5905162617](https://github.com/topij/agentic-dev-kit/issues/861#issuecomment-5905162617)),
+for the missing fixtures. It was read back identical.
+
+**Not established:**
+
+- a custody re-verification of the B and C namespaces' binding JSONs;
+- whether that cleanup removed any other manifest-bound file, or removed these at all.
+
+______________________________________________________________________
+
 ## Session — 2026-09-29 (Phase 5 D-TRIAGE-RECOVERY Stage 2, run autonomously, in Claude Code)
 
 **Mandate.** The operator went to sleep and asked for the session to run autonomously
@@ -276,63 +335,6 @@ scenarios above are left to ordinary use, on the operator's decision.
 
 ______________________________________________________________________
 
-## Session — 2026-09-26 (triage engine fixes, friction sweeps, #762 design, in Claude Code)
-
-**Shipped, each with a fallback panel because CodeRabbit's automatic review is off:**
-
-- [#812](https://github.com/topij/agentic-dev-kit/pull/812) merged as `cee1f6f`. Engine
-  sweeps write a record block under their marker, a later sweep keeps the marker, and
-  neither the EOF nor the archive heading spacing is mangled. It resolves #806, which
-  was closed by hand. A delta lens caught that the first repair commit had spliced an
-  existing test into a new one; `4ac95bb` restored it before merge.
-- [#813](https://github.com/topij/agentic-dev-kit/pull/813) merged as `c8b9be5`. It fixes
-  forward a regression #812 introduced: commit validation re-rendered retained sweeps
-  with the new renderer, so the 2026-09-25 `completed` state could not be retired and
-  triage refused to start. Validation now also accepts the pre-#812 rendering. Its PR
-  body carries the `make test` stamp and the offline replay against that state.
-- [#817](https://github.com/topij/agentic-dev-kit/pull/817) (`d027c66`) and
-  [#819](https://github.com/topij/agentic-dev-kit/pull/819) (`fe93d98`) are engine-backed
-  triage sweeps, both merged on the operator's direction. The run behind #817 filed
-  [#814](https://github.com/topij/agentic-dev-kit/issues/814),
-  [#815](https://github.com/topij/agentic-dev-kit/issues/815) and
-  [#816](https://github.com/topij/agentic-dev-kit/issues/816). #819 archived three
-  entries whose fixes had already shipped. The run needed two sweeps because one
-  approval carries one command ([#820](https://github.com/topij/agentic-dev-kit/issues/820)).
-
-**Filed at wrap-up, on the operator's approval of the exact payloads:** #820, and an
-occurrence comment on #808 (every create in the #817 run read back `ambiguous` and was
-verified on resume). [#818](https://github.com/topij/agentic-dev-kit/issues/818) was
-filed earlier as the ticket disposition for the #817 panel's low-severity rendering
-findings.
-
-**#762 design decided.** Continuations move into a standing `## Workstreams` section.
-Session blocks become an event log. The design, the defaults for workstream naming and
-closing, and the migration are in the
-[design comment](https://github.com/topij/agentic-dev-kit/issues/762#issuecomment-5845903370).
-The operator scheduled #762 ahead of the next cs-toolkit upgrade, and asked for it to
-run in a fresh session at higher effort.
-
-**Not established:** where the next cs-toolkit upgrade sits in the sprint plan. Neither
-`saved_plans/phase5-completion-plan_2026-09-18.md` (local, not committed) nor Phase 6 in
-`saved_plans/codex-parity-plan_2026-08-23.md` names one.
-
-______________________________________________________________________
-
-## Session — 2026-09-26 (documentation refresh, in Codex)
-
-**Shipped.** [#810](https://github.com/topij/agentic-dev-kit/pull/810) merged as
-`09fcbe874249ea773e25acd7a591487170acd07d` on the operator's direction. The new
-developer guide gives task-oriented routes; the architecture guide illustrates
-components, PR flow, lane state, and friction routing with Mermaid. Entry guides and
-the shared parallel workflow now agree with the supported upgrade, activation,
-merge-authority, and model-tier behavior.
-
-**Review.** CodeRabbit reported that automatic review was skipped. The PR carries
-the fallback panel and composed delta review evidence; its comments own the findings
-and dispositions.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -342,35 +344,25 @@ ______________________________________________________________________
 
 ### Phase 5 exit
 
-**Status:** D-TRIAGE-RECOVERY ran in stages:
+**Status:** the operator accepted D-TRIAGE-RECOVERY on 2026-09-30; `ACCEPTANCE.md`
+beside each run's `RESULTS.md` records it. The Phase 5 E audit packet is prepared and
+awaits the operator's decisions. No exit is declared.
 
-- Stage 1 at `197a242` found F-1, F-2 and F-3, which #865 (`b13abb3`) fixed.
-- Stage 2 ran at `b13abb3` on 2026-09-29; its `RESULTS.md` owns the outcome.
+**Owner:** `saved_plans/phase5-e-audit_2026-09-30.md` and the
+`saved_plans/phase5-completion-plan_2026-09-18.md` it audits against. Both are local and
+not committed; the packet's E-5 decides whether they are committed.
 
-The row awaits the operator's acceptance. The D runs' open residuals go to the E audit,
-which also decides whether to commit the local `saved_plans/phase5-*` packets.
+▶ Next: the operator takes decisions E-1 to E-7 in
+`saved_plans/phase5-e-audit_2026-09-30.md`:
 
-#748 and #7 were both open on 2026-09-29, awaiting the operator's judgment of whether
-#769 discharges them. The 2026-09-23 D-SYSTEMIZE-RECOVERY packet block in
-[`kit-handoff-history.md`](kit-handoff-history.md) sets out the options.
+- accept the B, C and D rows still awaiting acceptance;
+- approve or decline each scope amendment and the custody disposition;
+- decide #7 and #748;
+- decide whether to commit the `saved_plans/phase5-*` packets;
+- approve the #243 comment.
 
-**Owner:** these files, all local and not committed:
-
-- `saved_plans/phase5-completion-plan_2026-09-18.md`;
-- `saved_plans/phase5-d-triage-recovery_2026-09-29.md`;
-- `saved_plans/phase5-d-triage-recovery-02_2026-09-29.md`.
-
-▶ Next: the operator accepts or rejects D-TRIAGE-RECOVERY from the Stage 1 and Stage 2
-`RESULTS.md` files. Then prepare the Phase 5 E audit packet (milestone E of the
-completion plan), which reconciles each D row's evidence and open residuals against the
-Phase 5 contract.
-
-- **Its first question** is whether any D row is still owed. Leads to re-check include
-  the triage side of D-SERVICE, named as not established in the 2026-09-23
-  D-SYSTEMIZE-LIVE history entry, and notification-thread approval, named in the
-  2026-09-25 D-TRIAGE-RESIDUAL entry with #198.
-- **Also open for the audit to weigh:** #794's workflow fix, which is residual R1 of the
-  D-SYSTEMIZE-RECOVERY-02 run.
+On a declaration, open the exit record PR with the packet's payloads P-1 and P-5, and
+post each tracker payload the operator approves by its exact text.
 
 ### Reviewer profiles
 

@@ -5,6 +5,59 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-09-26 (triage engine fixes, friction sweeps, #762 design, in Claude Code)
+
+**Shipped, each with a fallback panel because CodeRabbit's automatic review is off:**
+
+- [#812](https://github.com/topij/agentic-dev-kit/pull/812) merged as `cee1f6f`. Engine
+  sweeps write a record block under their marker, a later sweep keeps the marker, and
+  neither the EOF nor the archive heading spacing is mangled. It resolves #806, which
+  was closed by hand. A delta lens caught that the first repair commit had spliced an
+  existing test into a new one; `4ac95bb` restored it before merge.
+- [#813](https://github.com/topij/agentic-dev-kit/pull/813) merged as `c8b9be5`. It fixes
+  forward a regression #812 introduced: commit validation re-rendered retained sweeps
+  with the new renderer, so the 2026-09-25 `completed` state could not be retired and
+  triage refused to start. Validation now also accepts the pre-#812 rendering. Its PR
+  body carries the `make test` stamp and the offline replay against that state.
+- [#817](https://github.com/topij/agentic-dev-kit/pull/817) (`d027c66`) and
+  [#819](https://github.com/topij/agentic-dev-kit/pull/819) (`fe93d98`) are engine-backed
+  triage sweeps, both merged on the operator's direction. The run behind #817 filed
+  [#814](https://github.com/topij/agentic-dev-kit/issues/814),
+  [#815](https://github.com/topij/agentic-dev-kit/issues/815) and
+  [#816](https://github.com/topij/agentic-dev-kit/issues/816). #819 archived three
+  entries whose fixes had already shipped. The run needed two sweeps because one
+  approval carries one command ([#820](https://github.com/topij/agentic-dev-kit/issues/820)).
+
+**Filed at wrap-up, on the operator's approval of the exact payloads:** #820, and an
+occurrence comment on #808 (every create in the #817 run read back `ambiguous` and was
+verified on resume). [#818](https://github.com/topij/agentic-dev-kit/issues/818) was
+filed earlier as the ticket disposition for the #817 panel's low-severity rendering
+findings.
+
+**#762 design decided.** Continuations move into a standing `## Workstreams` section.
+Session blocks become an event log. The design, the defaults for workstream naming and
+closing, and the migration are in the
+[design comment](https://github.com/topij/agentic-dev-kit/issues/762#issuecomment-5845903370).
+The operator scheduled #762 ahead of the next cs-toolkit upgrade, and asked for it to
+run in a fresh session at higher effort.
+
+**Not established:** where the next cs-toolkit upgrade sits in the sprint plan. Neither
+`saved_plans/phase5-completion-plan_2026-09-18.md` (local, not committed) nor Phase 6 in
+`saved_plans/codex-parity-plan_2026-08-23.md` names one.
+
+### 2026-09-26 (documentation refresh, in Codex)
+
+**Shipped.** [#810](https://github.com/topij/agentic-dev-kit/pull/810) merged as
+`09fcbe874249ea773e25acd7a591487170acd07d` on the operator's direction. The new
+developer guide gives task-oriented routes; the architecture guide illustrates
+components, PR flow, lane state, and friction routing with Mermaid. Entry guides and
+the shared parallel workflow now agree with the supported upgrade, activation,
+merge-authority, and model-tier behavior.
+
+**Review.** CodeRabbit reported that automatic review was skipped. The PR carries
+the fallback panel and composed delta review evidence; its comments own the findings
+and dispositions.
+
 ### 2026-09-25 (Phase 5 D-TRIAGE-RESIDUAL, in Claude Code)
 
 The packets are `saved_plans/phase5-d-triage-residual_2026-09-25.md` and
