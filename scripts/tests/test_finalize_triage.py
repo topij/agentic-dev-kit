@@ -665,6 +665,57 @@ def test_conflicting_worktree_is_refused_before_branch_authority_or_dispatch(
     assert not (root / "nested").exists()
 
 
+def _skip_unless_case_insensitive(directory: Path) -> None:
+    probe = directory / "case-probe"
+    probe.write_bytes(b"")
+    folded = (directory / "CASE-PROBE").exists()
+    probe.unlink()
+    if not folded:
+        pytest.skip("filesystem is case-sensitive; a case-variant path names a different directory")
+
+
+def _case_variant(root: Path, placement: str) -> Path:
+    """A differently cased spelling of the checkout, of a path inside it, or of its parent (#856)."""
+    variant = root.with_name(root.name.swapcase())
+    if placement == "same":
+        return variant
+    if placement == "inside":
+        return variant / "nested"
+    return root.parent.with_name(root.parent.name.swapcase())
+
+
+@pytest.mark.parametrize("placement", ["same", "inside", "containing"])
+def test_case_variant_worktree_is_refused_before_branch_authority(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, placement: str
+) -> None:
+    """`resolve()` keeps the spelling it was given, so the guard decides by filesystem identity (#856)."""
+    _skip_unless_case_insensitive(tmp_path)
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    draft_request, candidate_id = proposal_request(root)
+    run("new", context="interactive", request=draft_request, start=root)
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    approved, context = approval(loads_exact(state_path.read_bytes()), f"archive {candidate_id}")
+    worktree = _case_variant(root, placement)
+    assert worktree != root and not worktree.is_relative_to(root) and not root.is_relative_to(worktree)
+    forge = _BaseAuthority([], git(root, "rev-parse", "HEAD"))
+    result = run(
+        "resume",
+        context="interactive",
+        request={**approved, "finalize": True, "worktree": str(worktree)},
+        start=root,
+        approval_context=context,
+        forge=forge,
+    )
+    assert result["outcome"] == "operator-held"
+    assert result["detail"] == (
+        "finalization worktree must lie outside the repository checkout, neither inside it nor containing it"
+    )
+    assert [call[0] for call in forge.calls] == ["authority:protected-head"]
+    assert not (root / "nested").exists()
+
+
 class _BaseAuthority(FakeForge):
     """A fake forge whose branch-create authority does not depend on an observation."""
 
@@ -813,6 +864,64 @@ def test_commit_step_refuses_a_recorded_worktree_that_conflicts_with_the_checkou
     assert (root / "docs/kit-friction-log.md").read_bytes() == inbox_before
     assert (root / "docs/kit-friction-log-archive.md").read_bytes() == archive_before
     assert not (root / "nested").exists()
+
+
+@pytest.mark.parametrize("placement", ["same", "inside", "containing"])
+def test_commit_step_refuses_a_recorded_case_variant_of_the_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, placement: str
+) -> None:
+    """The commit-step re-check decides by filesystem identity too (#856): the
+    retained branch-create read-back is rewritten, through the state validator, to
+    a differently cased spelling of the checkout, of a path inside it, or of its parent."""
+    _skip_unless_case_insensitive(tmp_path)
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    draft_request, candidate_id = proposal_request(root)
+    run("new", context="interactive", request=draft_request, start=root)
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    presented = loads_exact(state_path.read_bytes())
+    approved, context = approval(presented, f"archive {candidate_id}")
+    worktree = tmp_path / "isolated-finalize"
+    shutil.copytree(root, worktree)
+    shutil.rmtree(worktree / "reports")
+    base = git(root, "rev-parse", "HEAD")
+    first = run(
+        "resume", context="interactive",
+        request={**approved, "finalize": True, "worktree": str(worktree)},
+        start=root, approval_context=context,
+        forge=_BaseAuthority([verified({
+            "repository": "topij/agentic-dev-kit", "base": base, "branch": finalize_branch(presented),
+            "worktree": str(worktree), "head": base, "tree": "0" * 40,
+        })], base),
+    )
+    assert first["detail"] == "stop after branch-create"
+    state = loads_exact(state_path.read_bytes())
+    operation = state["finalization_operations"][0]
+    recorded = _case_variant(root, placement)
+    assert recorded != root and not recorded.is_relative_to(root) and not root.is_relative_to(recorded)
+    intent = {**operation["intent"], "worktree": str(recorded)}
+    read_back = {**operation["read_back"], "worktree": str(recorded)}
+    attempts = [
+        {**attempt, "intent": intent, "intent_digest": digest(intent), "read_back": read_back if attempt["read_back"] is not None else None}
+        for attempt in operation["attempts"]
+    ]
+    operation = {**operation, "intent": intent, "intent_digest": digest(intent), "read_back": read_back, "attempts": attempts}
+    state = {**state, "finalization_operations": [operation], "repository_evidence": [operation]}
+    canonical_state(dumps(state), settings=load_settings(root), mode="live")
+    state_path.write_bytes(dumps(state))
+    inbox_before = (root / "docs/kit-friction-log.md").read_bytes()
+    archive_before = (root / "docs/kit-friction-log-archive.md").read_bytes()
+    forge = _BaseAuthority([], base)
+    result = run("resume", context="interactive", request={"finalize": True}, start=root, forge=forge)
+    assert result["outcome"] == "operator-held"
+    assert result["detail"] == (
+        "finalization worktree must lie outside the repository checkout, neither inside it nor containing it"
+    )
+    assert [call[0] for call in forge.calls] == ["authority:protected-head"]
+    assert loads_exact(state_path.read_bytes())["finalization_operations"] == [operation]
+    assert (root / "docs/kit-friction-log.md").read_bytes() == inbox_before
+    assert (root / "docs/kit-friction-log-archive.md").read_bytes() == archive_before
 
 
 def _branch_date_settings(tmp_path: Path, pattern: str) -> Settings:
@@ -1099,6 +1208,21 @@ def test_sweep_cleanup_never_hands_the_caller_checkout_to_the_provider(tmp_path:
         assert forge.calls == []
         assert {entry["result"] for entry in result.values()} == {"kept"}
         assert all("conflicts with the caller checkout" in entry["reason"] for entry in result.values())
+
+
+@pytest.mark.parametrize("placement", ["same", "inside", "containing"])
+def test_sweep_cleanup_keeps_a_case_variant_of_the_caller_checkout(tmp_path: Path, placement: str) -> None:
+    """The cleanup guard decides by filesystem identity, not spelling (#856)."""
+    _skip_unless_case_insensitive(tmp_path)
+    root = repository(tmp_path)
+    worktree = _case_variant(root, placement)
+    assert worktree != root and not worktree.is_relative_to(root) and not root.is_relative_to(worktree)
+    settings, state, archive = _cleanup_inputs(root, worktree)
+    forge = FakeForge([])
+    result = _sweep_cleanup(settings, forge, state, archive)
+    assert forge.calls == []
+    assert {entry["result"] for entry in result.values()} == {"kept"}
+    assert all("conflicts with the caller checkout" in entry["reason"] for entry in result.values())
 
 
 @pytest.mark.parametrize(
