@@ -3245,8 +3245,9 @@ def test_a_kill_during_completed_state_retirement_holds_rather_than_starting_fre
         request={"approval": approval_for(presented, "park TRI-01")}, start=root,
         approval_context=approval_context(presented, "park TRI-01"),
     )
-    assert completed["detail"] == "completed/decision-only"
+    assert completed["outcome"] == "degraded-success"
     completed_raw = state_path.read_bytes()
+    assert loads_exact(completed_raw)["phase"] == "completed"
     receipt_digest = loads_exact(completed_raw)["completion"]["completed_receipt_digest"]
     retired = state_path.with_name(f"{state_path.name}.completed-{receipt_digest[:16]}")
     marker = tmp_path / "retirement-cut"
