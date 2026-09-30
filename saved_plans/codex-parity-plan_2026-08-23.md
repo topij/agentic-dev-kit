@@ -387,14 +387,15 @@ historical observation it was and is not silently refreshed.
      proofs, and a complete external path/provenance/digest control. The promoted
      claims and caveats are in
      [`codex-parallel-batch-live-validation_2026-09-01.md`](codex-parallel-batch-live-validation_2026-09-01.md).
-- [ ] **Phase 5 — Align permissions, installation, and upgrades.** Merged deliveries
+- [x] **Phase 5 — Align permissions, installation, and upgrades.** Merged deliveries
   now include PR `#632` for the measured Claude lane policy and permanent adapter-write
   asymmetry; PR `#635` for generated adapter refresh plus manifest-selected installed
   tests; PR `#637` for the templated cockpit grant advisory, open-ended SessionStart,
   and informational permission inspection; PR `#639` for the allow-side whole-tool
   rule measurement; and PR `#649` for the safety-critical classification of the
   configured lane profile; and PR `#655` for adopter-side stale lens-definition
-  inspection. The exit is not yet established. `#236` retains the engine/doctrine
+  inspection. Topi declared the exit on 2026-09-30 under the acceptance amendments the
+  [Phase 5 E audit](phase5-e-audit_2026-09-30.md) names. `#236` retains the engine/doctrine
   same-function-different-path survey. The Phase 5 field-exercise reconciliation below
   owns `#243` coverage and its remaining limits. The Phase 5 checklist
   below records the landed `#631` declaration, the joined `#608`/`#255` delivery in
@@ -416,7 +417,10 @@ historical observation it was and is not silently refreshed.
   4. [x] Initial pilot write pass and separate fork reconciliation, recorded with the
      stage identities in the Phase 5 checklist below. This pass does not establish the
      phase exit.
-  5. [ ] **Blocked:** complete the remaining `#243` field exercises. The original
+  5. [x] Complete the remaining `#243` field exercises, under the acceptance amendments
+     of Topi's exit declaration of 2026-09-30; the [Phase 5 E audit](phase5-e-audit_2026-09-30.md)
+     owns the outcome and those amendments. The rest of this item is its record up to
+     2026-09-13 and is not updated. The item was blocked at first: the original
      fixture and source paths were absent when checked with `test -e` on 2026-09-09
      from kit revision `e698ec47d6284ccd31af5ba9d8bc5657fe992310`:
      `/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture` and
@@ -535,7 +539,7 @@ historical observation it was and is not silently refreshed.
      The operator approved the #723 deferral, then later authorized merge when clean.
      cs-toolkit #2255 merged on 2026-09-09 as `c4119f85e07f2a089ab8d5decc94cf2cd1635d14`;
      kit #724 merged as `8418118e40728c667c32a28a182697139bc7a5ef`, confirmed by
-     `gh pr view 724` on 2026-09-09. Item 5 remains blocked, so this does not complete Phase 5.
+     `gh pr view 724` on 2026-09-09. Item 5 was still blocked then, so this did not complete Phase 5.
 - [ ] **Earlier sprint work — #585.** The operator moved the proportional opening
   pass for record prose out of Phase 6 on 2026-09-09; the
   [decision and evidence](https://github.com/topij/agentic-dev-kit/issues/585#issuecomment-5606158377)
@@ -848,8 +852,11 @@ and final open/unmerged fixture pull requests.
 - [x] Treat the configured Claude lane profile as safety-critical adopter-owned policy
   through the Codex root binding and Claude path-scoped binding (PR `#649`). `#346` and
   `#434` remain separate workflow/test binding-coverage decisions.
-- [ ] Complete the remaining runtime-specific field coverage for `#243`, using the
-  reconciliation below rather than repeating the issue's older exercise list.
+- [x] Complete the remaining runtime-specific field coverage for `#243`, using the
+  reconciliation below rather than repeating the issue's older exercise list. The
+  [Phase 5 E audit](phase5-e-audit_2026-09-30.md) reconciles the field rows under the
+  acceptance amendments Topi's exit declaration of 2026-09-30 names; `#243` stays open for
+  its Phase 6 residue.
 - [x] Inspect adopter-side generated lens definitions against their configured
   mechanical compute carrier without duplicating installed-engine drift (PR `#655`;
   `#255`'s general enforcement mechanism remains separate).
@@ -920,7 +927,7 @@ and final open/unmerged fixture pull requests.
   observation without treating its own commit as the replay source.
   The [2026-09-09 replay](cs-toolkit-replay_2026-09-09.md) retains the completed
   verification at its bound refs, accepted #723 limitation and later delivery events.
-  The remaining fixture work is blocked as recorded in delivery item 5.
+  The remaining fixture work was then blocked, as delivery item 5 records.
 
 #### Field-exercise reconciliation — 2026-09-05
 
