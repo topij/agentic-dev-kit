@@ -544,7 +544,8 @@ historical observation it was and is not silently refreshed.
   pass for record prose out of Phase 6 on 2026-09-09; the
   [decision and evidence](https://github.com/topij/agentic-dev-kit/issues/585#issuecomment-5606158377)
   govern its placement. This replay does not implement it.
-- [ ] **Phase 6 — Gate parity and roll it out (not started).** With the pilot pulled into Phase 5,
+- [ ] **Phase 6 — Gate parity and roll it out (ordered and owned on 2026-09-30; order and
+  owners are in *Phase 6* below).** With the pilot pulled into Phase 5,
   this phase holds the cost and hygiene work the review found burning, then the gate:
   the suite measured and
   marked (`make test-fast` beside an unchanged `make test`); the learnings memo
@@ -1024,26 +1025,54 @@ the cost.
 The operator moved `#585` earlier in the sprint on 2026-09-09, outside this phase;
 see the maintained status and its linked decision.
 
-- Measure the suite (`pytest --durations`, stamped), register an `evidence` marker for
-  the bundle-walking and copytree fixture tests, add `make test-fast`, keep `make test`
-  as the verification command.
-- Distill `review-process-learnings_2026-08-24.md` into `fallback-review-panel.md`
-  doctrine and archive its per-PR sections.
-- Split the matrix's headless-lane cell into a per-runtime sub-table linking to the
-  records; cut this plan's *Sprint status* to exits, owners and order; drop the
-  *Phase 3 integration inventory* from this plan.
-- Route `session-start`'s open-pull-request reads through `pr_watch.py --json
-  --no-persist`; fold the REST backend's repeated fetch inside `pr_watch.py`.
-- Move adapter bodies from `_CURRENT_CONTEXTS` to per-runtime templates and add the
-  appended-instruction mutation for `adopt`, `upgrade` and `pr-watch`.
-- Add fresh-repository fixtures for Codex-only, Claude-only, and dual-runtime
-  adoption.
-- Add trusted Codex smoke tests for instruction discovery, skill discovery,
-  SessionStart, PostToolUse, `/review`, fallback panels, and parallel lanes, run on
-  demand with a stamped record rather than in pull-request CI.
-- Keep Claude integration smoke tests beside them where automation credentials permit.
-- Replace the historical convergence status with the maintained parity matrix and
-  move historical analysis to an archive.
+Ordered, with an owner for each item, on 2026-09-30. Each owner is the tracker issue that
+carries the item's acceptance. Work the items in this order:
+
+1. Measure the suite (`pytest --durations`, stamped), register an `evidence` marker for
+   the bundle-walking and copytree fixture tests, add `make test-fast`, keep `make test`
+   as the verification command. Owner:
+   [#875](https://github.com/topij/agentic-dev-kit/issues/875). It comes first because every
+   later slice's verification pays for the whole suite.
+2. Distill `review-process-learnings_2026-08-24.md` into `fallback-review-panel.md`
+   doctrine and archive its per-PR sections. Owner:
+   [#876](https://github.com/topij/agentic-dev-kit/issues/876).
+3. Split the matrix's headless-lane cell into a per-runtime sub-table linking to the
+   records; cut this plan's *Sprint status* to exits, owners and order; drop the
+   *Phase 3 integration inventory* from this plan. Owner:
+   [#877](https://github.com/topij/agentic-dev-kit/issues/877).
+4. Route `session-start`'s open-pull-request reads through `pr_watch.py --json
+   --no-persist`; fold the REST backend's repeated fetch inside `pr_watch.py`. Owner:
+   [#663](https://github.com/topij/agentic-dev-kit/issues/663). A behavioural change to
+   `scripts/pr_watch.py` is safety-critical: `AGENTS.md` routes it through
+   `docs/agentic-dev-kit/safety-critical-changes.md`.
+5. Move adapter bodies from `_CURRENT_CONTEXTS` to per-runtime templates and add the
+   appended-instruction mutation for `adopt`, `upgrade` and `pr-watch`. Owner:
+   [#243](https://github.com/topij/agentic-dev-kit/issues/243), whose Phase 6 residue
+   this is, together with the stale "`SKILL.md` step 5" citation in
+   `fallback-review-panel.md`. The item rewrites adapters under `.claude/`, which a
+   headless Claude lane cannot write
+   ([#627](https://github.com/topij/agentic-dev-kit/issues/627)), so it runs in the
+   cockpit or in a Codex lane.
+6. Add fresh-repository fixtures for Codex-only, Claude-only, and dual-runtime
+   adoption. Owner: [#878](https://github.com/topij/agentic-dev-kit/issues/878). It follows
+   item 5, so that the fixtures pin the rendered templates.
+7. Add trusted Codex smoke tests for instruction discovery, skill discovery,
+   SessionStart, PostToolUse, `/review`, fallback panels, and parallel lanes, run on
+   demand with a stamped record rather than in pull-request CI. Owner:
+   [#879](https://github.com/topij/agentic-dev-kit/issues/879).
+8. Keep Claude integration smoke tests beside them where automation credentials permit.
+   Owner: [#879](https://github.com/topij/agentic-dev-kit/issues/879), the same runner as
+   item 7.
+9. Replace the historical convergence status with the maintained parity matrix and
+   move historical analysis to an archive. Owner:
+   [#880](https://github.com/topij/agentic-dev-kit/issues/880). It comes last, because it also
+   checks the exit below.
+
+Items 1 to 4 name disjoint files, apart from `kit-manifest.json` and `CHANGELOG.md`,
+which any kit-owned change may touch. They can run as one parallel batch, landing one at
+a time and regenerating the manifest on each rebase. Two pairs share a file and run in
+order: item 2 before item 5 (`fallback-review-panel.md`), and item 3 before item 9
+(`runtime-parity.md` and this plan).
 
 Done when the parity matrix is enforced by deterministic checks and confirmed by the
 Phase 5 adopter run.
