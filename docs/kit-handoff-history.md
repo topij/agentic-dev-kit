@@ -5,6 +5,58 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-09-27 (triage resume completion and create read-back lag, in Claude Code)
+
+**Shipped.** [#828](https://github.com/topij/agentic-dev-kit/pull/828) merged as `76ef6be`: a resumed triage run completes a
+merge read-back it had already verified (#826), and sweep cleanup believes only a
+`verified` provider answer and builds its fallback from `SWEEP_CLEANUP_ARTIFACTS` (#827).
+[#829](https://github.com/topij/agentic-dev-kit/pull/829) merged as `563e694`: after a successful GitHub tracker create, the
+adapter waits, bounded, for the issue list to show the created issue before judging the
+marker matches (#808). Both merged on the operator's "merge when clean". #828 also
+carried the record fixes naming #826, #827 and the #256 comment.
+
+**Review.** CodeRabbit skipped both PRs; the fallback panel reviewed each, and the
+disposition comments on the PRs own the findings. On #829 the first approach, reading the
+created issue directly when the list was empty, dropped the list's duplicate check under
+lag, and was replaced by the wait.
+
+**Verification.** `make test` on 2026-09-27, each in its PR's worktree under
+`.claude/worktrees/`: at `f783e18a8be6fd689718f726a25910798b1d5633` it printed
+`3624 passed, 1 skipped`, and at `a447d2041fc0bfb4e8abaebe56c78c80df528cda`
+`3634 passed, 1 skipped`. In the main checkout it stops at conftest import on #461's
+unreadable `state/` file.
+
+**Left open:** #829 keeps the retry schedule as a class constant in `GitHubIssues` rather
+than a `config/dev-model.yaml` key; its PR body raises the question.
+
+**Not established:** the #826 resume against a real crash, and #829's wait against the
+live GitHub API, including whether its bounded wait covers GitHub's actual lag. Both rest
+on tests with scripted providers.
+
+### 2026-09-26 (triage sweep branches, #807, in Claude Code)
+
+**Shipped.** [#824](https://github.com/topij/agentic-dev-kit/pull/824) merged as `2c2844e`
+on the operator's direction in this session ("Merge when clean"); #807 closed with it. The
+default `vcs.triage_branch_pattern` is now `chore/triage-{date}-{session}`, and after a
+verified merge read-back the engine retires its own worktree, local branch and remote
+branch, recording each result in `completion.sweep_cleanup`. The CHANGELOG entry says
+what an adopter must do.
+
+**Review.** CodeRabbit skipped. The fallback panel ran full rounds at `782532a`,
+`ee209ed`, `5c9ec35` and `fbce09c`; the PR's disposition comments own the findings. The
+second and third rounds each found a way for a custom provider's cleanup record to pass
+the write and fail every later read. The fix that ended it was structural: the engine
+now runs the completion validator itself (`validate_sweep_cleanup`) instead of keeping
+its own copy of the rules.
+
+**Verification.** `make test` at `fbce09c46c100c721deec254cb81762d5b3450b6` on
+2026-09-26, in the PR's worktree under `.claude/worktrees/`, printed
+`3619 passed, 1 skipped`. The same command's results at the earlier heads are on the PR.
+
+**Not established:** a real same-day pair of triage runs, and retirement against the
+real forge; both are covered only by tests with real git in temporary directories. The
+stale `chore/triage-*` branches from before this change were not deleted.
+
 ### 2026-09-26 (handoff workstreams, in Claude Code)
 
 **Shipped.** [#822](https://github.com/topij/agentic-dev-kit/pull/822) merged as `76b883c`

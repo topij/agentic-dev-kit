@@ -20,6 +20,61 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-09-30 (Phase 6 planned; #857 and #874 shipped from a headless lane, in Claude Code)
+
+**Shipped.**
+
+- PR #882, squash `12629ab`, from the headless Claude lane `triage-857-874` (merge class
+  operator). It pins finalize's commit-step worktree re-check with a test (#857), and
+  corrects the *Completed-state retirement* doctrine, with kill-cutpoint tests (#874).
+  The cockpit's review rounds narrowed the doctrine: only a `TriageError` from the claim
+  releases the gate, and a kill or any other exception keeps it held. #857 and #874
+  closed on merge.
+- PR #881, squash `7290e31`: the parity plan's *Phase 6* section, ordered with an owner
+  for each item, and the Phase 6 workstream.
+
+**Filed.** Each was filed on the operator's approval of its exact text and read back
+identical:
+
+- #875, #876, #877, #878, #879 and #880: owners for Phase 6 items;
+- #883: residual precision points from #882's panel;
+- #884: the suite fails under `FORCE_COLOR`;
+- #885: a lane's Read tool is denied outside its worktree.
+
+Occurrence comments went on #628 (a lane's inline `gh pr create --body` was denied) and
+on #852 (the receipt workaround below).
+
+**Review.** CodeRabbit's auto-review is off, so the fallback panel reviewed both PRs.
+Round 1's receipt was recorded at its reviewed head, with its findings in the
+disposition, before the fix round was pushed. Each fix round then composed a delta
+receipt on the one before it. #882 took the dual form throughout, because it changes recovery doctrine.
+Its residual LOW findings went to #883 under the blast-radius stopping rule.
+
+**Lane.** The lane's work completed, but its receipt terminalized `failed` on permission
+denials the work did not need:
+
+- a Read of a gitignored file outside its worktree, which the cockpit's brief had pointed
+  it at;
+- a Write outside the worktree;
+- an inline `gh pr create --body`, after which it fell back to `--body-file`.
+
+`dev_session.sh rm triage-857-874` removed the lane after the merge.
+
+**Verified.** `env -u FORCE_COLOR make test` at each PR's merged head, on 2026-09-30:
+
+- #881 at `adb6324`, in `/Users/topi/Coding/agentic-dev-kit`: `3739 passed, 1 skipped,
+  3 warnings in 679.30s`;
+- #882 at `425dbfe`, in the lane worktree: `3745 passed, 1 skipped, 3 warnings in
+  578.74s`.
+
+The `env -u` form is because the shell began exporting `FORCE_COLOR=3` partway through
+the session (#884).
+
+**Held for the operator:** whether the retirement doctrine should prescribe removing the
+retired name by hand to leave the two-link state.
+
+______________________________________________________________________
+
 ## Session — 2026-09-30 (Phase 5 exit declared, in Claude Code)
 
 **Declared.** Topi declared Phase 5 complete under PHASE5-E-AUDIT-01
@@ -291,62 +346,6 @@ Each merged on the operator's "merge when clean". The pre-#824 `chore/triage-*` 
 
 ______________________________________________________________________
 
-## Session — 2026-09-27 (triage resume completion and create read-back lag, in Claude Code)
-
-**Shipped.** [#828](https://github.com/topij/agentic-dev-kit/pull/828) merged as `76ef6be`: a resumed triage run completes a
-merge read-back it had already verified (#826), and sweep cleanup believes only a
-`verified` provider answer and builds its fallback from `SWEEP_CLEANUP_ARTIFACTS` (#827).
-[#829](https://github.com/topij/agentic-dev-kit/pull/829) merged as `563e694`: after a successful GitHub tracker create, the
-adapter waits, bounded, for the issue list to show the created issue before judging the
-marker matches (#808). Both merged on the operator's "merge when clean". #828 also
-carried the record fixes naming #826, #827 and the #256 comment.
-
-**Review.** CodeRabbit skipped both PRs; the fallback panel reviewed each, and the
-disposition comments on the PRs own the findings. On #829 the first approach, reading the
-created issue directly when the list was empty, dropped the list's duplicate check under
-lag, and was replaced by the wait.
-
-**Verification.** `make test` on 2026-09-27, each in its PR's worktree under
-`.claude/worktrees/`: at `f783e18a8be6fd689718f726a25910798b1d5633` it printed
-`3624 passed, 1 skipped`, and at `a447d2041fc0bfb4e8abaebe56c78c80df528cda`
-`3634 passed, 1 skipped`. In the main checkout it stops at conftest import on #461's
-unreadable `state/` file.
-
-**Left open:** #829 keeps the retry schedule as a class constant in `GitHubIssues` rather
-than a `config/dev-model.yaml` key; its PR body raises the question.
-
-**Not established:** the #826 resume against a real crash, and #829's wait against the
-live GitHub API, including whether its bounded wait covers GitHub's actual lag. Both rest
-on tests with scripted providers.
-
-______________________________________________________________________
-
-## Session — 2026-09-26 (triage sweep branches, #807, in Claude Code)
-
-**Shipped.** [#824](https://github.com/topij/agentic-dev-kit/pull/824) merged as `2c2844e`
-on the operator's direction in this session ("Merge when clean"); #807 closed with it. The
-default `vcs.triage_branch_pattern` is now `chore/triage-{date}-{session}`, and after a
-verified merge read-back the engine retires its own worktree, local branch and remote
-branch, recording each result in `completion.sweep_cleanup`. The CHANGELOG entry says
-what an adopter must do.
-
-**Review.** CodeRabbit skipped. The fallback panel ran full rounds at `782532a`,
-`ee209ed`, `5c9ec35` and `fbce09c`; the PR's disposition comments own the findings. The
-second and third rounds each found a way for a custom provider's cleanup record to pass
-the write and fail every later read. The fix that ended it was structural: the engine
-now runs the completion validator itself (`validate_sweep_cleanup`) instead of keeping
-its own copy of the rules.
-
-**Verification.** `make test` at `fbce09c46c100c721deec254cb81762d5b3450b6` on
-2026-09-26, in the PR's worktree under `.claude/worktrees/`, printed
-`3619 passed, 1 skipped`. The same command's results at the earlier heads are on the PR.
-
-**Not established:** a real same-day pair of triage runs, and retirement against the
-real forge; both are covered only by tests with real git in temporary directories. The
-stale `chore/triage-*` branches from before this change were not deleted.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -385,11 +384,13 @@ review-request method.
 
 ### Triage engine hardening
 
-**Status:** `recover` retires an engine-written finished run by finding its sweep in git
-(#858); finalize names where its `worktree` must lie (#855). **Owner:**
+**Status:** finalize's commit-step worktree re-check is pinned by a test (#857), and the
+*Completed-state retirement* doctrine names what each stop leaves (#874), both in #882.
+Whether that doctrine should prescribe a way out of the two-link state is the operator's
+call. **Owner:**
 [#856](https://github.com/topij/agentic-dev-kit/issues/856),
-[#857](https://github.com/topij/agentic-dev-kit/issues/857),
-[#859](https://github.com/topij/agentic-dev-kit/issues/859).
+[#859](https://github.com/topij/agentic-dev-kit/issues/859),
+[#883](https://github.com/topij/agentic-dev-kit/issues/883).
 
-▶ Next: #857 — pin finalize's commit-step worktree re-check with a test that reaches the
-commit step with a recorded worktree inside, then containing, the checkout.
+▶ Next: #856 — make the finalize worktree-outside-checkout guard compare paths
+case-insensitively, the same guard #857 pinned.
