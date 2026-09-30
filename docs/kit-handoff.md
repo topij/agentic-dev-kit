@@ -20,6 +20,69 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-09-29 (Phase 5 D-TRIAGE-RECOVERY Stage 2, run autonomously, in Claude Code)
+
+**Mandate.** The operator went to sleep and asked for the session to run autonomously
+"based on the plan". Later they said "You can file the tickets as needed". The run's
+`APPROVAL.md` quotes both messages and says how they were read. Nothing was merged.
+
+**Packet.** `saved_plans/phase5-d-triage-recovery-02_2026-09-29.md` is local and not
+committed, like the other D packets. It reruns the whole Stage 1 matrix at `b13abb3`;
+`7a75f71` changes no engine or config file. The packet:
+
+- names the cases that #865's changes reach, and reruns O-ACTIVE, O-UNCERTAIN, T-HELD
+  and I-HELD as controls;
+- extends O-CAPTURE;
+- adds G-ALIAS-MID, V-ALIAS-MID and I-ALIAS for the cutpoints #865 created.
+
+**Preparation check.** A fresh subagent checked the draft, dry-ran it at `b13abb3` and
+counter-ran it at `197a242`. Its report is
+`state/review-evidence/phase5-d-triage-recovery-02-prep-20260929/prepcheck/REPORT.md`.
+The correction that would have broken the run concerned the fake origin:
+
+- The harness's bare clone copied every local branch, so the control checkout's merged
+  work branches reached the fake origin and failed K-U's `origin_refs`.
+- The origin is now cloned single-branch.
+
+**Stage 2 (synthetic).** The evidence is in
+`state/review-evidence/phase5-d-triage-recovery-02/` (gitignored), and its `RESULTS.md`
+owns the outcomes. The runs below were in that directory, over the engine at `b13abb3`
+plus fixture commit `fa61085`, on 2026-09-29.
+
+- `python3 verify_summaries.py` printed `cases 32 steps 215 problems []`.
+- `harness.py containment` printed `true` for `git_status`, `state_listing` and
+  `state_triage_lstat`.
+- In that run, F-1, F-2 and F-3 passed through the CLI, in V-ALIAS, O-CAPTURE, and G0,
+  G-ALIAS and T-GATE.
+- The preparation check counter-ran the same predictions at `197a242`. It failed the
+  changed and added rows' distinguishing steps and K-U's environmental `origin_refs`,
+  and no other row. Its report quotes the `verify_summaries.py` line.
+
+**Filed this session**, under the operator's go-ahead:
+
+- #869: `recover` reports a held or other current-gate recovery bundle without proving
+  the gate owner dead. It was reproduced with a stopped owner. It fits *Triage engine
+  hardening*, whose entry this session left alone.
+- An occurrence comment on #861: the harness's containment listing of all of `state/`
+  grows with `state/`.
+
+**Not established:** Stage 1's list, except the recovery evidence at the fixed engine
+that it left to Stage 2, which this run supplies. Also not established:
+
+- a `state-present-prepared` bundle whose owner is alive, which the CLI cannot reach;
+- a real hostname change (#867);
+- a `.tmp` gate name left by an earlier recovery.
+
+**Left for the operator:**
+
+- the row's acceptance;
+- removing `/private/tmp/adk-phase5-d-triage-recovery-02` and its `-prepcheck-b13` and
+  `-prepcheck-197a` siblings, which this session did not attempt;
+- deleting the control checkout's local branches of the merged #865 and #868,
+  `fix/triage-recovery-owner-alias` and `chore/update-handoff-2026-09-29-triage-recovery`.
+
+______________________________________________________________________
+
 ## Session — 2026-09-29 (Phase 5 D-TRIAGE-RECOVERY packet and Stage 1, recovery fixes, in Claude Code)
 
 **Packet.** `saved_plans/phase5-d-triage-recovery_2026-09-29.md` is local and not committed, like the other D packets. It scopes the D-TRIAGE-RECOVERY row as engine-level cases, driven through the real `recover` and `test` CLI, with no agent run.
@@ -270,79 +333,6 @@ and dispositions.
 
 ______________________________________________________________________
 
-## Session — 2026-09-25 (Phase 5 D-TRIAGE-RESIDUAL, in Claude Code)
-
-The packets are `saved_plans/phase5-d-triage-residual_2026-09-25.md` and
-`saved_plans/phase5-d-triage-retire-completed_2026-09-25.md`. They are local and not
-committed, like the other D packets. The evidence is in `state/review-evidence/`
-(gitignored):
-
-- `phase5-d-triage-residual-01/`: Stage T;
-- `phase5-d-triage-retire-01-stage0/`: the K1 classification;
-- `phase5-d-triage-residual-01-stage-l/`: the live stage, and its `RESULTS.md` owns the
-  outcomes.
-
-**Stage T** (test mode, in a throwaway clone) worked, and showed that a completed session
-ended its mode for good. **K1** (a read-only copy of the 2026-09-06 LLM-only state) found
-it invalid but finished.
-
-**Shipped, each on the operator's direction, with fallback panels:**
-
-- #798: `new`, no argument and `test` retire a valid completed triage state.
-- #799: a guard test compares `KIT_OWNED` with `git ls-files scripts`.
-- #801: `recover` retires an invalid but finished run, proven from git.
-- #804: a failed branch-create is retried once read-back shows it left nothing.
-
-The operator also asked for #800 (another session's handoff) to be merged.
-
-**Live triage.** The 2026-09-06 state was retired through #801. Session A filed TRI-05 as
-#802 and swept it (#803). Session B archived the entries that already had a home (#805). Both
-completed as `archive-sweep` / `degraded-success`. The markers' record blocks in
-`docs/kit-friction-log.md` were restored by hand in this wrap-up.
-
-**Filed, on the operator's approval of the exact payloads:** #806, #807, #808. An
-occurrence comment went on #425.
-
-**Not established:** notification-thread approval (the CLI has no notification provider;
-#198), and D-TRIAGE-RECOVERY.
-
-**Verification.** The bodies of #798, #799, #801 and #804 each stamp their own
-`make test` run. All ran in linked worktrees under this session's scratchpad, because the main checkout's
-`state/review-evidence/` holds unreadable files (#461).
-
-______________________________________________________________________
-
-## Session — 2026-09-25 (reviewer switching assessment, in Claude Code)
-
-**Why.** An In Parallel adopter repository is replacing CodeRabbit with an internal PR
-reviewer. The operator wants the kit to treat any reviewer as "just another review
-bot" and to make switching between CodeRabbit and internal tooling a config choice.
-
-**Decisions (operator):**
-
-- The kit repo stays on CodeRabbit (free OSS tier).
-- The kit ships **no** settings for the internal reviewer. The kit may be used by
-  external repos, so the adopter defines its reviewer's profile itself. Kit code, docs
-  and tests stay reviewer-neutral and use a made-up reviewer.
-- How the internal reviewer behaves (trigger, label semantics, login, latency) is
-  settled by watching it once it is live on the adopter. If the kit can't accommodate
-  it, the fallback is asking the reviewer's developer for a change. On 2026-09-25
-  the operator asked that developer to have the reviewer post a GitHub check run, which would make the kit's existing
-  check-based pending path work unchanged.
-
-**Filed on the operator's go-ahead:**
-
-- #796: reviewer profiles, with adopter-defined profiles and a configured
-  review-request method;
-- #797: the merge gate can't see a reviewer whose only in-progress signal is a
-  comment, and pending grace is one value for all reviewers.
-
-The reviewer-specific notes and the checklist of things to observe once it is live are
-in `saved_plans/fabro-review-tool-assessment_2026-09-25.md` (local, not committed). The
-public issues leave those details out on purpose.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -352,24 +342,34 @@ ______________________________________________________________________
 
 ### Phase 5 exit
 
-**Status:** D-TRIAGE-RECOVERY Stage 1 ran synthetically at `197a242`, and the fixes it
-led to merged as #865 (`b13abb3`). The D runs' open residuals go to the E audit, which
-also decides whether to commit the local `saved_plans/phase5-*` packets. #748 and #7
-were both open on 2026-09-29, awaiting the operator's judgment of whether #769
-discharges them; the 2026-09-23 D-SYSTEMIZE-RECOVERY packet block in
+**Status:** D-TRIAGE-RECOVERY ran in stages:
+
+- Stage 1 at `197a242` found F-1, F-2 and F-3, which #865 (`b13abb3`) fixed.
+- Stage 2 ran at `b13abb3` on 2026-09-29; its `RESULTS.md` owns the outcome.
+
+The row awaits the operator's acceptance. The D runs' open residuals go to the E audit,
+which also decides whether to commit the local `saved_plans/phase5-*` packets.
+
+#748 and #7 were both open on 2026-09-29, awaiting the operator's judgment of whether
+#769 discharges them. The 2026-09-23 D-SYSTEMIZE-RECOVERY packet block in
 [`kit-handoff-history.md`](kit-handoff-history.md) sets out the options.
-**Owner:** `saved_plans/phase5-completion-plan_2026-09-18.md` and
-`saved_plans/phase5-d-triage-recovery_2026-09-29.md`, both local and not committed.
 
-▶ Next: prepare the D-TRIAGE-RECOVERY Stage 2 packet, then run it after approval.
+**Owner:** these files, all local and not committed:
 
-- **What it reruns:** the whole Stage 1 matrix, at `b13abb3`, which is wider than A1's
-  "affected cases". The packet must say so and why, name the cases #865's changes reach,
-  and rerun the rest as controls, for the operator's approval.
-- **What it reuses:** Stage 1's harness, fixture and fake `gh`, in a new namespace. The
-  Stage 1 harness hardcodes `197a242` and its own paths.
-- **What changes:** the predictions, wherever #865 fixed F-1, F-2 or F-3.
-- **The alternative** is still #794's workflow fix, which is residual R1 of the
+- `saved_plans/phase5-completion-plan_2026-09-18.md`;
+- `saved_plans/phase5-d-triage-recovery_2026-09-29.md`;
+- `saved_plans/phase5-d-triage-recovery-02_2026-09-29.md`.
+
+▶ Next: the operator accepts or rejects D-TRIAGE-RECOVERY from the Stage 1 and Stage 2
+`RESULTS.md` files. Then prepare the Phase 5 E audit packet (milestone E of the
+completion plan), which reconciles each D row's evidence and open residuals against the
+Phase 5 contract.
+
+- **Its first question** is whether any D row is still owed. Leads to re-check include
+  the triage side of D-SERVICE, named as not established in the 2026-09-23
+  D-SYSTEMIZE-LIVE history entry, and notification-thread approval, named in the
+  2026-09-25 D-TRIAGE-RESIDUAL entry with #198.
+- **Also open for the audit to weigh:** #794's workflow fix, which is residual R1 of the
   D-SYSTEMIZE-RECOVERY-02 run.
 
 ### Reviewer profiles
