@@ -966,7 +966,7 @@ stamped read-backs. This does not exercise operator initialization, later adopti
 verification, fixture PR completion, or any remaining systemize route. Keep those
 boundaries for that implementation. The separately approved initialization continuation
 above advances the adopt route without establishing successful adoption verification,
-fixture PR completion or Phase 5 exit. Those completion gates remain unchecked;
+fixture PR completion or Phase 5 exit. Those completion gates remained unchecked then;
 #243 stays open.
 
 PR #685's [fixture evidence](https://github.com/topij/agentic-dev-kit/pull/685#issuecomment-5555450011)
