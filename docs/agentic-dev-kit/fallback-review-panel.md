@@ -540,14 +540,16 @@ that record.
   when to stop* instead. *A reviewer checks* that the round's disposition names both
   and the mutation's result, for each behavioural finding it fixes. Recorded in the
   per-PR record's fix-round lessons and again on `#609`.
-- **Stamp verification at the head that merges, on a quiet tree.** `AGENTS.md` defines
-  what the stamp contains; this rule says where and when to take it:
+- **Stamp verification at the head that merges, on a quiet tree.** A stamp names the
+  command, the revision and the date of the run it reports (the kit's own `AGENTS.md`
+  carries the full rule). This rule says where and when to take it:
   - At the exact candidate head, after the last content change. A later push
-    invalidates it. `pr_watch` reports a stamp that no longer covers the head, as the
+    invalidates it. When stamps exist and none covers the head, `pr_watch` reports the
     evidence finding `verification_stamp_behind_head` (`#603`), but does not gate on it.
   - With nothing else writing into the tree: no concurrent `pr_watch` invocation that
     writes state (a poll or `--record-review`), because its writes trip the suite's
-    state guard, and no uncommitted edits, which trip the drift check.
+    state guard, and no uncommitted edits to kit-owned files, which trip the drift
+    check.
   - Lenses running full suites concurrently can produce a failure that a quiet run does
     not show. Compare a lens's suite failure with a quiet run before treating it as a
     finding.
