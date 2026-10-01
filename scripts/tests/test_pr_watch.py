@@ -9308,6 +9308,19 @@ def test_all_comments_reports_what_seen_noise_and_empty_bodies_hide() -> None:
     assert "all_comments" not in pr_watch.build_report(view, inline, seen)
 
 
+def test_all_comments_keeps_an_outdated_inline_comments_line() -> None:
+    """GitHub reports an inline comment on an outdated diff with `line: null` and
+    the line it was made on as `original_line`. `all_comments` keeps that line, as
+    `collect_comments` does."""
+    pr_watch = _load_pr_watch()
+    outdated = {"id": 78, "user": {"login": "reviewer"}, "body": "Outdated finding.",
+                "path": "scripts/pr_watch.py", "line": None, "original_line": 7}
+
+    [entry] = pr_watch.all_comments(_green_view(), [outdated])
+
+    assert (entry["path"], entry["line"]) == ("scripts/pr_watch.py", 7)
+
+
 def test_all_comments_through_main_is_read_only(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

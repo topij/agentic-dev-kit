@@ -5575,7 +5575,8 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "with a plain poll: report current PR state without rewriting the "
             "per-PR seen, pending, check-baseline, or bot-clock state; use for "
-            "an act-time authorization check after the interactive watch loop"
+            "an act-time authorization check after the interactive watch loop, "
+            "and with --all-comments for session-start's read-only review read"
         ),
     )
     parser.add_argument(
