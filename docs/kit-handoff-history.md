@@ -5,6 +5,63 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-09-29 (triage finalize worktree, recover for engine-written runs, in Claude Code)
+
+**Shipped.** [#855](https://github.com/topij/agentic-dev-kit/pull/855) merged as `e265c36`; #841 is closed. Finalize's refusal now says the `worktree` must lie outside the repository checkout, and the triage workflow adds that it must not exist yet.
+[#858](https://github.com/topij/agentic-dev-kit/pull/858) merged as `369e9ee`; #833 is closed. `recover` reads the engine's finished layout. Its merge read-back names no merge commit, so `recover` takes the one first-parent commit on the protected ref, after the run's `protected_branch_head`, that moves every swept block into the archive, and holds otherwise. `recover` also refuses a config-drifted completed state as valid. #858 was reviewed as a safety-critical recovery path and merged on the operator's word.
+
+**Decided.** An LLM-only state that names no merge commit stays held; the git lookup is the engine layout's route only (#858's round 1). The dead end filed as #859 was ticketed rather than fixed in #858, because the fix is a new mechanism on a recovery path. On the operator's word, both PRs merged and this session's work is recorded under *Triage engine hardening*.
+
+**Filed this session:** #856 (the worktree guard compares paths by case), #857 (the commit-step re-check has no test), #859 (`recover` calls a state valid that `new` then hard-stops on). Occurrence comments on #852 (record the round's receipt before pushing its fix; chained deltas composed) and #643 (lenses launched by naming the rendered prompt file).
+
+**Review.** CodeRabbit skipped both PRs; the fallback panel carried each, and the disposition comments on the PRs own the findings.
+
+**Verification.** In `/Users/topi/Coding/agentic-dev-kit` on 2026-09-29, `make test` at `11b2d7f0e76034e22da0a5097763036f98b6b6dc` (#855's head) printed `3702 passed, 1 skipped in 547.40s`, and at `b540930b3adb3a52290822f3761977975f8da5b3` (#858's head) printed `3728 passed, 1 skipped in 585.33s`.
+
+### 2026-09-28 (make lint scope, state-guard exclusion, in Claude Code)
+
+**Shipped.** [#850](https://github.com/topij/agentic-dev-kit/pull/850) merged as `6a21e59`; #848 is closed. `make lint` hands ruff only the Python files git tracks, and `scripts/tests/test_make_lint.py` runs the recipe against a stub `uvx`.
+[#851](https://github.com/topij/agentic-dev-kit/pull/851) merged as `6e87d25`. The #428 state guard read every file under `state/` in each pytest process, so this checkout's `state/review-evidence/` made the local suite far slower than CI's. New `state.test_guard_exclude`, shipped as `[]` and settable in the local overlay: a listed top-level directory is recorded as present and not walked. A list naming `pr-watch`, a directory a configured `state/...` path points into, or any invalid entry excludes nothing.
+
+**Decided.** The exclusion is set in this checkout's gitignored `config/dev-model.local.yaml` (`review-evidence`), not the tracked config, which is also `init.sh`'s template. On the operator's word, this session's work takes no workstream. Raised and not settled: whether `models.runtime_mappings.claude` should name Opus 5.5 for a tier.
+
+**Filed this session:** #852 (a fix round cannot compose a delta receipt without a receipt at its parent), #853 (a repo-only test file fails CI twice).
+
+**Review.** CodeRabbit skipped both PRs, so the fallback panel carried each; the disposition comments on the PRs own the findings. #851's round-1 adversarial lens built a fabricated `pr-watch` receipt that passed the guard when `pr-watch` was listed; the refusal of engine directories came from that.
+
+**Verification.** In `/Users/topi/Coding/agentic-dev-kit` on 2026-09-28, `make test` at `37830b8349665d2c0218b696f67808add988d9b9` printed `3701 passed, 1 skipped in 494.89s`; the same command at `5a58e1a0081494f2d9c2ce75a5e9a27c3c9526e1`, #850's first commit and so without #851 or #850's own test, printed `3688 passed, 1 skipped in 3375.64s`. #461 stays open: an unreadable file anywhere the guard still walks stops the conftest import.
+
+### 2026-09-28 (sweep moves earlier graduation markers, friction sweep, in Claude Code)
+
+**Shipped.** [#843](https://github.com/topij/agentic-dev-kit/pull/843) merged as `5ac1293`; #187 is closed. A sweep moves every earlier graduation-marker section to the archive and keeps only its own; a marker-titled section holding an entry line stays. The previous layout validates as the `pre-187` rendering.
+[#847](https://github.com/topij/agentic-dev-kit/pull/847) merged as `261cc83`: the first sweep under #843, triage session `3058c6ec`. It filed #844, #845 and #846, and archived TRI-04 and TRI-05 (the 2026-08-27 `claude -p` and `panel_prompt.py` entries). Both merged on the operator's word.
+
+**Decided.** #847's record named the approver `topi`: the cockpit wrote that into the approval context, while earlier records and the GitHub login use `topij`. On the operator's word, #847 merged as produced and this commit corrects the line, since editing the engine-rendered sweep would have broken its forge chain.
+
+**Filed this session:** #848 (`make test` stops at lint on untracked Python files). #461 carries an occurrence: unreadable leftover fixtures under `state/review-evidence/` stopped the conftest import; the cockpit restored owner read permission on them and deleted nothing.
+
+**Review.** CodeRabbit skipped both PRs, so the fallback panel carried each; the disposition comments on the PRs own the findings. #843's round 1 found that a dated entry whose heading merely mentions "Backlog migrated" would have been archived unannotated.
+
+**Verification.** In `/Users/topi/Coding/agentic-dev-kit` on 2026-09-28, `uvx ruff@0.16.0 check --no-fix --extend-exclude saved_plans`, `make check-syntax` and `uv run --with pytest --with pyyaml python -m pytest scripts/lib/state_paths/tests scripts/tests -q` passed at `f59e46aac0f7fcef772587a77c4e49793e1ec9d7`, pytest printing `3689 passed`. Plain `make test` was not usable there: #848.
+
+### 2026-09-27 (mixed triage approval, sweep rendering, retirement across config, in Claude Code)
+
+**Shipped.** [#831](https://github.com/topij/agentic-dev-kit/pull/831) merged as `96d7632`: one triage approval carries `approve`, `archive` and `park` commands, one per line (#820).
+[#832](https://github.com/topij/agentic-dev-kit/pull/832) merged as `318173c`: the sweep record names each source entry, the archive gains no trailing blank line, and a same-date group joins the archive's existing section. `render_sweep` keeps a `pre-818` rendering, so the 2026-09-26 sweep still validates (#818).
+[#834](https://github.com/topij/agentic-dev-kit/pull/834) merged as `11599e6`: a session-starting entry retires a completed state written under an earlier config. The first sweep attempt held on `configuration identity mismatch`, because #824 had changed the config after the 2026-09-26 sweep completed.
+[#840](https://github.com/topij/agentic-dev-kit/pull/840) merged as `c842931`: the sweep of triage session `7110f64d`, approved in one mixed reply. It filed #835, #836, #837, #838 and #839, and archived TRI-01, TRI-03, TRI-05 and TRI-06, each already carried elsewhere. The 2026-09-11 runtime entry, the 2026-09-09 process-list entry, and the 2026-08-27 `claude -p` and `panel_prompt.py` entries stay parked.
+Each merged on the operator's "merge when clean". The pre-#824 `chore/triage-*` branches were deleted by hand on 2026-09-27, before this session.
+
+**Decided.** The operator chose fixing the engine over `recover` or a hand rename. `recover` would have written a terminal `state-present-held` bundle, because its finished-run check knows only the LLM-only layout (#833).
+
+**Filed or reopened this session:** #833, #841, and #187 reopened with the marker-accumulation recurrence. #835 carries this session's lens-fetch occurrences.
+
+**Review.** CodeRabbit skipped every PR, and the fallback panel carried each one; the disposition comments on the PRs own the findings. The #834 round-1 delta lens found that a doc-row edit pushed without a test run broke a pinned `test_portability.py` string.
+
+**Verification.** `make test`, each in its PR's worktree under `.claude/worktrees/` on 2026-09-27: `3658 passed, 1 skipped` at `1c4c6ede786e0c06c9954dc3dea0dba168c8838b` (#831), `3668 passed, 1 skipped` at `a0978fe6670c3f1221cb43dfec84a0b5a7d4b69c` (#832), and `3680 passed, 1 skipped` at `2daf1d835306a8eff43c26aaeef00e304a0a3551` (#834). The final LOW-repair heads of #832 and #834 got focused suites and the delta lenses' own runs, not a cockpit `make test`.
+
+**Not established:** `check_doc_budget.py` at `c842931` on 2026-09-27 still warned on `docs/kit-friction-log.md` after the sweep; #187 owns why.
+
 ### 2026-09-27 (triage resume completion and create read-back lag, in Claude Code)
 
 **Shipped.** [#828](https://github.com/topij/agentic-dev-kit/pull/828) merged as `76ef6be`: a resumed triage run completes a
