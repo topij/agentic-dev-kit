@@ -1406,8 +1406,8 @@ def _worktree_conflicts_with_checkout(worktree_path: Path, repo: Path) -> bool:
     (#856). Containment is therefore also decided by filesystem identity: the
     worktree path or any existing ancestor is the checkout, or the checkout or
     any ancestor is the worktree. The worktree need not exist yet, so only its
-    existing ancestors take part; the structural test is kept for paths
-    nothing on disk can identify."""
+    existing ancestors take part. The structural test runs first, for every path;
+    the identity checks then catch the spellings it misses."""
     if worktree_path == repo or repo.is_relative_to(worktree_path) or worktree_path.is_relative_to(repo):
         return True
 

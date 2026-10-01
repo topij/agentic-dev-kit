@@ -34,6 +34,7 @@ from triage.engine import (  # noqa: E402
     _sweep_cleanup_kept,
     _validate_commit_updates,
     _verify_forge_read_back,
+    _worktree_conflicts_with_checkout,
     run,
 )
 from triage.finalize import render_sweep, sweep_ids  # noqa: E402
@@ -1223,6 +1224,38 @@ def test_sweep_cleanup_keeps_a_case_variant_of_the_caller_checkout(tmp_path: Pat
     assert forge.calls == []
     assert {entry["result"] for entry in result.values()} == {"kept"}
     assert all("conflicts with the caller checkout" in entry["reason"] for entry in result.values())
+
+
+@pytest.mark.parametrize(
+    ("worktree", "conflicts"),
+    [
+        ("/repo/CHECKOUT", True),
+        ("/REPO/checkout/nested", True),
+        ("/REPO", True),
+        ("/repo/checkout-sibling", False),
+        ("/elsewhere/checkout", False),
+    ],
+)
+def test_worktree_conflict_predicate_decides_by_identity_on_any_filesystem(
+    monkeypatch: pytest.MonkeyPatch, worktree: str, conflicts: bool
+) -> None:
+    """The case-variant tests above skip on a case-sensitive filesystem, which is
+    what CI runs on (#856). This pins the predicate's identity branches everywhere,
+    by giving `Path.stat` a case-folding identity: every spelling below names the
+    same directory as its lowercase form, and `/repo/checkout/nested` does not exist yet."""
+    existing = {"/", "/repo", "/repo/checkout", "/repo/checkout-sibling", "/elsewhere", "/elsewhere/checkout"}
+
+    def fake_stat(self: Path, *args: object, **kwargs: object) -> os.stat_result:
+        folded = str(self).lower()
+        if folded not in existing:
+            raise FileNotFoundError(str(self))
+        return os.stat_result((0, sorted(existing).index(folded) + 1, 1, 0, 0, 0, 0, 0, 0, 0))
+
+    monkeypatch.setattr(Path, "stat", fake_stat)
+    repo = Path("/repo/checkout")
+    candidate = Path(worktree)
+    assert candidate != repo and not candidate.is_relative_to(repo) and not repo.is_relative_to(candidate)
+    assert _worktree_conflicts_with_checkout(candidate, repo) is conflicts
 
 
 @pytest.mark.parametrize(
