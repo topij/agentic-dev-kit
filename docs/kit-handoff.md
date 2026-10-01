@@ -33,7 +33,7 @@
 
 **Decided by the operator.**
 
-- The templates sit beside the renderer, not under `docs/templates/adapters/` as #243's
+- The templates sit beside the renderer, not under `docs/templates/` as #243's
   2026-09-02 comment proposed.
 - #902 closes #243, and merges once clean.
 
@@ -53,8 +53,8 @@ posted on the PR.
 **Verified.** `env -u FORCE_COLOR make test` at `a459006`, in
 `/Users/topi/Coding/agentic-dev-kit` on 2026-10-01: `3792 passed, 1 skipped in
 519.66s (0:08:39)`. The repair commits carry focused verification, recorded on the PR.
-For the merged tree, `gh run list --commit 65e9d2d` showed the `Test` workflow
-completed `success` on `main`.
+For the merged tree, `gh run list --commit 65e9d2d334de4277dd2bbb031667bd666c3da9ee`
+showed the `Test` workflow completed `success` on `main`.
 
 ______________________________________________________________________
 
