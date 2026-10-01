@@ -387,7 +387,7 @@ review-request method.
 
 **Status:** finalize's commit-step worktree re-check is pinned by a test (#857), and the
 *Completed-state retirement* doctrine names each live-mode kill cutpoint (#874), both in
-#882. #883 carries its residual points. The finalize worktree guard decides containment by
+#882. #883 carries its residual points. The engine's worktree guards decide containment by
 filesystem identity (#856, in #889); #891 carries the same gap in `GitHubForge`'s
 sweep-cleanup guard. The doctrine prescribes the operator's manual way out of the
 two-link state (#894), and an engine-owned rollback waits for a recurrence (#892).
@@ -397,5 +397,5 @@ two-link state (#894), and an engine-owned rollback waits for a recurrence (#892
 [#891](https://github.com/topij/agentic-dev-kit/issues/891),
 [#892](https://github.com/topij/agentic-dev-kit/issues/892).
 
-▶ Next: chosen at the next wrap-up. #891, the same gap #856 closed, and #859 are the
-candidates.
+▶ Next: #891 — make `GitHubForge`'s sweep-cleanup guard decide containment by
+filesystem identity, sharing the predicate #889 gave the engine's guards.
