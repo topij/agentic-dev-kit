@@ -61,8 +61,10 @@ disposition is posted on the PR, with both delta passes' verdict lines verbatim.
 
 **Verified.** `env -u FORCE_COLOR make test` at `d29fa9a`, in
 `/Users/topi/Coding/agentic-dev-kit` on 2026-10-01: `3773 passed, 1 skipped in
-658.45s`. `gh run list --commit 6e4c439` showed the `Test` workflow completed `success`
-on `main`.
+658.45s`. That run predates the two LOW-repair commits, `be68303` and `a2acb9b`, which
+changed `scripts/pr_watch.py` and its tests before the merge. For the merged tree,
+`gh run list --commit 6e4c439` showed the `Test` workflow completed `success` on
+`main`.
 
 ______________________________________________________________________
 
@@ -293,7 +295,9 @@ ______________________________________________________________________
 **Status:** items 1 to 3 shipped on 2026-10-01, in #893, #888 and #887, and item 4
 shipped the same day in #897. The *Phase 6* section of
 `saved_plans/codex-parity-plan_2026-08-23.md` owns the order, the dependencies and the
-exit. #890 carries a duplication that #887 left in `runtime-parity.md`. **Owner:**
+exit. #890 carries a duplication that #887 left in `runtime-parity.md`. #663, item 4's
+owner, stays open for residue that is not Phase 6 work; its 2026-10-01 comment names it.
+**Owner:**
 [#243](https://github.com/topij/agentic-dev-kit/issues/243),
 [#878](https://github.com/topij/agentic-dev-kit/issues/878),
 [#879](https://github.com/topij/agentic-dev-kit/issues/879),
