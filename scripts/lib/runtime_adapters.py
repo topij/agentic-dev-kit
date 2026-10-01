@@ -38,88 +38,21 @@ _ARGUMENT_HINTS = {
     "triage-friction-log": "[resume|new|recover|test]",
 }
 
-_CURRENT_CONTEXTS = {
-    "claude": {
-        "adopt": """Treat `$ARGUMENTS` as additional adoption context (for example, a target repo path or
-constraints on what may be installed). Resolve all configured paths from the repository
-root and `config/dev-model.yaml`.""",
-        "parallel": """Treat `$ARGUMENTS` as the requested parallel-development action and arguments.
-Resolve the engine path from the repository root.""",
-        "post-merge-systemize": """Treat `$ARGUMENTS` as entry-point keywords. Resolve configured paths from the repository
-root and merged configuration defined by the shared workflow. This runtime's
-repository-instruction layer is `CLAUDE.md` and `.claude/rules/`. Translate the
-configured analysis tier only when the current launcher exposes that control; otherwise
-treat it as guidance and do not claim that the model or effort changed.""",
-        "pr-watch": """Treat `$ARGUMENTS` as the optional PR number or additional watch context. Resolve
-the engine path from the repository root.
+RUNTIMES = ("claude", "codex")
 
-When the fallback review panel runs here, launch each lens as the agent named after
-it (`.claude/agents/<lens>.md`, rendered from `review.fallback_panel.lens_compute.claude`
-by `<engine-dir>/panel_prompt.py --lens <lens> --agent-definition`): its frontmatter is what
-applies the configured `model` and `effort`, since the delegation tool itself has no
-effort parameter. A definition added after this session started was not launchable in
-the turn it was written and appeared in the roster later; count on it from the next
-session.""",
-        "session-start": """Treat `$ARGUMENTS` as additional session context. Resolve all configured paths from
-the repository root and merged configuration defined by the shared workflow.""",
-        "triage-friction-log": """Treat `$ARGUMENTS` as the entry point. Resolve configured paths from the repository root
-and merged configuration defined by the shared workflow; translate only runtime-native
-invocation and available mechanisms.""",
-        "upgrade": """**Its Step 0 clones the kit. Re-read the workflow from that clone before Step 2, and
-follow the clone's copy for the rest of the run.** The workflow's own early steps execute
-from whatever copy is on disk here, and it is replaced only in Step 4 — so an installed
-copy that is behind the kit drives the entire upgrade before anything refreshes it, and
-the paragraph telling you to check for that is inside the copy you do not have yet. That
-is why the instruction is here instead: this adapter is the one surface read before any
-of it. A workflow doc is kit-owned, so a local edit to it is a kit bug to report rather
-than a patch to carry forward.
+# The workflows each runtime binds, in report order.
+WORKFLOW_SLUGS = tuple(_DISPLAY_NAMES)
 
-Treat `$ARGUMENTS` as additional upgrade context. Resolve all configured paths from the
-repository root and `config/dev-model.yaml`.""",
-        "wrap-up": """Treat `$ARGUMENTS` as additional wrap-up context. Resolve all configured paths from
-the repository root and merged configuration defined by the shared workflow.""",
-    },
-    "codex": {
-        "adopt": """Treat the user's request as additional adoption context. Resolve configured paths from
-the repository root and merged configuration when one exists; translate only
-runtime-native invocation and available mechanisms.""",
-        "parallel": """Treat the user's request as the parallel-development action and context. Resolve the
-configured engine path from the repository root; translate only runtime-native lane,
-isolation, and delegation mechanisms.""",
-        "post-merge-systemize": """Treat the user's argument as entry-point keywords. Resolve configured paths from the
-repository root and merged configuration defined by the shared workflow; translate only
-runtime-native invocation and available mechanisms. This runtime's repository-instruction
-layer is `AGENTS.md`. Translate the configured analysis tier only when the current
-launcher exposes that control; otherwise treat it as guidance and do not claim that the
-model or effort changed.""",
-        "pr-watch": """Treat the user's request as the optional PR number or additional watch context. Resolve
-the configured engine path from the repository root.
-
-When the fallback panel runs, use one isolated fresh-context reviewer per configured
-lens. Carry `review.fallback_panel.lens_compute.codex` on the `codex exec` argv as
-`-c model_reasoning_effort=<effort>` and, when configured, `-m <model>`; read the
-applied values back from the rollout. Translate only runtime-native reviewer isolation
-and available mechanisms, and never treat an unavailable reviewer as a waiver.""",
-        "session-start": """Treat the user's request as additional session context. Resolve all configured paths
-from the repository root and merged configuration defined by the shared workflow;
-translate only runtime-native invocation and available mechanisms.""",
-        "triage-friction-log": """Treat the user's argument as the entry point. Resolve configured paths from the
-repository root and merged configuration defined by the shared workflow; translate only
-runtime-native invocation and available mechanisms.""",
-        "upgrade": """The workflow's Step 0 clones the kit. Re-read the workflow from that clone before
-Step 2, and follow the clone's copy for the rest of the run. Its early steps execute from
-whatever copy is installed in the adopter and it is replaced only in Step 4, so this
-bootstrap instruction must remain in the adapter that is read first. A local edit to the
-shared workflow is a kit bug to report rather than a patch to carry forward.
-
-Treat the user's request as additional upgrade context. Resolve configured paths from
-the repository root and merged configuration; translate only runtime-native invocation
-and available mechanisms.""",
-        "wrap-up": """Treat the current conversation and repository diff as session context. Resolve all
-configured paths from the repository root and merged configuration defined by the
-shared workflow; translate only runtime-native invocation and available mechanisms.""",
-    },
-}
+# Each binding's runtime-specific text is authored as Markdown, one file per
+# runtime and workflow, at `adapter_templates/<runtime>/<slug>.md` beside this
+# module. The frame around it stays below: the front matter, the Codex heading,
+# and the line that sends the reader to the shared workflow.
+#
+# Resolved from this file rather than from a repository root, so the templates
+# travel with the module into a vendored engines directory. A root lookup would
+# need the depth arithmetic `kitconfig.repo_root` documents as wrong for the
+# `scripts/devkit/lib/` layout once no `.git` is found (#60).
+TEMPLATE_ROOT = Path(__file__).resolve().parent / "adapter_templates"
 
 # The Codex bindings below were the shipped form immediately before the shared
 # renderer.  Keep this one historical generation executable: an adopter that
@@ -234,6 +167,27 @@ def _frontmatter(text: str) -> dict[str, str]:
     return fields
 
 
+def _context(runtime: str, slug: str) -> str:
+    """Read one binding's runtime-specific text from its template."""
+
+    path = TEMPLATE_ROOT / runtime / f"{slug}.md"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise ValueError(f"cannot read adapter template {path}: {exc}") from exc
+    # The file ends with one newline, as a text file does, and the frame supplies
+    # the adapter's own, so exactly one is dropped. A blank or whitespace-only
+    # line at either end would change the rendered bytes without changing a word,
+    # so it is refused rather than normalised.
+    lines = text[:-1].split("\n") if text.endswith("\n") else []
+    if not lines or not lines[0].strip() or not lines[-1].strip():
+        raise ValueError(
+            f"adapter template {path} must start and end with a line of text, "
+            "followed by one newline"
+        )
+    return text[:-1]
+
+
 def render_adapter(
     runtime: str,
     slug: str,
@@ -244,9 +198,9 @@ def render_adapter(
 ) -> str:
     """Render one complete adapter from its declared inputs."""
 
-    if runtime not in _CURRENT_CONTEXTS:
+    if runtime not in RUNTIMES:
         raise ValueError(f"unsupported runtime: {runtime}")
-    if slug not in _CURRENT_CONTEXTS[runtime]:
+    if slug not in WORKFLOW_SLUGS:
         raise ValueError(f"unsupported workflow slug for {runtime}: {slug}")
     expected_path = f"docs/agentic-dev-kit/workflows/{slug}.md"
     if workflow_path != expected_path:
@@ -274,7 +228,7 @@ def render_adapter(
         body = _LEGACY_CODEX_BODIES[slug].format(workflow_path=workflow_path)
     elif template_version == CURRENT_TEMPLATE_VERSION:
         heading = f"# {_DISPLAY_NAMES[slug]}\n\n" if runtime == "codex" else ""
-        context = _CURRENT_CONTEXTS[runtime][slug]
+        context = _context(runtime, slug)
         body = (
             f"{heading}Read `{workflow_path}` completely and follow it.\n\n"
             f"{context}\n"
@@ -283,7 +237,7 @@ def render_adapter(
         # Every unlisted binding kept the same rendered body across the template
         # transition, so the current renderer is also its historical renderer.
         heading = f"# {_DISPLAY_NAMES[slug]}\n\n" if runtime == "codex" else ""
-        context = _CURRENT_CONTEXTS[runtime][slug]
+        context = _context(runtime, slug)
         body = (
             f"{heading}Read `{workflow_path}` completely and follow it.\n\n"
             f"{context}\n"
@@ -327,8 +281,8 @@ def compare_adapters(source_root: Path, adopter_root: Path) -> list[AdapterStatu
     """Compare an adopter against adapters rendered from a source kit checkout."""
 
     statuses: list[AdapterStatus] = []
-    for runtime, contexts in _CURRENT_CONTEXTS.items():
-        for slug in contexts:
+    for runtime in RUNTIMES:
+        for slug in WORKFLOW_SLUGS:
             rel = _adapter_path(runtime, slug)
             source_path = source_root / rel
             try:
