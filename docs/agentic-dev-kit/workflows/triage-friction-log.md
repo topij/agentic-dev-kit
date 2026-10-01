@@ -220,16 +220,22 @@ stopped. In live mode:
 - **Between the rename's link and its unlink.** The state path and the retired name are
   one inode, and every read refuses a state with a second link (`unsafe artifact at held
   parent`), `recover` included. No engine route clears it, so the operator does, by hand:
-  - First confirm that the state path and `<state path>.completed-<digest>` are the same
-    inode, and that each shows a link count of 2.
-  - Then remove the `.completed-<digest>` name, and only that name, never the state path.
+  - First confirm that the gate's owner has exited: no process with the gate record's
+    `process_id` is running on its `host`.
+  - Then confirm that the state path and the retired name,
+    `<state path>.completed-<first 16 hex of completed_receipt_digest>`, are the same
+    inode, and that each shows a link count of 2. A file an earlier run retired shows a
+    link count of 1 and is not this name.
+  - Then remove the retired name, and only that name, never the state path.
 
-  This deletes no bytes: the same bytes stay at the state path. It is not the manual
-  deletion *Invalid-state recovery* forbids, because `new` still waits for an approved
-  `recover`. The run is now in the first case above. Interactive `recover` releases the
-  old gate, and the next session-starting entry retires the state again.
+  This is an operator action outside the workflow, which itself never deletes a retained
+  file, and it deletes no bytes: the same bytes stay at the state path. It is not the
+  manual deletion *Invalid-state recovery* forbids, because `new` still waits for an
+  approved `recover`. The run is now in the first case above. Interactive `recover`
+  releases the old gate, and the next session-starting entry retires the state again.
   `test_a_kill_during_completed_state_retirement_holds_rather_than_starting_fresh[after-link]`
-  performs exactly this sequence.
+  pins that outcome: once it removes the retired name, `recover` releases the gate and
+  `new` retires the state again.
 - **After the unlink, before the claim.** The state path is absent and only the retired
   file remains. Interactive `recover` takes the gate-only route, which ends in the
   terminal `gate-only-operator-held` receipt, not in a fresh start.
