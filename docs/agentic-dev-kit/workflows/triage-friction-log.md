@@ -219,8 +219,26 @@ stopped. In live mode:
   session-starting entry retires the state again.
 - **Between the rename's link and its unlink.** The state path and the retired name are
   one inode, and every read refuses a state with a second link (`unsafe artifact at held
-  parent`), `recover` included. No engine route clears it: it stays operator-held for
-  the operator to resolve outside this workflow.
+  parent`), `recover` included. No engine route clears it, so the operator does, by hand:
+  - First confirm that the gate's owner has exited. The gate record is the file at
+    `triage.gate_path` with `{mode}` resolved to `live`; no process with its
+    `process_id` may be running on its `host`. If that id now belongs to another
+    process, neither this check nor `recover` can prove the owner dead until that
+    process exits too, and the run stays held until then.
+  - Then confirm that the state path and the retired name,
+    `<state path>.completed-<first 16 hex of completed_receipt_digest>`, are the same
+    inode, and that each shows a link count of 2. A file an earlier run retired carries
+    another digest in its name and shows a link count of 1.
+  - Then remove the retired name, and only that name, never the state path.
+
+  This is an operator action outside the workflow, which itself never deletes a retained
+  file, and it deletes no bytes: the same bytes stay at the state path. It is not the
+  manual deletion *Invalid-state recovery* forbids, because `new` still waits for an
+  approved `recover`. The run is now in the first case above. Interactive `recover`
+  releases the old gate, and the next session-starting entry retires the state again.
+  `test_a_kill_during_completed_state_retirement_holds_rather_than_starting_fresh[after-link]`
+  pins that outcome: once it removes the retired name, `recover` releases the gate and
+  `new` retires the state again.
 - **After the unlink, before the claim.** The state path is absent and only the retired
   file remains. Interactive `recover` takes the gate-only route, which ends in the
   terminal `gate-only-operator-held` receipt, not in a fresh start.
