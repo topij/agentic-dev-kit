@@ -2153,6 +2153,8 @@ def _adapter_rel(slug: str, runtime: str) -> str:
 
 
 def _assert_pinned_adapter(adapter: str, slug: str, runtime: str) -> None:
+    # Whitespace is flattened on both sides, so this pins the words. The line
+    # breaks are pinned by the renderer's equality with the shipped files.
     heading = f"# {_PINNED_CODEX_HEADINGS[slug]} " if runtime == "codex" else ""
     shared_path = f"docs/agentic-dev-kit/workflows/{slug}.md"
     expected = " ".join(
@@ -2172,7 +2174,7 @@ def _assert_pinned_adapter(adapter: str, slug: str, runtime: str) -> None:
     ".agents/skills/upgrade",
     ".agents/skills/pr-watch",
 )
-def test_adopt_upgrade_and_pr_watch_adapters_are_pinned_exactly() -> None:
+def test_adopt_upgrade_and_pr_watch_adapter_bodies_are_pinned_word_for_word() -> None:
     require_kit_source()
     for slug, runtime in _PINNED_ADAPTER_CONTEXTS:
         adapter = (REPO_ROOT / _adapter_rel(slug, runtime)).read_text(encoding="utf-8")

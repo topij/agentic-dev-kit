@@ -450,10 +450,15 @@ def test_shipped_runtime_adapters_equal_the_renderer_for_both_runtimes():
     }
 
 
-def test_adapter_templates_are_one_per_binding_and_manifest_tracked():
-    require_kit_source()
+def _require_adapter_templates() -> None:
+    """Skip, naming the path, where the templates were not installed with the renderer."""
     templates = ENGINE_DIR / "lib" / "adapter_templates"
     conftest.require_kit_paths(templates.relative_to(REPO_ROOT).as_posix())
+
+
+def test_adapter_templates_are_one_per_binding_and_manifest_tracked():
+    require_kit_source()
+    _require_adapter_templates()
     expected = {
         f"{runtime}/{slug}.md"
         for runtime in runtime_adapters.RUNTIMES
@@ -469,14 +474,22 @@ def test_adapter_templates_are_one_per_binding_and_manifest_tracked():
         for path, role in kit_doctor.KIT_OWNED
         if path.startswith(prefix)
     }
+    manifest = json.loads((REPO_ROOT / "kit-manifest.json").read_text(encoding="utf-8"))
+    shipped = {
+        path[len(prefix) :]: entry["role"]
+        for path, entry in manifest["files"].items()
+        if path.startswith(prefix)
+    }
 
     # A misnamed or extra file would otherwise be read by nothing and reported
     # by nothing, and a new binding without an entry would not ship.
     assert on_disk == expected
     assert tracked == dict.fromkeys(expected, "template")
+    assert shipped == tracked
 
 
 def test_renderer_reads_the_templates_beside_itself_in_a_vendored_layout(tmp_path):
+    _require_adapter_templates()
     library = tmp_path / "adopter" / "scripts" / "devkit" / "lib"
     library.mkdir(parents=True)
     shutil.copy2(ENGINE_DIR / "lib" / "runtime_adapters.py", library / "runtime_adapters.py")
@@ -509,10 +522,33 @@ def test_renderer_reads_the_templates_beside_itself_in_a_vendored_layout(tmp_pat
 
 @pytest.mark.parametrize(
     "content",
-    [None, "", "\n", "\nLeading blank line.\n", "Trailing blank line.\n\n", "No newline.", b"\xff"],
-    ids=["absent", "empty", "blank", "leading-blank", "trailing-blank", "unterminated", "not-utf8"],
+    [
+        None,
+        "",
+        "\n",
+        "   \n",
+        "\nLeading blank line.\n",
+        "  \nLeading whitespace-only line.\n",
+        "Trailing blank line.\n\n",
+        "Trailing whitespace-only line.\n  \n",
+        "No newline.",
+        b"\xff",
+    ],
+    ids=[
+        "absent",
+        "empty",
+        "blank",
+        "whitespace-only",
+        "leading-blank",
+        "leading-whitespace-only",
+        "trailing-blank",
+        "trailing-whitespace-only",
+        "unterminated",
+        "not-utf8",
+    ],
 )
 def test_a_malformed_adapter_template_is_refused_with_its_path(tmp_path, monkeypatch, content):
+    _require_adapter_templates()
     templates = tmp_path / "adapter_templates"
     shutil.copytree(runtime_adapters.TEMPLATE_ROOT, templates)
     target = templates / "claude" / "adopt.md"

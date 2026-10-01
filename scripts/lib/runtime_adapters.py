@@ -176,12 +176,14 @@ def _context(runtime: str, slug: str) -> str:
     except (OSError, UnicodeError) as exc:
         raise ValueError(f"cannot read adapter template {path}: {exc}") from exc
     # The file ends with one newline, as a text file does, and the frame supplies
-    # the adapter's own, so exactly one is dropped. A blank line at either end
-    # would change the rendered bytes without changing a word, so it is refused
-    # rather than normalised.
-    if not text.strip() or text.startswith("\n") or not text.endswith("\n") or text.endswith("\n\n"):
+    # the adapter's own, so exactly one is dropped. A blank or whitespace-only
+    # line at either end would change the rendered bytes without changing a word,
+    # so it is refused rather than normalised.
+    lines = text[:-1].split("\n") if text.endswith("\n") else []
+    if not lines or not lines[0].strip() or not lines[-1].strip():
         raise ValueError(
-            f"adapter template {path} must start with text and end with exactly one newline"
+            f"adapter template {path} must start and end with a line of text, "
+            "followed by one newline"
         )
     return text[:-1]
 
