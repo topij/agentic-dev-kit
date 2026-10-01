@@ -23,7 +23,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _repo_layout import engine_dir, find_repo_root  # noqa: E402
 
-# Every test here walks a retained evidence bundle; `make test-fast` skips them (#875).
+# Every test here builds or walks an evidence bundle; `make test-fast` skips the
+# whole module (#875).
 pytestmark = pytest.mark.evidence
 
 ENGINE = engine_dir(Path(__file__).resolve()) / "verify_live_validation_bundle.py"

@@ -72,10 +72,9 @@
 # only that the targets stay equal to EACH OTHER (see the invariant described
 # under `mutation-test` below; `test-fast` is pinned to `test` the same way).
 # Drop `lint check-syntax` from every target's prerequisite line at once and the
-# full local suite still reports
-# 896 passed; nothing notices. CI does not help here either — `test.yml`
-# never invokes `make`, so its steps are independent of whatever this
-# Makefile says. Verified by two independent review lenses (fallback panel,
+# full local suite still passes; nothing notices. CI does not help here either
+# — `test.yml` never invokes `make`, so its steps are independent of whatever
+# this Makefile says. Verified by two independent review lenses (fallback panel,
 # PR #315) via that exact mutation. Closing it needs a test that reads
 # `make -n test` / `make -n mutation-test` output for the CI-parity commands
 # themselves, not just their relation to each other — out of scope here
@@ -147,9 +146,9 @@ test: lint check-syntax
 	uv run --with pytest --with pyyaml python -m pytest scripts/lib/state_paths/tests scripts/tests -q
 
 # An inner-loop convenience, never a verification claim: the same lint and
-# check-syntax, then the suite without the `evidence`-marked tests (the
-# bundle walkers and the tree-copying tests #875 picked). `make test` stays
-# the verification command (#875).
+# check-syntax, then the suite without the `evidence`-marked tests (all of
+# test_live_validation_bundle.py, and the tree-copying tests #875 picked).
+# `make test` stays the verification command (#875).
 # `test_mutation_gate.py::test_the_fast_target_is_make_test_minus_the_evidence_tests`
 # pins this recipe, by executing `make -n`, as exactly `make test` plus
 # `-m 'not evidence'`.

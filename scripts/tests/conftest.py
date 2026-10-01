@@ -343,7 +343,8 @@ def pytest_configure(config) -> None:
     )
     config.addinivalue_line(
         "markers",
-        "evidence: walks a retained evidence bundle, or copies a tree in one of "
+        "evidence: in test_live_validation_bundle.py, which builds or walks "
+        "evidence bundles, or copies a tree in one of "
         "the files #875 picked by per-test time (test_finalize_triage.py, "
         "test_kit_doctor.py, test_lane_launcher.py, test_portability.py); a "
         "tree copy elsewhere stays unmarked. `make test-fast` deselects these "
