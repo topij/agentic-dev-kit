@@ -466,7 +466,7 @@
     },
     "scripts/tests/conftest.py": {
       "role": "test",
-      "sha256": "bce151331992814a7fb475a627619fea3adfb5e674698c5748f6e9048f55f2f5"
+      "sha256": "a069238165b393c6f6dda842f2461a36965e4da539640993da6a5ce6e009c3d5"
     },
     "scripts/tests/fixtures/codex_parallel_batch_expected.json": {
       "role": "repo-only",
@@ -530,7 +530,7 @@
     },
     "scripts/tests/test_mutation_gate.py": {
       "role": "test",
-      "sha256": "72914ad18b3622faa05a8e5c03035ba1040e7477aeca2cf8f9742aecd2bbf334"
+      "sha256": "162c16e7ef14198598ccd29f819f06a96caaec54f9cfd2b16ec1fac7359e459d"
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",

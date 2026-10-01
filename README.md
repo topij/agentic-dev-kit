@@ -455,6 +455,7 @@ Run the suite after modifying the engines:
 
 ```sh
 make test          # the whole suite; supplies pytest + pyyaml itself via uv
+make test-fast     # same, minus the `evidence`-marked tests — inner loop only, never a verification claim
 make mutation-test # same, minus the drift self-check — use this when mutating files
 ```
 

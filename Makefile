@@ -1,6 +1,7 @@
-# Makefile — thin entry points: `make install-hooks`, `make test`, `make mutation-test`.
-# `check-syntax` and `lint` are the CI-parity gates `test` and `mutation-test`
-# compose from; call them directly to run just one gate.
+# Makefile — thin entry points: `make install-hooks`, `make test`, `make test-fast`,
+# `make mutation-test`. `check-syntax` and `lint` are the CI-parity gates `test`,
+# `test-fast` and `mutation-test` compose from; call them directly to run just one
+# gate.
 #
 # install-hooks
 # -------------
@@ -68,9 +69,10 @@
 #
 # KNOWN GAP, not closed by this change: nothing in this repo's own test suite
 # pins that `test`/`mutation-test` actually DEPEND on `lint`+`check-syntax` —
-# only that the two targets stay equal to EACH OTHER (see the invariant
-# described under `mutation-test` below). Drop `lint check-syntax` from both
-# targets' prerequisite lines at once and the full local suite still reports
+# only that the targets stay equal to EACH OTHER (see the invariant described
+# under `mutation-test` below; `test-fast` is pinned to `test` the same way).
+# Drop `lint check-syntax` from every target's prerequisite line at once and the
+# full local suite still reports
 # 896 passed; nothing notices. CI does not help here either — `test.yml`
 # never invokes `make`, so its steps are independent of whatever this
 # Makefile says. Verified by two independent review lenses (fallback panel,
@@ -146,8 +148,11 @@ test: lint check-syntax
 
 # An inner-loop convenience, never a verification claim: the same lint and
 # check-syntax, then the suite without the `evidence`-marked tests (the
-# bundle walkers and the copytree fixtures). `make test` stays the
-# verification command (#875).
+# bundle walkers and the tree-copying tests #875 picked). `make test` stays
+# the verification command (#875).
+# `test_mutation_gate.py::test_the_fast_target_is_make_test_minus_the_evidence_tests`
+# pins this recipe, by executing `make -n`, as exactly `make test` plus
+# `-m 'not evidence'`.
 test-fast: lint check-syntax
 	uv run --with pytest --with pyyaml python -m pytest scripts/lib/state_paths/tests scripts/tests -q -m 'not evidence'
 

@@ -343,10 +343,12 @@ def pytest_configure(config) -> None:
     )
     config.addinivalue_line(
         "markers",
-        "evidence: walks a retained evidence bundle or copies a fixture tree. "
-        "`make test-fast` deselects these (`-m 'not evidence'`) for a quicker "
-        "inner loop; `make test` runs them and stays the verification command "
-        "(#875).",
+        "evidence: walks a retained evidence bundle, or copies a tree in one of "
+        "the files #875 picked by per-test time (test_finalize_triage.py, "
+        "test_kit_doctor.py, test_lane_launcher.py, test_portability.py); a "
+        "tree copy elsewhere stays unmarked. `make test-fast` deselects these "
+        "(`-m 'not evidence'`) for a quicker inner loop; `make test` runs them "
+        "and stays the verification command (#875).",
     )
     config.addinivalue_line(
         "markers",

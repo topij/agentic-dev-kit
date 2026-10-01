@@ -24,8 +24,11 @@ for the run you actually did.
 
 **`make test-fast` is not a verification command.** It runs the same `lint` and
 `check-syntax`, then the suite without the `evidence`-marked tests (the bundle walkers
-and the copytree fixtures). Use it in the inner loop; a verification claim still names
-`make test` and its result.
+and the tree-copying tests #875 picked). Use it in the inner loop; a verification claim
+still names `make test` and its result. The skipped tests include guards on the
+safety-critical paths, among them the lane launcher's authority checks and the
+self-merge refusals, so a change to one of those paths runs `make test` even in the
+inner loop.
 
 The probes an agent reaches for first fail here in a way that reads as "pytest is
 unavailable in this environment". None of them is evidence of that:

@@ -31,7 +31,9 @@ paragraph gave a shorter one and a review caught it:**
 - **The workflow file**, whose contents nothing here checks.
 - **The `Makefile` beyond the two assertions named above** — those cover the
   exclusion being dropped, mistyped, moved onto `test:`, or the two targets
-  diverging; they do not cover every possible edit.
+  diverging; they do not cover every possible edit. `make test-fast` is tied to
+  `make test` by one more `make -n` assertion of the same shape, which lives
+  here because the helper does (#875).
 
 All of these are deliberate edits rather than drift, and a repo-level gate
 (CI's separate `kit_doctor` step) still catches a stale manifest regardless.
@@ -76,6 +78,7 @@ SUITES = (f"{_ENGINE_REL}/lib/state_paths/tests", f"{_ENGINE_REL}/tests")
 DRIFTCHECK_NODE = f"{_ENGINE_REL}/tests/test_kit_doctor.py::test_kit_repo_self_check_is_clean"
 
 MUTATION_INVOCATION = "-m 'not driftcheck'"
+FAST_INVOCATION = "-m 'not evidence'"
 
 
 def _pytest(*args: str) -> subprocess.CompletedProcess[str]:
@@ -333,6 +336,29 @@ def test_the_mutation_target_actually_excludes_the_drift_check():
         )
 
 
+def test_the_fast_target_is_make_test_minus_the_evidence_tests():
+    """`make test-fast` must be exactly `make test` plus `-m 'not evidence'`.
+
+    `AGENTS.md` says it runs the same `lint` and `check-syntax`, then the suite
+    without the `evidence`-marked tests (#875). `make -n` prints the gates'
+    commands as well as the suite's, so a recipe that drops a gate `test` has,
+    swaps the suite list, or loses the marker expression stops matching. Like
+    the mutation-target pin above, it ties the target to `make test` and does
+    not pin that `make test` itself keeps the gates (the Makefile's KNOWN GAP).
+    """
+    fast_cmd = _make_would_run("test-fast")
+    if fast_cmd is None:
+        pytest.skip("no `test-fast` target here (or no make); nothing to pin")
+    test_cmd = _make_would_run("test")
+    if test_cmd is None:
+        pytest.skip("no `test` target here (or no make); nothing to compare against")
+    assert fast_cmd == f"{test_cmd} {FAST_INVOCATION}", (
+        "`make test-fast` must be exactly `make test` plus "
+        f"{FAST_INVOCATION}, so it cannot quietly skip a gate or cover a "
+        f"different suite.\n  test:      {test_cmd}\n  test-fast: {fast_cmd}"
+    )
+
+
 def test_the_marker_is_registered_somewhere_pytest_can_see_it():
     """An unregistered mark still matches under `-m`; it just warns on the one
     command a reviewer is told to trust, which is how the command gets dropped
@@ -346,10 +372,14 @@ def test_the_marker_is_registered_somewhere_pytest_can_see_it():
     reason the conftest exists) and it is not pinned here. The conftest's
     presence is asserted separately below, which is weaker than causation and is
     all this can honestly offer.
+
+    `evidence` is checked the same way, because `make test-fast` deselects by it
+    (#875).
     """
     proc = _pytest(*SUITES, "--markers")
     assert proc.returncode == 0, f"`pytest --markers` failed:\n{proc.stdout}\n{proc.stderr}"
     assert "driftcheck" in proc.stdout, "`driftcheck` is not registered with pytest"
+    assert "@pytest.mark.evidence:" in proc.stdout, "`evidence` is not registered with pytest"
     assert (ENGINE_DIR / "tests" / "conftest.py").is_file(), (
         "the registration should live in a conftest beside the tests so it moves "
         "with them when they are vendored"
