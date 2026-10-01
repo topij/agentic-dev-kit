@@ -450,6 +450,109 @@ def test_shipped_runtime_adapters_equal_the_renderer_for_both_runtimes():
     }
 
 
+def test_adapter_templates_are_one_per_binding_and_manifest_tracked():
+    require_kit_source()
+    templates = ENGINE_DIR / "lib" / "adapter_templates"
+    conftest.require_kit_paths(templates.relative_to(REPO_ROOT).as_posix())
+    expected = {
+        f"{runtime}/{slug}.md"
+        for runtime in runtime_adapters.RUNTIMES
+        for slug in runtime_adapters.WORKFLOW_SLUGS
+    }
+    on_disk = {
+        path.relative_to(runtime_adapters.TEMPLATE_ROOT).as_posix()
+        for path in runtime_adapters.TEMPLATE_ROOT.rglob("*.md")
+    }
+    prefix = "scripts/lib/adapter_templates/"
+    tracked = {
+        path[len(prefix) :]: role
+        for path, role in kit_doctor.KIT_OWNED
+        if path.startswith(prefix)
+    }
+
+    # A misnamed or extra file would otherwise be read by nothing and reported
+    # by nothing, and a new binding without an entry would not ship.
+    assert on_disk == expected
+    assert tracked == dict.fromkeys(expected, "template")
+
+
+def test_renderer_reads_the_templates_beside_itself_in_a_vendored_layout(tmp_path):
+    library = tmp_path / "adopter" / "scripts" / "devkit" / "lib"
+    library.mkdir(parents=True)
+    shutil.copy2(ENGINE_DIR / "lib" / "runtime_adapters.py", library / "runtime_adapters.py")
+    shutil.copytree(runtime_adapters.TEMPLATE_ROOT, library / "adapter_templates")
+    (library / "adapter_templates" / "codex" / "wrap-up.md").write_text(
+        "Vendored probe context.\n", encoding="utf-8"
+    )
+    script = (
+        "import sys; sys.path.insert(0, sys.argv[1]); import runtime_adapters; "
+        "print(runtime_adapters.render_adapter('codex', 'wrap-up', 'Probe.', "
+        "'docs/agentic-dev-kit/workflows/wrap-up.md'), end='')"
+    )
+
+    # No `.git` above the tree, and the kit's own copy of this template says
+    # something else, so only a read beside the vendored module renders this.
+    result = subprocess.run(
+        [sys.executable, "-c", script, str(library)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.endswith(
+        "Read `docs/agentic-dev-kit/workflows/wrap-up.md` completely and follow it.\n\n"
+        "Vendored probe context.\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "content",
+    [None, "", "\n", "\nLeading blank line.\n", "Trailing blank line.\n\n", "No newline.", b"\xff"],
+    ids=["absent", "empty", "blank", "leading-blank", "trailing-blank", "unterminated", "not-utf8"],
+)
+def test_a_malformed_adapter_template_is_refused_with_its_path(tmp_path, monkeypatch, content):
+    templates = tmp_path / "adapter_templates"
+    shutil.copytree(runtime_adapters.TEMPLATE_ROOT, templates)
+    target = templates / "claude" / "adopt.md"
+    if content is None:
+        target.unlink()
+    elif isinstance(content, bytes):
+        target.write_bytes(content)
+    else:
+        target.write_text(content, encoding="utf-8")
+    monkeypatch.setattr(runtime_adapters, "TEMPLATE_ROOT", templates)
+
+    with pytest.raises(ValueError) as raised:
+        runtime_adapters.render_adapter(
+            "claude", "adopt", "Probe.", "docs/agentic-dev-kit/workflows/adopt.md"
+        )
+
+    assert str(target) in str(raised.value)
+
+
+def test_adapter_report_reports_a_missing_template_as_an_error(
+    tmp_path, monkeypatch, capsys, adapter_source
+):
+    monkeypatch.setattr(runtime_adapters, "TEMPLATE_ROOT", tmp_path / "absent")
+
+    code = kit_doctor.main(
+        [
+            "--root",
+            str(tmp_path / "adopter"),
+            "--adapter-report",
+            "--adapter-source",
+            str(adapter_source),
+        ]
+    )
+
+    assert code == 2
+    err = capsys.readouterr().err
+    assert "cannot read adapter template" in err
+    assert "Traceback" not in err
+
+
 @pytest.mark.parametrize("slug", ["adopt", "parallel", "pr-watch", "upgrade"])
 def test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned(
     tmp_path, slug, adapter_source

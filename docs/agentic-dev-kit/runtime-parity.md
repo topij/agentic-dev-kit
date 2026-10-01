@@ -246,7 +246,9 @@ the matrix moves to `aligned`.
 
 1. Update the front-matter declaration and the implementation together.
 2. Keep user-facing behavior in the shared workflow; keep only invocation and
-   runtime-capability translation in the adapter.
+   runtime-capability translation in the adapter. Write an adapter's text in its
+   template, `scripts/lib/adapter_templates/<runtime>/<slug>.md`, and ship the adapter
+   as `scripts/lib/runtime_adapters.py` renders it.
 3. Update the capability row when a gap is opened, narrowed, or closed.
 4. Add deterministic structural coverage, then add a live runtime check when the claim
    depends on client behavior rather than repository files.

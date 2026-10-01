@@ -42,6 +42,10 @@ starts.
 
 ---
 
+## #902 — Runtime adapter text moves into Markdown templates beside the renderer
+
+CHANGED — return shape: Refresh `lib/runtime_adapters.py` in your engine directory together with the new `lib/adapter_templates/` directory beside it, and refresh `kit-manifest.json`, `scripts/tests/conftest.py`, `scripts/tests/test_kit_repo_only.py`, `scripts/tests/test_kit_doctor.py` and `scripts/tests/test_portability.py`. The renderer reads each adapter's runtime-specific text from `lib/adapter_templates/<runtime>/<slug>.md` beside itself. `_CURRENT_CONTEXTS` is gone; iterate `RUNTIMES` and `WORKFLOW_SLUGS` instead. A renderer installed without its templates raises `ValueError` naming the missing template, so `kit_doctor.py --adapter-report` exits 2, and an older `scripts/tests/conftest.py` fails on the missing `_CURRENT_CONTEXTS`. The rendered adapters are byte-identical, so nothing under `.claude/commands/` or `.agents/skills/` changes.
+
 ## #897 — `session-start` reads open pull requests through `pr_watch.py`, and a REST poll reads each check surface once
 
 ADDED — engine CLI surface: Refresh `pr_watch.py` in your engine directory, `docs/agentic-dev-kit/workflows/session-start.md`, `docs/agentic-dev-kit/workflows/pr-watch.md`, `kit-manifest.json`, `scripts/tests/test_pr_watch.py` and `scripts/tests/test_portability.py`. `pr_watch.py` takes a new `--all-comments` flag, valid only with `--json` on a plain poll. It adds `all_comments` to the report: every issue comment, review submission and inline review comment the poll read, each as `{kind, author, path, line, state, body}`, unfiltered by the pull request's seen state, the noise markers or an empty body. `session-start` now reads each open pull request with `pr_watch.py <PR#> --json --no-persist --all-comments` instead of three `gh api` calls, so refresh `pr_watch.py` no later than the workflow.

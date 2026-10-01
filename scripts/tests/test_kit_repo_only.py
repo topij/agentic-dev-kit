@@ -75,7 +75,11 @@ def test_generated_adapter_fixture_declares_its_renderer_dependency(tmp_path, in
         from conftest import require_kit_paths
 
         renderer_path = ENGINE_DIR / "lib/runtime_adapters.py"
-        require_kit_paths(renderer_path.relative_to(REPO_ROOT).as_posix())
+        templates_path = ENGINE_DIR / "lib/adapter_templates"
+        require_kit_paths(
+            renderer_path.relative_to(REPO_ROOT).as_posix(),
+            templates_path.relative_to(REPO_ROOT).as_posix(),
+        )
     root = _tree(tmp_path, """
 from conftest import generated_adapter_source
 
@@ -88,11 +92,13 @@ def test_probe(tmp_path):
         library = root / "scripts/devkit/lib"
         library.mkdir()
         shutil.copy2(ENGINE_DIR / "lib/runtime_adapters.py", library / "runtime_adapters.py")
+        shutil.copytree(ENGINE_DIR / "lib/adapter_templates", library / "adapter_templates")
     out = _run(root)
     assert out.returncode == 0, out.stdout + out.stderr
     assert ("1 passed" if installed else "1 skipped") in out.stdout, out.stdout
     if not installed:
         assert "scripts/devkit/lib/runtime_adapters.py" in out.stdout, out.stdout
+        assert "scripts/devkit/lib/adapter_templates" in out.stdout, out.stdout
 
 
 @pytest.mark.parametrize("renderer_present", [False, True])
@@ -105,8 +111,11 @@ def test_renderer_dependency_probe_obeys_the_declared_installation(tmp_path, ren
         library.mkdir()
         # The probe checks dependency availability; its enclosing installation
         # supplies a stand-in so this regression test needs no vendored renderer.
+        # The stand-in reads no template, so an empty directory declares them.
+        (library / "adapter_templates").mkdir()
         (library / "runtime_adapters.py").write_text(
-            '_CURRENT_CONTEXTS = {"codex": {"wrap-up": ""}}\n'
+            'RUNTIMES = ("codex",)\n'
+            'WORKFLOW_SLUGS = ("wrap-up",)\n'
             'def _adapter_path(runtime, slug):\n'
             '    return f".agents/skills/{slug}/SKILL.md"\n'
             'def render_adapter(runtime, slug, description, shared):\n'

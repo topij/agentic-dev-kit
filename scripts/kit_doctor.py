@@ -299,6 +299,28 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/conftest.py", "engine"),
     ("scripts/lib/kitconfig.py", "engine"),
     ("scripts/lib/runtime_adapters.py", "engine"),
+    # The renderer reads each adapter's text from these at run time (#243), so
+    # they install with it. `template` rather than `engine`: an engine-role entry
+    # would be scanned for imports and would join the engines-dir probe names.
+    # The import graph cannot see this read, the class `lib/repo_root.sh` is in
+    # (#228), so a tree with the renderer and without these reports them as
+    # plain `missing`, and rendering refuses with the template's path.
+    ("scripts/lib/adapter_templates/claude/adopt.md", "template"),
+    ("scripts/lib/adapter_templates/claude/parallel.md", "template"),
+    ("scripts/lib/adapter_templates/claude/post-merge-systemize.md", "template"),
+    ("scripts/lib/adapter_templates/claude/pr-watch.md", "template"),
+    ("scripts/lib/adapter_templates/claude/session-start.md", "template"),
+    ("scripts/lib/adapter_templates/claude/triage-friction-log.md", "template"),
+    ("scripts/lib/adapter_templates/claude/upgrade.md", "template"),
+    ("scripts/lib/adapter_templates/claude/wrap-up.md", "template"),
+    ("scripts/lib/adapter_templates/codex/adopt.md", "template"),
+    ("scripts/lib/adapter_templates/codex/parallel.md", "template"),
+    ("scripts/lib/adapter_templates/codex/post-merge-systemize.md", "template"),
+    ("scripts/lib/adapter_templates/codex/pr-watch.md", "template"),
+    ("scripts/lib/adapter_templates/codex/session-start.md", "template"),
+    ("scripts/lib/adapter_templates/codex/triage-friction-log.md", "template"),
+    ("scripts/lib/adapter_templates/codex/upgrade.md", "template"),
+    ("scripts/lib/adapter_templates/codex/wrap-up.md", "template"),
     ("scripts/lib/atomic_write.py", "engine"),
     ("scripts/lib/devmodel_config.py", "engine"),
     ("scripts/lib/repo_root.sh", "engine"),

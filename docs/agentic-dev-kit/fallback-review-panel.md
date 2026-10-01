@@ -132,10 +132,11 @@ other runtime never leaks into this one's instruction.
 `--runtime` and renders the compute into the launch prompt a lens actually receives
 as a `Run at:` line, and with `--agent-definition` it renders the Claude Code agent
 definition `.claude/agents/<lens>.md` whose frontmatter is what applies the compute
-on that runtime. `.agents/skills/pr-watch/SKILL.md` step 5 names `lens_compute.codex`
-as well, `.claude/commands/pr-watch.md` names the agent definitions, `init.sh` seeds
-them, and `kit_doctor.py` tracks the hook partly because of this key. Anything
-changing the key's meaning has to move all of them together.
+on that runtime. `.agents/skills/pr-watch/SKILL.md` names `lens_compute.codex` as
+well and `.claude/commands/pr-watch.md` names the agent definitions, each rendered from
+its template under `scripts/lib/adapter_templates/`; `init.sh` seeds the definitions,
+and `kit_doctor.py` tracks the hook partly because of this key. Anything changing the
+key's meaning has to move all of them together.
 
 Two corrections are recorded here rather than made silently, because the second is
 worse than the first:
