@@ -267,427 +267,62 @@ maintained *Sprint status* and *Delivery plan* sections below.
     author edits is the one the renderer ships; add the appended-instruction mutation
     for `adopt`, `upgrade` and `pr-watch`.
 
-## Sprint status — reconciled 2026-09-10
+<a id="sprint-status--reconciled-2026-09-10"></a>
 
-The machine-readable inventory and current capability judgments live in
-[`runtime-parity.md`](../docs/agentic-dev-kit/runtime-parity.md); this plan supplies
-their delivery order and exit conditions. This maintained status section reconciles
-merged repository state; the stamped pre-implementation baseline below remains the
-historical observation it was and is not silently refreshed.
+## Sprint status
 
-- [x] **Phase 1 — Declare the parity contract.** PR `#588` merged on 2026-08-23 with
-  the maintained capability matrix, shared-workflow inventory, explicit exceptions,
-  and declaration-derived structural checks.
-- [x] **Phase 2 — Correct safety and lifecycle hooks.** PR `#588` removed the
-  Claude-only memory checker from Codex. PR `#590` routed shared safety doctrine and
-  merged on 2026-08-24 with trusted-client hook evidence, canonical installer wiring,
-  and exact-string lifecycle enforcement in `kit_doctor`. The controlled record in
-  [`codex-safety-doctrine-live-validation_2026-08-24.md`](codex-safety-doctrine-live-validation_2026-08-24.md)
-  then established, for the stamped trusted client observation, that Codex supplied
-  the root route and read and applied the shared doctrine for affected merge-authority
-  work. PR `#680` subsequently recorded a scoped interactive-TUI
-  `systemMessage` observation. The non-load-bearing matrix declaration remains;
-  neither client observation establishes a general presentation guarantee.
-- [x] **Phase 3 — Complete workflow and integration coverage.** PR `#595` merged the
-  bounded `post-merge-systemize` extraction with a shared definition, thin runtime
-  bindings, config-owned policy, equivalent durable artifacts, and explicit capability
-  preflights. PR `#596` merged the same structured contract for `session-start` and
-  `wrap-up`. PR `#599` merged the config-owned draft/approve/finalize matrix and the
-  independently observed forge-provenance chain for `triage-friction-log`, closing the
-  remaining structural exit.
-- [x] **Phase 4 — Make delegation and parallel lanes equivalent.** PR `#598` delivered
-  the kit-owned engine boundary; PR `#609` delivered the Codex wrapper, its live record,
-  and the declared Claude gap; PR `#611` generalised the wrapper to Claude
-  (`claude -p`) with a Claude-produced live record and moved the parity row's Claude
-  cell to the observed mechanism; PR `#614` added the config-owned approval policy per
-  runtime and the Claude trust route with a Claude-produced writing-lane record; PR
-  `#620` added the Codex-authored writing-lane record without changing the launcher;
-  PR `#623` calibrated the capability tiers per runtime from live probes and declared
-  every compute key mechanical or advisory per runtime. Delivery order and current
-  disposition:
-  1. Done in PR `#611` (Claude through `claude -p`, config-declared transports, Codex
-     pinned unchanged). The record observed no write or approval transition and found
-     that a fresh lane worktree is an untrusted workspace to Claude — the shape of the
-     next item.
-  2. Done in PR `#614` for Claude: `parallel.<runtime>_approval_policy` and
-     `parallel.claude_settings_profile`, the trust route (`--setting-sources ""` plus
-     the cockpit-owned profile), the structural profile validator, denial read-back,
-     and a writing-lane record — a lane that performed a scoped write and landed a PR
-     through its own `pr-watch`. That slice did not observe the Codex value.
-  3. Done in PR `#620`: the Codex-authored record observed the scoped write, exact
-     per-command approval transitions, network-disabled and network-enabled outcomes,
-     ready pull request, and cockpit `dev_session.sh pr-watch` receipt. It also found
-     that action denials described in final prose do not reach
-     `terminal.permission_denials` through `last-message-file`, and that user config
-     reached the untrusted lanes while project config did not. The raw receipts,
-     rollouts, and captures were removed with the fixture, so the parity cell records
-     the historical observation without promoting it as durable capability evidence;
-     `#621` owns the durable evidence-bundle follow-up.
-  4. Done in PR `#623` (squash `92a3c15`): tiers calibrated from live probes of the
-     pinned clients (Claude Code 2.1.247, codex-cli 0.149.1, 2026-08-27) —
-     `runtime_mappings` advisory on both runtimes with values each client accepted
-     (`claude.expensive: fable`, `codex.expensive: xhigh`); `lens_compute.claude`
-     mechanical through the kit-owned `.claude/agents/<lens>.md` rendered by
-     `panel_prompt.py --agent-definition` (the delegation tool itself has no effort
-     parameter, so a plain subagent stays at the cockpit's effort); `lens_compute.codex`
-     mechanical on the `codex exec` argv and read back from the rollout. The blanket
-     "no per-agent effort" sentence is retired on the surface it was false on and kept
-     on the one it was true on. Design and record:
-     [`capability-tier-calibration-design_2026-08-27.md`](capability-tier-calibration-design_2026-08-27.md),
-     [`capability-tier-calibration-live-validation_2026-08-27.md`](capability-tier-calibration-live-validation_2026-08-27.md).
-     PR `#655` later delivered the adopter-side `kit_doctor` check for stale lens
-     definitions. The already-running doctor owns expected rendering while the
-     existing file report owns installed-engine drift.
-  5. Done, as a fail-closed run: the first real headless task on the generalised
-     launcher (no tracker item; `#602` was the task the lane performed, not the slice).
-     The lane ran on this repository with the launcher and every shipped configuration
-     value byte-identical, and terminalized `failed` on a non-empty denial list. That
-     establishes for Claude what the Codex record could not — structured denial
-     read-back with real denials in it — and found two boundaries no synthetic lane
-     could reach: a lane cannot write under `.claude/`, which `Edit(**)` does not lift
-     and which the same lane's successful `.agents/` and `scripts/tests/` edits rule out
-     as a glob effect; and the read-only Bash class is a property of command shape, so a
-     loop or a `;`-chained compound of otherwise-accepted commands is denied. The lane
-     opened no pull request; the cockpit pushed its branch and opened `#625` only after
-     writing the file the lane was refused, so what stays unobserved is a *lane* driving
-     CI or earning a `pr-watch` receipt on a real repository — not CI on that branch.
-     Design and record:
-     [`first-real-headless-lane-design_2026-08-28.md`](first-real-headless-lane-design_2026-08-28.md),
-     [`first-real-headless-lane-live-validation_2026-08-28.md`](first-real-headless-lane-live-validation_2026-08-28.md).
-     Not built: a model or effort control on the wrapper, which the run gave no reason
-     to add — the lane resolved to the product default and the task did not need
-     another tier.
-     PR `#667` subsequently delivered the review disposition and stamp/head reporting
-     for `#603`/`#604`. The maintained Phase 5 checklist below owns the adopter pilot,
-     declaration work and remaining field coverage.
-  6. Carried by PR `#651`: the repository-owned redacted evidence contract, hostile
-     missing/altered/wrong-revision/claim-relabel mutations, and tracked positive
-     control now refuse promotion when the retained bytes, complete claim-to-artifact
-     map, independently expected applied compute for a claim that depends on it,
-     review provenance, or binding are absent. A persistent Codex
-     writing lane at source revision
-     `bdfd6ee702a630f0575f0c186f51b3bbbcd1810a` produced descriptor-scoped worktree and
-     state output, an open non-draft private pull request with GitHub `CLEAN` state,
-     and an exact-head cockpit review
-     receipt; the promotion retains the exact upstream and fixture source bytes those
-     claims depend on and is bound to synthetic fixture revision
-     `83d3b623305a691dd874df44ca92270daa62ade9`, repository, and head
-     `5c4006d18e65e0443dc7b22f48c099ad07ce1da9`. The copied runtime attestation does not
-     correlate its session to the launcher invocation, so its model, effort, and cwd
-     remain historical and outside the promoted claim map. The 2026-08-27 record also
-     stays historical and unpromoted. The retained record is
-     [`codex-writing-lane-live-validation_2026-08-30.md`](codex-writing-lane-live-validation_2026-08-30.md).
-     This implements `#621`'s durable-evidence contract for the bounded writing-lane
-     claims. That writing-lane record alone does not establish the Phase 4 exit.
-     The required retained parallel-batch evidence followed in PR `#659`, below.
-  7. Done in PR `#659`: the Codex-produced parallel batch retains both descriptor and
-     launcher identity chains, independent filesystem and Git read-backs, both exact
-     reviewed heads and dual-lens receipts, operator merge refusals, reconciliation's
-     held outcome, final open/unmerged forge state, exact source bytes and Git-object
-     proofs, and a complete external path/provenance/digest control. The promoted
-     claims and caveats are in
-     [`codex-parallel-batch-live-validation_2026-09-01.md`](codex-parallel-batch-live-validation_2026-09-01.md).
-- [x] **Phase 5 — Align permissions, installation, and upgrades.** Merged deliveries
-  now include PR `#632` for the measured Claude lane policy and permanent adapter-write
-  asymmetry; PR `#635` for generated adapter refresh plus manifest-selected installed
-  tests; PR `#637` for the templated cockpit grant advisory, open-ended SessionStart,
-  and informational permission inspection; PR `#639` for the allow-side whole-tool
-  rule measurement; and PR `#649` for the safety-critical classification of the
-  configured lane profile; and PR `#655` for adopter-side stale lens-definition
-  inspection. Topi declared the exit on 2026-09-30 under the acceptance amendments the
-  [Phase 5 E audit](phase5-e-audit_2026-09-30.md) names. `#236` retains the engine/doctrine
-  same-function-different-path survey. The Phase 5 field-exercise reconciliation below
-  owns `#243` coverage and its remaining limits. The Phase 5 checklist
-  below records the landed `#631` declaration, the joined `#608`/`#255` delivery in
-  PR `#680`, and the initial adopter write pass. The operator approved the `#608`/`#255`
-  dispositions and closure on 2026-09-07; the [Codex batch record](codex-hooks-batch_2026-09-07.md)
-  retains the tracker receipts. **Re-sequenced on
-  2026-09-02** (*Sprint review* above): the cs-toolkit adopter pilot moves from Phase 6
-  into this phase as its exit test, because the exit is only establishable by an
-  upgrade run; assigning the live-validation verifier a repo-only role and withdrawing
-  it from the adopter-shipped set, plus putting review evidence on the pull request
-  (`#603`, `#604`), join the phase; `#631` and `#608` are taken as declarations rather
-  than mechanisms, while `#255` retains its general enforcement mechanism. Delivery
-  order, reconciled on 2026-09-06 against the retained field records:
-  1. [x] Adopter pilot, read-only pass first (`#607`, `#236`, `#243`).
-  2. [x] `pr_watch.py --record-review` posting the disposition comment; stamp/head and
-     receipt/comment mismatches reported.
-  3. [x] Verifier, its test, and its evidence page assigned the repo-only manifest role,
-     with the `CHANGELOG.md` entry.
-  4. [x] Initial pilot write pass and separate fork reconciliation, recorded with the
-     stage identities in the Phase 5 checklist below. This pass does not establish the
-     phase exit.
-  5. [x] Complete the remaining `#243` field exercises, under the acceptance amendments
-     of Topi's exit declaration of 2026-09-30; the [Phase 5 E audit](phase5-e-audit_2026-09-30.md)
-     owns the outcome and those amendments. The rest of this item is its record up to
-     2026-09-13 and is not updated. The item was blocked at first: the original
-     fixture and source paths were absent when checked with `test -e` on 2026-09-09
-     from kit revision `e698ec47d6284ccd31af5ba9d8bc5657fe992310`:
-     `/private/tmp/adk-adopt-field-20260905-5mfj1st8/fixture` and
-     `/private/tmp/adk-adopt-continuation-20260906-AFeElK/kit-source`.
-     Do not reconstruct either original path. The operator subsequently approved
-     ITEM5-B from the retained-baseline decision packet on 2026-09-09.
-     The [item 5 decision packet](phase5-item5-decision_2026-09-09.md) now compares
-     ITEM5-A's normalized historical payload rebuild with ITEM5-B's fresh current-kit
-     verification fixture. The [read-only audit](phase5-item5-baseline-audit_2026-09-09.json)
-     distinguishes available file bytes from the missing Git/runtime continuity and
-     cache bytes. The [ITEM5-B execution](phase5-item5-b-execution_2026-09-09.md)
-     records the new fixture at kit pin `8418118e40728c667c32a28a182697139bc7a5ef`,
-     its consumed setup approval and complete local verification results. Installed
-     verification did not establish successful adoption. The operator approved the
-     [kit-only #534 repair](phase5-item5-kit534-repair_2026-09-10.md) on 2026-09-10;
-     its source and synthetic-layout checks do not update or verify retained ITEM5-B.
-     The operator approved the [fixture-update packet](phase5-item5-b-update-decision_2026-09-10.md)
-     on 2026-09-10. Its [execution record](phase5-item5-b-update-execution_2026-09-10.md)
-     retains the applied repair pin `60fe0dc7ad68922d064c0cf401cff2c4c6d607ac`,
-     fixture attempt `413132b01d14c735d94753231bf325904135285f`, complete local
-     verification and preservation evidence. That update approval is consumed.
-     The [acceptance and field-exit packet](phase5-item5-b-acceptance-decision_2026-09-10.md)
-     binds the preserved-file decisions to the fresh read-only comparison with the
-     update's FINAL evidence. The operator approved ACCEPT-01 and PR-01 as scoped on
-     2026-09-10. The [acceptance execution](phase5-item5-b-acceptance-execution_2026-09-10.md)
-     records ownership acceptance, the exact friction/CI payloads, local/hosted results
-     and private fixture PR #1 at `f770f183bf6691f1f706c676b740cf2ef5ceb766`.
-     PR-01 paused at the recorded P2 inherited detector gap and P3 wording
-     imprecision. The [kit-only repair decision](phase5-item5-b-review-repair-decision_2026-09-10.md)
-     was approved on 2026-09-10. The [kit repair execution](phase5-item5-b-kit-repair-execution_2026-09-10.md)
-     carries the applied kit scope and pre-fix review receipts. Its panel recorded a P2
-     inherited FIFO-root gap and P3 root-symlink coverage gap; the [follow-up packet](phase5-item5-b-review-followup-decision_2026-09-10.md)
-     was approved as ITEM5-B-KIT-REVIEW-02 on 2026-09-11. The [follow-up execution](phase5-item5-b-review-followup-execution_2026-09-11.md)
-     records the applied scope, final panel and separately authorized merge of kit #731 as
-     `e6d6e77d118454349f8e8bb046e99ef3009c5f5c`. UPDATE-02 preparation in #733 led
-     to the separately approved [source-review repair](phase5-item5-b-source-review-repair_2026-09-11.md),
-     delivered by #734 at `7e0232ed871b37a315c5509c97b83d3b00b1a3fd`. The
-     [UPDATE-03 packet](phase5-item5-b-update03-decision_2026-09-11.md) prepared the
-     revised exact local retained update after fresh read-only checkpoint checks.
-     Kit #733 delivered that packet on 2026-09-11 as
-     `e6b8e182466046a820198fa28c8cc52dc06509d0`; its
-     [completion checkpoint](https://github.com/topij/agentic-dev-kit/pull/733#issuecomment-5639767232)
-     preserves the review/merge evidence and the then-unanswered approval question.
-     Its current `-r5` binding retains the audit and dependent-command isolation correction,
-     corrects copied provenance, and preserves unresolved generic-upgrade source findings
-     outside the proposed execution;
-     earlier UPDATE-03 questions and evidence remain historical and unanswered.
-     The operator subsequently approved ITEM5-B-UPDATE-03 as scoped. The
-     [execution record](phase5-item5-b-update03-execution_2026-09-12.md) retains the
-     consumed authority, local attempt `4ad91c875377d8607082cd0a125ba801218187ed`,
-     source `7e0232ed871b37a315c5509c97b83d3b00b1a3fd`, exact baseline, verification
-     and final preservation evidence. UPDATE-02's old question, payloads, ledger and
-     review evidence remain preserved and unanswered. Kit #736 delivered the execution
-     record as `2b272a939013538a740f68f3990a6cc961c9512f`; its
-     [review disposition](https://github.com/topij/agentic-dev-kit/pull/736#issuecomment-5643887657)
-     retains the panel and stamped verification limits. The
-     [PR-02 continuation packet](phase5-item5-b-pr02-decision_2026-09-12.md) now binds
-     read-only checkpoint/forge comparisons, the CI payload, title/body, publication,
-     verification/review scope and rollback. Kit #737 delivered it as
-     `083bccbfa4c4b066d82e7625ddf1efe70716dd2d`. The operator subsequently approved
-     PR-02 as scoped; the [execution record](phase5-item5-b-pr02-execution_2026-09-13.md)
-     owns the applied CI payload, publication at
-     `12d7d4b41abe75451ed74d7cbc068bc6b8be2db7`, verification, review findings and
-     retained checkpoint. Additional fixes and field-exit work retain their separate
-     decisions; publication does not establish adoption completion.
-     Fixture merge remains excluded; the nonfunctional custom
-     wrap-up carries ownership acceptance only. No original continuity or prior field
-     credit was recreated.
-     Delivery item 6 is independent of these paths. The approved
-     [adopt continuation](codex-adopt-initialization-field-exercise_2026-09-06.md)
-     executed initialization and attempted Step 4 checks; the installed suites failed.
-     Adoption completion remains pending, as do the untested systemize routes.
-     The [continuation review](codex-adopt-completion-review_2026-09-06.md) retains
-     the ownership/lens diff and reconciles the independent source/fixture probes
-     with VER-01. The approved [VER-02 trial](codex-adopt-ver02-trial_2026-09-06.md)
-     records the copied-test root repair, assertion outcome and mutation/restoration
-     evidence. The separately approved [VER-03 repair](codex-adopt-ver03-repair_2026-09-06.md)
-     records the permanent kit test-root change, synthetic-layout regression and
-     mutation/restoration. It leaves the original fixture untouched. The approved
-     [FIX-01 application](adopt-fix01-ownership-lenses_2026-09-06.md) then applied the
-     retained ownership/lens diff to the original fixture and supersedes its continuity
-     baseline. The approved [REG-01 application](adopt-reg01-application_2026-09-07.md)
-     subsequently applied registration and superseded the fixture baseline again.
-     The [suite assessment](adopt-suite-assessment_2026-09-07.md) classified the retained
-     failures without repairing them. The [Codex batch](codex-hooks-batch_2026-09-07.md)
-     records live loading/discovery, the disposable unset case and the approved tracker
-     dispositions. Its [continuation](codex-hooks-continuation_2026-09-09.md) adds
-     execution after trust, the disabled CLI case, a desktop unset observation and
-     field verification of the doctor correction, with client-specific limits.
-     Adoption completion and Phase 5 exit keep their own exact decisions;
-     do not repeat credited probes or promote a warning-free doctor to fixture completion.
-  6. [x] Replay the write pass and fork reconciliation from the then-current kit source,
-     using the same `$REPO` origin check, `$KIT` path, and immediately-before-every-write
-     directory assertion as the initial pass. For a stage with a diff, bind its PR
-     identity, base name and head and require the protected → upgrade → reconciliation chain
-     for the PRs that exist. For a
-     no-change stage, record its exact invocation, successful no-change output, input
-     and output SHA, tree equality, clean status, and input linkage to the preceding
-     stage; never manufacture an empty PR. Verify the resulting adopter head against
-     the adopter condition below. Movement of a bound adopter ref before the exit
-     read-back invalidates the evidence. Capture one
-     authoritative tuple containing the kit source and protected head, the adopter
-     repository's canonical origin URL, adopter protected head, exact resulting adopter
-     head, every created adopter PR's identity, base name and head, and each no-change stage's
-     invocation, output, input/output equality, tree-equality check, clean status, and
-     preceding-stage linkage. Require the origin URL to match the approved cs-toolkit
-     remote and the kit source to equal the protected head in both snapshots. Verify
-     every ancestry edge and the adopter condition against those immutable SHAs, then
-     capture the full tuple again and require it to be byte-identical. A mismatch
-     requires replay. Publish both snapshots and the stamped verification result on the
-     kit wrap-up PR before it merges. Later ref movement is a separate event; wrap-up
-     records the observation without treating its own commit as the replay source.
-     Executed 2026-09-09 under REPLAY-01: the [replay record](cs-toolkit-replay_2026-09-09.md)
-     retains cs-toolkit #2255 at `21fe33bb040e7fdcc8f7d3d7c4402e768b1ff351`,
-     its no-change reconciliation, stable snapshots, and actual verification limits.
-     The operator approved the #723 deferral, then later authorized merge when clean.
-     cs-toolkit #2255 merged on 2026-09-09 as `c4119f85e07f2a089ab8d5decc94cf2cd1635d14`;
-     kit #724 merged as `8418118e40728c667c32a28a182697139bc7a5ef`, confirmed by
-     `gh pr view 724` on 2026-09-09. Item 5 was still blocked then, so this did not complete Phase 5.
-- [ ] **Earlier sprint work — #585.** The operator moved the proportional opening
-  pass for record prose out of Phase 6 on 2026-09-09; the
+Each phase's exit, owner and order, and nothing else. The capability claims and their
+evidence links are owned by
+[`runtime-parity.md`](../docs/agentic-dev-kit/runtime-parity.md), and the session
+narrative by the living handoff. Each exit condition is the paragraph of that phase's
+*Delivery plan* section below that says when the phase is done; this list links it rather
+than restating it. A phase's owner is where its outcome is maintained now: a document for
+a closed phase, and a tracker issue for each item of an open one. The per-pull-request
+status this section carried before #877 is in git history, and the stamped
+pre-implementation baseline below remains the historical observation it was.
+
+Order: the phases run in the order listed. The 2026-09-02 re-sequencing (*Sprint review*
+above) moved the cs-toolkit adopter pilot from Phase 6 into Phase 5 as its exit test, and
+on 2026-09-09 the operator moved `#585` out of Phase 6 to earlier in the sprint.
+
+- [x] **Phase 1 — Declare the parity contract.** Exit:
+  [*Phase 1*](#phase-1--declare-the-parity-contract), met when PR `#588` merged on
+  2026-08-23. Owner: the front-matter declaration and capability matrix in
+  `runtime-parity.md`, and the structural checks derived from the declaration.
+- [x] **Phase 2 — Correct safety and lifecycle hooks.** Exit:
+  [*Phase 2*](#phase-2--correct-safety-and-lifecycle-hooks), met for the stamped trusted
+  clients the matrix's
+  [*Lifecycle validation boundary*](../docs/agentic-dev-kit/runtime-parity.md#lifecycle-validation-boundary)
+  links. Owner: that section and the matrix's safety-doctrine and hook rows.
+- [x] **Phase 3 — Complete workflow and integration coverage.** Exit:
+  [*Phase 3*](#phase-3--complete-workflow-and-integration-coverage), its structural exit
+  closed by PR `#599`. Owner: the capability, authority and completion contracts in the
+  shared definitions under `docs/agentic-dev-kit/workflows/`, and the matrix's
+  integration rows.
+- [x] **Phase 4 — Make delegation and parallel lanes equivalent.** Exit:
+  [*Phase 4*](#phase-4--make-delegation-and-parallel-lanes-equivalent), met by the
+  [retained 2026-09-01 parallel-batch run](codex-parallel-batch-live-validation_2026-09-01.md).
+  Owner: the matrix's *Headless lane isolation* row and its
+  [per-runtime sub-table](../docs/agentic-dev-kit/runtime-parity.md#headless-lane-isolation-per-runtime).
+- [x] **Phase 5 — Align permissions, installation, and upgrades.** Exit:
+  [*Phase 5*](#phase-5--align-permissions-installation-and-upgrades), declared by Topi on
+  2026-09-30 under the acceptance amendments the
+  [Phase 5 E audit](phase5-e-audit_2026-09-30.md) names. Owner: that audit, for the
+  outcome and its amendments; the *Delivery plan*'s Phase 5 checklist, for each item's
+  disposition.
+- [ ] **Earlier sprint work — #585.** The proportional opening pass for record prose.
+  Owner: `#585`, whose
   [decision and evidence](https://github.com/topij/agentic-dev-kit/issues/585#issuecomment-5606158377)
-  govern its placement. This replay does not implement it.
-- [ ] **Phase 6 — Gate parity and roll it out (ordered and owned on 2026-09-30; order and
-  owners are in *Phase 6* below).** With the pilot pulled into Phase 5,
-  this phase holds the cost and hygiene work the review found burning, then the gate:
-  the suite measured and
-  marked (`make test-fast` beside an unchanged `make test`); the learnings memo
-  distilled into `fallback-review-panel.md`; the matrix's headless-lane cell split per
-  runtime and this plan cut to exits and order; `session-start`'s forge reads routed
-  through the engine; adapter bodies moved from `_CURRENT_CONTEXTS` to per-runtime
-  templates with the missing hostile mutations; and only then adoption fixtures,
-  trusted smoke coverage, maintained parity reporting, and the convergence plan
-  archived behind the matrix.
+  govern its placement.
+- [ ] **Phase 6 — Gate parity and roll it out.** Exit:
+  [*Phase 6*](#phase-6--gate-parity-and-roll-it-out). Owners and order: that section's
+  ordered list, one tracker issue per item, set on 2026-09-30.
 
 This plan records the pre-implementation baseline. Its repository observations were
 collected with `rg --files`, targeted `rg`, and
 `uv run scripts/kit_doctor.py --json` at
 `9c4969687f9adbec1eca55cbfb47955d85025026` on 2026-08-23. They intentionally describe
 that revision; the delivery slices below are expected to change them.
-
-## Phase 3 integration inventory — 2026-08-25
-
-### `session-start`
-
-- **Shared semantics:** gather the handoff, friction inbox, tracker, pull requests,
-  repository state, CI/cron health, and project drift; classify traceable candidates;
-  remediate false `Now` promotions; render one briefing and recommendation.
-- **Runtime translation:** Claude passes `$ARGUMENTS`; Codex passes the user's request.
-  Each runtime selects its own read mechanisms and may apply the configured model or
-  effort mapping only when its launcher actually exposes that control.
-- **Capabilities:** repository/config and repository-state reads are required. Forge,
-  CI/cron, and tracker reads are always attempted and degrade visibly; forge readiness
-  uses unfiltered review evidence, labels resolution the forge cannot prove, and
-  represents detached HEAD explicitly.
-  Configured drift reads degrade visibly when applicable. Archive and resolved-
-  tracker reads are conditional before a `Now` promotion. Runtime compute selection is
-  an optional enhancement.
-- **Authority and artifacts:** the workflow is read-only and creates no durable state.
-  The returned briefing is load-bearing; live sources, not an earlier response, are
-  retry evidence. Non-interactive use renders once and exits.
-- **Stops and mismatch:** required-source failure is a hard stop; optional-source gaps
-  produce degraded success without false empty/clean claims. The Codex adapter repeated
-  read-only and compute policy that belongs in the shared definition; this slice removed
-  that duplicate.
-
-### `wrap-up`
-
-- **Shared semantics:** author and validate the living record, route session friction,
-  preserve a next starter, enforce document budgets, stage named paths, and carry the
-  record pull request through shared review follow-through.
-- **Runtime translation:** Claude and Codex select native repository, forge, review, and
-  tracker mechanisms. Invocation itself remains runtime-specific; capability policy and
-  approval semantics do not.
-- **Capabilities:** repository/config read and handoff write are required. The document-
-  budget checker is required; the archive helper is conditional on its result. Forge PR
-  write and `pr-watch` are conditional on any changed repository artifact. Tracker
-  search/write is
-  conditional and payload-approval-gated for an issue-shaped finding; an existing
-  project-status artifact is an optional enhancement. Merge authority is conditional
-  after the exact head becomes mergeable.
-- **Authority and artifacts:** invocation authorizes the scoped repository record and its
-  branch/PR path, not a merge. Tracker creates, modifications, and occurrence comments
-  require the exact payload to be confirmed by the operator in the current interactive
-  session. An interactive issue-shaped finding is searched and presented for that
-  decision before parking. Durable evidence is every changed repository artifact,
-  including an existing project-status artifact, its reviewed merge
-  or exact operator-held head when changed, a parked friction entry, or an identifier
-  actually returned and read back from the tracker.
-- **Stops and mismatch:** a required failure preserves the record and stops before a
-  false completion. Tracker unavailability, decline, silence, or ambiguity degrades to
-  the friction inbox; incomplete and accumulating findings also take that route. Missing
-  or insufficient merge authority holds a mergeable pull request for the operator; a
-  policy-less non-lane pull request takes the operator default. Conditional capabilities
-  classify at their trigger rather than before the record edit; unavailable forge or
-  unsettled review paths preserve exact resume evidence as incomplete. First-match
-  terminal precedence also keeps a degraded integration from masking an incomplete
-  repository path or a failed or still-ambiguous authorized merge; a tracker-only write
-  is successful completion, not a no-op, and isolated review plus self-merge stay on
-  the cockpit's paired lane wrappers and shared state sandbox. The
-  Codex adapter's generic external-mutation wording was weaker than the shared payload-
-  specific gate; this slice removed that duplicate.
-
-### `triage-friction-log`
-
-- **Shared semantics:** draft proposals from a frozen inbox, obtain exact operator
-  decisions, persist an approval session, file approved tracker payloads, and finalize a
-  no-data-loss archive sweep on a reviewable branch.
-- **Runtime translation:** Claude accepts `$ARGUMENTS`; Codex accepts the skill argument.
-  Each runtime needs native tracker and notification clients, but neither adapter should
-  choose their policy.
-- **Capabilities:** repository/config, sandbox-aware state resolution, and an exact
-  frozen inbox are required. Tracker write/read-back is conditional after exact-payload
-  approval. Scheduled approval collection requires notification send/thread read, while
-  interactive notification failure degrades to the current session. The configured
-  draft/finalize pair is atomic; both absent selects an honest agent-executed LLM-only
-  mode and a partial pair stops.
-- **Authority and artifacts:** the frozen inbox, proposal report, approval-bound state,
-  returned tracker identifiers, source/archive diff, and PR are resume evidence. Tracker
-  writes require exact-payload approval; a standing workflow request is not approval.
-  Commit, push, pull-request creation, `pr-watch`, archive sweep, and merge read-back
-  consume the exact identity established by the preceding independently verified
-  read-back rather than a locally self-consistent lifecycle record.
-- **Stops and mismatch:** active approval state cannot be overwritten; missing frozen
-  evidence never falls back to a whole-inbox sweep; changed approved payloads require a
-  new decision; failed or ambiguous tracker/forge writes require destination read-back;
-  partial tracker success holds before finalization; and test mode cannot write tracker,
-  source documents, or forge state. Shared precedence distinguishes hard-stop,
-  operator-held, degraded success, and successful completion. Both adapters now carry
-  invocation/mechanism translation only.
-
-### Slice boundary and next starter
-
-PR `#596` merged the shared contract for `session-start` and `wrap-up`, whose
-integration surface can use existing config, runtime-native mechanisms, and the shipped
-helpers named by each definition without adding a dedicated pipeline configuration. It
-did not add a partial triage config, pretend the missing engines are ready, or duplicate
-approval policy in an adapter.
-
-PR `#598` advances the shared lane primitive without claiming the Phase 3 exit. Its
-read-only comparison of cs-toolkit commit
-`4cf1ca914361b9912cd6bb1389e985d6e97ab3a0` (`#2086`) and its parent separated reusable
-engine behavior from cs-toolkit policy/translation and unrelated application code. The
-kit receives absolute headless roots, the descriptor environment replacement contract, durable
-lane/base/class identity, exact repository/PR/base/head/fork binding, fail-closed forge
-reads, operator-held evidence, resume-aware branch-tip checks, semantic/mutation
-matrices, and adopter upgrade coverage. It does not receive cs-toolkit's operator-only
-merge policy or `CS_TOOLKIT_*` namespace. The downstream checkout remains unchanged;
-its repo-owned engines require a later explicit reconciliation PR rather than a normal
-kit upgrade.
-
-PR `#599` delivered the Phase 3 starter and closed the declared structural exit. The
-starter it preserved (`feat/codex-environment-capable-launcher`) was consumed by PR
-`#609` on 2026-08-26. The next sprint starter set by the 2026-09-02 review was consumed
-by the read-only adopter pass later that day:
-
-```text
-In a Claude Code session, run the cs-toolkit adopter pilot read-only first. Bind
-REPO=/Users/topi/Coding/in-parallel/cs-toolkit and KIT=<fresh clone of this repo at a
-pinned sha> before anything else and assert pwd before every write. Run kit_doctor in
-both modes from $KIT against $REPO and record the output stamped, including the false
-"broken, not sized down" verdict on scripts/devkit/lib/runtime_adapters.py. Walk
-/upgrade Steps 0-3 without writing. File what the instrument gets wrong as occurrences
-on #236 and what the adapters need as occurrences on #243, on the operator's approval
-of each payload. Stop before any write to $REPO; the write pass is its own session on
-the adopter operator's go-ahead. Do not widen the kit in the same session.
-```
 
 ## Pre-implementation assessment
 
@@ -928,7 +563,8 @@ and final open/unmerged fixture pull requests.
   observation without treating its own commit as the replay source.
   The [2026-09-09 replay](cs-toolkit-replay_2026-09-09.md) retains the completed
   verification at its bound refs, accepted #723 limitation and later delivery events.
-  The remaining fixture work was then blocked, as delivery item 5 records.
+  The remaining fixture work was then blocked; the
+  [Phase 5 E audit](phase5-e-audit_2026-09-30.md) owns its outcome.
 
 #### Field-exercise reconciliation — 2026-09-05
 
