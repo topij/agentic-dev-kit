@@ -554,9 +554,10 @@ def test_sweep_cleanup_keeps_a_case_variant_of_the_caller_checkout(tmp_path: Pat
 
 def test_sweep_cleanup_guard_asks_the_predicate_the_engine_shares(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The case-variant test above skips on a case-sensitive filesystem, which is
-    what CI runs on. This pins, on any filesystem, that the provider's guard is the
-    one predicate the engine's guards use, whose identity branches
-    `test_finalize_triage.py` pins with a case-folding `Path.stat` (#891)."""
+    what CI runs on. This pins, on any filesystem, that the provider and the engine
+    hold the same predicate function, and that the provider's guard asks it. The
+    predicate's identity branches are pinned by `test_finalize_triage.py`, with a
+    case-folding `Path.stat`, and the engine's call sites by its guard tests (#891)."""
     import triage.engine
     import triage.model
     import triage.providers

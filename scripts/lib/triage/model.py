@@ -312,8 +312,8 @@ def worktree_conflicts_with_checkout(worktree_path: Path, repo: Path) -> bool:
     existing ancestors take part. The structural test runs first, for every path;
     the identity checks then catch the spellings it misses.
 
-    Shared by the engine's three worktree guards and `GitHubForge`'s sweep-cleanup
-    guard (#891), so the provider cannot decide containment differently."""
+    Shared by the engine's worktree guards and `GitHubForge`'s sweep-cleanup guard
+    (#891), so the provider cannot decide containment differently."""
     if worktree_path == repo or repo.is_relative_to(worktree_path) or worktree_path.is_relative_to(repo):
         return True
 
