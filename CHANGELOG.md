@@ -44,7 +44,7 @@ starts.
 
 ## #907 — `GitHubForge`'s sweep-cleanup guard decides containment by filesystem identity
 
-CHANGED — gate semantics: Refresh `lib/triage/model.py`, `lib/triage/engine.py` and `lib/triage/providers.py` in your engine directory together, with `kit-manifest.json` and `scripts/tests/test_triage_providers.py`. The worktree-containment predicate moved from `engine.py` to `model.py` as `worktree_conflicts_with_checkout`, and `engine.py` imports it from there, so an `engine.py` refreshed without `model.py` fails to import. On a case-insensitive filesystem, `GitHubForge`'s `sweep-cleanup` action now reports all three artifacts `kept` for a differently cased path to the caller checkout, to a path inside it, or to its parent, where it used to go on to remove the local and remote branch.
+CHANGED — gate semantics: Refresh `lib/triage/model.py`, `lib/triage/engine.py` and `lib/triage/providers.py` in your engine directory together, with `kit-manifest.json` and `scripts/tests/test_triage_providers.py`. The worktree-containment predicate moved from `engine.py` to `model.py` as `worktree_conflicts_with_checkout`, and `engine.py` imports it from there, so an `engine.py` refreshed without `model.py` fails to import. On a case-insensitive filesystem, `GitHubForge`'s `sweep-cleanup` action now reports all three artifacts `kept` for a differently cased path to the caller checkout, to a path inside it, or to its parent, where it used to let the cleanup's git commands run: `git worktree remove` and `git branch -d` refused on their own, but the remote branch's compare-and-delete went ahead and deleted it.
 
 ## #902 — Runtime adapter text moves into Markdown templates beside the renderer
 
