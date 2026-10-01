@@ -20,6 +20,57 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-01 (Phase 6 item 6, #890 and #891, unattended in Claude Code)
+
+**Shipped.**
+
+- PR #904, squash `0c7669a`: Phase 6 item 6. `runtime-parity.md` gains an `adoption`
+  front-matter block, scoped to the template route. Repo-only fixtures in
+  `scripts/tests/test_adoption_fixtures.py` install the kit into fresh Codex-only,
+  Claude-only and dual-runtime repositories and check each install against it. #878
+  closed on merge.
+- PR #906, squash `c6b663d`: each headless-lane record's claims now live once, in the
+  per-runtime sub-table of `runtime-parity.md`. #890 closed on merge.
+
+**Held for the operator.** PR #907 is the fix for #891: `GitHubForge`'s sweep-cleanup
+guard now decides containment by filesystem identity, through #889's predicate moved to
+`model.py`. It gates a destructive operation, so `safety-critical-changes.md` makes it
+operator-merge, and this session did not merge it. Its full-panel receipt at `704bde3`
+was recorded from the worktree #907 was built in, whose state file was then copied into
+the main checkout's `state/`; the two-lens delta receipt at `fcff926` composed on it
+there (#563's mechanism; occurrence noted there).
+
+**Decided by the operator**, in this session, before it ran unattended:
+
+- #878 step 3: a single-runtime adopter keeps receiving the other runtime's adapters,
+  recorded as `other_runtime: installed`, and on #878.
+- Scope: #878, then #890 and #891, then wrap-up. Pull requests merge when clean, and
+  LOW review findings are filed.
+- Issue-shaped friction at wrap-up is filed without per-payload approval. That departs
+  from `wrap-up.md`'s exact-payload rule; #909 asks which should hold.
+
+**Filed**, each read back: #905 and #908, the deferred LOW findings of #904 and #906;
+#909. Occurrence comments on #563, #844 and #643.
+
+**Review.** CodeRabbit's auto-review stayed off, so the fallback panel reviewed each
+pull request. #904 had a full panel at `2581034` and again at `1f37c00`. #906 had a
+full panel at `54c2f75`. #907 had a full panel at `704bde3` and a delta at `fcff926`.
+Each round's disposition is posted on its pull request.
+
+**Verified.** Each pull request's body carries its `env -u FORCE_COLOR make test`
+stamp at the head that merged or is held, each run on 2026-10-01 with exit 0:
+
+- at `1f37c00` (#904) and at `54c2f75` (#906), in `/Users/topi/Coding/agentic-dev-kit`;
+- at `fcff926` (#907), in a `git worktree add` of it under the session scratchpad.
+
+`gh run list --commit` showed the `Test` workflow `success` on `main` for `0c7669a` and
+`c6b663d`.
+
+**Not established.** #907's case-variant tests skip on a case-sensitive filesystem,
+which is what CI runs; they ran on this machine's case-insensitive one.
+
+______________________________________________________________________
+
 ## Session — 2026-10-01 (Phase 6 item 5, in Claude Code)
 
 **Shipped.** PR #902, squash `65e9d2d`: Phase 6 item 5. #243 closed on merge.
@@ -262,65 +313,6 @@ Closed workstream Phase 5 exit: the exit is declared.
 
 ______________________________________________________________________
 
-## Session — 2026-09-30 (Phase 5 E audit packet, in Claude Code)
-
-**Accepted.** The operator accepted D-TRIAGE-RECOVERY: "I accept the Stage 1 and Stage 2
-RESULTS.md files." `ACCEPTANCE.md` beside each run's `RESULTS.md` records it. Each run's
-*Not established* list goes to the E audit.
-
-**Packet.** `saved_plans/phase5-e-audit_2026-09-30.md` is local and not committed, like
-the D packets. It is milestone E's audit, and it approves nothing. It contains:
-
-- an exit ledger over every Stage A row and every D package;
-- a custody check of the D evidence;
-- the operator's decisions E-1 to E-7, each with a recommendation;
-- exact payloads for the parity plan and the tracker.
-
-Its grounding reads and `collect.sh` are in
-`state/review-evidence/phase5-e-audit-20260930/` (gitignored). Fresh subagents
-checked successive drafts against the records, and the packet's *Preparation check*
-lists what each round changed.
-
-**What the audit found.** The packet owns the detail.
-
-- **Acceptances on record.** Besides D-TRIAGE-RECOVERY, the acceptances are:
-  - the 2026-09-23 decisions in `phase5-d-systemize-boundaries-01/APPROVAL.md`: the
-    systemize friction and tracker no-write amendment, and the cap, batching,
-    competing-cache and hostile-target rows as synthetic;
-  - RECOVERY-01's run P as the pre-approval cutpoint's evidence;
-  - milestone B's accepted limits.
-
-  No acceptance covers B or C as a whole, or the other D rows. The packet asks for
-  those under E-1, and each gap it names is an amendment the declaration names.
-- **Scope decisions.** The packet's searches found no recorded decision on additional
-  client coverage. Also open as scope decisions (E-2):
-  - notification approval provenance (#198) and the triage notification route;
-  - scheduling and worktree runners, beside #747;
-  - real-service crash ambiguity (#794) and concurrent systemize runs (#792);
-  - engine installation in an adopter.
-- **Missing sealed fixtures.** The `fixtures/` files that the manifests in
-  `phase5-d-systemize-recovery-01/` and `phase5-d-systemize-boundaries-01/` bind are
-  gone. Both directories' modification times fall in the window of the 2026-09-29
-  cleanup that #861 describes. That the cleanup removed them is an inference from those
-  times (E-3).
-- **A wrong earlier judgment.** The judgment on #7 in the history's 2026-09-23
-  D-SYSTEMIZE-RECOVERY packet block is wrong. #769 shipped #7's fetch/digest pair
-  behind systemize's own forge boundary, not #6's. The threshold and operator-login
-  keys predate #769, which added `heartbeat_job` and `heartbeat_pattern`.
-  `nightly_digest.py` was not shipped. E-4 carries the corrected facts.
-
-**Filed this session**, on the operator's approval of the exact revised text: an
-occurrence comment on #861
-([issuecomment-5905162617](https://github.com/topij/agentic-dev-kit/issues/861#issuecomment-5905162617)),
-for the missing fixtures. It was read back identical.
-
-**Not established:**
-
-- a custody re-verification of the B and C namespaces' binding JSONs;
-- whether that cleanup removed any other manifest-bound file, or removed these at all.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -330,22 +322,23 @@ ______________________________________________________________________
 
 ### Phase 6 — gate parity and roll it out
 
-**Status:** items 1 to 3 shipped on 2026-10-01, in #893, #888 and #887, and items 4
-and 5 shipped the same day, in #897 and #902. The *Phase 6* section of
-`saved_plans/codex-parity-plan_2026-08-23.md` owns the order, the dependencies and the
-exit. #890 carries a duplication that #887 left in `runtime-parity.md`. #663, item 4's
-owner, stays open for residue that is not Phase 6 work; its 2026-10-01 comment names it.
+**Status:** items 1 to 3 shipped on 2026-10-01, in #893, #888 and #887; items 4 and 5
+the same day, in #897 and #902; item 6 the same day, in #904, which also recorded
+#878 step 3's answer. #906 removed the duplication #887 left in `runtime-parity.md`.
+The *Phase 6* section of `saved_plans/codex-parity-plan_2026-08-23.md` owns the order,
+the dependencies and the exit. #663, item 4's owner, stays open for residue that is not
+Phase 6 work; its 2026-10-01 comment names it. #905 and #908 carry deferred LOW
+findings from #904 and #906.
 **Owner:**
-[#878](https://github.com/topij/agentic-dev-kit/issues/878),
 [#879](https://github.com/topij/agentic-dev-kit/issues/879),
 [#880](https://github.com/topij/agentic-dev-kit/issues/880),
-[#890](https://github.com/topij/agentic-dev-kit/issues/890).
+[#905](https://github.com/topij/agentic-dev-kit/issues/905),
+[#908](https://github.com/topij/agentic-dev-kit/issues/908).
 
-▶ Next: [#878](https://github.com/topij/agentic-dev-kit/issues/878) — Phase 6 item 6:
-fresh-repository adoption fixtures for Codex-only, Claude-only and dual-runtime
-adopters, each checked against the `runtime-parity.md` declaration and pinning the
-adapters rendered from `scripts/lib/adapter_templates/`. Settle #878's step 3 with the
-operator first: whether a single-runtime adopter receives the other runtime's adapters.
+▶ Next: [#879](https://github.com/topij/agentic-dev-kit/issues/879) — Phase 6 items 7
+and 8: on-demand trusted smoke tests for Codex, with Claude beside them where
+automation credentials permit, run with a stamped record rather than in pull-request
+CI.
 
 ### Scratch retention
 
@@ -380,11 +373,14 @@ review-request method.
 filesystem identity (#856, in #889); #891 carries the same gap in `GitHubForge`'s
 sweep-cleanup guard. The doctrine prescribes the operator's manual way out of the
 two-link state (#894), and an engine-owned rollback waits for a recurrence (#892).
+#891's fix, `GitHubForge`'s sweep-cleanup guard on the shared predicate, is PR #907,
+which is operator-merge.
 **Owner:**
 [#859](https://github.com/topij/agentic-dev-kit/issues/859),
 [#883](https://github.com/topij/agentic-dev-kit/issues/883),
 [#891](https://github.com/topij/agentic-dev-kit/issues/891),
 [#892](https://github.com/topij/agentic-dev-kit/issues/892).
 
-▶ Next: #891 — make `GitHubForge`'s sweep-cleanup guard decide containment by
-filesystem identity, sharing the predicate #889 gave the engine's guards.
+▶ Next: if #907 is still open, the operator reads its panel record and merges it at
+its reviewed head. Then #859 — triage recover calls a completed state valid on
+`canonical_state` alone, so a missing frozen artifact dead-ends it.

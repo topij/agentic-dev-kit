@@ -5,6 +5,63 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-09-30 (Phase 5 E audit packet, in Claude Code)
+
+**Accepted.** The operator accepted D-TRIAGE-RECOVERY: "I accept the Stage 1 and Stage 2
+RESULTS.md files." `ACCEPTANCE.md` beside each run's `RESULTS.md` records it. Each run's
+*Not established* list goes to the E audit.
+
+**Packet.** `saved_plans/phase5-e-audit_2026-09-30.md` is local and not committed, like
+the D packets. It is milestone E's audit, and it approves nothing. It contains:
+
+- an exit ledger over every Stage A row and every D package;
+- a custody check of the D evidence;
+- the operator's decisions E-1 to E-7, each with a recommendation;
+- exact payloads for the parity plan and the tracker.
+
+Its grounding reads and `collect.sh` are in
+`state/review-evidence/phase5-e-audit-20260930/` (gitignored). Fresh subagents
+checked successive drafts against the records, and the packet's *Preparation check*
+lists what each round changed.
+
+**What the audit found.** The packet owns the detail.
+
+- **Acceptances on record.** Besides D-TRIAGE-RECOVERY, the acceptances are:
+  - the 2026-09-23 decisions in `phase5-d-systemize-boundaries-01/APPROVAL.md`: the
+    systemize friction and tracker no-write amendment, and the cap, batching,
+    competing-cache and hostile-target rows as synthetic;
+  - RECOVERY-01's run P as the pre-approval cutpoint's evidence;
+  - milestone B's accepted limits.
+
+  No acceptance covers B or C as a whole, or the other D rows. The packet asks for
+  those under E-1, and each gap it names is an amendment the declaration names.
+- **Scope decisions.** The packet's searches found no recorded decision on additional
+  client coverage. Also open as scope decisions (E-2):
+  - notification approval provenance (#198) and the triage notification route;
+  - scheduling and worktree runners, beside #747;
+  - real-service crash ambiguity (#794) and concurrent systemize runs (#792);
+  - engine installation in an adopter.
+- **Missing sealed fixtures.** The `fixtures/` files that the manifests in
+  `phase5-d-systemize-recovery-01/` and `phase5-d-systemize-boundaries-01/` bind are
+  gone. Both directories' modification times fall in the window of the 2026-09-29
+  cleanup that #861 describes. That the cleanup removed them is an inference from those
+  times (E-3).
+- **A wrong earlier judgment.** The judgment on #7 in the history's 2026-09-23
+  D-SYSTEMIZE-RECOVERY packet block is wrong. #769 shipped #7's fetch/digest pair
+  behind systemize's own forge boundary, not #6's. The threshold and operator-login
+  keys predate #769, which added `heartbeat_job` and `heartbeat_pattern`.
+  `nightly_digest.py` was not shipped. E-4 carries the corrected facts.
+
+**Filed this session**, on the operator's approval of the exact revised text: an
+occurrence comment on #861
+([issuecomment-5905162617](https://github.com/topij/agentic-dev-kit/issues/861#issuecomment-5905162617)),
+for the missing fixtures. It was read back identical.
+
+**Not established:**
+
+- a custody re-verification of the B and C namespaces' binding JSONs;
+- whether that cleanup removed any other manifest-bound file, or removed these at all.
+
 ### 2026-09-29 (Phase 5 D-TRIAGE-RECOVERY Stage 2, run autonomously, in Claude Code)
 
 **Mandate.** The operator went to sleep and asked for the session to run autonomously
