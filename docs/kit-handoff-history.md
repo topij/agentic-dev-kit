@@ -5,6 +5,104 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-09-29 (Phase 5 D-TRIAGE-RECOVERY Stage 2, run autonomously, in Claude Code)
+
+**Mandate.** The operator went to sleep and asked for the session to run autonomously
+"based on the plan". Later they said "You can file the tickets as needed". The run's
+`APPROVAL.md` quotes both messages and says how they were read. Nothing was merged.
+
+**Packet.** `saved_plans/phase5-d-triage-recovery-02_2026-09-29.md` is local and not
+committed, like the other D packets. It reruns the whole Stage 1 matrix at `b13abb3`;
+`7a75f71` changes no engine or config file. The packet:
+
+- names the cases that #865's changes reach, and reruns O-ACTIVE, O-UNCERTAIN, T-HELD
+  and I-HELD as controls;
+- extends O-CAPTURE;
+- adds G-ALIAS-MID, V-ALIAS-MID and I-ALIAS for the cutpoints #865 created.
+
+**Preparation check.** A fresh subagent checked the draft, dry-ran it at `b13abb3` and
+counter-ran it at `197a242`. Its report is
+`state/review-evidence/phase5-d-triage-recovery-02-prep-20260929/prepcheck/REPORT.md`.
+The correction that would have broken the run concerned the fake origin:
+
+- The harness's bare clone copied every local branch, so the control checkout's merged
+  work branches reached the fake origin and failed K-U's `origin_refs`.
+- The origin is now cloned single-branch.
+
+**Stage 2 (synthetic).** The evidence is in
+`state/review-evidence/phase5-d-triage-recovery-02/` (gitignored), and its `RESULTS.md`
+owns the outcomes. The runs below were in that directory, over the engine at `b13abb3`
+plus fixture commit `fa61085`, on 2026-09-29.
+
+- `python3 verify_summaries.py` printed `cases 32 steps 215 problems []`.
+- `harness.py containment` printed `true` for `git_status`, `state_listing` and
+  `state_triage_lstat`.
+- In that run, F-1, F-2 and F-3 passed through the CLI, in V-ALIAS, O-CAPTURE, and G0,
+  G-ALIAS and T-GATE.
+- The preparation check counter-ran the same predictions at `197a242`. It failed the
+  changed and added rows' distinguishing steps and K-U's environmental `origin_refs`,
+  and no other row. Its report quotes the `verify_summaries.py` line.
+
+**Filed this session**, under the operator's go-ahead:
+
+- #869: `recover` reports a held or other current-gate recovery bundle without proving
+  the gate owner dead. It was reproduced with a stopped owner. It fits *Triage engine
+  hardening*, whose entry this session left alone.
+- An occurrence comment on #861: the harness's containment listing of all of `state/`
+  grows with `state/`.
+
+**Not established:** Stage 1's list, except the recovery evidence at the fixed engine
+that it left to Stage 2, which this run supplies. Also not established:
+
+- a `state-present-prepared` bundle whose owner is alive, which the CLI cannot reach;
+- a real hostname change (#867);
+- a `.tmp` gate name left by an earlier recovery.
+
+**Left for the operator:**
+
+- the row's acceptance;
+- removing `/private/tmp/adk-phase5-d-triage-recovery-02` and its `-prepcheck-b13` and
+  `-prepcheck-197a` siblings, which this session did not attempt;
+- deleting the control checkout's local branches of the merged #865 and #868,
+  `fix/triage-recovery-owner-alias` and `chore/update-handoff-2026-09-29-triage-recovery`.
+
+### 2026-09-29 (Phase 5 D-TRIAGE-RECOVERY packet and Stage 1, recovery fixes, in Claude Code)
+
+**Packet.** `saved_plans/phase5-d-triage-recovery_2026-09-29.md` is local and not committed, like the other D packets. It scopes the D-TRIAGE-RECOVERY row as engine-level cases, driven through the real `recover` and `test` CLI, with no agent run.
+
+- A fresh subagent checked the draft against the code, and its corrections are folded in.
+- Preparation found F-1, F-2 and F-3. They were filed as #862, #863 and #864 on the operator's approval of the exact payloads.
+- The operator chose Decision A1: run Stage 1 at `197a242`, fix, then rerun the affected cases as Stage 2.
+
+**Stage 1 (synthetic).** It ran in a disposable workspace under `/private/tmp`. The harness, the fixture's setup and the fake `gh` are with the evidence in `state/review-evidence/phase5-d-triage-recovery-01/` (gitignored). `RESULTS.md` owns the outcomes, and `APPROVAL.md` holds the approval and the run's disclosures. `python3 verify_summaries.py` there, over the engine at `197a242` plus fixture commit `f4f261f`, printed `problems []` on 2026-09-29. So every predicted step matched, including the predicted F-1, F-2 and F-3 divergences.
+
+**Shipped.** [#865](https://github.com/topij/agentic-dev-kit/pull/865) merged as `b13abb3`, a squash of its reviewed head `a904080` with the same tree. #862, #863 and #864 are closed. Recovery now:
+
+- acts on a state-present bundle only once its gate owner is proven dead, by liveness alone;
+- quarantines every same-inode gate name, aliases first, in the gate-only route too;
+- reports a released gate-only receipt as itself.
+
+An ungated plan followed by an approval must now run as separate processes, as the CLI does.
+
+**Decided.** The action core gets no gate-disposition field. The owner is bound through `old_gate_digest`, and ownership is proven at act time; #865's body gives the reasoning.
+
+**Review.** CodeRabbit skipped #865, so the fallback panel ran two full rounds. Round 1 found a regression: the owner check re-validated the current config fingerprint, which held an approved resume after any config change. It was fixed in the PR, and #865's disposition comments own the findings.
+
+**Filed this session:**
+
+- #862, #863 and #864;
+- #867: `owner_status` reads a changed hostname as `uncertain`. `hostname` changed during this session.
+
+Occurrence comments went on #643 and #835.
+
+**Verification.** In `/Users/topi/Coding/agentic-dev-kit`, `make test` at `a9040803f84c198a14ee101c115a2a0d027a2c72` (#865's reviewed head) on 2026-09-29 printed `3739 passed, 1 skipped in 571.40s`.
+
+**Not established:**
+
+- recovery evidence at the fixed engine, which is Stage 2;
+- real-service ambiguity from a crash;
+- concurrent recovery races.
+
 ### 2026-09-29 (triage finalize worktree, recover for engine-written runs, in Claude Code)
 
 **Shipped.** [#855](https://github.com/topij/agentic-dev-kit/pull/855) merged as `e265c36`; #841 is closed. Finalize's refusal now says the `worktree` must lie outside the repository checkout, and the triage workflow adds that it must not exist yet.

@@ -20,6 +20,54 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-01 (Phase 6 item 4, and a scratch and branch cleanup, in Claude Code)
+
+**Shipped.** PR #897, squash `6e4c439`: Phase 6 item 4 (#663).
+
+- session-start reads each open pull request through `pr_watch.py <PR#> --json
+  --no-persist --all-comments` instead of three `gh api` calls.
+- The new `--all-comments` flag reports every comment and review submission,
+  unfiltered by seen state, noise markers or an empty body.
+- A REST poll reads `pulls/{n}`, `check-runs` and `status` once instead of twice.
+
+**Decided by the operator.**
+
+- Merge #897, which was held for them as operator-merge.
+- Keep `state/review-evidence/` until a retention rule decides what each run keeps
+  (#861).
+- Build the sweep engine (#900) in its own session. It opens the *Scratch retention*
+  workstream below.
+
+**Left out on purpose:** passing `dev_session.sh`'s `headRefOid` down to `pr_watch.py`.
+The reason is in the #663 comment, and #663 stays open for its residue.
+
+**Filed**, each on the operator's approval of its exact text: #898, #899, #900.
+Comments went on #663 and #838.
+
+**Review.** CodeRabbit's auto-review stayed off, so the fallback panel reviewed #897:
+the full dual-lens panel at `d29fa9a`, then dual-lens delta passes for its LOW repairs
+at `be68303` and `a2acb9b`. The receipts compose into one chain. Each round's
+disposition is posted on the PR, with both delta passes' verdict lines verbatim.
+
+**Cleanup.**
+
+- Every head branch on origin whose PR merged was deleted, after checking that its tip
+  was the merged head. GitHub's delete-branch-on-merge setting is now on.
+- `dev/pr-watch-rest-transport` is kept: its PR, #91, closed with commits not in
+  `main`.
+- The operator ran a generated script that removed stale session scratchpads and
+  review-lens trees under `/private/tmp`, for this repo and for cs-toolkit. Apart from
+  this session's own lens clones, it touched only entries not modified that day.
+
+**Verified.** `env -u FORCE_COLOR make test` at `d29fa9a`, in
+`/Users/topi/Coding/agentic-dev-kit` on 2026-10-01: `3773 passed, 1 skipped in
+658.45s`. That run predates the two LOW-repair commits, `be68303` and `a2acb9b`, which
+changed `scripts/pr_watch.py` and its tests before the merge. For the merged tree,
+`gh run list --commit 6e4c439` showed the `Test` workflow completed `success` on
+`main`.
+
+______________________________________________________________________
+
 ## Session — 2026-10-01 (Phase 6 items 1 to 3, the triage guard, the two-link way out, in Claude Code)
 
 This continues the *Phase 6 planned* session entry below, after its wrap-up.
@@ -235,108 +283,6 @@ for the missing fixtures. It was read back identical.
 
 ______________________________________________________________________
 
-## Session — 2026-09-29 (Phase 5 D-TRIAGE-RECOVERY Stage 2, run autonomously, in Claude Code)
-
-**Mandate.** The operator went to sleep and asked for the session to run autonomously
-"based on the plan". Later they said "You can file the tickets as needed". The run's
-`APPROVAL.md` quotes both messages and says how they were read. Nothing was merged.
-
-**Packet.** `saved_plans/phase5-d-triage-recovery-02_2026-09-29.md` is local and not
-committed, like the other D packets. It reruns the whole Stage 1 matrix at `b13abb3`;
-`7a75f71` changes no engine or config file. The packet:
-
-- names the cases that #865's changes reach, and reruns O-ACTIVE, O-UNCERTAIN, T-HELD
-  and I-HELD as controls;
-- extends O-CAPTURE;
-- adds G-ALIAS-MID, V-ALIAS-MID and I-ALIAS for the cutpoints #865 created.
-
-**Preparation check.** A fresh subagent checked the draft, dry-ran it at `b13abb3` and
-counter-ran it at `197a242`. Its report is
-`state/review-evidence/phase5-d-triage-recovery-02-prep-20260929/prepcheck/REPORT.md`.
-The correction that would have broken the run concerned the fake origin:
-
-- The harness's bare clone copied every local branch, so the control checkout's merged
-  work branches reached the fake origin and failed K-U's `origin_refs`.
-- The origin is now cloned single-branch.
-
-**Stage 2 (synthetic).** The evidence is in
-`state/review-evidence/phase5-d-triage-recovery-02/` (gitignored), and its `RESULTS.md`
-owns the outcomes. The runs below were in that directory, over the engine at `b13abb3`
-plus fixture commit `fa61085`, on 2026-09-29.
-
-- `python3 verify_summaries.py` printed `cases 32 steps 215 problems []`.
-- `harness.py containment` printed `true` for `git_status`, `state_listing` and
-  `state_triage_lstat`.
-- In that run, F-1, F-2 and F-3 passed through the CLI, in V-ALIAS, O-CAPTURE, and G0,
-  G-ALIAS and T-GATE.
-- The preparation check counter-ran the same predictions at `197a242`. It failed the
-  changed and added rows' distinguishing steps and K-U's environmental `origin_refs`,
-  and no other row. Its report quotes the `verify_summaries.py` line.
-
-**Filed this session**, under the operator's go-ahead:
-
-- #869: `recover` reports a held or other current-gate recovery bundle without proving
-  the gate owner dead. It was reproduced with a stopped owner. It fits *Triage engine
-  hardening*, whose entry this session left alone.
-- An occurrence comment on #861: the harness's containment listing of all of `state/`
-  grows with `state/`.
-
-**Not established:** Stage 1's list, except the recovery evidence at the fixed engine
-that it left to Stage 2, which this run supplies. Also not established:
-
-- a `state-present-prepared` bundle whose owner is alive, which the CLI cannot reach;
-- a real hostname change (#867);
-- a `.tmp` gate name left by an earlier recovery.
-
-**Left for the operator:**
-
-- the row's acceptance;
-- removing `/private/tmp/adk-phase5-d-triage-recovery-02` and its `-prepcheck-b13` and
-  `-prepcheck-197a` siblings, which this session did not attempt;
-- deleting the control checkout's local branches of the merged #865 and #868,
-  `fix/triage-recovery-owner-alias` and `chore/update-handoff-2026-09-29-triage-recovery`.
-
-______________________________________________________________________
-
-## Session — 2026-09-29 (Phase 5 D-TRIAGE-RECOVERY packet and Stage 1, recovery fixes, in Claude Code)
-
-**Packet.** `saved_plans/phase5-d-triage-recovery_2026-09-29.md` is local and not committed, like the other D packets. It scopes the D-TRIAGE-RECOVERY row as engine-level cases, driven through the real `recover` and `test` CLI, with no agent run.
-
-- A fresh subagent checked the draft against the code, and its corrections are folded in.
-- Preparation found F-1, F-2 and F-3. They were filed as #862, #863 and #864 on the operator's approval of the exact payloads.
-- The operator chose Decision A1: run Stage 1 at `197a242`, fix, then rerun the affected cases as Stage 2.
-
-**Stage 1 (synthetic).** It ran in a disposable workspace under `/private/tmp`. The harness, the fixture's setup and the fake `gh` are with the evidence in `state/review-evidence/phase5-d-triage-recovery-01/` (gitignored). `RESULTS.md` owns the outcomes, and `APPROVAL.md` holds the approval and the run's disclosures. `python3 verify_summaries.py` there, over the engine at `197a242` plus fixture commit `f4f261f`, printed `problems []` on 2026-09-29. So every predicted step matched, including the predicted F-1, F-2 and F-3 divergences.
-
-**Shipped.** [#865](https://github.com/topij/agentic-dev-kit/pull/865) merged as `b13abb3`, a squash of its reviewed head `a904080` with the same tree. #862, #863 and #864 are closed. Recovery now:
-
-- acts on a state-present bundle only once its gate owner is proven dead, by liveness alone;
-- quarantines every same-inode gate name, aliases first, in the gate-only route too;
-- reports a released gate-only receipt as itself.
-
-An ungated plan followed by an approval must now run as separate processes, as the CLI does.
-
-**Decided.** The action core gets no gate-disposition field. The owner is bound through `old_gate_digest`, and ownership is proven at act time; #865's body gives the reasoning.
-
-**Review.** CodeRabbit skipped #865, so the fallback panel ran two full rounds. Round 1 found a regression: the owner check re-validated the current config fingerprint, which held an approved resume after any config change. It was fixed in the PR, and #865's disposition comments own the findings.
-
-**Filed this session:**
-
-- #862, #863 and #864;
-- #867: `owner_status` reads a changed hostname as `uncertain`. `hostname` changed during this session.
-
-Occurrence comments went on #643 and #835.
-
-**Verification.** In `/Users/topi/Coding/agentic-dev-kit`, `make test` at `a9040803f84c198a14ee101c115a2a0d027a2c72` (#865's reviewed head) on 2026-09-29 printed `3739 passed, 1 skipped in 571.40s`.
-
-**Not established:**
-
-- recovery evidence at the fixed engine, which is Stage 2;
-- real-service ambiguity from a crash;
-- concurrent recovery races.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -346,22 +292,39 @@ ______________________________________________________________________
 
 ### Phase 6 — gate parity and roll it out
 
-**Status:** items 1 to 3 shipped on 2026-10-01, in #893, #888 and #887. The *Phase 6*
-section of `saved_plans/codex-parity-plan_2026-08-23.md` owns the order, the
-dependencies and the exit. #890 carries a duplication that #887 left in
-`runtime-parity.md`. **Owner:**
-[#663](https://github.com/topij/agentic-dev-kit/issues/663),
+**Status:** items 1 to 3 shipped on 2026-10-01, in #893, #888 and #887, and item 4
+shipped the same day in #897. The *Phase 6* section of
+`saved_plans/codex-parity-plan_2026-08-23.md` owns the order, the dependencies and the
+exit. #890 carries a duplication that #887 left in `runtime-parity.md`. #663, item 4's
+owner, stays open for residue that is not Phase 6 work; its 2026-10-01 comment names it.
+**Owner:**
 [#243](https://github.com/topij/agentic-dev-kit/issues/243),
 [#878](https://github.com/topij/agentic-dev-kit/issues/878),
 [#879](https://github.com/topij/agentic-dev-kit/issues/879),
 [#880](https://github.com/topij/agentic-dev-kit/issues/880),
 [#890](https://github.com/topij/agentic-dev-kit/issues/890).
 
-▶ Next: [#663](https://github.com/topij/agentic-dev-kit/issues/663) — route
-`session-start`'s open-pull-request reads through `pr_watch.py --json --no-persist`, and
-fold the REST backend's repeated fetch inside `pr_watch.py`. A behavioural change to
-`pr_watch.py` is safety-critical: read `docs/agentic-dev-kit/safety-critical-changes.md`
-first, and hold the PR for the operator's merge.
+▶ Next: [#243](https://github.com/topij/agentic-dev-kit/issues/243) — Phase 6 item 5:
+move adapter bodies from `_CURRENT_CONTEXTS` to per-runtime templates, add the
+appended-instruction mutation for `adopt`, `upgrade` and `pr-watch`, and fix the stale
+"`SKILL.md` step 5" citation in `fallback-review-panel.md`. Its residue is stated in
+#243's 2026-09-30 comment. If the move changes a rendered adapter under `.claude/`,
+split the work as the plan's item 5 prescribes: a lane takes the runtime-neutral half
+and `.agents/`, the cockpit takes `.claude/` (#627), and both land as one PR.
+
+### Scratch retention
+
+**Status:** filed on 2026-10-01 as #900. Review lenses' mutation clones, session
+scratchpads and killed pytest basetemps pile up under `/private/tmp` with nothing to
+sweep them. They filled the disk on 2026-09-29 and again overnight into 2026-10-01. A
+manual cleanup on 2026-10-01 removed the stale ones. `state/review-evidence/` is kept
+until #861 sets its retention rule. **Owner:** [#900](https://github.com/topij/agentic-dev-kit/issues/900),
+[#861](https://github.com/topij/agentic-dev-kit/issues/861),
+[#895](https://github.com/topij/agentic-dev-kit/issues/895).
+
+▶ Next: #900 — build `scripts/sweep_scratch.py`, report mode first, then the guarded
+`--apply`. It deletes files, so read `docs/agentic-dev-kit/safety-critical-changes.md`
+first and hold the PR for the operator's merge.
 
 ### Reviewer profiles
 
