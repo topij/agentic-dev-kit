@@ -1,4 +1,18 @@
 ---
+adoption:
+  other_runtime: installed
+  surfaces:
+    shared:
+      - AGENTS.md
+    claude:
+      - CLAUDE.md
+      - .claude/settings.json
+      - .claude/rules/safety-critical-changes.md
+      - .claude/agents/adversarial.md
+      - .claude/agents/correctness.md
+      - config/claude-lane-settings.json
+    codex:
+      - .codex/hooks.json
 workflow_contract:
   - name: session-start
     status: aligned
@@ -51,9 +65,10 @@ workflow_contract:
 # Runtime parity contract
 
 This is the current contract for Claude Code and Codex support in
-agentic-dev-kit. The front matter is the machine-readable workflow inventory;
-repository tests derive their expected shared definitions and runtime bindings from
-it. Add or change a workflow there in the same change that moves its implementation.
+agentic-dev-kit. The front matter is the machine-readable workflow inventory and
+adoption footprint; repository tests derive their expected shared definitions, runtime
+bindings and fresh-install surfaces from it. Add or change a workflow there in the same
+change that moves its implementation.
 
 ## What parity means
 
@@ -78,8 +93,37 @@ Codex project configuration remain runtime-native surfaces.
 - `companion` — shared material is loaded by the workflow named in `loaded_by` and
   deliberately has no direct runtime command or skill.
 
-The machine-readable declaration is authoritative for file coverage. The matrix below
+The machine-readable declarations are authoritative for file coverage. The matrix below
 records broader capability parity that cannot be expressed as an adapter path.
+
+## Adoption footprint
+
+The front matter's `adoption` block declares what the template route delivers besides
+the workflow adapters: the kit's tracked files in a new repository, then `init.sh`.
+`surfaces` lists each runtime's other files — its entry point, hook registration,
+path-scoped rule, lens definitions and lane profile — and, under `shared`, the entry
+point every runtime reads. `other_runtime` records what an adopter that runs one
+runtime receives of the other:
+
+- `installed` — both runtimes' adapters and surfaces, whatever `runtime.default` names.
+  Decided by the operator on 2026-10-01 (#878): the adapters are thin, a runtime that
+  is not run never reads its files, and a runtime added later finds its adapters
+  already in place. Neither the template route nor `init.sh` selects files by runtime;
+  `runtime.default` selects the lane launcher and the session-start invocation
+  `init.sh` prints.
+
+`/adopt`, for a repository that already has its own files, proposes both adapter sets
+too, installs only targets the repository does not already hold, and writes no hook
+registration; `init.sh` prints those instead.
+
+The kit's repository-only fresh-install fixtures install the kit into fresh Codex-only,
+Claude-only and dual-runtime repositories. Each install must hold exactly what this
+block and the workflow inventory declare under `.claude/`, `.agents/` and `.codex/`,
+every adapter must be the one rendered from `scripts/lib/adapter_templates/`, the
+entry points must be rendered, and the other surfaces must arrive unchanged by
+`init.sh`. A file in one of those directories that neither declares fails them, so a
+new runtime file ships with its declaration. The surfaces' own content is pinned by
+the tests of each file, not by the fixtures.
 
 ## Capability matrix
 
@@ -87,6 +131,7 @@ records broader capability parity that cannot be expressed as an adapter path.
 |---|---|---|---|---|
 | Repository instructions | `AGENTS.md` | `CLAUDE.md` imports it | reads `AGENTS.md` directly | aligned |
 | Workflow adapters | `docs/agentic-dev-kit/workflows/` | `.claude/commands/` | `.agents/skills/` | declaration above is authoritative |
+| Fresh-install footprint | the front matter's `adoption` block | every Claude adapter and surface | every Codex adapter and surface | decided (#878, 2026-10-01): `other_runtime: installed`, so an adopter that runs one runtime still receives the other's files, inert. Pinned per adopter by the kit's fresh-install fixtures; see [*Adoption footprint*](#adoption-footprint) |
 | Safety-critical doctrine | `docs/agentic-dev-kit/safety-critical-changes.md` | path-scoped `.claude/rules/` binding | precise root `AGENTS.md` routing for the merge-authority engines | aligned for the stamped supported-client observation: structure proves the route; prompt input and live events establish that the trusted run supplied it and read and applied the shared doctrine |
 | Document-budget tripwire | `check_doc_budget.py` | `SessionStart` | open-ended match-all `SessionStart` with a bounded command timeout | aligned: repository semantics are deterministic and the supported trusted client ran the equivalent lifecycle shape |
 | Runtime memory tripwire | runtime-specific artifact | `check_memory_budget.py` checks Claude's `MEMORY.md` | no corresponding repository artifact | intentional difference: never invoke the Claude engine on Codex |

@@ -216,7 +216,9 @@ runtime adapters are intentionally thin:
 
 [`docs/agentic-dev-kit/runtime-parity.md`](docs/agentic-dev-kit/runtime-parity.md)
 is the authoritative adapter inventory and records deliberate exceptions and open
-capability gaps.
+capability gaps. A fresh install from the template delivers both runtimes' adapters
+whichever one you run; the other runtime's adapters stay inert, already in place if
+you add that runtime later.
 
 Set `runtime.default` in `config/dev-model.yaml`. The lane launcher reads its command
 from `runtime.launchers`; shared workflows use the runtime-neutral
@@ -289,7 +291,7 @@ Each piece maps to one or more of the ten principles in
 | `docs/CLAUDE-sections.md` | #4 Merge classes, #5 PR follow-through | Ready-to-paste CLAUDE.md sections: risk-based PR splitting, the mandatory watch-to-green loop, execution rules, the rules-layout convention. |
 | `docs/autonomous-session-playbook.md` | #4, #5, #7 | The full operating contract for operator-requested autonomous sessions — branch hygiene, sequencing, local gate, ready-by-default PRs with a bounded material unfinished-work draft exception, watch-and-fix to merge, self-merge policy. |
 | `docs/agentic-dev-kit/safety-critical-changes.md` | #6 Safety-critical doctrine | Shared doctrine for send-gates, destructive operations, and kill/recovery paths; bound through the Claude rule and precise root `AGENTS.md` routing without a runtime-specific copy. |
-| `docs/agentic-dev-kit/runtime-parity.md` | Runtime parity | Machine-readable workflow inventory and capability matrix for Claude Code and Codex; structural adapter tests derive their expected set from this contract. |
+| `docs/agentic-dev-kit/runtime-parity.md` | Runtime parity | Machine-readable workflow inventory, adoption footprint and capability matrix for Claude Code and Codex; structural adapter tests and the fresh-install fixtures derive their expected set from this contract. |
 | `config/dev-model.yaml` | #10 No hardcoding | The single config surface every skill and script reads instead of hardcoding a value. |
 | `scripts/lib/kitconfig.py` | #10 No hardcoding | Stdlib-only reader for `config/dev-model.yaml`, used where an engine must stay dependency-free (`pr_watch.py` declares zero third-party deps). |
 | `scripts/check_doc_budget.py`, `scripts/archive_plan_sessions.py` | #1 | The tripwire and sweep that keep the handoff file from ballooning. Which files are watched — and how big each may get — is the `doc_budgets:` list in `config/dev-model.yaml`; each entry is `{path, budget, archive, remedy}`, and the `remedy` string is what the warning tells you to run. Warn-only by default — it exits 0 even when a doc is over budget, and returns 1 only under `--strict`. It exits 2 on a usage or config error whatever the flags, so a `path:` naming a doc you have since renamed will gate any pipeline that runs it. |
