@@ -22,7 +22,7 @@
 
 ## Session — 2026-10-01 (Phase 6 items 1 to 3, the triage guard, the two-link way out, in Claude Code)
 
-This continues the 2026-09-30 session below, after its wrap-up.
+This continues the *Phase 6 planned* session entry below, after its wrap-up.
 
 **Shipped.**
 
@@ -46,8 +46,9 @@ This continues the 2026-09-30 session below, after its wrap-up.
 
 - Build #875 even though the premise check had put it on hold. The correction comment on
   #875 retracts the first estimate.
-- Leave the two-link state to a documented manual step. #892 carries the engine route, to
-  be built only if the state recurs.
+- Leave the two-link state to a documented manual step. This answers the question the
+  entry below held for the operator. #892 carries the engine route, to be built only if
+  the state recurs.
 - *Triage engine hardening*'s next step is #891.
 
 **Filed**, each on the operator's approval of its exact text: #890, #891, #892, #895.
@@ -69,8 +70,8 @@ is #852's trap on a later round, and its dispositions went in as a plain comment
   background `make test`. The cockpit finished the work (the #514 comment).
 
 **Verified.** Each PR's body carries its `env -u FORCE_COLOR make test` stamp at a named
-sha. On main, `gh run list --commit <sha>` showed the `Test` workflow completed
-`success` on `95822fb`, `e559b5f`, `757a6c0`, `2a81896` and `25fde2c`.
+sha. On main on 2026-10-01, `gh run list --commit <sha>` showed the `Test` workflow
+completed `success` on `95822fb`, `e559b5f`, `757a6c0`, `2a81896` and `25fde2c`.
 
 ______________________________________________________________________
 
