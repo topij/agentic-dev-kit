@@ -126,7 +126,7 @@
 # is silent and in the confident direction — forget it once and the mutant reads
 # as killed.
 
-.PHONY: install-hooks test mutation-test check-syntax lint
+.PHONY: install-hooks test test-fast mutation-test check-syntax lint
 
 install-hooks:
 	@engines_dir="$$(python3 -c "import sys; sys.path.insert(0, 'scripts/lib'); import kitconfig; c = kitconfig.load_config(); print(kitconfig.get(c, 'paths.engines', 'scripts'))" 2>/dev/null || echo scripts)"; \
@@ -143,6 +143,13 @@ check-syntax:
 
 test: lint check-syntax
 	uv run --with pytest --with pyyaml python -m pytest scripts/lib/state_paths/tests scripts/tests -q
+
+# An inner-loop convenience, never a verification claim: the same lint and
+# check-syntax, then the suite without the `evidence`-marked tests (the
+# bundle walkers and the copytree fixtures). `make test` stays the
+# verification command (#875).
+test-fast: lint check-syntax
+	uv run --with pytest --with pyyaml python -m pytest scripts/lib/state_paths/tests scripts/tests -q -m 'not evidence'
 
 mutation-test: lint check-syntax
 	uv run --with pytest --with pyyaml python -m pytest scripts/lib/state_paths/tests scripts/tests -q -m 'not driftcheck'

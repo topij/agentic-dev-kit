@@ -115,6 +115,7 @@ review:
     return root
 
 
+@pytest.mark.evidence
 @pytest.mark.parametrize("engines", ["scripts", "scripts/devkit", "scr&ipts"])
 def test_lens_definition_inspection_reports_missing_current_and_stale(tmp_path, engines):
     root = _lens_repo(tmp_path, engines=engines)
@@ -209,6 +210,7 @@ def test_lens_definition_inspection_reports_missing_current_and_stale(tmp_path, 
     ]
 
 
+@pytest.mark.evidence
 def test_the_lens_remedy_does_not_prescribe_an_engine_this_tree_lacks(tmp_path):
     """#661's second occurrence: the remedy was printed unconditionally, against
     the KIT's dependency graph rather than the adopter's installed surface. One
@@ -247,6 +249,7 @@ def test_the_lens_remedy_does_not_prescribe_an_engine_this_tree_lacks(tmp_path):
     assert "this check never executes the command or writes the definitions" in rendered
 
 
+@pytest.mark.evidence
 def test_a_configured_compute_change_makes_the_definition_stale(tmp_path):
     root = _lens_repo(tmp_path)
     definition = root / ".claude" / "agents" / "adversarial.md"
@@ -263,6 +266,7 @@ def test_a_configured_compute_change_makes_the_definition_stale(tmp_path):
     assert [(item.lens, item.state) for item in statuses] == [("adversarial", "stale")]
 
 
+@pytest.mark.evidence
 def test_lens_inspection_does_not_execute_the_adopter_generator(tmp_path):
     root = _lens_repo(tmp_path)
     sentinel = root / "doctor-executed-generator"
@@ -280,6 +284,7 @@ def test_lens_inspection_does_not_execute_the_adopter_generator(tmp_path):
     assert not sentinel.exists()
 
 
+@pytest.mark.evidence
 def test_a_malformed_lens_roster_is_unverifiable(tmp_path):
     root = _lens_repo(tmp_path)
     config_path = root / "config" / "dev-model.yaml"
@@ -300,6 +305,7 @@ def test_a_malformed_lens_roster_is_unverifiable(tmp_path):
     assert "roster is not a list" in statuses[0].detail
 
 
+@pytest.mark.evidence
 def test_a_malformed_lens_roster_entry_is_unverifiable(tmp_path):
     root = _lens_repo(tmp_path)
     config_path = root / "config" / "dev-model.yaml"
@@ -318,6 +324,7 @@ def test_a_malformed_lens_roster_entry_is_unverifiable(tmp_path):
     assert "entry has no string name" in statuses[0].detail
 
 
+@pytest.mark.evidence
 def test_an_unreadable_lens_definition_is_reported_and_rendered(
     tmp_path, monkeypatch
 ):
@@ -353,6 +360,7 @@ def test_an_unreadable_lens_definition_is_reported_and_rendered(
     assert "unreadable — definition denied" in rendered
 
 
+@pytest.mark.evidence
 def test_regeneration_imports_the_sibling_doctor_before_a_lib_shadow(tmp_path):
     root = _lens_repo(tmp_path)
     sentinel = root / "shadow-doctor-executed"
@@ -391,6 +399,7 @@ def render_agent_definition(*_args):
     assert not sentinel.exists()
 
 
+@pytest.mark.evidence
 def test_json_reports_missing_lens_definitions_as_advisory(tmp_path, capsys):
     root = _lens_repo(tmp_path)
     manifest_path = tmp_path / "comparison.json"
@@ -474,6 +483,7 @@ def test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned(
     assert "refresh freely" in status.detail
 
 
+@pytest.mark.evidence
 def test_authored_adapter_change_is_reported_and_preserved_for_each_runtime(
     tmp_path, adapter_source
 ):
@@ -684,6 +694,7 @@ def test_installed_test_targets_skip_a_declined_missing_test_root(tmp_path):
     assert run_installed_tests.installed_test_targets(tmp_path, manifest, "scripts") == []
 
 
+@pytest.mark.evidence
 def test_doctor_default_report_starts_without_the_adapter_renderer(tmp_path):
     root = _fake_repo(tmp_path / "adopter", engines="scripts/devkit")
     engine = root / "scripts" / "devkit"
@@ -750,6 +761,7 @@ def test_installed_test_targets_refuse_declared_symlinked_ancestor(tmp_path):
     assert (outside / "test_link.py").read_bytes() == before
 
 
+@pytest.mark.evidence
 def test_adapter_report_refuses_a_source_adapter_the_renderer_does_not_own(
     tmp_path, capsys, adapter_source
 ):

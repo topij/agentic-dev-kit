@@ -340,6 +340,7 @@ def _run_launcher(
     )
 
 
+@pytest.mark.evidence
 def test_supported_launcher_replaces_inherited_identity_and_binds_observation(
     tmp_path: Path,
 ) -> None:
@@ -401,6 +402,7 @@ def test_supported_launcher_replaces_inherited_identity_and_binds_observation(
     assert receipt["terminal"]["final_message_sha256"]
 
 
+@pytest.mark.evidence
 def test_caller_inheritable_file_descriptor_is_closed_before_runtime_exec(
     tmp_path: Path,
 ) -> None:
@@ -449,6 +451,7 @@ def test_caller_inheritable_file_descriptor_is_closed_before_runtime_exec(
     assert final["inherited_fd_open"] is False
 
 
+@pytest.mark.evidence
 def test_relative_runtime_command_uses_only_the_trusted_executable_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -502,6 +505,7 @@ def test_relative_runtime_command_uses_only_the_trusted_executable_path(
     assert not hostile_marker.exists()
 
 
+@pytest.mark.evidence
 @pytest.mark.parametrize(
     ("key", "foreign"),
     (
@@ -533,6 +537,7 @@ def test_descriptor_environment_is_cross_bound_to_lane_identity(
     assert not Path(descriptor["session_dir"], "launch-attempt.json").exists()
 
 
+@pytest.mark.evidence
 def test_issuer_authority_rejects_id_and_window_rewrite_before_launch(
     tmp_path: Path,
 ) -> None:
@@ -641,6 +646,7 @@ def test_foreign_identity_mutations_are_rejected(field: str, foreign: str) -> No
         launcher._validate_observation(expected, observed)
 
 
+@pytest.mark.evidence
 def test_stale_descriptor_is_rejected_after_canonical_rewrite(tmp_path: Path) -> None:
     launcher = _load_launcher()
     _repo, _engine, _sessions, descriptor, _prompt, _env = _install_repo(tmp_path)
@@ -725,6 +731,7 @@ def test_descriptor_scrub_refuses_when_live_descriptors_cannot_be_enumerated(
         launcher._close_nonstandard_descriptors()
 
 
+@pytest.mark.evidence
 def test_success_without_final_message_evidence_is_failure(tmp_path: Path) -> None:
     _repo, engine, _sessions, descriptor, prompt, env = _install_repo(
         tmp_path, write_final=False
@@ -741,6 +748,7 @@ def test_success_without_final_message_evidence_is_failure(tmp_path: Path) -> No
     assert "final-message evidence" in receipt["terminal"]["error"]
 
 
+@pytest.mark.evidence
 def test_receipt_evidence_objects_do_not_alias(tmp_path: Path) -> None:
     _repo, engine, sessions, descriptor, prompt, env = _install_repo(tmp_path)
     result = _run_launcher(engine, descriptor, prompt, env)
@@ -756,6 +764,7 @@ def test_receipt_evidence_objects_do_not_alias(tmp_path: Path) -> None:
     assert receipt["observed"] == observed_before
 
 
+@pytest.mark.evidence
 def test_forced_interruption_stops_child_and_records_terminal_outcome(tmp_path: Path) -> None:
     _repo, engine, sessions, descriptor, prompt, env = _install_repo(tmp_path, sleep=True)
     process = subprocess.Popen(
@@ -793,6 +802,7 @@ def test_forced_interruption_stops_child_and_records_terminal_outcome(tmp_path: 
         os.kill(child_pid, 0)
 
 
+@pytest.mark.evidence
 def test_internal_child_mode_cannot_be_forged_by_a_caller(tmp_path: Path) -> None:
     launcher = _load_launcher()
     _repo, engine, _sessions, descriptor, _prompt, env = _install_repo(tmp_path)
@@ -882,6 +892,7 @@ def test_internal_child_mode_cannot_be_forged_by_a_caller(tmp_path: Path) -> Non
     assert not final_path.exists()
 
 
+@pytest.mark.evidence
 def test_descriptor_id_cannot_escape_the_session_evidence_namespace(
     tmp_path: Path,
 ) -> None:
@@ -899,6 +910,7 @@ def test_descriptor_id_cannot_escape_the_session_evidence_namespace(
         launcher._load_descriptor(path)
 
 
+@pytest.mark.evidence
 def test_corrupted_observation_cannot_be_terminalized_as_success(tmp_path: Path) -> None:
     _repo, engine, sessions, descriptor, prompt, env = _install_repo(
         tmp_path, corrupt_receipt=True
@@ -919,6 +931,7 @@ def test_corrupted_observation_cannot_be_terminalized_as_success(tmp_path: Path)
     assert "observed receipt changed" in receipt["terminal"]["error"]
 
 
+@pytest.mark.evidence
 def test_sigterm_ignoring_child_is_forcibly_stopped_within_the_configured_bound(
     tmp_path: Path,
 ) -> None:
@@ -970,6 +983,7 @@ def test_sigterm_ignoring_child_is_forcibly_stopped_within_the_configured_bound(
         os.kill(child_pid, 0)
 
 
+@pytest.mark.evidence
 def test_descriptor_is_one_shot_after_a_successful_launch(tmp_path: Path) -> None:
     launcher = _load_launcher()
     _repo, engine, _sessions, descriptor, prompt, env = _install_repo(tmp_path)
@@ -998,6 +1012,7 @@ def test_descriptor_is_one_shot_after_a_successful_launch(tmp_path: Path) -> Non
     assert "already has a launch attempt" in second.stderr
 
 
+@pytest.mark.evidence
 def test_partial_descriptor_without_rewrite_seal_cannot_launch(tmp_path: Path) -> None:
     _repo, engine, _sessions, descriptor, prompt, env = _install_repo(tmp_path)
     authority_path = Path(descriptor["session_dir"]) / "launch-authority.json"
@@ -1010,6 +1025,7 @@ def test_partial_descriptor_without_rewrite_seal_cannot_launch(tmp_path: Path) -
     assert not Path(descriptor["session_dir"], "launch-attempt.json").exists()
 
 
+@pytest.mark.evidence
 def test_preexisting_final_message_path_blocks_launch(tmp_path: Path) -> None:
     _repo, engine, sessions, descriptor, prompt, env = _install_repo(tmp_path)
     final_path = sessions / "probe" / f"launch-final-{descriptor['descriptor_id']}.txt"
@@ -1028,6 +1044,7 @@ def test_preexisting_final_message_path_blocks_launch(tmp_path: Path) -> None:
     assert final_path.read_text(encoding="utf-8") == "stale evidence"
 
 
+@pytest.mark.evidence
 def test_rewritten_prompt_contract_is_rejected_before_launch(tmp_path: Path) -> None:
     launcher = _load_launcher()
     _repo, engine, sessions, descriptor, prompt, env = _install_repo(tmp_path)
@@ -1049,6 +1066,7 @@ def test_rewritten_prompt_contract_is_rejected_before_launch(tmp_path: Path) -> 
     assert not sessions.joinpath("probe", "launch-attempt.json").exists()
 
 
+@pytest.mark.evidence
 def test_descendant_cannot_outlive_a_successful_child_leader(tmp_path: Path) -> None:
     _repo, engine, sessions, descriptor, prompt, env = _install_repo(
         tmp_path, spawn_descendant=True
@@ -1076,6 +1094,7 @@ def test_descendant_cannot_outlive_a_successful_child_leader(tmp_path: Path) -> 
                 os.kill(descendant_pid, signal.SIGKILL)
 
 
+@pytest.mark.evidence
 def test_detached_descendant_blocks_success_and_is_terminated(tmp_path: Path) -> None:
     _repo, engine, sessions, descriptor, prompt, env = _install_repo(
         tmp_path, spawn_detached_descendant=True
@@ -1103,6 +1122,7 @@ def test_detached_descendant_blocks_success_and_is_terminated(tmp_path: Path) ->
                 os.kill(detached_pid, signal.SIGKILL)
 
 
+@pytest.mark.evidence
 def test_interruption_terminates_detached_launch_lineage(tmp_path: Path) -> None:
     _repo, engine, sessions, descriptor, prompt, env = _install_repo(
         tmp_path, sleep=True, spawn_detached_descendant=True
@@ -1147,6 +1167,7 @@ def test_interruption_terminates_detached_launch_lineage(tmp_path: Path) -> None
             os.kill(detached_pid, signal.SIGKILL)
 
 
+@pytest.mark.evidence
 def test_exception_after_reaped_leader_still_cleans_up_descendant(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1206,6 +1227,7 @@ def _receipt(sessions: Path, descriptor: dict[str, object]) -> dict[str, object]
     )
 
 
+@pytest.mark.evidence
 def test_claude_wrapper_replaces_inherited_identity_and_binds_json_final_text(
     tmp_path: Path,
 ) -> None:
@@ -1294,6 +1316,7 @@ def test_claude_wrapper_replaces_inherited_identity_and_binds_json_final_text(
     assert receipt["observed"]["repo_root"] == str(repo)
 
 
+@pytest.mark.evidence
 def test_codex_child_argv_is_pinned_with_the_policy_slot_and_evidence_route_unchanged(
     tmp_path: Path,
 ) -> None:
@@ -1343,6 +1366,7 @@ def test_codex_child_argv_is_pinned_with_the_policy_slot_and_evidence_route_unch
     ).hexdigest()
 
 
+@pytest.mark.evidence
 @pytest.mark.parametrize(
     ("output", "fragment"),
     (
@@ -1374,6 +1398,7 @@ def test_hostile_claude_stdout_is_a_failed_terminal_receipt(
     assert Path(descriptor["session_dir"], "launch-attempt.json").exists()
 
 
+@pytest.mark.evidence
 def test_claude_prompt_not_delivered_on_stdin_is_visible_in_the_final_text(
     tmp_path: Path,
 ) -> None:
@@ -1396,6 +1421,7 @@ def test_claude_prompt_not_delivered_on_stdin_is_visible_in_the_final_text(
     assert json.loads(envelope["result"])["contract_first"] is True
 
 
+@pytest.mark.evidence
 @pytest.mark.parametrize(
     ("runtime", "key", "declared"),
     (
@@ -1429,6 +1455,7 @@ def test_declared_transport_the_runtime_does_not_implement_is_refused(
     assert not Path(descriptor["session_dir"], "launch-attempt.json").exists()
 
 
+@pytest.mark.evidence
 def test_descriptor_for_an_untemplated_runtime_is_refused(tmp_path: Path) -> None:
     launcher = _load_launcher()
     _repo, engine_dir, _sessions, descriptor, prompt, env = _install_repo(
@@ -1471,6 +1498,7 @@ def test_descriptor_for_an_untemplated_runtime_is_refused(tmp_path: Path) -> Non
     assert not Path(descriptor["session_dir"], "launch-attempt.json").exists()
 
 
+@pytest.mark.evidence
 def test_claude_final_text_is_not_accepted_before_the_observation_is_bound(
     tmp_path: Path,
 ) -> None:
@@ -1484,6 +1512,7 @@ def test_claude_final_text_is_not_accepted_before_the_observation_is_bound(
     assert "observed receipt changed" in receipt["terminal"]["error"]
 
 
+@pytest.mark.evidence
 def test_claude_descriptor_is_one_shot_after_a_successful_launch(tmp_path: Path) -> None:
     _repo, engine_dir, _sessions, descriptor, prompt, env = _install_repo(
         tmp_path, runtime="claude"
@@ -1686,6 +1715,7 @@ def _rewrite_parallel_key(descriptor: dict[str, object], key: str, value: str | 
     config_path.write_text("".join(rewritten), encoding="utf-8")
 
 
+@pytest.mark.evidence
 @pytest.mark.parametrize(
     ("runtime", "declared", "mode_argv"),
     (
@@ -1722,6 +1752,7 @@ def test_each_declared_policy_reaches_the_child_argv_in_the_fixed_slot(
     assert receipt["observed"]["argv"] == [*receipt["request"]["configured_command"], *argv]
 
 
+@pytest.mark.evidence
 def test_permission_denials_fail_the_lane_before_any_success(tmp_path: Path) -> None:
     # Positive construction for the approval transition: Claude's envelope for a
     # refused write is `subtype=success`, `is_error=false`; the refusal lives only
@@ -1744,6 +1775,7 @@ def test_permission_denials_fail_the_lane_before_any_success(tmp_path: Path) -> 
     assert Path(descriptor["session_dir"], "launch-attempt.json").exists()
 
 
+@pytest.mark.evidence
 def test_result_without_a_denial_list_is_not_success(tmp_path: Path) -> None:
     _repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(
         tmp_path, runtime="claude", claude_output="no-denial-list"
@@ -1756,6 +1788,7 @@ def test_result_without_a_denial_list_is_not_success(tmp_path: Path) -> None:
     assert receipt["terminal"]["permission_denials"] is None
 
 
+@pytest.mark.evidence
 @pytest.mark.parametrize(
     ("runtime", "key", "declared"),
     (
@@ -1911,6 +1944,7 @@ def test_edit_tool_allow_must_be_scoped_inside_the_worktree(entry: str, escapes:
     assert launcher._edit_allow_escapes_the_worktree(entry) is escapes
 
 
+@pytest.mark.evidence
 @pytest.mark.parametrize(
     ("profile", "fragment"),
     (
@@ -1998,6 +2032,7 @@ def test_widening_or_malformed_settings_profile_is_a_refused_trust_step(
     assert not Path(descriptor["session_dir"], "launch-attempt.json").exists()
 
 
+@pytest.mark.evidence
 @pytest.mark.parametrize(
     "profile",
     (
@@ -2026,6 +2061,7 @@ def test_bounded_or_narrowing_settings_profile_is_accepted(
     assert _receipt(sessions, descriptor)["status"] == "completed"
 
 
+@pytest.mark.evidence
 def test_missing_symlinked_or_undeclared_settings_profile_is_refused(tmp_path: Path) -> None:
     repo, engine_dir, _sessions, descriptor, prompt, env = _install_repo(
         tmp_path, runtime="claude"
@@ -2061,6 +2097,7 @@ def test_missing_symlinked_or_undeclared_settings_profile_is_refused(tmp_path: P
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.evidence
 def test_absolute_profile_path_outside_the_repository_is_accepted_and_bound(
     tmp_path: Path,
 ) -> None:
