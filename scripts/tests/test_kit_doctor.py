@@ -1752,10 +1752,13 @@ def test_repo_only_paths_are_hashed_but_not_offered_to_an_adopter(tmp_path):
     assert repo_only.isdisjoint(recorded["files"])
     assert repo_only.isdisjoint(recorded["not_installed"])
 
+    # By role, not by `.md` alone: the adapter templates are `.md` too, but they sit
+    # under the engines directory, which a vendored install moves, so a kit-layout
+    # path from `REPO_ROOT` does not reach them there.
     adopter_doctrine = {
         rel: (REPO_ROOT / rel).read_text(encoding="utf-8")
-        for rel, _role in kit_doctor.ADOPTER_KIT_OWNED
-        if rel.endswith(".md")
+        for rel, role in kit_doctor.ADOPTER_KIT_OWNED
+        if rel.endswith(".md") and role in ("doctrine", "workflow")
     }
     for repo_only_path in repo_only:
         basename = Path(repo_only_path).name

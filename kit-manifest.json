@@ -570,7 +570,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "e2e3de8f7c3aa4b627d3ea6fa4f835f84644f3af5dead0bf52044e80defe91f8"
+      "sha256": "c6fd2043580f71c5c4f478fe6b5371d9b4614d3113e169ed1f789b8190331672"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
