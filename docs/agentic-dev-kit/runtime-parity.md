@@ -93,29 +93,37 @@ Codex project configuration remain runtime-native surfaces.
 - `companion` — shared material is loaded by the workflow named in `loaded_by` and
   deliberately has no direct runtime command or skill.
 
-The machine-readable declaration is authoritative for file coverage. The matrix below
+The machine-readable declarations are authoritative for file coverage. The matrix below
 records broader capability parity that cannot be expressed as an adapter path.
 
 ## Adoption footprint
 
-The front matter's `adoption` block declares what a fresh install delivers besides the
-workflow adapters. `surfaces` lists each runtime's other files — its entry point, hook
-registration, path-scoped rule, lens definitions and lane profile — and, under
-`shared`, the entry point every runtime reads. `other_runtime` records what an adopter
-that runs one runtime receives of the other:
+The front matter's `adoption` block declares what the template route delivers besides
+the workflow adapters: the kit's tracked files in a new repository, then `init.sh`.
+`surfaces` lists each runtime's other files — its entry point, hook registration,
+path-scoped rule, lens definitions and lane profile — and, under `shared`, the entry
+point every runtime reads. `other_runtime` records what an adopter that runs one
+runtime receives of the other:
 
 - `installed` — both runtimes' adapters and surfaces, whatever `runtime.default` names.
   Decided by the operator on 2026-10-01 (#878): the adapters are thin, a runtime that
-  is not run never reads its files, and a runtime added later needs no re-adoption.
-  Neither the template route nor `init.sh` selects files by runtime;
+  is not run never reads its files, and a runtime added later finds its adapters
+  already in place. Neither the template route nor `init.sh` selects files by runtime;
   `runtime.default` selects the lane launcher and the session-start invocation
   `init.sh` prints.
 
+`/adopt`, for a repository that already has its own files, proposes both adapter sets
+too, installs only targets the repository does not already hold, and writes no hook
+registration; `init.sh` prints those instead.
+
 The kit's repository-only fresh-install fixtures install the kit into fresh Codex-only,
-Claude-only and dual-runtime repositories and check each install against this block,
-the workflow inventory above and the adapters rendered from
-`scripts/lib/adapter_templates/`. A file under `.claude/`, `.agents/` or `.codex/` that
-neither declares fails it, so a new runtime file ships with its declaration.
+Claude-only and dual-runtime repositories. Each install must hold exactly what this
+block and the workflow inventory declare under `.claude/`, `.agents/` and `.codex/`,
+every adapter must be the one rendered from `scripts/lib/adapter_templates/`, the
+entry points must be rendered, and the other surfaces must arrive unchanged by
+`init.sh`. A file in one of those directories that neither declares fails them, so a
+new runtime file ships with its declaration. The surfaces' own content is pinned by
+the tests of each file, not by the fixtures.
 
 ## Capability matrix
 

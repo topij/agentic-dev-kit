@@ -216,9 +216,9 @@ runtime adapters are intentionally thin:
 
 [`docs/agentic-dev-kit/runtime-parity.md`](docs/agentic-dev-kit/runtime-parity.md)
 is the authoritative adapter inventory and records deliberate exceptions and open
-capability gaps. A fresh install delivers both runtimes' adapters whichever one you
-run; the other runtime's files stay inert, and adding that runtime later needs no
-re-adoption.
+capability gaps. A fresh install from the template delivers both runtimes' adapters
+whichever one you run; the other runtime's adapters stay inert, already in place if
+you add that runtime later.
 
 Set `runtime.default` in `config/dev-model.yaml`. The lane launcher reads its command
 from `runtime.launchers`; shared workflows use the runtime-neutral

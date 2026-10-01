@@ -36,7 +36,7 @@
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
-      "sha256": "f859ad2f0a77592416d0e1c00e9d24f9866c8ef69e1ab7386ddda1aaadaab9a7"
+      "sha256": "f402fe06b0c4f834b7131422bcb9b1e5df3cb383742deaf23aece87d4c6f1877"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
@@ -554,7 +554,7 @@
     },
     "scripts/tests/test_adoption_fixtures.py": {
       "role": "repo-only",
-      "sha256": "41c9b58b5c725450d1342607f9ab851581e9473b5f057c0b461a1df7cc433ae7"
+      "sha256": "b9d6a7f35bf10617c9ef9193279de456a761fd88855f6f05e6920fcbbfef2720"
     },
     "scripts/tests/test_check_memory_budget.py": {
       "role": "test",

@@ -13,6 +13,10 @@ runtime files they already keep before the kit arrives:
 - **claude-only** answers `claude` and keeps its own local Claude settings and a command;
 - **dual-runtime** answers `claude` and keeps both.
 
+Those own files are ones the kit does not ship. A repository that already holds its own
+copy of a file the kit ships is the case `/adopt` exists for: the template route
+overwrites it, as the README warns.
+
 `other_runtime: installed` in the declaration is #878 step 3's answer, decided by the
 operator on 2026-10-01: an adopter receives both runtimes' files whatever
 `runtime.default` names. So the expected footprint here never depends on the adopter's
@@ -278,8 +282,11 @@ def _assert_install_matches_declaration(install: Install, declaration: dict) -> 
                 f"{adopter.name}: {rel} is not the adapter rendered from its template"
             )
 
-    # Entry points are rendered from their templates; every other surface, and each
-    # skill's interface file, arrives as the kit ships it.
+    # Entry points are rendered from their templates. Every other surface, and each
+    # skill's interface file, arrives unchanged by the install. That compares the
+    # install with the tree it was copied from, so it catches `init.sh` altering a
+    # surface, not a change to the kit's own copy: each surface's content is pinned by
+    # the tests of the file itself, such as the shipped-registration references.
     templates = REPO_ROOT / "docs" / "templates"
     surfaces = {rel for paths in adoption["surfaces"].values() for rel in paths}
     for rel in sorted(surfaces | _interfaces(declaration)):
@@ -288,6 +295,7 @@ def _assert_install_matches_declaration(install: Install, declaration: dict) -> 
             assert text.startswith(f"<!-- Rendered from docs/templates/{rel}.tmpl"), (
                 f"{adopter.name}: {rel} was not rendered from its template"
             )
+            assert "{{" not in text, f"{adopter.name}: {rel} keeps an unrendered template token"
         else:
             assert (root / rel).read_bytes() == (REPO_ROOT / rel).read_bytes(), (
                 f"{adopter.name}: {rel} differs from the kit's"
@@ -310,10 +318,11 @@ def _assert_install_matches_declaration(install: Install, declaration: dict) -> 
     assert set(shipped) >= set(RUNTIMES)
     for runtime in RUNTIMES:
         assert shipped[runtime], f"the kit ships no {runtime} config keys to compare"
-        assert received.get(runtime) == shipped[runtime], (
-            f"{adopter.name}: {runtime} config keys differ from the kit's: "
-            f"{sorted(set(shipped[runtime]) ^ set(received.get(runtime, {})))}"
+        got = received.get(runtime, {})
+        changed = sorted(
+            path for path in set(shipped[runtime]) | set(got) if shipped[runtime].get(path) != got.get(path)
         )
+        assert not changed, f"{adopter.name}: {runtime} config differs from the kit's at {changed}"
 
     # `init.sh` tells every adopter both registrations, and how to start its runtime.
     for runtime in RUNTIMES:
@@ -442,6 +451,12 @@ def test_a_changed_surface_or_own_file_fails(installs, name, tmp_path):
             AssertionError, match="rendered"
         ):
             _assert_install_matches_declaration(install, declaration)
+        # Rendered, but with a token left in.
+        path = install.root / rel
+        with _replaced(path, path.read_bytes() + b"\n{{PROJECT_NAME}}\n"), pytest.raises(
+            AssertionError, match="unrendered template token"
+        ):
+            _assert_install_matches_declaration(install, declaration)
     for rel in install.adopter.own:
         path = install.root / rel
         with _replaced(path, path.read_bytes() + b"\n"), pytest.raises(
@@ -457,7 +472,7 @@ def test_a_changed_surface_or_own_file_fails(installs, name, tmp_path):
 
 
 @pytest.mark.parametrize("name", [adopter.name for adopter in ADOPTERS])
-def test_a_dropped_runtime_config_key_fails(installs, name, tmp_path):
+def test_a_dropped_or_changed_runtime_config_key_fails(installs, name, tmp_path):
     install = _copy(installs[name], tmp_path)
     declaration = _declaration()
     config = install.root / CONFIG
@@ -471,9 +486,18 @@ def test_a_dropped_runtime_config_key_fails(installs, name, tmp_path):
             dropped, count = re.subn(pattern, "", text)
             assert count == 1, f"{CONFIG} no longer matches {pattern!r} once"
             with _replaced(config, dropped.encode("utf-8")), pytest.raises(
-                AssertionError, match=f"{runtime} config keys"
+                AssertionError, match=f"{runtime} config differs"
             ):
                 _assert_install_matches_declaration(install, declaration)
+        # The key kept, its value changed: the same leaves, so only the values differ.
+        changed, count = re.subn(
+            rf"(?m)^(  {runtime}_headless_command: \[{runtime}, )[^\],]+\]$", r"\g<1>changed]", text
+        )
+        assert count == 1, f"{CONFIG} no longer carries one {runtime}_headless_command list"
+        with _replaced(config, changed.encode("utf-8")), pytest.raises(
+            AssertionError, match=f"{runtime} config differs"
+        ):
+            _assert_install_matches_declaration(install, declaration)
     answered = re.sub(r"(?m)^(  default: )\w+", r"\g<1>none", text, count=1)
     with _replaced(config, answered.encode("utf-8")), pytest.raises(AssertionError):
         _assert_install_matches_declaration(install, declaration)
