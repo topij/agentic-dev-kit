@@ -162,10 +162,10 @@ still run, and the operator's user settings would otherwise apply. **Codex** rec
 
 | Runtime | Record | Promoted | Not promoted |
 |---|---|---|---|
-| Claude Code | [Claude writing-lane record](../../saved_plans/claude-writing-lane-live-validation_2026-08-27.md) | under the shipped `dont-ask` default with path-scoped edit tools: a scoped write, commit, push, pull request, and cockpit `pr-watch` with an empty denial list; a write beyond the worktree refused; a lane with denied calls terminalizing `failed`. `accept-edits` auto-accepts the runtime's own file-system Bash class regardless of the allow list, which is why it is not the default | a real repository: the record's lanes ran against a synthetic one |
+| Claude Code | [Claude writing-lane record](../../saved_plans/claude-writing-lane-live-validation_2026-08-27.md) | the config-declared policy and trust route in the child argv and the receipt; under the shipped `dont-ask` default with path-scoped edit tools: a scoped write, commit, push, pull request, and cockpit `pr-watch` with an empty denial list; a write beyond the worktree refused; a lane with denied calls terminalizing `failed`. `accept-edits` auto-accepts the runtime's own file-system Bash class regardless of the allow list, which is why it is not the default | a real repository: the record's lanes ran against a synthetic one |
 | Claude Code | [First real headless lane](../../saved_plans/first-real-headless-lane-live-validation_2026-08-28.md) (Claude Code 2.1.250, 2026-08-28) | on **this repository**, launcher and every shipped configuration value byte-identical: structured denial read-back with real denials in it, each naming its tool and target, retained under digests the receipt carries. A lane cannot write under `.claude/` — `Edit(**)` does not lift it, and neither the glob nor dot-directories is the mechanism — so a Claude lane cannot complete a runtime-parity change on its own, where a Codex lane edits its own adapter directory freely. The read-only Bash class the shipped profile relies on is a property of command **shape**, not command name: a loop or a `;`-chained compound of otherwise-accepted commands is denied | a lane driving CI or earning a `pr-watch` receipt on a real repository: the lane opened no pull request, and the cockpit opened `#625` only after writing the file the lane was refused |
 | Codex | [2026-08-27 writing-lane record](../../saved_plans/codex-writing-lane-live-validation_2026-08-27.md) | nothing: a historical observation | all of its behavior, because its temporary receipts, rollouts, and captures were removed at fixture cleanup |
-| Codex | [2026-08-30 rerun](../../saved_plans/codex-writing-lane-live-validation_2026-08-30.md), with its [retained redacted bundle](../../saved_plans/codex-writing-lane-evidence_2026-08-30/bundle.json) | only claims independently recomputable from the bundle, bound to the source revision, synthetic fixture revision, and reviewed head the record names: descriptor-scoped worktree/state output, the private PR's open, non-draft, GitHub `CLEAN` state, and an exact-head cockpit review receipt | the applied Codex model/effort/cwd, because its retained session attestation is not correlated to the launcher invocation; the earlier record's exact per-command approval transitions, native config reach, and future-client behavior; structured Codex denial read-back, because both writing-lane records carry `terminal.permission_denials: null` |
+| Codex | [2026-08-30 rerun](../../saved_plans/codex-writing-lane-live-validation_2026-08-30.md), with its [retained redacted bundle](../../saved_plans/codex-writing-lane-evidence_2026-08-30/bundle.json) | only claims independently recomputable from the bundle, bound to the source revision, synthetic fixture revision, and reviewed head the record names: descriptor-scoped worktree/state output, the private PR's open, non-draft, GitHub `CLEAN` state, and an exact-head cockpit review receipt | the applied Codex model/effort/cwd, because its retained session attestation is not correlated to the launcher invocation; the earlier record's exact per-command approval transitions, native config reach, and future-client behavior; that the observed output matched a pre-run request, because the task prompt is neither retained nor bound; structured Codex denial read-back, because both writing-lane records carry `terminal.permission_denials: null` while each run described denial and approval behavior in its final prose |
 | Codex | [2026-09-01 retained parallel-batch run](../../saved_plans/codex-parallel-batch-live-validation_2026-09-01.md), with its [redacted bundle](../../saved_plans/codex-parallel-batch-evidence_2026-09-01/bundle.json) | independently recomputable evidence for descriptor-scoped disjoint worktree and state-root identities across `parallel-alpha` and `parallel-beta`, both exact reviewed heads with scope-local dual-lens receipts, and operator-class merge refusal plus reconciliation-held, final open/unmerged forge state; the bundle fixes the complete claim map and every artifact path, provenance, and digest outside it | anything outside that claim map |
 
 ## Live promotion boundary
@@ -228,23 +228,18 @@ repository to avoid sending workspace metadata to the external client, verifies 
 copied engine bytes against this checkout, injects hostile inherited lane/repository
 variables, and binds the child observation and final text to the one-shot descriptor
 receipt. Each supported claim is limited to the stamped local client and the selected
-kit wrapper; neither observes a write or an approval transition. The Claude
-writing-lane record is kept in
-[`saved_plans/claude-writing-lane-live-validation_2026-08-27.md`](../../saved_plans/claude-writing-lane-live-validation_2026-08-27.md),
-produced from a Claude Code session against a private synthetic GitHub repository:
-it observes the config-declared policy and trust route in the child argv and receipt,
-the lane's write, commit, push, and pull request, the cockpit's `dev_session.sh
-pr-watch` read-back, the denial list the runtime reported, and a `dont-ask` control
-lane whose refused write terminalized `failed`. Its route-selection probes are in
-[`saved_plans/claude-writing-lane-approval-policy-design_2026-08-27.md`](../../saved_plans/claude-writing-lane-approval-policy-design_2026-08-27.md).
-The Codex writing-lane design and record are kept in
-[`saved_plans/codex-writing-lane-design_2026-08-27.md`](../../saved_plans/codex-writing-lane-design_2026-08-27.md)
-and
-[`saved_plans/codex-writing-lane-live-validation_2026-08-27.md`](../../saved_plans/codex-writing-lane-live-validation_2026-08-27.md).
-The durable rerun and its repository-owned evidence are kept in
-[`saved_plans/codex-writing-lane-live-validation_2026-08-30.md`](../../saved_plans/codex-writing-lane-live-validation_2026-08-30.md)
-and
+kit wrapper; neither observes a write or an approval transition.
+
+The headless writing-lane and parallel-batch records are linked from
+[*Headless lane isolation per runtime*](#headless-lane-isolation-per-runtime), which is
+where each one's promoted and withheld claims are stated. The designs behind them are
+kept beside them: the Claude route-selection probes in
+[`saved_plans/claude-writing-lane-approval-policy-design_2026-08-27.md`](../../saved_plans/claude-writing-lane-approval-policy-design_2026-08-27.md),
+and the Codex design in
+[`saved_plans/codex-writing-lane-design_2026-08-27.md`](../../saved_plans/codex-writing-lane-design_2026-08-27.md).
+The 2026-08-30 rerun's repository-owned evidence is in
 [`saved_plans/codex-writing-lane-evidence_2026-08-30/`](../../saved_plans/codex-writing-lane-evidence_2026-08-30/).
+
 The capability-tier calibration design and record are kept in
 [`saved_plans/capability-tier-calibration-design_2026-08-27.md`](../../saved_plans/capability-tier-calibration-design_2026-08-27.md)
 and
@@ -254,24 +249,6 @@ probes in a scratch fixture. The record's observers are each runtime's own artif
 Claude's session and subagent transcripts, Codex's rollout `turn_context` — never the
 prompt or the child's prose; its raw outputs were session-scoped and are quoted as
 excerpts, so the row above promotes only what the excerpts show.
-The historical record narrates the fixture-only workspace-write lane, native config
-reach, per-command approval transitions, network-disabled and network-enabled
-outcomes, GitHub pull-request read-back, and the cockpit review receipt. Its raw
-fixture evidence was temporary and removed under that run's cleanup contract, so the
-narrative and its unresolvable digests remain historical. The durable rerun uses the
-repository-owned verifier and a promotion receipt bound to the retained destination
-bytes, exact upstream and fixture source files, source revision, synthetic fixture
-revision, review repository, reviewed synthetic head, redaction reviewer, runtime,
-client, and claim IDs. It promotes launcher-reported write/state output independently
-matched by cockpit read-backs, the private PR's open, non-draft, GitHub `CLEAN` state,
-and the exact-head review-receipt
-claims enumerated in that receipt. The task prompt is neither retained nor bound, so
-the promotion does not claim that the observed output matched a pre-run request. The
-retained runtime attestation is outside the promoted claim map because it does not
-correlate its session to the launcher invocation. Both
-runs preserve the transport gap: Codex described denial/approval behavior in final
-prose while the completed last-message receipt carried
-`terminal.permission_denials: null`. The shipped default remains read-only.
 
 ## Product surfaces this contract relies on
 
