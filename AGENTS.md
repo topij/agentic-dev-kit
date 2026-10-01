@@ -22,6 +22,14 @@ starting the run** — a default timeout can cut the run off partway, and how th
 truncation surfaces differs by runtime. pytest's summary line prints the elapsed time
 for the run you actually did.
 
+**`make test-fast` is not a verification command.** It runs the same `lint` and
+`check-syntax`, then the suite without the `evidence`-marked tests (all of
+`test_live_validation_bundle.py`, and the tree-copying tests #875 picked). Use it in the
+inner loop; a verification claim still names `make test` and its result. The skipped
+tests include guards, among them the lane launcher's authority checks, the self-merge
+refusals and the live-validation bundle verifier's refusals, so a change to a guarded
+path runs `make test` even in the inner loop.
+
 The probes an agent reaches for first fail here in a way that reads as "pytest is
 unavailable in this environment". None of them is evidence of that:
 

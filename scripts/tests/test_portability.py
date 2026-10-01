@@ -195,6 +195,7 @@ def test_nested_lane_contract_uses_configured_paths(tmp_path: Path) -> None:
     assert "never trunk" in result.stdout
 
 
+@pytest.mark.evidence
 def test_real_headless_lane_uses_configured_base_and_replaces_inherited_state(
     tmp_path: Path,
 ) -> None:
@@ -273,6 +274,7 @@ def test_real_headless_lane_uses_configured_base_and_replaces_inherited_state(
     assert not (sessions / "probe").exists()
 
 
+@pytest.mark.evidence
 def test_relative_headless_sessions_activate_with_absolute_descriptor_roots(
     tmp_path: Path,
 ) -> None:
@@ -326,6 +328,7 @@ def test_relative_headless_sessions_activate_with_absolute_descriptor_roots(
     assert all(Path(value).is_absolute() for value in (cwd, state_root, repo_root))
 
 
+@pytest.mark.evidence
 def test_remove_without_force_preserves_a_worktree_that_turns_dirty_after_probe(
     tmp_path: Path,
 ) -> None:
@@ -379,6 +382,7 @@ def test_remove_without_force_preserves_a_worktree_that_turns_dirty_after_probe(
     assert raced.is_file()
 
 
+@pytest.mark.evidence
 def test_force_recreate_refuses_configured_protected_branch_before_mutation(
     tmp_path: Path,
 ) -> None:
@@ -418,6 +422,7 @@ def test_force_recreate_refuses_configured_protected_branch_before_mutation(
     assert (sessions / "probe" / "wt").is_dir()
 
 
+@pytest.mark.evidence
 def test_single_quoted_protected_branch_is_still_protected(tmp_path: Path) -> None:
     repo, engine_dir, sessions = _install_real_trunk_repo(tmp_path)
     env = {**os.environ, "DEVKIT_SESSIONS_DIR": str(sessions)}
@@ -462,6 +467,7 @@ def test_single_quoted_protected_branch_is_still_protected(tmp_path: Path) -> No
     assert (sessions / "probe" / "wt").is_dir()
 
 
+@pytest.mark.evidence
 @pytest.mark.parametrize(
     "vcs_block,expected_error",
     [
@@ -517,6 +523,7 @@ def test_missing_or_invalid_protected_branch_fails_before_mutation(
     assert (sessions / "probe" / "wt").is_dir()
 
 
+@pytest.mark.evidence
 def test_operator_merge_class_refuses_before_contacting_github(tmp_path: Path) -> None:
     repo, engine_dir, sessions = _install_real_trunk_repo(tmp_path)
     env = {**os.environ, "DEVKIT_SESSIONS_DIR": str(sessions)}
@@ -585,6 +592,7 @@ printf '%s\n' "$REPORT_JSON"
     return fake_bin, call_log, uv_log
 
 
+@pytest.mark.evidence
 def test_self_merge_refuses_wrong_base_and_binds_gh_to_repo(tmp_path: Path) -> None:
     repo, engine_dir, sessions = _install_real_trunk_repo(tmp_path)
     _prepare_self_merge_session(sessions)
@@ -633,6 +641,7 @@ def test_self_merge_refuses_wrong_base_and_binds_gh_to_repo(tmp_path: Path) -> N
     assert f"{repo}|owner/project|pr list" in calls
 
 
+@pytest.mark.evidence
 def test_self_merge_refuses_a_cross_repository_pr_before_review(tmp_path: Path) -> None:
     _, engine_dir, sessions = _install_real_trunk_repo(tmp_path)
     _prepare_self_merge_session(sessions)
@@ -672,6 +681,7 @@ def test_self_merge_refuses_a_cross_repository_pr_before_review(tmp_path: Path) 
     assert "pr merge" not in call_log.read_text(encoding="utf-8")
 
 
+@pytest.mark.evidence
 def test_self_merge_refuses_a_report_that_is_done_but_not_mergeable(
     tmp_path: Path,
 ) -> None:
@@ -733,6 +743,7 @@ def test_self_merge_refuses_a_report_that_is_done_but_not_mergeable(
         assert "pr merge" not in call_log.read_text(encoding="utf-8"), label
 
 
+@pytest.mark.evidence
 def test_self_merge_refuses_a_report_whose_fields_carry_tabs(tmp_path: Path) -> None:
     """The gate extraction is tab-joined and the shell splits it on tabs, so an
     unscrubbed field SHIFTS every field after it (`#537`).
@@ -799,6 +810,7 @@ def test_self_merge_refuses_a_report_whose_fields_carry_tabs(tmp_path: Path) -> 
     assert "pr merge" not in call_log.read_text(encoding="utf-8")
 
 
+@pytest.mark.evidence
 def test_lane_pr_resolution_refuses_metadata_whose_fields_carry_tabs(
     tmp_path: Path,
 ) -> None:
@@ -947,6 +959,7 @@ def test_the_extractions_scrub_every_control_character_to_a_space() -> None:
         assert emitted(block, payload("tr-unk"), field) == "tr-unk", label
 
 
+@pytest.mark.evidence
 def test_self_merge_refuses_when_identity_read_and_review_poll_disagree_on_head(
     tmp_path: Path,
 ) -> None:
@@ -1001,6 +1014,7 @@ def test_self_merge_refuses_when_identity_read_and_review_poll_disagree_on_head(
     assert uv_log.read_text(encoding="utf-8").startswith(f"{session / 'state'}|")
 
 
+@pytest.mark.evidence
 def test_scope_pr_watch_and_merge_share_lane_state_and_pinned_repo(
     tmp_path: Path,
 ) -> None:
@@ -1077,6 +1091,7 @@ def test_scope_pr_watch_and_merge_share_lane_state_and_pinned_repo(
     assert f"{repo}|owner/project|pr merge" in gh_calls
 
 
+@pytest.mark.evidence
 def test_scope_wrappers_canonicalize_a_relative_session_state_root(tmp_path: Path) -> None:
     _, engine_dir, _sessions = _install_real_trunk_repo(tmp_path)
     relative_sessions = Path("scope-sessions")
@@ -3446,6 +3461,7 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             _assert_bookend_integration_semantics(name, mutated)
 
 
+@pytest.mark.evidence
 @pytest.mark.parametrize("name", ("session-start", "wrap-up"))
 def test_runtime_parity_rejects_missing_or_stale_bookend_adapter(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str
@@ -14442,6 +14458,7 @@ def test_systemize_upgrade_requires_replacing_the_legacy_claude_adapter() -> Non
     )
 
 
+@pytest.mark.evidence
 def test_runtime_parity_rejects_a_missing_or_stale_systemize_adapter(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -14705,6 +14722,7 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
     assert "`launch_lane.py`" in rename_entry
 
 
+@pytest.mark.evidence
 @pytest.mark.kit_repo_only("saved_plans/codex-hooks-live-probe/.codex/hooks.json")
 def test_codex_live_validation_fixture_commands_are_executable(
     tmp_path: Path,
@@ -14889,6 +14907,7 @@ def _runtime_parity_fixture(tmp_path: Path) -> Path:
     return repo
 
 
+@pytest.mark.evidence
 def test_runtime_parity_contract_distinguishes_a_decline_from_a_removal(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -14907,6 +14926,7 @@ def test_runtime_parity_contract_distinguishes_a_decline_from_a_removal(
         _assert_runtime_parity_contract_covers_workflows_and_adapters()
 
 
+@pytest.mark.evidence
 def test_runtime_parity_contract_rejects_a_gap_with_no_real_surface(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -14929,6 +14949,7 @@ def test_runtime_parity_contract_rejects_a_gap_with_no_real_surface(
         _assert_runtime_parity_contract_covers_workflows_and_adapters()
 
 
+@pytest.mark.evidence
 def test_runtime_parity_contract_allows_a_codex_only_gap(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -14960,6 +14981,7 @@ def test_runtime_parity_contract_allows_a_codex_only_gap(
     _assert_runtime_parity_contract_covers_workflows_and_adapters()
 
 
+@pytest.mark.evidence
 def test_runtime_parity_companion_must_be_referenced_by_its_owner(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

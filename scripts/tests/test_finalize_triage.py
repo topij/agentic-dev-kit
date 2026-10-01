@@ -160,6 +160,7 @@ def test_fabricated_verified_watch_receipt_is_rejected_at_engine_boundary() -> N
         _verify_forge_read_back("pr-watch", intent, read_back)
 
 
+@pytest.mark.evidence
 def test_archive_only_finalize_retains_exact_new_block_and_waits_for_merge(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -379,6 +380,7 @@ def test_archive_only_finalize_retains_exact_new_block_and_waits_for_merge(
         canonical_state(dumps(shortened), settings=load_settings(root), mode="live")
 
 
+@pytest.mark.evidence
 def test_commit_authority_failure_leaves_clean_worktree_and_fresh_retry_can_continue(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -466,6 +468,7 @@ def test_commit_authority_failure_leaves_clean_worktree_and_fresh_retry_can_cont
     assert b"- **Approved archive.**" in (worktree / "docs/kit-friction-log-archive.md").read_bytes()
 
 
+@pytest.mark.evidence
 @pytest.mark.parametrize("mutation", ["derived-content", "foreign-path", "legacy-rendering", "pre-818-rendering", "pre-187-rendering"])
 def test_fresh_process_refuses_mutated_retained_commit_updates_before_rebind(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
@@ -760,6 +763,7 @@ def _failed_branch_create(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     return root, state_path, worktree, base, retained
 
 
+@pytest.mark.evidence
 def test_failed_branch_create_is_retried_with_its_intent_once_read_back_shows_nothing_was_left(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -806,6 +810,7 @@ def test_failed_branch_create_stays_held_while_anything_it_could_have_left_exist
     assert loads_exact(state_path.read_bytes())["finalization_operations"] == before
 
 
+@pytest.mark.evidence
 @pytest.mark.parametrize("placement", ["inside", "containing"])
 def test_commit_step_refuses_a_recorded_worktree_that_conflicts_with_the_checkout(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, placement: str
@@ -867,6 +872,7 @@ def test_commit_step_refuses_a_recorded_worktree_that_conflicts_with_the_checkou
     assert not (root / "nested").exists()
 
 
+@pytest.mark.evidence
 @pytest.mark.parametrize("placement", ["same", "inside", "containing"])
 def test_commit_step_refuses_a_recorded_case_variant_of_the_checkout(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, placement: str
@@ -990,6 +996,7 @@ def test_legacy_fallback_drops_the_whole_separator_beside_session(
     assert _branch_date(settings, legacy_branch, "c" * 32) == "2026-01-02"
 
 
+@pytest.mark.evidence
 def test_retained_old_pattern_finalization_state_replays_cleanly_under_the_new_default(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1056,6 +1063,7 @@ def test_retained_old_pattern_finalization_state_replays_cleanly_under_the_new_d
     _validate_commit_updates(state, settings, intent)  # must not raise
 
 
+@pytest.mark.evidence
 def test_verified_merge_read_back_retires_the_sweeps_own_artifacts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1135,6 +1143,7 @@ def test_verified_merge_read_back_retires_the_sweeps_own_artifacts(
             canonical_state(dumps(tampered), settings=load_settings(root), mode="live")
 
 
+@pytest.mark.evidence
 def test_sweep_cleanup_never_un_completes_a_verified_merge(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1349,6 +1358,7 @@ def test_sweep_cleanup_fallback_follows_the_artifact_set(monkeypatch: pytest.Mon
     validate_sweep_cleanup(fallback)
 
 
+@pytest.mark.evidence
 def test_resume_completes_a_verified_merge_read_back_whose_completion_was_never_written(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1506,6 +1516,7 @@ def _recover_approval(core_digest: str) -> tuple[dict, ApprovalContext]:
     return {"recovery_approval": supplied}, context
 
 
+@pytest.mark.evidence
 def test_recover_retires_an_invalid_engine_written_completed_sweep_found_in_git(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1548,6 +1559,7 @@ def test_recover_retires_an_invalid_engine_written_completed_sweep_found_in_git(
     assert restarted["detail"] == "verified recovery receipt replaced by reserved new state"
 
 
+@pytest.mark.evidence
 @pytest.mark.parametrize("history", ["not-landed", "swept-twice", "block-back-in-inbox"])
 def test_recover_holds_an_invalid_engine_written_completed_sweep_git_does_not_prove(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, history: str
@@ -1576,6 +1588,7 @@ def test_recover_holds_an_invalid_engine_written_completed_sweep_git_does_not_pr
     assert state_path.read_bytes() == raw
 
 
+@pytest.mark.evidence
 def test_recover_refuses_a_completed_state_valid_but_for_a_later_config_change(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1599,6 +1612,7 @@ def test_recover_refuses_a_completed_state_valid_but_for_a_later_config_change(
     assert loads_exact(state_path.read_bytes())["phase"] == "reserved", restarted
 
 
+@pytest.mark.evidence
 def test_recover_takes_the_first_parent_merge_commit_of_a_merge_landed_sweep(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1619,6 +1633,7 @@ def test_recover_takes_the_first_parent_merge_commit_of_a_merge_landed_sweep(
     assert plan["action_core"]["terminal_evidence"]["merge_commit"] == merge
 
 
+@pytest.mark.evidence
 def test_recover_looks_for_the_sweep_only_after_the_runs_draft_head(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1633,6 +1648,7 @@ def test_recover_looks_for_the_sweep_only_after_the_runs_draft_head(
     assert plan["action_core"]["terminal_evidence"]["merge_commit"] == sweep
 
 
+@pytest.mark.evidence
 def test_recover_holds_when_the_runs_draft_head_is_not_on_the_protected_ref(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

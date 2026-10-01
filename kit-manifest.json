@@ -466,7 +466,7 @@
     },
     "scripts/tests/conftest.py": {
       "role": "test",
-      "sha256": "dcc6980325b5ab33ddfb069f8a27f27b70f406c42892e5fcbcaf2369d0f07cd4"
+      "sha256": "8aaf917788f8332a2a11d0b7d022854e51f94034172c0939a2096c8f96b3396d"
     },
     "scripts/tests/fixtures/codex_parallel_batch_expected.json": {
       "role": "repo-only",
@@ -498,7 +498,7 @@
     },
     "scripts/tests/test_finalize_triage.py": {
       "role": "test",
-      "sha256": "5b69b677cb8a5ec52bb3920bbc8428a8191778abb449b5813d423b0f80f7b486"
+      "sha256": "a791528e0e6af397dd6bef91f133d17a79d96d50e65b09c17f12f1e80b08656d"
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
@@ -506,7 +506,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "6df93ac7429b24bbe81414da91c9eab927f7d490ec907e9f000543c6de7035c4"
+      "sha256": "9cab65a85e0bd2672beb4d0ea02e2491e28ebd0bba00d3c74250b2c8d246e9b7"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -518,11 +518,11 @@
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
-      "sha256": "873a4da575883f92b044727fc5427697c26dcf386687a5d2bebc6185a217a838"
+      "sha256": "5ca8f8467872a99a8851524790de94fe5865d4e9281bf2e1a21aae13e8310d54"
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "repo-only",
-      "sha256": "c84db1469e363628bbaac15cb0f7412e23a8240532ec003901ac2c039b4442c7"
+      "sha256": "01708beceacb28e701f0b2258ed60d89062440b2ac3579352224ccbd97219547"
     },
     "scripts/tests/test_make_lint.py": {
       "role": "repo-only",
@@ -530,7 +530,7 @@
     },
     "scripts/tests/test_mutation_gate.py": {
       "role": "test",
-      "sha256": "72914ad18b3622faa05a8e5c03035ba1040e7477aeca2cf8f9742aecd2bbf334"
+      "sha256": "162c16e7ef14198598ccd29f819f06a96caaec54f9cfd2b16ec1fac7359e459d"
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
@@ -538,7 +538,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "bab7e8a04fc9cfa9b5bcd0a772c134bac1e6b856c83579ebfca1bcf1f90d5fcc"
+      "sha256": "0667da65c57d3abdf41cb0a5ed11da923aeba913c6d764cd3381b5ddf6e6c662"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
