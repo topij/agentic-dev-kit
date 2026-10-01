@@ -14,7 +14,7 @@ from typing import Any, Protocol
 from urllib.parse import urlparse
 
 from .canonical import decode_bytes, digest, digest_bytes
-from .model import TriageError, terminal_pr_watch_receipt
+from .model import TriageError, terminal_pr_watch_receipt, worktree_conflicts_with_checkout
 
 
 @dataclass(frozen=True)
@@ -527,7 +527,7 @@ class GitHubForge:
         worktree = Path(intent["worktree"]).resolve()
         branch = intent["branch"]
         pushed_head = intent["pushed_head"]
-        if worktree == self.repo or self.repo.is_relative_to(worktree) or worktree.is_relative_to(self.repo):
+        if worktree_conflicts_with_checkout(worktree, self.repo):
             reason = "sweep-cleanup worktree conflicts with the caller checkout"
             return {name: {"result": "kept", "reason": reason} for name in ("worktree", "local_branch", "remote_branch")}
         if not worktree.exists():
