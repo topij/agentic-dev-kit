@@ -1244,8 +1244,8 @@ def test_worktree_conflict_predicate_decides_by_identity_on_any_filesystem(
     by giving `Path.stat` a case-folding identity: every spelling below names the
     same directory as its lowercase form, and `/repo/checkout/nested` does not exist yet."""
     # (st_dev, st_ino) per lowercase path. `/elsewhere` sits on another device and
-    # reuses the checkout's inode numbers, so an identity that ignored the device
-    # would call `/elsewhere/checkout` the checkout.
+    # reuses the inode numbers of `/repo` and `/repo/checkout`, so an identity that
+    # ignored the device would call `/elsewhere/checkout` the checkout.
     identities = {
         "/": (1, 1),
         "/repo": (1, 2),
@@ -1282,8 +1282,8 @@ def test_worktree_conflict_predicate_keeps_the_structural_test_when_nothing_can_
     monkeypatch: pytest.MonkeyPatch, worktree: str, conflicts: bool
 ) -> None:
     """When no path can be stat'ed, the identity checks have nothing to compare,
-    and the structural test alone still refuses a worktree that is, lies inside,
-    or contains the checkout (#856)."""
+    and the structural test alone still refuses a worktree that lies inside or
+    contains (or is) the checkout (#856)."""
 
     def fake_stat(self: Path, *args: object, **kwargs: object) -> os.stat_result:
         raise FileNotFoundError(str(self))
