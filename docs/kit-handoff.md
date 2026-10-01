@@ -20,6 +20,44 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-01 (Phase 6 item 5, in Claude Code)
+
+**Shipped.** PR #902, squash `65e9d2d`: Phase 6 item 5. #243 closed on merge.
+
+- Each adapter's runtime-specific text moved from `_CURRENT_CONTEXTS` into
+  `scripts/lib/adapter_templates/<runtime>/<slug>.md`, read from beside the renderer.
+  The rendered adapters are byte-identical.
+- `adopt`, `upgrade` and `pr-watch` gained word-for-word pins with appended-instruction
+  mutations.
+- `fallback-review-panel.md` no longer cites a "step 5" of the Codex `pr-watch` binding.
+
+**Decided by the operator.**
+
+- The templates sit beside the renderer, not under `docs/templates/` as #243's
+  2026-09-02 comment proposed.
+- #902 closes #243, and merges once clean.
+
+**Filed**, on the operator's approval of its exact text and read back identical: an
+occurrence comment on #644
+([issuecomment-5937818741](https://github.com/topij/agentic-dev-kit/issues/644#issuecomment-5937818741)).
+It reproduces that intermittent failure by launching the test as a shell `&` job,
+which starts it with SIGINT ignored.
+
+**Review.** CodeRabbit's auto-review stayed off, so the fallback panel reviewed #902:
+the full dual-lens panel at `a459006`, then adversarial delta passes over the repair
+commits. Delta passes 1 and 2 each disputed a draw, both about another test's handling
+of the templates, so neither recorded a receipt. Delta pass 3 confirmed every draw,
+and its receipt at `947bc22` composes on the full panel's. Each round's disposition is
+posted on the PR.
+
+**Verified.** `env -u FORCE_COLOR make test` at `a459006`, in
+`/Users/topi/Coding/agentic-dev-kit` on 2026-10-01: `3792 passed, 1 skipped in
+519.66s (0:08:39)`. The repair commits carry focused verification, recorded on the PR.
+For the merged tree, `gh run list --commit 65e9d2d334de4277dd2bbb031667bd666c3da9ee`
+showed the `Test` workflow completed `success` on `main`.
+
+______________________________________________________________________
+
 ## Session — 2026-10-01 (Phase 6 item 4, and a scratch and branch cleanup, in Claude Code)
 
 **Shipped.** PR #897, squash `6e4c439`: Phase 6 item 4 (#663).
@@ -292,25 +330,22 @@ ______________________________________________________________________
 
 ### Phase 6 — gate parity and roll it out
 
-**Status:** items 1 to 3 shipped on 2026-10-01, in #893, #888 and #887, and item 4
-shipped the same day in #897. The *Phase 6* section of
+**Status:** items 1 to 3 shipped on 2026-10-01, in #893, #888 and #887, and items 4
+and 5 shipped the same day, in #897 and #902. The *Phase 6* section of
 `saved_plans/codex-parity-plan_2026-08-23.md` owns the order, the dependencies and the
 exit. #890 carries a duplication that #887 left in `runtime-parity.md`. #663, item 4's
 owner, stays open for residue that is not Phase 6 work; its 2026-10-01 comment names it.
 **Owner:**
-[#243](https://github.com/topij/agentic-dev-kit/issues/243),
 [#878](https://github.com/topij/agentic-dev-kit/issues/878),
 [#879](https://github.com/topij/agentic-dev-kit/issues/879),
 [#880](https://github.com/topij/agentic-dev-kit/issues/880),
 [#890](https://github.com/topij/agentic-dev-kit/issues/890).
 
-▶ Next: [#243](https://github.com/topij/agentic-dev-kit/issues/243) — Phase 6 item 5:
-move adapter bodies from `_CURRENT_CONTEXTS` to per-runtime templates, add the
-appended-instruction mutation for `adopt`, `upgrade` and `pr-watch`, and fix the stale
-"`SKILL.md` step 5" citation in `fallback-review-panel.md`. Its residue is stated in
-#243's 2026-09-30 comment. If the move changes a rendered adapter under `.claude/`,
-split the work as the plan's item 5 prescribes: a lane takes the runtime-neutral half
-and `.agents/`, the cockpit takes `.claude/` (#627), and both land as one PR.
+▶ Next: [#878](https://github.com/topij/agentic-dev-kit/issues/878) — Phase 6 item 6:
+fresh-repository adoption fixtures for Codex-only, Claude-only and dual-runtime
+adopters, each checked against the `runtime-parity.md` declaration and pinning the
+adapters rendered from `scripts/lib/adapter_templates/`. Settle #878's step 3 with the
+operator first: whether a single-runtime adopter receives the other runtime's adapters.
 
 ### Scratch retention
 
