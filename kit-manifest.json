@@ -36,7 +36,7 @@
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
-      "sha256": "7398889407eb7d1c74baae9b89beb66fa2cbc489de54271653c3a869ea571451"
+      "sha256": "d166ac355c0288a16553ee883e42577621b5117ea1f8a1e28b24599f2ca6f7f0"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
@@ -155,7 +155,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "3afd3821c1baa40b08bdaef460b32c86322fe9e482a4b90ee4df327e06cb2662"
+      "sha256": "c52ef60f516188d88367ea02660ccb649b741215e9584fbb408df36612753e50"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -551,6 +551,10 @@
     "scripts/tests/fixtures/shipped-registrations/codex-hooks.json": {
       "role": "test",
       "sha256": "66979af482546118a359db5ec3ecd5559a4dfc757ad431c198a23c26e5a9b872"
+    },
+    "scripts/tests/test_adoption_fixtures.py": {
+      "role": "repo-only",
+      "sha256": "a78d671953af7b68c054d8e30d6f22ff430f7d123fb6ed430b11c3afc080a70c"
     },
     "scripts/tests/test_check_memory_budget.py": {
       "role": "test",

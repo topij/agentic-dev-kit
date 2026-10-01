@@ -46,14 +46,29 @@ workflow_contract:
     claude: null
     codex: null
     loaded_by: parallel
+adoption:
+  other_runtime: installed
+  surfaces:
+    shared:
+      - AGENTS.md
+    claude:
+      - CLAUDE.md
+      - .claude/settings.json
+      - .claude/rules/safety-critical-changes.md
+      - .claude/agents/adversarial.md
+      - .claude/agents/correctness.md
+      - config/claude-lane-settings.json
+    codex:
+      - .codex/hooks.json
 ---
 
 # Runtime parity contract
 
 This is the current contract for Claude Code and Codex support in
-agentic-dev-kit. The front matter is the machine-readable workflow inventory;
-repository tests derive their expected shared definitions and runtime bindings from
-it. Add or change a workflow there in the same change that moves its implementation.
+agentic-dev-kit. The front matter is the machine-readable workflow inventory and
+adoption footprint; repository tests derive their expected shared definitions, runtime
+bindings and fresh-install surfaces from it. Add or change a workflow there in the same
+change that moves its implementation.
 
 ## What parity means
 
@@ -81,12 +96,34 @@ Codex project configuration remain runtime-native surfaces.
 The machine-readable declaration is authoritative for file coverage. The matrix below
 records broader capability parity that cannot be expressed as an adapter path.
 
+## Adoption footprint
+
+The front matter's `adoption` block declares what a fresh install delivers besides the
+workflow adapters. `surfaces` lists each runtime's other files — its entry point, hook
+registration, path-scoped rule, lens definitions and lane profile — and, under
+`shared`, the entry point every runtime reads. `other_runtime` records what an adopter
+that runs one runtime receives of the other:
+
+- `installed` — both runtimes' adapters and surfaces, whatever `runtime.default` names.
+  Decided by the operator on 2026-10-01 (#878): the adapters are thin, a runtime that
+  is not run never reads its files, and a runtime added later needs no re-adoption.
+  Neither the template route nor `init.sh` selects files by runtime;
+  `runtime.default` selects the lane launcher and the session-start invocation
+  `init.sh` prints.
+
+`scripts/tests/test_adoption_fixtures.py` installs the kit into fresh Codex-only,
+Claude-only and dual-runtime repositories and checks each install against this block,
+the workflow inventory above and the adapters rendered from
+`scripts/lib/adapter_templates/`. A file under `.claude/`, `.agents/` or `.codex/` that
+neither declares fails it, so a new runtime file ships with its declaration.
+
 ## Capability matrix
 
 | Capability | Shared contract | Claude Code | Codex | Status / exit |
 |---|---|---|---|---|
 | Repository instructions | `AGENTS.md` | `CLAUDE.md` imports it | reads `AGENTS.md` directly | aligned |
 | Workflow adapters | `docs/agentic-dev-kit/workflows/` | `.claude/commands/` | `.agents/skills/` | declaration above is authoritative |
+| Fresh-install footprint | the front matter's `adoption` block | every Claude adapter and surface | every Codex adapter and surface | decided (#878, 2026-10-01): `other_runtime: installed`, so an adopter that runs one runtime still receives the other's files, inert. Pinned per adopter by the fixtures [*Adoption footprint*](#adoption-footprint) names |
 | Safety-critical doctrine | `docs/agentic-dev-kit/safety-critical-changes.md` | path-scoped `.claude/rules/` binding | precise root `AGENTS.md` routing for the merge-authority engines | aligned for the stamped supported-client observation: structure proves the route; prompt input and live events establish that the trusted run supplied it and read and applied the shared doctrine |
 | Document-budget tripwire | `check_doc_budget.py` | `SessionStart` | open-ended match-all `SessionStart` with a bounded command timeout | aligned: repository semantics are deterministic and the supported trusted client ran the equivalent lifecycle shape |
 | Runtime memory tripwire | runtime-specific artifact | `check_memory_budget.py` checks Claude's `MEMORY.md` | no corresponding repository artifact | intentional difference: never invoke the Claude engine on Codex |
