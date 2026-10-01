@@ -311,6 +311,15 @@ cannot be combined with `--mark-seen`, `--record-review`, `--assert-draft`, or
 `--assert-ready`. A merge wrapper should use this mode for its last `mergeable`
 check, after the normal watch-and-acknowledge loop has finished.
 
+`--all-comments`, valid only with `--json` on a plain poll, adds `all_comments[]`
+to the report: every comment and review submission the poll read, as
+`{kind, author, path, line, state, body}`, whether or not this pull request's seen
+state acknowledges it, a noise marker filters it, or its body is empty. `state` is a
+review's verdict and `null` for the other kinds. The watch loop does not need it,
+because `new_comments[]` is its view.
+`session-start` runs it with `--no-persist` to judge an open pull request without
+inheriting that pull request's acknowledgements.
+
 ## The draft-bit flags — they CORRECT, they do not check
 
 `--assert-draft` and `--assert-ready` are documented in `pr_watch.py`'s own docstring,
