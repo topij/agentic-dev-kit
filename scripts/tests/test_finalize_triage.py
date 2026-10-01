@@ -1243,19 +1243,53 @@ def test_worktree_conflict_predicate_decides_by_identity_on_any_filesystem(
     what CI runs on (#856). This pins the predicate's identity branches everywhere,
     by giving `Path.stat` a case-folding identity: every spelling below names the
     same directory as its lowercase form, and `/repo/checkout/nested` does not exist yet."""
-    existing = {"/", "/repo", "/repo/checkout", "/repo/checkout-sibling", "/elsewhere", "/elsewhere/checkout"}
+    # (st_dev, st_ino) per lowercase path. `/elsewhere` sits on another device and
+    # reuses the checkout's inode numbers, so an identity that ignored the device
+    # would call `/elsewhere/checkout` the checkout.
+    identities = {
+        "/": (1, 1),
+        "/repo": (1, 2),
+        "/repo/checkout": (1, 3),
+        "/repo/checkout-sibling": (1, 4),
+        "/elsewhere": (2, 2),
+        "/elsewhere/checkout": (2, 3),
+    }
 
     def fake_stat(self: Path, *args: object, **kwargs: object) -> os.stat_result:
         folded = str(self).lower()
-        if folded not in existing:
+        if folded not in identities:
             raise FileNotFoundError(str(self))
-        return os.stat_result((0, sorted(existing).index(folded) + 1, 1, 0, 0, 0, 0, 0, 0, 0))
+        device, inode = identities[folded]
+        return os.stat_result((0, inode, device, 0, 0, 0, 0, 0, 0, 0))
 
     monkeypatch.setattr(Path, "stat", fake_stat)
     repo = Path("/repo/checkout")
     candidate = Path(worktree)
     assert candidate != repo and not candidate.is_relative_to(repo) and not repo.is_relative_to(candidate)
     assert _worktree_conflicts_with_checkout(candidate, repo) is conflicts
+
+
+@pytest.mark.parametrize(
+    ("worktree", "conflicts"),
+    [
+        ("/gone/checkout", True),
+        ("/gone/checkout/nested", True),
+        ("/gone", True),
+        ("/gone/checkout-sibling", False),
+    ],
+)
+def test_worktree_conflict_predicate_keeps_the_structural_test_when_nothing_can_be_stat(
+    monkeypatch: pytest.MonkeyPatch, worktree: str, conflicts: bool
+) -> None:
+    """When no path can be stat'ed, the identity checks have nothing to compare,
+    and the structural test alone still refuses a worktree that is, lies inside,
+    or contains the checkout (#856)."""
+
+    def fake_stat(self: Path, *args: object, **kwargs: object) -> os.stat_result:
+        raise FileNotFoundError(str(self))
+
+    monkeypatch.setattr(Path, "stat", fake_stat)
+    assert _worktree_conflicts_with_checkout(Path(worktree), Path("/gone/checkout")) is conflicts
 
 
 @pytest.mark.parametrize(
