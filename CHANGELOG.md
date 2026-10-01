@@ -42,6 +42,12 @@ starts.
 
 ---
 
+## #897 — `session-start` reads open pull requests through `pr_watch.py`, and a REST poll reads each check surface once
+
+ADDED — engine CLI surface: Refresh `pr_watch.py` in your engine directory, `docs/agentic-dev-kit/workflows/session-start.md`, `docs/agentic-dev-kit/workflows/pr-watch.md`, `kit-manifest.json`, `scripts/tests/test_pr_watch.py` and `scripts/tests/test_portability.py`. `pr_watch.py` takes a new `--all-comments` flag, valid only with `--json` on a plain poll. It adds `all_comments` to the report: every issue comment, review submission and inline review comment the poll read, each as `{kind, author, path, line, state, body}`, unfiltered by the pull request's seen state, the noise markers or an empty body. `session-start` now reads each open pull request with `pr_watch.py <PR#> --json --no-persist --all-comments` instead of three `gh api` calls, so refresh `pr_watch.py` no later than the workflow.
+
+CHANGED — return shape: `fetch_pr_view` and `rest_pr_view` return a third element, a `RestCheckReads` on the REST backend and `None` on `gh`, and `fetch_check_details` takes a matching `rest_reads` keyword. Update any code or test of yours that unpacks `fetch_pr_view` into two names or stubs it with a two-element tuple. On the REST backend, a check read that hits the page ceiling now appears in `truncated_reads` once per poll rather than twice.
+
 ## #865 — Triage recovery proves a capture's owner dead, moves every gate name, and reports a released gate-only receipt as itself
 
 CHANGED — gate semantics: Refresh `lib/triage/recovery.py`, `lib/triage/engine.py`, the shared triage workflow, `kit-manifest.json`, `scripts/tests/test_triage_engine.py` and `scripts/tests/test_finalize_triage.py`. The changes:

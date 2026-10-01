@@ -6695,7 +6695,7 @@ def test_rest_pr_view_assembles_the_same_shape_build_report_consumes(
 
     monkeypatch.setattr(pr_watch, "_http_get_all", _get_all)
 
-    view, inline = pr_watch.fetch_pr_view(9)
+    view, inline, _ = pr_watch.fetch_pr_view(9)
 
     assert view["number"] == 9
     assert view["headRefOid"] == "deadbee"
@@ -7007,6 +7007,136 @@ def test_fetch_check_details_on_rest_returns_rows_with_a_real_signal(
     assert pr_watch.summarize_review_bots(details.rows, [], now=NOW)["unavailable"] != []
 
 
+# The #95 shape both REST-fold tests below use: a reviewer's outage announced
+# only as a status description, whose creator only the PLURAL statuses endpoint
+# carries — so the identity read must fire, and must target the threaded sha.
+_FOLD_CHECK_RUN = {
+    "name": "toolkit",
+    "status": "completed",
+    "conclusion": "success",
+    "app": {"slug": "github-actions"},
+}
+_FOLD_STATUS = {
+    "context": "CodeRabbit",
+    "state": "success",
+    "description": "Review rate limited",
+}
+_FOLD_CREATORS = [
+    {
+        **_FOLD_STATUS,
+        "created_at": "2026-08-10T12:15:00Z",
+        "id": 51945692384,
+        "creator": {"login": "coderabbitai[bot]", "type": "Bot"},
+    }
+]
+
+
+def test_a_rest_poll_reads_each_check_surface_once(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """#663: `rest_pr_view` and `fetch_check_details` each read `pulls/{n}`,
+    `check-runs` and `status` in one poll. `main` now threads the first reads into
+    the second call, so each surface is read once.
+
+    Through `main` and the real fetch functions, with only the HTTP layer mocked:
+    dropping the `rest_reads=` argument at the call site, or ignoring it inside
+    `fetch_check_details`, reads every surface twice and fails the counts. The
+    outage assertion pins that the threaded reads, and the identity read for their
+    sha, still reach the report.
+    """
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+    monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path / "watch-state")
+    monkeypatch.setattr(pr_watch, "resolve_pr", lambda explicit: 9)
+    object_reads = _route_http(
+        pr_watch,
+        monkeypatch,
+        {"pulls/9": {"number": 9, "state": "open", "head": {"sha": "deadbee"}}},
+    )
+    wrapped_reads: list[str] = []
+
+    def _get_all_wrapped(url, token, key, **_kw):
+        wrapped_reads.append(key)
+        return {"check_runs": [_FOLD_CHECK_RUN], "statuses": [_FOLD_STATUS]}[key]
+
+    monkeypatch.setattr(pr_watch, "_http_get_all_wrapped", _get_all_wrapped)
+    list_reads: list[str] = []
+
+    def _get_all(url, token, **_kw):
+        list_reads.append(url)
+        return _FOLD_CREATORS if "commits/deadbee/statuses" in url else []
+
+    monkeypatch.setattr(pr_watch, "_http_get_all", _get_all)
+
+    assert pr_watch.main(["9", "--json", "--no-persist"]) == 0
+    report = json.loads(capsys.readouterr().out)
+
+    assert len(object_reads) == 1, object_reads
+    assert sorted(wrapped_reads) == ["check_runs", "statuses"]
+    assert [u for u in list_reads if "/statuses?" in u] == [
+        "https://api.github.com/repos/owner/repo/commits/deadbee/statuses?per_page=100"
+    ]
+    outage = [e for e in report["review_bots"]["unavailable"] if e["surface"] == "check"]
+    assert outage[0]["identity"] == "coderabbitai[bot]"
+    assert outage[0]["trusted"] is True
+
+
+def test_rest_check_details_shape_rows_from_the_reads_they_are_handed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Given `rest_reads`, the REST branch reads nothing but the identity
+    endpoint, and reads that for `rest_reads.sha`. `_route_http` raises
+    AssertionError for any other GET, which `fetch_check_details` does not catch,
+    so a second `pulls/5`, `check-runs` or `status` read fails this test rather
+    than degrading."""
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+    seen = _route_http(pr_watch, monkeypatch, {"commits/abc123/statuses": _FOLD_CREATORS})
+
+    details = pr_watch.fetch_check_details(
+        5,
+        bots=("coderabbit",),
+        head_sha="ignored-on-rest",
+        rest_reads=pr_watch.RestCheckReads("abc123", [_FOLD_CHECK_RUN], [_FOLD_STATUS]),
+    )
+
+    assert seen == [
+        "https://api.github.com/repos/owner/repo/commits/abc123/statuses?per_page=100"
+    ]
+    assert details.signal == "ok"
+    assert [(row["name"], row["identity"]) for row in details.rows] == [
+        ("toolkit", "github-actions"),
+        ("CodeRabbit", "coderabbitai[bot]"),
+    ]
+
+
+def test_the_gh_branch_ignores_rest_reads(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A backend that changes between `fetch_pr_view` and `fetch_check_details`
+    must not make the `gh` branch shape rows from REST reads: its rows come from
+    `gh pr checks`, as they did before #663."""
+    pr_watch = _load_pr_watch()
+
+    class _Result:
+        stdout = '[{"name":"tests","state":"SUCCESS","bucket":"pass"}]'
+        stderr = ""
+        returncode = 0
+
+    monkeypatch.setattr(pr_watch.subprocess, "run", lambda *a, **k: _Result())
+
+    details = pr_watch.fetch_check_details(
+        5,
+        bots=("coderabbit",),
+        rest_reads=pr_watch.RestCheckReads("abc123", [_FOLD_CHECK_RUN], [_FOLD_STATUS]),
+    )
+
+    assert details == (
+        [{"name": "tests", "state": "SUCCESS", "bucket": "pass", "identity": ""}],
+        "ok",
+    )
+
+
 # --- round 2: what CodeRabbit's review of #91 found -------------------------
 
 
@@ -7051,7 +7181,7 @@ def test_rest_view_raises_the_changes_requested_merge_blocker(
         ],
     )
 
-    view, inline = pr_watch.fetch_pr_view(1)
+    view, inline, _ = pr_watch.fetch_pr_view(1)
     assert view["reviewDecision"] == "CHANGES_REQUESTED"
 
     report = pr_watch.build_report(
@@ -7108,7 +7238,7 @@ def test_rest_view_names_a_merged_pr_merged(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(pr_watch, "_http_get_all", lambda url, token, **_kw: [])
     monkeypatch.setattr(pr_watch, "_http_get_all_wrapped", lambda url, token, key, **_kw: [])
 
-    view, _ = pr_watch.fetch_pr_view(1)
+    view, _, _ = pr_watch.fetch_pr_view(1)
     assert view["state"] == "MERGED"
 
     report = pr_watch.build_report(
@@ -7496,12 +7626,13 @@ def test_truncation_is_reported_in_the_json_and_the_render(
     assert report["converged"] is True
 
 
-def test_both_reads_of_one_url_in_a_poll_are_recorded(
+def test_two_reads_of_one_url_are_both_recorded(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """One poll reads the check-runs URL twice — `rest_pr_view`, then
-    `fetch_check_details`. The stderr line is deduped so a watch loop is not a
-    wall of warnings; the recorded LIST must not be, or the second truncation
+    """`main` no longer reads a check URL twice in one poll (#663), but
+    `fetch_check_details` called without `rest_reads` still repeats
+    `rest_pr_view`'s check reads. The stderr line is deduped so a watch loop is not
+    a wall of warnings; the recorded LIST must not be, or the second truncation
     vanishes."""
     pr_watch = _load_pr_watch()
     monkeypatch.setattr(
@@ -8196,7 +8327,7 @@ def test_the_false_settle_guard_is_not_disabled_by_a_missing_state_key(
     monkeypatch.setattr(
         pr_watch,
         "fetch_pr_view",
-        lambda pr: (_green_view(headRefOid="abc123"), []),
+        lambda pr: (_green_view(headRefOid="abc123"), [], None),
     )
     monkeypatch.setattr(
         pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "skipped")
@@ -8260,7 +8391,7 @@ def _poll_via_main(monkeypatch: pytest.MonkeyPatch, pr_watch, state: dict, view:
     reverted. Same shape, third occurrence — so these go through the call site.
     """
     monkeypatch.setattr(pr_watch, "resolve_pr", lambda explicit: 9)
-    monkeypatch.setattr(pr_watch, "fetch_pr_view", lambda pr: (view, []))
+    monkeypatch.setattr(pr_watch, "fetch_pr_view", lambda pr: (view, [], None))
     monkeypatch.setattr(
         pr_watch,
         "fetch_check_details",
@@ -9042,7 +9173,7 @@ def test_main_resolves_the_backend_before_it_reads(
     monkeypatch.setattr(
         pr_watch,
         "fetch_pr_view",
-        lambda pr: (order.append("read"), (_green_view(headRefOid="abc123"), []))[1],
+        lambda pr: (order.append("read"), (_green_view(headRefOid="abc123"), [], None))[1],
     )
     monkeypatch.setattr(
         pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "skipped")
@@ -9085,7 +9216,7 @@ def test_no_persist_builds_the_report_without_rewriting_watch_state(
     monkeypatch.setattr(
         pr_watch,
         "fetch_pr_view",
-        lambda pr: (_green_view(headRefOid="abc123"), []),
+        lambda pr: (_green_view(headRefOid="abc123"), [], None),
     )
     monkeypatch.setattr(
         pr_watch,
@@ -9119,6 +9250,115 @@ def test_no_persist_refuses_state_changing_modes(
     with pytest.raises(SystemExit, match="2"):
         pr_watch.main(argv)
     assert "--no-persist is only valid with a plain poll" in capsys.readouterr().err
+
+
+def _three_comment_view(pr_watch: ModuleType) -> tuple[dict, list[dict], set[str]]:
+    """One acknowledged issue comment, one noise review, one bodyless
+    CHANGES_REQUESTED review, and one fresh inline finding.
+
+    Returns the view, the inline list, and the `seen` set that acknowledges the
+    first comment by its occurrence-and-content token.
+    """
+    acked = {"id": "IC_1", "author": {"login": "reviewer"}, "body": "Fixed upstream."}
+    noise = {
+        "id": "PRR_1",
+        "author": {"login": "coderabbitai"},
+        "body": "<!-- walkthrough_start --> walkthrough",
+        "state": "COMMENTED",
+    }
+    # The fixture is only worth something while the engine calls this noise.
+    assert pr_watch.is_noise(noise["body"], author="coderabbitai")
+    bodyless = {"id": "PRR_2", "author": {"login": "maintainer"}, "body": "",
+                "state": "CHANGES_REQUESTED"}
+    fresh = {
+        "id": 77,
+        "user": {"login": "reviewer"},
+        "body": "This guard fails open.",
+        "path": "scripts/pr_watch.py",
+        "line": 12,
+    }
+    view = _green_view(comments=[acked], reviews=[noise, bodyless])
+    return view, [fresh], {pr_watch._ack_key("issue", acked)}
+
+
+def test_all_comments_reports_what_seen_noise_and_empty_bodies_hide() -> None:
+    """`new_comments` is the watch loop's view: filtered by this PR's
+    acknowledgements and by the noise markers, and `collect_comments` skips a
+    review with no body. `session-start` must judge review evidence without any
+    of those filters (#663), so `all_comments` carries every comment and review
+    submission, with each review's `state`, and carries no acknowledgement or
+    noise field beside it (#569)."""
+    pr_watch = _load_pr_watch()
+    view, inline, seen = _three_comment_view(pr_watch)
+
+    report = pr_watch.build_report(view, inline, seen, include_all_comments=True)
+
+    assert [c["body"] for c in report["new_comments"]] == ["This guard fails open."]
+    assert report["all_comments"] == [
+        {"kind": "issue", "author": "reviewer", "path": None, "line": None,
+         "state": None, "body": "Fixed upstream."},
+        {"kind": "review", "author": "coderabbitai", "path": None, "line": None,
+         "state": "COMMENTED", "body": "<!-- walkthrough_start --> walkthrough"},
+        {"kind": "review", "author": "maintainer", "path": None, "line": None,
+         "state": "CHANGES_REQUESTED", "body": ""},
+        {"kind": "inline", "author": "reviewer", "path": "scripts/pr_watch.py",
+         "line": 12, "state": None, "body": "This guard fails open."},
+    ]
+    # Opt-in: the watch loop's report does not grow by every comment's body.
+    assert "all_comments" not in pr_watch.build_report(view, inline, seen)
+
+
+def test_all_comments_through_main_is_read_only(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The form `session-start` runs: `--json --no-persist --all-comments`. It
+    reads the PR's existing acknowledgements, reports past them, and writes no
+    watch state."""
+    pr_watch = _load_pr_watch()
+    state_dir = tmp_path / "watch-state"
+    monkeypatch.setattr(pr_watch, "STATE_DIR", state_dir)
+    monkeypatch.setattr(pr_watch, "resolve_pr", lambda explicit: 9)
+    view, inline, seen = _three_comment_view(pr_watch)
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: {"seen": sorted(seen)})
+    monkeypatch.setattr(pr_watch, "fetch_pr_view", lambda pr: (view, inline, None))
+    monkeypatch.setattr(
+        pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "skipped")
+    )
+
+    assert pr_watch.main(["9", "--json", "--no-persist", "--all-comments"]) == 0
+    report = json.loads(capsys.readouterr().out)
+
+    assert len(report["new_comments"]) == 1
+    assert [c["kind"] for c in report["all_comments"]] == [
+        "issue", "review", "review", "inline"
+    ]
+    assert not state_dir.exists()
+
+
+@pytest.mark.parametrize(
+    ("argv", "message"),
+    [
+        (["9", "--all-comments"], "--all-comments is only valid with --json"),
+        (["9", "--json", "--all-comments", "--mark-seen"],
+         "--all-comments is only valid with a plain poll"),
+        (["9", "--json", "--all-comments", "--assert-ready"],
+         "--all-comments is only valid with a plain poll"),
+        (["9", "--json", "--all-comments", "--record-review", "fallback:panel",
+          "--head", "abc123"],
+         "--all-comments is only valid with a plain poll"),
+    ],
+)
+def test_all_comments_refuses_outside_a_json_plain_poll(
+    argv: list[str], message: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    pr_watch = _load_pr_watch()
+
+    with pytest.raises(SystemExit, match="2"):
+        pr_watch.main(argv)
+    assert message in capsys.readouterr().err
+
 
 def test_the_report_names_which_backend_produced_it() -> None:
     """`persist_poll` needs it to scope the settle baseline, so it has to be in
@@ -9253,7 +9493,7 @@ def test_the_rest_field_mappings_that_feed_merge_blockers_are_pinned(
     monkeypatch.setattr(pr_watch, "_http_get_all", lambda url, token, **_kw: [])
     monkeypatch.setattr(pr_watch, "_http_get_all_wrapped", lambda url, token, key, **_kw: [])
 
-    view, _ = pr_watch.fetch_pr_view(9)
+    view, _, _ = pr_watch.fetch_pr_view(9)
     assert view["isDraft"] is True
     assert view["mergeStateStatus"] == "BLOCKED"
     assert view["baseRefName"] == "release"
@@ -9978,7 +10218,7 @@ def test_both_transports_fetch_the_body_the_stamp_check_reads(
         pr_watch, "_rest_fetch_checks", lambda sha, **kw: ([], [])
     )
     monkeypatch.setattr(pr_watch, "_rest_repo_slug", lambda: ("o", "r"))
-    rest_view, _ = pr_watch.rest_pr_view(9, token="t")
+    rest_view, _, _ = pr_watch.rest_pr_view(9, token="t")
     assert pr_watch.stamped_shas(rest_view["body"]) == ["deadbeef1234567"]
 
 
@@ -10081,7 +10321,7 @@ def test_edit_between_poll_and_acknowledgement_is_not_acked(
     monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path / "watch-state")
     monkeypatch.setattr(pr_watch, "resolve_pr", lambda explicit: 7)
     polled = _edited_comment_view(pr_watch, kind, "Original finding")
-    monkeypatch.setattr(pr_watch, "fetch_pr_view", lambda pr: polled)
+    monkeypatch.setattr(pr_watch, "fetch_pr_view", lambda pr: (*polled, None))
     monkeypatch.setattr(pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "skipped"))
 
     assert pr_watch.main(["7", "--json"]) == 0
@@ -10205,7 +10445,7 @@ def test_identical_occurrence_arriving_between_poll_and_ack_stays_unhandled(
 
     def fetch(pr):
         reads.append(pr)
-        return polled
+        return (*polled, None)
 
     monkeypatch.setattr(pr_watch, "fetch_pr_view", fetch)
     monkeypatch.setattr(pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "skipped"))

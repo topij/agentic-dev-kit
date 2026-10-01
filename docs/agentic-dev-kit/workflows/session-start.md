@@ -87,7 +87,7 @@ source that failed on the retry.
 | Living handoff   | `<handoff>` — every entry under `## Workstreams` (status, owner, `▶ Next:`), plus the newest session entries as context                  |
 | Friction inbox   | `<friction-log>` — entries since the last "Backlog migrated" marker                                                                  |
 | Tracker backlog  | your tracker's list-issues command/script — project `tracker.project_name` (open only — drop `completed`/`canceled`). Pass an explicit row limit *and* select fields; see the gather for why these are two separate limits and why a full page must be treated as truncated |
-| Open PRs         | `gh pr list` plus the configured read-only review-health mechanism — anything draft / CI-red / awaiting-review (the PR-follow-through rule). Page both the list and review findings completely |
+| Open PRs         | `gh pr list` plus a read-only `pr_watch.py --json --no-persist --all-comments` poll per pull request — anything draft / CI-red / awaiting-review (the PR-follow-through rule). Page both the list and review findings completely |
 | Working tree     | `git status --short` plus a symbolic-branch read or explicit `DETACHED at <sha>` classification — unfinished business from last session |
 | CI/cron health   | your cron/CI runner's status command (adapt to your infra — e.g. a wrapper script that logs recent job outcomes)                         |
 | Config drift     | your host config-apply step, if you have one (e.g. a `verify --json`-style check comparing committed config against applied host state) — drop this bullet entirely if it doesn't generalize to your setup |
@@ -132,17 +132,30 @@ like good news, it looks like a missing handoff.
   code reveals and only the full-page check catches.
 
   The list response is discovery, not complete review health. For every returned pull
-  request, page review submissions, issue comments, and inline review comments through
-  the forge API, independent of `pr-watch` acknowledgement or seen state. With `gh`, use
-  `gh api --paginate` against the pull request's `/reviews`, `/issues/<PR#>/comments`,
-  and `/pulls/<PR#>/comments` endpoints; another runtime may translate those reads but
-  must preserve their full unfiltered content. If the selected mechanism does not expose
-  thread resolution, keep an actionable finding as a candidate and label its resolution
-  unverified. Do not mark `forge-pr-read` ready from list metadata or an
-  acknowledgement-filtered view alone. If this second layer is missing, fails, or may be
-  truncated, render
-  `PRs unavailable: review findings <reason>` rather than silently omitting unresolved
-  bot feedback.
+  request, read its review evidence through the watch engine, read-only:
+
+  ```sh
+  uv run <engine-dir>/pr_watch.py <PR#> --json --no-persist --all-comments
+  ```
+
+  `all_comments[]` holds every issue comment, every review submission with its
+  `state` (including one submitted without a body), and every inline review comment,
+  independent of `pr-watch` acknowledgement or seen state and of its noise markers.
+  Judge from `all_comments[]`, never from `new_comments[]`, which is the
+  acknowledgement-filtered view the watch loop reads. `--no-persist` leaves the pull
+  request's watch state as it was, so this read writes nothing. Another runtime may
+  translate the invocation but must preserve the full unfiltered content.
+
+  On the `gh` backend the engine pages all three surfaces to the end: `gh pr view`
+  follows the review and comment cursors, and `gh api --paginate` returns the inline
+  comments as one array (checked against gh 2.97.0 on 2026-10-01, from its source and
+  from live reads). Its REST backend stops at a page ceiling and names every read that
+  hit it in `truncated_reads[]`. Neither backend exposes thread resolution, so keep an
+  actionable finding as a candidate and label its resolution unverified. Do not mark
+  `forge-pr-read` ready from list metadata or an acknowledgement-filtered view alone.
+  If the engine exits non-zero, if `truncated_reads[]` is non-empty, or if this second
+  layer is otherwise missing, render `PRs unavailable: review findings <reason>`
+  rather than silently omitting unresolved bot feedback.
 - your cron/CI health command (adapt to your infra)
 - your config-drift check, if you have one (parse its output for a 🔴-worthy line in *Render the briefing*)
 - Read `<handoff>`. The focus is the `## Workstreams` section: each `### <name>` entry's

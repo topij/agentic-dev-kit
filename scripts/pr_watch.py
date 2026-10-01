@@ -84,6 +84,7 @@ only; it is not read-only — it still writes its own per-PR watch state.
 Usage:
     uv run scripts/pr_watch.py                 # current branch's PR, human summary
     uv run scripts/pr_watch.py 916 --json       # explicit PR, machine-readable
+    uv run <engine-dir>/pr_watch.py 916 --json --no-persist --all-comments  # read-only, every comment (session-start)
     uv run scripts/pr_watch.py --mark-seen      # ack exactly what the last poll reported
     uv run scripts/pr_watch.py 916 --record-review "fallback:codex" --head <polled-sha>
     uv run <engine-dir>/pr_watch.py 916 --record-review "fallback:panel" --head <polled-sha> --disposition -  # findings on stdin
@@ -948,9 +949,10 @@ def _warn_pagination_truncated(url: str, max_pages: int) -> None:
     something false about which guard is blind.
 
     The stderr line is deduped per URL within one process, which is one poll —
-    the engine is invoked fresh per round. What that collapses is the check-runs
-    URL being read twice in a single poll (`rest_pr_view`, then
-    `fetch_check_details`).
+    the engine is invoked fresh per round. :func:`main` hands `rest_pr_view`'s
+    check reads to `fetch_check_details` (#663), so a poll reads each check URL
+    once; what the dedupe still collapses is a caller that reads one URL twice,
+    such as `fetch_check_details` called without those reads.
 
     ``_truncated_reads`` itself is NOT deduped: both reads are real events.
     :func:`render` is what collapses them for display; ``build_report`` copies the
@@ -1428,12 +1430,29 @@ def _rest_fetch_checks(
     return check_runs, statuses
 
 
-def rest_pr_view(pr: int, *, token: str) -> tuple[dict, list[dict]]:
+class RestCheckReads(NamedTuple):
+    """The two check surfaces :func:`rest_pr_view` read, and the commit it read them for.
+
+    Handed to :func:`fetch_check_details` so one REST poll reads ``pulls/{n}``,
+    ``check-runs`` and ``status`` once rather than twice (#663). In the engine,
+    only :func:`rest_pr_view` builds one, so receiving one means the REST
+    transport performed these reads; the `gh` branch of
+    :func:`fetch_check_details` never reads it.
+    """
+
+    sha: str
+    check_runs: list[dict]
+    statuses: list[dict]
+
+
+def rest_pr_view(pr: int, *, token: str) -> tuple[dict, list[dict], RestCheckReads]:
     """REST equivalent of the ``gh pr view`` + inline-comments fetch in :func:`main`.
 
-    Returns ``(view, inline)`` in the shape :func:`build_report` consumes. REST
-    spells a comment's author ``user`` where GraphQL spells it ``author``, which
-    :func:`_author` already handles, so no renaming is needed.
+    Returns ``(view, inline, check_reads)``. ``view`` and ``inline`` are in the
+    shape :func:`build_report` consumes. REST spells a comment's author ``user``
+    where GraphQL spells it ``author``, which :func:`_author` already handles, so
+    no renaming is needed. ``check_reads`` carries the raw check surfaces behind
+    ``view["statusCheckRollup"]`` for :func:`fetch_check_details`.
     """
     slug = _rest_repo_slug()
     pr_data = _rest_object(_http_get(_rest_api(f"pulls/{pr}", slug), token)[0], f"PR #{pr}")
@@ -1477,7 +1496,7 @@ def rest_pr_view(pr: int, *, token: str) -> tuple[dict, list[dict]]:
         ),
     }
     inline = _http_get_all(_rest_api(f"pulls/{pr}/comments?per_page=100", slug), token)
-    return view, inline
+    return view, inline, RestCheckReads(sha, check_runs, statuses)
 
 
 _bot_signal_warned = False
@@ -1713,7 +1732,11 @@ def _gh_identity_map(sha: str) -> dict[str, str]:
 
 
 def fetch_check_details(
-    pr: int, *, bots: tuple[str, ...] | None = None, head_sha: str | None = None
+    pr: int,
+    *,
+    bots: tuple[str, ...] | None = None,
+    head_sha: str | None = None,
+    rest_reads: RestCheckReads | None = None,
 ) -> CheckDetails:
     """Per-check ``{name, state, bucket, description, startedAt, identity}`` for one PR.
 
@@ -1740,9 +1763,17 @@ def fetch_check_details(
     ``head_sha`` is an optimisation for the `gh` backend only. That backend needs
     a commit SHA to reach the REST identity endpoints and has none to hand, so
     without this it spends a ``gh pr view`` to find one. Both call sites already
-    hold the head from their own snapshot. The REST backend ignores it and keeps
-    deriving the SHA from its own ``pulls/{pr}`` read, so the identity it resolves
-    can never be for a different commit than the rows it shaped.
+    hold the head from their own snapshot. The REST backend ignores it.
+
+    ``rest_reads`` is the REST backend's counterpart (#663): the check surfaces
+    :func:`rest_pr_view` already read this poll, for the commit it names. Given
+    one, the REST branch shapes its rows from those reads instead of reading
+    ``pulls/{pr}``, ``check-runs`` and ``status`` a second time. The identity read
+    then targets ``rest_reads.sha``, so the identity it resolves is still for the
+    commit whose rows it shaped. Without one, the REST branch derives the SHA from
+    its own ``pulls/{pr}`` read, as before. The `gh` branch ignores it and reads
+    ``gh pr checks`` as before, so a backend that changes between
+    :func:`fetch_pr_view` and this call loses only the saving.
 
     A SECOND ``gh`` call, and deliberately so. ``gh pr view --json
     statusCheckRollup`` — the source :func:`summarize_checks` reads — returns a
@@ -1798,13 +1829,16 @@ def fetch_check_details(
     if backend == "rest":
         try:
             slug = _rest_repo_slug()
-            pr_data = _rest_object(
-                _http_get(_rest_api(f"pulls/{pr}", slug), token)[0], f"PR #{pr}"
-            )
-            sha = (pr_data.get("head") or {}).get("sha")
-            if not sha:
-                raise RuntimeError(f"PR #{pr} response carried no head SHA")
-            check_runs, statuses = _rest_fetch_checks(sha, token=token, slug=slug)
+            if rest_reads is not None:
+                sha, check_runs, statuses = rest_reads
+            else:
+                pr_data = _rest_object(
+                    _http_get(_rest_api(f"pulls/{pr}", slug), token)[0], f"PR #{pr}"
+                )
+                sha = (pr_data.get("head") or {}).get("sha")
+                if not sha:
+                    raise RuntimeError(f"PR #{pr} response carried no head SHA")
+                check_runs, statuses = _rest_fetch_checks(sha, token=token, slug=slug)
             rows = _rest_check_rows(check_runs, statuses)
             # The #95 identity read, whenever a row's identity has a consumer
             # this poll. Check runs already carry `app.slug` from the fetch
@@ -1972,11 +2006,14 @@ def resolve_pr(explicit: int | None) -> int:
     return int(data["number"])
 
 
-def fetch_pr_view(pr: int) -> tuple[dict, list[dict]]:
+def fetch_pr_view(pr: int) -> tuple[dict, list[dict], RestCheckReads | None]:
     """The PR snapshot + its inline review comments, from either backend.
 
     One function rather than two call sites so the `gh` and REST paths cannot
-    drift into returning different field sets.
+    drift into returning different field sets. The third element is the REST
+    check reads :func:`fetch_check_details` reuses (see :class:`RestCheckReads`),
+    and ``None`` on the `gh` backend, whose check details come from a different
+    command (``gh pr checks``) than its rollup.
     """
     backend, token = _resolve_backend()
     if backend == "rest":
@@ -1996,7 +2033,7 @@ def fetch_pr_view(pr: int) -> tuple[dict, list[dict]]:
     inline = _gh_json(
         ["api", f"repos/{{owner}}/{{repo}}/pulls/{pr}/comments", "--paginate"]
     )
-    return view, inline
+    return view, inline, None
 
 
 def fetch_review_snapshot(pr: int) -> dict:
@@ -2334,6 +2371,41 @@ def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
                 ),
             }
         )
+    return out
+
+
+def all_comments(view: dict, inline: list[dict]) -> list[dict]:
+    """Every issue comment, review submission and inline comment the poll read.
+
+    Each entry is ``{kind, author, path, line, state, body}``; ``state`` is the
+    review's verdict for ``kind == "review"`` and ``None`` otherwise. Nothing is
+    filtered: not by ``seen``, not by the noise markers, and not by an empty body.
+
+    Its own walk rather than :func:`collect_comments`, because that function
+    skips a review submission with no body. A bodyless review carries no finding
+    for the watch loop, so the skip is right there, but its ``state`` is review
+    evidence for a reader judging the PR from scratch (`session-start`, #663).
+    """
+    out: list[dict] = []
+    for raw in view.get("comments") or []:
+        if isinstance(raw, dict):
+            out.append(
+                {"kind": "issue", "author": _author(raw), "path": None, "line": None,
+                 "state": None, "body": raw.get("body") or ""}
+            )
+    for raw in view.get("reviews") or []:
+        if isinstance(raw, dict):
+            out.append(
+                {"kind": "review", "author": _author(raw), "path": None, "line": None,
+                 "state": raw.get("state"), "body": raw.get("body") or ""}
+            )
+    for raw in inline or []:
+        if isinstance(raw, dict):
+            out.append(
+                {"kind": "inline", "author": _author(raw), "path": raw.get("path"),
+                 "line": raw.get("line") or raw.get("original_line"),
+                 "state": None, "body": raw.get("body") or ""}
+            )
     return out
 
 
@@ -4428,6 +4500,7 @@ def build_report(
     # — see :func:`rest_cannot_authorize_merge`. None means "resolve it", which is
     # right for a caller that did no I/O of its own (tests, `--mark-seen`).
     backend: str | None = None,
+    include_all_comments: bool = False,
 ) -> dict:
     """Assemble the JSON-serializable watch report for one PR snapshot.
 
@@ -4461,6 +4534,14 @@ def build_report(
       one-liner for the human render; ``body`` is the FULL text so a caller never
       needs a second ``gh api`` fetch for the suggested diff.
     - ``all_comment_keys`` — every current comment's platform-id key (back-compat).
+    - ``all_comments`` — present only with ``include_all_comments`` (the CLI's
+      ``--all-comments``): :func:`all_comments`, every comment and review
+      submission the poll read, whatever ``seen``, the noise markers and an empty
+      body would say. It exists for a reader that must judge review evidence
+      independently of this PR's acknowledgements — `session-start` (#663).
+      Deliberately without :func:`new_actionable`'s two predicates beside each
+      entry: they answer the watch loop's question, and #569 records why a
+      predicate built for one question should not answer another.
     - ``all_seen_keys`` — the snapshot ``--mark-seen`` writes: compatibility
       platform/content keys and usable occurrence-and-content tokens. Only the
       tokens authorize suppression; a new-ID repost requires acknowledgement.
@@ -4866,6 +4947,8 @@ def build_report(
             }
         ),
     }
+    if include_all_comments:
+        report["all_comments"] = all_comments(view, inline)
     report["converged"] = decide_converged(checks, fresh, settling=settling)
     report["mergeable"] = decide_mergeable(
         report["converged"],
@@ -4917,7 +5000,8 @@ def render(report: dict) -> str:
     # Truncation, on the surface a human or agent actually reads. It gates
     # nothing — REST cannot authorize a merge, and blocking `converged` would
     # wedge the loop — so this line is the entire mechanism. Deduplicated because
-    # one poll legitimately reads the check-runs URL twice.
+    # `truncated_reads` records every read, and a report built by a caller other
+    # than `main` may have read one URL twice.
     for truncated in dict.fromkeys(report.get("truncated_reads") or []):
         lines.append(
             f"  ⚠ a paginated read was TRUNCATED at the page ceiling ({truncated}) "
@@ -5495,6 +5579,16 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--all-comments",
+        action="store_true",
+        help=(
+            "with --json on a plain poll: also report every comment and review "
+            "submission as `all_comments`, whether or not this PR's seen state "
+            "acknowledges it or a noise marker filters it; for a reader such as "
+            "session-start that must not inherit this PR's acknowledgements"
+        ),
+    )
+    parser.add_argument(
         "--head",
         metavar="EXPECTED_SHA",
         help="exact head SHA reviewed; required with --record-review",
@@ -5593,6 +5687,15 @@ def main(argv: list[str] | None = None) -> int:
         or args.assert_ready
     ):
         parser.error("--no-persist is only valid with a plain poll")
+    if args.all_comments and (
+        args.mark_seen
+        or args.record_review is not None
+        or args.assert_draft
+        or args.assert_ready
+    ):
+        parser.error("--all-comments is only valid with a plain poll")
+    if args.all_comments and not args.json:
+        parser.error("--all-comments is only valid with --json")
 
     try:
         pr = resolve_pr(args.pr)
@@ -5656,13 +5759,15 @@ def main(argv: list[str] | None = None) -> int:
     # REST bound then being evaluated against the wrong transport.
     backend_name = _active_backend_name()
     try:
-        view, inline = fetch_pr_view(pr)
+        view, inline, rest_reads = fetch_pr_view(pr)
     except (RuntimeError, KeyError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     # Deliberately outside the try: this call never raises and never blocks the
     # loop — see :func:`fetch_check_details`.
-    check_details = fetch_check_details(pr, head_sha=view.get("headRefOid"))
+    check_details = fetch_check_details(
+        pr, head_sha=view.get("headRefOid"), rest_reads=rest_reads
+    )
 
     state = load_state(pr)
     seen = set(state.get("seen", []))
@@ -5679,6 +5784,7 @@ def main(argv: list[str] | None = None) -> int:
         prior_settle_since=settle_since,
         prior_settle_total=settle_total,
         backend=backend_name,
+        include_all_comments=args.all_comments,
     )
 
     if not args.no_persist:

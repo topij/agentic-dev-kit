@@ -2740,12 +2740,16 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         assert "keep that candidate out of `Now`" in flattened
         assert "`git symbolic-ref --short -q HEAD`" in flattened
         assert "report `DETACHED at <sha>` rather than a blank branch" in flattened
+        # #663: each pull request's review evidence is read through the watch
+        # engine, read-only, and judged from the unfiltered list rather than the
+        # watch loop's acknowledged view.
         assert (
-            "`gh api --paginate` against the pull request's `/reviews`, "
-            "`/issues/<PR#>/comments`, and `/pulls/<PR#>/comments` endpoints"
+            "uv run <engine-dir>/pr_watch.py <PR#> --json --no-persist --all-comments"
         ) in flattened
+        assert "Judge from `all_comments[]`, never from `new_comments[]`" in flattened
         assert "independent of `pr-watch` acknowledgement or seen state" in flattened
-        assert "must preserve their full unfiltered content" in flattened
+        assert "must preserve the full unfiltered content" in flattened
+        assert "if `truncated_reads[]` is non-empty" in flattened
         assert "keep an actionable finding as a candidate" in flattened
         assert (
             "Do not mark `forge-pr-read` ready from list metadata or an "
@@ -3219,14 +3223,27 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "`true`", 1
         )),
         ("session-start", session, session.replace(
-            "Do not mark `forge-pr-read` ready from list metadata or an\n"
-            "  acknowledgement-filtered view alone",
-            "Mark `forge-pr-read` ready from list metadata or an\n"
-            "  acknowledgement-filtered view alone", 1
+            "Do not mark\n"
+            "  `forge-pr-read` ready from list metadata or an acknowledgement-filtered view alone",
+            "Mark\n"
+            "  `forge-pr-read` ready from list metadata or an acknowledgement-filtered view alone", 1
         )),
         ("session-start", session, session.replace(
-            "must preserve their full unfiltered content",
+            "must preserve the full unfiltered content",
             "may filter content through local acknowledgement state", 1
+        )),
+        # #663: the per-PR read is the watch engine's, read-only and unfiltered.
+        ("session-start", session, session.replace(
+            "Judge from `all_comments[]`, never from `new_comments[]`",
+            "Judge from `new_comments[]`", 1
+        )),
+        ("session-start", session, session.replace(
+            "pr_watch.py <PR#> --json --no-persist --all-comments",
+            "pr_watch.py <PR#> --json --all-comments", 1
+        )),
+        ("session-start", session, session.replace(
+            "if `truncated_reads[]` is non-empty, ",
+            "", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "`kitconfig.load_config()`", "`config/dev-model.yaml`", 1
