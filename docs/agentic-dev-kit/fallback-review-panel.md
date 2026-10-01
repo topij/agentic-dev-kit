@@ -456,9 +456,9 @@ author re-reading their own diff. **Cite them by name, never by number.**
 4. Triage every finding against the *current* code — some go stale across
    rounds.
 5. Dispose of LOW findings by **LOW findings: delta review or ticket** below.
-   Fix other real findings, each with the positive construction and hostile mutation
-   that *What the author owes the loop* pairs with it, and reply-with-reason to the
-   rest.
+   Fix other real findings, and reply-with-reason to the rest. A fix to executable
+   behaviour carries the positive construction and hostile mutation that *What the
+   author owes the loop* pairs with it.
 6. **Re-run after the fix round.** Not optional — whether it is the full panel
    or a delta pass is decided below: apply the LOW rule first; otherwise use
    what the fix round's delta contains, then — for how many lenses the delta pass takes — by whether the
@@ -495,10 +495,10 @@ author re-reading their own diff. **Cite them by name, never by number.**
 ## What the author owes the loop
 
 The contract above binds the lenses. These rules bind the author and the cockpit, and
-each one states something a reviewer can check on the pull request. Each was learned on
-more than one pull request of the Codex–Claude parity work before it was written here.
-`git show 7290e31:saved_plans/review-process-learnings_2026-08-24.md` prints the per-PR
-record they were distilled from.
+each one states something a reviewer can check on the pull request. They were distilled
+from the per-PR review record of the kit's Codex–Claude parity work. In the kit's own
+repository, `git show 7290e31:saved_plans/review-process-learnings_2026-08-24.md` prints
+that record.
 
 - **Write the design matrix before the first panel.** A change to a structured contract
   or a lifecycle, such as a workflow declaration, an external action or a launcher,
@@ -527,23 +527,27 @@ record they were distilled from.
   *A reviewer checks* that each runtime claim in the diff names the probe and the
   observer that established it, stamped. Learned on `#614`, `#620`, `#623`, `#626`,
   `#632` and `#637`.
-- **Pair each accepted finding with a positive construction and a locally recomputed
-  hostile mutation.** The positive case pins the corrected behaviour. The mutation
+- **Pair each accepted finding in executable behaviour with a positive construction and
+  a locally recomputed hostile mutation.** The positive case pins the corrected
+  behaviour. The mutation
   re-creates the finding's failure in a copy, and the new test must fail on it, under
   **Mutation-test new branches**' rules, including proof that the mutation landed. The
   pair turns the finding into a standing boundary, so the next round does not
   rediscover its adjacent transition. Build the two fixtures separately: a hostile
   object copied from the positive one can share objects with it and stop proving an
-  independent boundary. *A reviewer checks* that the round's disposition names both and
-  the mutation's result. Learned in the memo's early fix-round lessons and again on
-  `#609`.
+  independent boundary. A finding in prose, or one answered by documenting a limitation,
+  has nothing for a mutation to fail, and takes the prose rules under *Re-running, and
+  when to stop* instead. *A reviewer checks* that the round's disposition names both
+  and the mutation's result, for each behavioural finding it fixes. Recorded in the
+  per-PR record's fix-round lessons and again on `#609`.
 - **Stamp verification at the head that merges, on a quiet tree.** `AGENTS.md` defines
   what the stamp contains; this rule says where and when to take it:
   - At the exact candidate head, after the last content change. A later push
-    invalidates it, and nothing checks that yet (`#603`).
-  - With nothing else writing into the tree: no concurrent `pr_watch` poll, whose state
-    writes trip the suite's state guard, and no uncommitted edits, which trip the drift
-    check.
+    invalidates it. `pr_watch` reports a stamp that no longer covers the head, as the
+    evidence finding `verification_stamp_behind_head` (`#603`), but does not gate on it.
+  - With nothing else writing into the tree: no concurrent `pr_watch` invocation that
+    writes state (a poll or `--record-review`), because its writes trip the suite's
+    state guard, and no uncommitted edits, which trip the drift check.
   - Lenses running full suites concurrently can produce a failure that a quiet run does
     not show. Compare a lens's suite failure with a quiet run before treating it as a
     finding.
