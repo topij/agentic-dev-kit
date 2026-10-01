@@ -456,7 +456,9 @@ author re-reading their own diff. **Cite them by name, never by number.**
 4. Triage every finding against the *current* code — some go stale across
    rounds.
 5. Dispose of LOW findings by **LOW findings: delta review or ticket** below.
-   Fix other real findings, reply-with-reason to the rest.
+   Fix other real findings, and reply-with-reason to the rest. A fix to executable
+   behaviour carries the positive construction and hostile mutation that *What the
+   author owes the loop* pairs with it.
 6. **Re-run after the fix round.** Not optional — whether it is the full panel
    or a delta pass is decided below: apply the LOW rule first; otherwise use
    what the fix round's delta contains, then — for how many lenses the delta pass takes — by whether the
@@ -489,6 +491,80 @@ author re-reading their own diff. **Cite them by name, never by number.**
    buried in the record command's stdout — and it is worth exactly what an honest
    operator puts into it. Verifying coverage needs each lens to record its own
    receipt from its own context: issue #32, not this.
+
+## What the author owes the loop
+
+The contract above binds the lenses. These rules bind the author and the cockpit, and
+each one states something a reviewer can check on the pull request. They were distilled
+from the per-PR review record of the kit's Codex–Claude parity work. In the kit's own
+repository, `git show 7290e31:saved_plans/review-process-learnings_2026-08-24.md` prints
+that record.
+
+- **Write the design matrix before the first panel.** A change to a structured contract
+  or a lifecycle, such as a workflow declaration, an external action or a launcher,
+  carries its matrix in the pull request before a lens reviews it:
+  - for a declaration: each capability's applicability, trigger point, unavailable
+    result, authority, durable evidence, resume route and terminal outcome;
+  - for an external action: action × crash cutpoint × durable evidence ×
+    authoritative observer.
+
+  Make the terminal outcomes total and mutually exclusive, then build the hostile
+  mutations from the matrix. Do not wait for successive panels to rediscover its missing
+  rows one per round. *A reviewer checks* that the matrix is in the pull request and
+  that each row names the test or mutation that pins it. Learned on `#599`, `#611` and
+  `#626`.
+- **Observe a claim about a runtime, a tool or a live system before writing it, and use
+  an observer the claim does not control.**
+  - Probe the pinned client.
+  - Read the runtime's own artifact (a transcript, a rollout, a receipt, the host
+    filesystem), not the argv you passed or the child's account of itself.
+  - To attribute an outcome to one rule, include a case that rule is the only possible
+    source of. A probe where everything ran establishes nothing, and the denied case
+    does.
+  - Treat a lens's report of runtime behaviour as testimony: the cockpit reproduces it
+    before a disposition calls it fixed.
+
+  *A reviewer checks* that each runtime claim in the diff names the probe and the
+  observer that established it, stamped. Learned on `#614`, `#620`, `#623`, `#626`,
+  `#632` and `#637`.
+- **Pair each accepted finding in executable behaviour with a positive construction and
+  a locally recomputed hostile mutation.** The positive case pins the corrected
+  behaviour. The mutation
+  re-creates the finding's failure in a copy, and the new test must fail on it, under
+  **Mutation-test new branches**' rules, including proof that the mutation landed. The
+  pair turns the finding into a standing boundary, so the next round does not
+  rediscover its adjacent transition. Build the two fixtures separately: a hostile
+  object copied from the positive one can share objects with it and stop proving an
+  independent boundary. A finding in prose, or one answered by documenting a limitation,
+  has nothing for a mutation to fail, and takes the prose rules under *Re-running, and
+  when to stop* instead. *A reviewer checks* that the round's disposition names both
+  and the mutation's result, for each behavioural finding it fixes. Recorded in the
+  per-PR record's fix-round lessons and again on `#609`.
+- **Stamp verification at the head that merges, on a quiet tree.** A stamp names the
+  command, the revision and the date of the run it reports (the kit's own `AGENTS.md`
+  carries the full rule). This rule says where and when to take it:
+  - At the exact candidate head, after the last content change. A later push
+    invalidates it. When stamps exist and none covers the head, `pr_watch` reports the
+    evidence finding `verification_stamp_behind_head` (`#603`), but does not gate on it.
+  - With nothing else writing into the tree: no concurrent `pr_watch` invocation that
+    writes state (a poll or `--record-review`), because its writes trip the suite's
+    state guard, and no uncommitted edits to kit-owned files, which trip the drift
+    check.
+  - Lenses running full suites concurrently can produce a failure that a quiet run does
+    not show. Compare a lens's suite failure with a quiet run before treating it as a
+    finding.
+
+  *A reviewer checks* that the pull request's verification stamp names the head
+  `pr_watch` reports as current. Learned on `#623`, `#626` and `#657`.
+- **Read repeated findings in one place as design feedback.** When consecutive rounds
+  find defects in the same function, or keep moving the same trust boundary, the
+  predicate or the ownership is wrong, not merely its cases incomplete. Stop adding cases
+  and guards. Re-examine what the code is for, or which existing mechanism owns the
+  concern, and return to the design artifact before the next round. A new mechanism this
+  prompts is still filed separately, under `safety-critical-changes.md` rule 3. *A
+  reviewer checks* that when one function draws findings in consecutive rounds, the next
+  disposition says whether its predicate or its ownership was re-examined. Learned on
+  `#599`, `#637`, `#653` and `#655`.
 
 ## LOW findings: delta review or ticket
 
