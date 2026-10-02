@@ -143,7 +143,7 @@ def _assert_matrix_matches_declaration(text: str) -> None:
         f"declaration only {sorted(set(names) - set(table_names))}, "
         "or the same rows in another order"
     )
-    for row, entry in zip(rows, declared):
+    for row, entry in zip(rows, declared, strict=True):
         name, status = entry["capability"], entry["status"]
         assert all(row), f"the {name!r} row has an empty cell"
         assert _opens_with(row[-1], status), (
@@ -166,7 +166,7 @@ def _assert_matrix_matches_declaration(text: str) -> None:
         f"the per-runtime lane table has {len(rows)} rows and lane_isolation_records "
         f"declares {len(records)}"
     )
-    for row, entry in zip(rows, records):
+    for row, entry in zip(rows, records, strict=True):
         assert len(row) == len(LANE_HEADER) and all(row), f"lane row {row[:2]} is short or has an empty cell"
         assert row[0] == entry["runtime"], f"lane row for {row[0]!r} is declared as {entry['runtime']!r}"
         links = LINK.findall(row[1])

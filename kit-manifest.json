@@ -634,7 +634,7 @@
     },
     "scripts/tests/test_runtime_parity_matrix.py": {
       "role": "repo-only",
-      "sha256": "b912a58112a80218eb2cef8807d5c5ec8691b81e780e49920eab2718bdca293b"
+      "sha256": "867f8297f22717fb932992bb32e191a9ba4a6cee9328093389f35722ee873bf0"
     },
     "scripts/tests/test_runtime_smoke.py": {
       "role": "repo-only",
