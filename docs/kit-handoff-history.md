@@ -5,6 +5,52 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-01 (Phase 6 item 4, and a scratch and branch cleanup, in Claude Code)
+
+**Shipped.** PR #897, squash `6e4c439`: Phase 6 item 4 (#663).
+
+- session-start reads each open pull request through `pr_watch.py <PR#> --json
+  --no-persist --all-comments` instead of three `gh api` calls.
+- The new `--all-comments` flag reports every comment and review submission,
+  unfiltered by seen state, noise markers or an empty body.
+- A REST poll reads `pulls/{n}`, `check-runs` and `status` once instead of twice.
+
+**Decided by the operator.**
+
+- Merge #897, which was held for them as operator-merge.
+- Keep `state/review-evidence/` until a retention rule decides what each run keeps
+  (#861).
+- Build the sweep engine (#900) in its own session. It opens the *Scratch retention*
+  workstream below.
+
+**Left out on purpose:** passing `dev_session.sh`'s `headRefOid` down to `pr_watch.py`.
+The reason is in the #663 comment, and #663 stays open for its residue.
+
+**Filed**, each on the operator's approval of its exact text: #898, #899, #900.
+Comments went on #663 and #838.
+
+**Review.** CodeRabbit's auto-review stayed off, so the fallback panel reviewed #897:
+the full dual-lens panel at `d29fa9a`, then dual-lens delta passes for its LOW repairs
+at `be68303` and `a2acb9b`. The receipts compose into one chain. Each round's
+disposition is posted on the PR, with both delta passes' verdict lines verbatim.
+
+**Cleanup.**
+
+- Every head branch on origin whose PR merged was deleted, after checking that its tip
+  was the merged head. GitHub's delete-branch-on-merge setting is now on.
+- `dev/pr-watch-rest-transport` is kept: its PR, #91, closed with commits not in
+  `main`.
+- The operator ran a generated script that removed stale session scratchpads and
+  review-lens trees under `/private/tmp`, for this repo and for cs-toolkit. Apart from
+  this session's own lens clones, it touched only entries not modified that day.
+
+**Verified.** `env -u FORCE_COLOR make test` at `d29fa9a`, in
+`/Users/topi/Coding/agentic-dev-kit` on 2026-10-01: `3773 passed, 1 skipped in
+658.45s`. That run predates the two LOW-repair commits, `be68303` and `a2acb9b`, which
+changed `scripts/pr_watch.py` and its tests before the merge. For the merged tree,
+`gh run list --commit 6e4c439` showed the `Test` workflow completed `success` on
+`main`.
+
 ### 2026-10-01 (Phase 6 items 1 to 3, the triage guard, the two-link way out, in Claude Code)
 
 This continues the *Phase 6 planned* session entry below, after its wrap-up.
