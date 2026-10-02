@@ -686,7 +686,7 @@ def test_each_claude_review_condition_is_required(changes):
     assert not rs.claude_review_ok(**arguments)
 
 
-def test_no_lens_git_allowance_runs_a_command():
+def test_ls_remote_is_not_a_lens_git_allowance():
     # `git ls-remote --upload-pack=<command>` runs <command>.
     assert rs.CLAUDE_LENS_GIT and not [rule for rule in rs.CLAUDE_LENS_GIT if "ls-remote" in rule]
 
@@ -736,8 +736,8 @@ def test_an_engine_that_does_not_finish_refuses_the_run(tmp_path, monkeypatch, e
 @pytest.mark.parametrize(
     "raised, message",
     [
-        (KeyboardInterrupt(), "interrupted; every client it started is stopped; no record was written"),
-        (RuntimeError("boom"), "failed: RuntimeError: boom; no record was written to --out"),
+        (KeyboardInterrupt(), "interrupted; every client it was running is stopped; no record was written to --out"),
+        (RuntimeError("boom"), "failed: RuntimeError: boom; every client it was running is stopped; no record"),
     ],
     ids=["interrupt", "exception"],
 )
@@ -754,12 +754,39 @@ def test_a_run_that_cannot_finish_stops_its_clients_and_exits_aborted(tmp_path, 
 
     monkeypatch.setattr(rs, "resolve_revision", lambda _root, _revision: "0" * 40)
     monkeypatch.setattr(rs, "verify_harness", lambda _root, _revision: {})
-    monkeypatch.setattr(rs, "stop_live_children", lambda: stopped.append(True))
+    monkeypatch.setattr(rs, "stop_live_children", lambda: stopped.append(True) or [])
     monkeypatch.setattr(rs, "run", fail)
     assert rs.main(["--work-root", str(tmp_path), "--out", str(tmp_path / "out")]) == rs.EXIT_ABORTED
     assert message in capsys.readouterr().err
     assert stopped == [True]
     assert {signum: signal.getsignal(signum) for signum in rs.INTERRUPT_SIGNALS} == before
+
+
+def test_a_signal_during_the_failure_stop_does_not_cut_it_short(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(rs, "_INTERRUPTED", False)
+    monkeypatch.setattr(rs, "_STOPPING", False)
+    monkeypatch.setattr(rs, "resolve_revision", lambda _root, _revision: "0" * 40)
+    monkeypatch.setattr(rs, "verify_harness", lambda _root, _revision: {})
+    stops = []
+
+    def fail(*_args):
+        raise RuntimeError("boom")
+
+    def stop_while_signalled():
+        assert signal.getsignal(signal.SIGTERM) is rs._interrupt
+        os.kill(os.getpid(), signal.SIGTERM)
+        time.sleep(0.3)  # the handler runs here
+        stops.append(True)
+        return []
+
+    monkeypatch.setattr(rs, "run", fail)
+    monkeypatch.setattr(rs, "stop_live_children", stop_while_signalled)
+    try:
+        code = rs.main(["--work-root", str(tmp_path), "--out", str(tmp_path / "out")])
+    except KeyboardInterrupt:
+        pytest.fail("a signal during the failure's stop escaped main")
+    assert code == rs.EXIT_ABORTED and stops == [True]
+    assert "failed: RuntimeError: boom; every client it was running is stopped" in capsys.readouterr().err
 
 
 def _gone(pid: int, wait: float = 15.0) -> bool:
@@ -821,11 +848,12 @@ def test_no_client_starts_once_the_stop_has_begun(tmp_path, monkeypatch):
 
 
 def test_a_client_an_interrupt_catches_mid_stop_stays_registered_until_stopped(tmp_path, monkeypatch):
-    """A timeout's stop waits out its grace for a client that ignores SIGTERM; an
-    interrupt in that wait must leave the client for `stop_live_children`."""
+    """A timeout's stop waits out its grace for a descendant that ignores SIGTERM after
+    its leader has died; an interrupt in that wait must leave the group, which still has
+    a member, for `stop_live_children`."""
     monkeypatch.setattr(rs, "_LIVE_GROUPS", set())
     monkeypatch.setattr(rs, "_STOPPING", False)
-    pids = tmp_path / "pids"
+    leader, descendant = tmp_path / "leader", tmp_path / "descendant"
 
     def interrupt(_signum, _frame):
         raise KeyboardInterrupt("an interrupt during the stop")
@@ -835,22 +863,53 @@ def test_a_client_an_interrupt_catches_mid_stop_stays_registered_until_stopped(t
     try:
         with pytest.raises(KeyboardInterrupt):
             rs.run_child(
-                ["bash", "-c", f"trap '' TERM; sleep 300 & echo $$ $! > {pids}; wait"], cwd=tmp_path,
-                env=dict(os.environ), stdin_text="", timeout=1, log_dir=tmp_path, name="stubborn",
+                ["bash", "-c", f"echo $$ > {leader}; (trap '' TERM; sleep 300 & echo $! > {descendant}; wait) & wait"],
+                cwd=tmp_path, env=dict(os.environ), stdin_text="", timeout=1, log_dir=tmp_path, name="stubborn",
             )
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
         signal.signal(signal.SIGALRM, previous)
-    started = [int(pid) for pid in pids.read_text(encoding="utf-8").split()]
+    assert _gone(int(leader.read_text(encoding="utf-8")))
     assert len(rs._LIVE_GROUPS) == 1
-    rs.stop_live_children()
-    assert len(started) == 2 and all(_gone(pid) for pid in started)
+    assert rs.stop_live_children() == []
+    assert _gone(int(descendant.read_text(encoding="utf-8")))
 
 
-def test_what_a_stopped_run_left_at_out_is_read_from_the_disk(tmp_path):
+def test_a_group_that_outlives_the_stop_is_named(monkeypatch):
+    monkeypatch.setattr(rs, "_STOPPING", False)
+    monkeypatch.setattr(rs, "_LIVE_GROUPS", {424242})
+    monkeypatch.setattr(rs.os, "killpg", lambda _group, _signum: None)
+    monkeypatch.setattr(rs, "_group_alive", lambda _group: True)
+    survivors = rs.stop_live_children(grace=0.2)
+    assert survivors == [424242]
+    assert rs.stopped(survivors) == "client process groups that outlived the stop: 424242"
+    assert rs.stopped([]) == "every client it was running is stopped"
+
+
+def test_what_a_stopped_run_left_at_out_is_read_from_the_disk(tmp_path, monkeypatch):
+    monkeypatch.setattr(rs, "_RUN_ID", "adk-smoke-this")
     assert rs.left_at(tmp_path / "absent") == "no record was written to --out"
-    (tmp_path / "record.json").write_text("{}\n", encoding="utf-8")
+    for written in ("not json", json.dumps({"run_id": "adk-smoke-another"})):
+        (tmp_path / "record.json").write_text(written, encoding="utf-8")
+        assert rs.left_at(tmp_path) == "no record was written to --out", written
+    (tmp_path / "record.json").write_text(json.dumps({"run_id": "adk-smoke-this"}), encoding="utf-8")
     assert rs.left_at(tmp_path) == "the record at --out was complete before the run stopped"
+
+
+def test_a_new_run_starts_unstopped_and_its_handlers_come_back(monkeypatch):
+    for name, value in (("_INTERRUPTED", True), ("_STOPPING", True), ("_RUN_ID", "adk-smoke-old")):
+        monkeypatch.setattr(rs, name, value)
+    before = {signum: signal.getsignal(signum) for signum in rs.INTERRUPT_SIGNALS}
+    try:
+        previous = rs.install_interrupts()
+        assert (rs._INTERRUPTED, rs._STOPPING, rs._RUN_ID) == (False, False, None)
+        rs.restore_interrupts(previous)
+        assert {signum: signal.getsignal(signum) for signum in rs.INTERRUPT_SIGNALS} == before
+        # A handler installed outside Python comes back from `signal.signal` as None.
+        rs.restore_interrupts({signal.SIGHUP: None})
+        assert signal.getsignal(signal.SIGHUP) is signal.SIG_DFL
+    finally:
+        rs.restore_interrupts(before)
 
 
 def test_a_home_or_binary_that_is_not_what_it_claims_is_refused(tmp_path):
@@ -867,16 +926,36 @@ def test_a_home_or_binary_that_is_not_what_it_claims_is_refused(tmp_path):
         rs.check_binary(plain, "--codex-bin")
 
 
-def test_a_child_that_outlives_its_timeout_is_stopped_with_what_it_started(tmp_path):
-    """Both processes ignore SIGTERM, so only the stop's SIGKILL escalation ends them."""
-    pids = tmp_path / "pids"
+def _quick_stops(monkeypatch):
+    """The runner's own stop, with a one-second grace for the unit tests."""
+    stop_group = rs._stop_group
+    monkeypatch.setattr(rs, "_stop_group", lambda process: stop_group(process, grace=1))
+
+
+def test_a_child_that_outlives_its_timeout_is_stopped_with_what_it_started(tmp_path, monkeypatch):
+    """The leader dies on SIGTERM; a descendant ignores it. The stop waits for the
+    group, not its leader, so only its SIGKILL ends the descendant."""
+    _quick_stops(monkeypatch)
+    leader, descendant = tmp_path / "leader", tmp_path / "descendant"
     invocation = rs.run_child(
-        ["bash", "-c", f"trap '' TERM; sleep 300 & echo $$ $! > {pids}; wait"], cwd=tmp_path, env=dict(os.environ),
-        stdin_text="", timeout=2, log_dir=tmp_path, name="hang",
+        ["bash", "-c", f"echo $$ > {leader}; (trap '' TERM; sleep 300 & echo $! > {descendant}; wait) & wait"],
+        cwd=tmp_path, env=dict(os.environ), stdin_text="", timeout=2, log_dir=tmp_path, name="hang",
     )
     assert rs.invocation_ok(invocation) == "timed out after 2s"
-    started = [int(pid) for pid in pids.read_text(encoding="utf-8").split()]
-    assert len(started) == 2 and all(_gone(pid) for pid in started)
+    started = [int(path.read_text(encoding="utf-8")) for path in (leader, descendant)]
+    assert all(_gone(pid) for pid in started)
+    assert not rs._LIVE_GROUPS
+
+
+def test_what_a_client_leaves_in_its_group_goes_with_it(tmp_path, monkeypatch):
+    _quick_stops(monkeypatch)
+    descendant = tmp_path / "descendant"
+    invocation = rs.run_child(
+        ["bash", "-c", f"(trap '' TERM; sleep 300 & echo $! > {descendant}; wait) & sleep 0.5; exit 0"],
+        cwd=tmp_path, env=dict(os.environ), stdin_text="", timeout=30, log_dir=tmp_path, name="leaves",
+    )
+    assert rs.invocation_ok(invocation) is None and invocation["group_outlived_client"]
+    assert _gone(int(descendant.read_text(encoding="utf-8")))
     assert not rs._LIVE_GROUPS
 
 
@@ -1502,6 +1581,17 @@ def _in_process_context(smoke_kit, tmp_path, monkeypatch):
     return ctx, {row_id: rs.Row(row_id, runtime, check) for row_id, runtime, check in rs.ROWS}
 
 
+def test_the_commands_row_fails_with_no_lens_agent_to_look_for(smoke_kit, tmp_path, monkeypatch):
+    for name in ("run_claude_panel", "run_lane"):
+        monkeypatch.setattr(rs, name, lambda *_args, **_kwargs: None)
+    ctx, rows = _in_process_context(smoke_kit, tmp_path, monkeypatch)
+    ctx.config["review"]["fallback_panel"]["lenses"] = []
+    rs.run_claude(ctx, rows, smoke_kit["fakes"]["claude"], smoke_kit["homes"]["claude"], FAKE_VERSION)
+    assert (rows["claude.commands"].status, rows["claude.commands"].reason) == (
+        "failed", "no declared command or no configured lens agent to look for",
+    )
+
+
 @pytest.mark.parametrize("runtime", ["codex", "claude"])
 def test_unset_optional_settings_are_reasons_not_crashes(smoke_kit, tmp_path, monkeypatch, runtime):
     """A setting the runner treats as optional, absent from the config, must not abort a
@@ -1550,16 +1640,20 @@ def test_a_record_is_published_whole_or_not_at_all(smoke_kit, tmp_path, monkeypa
 
     def intrude(record):
         out.mkdir()
-        (out / "intruder.txt").write_text("someone else's\n", encoding="utf-8")
+        (out / "record.json").write_text(json.dumps({"run_id": "adk-smoke-another"}), encoding="utf-8")
         return render(record)
 
     monkeypatch.setattr(rs, "render_markdown", intrude)
+    monkeypatch.setattr(rs, "_RUN_ID", None)
     assert rs.main(["--work-root", str(work), "--out", str(out)]) == rs.EXIT_ABORTED
     err = capsys.readouterr().err
     assert "--out could not take the record" in err and "no record was written to --out" in err
-    assert [path.name for path in out.iterdir()] == ["intruder.txt"]
+    assert [path.name for path in out.iterdir()] == ["record.json"]
+    assert json.loads((out / "record.json").read_text(encoding="utf-8")) == {"run_id": "adk-smoke-another"}
     [staging] = tmp_path.glob(".out.*")
     assert sorted(path.name for path in staging.iterdir()) == ["record.json", "record.md"]
+    # What `left_at` compares a record at --out with: this run's own id.
+    assert json.loads((staging / "record.json").read_text(encoding="utf-8"))["run_id"] == rs._RUN_ID
 
 
 def test_a_record_that_cannot_be_rendered_leaves_nothing_at_out(smoke_kit, tmp_path, monkeypatch, capsys):
@@ -1717,7 +1811,7 @@ def test_an_interrupted_run_stops_every_client_and_writes_no_record(smoke_kit, t
             with contextlib.suppress(ProcessLookupError):
                 os.kill(pid, signal.SIGKILL)
     assert runner.returncode == rs.EXIT_ABORTED, stderr
-    assert "interrupted; every client it started is stopped; no record was written to --out" in stderr
+    assert "interrupted; every client it was running is stopped; no record was written to --out" in stderr
     assert len(pids) == 2 * hanging and not survivors, survivors
     assert not (out / "record.json").exists()
 

@@ -92,17 +92,24 @@ kit revision, the date, the invocation with operator paths replaced by placehold
 each client's shell `--version`, and the executing version each row's artifacts
 report. No raw rollout or transcript is retained in it; logs stay in the run directory.
 The record is written aside and moved into place whole as the run's last step, so a run
-that is interrupted, or that fails on its own account, leaves no record at `--out`; it
-stops every client it started, says what it left at `--out`, and leaves its run
-directory as it stood. An interrupt is SIGINT, SIGTERM or SIGHUP, except one the runner
-inherited ignored; a repeat of it does not cut the stop short. One window is not closed:
-a signal that lands inside `subprocess.Popen` itself, while a client is being started,
-leaves that client to run to its own timeout.
+that is interrupted, or that fails on its own account, leaves no record at `--out`, says
+what it left there, and leaves its run directory as it stood.
+
+**Stopping clients.** Each client runs in a process group of its own, and the runner
+stops a group whole: SIGTERM, a grace, then SIGKILL, until no member is left. It does so
+when a client outlives its timeout, when a client exits and leaves members behind, and,
+for every group it is running, when the run is interrupted or fails. An interrupt is
+SIGINT, SIGTERM or SIGHUP, except one the runner inherited ignored, and once a stop has
+begun no signal cuts it short. A group that outlives even SIGKILL is named on stderr. Out
+of reach: a process a client moves into a session of its own (a lane's client is its
+launcher's to stop, and the launcher relays the signal), and a client an interrupt
+catches between its start and its registration, inside `subprocess.Popen` or on the
+statements after it, which then runs outside the runner's reach and its timeout.
 
 Exit status: 0 every row passed; 1 a row failed; 3 no row failed and at least one did
 not run; 2 refused before any client started; 4 interrupted, or failed on its own
-account, with every client it had started stopped and stderr saying whether a record
-reached `--out`.
+account, with every client group it was running stopped or named, and stderr saying
+whether a record reached `--out`.
 """
 
 from __future__ import annotations
@@ -175,6 +182,8 @@ INTERRUPT_SIGNALS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
 _INTERRUPTED = False
 # Set, under the lock, once the stop has begun: no client starts after it.
 _STOPPING = False
+# This run's directory name, which its record carries as `run_id`.
+_RUN_ID: str | None = None
 
 # What a fixture child never inherits. Lane and repository identity would point the
 # fixture's engines at the operator's tree (the launcher strips the same set), a set
@@ -187,10 +196,11 @@ SCRUBBED_KEYS = frozenset(
 CLAUDE_CREDENTIAL_ENV = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY")
 # A lens reads the diff with git; the kit's project settings allow none of these, and
 # `dontAsk` would turn the first read into a denial. Passed per invocation, so nothing
-# under `.claude/` changes. A prefix rule cannot exclude a flag: `git diff`, `git show`
-# and `git log` accept `--output`, which writes a file, so this allows the subcommands a
-# lens reads with and does not make a lens read-only. `git ls-remote` is left out, since
-# its `--upload-pack` runs a command; the fixture's remote is a local path anyway.
+# under `.claude/` changes. A prefix rule cannot exclude a flag, so this allows the
+# subcommands a lens reads with and does not confine a lens: `git diff`, `git show` and
+# `git log` accept `--output`, which writes a file, and `git diff --no-index` reads any
+# file the runner can, the isolated home's login included. `git ls-remote` is left out,
+# since its `--upload-pack` runs a command; the fixture's remote is a local path anyway.
 CLAUDE_LENS_GIT = (
     "Bash(git diff:*)",
     "Bash(git show:*)",
@@ -340,14 +350,16 @@ def run_child(
 ) -> dict[str, Any]:
     """Run one client with a finite timeout; record exit status and timeout together.
 
-    The child gets its own session so a timeout can stop everything it started, and
-    the outcome is returned rather than raised: a hung or failed client is a row result,
+    The child gets a session, and so a process group, of its own, which the runner
+    stops whole when the client outlives its timeout or exits leaving members behind.
+    The outcome is returned rather than raised: a hung or failed client is a row result,
     not a harness crash.
     """
     stdout_path = log_dir / f"{name}.stdout"
     stderr_path = log_dir / f"{name}.stderr"
     started = time.monotonic()
     timed_out = False
+    outlived = False
     returncode: int | None = None
     error: str | None = None
     with stdout_path.open("wb") as out, stderr_path.open("wb") as err:
@@ -381,10 +393,15 @@ def run_child(
             except BaseException:
                 _stop_group(process)
                 raise
+            else:
+                # What the client left in its group goes with it.
+                if _group_alive(process.pid):
+                    outlived = True
+                    _stop_group(process)
             finally:
-                # A client an interrupt caught mid-stop is still alive; it stays
+                # A group an interrupt caught mid-stop still has members; it stays
                 # registered for `stop_live_children` to finish.
-                if process.poll() is not None:
+                if process.poll() is not None and not _group_alive(process.pid):
                     with _LIVE_LOCK:
                         _LIVE_GROUPS.discard(process.pid)
             returncode = process.returncode
@@ -395,6 +412,7 @@ def run_child(
         "cwd": str(cwd),
         "returncode": returncode,
         "timed_out": timed_out,
+        "group_outlived_client": outlived,
         "timeout_seconds": timeout,
         "duration_seconds": round(time.monotonic() - started, 1),
         "error": error,
@@ -406,20 +424,34 @@ def run_child(
     }
 
 
-def _stop_group(process: subprocess.Popen) -> None:
-    for sig, grace in ((signal.SIGTERM, 10), (signal.SIGKILL, 10)):
+def _stop_group(process: subprocess.Popen, grace: float = 10) -> None:
+    """Stop a client's whole process group: SIGTERM, a grace, then SIGKILL.
+
+    The group is stopped when no member is left, not when its leader exits: a
+    descendant that ignores SIGTERM outlives a leader that does not.
+    """
+    for sig in (signal.SIGTERM, signal.SIGKILL):
         try:
             os.killpg(process.pid, sig)
-        except ProcessLookupError:
+        except (ProcessLookupError, PermissionError):
             break
-        try:
-            process.wait(timeout=grace)
+        if _group_ended(process, grace):
             break
-        except subprocess.TimeoutExpired:
-            continue
 
 
-def stop_live_children() -> None:
+def _group_ended(process: subprocess.Popen, grace: float) -> bool:
+    """Wait up to `grace` for the group to empty, reaping its leader on the way."""
+    deadline = time.monotonic() + grace
+    while True:
+        process.poll()  # an unreaped leader would still count as a member
+        if not _group_alive(process.pid):
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.05)
+
+
+def stop_live_children(grace: float = 5) -> list[int]:
     """Stop every client group still running: SIGTERM, a short grace, then SIGKILL.
 
     Called when the run is interrupted or fails. A client launched from a worker
@@ -438,11 +470,13 @@ def stop_live_children() -> None:
                 alive.append(group)
             except (ProcessLookupError, PermissionError):
                 continue
-        deadline = time.monotonic() + 5
+        deadline = time.monotonic() + grace
         while alive and time.monotonic() < deadline:
             alive = [group for group in alive if _group_alive(group)]
             time.sleep(0.1)
         groups = alive
+    # What outlived SIGKILL as well, for the caller to name rather than to claim stopped.
+    return [group for group in groups if _group_alive(group)]
 
 
 def _group_alive(group: int) -> bool:
@@ -462,14 +496,25 @@ def _interrupt(signum: int, _frame: Any) -> None:
     raise KeyboardInterrupt(f"signal {signum}")
 
 
+def restore_interrupts(previous: dict[int, Any]) -> None:
+    """Put back the handlers `install_interrupts` replaced.
+
+    `signal.signal` reports a handler installed outside Python as None, which it will
+    not take back; the default stands in for it.
+    """
+    for signum, handler in previous.items():
+        signal.signal(signum, signal.SIG_DFL if handler is None else handler)
+
+
 def install_interrupts() -> dict[int, Any]:
     """Route each interrupt signal to `_interrupt` and return the handlers to restore.
 
     A signal this process inherited ignored stays ignored: `nohup`, or a shell's
     background job, asked for exactly that.
     """
-    global _INTERRUPTED, _STOPPING
+    global _INTERRUPTED, _STOPPING, _RUN_ID
     _INTERRUPTED = _STOPPING = False
+    _RUN_ID = None
     return {
         signum: signal.signal(signum, _interrupt)
         for signum in INTERRUPT_SIGNALS
@@ -1831,7 +1876,9 @@ def run_claude(ctx: Context, rows: dict[str, Row], binary: Path, config_dir: Pat
         ok = claude_commands_ok(expected_commands, expected_agents, missing_commands, missing_agents)
         _finish(rows["claude.commands"], ok, mismatch, evidence,
                 "every declared command and every configured lens agent was loaded",
-                "a declared command or a configured lens agent was not loaded")
+                "a declared command or a configured lens agent was not loaded"
+                if expected_commands and expected_agents
+                else "no declared command or no configured lens agent to look for")
 
         starts = claude_hook_events(events, "SessionStart")
         hit = next((event for event in starts if mentions(event, ctx.budget_line)), None)
@@ -2239,6 +2286,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
+    global _INTERRUPTED
     raw_argv = list(sys.argv[1:] if argv is None else argv)
     args = parse_args(raw_argv)
     started_at = utc_now()
@@ -2252,16 +2300,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"runtime_smoke: refused: {exc}", file=sys.stderr)
         return EXIT_REFUSED
     except KeyboardInterrupt:
-        stop_live_children()
-        print(f"runtime_smoke: interrupted; every client it started is stopped; {left_at(args.out)}", file=sys.stderr)
+        _INTERRUPTED = True  # first, before any call: no signal may cut the stop short
+        print(f"runtime_smoke: interrupted; {stopped(stop_live_children())}; {left_at(args.out)}", file=sys.stderr)
         return EXIT_ABORTED
     except Exception as exc:  # the runner's own failure is never a row result
-        stop_live_children()
-        print(f"runtime_smoke: failed: {type(exc).__name__}: {exc}; {left_at(args.out)}", file=sys.stderr)
+        _INTERRUPTED = True  # first, before any call: no signal may cut the stop short
+        failure = f"{type(exc).__name__}: {exc}"
+        print(f"runtime_smoke: failed: {failure}; {stopped(stop_live_children())}; {left_at(args.out)}", file=sys.stderr)
         return EXIT_ABORTED
     finally:
-        for signum, handler in previous.items():
-            signal.signal(signum, signal.SIG_DFL if handler is None else handler)
+        restore_interrupts(previous)
     summary = record["summary"]
     for status in ("passed", "failed", "not-run"):
         print(f"{status}: {', '.join(summary[status]) or '-'}")
@@ -2269,9 +2317,24 @@ def main(argv: list[str] | None = None) -> int:
     return record["exit_status"]
 
 
+def stopped(survivors: list[int]) -> str:
+    """The stop's account, from what `stop_live_children` found rather than assumed."""
+    if not survivors:
+        return "every client it was running is stopped"
+    return f"client process groups that outlived the stop: {', '.join(str(group) for group in survivors)}"
+
+
 def left_at(out: Path) -> str:
-    """What a run that stopped left at `--out`, read from the disk rather than assumed."""
-    if (out / "record.json").is_file():
+    """What a run that stopped left at `--out`, read from the disk rather than assumed.
+
+    A record counts only if it is this run's own, by `run_id`: whatever else is at
+    `--out` was put there by someone else.
+    """
+    try:
+        record = json.loads((out / "record.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        record = None
+    if isinstance(record, dict) and _RUN_ID is not None and record.get("run_id") == _RUN_ID:
         return "the record at --out was complete before the run stopped"
     return "no record was written to --out"
 
@@ -2284,6 +2347,7 @@ def run(
     started_at: str,
     raw_argv: list[str],
 ) -> dict[str, Any]:
+    global _RUN_ID
     if args.timeout <= 0:
         raise Refusal("--timeout must be positive")
     work_root = args.work_root
@@ -2329,6 +2393,7 @@ def run(
         raise Refusal("the Codex trust authorizations need a Codex run to apply to")
 
     run_dir = Path(realpath(tempfile.mkdtemp(prefix="adk-smoke-", dir=work_root)))
+    _RUN_ID = run_dir.name
     log_dir = run_dir / "logs"
     log_dir.mkdir()
     fixture = build_fixture(kit_root, revision, run_dir, base_env)
