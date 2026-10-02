@@ -634,7 +634,7 @@
     },
     "scripts/tests/test_runtime_smoke.py": {
       "role": "repo-only",
-      "sha256": "08d35f6d57e4726f0a1c16abe2307b4871870d109088b2f80df32c25bb9c599f"
+      "sha256": "991a43792c7cfb7174952b17ab6581301485df8856cee2fe58849270c006541e"
     },
     "scripts/tests/test_state_guard.py": {
       "role": "test",

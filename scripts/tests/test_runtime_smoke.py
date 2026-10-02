@@ -679,6 +679,14 @@ def _gone(pid: int, wait: float = 15.0) -> bool:
             os.kill(pid, 0)
         except (ProcessLookupError, PermissionError):
             return True
+        # A zombie has exited; only its reaping is outstanding, which an orphan
+        # waits on from whichever process adopted it.
+        try:
+            state = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True, timeout=10).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            state = ""
+        if state.strip().startswith("Z"):
+            return True
         time.sleep(0.1)
     return False
 
@@ -907,7 +915,7 @@ if review and os.environ.get("FAKE_CODEX_REVIEW_EXIT") == "1":
 
 FAKE_CLAUDE = r'''#!{python}
 """A stand-in `claude` for the smoke runner's tests. Never a real client."""
-import json, os, re, subprocess, sys, uuid
+import hashlib, json, os, re, subprocess, sys, uuid
 from pathlib import Path
 
 VERSION = "{version}"
@@ -991,7 +999,12 @@ def hook_events(event, payload, tool="Bash"):
     return outputs
 
 hook_events("SessionStart", {{"hook_event_name": "SessionStart", "source": "startup"}})
-folder = config / "projects" / re.sub(r"[/.]", "-", str(cwd))
+encoded = re.sub(r"[/.]", "-", str(cwd))
+# Kept under a directory name's length limit, so a long temporary path cannot fail the
+# fake; the runner finds a transcript by its session id, never by this name.
+if len(encoded) > 200:
+    encoded = encoded[:160] + "-" + hashlib.sha256(encoded.encode()).hexdigest()[:16]
+folder = config / "projects" / encoded
 folder.mkdir(parents=True, exist_ok=True)
 
 def frontmatter(agent):
@@ -1258,8 +1271,8 @@ def test_the_codex_hook_rows_name_the_trust_layer_that_is_missing(smoke_kit, fla
     ],
     ids=["exit-order-omission", "no-markers-no-hook", "hook-before-call", "silent-hook"],
 )
-def test_a_client_that_misbehaves_fails_exactly_the_rows_it_breaks(smoke_kit, switches, runtime, broken):
-    name = "misbehave-" + "-".join(sorted(key.lower() for key in switches))[:80]
+def test_a_client_that_misbehaves_fails_exactly_the_rows_it_breaks(smoke_kit, request, switches, runtime, broken):
+    name = f"misbehave-{request.node.callspec.id}"
     extra = ["--allow-codex-project-trust", "--allow-codex-hook-trust-bypass"] if runtime != "claude" else []
     result, record, _ = _smoke(smoke_kit, name, *(["--runtime", runtime] if runtime else []), *extra, env_extra=switches)
     rows = _rows(record)
