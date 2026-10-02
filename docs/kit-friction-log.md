@@ -27,11 +27,11 @@
 ## 2026-10-03
 
 Parked rather than filed: this wrap-up ran with no operator present, so no tracker
-payload could be approved. Several are issue-shaped; the first two also carry a drafted
-payload.
+payload could be approved. The first two carry a drafted payload.
 
 - **The matrix guard's LOW residue from #923's last delta pass.** Severity L.
-  - **Observed** by both lenses at `f60b530` (dispositions posted on #923).
+  - **Observed** in #923's last delta pass at `f60b530`; its disposition there names the
+    lens behind each item.
     `scripts/tests/test_runtime_parity_matrix.py` misses three things:
     - It recognises only backtick fences, so a `~~~` fence holding a `#` line still ends
       a section early, and a rogue row after it goes unchecked. `_slugs` has the same
@@ -49,8 +49,9 @@ payload.
     the link forms it does not parse".
 - **#919's tracker body does not scope the row audit the records now assign to it.**
   Severity M. The handoff, the exit record and the plan pointer all name #919 as the
-  owner of "which matrix rows' claims are true". #919's body still describes only item
-  10, whose acceptance #923 met, so a reader of the issue alone could close it.
+  owner of "which matrix rows' claims are true". Read on 2026-10-03, #919's body
+  described only item 10, whose acceptance #923 met, so a reader of the issue alone could
+  close it.
   **Drafted comment for #919:** "#923 shipped item 10's check and the exit re-run; the
   operator declared the Phase 6 exit under the amendment in
   `saved_plans/phase6-exit-check_2026-10-02.md`. This issue stays open for what that
@@ -68,7 +69,8 @@ payload.
   — the directory that `wrap-up.md` asks a verification claim to name — was reported
   as no stamp at that head. **Mechanism:** `_VERIFICATION_STAMP_RE` requires
   `at <sha> on <date>` with nothing between them. **Proposed fix:** accept a clause
-  between them, or have both docs prescribe "at `<sha>` on `<date>`, in `<dir>`".
+  between them in the parser, or have `wrap-up.md` prescribe the order "at `<sha>` on
+  `<date>`, in `<dir>`".
 - **A negative control anchored on a structural boundary stopped testing anything when
   an unrelated key moved that boundary.** Severity L, kept for accumulation.
   `test_runtime_parity_contract_rejects_a_gap_with_no_real_surface` inserted its entry
@@ -79,7 +81,8 @@ payload.
 - **The option offered for an operator decision overstated its own premise.** Severity
   M, kept for accumulation. The cockpit offered "the table's rows are confirmed by their
   own live records" as an option, the operator chose it, and #923's correctness lens
-  then showed several rows cite no record. The operator re-decided on a narrowed
+  then showed that rows such as *Post-merge integrations* and *Triage integrations* cite
+  no record. The operator re-decided on a narrowed
   wording. The shape: a decision option's factual premise was not checked against the
   record before it was offered.
 - **#923 is a further occurrence of the shape #838 tracks.** Severity L. The full panel

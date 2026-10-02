@@ -54,8 +54,8 @@ stopped under the LOW delta-or-ticket rule; its residual findings are parked bel
 (0:11:14)`. The exit-check record carries the mutation runs, each with its command and
 revision.
 
-**Not established.** Which matrix rows' claims are true; #919 carries that, though its
-tracker body does not yet say so.
+**Not established.** Which matrix rows' claims are true; #919 carries that. Read on
+2026-10-03, its tracker body did not yet say so.
 
 **Parked, not filed**, because no operator was present to approve a payload: the
 2026-10-03 entries in `docs/kit-friction-log.md`, including a drafted comment for #919.
