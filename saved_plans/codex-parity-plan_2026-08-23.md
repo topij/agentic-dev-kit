@@ -316,7 +316,8 @@ on 2026-09-09 the operator moved `#585` out of Phase 6 to earlier in the sprint.
   govern its placement.
 - [ ] **Phase 6 — Gate parity and roll it out.** Exit:
   [*Phase 6*](#phase-6--gate-parity-and-roll-it-out). Owners and order: that section's
-  ordered list, one tracker issue per item, set on 2026-09-30.
+  ordered list, one tracker issue per item, set on 2026-09-30. Item 10 was added on
+  2026-10-02, after item 9's exit check.
 
 This plan records the pre-implementation baseline. Its repository observations were
 collected with `rg --files`, targeted `rg`, and
@@ -712,8 +713,15 @@ carries the item's scope. Work the items in this order:
    item 7.
 9. Replace the historical convergence status with the maintained parity matrix and
    move historical analysis to an archive. Owner:
-   [#880](https://github.com/topij/agentic-dev-kit/issues/880). It comes last, because it also
-   checks the exit below.
+   [#880](https://github.com/topij/agentic-dev-kit/issues/880). It also checks the exit
+   below. Its [exit check](phase6-exit-check_2026-10-02.md), at `7040d28` on 2026-10-02,
+   found the front-matter declaration enforced and confirmed, and the capability table
+   unenforced. The operator held the exit and added item 10.
+10. Add a deterministic check over the capability table, so a deleted or contradicted row
+    fails the suite, then re-run the exit check against the exit as written. If it holds,
+    archive this plan behind the matrix. Owner:
+    [#919](https://github.com/topij/agentic-dev-kit/issues/919). It comes last, because it
+    re-checks the exit below, and after item 9, because both edit this plan.
 
 Items 2 to 4 do not depend on item 1, so they can run beside it as one parallel batch,
 paying the full suite's cost. None of the issues for items 1 to 4 proposes editing a file
