@@ -785,7 +785,11 @@ def test_an_interrupt_raises_once(monkeypatch):
     monkeypatch.setattr(rs, "_INTERRUPTED", False)
     with pytest.raises(KeyboardInterrupt):
         rs._interrupt(signal.SIGTERM, None)
-    assert rs._interrupt(signal.SIGTERM, None) is None
+    try:
+        repeated = rs._interrupt(signal.SIGTERM, None)
+    except KeyboardInterrupt:
+        pytest.fail("a repeated interrupt raised again")
+    assert repeated is None
 
 
 def test_a_signal_inherited_ignored_stays_ignored(monkeypatch):
@@ -864,9 +868,10 @@ def test_a_home_or_binary_that_is_not_what_it_claims_is_refused(tmp_path):
 
 
 def test_a_child_that_outlives_its_timeout_is_stopped_with_what_it_started(tmp_path):
+    """Both processes ignore SIGTERM, so only the stop's SIGKILL escalation ends them."""
     pids = tmp_path / "pids"
     invocation = rs.run_child(
-        ["bash", "-c", f"sleep 300 & echo $$ $! > {pids}; wait"], cwd=tmp_path, env=dict(os.environ),
+        ["bash", "-c", f"trap '' TERM; sleep 300 & echo $$ $! > {pids}; wait"], cwd=tmp_path, env=dict(os.environ),
         stdin_text="", timeout=2, log_dir=tmp_path, name="hang",
     )
     assert rs.invocation_ok(invocation) == "timed out after 2s"

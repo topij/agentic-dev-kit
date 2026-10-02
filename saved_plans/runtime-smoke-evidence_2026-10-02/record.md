@@ -1,6 +1,6 @@
 # Runtime smoke record — 2026-10-02
 
-Written by `scripts/runtime_smoke.py` at kit revision `c3f98666fe82e117ca602fdf92d6a5bc53ee1258`, run `adk-smoke-7wzl0w2d`, started 2026-10-02T11:32:40Z and finished 2026-10-02T11:37:33Z (UTC). Every row below is an observation at the clients and revision named here.
+Written by `scripts/runtime_smoke.py` at kit revision `449096440c73aaea741fcf9acf4767e304892e97`, run `adk-smoke-7l2clq87`, started 2026-10-02T12:49:49Z and finished 2026-10-02T12:55:40Z (UTC). Every row below is an observation at the clients and revision named here.
 
 Invocation, as the runner's arguments, under `~/.cache/uv/environments-v2/runtime-smoke-106a2fd21d154242/bin/python3`:
 
@@ -36,8 +36,8 @@ scripts/runtime_smoke.py --work-root '<work-root>' --out '<out>' --codex-bin /op
 
 ## Fixture and observations
 
-- Fixture: `43aaad82916ccb06493f1ee8b146ab1b6ab9c0f0` (the revision's tree plus the controls commit), review head `0f82f406c01dc8eb0a46587921b2dea3d6543ac5` on `smoke-review`.
-- SessionStart control: `docs/kit-friction-log.md` committed at 200 lines against a budget of 150.
+- Fixture: `cd96c44cbd594b2d9659d2b6dc51c9d08c3e67cd` (the revision's tree plus the controls commit), review head `42e8dbe77af92b5096b9ca204370ae395418fd83` on `smoke-review`.
+- SessionStart control: `docs/kit-friction-log.md` committed at 208 lines against a budget of 150.
 - Codex hook probe trust: project trust per-invocation override; definition trust per-invocation bypass.
 - Trusted-project entries the run added to the isolated Codex home (#802): none.
 - Hook-state entries the run added to the isolated Codex home: none.

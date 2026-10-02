@@ -11,8 +11,8 @@ records*).
 
 The runner wrote [`record.md`](runtime-smoke-evidence_2026-10-02/record.md) and
 [`record.json`](runtime-smoke-evidence_2026-10-02/record.json) at kit revision
-`c3f98666fe82e117ca602fdf92d6a5bc53ee1258`, started 2026-10-02T11:32:40Z and finished
-11:37:33Z UTC. It was started as `uv run scripts/runtime_smoke.py` with these arguments,
+`449096440c73aaea741fcf9acf4767e304892e97`, started 2026-10-02T12:49:49Z and finished
+12:55:40Z UTC. It was started as `uv run scripts/runtime_smoke.py` with these arguments,
 which the record keeps as given beside its interpreter, operator paths replaced by the
 runner's placeholders:
 
@@ -41,9 +41,11 @@ the runtime that executed:
   row's transcript `version` read `2.1.287`.
 - **The lanes** ran the command the launcher resolves on its own trusted path:
   `/opt/homebrew/bin/codex` and `/opt/homebrew/bin/claude`. Each lane row's
-  `configured_command_realpath` names the file that ran, the same file the pinned path
-  resolves to: the cask's `codex`, and `~/.local/share/claude/versions/2.1.287`, which
-  `/opt/homebrew/bin/claude` reaches through `~/.local/bin/claude`.
+  `configured_command_realpath` names the file that command resolves to, which the
+  runner computes after the fact, and it is the file the pinned path resolves to: the
+  cask's `codex`, and `~/.local/share/claude/versions/2.1.287`, which
+  `/opt/homebrew/bin/claude` reaches through `~/.local/bin/claude`. The version each
+  lane executed is read separately, from its own session artifact.
 - **Not exercised:** the ChatGPT app bundles its own Codex, which printed
   `codex-cli 0.159.2` (`/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex
   --version` on 2026-10-02). The lane launcher resolves `codex` on its fixed trusted
@@ -60,13 +62,15 @@ the runtime that executed:
   `--dangerously-bypass-hook-trust` and a `-c` override trusting the fixture path
   (`--allow-codex-hook-trust-bypass`, `--allow-codex-project-trust`). No other session
   ran with either.
-- The runs left the operator's own settings as they were. For runs 1 to 5,
+- Runs 1 to 5 left the operator's `~/.codex/config.toml` as it was:
   `shasum -a 256 ~/.codex/config.toml` at 2026-10-02T10:27:25Z, after run 5 ended,
   printed a value beginning `0227cc926633727a`, as did the session's first reading that
-  day, taken before it ran any client command. That file was rewritten between runs 5
-  and 6, while no smoke run was running, so a hash cannot speak for run 6; instead
+  day, taken before it ran any client command. That file was rewritten later that day
+  while no smoke run was running, so no hash speaks for the later runs. What does:
   `grep -c adk-smoke` over `~/.codex/config.toml` and over `~/.claude.json` printed 0
-  for each at 2026-10-02T11:32:35Z, before run 6, and again at 11:37:51Z, after it.
+  for each before and after each of runs 6, 7 and 8, the first reading at
+  2026-10-02T11:32:35Z and the last at 12:55:45Z. That shows no entry naming a fixture
+  path was added to either file, and nothing more.
 
 ## Observations
 
@@ -74,7 +78,8 @@ the runtime that executed:
    isolated home, so none wrote a trusted-project entry there. `ls
    <codex-home>/config.toml` found no file at 2026-10-02T10:14:53Z, after every `codex
    exec` session of runs 1 to 3 had ended (run 3's Claude rows were still running), at
-   10:27:25Z, after run 5, and at 11:37:51Z, after run 6. Runs 2 to 6 each passed a
+   10:27:25Z, after run 5, at 11:37:51Z, after run 6, at 12:49:17Z, after run 7, and at
+   12:55:45Z, after run 8. Runs 2 to 8 each passed a
    per-invocation project-trust override. Each record's own observation, which the runner
    reads from that file, lists no added project or hook-state entry. #802 saw the
    entries under the operator's own home, from `codex exec --ignore-user-config
@@ -85,7 +90,7 @@ the runtime that executed:
 2. **Codex trusts a project's hooks at two layers.** With the fixture not a trusted
    project, `--dangerously-bypass-hook-trust` alone produced output from neither hook
    (run 1). With a per-invocation project-trust override as well, both ran and their
-   output reached the session (runs 2 to 6). #802's description of a trusted path
+   output reached the session (runs 2 to 8). #802's description of a trusted path
    loading a project's config and hooks is consistent with that; these runs did not
    exercise persisted trust.
 3. **Where Codex 0.153.4 puts injected context.** Under the isolated home, AGENTS.md
@@ -96,7 +101,7 @@ the runtime that executed:
    warning was written between the shell call and its output. `codex exec review` wrote a
    parent session carrying `EnteredReviewMode` and `ExitedReviewMode` items, and a child
    session whose `session_meta.source` is `{"subagent": "review"}`; the reviewer's compute
-   is in that child's `turn_context`, which in run 6 read `gpt-6-astra`, the isolated
+   is in that child's `turn_context`, which in run 8 read `gpt-6-astra`, the isolated
    home's default model, at `low`, the configured cheap tier the runner passes as
    `-c model_reasoning_effort`.
 4. **Claude applies a lens's effort only on the documented route.** Launched as
@@ -104,7 +109,7 @@ the runtime that executed:
    `claude-sonnet-5-5`, at effort `medium` rather than the definition's `high`. Delegated
    from a parent session to the agent named after the lens, the route
    `fallback-review-panel.md` documents, each ran `claude-sonnet-5-5` at `high` (runs 2
-   to 6). The parent transcribed the rendered lens prompt into its Agent call; the
+   to 8). The parent transcribed the rendered lens prompt into its Agent call; the
    runner compared the subagent's first prompt with it, both trimmed of surrounding
    whitespace, and found them equal. That transcription is the inline hand-off #643 is
    about.
@@ -112,13 +117,15 @@ the runtime that executed:
    `permissions.allow` entries with a stderr notice that the workspace was not trusted,
    and still ran the project's hooks.
 6. **The configured Claude review command** ran as a local command: the transcript
-   records the literal `/code-review` and a `local_command` entry, and in run 6 the
-   review ran in a `general-purpose` subagent on `claude-opus-5-5` at `medium`.
+   records the literal `/code-review` and a `local_command` entry. In run 6 the review
+   ran in a `general-purpose` subagent; in run 8 in an `Explore` and a `general-purpose`
+   subagent; each on `claude-opus-5-5` at `medium`.
 
 ## The runs before the stamped one
 
-The stamped run is run 6. The runs before it were full live runs at earlier revisions of
-the runner, against the same clients and isolated homes.
+The stamped run is run 8. The runs before it were full live runs at earlier revisions of
+the runner, or at its own revision for run 7, against the same clients and isolated
+homes.
 
 - **Run 1,** at `7b209d7`, 2026-10-02T09:50:51Z to 09:54:48Z, with the hook-trust bypass
   only. Its record is retained as historical evidence in
@@ -142,16 +149,27 @@ the runner, against the same clients and isolated homes.
   `24570a8`): `claude.instructions` now requires AGENTS.md to load as CLAUDE.md's import,
   and `claude.post_tool_use` requires the hook's warning after the call whose result
   carries the nonce URL. Its record's invocation line begins `uv run`, which that runner
-  wrote without being able to observe how it was started; run 6's record keeps the
+  wrote without being able to observe how it was started; the later records keep the
   arguments as given and the interpreter. Run 5's record is retained in
   [`run5-64526e1/`](runtime-smoke-evidence_2026-10-02/run5-64526e1/record.md).
+- **Run 6,** at `c3f9866`, 11:32:40Z to 11:37:33Z, with both trust layers. Every row
+  passed. It was the stamped run until the second review round changed the runner
+  (`4490964`): interrupts and their escalation, `claude.commands` needing something to
+  look for, and `claude.instructions` needing CLAUDE.md as the include's parent. It is
+  not retained; run 8 supersedes it.
+- **Run 7,** at `4490964`, 12:44:30Z to 12:49:12Z, with both trust layers. Every row
+  passed except `codex.panel`: the correctness lens exited 1 without a report, and its
+  own `--json` event stream ended in `error`, `Selected model is at capacity. Please try
+  a different model.`, then `turn.failed`. The row failed closed. The record names only
+  the exit status, because Codex wrote the reason to that stream and not to stderr, the
+  one line of output the record keeps. It is not retained; run 8 repeated it.
 
 Runs 2 and 3 are not retained. Their records kept a Claude stderr excerpt cut before
 redaction, so part of the operator's scratchpad path survived, account name included;
 `155e2b5` bounds strings only after redaction. Run 1's record predates that field.
 `grep -c` for `/Users/`, `-Users-`, `/private/tmp/claude-502` and the account name over
-the `record.json` and `record.md` of runs 1, 5 and 6 printed 0 for each at
-2026-10-02T11:38:45Z.
+the `record.json` and `record.md` of runs 1, 5 and 8 printed 0 for each at
+2026-10-02T12:56:22Z.
 
 ## Not established
 
