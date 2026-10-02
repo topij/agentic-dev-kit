@@ -20,6 +20,35 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-02 (Phase 6 Codex validation)
+
+**Shipped.** PR #911, squash `0298191`: #908's lifecycle record now names the
+Capability tiers matrix row and identifies the writing-lane records as the ones
+with accompanying designs. The manifest was regenerated.
+
+**Observed.** The Codex session exercised skill discovery, session-start sources,
+ready PR creation, PR follow-through hook delivery, and the fallback panel. Each
+fresh `codex exec` lens's native `turn_context` confirmed the configured model and
+effort. To avoid #802's trust side effect, the operator approved starting reviewers
+in the already trusted checkout and directing them to separate review trees.
+The panel's disposition is on #911; local observations and native excerpts are in
+`state/review-evidence/codex-validation-20261002/` (gitignored).
+
+**Verified.** `env -u FORCE_COLOR make test` at
+`4985e4c1d99419ee39144682b576582ca8943038` on 2026-10-02 in
+`/Users/topi/Coding/agentic-dev-kit` passed on a quiet tracked tree.
+
+**Not established.** No SessionStart output reached this chat. The trusted hooks
+were inspected in a separate CLI session; the desktop hook UI was unavailable.
+Native `/review`, parallel lanes, Claude smoke tests and the on-demand runner were
+not exercised. The #879 observation comment was drafted for operator approval;
+this session makes no parity-matrix promotion.
+
+**Corrected.** At the operator's request, the triage workstream records #907's
+merge as `cb92fd5`, removes #891 from its owners, and continues with #859.
+
+______________________________________________________________________
+
 ## Session — 2026-10-01 (Phase 6 item 6, #890 and #891, unattended in Claude Code)
 
 **Shipped.**
@@ -268,51 +297,6 @@ retired name by hand to leave the two-link state.
 
 ______________________________________________________________________
 
-## Session — 2026-09-30 (Phase 5 exit declared, in Claude Code)
-
-**Declared.** Topi declared Phase 5 complete under PHASE5-E-AUDIT-01
-(`saved_plans/phase5-e-audit_2026-09-30.md`) by answering "Declare, approve all
-(Recommended)" to a question that quoted the packet's declaration wording, which that
-answer adopts:
-
-> I declare Phase 5 complete under PHASE5-E-AUDIT-01, on these amendments to its
-> acceptance contract:
->
-> - the systemize friction and tracker no-write amendment of 2026-09-23;
-> - the synthetic acceptances of 2026-09-23 (systemize boundaries) and 2026-09-30
->   (D-TRIAGE-RECOVERY);
-> - E-1a to E-1f, each with the gaps its row names;
-> - E-2a to E-2e;
-> - E-3.
->
-> The accepted limitations in its residual register are limits of this exit.
-
-The declaration names its acceptance amendments; the packet's residual register owns
-each residual's carrier. Topi took E-1 to E-6 as the packet recommends. Each answer is
-recorded verbatim in `state/review-evidence/phase5-e-audit-20260930/DECISIONS.md`
-(gitignored).
-
-**Recorded.** The parity plan's Phase 5 items are checked (payload P-1), and the
-`saved_plans/phase5-*` packet markdowns are committed (E-5 option A). Tracker, each
-read back identical to its payload:
-
-- P-2 on #243, which stays open:
-  [issuecomment-5906532047](https://github.com/topij/agentic-dev-kit/issues/243#issuecomment-5906532047);
-- P-3a on #7, then set completed:
-  [issuecomment-5906532328](https://github.com/topij/agentic-dev-kit/issues/7#issuecomment-5906532328);
-- P-3b on #748, then set completed:
-  [issuecomment-5906532589](https://github.com/topij/agentic-dev-kit/issues/748#issuecomment-5906532589);
-- P-6 filed as [#872](https://github.com/topij/agentic-dev-kit/issues/872).
-
-**Not established:** a third full check of the packet against its evidence records.
-Before the decisions, the packet's SHA-256, P-1's anchors, the facts P-3a and P-3b
-state and the named issues' states were re-read from the repository root at `3bcb3a3`,
-and matched.
-
-Closed workstream Phase 5 exit: the exit is declared.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -327,13 +311,13 @@ the same day, in #897 and #902; item 6 the same day, in #904, which also recorde
 #878 step 3's answer. #906 removed the duplication #887 left in `runtime-parity.md`.
 The *Phase 6* section of `saved_plans/codex-parity-plan_2026-08-23.md` owns the order,
 the dependencies and the exit. #663, item 4's owner, stays open for residue that is not
-Phase 6 work; its 2026-10-01 comment names it. #905 and #908 carry deferred LOW
-findings from #904 and #906.
+Phase 6 work; its 2026-10-01 comment names it. #905 carries deferred LOW findings
+from #904. #911 clarified #906’s lifecycle references on 2026-10-02. The Codex
+validation session above supplies observations for #879, without completing it.
 **Owner:**
 [#879](https://github.com/topij/agentic-dev-kit/issues/879),
 [#880](https://github.com/topij/agentic-dev-kit/issues/880),
-[#905](https://github.com/topij/agentic-dev-kit/issues/905),
-[#908](https://github.com/topij/agentic-dev-kit/issues/908).
+[#905](https://github.com/topij/agentic-dev-kit/issues/905).
 
 ▶ Next: [#879](https://github.com/topij/agentic-dev-kit/issues/879) — Phase 6 items 7
 and 8: on-demand trusted smoke tests for Codex, with Claude beside them where
@@ -370,17 +354,14 @@ review-request method.
 **Status:** finalize's commit-step worktree re-check is pinned by a test (#857), and the
 *Completed-state retirement* doctrine names each live-mode kill cutpoint (#874), both in
 #882. #883 carries its residual points. The engine's worktree guards decide containment by
-filesystem identity (#856, in #889); #891 carries the same gap in `GitHubForge`'s
-sweep-cleanup guard. The doctrine prescribes the operator's manual way out of the
-two-link state (#894), and an engine-owned rollback waits for a recurrence (#892).
-#891's fix, `GitHubForge`'s sweep-cleanup guard on the shared predicate, is PR #907,
-which is operator-merge.
+filesystem identity (#856, in #889). PR #907 applied the shared predicate to
+`GitHubForge`’s sweep-cleanup guard (#891), merged on 2026-10-02 as `cb92fd5`.
+The doctrine prescribes the operator’s manual way out of the two-link state (#894),
+and an engine-owned rollback waits for a recurrence (#892).
 **Owner:**
 [#859](https://github.com/topij/agentic-dev-kit/issues/859),
 [#883](https://github.com/topij/agentic-dev-kit/issues/883),
-[#891](https://github.com/topij/agentic-dev-kit/issues/891),
 [#892](https://github.com/topij/agentic-dev-kit/issues/892).
 
-▶ Next: if #907 is still open, the operator reads its panel record and merges it at
-its reviewed head. Then #859 — triage recover calls a completed state valid on
-`canonical_state` alone, so a missing frozen artifact dead-ends it.
+▶ Next: #859 — triage recover calls a completed state valid on `canonical_state`
+alone, so a missing frozen artifact dead-ends it.
