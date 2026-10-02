@@ -20,6 +20,48 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-03 (Phase 6 item 10, #919, and the #585 decision, in Claude Code)
+
+**Shipped.** PR #923, squash `3246e72`: Phase 6 item 10.
+
+- `runtime-parity.md`'s front matter declares `capability_matrix` and
+  `lane_isolation_records`; `scripts/tests/test_runtime_parity_matrix.py` holds each
+  table to its declaration and resolves the file's links in the forms it parses.
+- `saved_plans/phase6-exit-check_2026-10-02.md` records the re-run and the declaration.
+  `saved_plans/codex-parity-plan_2026-08-23.md` is a pointer.
+- #919 stays open for the row audit the exit left open.
+
+**Decided by the operator.**
+
+- Declare the Phase 6 exit under a recorded amendment rather than hold it (2026-10-02).
+  #923's correctness lens then found the offered wording overstated, and the operator
+  declared under the narrowed amendment the exit record states (2026-10-03).
+- #585: the lens count follows a change's class, and only the safety-critical class
+  inherits `safety-critical-changes.md` rule 2's two-lens floor; code outside the
+  safety-critical paths takes one lens. Posted on #585 on approval of its exact text, as
+  [this comment](https://github.com/topij/agentic-dev-kit/issues/585#issuecomment-5960721970),
+  and read back identical.
+- Merge #923 and this wrap-up when clean, and run the rest unattended.
+
+**Review.** CodeRabbit's auto-review stayed off, so the fallback panel reviewed #923: the
+full panel at `9f23607`, then dual-lens delta passes at `0fb420d` and `f60b530`. Each
+round's disposition and the delta passes' verdict lines are posted on #923. The loop
+stopped under the LOW delta-or-ticket rule; its residual findings are parked below.
+
+**Verified.** `env -u FORCE_COLOR make test` at
+`f60b530acdd5ca38afaae042e26103fd85a15e1a` on 2026-10-02 (UTC), in
+`/Users/topi/Coding/agentic-dev-kit`, printed `3992 passed, 1 skipped in 674.78s
+(0:11:14)`. The exit-check record carries the mutation runs, each with its command and
+revision.
+
+**Not established.** Which matrix rows' claims are true; #919 carries that, though its
+tracker body does not yet say so.
+
+**Parked, not filed**, because no operator was present to approve a payload: the
+2026-10-03 entries in `docs/kit-friction-log.md`, including a drafted comment for #919.
+
+______________________________________________________________________
+
 ## Session — 2026-10-02 (Phase 6 item 9, #880, in Claude Code)
 
 **Shipped.** PR #920, squash `d9f757d`: Phase 6 item 9.
@@ -220,54 +262,6 @@ showed the `Test` workflow completed `success` on `main`.
 
 ______________________________________________________________________
 
-## Session — 2026-10-01 (Phase 6 item 4, and a scratch and branch cleanup, in Claude Code)
-
-**Shipped.** PR #897, squash `6e4c439`: Phase 6 item 4 (#663).
-
-- session-start reads each open pull request through `pr_watch.py <PR#> --json
-  --no-persist --all-comments` instead of three `gh api` calls.
-- The new `--all-comments` flag reports every comment and review submission,
-  unfiltered by seen state, noise markers or an empty body.
-- A REST poll reads `pulls/{n}`, `check-runs` and `status` once instead of twice.
-
-**Decided by the operator.**
-
-- Merge #897, which was held for them as operator-merge.
-- Keep `state/review-evidence/` until a retention rule decides what each run keeps
-  (#861).
-- Build the sweep engine (#900) in its own session. It opens the *Scratch retention*
-  workstream below.
-
-**Left out on purpose:** passing `dev_session.sh`'s `headRefOid` down to `pr_watch.py`.
-The reason is in the #663 comment, and #663 stays open for its residue.
-
-**Filed**, each on the operator's approval of its exact text: #898, #899, #900.
-Comments went on #663 and #838.
-
-**Review.** CodeRabbit's auto-review stayed off, so the fallback panel reviewed #897:
-the full dual-lens panel at `d29fa9a`, then dual-lens delta passes for its LOW repairs
-at `be68303` and `a2acb9b`. The receipts compose into one chain. Each round's
-disposition is posted on the PR, with both delta passes' verdict lines verbatim.
-
-**Cleanup.**
-
-- Every head branch on origin whose PR merged was deleted, after checking that its tip
-  was the merged head. GitHub's delete-branch-on-merge setting is now on.
-- `dev/pr-watch-rest-transport` is kept: its PR, #91, closed with commits not in
-  `main`.
-- The operator ran a generated script that removed stale session scratchpads and
-  review-lens trees under `/private/tmp`, for this repo and for cs-toolkit. Apart from
-  this session's own lens clones, it touched only entries not modified that day.
-
-**Verified.** `env -u FORCE_COLOR make test` at `d29fa9a`, in
-`/Users/topi/Coding/agentic-dev-kit` on 2026-10-01: `3773 passed, 1 skipped in
-658.45s`. That run predates the two LOW-repair commits, `be68303` and `a2acb9b`, which
-changed `scripts/pr_watch.py` and its tests before the merge. For the merged tree,
-`gh run list --commit 6e4c439` showed the `Test` workflow completed `success` on
-`main`.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -284,9 +278,10 @@ smoke record; item 9 the same day, in #920, squash `d9f757d`. #920 archives the
 convergence plan behind a pointer and records the Phase 6 exit check at `7040d28`
 (`saved_plans/phase6-exit-check_2026-10-02.md`). The check found `workflow_contract`
 enforced and confirmed by the Phase 5 replay, `adoption` enforced, and the capability
-table unenforced. The operator held the exit and added item 10, #919. #923 adds the
-check over the table, re-runs the exit check, and archives the parity plan behind a
-pointer; the operator declared the exit under the amendment that record states.
+table unenforced. The operator held the exit and added item 10, #919. #923, squash
+`3246e72` on 2026-10-03, added the check over the table, re-ran the exit check, and
+archived the parity plan behind a pointer; the operator declared the exit under the
+amendment that record states. Closing this workstream is the operator's call.
 #906 removed the duplication #887 left in `runtime-parity.md`.
 #663, item 4's owner, stays open for residue that is not
 Phase 6 work; its 2026-10-01 comment names it. #905 carries deferred LOW findings
@@ -300,8 +295,25 @@ matrix rows' claims are true, which the exit left open;
 [#916](https://github.com/topij/agentic-dev-kit/issues/916),
 [#917](https://github.com/topij/agentic-dev-kit/issues/917).
 
-▶ Next: #919's row audit, which the exit amendment left open. The rest of the residue is
-carried by #905, #915, #916 and #917.
+▶ Next: approve, edit or decline the #919 scoping comment parked in
+`docs/kit-friction-log.md` under 2026-10-03, then #919's row audit: which matrix rows'
+claims are pinned by tests. The rest of the residue is carried by #905, #915, #916 and
+#917.
+
+### Review proportionality
+
+**Status:** decided on 2026-10-02, not started. The fallback panel's lens count follows
+a change's class: only the safety-critical class keeps the two-lens floor, and code
+outside the safety-critical paths takes one isolated lens. Keeping two lenses on
+workflow docs until #370 measures them was proposed, not decided. The decision and its
+constraints are #585's 2026-10-02 comment. **Owner:**
+[#585](https://github.com/topij/agentic-dev-kit/issues/585); related #666, #403, #921.
+
+▶ Next: implement #585 per its 2026-10-02 decision comment — declare the safety-critical
+path set once in `config/dev-model.yaml`, then a single-lens receipt the merge gate
+accepts by class. `scripts/pr_watch.py` is safety-critical: read
+`docs/agentic-dev-kit/safety-critical-changes.md` first and hold the PR for the
+operator's merge.
 
 ### Scratch retention
 
