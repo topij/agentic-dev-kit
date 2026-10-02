@@ -18,6 +18,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -265,6 +266,26 @@ def test_a_moved_injection_shape_leaves_its_heads_in_the_evidence(tmp_path):
     assert not ok and evidence["user_message_heads"] == ["<environment_context>"]
     ok, evidence = rs.check_skills(view, [rs.realpath(tmp_path / "adopt" / "SKILL.md")])
     assert not ok and evidence["developer_message_heads"] == ["## Skills"]
+
+
+def test_the_reviewer_is_the_review_child_session_in_the_fixture(tmp_path):
+    day = tmp_path / "home" / "sessions" / "2026" / "10" / "02"
+    day.mkdir(parents=True)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def rollout(name, source, cwd):
+        (day / f"rollout-{name}.jsonl").write_text(
+            json.dumps({"type": "session_meta", "payload": {"source": source, "cwd": str(cwd)}}) + "\n",
+            encoding="utf-8",
+        )
+
+    rollout("parent", "exec", repo)
+    rollout("child", {"subagent": "review"}, repo)
+    rollout("elsewhere", {"subagent": "review"}, tmp_path)
+    found = rs.review_child_sessions(tmp_path / "home", cwd=repo, since=0)
+    assert [path.name for path in found] == ["rollout-child.jsonl"]
+    assert rs.review_child_sessions(tmp_path / "home", cwd=repo, since=time.time() + 60) == []
 
 
 def test_review_mode_is_read_from_completed_item_types():
@@ -556,6 +577,12 @@ if "SMOKE-DONE-" in prompt:
 elif review:
     add("event_msg", {{"type": "item_completed", "item": {{"type": "EnteredReviewMode"}}}})
     add("event_msg", {{"type": "item_completed", "item": {{"type": "ExitedReviewMode"}}}})
+    # The reviewer runs as a child session of its own, as the live client's did.
+    child = str(uuid.uuid4())
+    (day / f"rollout-2026-10-02T00-00-01-{{child}}.jsonl").write_text("".join(json.dumps(entry) + "\n" for entry in (
+        {{"type": "session_meta", "payload": {{"id": child, "cli_version": VERSION, "source": {{"subagent": "review"}}, "cwd": str(cwd)}}}},
+        {{"type": "turn_context", "payload": {{"model": "fake-reviewer", "effort": effort}}}},
+    )), encoding="utf-8")
     final = "Fake review: one finding in docs/smoke-review-target.md."
 elif "LANE-" in prompt:
     branch = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=cwd, capture_output=True, text=True).stdout.strip()
@@ -808,6 +835,9 @@ def test_every_row_passes_against_clients_that_behave(smoke_kit):
         "hook_trust": "per-invocation bypass",
         "hooks_json_differs": False,
     }
+    assert (rows["codex.review"]["evidence"]["reviewer_model"], rows["codex.review"]["evidence"]["reviewer_effort"]) == (
+        "fake-reviewer", "low"
+    )
     for row_id in ("codex.lane", "claude.lane"):
         assert rows[row_id]["evidence"]["receipt_status"] == "completed"
         assert rows[row_id]["session"]["executing_version"] == FAKE_VERSION

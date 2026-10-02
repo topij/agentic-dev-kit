@@ -93,6 +93,7 @@ import concurrent.futures
 import datetime as dt
 import hashlib
 import io
+import itertools
 import json
 import os
 import re
@@ -626,10 +627,7 @@ def codex_thread_id(stdout_path: Path) -> str | None:
 
 
 def rollout_cwd(path: Path) -> str | None:
-    for entry in read_jsonl(path)[:5]:
-        if entry.get("type") == "session_meta" and isinstance(entry.get("payload"), dict):
-            return entry["payload"].get("cwd")
-    return None
+    return session_meta(path).get("cwd")
 
 
 def locate_rollout(home: Path, *, thread_id: str | None, cwd: Path, since: float) -> tuple[Path | None, str]:
@@ -810,6 +808,31 @@ def message_heads(view: dict[str, Any], role: str) -> list[str]:
             first = message["text"].strip().splitlines()[0] if message["text"].strip() else ""
             heads.append(flatten(first))
     return heads
+
+
+def review_child_sessions(home: Path, *, cwd: Path, since: float) -> list[Path]:
+    """Rollouts of `codex exec review`'s reviewer: `source` `{"subagent": "review"}`."""
+    children = []
+    for path in sorted((home / "sessions").rglob("rollout-*.jsonl")):
+        if path.stat().st_mtime < since:
+            continue
+        meta = session_meta(path)
+        if meta.get("source") == {"subagent": "review"} and realpath(str(meta.get("cwd"))) == realpath(cwd):
+            children.append(path)
+    return children
+
+
+def session_meta(path: Path) -> dict[str, Any]:
+    """A rollout's `session_meta` payload, read from its opening lines alone."""
+    try:
+        with path.open(encoding="utf-8", errors="replace") as handle:
+            for line in itertools.islice(handle, 5):
+                entry = _json_or_none(line)
+                if isinstance(entry, dict) and entry.get("type") == "session_meta" and isinstance(entry.get("payload"), dict):
+                    return entry["payload"]
+    except OSError:
+        pass
+    return {}
 
 
 def review_markers(view: dict[str, Any]) -> list[str]:
@@ -1262,6 +1285,7 @@ def run_codex(
     # Native review, on the review branch against the protected branch.
     base = get(ctx.config, "vcs.protected_branch", "main")
     review_argv = ["exec", "review", "--json", "--base", base, *effort, "-o", str(ctx.log_dir / "codex-review.last")]
+    review_since = time.time() - 1
     invocation, view, note = codex_exec_session(
         ctx, binary, home, review_argv, cwd=fixture.repo, prompt="", name="codex-review"
     )
@@ -1272,11 +1296,21 @@ def run_codex(
         row.set("failed", f"no rollout to read: {note} ({invocation_ok(invocation) or 'exit 0'})")
     else:
         row.session = codex_session(view)
+        # The reviewer's compute lives in the review's own child session; the parent
+        # that carries the review-mode items records no turn context of its own.
+        children = review_child_sessions(home, cwd=fixture.repo, since=review_since)
+        row.session["reviewer"] = (
+            codex_session(rollout_view(read_jsonl(children[0])))
+            if len(children) == 1
+            else {"note": f"{len(children)} review child sessions started in the fixture during the review"}
+        )
         markers = review_markers(view)
         problem = invocation_ok(invocation)
         evidence = {
             "observer": "rollout event_msg and completed-item types naming review mode, and the last-message file",
             "review_events": markers,
+            "reviewer_model": row.session["reviewer"].get("model"),
+            "reviewer_effort": row.session["reviewer"].get("effort"),
             "last_message_chars": len(last),
             "last_message_first_line": flatten(last.strip().splitlines()[0]) if last.strip() else "",
         }
