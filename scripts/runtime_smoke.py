@@ -97,24 +97,26 @@ what it left there, and leaves its run directory as it stood.
 
 **Stopping clients.** Each client runs in a process group of its own, and the runner
 stops a group whole: SIGTERM, a grace, then SIGKILL and a second grace, waiting on the
-whole group rather than its leader. It does so
-when a client outlives its timeout, when a client exits and leaves members behind, and,
-for every group it is running, when the run is interrupted or fails. An interrupt is
-SIGINT, SIGTERM or SIGHUP, except one the runner inherited ignored, and once a stop has
-begun no signal cuts it short. When the run is interrupted or fails, stderr names any
-group that outlived even SIGKILL. A stream whose reader is gone leaves the exit status
-alone: it still tells a refused run from an interrupted or failed one, or says how the
-rows came out; what was stopped, and whether a record reached `--out`, are on stderr
-alone. Out of reach: a process a client moves into a session of its own (a lane's client is its
+whole group rather than its leader. It does so when a client outlives its timeout, when
+a client exits and leaves members behind, and, for every group it is running, when the
+run is interrupted or fails. An interrupt is SIGINT, SIGTERM or SIGHUP, except one the
+runner inherited ignored. Once the run's own stop has begun, no further signal cuts it
+short; a signal that lands during a client's timeout stop interrupts that stop instead,
+and the group, still registered, is the run's stop to finish. When the run is
+interrupted or fails, stderr names any group that outlived even SIGKILL. Once its
+arguments are parsed, a stream whose reader is gone leaves the exit status alone: it
+still tells a refused run from an interrupted or failed one, or says how the rows came
+out; what was stopped, and whether a record reached `--out`, are on stderr alone. Out
+of reach: a process a client moves into a session of its own (a lane's client is its
 launcher's to stop, and the launcher relays the signal), and a client an interrupt
 catches between its start and its registration, inside `subprocess.Popen` or on the
 statements after it, which then runs outside the runner's reach and its timeout.
 
 Exit status: 0 every row passed; 1 a row failed; 3 no row failed and at least one did
 not run; 2 refused before any client started; 4 interrupted, or failed on its own
-account, after stopping every client group it was running. Stderr, where it can be
-written, names any group that outlived SIGKILL and says whether a record reached
-`--out`.
+account, after stopping every client group it was running that SIGKILL could end.
+Stderr, where it can be written, names any group that outlived SIGKILL and says whether
+a record reached `--out`.
 """
 
 from __future__ import annotations
@@ -123,6 +125,7 @@ import argparse
 import concurrent.futures
 import contextlib
 import datetime as dt
+import errno
 import hashlib
 import io
 import itertools
@@ -501,7 +504,7 @@ def _group_alive(group: int) -> bool:
 
 
 def _interrupt(signum: int, _frame: Any) -> None:
-    """Raise once: a repeat signal must not cut short the stop the first one began."""
+    """Raise once: a repeat signal must not cut short the run's stop, which the first began."""
     global _INTERRUPTED
     if _INTERRUPTED:
         return
@@ -2335,25 +2338,40 @@ def _emit(text: str, *, stderr: bool = False) -> None:
 
     A write that fails leaves its text buffered, and CPython's own flush at exit then
     fails as well and makes the exit status 120, whatever `main` returned. So a stream
-    that fails is pointed at /dev/null, and the status stays the one the run decided.
+    whose reader is gone is pointed at /dev/null, and the status stays the one the run
+    decided. Any other failed write (a full non-blocking pipe, a character the stream
+    cannot encode) drops the line and leaves the stream as it was.
     """
     stream = sys.stderr if stderr else sys.stdout
     if stream is None:  # the descriptor was closed before the run began
         return
     try:
         print(text, file=stream, flush=True)
-    except (OSError, ValueError):
-        _silence(2 if stderr else 1)
+    except OSError as exc:
+        if exc.errno in READER_GONE:
+            _silence(2 if stderr else 1)
+    except ValueError as exc:
+        if not isinstance(exc, UnicodeError):  # a closed file object
+            _silence(2 if stderr else 1)
+
+
+# The write errors that mean nobody will read the stream again.
+READER_GONE = frozenset({errno.EPIPE, errno.EIO, errno.EBADF})
 
 
 def _silence(fd: int) -> None:
-    """Point a standard descriptor whose reader is gone at /dev/null."""
+    """Point a standard descriptor whose reader is gone at /dev/null.
+
+    If that descriptor was itself closed, /dev/null opens as it, and the descriptor
+    `os.open` returns is the one to keep.
+    """
     with contextlib.suppress(OSError):
         devnull = os.open(os.devnull, os.O_WRONLY)
-        try:
-            os.dup2(devnull, fd)
-        finally:
-            os.close(devnull)
+        if devnull != fd:
+            try:
+                os.dup2(devnull, fd)
+            finally:
+                os.close(devnull)
 
 
 def _report(message: str) -> None:

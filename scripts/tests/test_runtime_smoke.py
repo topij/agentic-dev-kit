@@ -14,6 +14,7 @@ runner expects.
 from __future__ import annotations
 
 import contextlib
+import errno
 import json
 import os
 import shutil
@@ -965,6 +966,34 @@ def test_the_exit_status_survives_a_stderr_that_is_gone(tmp_path, monkeypatch, r
     assert silenced == [2]
 
 
+@pytest.mark.parametrize(
+    "error",
+    [OSError(errno.EAGAIN, "Resource temporarily unavailable"), UnicodeEncodeError("ascii", "é", 0, 1, "no")],
+    ids=["full-pipe", "unencodable"],
+)
+def test_a_write_that_fails_with_a_reader_still_there_leaves_the_stream_alone(monkeypatch, error):
+    silenced = []
+    monkeypatch.setattr(rs, "_silence", silenced.append)
+    monkeypatch.setattr(sys, "stderr", _GoneStream(error))
+    rs._report("failed: boom")
+    assert silenced == []
+
+
+def test_a_closed_standard_descriptor_is_silenced_without_closing_it_again(tmp_path):
+    """A real process: with fd 2 closed, /dev/null opens as fd 2, and closing it again
+    would leave the flush at exit to fail."""
+    code = (
+        "import os, sys\n"
+        f"sys.path.insert(0, {str(ENGINE_DIR)!r})\n"
+        "import runtime_smoke as rs\n"
+        "os.close(2)\n"
+        "rs._report('failed: boom')\n"
+        "sys.exit(3)\n"
+    )
+    result = subprocess.run([sys.executable, "-c", code], cwd=tmp_path, timeout=60)
+    assert result.returncode == 3
+
+
 def test_a_stderr_closed_before_the_run_sends_nothing_to_stdout(monkeypatch, capsys):
     monkeypatch.setattr(sys, "stderr", None)
     rs._report("refused: no")
@@ -1554,6 +1583,10 @@ def test_every_row_passes_against_clients_that_behave(smoke_kit):
     for row_id in ("codex.lane", "claude.lane"):
         assert rows[row_id]["evidence"]["receipt_status"] == "completed"
         assert rows[row_id]["session"]["executing_version"] == FAKE_VERSION
+    # The summary is stdout's, and nothing of it is stderr's.
+    assert f"passed: {', '.join(row_id for row_id, _, _ in rs.ROWS)}" in result.stdout
+    assert f"record: {out / 'record.md'}" in result.stdout
+    assert "passed:" not in result.stderr and "record:" not in result.stderr
     markdown = (out / "record.md").read_text(encoding="utf-8")
     assert smoke_kit["revision"] in markdown
     published = markdown + (out / "record.json").read_text(encoding="utf-8")
