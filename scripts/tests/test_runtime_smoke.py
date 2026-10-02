@@ -201,6 +201,18 @@ def test_the_hook_answer_is_ordered_after_its_call_not_its_output():
     assert rs.call_answered_by(unlinked, rs.first_output_with(unlinked, url)) is None
 
 
+def test_the_call_is_the_one_whose_id_the_output_carries():
+    url = "https://github.com/adk-smoke/fixture-abc/pull/7"
+    entries = [
+        {"type": "response_item", "payload": {"type": "custom_tool_call", "call_id": "c0"}},
+        {"type": "response_item", "payload": {"type": "custom_tool_call_output", "call_id": "c0", "output": "a listing"}},
+        {"type": "response_item", "payload": {"type": "custom_tool_call", "call_id": "c1"}},
+        {"type": "response_item", "payload": {"type": "custom_tool_call_output", "call_id": "c1", "output": url}},
+    ]
+    view = rs.rollout_view(entries)
+    assert rs.call_answered_by(view, rs.first_output_with(view, url)) == 2
+
+
 def test_the_nonce_url_is_found_only_in_tool_output():
     url = "https://github.com/adk-smoke/fixture-abc/pull/7"
     view = _view(
@@ -276,6 +288,8 @@ def test_the_nonce_url_counts_only_from_a_tool_result_linked_to_its_call():
     assert rs.claude_tool_call_for(events, url) == (1, 3)
     unlinked = [prompt, _tool_use("t0"), _tool_result("t1", url)]
     assert rs.claude_tool_call_for(unlinked, url) == (None, 2)
+    another_part = {"type": "user", "message": {"content": [{"type": "document", "content": url}]}}
+    assert rs.claude_tool_call_for([prompt, _tool_use("t1"), another_part], url) == (None, None)
 
 
 def test_the_hooks_json_comparison_reads_the_revisions_bytes(tmp_path):
@@ -1402,7 +1416,12 @@ def test_an_interrupted_run_stops_every_client_and_writes_no_record(smoke_kit, t
     )
     config = rs.load_config(smoke_kit["kit"] / "config" / "dev-model.yaml", overlay=False)
     hanging = 1 if step == "probe" else len(rs.lens_roster(config))
-    runner = subprocess.Popen(argv, cwd=smoke_kit["base"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    runner = subprocess.Popen(
+        argv, cwd=smoke_kit["base"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        # A job a shell starts in the background inherits SIGINT ignored, and Python then
+        # installs no KeyboardInterrupt handler; start the runner as a terminal would.
+        preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL),
+    )
     try:
         deadline = time.monotonic() + 300
         while len(list(pid_dir.glob("*.pid"))) < hanging:
