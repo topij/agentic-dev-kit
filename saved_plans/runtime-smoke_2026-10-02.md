@@ -29,7 +29,9 @@ It exited 0, and every row passed: `codex.instructions`, `codex.skills`,
 `codex.lane`, `claude.instructions`, `claude.commands`, `claude.session_start`,
 `claude.post_tool_use`, `claude.review`, `claude.panel` and `claude.lane`. Each row's
 evidence and the session fields read from the runtime's own artifacts are in
-`record.json`.
+`record.json`. Review after run 9 changed the runner only in how its final lines are
+written, which matters only when a stream's reader is gone, and in docstrings and
+comments.
 
 The clients, as the pinned binary reports itself and as each row's own artifacts report
 the runtime that executed:

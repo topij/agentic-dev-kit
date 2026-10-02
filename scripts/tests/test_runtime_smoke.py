@@ -909,25 +909,35 @@ def test_what_a_stopped_run_left_at_out_is_read_from_the_disk(tmp_path, monkeypa
     assert rs.left_at(tmp_path) == "no record was written to --out"
 
 
-def test_a_group_that_refuses_its_signal_counts_as_stopped(monkeypatch):
-    """macOS refuses a signal to a group whose only member is an unreaped zombie."""
-    def refuse(_group, _signum):
+def test_a_refused_signal_ends_the_stop(monkeypatch):
+    """macOS refuses a signal to a group whose only member is an unreaped zombie: the
+    stop takes the refusal for a group that is gone, and does not escalate."""
+    sent = []
+
+    def refuse(_group, signum):
+        sent.append(signum)
         raise PermissionError(1, "Operation not permitted")
 
     monkeypatch.setattr(rs.os, "killpg", refuse)
     rs._stop_group(types.SimpleNamespace(pid=424242, poll=lambda: 0), grace=0.1)
+    assert sent == [signal.SIGTERM]
+    assert rs._group_alive(424242) is False
 
 
 class _GoneStream:
-    """A stderr whose terminal has closed."""
+    """A stream whose reader has gone: a closed terminal, or a closed file object."""
+
+    def __init__(self, error):
+        self.error = error
 
     def write(self, _text):
-        raise OSError(5, "Input/output error")
+        raise self.error
 
     def flush(self):
-        raise OSError(5, "Input/output error")
+        raise self.error
 
 
+@pytest.mark.parametrize("error", [OSError(5, "Input/output error"), ValueError("I/O operation on closed file")])
 @pytest.mark.parametrize(
     "raised, code",
     [
@@ -937,19 +947,51 @@ class _GoneStream:
     ],
     ids=["interrupt", "failure", "refusal"],
 )
-def test_the_exit_status_survives_a_stderr_that_is_gone(tmp_path, monkeypatch, raised, code):
+def test_the_exit_status_survives_a_stderr_that_is_gone(tmp_path, monkeypatch, raised, code, error):
     monkeypatch.setattr(rs, "_INTERRUPTED", False)
     monkeypatch.setattr(rs, "_STOPPING", False)
     monkeypatch.setattr(rs, "resolve_revision", lambda _root, _revision: "0" * 40)
     monkeypatch.setattr(rs, "verify_harness", lambda _root, _revision: {})
     monkeypatch.setattr(rs, "stop_live_children", lambda: [])
+    silenced = []
+    monkeypatch.setattr(rs, "_silence", silenced.append)  # not this test process's own fd 2
 
     def fail(*_args):
         raise raised
 
     monkeypatch.setattr(rs, "run", fail)
-    monkeypatch.setattr(sys, "stderr", _GoneStream())
+    monkeypatch.setattr(sys, "stderr", _GoneStream(error))
     assert rs.main(["--work-root", str(tmp_path), "--out", str(tmp_path / "out")]) == code
+    assert silenced == [2]
+
+
+def test_a_stderr_closed_before_the_run_sends_nothing_to_stdout(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "stderr", None)
+    rs._report("refused: no")
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize("stream", ["stderr", "stdout"])
+def test_a_stream_that_is_gone_leaves_the_exit_status_alone(smoke_kit, tmp_path, stream):
+    """A real process, since the interpreter's own flush at exit is where a gone stream
+    turns any status into 120. A refusal speaks on stderr; a run that requests no
+    runtime, every row not run, speaks on stdout."""
+    read_end, write_end = os.pipe()
+    os.close(read_end)  # nobody will read: every write to the pipe fails
+    work = tmp_path / "work"
+    work.mkdir()
+    argv = [sys.executable, str(smoke_kit["kit"] / "scripts" / "runtime_smoke.py"),
+            "--work-root", "relative" if stream == "stderr" else str(work), "--out", str(tmp_path / "out")]
+    env = {key: value for key, value in smoke_kit["env"].items() if key not in rs.CLAUDE_CREDENTIAL_ENV}
+    try:
+        result = subprocess.run(
+            argv, cwd=smoke_kit["base"], env=env, timeout=300,
+            stdout=write_end if stream == "stdout" else subprocess.DEVNULL,
+            stderr=write_end if stream == "stderr" else subprocess.DEVNULL,
+        )
+    finally:
+        os.close(write_end)
+    assert result.returncode == (rs.EXIT_REFUSED if stream == "stderr" else rs.EXIT_INCOMPLETE)
 
 
 def test_a_new_run_starts_unstopped_and_its_handlers_come_back(monkeypatch):

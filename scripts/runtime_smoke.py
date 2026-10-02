@@ -96,21 +96,25 @@ that is interrupted, or that fails on its own account, leaves no record at `--ou
 what it left there, and leaves its run directory as it stood.
 
 **Stopping clients.** Each client runs in a process group of its own, and the runner
-stops a group whole: SIGTERM, a grace, then SIGKILL, until no member is left. It does so
+stops a group whole: SIGTERM, a grace, then SIGKILL and a second grace, waiting on the
+whole group rather than its leader. It does so
 when a client outlives its timeout, when a client exits and leaves members behind, and,
 for every group it is running, when the run is interrupted or fails. An interrupt is
 SIGINT, SIGTERM or SIGHUP, except one the runner inherited ignored, and once a stop has
 begun no signal cuts it short. When the run is interrupted or fails, stderr names any
-group that outlived even SIGKILL, and the exit status says what happened even if stderr
-is gone. Out of reach: a process a client moves into a session of its own (a lane's client is its
+group that outlived even SIGKILL. A stream whose reader is gone leaves the exit status
+alone: it still tells a refused run from an interrupted or failed one, or says how the
+rows came out; what was stopped, and whether a record reached `--out`, are on stderr
+alone. Out of reach: a process a client moves into a session of its own (a lane's client is its
 launcher's to stop, and the launcher relays the signal), and a client an interrupt
 catches between its start and its registration, inside `subprocess.Popen` or on the
 statements after it, which then runs outside the runner's reach and its timeout.
 
 Exit status: 0 every row passed; 1 a row failed; 3 no row failed and at least one did
 not run; 2 refused before any client started; 4 interrupted, or failed on its own
-account, with every client group it was running stopped or named, and stderr saying
-whether a record reached `--out`.
+account, after stopping every client group it was running. Stderr, where it can be
+written, names any group that outlived SIGKILL and says whether a record reached
+`--out`.
 """
 
 from __future__ import annotations
@@ -2321,19 +2325,40 @@ def main(argv: list[str] | None = None) -> int:
         restore_interrupts(previous)
     summary = record["summary"]
     for status in ("passed", "failed", "not-run"):
-        print(f"{status}: {', '.join(summary[status]) or '-'}")
-    print(f"record: {args.out / 'record.md'}")
+        _emit(f"{status}: {', '.join(summary[status]) or '-'}")
+    _emit(f"record: {args.out / 'record.md'}")
     return record["exit_status"]
 
 
-def _report(message: str) -> None:
-    """Write the run's last word to stderr, which may be gone.
+def _emit(text: str, *, stderr: bool = False) -> None:
+    """Write a line for the operator to a stream whose reader may be gone.
 
-    A closed terminal's SIGHUP leaves no stderr to write to; the exit status must
-    still say what happened.
+    A write that fails leaves its text buffered, and CPython's own flush at exit then
+    fails as well and makes the exit status 120, whatever `main` returned. So a stream
+    that fails is pointed at /dev/null, and the status stays the one the run decided.
     """
+    stream = sys.stderr if stderr else sys.stdout
+    if stream is None:  # the descriptor was closed before the run began
+        return
+    try:
+        print(text, file=stream, flush=True)
+    except (OSError, ValueError):
+        _silence(2 if stderr else 1)
+
+
+def _silence(fd: int) -> None:
+    """Point a standard descriptor whose reader is gone at /dev/null."""
     with contextlib.suppress(OSError):
-        print(f"runtime_smoke: {message}", file=sys.stderr)
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        try:
+            os.dup2(devnull, fd)
+        finally:
+            os.close(devnull)
+
+
+def _report(message: str) -> None:
+    """The last word of a run that was refused, interrupted or failed, on stderr."""
+    _emit(f"runtime_smoke: {message}", stderr=True)
 
 
 def stopped(survivors: list[int]) -> str:
