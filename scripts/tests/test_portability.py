@@ -14703,7 +14703,9 @@ def _assert_runtime_parity_contract_covers_workflows_and_adapters() -> None:
             )
         elif entry["status"] == "gap":
             paths = [entry[key] for key in ("shared", "claude", "codex")]
-            assert any(paths) and not all(paths)
+            assert any(paths) and not all(paths), (
+                f"gap {name} must name some of its surfaces, and not all of them"
+            )
         else:
             assert all(entry[key] for key in ("shared", "claude", "codex"))
 
@@ -15095,7 +15097,7 @@ def test_runtime_parity_contract_rejects_a_gap_with_no_real_surface(
         for entry in yaml.safe_load(text.split("---", 2)[1])["workflow_contract"]
     }
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(AssertionError, match="gap phantom-workflow must name some"):
         _assert_runtime_parity_contract_covers_workflows_and_adapters()
 
 

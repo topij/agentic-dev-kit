@@ -284,24 +284,22 @@ smoke record; item 9 the same day, in #920, squash `d9f757d`. #920 archives the
 convergence plan behind a pointer and records the Phase 6 exit check at `7040d28`
 (`saved_plans/phase6-exit-check_2026-10-02.md`). The check found `workflow_contract`
 enforced and confirmed by the Phase 5 replay, `adoption` enforced, and the capability
-table unenforced. The operator held the exit and added item 10, #919.
+table unenforced. The operator held the exit and added item 10, #919. #923 adds the
+check over the table, re-runs the exit check, and archives the parity plan behind a
+pointer; the operator declared the exit under the amendment that record states.
 #906 removed the duplication #887 left in `runtime-parity.md`.
-The *Phase 6* section of `saved_plans/codex-parity-plan_2026-08-23.md` owns the order,
-the dependencies and the exit. #663, item 4's owner, stays open for residue that is not
+#663, item 4's owner, stays open for residue that is not
 Phase 6 work; its 2026-10-01 comment names it. #905 carries deferred LOW findings
 from #904, #915 a deferred LOW finding from #913's review, and #916 and #917 what
 #913's live runs found. #911 clarified #906’s lifecycle references on 2026-10-02.
 **Owner:**
-[#919](https://github.com/topij/agentic-dev-kit/issues/919),
 [#905](https://github.com/topij/agentic-dev-kit/issues/905),
 [#915](https://github.com/topij/agentic-dev-kit/issues/915),
 [#916](https://github.com/topij/agentic-dev-kit/issues/916),
 [#917](https://github.com/topij/agentic-dev-kit/issues/917).
 
-▶ Next: [#919](https://github.com/topij/agentic-dev-kit/issues/919) — Phase 6 item 10:
-add a deterministic check over `runtime-parity.md`'s capability table, then re-run the
-exit check against the exit as written and, if it holds, archive the parity plan behind
-the matrix.
+▶ Next: nothing is owed by Phase 6 itself. Its residue is carried by #905, #915, #916 and
+#917; the operator closes this workstream.
 
 ### Scratch retention
 

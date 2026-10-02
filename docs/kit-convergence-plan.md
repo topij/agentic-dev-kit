@@ -8,8 +8,8 @@ retired behind the maintained parity contract by Phase 6 item 9 of the parity pl
 
 - Runtime support as declared now:
   [`runtime-parity.md`](agentic-dev-kit/runtime-parity.md).
-- The parity work's phases, exits and owners:
-  [`codex-parity-plan_2026-08-23.md`](../saved_plans/codex-parity-plan_2026-08-23.md).
+- The parity work's phases, exits and owners: the archived parity plan, reached through
+  its pointer [`codex-parity-plan_2026-08-23.md`](../saved_plans/codex-parity-plan_2026-08-23.md).
 - Current project work: [`kit-handoff.md`](kit-handoff.md).
 - Installing or upgrading the kit: the [developer guide](developer-guide.md).
 

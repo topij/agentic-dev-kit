@@ -41,7 +41,9 @@ LANE_HEADING = "### Headless lane isolation per runtime"
 LANE_HEADER = ["Runtime", "Record", "Promoted", "Not promoted"]
 LANE_RUNTIMES = {"Claude Code", "Codex"}
 
-LINK = re.compile(r"\]\(([^)\s]+)\)")
+# An inline link's target, with or without a title, and a reference definition's.
+LINK = re.compile(r"\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+REFERENCE = re.compile(r"^ {0,3}\[[^\]]+\]:\s*(\S+)", re.MULTILINE)
 ISSUE = re.compile(r"#\d+")
 
 
@@ -52,28 +54,33 @@ def _split(text: str) -> tuple[dict, str]:
 
 
 def _section(body: str, heading: str) -> list[str]:
-    """The lines under `heading`, up to the next heading of the same or a higher level."""
+    """The lines under `heading`, up to the next heading of any level."""
     lines = body.splitlines()
     starts = [i for i, line in enumerate(lines) if line.rstrip() == heading]
     assert len(starts) == 1, f"runtime-parity.md has {len(starts)} {heading!r} headings, not one"
-    level = len(heading) - len(heading.lstrip("#"))
     section = []
     for line in lines[starts[0] + 1 :]:
         marks = len(line) - len(line.lstrip("#"))
-        if marks and line[marks:].startswith(" ") and marks <= level:
+        if marks and line[marks:].startswith(" "):
             break
         section.append(line)
     return section
 
 
 def _table(section: list[str], heading: str) -> tuple[list[str], list[list[str]]]:
-    """The first table in a section: its header cells and its rows' cells."""
+    """A section's one table: its header cells and its rows' cells.
+
+    One, because a row the parse does not reach is a row nothing checks: a second
+    table, or rows below a blank line, could restate a capability with another status.
+    """
     block: list[str] = []
+    ended = False
     for line in section:
-        if line.startswith("|"):
+        if line.lstrip().startswith("|"):
+            assert not ended, f"{heading!r} holds a second table, or rows outside its table"
             block.append(line)
         elif block:
-            break
+            ended = True
     assert len(block) >= 2, f"{heading!r} holds no table"
     header, separator, *rows = (
         [cell.strip() for cell in line.strip().strip("|").split("|")] for line in block
@@ -178,7 +185,7 @@ def _assert_matrix_matches_declaration(text: str) -> None:
 
     # Every relative link and anchor resolves, the sub-table's among them.
     own = _slugs(body)
-    for target in LINK.findall(body):
+    for target in LINK.findall(body) + REFERENCE.findall(body):
         if re.match(r"[a-z][a-z0-9+.-]*:", target):
             continue
         path, _, anchor = target.partition("#")
@@ -187,6 +194,8 @@ def _assert_matrix_matches_declaration(text: str) -> None:
             assert resolved.exists(), f"runtime-parity.md links {target!r}, which does not exist"
             assert resolved.is_relative_to(REPO_ROOT), f"runtime-parity.md links {target!r}, outside the repository"
         if anchor:
+            if path:
+                assert resolved.is_file(), f"runtime-parity.md links {target!r}, an anchor into a non-file"
             slugs = own if not path else _slugs(resolved.read_text(encoding="utf-8"))
             assert anchor in slugs, f"runtime-parity.md links {target!r}, whose anchor does not exist"
 
@@ -327,3 +336,70 @@ def test_a_broken_relative_link_fails() -> None:
         _mutated("(#adoption-footprint)", "(#adoption-surfaces)"),
         "anchor does not exist",
     )
+
+
+def test_a_broken_or_escaping_link_outside_the_lane_table_fails() -> None:
+    require_kit_source()
+    link = "(../../saved_plans/claude-sessionstart-matcher-live-validation_2026-08-29.md)"
+    _fails(_mutated(link, link.replace("2026-08-29", "2026-08-28")), "which does not exist")
+    # The repository's parent directory exists, so only the containment check can fire.
+    _fails(_mutated(link, "(../../..)"), "outside the repository")
+
+
+def test_links_in_other_markdown_forms_are_checked() -> None:
+    require_kit_source()
+    text = _text() + '\nSee [a titled link](../../saved_plans/absent.md "title").\n'
+    _fails(text, "which does not exist")
+    _fails(_text() + "\n[ref]: ../../saved_plans/absent.md\n", "which does not exist")
+    _fails(_text() + "\nSee [a directory](../../saved_plans/#section).\n", "an anchor into a non-file")
+
+
+def test_rows_outside_the_one_table_fail() -> None:
+    require_kit_source()
+    last = _row("Drift inspection")
+    rogue = "| Adapter upgrade | a | b | c | gap (#919): restated with another status |"
+    _fails(_mutated(last + "\n", f"{last}\n\n{rogue}\n"), "second table")
+    _fails(
+        _mutated(f"{LANE_HEADING}\n", f"{LANE_HEADING}\n\n| A | B |\n|---|---|\n| c | d |\n"),
+        "second table",
+    )
+
+
+def test_a_status_term_that_only_starts_the_cell_word_fails() -> None:
+    require_kit_source()
+    row = _row("Adapter upgrade")
+    _fails(_mutated(row, row.replace("| aligned: ", "| alignedish: ", 1)), "does not open with")
+
+
+def test_a_malformed_row_or_header_fails() -> None:
+    require_kit_source()
+    row = _row("Adapter upgrade")
+    cells = row.split(" | ")
+    _fails(_mutated(row, row.replace(cells[1], "", 1)), "empty cell")
+    _fails(_mutated(row, row + " extra |"), "wrong cell count")
+    _fails(
+        _mutated("| Codex | Status / exit |", "| Codex | Status |"),
+        "capability matrix's columns",
+    )
+    _fails(
+        _mutated("| Promoted | Not promoted |", "| Promoted | Withheld |"),
+        "lane table's columns",
+    )
+
+
+def test_a_malformed_declaration_entry_fails() -> None:
+    require_kit_source()
+    entry = "  - capability: Adapter upgrade\n    status: aligned\n"
+    _fails(_mutated(entry, entry + "    note: extra\n"), "is not exactly a capability and a status")
+    lane = "  - runtime: Codex\n    record: saved_plans/codex-parallel-batch-live-validation_2026-09-01.md\n"
+    _fails(_mutated(lane, lane.replace("Codex", "Gemini")), "unknown runtime")
+
+
+def test_a_lane_row_under_another_runtime_fails() -> None:
+    require_kit_source()
+    row = next(
+        line
+        for line in _text().splitlines()
+        if line.startswith("| Codex |") and "parallel-batch-live-validation" in line
+    )
+    _fails(_mutated(row, row.replace("| Codex |", "| Claude Code |", 1)), "is declared as")
