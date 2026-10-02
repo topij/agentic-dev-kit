@@ -32,8 +32,8 @@ sys.path.insert(0, str(ENGINE_DIR))
 import runtime_smoke as rs  # noqa: E402
 
 FAKE_VERSION = "9.9.9"
-# The kit's working records and evidence trees: most of the tracked bytes, and
-# nothing the runner or the fixture's engines read.
+# The kit's working records and evidence trees, which neither the runner nor the
+# fixture's engines read.
 NOT_COPIED = ("saved_plans/",)
 
 
@@ -251,13 +251,56 @@ def test_hook_output_is_matched_through_its_json_layers():
     assert not rs.mentions(event, "docs/y.md")
 
 
-def test_the_nonce_url_counts_only_from_a_tool_result():
+def _tool_use(use_id: str) -> dict:
+    return {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": use_id, "name": "Bash"}]}}
+
+
+def _tool_result(use_id: str, text: str) -> dict:
+    return {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": use_id, "content": text}]}}
+
+
+def test_the_nonce_url_counts_only_from_a_tool_result_linked_to_its_call():
     url = "https://github.com/adk-smoke/fixture-abc/pull/7"
     prompt = {"type": "user", "message": {"content": [{"type": "text", "text": f"printf {url}"}]}}
     echoed = {"type": "assistant", "message": {"content": [{"type": "text", "text": url}]}}
-    result = {"type": "user", "message": {"content": [{"type": "tool_result", "content": f"{url}\n"}]}}
-    assert not rs.tool_results_with([prompt, echoed], url)
-    assert rs.tool_results_with([prompt, echoed, result], url)
+    assert rs.claude_tool_call_for([prompt, echoed], url) == (None, None)
+    events = [prompt, _tool_use("t1"), {"type": "system", "subtype": "hook_response"}, _tool_result("t1", f"{url}\n")]
+    assert rs.claude_tool_call_for(events, url) == (1, 3)
+    unlinked = [prompt, _tool_use("t0"), _tool_result("t1", url)]
+    assert rs.claude_tool_call_for(unlinked, url) == (None, 2)
+
+
+def test_the_hooks_json_comparison_reads_the_revisions_bytes(tmp_path):
+    env = _git_env(tmp_path)
+    kit = tmp_path / "kit"
+    (kit / ".codex").mkdir(parents=True)
+    (kit / ".codex" / "hooks.json").write_text('{"hooks": {}}\n', encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=kit, env=env, check=True)
+    sha = _commit_all(kit, env, "hooks")
+    fixture = tmp_path / "fixture"
+    (fixture / ".codex").mkdir(parents=True)
+    (fixture / ".codex" / "hooks.json").write_text('{"hooks": {}}\n', encoding="utf-8")
+    with pytest.MonkeyPatch.context() as patch:
+        for key, value in env.items():
+            patch.setenv(key, value)
+        assert rs.hooks_json_differs(fixture, kit, sha) is False
+        (fixture / ".codex" / "hooks.json").write_text('{"hooks": {"x": []}}\n', encoding="utf-8")
+        assert rs.hooks_json_differs(fixture, kit, sha) is True
+        (fixture / ".codex" / "hooks.json").unlink()
+        assert rs.hooks_json_differs(fixture, kit, sha) is True
+        assert rs.hooks_json_differs(kit, kit, "no-such-revision") is True
+
+
+@pytest.mark.parametrize("bypass, project_trust", [(True, True), (True, False), (False, True)])
+def test_a_differing_registration_gets_no_trust_whatever_was_authorized(bypass, project_trust):
+    assert rs.codex_hook_route(True, bypass=bypass, project_trust=project_trust) == {
+        "project_trust": "none",
+        "hook_trust": "none",
+        "hooks_json_differs": True,
+    }
+    route = rs.codex_hook_route(False, bypass=bypass, project_trust=project_trust)
+    assert route["project_trust"] == ("per-invocation override" if project_trust else "none")
+    assert route["hook_trust"] == ("per-invocation bypass" if bypass else "none")
 
 
 def test_a_moved_injection_shape_leaves_its_heads_in_the_evidence(tmp_path):
@@ -565,18 +608,23 @@ for text in run_hooks("SessionStart", {{"hook_event_name": "SessionStart", "sour
 if "SMOKE-DONE-" in prompt:
     command = re.search(r"^(printf .+)$", prompt, re.M).group(1)
     output = subprocess.run(["bash", "-c", command], capture_output=True, text=True).stdout
-    add("response_item", {{"type": "function_call", "name": "shell", "call_id": "c1", "arguments": json.dumps({{"command": command}})}})
     payload = {{"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_input": {{"command": command}},
                "tool_response": {{"stdout": output, "stderr": "", "exit_code": 0}}, "cwd": str(cwd)}}
+    answers = [json.loads(text)["hookSpecificOutput"]["additionalContext"]
+               for text in run_hooks("PostToolUse", payload) if text.strip()]
+    early = os.environ.get("FAKE_CODEX_HOOK_BEFORE_CALL") == "1"
+    for answer in answers if early else []:
+        message("developer", answer)
+    add("response_item", {{"type": "function_call", "name": "shell", "call_id": "c1", "arguments": json.dumps({{"command": command}})}})
     # The live client wrote the hook's context between the call and its output.
-    for text in run_hooks("PostToolUse", payload):
-        if text.strip():
-            message("developer", json.loads(text)["hookSpecificOutput"]["additionalContext"])
+    for answer in [] if early else answers:
+        message("developer", answer)
     add("response_item", {{"type": "function_call_output", "call_id": "c1", "output": output}})
     final = re.search(r"SMOKE-DONE-[0-9a-f]+", prompt).group(0)
 elif review:
-    add("event_msg", {{"type": "item_completed", "item": {{"type": "EnteredReviewMode"}}}})
-    add("event_msg", {{"type": "item_completed", "item": {{"type": "ExitedReviewMode"}}}})
+    if os.environ.get("FAKE_CODEX_REVIEW_NO_MARKERS") != "1":
+        add("event_msg", {{"type": "item_completed", "item": {{"type": "EnteredReviewMode"}}}})
+        add("event_msg", {{"type": "item_completed", "item": {{"type": "ExitedReviewMode"}}}})
     # The reviewer runs as a child session of its own, as the live client's did.
     child = str(uuid.uuid4())
     (day / f"rollout-2026-10-02T00-00-01-{{child}}.jsonl").write_text("".join(json.dumps(entry) + "\n" for entry in (
@@ -597,6 +645,8 @@ if last:
     Path(last).write_text(final, encoding="utf-8")
 if "--json" in flags:
     print(json.dumps({{"type": "thread.started", "thread_id": thread}}))
+if review and os.environ.get("FAKE_CODEX_REVIEW_EXIT") == "1":
+    sys.exit(1)
 '''
 
 FAKE_CLAUDE = r'''#!{python}
@@ -676,6 +726,8 @@ def hook_events(event, payload, tool="Bash"):
             continue
         for hook in group["hooks"]:
             out = run(hook["command"], payload)
+            if event == "SessionStart" and os.environ.get("FAKE_CLAUDE_SESSIONSTART_SILENT") == "1":
+                out = ""
             outputs.append(out)
             events.append({{"type": "system", "subtype": "hook_response", "hook_event": event, "output": out, "stdout": out}})
     return outputs
@@ -708,17 +760,28 @@ if "SMOKE-DONE-" in prompt:
     command = re.search(r"^(printf .+)$", prompt, re.M).group(1)
     if "Bash(printf:*)" in allowed:
         output = subprocess.run(["bash", "-c", command], capture_output=True, text=True).stdout
+        post = {{"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_input": {{"command": command}},
+                "tool_response": {{"stdout": output, "stderr": "", "interrupted": False}}}}
+        hooked = os.environ.get("FAKE_CLAUDE_NO_POSTTOOL_HOOK") != "1"
+        early = os.environ.get("FAKE_CLAUDE_HOOK_BEFORE_CALL") == "1"
+        if hooked and early:
+            hook_events("PostToolUse", post)
         events.append({{"type": "assistant", "message": {{"content": [{{"type": "tool_use", "id": "t1", "name": "Bash", "input": {{"command": command}}}}]}}}})
-        events.append({{"type": "user", "message": {{"content": [{{"type": "tool_result", "tool_use_id": "t1", "content": output}}]}}}})
-        hook_events("PostToolUse", {{"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_input": {{"command": command}},
-                                    "tool_response": {{"stdout": output, "stderr": "", "interrupted": False}}}})
+        # The live client streamed the hook's events between the call and its result.
+        if hooked and not early:
+            hook_events("PostToolUse", post)
+        if os.environ.get("FAKE_CLAUDE_NO_TOOL_RESULT") != "1":
+            events.append({{"type": "user", "message": {{"content": [{{"type": "tool_result", "tool_use_id": "t1", "content": output}}]}}}})
     result = re.search(r"SMOKE-DONE-[0-9a-f]+", prompt).group(0)
 elif prompt.startswith("/"):
     # 2.1.287 records a command as its literal text, then a local_command entry.
     result = "Fake review: one finding."
     subagent("general-purpose", "Review the diff.", "claude-opus-fake", "medium", result)
-    transcript.append({{"type": "system", "subtype": "local_command",
-                       "content": f"<local-command-stdout>{{result}}</local-command-stdout>"}})
+    if os.environ.get("FAKE_CLAUDE_REVIEW_UNRECORDED") == "1":
+        transcript[-1]["message"]["content"] = "a review, described in prose"
+    else:
+        transcript.append({{"type": "system", "subtype": "local_command",
+                           "content": f"<local-command-stdout>{{result}}</local-command-stdout>"}})
 elif "-----BEGIN LENS PROMPT-----" in prompt:
     lens = re.search(r"Launch the `([^`]+)` agent", prompt).group(1)
     lens_prompt = prompt.split("-----BEGIN LENS PROMPT-----\n", 1)[1].rsplit("\n-----END LENS PROMPT-----", 1)[0]
@@ -867,6 +930,81 @@ def test_the_codex_hook_rows_name_the_trust_layer_that_is_missing(smoke_kit, fla
         assert rows[row_id]["status"] == "passed", rows[row_id]["reason"]
     assert rows["claude.lane"]["reason"] == "not selected for this run (--runtime)"
     assert result.returncode == rs.EXIT_INCOMPLETE
+
+
+@pytest.mark.parametrize(
+    "switches, runtime, broken",
+    [
+        (
+            {
+                "FAKE_CODEX_REVIEW_EXIT": "1",
+                "FAKE_CODEX_HOOK_BEFORE_CALL": "1",
+                "FAKE_CLAUDE_NO_TOOL_RESULT": "1",
+                "FAKE_CLAUDE_REVIEW_UNRECORDED": "1",
+                "FAKE_CLAUDE_SESSIONSTART_SILENT": "1",
+            },
+            None,
+            {
+                "codex.review": "exited 1",
+                "codex.post_tool_use": "the hook's warning never reached the session",
+                "claude.post_tool_use": "no tool result carried the nonce URL",
+                "claude.review": "not listed, not invoked, or returned nothing",
+                "claude.session_start": "no SessionStart hook event carried the tripwire line",
+            },
+        ),
+        (
+            {"FAKE_CODEX_REVIEW_NO_MARKERS": "1", "FAKE_CLAUDE_NO_POSTTOOL_HOOK": "1"},
+            None,
+            {
+                "codex.review": "the rollout recorded no review-mode event",
+                "claude.post_tool_use": "no PostToolUse hook event after that shell call",
+            },
+        ),
+        (
+            {"FAKE_CLAUDE_HOOK_BEFORE_CALL": "1"},
+            "claude",
+            {"claude.post_tool_use": "no PostToolUse hook event after that shell call"},
+        ),
+    ],
+    ids=["exit-order-omission", "no-markers-no-hook", "hook-before-call"],
+)
+def test_a_client_that_misbehaves_fails_exactly_the_rows_it_breaks(smoke_kit, switches, runtime, broken):
+    name = "misbehave-" + "-".join(sorted(key.lower() for key in switches))[:80]
+    extra = ["--allow-codex-project-trust", "--allow-codex-hook-trust-bypass"] if runtime != "claude" else []
+    result, record, _ = _smoke(smoke_kit, name, *(["--runtime", runtime] if runtime else []), *extra, env_extra=switches)
+    rows = _rows(record)
+    for row_id, reason in broken.items():
+        assert rows[row_id]["status"] == "failed", (row_id, rows[row_id]["reason"])
+        assert reason in rows[row_id]["reason"], (row_id, rows[row_id]["reason"])
+    selected = {row["id"] for row in record["rows"] if runtime in (None, row["runtime"])}
+    assert {row_id for row_id in selected if rows[row_id]["status"] != "passed"} == set(broken)
+    assert result.returncode == rs.EXIT_FAILED
+
+
+def test_a_tampered_hook_registration_is_trusted_by_no_route(smoke_kit, tmp_path, monkeypatch):
+    """The guard the CLI cannot reach: its fixture is the revision's own bytes."""
+    for key, value in smoke_kit["env"].items():
+        monkeypatch.setenv(key, value)
+    run_dir = tmp_path / "run"
+    (run_dir / "logs").mkdir(parents=True)
+    base_env = rs.scrubbed_environment()
+    fixture = rs.build_fixture(smoke_kit["kit"], smoke_kit["revision"], run_dir, base_env)
+    (fixture.repo / rs.CODEX_HOOKS).write_text('{"hooks": {}}\n', encoding="utf-8")
+    ctx = rs.Context(
+        kit_root=smoke_kit["kit"], revision=smoke_kit["revision"], run_dir=run_dir, log_dir=run_dir / "logs",
+        fixture=fixture, config=rs.load_config(fixture.repo / "config" / "dev-model.yaml", overlay=False),
+        timeout=180, nonce="0123456789ab", pr_number=1000, budget_line="⚠ unused", base_env=base_env,
+        followup_markers={"codex": "unused.", "claude": "unused."},
+    )
+    rows = {row_id: rs.Row(row_id, runtime, check) for row_id, runtime, check in rs.ROWS}
+    observed = rs.run_codex(
+        ctx, rows, smoke_kit["fakes"]["codex"], smoke_kit["homes"]["codex"], FAKE_VERSION,
+        bypass=True, project_trust=True,
+    )
+    assert observed["hook_trust_route"] == {"project_trust": "none", "hook_trust": "none", "hooks_json_differs": True}
+    for row_id in ("codex.session_start", "codex.post_tool_use"):
+        assert rows[row_id].status == "not-run"
+        assert rows[row_id].reason.startswith("hook trust refused")
 
 
 def test_an_unauthenticated_claude_home_names_the_credential_it_lacked(smoke_kit):

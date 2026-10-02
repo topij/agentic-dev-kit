@@ -53,20 +53,20 @@ the runtime that executed:
   `--dangerously-bypass-hook-trust` and a `-c` override trusting the fixture path
   (`--allow-codex-hook-trust-bypass`, `--allow-codex-project-trust`). No other session
   ran with either.
-- The operator's own settings were left as they were.
-  `shasum -a 256 ~/.codex/config.toml` at 2026-10-02T10:14:59Z printed the value this
-  session's first reading printed earlier that day, before the session ran any client
-  command (`0227cc92…`). The operator's `~/.claude.json` held no project entry naming a
-  smoke fixture at 2026-10-02T10:15:05Z.
+- The runs left the operator's own settings as they were.
+  `shasum -a 256 ~/.codex/config.toml` at 2026-10-02T10:27:25Z, after run 5 ended,
+  printed a value beginning `0227cc926633727a`, as did the session's first reading that
+  day, taken before it ran any client command. The operator's `~/.claude.json` held no
+  project entry naming a smoke fixture at 2026-10-02T10:49:28Z.
 
 ## Observations
 
 1. **#802, in an isolated home.** No `codex exec` here wrote a trusted-project entry.
-   `ls <codex-home>/config.toml` found no file at 2026-10-02T10:14:53Z, after the probe,
-   review, lens and lane sessions of runs 1 to 3, and again at 2026-10-02T10:27:25Z,
-   after run 5. Runs 2 to 5 each passed a per-invocation project-trust override. Each
-   record's own observation lists no added project or hook-state entry. #802 saw the
-   entries under the operator's own home, from
+   `ls <codex-home>/config.toml` found no file at 2026-10-02T10:14:53Z, after every
+   `codex exec` session of runs 1 to 3 had ended (run 3's Claude rows were still
+   running), and again at 2026-10-02T10:27:25Z, after run 5. Runs 2 to 5 each passed a
+   per-invocation project-trust override. Each record's own observation lists no added
+   project or hook-state entry. #802 saw the entries under the operator's own home, from
    `codex exec --ignore-user-config --ephemeral`, and leaves open whether the CLI or the
    desktop app's service writes them. Under an isolated home, with the flags these
    records show, the CLI wrote none: that narrows the question without settling it.
@@ -84,8 +84,9 @@ the runtime that executed:
    warning was written between the shell call and its output. `codex exec review` wrote a
    parent session carrying `EnteredReviewMode` and `ExitedReviewMode` items, and a child
    session whose `session_meta.source` is `{"subagent": "review"}`; the reviewer's compute
-   is in that child's `turn_context`, which in run 5 read `gpt-6-astra` at `low`, the
-   configured cheap tier the runner passes with `-c`.
+   is in that child's `turn_context`, which in run 5 read `gpt-6-astra`, the isolated
+   home's default model, at `low`, the configured cheap tier the runner passes as
+   `-c model_reasoning_effort`.
 4. **Claude applies a lens's effort only on the documented route.** Launched as
    `claude -p --agent <lens>` (run 1), each lens ran the definition's model,
    `claude-sonnet-5-5`, at effort `medium` rather than the definition's `high`. Delegated

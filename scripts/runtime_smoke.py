@@ -16,6 +16,7 @@ model calls, and needs credentials CI does not hold. Run it on demand from a che
 of the kit whose copy of this file is committed at the revision under test:
 
     uv run <engine-dir>/runtime_smoke.py --work-root <dir> --out <new dir> \\
+        [--revision <commit>] [--runtime codex|claude] \\
         --codex-bin <absolute path> --codex-version <version> --codex-home <dir> \\
         [--claude-bin <absolute path> --claude-version <version> \\
          --claude-config-dir <dir>] [--allow-codex-project-trust] \\
@@ -38,10 +39,12 @@ One row per check per runtime:
     claude.panel          as for Codex, each lens launched as its agent definition
     claude.lane           as for Codex
 
-**Evidence is read from runtime artifacts, never from what a model says.** Codex rows
-read the session rollout under the isolated `CODEX_HOME`; Claude rows read the
-stream-json events and the session transcript under the isolated config directory;
-lane rows also read the launcher's terminal receipt. The executing client version and
+**What a runtime did is read from its own artifacts, never from what a model says.**
+Codex rows read the session rollout under the isolated `CODEX_HOME`; Claude rows read
+the stream-json events and the session transcript under the isolated config
+directory; lane rows also read the launcher's terminal receipt. Model-written text
+serves only as a liveness check: a review that returned something, a lens report that
+names the review head, a lane's final text that carries its task token. The executing client version and
 the applied model and effort come from those artifacts too (rollout `session_meta` and
 `turn_context`, transcript `version`, `message.model` and `effort`), so a shell CLI that
 differs from the runtime that executed a check shows as a pin mismatch on the row
@@ -955,19 +958,32 @@ def mentions(event: dict[str, Any], needle: str) -> bool:
     return any(needle in text for text in event["strings"])
 
 
-def tool_results_with(events: list[dict[str, Any]], needle: str) -> bool:
-    """Whether a tool result — not a prompt or the model's own text — carries `needle`."""
-    for event in events:
+def claude_tool_call_for(events: list[dict[str, Any]], needle: str) -> tuple[int | None, int | None]:
+    """(tool_use index, tool_result index) of the first tool result carrying `needle`.
+
+    Only a `tool_result` counts — never the prompt or the model's own text. 2.1.287
+    streams a PostToolUse hook's events between a `tool_use` and its `tool_result`,
+    so a hook's answer is ordered after the call, which the result names by
+    `tool_use_id`. The call index is None when no `tool_use` carries that id.
+    """
+    for result_index, event in enumerate(events):
         if event.get("type") != "user" or not isinstance(event.get("message"), dict):
             continue
         for part in event["message"].get("content") or []:
-            if (
-                isinstance(part, dict)
-                and part.get("type") == "tool_result"
-                and any(needle in text for text in string_values(part.get("content")))
-            ):
-                return True
-    return False
+            if not (isinstance(part, dict) and part.get("type") == "tool_result"):
+                continue
+            if not any(needle in text for text in string_values(part.get("content"))):
+                continue
+            use_id = part.get("tool_use_id")
+            for use_index, candidate in enumerate(events[:result_index]):
+                message = candidate.get("message")
+                if candidate.get("type") != "assistant" or not isinstance(message, dict):
+                    continue
+                for item in message.get("content") or []:
+                    if isinstance(item, dict) and item.get("type") == "tool_use" and use_id and item.get("id") == use_id:
+                        return use_index, result_index
+            return None, result_index
+    return None, None
 
 
 def find_claude_transcript(config_dir: Path, session_id: str | None) -> Path | None:
@@ -1162,6 +1178,22 @@ def codex_project_trust_override(repo: Path) -> list[str]:
     return ["-c", f'projects={{{json.dumps(realpath(repo))}={{trust_level="trusted"}}}}']
 
 
+def hooks_json_differs(repo: Path, kit_root: Path, revision: str) -> bool:
+    """Whether the fixture's hook registration is anything but the revision's bytes."""
+    committed = subprocess.run(["git", "show", f"{revision}:{CODEX_HOOKS}"], cwd=kit_root, capture_output=True)
+    path = repo / CODEX_HOOKS
+    return committed.returncode != 0 or not path.is_file() or path.read_bytes() != committed.stdout
+
+
+def codex_hook_route(differs: bool, *, bypass: bool, project_trust: bool) -> dict[str, Any]:
+    """The trust the hook probe runs under: none at all when the registration differs."""
+    return {
+        "project_trust": "per-invocation override" if project_trust and not differs else "none",
+        "hook_trust": "per-invocation bypass" if bypass and not differs else "none",
+        "hooks_json_differs": differs,
+    }
+
+
 def hook_trust_reason(route: dict[str, Any]) -> str | None:
     """Why the hook rows could not run under `route`, or None when both layers held.
 
@@ -1196,16 +1228,11 @@ def run_codex(
     command, url = probe_command(ctx.nonce, ctx.pr_number)
 
     # Hook probe: one session evidences instructions, skills and both hooks.
-    hooks_bytes = (fixture.repo / CODEX_HOOKS).read_bytes()
-    committed_hooks = subprocess.run(
-        ["git", "show", f"{ctx.revision}:{CODEX_HOOKS}"], cwd=ctx.kit_root, capture_output=True
-    ).stdout
-    differs = hooks_bytes != committed_hooks
-    route = {
-        "project_trust": "per-invocation override" if project_trust and not differs else "none",
-        "hook_trust": "per-invocation bypass" if bypass and not differs else "none",
-        "hooks_json_differs": differs,
-    }
+    # Equal by construction on the CLI path, since the fixture is extracted from the
+    # revision; checked anyway, because the trust a route grants is to these bytes.
+    route = codex_hook_route(
+        hooks_json_differs(fixture.repo, ctx.kit_root, ctx.revision), bypass=bypass, project_trust=project_trust
+    )
     trust_reason = hook_trust_reason(route)
     probe_argv = [
         "exec", "--json", "-C", str(fixture.repo), "-s", "read-only", *effort,
@@ -1648,18 +1675,26 @@ def run_claude(ctx: Context, rows: dict[str, Row], binary: Path, config_dir: Pat
 
         marker = ctx.followup_markers["claude"]
         posts = claude_hook_events(events, "PostToolUse")
-        hit = next((event for event in posts if mentions(event, marker)), None)
-        printed = tool_results_with(events, url)
+        use_index, result_index = claude_tool_call_for(events, url)
+        # After the call when the result names it; after the result itself otherwise,
+        # which is stricter and never earlier than the call.
+        anchor = use_index if use_index is not None else result_index
+        hit = next(
+            (event for event in posts if anchor is not None and event["index"] > anchor and mentions(event, marker)),
+            None,
+        )
         evidence = {
-            "observer": "stream-json tool result carrying the nonce URL, and PostToolUse hook events",
-            "nonce_url_tool_result": printed,
+            "observer": "stream-json tool_use and the tool_result carrying the nonce URL, then PostToolUse hook events",
+            "nonce_url_tool_use_index": use_index,
+            "nonce_url_tool_result_index": result_index,
             "post_tool_use_events": [{"index": event["index"], "subtype": event["subtype"]} for event in posts],
             "expected_marker": marker,
             "found": {"index": hit["index"], "subtype": hit["subtype"]} if hit else None,
         }
-        _finish(rows["claude.post_tool_use"], hit is not None and printed, mismatch, evidence,
-                "the follow-up hook's warning was the PostToolUse output for the shell call that printed the nonce URL",
-                "no shell result carried the nonce URL" if not printed else "no PostToolUse hook event carried the hook's warning")
+        _finish(rows["claude.post_tool_use"], hit is not None, mismatch, evidence,
+                "a PostToolUse hook event after the shell call that printed the nonce URL carried the hook's warning",
+                "no tool result carried the nonce URL" if result_index is None
+                else "no PostToolUse hook event after that shell call carried the hook's warning")
 
     # The configured review command, on the review branch.
     review_command = get(ctx.config, "review.fallback_commands.claude")
