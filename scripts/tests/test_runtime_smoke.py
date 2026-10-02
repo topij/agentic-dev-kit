@@ -736,8 +736,8 @@ def test_an_engine_that_does_not_finish_refuses_the_run(tmp_path, monkeypatch, e
 @pytest.mark.parametrize(
     "raised, message",
     [
-        (KeyboardInterrupt(), "interrupted; every client it was running is stopped; no record was written to --out"),
-        (RuntimeError("boom"), "failed: RuntimeError: boom; every client it was running is stopped; no record"),
+        (KeyboardInterrupt(), "interrupted; every client process group it was running is stopped; no record was written to --out"),
+        (RuntimeError("boom"), "failed: RuntimeError: boom; every client process group it was running is stopped; no record"),
     ],
     ids=["interrupt", "exception"],
 )
@@ -765,9 +765,9 @@ def test_a_run_that_cannot_finish_stops_its_clients_and_exits_aborted(tmp_path, 
 @pytest.mark.parametrize(
     "raised, account",
     [
-        (RuntimeError("boom"), "failed: RuntimeError: boom; every client it was running is stopped"),
+        (RuntimeError("boom"), "failed: RuntimeError: boom; every client process group it was running is stopped"),
         # Raised as no handler of the runner's would: the latch is still unset.
-        (KeyboardInterrupt(), "interrupted; every client it was running is stopped"),
+        (KeyboardInterrupt(), "interrupted; every client process group it was running is stopped"),
     ],
     ids=["failure", "interrupt"],
 )
@@ -892,7 +892,7 @@ def test_a_group_that_outlives_the_stop_is_named(monkeypatch):
     survivors = rs.stop_live_children(grace=0.2)
     assert survivors == [424242]
     assert rs.stopped(survivors) == "client process groups that outlived the stop: 424242"
-    assert rs.stopped([]) == "every client it was running is stopped"
+    assert rs.stopped([]) == "every client process group it was running is stopped"
 
 
 def test_what_a_stopped_run_left_at_out_is_read_from_the_disk(tmp_path, monkeypatch):
@@ -903,6 +903,53 @@ def test_what_a_stopped_run_left_at_out_is_read_from_the_disk(tmp_path, monkeypa
         assert rs.left_at(tmp_path) == "no record was written to --out", written
     (tmp_path / "record.json").write_text(json.dumps({"run_id": "adk-smoke-this"}), encoding="utf-8")
     assert rs.left_at(tmp_path) == "the record at --out was complete before the run stopped"
+    # Before a run has its id, nothing at --out is its record, not even one without an id.
+    monkeypatch.setattr(rs, "_RUN_ID", None)
+    (tmp_path / "record.json").write_text("{}", encoding="utf-8")
+    assert rs.left_at(tmp_path) == "no record was written to --out"
+
+
+def test_a_group_that_refuses_its_signal_counts_as_stopped(monkeypatch):
+    """macOS refuses a signal to a group whose only member is an unreaped zombie."""
+    def refuse(_group, _signum):
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setattr(rs.os, "killpg", refuse)
+    rs._stop_group(types.SimpleNamespace(pid=424242, poll=lambda: 0), grace=0.1)
+
+
+class _GoneStream:
+    """A stderr whose terminal has closed."""
+
+    def write(self, _text):
+        raise OSError(5, "Input/output error")
+
+    def flush(self):
+        raise OSError(5, "Input/output error")
+
+
+@pytest.mark.parametrize(
+    "raised, code",
+    [
+        (KeyboardInterrupt(), rs.EXIT_ABORTED),
+        (RuntimeError("boom"), rs.EXIT_ABORTED),
+        (rs.Refusal("no"), rs.EXIT_REFUSED),
+    ],
+    ids=["interrupt", "failure", "refusal"],
+)
+def test_the_exit_status_survives_a_stderr_that_is_gone(tmp_path, monkeypatch, raised, code):
+    monkeypatch.setattr(rs, "_INTERRUPTED", False)
+    monkeypatch.setattr(rs, "_STOPPING", False)
+    monkeypatch.setattr(rs, "resolve_revision", lambda _root, _revision: "0" * 40)
+    monkeypatch.setattr(rs, "verify_harness", lambda _root, _revision: {})
+    monkeypatch.setattr(rs, "stop_live_children", lambda: [])
+
+    def fail(*_args):
+        raise raised
+
+    monkeypatch.setattr(rs, "run", fail)
+    monkeypatch.setattr(sys, "stderr", _GoneStream())
+    assert rs.main(["--work-root", str(tmp_path), "--out", str(tmp_path / "out")]) == code
 
 
 def test_a_new_run_starts_unstopped_and_its_handlers_come_back(monkeypatch):
@@ -1820,7 +1867,7 @@ def test_an_interrupted_run_stops_every_client_and_writes_no_record(smoke_kit, t
             with contextlib.suppress(ProcessLookupError):
                 os.kill(pid, signal.SIGKILL)
     assert runner.returncode == rs.EXIT_ABORTED, stderr
-    assert "interrupted; every client it was running is stopped; no record was written to --out" in stderr
+    assert "interrupted; every client process group it was running is stopped; no record was written to --out" in stderr
     assert len(pids) == 2 * hanging and not survivors, survivors
     assert not (out / "record.json").exists()
 

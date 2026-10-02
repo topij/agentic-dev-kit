@@ -164,7 +164,8 @@ the runner, against the same clients and isolated homes.
   own `--json` event stream ended in `error`, `Selected model is at capacity. Please try
   a different model.`, then `turn.failed`. The row failed closed. The record names only
   the exit status, because Codex wrote the reason to that stream and not to stderr, the
-  one line of output the record keeps. It is not retained; run 8 repeated it.
+  one line of output the record keeps. It is not retained; run 8 ran the same revision
+  again.
 - **Run 8,** at `4490964`, 12:49:49Z to 12:55:40Z, with both trust layers. Every row
   passed. It was the stamped run until the third review round changed the runner
   (`0c2c200`): a stop waits until a client's whole group is empty, what a client leaves
@@ -185,7 +186,9 @@ the `record.json` and `record.md` of runs 1, 5 and 9 printed 0 for each at
 - Persisted trust. Every trust here was per invocation, in an isolated home.
 - A lane's compute. The launcher carries no model or effort; each lane ran its home's
   defaults, which the record's lane rows show.
-- The runner's interrupt and abort paths against live clients. Exit 4, and the stop of
-  every client it started, were exercised with the fake clients of
-  `scripts/tests/test_runtime_smoke.py` only.
+- The runner's stops against live clients. Exit 4, and the stop of a client's whole
+  process group on a timeout, on an exit that leaves members behind, and on an
+  interrupt or a failure, were exercised with the fake clients of
+  `scripts/tests/test_runtime_smoke.py` only. Run 9 shows only that no live client left
+  a member behind.
 - Another client version, account or machine.

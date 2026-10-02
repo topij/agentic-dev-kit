@@ -100,8 +100,9 @@ stops a group whole: SIGTERM, a grace, then SIGKILL, until no member is left. It
 when a client outlives its timeout, when a client exits and leaves members behind, and,
 for every group it is running, when the run is interrupted or fails. An interrupt is
 SIGINT, SIGTERM or SIGHUP, except one the runner inherited ignored, and once a stop has
-begun no signal cuts it short. A group that outlives even SIGKILL is named on stderr. Out
-of reach: a process a client moves into a session of its own (a lane's client is its
+begun no signal cuts it short. When the run is interrupted or fails, stderr names any
+group that outlived even SIGKILL, and the exit status says what happened even if stderr
+is gone. Out of reach: a process a client moves into a session of its own (a lane's client is its
 launcher's to stop, and the launcher relays the signal), and a client an interrupt
 catches between its start and its registration, inside `subprocess.Popen` or on the
 statements after it, which then runs outside the runner's reach and its timeout.
@@ -116,6 +117,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import contextlib
 import datetime as dt
 import hashlib
 import io
@@ -197,9 +199,10 @@ CLAUDE_CREDENTIAL_ENV = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY")
 # A lens reads the diff with git; the kit's project settings allow none of these, and
 # `dontAsk` would turn the first read into a denial. Passed per invocation, so nothing
 # under `.claude/` changes. A prefix rule cannot exclude a flag, so this allows the
-# subcommands a lens reads with and does not confine a lens: `git diff`, `git show` and
-# `git log` accept `--output`, which writes a file, and `git diff --no-index` reads any
-# file the runner can, the isolated home's login included. `git ls-remote` is left out,
+# subcommands a lens reads with and does not confine a lens: by git's own rules, `git
+# diff`, `git show` and `git log` accept `--output`, which writes a file, and `git diff
+# --no-index` reads any file the runner can, the isolated home's login included; whether
+# Claude Code's permission check passes such a call was not probed. `git ls-remote` is left out,
 # since its `--upload-pack` runs a command; the fixture's remote is a local path anyway.
 CLAUDE_LENS_GIT = (
     "Bash(git diff:*)",
@@ -480,6 +483,12 @@ def stop_live_children(grace: float = 5) -> list[int]:
 
 
 def _group_alive(group: int) -> bool:
+    """Whether a process group has a member left.
+
+    A zombie member counts while it lasts. macOS refuses the probe once a group holds
+    only zombies, and so reports it gone; on Linux a zombie counts until it is reaped,
+    which this assumes an init does for orphans.
+    """
     try:
         os.killpg(group, 0)
     except (ProcessLookupError, PermissionError):
@@ -2297,16 +2306,16 @@ def main(argv: list[str] | None = None) -> int:
         harness = verify_harness(kit_root, revision)
         record = run(args, kit_root, revision, harness, started_at, raw_argv)
     except Refusal as exc:
-        print(f"runtime_smoke: refused: {exc}", file=sys.stderr)
+        _report(f"refused: {exc}")
         return EXIT_REFUSED
     except KeyboardInterrupt:
         _INTERRUPTED = True  # first, before any call: no signal may cut the stop short
-        print(f"runtime_smoke: interrupted; {stopped(stop_live_children())}; {left_at(args.out)}", file=sys.stderr)
+        _report(f"interrupted; {stopped(stop_live_children())}; {left_at(args.out)}")
         return EXIT_ABORTED
     except Exception as exc:  # the runner's own failure is never a row result
         _INTERRUPTED = True  # first, before any call: no signal may cut the stop short
         failure = f"{type(exc).__name__}: {exc}"
-        print(f"runtime_smoke: failed: {failure}; {stopped(stop_live_children())}; {left_at(args.out)}", file=sys.stderr)
+        _report(f"failed: {failure}; {stopped(stop_live_children())}; {left_at(args.out)}")
         return EXIT_ABORTED
     finally:
         restore_interrupts(previous)
@@ -2317,10 +2326,20 @@ def main(argv: list[str] | None = None) -> int:
     return record["exit_status"]
 
 
+def _report(message: str) -> None:
+    """Write the run's last word to stderr, which may be gone.
+
+    A closed terminal's SIGHUP leaves no stderr to write to; the exit status must
+    still say what happened.
+    """
+    with contextlib.suppress(OSError):
+        print(f"runtime_smoke: {message}", file=sys.stderr)
+
+
 def stopped(survivors: list[int]) -> str:
     """The stop's account, from what `stop_live_children` found rather than assumed."""
     if not survivors:
-        return "every client it was running is stopped"
+        return "every client process group it was running is stopped"
     return f"client process groups that outlived the stop: {', '.join(str(group) for group in survivors)}"
 
 
