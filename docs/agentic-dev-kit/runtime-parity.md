@@ -232,8 +232,8 @@ kit wrapper; neither observes a write or an approval transition.
 
 The headless writing-lane and parallel-batch records are linked from
 [*Headless lane isolation per runtime*](#headless-lane-isolation-per-runtime), which is
-where each one's promoted and withheld claims are stated. The designs behind them are
-kept beside them: the Claude route-selection probes in
+where each one's promoted and withheld claims are stated. The writing-lane designs are
+kept beside the writing-lane records: the Claude route-selection probes in
 [`saved_plans/claude-writing-lane-approval-policy-design_2026-08-27.md`](../../saved_plans/claude-writing-lane-approval-policy-design_2026-08-27.md),
 and the Codex design in
 [`saved_plans/codex-writing-lane-design_2026-08-27.md`](../../saved_plans/codex-writing-lane-design_2026-08-27.md).
@@ -248,7 +248,8 @@ produced from a Claude Code session with controlled `claude -p` and `codex exec`
 probes in a scratch fixture. The record's observers are each runtime's own artifacts —
 Claude's session and subagent transcripts, Codex's rollout `turn_context` — never the
 prompt or the child's prose; its raw outputs were session-scoped and are quoted as
-excerpts, so the row above promotes only what the excerpts show.
+excerpts, so the *Capability tiers* row of the capability matrix promotes only what
+the excerpts show.
 
 ## Product surfaces this contract relies on
 
