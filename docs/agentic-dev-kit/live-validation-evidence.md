@@ -307,6 +307,21 @@ Bound every child process such a harness starts with a finite timeout, and recor
 timeout outcome beside its exit status, so a hung child fails the harness instead of
 stalling it.
 
+## On-demand smoke records
+
+`<engine-dir>/runtime_smoke.py` re-observes the runtime surfaces on demand and never in
+pull-request CI (#879). It drives a pinned Codex client, and Claude Code where a
+credential permits, against a disposable copy of the kit, and writes `record.json` and
+`record.md` stamped with the kit revision, the date, the invocation, each client's shell
+version and the version each row's runtime artifacts report. Its rows, observers,
+isolation and exit statuses are in its docstring.
+
+A smoke record is an observation, not a promotion bundle. It keeps minimized fields
+and the digests of bytes it does not retain, so it promotes nothing on its own: a row
+that passed is a reason to collect a bundle under the contract above, and a row that
+failed or did not run is a reason to re-check the claim it covers. Read a record for
+private paths and content before committing it, as for any evidence outside a bundle.
+
 ## Applied compute and ephemeral carriers
 
 An argv model or effort is an instruction, not the authoritative observer of what the

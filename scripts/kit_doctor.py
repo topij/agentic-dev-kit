@@ -287,6 +287,10 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # all of them hashed by --generate-manifest so the kit's own drift gate
     # watches them, but omit them from adopter inspection and install baselines.
     ("scripts/verify_live_validation_bundle.py", REPO_ONLY_ROLE),
+    # The on-demand runtime smoke runner (#879): it starts real clients against a
+    # disposable copy of the kit and writes a stamped observation record. Kit
+    # maintenance like the verifier above, so it ships nowhere.
+    ("scripts/runtime_smoke.py", REPO_ONLY_ROLE),
     # Assembles panel launch prompts by QUOTING the contract out of
     # docs/agentic-dev-kit/fallback-review-panel.md at run time (#214). That
     # coupling is why it is tracked beside the doctrine rather than left
@@ -366,6 +370,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/test_state_guard.py", "test"),
     ("scripts/tests/test_live_validation_bundle.py", REPO_ONLY_ROLE),
     ("scripts/tests/test_make_lint.py", REPO_ONLY_ROLE),
+    ("scripts/tests/test_runtime_smoke.py", REPO_ONLY_ROLE),
     # Installs the kit's own tracked tree into fresh repositories, so it asserts
     # nothing an adopter's tree could answer.
     ("scripts/tests/test_adoption_fixtures.py", REPO_ONLY_ROLE),

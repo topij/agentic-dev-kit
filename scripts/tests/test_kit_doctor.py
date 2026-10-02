@@ -1714,8 +1714,10 @@ def test_repo_only_paths_are_hashed_but_not_offered_to_an_adopter(tmp_path):
     """Release hashing and kit drift coverage must not make these adopter files."""
     repo_only = {
         "scripts/verify_live_validation_bundle.py",
+        "scripts/runtime_smoke.py",
         "scripts/tests/test_live_validation_bundle.py",
         "scripts/tests/test_make_lint.py",
+        "scripts/tests/test_runtime_smoke.py",
         "scripts/tests/test_adoption_fixtures.py",
         "scripts/tests/fixtures/codex_parallel_batch_expected.json",
         "docs/agentic-dev-kit/live-validation-evidence.md",
