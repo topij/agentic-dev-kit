@@ -272,9 +272,17 @@ def test_a_status_outside_the_vocabulary_fails() -> None:
 
 def test_a_status_that_owes_an_issue_and_names_none_fails() -> None:
     require_kit_source()
-    row = _row("Interactive hook-message presentation")
-    assert "not load-bearing (#608):" in row
-    _fails(_mutated(row, re.sub(r"#\d+", "an issue", row)), "names no issue")
+    for capability in ("Interactive hook-message presentation", "Fresh-install footprint"):
+        row = _row(capability)
+        assert re.search(r"#\d+", row), f"the {capability!r} row names no issue to remove"
+        _fails(_mutated(row, re.sub(r"#\d+", "an issue", row)), "names no issue")
+    # No row is a gap today, so make one on both sides, naming no issue.
+    row = _row("Adapter upgrade")
+    entry = "  - capability: Adapter upgrade\n    status: aligned\n"
+    text = _mutated(row, row.replace("| aligned: ", "| gap: ", 1)).replace(
+        entry, entry.replace("aligned", "gap")
+    )
+    _fails(text, "names no issue")
 
 
 def test_a_stated_vocabulary_that_drifts_from_the_test_fails() -> None:

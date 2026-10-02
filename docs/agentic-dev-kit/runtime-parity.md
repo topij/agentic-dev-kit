@@ -179,8 +179,8 @@ the tests of each file, not by the fixtures.
 Each row's *Status / exit* cell opens with its status from this vocabulary, the same
 term the front matter's `capability_matrix` declares for the row:
 
-- `aligned` — both runtimes reach the parity outcome; the rest of the cell scopes the
-  claim and names what it does not cover.
+- `aligned` — both runtimes reach the parity outcome; where the claim is scoped, the
+  rest of the cell says to what.
 - `decided` — the operator chose the behaviour on the issue the cell names.
 - `intentional difference` — the runtimes differ by design; the cell says why that is
   not a gap.

@@ -9,8 +9,9 @@ section:
 > Phase 5 adopter run.
 
 Every observation below was taken at `7040d289942a80b0a87f6447048d29e3f37964d5`
-(`main`) on 2026-10-02, unless it names another revision. **This record declares
-nothing.** Declaring the exit is the operator's call, as it was for Phase 5.
+(`main`) on 2026-10-02, unless it names another revision. **This record makes no
+declaration of its own.** Declaring the exit is the operator's call, as it was for Phase 5;
+the record documents the operator's decision where one was taken.
 
 ## What "the parity matrix" covers
 
@@ -194,8 +195,16 @@ own negative controls, whose text anchors the mutation removed.
 ### Part 2, unchanged
 
 Item 10 adds no adopter run, so Part 2 stands as found above: the cs-toolkit replay
-confirms `workflow_contract`, and confirms no table row. Each row's live side rests on
-the records the matrix's *Live promotion boundary* governs.
+confirms `workflow_contract`, and confirms no table row. The rows split in two:
+
+- A row whose claim depends on client behaviour rests on the stamped records the matrix
+  and its *Lifecycle validation boundary* and *Live promotion boundary* sections link.
+- A row that claims repository structure, a decision or an intentional difference is
+  confirmed by no run: among them *Workflow adapters*, *Fresh-install footprint*,
+  *Runtime memory tripwire*, *Post-merge integrations*, *Session-start and wrap-up
+  integrations*, *Triage integrations*, *Adapter upgrade* and *Drift inspection*. The
+  check above holds each to the declaration. Their truth is pinned, where it is, by the
+  tests of the files they describe, and this record does not audit which.
 
 ### Verdict after item 10
 
@@ -211,9 +220,13 @@ the records the matrix's *Live promotion boundary* governs.
 
 On 2026-10-02 the operator was offered two routes: hold the exit again, or declare it
 with a recorded amendment that the table's rows are confirmed by their own live records
-rather than by the adopter run. The operator chose the second.
+rather than by the adopter run. The operator chose the second. #923's correctness lens
+then found that wording overstated, as Part 2 above now sets out, and on 2026-10-03 the
+operator chose to declare under the narrowed amendment below rather than hold.
 
-**The operator declared the Phase 6 exit, under this amendment:** the parity matrix is enforced by
-deterministic checks; its declaration is confirmed by the Phase 5 adopter run, and its
-table's rows by the live records the matrix's *Live promotion boundary* governs. The
-parity plan is archived behind the matrix in the same change, which is #880's step 4.
+**The operator declared the Phase 6 exit, under this amendment:** the parity matrix is
+enforced by deterministic checks. Its declaration is confirmed by the Phase 5 adopter
+run. Its table's client-dependent rows are confirmed by their stamped live records; its
+other rows are claims no run confirms, held to the declaration by the check, with their
+truth left unaudited. The parity plan is archived behind the matrix in the same change,
+which is #880's step 4.
