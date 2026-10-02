@@ -1,0 +1,1111 @@
+{
+  "schema": "adk-runtime-smoke/1",
+  "run_id": "adk-smoke-76ih37g5",
+  "started_at": "2026-10-02T09:50:51Z",
+  "finished_at": "2026-10-02T09:54:48Z",
+  "kit": {
+    "revision": "7b209d78e088c3a54a2d48f0d342d15580698408",
+    "harness": "scripts/runtime_smoke.py",
+    "harness_sha256": {
+      "scripts/runtime_smoke.py": "c7a32e0f148146c72d0bc64d9bebb7f384a6b6b157c0a68f22dbeb5344903a8e",
+      "scripts/lib/kitconfig.py": "428fa7e24e9efec1a8f65f15ba2d1673df819196bce3ccabe1a850afa7ff988a"
+    }
+  },
+  "invocation": [
+    "uv",
+    "run",
+    "scripts/runtime_smoke.py",
+    "--work-root",
+    "<work-root>",
+    "--out",
+    "<out>",
+    "--codex-bin",
+    "/opt/homebrew/bin/codex",
+    "--codex-version",
+    "0.153.4",
+    "--codex-home",
+    "<codex-home>",
+    "--claude-bin",
+    "~/.local/bin/claude",
+    "--claude-version",
+    "2.1.287",
+    "--claude-config-dir",
+    "<claude-config>",
+    "--allow-codex-hook-trust-bypass"
+  ],
+  "clients": {
+    "codex": {
+      "bin": "/opt/homebrew/bin/codex",
+      "realpath": "/opt/homebrew/Caskroom/codex/0.153.4/bin/codex",
+      "shell_version": "codex-cli 0.153.4",
+      "pin": "0.153.4",
+      "logged_in": true,
+      "preflight": "ready"
+    },
+    "claude": {
+      "bin": "~/.local/bin/claude",
+      "realpath": "~/.local/share/claude/versions/2.1.287",
+      "shell_version": "2.1.287 (Claude Code)",
+      "pin": "2.1.287",
+      "credential_env_present": [],
+      "logged_in": true,
+      "auth_method": "claude.ai",
+      "preflight": "ready"
+    }
+  },
+  "fixture": {
+    "main_head": "d0d57784622db0e117f189a52ce91c651a554ed3",
+    "review_head": "466fbb20ad0d8b5472f48bf22f64e01255e60d21",
+    "friction_log": "docs/kit-friction-log.md",
+    "friction_lines": 237,
+    "friction_budget": 150,
+    "nonce": "186404d91a4b"
+  },
+  "observations": {
+    "ancestor_instruction_files": [],
+    "codex": {
+      "hook_trust_route": "bypass",
+      "projects_added": [],
+      "hooks_state_added": []
+    }
+  },
+  "rows": [
+    {
+      "id": "codex.instructions",
+      "runtime": "codex",
+      "check": "AGENTS.md discovery",
+      "status": "failed",
+      "reason": "no injected AGENTS.md block both named the fixture and equalled its AGENTS.md",
+      "evidence": {
+        "observer": "rollout response_item message, role user, `# AGENTS.md instructions for` block",
+        "fixture_agents_md_sha256": "a5477de3c2072957512439a7b25566422c29b698eb5346e2f5b3327749b83114",
+        "blocks": [],
+        "user_message_heads": [
+          "<recommended_plugins>",
+          "This is an automated smoke test of the client, not a task. Run exactly one shel\u2026"
+        ]
+      },
+      "session": {
+        "observer": "rollout session_meta and first turn_context",
+        "session_id": "01a0fc06-261c-7d01-bbd0-bcab5557fe23",
+        "executing_version": "0.153.4",
+        "originator": "codex_exec",
+        "source": "exec",
+        "cwd": "<run>/repo",
+        "model": "gpt-6-astra",
+        "effort": "low",
+        "approval_policy": "never",
+        "sandbox": "read-only"
+      },
+      "invocations": [
+        {
+          "name": "codex-probe",
+          "argv": [
+            "/opt/homebrew/bin/codex",
+            "exec",
+            "--json",
+            "-C",
+            "<run>/repo",
+            "-s",
+            "read-only",
+            "-c",
+            "model_reasoning_effort=low",
+            "-o",
+            "<run>/logs/codex-probe.last",
+            "--dangerously-bypass-hook-trust",
+            "-"
+          ],
+          "cwd": "<run>/repo",
+          "returncode": 0,
+          "timed_out": false,
+          "timeout_seconds": 1800,
+          "duration_seconds": 13.0,
+          "error": null,
+          "stdout": "<run>/logs/codex-probe.stdout",
+          "stderr": "<run>/logs/codex-probe.stderr"
+        }
+      ]
+    },
+    {
+      "id": "codex.skills",
+      "runtime": "codex",
+      "check": "repository skill discovery",
+      "status": "passed",
+      "reason": "every skill the parity declaration binds for Codex is listed in the injected skills block",
+      "evidence": {
+        "observer": "rollout response_item message, role developer, `<skills_instructions>` block",
+        "skills_blocks": 1,
+        "expected": [
+          "<run>/repo/.agents/skills/adopt/SKILL.md",
+          "<run>/repo/.agents/skills/parallel/SKILL.md",
+          "<run>/repo/.agents/skills/post-merge-systemize/SKILL.md",
+          "<run>/repo/.agents/skills/pr-watch/SKILL.md",
+          "<run>/repo/.agents/skills/session-start/SKILL.md",
+          "<run>/repo/.agents/skills/triage-friction-log/SKILL.md",
+          "<run>/repo/.agents/skills/upgrade/SKILL.md",
+          "<run>/repo/.agents/skills/wrap-up/SKILL.md"
+        ],
+        "missing": []
+      },
+      "session": {
+        "observer": "rollout session_meta and first turn_context",
+        "session_id": "01a0fc06-261c-7d01-bbd0-bcab5557fe23",
+        "executing_version": "0.153.4",
+        "originator": "codex_exec",
+        "source": "exec",
+        "cwd": "<run>/repo",
+        "model": "gpt-6-astra",
+        "effort": "low",
+        "approval_policy": "never",
+        "sandbox": "read-only"
+      },
+      "invocations": [
+        {
+          "name": "codex-probe",
+          "argv": [
+            "/opt/homebrew/bin/codex",
+            "exec",
+            "--json",
+            "-C",
+            "<run>/repo",
+            "-s",
+            "read-only",
+            "-c",
+            "model_reasoning_effort=low",
+            "-o",
+            "<run>/logs/codex-probe.last",
+            "--dangerously-bypass-hook-trust",
+            "-"
+          ],
+          "cwd": "<run>/repo",
+          "returncode": 0,
+          "timed_out": false,
+          "timeout_seconds": 1800,
+          "duration_seconds": 13.0,
+          "error": null,
+          "stdout": "<run>/logs/codex-probe.stdout",
+          "stderr": "<run>/logs/codex-probe.stderr"
+        }
+      ]
+    },
+    {
+      "id": "codex.session_start",
+      "runtime": "codex",
+      "check": "SessionStart hook",
+      "status": "failed",
+      "reason": "hooks ran under the bypass but the tripwire line never reached the session",
+      "evidence": {
+        "observer": "rollout response_item message carrying the budget tripwire line",
+        "hook_trust_route": "bypass",
+        "expected_line": "\u26a0 docs/kit-friction-log.md is 237 lines (budget ~150) \u2014 an archive sweep into docs/kit-friction-log-archive.md is overdue: run the triage-friction-log workflow to graduate the inbox to the tracker.",
+        "found": null
+      },
+      "session": {
+        "observer": "rollout session_meta and first turn_context",
+        "session_id": "01a0fc06-261c-7d01-bbd0-bcab5557fe23",
+        "executing_version": "0.153.4",
+        "originator": "codex_exec",
+        "source": "exec",
+        "cwd": "<run>/repo",
+        "model": "gpt-6-astra",
+        "effort": "low",
+        "approval_policy": "never",
+        "sandbox": "read-only"
+      },
+      "invocations": [
+        {
+          "name": "codex-probe",
+          "argv": [
+            "/opt/homebrew/bin/codex",
+            "exec",
+            "--json",
+            "-C",
+            "<run>/repo",
+            "-s",
+            "read-only",
+            "-c",
+            "model_reasoning_effort=low",
+            "-o",
+            "<run>/logs/codex-probe.last",
+            "--dangerously-bypass-hook-trust",
+            "-"
+          ],
+          "cwd": "<run>/repo",
+          "returncode": 0,
+          "timed_out": false,
+          "timeout_seconds": 1800,
+          "duration_seconds": 13.0,
+          "error": null,
+          "stdout": "<run>/logs/codex-probe.stdout",
+          "stderr": "<run>/logs/codex-probe.stderr"
+        }
+      ]
+    },
+    {
+      "id": "codex.post_tool_use",
+      "runtime": "codex",
+      "check": "PostToolUse hook",
+      "status": "failed",
+      "reason": "the shell call ran but the hook's warning never reached the session",
+      "evidence": {
+        "observer": "rollout tool output carrying the nonce URL, then a context message with the hook's warning",
+        "hook_trust_route": "bypass",
+        "nonce_url_output_index": 15,
+        "expected_marker": "A command or response produced unresolved pull-request lifecycle evidence.",
+        "found": null
+      },
+      "session": {
+        "observer": "rollout session_meta and first turn_context",
+        "session_id": "01a0fc06-261c-7d01-bbd0-bcab5557fe23",
+        "executing_version": "0.153.4",
+        "originator": "codex_exec",
+        "source": "exec",
+        "cwd": "<run>/repo",
+        "model": "gpt-6-astra",
+        "effort": "low",
+        "approval_policy": "never",
+        "sandbox": "read-only"
+      },
+      "invocations": [
+        {
+          "name": "codex-probe",
+          "argv": [
+            "/opt/homebrew/bin/codex",
+            "exec",
+            "--json",
+            "-C",
+            "<run>/repo",
+            "-s",
+            "read-only",
+            "-c",
+            "model_reasoning_effort=low",
+            "-o",
+            "<run>/logs/codex-probe.last",
+            "--dangerously-bypass-hook-trust",
+            "-"
+          ],
+          "cwd": "<run>/repo",
+          "returncode": 0,
+          "timed_out": false,
+          "timeout_seconds": 1800,
+          "duration_seconds": 13.0,
+          "error": null,
+          "stdout": "<run>/logs/codex-probe.stdout",
+          "stderr": "<run>/logs/codex-probe.stderr"
+        }
+      ]
+    },
+    {
+      "id": "codex.review",
+      "runtime": "codex",
+      "check": "native review (`codex exec review`)",
+      "status": "failed",
+      "reason": "the rollout recorded no review-mode event",
+      "evidence": {
+        "observer": "rollout event_msg types naming review mode, and the last-message file",
+        "review_events": [],
+        "last_message_chars": 779,
+        "last_message_first_line": "The added document contradicts the script's exit behavior and the configured startup hook. No executable code is changed."
+      },
+      "session": {
+        "observer": "rollout session_meta and first turn_context",
+        "session_id": "01a0fc06-55b0-7853-8d54-5e2f9ce4fd04",
+        "executing_version": "0.153.4",
+        "originator": "codex_exec",
+        "source": "exec",
+        "cwd": "<run>/repo",
+        "model": null,
+        "effort": null,
+        "approval_policy": null,
+        "sandbox": null
+      },
+      "invocations": [
+        {
+          "name": "codex-review",
+          "argv": [
+            "/opt/homebrew/bin/codex",
+            "exec",
+            "review",
+            "--json",
+            "--base",
+            "main",
+            "-c",
+            "model_reasoning_effort=low",
+            "-o",
+            "<run>/logs/codex-review.last"
+          ],
+          "cwd": "<run>/repo",
+          "returncode": 0,
+          "timed_out": false,
+          "timeout_seconds": 1800,
+          "duration_seconds": 30.2,
+          "error": null,
+          "stdout": "<run>/logs/codex-review.stdout",
+          "stderr": "<run>/logs/codex-review.stderr"
+        }
+      ]
+    },
+    {
+      "id": "codex.panel",
+      "runtime": "codex",
+      "check": "configured fallback panel",
+      "status": "passed",
+      "reason": "every configured lens ran at its configured compute and reported on the review head",
+      "evidence": {
+        "observer": "each lens's rollout turn_context and last-message file",
+        "lenses": [
+          {
+            "lens": "adversarial",
+            "configured_model": "gpt-5.6-sol",
+            "configured_effort": "medium",
+            "report_chars": 3387,
+            "report_names_review_head": true,
+            "applied_model": "gpt-5.6-sol",
+            "applied_effort": "medium",
+            "executing_version": "0.153.4"
+          },
+          {
+            "lens": "correctness",
+            "configured_model": "gpt-5.6-sol",
+            "configured_effort": "medium",
+            "report_chars": 3166,
+            "report_names_review_head": true,
+            "applied_model": "gpt-5.6-sol",
+            "applied_effort": "medium",
+            "executing_version": "0.153.4"
+          }
+        ]
+      },
+      "session": {
+        "observer": "each lens's rollout turn_context",
+        "lenses": [
+          {
+            "lens": "adversarial",
+            "configured_model": "gpt-5.6-sol",
+            "configured_effort": "medium",
+            "report_chars": 3387,
+            "report_names_review_head": true,
+            "applied_model": "gpt-5.6-sol",
+            "applied_effort": "medium",
+            "executing_version": "0.153.4"
+          },
+          {
+            "lens": "correctness",
+            "configured_model": "gpt-5.6-sol",
+            "configured_effort": "medium",
+            "report_chars": 3166,
+            "report_names_review_head": true,
+            "applied_model": "gpt-5.6-sol",
+            "applied_effort": "medium",
+            "executing_version": "0.153.4"
+          }
+        ]
+      },
+      "invocations": [
+        {
+          "name": "codex-lens-adversarial",
+          "argv": [
+            "/opt/homebrew/bin/codex",
+            "exec",
+            "--json",
+            "-C",
+            "<run>/panel-codex-adversarial",
+            "-s",
+            "read-only",
+            "-m",
+            "gpt-5.6-sol",
+            "-c",
+            "model_reasoning_effort=medium",
+            "-o",
+            "<run>/logs/codex-lens-adversarial.last",
+            "-"
+          ],
+          "cwd": "<run>/panel-codex-adversarial",
+          "returncode": 0,
+          "timed_out": false,
+          "timeout_seconds": 1800,
+          "duration_seconds": 106.8,
+          "error": null,
+          "stdout": "<run>/logs/codex-lens-adversarial.stdout",
+          "stderr": "<run>/logs/codex-lens-adversarial.stderr"
+        },
+        {
+          "name": "codex-lens-correctness",
+          "argv": [
+            "/opt/homebrew/bin/codex",
+            "exec",
+            "--json",
+            "-C",
+            "<run>/panel-codex-correctness",
+            "-s",
+            "read-only",
+            "-m",
+            "gpt-5.6-sol",
+            "-c",
+            "model_reasoning_effort=medium",
+            "-o",
+            "<run>/logs/codex-lens-correctness.last",
+            "-"
+          ],
+          "cwd": "<run>/panel-codex-correctness",
+          "returncode": 0,
+          "timed_out": false,
+          "timeout_seconds": 1800,
+          "duration_seconds": 106.8,
+          "error": null,
+          "stdout": "<run>/logs/codex-lens-correctness.stdout",
+          "stderr": "<run>/logs/codex-lens-correctness.stderr"
+        }
+      ]
+    },
+    {
+      "id": "codex.lane",
+      "runtime": "codex",
+      "check": "parallel lane through `launch_lane.py`",
+      "status": "passed",
+      "reason": "the launcher completed the lane in its worktree and bound the final text",
+      "evidence": {
+        "observer": "launcher terminal receipt, its final message, and the lane's own session artifact",
+        "receipt_status": "completed",
+        "receipt_returncode": 0,
+        "receipt_final_text_sha256_matches": true,
+        "configured_command": [
+          "/opt/homebrew/bin/codex",
+          "exec"
+        ],
+        "final_text_names_token": true,
+        "permission_denials": null,
+        "worktree": "<run>/sessions/smoke-codex/wt"
+      },
+      "session": {
+        "observer": "rollout session_meta and first turn_context",
+        "session_id": "01a0fc08-751a-7fd1-b4a7-37106d2bbd4a",
+        "executing_version": "0.153.4",
+        "originator": "codex_exec",
+        "source": "exec",
+        "cwd": "<run>/sessions/smoke-codex/wt",
+        "model": "gpt-6-astra",
+        "effort": null,
+        "approval_policy": "never",
+        "sandbox": "read-only"
+      },
+      "invocations": [
+        {
+          "name": "codex-lane-issue",
+          "argv": [
+            "bash",
+            "<run>/repo/scripts/dev_session.sh",
+            "new",
+            "--headless",
+            "smoke-codex",
+            "--merge-class",
+            "operator",
+            "--runtime",
+            "codex"
+          ],
+          "cwd": "<run>/repo",
+          "returncode": 0,
+          "timed_out": false,
+          "timeout_seconds": 300,
+          "duration_seconds": 0.8,
+          "error": null,
+          "stdout": "<run>/logs/codex-lane-issue.stdout",
+          "stderr": "<run>/logs/codex-lane-issue.stderr"
+        },
+        {
+          "name": "codex-lane-launch",
+          "argv": [
+            "~/.cache/uv/environments-v2/runtime-smoke-106a2fd21d154242/bin/python",
+            "<run>/repo/scripts/launch_lane.py",
+            "--descriptor",
+            "<run>/sessions/smoke-codex/launch-descriptor.json",
+            "--prompt-file",
+            "<run>/codex-lane-task.txt"
+          ],
+          "cwd": "<run>/repo",
+          "returncode": 0,
+          "timed_out": false,
+          "timeout_seconds": 1800,
+          "duration_seconds": 13.0,
+          "error": null,
+          "stdout": "<run>/logs/codex-lane-launch.stdout",
+          "stderr": "<run>/logs/codex-lane-launch.stderr"
+        }
+      ]
+    },
+    {
+      "id": "claude.instructions",
+      "runtime": "claude",
+      "check": "CLAUDE.md and its AGENTS.md import",
+      "status": "passed",
+      "reason": "the runtime loaded the fixture's CLAUDE.md and the AGENTS.md it imports",
+      "evidence": {
+        "observer": "an InstructionsLoaded hook passed with --settings, recording the runtime's own hook input",
+        "expected": [
+          "<run>/repo/CLAUDE.md",
+          "<run>/repo/AGENTS.md"
+        ],
+        "loaded": [
+          {
+            "file_path": "<run>/repo/CLAUDE.md",
+            "memory_type": "Project",
+            "load_reason": "session_start"
+          },
+          {
+            "file_path": "<run>/repo/AGENTS.md",
+            "memory_type": "Project",
+            "load_reason": "include"
+          }
+        ]
+      },
+      "session": {
+        "observer": "stream-json system/init and the session transcript",
+        "session_id": "e9f2aa2d-d307-4911-920b-f483618ffc3a",
+        "executing_version": "2.1.287",
+        "init_version": "2.1.287",
+        "cwd": "<run>/repo",
+        "model": "claude-haiku-4-5-20251001",
+        "transcript_models": [
+          "claude-haiku-4-5-20251001"
+        ],
+        "transcript_efforts": [],
+        "permission_mode": "dontAsk",
+        "api_key_source": "none"
+      },
+      "invocations": [
+        {
+          "name": "claude-probe",
+          "argv": [
+            "~/.local/bin/claude",
+            "-p",
+            "--output-format",
+            "stream-json",
+            "--verbose",
+            "--include-hook-events",
+            "--setting-sources",
+            "project",
+            "--permission-mode",
+            "dontAsk",
+            "--settings",
+            "{\"hooks\": {\"InstructionsLoaded\": [{\"hooks\": [{\"type\": \"command\", \"command\": \"{ cat; printf '\\\\n'; } >> <run>/claude-instructions-loaded.jsonl\", \"timeout\": 10}]}]}}",
+            "--model",
+            "haiku",
+            "--allowedTools",
+            "Bash(printf:*)"
+          ],
+          "cwd": "<run>/repo",
+          "returncode": 0,
+          "timed_out": false,
+          "timeout_seconds": 1800,
+          "duration_seconds": 8.9,
+          "error": null,
+          "stdout": "<run>/logs/claude-probe.stdout",
+          "stderr": "<run>/logs/claude-probe.stderr"
+        }
+      ]
+    },
+    {
+      "id": "claude.commands",
+      "runtime": "claude",
+      "check": "command and lens-agent discovery",
+      "status": "passed",
+      "reason": "every declared command and every configured lens agent was loaded",
+      "evidence": {
+        "observer": "stream-json system/init slash_commands and agents",
+        "missing_commands": [],
+        "missing_agents": [],
+        "expected_commands": [
+          "adopt",
+          "parallel",
+          "post-merge-systemize",
+          "pr-watch",
+          "session-start",
+          "triage-friction-log",
+          "upgrade",
+          "wrap-up"
+        ],
+        "expected_agents": [
+          "adversarial",
+          "correctness"
+        ]
+      },
+      "session": {
+        "observer": "stream-json system/init and the session transcript",
+        "session_id": "e9f2aa2d-d307-4911-920b-f483618ffc3a",
+        "executing_version": "2.1.287",
+        "init_version": "2.1.287",
+        "cwd": "<run>/repo",
+        "model": "claude-haiku-4-5-20251001",
+        "transcript_models": [
+          "claude-haiku-4-5-20251001"
+        ],
+        "transcript_efforts": [],
+        "permission_mode": "dontAsk",
+        "api_key_source": "none"
+      },
+      "invocations": [
+        {
+          "name": "claude-probe",
+          "argv": [
+            "~/.local/bin/claude",
+            "-p",
+            "--output-format",
+            "stream-json",
+            "--verbose",
+            "--include-hook-events",
+            "--setting-sources",
+            "project",
+            "--permission-mode",
+            "dontAsk",
+            "--settings",
+            "{\"hooks\": {\"InstructionsLoaded\": [{\"hooks\": [{\"type\": \"command\", \"command\": \"{ cat; printf '\\\\n'; } >> <run>/claude-instructions-loaded.jsonl\", \"timeout\": 10}]}]}}",
+            "--model",
+            "haiku",
+            "--allowedTools",
+            "Bash(printf:*)"
+          ],
+          "cwd": "<run>/repo",
+          "returncode": 0,
+          "timed_out": false,
+          "timeout_seconds": 1800,
+          "duration_seconds": 8.9,
+          "error": null,
+          "stdout": "<run>/logs/claude-probe.stdout",
+          "stderr": "<run>/logs/claude-probe.stderr"
+        }
+      ]
+    },
+    {
+      "id": "claude.session_start",
+      "runtime": "claude",
+      "check": "SessionStart hook",
+      "status": "passed",
+      "reason": "the tripwire line naming this run's over-budget count was the SessionStart hook's output",
+      "evidence": {
+        "observer": "stream-json hook events (--include-hook-events) for SessionStart",
+        "session_start_events": [
+          {
+            "index": 0,
+            "subtype": "hook_started"
+          },
+          {
+            "index": 1,
+            "subtype": "hook_started"
+          },
+          {
+            "index": 2,
+            "subtype": "hook_response"
+          },
+          {
+            "index": 3,
+            "subtype": "hook_response"
+          }
+        ],
+        "expected_line": "\u26a0 docs/kit-friction-log.md is 237 lines (budget ~150) \u2014 an archive sweep into docs/kit-friction-log-archive.md is overdue: run the triage-friction-log workflow to graduate the inbox to the tracker.",
+        "found": {
+          "index": 3,
+          "subtype": "hook_response"
+        }
+      },
+      "session": {
+        "observer": "stream-json system/init and the session transcript",
+        "session_id": "e9f2aa2d-d307-4911-920b-f483618ffc3a",
+        "executing_version": "2.1.287",
+        "init_version": "2.1.287",
+        "cwd": "<run>/repo",
+        "model": "claude-haiku-4-5-20251001",
+        "transcript_models": [
+          "claude-haiku-4-5-20251001"
+        ],
+        "transcript_efforts": [],
+        "permission_mode": "dontAsk",
+        "api_key_source": "none"
+      },
+      "invocations": [
+        {
+          "name": "claude-probe",
+          "argv": [
+            "~/.local/bin/claude",
+            "-p",
+            "--output-format",
+            "stream-json",
+            "--verbose",
+            "--include-hook-events",
+            "--setting-sources",
+            "project",
+            "--permission-mode",
+            "dontAsk",
+            "--settings",
+            "{\"hooks\": {\"InstructionsLoaded\": [{\"hooks\": [{\"type\": \"command\", \"command\": \"{ cat; printf '\\\\n'; } >> <run>/claude-instructions-loaded.jsonl\", \"timeout\": 10}]}]}}",
+            "--model",
+            "haiku",
+            "--allowedTools",
+            "Bash(printf:*)"
+          ],
+          "cwd": "<run>/repo",
+          "returncode": 0,
+          "timed_out": false,
+          "timeout_seconds": 1800,
+          "duration_seconds": 8.9,
+          "error": null,
+          "stdout": "<run>/logs/claude-probe.stdout",
+          "stderr": "<run>/logs/claude-probe.stderr"
+        }
+      ]
+    },
+    {
+      "id": "claude.post_tool_use",
+      "runtime": "claude",
+      "check": "PostToolUse hook",
+      "status": "passed",
+      "reason": "the follow-up hook's warning was the PostToolUse output for the shell call that printed the nonce URL",
+      "evidence": {
+        "observer": "stream-json tool result carrying the nonce URL, and PostToolUse hook events",
+        "nonce_url_tool_result": true,
+        "post_tool_use_events": [
+          {
+            "index": 12,
+            "subtype": "hook_started"
+          },
+          {
+            "index": 13,
+            "subtype": "hook_response"
+          }
+        ],
+        "expected_marker": "A command or response produced unresolved pull-request lifecycle evidence.",
+        "found": {
+          "index": 13,
+          "subtype": "hook_response"
+        }
+      },
+      "session": {
+        "observer": "stream-json system/init and the session transcript",
+        "session_id": "e9f2aa2d-d307-4911-920b-f483618ffc3a",
+        "executing_version": "2.1.287",
+        "init_version": "2.1.287",
+        "cwd": "<run>/repo",
+        "model": "claude-haiku-4-5-20251001",
+        "transcript_models": [
+          "claude-haiku-4-5-20251001"
+        ],
+        "transcript_efforts": [],
+        "permission_mode": "dontAsk",
+        "api_key_source": "none"
+      },
+      "invocations": [
+        {
+          "name": "claude-probe",
+          "argv": [
+            "~/.local/bin/claude",
+            "-p",
+            "--output-format",
+            "stream-json",
+            "--verbose",
+            "--include-hook-events",
+            "--setting-sources",
+            "project",
+            "--permission-mode",
+            "dontAsk",
+            "--settings",
+            "{\"hooks\": {\"InstructionsLoaded\": [{\"hooks\": [{\"type\": \"command\", \"command\": \"{ cat; printf '\\\\n'; } >> <run>/claude-instructions-loaded.jsonl\", \"timeout\": 10}]}]}}",
+            "--model",
+            "haiku",
+            "--allowedTools",
+            "Bash(printf:*)"
+          ],
+          "cwd": "<run>/repo",
+          "returncode": 0,
+          "timed_out": false,
+          "timeout_seconds": 1800,
+          "duration_seconds": 8.9,
+          "error": null,
+          "stdout": "<run>/logs/claude-probe.stdout",
+          "stderr": "<run>/logs/claude-probe.stderr"
+        }
+      ]
+    },
+    {
+      "id": "claude.review",
+      "runtime": "claude",
+      "check": "configured review command",
+      "status": "failed",
+      "reason": "the configured review command was not listed, not invoked, or returned nothing",
+      "evidence": {
+        "observer": "stream-json init and result, and the transcript's record of the invocation",
+        "command": "/code-review",
+        "listed_in_init": true,
+        "invocation_in_transcript": false,
+        "result_is_error": false,
+        "result_chars": 1010
+      },
+      "session": {
+        "observer": "stream-json system/init and the session transcript",
+        "session_id": "d675aae6-ffe6-4dfa-88c8-ce8072816dea",
+        "executing_version": "2.1.287",
+        "init_version": "2.1.287",
+        "cwd": "<run>/repo",
+        "model": "claude-opus-5-5",
+        "transcript_models": [],
+        "transcript_efforts": [],
+        "permission_mode": "dontAsk",
+        "api_key_source": "none"
+      },
+      "invocations": [
+        {
+          "name": "claude-review",
+          "argv": [
+            "~/.local/bin/claude",
+            "-p",
+            "--output-format",
+            "stream-json",
+            "--verbose",
+            "--setting-sources",
+            "project",
+            "--permission-mode",
+            "dontAsk",
+            "--allowedTools",
+            "Bash(git diff:*),Bash(git show:*),Bash(git log:*),Bash(git status:*),Bash(git rev-parse:*),Bash(git ls-remote:*)",
+            "--",
+            "/code-review"
+          ],
+          "cwd": "<run>/repo",
+          "returncode": 0,
+          "timed_out": false,
+          "timeout_seconds": 1800,
+          "duration_seconds": 25.7,
+          "error": null,
+          "stdout": "<run>/logs/claude-review.stdout",
+          "stderr": "<run>/logs/claude-review.stderr"
+        }
+      ]
+    },
+    {
+      "id": "claude.panel",
+      "runtime": "claude",
+      "check": "configured fallback panel",
+      "status": "failed",
+      "reason": "adversarial: applied efforts ['medium'], configured 'high'; correctness: applied efforts ['medium'], configured 'high'",
+      "evidence": {
+        "observer": "each lens's transcript models and efforts, and its result",
+        "lenses": [
+          {
+            "lens": "adversarial",
+            "configured_model": "sonnet",
+            "configured_effort": "high",
+            "applied_models": [
+              "claude-sonnet-5-5"
+            ],
+            "applied_efforts": [
+              "medium"
+            ],
+            "executing_version": "2.1.287",
+            "report_chars": 1847,
+            "report_names_review_head": true
+          },
+          {
+            "lens": "correctness",
+            "configured_model": "sonnet",
+            "configured_effort": "high",
+            "applied_models": [
+              "claude-sonnet-5-5"
+            ],
+            "applied_efforts": [
+              "medium"
+            ],
+            "executing_version": "2.1.287",
+            "report_chars": 1291,
+            "report_names_review_head": true
+          }
+        ]
+      },
+      "session": {
+        "observer": "each lens's session transcript",
+        "lenses": [
+          {
+            "lens": "adversarial",
+            "configured_model": "sonnet",
+            "configured_effort": "high",
+            "applied_models": [
+              "claude-sonnet-5-5"
+            ],
+            "applied_efforts": [
+              "medium"
+            ],
+            "executing_version": "2.1.287",
+            "report_chars": 1847,
+            "report_names_review_head": true
+          },
+          {
+            "lens": "correctness",
+            "configured_model": "sonnet",
+            "configured_effort": "high",
+            "applied_models": [
+              "claude-sonnet-5-5"
+            ],
+            "applied_efforts": [
+              "medium"
+            ],
+            "executing_version": "2.1.287",
+            "report_chars": 1291,
+            "report_names_review_head": true
+          }
+        ]
+      },
+      "invocations": [
+        {
+          "name": "claude-lens-adversarial",
+          "argv": [
+            "~/.local/bin/claude",
+            "-p",
+            "--agent",
+            "adversarial",
+            "--output-format",
+            "stream-json",
+            "--verbose",
+            "--setting-sources",
+            "project",
+            "--permission-mode",
+            "dontAsk",
+            "--allowedTools",
+            "Bash(git diff:*),Bash(git show:*),Bash(git log:*),Bash(git status:*),Bash(git rev-parse:*),Bash(git ls-remote:*)"
+          ],
+          "cwd": "<run>/panel-claude-adversarial",
+          "returncode": 0,
+          "timed_out": false,
+          "timeout_seconds": 1800,
+          "duration_seconds": 23.4,
+          "error": null,
+          "stdout": "<run>/logs/claude-lens-adversarial.stdout",
+          "stderr": "<run>/logs/claude-lens-adversarial.stderr"
+        },
+        {
+          "name": "claude-lens-correctness",
+          "argv": [
+            "~/.local/bin/claude",
+            "-p",
+            "--agent",
+            "correctness",
+            "--output-format",
+            "stream-json",
+            "--verbose",
+            "--setting-sources",
+            "project",
+            "--permission-mode",
+            "dontAsk",
+            "--allowedTools",
+            "Bash(git diff:*),Bash(git show:*),Bash(git log:*),Bash(git status:*),Bash(git rev-parse:*),Bash(git ls-remote:*)"
+          ],
+          "cwd": "<run>/panel-claude-correctness",
+          "returncode": 0,
+          "timed_out": false,
+          "timeout_seconds": 1800,
+          "duration_seconds": 11.1,
+          "error": null,
+          "stdout": "<run>/logs/claude-lens-correctness.stdout",
+          "stderr": "<run>/logs/claude-lens-correctness.stderr"
+        }
+      ]
+    },
+    {
+      "id": "claude.lane",
+      "runtime": "claude",
+      "check": "parallel lane through `launch_lane.py`",
+      "status": "passed",
+      "reason": "the launcher completed the lane in its worktree and bound the final text",
+      "evidence": {
+        "observer": "launcher terminal receipt, its final message, and the lane's own session artifact",
+        "receipt_status": "completed",
+        "receipt_returncode": 0,
+        "receipt_final_text_sha256_matches": true,
+        "configured_command": [
+          "/opt/homebrew/bin/claude",
+          "-p"
+        ],
+        "final_text_names_token": true,
+        "permission_denials": [],
+        "worktree": "<run>/sessions/smoke-claude/wt"
+      },
+      "session": {
+        "observer": "stream-json system/init and the session transcript",
+        "session_id": "af3ad803-6715-4dd2-949a-950bfed992e4",
+        "executing_version": "2.1.287",
+        "init_version": null,
+        "cwd": "<run>/sessions/smoke-claude/wt",
+        "model": null,
+        "transcript_models": [
+          "claude-opus-5-5"
+        ],
+        "transcript_efforts": [
+          "medium"
+        ],
+        "permission_mode": null,
+        "api_key_source": null
+      },
+      "invocations": [
+        {
+          "name": "claude-lane-issue",
+          "argv": [
+            "bash",
+            "<run>/repo/scripts/dev_session.sh",
+            "new",
+            "--headless",
+            "smoke-claude",
+            "--merge-class",
+            "operator",
+            "--runtime",
+            "claude"
+          ],
+          "cwd": "<run>/repo",
+          "returncode": 0,
+          "timed_out": false,
+          "timeout_seconds": 300,
+          "duration_seconds": 0.8,
+          "error": null,
+          "stdout": "<run>/logs/claude-lane-issue.stdout",
+          "stderr": "<run>/logs/claude-lane-issue.stderr"
+        },
+        {
+          "name": "claude-lane-launch",
+          "argv": [
+            "~/.cache/uv/environments-v2/runtime-smoke-106a2fd21d154242/bin/python",
+            "<run>/repo/scripts/launch_lane.py",
+            "--descriptor",
+            "<run>/sessions/smoke-claude/launch-descriptor.json",
+            "--prompt-file",
+            "<run>/claude-lane-task.txt"
+          ],
+          "cwd": "<run>/repo",
+          "returncode": 0,
+          "timed_out": false,
+          "timeout_seconds": 1800,
+          "duration_seconds": 8.0,
+          "error": null,
+          "stdout": "<run>/logs/claude-lane-launch.stdout",
+          "stderr": "<run>/logs/claude-lane-launch.stderr"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "passed": [
+      "codex.skills",
+      "codex.panel",
+      "codex.lane",
+      "claude.instructions",
+      "claude.commands",
+      "claude.session_start",
+      "claude.post_tool_use",
+      "claude.lane"
+    ],
+    "failed": [
+      "codex.instructions",
+      "codex.session_start",
+      "codex.post_tool_use",
+      "codex.review",
+      "claude.review",
+      "claude.panel"
+    ],
+    "not-run": []
+  },
+  "exit_status": 1
+}
