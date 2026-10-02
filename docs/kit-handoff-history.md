@@ -5,6 +5,59 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-01 (Phase 6 items 1 to 3, the triage guard, the two-link way out, in Claude Code)
+
+This continues the *Phase 6 planned* session entry below, after its wrap-up.
+
+**Shipped.**
+
+- PR #887, squash `e559b5f`, from the headless lane `phase6-877`: Phase 6 item 3 (#877).
+  The parity matrix's headless-lane cell is split per runtime, and the parity plan is cut
+  to exits, owners and order.
+- PR #888, squash `757a6c0`: item 2 (#876). The review-process learnings memo is distilled
+  into `fallback-review-panel.md` and archived.
+- PR #893, squash `25fde2c`: item 1 (#875). It adds an `evidence` marker and
+  `make test-fast`, pinned by `make -n` to be `make test` plus `-m 'not evidence'`.
+  `AGENTS.md` says it is never a verification claim and names the guard tests it skips.
+- PR #889, squash `95822fb`, from the headless lane `triage-856`: the engine's worktree
+  guards decide containment by filesystem identity (#856).
+- PR #894, squash `2a81896`: the *Completed-state retirement* doctrine gives the operator
+  a manual way out of the two-link state. The same PR rewrote the *Triage engine
+  hardening* entry below.
+
+#875, #876, #877 and #856 closed on merge.
+
+**Decided by the operator.**
+
+- Build #875 even though the premise check had put it on hold. The correction comment on
+  #875 retracts the first estimate.
+- Leave the two-link state to a documented manual step. This answers the question the
+  entry below held for the operator. #892 carries the engine route, to be built only if
+  the state recurs.
+- *Triage engine hardening*'s next step is #891.
+
+**Filed**, each on the operator's approval of its exact text: #890, #891, #892, #895.
+Comments went on #880, #875 (two), #883, #892, #852 and #514.
+
+**Review.** CodeRabbit's auto-review stayed off, so the fallback panel reviewed each PR.
+#889 and #894 took the dual form throughout, as a gate guard and as recovery doctrine.
+On #894, delta pass 1's receipt was refused because its repair was pushed first. That
+is #852's trap on a later round, and its dispositions went in as a plain comment.
+
+**Incidents.**
+
+- The disk filled overnight (ENOSPC), and every tool call failed until the operator
+  cleared pytest's temp directory. #895 names the mechanism: a killed run leaves a lock
+  that pins its basetemp for three days.
+- Review lenses stalled when the host slept. Their suite runs outlived them and were
+  killed by hand.
+- The `triage-856` lane returned mid-task, because the cockpit's brief told it to
+  background `make test`. The cockpit finished the work (the #514 comment).
+
+**Verified.** Each PR's body carries its `env -u FORCE_COLOR make test` stamp at a named
+sha. On main on 2026-10-01, `gh run list --commit <sha>` showed the `Test` workflow
+completed `success` on `95822fb`, `e559b5f`, `757a6c0`, `2a81896` and `25fde2c`.
+
 ### 2026-09-30 (Phase 6 planned; #857 and #874 shipped from a headless lane, in Claude Code)
 
 **Shipped.**
