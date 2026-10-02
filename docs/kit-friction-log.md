@@ -32,11 +32,11 @@ payload could be approved. The first two carry a drafted payload.
 - **The matrix guard's LOW residue from #923's last delta pass.** Severity L.
   - **Observed** in #923's last delta pass at `f60b530`; its disposition there names the
     lens behind each item.
-    `scripts/tests/test_runtime_parity_matrix.py` misses three things:
+    `scripts/tests/test_runtime_parity_matrix.py` misses the following:
     - It recognises only backtick fences, so a `~~~` fence holding a `#` line still ends
       a section early, and a rogue row after it goes unchecked. `_slugs` has the same
       gap.
-    - It skips some link forms: unquoted or spaced `href`, `img src`, an angle-bracketed
+    - It skips these link forms: unquoted or spaced `href`, `img src`, an angle-bracketed
       target containing a space, and reference definitions inside lists or quotes.
     - The `<?` in `LINK` and `REFERENCE`, `HREF`'s IGNORECASE, and the single-quoted
       `href` have no test that fails when they are removed.
@@ -81,8 +81,8 @@ payload could be approved. The first two carry a drafted payload.
 - **The option offered for an operator decision overstated its own premise.** Severity
   M, kept for accumulation. The cockpit offered "the table's rows are confirmed by their
   own live records" as an option, the operator chose it, and #923's correctness lens
-  then showed that rows such as *Post-merge integrations* and *Triage integrations* cite
-  no record. The operator re-decided on a narrowed
+  then found that "rows claiming repository structure, a decision or an intentional
+  difference have none". The operator re-decided on a narrowed
   wording. The shape: a decision option's factual premise was not checked against the
   record before it was offered.
 - **#923 is a further occurrence of the shape #838 tracks.** Severity L. The full panel
