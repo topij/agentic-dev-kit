@@ -41,7 +41,7 @@ def _message(index: int, role: str, text: str) -> dict:
 
 
 def _view(**parts) -> dict:
-    view = {"meta": {}, "turns": [], "messages": [], "outputs": [], "events": [], "world_states": []}
+    view = {"meta": {}, "turns": [], "messages": [], "calls": [], "outputs": [], "events": [], "world_states": []}
     view.update(parts)
     return view
 
@@ -174,6 +174,22 @@ def test_hook_context_must_follow_the_call_it_answers():
     view = _view(messages=[_message(4, "developer", "warning"), _message(12, "developer", "warning")])
     assert rs.find_injected(view, "warning", after=8) == {"index": 12, "role": "developer"}
     assert rs.find_injected(view, "warning", after=12) is None
+
+
+def test_the_hook_answer_is_ordered_after_its_call_not_its_output():
+    url = "https://github.com/adk-smoke/fixture-abc/pull/7"
+    entries = [
+        {"type": "response_item", "payload": {"type": "message", "role": "developer", "content": [{"text": "warning"}]}},
+        {"type": "response_item", "payload": {"type": "custom_tool_call", "call_id": "c1"}},
+        {"type": "response_item", "payload": {"type": "message", "role": "developer", "content": [{"text": "warning"}]}},
+        {"type": "response_item", "payload": {"type": "custom_tool_call_output", "call_id": "c1", "output": url}},
+    ]
+    view = rs.rollout_view(entries)
+    output_index = rs.first_output_with(view, url)
+    assert (output_index, rs.call_answered_by(view, output_index)) == (3, 1)
+    assert rs.find_injected(view, "warning", after=rs.call_answered_by(view, output_index)) == {"index": 2, "role": "developer"}
+    unlinked = rs.rollout_view(entries[:1] + [entries[3]])
+    assert rs.call_answered_by(unlinked, rs.first_output_with(unlinked, url)) is None
 
 
 def test_the_nonce_url_is_found_only_in_tool_output():
@@ -512,12 +528,13 @@ if "SMOKE-DONE-" in prompt:
     command = re.search(r"^(printf .+)$", prompt, re.M).group(1)
     output = subprocess.run(["bash", "-c", command], capture_output=True, text=True).stdout
     add("response_item", {{"type": "function_call", "name": "shell", "call_id": "c1", "arguments": json.dumps({{"command": command}})}})
-    add("response_item", {{"type": "function_call_output", "call_id": "c1", "output": output}})
     payload = {{"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_input": {{"command": command}},
                "tool_response": {{"stdout": output, "stderr": "", "exit_code": 0}}, "cwd": str(cwd)}}
+    # The live client wrote the hook's context between the call and its output.
     for text in run_hooks("PostToolUse", payload):
         if text.strip():
             message("developer", json.loads(text)["hookSpecificOutput"]["additionalContext"])
+    add("response_item", {{"type": "function_call_output", "call_id": "c1", "output": output}})
     final = re.search(r"SMOKE-DONE-[0-9a-f]+", prompt).group(0)
 elif review:
     add("event_msg", {{"type": "item_completed", "item": {{"type": "EnteredReviewMode"}}}})
@@ -690,12 +707,23 @@ def _kit_files() -> list[str]:
     return sorted(rel for rel in files if (REPO_ROOT / rel).is_file())
 
 
+UV_SHIM = """#!/bin/sh
+# Stands in for `uv run --script <engine> <args>`, the one form the shipped hook
+# registrations use, so these tests need no uv on the machine (CI has none).
+if [ "$1" = run ] && [ "$2" = --script ]; then shift 2; exec "{python}" "$@"; fi
+echo "test uv shim: unsupported: $*" >&2
+exit 2
+"""
+
+
 @pytest.fixture(scope="module")
 def smoke_kit(tmp_path_factory):
     """A committed copy of the kit whose lane commands name the fake clients."""
-    if shutil.which("uv") is None:
-        pytest.skip("the shipped SessionStart registrations run `uv run --script`")
     base = tmp_path_factory.mktemp("smoke")
+    shims = base / "shims"
+    shims.mkdir()
+    (shims / "uv").write_text(UV_SHIM.format(python=sys.executable), encoding="utf-8")
+    (shims / "uv").chmod(0o755)
     env = _git_env(base)
     bin_dir = base / "bin"
     bin_dir.mkdir()
@@ -721,6 +749,7 @@ def smoke_kit(tmp_path_factory):
     homes = {"codex": base / "codex-home", "claude": base / "claude-config"}
     for home in homes.values():
         home.mkdir()
+    env["PATH"] = f"{shims}{os.pathsep}{env.get('PATH', '')}"
     return {"base": base, "kit": kit, "revision": revision, "fakes": fakes, "homes": homes, "env": env}
 
 

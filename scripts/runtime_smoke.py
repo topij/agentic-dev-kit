@@ -655,6 +655,7 @@ def rollout_view(entries: list[dict[str, Any]]) -> dict[str, Any]:
     meta: dict[str, Any] | None = None
     turns: list[dict[str, Any]] = []
     messages: list[dict[str, Any]] = []
+    calls: list[dict[str, Any]] = []
     outputs: list[dict[str, Any]] = []
     events: list[dict[str, Any]] = []
     world_states: list[dict[str, Any]] = []
@@ -670,8 +671,12 @@ def rollout_view(entries: list[dict[str, Any]]) -> dict[str, Any]:
             messages.append(
                 {"index": index, "role": payload.get("role"), "text": _message_text(payload.get("content"))}
             )
+        elif kind == "response_item" and item in ("function_call", "custom_tool_call", "local_shell_call"):
+            calls.append({"index": index, "call_id": payload.get("call_id")})
         elif kind == "response_item" and item in ("function_call_output", "custom_tool_call_output"):
-            outputs.append({"index": index, "text": json.dumps(payload.get("output"), sort_keys=True)})
+            outputs.append(
+                {"index": index, "call_id": payload.get("call_id"), "text": json.dumps(payload.get("output"), sort_keys=True)}
+            )
         elif kind == "event_msg":
             completed = payload.get("item") if isinstance(payload.get("item"), dict) else {}
             events.append(
@@ -683,6 +688,7 @@ def rollout_view(entries: list[dict[str, Any]]) -> dict[str, Any]:
         "meta": meta or {},
         "turns": turns,
         "messages": messages,
+        "calls": calls,
         "outputs": outputs,
         "events": events,
         "world_states": world_states,
@@ -830,6 +836,19 @@ def first_output_with(view: dict[str, Any], needle: str) -> int | None:
     """Index of the first tool output carrying `needle` — never a model-authored event."""
     indices = [item["index"] for item in view["outputs"] if needle in item["text"]]
     return min(indices) if indices else None
+
+
+def call_answered_by(view: dict[str, Any], output_index: int) -> int | None:
+    """Index of the tool call whose output sits at `output_index`, matched by call id.
+
+    0.153.4 writes PostToolUse context between a call and its output, so a hook's
+    answer is ordered after the call, not after the output.
+    """
+    output = next((item for item in view["outputs"] if item["index"] == output_index), None)
+    if output is None or not output.get("call_id"):
+        return None
+    calls = [call["index"] for call in view["calls"] if call["call_id"] == output["call_id"]]
+    return min(calls) if calls else None
 
 
 def config_trust_entries(home: Path) -> dict[str, list[str]]:
@@ -1205,13 +1224,18 @@ def run_codex(
                 "failed", "both trust layers held for the probe, and the tripwire line never reached the session", **evidence
             )
 
-        call_index = first_output_with(view, url)
+        output_index = first_output_with(view, url)
+        call_index = call_answered_by(view, output_index) if output_index is not None else None
         marker = ctx.followup_markers["codex"]
-        found = find_injected(view, marker, after=call_index) if call_index is not None else None
+        # After the call when its id links it to the nonce output; after the output itself
+        # otherwise, which is stricter and never earlier than the call.
+        anchor = call_index if call_index is not None else output_index
+        found = find_injected(view, marker, after=anchor) if anchor is not None else None
         evidence = {
-            "observer": "rollout tool output carrying the nonce URL, then a context message with the hook's warning",
+            "observer": "rollout tool call whose output carries the nonce URL, then a context message with the hook's warning",
             "hook_trust_route": route,
-            "nonce_url_output_index": call_index,
+            "nonce_url_output_index": output_index,
+            "nonce_url_call_index": call_index,
             "expected_marker": marker,
             "found": found,
         }
@@ -1220,7 +1244,7 @@ def run_codex(
                     "the follow-up hook's warning reached the session after the shell call that printed the nonce URL", "")
         elif trust_reason:
             rows["codex.post_tool_use"].set("not-run", trust_reason, **evidence)
-        elif call_index is None:
+        elif output_index is None:
             rows["codex.post_tool_use"].set("failed", "the session recorded no shell output carrying the nonce URL", **evidence)
         else:
             rows["codex.post_tool_use"].set(
