@@ -5,6 +5,60 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-09-30 (Phase 6 planned; #857 and #874 shipped from a headless lane, in Claude Code)
+
+**Shipped.**
+
+- PR #882, squash `12629ab`, from the headless Claude lane `triage-857-874` (merge class
+  operator). It pins finalize's commit-step worktree re-check with a test (#857), and
+  corrects the *Completed-state retirement* doctrine, with kill-cutpoint tests (#874).
+  #883 carries the doctrine points the review rounds left open. #857 and #874 closed on
+  merge.
+- PR #881, squash `7290e31`: the parity plan's *Phase 6* section, ordered with an owner
+  for each item, and the Phase 6 workstream.
+
+**Filed.** Each was filed on the operator's approval of its exact text and read back
+identical:
+
+- #875, #876, #877, #878, #879 and #880: owners for Phase 6 items;
+- #883: residual precision points from #882's panel;
+- #884: the suite fails under `FORCE_COLOR`;
+- #885: a lane's Read tool is denied outside its worktree.
+
+Occurrence comments went on #628 (a lane's inline `gh pr create --body` was denied) and
+on #852 (the receipt workaround below).
+
+**Review.** CodeRabbit's auto-review is off, so the fallback panel reviewed both PRs.
+Round 1's receipt was recorded at its reviewed head, with its findings in the
+disposition, before the fix round was pushed. Each fix round then composed a delta
+receipt on the one before it. #882 took the dual form throughout, because it changes
+recovery doctrine. Its residual LOW findings went to #883 under the blast-radius
+stopping rule.
+
+**Lane.** The lane's work completed, but its receipt terminalized `failed` on permission
+denials the work did not need. The receipt listed them, until `dev_session.sh rm`
+removed its session directory:
+
+- a Read of a gitignored file outside its worktree, which the cockpit's brief had pointed
+  it at;
+- a Write outside the worktree;
+- an inline `gh pr create --body`, after which it fell back to `--body-file`.
+
+`dev_session.sh rm triage-857-874` removed the lane after the merge.
+
+**Verified.** `env -u FORCE_COLOR make test` at each PR's merged head, on 2026-09-30:
+
+- #881 at `adb6324`, in `/Users/topi/Coding/agentic-dev-kit`: `3739 passed, 1 skipped,
+  3 warnings in 679.30s`;
+- #882 at `425dbfe`, in the lane worktree `/Users/topi/Coding/dev-model-sessions/triage-857-874/wt`:
+  `3745 passed, 1 skipped, 3 warnings in 578.74s`.
+
+The `env -u` form is because the shell began exporting `FORCE_COLOR=3` partway through
+the session (#884).
+
+**Held for the operator:** whether the retirement doctrine should prescribe removing the
+retired name by hand to leave the two-link state.
+
 ### 2026-09-30 (Phase 5 exit declared, in Claude Code)
 
 **Declared.** Topi declared Phase 5 complete under PHASE5-E-AUDIT-01

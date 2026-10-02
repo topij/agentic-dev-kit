@@ -20,6 +20,40 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-02 (Phase 6 items 7 and 8, #879, in Claude Code)
+
+**Shipped.** PR #913, squash `947fca0`: `scripts/runtime_smoke.py`, a repo-only runner
+started by hand rather than in pull-request CI. In a fixture built from a kit revision,
+under isolated client homes, it drives a pinned Codex and a pinned Claude Code through
+instruction and skill or command discovery, SessionStart and PostToolUse, native review,
+the fallback panel and a lane through `scripts/launch_lane.py`. Each row records evidence
+read from the runtime's own artifacts, or the reason it could not run. The first stamped
+record, from a run at `0c2c200`, is `saved_plans/runtime-smoke-evidence_2026-10-02/`,
+and `saved_plans/runtime-smoke_2026-10-02.md` is its narrative. #879 closed on merge.
+
+**Decided.**
+
+- Trust is granted per invocation, and only in isolated homes the operator created and
+  logged in to. For the Codex hook probe alone, the operator authorized the hook-trust
+  bypass and a `-c` project-trust override; the fixture's hook output reached a Codex
+  session only with both (the narrative's observation 2).
+- A smoke record is an observation, not a promotion bundle
+  (`live-validation-evidence.md`, *On-demand smoke records*), so no parity-matrix row
+  moved.
+
+**Verified.** `env -u FORCE_COLOR make test` at
+`ec06c3bd2ded880fabcf674e33d8947035d37b4d` on 2026-10-02 in
+`/Users/topi/Coding/agentic-dev-kit` printed `3969 passed, 1 skipped in 645.24s
+(0:10:45)`. The squash's tree is that revision's.
+
+**Not established.** The narrative's own section names what the record does not show.
+The runner's stops were exercised against fake clients only.
+
+**Filed.** #915, from #913's review; #916 and #917, from the live runs. Observations
+went to #802, #643 and #408 as comments.
+
+______________________________________________________________________
+
 ## Session — 2026-10-02 (Phase 6 Codex validation)
 
 **Shipped.** PR #911, squash `0298191`: #908's lifecycle record now names the
@@ -241,62 +275,6 @@ completed `success` on `95822fb`, `e559b5f`, `757a6c0`, `2a81896` and `25fde2c`.
 
 ______________________________________________________________________
 
-## Session — 2026-09-30 (Phase 6 planned; #857 and #874 shipped from a headless lane, in Claude Code)
-
-**Shipped.**
-
-- PR #882, squash `12629ab`, from the headless Claude lane `triage-857-874` (merge class
-  operator). It pins finalize's commit-step worktree re-check with a test (#857), and
-  corrects the *Completed-state retirement* doctrine, with kill-cutpoint tests (#874).
-  #883 carries the doctrine points the review rounds left open. #857 and #874 closed on
-  merge.
-- PR #881, squash `7290e31`: the parity plan's *Phase 6* section, ordered with an owner
-  for each item, and the Phase 6 workstream.
-
-**Filed.** Each was filed on the operator's approval of its exact text and read back
-identical:
-
-- #875, #876, #877, #878, #879 and #880: owners for Phase 6 items;
-- #883: residual precision points from #882's panel;
-- #884: the suite fails under `FORCE_COLOR`;
-- #885: a lane's Read tool is denied outside its worktree.
-
-Occurrence comments went on #628 (a lane's inline `gh pr create --body` was denied) and
-on #852 (the receipt workaround below).
-
-**Review.** CodeRabbit's auto-review is off, so the fallback panel reviewed both PRs.
-Round 1's receipt was recorded at its reviewed head, with its findings in the
-disposition, before the fix round was pushed. Each fix round then composed a delta
-receipt on the one before it. #882 took the dual form throughout, because it changes
-recovery doctrine. Its residual LOW findings went to #883 under the blast-radius
-stopping rule.
-
-**Lane.** The lane's work completed, but its receipt terminalized `failed` on permission
-denials the work did not need. The receipt listed them, until `dev_session.sh rm`
-removed its session directory:
-
-- a Read of a gitignored file outside its worktree, which the cockpit's brief had pointed
-  it at;
-- a Write outside the worktree;
-- an inline `gh pr create --body`, after which it fell back to `--body-file`.
-
-`dev_session.sh rm triage-857-874` removed the lane after the merge.
-
-**Verified.** `env -u FORCE_COLOR make test` at each PR's merged head, on 2026-09-30:
-
-- #881 at `adb6324`, in `/Users/topi/Coding/agentic-dev-kit`: `3739 passed, 1 skipped,
-  3 warnings in 679.30s`;
-- #882 at `425dbfe`, in the lane worktree `/Users/topi/Coding/dev-model-sessions/triage-857-874/wt`:
-  `3745 passed, 1 skipped, 3 warnings in 578.74s`.
-
-The `env -u` form is because the shell began exporting `FORCE_COLOR=3` partway through
-the session (#884).
-
-**Held for the operator:** whether the retirement doctrine should prescribe removing the
-retired name by hand to leave the two-link state.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -308,21 +286,23 @@ ______________________________________________________________________
 
 **Status:** items 1 to 3 shipped on 2026-10-01, in #893, #888 and #887; items 4 and 5
 the same day, in #897 and #902; item 6 the same day, in #904, which also recorded
-#878 step 3's answer. #906 removed the duplication #887 left in `runtime-parity.md`.
+#878 step 3's answer; items 7 and 8 on 2026-10-02, in #913, with the first stamped
+smoke record. #906 removed the duplication #887 left in `runtime-parity.md`.
 The *Phase 6* section of `saved_plans/codex-parity-plan_2026-08-23.md` owns the order,
 the dependencies and the exit. #663, item 4's owner, stays open for residue that is not
 Phase 6 work; its 2026-10-01 comment names it. #905 carries deferred LOW findings
-from #904. #911 clarified #906’s lifecycle references on 2026-10-02. The Codex
-validation session above supplies observations for #879, without completing it.
+from #904, #915 a deferred LOW finding from #913's review, and #916 and #917 what
+#913's live runs found. #911 clarified #906’s lifecycle references on 2026-10-02.
 **Owner:**
-[#879](https://github.com/topij/agentic-dev-kit/issues/879),
 [#880](https://github.com/topij/agentic-dev-kit/issues/880),
-[#905](https://github.com/topij/agentic-dev-kit/issues/905).
+[#905](https://github.com/topij/agentic-dev-kit/issues/905),
+[#915](https://github.com/topij/agentic-dev-kit/issues/915),
+[#916](https://github.com/topij/agentic-dev-kit/issues/916),
+[#917](https://github.com/topij/agentic-dev-kit/issues/917).
 
-▶ Next: [#879](https://github.com/topij/agentic-dev-kit/issues/879) — Phase 6 items 7
-and 8: on-demand trusted smoke tests for Codex, with Claude beside them where
-automation credentials permit, run with a stamped record rather than in pull-request
-CI.
+▶ Next: [#880](https://github.com/topij/agentic-dev-kit/issues/880) — Phase 6 item 9:
+retire `docs/kit-convergence-plan.md` behind the maintained parity matrix, then check
+the Phase 6 exit as the parity plan states it.
 
 ### Scratch retention
 
