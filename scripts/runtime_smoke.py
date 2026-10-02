@@ -18,7 +18,8 @@ of the kit whose copy of this file is committed at the revision under test:
     uv run <engine-dir>/runtime_smoke.py --work-root <dir> --out <new dir> \\
         --codex-bin <absolute path> --codex-version <version> --codex-home <dir> \\
         [--claude-bin <absolute path> --claude-version <version> \\
-         --claude-config-dir <dir>] [--allow-codex-hook-trust-bypass] [--timeout <s>]
+         --claude-config-dir <dir>] [--allow-codex-project-trust] \\
+        [--allow-codex-hook-trust-bypass] [--timeout <s>]
 
 One row per check per runtime:
 
@@ -62,11 +63,14 @@ the operator's own Codex home or Claude configuration directory. #802 observed
 `codex exec` writing a trusted-project entry for its working directory into the home
 it ran under; the record lists every project and hook-state entry a run adds to the
 isolated home, so that side effect is observed rather than assumed. The runner grants
-no trust itself. Codex runs a project's hooks only after their
-definitions are trusted, and a fresh fixture's never are, so the two Codex hook rows
-record `not-run` unless the operator passes `--allow-codex-hook-trust-bypass`. That adds
-the client's `--dangerously-bypass-hook-trust` to the hook probe alone, after the runner
-has checked that the fixture's hook registration is the revision's own bytes.
+no trust itself. Codex trusts a project's hooks at two layers, the project and each
+definition, and a fresh fixture holds neither, so the two Codex hook rows record
+`not-run`, naming the missing layer, unless the operator authorizes both for the hook
+probe alone: `--allow-codex-project-trust` adds a per-invocation `-c` override trusting
+the fixture path, and `--allow-codex-hook-trust-bypass` adds the client's
+`--dangerously-bypass-hook-trust`. Neither is written anywhere, and both apply only
+after the runner has checked that the fixture's hook registration is the revision's
+own bytes.
 
 **The fixture** is `git archive` of the kit revision: tracked files only, so no local
 config overlay, `state/`, or operator note reaches a client. It is committed as a fresh
@@ -162,11 +166,13 @@ CLAUDE_READ_ONLY_GIT = (
 EXCERPT_LIMIT = 240
 LANE_SCOPES = {"codex": "smoke-codex", "claude": "smoke-claude"}
 
-# The two injected-context shapes Codex 0.153.4 writes into a rollout: the AGENTS.md
-# chain as a user message, and the skills list as a developer message whose entries
-# name their file through a root alias. Matching fails closed: a shape this does not
-# recognise leaves the row failed, with the first line of each candidate message in its
-# evidence so the changed shape can be read from the record.
+# The injected-context shapes Codex writes into a rollout. AGENTS.md has arrived two
+# ways from the same 0.153.4 client: as a user message (the operator's desktop-launched
+# sessions) and as `state.agents_md` in a `world_state` snapshot (a fresh `codex exec`
+# under an isolated home, the first live run of this runner). The skills list arrives as
+# a developer message whose entries name their file through a root alias. Matching fails
+# closed: a shape this does not recognise leaves the row failed, with the first line of
+# each candidate message in its evidence so the changed shape can be read from the record.
 AGENTS_BLOCK = re.compile(
     r"\A# AGENTS\.md instructions for (?P<dir>[^\n]+)\n\n<INSTRUCTIONS>\n(?P<body>.*)\n"
     r"</INSTRUCTIONS>\s*\Z",
@@ -321,6 +327,7 @@ def run_child(
                 timed_out = True
                 _stop_group(process)
             returncode = process.returncode
+    stderr_lines = [line for line in _read_text(stderr_path).splitlines() if line.strip()]
     return {
         "name": name,
         "argv": list(argv),
@@ -332,6 +339,9 @@ def run_child(
         "error": error,
         "stdout": str(stdout_path),
         "stderr": str(stderr_path),
+        # A client's own notice lands here — Claude's note that an untrusted project's
+        # allow list was ignored, say — so the first line is kept in the record.
+        "stderr_head": excerpt(stderr_lines[0]) if stderr_lines else "",
     }
 
 
@@ -647,6 +657,7 @@ def rollout_view(entries: list[dict[str, Any]]) -> dict[str, Any]:
     messages: list[dict[str, Any]] = []
     outputs: list[dict[str, Any]] = []
     events: list[dict[str, Any]] = []
+    world_states: list[dict[str, Any]] = []
     for index, entry in enumerate(entries):
         kind = entry.get("type")
         payload = entry.get("payload") if isinstance(entry.get("payload"), dict) else {}
@@ -662,13 +673,19 @@ def rollout_view(entries: list[dict[str, Any]]) -> dict[str, Any]:
         elif kind == "response_item" and item in ("function_call_output", "custom_tool_call_output"):
             outputs.append({"index": index, "text": json.dumps(payload.get("output"), sort_keys=True)})
         elif kind == "event_msg":
-            events.append({"index": index, "type": item, "text": json.dumps(payload, sort_keys=True)})
+            completed = payload.get("item") if isinstance(payload.get("item"), dict) else {}
+            events.append(
+                {"index": index, "type": item, "item_type": completed.get("type"), "text": json.dumps(payload, sort_keys=True)}
+            )
+        elif kind == "world_state" and isinstance(payload.get("state"), dict):
+            world_states.append({"index": index, "state": payload["state"]})
     return {
         "meta": meta or {},
         "turns": turns,
         "messages": messages,
         "outputs": outputs,
         "events": events,
+        "world_states": world_states,
     }
 
 
@@ -704,15 +721,32 @@ def check_agents_block(view: dict[str, Any], repo: Path, agents_md: bytes) -> tu
         blocks.append(
             {
                 "index": message["index"],
+                "shape": "user message",
                 "dir": match.group("dir"),
                 "dir_is_fixture": realpath(match.group("dir")) == realpath(repo),
                 "body_sha256": sha256_bytes(body),
                 "body_equals_fixture": body == agents_md,
             }
         )
+    for snapshot in view.get("world_states", []):
+        injected = snapshot["state"].get("agents_md")
+        if not isinstance(injected, dict) or not isinstance(injected.get("text"), str):
+            continue
+        body = injected["text"].encode()
+        directory = str(injected.get("directory"))
+        blocks.append(
+            {
+                "index": snapshot["index"],
+                "shape": "world_state.agents_md",
+                "dir": directory,
+                "dir_is_fixture": realpath(directory) == realpath(repo),
+                "body_sha256": sha256_bytes(body),
+                "body_equals_fixture": body == agents_md,
+            }
+        )
     ok = any(block["dir_is_fixture"] and block["body_equals_fixture"] for block in blocks)
     evidence: dict[str, Any] = {
-        "observer": "rollout response_item message, role user, `# AGENTS.md instructions for` block",
+        "observer": "rollout `world_state` state.agents_md, or a user message `# AGENTS.md instructions for` block",
         "fixture_agents_md_sha256": sha256_bytes(agents_md),
         "blocks": blocks,
     }
@@ -762,6 +796,22 @@ def message_heads(view: dict[str, Any], role: str) -> list[str]:
             first = message["text"].strip().splitlines()[0] if message["text"].strip() else ""
             heads.append(excerpt(first, 80))
     return heads
+
+
+def review_markers(view: dict[str, Any]) -> list[str]:
+    """Review-mode names from event types and completed-item types.
+
+    0.153.4 records `codex exec review` as `item_completed` events whose items are
+    `EnteredReviewMode` and `ExitedReviewMode`, not as event types of their own.
+    """
+    return sorted(
+        {
+            str(name)
+            for event in view["events"]
+            for name in (event["type"], event.get("item_type"))
+            if name and "review" in str(name).lower()
+        }
+    )
 
 
 def find_injected(view: dict[str, Any], needle: str, *, after: int = -1) -> dict[str, Any] | None:
@@ -910,6 +960,53 @@ def claude_session(init: dict[str, Any], transcript: list[dict[str, Any]]) -> di
     }
 
 
+def entry_text(entry: dict[str, Any]) -> str:
+    """The text of a transcript entry's message, whether a string or a list of parts."""
+    message = entry.get("message")
+    if not isinstance(message, dict):
+        return ""
+    return _message_text(message.get("content"))
+
+
+def claude_subagents(transcript_path: Path | None) -> list[dict[str, Any]]:
+    """Each subagent a session ran, read from its own transcript beside the session's.
+
+    2.1.287 keeps them at `<session>/subagents/agent-<id>.jsonl`, each with a
+    `.meta.json` naming its `agentType` — the agent definition it ran as.
+    """
+    if transcript_path is None:
+        return []
+    agents = []
+    for path in sorted((transcript_path.parent / transcript_path.stem / "subagents").glob("agent-*.jsonl")):
+        meta = _json_or_none(_read_text(path.with_name(path.name.removesuffix(".jsonl") + ".meta.json")))
+        entries = read_jsonl(path)
+        session = claude_session({}, entries)
+        texts = [entry_text(entry) for entry in entries if entry.get("type") == "assistant"]
+        agents.append(
+            {
+                "agent_type": meta.get("agentType") if isinstance(meta, dict) else None,
+                "models": session["transcript_models"],
+                "efforts": session["transcript_efforts"],
+                "executing_version": session["executing_version"],
+                "first_prompt": next((entry_text(e) for e in entries if e.get("type") == "user"), ""),
+                "last_text": next((text for text in reversed(texts) if text.strip()), ""),
+            }
+        )
+    return agents
+
+
+def summarise_subagent(agent: dict[str, Any]) -> dict[str, Any]:
+    """What the record keeps of a subagent: no prompt or report text, only their digests."""
+    return {
+        "agent_type": agent["agent_type"],
+        "applied_models": agent["models"],
+        "applied_efforts": agent["efforts"],
+        "executing_version": agent["executing_version"],
+        "prompt_sha256": sha256_bytes(agent["first_prompt"].encode()),
+        "report_chars": len(agent["last_text"]),
+    }
+
+
 def pin_mismatch(session: dict[str, Any], pin: str) -> str | None:
     version = session.get("executing_version")
     if version == pin:
@@ -1006,7 +1103,42 @@ def codex_exec_session(
     return invocation, rollout_view(read_jsonl(rollout)), note
 
 
-def run_codex(ctx: Context, rows: dict[str, Row], binary: Path, home: Path, pin: str, *, bypass: bool) -> dict[str, Any]:
+def codex_project_trust_override(repo: Path) -> list[str]:
+    """A `-c` pair that trusts `repo` as a project for one invocation; nothing is written.
+
+    An inline table rather than a dotted key, so a path holding a dot cannot be split
+    into key segments.
+    """
+    return ["-c", f'projects={{{json.dumps(realpath(repo))}={{trust_level="trusted"}}}}']
+
+
+def hook_trust_reason(route: dict[str, Any]) -> str | None:
+    """Why the hook rows could not run under `route`, or None when both layers held.
+
+    Codex trusts a hook at two layers: the project, whose `.codex/` it loads only once
+    the path is trusted (#802 describes a trusted path loading a project's config and
+    hooks), and each definition, which `--dangerously-bypass-hook-trust` waives for one
+    invocation. The first live run passed the bypass without project trust and recorded
+    no output from either hook.
+    """
+    if route["hooks_json_differs"]:
+        return "hook trust refused: the fixture's .codex/hooks.json differs from the revision's bytes"
+    if route["project_trust"] == "none":
+        return (
+            "project trust not established: the fixture is a new path to the isolated home and "
+            "the runner grants no project trust; pass --allow-codex-project-trust for the hook probe"
+        )
+    if route["hook_trust"] == "none":
+        return (
+            "hook trust not established: the fixture's hook definitions are new to the isolated "
+            "home and the runner grants no trust; pass --allow-codex-hook-trust-bypass for the hook probe"
+        )
+    return None
+
+
+def run_codex(
+    ctx: Context, rows: dict[str, Row], binary: Path, home: Path, pin: str, *, bypass: bool, project_trust: bool
+) -> dict[str, Any]:
     trust_before = config_trust_entries(home)
     cheap = get(ctx.config, "models.runtime_mappings.codex.cheap")
     effort = ["-c", f"model_reasoning_effort={cheap}"] if cheap else []
@@ -1018,11 +1150,18 @@ def run_codex(ctx: Context, rows: dict[str, Row], binary: Path, home: Path, pin:
     committed_hooks = subprocess.run(
         ["git", "show", f"{ctx.revision}:{CODEX_HOOKS}"], cwd=ctx.kit_root, capture_output=True
     ).stdout
-    bypass_ok = bypass and hooks_bytes == committed_hooks
+    differs = hooks_bytes != committed_hooks
+    route = {
+        "project_trust": "per-invocation override" if project_trust and not differs else "none",
+        "hook_trust": "per-invocation bypass" if bypass and not differs else "none",
+        "hooks_json_differs": differs,
+    }
+    trust_reason = hook_trust_reason(route)
     probe_argv = [
         "exec", "--json", "-C", str(fixture.repo), "-s", "read-only", *effort,
         "-o", str(ctx.log_dir / "codex-probe.last"),
-        *(["--dangerously-bypass-hook-trust"] if bypass_ok else []), "-",
+        *(codex_project_trust_override(fixture.repo) if route["project_trust"] != "none" else []),
+        *(["--dangerously-bypass-hook-trust"] if route["hook_trust"] != "none" else []), "-",
     ]
     invocation, view, note = codex_exec_session(
         ctx, binary, home, probe_argv, cwd=fixture.repo, prompt=probe_prompt(ctx, command), name="codex-probe"
@@ -1049,34 +1188,29 @@ def run_codex(ctx: Context, rows: dict[str, Row], binary: Path, home: Path, pin:
                 "every skill the parity declaration binds for Codex is listed in the injected skills block",
                 "a declared Codex skill was not listed in the injected skills block")
 
-        hook_route = "bypass" if bypass_ok else "none"
-        trust_reason = (
-            "hook trust not established: the fixture's hook definitions are new to the isolated "
-            "home and the runner grants no trust; pass --allow-codex-hook-trust-bypass to run them"
-            if not bypass
-            else "hook trust bypass refused: the fixture's .codex/hooks.json differs from the revision's bytes"
-        )
         found = find_injected(view, ctx.budget_line)
         evidence = {
             "observer": "rollout response_item message carrying the budget tripwire line",
-            "hook_trust_route": hook_route,
+            "hook_trust_route": route,
             "expected_line": ctx.budget_line,
             "found": found,
         }
         if found:
             _finish(rows["codex.session_start"], True, mismatch, evidence,
                     "the tripwire line naming this run's over-budget count reached the session", "")
-        elif bypass_ok:
-            rows["codex.session_start"].set("failed", "hooks ran under the bypass but the tripwire line never reached the session", **evidence)
-        else:
+        elif trust_reason:
             rows["codex.session_start"].set("not-run", trust_reason, **evidence)
+        else:
+            rows["codex.session_start"].set(
+                "failed", "both trust layers held for the probe, and the tripwire line never reached the session", **evidence
+            )
 
         call_index = first_output_with(view, url)
         marker = ctx.followup_markers["codex"]
         found = find_injected(view, marker, after=call_index) if call_index is not None else None
         evidence = {
             "observer": "rollout tool output carrying the nonce URL, then a context message with the hook's warning",
-            "hook_trust_route": hook_route,
+            "hook_trust_route": route,
             "nonce_url_output_index": call_index,
             "expected_marker": marker,
             "found": found,
@@ -1084,12 +1218,14 @@ def run_codex(ctx: Context, rows: dict[str, Row], binary: Path, home: Path, pin:
         if found:
             _finish(rows["codex.post_tool_use"], True, mismatch, evidence,
                     "the follow-up hook's warning reached the session after the shell call that printed the nonce URL", "")
-        elif not bypass_ok:
+        elif trust_reason:
             rows["codex.post_tool_use"].set("not-run", trust_reason, **evidence)
         elif call_index is None:
             rows["codex.post_tool_use"].set("failed", "the session recorded no shell output carrying the nonce URL", **evidence)
         else:
-            rows["codex.post_tool_use"].set("failed", "the shell call ran but the hook's warning never reached the session", **evidence)
+            rows["codex.post_tool_use"].set(
+                "failed", "both trust layers held for the probe, the shell call ran, and the hook's warning never reached the session", **evidence
+            )
 
     # Native review, on the review branch against the protected branch.
     base = get(ctx.config, "vcs.protected_branch", "main")
@@ -1104,10 +1240,10 @@ def run_codex(ctx: Context, rows: dict[str, Row], binary: Path, home: Path, pin:
         row.set("failed", f"no rollout to read: {note} ({invocation_ok(invocation) or 'exit 0'})")
     else:
         row.session = codex_session(view)
-        markers = sorted({event["type"] for event in view["events"] if "review" in str(event["type"]).lower()})
+        markers = review_markers(view)
         problem = invocation_ok(invocation)
         evidence = {
-            "observer": "rollout event_msg types naming review mode, and the last-message file",
+            "observer": "rollout event_msg and completed-item types naming review mode, and the last-message file",
             "review_events": markers,
             "last_message_chars": len(last),
             "last_message_first_line": excerpt(last.strip().splitlines()[0]) if last.strip() else "",
@@ -1122,7 +1258,7 @@ def run_codex(ctx: Context, rows: dict[str, Row], binary: Path, home: Path, pin:
 
     trust_after = config_trust_entries(home)
     return {
-        "hook_trust_route": "bypass" if bypass_ok else "none",
+        "hook_trust_route": route,
         "projects_added": sorted(set(trust_after["projects"]) - set(trust_before["projects"])),
         "hooks_state_added": sorted(set(trust_after["hooks_state"]) - set(trust_before["hooks_state"])),
     }
@@ -1358,15 +1494,16 @@ def run_lane(ctx: Context, row: Row, runtime: str, pin: str, runtime_env: dict[s
 
 def claude_stream_session(
     ctx: Context, binary: Path, config_dir: Path, argv_tail: list[str], *, cwd: Path, prompt: str, name: str
-) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], Path | None]:
     env = {**ctx.base_env, "CLAUDE_CONFIG_DIR": str(config_dir)}
     invocation = run_child(
         [str(binary), *argv_tail], cwd=cwd, env=env, stdin_text=prompt, timeout=ctx.timeout,
         log_dir=ctx.log_dir, name=name,
     )
     events = read_jsonl(Path(invocation["stdout"]))
-    transcript = find_claude_transcript(config_dir, claude_init(events).get("session_id"))
-    return invocation, events, read_jsonl(transcript) if transcript else []
+    session_id = claude_init(events).get("session_id") or claude_result(events).get("session_id")
+    transcript = find_claude_transcript(config_dir, session_id)
+    return invocation, events, read_jsonl(transcript) if transcript else [], transcript
 
 
 def run_claude(ctx: Context, rows: dict[str, Row], binary: Path, config_dir: Path, pin: str) -> None:
@@ -1387,7 +1524,7 @@ def run_claude(ctx: Context, rows: dict[str, Row], binary: Path, config_dir: Pat
         "--settings", json.dumps(observer), *(["--model", cheap] if cheap else []),
         "--allowedTools", "Bash(printf:*)",
     ]
-    invocation, events, transcript = claude_stream_session(
+    invocation, events, transcript, _ = claude_stream_session(
         ctx, binary, config_dir, probe_argv, cwd=fixture.repo, prompt=probe_prompt(ctx, command), name="claude-probe"
     )
     init = claude_init(events)
@@ -1468,7 +1605,7 @@ def run_claude(ctx: Context, rows: dict[str, Row], binary: Path, config_dir: Pat
             "-p", "--output-format", "stream-json", "--verbose", "--setting-sources", "project",
             "--permission-mode", "dontAsk", "--allowedTools", ",".join(CLAUDE_READ_ONLY_GIT), "--", review_command,
         ]
-        invocation, events, transcript = claude_stream_session(
+        invocation, events, transcript, transcript_path = claude_stream_session(
             ctx, binary, config_dir, argv, cwd=fixture.repo, prompt="", name="claude-review"
         )
         row.invocations.append(invocation)
@@ -1477,18 +1614,26 @@ def run_claude(ctx: Context, rows: dict[str, Row], binary: Path, config_dir: Pat
         result = claude_result(events)
         name = review_command.lstrip("/").split()[0]
         listed = name in {str(item).lstrip("/") for item in init.get("slash_commands") or []}
+        # 2.1.287 records a command as the user's literal text followed by a
+        # `local_command` system entry; an older client wrapped it in `<command-name>`.
         invoked = any(
-            f"<command-name>/{name}</command-name>" in json.dumps(entry) or f'"skill": "{name}"' in json.dumps(entry)
+            (entry.get("type") == "user" and entry_text(entry).strip() == review_command.strip())
+            or f"<command-name>/{name}</command-name>" in json.dumps(entry)
             for entry in transcript
         )
+        local = [entry for entry in transcript if entry.get("type") == "system" and entry.get("subtype") == "local_command"]
+        subagents = claude_subagents(transcript_path)
+        row.session["subagents"] = [summarise_subagent(agent) for agent in subagents]
         text = str(result.get("result") or "")
         evidence = {
-            "observer": "stream-json init and result, and the transcript's record of the invocation",
+            "observer": "stream-json init and result, and the transcript's record of the invocation and its subagents",
             "command": review_command,
             "listed_in_init": listed,
             "invocation_in_transcript": invoked,
+            "local_command_recorded": bool(local),
             "result_is_error": result.get("is_error"),
             "result_chars": len(text),
+            "subagents": row.session["subagents"],
         }
         problem = invocation_ok(invocation)
         ok = not problem and listed and invoked and result and not result.get("is_error") and text.strip()
@@ -1498,6 +1643,26 @@ def run_claude(ctx: Context, rows: dict[str, Row], binary: Path, config_dir: Pat
 
     run_claude_panel(ctx, rows["claude.panel"], binary, config_dir, pin)
     run_lane(ctx, rows["claude.lane"], "claude", pin, {"CLAUDE_CONFIG_DIR": str(config_dir)}, home=config_dir)
+
+
+LENS_BEGIN = "-----BEGIN LENS PROMPT-----"
+LENS_END = "-----END LENS PROMPT-----"
+
+
+def delegation_prompt(lens: str, prompt: str) -> str:
+    """The cockpit's half of the documented Claude route: launch the lens as its agent.
+
+    `fallback-review-panel.md` makes `lens_compute.claude` mechanical only through the
+    agent definition, applied when the cockpit delegates to the agent named after the
+    lens; a session started with `--agent` is a different mechanism. So a parent
+    session delegates, and the row reads the subagent's own transcript.
+    """
+    return (
+        f"Launch the `{lens}` agent with your Agent tool. Give it, as its prompt, the text "
+        "between the two marker lines below, exactly and in full, without the marker lines. "
+        "Do not review anything yourself. When the agent returns, reply with exactly "
+        f"LENS-DONE and nothing else.\n{LENS_BEGIN}\n{prompt}\n{LENS_END}\n"
+    )
 
 
 def run_claude_panel(ctx: Context, row: Row, binary: Path, config_dir: Path, pin: str) -> None:
@@ -1516,52 +1681,66 @@ def run_claude_panel(ctx: Context, row: Row, binary: Path, config_dir: Path, pin
             row.set("failed", f"the {lens} prompt could not be assembled: {exc}")
             return
         argv = [
-            "-p", "--agent", lens, "--output-format", "stream-json", "--verbose",
+            "-p", "--output-format", "stream-json", "--verbose",
             "--setting-sources", "project", "--permission-mode", "dontAsk",
             "--allowedTools", ",".join(CLAUDE_READ_ONLY_GIT),
         ]
         jobs.append((lens, tree, argv, prompt))
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(jobs)) as pool:
         futures = {
-            lens: pool.submit(claude_stream_session, ctx, binary, config_dir, argv, cwd=tree, prompt=prompt, name=f"claude-lens-{lens}")
+            lens: pool.submit(
+                claude_stream_session, ctx, binary, config_dir, argv, cwd=tree,
+                prompt=delegation_prompt(lens, prompt), name=f"claude-lens-{lens}",
+            )
             for lens, tree, argv, prompt in jobs
         }
     per_lens = []
     problems = []
-    for lens, *_ in jobs:
-        invocation, events, transcript = futures[lens].result()
+    for lens, _tree, _argv, prompt in jobs:
+        invocation, events, transcript, transcript_path = futures[lens].result()
         row.invocations.append(invocation)
-        session = claude_session(claude_init(events), transcript)
-        report = str(claude_result(events).get("result") or "")
-        entry = {
+        parent = claude_session(claude_init(events), transcript)
+        launched = [agent for agent in claude_subagents(transcript_path) if agent["agent_type"] == lens]
+        agent = launched[0] if launched else None
+        entry: dict[str, Any] = {
             "lens": lens,
             "configured_model": model,
             "configured_effort": effort,
-            "applied_models": session["transcript_models"],
-            "applied_efforts": session["transcript_efforts"],
-            "executing_version": session["executing_version"],
-            "report_chars": len(report),
-            "report_names_review_head": ctx.fixture.review_head[:7] in report,
+            "parent_executing_version": parent["executing_version"],
+            "lens_agent_launched": agent is not None,
         }
         per_lens.append(entry)
         if (failure := invocation_ok(invocation)):
             problems.append(f"{lens}: {failure}")
-        if not transcript:
-            problems.append(f"{lens}: no session transcript")
-        if model and not (session["transcript_models"] and all(model in applied for applied in session["transcript_models"])):
-            problems.append(f"{lens}: applied models {session['transcript_models']!r}, configured {model!r}")
-        if effort and session["transcript_efforts"] != [str(effort)]:
-            problems.append(f"{lens}: applied efforts {session['transcript_efforts']!r}, configured {effort!r}")
+        if agent is None:
+            problems.append(f"{lens}: the parent session launched no `{lens}` agent")
+            continue
+        entry.update(summarise_subagent(agent))
+        entry["prompt_verbatim"] = agent["first_prompt"].strip() == prompt.strip()
+        entry["report_names_review_head"] = ctx.fixture.review_head[:7] in agent["last_text"]
+        if not entry["prompt_verbatim"]:
+            problems.append(f"{lens}: the agent's prompt is not the one panel_prompt.py rendered")
+        if model and not (agent["models"] and all(model in applied for applied in agent["models"])):
+            problems.append(f"{lens}: applied models {agent['models']!r}, configured {model!r}")
+        if effort and agent["efforts"] != [str(effort)]:
+            problems.append(f"{lens}: applied efforts {agent['efforts']!r}, configured {effort!r}")
         if not entry["report_names_review_head"]:
             problems.append(f"{lens}: the report does not name the review head")
-        if (mismatch := pin_mismatch(session, pin)):
+        if (mismatch := pin_mismatch(agent, pin)):
             problems.append(f"{lens}: {mismatch}")
-    row.session = {"observer": "each lens's session transcript", "lenses": per_lens}
-    evidence = {"observer": "each lens's transcript models and efforts, and its result", "lenses": per_lens}
+    row.session = {"observer": "each lens agent's own subagent transcript", "lenses": per_lens}
+    evidence = {
+        "observer": "each lens agent's subagent transcript and its .meta.json agent type",
+        "lenses": per_lens,
+    }
     if problems:
         row.set("failed", "; ".join(problems), **evidence)
     else:
-        row.set("passed", "every configured lens ran as its agent at its configured compute and reported on the review head", **evidence)
+        row.set(
+            "passed",
+            "each configured lens ran as its agent definition, on the rendered prompt, at its configured compute, and reported on the review head",
+            **evidence,
+        )
 
 
 # ------------------------------------------------------------------------ record
@@ -1644,7 +1823,7 @@ def render_markdown(record: dict[str, Any]) -> str:
         f"review head `{record['fixture']['review_head']}` on `{REVIEW_BRANCH}`.",
         f"- SessionStart control: `{record['fixture']['friction_log']}` committed at "
         f"{record['fixture']['friction_lines']} lines against a budget of {record['fixture']['friction_budget']}.",
-        f"- Codex hook-trust route: {observations.get('codex', {}).get('hook_trust_route', '—')}.",
+        f"- Codex hook probe trust: {render_route(observations.get('codex', {}).get('hook_trust_route'))}.",
         f"- Trusted-project entries the run added to the isolated Codex home (#802): "
         f"{', '.join(f'`{item}`' for item in observations.get('codex', {}).get('projects_added', [])) or 'none'}.",
         f"- Hook-state entries the run added to the isolated Codex home: "
@@ -1657,6 +1836,12 @@ def render_markdown(record: dict[str, Any]) -> str:
         "",
     ]
     return "\n".join(lines)
+
+
+def render_route(route: Any) -> str:
+    if not isinstance(route, dict):
+        return "—"
+    return f"project trust {route.get('project_trust')}; definition trust {route.get('hook_trust')}"
 
 
 def ancestor_instruction_files(start: Path) -> list[str]:
@@ -1680,6 +1865,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--codex-bin", type=Path, help="absolute path of the pinned Codex binary")
     parser.add_argument("--codex-version", help="the pin: the exact version `--version` must report")
     parser.add_argument("--codex-home", type=Path, help="isolated CODEX_HOME, provisioned and logged in by the operator")
+    parser.add_argument("--allow-codex-project-trust", action="store_true",
+                        help="operator authorization to trust the fixture path for the hook probe alone (-c override)")
     parser.add_argument("--allow-codex-hook-trust-bypass", action="store_true",
                         help="operator authorization to pass --dangerously-bypass-hook-trust to the hook probe")
     parser.add_argument("--claude-bin", type=Path, help="absolute path of the pinned Claude Code binary")
@@ -1755,8 +1942,8 @@ def run(
             else check_isolated_home(home, flag="--claude-config-dir", env_key="CLAUDE_CONFIG_DIR", fallback=".claude", kit_root=kit_root)
         )
         pins[runtime] = pin
-    if args.allow_codex_hook_trust_bypass and "codex" not in homes:
-        raise Refusal("--allow-codex-hook-trust-bypass needs a Codex run to apply to")
+    if (args.allow_codex_hook_trust_bypass or args.allow_codex_project_trust) and "codex" not in homes:
+        raise Refusal("the Codex trust authorizations need a Codex run to apply to")
 
     out.mkdir(parents=False, exist_ok=True)
     run_dir = Path(realpath(tempfile.mkdtemp(prefix="adk-smoke-", dir=work_root)))
@@ -1804,7 +1991,8 @@ def run(
     if "codex" in homes and "codex" not in blocked:
         clients["codex"]["preflight"] = "ready"
         observations["codex"] = run_codex(
-            ctx, rows, binaries["codex"], homes["codex"], pins["codex"], bypass=args.allow_codex_hook_trust_bypass
+            ctx, rows, binaries["codex"], homes["codex"], pins["codex"],
+            bypass=args.allow_codex_hook_trust_bypass, project_trust=args.allow_codex_project_trust,
         )
     if "claude" in homes and "claude" not in blocked:
         clients["claude"]["preflight"] = "ready"

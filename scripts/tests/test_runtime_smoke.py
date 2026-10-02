@@ -41,7 +41,7 @@ def _message(index: int, role: str, text: str) -> dict:
 
 
 def _view(**parts) -> dict:
-    view = {"meta": {}, "turns": [], "messages": [], "calls": [], "outputs": [], "events": []}
+    view = {"meta": {}, "turns": [], "messages": [], "outputs": [], "events": [], "world_states": []}
     view.update(parts)
     return view
 
@@ -61,6 +61,7 @@ def test_the_agents_block_must_name_the_fixture_and_equal_its_file(tmp_path):
     assert evidence["blocks"] == [
         {
             "index": 3,
+            "shape": "user message",
             "dir": str(tmp_path),
             "dir_is_fixture": True,
             "body_sha256": rs.sha256_bytes(body.encode()),
@@ -85,6 +86,29 @@ def test_an_agents_block_for_another_directory_does_not_count(tmp_path):
     ok, evidence = rs.check_agents_block(view, tmp_path, body.encode())
     assert not ok
     assert evidence["blocks"][0]["dir_is_fixture"] is False
+
+
+def _world_state(index: int, directory: Path, text: str) -> dict:
+    return {"index": index, "state": {"agents_md": {"directory": str(directory), "text": text}}}
+
+
+def test_a_world_state_snapshot_carries_agents_md_too(tmp_path):
+    body = "# AGENTS.md\n\n— the contract.\n"
+    ok, evidence = rs.check_agents_block(_view(world_states=[_world_state(6, tmp_path, body)]), tmp_path, body.encode())
+    assert ok
+    assert evidence["blocks"][0]["shape"] == "world_state.agents_md"
+    ok, _ = rs.check_agents_block(_view(world_states=[_world_state(6, tmp_path, body + " ")]), tmp_path, body.encode())
+    assert not ok
+
+
+def test_world_state_entries_reach_the_view():
+    entries = [
+        {"type": "world_state", "payload": {"full": True, "state": {"agents_md": {"directory": "/r", "text": "x"}}}},
+        {"type": "world_state", "payload": {"full": False}},
+    ]
+    assert rs.rollout_view(entries)["world_states"] == [
+        {"index": 0, "state": {"agents_md": {"directory": "/r", "text": "x"}}}
+    ]
 
 
 @pytest.mark.parametrize("role", ["assistant", "developer"])
@@ -225,6 +249,64 @@ def test_a_moved_injection_shape_leaves_its_heads_in_the_evidence(tmp_path):
     assert not ok and evidence["user_message_heads"] == ["<environment_context>"]
     ok, evidence = rs.check_skills(view, [rs.realpath(tmp_path / "adopt" / "SKILL.md")])
     assert not ok and evidence["developer_message_heads"] == ["## Skills"]
+
+
+def test_review_mode_is_read_from_completed_item_types():
+    entries = [
+        {"type": "event_msg", "payload": {"type": "item_completed", "item": {"type": "EnteredReviewMode"}}},
+        {"type": "event_msg", "payload": {"type": "task_started"}},
+        {"type": "event_msg", "payload": {"type": "item_completed", "item": {"type": "ExitedReviewMode"}}},
+    ]
+    assert rs.review_markers(rs.rollout_view(entries)) == ["EnteredReviewMode", "ExitedReviewMode"]
+    assert rs.review_markers(rs.rollout_view(entries[1:2])) == []
+
+
+def _route(project="none", hook="none", differs=False):
+    return {"project_trust": project, "hook_trust": hook, "hooks_json_differs": differs}
+
+
+def test_the_missing_trust_layer_is_named_project_first():
+    assert rs.hook_trust_reason(_route()).startswith("project trust not established")
+    assert rs.hook_trust_reason(_route(hook="per-invocation bypass")).startswith("project trust not established")
+    assert rs.hook_trust_reason(_route(project="per-invocation override")).startswith("hook trust not established")
+    assert rs.hook_trust_reason(_route("per-invocation override", "per-invocation bypass")) is None
+    assert rs.hook_trust_reason(_route("per-invocation override", "per-invocation bypass", True)).startswith(
+        "hook trust refused"
+    )
+
+
+def test_the_project_trust_override_is_one_toml_table_keyed_by_the_whole_path(tmp_path):
+    repo = tmp_path / "a.b" / 'odd"name'
+    repo.mkdir(parents=True)
+    flag, value = rs.codex_project_trust_override(repo)
+    assert flag == "-c"
+    assert rs.tomllib.loads(value) == {"projects": {rs.realpath(repo): {"trust_level": "trusted"}}}
+
+
+def test_subagents_are_read_with_their_agent_type_and_summarised_without_text(tmp_path):
+    transcript = tmp_path / "session-1.jsonl"
+    transcript.write_text("", encoding="utf-8")
+    folder = tmp_path / "session-1" / "subagents"
+    folder.mkdir(parents=True)
+    (folder / "agent-1.meta.json").write_text(json.dumps({"agentType": "adversarial"}), encoding="utf-8")
+    (folder / "agent-1.jsonl").write_text(
+        "\n".join(
+            json.dumps(entry)
+            for entry in (
+                {"type": "user", "version": "2.1.287", "message": {"content": "the rendered prompt"}},
+                {"type": "assistant", "version": "2.1.287", "effort": "high",
+                 "message": {"model": "claude-sonnet-5", "content": [{"type": "text", "text": "Reviewed abc1234."}]}},
+            )
+        ),
+        encoding="utf-8",
+    )
+    [agent] = rs.claude_subagents(transcript)
+    assert (agent["agent_type"], agent["models"], agent["efforts"]) == ("adversarial", ["claude-sonnet-5"], ["high"])
+    assert (agent["first_prompt"], agent["last_text"]) == ("the rendered prompt", "Reviewed abc1234.")
+    summary = rs.summarise_subagent(agent)
+    assert summary["prompt_sha256"] == rs.sha256_bytes(b"the rendered prompt")
+    assert "the rendered prompt" not in json.dumps(summary) and "Reviewed" not in json.dumps(summary)
+    assert rs.claude_subagents(None) == []
 
 
 def test_hook_events_are_selected_by_event_name():
@@ -393,8 +475,9 @@ add("session_meta", {{"id": thread, "cli_version": VERSION, "originator": "codex
 add("turn_context", {{"model": values["-m"] or "fake-default", "effort": effort, "approval_policy": "never",
                       "sandbox_policy": {{"type": values["-s"] or values["--sandbox"] or "read-only"}}, "cwd": str(cwd)}})
 if (cwd / "AGENTS.md").is_file():
-    body = (cwd / "AGENTS.md").read_text(encoding="utf-8")
-    message("user", f"# AGENTS.md instructions for {{cwd}}\n\n<INSTRUCTIONS>\n{{body}}\n</INSTRUCTIONS>")
+    # The shape the live 0.153.4 client wrote under an isolated home.
+    add("world_state", {{"full": True, "state": {{"agents_md": {{
+        "directory": str(cwd), "text": (cwd / "AGENTS.md").read_text(encoding="utf-8")}}}}}})
 skills = cwd / ".agents" / "skills"
 if skills.is_dir():
     lines = ["<skills_instructions>", "## Skills", "### Skill roots", f"- `r0` = `{{skills}}`", "### Available skills"]
@@ -402,8 +485,12 @@ if skills.is_dir():
     lines.append("</skills_instructions>")
     message("developer", "\n".join(lines))
 
+# A project's hooks load only for a trusted project, and run only with their
+# definitions trusted: the two layers the live client showed.
+project_trusted = any(item.startswith("projects=") and json.dumps(os.path.realpath(cwd)) in item
+                      and 'trust_level="trusted"' in item for item in configs)
 hooks = {{}}
-if "--dangerously-bypass-hook-trust" in flags and (cwd / ".codex" / "hooks.json").is_file():
+if project_trusted and "--dangerously-bypass-hook-trust" in flags and (cwd / ".codex" / "hooks.json").is_file():
     hooks = json.loads((cwd / ".codex" / "hooks.json").read_text(encoding="utf-8"))["hooks"]
 
 def run_hooks(event, payload):
@@ -433,8 +520,8 @@ if "SMOKE-DONE-" in prompt:
             message("developer", json.loads(text)["hookSpecificOutput"]["additionalContext"])
     final = re.search(r"SMOKE-DONE-[0-9a-f]+", prompt).group(0)
 elif review:
-    add("event_msg", {{"type": "entered_review_mode"}})
-    add("event_msg", {{"type": "exited_review_mode"}})
+    add("event_msg", {{"type": "item_completed", "item": {{"type": "EnteredReviewMode"}}}})
+    add("event_msg", {{"type": "item_completed", "item": {{"type": "ExitedReviewMode"}}}})
     final = "Fake review: one finding in docs/smoke-review-target.md."
 elif "LANE-" in prompt:
     branch = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=cwd, capture_output=True, text=True).stdout.strip()
@@ -533,8 +620,29 @@ def hook_events(event, payload, tool="Bash"):
     return outputs
 
 hook_events("SessionStart", {{"hook_event_name": "SessionStart", "source": "startup"}})
+folder = config / "projects" / re.sub(r"[/.]", "-", str(cwd))
+folder.mkdir(parents=True, exist_ok=True)
+
+def frontmatter(agent):
+    front = (cwd / ".claude" / "agents" / f"{{agent}}.md").read_text(encoding="utf-8").split("---")[1]
+    return (re.search(r'^model:\s*"?([^"\n]+)"?', front, re.M).group(1), re.search(r"^effort:\s*(\S+)", front, re.M).group(1))
+
+def subagent(agent_type, prompt_text, sub_model_id, sub_effort, text):
+    # Where 2.1.287 keeps a subagent: beside the session transcript, with a .meta.json.
+    sub = folder / session / "subagents"
+    sub.mkdir(parents=True, exist_ok=True)
+    name = "agent-" + uuid.uuid4().hex[:16]
+    (sub / f"{{name}}.meta.json").write_text(json.dumps({{"agentType": agent_type, "requestShape": "foreground"}}), encoding="utf-8")
+    entries = [
+        {{"type": "user", "isSidechain": True, "version": VERSION, "message": {{"role": "user", "content": prompt_text}}}},
+        {{"type": "assistant", "isSidechain": True, "version": VERSION, "effort": sub_effort,
+          "message": {{"model": sub_model_id, "content": [{{"type": "text", "text": text}}]}}}},
+    ]
+    (sub / f"{{name}}.jsonl").write_text("".join(json.dumps(e) + "\n" for e in entries), encoding="utf-8")
+
 transcript.append({{"type": "user", "version": VERSION, "cwd": str(cwd), "sessionId": session,
-                   "message": {{"role": "user", "content": f"<command-name>{{prompt.strip()}}</command-name>" if prompt.startswith("/") else prompt}}}})
+                   "message": {{"role": "user", "content": prompt.strip() if prompt.startswith("/") else prompt}}}})
+head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
 if "SMOKE-DONE-" in prompt:
     command = re.search(r"^(printf .+)$", prompt, re.M).group(1)
     if "Bash(printf:*)" in allowed:
@@ -545,19 +653,26 @@ if "SMOKE-DONE-" in prompt:
                                     "tool_response": {{"stdout": output, "stderr": "", "interrupted": False}}}})
     result = re.search(r"SMOKE-DONE-[0-9a-f]+", prompt).group(0)
 elif prompt.startswith("/"):
+    # 2.1.287 records a command as its literal text, then a local_command entry.
     result = "Fake review: one finding."
+    subagent("general-purpose", "Review the diff.", "claude-opus-fake", "medium", result)
+    transcript.append({{"type": "system", "subtype": "local_command",
+                       "content": f"<local-command-stdout>{{result}}</local-command-stdout>"}})
+elif "-----BEGIN LENS PROMPT-----" in prompt:
+    lens = re.search(r"Launch the `([^`]+)` agent", prompt).group(1)
+    lens_prompt = prompt.split("-----BEGIN LENS PROMPT-----\n", 1)[1].rsplit("\n-----END LENS PROMPT-----", 1)[0]
+    lens_model, lens_effort = frontmatter(lens)
+    subagent(lens, lens_prompt, f"claude-{{lens_model}}-fake", lens_effort, f"Reviewed {{head}}.")
+    result = "LENS-DONE"
 elif "LANE-" in prompt:
     branch = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, text=True).stdout.strip()
     result = f"{{re.search(r'LANE-[0-9a-f]+', prompt).group(0)}} {{branch}}"
 else:
-    head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
     result = f"Reviewed {{head}}."
 transcript.append({{"type": "assistant", "version": VERSION, "cwd": str(cwd), "effort": effort, "message": {{"model": model_id}}}})
 final = {{"type": "result", "subtype": "success", "is_error": False, "result": result, "session_id": session,
          "permission_denials": []}}
 events.append(final)
-folder = config / "projects" / re.sub(r"[/.]", "-", str(cwd))
-folder.mkdir(parents=True, exist_ok=True)
 (folder / f"{{session}}.jsonl").write_text("".join(json.dumps(e) + "\n" for e in transcript), encoding="utf-8")
 if values["--output-format"] == "stream-json":
     for event in events:
@@ -635,14 +750,18 @@ def _rows(record) -> dict[str, dict]:
 
 
 def test_every_row_passes_against_clients_that_behave(smoke_kit):
-    result, record, out = _smoke(smoke_kit, "all", "--allow-codex-hook-trust-bypass")
+    result, record, out = _smoke(smoke_kit, "all", "--allow-codex-project-trust", "--allow-codex-hook-trust-bypass")
     rows = _rows(record)
     assert {row_id: row["status"] for row_id, row in rows.items()} == {row_id: "passed" for row_id, _, _ in rs.ROWS}, (
         json.dumps({row_id: row["reason"] for row_id, row in rows.items()}, indent=1) + result.stderr
     )
     assert result.returncode == rs.EXIT_PASSED
     assert record["kit"]["revision"] == smoke_kit["revision"]
-    assert record["observations"]["codex"]["hook_trust_route"] == "bypass"
+    assert record["observations"]["codex"]["hook_trust_route"] == {
+        "project_trust": "per-invocation override",
+        "hook_trust": "per-invocation bypass",
+        "hooks_json_differs": False,
+    }
     for row_id in ("codex.lane", "claude.lane"):
         assert rows[row_id]["evidence"]["receipt_status"] == "completed"
         assert rows[row_id]["session"]["executing_version"] == FAKE_VERSION
@@ -653,12 +772,21 @@ def test_every_row_passes_against_clients_that_behave(smoke_kit):
         assert str(private) not in published and rs.realpath(private) not in published
 
 
-def test_without_the_bypass_the_codex_hook_rows_name_the_missing_trust(smoke_kit):
-    result, record, _ = _smoke(smoke_kit, "no-bypass", "--runtime", "codex")
+@pytest.mark.parametrize(
+    "flags, missing",
+    [
+        ((), "project trust not established"),
+        (("--allow-codex-hook-trust-bypass",), "project trust not established"),
+        (("--allow-codex-project-trust",), "hook trust not established"),
+    ],
+    ids=["neither", "bypass-only", "project-only"],
+)
+def test_the_codex_hook_rows_name_the_trust_layer_that_is_missing(smoke_kit, flags, missing):
+    result, record, _ = _smoke(smoke_kit, f"trust-{len(flags)}-{'-'.join(flags)}", "--runtime", "codex", *flags)
     rows = _rows(record)
     for row_id in ("codex.session_start", "codex.post_tool_use"):
         assert rows[row_id]["status"] == "not-run"
-        assert "the runner grants no trust" in rows[row_id]["reason"]
+        assert rows[row_id]["reason"].startswith(missing)
     for row_id in ("codex.instructions", "codex.skills", "codex.review", "codex.panel", "codex.lane"):
         assert rows[row_id]["status"] == "passed", rows[row_id]["reason"]
     assert rows["claude.lane"]["reason"] == "not selected for this run (--runtime)"
