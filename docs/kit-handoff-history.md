@@ -5,6 +5,49 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-09-30 (Phase 5 exit declared, in Claude Code)
+
+**Declared.** Topi declared Phase 5 complete under PHASE5-E-AUDIT-01
+(`saved_plans/phase5-e-audit_2026-09-30.md`) by answering "Declare, approve all
+(Recommended)" to a question that quoted the packet's declaration wording, which that
+answer adopts:
+
+> I declare Phase 5 complete under PHASE5-E-AUDIT-01, on these amendments to its
+> acceptance contract:
+>
+> - the systemize friction and tracker no-write amendment of 2026-09-23;
+> - the synthetic acceptances of 2026-09-23 (systemize boundaries) and 2026-09-30
+>   (D-TRIAGE-RECOVERY);
+> - E-1a to E-1f, each with the gaps its row names;
+> - E-2a to E-2e;
+> - E-3.
+>
+> The accepted limitations in its residual register are limits of this exit.
+
+The declaration names its acceptance amendments; the packet's residual register owns
+each residual's carrier. Topi took E-1 to E-6 as the packet recommends. Each answer is
+recorded verbatim in `state/review-evidence/phase5-e-audit-20260930/DECISIONS.md`
+(gitignored).
+
+**Recorded.** The parity plan's Phase 5 items are checked (payload P-1), and the
+`saved_plans/phase5-*` packet markdowns are committed (E-5 option A). Tracker, each
+read back identical to its payload:
+
+- P-2 on #243, which stays open:
+  [issuecomment-5906532047](https://github.com/topij/agentic-dev-kit/issues/243#issuecomment-5906532047);
+- P-3a on #7, then set completed:
+  [issuecomment-5906532328](https://github.com/topij/agentic-dev-kit/issues/7#issuecomment-5906532328);
+- P-3b on #748, then set completed:
+  [issuecomment-5906532589](https://github.com/topij/agentic-dev-kit/issues/748#issuecomment-5906532589);
+- P-6 filed as [#872](https://github.com/topij/agentic-dev-kit/issues/872).
+
+**Not established:** a third full check of the packet against its evidence records.
+Before the decisions, the packet's SHA-256, P-1's anchors, the facts P-3a and P-3b
+state and the named issues' states were re-read from the repository root at `3bcb3a3`,
+and matched.
+
+Closed workstream Phase 5 exit: the exit is declared.
+
 ### 2026-09-30 (Phase 5 E audit packet, in Claude Code)
 
 **Accepted.** The operator accepted D-TRIAGE-RECOVERY: "I accept the Stage 1 and Stage 2
