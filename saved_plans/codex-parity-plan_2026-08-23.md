@@ -714,9 +714,15 @@ carries the item's scope. Work the items in this order:
 9. Replace the historical convergence status with the maintained parity matrix and
    move historical analysis to an archive. Owner:
    [#880](https://github.com/topij/agentic-dev-kit/issues/880). It also checks the exit
-   below. Its [exit check](phase6-exit-check_2026-10-02.md), at `7040d28` on 2026-10-02,
-   found the front-matter declaration enforced and confirmed, and the capability table
-   unenforced. The operator held the exit and added item 10.
+   below. The convergence plan is now a pointer, and its historical analysis is archived
+   in git rather than in a separate file:
+   `git show 09fcbe8:docs/kit-convergence-plan.md` prints it. The
+   [exit check](phase6-exit-check_2026-10-02.md), at `7040d28` on 2026-10-02, found:
+   - `workflow_contract` enforced, and confirmed by the Phase 5 replay;
+   - `adoption` enforced;
+   - the capability table unenforced.
+
+   The operator held the exit and added item 10.
 10. Add a deterministic check over the capability table, so a deleted or contradicted row
     fails the suite, then re-run the exit check against the exit as written. If it holds,
     archive this plan behind the matrix. Owner:

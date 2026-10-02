@@ -3,8 +3,8 @@
 This plan ran the convergence campaign agreed on 2026-08-06: cs-toolkit using the kit
 rather than its own modified or historical copy of it, and Codex as a first-class runtime
 rather than a partially wired one. Its status and its account of runtime support were
-retired behind the maintained parity contract in Phase 6 of the parity plan (#880). It is
-not a current record of anything.
+retired behind the maintained parity contract by Phase 6 item 9 of the parity plan
+(#880). It is not a current record of anything.
 
 - Runtime support as declared now:
   [`runtime-parity.md`](agentic-dev-kit/runtime-parity.md).

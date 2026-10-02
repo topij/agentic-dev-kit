@@ -17,7 +17,8 @@ nothing.** Declaring the exit is the operator's call, as it was for Phase 5.
 Phase 1 of the plan defines the matrix as "a maintained runtime-capability matrix
 covering workflows, persistent instructions, safety activation, hooks, permissions,
 model controls, subagents, external integrations, adoption, upgrade, and drift
-detection", with structural checks "derive[d] … from that declaration".
+detection". It also says to "Derive structural parity checks from that declaration
+instead of restating the expected adapter set in tests."
 [`runtime-parity.md`](../docs/agentic-dev-kit/runtime-parity.md) holds it in two halves,
 and names them differently itself:
 
@@ -96,7 +97,7 @@ This repeats, for the whole table, what
 [#880's 2026-10-01 comment](https://github.com/topij/agentic-dev-kit/issues/880) found
 for the sub-table at `edce2ca`.
 
-Many rows describe behaviour whose repository side has tests of its own. For example,
+Some rows describe behaviour whose repository side has tests of its own. For example,
 the *Lifecycle validation boundary* section says repository checks keep the Claude-only
 memory engine out of the shipped Codex hooks. Those tests pin the behaviour and not the
 row: the row can be deleted or contradicted, and they still pass. This record does not
