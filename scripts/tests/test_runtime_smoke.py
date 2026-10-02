@@ -347,6 +347,23 @@ def test_redaction_replaces_every_form_of_a_path_longest_first(tmp_path):
     assert rs.redact(record, table) == {"<run>/logs": ["cd <run>/repo", "<work-root>/other"]}
 
 
+def test_strings_are_bounded_only_after_redaction(tmp_path):
+    run = tmp_path / "work" / "adk-smoke-x"
+    run.mkdir(parents=True)
+    table = rs.placeholders([(run, "<run>")])
+    notice = "Ignoring entries: " + "padding " * 40 + f"set projects[{run}/repo] in {run}/cfg.json"
+    bounded = rs.bound_strings(rs.redact({"stderr_head": notice}, table), limit=120)
+    assert str(tmp_path) not in json.dumps(bounded) and rs.realpath(tmp_path) not in json.dumps(bounded)
+    assert bounded["stderr_head"].endswith("…") and len(bounded["stderr_head"]) == 120
+
+
+def test_the_encoded_spelling_of_a_path_is_redacted_too(tmp_path):
+    home = tmp_path / "Users" / "someone"
+    encoded = "-".join(str(home).split("/"))
+    table = rs.placeholders([(home, "~"), (encoded, "~")])
+    assert rs.redact(f"projects/-private{encoded}-Coding-repo/x.jsonl", table) == "projects/-private~-Coding-repo/x.jsonl"
+
+
 @pytest.mark.parametrize(
     "statuses, expected",
     [

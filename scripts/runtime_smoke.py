@@ -164,6 +164,9 @@ CLAUDE_READ_ONLY_GIT = (
     "Bash(git ls-remote:*)",
 )
 EXCERPT_LIMIT = 240
+# Strings in the record are bounded only after redaction: an excerpt cut first can end
+# inside an operator path, leaving a prefix no placeholder matches.
+RECORD_STRING_LIMIT = 600
 LANE_SCOPES = {"codex": "smoke-codex", "claude": "smoke-claude"}
 
 # The injected-context shapes Codex writes into a rollout. AGENTS.md has arrived two
@@ -241,6 +244,11 @@ def utc_now() -> str:
 
 def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def flatten(text: str) -> str:
+    """One line, whitespace collapsed, nothing cut: captured text waits for redaction."""
+    return " ".join(text.split())
 
 
 def excerpt(text: str, limit: int = EXCERPT_LIMIT) -> str:
@@ -341,7 +349,7 @@ def run_child(
         "stderr": str(stderr_path),
         # A client's own notice lands here — Claude's note that an untrusted project's
         # allow list was ignored, say — so the first line is kept in the record.
-        "stderr_head": excerpt(stderr_lines[0]) if stderr_lines else "",
+        "stderr_head": flatten(stderr_lines[0]) if stderr_lines else "",
     }
 
 
@@ -800,7 +808,7 @@ def message_heads(view: dict[str, Any], role: str) -> list[str]:
     for message in view["messages"]:
         if message["role"] == role:
             first = message["text"].strip().splitlines()[0] if message["text"].strip() else ""
-            heads.append(excerpt(first, 80))
+            heads.append(flatten(first))
     return heads
 
 
@@ -1270,7 +1278,7 @@ def run_codex(
             "observer": "rollout event_msg and completed-item types naming review mode, and the last-message file",
             "review_events": markers,
             "last_message_chars": len(last),
-            "last_message_first_line": excerpt(last.strip().splitlines()[0]) if last.strip() else "",
+            "last_message_first_line": flatten(last.strip().splitlines()[0]) if last.strip() else "",
         }
         ok = not problem and markers and last.strip()
         _finish(row, bool(ok), pin_mismatch(row.session, pin), evidence,
@@ -1338,7 +1346,7 @@ def panel_prompt(ctx: Context, tree: Path, lens: str, runtime: str) -> str:
         timeout=300,
     )
     if result.returncode != 0 or not result.stdout.strip():
-        raise RuntimeError(f"panel_prompt.py exited {result.returncode}: {excerpt(result.stderr)}")
+        raise RuntimeError(f"panel_prompt.py exited {result.returncode}: {flatten(result.stderr)}")
     return result.stdout
 
 
@@ -1792,6 +1800,17 @@ def redact(value: Any, table: list[tuple[str, str]]) -> Any:
     return value
 
 
+def bound_strings(value: Any, limit: int = RECORD_STRING_LIMIT) -> Any:
+    """Cut every string in `value` to `limit`; run it on a record already redacted."""
+    if isinstance(value, str):
+        return value if len(value) <= limit else value[: limit - 1] + "…"
+    if isinstance(value, list):
+        return [bound_strings(item, limit) for item in value]
+    if isinstance(value, dict):
+        return {key: bound_strings(item, limit) for key, item in value.items()}
+    return value
+
+
 def summarise(rows: dict[str, Row]) -> tuple[dict[str, list[str]], int]:
     summary = {status: [row.id for row in rows.values() if row.status == status] for status in ("passed", "failed", "not-run")}
     if summary["failed"]:
@@ -2032,6 +2051,9 @@ def run(
             (work_root, "<work-root>"),
             (out, "<out>"),
             (Path.home(), "~"),
+            # Claude names a project's transcript directory by its path with `/` and
+            # `.` turned into `-`; that spelling carries the account name too.
+            (re.sub(r"[/.]", "-", str(Path.home())), "~"),
         ]
     )
     record = redact(
@@ -2070,6 +2092,7 @@ def run(
         },
         table,
     )
+    record = bound_strings(record)
     (out / "record.json").write_text(json.dumps(record, indent=2, sort_keys=False) + "\n", encoding="utf-8")
     (out / "record.md").write_text(render_markdown(record), encoding="utf-8")
     return record
