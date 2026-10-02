@@ -762,7 +762,16 @@ def test_a_run_that_cannot_finish_stops_its_clients_and_exits_aborted(tmp_path, 
     assert {signum: signal.getsignal(signum) for signum in rs.INTERRUPT_SIGNALS} == before
 
 
-def test_a_signal_during_the_failure_stop_does_not_cut_it_short(tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize(
+    "raised, account",
+    [
+        (RuntimeError("boom"), "failed: RuntimeError: boom; every client it was running is stopped"),
+        # Raised as no handler of the runner's would: the latch is still unset.
+        (KeyboardInterrupt(), "interrupted; every client it was running is stopped"),
+    ],
+    ids=["failure", "interrupt"],
+)
+def test_a_signal_during_an_abort_stop_does_not_cut_it_short(tmp_path, monkeypatch, capsys, raised, account):
     monkeypatch.setattr(rs, "_INTERRUPTED", False)
     monkeypatch.setattr(rs, "_STOPPING", False)
     monkeypatch.setattr(rs, "resolve_revision", lambda _root, _revision: "0" * 40)
@@ -770,7 +779,7 @@ def test_a_signal_during_the_failure_stop_does_not_cut_it_short(tmp_path, monkey
     stops = []
 
     def fail(*_args):
-        raise RuntimeError("boom")
+        raise raised
 
     def stop_while_signalled():
         assert signal.getsignal(signal.SIGTERM) is rs._interrupt
@@ -784,9 +793,9 @@ def test_a_signal_during_the_failure_stop_does_not_cut_it_short(tmp_path, monkey
     try:
         code = rs.main(["--work-root", str(tmp_path), "--out", str(tmp_path / "out")])
     except KeyboardInterrupt:
-        pytest.fail("a signal during the failure's stop escaped main")
+        pytest.fail("a signal during the abort's stop escaped main")
     assert code == rs.EXIT_ABORTED and stops == [True]
-    assert "failed: RuntimeError: boom; every client it was running is stopped" in capsys.readouterr().err
+    assert account in capsys.readouterr().err
 
 
 def _gone(pid: int, wait: float = 15.0) -> bool:

@@ -11,8 +11,8 @@ records*).
 
 The runner wrote [`record.md`](runtime-smoke-evidence_2026-10-02/record.md) and
 [`record.json`](runtime-smoke-evidence_2026-10-02/record.json) at kit revision
-`449096440c73aaea741fcf9acf4767e304892e97`, started 2026-10-02T12:49:49Z and finished
-12:55:40Z UTC. It was started as `uv run scripts/runtime_smoke.py` with these arguments,
+`0c2c2009c8e84d3e016f303d9a9542cd1b5662b6`, started 2026-10-02T14:17:23Z and finished
+14:22:57Z UTC. It was started as `uv run scripts/runtime_smoke.py` with these arguments,
 which the record keeps as given beside its interpreter, operator paths replaced by the
 runner's placeholders:
 
@@ -68,8 +68,8 @@ the runtime that executed:
   day, taken before it ran any client command. That file was rewritten later that day
   while no smoke run was running, so no hash speaks for the later runs. What does:
   `grep -c adk-smoke` over `~/.codex/config.toml` and over `~/.claude.json` printed 0
-  for each before and after each of runs 6, 7 and 8, the first reading at
-  2026-10-02T11:32:35Z and the last at 12:55:45Z. That shows no entry naming a fixture
+  for each before and after each of runs 6 to 9, the first reading at
+  2026-10-02T11:32:35Z and the last at 14:23:04Z. That shows no entry naming a fixture
   path was added to either file, and nothing more.
 
 ## Observations
@@ -78,10 +78,10 @@ the runtime that executed:
    isolated home, so none wrote a trusted-project entry there. `ls
    <codex-home>/config.toml` found no file at 2026-10-02T10:14:53Z, after every `codex
    exec` session of runs 1 to 3 had ended (run 3's Claude rows were still running), at
-   10:27:25Z, after run 5, at 11:37:51Z, after run 6, at 12:49:17Z, after run 7, and at
-   12:55:45Z, after run 8. Runs 2 to 8 each passed a
-   per-invocation project-trust override. Each record's own observation, which the runner
-   reads from that file, lists no added project or hook-state entry. #802 saw the
+   10:27:25Z, after run 5, and after each of runs 6 to 9, the last at 14:23:04Z. Runs 2
+   to 9 each passed a per-invocation project-trust override. Each record's own
+   observation, which the runner reads from that file, lists no added project or
+   hook-state entry. #802 saw the
    entries under the operator's own home, from `codex exec --ignore-user-config
    --ephemeral`, and leaves open whether the CLI or the desktop app's service writes
    them. Under an isolated home, with the flags these records show, the CLI wrote no
@@ -90,7 +90,7 @@ the runtime that executed:
 2. **Codex trusts a project's hooks at two layers.** With the fixture not a trusted
    project, `--dangerously-bypass-hook-trust` alone produced output from neither hook
    (run 1). With a per-invocation project-trust override as well, both ran and their
-   output reached the session (runs 2 to 8). #802's description of a trusted path
+   output reached the session (runs 2 to 9). #802's description of a trusted path
    loading a project's config and hooks is consistent with that; these runs did not
    exercise persisted trust.
 3. **Where Codex 0.153.4 puts injected context.** Under the isolated home, AGENTS.md
@@ -101,7 +101,7 @@ the runtime that executed:
    warning was written between the shell call and its output. `codex exec review` wrote a
    parent session carrying `EnteredReviewMode` and `ExitedReviewMode` items, and a child
    session whose `session_meta.source` is `{"subagent": "review"}`; the reviewer's compute
-   is in that child's `turn_context`, which in run 8 read `gpt-6-astra`, the isolated
+   is in that child's `turn_context`, which in run 9 read `gpt-6-astra`, the isolated
    home's default model, at `low`, the configured cheap tier the runner passes as
    `-c model_reasoning_effort`.
 4. **Claude applies a lens's effort only on the documented route.** Launched as
@@ -109,7 +109,7 @@ the runtime that executed:
    `claude-sonnet-5-5`, at effort `medium` rather than the definition's `high`. Delegated
    from a parent session to the agent named after the lens, the route
    `fallback-review-panel.md` documents, each ran `claude-sonnet-5-5` at `high` (runs 2
-   to 8). The parent transcribed the rendered lens prompt into its Agent call; the
+   to 9). The parent transcribed the rendered lens prompt into its Agent call; the
    runner compared the subagent's first prompt with it, both trimmed of surrounding
    whitespace, and found them equal. That transcription is the inline hand-off #643 is
    about.
@@ -117,15 +117,18 @@ the runtime that executed:
    `permissions.allow` entries with a stderr notice that the workspace was not trusted,
    and still ran the project's hooks.
 6. **The configured Claude review command** ran as a local command: the transcript
-   records the literal `/code-review` and a `local_command` entry. In run 6 the review
-   ran in a `general-purpose` subagent; in run 8 in an `Explore` and a `general-purpose`
-   subagent; each on `claude-opus-5-5` at `medium`.
+   records the literal `/code-review` and a `local_command` entry. In runs 6 and 9 the
+   review ran in a `general-purpose` subagent; in run 8 in an `Explore` and a
+   `general-purpose` subagent; each on `claude-opus-5-5` at `medium`.
+7. **No client left a process behind in its group.** Each client runs in a process group
+   of its own, and from `0c2c200` the runner stops whatever a client leaves there when
+   it exits, saying so in that invocation's `group_outlived_client`. In run 9 that field
+   read false for every invocation, Codex and Claude alike.
 
 ## The runs before the stamped one
 
-The stamped run is run 8. The runs before it were full live runs at earlier revisions of
-the runner, or at its own revision for run 7, against the same clients and isolated
-homes.
+The stamped run is run 9. The runs before it were full live runs at earlier revisions of
+the runner, against the same clients and isolated homes.
 
 - **Run 1,** at `7b209d7`, 2026-10-02T09:50:51Z to 09:54:48Z, with the hook-trust bypass
   only. Its record is retained as historical evidence in
@@ -142,8 +145,7 @@ homes.
   passed.
 - **Run 4,** at `155e2b5`, 10:15:26Z to 10:19:48Z, with both trust layers. Every row
   passed. Its record left the native Codex reviewer's model and effort null: they live in
-  the review's child session, which `64526e1` reads. It is not retained; run 5 supersedes
-  it.
+  the review's child session, which `64526e1` reads. It is not retained.
 - **Run 5,** at `64526e1`, 10:21:56Z to 10:27:12Z, with both trust layers. Every row
   passed, and it was the stamped run until review tightened the runner (`b22354c`,
   `24570a8`): `claude.instructions` now requires AGENTS.md to load as CLAUDE.md's import,
@@ -156,20 +158,25 @@ homes.
   passed. It was the stamped run until the second review round changed the runner
   (`4490964`): interrupts and their escalation, `claude.commands` needing something to
   look for, and `claude.instructions` needing CLAUDE.md as the include's parent. It is
-  not retained; run 8 supersedes it.
+  not retained.
 - **Run 7,** at `4490964`, 12:44:30Z to 12:49:12Z, with both trust layers. Every row
   passed except `codex.panel`: the correctness lens exited 1 without a report, and its
   own `--json` event stream ended in `error`, `Selected model is at capacity. Please try
   a different model.`, then `turn.failed`. The row failed closed. The record names only
   the exit status, because Codex wrote the reason to that stream and not to stderr, the
   one line of output the record keeps. It is not retained; run 8 repeated it.
+- **Run 8,** at `4490964`, 12:49:49Z to 12:55:40Z, with both trust layers. Every row
+  passed. It was the stamped run until the third review round changed the runner
+  (`0c2c200`): a stop waits until a client's whole group is empty, what a client leaves
+  in its group is stopped with it, a signal during a failure's stop no longer escapes,
+  and `claude.commands` says when there was nothing to look for. It is not retained.
 
 Runs 2 and 3 are not retained. Their records kept a Claude stderr excerpt cut before
 redaction, so part of the operator's scratchpad path survived, account name included;
 `155e2b5` bounds strings only after redaction. Run 1's record predates that field.
 `grep -c` for `/Users/`, `-Users-`, `/private/tmp/claude-502` and the account name over
-the `record.json` and `record.md` of runs 1, 5 and 8 printed 0 for each at
-2026-10-02T12:56:22Z.
+the `record.json` and `record.md` of runs 1, 5 and 9 printed 0 for each at
+2026-10-02T14:23:35Z.
 
 ## Not established
 
