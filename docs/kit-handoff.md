@@ -20,6 +20,54 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-02 (Phase 6 item 9, #880, in Claude Code)
+
+**Shipped.** PR #920, squash `d9f757d`: Phase 6 item 9.
+
+- `docs/kit-convergence-plan.md` is now a pointer;
+  `git show 09fcbe8:docs/kit-convergence-plan.md` prints the archived text.
+- `saved_plans/phase6-exit-check_2026-10-02.md` records the Phase 6 exit check at
+  `7040d28`, with the command and revision behind each verdict.
+- #880 closed on merge.
+
+**Decided by the operator.**
+
+- Hold the Phase 6 exit, rather than declare it under an amendment that narrows "the
+  parity matrix" to the front-matter declaration.
+- Add item 10, #919, filed on approval of its exact text. It adds a check over the
+  capability table, then re-runs the exit check.
+- Merge #920 when clean.
+
+**Review.** CodeRabbit's auto-review stayed off, so the fallback panel reviewed #920.
+
+- The full dual-lens panel ran at `89ddbe0`.
+- A dual-lens delta pass covered the repair commit `92bad59`. It was dual because the
+  correctness lens marked one finding LOW-MEDIUM. Its receipt composes on the panel's.
+- Each round's disposition and the delta's verdict lines are posted on #920.
+
+**Verified.**
+
+- `env -u FORCE_COLOR make test` at `89ddbe0d3f8116c85b69cd16ed1a8a6de5d5c2d3` on
+  2026-10-02, in `/Users/topi/Coding/agentic-dev-kit`, printed `3969 passed, 1 skipped
+  in 662.86s (0:11:02)`.
+- The repair commit changed only record prose. A link check covered it, as recorded on
+  #920.
+- `gh run list --commit d9f757da193bcf91c5cc4c0c2d211dcf71085023` showed the `Test`
+  workflow completed `success` on `main`.
+
+**Not established.** The record does not audit which table rows have their repository
+side pinned by other tests; #919 carries that. The record's mutation clones were not
+kept.
+
+**Filed**, each on the operator's approval of its exact text, and read back identical:
+
+- #919;
+- #921, from the delta pass: a lens skipped the two classification verdicts;
+- an occurrence comment on #578: the suite now outlasts the lens timeout that issue
+  suggests.
+
+______________________________________________________________________
+
 ## Session — 2026-10-02 (Phase 6 items 7 and 8, #879, in Claude Code)
 
 **Shipped.** PR #913, squash `947fca0`: `scripts/runtime_smoke.py`, a repo-only runner
@@ -220,61 +268,6 @@ changed `scripts/pr_watch.py` and its tests before the merge. For the merged tre
 
 ______________________________________________________________________
 
-## Session — 2026-10-01 (Phase 6 items 1 to 3, the triage guard, the two-link way out, in Claude Code)
-
-This continues the *Phase 6 planned* session entry below, after its wrap-up.
-
-**Shipped.**
-
-- PR #887, squash `e559b5f`, from the headless lane `phase6-877`: Phase 6 item 3 (#877).
-  The parity matrix's headless-lane cell is split per runtime, and the parity plan is cut
-  to exits, owners and order.
-- PR #888, squash `757a6c0`: item 2 (#876). The review-process learnings memo is distilled
-  into `fallback-review-panel.md` and archived.
-- PR #893, squash `25fde2c`: item 1 (#875). It adds an `evidence` marker and
-  `make test-fast`, pinned by `make -n` to be `make test` plus `-m 'not evidence'`.
-  `AGENTS.md` says it is never a verification claim and names the guard tests it skips.
-- PR #889, squash `95822fb`, from the headless lane `triage-856`: the engine's worktree
-  guards decide containment by filesystem identity (#856).
-- PR #894, squash `2a81896`: the *Completed-state retirement* doctrine gives the operator
-  a manual way out of the two-link state. The same PR rewrote the *Triage engine
-  hardening* entry below.
-
-#875, #876, #877 and #856 closed on merge.
-
-**Decided by the operator.**
-
-- Build #875 even though the premise check had put it on hold. The correction comment on
-  #875 retracts the first estimate.
-- Leave the two-link state to a documented manual step. This answers the question the
-  entry below held for the operator. #892 carries the engine route, to be built only if
-  the state recurs.
-- *Triage engine hardening*'s next step is #891.
-
-**Filed**, each on the operator's approval of its exact text: #890, #891, #892, #895.
-Comments went on #880, #875 (two), #883, #892, #852 and #514.
-
-**Review.** CodeRabbit's auto-review stayed off, so the fallback panel reviewed each PR.
-#889 and #894 took the dual form throughout, as a gate guard and as recovery doctrine.
-On #894, delta pass 1's receipt was refused because its repair was pushed first. That
-is #852's trap on a later round, and its dispositions went in as a plain comment.
-
-**Incidents.**
-
-- The disk filled overnight (ENOSPC), and every tool call failed until the operator
-  cleared pytest's temp directory. #895 names the mechanism: a killed run leaves a lock
-  that pins its basetemp for three days.
-- Review lenses stalled when the host slept. Their suite runs outlived them and were
-  killed by hand.
-- The `triage-856` lane returned mid-task, because the cockpit's brief told it to
-  background `make test`. The cockpit finished the work (the #514 comment).
-
-**Verified.** Each PR's body carries its `env -u FORCE_COLOR make test` stamp at a named
-sha. On main on 2026-10-01, `gh run list --commit <sha>` showed the `Test` workflow
-completed `success` on `95822fb`, `e559b5f`, `757a6c0`, `2a81896` and `25fde2c`.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -287,8 +280,8 @@ ______________________________________________________________________
 **Status:** items 1 to 3 shipped on 2026-10-01, in #893, #888 and #887; items 4 and 5
 the same day, in #897 and #902; item 6 the same day, in #904, which also recorded
 #878 step 3's answer; items 7 and 8 on 2026-10-02, in #913, with the first stamped
-smoke record; item 9 the same day, in #920. #920 archives the convergence plan behind a
-pointer and records the Phase 6 exit check at `7040d28`
+smoke record; item 9 the same day, in #920, squash `d9f757d`. #920 archives the
+convergence plan behind a pointer and records the Phase 6 exit check at `7040d28`
 (`saved_plans/phase6-exit-check_2026-10-02.md`). The check found `workflow_contract`
 enforced and confirmed by the Phase 5 replay, `adoption` enforced, and the capability
 table unenforced. The operator held the exit and added item 10, #919.
