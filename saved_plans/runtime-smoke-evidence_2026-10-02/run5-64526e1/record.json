@@ -1,17 +1,19 @@
 {
   "schema": "adk-runtime-smoke/1",
-  "run_id": "adk-smoke-7wzl0w2d",
-  "started_at": "2026-10-02T11:32:40Z",
-  "finished_at": "2026-10-02T11:37:33Z",
+  "run_id": "adk-smoke-lpgam5d5",
+  "started_at": "2026-10-02T10:21:56Z",
+  "finished_at": "2026-10-02T10:27:12Z",
   "kit": {
-    "revision": "c3f98666fe82e117ca602fdf92d6a5bc53ee1258",
+    "revision": "64526e1d6c357735317b5d151a56feb80612c098",
     "harness": "scripts/runtime_smoke.py",
     "harness_sha256": {
-      "scripts/runtime_smoke.py": "faa1042edc5546682de9fb72007ea7b82c43128d5c81d079c4a21e1f01aa36e8",
+      "scripts/runtime_smoke.py": "9afdb11436e7a027b634840bdf790bce699232e903456d23bdca45970c22b918",
       "scripts/lib/kitconfig.py": "428fa7e24e9efec1a8f65f15ba2d1673df819196bce3ccabe1a850afa7ff988a"
     }
   },
   "invocation": [
+    "uv",
+    "run",
     "scripts/runtime_smoke.py",
     "--work-root",
     "<work-root>",
@@ -32,7 +34,6 @@
     "--allow-codex-project-trust",
     "--allow-codex-hook-trust-bypass"
   ],
-  "interpreter": "~/.cache/uv/environments-v2/runtime-smoke-106a2fd21d154242/bin/python3",
   "clients": {
     "codex": {
       "bin": "/opt/homebrew/bin/codex",
@@ -54,12 +55,12 @@
     }
   },
   "fixture": {
-    "main_head": "43aaad82916ccb06493f1ee8b146ab1b6ab9c0f0",
-    "review_head": "0f82f406c01dc8eb0a46587921b2dea3d6543ac5",
+    "main_head": "24a1145af6f5441773e0840378ebb20d9cfb9b47",
+    "review_head": "91d9d3f89a98866a6ee747d3a401ef5638777e37",
     "friction_log": "docs/kit-friction-log.md",
-    "friction_lines": 200,
+    "friction_lines": 182,
     "friction_budget": 150,
-    "nonce": "0256ec566047"
+    "nonce": "e4452e4c7596"
   },
   "observations": {
     "ancestor_instruction_files": [],
@@ -96,7 +97,7 @@
       },
       "session": {
         "observer": "rollout session_meta and first turn_context",
-        "session_id": "01a0fc63-5e52-7a41-94a9-da3ecf512ffa",
+        "session_id": "01a0fc22-999e-7192-945d-6cd3084b9509",
         "executing_version": "0.153.4",
         "originator": "codex_exec",
         "source": "exec",
@@ -130,7 +131,7 @@
           "returncode": 0,
           "timed_out": false,
           "timeout_seconds": 1800,
-          "duration_seconds": 13.4,
+          "duration_seconds": 12.9,
           "error": null,
           "stdout": "<run>/logs/codex-probe.stdout",
           "stderr": "<run>/logs/codex-probe.stderr",
@@ -161,7 +162,7 @@
       },
       "session": {
         "observer": "rollout session_meta and first turn_context",
-        "session_id": "01a0fc63-5e52-7a41-94a9-da3ecf512ffa",
+        "session_id": "01a0fc22-999e-7192-945d-6cd3084b9509",
         "executing_version": "0.153.4",
         "originator": "codex_exec",
         "source": "exec",
@@ -195,7 +196,7 @@
           "returncode": 0,
           "timed_out": false,
           "timeout_seconds": 1800,
-          "duration_seconds": 13.4,
+          "duration_seconds": 12.9,
           "error": null,
           "stdout": "<run>/logs/codex-probe.stdout",
           "stderr": "<run>/logs/codex-probe.stderr",
@@ -216,7 +217,7 @@
           "hook_trust": "per-invocation bypass",
           "hooks_json_differs": false
         },
-        "expected_line": "\u26a0 docs/kit-friction-log.md is 200 lines (budget ~150) \u2014 an archive sweep into docs/kit-friction-log-archive.md is overdue: run the triage-friction-log workflow to graduate the inbox to the tracker.",
+        "expected_line": "\u26a0 docs/kit-friction-log.md is 182 lines (budget ~150) \u2014 an archive sweep into docs/kit-friction-log-archive.md is overdue: run the triage-friction-log workflow to graduate the inbox to the tracker.",
         "found": {
           "index": 8,
           "role": "developer"
@@ -224,7 +225,7 @@
       },
       "session": {
         "observer": "rollout session_meta and first turn_context",
-        "session_id": "01a0fc63-5e52-7a41-94a9-da3ecf512ffa",
+        "session_id": "01a0fc22-999e-7192-945d-6cd3084b9509",
         "executing_version": "0.153.4",
         "originator": "codex_exec",
         "source": "exec",
@@ -258,7 +259,7 @@
           "returncode": 0,
           "timed_out": false,
           "timeout_seconds": 1800,
-          "duration_seconds": 13.4,
+          "duration_seconds": 12.9,
           "error": null,
           "stdout": "<run>/logs/codex-probe.stdout",
           "stderr": "<run>/logs/codex-probe.stderr",
@@ -289,7 +290,7 @@
       },
       "session": {
         "observer": "rollout session_meta and first turn_context",
-        "session_id": "01a0fc63-5e52-7a41-94a9-da3ecf512ffa",
+        "session_id": "01a0fc22-999e-7192-945d-6cd3084b9509",
         "executing_version": "0.153.4",
         "originator": "codex_exec",
         "source": "exec",
@@ -323,7 +324,7 @@
           "returncode": 0,
           "timed_out": false,
           "timeout_seconds": 1800,
-          "duration_seconds": 13.4,
+          "duration_seconds": 12.9,
           "error": null,
           "stdout": "<run>/logs/codex-probe.stdout",
           "stderr": "<run>/logs/codex-probe.stderr",
@@ -345,12 +346,12 @@
         ],
         "reviewer_model": "gpt-6-astra",
         "reviewer_effort": "low",
-        "last_message_chars": 874,
-        "last_message_first_line": "The added document misrepresents both the budget checker\u2019s exit behavior and the SessionStart hook\u2019s enforcement. No executable code changes are present."
+        "last_message_chars": 896,
+        "last_message_first_line": "The added page misrepresents the budget check's exit semantics and the configured session hook, describing a blocking gate that does not exist."
       },
       "session": {
         "observer": "rollout session_meta and first turn_context",
-        "session_id": "01a0fc63-8e63-7280-875d-7f04a431e13e",
+        "session_id": "01a0fc22-cbdf-7ca3-9bf7-b6320f0295db",
         "executing_version": "0.153.4",
         "originator": "codex_exec",
         "source": "exec",
@@ -361,7 +362,7 @@
         "sandbox": null,
         "reviewer": {
           "observer": "rollout session_meta and first turn_context",
-          "session_id": "01a0fc63-8f1c-72c2-9b2f-a97503b61195",
+          "session_id": "01a0fc22-cc9d-7f33-ac2e-5cef8e836122",
           "executing_version": "0.153.4",
           "originator": "codex_exec",
           "source": {
@@ -393,7 +394,7 @@
           "returncode": 0,
           "timed_out": false,
           "timeout_seconds": 1800,
-          "duration_seconds": 35.8,
+          "duration_seconds": 39.1,
           "error": null,
           "stdout": "<run>/logs/codex-review.stdout",
           "stderr": "<run>/logs/codex-review.stderr",
@@ -406,7 +407,7 @@
       "runtime": "codex",
       "check": "configured fallback panel",
       "status": "passed",
-      "reason": "every configured lens ran at its configured compute and returned a report naming the review head",
+      "reason": "every configured lens ran at its configured compute and reported on the review head",
       "evidence": {
         "observer": "each lens's rollout turn_context and last-message file",
         "lenses": [
@@ -414,7 +415,7 @@
             "lens": "adversarial",
             "configured_model": "gpt-5.6-sol",
             "configured_effort": "medium",
-            "report_chars": 3146,
+            "report_chars": 2337,
             "report_names_review_head": true,
             "applied_model": "gpt-5.6-sol",
             "applied_effort": "medium",
@@ -424,7 +425,7 @@
             "lens": "correctness",
             "configured_model": "gpt-5.6-sol",
             "configured_effort": "medium",
-            "report_chars": 2833,
+            "report_chars": 2541,
             "report_names_review_head": true,
             "applied_model": "gpt-5.6-sol",
             "applied_effort": "medium",
@@ -439,7 +440,7 @@
             "lens": "adversarial",
             "configured_model": "gpt-5.6-sol",
             "configured_effort": "medium",
-            "report_chars": 3146,
+            "report_chars": 2337,
             "report_names_review_head": true,
             "applied_model": "gpt-5.6-sol",
             "applied_effort": "medium",
@@ -449,7 +450,7 @@
             "lens": "correctness",
             "configured_model": "gpt-5.6-sol",
             "configured_effort": "medium",
-            "report_chars": 2833,
+            "report_chars": 2541,
             "report_names_review_head": true,
             "applied_model": "gpt-5.6-sol",
             "applied_effort": "medium",
@@ -480,7 +481,7 @@
           "returncode": 0,
           "timed_out": false,
           "timeout_seconds": 1800,
-          "duration_seconds": 112.4,
+          "duration_seconds": 124.2,
           "error": null,
           "stdout": "<run>/logs/codex-lens-adversarial.stdout",
           "stderr": "<run>/logs/codex-lens-adversarial.stderr",
@@ -508,7 +509,7 @@
           "returncode": 0,
           "timed_out": false,
           "timeout_seconds": 1800,
-          "duration_seconds": 120.8,
+          "duration_seconds": 130.9,
           "error": null,
           "stdout": "<run>/logs/codex-lens-correctness.stdout",
           "stderr": "<run>/logs/codex-lens-correctness.stderr",
@@ -531,14 +532,13 @@
           "/opt/homebrew/bin/codex",
           "exec"
         ],
-        "configured_command_realpath": "/opt/homebrew/Caskroom/codex/0.153.4/bin/codex",
         "final_text_names_token": true,
         "permission_denials": null,
         "worktree": "<run>/sessions/smoke-codex/wt"
       },
       "session": {
         "observer": "rollout session_meta and first turn_context",
-        "session_id": "01a0fc65-fbaa-76b1-85e4-db084dddd632",
+        "session_id": "01a0fc25-6cd6-7923-b3a0-d935e7ce8e0b",
         "executing_version": "0.153.4",
         "originator": "codex_exec",
         "source": "exec",
@@ -566,7 +566,7 @@
           "returncode": 0,
           "timed_out": false,
           "timeout_seconds": 300,
-          "duration_seconds": 0.8,
+          "duration_seconds": 0.9,
           "error": null,
           "stdout": "<run>/logs/codex-lane-issue.stdout",
           "stderr": "<run>/logs/codex-lane-issue.stderr",
@@ -586,7 +586,7 @@
           "returncode": 0,
           "timed_out": false,
           "timeout_seconds": 1800,
-          "duration_seconds": 13.7,
+          "duration_seconds": 11.5,
           "error": null,
           "stdout": "<run>/logs/codex-lane-launch.stdout",
           "stderr": "<run>/logs/codex-lane-launch.stderr",
@@ -599,7 +599,7 @@
       "runtime": "claude",
       "check": "CLAUDE.md and its AGENTS.md import",
       "status": "passed",
-      "reason": "the runtime loaded the fixture's CLAUDE.md, and AGENTS.md as its import",
+      "reason": "the runtime loaded the fixture's CLAUDE.md and the AGENTS.md it imports",
       "evidence": {
         "observer": "an InstructionsLoaded hook passed with --settings, recording the runtime's own hook input",
         "expected": [
@@ -621,7 +621,7 @@
       },
       "session": {
         "observer": "stream-json system/init and the session transcript",
-        "session_id": "dae59cc2-06b8-4634-8af1-ff6173d9db81",
+        "session_id": "f9489520-1c1c-496d-b4f7-b780a6ba8111",
         "executing_version": "2.1.287",
         "init_version": "2.1.287",
         "cwd": "<run>/repo",
@@ -658,7 +658,7 @@
           "returncode": 0,
           "timed_out": false,
           "timeout_seconds": 1800,
-          "duration_seconds": 8.0,
+          "duration_seconds": 8.9,
           "error": null,
           "stdout": "<run>/logs/claude-probe.stdout",
           "stderr": "<run>/logs/claude-probe.stderr",
@@ -693,7 +693,7 @@
       },
       "session": {
         "observer": "stream-json system/init and the session transcript",
-        "session_id": "dae59cc2-06b8-4634-8af1-ff6173d9db81",
+        "session_id": "f9489520-1c1c-496d-b4f7-b780a6ba8111",
         "executing_version": "2.1.287",
         "init_version": "2.1.287",
         "cwd": "<run>/repo",
@@ -730,7 +730,7 @@
           "returncode": 0,
           "timed_out": false,
           "timeout_seconds": 1800,
-          "duration_seconds": 8.0,
+          "duration_seconds": 8.9,
           "error": null,
           "stdout": "<run>/logs/claude-probe.stdout",
           "stderr": "<run>/logs/claude-probe.stderr",
@@ -764,7 +764,7 @@
             "subtype": "hook_response"
           }
         ],
-        "expected_line": "\u26a0 docs/kit-friction-log.md is 200 lines (budget ~150) \u2014 an archive sweep into docs/kit-friction-log-archive.md is overdue: run the triage-friction-log workflow to graduate the inbox to the tracker.",
+        "expected_line": "\u26a0 docs/kit-friction-log.md is 182 lines (budget ~150) \u2014 an archive sweep into docs/kit-friction-log-archive.md is overdue: run the triage-friction-log workflow to graduate the inbox to the tracker.",
         "found": {
           "index": 3,
           "subtype": "hook_response"
@@ -772,7 +772,7 @@
       },
       "session": {
         "observer": "stream-json system/init and the session transcript",
-        "session_id": "dae59cc2-06b8-4634-8af1-ff6173d9db81",
+        "session_id": "f9489520-1c1c-496d-b4f7-b780a6ba8111",
         "executing_version": "2.1.287",
         "init_version": "2.1.287",
         "cwd": "<run>/repo",
@@ -809,7 +809,7 @@
           "returncode": 0,
           "timed_out": false,
           "timeout_seconds": 1800,
-          "duration_seconds": 8.0,
+          "duration_seconds": 8.9,
           "error": null,
           "stdout": "<run>/logs/claude-probe.stdout",
           "stderr": "<run>/logs/claude-probe.stderr",
@@ -822,11 +822,10 @@
       "runtime": "claude",
       "check": "PostToolUse hook",
       "status": "passed",
-      "reason": "a PostToolUse hook event after the shell call that printed the nonce URL carried the hook's warning",
+      "reason": "the follow-up hook's warning was the PostToolUse output for the shell call that printed the nonce URL",
       "evidence": {
-        "observer": "stream-json tool_use and the tool_result carrying the nonce URL, then PostToolUse hook events",
-        "nonce_url_tool_use_index": 10,
-        "nonce_url_tool_result_index": 14,
+        "observer": "stream-json tool result carrying the nonce URL, and PostToolUse hook events",
+        "nonce_url_tool_result": true,
         "post_tool_use_events": [
           {
             "index": 12,
@@ -845,7 +844,7 @@
       },
       "session": {
         "observer": "stream-json system/init and the session transcript",
-        "session_id": "dae59cc2-06b8-4634-8af1-ff6173d9db81",
+        "session_id": "f9489520-1c1c-496d-b4f7-b780a6ba8111",
         "executing_version": "2.1.287",
         "init_version": "2.1.287",
         "cwd": "<run>/repo",
@@ -882,7 +881,7 @@
           "returncode": 0,
           "timed_out": false,
           "timeout_seconds": 1800,
-          "duration_seconds": 8.0,
+          "duration_seconds": 8.9,
           "error": null,
           "stdout": "<run>/logs/claude-probe.stdout",
           "stderr": "<run>/logs/claude-probe.stderr",
@@ -895,7 +894,7 @@
       "runtime": "claude",
       "check": "configured review command",
       "status": "passed",
-      "reason": "the configured review command was invoked, by the transcript's record, and returned a non-error result",
+      "reason": "the configured review command ran and returned a review",
       "evidence": {
         "observer": "stream-json init and result, and the transcript's record of the invocation and its subagents",
         "command": "/code-review",
@@ -903,7 +902,7 @@
         "invocation_in_transcript": true,
         "local_command_recorded": true,
         "result_is_error": false,
-        "result_chars": 928,
+        "result_chars": 1266,
         "subagents": [
           {
             "agent_type": "general-purpose",
@@ -915,13 +914,13 @@
             ],
             "executing_version": "2.1.287",
             "prompt_sha256": "393c737a840ac2aa8a9333f11cbb4eb24be4310701d75ead36fe99cb3cc6b3f9",
-            "report_chars": 928
+            "report_chars": 1266
           }
         ]
       },
       "session": {
         "observer": "stream-json system/init and the session transcript",
-        "session_id": "7e8ec1b8-02f1-4b38-980e-0d167e70eca9",
+        "session_id": "d2e4cd94-da02-41db-86ab-dc2d4c148598",
         "executing_version": "2.1.287",
         "init_version": "2.1.287",
         "cwd": "<run>/repo",
@@ -941,7 +940,7 @@
             ],
             "executing_version": "2.1.287",
             "prompt_sha256": "393c737a840ac2aa8a9333f11cbb4eb24be4310701d75ead36fe99cb3cc6b3f9",
-            "report_chars": 928
+            "report_chars": 1266
           }
         ]
       },
@@ -967,7 +966,7 @@
           "returncode": 0,
           "timed_out": false,
           "timeout_seconds": 1800,
-          "duration_seconds": 19.5,
+          "duration_seconds": 20.5,
           "error": null,
           "stdout": "<run>/logs/claude-review.stdout",
           "stderr": "<run>/logs/claude-review.stderr",
@@ -980,7 +979,7 @@
       "runtime": "claude",
       "check": "configured fallback panel",
       "status": "passed",
-      "reason": "each configured lens ran as its agent definition, on the rendered prompt, at its configured compute, and returned a report naming the review head",
+      "reason": "each configured lens ran as its agent definition, on the rendered prompt, at its configured compute, and reported on the review head",
       "evidence": {
         "observer": "each lens agent's subagent transcript and its .meta.json agent type",
         "lenses": [
@@ -998,8 +997,8 @@
               "high"
             ],
             "executing_version": "2.1.287",
-            "prompt_sha256": "29e11535005b9b6d3da316793a1cee25c78d93754570d400c0be710883be9f4f",
-            "report_chars": 3421,
+            "prompt_sha256": "1aec6db87754ad3c7474b8caefd0b34637aab79fbd724ce8784bd496a6e96d3b",
+            "report_chars": 3179,
             "prompt_verbatim": true,
             "report_names_review_head": true
           },
@@ -1017,8 +1016,8 @@
               "high"
             ],
             "executing_version": "2.1.287",
-            "prompt_sha256": "b0914a63b415bcec83c2b4bbbe9e3e452c05a5b91cbef53cb916a9983a0b8d37",
-            "report_chars": 2987,
+            "prompt_sha256": "d1205f35c39d0e72c63cf1daead5a140d6a43bfaa9ec37ac8d2146172532dfc1",
+            "report_chars": 3564,
             "prompt_verbatim": true,
             "report_names_review_head": true
           }
@@ -1041,8 +1040,8 @@
               "high"
             ],
             "executing_version": "2.1.287",
-            "prompt_sha256": "29e11535005b9b6d3da316793a1cee25c78d93754570d400c0be710883be9f4f",
-            "report_chars": 3421,
+            "prompt_sha256": "1aec6db87754ad3c7474b8caefd0b34637aab79fbd724ce8784bd496a6e96d3b",
+            "report_chars": 3179,
             "prompt_verbatim": true,
             "report_names_review_head": true
           },
@@ -1060,8 +1059,8 @@
               "high"
             ],
             "executing_version": "2.1.287",
-            "prompt_sha256": "b0914a63b415bcec83c2b4bbbe9e3e452c05a5b91cbef53cb916a9983a0b8d37",
-            "report_chars": 2987,
+            "prompt_sha256": "d1205f35c39d0e72c63cf1daead5a140d6a43bfaa9ec37ac8d2146172532dfc1",
+            "report_chars": 3564,
             "prompt_verbatim": true,
             "report_names_review_head": true
           }
@@ -1087,7 +1086,7 @@
           "returncode": 0,
           "timed_out": false,
           "timeout_seconds": 1800,
-          "duration_seconds": 66.1,
+          "duration_seconds": 75.4,
           "error": null,
           "stdout": "<run>/logs/claude-lens-adversarial.stdout",
           "stderr": "<run>/logs/claude-lens-adversarial.stderr",
@@ -1112,7 +1111,7 @@
           "returncode": 0,
           "timed_out": false,
           "timeout_seconds": 1800,
-          "duration_seconds": 64.0,
+          "duration_seconds": 72.8,
           "error": null,
           "stdout": "<run>/logs/claude-lens-correctness.stdout",
           "stderr": "<run>/logs/claude-lens-correctness.stderr",
@@ -1135,14 +1134,13 @@
           "/opt/homebrew/bin/claude",
           "-p"
         ],
-        "configured_command_realpath": "~/.local/share/claude/versions/2.1.287",
         "final_text_names_token": true,
         "permission_denials": [],
         "worktree": "<run>/sessions/smoke-claude/wt"
       },
       "session": {
         "observer": "stream-json system/init and the session transcript",
-        "session_id": "613a3e03-fceb-4de8-b847-a08732455759",
+        "session_id": "055282bb-c689-45c8-a010-9410c5d22100",
         "executing_version": "2.1.287",
         "init_version": null,
         "cwd": "<run>/sessions/smoke-claude/wt",
@@ -1174,7 +1172,7 @@
           "returncode": 0,
           "timed_out": false,
           "timeout_seconds": 300,
-          "duration_seconds": 0.9,
+          "duration_seconds": 0.8,
           "error": null,
           "stdout": "<run>/logs/claude-lane-issue.stdout",
           "stderr": "<run>/logs/claude-lane-issue.stderr",
@@ -1194,11 +1192,11 @@
           "returncode": 0,
           "timed_out": false,
           "timeout_seconds": 1800,
-          "duration_seconds": 7.2,
+          "duration_seconds": 8.6,
           "error": null,
           "stdout": "<run>/logs/claude-lane-launch.stdout",
           "stderr": "<run>/logs/claude-lane-launch.stderr",
-          "stderr_head": "[lane-launcher] receipt: <run>/sessions/smoke-claude/launch-receipt-69ea04e0-d842-4a9e-8fa5-aab752e3bd3d.json"
+          "stderr_head": "[lane-launcher] receipt: <run>/sessions/smoke-claude/launch-receipt-3e5fdb15-4cb2-4c53-b880-df734bcf4652.json"
         }
       ]
     }

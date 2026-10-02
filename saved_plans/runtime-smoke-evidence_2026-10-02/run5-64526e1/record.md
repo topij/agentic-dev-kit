@@ -1,11 +1,11 @@
 # Runtime smoke record — 2026-10-02
 
-Written by `scripts/runtime_smoke.py` at kit revision `c3f98666fe82e117ca602fdf92d6a5bc53ee1258`, run `adk-smoke-7wzl0w2d`, started 2026-10-02T11:32:40Z and finished 2026-10-02T11:37:33Z (UTC). Every row below is an observation at the clients and revision named here.
+Written by `scripts/runtime_smoke.py` at kit revision `64526e1d6c357735317b5d151a56feb80612c098`, run `adk-smoke-lpgam5d5`, started 2026-10-02T10:21:56Z and finished 2026-10-02T10:27:12Z (UTC). Every row below is an observation at the clients and revision named here.
 
-Invocation, as the runner's arguments, under `~/.cache/uv/environments-v2/runtime-smoke-106a2fd21d154242/bin/python3`:
+Invocation:
 
 ```text
-scripts/runtime_smoke.py --work-root '<work-root>' --out '<out>' --codex-bin /opt/homebrew/bin/codex --codex-version 0.153.4 --codex-home '<codex-home>' --claude-bin '~/.local/bin/claude' --claude-version 2.1.287 --claude-config-dir '<claude-config>' --allow-codex-project-trust --allow-codex-hook-trust-bypass
+uv run scripts/runtime_smoke.py --work-root '<work-root>' --out '<out>' --codex-bin /opt/homebrew/bin/codex --codex-version 0.153.4 --codex-home '<codex-home>' --claude-bin '~/.local/bin/claude' --claude-version 2.1.287 --claude-config-dir '<claude-config>' --allow-codex-project-trust --allow-codex-hook-trust-bypass
 ```
 
 ## Clients
@@ -24,20 +24,20 @@ scripts/runtime_smoke.py --work-root '<work-root>' --out '<out>' --codex-bin /op
 | `codex.session_start` | SessionStart hook | **passed** | the tripwire line naming this run's over-budget count reached the session |
 | `codex.post_tool_use` | PostToolUse hook | **passed** | the follow-up hook's warning reached the session after the shell call that printed the nonce URL |
 | `codex.review` | native review (`codex exec review`) | **passed** | the rollout recorded review mode and the review returned its output |
-| `codex.panel` | configured fallback panel | **passed** | every configured lens ran at its configured compute and returned a report naming the review head |
+| `codex.panel` | configured fallback panel | **passed** | every configured lens ran at its configured compute and reported on the review head |
 | `codex.lane` | parallel lane through `launch_lane.py` | **passed** | the launcher completed the lane in its worktree and bound the final text |
-| `claude.instructions` | CLAUDE.md and its AGENTS.md import | **passed** | the runtime loaded the fixture's CLAUDE.md, and AGENTS.md as its import |
+| `claude.instructions` | CLAUDE.md and its AGENTS.md import | **passed** | the runtime loaded the fixture's CLAUDE.md and the AGENTS.md it imports |
 | `claude.commands` | command and lens-agent discovery | **passed** | every declared command and every configured lens agent was loaded |
 | `claude.session_start` | SessionStart hook | **passed** | the tripwire line naming this run's over-budget count was the SessionStart hook's output |
-| `claude.post_tool_use` | PostToolUse hook | **passed** | a PostToolUse hook event after the shell call that printed the nonce URL carried the hook's warning |
-| `claude.review` | configured review command | **passed** | the configured review command was invoked, by the transcript's record, and returned a non-error result |
-| `claude.panel` | configured fallback panel | **passed** | each configured lens ran as its agent definition, on the rendered prompt, at its configured compute, and returned a report naming the review head |
+| `claude.post_tool_use` | PostToolUse hook | **passed** | the follow-up hook's warning was the PostToolUse output for the shell call that printed the nonce URL |
+| `claude.review` | configured review command | **passed** | the configured review command ran and returned a review |
+| `claude.panel` | configured fallback panel | **passed** | each configured lens ran as its agent definition, on the rendered prompt, at its configured compute, and reported on the review head |
 | `claude.lane` | parallel lane through `launch_lane.py` | **passed** | the launcher completed the lane in its worktree and bound the final text |
 
 ## Fixture and observations
 
-- Fixture: `43aaad82916ccb06493f1ee8b146ab1b6ab9c0f0` (the revision's tree plus the controls commit), review head `0f82f406c01dc8eb0a46587921b2dea3d6543ac5` on `smoke-review`.
-- SessionStart control: `docs/kit-friction-log.md` committed at 200 lines against a budget of 150.
+- Fixture: `24a1145af6f5441773e0840378ebb20d9cfb9b47` (the revision's tree plus the controls commit), review head `91d9d3f89a98866a6ee747d3a401ef5638777e37` on `smoke-review`.
+- SessionStart control: `docs/kit-friction-log.md` committed at 182 lines against a budget of 150.
 - Codex hook probe trust: project trust per-invocation override; definition trust per-invocation bypass.
 - Trusted-project entries the run added to the isolated Codex home (#802): none.
 - Hook-state entries the run added to the isolated Codex home: none.
