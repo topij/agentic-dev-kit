@@ -33,8 +33,9 @@ One row per check per runtime:
     codex.lane            one parallel lane runs through the kit's lane launcher
     claude.instructions   CLAUDE.md and the AGENTS.md it imports are loaded
     claude.commands       every declared command and every configured lens agent loads
-    claude.session_start  as for Codex
-    claude.post_tool_use  as for Codex
+    claude.session_start  the SessionStart hook runs and its output carries the tripwire line
+    claude.post_tool_use  the PostToolUse hook runs after a shell call and its output carries
+                          the warning
     claude.review         the configured review command (`review.fallback_commands`)
     claude.panel          as for Codex, each lens launched as its agent definition
     claude.lane           as for Codex
@@ -74,7 +75,10 @@ the fixture path, and `--allow-codex-hook-trust-bypass` adds the client's
 `--dangerously-bypass-hook-trust`. Neither is written anywhere, and both apply only
 after the runner has checked that the fixture's hook registration is the revision's
 own bytes. That check binds the authorization to the revision's registration; vetting
-the revision itself is the operator's choice of `--revision`.
+the revision itself is the operator's choice of `--revision`. The runner's environment,
+less the lane identity and homes it scrubs, reaches every child it starts, credentials
+included, and so reaches the code those authorizations let a client run: the fixture's
+hook engines, which are the revision's own.
 
 **The fixture** is `git archive` of the kit revision: tracked files only, so no local
 config overlay, `state/`, or operator note reaches a client. It is committed as a fresh
@@ -90,7 +94,10 @@ report. No raw rollout or transcript is retained in it; logs stay in the run dir
 The record is written aside and moved into place whole as the run's last step, so a run
 that is interrupted, or that fails on its own account, leaves no record at `--out`; it
 stops every client it started, says what it left at `--out`, and leaves its run
-directory as it stood.
+directory as it stood. An interrupt is SIGINT, SIGTERM or SIGHUP, except one the runner
+inherited ignored; a repeat of it does not cut the stop short. One window is not closed:
+a signal that lands inside `subprocess.Popen` itself, while a client is being started,
+leaves that client to run to its own timeout.
 
 Exit status: 0 every row passed; 1 a row failed; 3 no row failed and at least one did
 not run; 2 refused before any client started; 4 interrupted, or failed on its own
@@ -163,6 +170,11 @@ PREFLIGHT_TIMEOUT = 60
 # until its own timeout.
 _LIVE_GROUPS: set[int] = set()
 _LIVE_LOCK = threading.Lock()
+# How an operator's interrupt arrives: a key press, a kill, a closed terminal.
+INTERRUPT_SIGNALS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
+_INTERRUPTED = False
+# Set, under the lock, once the stop has begun: no client starts after it.
+_STOPPING = False
 
 # What a fixture child never inherits. Lane and repository identity would point the
 # fixture's engines at the operator's tree (the launcher strips the same set), a set
@@ -175,14 +187,16 @@ SCRUBBED_KEYS = frozenset(
 CLAUDE_CREDENTIAL_ENV = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY")
 # A lens reads the diff with git; the kit's project settings allow none of these, and
 # `dontAsk` would turn the first read into a denial. Passed per invocation, so nothing
-# under `.claude/` changes.
-CLAUDE_READ_ONLY_GIT = (
+# under `.claude/` changes. A prefix rule cannot exclude a flag: `git diff`, `git show`
+# and `git log` accept `--output`, which writes a file, so this allows the subcommands a
+# lens reads with and does not make a lens read-only. `git ls-remote` is left out, since
+# its `--upload-pack` runs a command; the fixture's remote is a local path anyway.
+CLAUDE_LENS_GIT = (
     "Bash(git diff:*)",
     "Bash(git show:*)",
     "Bash(git log:*)",
     "Bash(git status:*)",
     "Bash(git rev-parse:*)",
-    "Bash(git ls-remote:*)",
 )
 EXCERPT_LIMIT = 240
 # Strings in the record are bounded only after redaction: an excerpt cut first can end
@@ -337,21 +351,28 @@ def run_child(
     returncode: int | None = None
     error: str | None = None
     with stdout_path.open("wb") as out, stderr_path.open("wb") as err:
-        try:
-            process = subprocess.Popen(
-                argv,
-                cwd=cwd,
-                env=env,
-                stdin=subprocess.PIPE,
-                stdout=out,
-                stderr=err,
-                start_new_session=True,
-            )
-        except OSError as exc:
-            error = f"could not start: {exc}"
-        else:
-            with _LIVE_LOCK:
-                _LIVE_GROUPS.add(process.pid)
+        process: subprocess.Popen | None = None
+        # Started and registered under the lock the stop takes, so a client either
+        # starts before the stop's snapshot and is in it, or does not start at all.
+        with _LIVE_LOCK:
+            if _STOPPING:
+                error = "not started: the run is stopping"
+            else:
+                try:
+                    process = subprocess.Popen(
+                        argv,
+                        cwd=cwd,
+                        env=env,
+                        stdin=subprocess.PIPE,
+                        stdout=out,
+                        stderr=err,
+                        start_new_session=True,
+                    )
+                except OSError as exc:
+                    error = f"could not start: {exc}"
+                else:
+                    _LIVE_GROUPS.add(process.pid)
+        if process is not None:
             try:
                 process.communicate(stdin_text.encode(), timeout=timeout)
             except subprocess.TimeoutExpired:
@@ -361,8 +382,11 @@ def run_child(
                 _stop_group(process)
                 raise
             finally:
-                with _LIVE_LOCK:
-                    _LIVE_GROUPS.discard(process.pid)
+                # A client an interrupt caught mid-stop is still alive; it stays
+                # registered for `stop_live_children` to finish.
+                if process.poll() is not None:
+                    with _LIVE_LOCK:
+                        _LIVE_GROUPS.discard(process.pid)
             returncode = process.returncode
     stderr_lines = [line for line in _read_text(stderr_path).splitlines() if line.strip()]
     return {
@@ -400,9 +424,11 @@ def stop_live_children() -> None:
 
     Called when the run is interrupted or fails. A client launched from a worker
     thread is not reached by the main thread's exception, so the registry is how
-    the main thread finds it.
+    the main thread finds it; once this has begun, no worker starts another.
     """
+    global _STOPPING
     with _LIVE_LOCK:
+        _STOPPING = True
         groups = sorted(_LIVE_GROUPS)
     for sig in (signal.SIGTERM, signal.SIGKILL):
         alive = []
@@ -428,7 +454,27 @@ def _group_alive(group: int) -> bool:
 
 
 def _interrupt(signum: int, _frame: Any) -> None:
+    """Raise once: a repeat signal must not cut short the stop the first one began."""
+    global _INTERRUPTED
+    if _INTERRUPTED:
+        return
+    _INTERRUPTED = True
     raise KeyboardInterrupt(f"signal {signum}")
+
+
+def install_interrupts() -> dict[int, Any]:
+    """Route each interrupt signal to `_interrupt` and return the handlers to restore.
+
+    A signal this process inherited ignored stays ignored: `nohup`, or a shell's
+    background job, asked for exactly that.
+    """
+    global _INTERRUPTED, _STOPPING
+    _INTERRUPTED = _STOPPING = False
+    return {
+        signum: signal.signal(signum, _interrupt)
+        for signum in INTERRUPT_SIGNALS
+        if signal.getsignal(signum) is not signal.SIG_IGN
+    }
 
 
 def invocation_ok(invocation: dict[str, Any]) -> str | None:
@@ -1296,7 +1342,7 @@ def run_codex(
     ctx: Context, rows: dict[str, Row], binary: Path, home: Path, pin: str, *, bypass: bool, project_trust: bool
 ) -> dict[str, Any]:
     trust_before = config_trust_entries(home)
-    cheap = get(ctx.config, "models.runtime_mappings.codex.cheap")
+    cheap = get(ctx.config, "models.runtime_mappings.codex.cheap", None)
     effort = ["-c", f"model_reasoning_effort={cheap}"] if cheap else []
     fixture = ctx.fixture
     command, url = probe_command(ctx.nonce, ctx.pr_number)
@@ -1729,7 +1775,7 @@ def claude_stream_session(
 def run_claude(ctx: Context, rows: dict[str, Row], binary: Path, config_dir: Path, pin: str) -> None:
     fixture = ctx.fixture
     command, url = probe_command(ctx.nonce, ctx.pr_number)
-    cheap = get(ctx.config, "models.runtime_mappings.claude.cheap")
+    cheap = get(ctx.config, "models.runtime_mappings.claude.cheap", None)
     observer_log = ctx.run_dir / "claude-instructions-loaded.jsonl"
     observer = {
         "hooks": {
@@ -1764,7 +1810,7 @@ def run_claude(ctx: Context, rows: dict[str, Row], binary: Path, config_dir: Pat
             "observer": "an InstructionsLoaded hook passed with --settings, recording the runtime's own hook input",
             "expected": wanted,
             "loaded": [
-                {"file_path": entry.get("file_path"), "memory_type": entry.get("memory_type"), "load_reason": entry.get("load_reason")}
+                {key: entry.get(key) for key in ("file_path", "memory_type", "load_reason", "parent_file_path")}
                 for entry in loaded
             ],
         }
@@ -1782,7 +1828,8 @@ def run_claude(ctx: Context, rows: dict[str, Row], binary: Path, config_dir: Pat
             "expected_commands": expected_commands,
             "expected_agents": expected_agents,
         }
-        _finish(rows["claude.commands"], not evidence["missing_commands"] and not evidence["missing_agents"], mismatch, evidence,
+        ok = claude_commands_ok(expected_commands, expected_agents, missing_commands, missing_agents)
+        _finish(rows["claude.commands"], ok, mismatch, evidence,
                 "every declared command and every configured lens agent was loaded",
                 "a declared command or a configured lens agent was not loaded")
 
@@ -1822,14 +1869,14 @@ def run_claude(ctx: Context, rows: dict[str, Row], binary: Path, config_dir: Pat
                 else "no PostToolUse hook event after that shell call carried the hook's warning")
 
     # The configured review command, on the review branch.
-    review_command = get(ctx.config, "review.fallback_commands.claude")
+    review_command = get(ctx.config, "review.fallback_commands.claude", None)
     row = rows["claude.review"]
     if not review_command:
         row.set("not-run", "review.fallback_commands.claude is not configured")
     else:
         argv = [
             "-p", "--output-format", "stream-json", "--verbose", "--setting-sources", "project",
-            "--permission-mode", "dontAsk", "--allowedTools", ",".join(CLAUDE_READ_ONLY_GIT), "--", review_command,
+            "--permission-mode", "dontAsk", "--allowedTools", ",".join(CLAUDE_LENS_GIT), "--", review_command,
         ]
         invocation, events, transcript, transcript_path = claude_stream_session(
             ctx, binary, config_dir, argv, cwd=fixture.repo, prompt="", name="claude-review"
@@ -1872,14 +1919,23 @@ def run_claude(ctx: Context, rows: dict[str, Row], binary: Path, config_dir: Pat
 
 
 def claude_instructions_ok(loaded: list[dict[str, Any]], repo: Path) -> bool:
-    """CLAUDE.md loaded, and AGENTS.md loaded as its import (`load_reason` `include`)."""
+    """CLAUDE.md loaded, and AGENTS.md loaded as its import.
+
+    The import is an `include` whose `parent_file_path` is the fixture's CLAUDE.md,
+    the field Claude Code 2.1.287 sets on an included file's hook input.
+    """
     claude_md, agents_md = realpath(repo / "CLAUDE.md"), realpath(repo / "AGENTS.md")
-    paths = {
-        (realpath(entry["file_path"]), entry.get("load_reason"))
+
+    def path_of(entry: dict[str, Any], key: str) -> str | None:
+        value = entry.get(key)
+        return realpath(value) if isinstance(value, str) else None
+
+    return any(path_of(entry, "file_path") == claude_md for entry in loaded) and any(
+        path_of(entry, "file_path") == agents_md
+        and entry.get("load_reason") == "include"
+        and path_of(entry, "parent_file_path") == claude_md
         for entry in loaded
-        if isinstance(entry.get("file_path"), str)
-    }
-    return any(path == claude_md for path, _ in paths) and (agents_md, "include") in paths
+    )
 
 
 def claude_missing(
@@ -1892,6 +1948,13 @@ def claude_missing(
         [name for name in expected_commands if name not in commands],
         [name for name in expected_agents if name not in agents],
     )
+
+
+def claude_commands_ok(
+    expected_commands: list[str], expected_agents: list[str], missing_commands: list[str], missing_agents: list[str]
+) -> bool:
+    """Every declared command and configured lens agent is listed, and there was one of each to list."""
+    return bool(expected_commands) and bool(expected_agents) and not missing_commands and not missing_agents
 
 
 def claude_review_ok(*, problem: str | None, listed: bool, invoked: bool, result: dict[str, Any]) -> bool:
@@ -1938,7 +2001,7 @@ def run_claude_panel(ctx: Context, row: Row, binary: Path, config_dir: Path, pin
         argv = [
             "-p", "--output-format", "stream-json", "--verbose",
             "--setting-sources", "project", "--permission-mode", "dontAsk",
-            "--allowedTools", ",".join(CLAUDE_READ_ONLY_GIT),
+            "--allowedTools", ",".join(CLAUDE_LENS_GIT),
         ]
         jobs.append((lens, tree, argv, prompt))
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(jobs)) as pool:
@@ -2179,7 +2242,7 @@ def main(argv: list[str] | None = None) -> int:
     raw_argv = list(sys.argv[1:] if argv is None else argv)
     args = parse_args(raw_argv)
     started_at = utc_now()
-    previous = signal.signal(signal.SIGTERM, _interrupt)
+    previous = install_interrupts()
     try:
         kit_root = repo_root(SCRIPT_PATH)
         revision = resolve_revision(kit_root, args.revision)
@@ -2197,7 +2260,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"runtime_smoke: failed: {type(exc).__name__}: {exc}; {left_at(args.out)}", file=sys.stderr)
         return EXIT_ABORTED
     finally:
-        signal.signal(signal.SIGTERM, previous)
+        for signum, handler in previous.items():
+            signal.signal(signum, signal.SIG_DFL if handler is None else handler)
     summary = record["summary"]
     for status in ("passed", "failed", "not-run"):
         print(f"{status}: {', '.join(summary[status]) or '-'}")

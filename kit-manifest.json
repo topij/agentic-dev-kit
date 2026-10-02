@@ -526,7 +526,7 @@
     },
     "scripts/runtime_smoke.py": {
       "role": "repo-only",
-      "sha256": "faa1042edc5546682de9fb72007ea7b82c43128d5c81d079c4a21e1f01aa36e8"
+      "sha256": "63f07dc8559c3aacdfbbb4d74f24f7919ca24843a8ef15f3bfed77712d04404c"
     },
     "scripts/tests/_repo_layout.py": {
       "role": "test",
@@ -634,7 +634,7 @@
     },
     "scripts/tests/test_runtime_smoke.py": {
       "role": "repo-only",
-      "sha256": "0a3c5a3327427b65acd27a04061414f90edf7564c620691bba7d02141822118b"
+      "sha256": "bebb78b461f3d11575c4074c9b9878a1a41c624c10581c92de6b03a24076416a"
     },
     "scripts/tests/test_state_guard.py": {
       "role": "test",

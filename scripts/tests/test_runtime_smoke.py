@@ -105,6 +105,15 @@ def test_a_world_state_snapshot_carries_agents_md_too(tmp_path):
     assert not ok
 
 
+def test_a_world_state_snapshot_for_another_directory_does_not_count(tmp_path):
+    body = "# AGENTS.md\n"
+    ok, evidence = rs.check_agents_block(
+        _view(world_states=[_world_state(6, tmp_path / "elsewhere", body)]), tmp_path, body.encode()
+    )
+    assert not ok
+    assert (evidence["blocks"][0]["dir_is_fixture"], evidence["blocks"][0]["body_equals_fixture"]) == (False, True)
+
+
 def test_world_state_entries_reach_the_view():
     entries = [
         {"type": "world_state", "payload": {"full": True, "state": {"agents_md": {"directory": "/r", "text": "x"}}}},
@@ -279,7 +288,7 @@ def _tool_result(use_id: str, text: str) -> dict:
     return {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": use_id, "content": text}]}}
 
 
-def test_the_nonce_url_counts_only_from_a_tool_result_linked_to_its_call():
+def test_only_a_tool_result_carries_the_nonce_url_and_its_id_finds_the_call():
     url = "https://github.com/adk-smoke/fixture-abc/pull/7"
     prompt = {"type": "user", "message": {"content": [{"type": "text", "text": f"printf {url}"}]}}
     echoed = {"type": "assistant", "message": {"content": [{"type": "text", "text": url}]}}
@@ -446,6 +455,15 @@ def test_strings_are_bounded_only_after_redaction(tmp_path):
     assert record["long"] == long[: rs.RECORD_STRING_LIMIT - 1] + "…"
 
 
+def test_a_path_reached_through_a_link_is_redacted_in_both_spellings(tmp_path):
+    real = tmp_path / "real" / "run"
+    real.mkdir(parents=True)
+    link = tmp_path / "link"
+    link.symlink_to(real)
+    table = rs.placeholders([(link, "<run>")])
+    assert rs.redact(f"{link}/repo and {real}/repo", table) == "<run>/repo and <run>/repo"
+
+
 def test_the_encoded_spelling_of_a_path_is_redacted_too(tmp_path):
     home = tmp_path / "Users" / "someone"
     encoded = "-".join(str(home).split("/"))
@@ -527,6 +545,8 @@ def _claude_lens(**changes):
         ({"agent": {**GOOD_AGENT, "first_prompt": "a paraphrase"}}, "the agent's prompt is not the one panel_prompt.py rendered"),
         ({"agent": {**GOOD_AGENT, "models": ["claude-opus-5"]}}, "applied models ['claude-opus-5'], configured 'sonnet'"),
         ({"agent": {**GOOD_AGENT, "models": []}}, "applied models [], configured 'sonnet'"),
+        ({"agent": {**GOOD_AGENT, "models": ["claude-sonnet-5", "claude-opus-5"]}},
+         "applied models ['claude-sonnet-5', 'claude-opus-5'], configured 'sonnet'"),
         ({"agent": {**GOOD_AGENT, "efforts": ["medium"]}}, "applied efforts ['medium'], configured 'high'"),
         ({"agent": {**GOOD_AGENT, "last_text": "Could not diff."}}, "the report does not name the review head"),
         ({"agent": {**GOOD_AGENT, "executing_version": "0.9"}}, "not the pinned '1.0'"),
@@ -586,12 +606,59 @@ def test_the_lane_text_is_what_each_transport_digests():
 
 def test_agents_md_must_load_as_the_claude_md_import(tmp_path):
     claude_md = {"file_path": str(tmp_path / "CLAUDE.md"), "load_reason": "session_start"}
-    imported = {"file_path": str(tmp_path / "AGENTS.md"), "load_reason": "include"}
-    loaded_alone = {"file_path": str(tmp_path / "AGENTS.md"), "load_reason": "session_start"}
+    imported = {"file_path": str(tmp_path / "AGENTS.md"), "load_reason": "include",
+                "parent_file_path": str(tmp_path / "CLAUDE.md")}
     assert rs.claude_instructions_ok([claude_md, imported], tmp_path)
-    assert not rs.claude_instructions_ok([claude_md, loaded_alone], tmp_path)
+    for agents_md in (
+        {**imported, "load_reason": "session_start"},
+        {**imported, "parent_file_path": str(tmp_path / "docs" / "other.md")},
+        {key: value for key, value in imported.items() if key != "parent_file_path"},
+    ):
+        assert not rs.claude_instructions_ok([claude_md, agents_md], tmp_path), agents_md
     assert not rs.claude_instructions_ok([imported], tmp_path)
     assert not rs.claude_instructions_ok([claude_md], tmp_path)
+
+
+def test_the_commands_row_needs_something_to_look_for():
+    assert rs.claude_commands_ok(["pr-watch"], ["adversarial"], [], [])
+    for arguments in (
+        ([], ["adversarial"], [], []),
+        (["pr-watch"], [], [], []),
+        (["pr-watch"], ["adversarial"], ["pr-watch"], []),
+        (["pr-watch"], ["adversarial"], [], ["adversarial"]),
+    ):
+        assert not rs.claude_commands_ok(*arguments), arguments
+
+
+def test_a_passing_row_whose_runtime_is_not_the_pin_fails():
+    mismatch = "the executing runtime reported '0.9', not the pinned '1.0'"
+    rows = [rs.Row(str(index), "codex", "check") for index in range(3)]
+    rs._finish(rows[0], True, mismatch, {"seen": 1}, "it passed", "it failed")
+    rs._finish(rows[1], True, None, {}, "it passed", "it failed")
+    rs._finish(rows[2], False, mismatch, {}, "it passed", "it failed")
+    assert [(row.status, row.reason) for row in rows] == [
+        ("failed", f"it passed, but {mismatch}"), ("passed", "it passed"), ("failed", "it failed"),
+    ]
+    assert rows[0].evidence == {"seen": 1}
+
+
+def test_two_candidates_for_one_session_fail_closed(tmp_path):
+    day = tmp_path / "codex" / "sessions" / "2026" / "10" / "02"
+    day.mkdir(parents=True)
+    meta = json.dumps({"type": "session_meta", "payload": {"cwd": str(tmp_path / "repo")}}) + "\n"
+    (day / "rollout-a-t1.jsonl").write_text(meta, encoding="utf-8")
+    for thread in ("t1", None):
+        assert rs.locate_rollout(tmp_path / "codex", thread_id=thread, cwd=tmp_path / "repo", since=0)[0] is not None
+    (day / "rollout-b-t1.jsonl").write_text(meta, encoding="utf-8")
+    for thread in ("t1", None):
+        assert rs.locate_rollout(tmp_path / "codex", thread_id=thread, cwd=tmp_path / "repo", since=0)[0] is None
+    projects = tmp_path / "claude" / "projects"
+    (projects / "p1").mkdir(parents=True)
+    (projects / "p1" / "s1.jsonl").write_text("{}\n", encoding="utf-8")
+    assert rs.find_claude_transcript(tmp_path / "claude", "s1") == projects / "p1" / "s1.jsonl"
+    (projects / "p2").mkdir()
+    (projects / "p2" / "s1.jsonl").write_text("{}\n", encoding="utf-8")
+    assert rs.find_claude_transcript(tmp_path / "claude", "s1") is None
 
 
 def test_missing_commands_and_lens_agents_are_named():
@@ -608,6 +675,7 @@ def test_missing_commands_and_lens_agents_are_named():
         {"invoked": False},
         {"result": {"is_error": True, "result": "a review"}},
         {"result": {"is_error": False, "result": "  "}},
+        {"result": {"result": "a review"}},
         {"result": {}},
     ],
 )
@@ -616,6 +684,11 @@ def test_each_claude_review_condition_is_required(changes):
     assert rs.claude_review_ok(**arguments)
     arguments.update(changes)
     assert not rs.claude_review_ok(**arguments)
+
+
+def test_no_lens_git_allowance_runs_a_command():
+    # `git ls-remote --upload-pack=<command>` runs <command>.
+    assert rs.CLAUDE_LENS_GIT and not [rule for rule in rs.CLAUDE_LENS_GIT if "ls-remote" in rule]
 
 
 def test_fixture_children_inherit_no_lane_identity_or_home(monkeypatch):
@@ -669,11 +742,14 @@ def test_an_engine_that_does_not_finish_refuses_the_run(tmp_path, monkeypatch, e
     ids=["interrupt", "exception"],
 )
 def test_a_run_that_cannot_finish_stops_its_clients_and_exits_aborted(tmp_path, monkeypatch, capsys, raised, message):
-    before = signal.getsignal(signal.SIGTERM)
+    monkeypatch.setattr(rs, "_INTERRUPTED", False)
+    monkeypatch.setattr(rs, "_STOPPING", False)
+    before = {signum: signal.getsignal(signum) for signum in rs.INTERRUPT_SIGNALS}
     stopped = []
 
     def fail(*_args):
-        assert signal.getsignal(signal.SIGTERM) is rs._interrupt
+        for signum, handler in before.items():
+            assert signal.getsignal(signum) is (signal.SIG_IGN if handler is signal.SIG_IGN else rs._interrupt), signum
         raise raised
 
     monkeypatch.setattr(rs, "resolve_revision", lambda _root, _revision: "0" * 40)
@@ -683,7 +759,7 @@ def test_a_run_that_cannot_finish_stops_its_clients_and_exits_aborted(tmp_path, 
     assert rs.main(["--work-root", str(tmp_path), "--out", str(tmp_path / "out")]) == rs.EXIT_ABORTED
     assert message in capsys.readouterr().err
     assert stopped == [True]
-    assert signal.getsignal(signal.SIGTERM) is before
+    assert {signum: signal.getsignal(signum) for signum in rs.INTERRUPT_SIGNALS} == before
 
 
 def _gone(pid: int, wait: float = 15.0) -> bool:
@@ -703,6 +779,88 @@ def _gone(pid: int, wait: float = 15.0) -> bool:
             return True
         time.sleep(0.1)
     return False
+
+
+def test_an_interrupt_raises_once(monkeypatch):
+    monkeypatch.setattr(rs, "_INTERRUPTED", False)
+    with pytest.raises(KeyboardInterrupt):
+        rs._interrupt(signal.SIGTERM, None)
+    assert rs._interrupt(signal.SIGTERM, None) is None
+
+
+def test_a_signal_inherited_ignored_stays_ignored(monkeypatch):
+    monkeypatch.setattr(rs, "_INTERRUPTED", False)
+    monkeypatch.setattr(rs, "_STOPPING", False)
+    before = {signum: signal.getsignal(signum) for signum in rs.INTERRUPT_SIGNALS}
+    signal.signal(signal.SIGHUP, signal.SIG_IGN)
+    try:
+        previous = rs.install_interrupts()
+        assert signal.getsignal(signal.SIGHUP) is signal.SIG_IGN and signal.SIGHUP not in previous
+        assert previous and all(signal.getsignal(signum) is rs._interrupt for signum in previous)
+    finally:
+        for signum, handler in before.items():
+            signal.signal(signum, signal.SIG_DFL if handler is None else handler)
+
+
+def test_no_client_starts_once_the_stop_has_begun(tmp_path, monkeypatch):
+    monkeypatch.setattr(rs, "_STOPPING", False)
+    monkeypatch.setattr(rs, "_LIVE_GROUPS", set())
+    rs.stop_live_children()
+    assert rs._STOPPING
+    marker = tmp_path / "started"
+    invocation = rs.run_child(
+        ["touch", str(marker)], cwd=tmp_path, env=dict(os.environ), stdin_text="", timeout=10, log_dir=tmp_path,
+        name="late",
+    )
+    assert rs.invocation_ok(invocation) == "not started: the run is stopping"
+    assert not marker.exists()
+
+
+def test_a_client_an_interrupt_catches_mid_stop_stays_registered_until_stopped(tmp_path, monkeypatch):
+    """A timeout's stop waits out its grace for a client that ignores SIGTERM; an
+    interrupt in that wait must leave the client for `stop_live_children`."""
+    monkeypatch.setattr(rs, "_LIVE_GROUPS", set())
+    monkeypatch.setattr(rs, "_STOPPING", False)
+    pids = tmp_path / "pids"
+
+    def interrupt(_signum, _frame):
+        raise KeyboardInterrupt("an interrupt during the stop")
+
+    previous = signal.signal(signal.SIGALRM, interrupt)
+    signal.setitimer(signal.ITIMER_REAL, 3)
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            rs.run_child(
+                ["bash", "-c", f"trap '' TERM; sleep 300 & echo $$ $! > {pids}; wait"], cwd=tmp_path,
+                env=dict(os.environ), stdin_text="", timeout=1, log_dir=tmp_path, name="stubborn",
+            )
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
+    started = [int(pid) for pid in pids.read_text(encoding="utf-8").split()]
+    assert len(rs._LIVE_GROUPS) == 1
+    rs.stop_live_children()
+    assert len(started) == 2 and all(_gone(pid) for pid in started)
+
+
+def test_what_a_stopped_run_left_at_out_is_read_from_the_disk(tmp_path):
+    assert rs.left_at(tmp_path / "absent") == "no record was written to --out"
+    (tmp_path / "record.json").write_text("{}\n", encoding="utf-8")
+    assert rs.left_at(tmp_path) == "the record at --out was complete before the run stopped"
+
+
+def test_a_home_or_binary_that_is_not_what_it_claims_is_refused(tmp_path):
+    with pytest.raises(rs.Refusal, match="is not an existing directory"):
+        rs.check_isolated_home(
+            tmp_path / "missing", flag="--codex-home", env_key="CODEX_HOME", fallback=".codex", kit_root=tmp_path / "kit"
+        )
+    with pytest.raises(rs.Refusal, match="must be an absolute path"):
+        rs.check_binary(Path("codex"), "--codex-bin")
+    plain = tmp_path / "plain"
+    plain.write_text("", encoding="utf-8")
+    plain.chmod(0o644)
+    with pytest.raises(rs.Refusal, match="is not an executable file"):
+        rs.check_binary(plain, "--codex-bin")
 
 
 def test_a_child_that_outlives_its_timeout_is_stopped_with_what_it_started(tmp_path):
@@ -791,6 +949,9 @@ if args == ["--version"]:
     print(f"codex-cli {{VERSION}}")
     sys.exit(0)
 if args[:2] == ["login", "status"]:
+    if os.environ.get("FAKE_CODEX_LOGGED_OUT") == "1":
+        print("Not logged in")
+        sys.exit(1)
     print("Logged in using a fake credential")
     sys.exit(0)
 if not args or args[0] != "exec":
@@ -871,17 +1032,23 @@ for text in run_hooks("SessionStart", {{"hook_event_name": "SessionStart", "sour
         message("developer", text)
 
 def hang(step):
-    # Stands still in a process group with a child of its own, for the interrupt tests.
+    # Stands still in a process group with a child of its own, both ignoring SIGTERM, so
+    # only a stop's SIGKILL escalation ends them; for the interrupt tests.
     if os.environ.get("FAKE_CODEX_HANG") != step:
         return
+    import signal, time
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
     child = subprocess.Popen(["sleep", "300"])
     pids = Path(os.environ["FAKE_PID_DIR"]) / f"{{uuid.uuid4()}}.pid"
     pids.write_text(f"{{os.getpid()}} {{child.pid}}\n", encoding="utf-8")
-    import time
     time.sleep(300)
 
 if "SMOKE-DONE-" in prompt:
     hang("probe")
+    if os.environ.get("FAKE_CODEX_WRITES_TRUST") == "1":
+        # What #802 saw a client write into the home it ran under.
+        with (Path(os.environ["CODEX_HOME"]) / "config.toml").open("a", encoding="utf-8") as handle:
+            handle.write(f"\n[projects.{{json.dumps(str(cwd))}}]\ntrust_level = \"trusted\"\n")
     command = re.search(r"^(printf .+)$", prompt, re.M).group(1)
     output = subprocess.run(["bash", "-c", command], capture_output=True, text=True).stdout
     payload = {{"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_input": {{"command": command}},
@@ -907,8 +1074,9 @@ elif review:
         {{"type": "session_meta", "payload": {{"id": child, "cli_version": VERSION, "source": {{"subagent": "review"}}, "cwd": str(cwd)}}}},
         {{"type": "turn_context", "payload": {{"model": "fake-reviewer", "effort": effort}}}},
     )), encoding="utf-8")
-    final = "Fake review: one finding in docs/smoke-review-target.md."
+    final = "" if os.environ.get("FAKE_CODEX_REVIEW_SILENT") == "1" else "Fake review: one finding in docs/smoke-review-target.md."
 elif "LANE-" in prompt:
+    hang("lane")
     branch = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=cwd, capture_output=True, text=True).stdout.strip()
     token = "" if os.environ.get("FAKE_CODEX_LANE_NO_TOKEN") == "1" else re.search(r"LANE-[0-9a-f]+", prompt).group(0)
     final = f"{{token}} {{branch}}".strip()
@@ -983,9 +1151,10 @@ commands = sorted(p.stem for p in (cwd / ".claude" / "commands").glob("*.md")) i
 agents = sorted(p.stem for p in (cwd / ".claude" / "agents").glob("*.md")) if project else []
 omitted = os.environ.get("FAKE_CLAUDE_INIT_OMIT")
 commands, agents = [name for name in commands if name != omitted], [name for name in agents if name != omitted]
-events.append({{"type": "system", "subtype": "init", "session_id": session, "cwd": str(cwd), "model": model_id,
-                "claude_code_version": VERSION, "slash_commands": commands + ["code-review"], "agents": agents,
-                "permissionMode": values["--permission-mode"], "apiKeySource": "none"}})
+if not (os.environ.get("FAKE_CLAUDE_NO_INIT") == "1" and "SMOKE-DONE-" in prompt):
+    events.append({{"type": "system", "subtype": "init", "session_id": session, "cwd": str(cwd), "model": model_id,
+                    "claude_code_version": VERSION, "slash_commands": commands + ["code-review"], "agents": agents,
+                    "permissionMode": values["--permission-mode"], "apiKeySource": "none"}})
 env = dict(os.environ, CLAUDE_PROJECT_DIR=str(cwd))
 
 def run(command, payload):
@@ -996,8 +1165,12 @@ for group in settings.get("hooks", {{}}).get("InstructionsLoaded", []):
     for hook in group["hooks"]:
         for name, reason in (("CLAUDE.md", "session_start"), ("AGENTS.md", "include")):
             if project and (cwd / name).is_file():
-                run(hook["command"], {{"hook_event_name": "InstructionsLoaded", "file_path": str(cwd / name),
-                                      "memory_type": "Project", "load_reason": reason}})
+                payload = {{"hook_event_name": "InstructionsLoaded", "file_path": str(cwd / name),
+                           "memory_type": "Project", "load_reason": reason}}
+                if reason == "include":
+                    # 2.1.287 names the file that imported it.
+                    payload["parent_file_path"] = str(cwd / "CLAUDE.md")
+                run(hook["command"], payload)
 
 def hook_events(event, payload, tool="Bash"):
     outputs = []
@@ -1282,8 +1455,17 @@ def test_the_codex_hook_rows_name_the_trust_layer_that_is_missing(smoke_kit, fla
                 "claude.commands": "a declared command or a configured lens agent was not loaded",
             },
         ),
+        ({"FAKE_CODEX_REVIEW_SILENT": "1"}, "codex", {"codex.review": "the review returned no output"}),
+        (
+            {"FAKE_CLAUDE_NO_INIT": "1"},
+            "claude",
+            {
+                row_id: "the session emitted no init event"
+                for row_id in ("claude.instructions", "claude.commands", "claude.session_start", "claude.post_tool_use")
+            },
+        ),
     ],
-    ids=["exit-order-omission", "no-markers-no-hook", "hook-before-call", "silent-hook"],
+    ids=["exit-order-omission", "no-markers-no-hook", "hook-before-call", "silent-hook", "review-silent", "no-init"],
 )
 def test_a_client_that_misbehaves_fails_exactly_the_rows_it_breaks(smoke_kit, request, switches, runtime, broken):
     name = f"misbehave-{request.node.callspec.id}"
@@ -1298,22 +1480,48 @@ def test_a_client_that_misbehaves_fails_exactly_the_rows_it_breaks(smoke_kit, re
     assert result.returncode == rs.EXIT_FAILED
 
 
-def test_a_tampered_hook_registration_is_trusted_by_no_route(smoke_kit, tmp_path, monkeypatch):
-    """The guard the CLI cannot reach: its fixture is the revision's own bytes."""
+def _in_process_context(smoke_kit, tmp_path, monkeypatch):
+    """A run's context built in process, for the guards the CLI cannot reach."""
     for key, value in smoke_kit["env"].items():
         monkeypatch.setenv(key, value)
     run_dir = tmp_path / "run"
     (run_dir / "logs").mkdir(parents=True)
     base_env = rs.scrubbed_environment()
     fixture = rs.build_fixture(smoke_kit["kit"], smoke_kit["revision"], run_dir, base_env)
-    (fixture.repo / rs.CODEX_HOOKS).write_text('{"hooks": {}}\n', encoding="utf-8")
     ctx = rs.Context(
         kit_root=smoke_kit["kit"], revision=smoke_kit["revision"], run_dir=run_dir, log_dir=run_dir / "logs",
         fixture=fixture, config=rs.load_config(fixture.repo / "config" / "dev-model.yaml", overlay=False),
         timeout=180, nonce="0123456789ab", pr_number=1000, budget_line="⚠ unused", base_env=base_env,
         followup_markers={"codex": "unused.", "claude": "unused."},
     )
-    rows = {row_id: rs.Row(row_id, runtime, check) for row_id, runtime, check in rs.ROWS}
+    return ctx, {row_id: rs.Row(row_id, runtime, check) for row_id, runtime, check in rs.ROWS}
+
+
+@pytest.mark.parametrize("runtime", ["codex", "claude"])
+def test_unset_optional_settings_are_reasons_not_crashes(smoke_kit, tmp_path, monkeypatch, runtime):
+    """A setting the runner treats as optional, absent from the config, must not abort a
+    run whose other runtime's clients have already run."""
+    for name in ("run_codex_panel", "run_claude_panel", "run_lane"):
+        monkeypatch.setattr(rs, name, lambda *_args, **_kwargs: None)
+    ctx, rows = _in_process_context(smoke_kit, tmp_path, monkeypatch)
+    ctx.config["models"]["runtime_mappings"][runtime].pop("cheap")
+    if runtime == "codex":
+        rs.run_codex(ctx, rows, smoke_kit["fakes"]["codex"], smoke_kit["homes"]["codex"], FAKE_VERSION,
+                     bypass=False, project_trust=False)
+        assert not any("model_reasoning_effort" in arg for arg in rows["codex.instructions"].invocations[0]["argv"])
+        return
+    ctx.config["review"]["fallback_commands"].pop("claude")
+    rs.run_claude(ctx, rows, smoke_kit["fakes"]["claude"], smoke_kit["homes"]["claude"], FAKE_VERSION)
+    assert "--model" not in rows["claude.instructions"].invocations[0]["argv"]
+    assert (rows["claude.review"].status, rows["claude.review"].reason) == (
+        "not-run", "review.fallback_commands.claude is not configured",
+    )
+
+
+def test_a_tampered_hook_registration_is_trusted_by_no_route(smoke_kit, tmp_path, monkeypatch):
+    """The guard the CLI cannot reach: its fixture is the revision's own bytes."""
+    ctx, rows = _in_process_context(smoke_kit, tmp_path, monkeypatch)
+    (ctx.fixture.repo / rs.CODEX_HOOKS).write_text('{"hooks": {}}\n', encoding="utf-8")
     observed = rs.run_codex(
         ctx, rows, smoke_kit["fakes"]["codex"], smoke_kit["homes"]["codex"], FAKE_VERSION,
         bypass=True, project_trust=True,
@@ -1322,6 +1530,31 @@ def test_a_tampered_hook_registration_is_trusted_by_no_route(smoke_kit, tmp_path
     for row_id in ("codex.session_start", "codex.post_tool_use"):
         assert rows[row_id].status == "not-run"
         assert rows[row_id].reason.startswith("hook trust refused")
+
+
+def test_a_record_is_published_whole_or_not_at_all(smoke_kit, tmp_path, monkeypatch, capsys):
+    """Something wrote into --out while the run went on: the rename into place fails,
+    and the complete record waits beside --out instead of merging into it."""
+    for key, value in smoke_kit["env"].items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setattr(rs, "SCRIPT_PATH", (smoke_kit["kit"] / "scripts" / "runtime_smoke.py").resolve())
+    work = tmp_path / "work"
+    work.mkdir()
+    out = tmp_path / "out"
+    render = rs.render_markdown
+
+    def intrude(record):
+        out.mkdir()
+        (out / "intruder.txt").write_text("someone else's\n", encoding="utf-8")
+        return render(record)
+
+    monkeypatch.setattr(rs, "render_markdown", intrude)
+    assert rs.main(["--work-root", str(work), "--out", str(out)]) == rs.EXIT_ABORTED
+    err = capsys.readouterr().err
+    assert "--out could not take the record" in err and "no record was written to --out" in err
+    assert [path.name for path in out.iterdir()] == ["intruder.txt"]
+    [staging] = tmp_path.glob(".out.*")
+    assert sorted(path.name for path in staging.iterdir()) == ["record.json", "record.md"]
 
 
 def test_a_record_that_cannot_be_rendered_leaves_nothing_at_out(smoke_kit, tmp_path, monkeypatch, capsys):
@@ -1342,13 +1575,31 @@ def test_a_record_that_cannot_be_rendered_leaves_nothing_at_out(smoke_kit, tmp_p
     assert not out.exists() and not list(tmp_path.glob(".out.*"))
 
 
-def test_an_unauthenticated_claude_home_names_the_credential_it_lacked(smoke_kit):
-    result, record, _ = _smoke(smoke_kit, "logged-out", "--runtime", "claude", env_extra={"FAKE_CLAUDE_LOGGED_OUT": "1"})
+@pytest.mark.parametrize(
+    "runtime, switch, named",
+    [
+        ("claude", "FAKE_CLAUDE_LOGGED_OUT", ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY")),
+        ("codex", "FAKE_CODEX_LOGGED_OUT", ("`codex login status`", "CODEX_HOME=<codex-home> codex login")),
+    ],
+)
+def test_an_unauthenticated_home_names_the_credential_it_lacked(smoke_kit, runtime, switch, named):
+    result, record, _ = _smoke(smoke_kit, f"logged-out-{runtime}", "--runtime", runtime, env_extra={switch: "1"})
     for row in record["rows"]:
-        if row["runtime"] == "claude":
+        if row["runtime"] == runtime:
             assert row["status"] == "not-run"
-            assert "CLAUDE_CODE_OAUTH_TOKEN" in row["reason"] and "ANTHROPIC_API_KEY" in row["reason"]
+            assert all(text in row["reason"] for text in named), row["reason"]
     assert result.returncode == rs.EXIT_INCOMPLETE
+
+
+def test_the_record_lists_only_the_trust_entries_the_run_added(smoke_kit, tmp_path):
+    home = tmp_path / "codex-home"
+    home.mkdir()
+    (home / "config.toml").write_text('[projects."/already/trusted"]\ntrust_level = "trusted"\n', encoding="utf-8")
+    result, record, _ = _smoke(
+        smoke_kit, "trust-written", "--runtime", "codex", "--codex-home", str(home),
+        env_extra={"FAKE_CODEX_WRITES_TRUST": "1"},
+    )
+    assert record["observations"]["codex"]["projects_added"] == ["<run>/repo (trusted)"], result.stderr
 
 
 def _sessions(home: Path) -> set[Path]:
@@ -1405,22 +1656,38 @@ def test_arguments_that_cannot_be_honoured_are_refused_before_anything_runs(smok
     assert {runtime: _sessions(home) for runtime, home in smoke_kit["homes"].items()} == before
 
 
-@pytest.mark.parametrize("step, signum", [("probe", signal.SIGTERM), ("lens", signal.SIGINT)])
-def test_an_interrupted_run_stops_every_client_and_writes_no_record(smoke_kit, tmp_path, step, signum):
-    """The probe runs on the main thread and the lenses on workers; both must be stopped."""
+def _interrupts_at_default():
+    # A job a shell starts in the background inherits SIGINT ignored, and the runner leaves
+    # a signal it inherited ignored alone; start it as a terminal would.
+    for signum in rs.INTERRUPT_SIGNALS:
+        signal.signal(signum, signal.SIG_DFL)
+
+
+@pytest.mark.parametrize(
+    "step, signals",
+    [
+        ("probe", (signal.SIGHUP,)),
+        ("probe", (signal.SIGTERM, signal.SIGTERM)),
+        ("lens", (signal.SIGINT,)),
+        ("lane", (signal.SIGTERM,)),
+    ],
+    ids=["probe-sighup", "probe-repeated-sigterm", "lens-sigint", "lane-sigterm"],
+)
+def test_an_interrupted_run_stops_every_client_and_writes_no_record(smoke_kit, tmp_path, step, signals):
+    """The probe and the lane's launcher run on the main thread, the lenses on worker
+    threads, and a lane's client behind the launcher's own relay. Every hanging fake
+    ignores SIGTERM, so each case also needs the stop's SIGKILL escalation."""
     pid_dir = tmp_path / "pids"
     pid_dir.mkdir()
     argv, env, out = _smoke_command(
-        smoke_kit, f"interrupt-{step}", "--runtime", "codex", "--allow-codex-project-trust",
+        smoke_kit, f"interrupt-{step}-{len(signals)}", "--runtime", "codex", "--allow-codex-project-trust",
         "--allow-codex-hook-trust-bypass", env_extra={"FAKE_CODEX_HANG": step, "FAKE_PID_DIR": str(pid_dir)},
     )
     config = rs.load_config(smoke_kit["kit"] / "config" / "dev-model.yaml", overlay=False)
-    hanging = 1 if step == "probe" else len(rs.lens_roster(config))
+    hanging = len(rs.lens_roster(config)) if step == "lens" else 1
     runner = subprocess.Popen(
         argv, cwd=smoke_kit["base"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        # A job a shell starts in the background inherits SIGINT ignored, and Python then
-        # installs no KeyboardInterrupt handler; start the runner as a terminal would.
-        preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL),
+        preexec_fn=_interrupts_at_default,
     )
     try:
         deadline = time.monotonic() + 300
@@ -1429,7 +1696,10 @@ def test_an_interrupted_run_stops_every_client_and_writes_no_record(smoke_kit, t
             assert time.monotonic() < deadline, "no fake client reached its hang"
             time.sleep(0.2)
         time.sleep(0.5)
-        runner.send_signal(signum)
+        for index, signum in enumerate(signals):
+            if index:
+                time.sleep(1)  # inside the grace of the stop the first signal began
+            runner.send_signal(signum)
         _stdout, stderr = runner.communicate(timeout=120)
     finally:
         if runner.poll() is None:
