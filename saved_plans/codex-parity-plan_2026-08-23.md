@@ -23,9 +23,10 @@ git show 75d5e5a:saved_plans/codex-parity-plan_2026-08-23.md
 Links into this file's sections from dated records resolve in that archived text, not
 here.
 
-The work it left open is tracked on the issues it cites, not here. Among them:
+The work it left open is tracked on issues, not here. Among them:
 [#585](https://github.com/topij/agentic-dev-kit/issues/585), which the operator moved
-ahead of Phase 6 on 2026-09-09 and which its 2026-10-02 decision comment widens, and
-the Phase 6 residue on #663, #905, #915, #916 and #917.
+ahead of Phase 6 on 2026-09-09 and which its 2026-10-02 decision comment widens;
+[#919](https://github.com/topij/agentic-dev-kit/issues/919), for the audit of the matrix
+rows the exit left unaudited; and #663, #905, #915, #916 and #917.
 
 Do not append to this file.

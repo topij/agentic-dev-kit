@@ -4,8 +4,9 @@ Phase 6 item 10. The file's front matter declares the *Capability matrix* rows w
 their statuses (`capability_matrix`) and the records the *Headless lane isolation per
 runtime* sub-table links (`lane_isolation_records`). These tests hold each table to
 its declaration, so deleting the table, deleting or renaming a row, or giving a row a
-status in one place and not the other fails the suite. They also resolve every relative
-link and in-file anchor in the file, the sub-table's anchor among them.
+status in one place and not the other fails the suite. They also resolve the file's
+relative links and in-file anchors, the sub-table's anchor among them, in the forms
+`LINK`, `REFERENCE` and `HREF` parse.
 
 What this does not establish: that a row's claim is true. The rows' repository sides
 are pinned, where they are, by the tests of the files they describe, and their live

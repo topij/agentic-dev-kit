@@ -166,7 +166,8 @@ statuses (`capability_matrix`) and the records the per-runtime sub-table links
 (`lane_isolation_records`). `scripts/tests/test_runtime_parity_matrix.py` holds each
 table to its declaration: the rows, their order, each status cell's opening term
 against a vocabulary the file states, and the sub-table's runtime and record per row.
-It also resolves every relative link and in-file anchor in the file. The adoption
+It also resolves the file's relative links and in-file anchors, in the Markdown and HTML
+forms it parses. The adoption
 fixtures now scan a fixed `.claude/`, `.agents/`, `.codex/` set, so the positive check
 names the cause of the `adoption.surfaces.codex` mutation above.
 
@@ -192,19 +193,15 @@ parity doc nor the matrix test. Each mutation's kill is
 which passed in that baseline. The other failures in each count are the matrix test's
 own negative controls, whose text anchors the mutation removed.
 
-### Part 2, unchanged
+### Part 2 after item 10
 
-Item 10 adds no adopter run, so Part 2 stands as found above: the cs-toolkit replay
-confirms `workflow_contract`, and confirms no table row. The rows split in two:
-
-- A row whose claim depends on client behaviour rests on the stamped records the matrix
-  and its *Lifecycle validation boundary* and *Live promotion boundary* sections link.
-- A row that claims repository structure, workflow outcomes, a decision or an intentional
-  difference is confirmed by no run the matrix links: among them *Workflow adapters*, *Fresh-install footprint*,
-  *Runtime memory tripwire*, *Post-merge integrations*, *Session-start and wrap-up
-  integrations*, *Triage integrations*, *Adapter upgrade* and *Drift inspection*. The
-  check above holds each to the declaration. Their truth is pinned, where it is, by the
-  tests of the files they describe, and this record does not audit which.
+Item 10 adds no adopter run, so the cs-toolkit replay still confirms `workflow_contract`
+and was compared against no table row. One sentence in Part 2 above overstates, and is
+corrected here rather than in place: not every table row names its own live record.
+Some cite a stamped record, in the cell or through the *Lifecycle validation boundary*
+and *Live promotion boundary* sections. This record checked no other row against any
+run. The check above holds every row to the declaration; whether a row's claim is true
+is left unaudited, and #919 stays open to carry that audit.
 
 ### Verdict after item 10
 
@@ -218,15 +215,14 @@ confirms `workflow_contract`, and confirms no table row. The rows split in two:
 
 ### Decision
 
-On 2026-10-02 the operator was offered two routes: hold the exit again, or declare it
-with a recorded amendment that the table's rows are confirmed by their own live records
-rather than by the adopter run. The operator chose the second. #923's correctness lens
-then found that wording overstated, as Part 2 above now sets out, and on 2026-10-03 the
-operator chose to declare under the narrowed amendment below rather than hold.
+On 2026-10-02 the operator chose to declare the exit under a recorded amendment rather
+than hold it again. #923's review panel found the amendment as first worded overstated
+what confirms the table's rows. On 2026-10-03 the operator chose to declare under the
+narrowed amendment below rather than hold.
 
 **The operator declared the Phase 6 exit, under this amendment:** the parity matrix is
 enforced by deterministic checks. Its declaration is confirmed by the Phase 5 adopter
-run. Its table's client-dependent rows are confirmed by their stamped live records; its
-other rows are claims no run the matrix links confirms, held to the declaration by the
-check, with their truth left unaudited. The parity plan is archived behind the matrix in the same change,
-which is #880's step 4.
+run. Its table's rows that cite a stamped live record rest on that record. The others
+were checked against no run here: the check holds them to the declaration, and their
+truth is left unaudited, as *Part 2 after item 10* sets out. The parity plan is archived
+behind the matrix in the same change, which is #880's step 4.

@@ -293,13 +293,15 @@ Phase 6 work; its 2026-10-01 comment names it. #905 carries deferred LOW finding
 from #904, #915 a deferred LOW finding from #913's review, and #916 and #917 what
 #913's live runs found. #911 clarified #906’s lifecycle references on 2026-10-02.
 **Owner:**
+[#919](https://github.com/topij/agentic-dev-kit/issues/919), for the audit of which
+matrix rows' claims are true, which the exit left open;
 [#905](https://github.com/topij/agentic-dev-kit/issues/905),
 [#915](https://github.com/topij/agentic-dev-kit/issues/915),
 [#916](https://github.com/topij/agentic-dev-kit/issues/916),
 [#917](https://github.com/topij/agentic-dev-kit/issues/917).
 
-▶ Next: nothing is owed by Phase 6 itself. Its residue is carried by #905, #915, #916 and
-#917; the operator closes this workstream.
+▶ Next: #919's row audit, which the exit amendment left open. The rest of the residue is
+carried by #905, #915, #916 and #917.
 
 ### Scratch retention
 
