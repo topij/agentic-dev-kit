@@ -13,12 +13,15 @@ runner expects.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import time
+import types
 from pathlib import Path
 
 import pytest
@@ -151,6 +154,11 @@ def test_a_declared_skill_missing_from_the_list_fails_and_is_named(tmp_path):
     ok, evidence = rs.check_skills(_view(messages=[_message(2, "developer", text)]), expected)
     assert not ok
     assert evidence["missing"] == [rs.realpath(tmp_path / "wrap-up" / "SKILL.md")]
+
+
+def test_an_empty_declaration_proves_no_skill_discovery(tmp_path):
+    ok, _ = rs.check_skills(_view(messages=[_message(2, "developer", SKILLS_TEXT.format(root=tmp_path))]), [])
+    assert not ok
 
 
 def test_a_skills_list_the_model_wrote_does_not_count(tmp_path):
@@ -415,10 +423,13 @@ def test_strings_are_bounded_only_after_redaction(tmp_path):
     run = tmp_path / "work" / "adk-smoke-x"
     run.mkdir(parents=True)
     table = rs.placeholders([(run, "<run>")])
-    notice = "Ignoring entries: " + "padding " * 40 + f"set projects[{run}/repo] in {run}/cfg.json"
-    bounded = rs.bound_strings(rs.redact({"stderr_head": notice}, table), limit=120)
-    assert str(tmp_path) not in json.dumps(bounded) and rs.realpath(tmp_path) not in json.dumps(bounded)
-    assert bounded["stderr_head"].endswith("…") and len(bounded["stderr_head"]) == 120
+    tail = "/repo/.claude.json"
+    # Exactly the limit once redacted, so a cut made before redaction lands inside the path.
+    padding = "p" * (rs.RECORD_STRING_LIMIT - len("<run>") - len(tail))
+    long = "x" * (rs.RECORD_STRING_LIMIT + 1)
+    record = rs.finalize_record({"stderr_head": padding + str(run) + tail, "long": long}, table)
+    assert record["stderr_head"] == padding + "<run>" + tail
+    assert record["long"] == long[: rs.RECORD_STRING_LIMIT - 1] + "…"
 
 
 def test_the_encoded_spelling_of_a_path_is_redacted_too(tmp_path):
@@ -452,6 +463,236 @@ def test_trust_entries_are_read_from_the_isolated_home(tmp_path):
         "hooks_state": ["/fixture/repo/.codex/hooks.json:session_start:0:0"],
     }
     assert rs.config_trust_entries(tmp_path / "absent") == {"projects": [], "hooks_state": []}
+
+
+# --------------------------------------------------------- row judgements
+
+GOOD_CODEX_SESSION = {"model": "m", "effort": "medium", "executing_version": "1.0"}
+
+
+def _codex_lens(**changes):
+    arguments = dict(failure=None, session=dict(GOOD_CODEX_SESSION), missing="", report="Reviewed abc1234def.",
+                     model="m", effort="medium", head="abc1234def", pin="1.0")
+    arguments.update(changes)
+    return rs.codex_lens_problems("lens", **arguments)
+
+
+@pytest.mark.parametrize(
+    "changes, problem",
+    [
+        ({"failure": "exited 1"}, "lens: exited 1"),
+        ({"session": None, "missing": "0 rollouts"}, "lens: no rollout (0 rollouts)"),
+        ({"session": {**GOOD_CODEX_SESSION, "model": "other"}}, "lens: applied model 'other', configured 'm'"),
+        ({"session": {**GOOD_CODEX_SESSION, "effort": "low"}}, "lens: applied effort 'low', configured 'medium'"),
+        ({"report": "Reviewed something else."}, "lens: the report does not name the review head"),
+        ({"session": {**GOOD_CODEX_SESSION, "executing_version": "0.9"}}, "not the pinned '1.0'"),
+    ],
+)
+def test_each_codex_lens_guard_fails_the_lens_alone(changes, problem):
+    assert _codex_lens() == []
+    problems = _codex_lens(**changes)
+    assert len(problems) == 1 and problem in problems[0], problems
+
+
+GOOD_AGENT = {"agent_type": "lens", "models": ["claude-sonnet-5"], "efforts": ["high"], "executing_version": "1.0",
+              "first_prompt": "the rendered prompt\n", "last_text": "Reviewed abc1234def."}
+
+
+def _claude_lens(**changes):
+    arguments = dict(failure=None, agent=dict(GOOD_AGENT), prompt="the rendered prompt", model="sonnet",
+                     effort="high", head="abc1234def", pin="1.0")
+    arguments.update(changes)
+    return rs.claude_lens_problems("lens", **arguments)
+
+
+@pytest.mark.parametrize(
+    "changes, problem",
+    [
+        ({"failure": "exited 1"}, "lens: exited 1"),
+        ({"agent": None}, "lens: the parent session launched no `lens` agent"),
+        ({"agent": {**GOOD_AGENT, "first_prompt": "a paraphrase"}}, "the agent's prompt is not the one panel_prompt.py rendered"),
+        ({"agent": {**GOOD_AGENT, "models": ["claude-opus-5"]}}, "applied models ['claude-opus-5'], configured 'sonnet'"),
+        ({"agent": {**GOOD_AGENT, "models": []}}, "applied models [], configured 'sonnet'"),
+        ({"agent": {**GOOD_AGENT, "efforts": ["medium"]}}, "applied efforts ['medium'], configured 'high'"),
+        ({"agent": {**GOOD_AGENT, "last_text": "Could not diff."}}, "the report does not name the review head"),
+        ({"agent": {**GOOD_AGENT, "executing_version": "0.9"}}, "not the pinned '1.0'"),
+    ],
+)
+def test_each_claude_lens_guard_fails_the_lens_alone(changes, problem):
+    assert _claude_lens() == []
+    problems = _claude_lens(**changes)
+    assert len(problems) == 1 and problem in problems[0], problems
+
+
+def test_the_lens_agent_is_chosen_by_its_agent_type():
+    other = {**GOOD_AGENT, "agent_type": "general-purpose"}
+    assert rs.lens_agent([other, GOOD_AGENT], "lens") is GOOD_AGENT
+    assert rs.lens_agent([other], "lens") is None
+
+
+def _lane(tmp_path, **changes):
+    text = b"LANE-abc dev/smoke-codex"
+    arguments = dict(
+        launch_failure=None,
+        receipt={"status": "completed", "terminal": {"final_text_sha256": rs.sha256_bytes(text)}},
+        text_bytes=text, token="LANE-abc",
+        session={"cwd": str(tmp_path), "executing_version": "1.0"}, worktree=tmp_path, pin="1.0",
+    )
+    arguments.update(changes)
+    return rs.lane_problems(**arguments)
+
+
+@pytest.mark.parametrize(
+    "changes, problem",
+    [
+        ({"launch_failure": "exited 70"}, "launch_lane.py exited 70"),
+        ({"receipt": {"status": "failed", "terminal": {"final_text_sha256": rs.sha256_bytes(b"LANE-abc dev/smoke-codex")}}},
+         "receipt status 'failed'"),
+        ({"receipt": {"status": "completed", "terminal": {"final_text_sha256": "0" * 64}}},
+         "the final text is not the one the receipt binds"),
+        ({"token": "LANE-other"}, "the final text does not carry the task token"),
+        ({"session": {"cwd": "/elsewhere", "executing_version": "1.0"}}, "the lane session ran outside the descriptor worktree"),
+        ({"session": {"cwd": None}}, "no lane session artifact recorded an executing version"),
+        ({"session": {"executing_version": "0.9"}}, "not the pinned '1.0'"),
+    ],
+)
+def test_each_lane_guard_fails_the_lane_alone(tmp_path, changes, problem):
+    assert _lane(tmp_path) == []
+    problems = _lane(tmp_path, **changes)
+    assert len(problems) == 1 and problem in problems[0], problems
+
+
+def test_the_lane_text_is_what_each_transport_digests():
+    assert rs.lane_final_text("codex", b"raw bytes\n") == (b"raw bytes\n", None)
+    result = json.dumps({"type": "result", "result": "LANE-x b", "session_id": "s1"}).encode()
+    assert rs.lane_final_text("claude", result) == (b"LANE-x b", "s1")
+    assert rs.lane_final_text("claude", b"[1, 2]") == (b"", None)
+    assert rs.lane_final_text("claude", b"not json") == (b"", None)
+
+
+def test_agents_md_must_load_as_the_claude_md_import(tmp_path):
+    claude_md = {"file_path": str(tmp_path / "CLAUDE.md"), "load_reason": "session_start"}
+    imported = {"file_path": str(tmp_path / "AGENTS.md"), "load_reason": "include"}
+    loaded_alone = {"file_path": str(tmp_path / "AGENTS.md"), "load_reason": "session_start"}
+    assert rs.claude_instructions_ok([claude_md, imported], tmp_path)
+    assert not rs.claude_instructions_ok([claude_md, loaded_alone], tmp_path)
+    assert not rs.claude_instructions_ok([imported], tmp_path)
+    assert not rs.claude_instructions_ok([claude_md], tmp_path)
+
+
+def test_missing_commands_and_lens_agents_are_named():
+    init = {"slash_commands": ["/wrap-up", "pr-watch"], "agents": ["adversarial"]}
+    assert rs.claude_missing(init, ["pr-watch", "wrap-up"], ["adversarial"]) == ([], [])
+    assert rs.claude_missing(init, ["pr-watch", "parallel"], ["adversarial", "correctness"]) == (["parallel"], ["correctness"])
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"problem": "exited 1"},
+        {"listed": False},
+        {"invoked": False},
+        {"result": {"is_error": True, "result": "a review"}},
+        {"result": {"is_error": False, "result": "  "}},
+        {"result": {}},
+    ],
+)
+def test_each_claude_review_condition_is_required(changes):
+    arguments = dict(problem=None, listed=True, invoked=True, result={"is_error": False, "result": "a review"})
+    assert rs.claude_review_ok(**arguments)
+    arguments.update(changes)
+    assert not rs.claude_review_ok(**arguments)
+
+
+def test_fixture_children_inherit_no_lane_identity_or_home(monkeypatch):
+    scrubbed = {"DEVKIT_STATE_ROOT", "GIT_DIR", "GIT_CONFIG_GLOBAL", "GH_REPO", "JOB_NAME", "FORCE_COLOR",
+                "CODEX_HOME", "CLAUDE_CONFIG_DIR", "PWD", "OLDPWD"}
+    for key in scrubbed:
+        monkeypatch.setenv(key, "inherited")
+    monkeypatch.setenv("SMOKE_KEPT", "kept")
+    env = rs.scrubbed_environment()
+    assert env["SMOKE_KEPT"] == "kept"
+    assert not scrubbed & set(env)
+
+
+@pytest.mark.parametrize("runtime", ["codex", "claude"])
+@pytest.mark.parametrize("hangs_on, reason", [("--version", "<--version failed"), ("status", "did not answer")])
+def test_a_client_that_does_not_answer_its_preflight_is_a_reason_not_a_crash(tmp_path, monkeypatch, runtime, hangs_on, reason):
+    monkeypatch.setattr(rs, "PREFLIGHT_TIMEOUT", 1)
+    preflight, version = {
+        "codex": (rs.codex_preflight, f"codex-cli {FAKE_VERSION}"),
+        "claude": (rs.claude_preflight, f"{FAKE_VERSION} (Claude Code)"),
+    }[runtime]
+    client = tmp_path / runtime
+    client.write_text(
+        f'#!/bin/sh\ncase " $* " in *" {hangs_on} "*) exec sleep 30;; esac\necho "{version}"\n', encoding="utf-8"
+    )
+    client.chmod(0o755)
+    _facts, problem = preflight(client, FAKE_VERSION, tmp_path, dict(os.environ))
+    assert problem and reason in problem, problem
+
+
+@pytest.mark.parametrize("expectation", ["budget", "followup"])
+def test_an_engine_that_does_not_finish_refuses_the_run(tmp_path, monkeypatch, expectation):
+    def hang(argv, **kwargs):
+        raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+
+    monkeypatch.setattr(rs.subprocess, "run", hang)
+    fixture = types.SimpleNamespace(engines=tmp_path, repo=tmp_path, friction_rel="docs/log.md", friction_lines=120)
+    with pytest.raises(rs.Refusal, match="did not finish"):
+        if expectation == "budget":
+            rs.expected_budget_line(fixture, {})
+        else:
+            rs.expected_followup_marker(fixture, "codex", "printf x", "https://x.invalid/pull/1", {})
+
+
+@pytest.mark.parametrize(
+    "raised, message",
+    [
+        (KeyboardInterrupt(), "interrupted; every client it started is stopped; no record was written"),
+        (RuntimeError("boom"), "failed: RuntimeError: boom; no record was written to --out"),
+    ],
+    ids=["interrupt", "exception"],
+)
+def test_a_run_that_cannot_finish_stops_its_clients_and_exits_aborted(tmp_path, monkeypatch, capsys, raised, message):
+    before = signal.getsignal(signal.SIGTERM)
+    stopped = []
+
+    def fail(*_args):
+        assert signal.getsignal(signal.SIGTERM) is rs._interrupt
+        raise raised
+
+    monkeypatch.setattr(rs, "resolve_revision", lambda _root, _revision: "0" * 40)
+    monkeypatch.setattr(rs, "verify_harness", lambda _root, _revision: {})
+    monkeypatch.setattr(rs, "stop_live_children", lambda: stopped.append(True))
+    monkeypatch.setattr(rs, "run", fail)
+    assert rs.main(["--work-root", str(tmp_path), "--out", str(tmp_path / "out")]) == rs.EXIT_ABORTED
+    assert message in capsys.readouterr().err
+    assert stopped == [True]
+    assert signal.getsignal(signal.SIGTERM) is before
+
+
+def _gone(pid: int, wait: float = 15.0) -> bool:
+    deadline = time.monotonic() + wait
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except (ProcessLookupError, PermissionError):
+            return True
+        time.sleep(0.1)
+    return False
+
+
+def test_a_child_that_outlives_its_timeout_is_stopped_with_what_it_started(tmp_path):
+    pids = tmp_path / "pids"
+    invocation = rs.run_child(
+        ["bash", "-c", f"sleep 300 & echo $$ $! > {pids}; wait"], cwd=tmp_path, env=dict(os.environ),
+        stdin_text="", timeout=2, log_dir=tmp_path, name="hang",
+    )
+    assert rs.invocation_ok(invocation) == "timed out after 2s"
+    started = [int(pid) for pid in pids.read_text(encoding="utf-8").split()]
+    assert len(started) == 2 and all(_gone(pid) for pid in started)
+    assert not rs._LIVE_GROUPS
 
 
 # ------------------------------------------------------------ refusals
@@ -569,7 +810,9 @@ def message(role, text):
     add("response_item", {{"type": "message", "role": role, "content": [{{"type": "input_text", "text": text}}]}})
 
 add("session_meta", {{"id": thread, "cli_version": VERSION, "originator": "codex_exec", "source": "exec", "cwd": str(cwd)}})
-add("turn_context", {{"model": values["-m"] or "fake-default", "effort": effort, "approval_policy": "never",
+# Only the panel lenses pass -m, so this misapplies a lens's model and nothing else.
+applied_model = (os.environ.get("FAKE_CODEX_LENS_MODEL") or values["-m"]) if values["-m"] else "fake-default"
+add("turn_context", {{"model": applied_model, "effort": effort, "approval_policy": "never",
                       "sandbox_policy": {{"type": values["-s"] or values["--sandbox"] or "read-only"}}, "cwd": str(cwd)}})
 if (cwd / "AGENTS.md").is_file():
     # The shape the live 0.153.4 client wrote under an isolated home.
@@ -605,7 +848,18 @@ for text in run_hooks("SessionStart", {{"hook_event_name": "SessionStart", "sour
     if text.strip():
         message("developer", text)
 
+def hang(step):
+    # Stands still in a process group with a child of its own, for the interrupt tests.
+    if os.environ.get("FAKE_CODEX_HANG") != step:
+        return
+    child = subprocess.Popen(["sleep", "300"])
+    pids = Path(os.environ["FAKE_PID_DIR"]) / f"{{uuid.uuid4()}}.pid"
+    pids.write_text(f"{{os.getpid()}} {{child.pid}}\n", encoding="utf-8")
+    import time
+    time.sleep(300)
+
 if "SMOKE-DONE-" in prompt:
+    hang("probe")
     command = re.search(r"^(printf .+)$", prompt, re.M).group(1)
     output = subprocess.run(["bash", "-c", command], capture_output=True, text=True).stdout
     payload = {{"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_input": {{"command": command}},
@@ -634,8 +888,10 @@ elif review:
     final = "Fake review: one finding in docs/smoke-review-target.md."
 elif "LANE-" in prompt:
     branch = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=cwd, capture_output=True, text=True).stdout.strip()
-    final = f"{{re.search(r'LANE-[0-9a-f]+', prompt).group(0)}} {{branch}}"
+    token = "" if os.environ.get("FAKE_CODEX_LANE_NO_TOKEN") == "1" else re.search(r"LANE-[0-9a-f]+", prompt).group(0)
+    final = f"{{token}} {{branch}}".strip()
 else:
+    hang("lens")
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=cwd, capture_output=True, text=True).stdout.strip()
     final = f"Reviewed {{head}}."
 message("assistant", final)
@@ -703,6 +959,8 @@ model_id = f"claude-{{model}}-fake"
 events, transcript = [], []
 commands = sorted(p.stem for p in (cwd / ".claude" / "commands").glob("*.md")) if project else []
 agents = sorted(p.stem for p in (cwd / ".claude" / "agents").glob("*.md")) if project else []
+omitted = os.environ.get("FAKE_CLAUDE_INIT_OMIT")
+commands, agents = [name for name in commands if name != omitted], [name for name in agents if name != omitted]
 events.append({{"type": "system", "subtype": "init", "session_id": session, "cwd": str(cwd), "model": model_id,
                 "claude_code_version": VERSION, "slash_commands": commands + ["code-review"], "agents": agents,
                 "permissionMode": values["--permission-mode"], "apiKeySource": "none"}})
@@ -726,7 +984,7 @@ def hook_events(event, payload, tool="Bash"):
             continue
         for hook in group["hooks"]:
             out = run(hook["command"], payload)
-            if event == "SessionStart" and os.environ.get("FAKE_CLAUDE_SESSIONSTART_SILENT") == "1":
+            if os.environ.get("FAKE_CLAUDE_SILENT_HOOK") == event:
                 out = ""
             outputs.append(out)
             events.append({{"type": "system", "subtype": "hook_response", "hook_event": event, "output": out, "stdout": out}})
@@ -786,11 +1044,13 @@ elif "-----BEGIN LENS PROMPT-----" in prompt:
     lens = re.search(r"Launch the `([^`]+)` agent", prompt).group(1)
     lens_prompt = prompt.split("-----BEGIN LENS PROMPT-----\n", 1)[1].rsplit("\n-----END LENS PROMPT-----", 1)[0]
     lens_model, lens_effort = frontmatter(lens)
+    lens_effort = os.environ.get("FAKE_CLAUDE_LENS_EFFORT") or lens_effort
     subagent(lens, lens_prompt, f"claude-{{lens_model}}-fake", lens_effort, f"Reviewed {{head}}.")
     result = "LENS-DONE"
 elif "LANE-" in prompt:
     branch = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, text=True).stdout.strip()
-    result = f"{{re.search(r'LANE-[0-9a-f]+', prompt).group(0)}} {{branch}}"
+    token = "" if os.environ.get("FAKE_CLAUDE_LANE_NO_TOKEN") == "1" else re.search(r"LANE-[0-9a-f]+", prompt).group(0)
+    result = f"{{token}} {{branch}}".strip()
 else:
     result = f"Reviewed {{head}}."
 transcript.append({{"type": "assistant", "version": VERSION, "cwd": str(cwd), "effort": effort, "message": {{"model": model_id}}}})
@@ -860,7 +1120,8 @@ def smoke_kit(tmp_path_factory):
     return {"base": base, "kit": kit, "revision": revision, "fakes": fakes, "homes": homes, "env": env}
 
 
-def _smoke(smoke_kit, name: str, *extra: str, codex_version: str = FAKE_VERSION, env_extra=None):
+def _smoke_command(smoke_kit, name: str, *extra: str, codex_version: str = FAKE_VERSION,
+                   claude_version: str = FAKE_VERSION, env_extra=None):
     base = smoke_kit["base"]
     work = base / f"work-{name}"
     work.mkdir()
@@ -870,13 +1131,18 @@ def _smoke(smoke_kit, name: str, *extra: str, codex_version: str = FAKE_VERSION,
         "--work-root", str(work), "--out", str(out), "--timeout", "180",
         "--codex-bin", str(smoke_kit["fakes"]["codex"]), "--codex-version", codex_version,
         "--codex-home", str(smoke_kit["homes"]["codex"]),
-        "--claude-bin", str(smoke_kit["fakes"]["claude"]), "--claude-version", FAKE_VERSION,
+        "--claude-bin", str(smoke_kit["fakes"]["claude"]), "--claude-version", claude_version,
         "--claude-config-dir", str(smoke_kit["homes"]["claude"]),
         *extra,
     ]
     env = {key: value for key, value in smoke_kit["env"].items() if key not in rs.CLAUDE_CREDENTIAL_ENV}
     env.update(env_extra or {})
-    result = subprocess.run(argv, cwd=base, env=env, capture_output=True, text=True, timeout=900)
+    return argv, env, out
+
+
+def _smoke(smoke_kit, name: str, *extra: str, **options):
+    argv, env, out = _smoke_command(smoke_kit, name, *extra, **options)
+    result = subprocess.run(argv, cwd=smoke_kit["base"], env=env, capture_output=True, text=True, timeout=900)
     record = json.loads((out / "record.json").read_text(encoding="utf-8")) if (out / "record.json").is_file() else None
     return result, record, out
 
@@ -886,6 +1152,8 @@ def _rows(record) -> dict[str, dict]:
 
 
 def test_every_row_passes_against_clients_that_behave(smoke_kit):
+    # An empty --out is taken over whole; a missing one is created by the same rename.
+    (smoke_kit["base"] / "out-all").mkdir()
     result, record, out = _smoke(smoke_kit, "all", "--allow-codex-project-trust", "--allow-codex-hook-trust-bypass")
     rows = _rows(record)
     assert {row_id: row["status"] for row_id, row in rows.items()} == {row_id: "passed" for row_id, _, _ in rs.ROWS}, (
@@ -939,34 +1207,56 @@ def test_the_codex_hook_rows_name_the_trust_layer_that_is_missing(smoke_kit, fla
             {
                 "FAKE_CODEX_REVIEW_EXIT": "1",
                 "FAKE_CODEX_HOOK_BEFORE_CALL": "1",
+                "FAKE_CODEX_LENS_MODEL": "wrong-model",
                 "FAKE_CLAUDE_NO_TOOL_RESULT": "1",
                 "FAKE_CLAUDE_REVIEW_UNRECORDED": "1",
-                "FAKE_CLAUDE_SESSIONSTART_SILENT": "1",
+                "FAKE_CLAUDE_SILENT_HOOK": "SessionStart",
+                "FAKE_CLAUDE_LANE_NO_TOKEN": "1",
             },
             None,
             {
                 "codex.review": "exited 1",
                 "codex.post_tool_use": "the hook's warning never reached the session",
+                "codex.panel": "applied model 'wrong-model'",
                 "claude.post_tool_use": "no tool result carried the nonce URL",
-                "claude.review": "not listed, not invoked, or returned nothing",
+                "claude.review": "not listed, not invoked, or returned no non-error result",
                 "claude.session_start": "no SessionStart hook event carried the tripwire line",
+                "claude.lane": "the final text does not carry the task token",
             },
         ),
         (
-            {"FAKE_CODEX_REVIEW_NO_MARKERS": "1", "FAKE_CLAUDE_NO_POSTTOOL_HOOK": "1"},
+            {
+                "FAKE_CODEX_REVIEW_NO_MARKERS": "1",
+                "FAKE_CODEX_LANE_NO_TOKEN": "1",
+                "FAKE_CLAUDE_NO_POSTTOOL_HOOK": "1",
+                "FAKE_CLAUDE_LENS_EFFORT": "low",
+            },
             None,
             {
                 "codex.review": "the rollout recorded no review-mode event",
+                "codex.lane": "the final text does not carry the task token",
                 "claude.post_tool_use": "no PostToolUse hook event after that shell call",
+                "claude.panel": "applied efforts ['low']",
             },
         ),
         (
-            {"FAKE_CLAUDE_HOOK_BEFORE_CALL": "1"},
+            {"FAKE_CLAUDE_HOOK_BEFORE_CALL": "1", "FAKE_CLAUDE_INIT_OMIT": "pr-watch"},
             "claude",
-            {"claude.post_tool_use": "no PostToolUse hook event after that shell call"},
+            {
+                "claude.post_tool_use": "no PostToolUse hook event after that shell call",
+                "claude.commands": "a declared command or a configured lens agent was not loaded",
+            },
+        ),
+        (
+            {"FAKE_CLAUDE_SILENT_HOOK": "PostToolUse", "FAKE_CLAUDE_INIT_OMIT": "adversarial"},
+            "claude",
+            {
+                "claude.post_tool_use": "no PostToolUse hook event after that shell call carried the hook's warning",
+                "claude.commands": "a declared command or a configured lens agent was not loaded",
+            },
         ),
     ],
-    ids=["exit-order-omission", "no-markers-no-hook", "hook-before-call"],
+    ids=["exit-order-omission", "no-markers-no-hook", "hook-before-call", "silent-hook"],
 )
 def test_a_client_that_misbehaves_fails_exactly_the_rows_it_breaks(smoke_kit, switches, runtime, broken):
     name = "misbehave-" + "-".join(sorted(key.lower() for key in switches))[:80]
@@ -1007,6 +1297,24 @@ def test_a_tampered_hook_registration_is_trusted_by_no_route(smoke_kit, tmp_path
         assert rows[row_id].reason.startswith("hook trust refused")
 
 
+def test_a_record_that_cannot_be_rendered_leaves_nothing_at_out(smoke_kit, tmp_path, monkeypatch, capsys):
+    """Run in process, so the renderer can fail after every row is judged."""
+    for key, value in smoke_kit["env"].items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setattr(rs, "SCRIPT_PATH", (smoke_kit["kit"] / "scripts" / "runtime_smoke.py").resolve())
+
+    def unrenderable(_record):
+        raise KeyError("a shape the renderer does not know")
+
+    monkeypatch.setattr(rs, "render_markdown", unrenderable)
+    work = tmp_path / "work"
+    work.mkdir()
+    out = tmp_path / "out"
+    assert rs.main(["--work-root", str(work), "--out", str(out)]) == rs.EXIT_ABORTED
+    assert "failed: KeyError" in capsys.readouterr().err
+    assert not out.exists() and not list(tmp_path.glob(".out.*"))
+
+
 def test_an_unauthenticated_claude_home_names_the_credential_it_lacked(smoke_kit):
     result, record, _ = _smoke(smoke_kit, "logged-out", "--runtime", "claude", env_extra={"FAKE_CLAUDE_LOGGED_OUT": "1"})
     for row in record["rows"]:
@@ -1016,19 +1324,95 @@ def test_an_unauthenticated_claude_home_names_the_credential_it_lacked(smoke_kit
     assert result.returncode == rs.EXIT_INCOMPLETE
 
 
-def _rollouts(home: Path) -> set[Path]:
-    return set((home / "sessions").rglob("rollout-*.jsonl"))
+def _sessions(home: Path) -> set[Path]:
+    """Every rollout or transcript a client wrote under its home."""
+    return set(home.rglob("*.jsonl"))
 
 
-def test_a_shell_cli_that_is_not_the_pin_runs_nothing(smoke_kit):
-    before = _rollouts(smoke_kit["homes"]["codex"])
-    result, record, _ = _smoke(smoke_kit, "pin", "--runtime", "codex", codex_version="0.0.1")
+@pytest.mark.parametrize(
+    "runtime, reported, pinned",
+    [
+        ("codex", f"codex-cli {FAKE_VERSION}", "codex-cli 0.0.1"),
+        ("claude", f"{FAKE_VERSION} (Claude Code)", "0.0.1 (Claude Code)"),
+    ],
+)
+def test_a_shell_cli_that_is_not_the_pin_runs_nothing(smoke_kit, runtime, reported, pinned):
+    home = smoke_kit["homes"][runtime]
+    before = _sessions(home)
+    result, record, _ = _smoke(smoke_kit, f"pin-{runtime}", "--runtime", runtime, **{f"{runtime}_version": "0.0.1"})
     for row in record["rows"]:
-        if row["runtime"] == "codex":
+        if row["runtime"] == runtime:
             assert row["status"] == "not-run"
-            assert f"codex-cli {FAKE_VERSION}" in row["reason"] and "codex-cli 0.0.1" in row["reason"]
-    assert _rollouts(smoke_kit["homes"]["codex"]) == before
+            assert reported in row["reason"] and pinned in row["reason"], row["reason"]
+    assert _sessions(home) == before
     assert result.returncode == rs.EXIT_INCOMPLETE
+
+
+@pytest.mark.parametrize(
+    "extra, refusal",
+    [
+        (("--timeout", "0"), "--timeout must be positive"),
+        (("--work-root", "relative"), "--work-root must be an existing absolute directory"),
+        (("--work-root", "<kit>/scripts"), "--work-root must be outside the kit checkout"),
+        (("--out", "relative-out"), "--out must be an absolute path"),
+        (("--out", "<occupied>/missing/out"), "--out must be in an existing directory"),
+        (("--out", "<occupied>"), "--out must be a new or empty directory"),
+        (("--runtime", "claude", "--allow-codex-project-trust"), "the Codex trust authorizations need a Codex run"),
+        (("--runtime", "claude", "--allow-codex-hook-trust-bypass"), "the Codex trust authorizations need a Codex run"),
+    ],
+    ids=["timeout", "relative-work-root", "work-root-in-kit", "relative-out", "out-without-parent", "occupied-out",
+         "project-trust", "bypass"],
+)
+def test_arguments_that_cannot_be_honoured_are_refused_before_anything_runs(smoke_kit, request, extra, refusal):
+    name = request.node.callspec.id
+    occupied = smoke_kit["base"] / f"occupied-{name}"
+    occupied.mkdir()
+    (occupied / "record.json").write_text("{}\n", encoding="utf-8")
+    extra = [arg.replace("<kit>", str(smoke_kit["kit"])).replace("<occupied>", str(occupied)) for arg in extra]
+    before = {runtime: _sessions(home) for runtime, home in smoke_kit["homes"].items()}
+    result, record, out = _smoke(smoke_kit, f"refused-{name}", *extra)
+    assert result.returncode == rs.EXIT_REFUSED, result.stderr
+    assert refusal in result.stderr
+    assert record is None and not out.exists()
+    assert (occupied / "record.json").read_text(encoding="utf-8") == "{}\n"
+    assert {runtime: _sessions(home) for runtime, home in smoke_kit["homes"].items()} == before
+
+
+@pytest.mark.parametrize("step, signum", [("probe", signal.SIGTERM), ("lens", signal.SIGINT)])
+def test_an_interrupted_run_stops_every_client_and_writes_no_record(smoke_kit, tmp_path, step, signum):
+    """The probe runs on the main thread and the lenses on workers; both must be stopped."""
+    pid_dir = tmp_path / "pids"
+    pid_dir.mkdir()
+    argv, env, out = _smoke_command(
+        smoke_kit, f"interrupt-{step}", "--runtime", "codex", "--allow-codex-project-trust",
+        "--allow-codex-hook-trust-bypass", env_extra={"FAKE_CODEX_HANG": step, "FAKE_PID_DIR": str(pid_dir)},
+    )
+    config = rs.load_config(smoke_kit["kit"] / "config" / "dev-model.yaml", overlay=False)
+    hanging = 1 if step == "probe" else len(rs.lens_roster(config))
+    runner = subprocess.Popen(argv, cwd=smoke_kit["base"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        deadline = time.monotonic() + 300
+        while len(list(pid_dir.glob("*.pid"))) < hanging:
+            assert runner.poll() is None, runner.communicate()
+            assert time.monotonic() < deadline, "no fake client reached its hang"
+            time.sleep(0.2)
+        time.sleep(0.5)
+        runner.send_signal(signum)
+        _stdout, stderr = runner.communicate(timeout=120)
+    finally:
+        if runner.poll() is None:
+            runner.kill()
+            runner.wait()
+        # Each hanging fake wrote its own pid and its child's.
+        pids = [int(pid) for path in pid_dir.glob("*.pid") for pid in path.read_text(encoding="utf-8").split()]
+        survivors = [pid for pid in pids if not _gone(pid)]
+        for pid in survivors:
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(pid, signal.SIGKILL)
+    assert runner.returncode == rs.EXIT_ABORTED, stderr
+    assert "interrupted; every client it started is stopped; no record was written to --out" in stderr
+    assert len(pids) == 2 * hanging and not survivors, survivors
+    assert not (out / "record.json").exists()
 
 
 def test_the_runner_refuses_a_dirty_harness(smoke_kit):

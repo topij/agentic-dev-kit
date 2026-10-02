@@ -44,11 +44,11 @@ Codex rows read the session rollout under the isolated `CODEX_HOME`; Claude rows
 the stream-json events and the session transcript under the isolated config
 directory; lane rows also read the launcher's terminal receipt. Model-written text
 serves only as a liveness check: a review that returned something, a lens report that
-names the review head, a lane's final text that carries its task token. The executing client version and
-the applied model and effort come from those artifacts too (rollout `session_meta` and
-`turn_context`, transcript `version`, `message.model` and `effort`), so a shell CLI that
-differs from the runtime that executed a check shows as a pin mismatch on the row
-instead of a wrong stamp on the record.
+names the review head, a lane's final text that carries its task token. The executing
+client version and the applied model and effort come from those artifacts too (rollout
+`session_meta` and `turn_context`, transcript `version`, `message.model` and `effort`),
+so a shell CLI that differs from the runtime that executed a check shows as a pin
+mismatch on the row instead of a wrong stamp on the record.
 
 The SessionStart engine, `check_doc_budget.py --quiet`, prints nothing on a healthy
 tree, so silence proves neither execution nor failure. The fixture therefore commits
@@ -65,7 +65,7 @@ logs in to once: `--codex-home` becomes `CODEX_HOME` and `--claude-config-dir` b
 the operator's own Codex home or Claude configuration directory. #802 observed
 `codex exec` writing a trusted-project entry for its working directory into the home
 it ran under; the record lists every project and hook-state entry a run adds to the
-isolated home, so that side effect is observed rather than assumed. The runner grants
+isolated home's `config.toml`, so that side effect is observed rather than assumed. The runner grants
 no trust itself. Codex trusts a project's hooks at two layers, the project and each
 definition, and a fresh fixture holds neither, so the two Codex hook rows record
 `not-run`, naming the missing layer, unless the operator authorizes both for the hook
@@ -73,20 +73,29 @@ probe alone: `--allow-codex-project-trust` adds a per-invocation `-c` override t
 the fixture path, and `--allow-codex-hook-trust-bypass` adds the client's
 `--dangerously-bypass-hook-trust`. Neither is written anywhere, and both apply only
 after the runner has checked that the fixture's hook registration is the revision's
-own bytes.
+own bytes. That check binds the authorization to the revision's registration; vetting
+the revision itself is the operator's choice of `--revision`.
 
 **The fixture** is `git archive` of the kit revision: tracked files only, so no local
 config overlay, `state/`, or operator note reaches a client. It is committed as a fresh
 repository with a local bare `origin`, then one controls commit and one review-target
-branch. Nothing is deleted: each run creates a new directory under `--work-root`.
+branch. Nothing is deleted: each run creates a new directory under `--work-root` and
+leaves it there, with the fixture, the lens clones, the lane worktrees and the logs,
+for the operator to remove.
 
 **The record** is `record.json` and `record.md` under `--out`. It is stamped with the
 kit revision, the date, the invocation with operator paths replaced by placeholders,
 each client's shell `--version`, and the executing version each row's artifacts
 report. No raw rollout or transcript is retained in it; logs stay in the run directory.
+The record is written aside and moved into place whole as the run's last step, so a run
+that is interrupted, or that fails on its own account, leaves no record at `--out`; it
+stops every client it started, says what it left at `--out`, and leaves its run
+directory as it stood.
 
 Exit status: 0 every row passed; 1 a row failed; 3 no row failed and at least one did
-not run; 2 refused before any client started.
+not run; 2 refused before any client started; 4 interrupted, or failed on its own
+account, with every client it had started stopped and stderr saying whether a record
+reached `--out`.
 """
 
 from __future__ import annotations
@@ -107,6 +116,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 import time
 import tomllib
 from dataclasses import dataclass, field
@@ -145,7 +155,14 @@ ROWS: tuple[tuple[str, str, str], ...] = (
 )
 RUNTIMES = ("codex", "claude")
 
-EXIT_PASSED, EXIT_FAILED, EXIT_REFUSED, EXIT_INCOMPLETE = 0, 1, 2, 3
+EXIT_PASSED, EXIT_FAILED, EXIT_REFUSED, EXIT_INCOMPLETE, EXIT_ABORTED = 0, 1, 2, 3, 4
+# Client probes that answer at once (`--version`, a login status) get this long.
+PREFLIGHT_TIMEOUT = 60
+# The process groups of the clients running now. An interrupt stops every one: a
+# client the runner abandoned would keep spending, perhaps under a trust bypass,
+# until its own timeout.
+_LIVE_GROUPS: set[int] = set()
+_LIVE_LOCK = threading.Lock()
 
 # What a fixture child never inherits. Lane and repository identity would point the
 # fixture's engines at the operator's tree (the launcher strips the same set), a set
@@ -333,11 +350,19 @@ def run_child(
         except OSError as exc:
             error = f"could not start: {exc}"
         else:
+            with _LIVE_LOCK:
+                _LIVE_GROUPS.add(process.pid)
             try:
                 process.communicate(stdin_text.encode(), timeout=timeout)
             except subprocess.TimeoutExpired:
                 timed_out = True
                 _stop_group(process)
+            except BaseException:
+                _stop_group(process)
+                raise
+            finally:
+                with _LIVE_LOCK:
+                    _LIVE_GROUPS.discard(process.pid)
             returncode = process.returncode
     stderr_lines = [line for line in _read_text(stderr_path).splitlines() if line.strip()]
     return {
@@ -368,6 +393,42 @@ def _stop_group(process: subprocess.Popen) -> None:
             break
         except subprocess.TimeoutExpired:
             continue
+
+
+def stop_live_children() -> None:
+    """Stop every client group still running: SIGTERM, a short grace, then SIGKILL.
+
+    Called when the run is interrupted or fails. A client launched from a worker
+    thread is not reached by the main thread's exception, so the registry is how
+    the main thread finds it.
+    """
+    with _LIVE_LOCK:
+        groups = sorted(_LIVE_GROUPS)
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        alive = []
+        for group in groups:
+            try:
+                os.killpg(group, sig)
+                alive.append(group)
+            except (ProcessLookupError, PermissionError):
+                continue
+        deadline = time.monotonic() + 5
+        while alive and time.monotonic() < deadline:
+            alive = [group for group in alive if _group_alive(group)]
+            time.sleep(0.1)
+        groups = alive
+
+
+def _group_alive(group: int) -> bool:
+    try:
+        os.killpg(group, 0)
+    except (ProcessLookupError, PermissionError):
+        return False
+    return True
+
+
+def _interrupt(signum: int, _frame: Any) -> None:
+    raise KeyboardInterrupt(f"signal {signum}")
 
 
 def invocation_ok(invocation: dict[str, Any]) -> str | None:
@@ -567,14 +628,17 @@ def pad_over_budget(path: Path, budget: int) -> int:
 
 def expected_budget_line(fixture: Fixture, env: dict[str, str]) -> str:
     """The tripwire line the fixture's own engine prints for the over-budget control."""
-    result = subprocess.run(
-        [sys.executable, str(fixture.engines / BUDGET_ENGINE), "--quiet"],
-        cwd=fixture.repo,
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
+    try:
+        result = subprocess.run(
+            [sys.executable, str(fixture.engines / BUDGET_ENGINE), "--quiet"],
+            cwd=fixture.repo,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise Refusal(f"the fixture's budget engine did not finish: {exc}") from exc
     needle = f"{fixture.friction_rel} is {fixture.friction_lines} lines"
     for line in result.stdout.splitlines():
         if needle in line:
@@ -599,15 +663,18 @@ def expected_followup_marker(fixture: Fixture, runtime: str, command: str, url: 
         "tool_response": {"stdout": f"{url}\n", "stderr": "", "exit_code": 0},
         "cwd": str(fixture.repo),
     }
-    result = subprocess.run(
-        [sys.executable, str(fixture.engines / HOOK_ENGINE), "--runtime", runtime],
-        cwd=fixture.repo,
-        env=env,
-        input=json.dumps(payload),
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
+    try:
+        result = subprocess.run(
+            [sys.executable, str(fixture.engines / HOOK_ENGINE), "--runtime", runtime],
+            cwd=fixture.repo,
+            env=env,
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise Refusal(f"the fixture's follow-up hook did not finish: {exc}") from exc
     try:
         context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
     except (json.JSONDecodeError, KeyError, TypeError) as exc:
@@ -791,7 +858,7 @@ def check_skills(view: dict[str, Any], expected: list[str]) -> tuple[bool, dict[
             blocks += 1
             listed |= listed_skill_files(message["text"])
     missing = [path for path in expected if path not in listed]
-    ok = bool(expected) and not missing and blocks > 0
+    ok = bool(expected) and not missing
     evidence: dict[str, Any] = {
         "observer": "rollout response_item message, role developer, `<skills_instructions>` block",
         "skills_blocks": blocks,
@@ -1086,7 +1153,9 @@ def pin_mismatch(session: dict[str, Any], pin: str) -> str | None:
 def shell_version(binary: Path, env: dict[str, str]) -> str:
     """What the binary on disk says it is — the shell CLI, not the executing runtime."""
     try:
-        result = subprocess.run([str(binary), "--version"], env=env, capture_output=True, text=True, timeout=60)
+        result = subprocess.run(
+            [str(binary), "--version"], env=env, capture_output=True, text=True, timeout=PREFLIGHT_TIMEOUT
+        )
     except (OSError, subprocess.TimeoutExpired) as exc:
         return f"<--version failed: {exc}>"
     lines = (result.stdout or result.stderr).strip().splitlines()
@@ -1098,9 +1167,13 @@ def codex_preflight(binary: Path, pin: str, home: Path, env: dict[str, str]) -> 
     facts: dict[str, Any] = {"bin": str(binary), "realpath": realpath(binary), "shell_version": version, "pin": pin}
     if version != f"codex-cli {pin}":
         return facts, f"the shell CLI reports {version!r}, not the pinned `codex-cli {pin}`"
-    status = subprocess.run(
-        [str(binary), "login", "status"], env={**env, "CODEX_HOME": str(home)}, capture_output=True, text=True, timeout=60
-    )
+    try:
+        status = subprocess.run(
+            [str(binary), "login", "status"], env={**env, "CODEX_HOME": str(home)},
+            capture_output=True, text=True, timeout=PREFLIGHT_TIMEOUT,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return facts, f"`codex login status` under the isolated CODEX_HOME did not answer: {exc}"
     facts["logged_in"] = status.returncode == 0
     if status.returncode != 0:
         return facts, (
@@ -1122,17 +1195,18 @@ def claude_preflight(binary: Path, pin: str, config_dir: Path, env: dict[str, st
     }
     if version != f"{pin} (Claude Code)":
         return facts, f"the shell CLI reports {version!r}, not the pinned `{pin} (Claude Code)`"
-    status = subprocess.run(
-        [str(binary), "auth", "status", "--json"],
-        env={**env, "CLAUDE_CONFIG_DIR": str(config_dir)},
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
     try:
-        report = json.loads(status.stdout)
-    except json.JSONDecodeError:
-        report = {}
+        status = subprocess.run(
+            [str(binary), "auth", "status", "--json"],
+            env={**env, "CLAUDE_CONFIG_DIR": str(config_dir)},
+            capture_output=True,
+            text=True,
+            timeout=PREFLIGHT_TIMEOUT,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return facts, f"`claude auth status` under the isolated CLAUDE_CONFIG_DIR did not answer: {exc}"
+    report = _json_or_none(status.stdout)
+    report = report if isinstance(report, dict) else {}
     facts["logged_in"] = bool(report.get("loggedIn"))
     facts["auth_method"] = report.get("authMethod")
     if not report.get("loggedIn"):
@@ -1439,11 +1513,12 @@ def run_codex_panel(ctx: Context, row: Row, binary: Path, home: Path, pin: str) 
             for lens, tree, argv, prompt in jobs
         }
     per_lens = []
-    problems = []
+    problems: list[str] = []
     for lens, *_ in jobs:
         invocation, view, note = futures[lens].result()
         row.invocations.append(invocation)
         report = _read_text(ctx.log_dir / f"codex-lens-{lens}.last")
+        session = codex_session(view) if view is not None else None
         entry: dict[str, Any] = {
             "lens": lens,
             "configured_model": model,
@@ -1451,30 +1526,58 @@ def run_codex_panel(ctx: Context, row: Row, binary: Path, home: Path, pin: str) 
             "report_chars": len(report),
             "report_names_review_head": ctx.fixture.review_head[:7] in report,
         }
-        if view is None:
-            problems.append(f"{lens}: no rollout ({note})")
-            per_lens.append(entry)
-            continue
-        session = codex_session(view)
-        entry.update(applied_model=session["model"], applied_effort=session["effort"], executing_version=session["executing_version"])
+        if session is not None:
+            entry.update(
+                applied_model=session["model"], applied_effort=session["effort"],
+                executing_version=session["executing_version"],
+            )
         per_lens.append(entry)
-        failure = invocation_ok(invocation)
-        if failure:
-            problems.append(f"{lens}: {failure}")
-        if model and session["model"] != model:
-            problems.append(f"{lens}: applied model {session['model']!r}, configured {model!r}")
-        if effort and session["effort"] != effort:
-            problems.append(f"{lens}: applied effort {session['effort']!r}, configured {effort!r}")
-        if not entry["report_names_review_head"]:
-            problems.append(f"{lens}: the report does not name the review head")
-        if (mismatch := pin_mismatch(session, pin)):
-            problems.append(f"{lens}: {mismatch}")
+        problems += codex_lens_problems(
+            lens, failure=invocation_ok(invocation), session=session, missing=note, report=report,
+            model=model, effort=effort, head=ctx.fixture.review_head, pin=pin,
+        )
     row.session = {"observer": "each lens's rollout turn_context", "lenses": per_lens}
     evidence = {"observer": "each lens's rollout turn_context and last-message file", "lenses": per_lens}
     if problems:
         row.set("failed", "; ".join(problems), **evidence)
     else:
-        row.set("passed", "every configured lens ran at its configured compute and reported on the review head", **evidence)
+        row.set(
+            "passed",
+            "every configured lens ran at its configured compute and returned a report naming the review head",
+            **evidence,
+        )
+
+
+def codex_lens_problems(
+    lens: str,
+    *,
+    failure: str | None,
+    session: dict[str, Any] | None,
+    missing: str,
+    report: str,
+    model: str | None,
+    effort: str | None,
+    head: str,
+    pin: str,
+) -> list[str]:
+    """Why one Codex lens fails the panel row; empty when it passes.
+
+    The head check is a liveness check: the rendered prompt carries the sha, so a
+    report naming it shows the lens worked from this run's prompt, not that it read
+    the diff.
+    """
+    problems = [f"{lens}: {failure}"] if failure else []
+    if session is None:
+        return [*problems, f"{lens}: no rollout ({missing})"]
+    if model and session.get("model") != model:
+        problems.append(f"{lens}: applied model {session.get('model')!r}, configured {model!r}")
+    if effort and session.get("effort") != effort:
+        problems.append(f"{lens}: applied effort {session.get('effort')!r}, configured {effort!r}")
+    if head[:7] not in report:
+        problems.append(f"{lens}: the report does not name the review head")
+    if (mismatch := pin_mismatch(session, pin)):
+        problems.append(f"{lens}: {mismatch}")
+    return problems
 
 
 # ---------------------------------------------------------------------------- lanes
@@ -1528,27 +1631,19 @@ def run_lane(ctx: Context, row: Row, runtime: str, pin: str, runtime_env: dict[s
     final_path = Path(terminal.get("final_message_path") or session_dir / f"launch-final-{descriptor_id}.txt")
     if final_path.is_file():
         final_bytes = final_path.read_bytes()
-    # The receipt digests the text each transport yields, as the launcher extracts it:
-    # the last-message file's raw bytes for Codex, the JSON result's `result` string
-    # encoded as UTF-8 for Claude.
-    claude_session_id = None
-    text_bytes = final_bytes
-    if runtime == "claude":
-        try:
-            final_object = json.loads(final_bytes.decode("utf-8").strip())
-            text_bytes = str(final_object.get("result", "")).encode("utf-8")
-            claude_session_id = final_object.get("session_id")
-        except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
-            text_bytes = b""
-    final_text = text_bytes.decode("utf-8", errors="replace")
+    text_bytes, claude_session_id = lane_final_text(runtime, final_bytes)
     final_digest = sha256_bytes(text_bytes) if text_bytes else None
+    configured = (receipt.get("request") or {}).get("configured_command")
     evidence = {
         "observer": "launcher terminal receipt, its final message, and the lane's own session artifact",
         "receipt_status": receipt.get("status"),
         "receipt_returncode": terminal.get("returncode"),
         "receipt_final_text_sha256_matches": bool(final_digest) and final_digest == terminal.get("final_text_sha256"),
-        "configured_command": (receipt.get("request") or {}).get("configured_command"),
-        "final_text_names_token": token in final_text,
+        "configured_command": configured,
+        # The launcher resolves its command on its own trusted path, which need not be
+        # the pinned binary's path; this is the file it ran.
+        "configured_command_realpath": realpath(configured[0]) if isinstance(configured, list) and configured else None,
+        "final_text_names_token": token in text_bytes.decode("utf-8", errors="replace"),
         "permission_denials": terminal.get("permission_denials"),
         "worktree": str(worktree),
     }
@@ -1561,14 +1656,49 @@ def run_lane(ctx: Context, row: Row, runtime: str, pin: str, runtime_env: dict[s
         session = claude_session({"session_id": claude_session_id}, entries)
         session["cwd"] = next((entry.get("cwd") for entry in entries if entry.get("cwd")), None)
     row.session = session
-    problems = []
-    if (problem := invocation_ok(launch)):
-        problems.append(f"launch_lane.py {problem}")
+    problems = lane_problems(
+        launch_failure=invocation_ok(launch), receipt=receipt, text_bytes=text_bytes, token=token,
+        session=session, worktree=worktree, pin=pin,
+    )
+    if problems:
+        row.set("failed", "; ".join(problems), **evidence)
+    else:
+        row.set("passed", "the launcher completed the lane in its worktree and bound the final text", **evidence)
+
+
+def lane_final_text(runtime: str, final_bytes: bytes) -> tuple[bytes, str | None]:
+    """The text a lane's receipt digests, as the launcher extracts it, and Claude's session.
+
+    The last-message file's raw bytes for Codex; for Claude, the `result` string of the
+    one JSON object `--output-format json` printed, encoded as UTF-8.
+    """
+    if runtime != "claude":
+        return final_bytes, None
+    final_object = _json_or_none(final_bytes.decode("utf-8", errors="replace").strip())
+    if not isinstance(final_object, dict):
+        return b"", None
+    session_id = final_object.get("session_id")
+    return str(final_object.get("result", "")).encode("utf-8"), session_id if isinstance(session_id, str) else None
+
+
+def lane_problems(
+    *,
+    launch_failure: str | None,
+    receipt: dict[str, Any],
+    text_bytes: bytes,
+    token: str,
+    session: dict[str, Any],
+    worktree: Path,
+    pin: str,
+) -> list[str]:
+    """Why a lane fails its row; empty when it passes."""
+    terminal = receipt.get("terminal") or {}
+    problems = [f"launch_lane.py {launch_failure}"] if launch_failure else []
     if receipt.get("status") != "completed":
         problems.append(f"receipt status {receipt.get('status')!r}")
-    if not evidence["receipt_final_text_sha256_matches"]:
+    if not text_bytes or sha256_bytes(text_bytes) != terminal.get("final_text_sha256"):
         problems.append("the final text is not the one the receipt binds")
-    if not evidence["final_text_names_token"]:
+    if token not in text_bytes.decode("utf-8", errors="replace"):
         problems.append("the final text does not carry the task token")
     if session.get("cwd") and realpath(session["cwd"]) != realpath(worktree):
         problems.append("the lane session ran outside the descriptor worktree")
@@ -1576,10 +1706,7 @@ def run_lane(ctx: Context, row: Row, runtime: str, pin: str, runtime_env: dict[s
         problems.append("no lane session artifact recorded an executing version")
     elif (mismatch := pin_mismatch(session, pin)):
         problems.append(mismatch)
-    if problems:
-        row.set("failed", "; ".join(problems), **evidence)
-    else:
-        row.set("passed", "the launcher completed the lane in its worktree and bound the final text", **evidence)
+    return problems
 
 
 # ------------------------------------------------------------------- claude checks
@@ -1632,7 +1759,6 @@ def run_claude(ctx: Context, rows: dict[str, Row], binary: Path, config_dir: Pat
             row.set("failed", f"the session emitted no init event ({invocation_ok(invocation) or 'exit 0'})")
     else:
         loaded = [entry for entry in read_jsonl(observer_log) if entry.get("hook_event_name") == "InstructionsLoaded"]
-        paths = {realpath(entry["file_path"]) for entry in loaded if isinstance(entry.get("file_path"), str)}
         wanted = [realpath(fixture.repo / "CLAUDE.md"), realpath(fixture.repo / "AGENTS.md")]
         evidence = {
             "observer": "an InstructionsLoaded hook passed with --settings, recording the runtime's own hook input",
@@ -1642,18 +1768,17 @@ def run_claude(ctx: Context, rows: dict[str, Row], binary: Path, config_dir: Pat
                 for entry in loaded
             ],
         }
-        _finish(rows["claude.instructions"], all(path in paths for path in wanted), mismatch, evidence,
-                "the runtime loaded the fixture's CLAUDE.md and the AGENTS.md it imports",
-                "the runtime did not report loading both the fixture's CLAUDE.md and AGENTS.md")
+        _finish(rows["claude.instructions"], claude_instructions_ok(loaded, fixture.repo), mismatch, evidence,
+                "the runtime loaded the fixture's CLAUDE.md, and AGENTS.md as its import",
+                "the runtime did not report loading the fixture's CLAUDE.md, and AGENTS.md as its import")
 
-        commands = {str(name).lstrip("/") for name in init.get("slash_commands") or []}
-        agents = {str(name) for name in init.get("agents") or []}
         expected_commands = expected_claude_commands(fixture.repo)
         expected_agents = lens_roster(ctx.config)
+        missing_commands, missing_agents = claude_missing(init, expected_commands, expected_agents)
         evidence = {
             "observer": "stream-json system/init slash_commands and agents",
-            "missing_commands": [name for name in expected_commands if name not in commands],
-            "missing_agents": [name for name in expected_agents if name not in agents],
+            "missing_commands": missing_commands,
+            "missing_agents": missing_agents,
             "expected_commands": expected_commands,
             "expected_agents": expected_agents,
         }
@@ -1737,13 +1862,42 @@ def run_claude(ctx: Context, rows: dict[str, Row], binary: Path, config_dir: Pat
             "subagents": row.session["subagents"],
         }
         problem = invocation_ok(invocation)
-        ok = not problem and listed and invoked and result and not result.get("is_error") and text.strip()
-        _finish(row, bool(ok), pin_mismatch(row.session, pin), evidence,
-                "the configured review command ran and returned a review",
-                problem or "the configured review command was not listed, not invoked, or returned nothing")
+        ok = claude_review_ok(problem=problem, listed=listed, invoked=invoked, result=result)
+        _finish(row, ok, pin_mismatch(row.session, pin), evidence,
+                "the configured review command was invoked, by the transcript's record, and returned a non-error result",
+                problem or "the configured review command was not listed, not invoked, or returned no non-error result")
 
     run_claude_panel(ctx, rows["claude.panel"], binary, config_dir, pin)
     run_lane(ctx, rows["claude.lane"], "claude", pin, {"CLAUDE_CONFIG_DIR": str(config_dir)}, home=config_dir)
+
+
+def claude_instructions_ok(loaded: list[dict[str, Any]], repo: Path) -> bool:
+    """CLAUDE.md loaded, and AGENTS.md loaded as its import (`load_reason` `include`)."""
+    claude_md, agents_md = realpath(repo / "CLAUDE.md"), realpath(repo / "AGENTS.md")
+    paths = {
+        (realpath(entry["file_path"]), entry.get("load_reason"))
+        for entry in loaded
+        if isinstance(entry.get("file_path"), str)
+    }
+    return any(path == claude_md for path, _ in paths) and (agents_md, "include") in paths
+
+
+def claude_missing(
+    init: dict[str, Any], expected_commands: list[str], expected_agents: list[str]
+) -> tuple[list[str], list[str]]:
+    """The declared commands and configured lens agents the init event does not list."""
+    commands = {str(name).lstrip("/") for name in init.get("slash_commands") or []}
+    agents = {str(name) for name in init.get("agents") or []}
+    return (
+        [name for name in expected_commands if name not in commands],
+        [name for name in expected_agents if name not in agents],
+    )
+
+
+def claude_review_ok(*, problem: str | None, listed: bool, invoked: bool, result: dict[str, Any]) -> bool:
+    """The command exited cleanly, was listed and invoked, and returned non-error text."""
+    text = str(result.get("result") or "")
+    return problem is None and listed and invoked and result.get("is_error") is False and bool(text.strip())
 
 
 LENS_BEGIN = "-----BEGIN LENS PROMPT-----"
@@ -1796,13 +1950,12 @@ def run_claude_panel(ctx: Context, row: Row, binary: Path, config_dir: Path, pin
             for lens, tree, argv, prompt in jobs
         }
     per_lens = []
-    problems = []
+    problems: list[str] = []
     for lens, _tree, _argv, prompt in jobs:
         invocation, events, transcript, transcript_path = futures[lens].result()
         row.invocations.append(invocation)
         parent = claude_session(claude_init(events), transcript)
-        launched = [agent for agent in claude_subagents(transcript_path) if agent["agent_type"] == lens]
-        agent = launched[0] if launched else None
+        agent = lens_agent(claude_subagents(transcript_path), lens)
         entry: dict[str, Any] = {
             "lens": lens,
             "configured_model": model,
@@ -1810,25 +1963,15 @@ def run_claude_panel(ctx: Context, row: Row, binary: Path, config_dir: Path, pin
             "parent_executing_version": parent["executing_version"],
             "lens_agent_launched": agent is not None,
         }
+        if agent is not None:
+            entry.update(summarise_subagent(agent))
+            entry["prompt_verbatim"] = agent["first_prompt"].strip() == prompt.strip()
+            entry["report_names_review_head"] = ctx.fixture.review_head[:7] in agent["last_text"]
         per_lens.append(entry)
-        if (failure := invocation_ok(invocation)):
-            problems.append(f"{lens}: {failure}")
-        if agent is None:
-            problems.append(f"{lens}: the parent session launched no `{lens}` agent")
-            continue
-        entry.update(summarise_subagent(agent))
-        entry["prompt_verbatim"] = agent["first_prompt"].strip() == prompt.strip()
-        entry["report_names_review_head"] = ctx.fixture.review_head[:7] in agent["last_text"]
-        if not entry["prompt_verbatim"]:
-            problems.append(f"{lens}: the agent's prompt is not the one panel_prompt.py rendered")
-        if model and not (agent["models"] and all(model in applied for applied in agent["models"])):
-            problems.append(f"{lens}: applied models {agent['models']!r}, configured {model!r}")
-        if effort and agent["efforts"] != [str(effort)]:
-            problems.append(f"{lens}: applied efforts {agent['efforts']!r}, configured {effort!r}")
-        if not entry["report_names_review_head"]:
-            problems.append(f"{lens}: the report does not name the review head")
-        if (mismatch := pin_mismatch(agent, pin)):
-            problems.append(f"{lens}: {mismatch}")
+        problems += claude_lens_problems(
+            lens, failure=invocation_ok(invocation), agent=agent, prompt=prompt,
+            model=model, effort=effort, head=ctx.fixture.review_head, pin=pin,
+        )
     row.session = {"observer": "each lens agent's own subagent transcript", "lenses": per_lens}
     evidence = {
         "observer": "each lens agent's subagent transcript and its .meta.json agent type",
@@ -1839,9 +1982,48 @@ def run_claude_panel(ctx: Context, row: Row, binary: Path, config_dir: Path, pin
     else:
         row.set(
             "passed",
-            "each configured lens ran as its agent definition, on the rendered prompt, at its configured compute, and reported on the review head",
+            "each configured lens ran as its agent definition, on the rendered prompt, at its configured "
+            "compute, and returned a report naming the review head",
             **evidence,
         )
+
+
+def lens_agent(agents: list[dict[str, Any]], lens: str) -> dict[str, Any] | None:
+    """The subagent that ran as the lens's own definition, by its `.meta.json` agent type."""
+    return next((agent for agent in agents if agent["agent_type"] == lens), None)
+
+
+def claude_lens_problems(
+    lens: str,
+    *,
+    failure: str | None,
+    agent: dict[str, Any] | None,
+    prompt: str,
+    model: str | None,
+    effort: str | None,
+    head: str,
+    pin: str,
+) -> list[str]:
+    """Why one Claude lens fails the panel row; empty when it passes.
+
+    The configured model is an alias, so the check is that every applied model id
+    names that family; the record keeps the resolved ids. The head check is the same
+    liveness check as the Codex panel's.
+    """
+    problems = [f"{lens}: {failure}"] if failure else []
+    if agent is None:
+        return [*problems, f"{lens}: the parent session launched no `{lens}` agent"]
+    if agent["first_prompt"].strip() != prompt.strip():
+        problems.append(f"{lens}: the agent's prompt is not the one panel_prompt.py rendered")
+    if model and not (agent["models"] and all(model in applied for applied in agent["models"])):
+        problems.append(f"{lens}: applied models {agent['models']!r}, configured {model!r}")
+    if effort and agent["efforts"] != [str(effort)]:
+        problems.append(f"{lens}: applied efforts {agent['efforts']!r}, configured {effort!r}")
+    if head[:7] not in agent["last_text"]:
+        problems.append(f"{lens}: the report does not name the review head")
+    if (mismatch := pin_mismatch(agent, pin)):
+        problems.append(f"{lens}: {mismatch}")
+    return problems
 
 
 # ------------------------------------------------------------------------ record
@@ -1867,6 +2049,11 @@ def redact(value: Any, table: list[tuple[str, str]]) -> Any:
     if isinstance(value, dict):
         return {redact(key, table): redact(item, table) for key, item in value.items()}
     return value
+
+
+def finalize_record(record: dict[str, Any], table: list[tuple[str, str]]) -> dict[str, Any]:
+    """Redact, then bound: a string cut before redaction can end inside a private path."""
+    return bound_strings(redact(record, table))
 
 
 def bound_strings(value: Any, limit: int = RECORD_STRING_LIMIT) -> Any:
@@ -1898,7 +2085,7 @@ def render_markdown(record: dict[str, Any]) -> str:
         f"started {record['started_at']} and finished {record['finished_at']} (UTC). "
         "Every row below is an observation at the clients and revision named here.",
         "",
-        "Invocation:",
+        f"Invocation, as the runner's arguments, under `{record.get('interpreter', '—')}`:",
         "",
         "```text",
         " ".join(shlex.quote(part) for part in record["invocation"]),
@@ -1992,6 +2179,7 @@ def main(argv: list[str] | None = None) -> int:
     raw_argv = list(sys.argv[1:] if argv is None else argv)
     args = parse_args(raw_argv)
     started_at = utc_now()
+    previous = signal.signal(signal.SIGTERM, _interrupt)
     try:
         kit_root = repo_root(SCRIPT_PATH)
         revision = resolve_revision(kit_root, args.revision)
@@ -2000,11 +2188,28 @@ def main(argv: list[str] | None = None) -> int:
     except Refusal as exc:
         print(f"runtime_smoke: refused: {exc}", file=sys.stderr)
         return EXIT_REFUSED
+    except KeyboardInterrupt:
+        stop_live_children()
+        print(f"runtime_smoke: interrupted; every client it started is stopped; {left_at(args.out)}", file=sys.stderr)
+        return EXIT_ABORTED
+    except Exception as exc:  # the runner's own failure is never a row result
+        stop_live_children()
+        print(f"runtime_smoke: failed: {type(exc).__name__}: {exc}; {left_at(args.out)}", file=sys.stderr)
+        return EXIT_ABORTED
+    finally:
+        signal.signal(signal.SIGTERM, previous)
     summary = record["summary"]
     for status in ("passed", "failed", "not-run"):
         print(f"{status}: {', '.join(summary[status]) or '-'}")
     print(f"record: {args.out / 'record.md'}")
     return record["exit_status"]
+
+
+def left_at(out: Path) -> str:
+    """What a run that stopped left at `--out`, read from the disk rather than assumed."""
+    if (out / "record.json").is_file():
+        return "the record at --out was complete before the run stopped"
+    return "no record was written to --out"
 
 
 def run(
@@ -2025,6 +2230,8 @@ def run(
     out = args.out
     if not out.is_absolute():
         raise Refusal("--out must be an absolute path")
+    if not out.parent.is_dir():
+        raise Refusal("--out must be in an existing directory")
     if out.exists() and (not out.is_dir() or any(out.iterdir())):
         raise Refusal("--out must be a new or empty directory; the runner overwrites no record")
     selected = args.runtime or list(RUNTIMES)
@@ -2057,7 +2264,6 @@ def run(
     if (args.allow_codex_hook_trust_bypass or args.allow_codex_project_trust) and "codex" not in homes:
         raise Refusal("the Codex trust authorizations need a Codex run to apply to")
 
-    out.mkdir(parents=False, exist_ok=True)
     run_dir = Path(realpath(tempfile.mkdtemp(prefix="adk-smoke-", dir=work_root)))
     log_dir = run_dir / "logs"
     log_dir.mkdir()
@@ -2125,14 +2331,17 @@ def run(
             (re.sub(r"[/.]", "-", str(Path.home())), "~"),
         ]
     )
-    record = redact(
+    record = finalize_record(
         {
             "schema": SCHEMA,
             "run_id": run_dir.name,
             "started_at": started_at,
             "finished_at": utc_now(),
             "kit": {"revision": revision, "harness": SCRIPT_PATH.relative_to(kit_root).as_posix(), "harness_sha256": harness},
-            "invocation": ["uv", "run", SCRIPT_PATH.relative_to(kit_root).as_posix(), *raw_argv],
+            # The arguments as given, and the interpreter that ran them. How the runner was
+            # started (`uv run`, `python3`) is not observable from inside it.
+            "invocation": [SCRIPT_PATH.relative_to(kit_root).as_posix(), *raw_argv],
+            "interpreter": sys.executable,
             "clients": clients,
             "fixture": {
                 "main_head": fixture.main_head,
@@ -2161,9 +2370,17 @@ def run(
         },
         table,
     )
-    record = bound_strings(record)
-    (out / "record.json").write_text(json.dumps(record, indent=2, sort_keys=False) + "\n", encoding="utf-8")
-    (out / "record.md").write_text(render_markdown(record), encoding="utf-8")
+    payload = json.dumps(record, indent=2, sort_keys=False) + "\n"
+    markdown = render_markdown(record)
+    # Written aside and renamed into place, so the record appears whole or not at all.
+    # The rename replaces `out` only if it is still an empty directory.
+    staging = Path(tempfile.mkdtemp(prefix=f".{out.name}.", dir=out.parent))
+    (staging / "record.json").write_text(payload, encoding="utf-8")
+    (staging / "record.md").write_text(markdown, encoding="utf-8")
+    try:
+        os.rename(staging, out)
+    except OSError as exc:
+        raise RuntimeError(f"--out could not take the record ({exc}); it is complete at {staging}") from exc
     return record
 
 
