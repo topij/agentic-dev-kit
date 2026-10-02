@@ -125,7 +125,6 @@ import argparse
 import concurrent.futures
 import contextlib
 import datetime as dt
-import errno
 import hashlib
 import io
 import itertools
@@ -2338,25 +2337,15 @@ def _emit(text: str, *, stderr: bool = False) -> None:
 
     A write that fails leaves its text buffered, and CPython's own flush at exit then
     fails as well and makes the exit status 120, whatever `main` returned. So a stream
-    whose reader is gone is pointed at /dev/null, and the status stays the one the run
-    decided. Any other failed write (a full non-blocking pipe, a character the stream
-    cannot encode) drops the line and leaves the stream as it was.
+    that fails is pointed at /dev/null, and the status stays the one the run decided.
     """
     stream = sys.stderr if stderr else sys.stdout
     if stream is None:  # the descriptor was closed before the run began
         return
     try:
         print(text, file=stream, flush=True)
-    except OSError as exc:
-        if exc.errno in READER_GONE:
-            _silence(2 if stderr else 1)
-    except ValueError as exc:
-        if not isinstance(exc, UnicodeError):  # a closed file object
-            _silence(2 if stderr else 1)
-
-
-# The write errors that mean nobody will read the stream again.
-READER_GONE = frozenset({errno.EPIPE, errno.EIO, errno.EBADF})
+    except (OSError, ValueError):
+        _silence(2 if stderr else 1)
 
 
 def _silence(fd: int) -> None:

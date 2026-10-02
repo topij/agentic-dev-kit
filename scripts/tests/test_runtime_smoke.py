@@ -14,7 +14,6 @@ runner expects.
 from __future__ import annotations
 
 import contextlib
-import errno
 import json
 import os
 import shutil
@@ -964,19 +963,6 @@ def test_the_exit_status_survives_a_stderr_that_is_gone(tmp_path, monkeypatch, r
     monkeypatch.setattr(sys, "stderr", _GoneStream(error))
     assert rs.main(["--work-root", str(tmp_path), "--out", str(tmp_path / "out")]) == code
     assert silenced == [2]
-
-
-@pytest.mark.parametrize(
-    "error",
-    [OSError(errno.EAGAIN, "Resource temporarily unavailable"), UnicodeEncodeError("ascii", "é", 0, 1, "no")],
-    ids=["full-pipe", "unencodable"],
-)
-def test_a_write_that_fails_with_a_reader_still_there_leaves_the_stream_alone(monkeypatch, error):
-    silenced = []
-    monkeypatch.setattr(rs, "_silence", silenced.append)
-    monkeypatch.setattr(sys, "stderr", _GoneStream(error))
-    rs._report("failed: boom")
-    assert silenced == []
 
 
 def test_a_closed_standard_descriptor_is_silenced_without_closing_it_again(tmp_path):
