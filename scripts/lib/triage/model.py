@@ -301,6 +301,36 @@ BASE_KEYS = set(state_base(
 SWEEP_CLEANUP_ARTIFACTS = ("worktree", "local_branch", "remote_branch")
 
 
+def worktree_conflicts_with_checkout(worktree_path: Path, repo: Path) -> bool:
+    """Whether a resolved worktree path is, contains, or lies inside the checkout.
+
+    `resolve()` does not fold case, so on a case-insensitive filesystem a
+    differently spelled path to the checkout passes a structural comparison
+    (#856). Containment is therefore also decided by filesystem identity: the
+    worktree path or any existing ancestor is the checkout, or the checkout or
+    any ancestor is the worktree. The worktree need not exist yet, so only its
+    existing ancestors take part. The structural test runs first, for every path;
+    the identity checks then catch the spellings it misses.
+
+    Shared by the engine's worktree guards and `GitHubForge`'s sweep-cleanup guard
+    (#891), so the provider cannot decide containment differently."""
+    if worktree_path == repo or repo.is_relative_to(worktree_path) or worktree_path.is_relative_to(repo):
+        return True
+
+    def identity(path: Path) -> tuple[int, int] | None:
+        try:
+            status = path.stat()
+        except OSError:
+            return None
+        return (status.st_dev, status.st_ino)
+
+    repo_identity = identity(repo)
+    if repo_identity is not None and any(identity(path) == repo_identity for path in (worktree_path, *worktree_path.parents)):
+        return True
+    worktree_identity = identity(worktree_path)
+    return worktree_identity is not None and any(identity(path) == worktree_identity for path in (repo, *repo.parents))
+
+
 def validate_sweep_cleanup(sweep_cleanup: Any) -> None:
     """Validate an optional `completion.sweep_cleanup` (#807): one guarded,
     idempotent result per retired artifact, `removed`/`absent` with no reason or

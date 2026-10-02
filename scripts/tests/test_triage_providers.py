@@ -520,3 +520,61 @@ def test_sweep_cleanup_never_touches_the_caller_checkout(tmp_path: Path) -> None
         observed = GitHubForge(repo).perform("sweep-cleanup", _cleanup_intent(conflicting, branch, pushed_head))
         assert all("caller checkout" in entry["reason"] for entry in observed.read_back.values())
     assert subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"], capture_output=True, text=True).returncode == 0
+
+
+def _skip_unless_case_insensitive(directory: Path) -> None:
+    probe = directory / "case-probe"
+    probe.write_bytes(b"")
+    folded = (directory / "CASE-PROBE").exists()
+    probe.unlink()
+    if not folded:
+        pytest.skip("filesystem is case-sensitive; a case-variant path names a different directory")
+
+
+@pytest.mark.parametrize("placement", ["same", "inside", "containing"])
+def test_sweep_cleanup_keeps_a_case_variant_of_the_caller_checkout(tmp_path: Path, placement: str) -> None:
+    """`resolve()` keeps the spelling it was given, so the provider's guard decides
+    containment by filesystem identity, as the engine's guards do (#891)."""
+    _skip_unless_case_insensitive(tmp_path)
+    repo, _worktree, branch, pushed_head = _pushed_sweep_branch(tmp_path)
+    variant = repo.with_name(repo.name.swapcase())
+    conflicting = {
+        "same": variant,
+        "inside": variant / "nested",
+        "containing": repo.parent.with_name(repo.parent.name.swapcase()),
+    }[placement]
+    assert conflicting != repo and not conflicting.is_relative_to(repo) and not repo.is_relative_to(conflicting)
+    observed = GitHubForge(repo).perform("sweep-cleanup", _cleanup_intent(conflicting, branch, pushed_head))
+    assert {entry["result"] for entry in observed.read_back.values()} == {"kept"}
+    assert all("caller checkout" in entry["reason"] for entry in observed.read_back.values())
+    # Nothing was touched: the branch this run pushed is still there, locally and on the remote.
+    assert _git(repo, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}")
+    assert _git(repo, "ls-remote", "origin", f"refs/heads/{branch}").split()[0] == pushed_head
+
+
+def test_sweep_cleanup_guard_asks_the_predicate_the_engine_shares(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The case-variant test above skips on a case-sensitive filesystem, which is
+    what CI runs on. This pins, on any filesystem, that the provider and the engine
+    hold the same predicate function, and that the provider's guard asks it. The
+    predicate's identity branches are pinned by `test_finalize_triage.py`, with a
+    case-folding `Path.stat`, and the engine's call sites by its guard tests (#891)."""
+    import triage.engine
+    import triage.model
+    import triage.providers
+
+    shared = triage.model.worktree_conflicts_with_checkout
+    assert triage.providers.worktree_conflicts_with_checkout is shared
+    assert triage.engine._worktree_conflicts_with_checkout is shared
+
+    repo, worktree, branch, pushed_head = _pushed_sweep_branch(tmp_path)
+    asked: list[tuple[Path, Path]] = []
+
+    def conflicts(candidate: Path, checkout: Path) -> bool:
+        asked.append((candidate, checkout))
+        return True
+
+    monkeypatch.setattr(triage.providers, "worktree_conflicts_with_checkout", conflicts)
+    observed = GitHubForge(repo).perform("sweep-cleanup", _cleanup_intent(worktree, branch, pushed_head))
+    assert asked == [(worktree.resolve(), repo.resolve())]
+    assert {entry["result"] for entry in observed.read_back.values()} == {"kept"}
+    assert worktree.exists()

@@ -42,6 +42,10 @@ starts.
 
 ---
 
+## #907 — `GitHubForge`'s sweep-cleanup guard decides containment by filesystem identity
+
+CHANGED — gate semantics: Refresh `lib/triage/model.py`, `lib/triage/engine.py` and `lib/triage/providers.py` in your engine directory together, with `kit-manifest.json` and `scripts/tests/test_triage_providers.py`. The worktree-containment predicate moved from `engine.py` to `model.py` as `worktree_conflicts_with_checkout`, and both `engine.py` and `providers.py` import it from there, so either one refreshed without `model.py` fails to import. On a case-insensitive filesystem, `GitHubForge`'s `sweep-cleanup` action now reports every artifact `kept` for a differently cased path to the caller checkout, to a path inside it, or to its parent. It used to let the cleanup's git commands run against such a path, so the remote branch's compare-and-delete could delete the branch.
+
 ## #902 — Runtime adapter text moves into Markdown templates beside the renderer
 
 CHANGED — return shape: Refresh `lib/runtime_adapters.py` in your engine directory together with the new `lib/adapter_templates/` directory beside it, and `kit_doctor.py`, whose `KIT_OWNED` now lists those templates. Refresh `kit-manifest.json`, `scripts/tests/conftest.py`, `scripts/tests/test_kit_repo_only.py`, `scripts/tests/test_kit_doctor.py` and `scripts/tests/test_portability.py` as well. The renderer reads each adapter's runtime-specific text from `lib/adapter_templates/<runtime>/<slug>.md` beside itself. `_CURRENT_CONTEXTS` is gone; iterate `RUNTIMES` and `WORKFLOW_SLUGS` instead. A renderer installed without its templates raises `ValueError` naming the missing template, so `kit_doctor.py --adapter-report` exits 2, and an older `scripts/tests/conftest.py` fails on the missing `_CURRENT_CONTEXTS`. The rendered adapters are byte-identical, so nothing under `.claude/commands/` or `.agents/skills/` changes.
