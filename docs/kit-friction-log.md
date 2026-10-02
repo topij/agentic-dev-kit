@@ -81,8 +81,8 @@ payload could be approved. The first two carry a drafted payload.
 - **The option offered for an operator decision overstated its own premise.** Severity
   M, kept for accumulation. The cockpit offered "the table's rows are confirmed by their
   own live records" as an option, the operator chose it, and #923's correctness lens
-  then found that "rows claiming repository structure, a decision or an intentional
-  difference have none". The operator re-decided on a narrowed
+  then found rows that cite no stamped record, as #923's disposition at `9f23607`
+  records. The operator re-decided on a narrowed
   wording. The shape: a decision option's factual premise was not checked against the
   record before it was offered.
 - **#923 is a further occurrence of the shape #838 tracks.** Severity L. The full panel
