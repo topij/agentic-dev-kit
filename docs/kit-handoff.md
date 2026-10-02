@@ -291,8 +291,8 @@ smoke record. #906 removed the duplication #887 left in `runtime-parity.md`.
 The *Phase 6* section of `saved_plans/codex-parity-plan_2026-08-23.md` owns the order,
 the dependencies and the exit. #663, item 4's owner, stays open for residue that is not
 Phase 6 work; its 2026-10-01 comment names it. #905 carries deferred LOW findings
-from #904, and #915 one from #913; #916 and #917 carry what #913's live runs found.
-#911 clarified #906’s lifecycle references on 2026-10-02.
+from #904, #915 a deferred LOW finding from #913's review, and #916 and #917 what
+#913's live runs found. #911 clarified #906’s lifecycle references on 2026-10-02.
 **Owner:**
 [#880](https://github.com/topij/agentic-dev-kit/issues/880),
 [#905](https://github.com/topij/agentic-dev-kit/issues/905),
