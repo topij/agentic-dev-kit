@@ -199,8 +199,8 @@ confirms `workflow_contract`, and confirms no table row. The rows split in two:
 
 - A row whose claim depends on client behaviour rests on the stamped records the matrix
   and its *Lifecycle validation boundary* and *Live promotion boundary* sections link.
-- A row that claims repository structure, a decision or an intentional difference is
-  confirmed by no run: among them *Workflow adapters*, *Fresh-install footprint*,
+- A row that claims repository structure, workflow outcomes, a decision or an intentional
+  difference is confirmed by no run the matrix links: among them *Workflow adapters*, *Fresh-install footprint*,
   *Runtime memory tripwire*, *Post-merge integrations*, *Session-start and wrap-up
   integrations*, *Triage integrations*, *Adapter upgrade* and *Drift inspection*. The
   check above holds each to the declaration. Their truth is pinned, where it is, by the
@@ -227,6 +227,6 @@ operator chose to declare under the narrowed amendment below rather than hold.
 **The operator declared the Phase 6 exit, under this amendment:** the parity matrix is
 enforced by deterministic checks. Its declaration is confirmed by the Phase 5 adopter
 run. Its table's client-dependent rows are confirmed by their stamped live records; its
-other rows are claims no run confirms, held to the declaration by the check, with their
-truth left unaudited. The parity plan is archived behind the matrix in the same change,
+other rows are claims no run the matrix links confirms, held to the declaration by the
+check, with their truth left unaudited. The parity plan is archived behind the matrix in the same change,
 which is #880's step 4.

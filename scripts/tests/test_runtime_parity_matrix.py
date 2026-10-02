@@ -41,9 +41,11 @@ LANE_HEADING = "### Headless lane isolation per runtime"
 LANE_HEADER = ["Runtime", "Record", "Promoted", "Not promoted"]
 LANE_RUNTIMES = {"Claude Code", "Codex"}
 
-# An inline link's target, with or without a title, and a reference definition's.
-LINK = re.compile(r"\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
-REFERENCE = re.compile(r"^ {0,3}\[[^\]]+\]:\s*(\S+)", re.MULTILINE)
+# An inline link's target, padded or not, with any CommonMark title form; a
+# reference definition's target; and an HTML anchor's href.
+LINK = re.compile(r"\]\(\s*<?([^)\s>]+)>?(?:\s+(?:\"[^\"]*\"|'[^']*'|\([^)]*\)))?\s*\)")
+REFERENCE = re.compile(r"^ {0,3}\[[^\]]+\]:\s*<?([^\s>]+)", re.MULTILINE)
+HREF = re.compile(r"""<a\s[^>]*href=["']([^"']+)["']""", re.IGNORECASE)
 ISSUE = re.compile(r"#\d+")
 
 
@@ -54,14 +56,21 @@ def _split(text: str) -> tuple[dict, str]:
 
 
 def _section(body: str, heading: str) -> list[str]:
-    """The lines under `heading`, up to the next heading of any level."""
+    """The lines under `heading`, up to the next heading of any level.
+
+    A `#` line inside fenced code is not a heading: ending the section there would hide
+    any table rows after the fence from the one-table check below.
+    """
     lines = body.splitlines()
     starts = [i for i, line in enumerate(lines) if line.rstrip() == heading]
     assert len(starts) == 1, f"runtime-parity.md has {len(starts)} {heading!r} headings, not one"
     section = []
+    fenced = False
     for line in lines[starts[0] + 1 :]:
+        if line.lstrip().startswith("```"):
+            fenced = not fenced
         marks = len(line) - len(line.lstrip("#"))
-        if marks and line[marks:].startswith(" "):
+        if not fenced and marks and line[marks:].startswith(" "):
             break
         section.append(line)
     return section
@@ -185,7 +194,7 @@ def _assert_matrix_matches_declaration(text: str) -> None:
 
     # Every relative link and anchor resolves, the sub-table's among them.
     own = _slugs(body)
-    for target in LINK.findall(body) + REFERENCE.findall(body):
+    for target in LINK.findall(body) + REFERENCE.findall(body) + HREF.findall(body):
         if re.match(r"[a-z][a-z0-9+.-]*:", target):
             continue
         path, _, anchor = target.partition("#")
@@ -360,6 +369,15 @@ def test_links_in_other_markdown_forms_are_checked() -> None:
     _fails(text, "which does not exist")
     _fails(_text() + "\n[ref]: ../../saved_plans/absent.md\n", "which does not exist")
     _fails(_text() + "\nSee [a directory](../../saved_plans/#section).\n", "an anchor into a non-file")
+    for form in (
+        "[x](../../saved_plans/absent.md 'title')",
+        "[x](../../saved_plans/absent.md (title))",
+        "[x]( ../../saved_plans/absent.md )",
+        "[x](\n../../saved_plans/absent.md)",
+        "[x](<../../saved_plans/absent.md>)",
+        '<a href="../../saved_plans/absent.md">x</a>',
+    ):
+        _fails(f"{_text()}\nSee {form}.\n", "which does not exist")
 
 
 def test_rows_outside_the_one_table_fail() -> None:
@@ -371,6 +389,10 @@ def test_rows_outside_the_one_table_fail() -> None:
         _mutated(f"{LANE_HEADING}\n", f"{LANE_HEADING}\n\n| A | B |\n|---|---|\n| c | d |\n"),
         "second table",
     )
+    # Behind a fence holding a `#` line, which is not a heading.
+    _fails(_mutated(last + "\n", f"{last}\n\n```sh\n# a shell comment\n```\n\n{rogue}\n"), "second table")
+    # Indented, which Markdown still renders as a table row.
+    _fails(_mutated(last + "\n", f"{last}\n\n   {rogue}\n"), "second table")
 
 
 def test_a_status_term_that_only_starts_the_cell_word_fails() -> None:
