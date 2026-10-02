@@ -36,7 +36,7 @@
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
-      "sha256": "a009a7493a34f2e62202494842823d675968aaba4a7fa9471402c152f91afb19"
+      "sha256": "39b6874f2a09f38d726c65343ddc82f5281518ea66e1cdf989a02d61e74d60ce"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
@@ -155,7 +155,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "1a7efacae44ad648e96873a8f4e2c90f72a03d83c9a998e602647a1e9d4e3d5e"
+      "sha256": "00c8426561755fe718f59cde7ded283c3424b54221ef540178f73dfdd1ba903d"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -558,7 +558,7 @@
     },
     "scripts/tests/test_adoption_fixtures.py": {
       "role": "repo-only",
-      "sha256": "b9d6a7f35bf10617c9ef9193279de456a761fd88855f6f05e6920fcbbfef2720"
+      "sha256": "7498059e80f53a4e7484428bc64ed5180b29fb9de432988ec193ed166b248cb5"
     },
     "scripts/tests/test_check_memory_budget.py": {
       "role": "test",
@@ -631,6 +631,10 @@
     "scripts/tests/test_repo_layout.py": {
       "role": "test",
       "sha256": "3560dba495462b51d85d68d12dc779616436671558f30553e244b7ffdc76f163"
+    },
+    "scripts/tests/test_runtime_parity_matrix.py": {
+      "role": "repo-only",
+      "sha256": "b912a58112a80218eb2cef8807d5c5ec8691b81e780e49920eab2718bdca293b"
     },
     "scripts/tests/test_runtime_smoke.py": {
       "role": "repo-only",

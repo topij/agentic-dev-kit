@@ -370,6 +370,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/test_state_guard.py", "test"),
     ("scripts/tests/test_live_validation_bundle.py", REPO_ONLY_ROLE),
     ("scripts/tests/test_make_lint.py", REPO_ONLY_ROLE),
+    ("scripts/tests/test_runtime_parity_matrix.py", REPO_ONLY_ROLE),
     ("scripts/tests/test_runtime_smoke.py", REPO_ONLY_ROLE),
     # Installs the kit's own tracked tree into fresh repositories, so it asserts
     # nothing an adopter's tree could answer.
