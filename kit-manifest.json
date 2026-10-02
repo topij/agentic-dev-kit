@@ -36,7 +36,7 @@
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
-      "sha256": "a009a7493a34f2e62202494842823d675968aaba4a7fa9471402c152f91afb19"
+      "sha256": "47f75bfb457732850287e80584ad4ed9b7c285f5ac1d44ccb9681b3522666715"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
@@ -155,7 +155,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "1a7efacae44ad648e96873a8f4e2c90f72a03d83c9a998e602647a1e9d4e3d5e"
+      "sha256": "00c8426561755fe718f59cde7ded283c3424b54221ef540178f73dfdd1ba903d"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -558,7 +558,7 @@
     },
     "scripts/tests/test_adoption_fixtures.py": {
       "role": "repo-only",
-      "sha256": "b9d6a7f35bf10617c9ef9193279de456a761fd88855f6f05e6920fcbbfef2720"
+      "sha256": "7498059e80f53a4e7484428bc64ed5180b29fb9de432988ec193ed166b248cb5"
     },
     "scripts/tests/test_check_memory_budget.py": {
       "role": "test",
@@ -578,7 +578,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "abba76d2dd3ca69a5bdb6adc401a26b87efa57af3c166b4fc48d1c3595eff322"
+      "sha256": "0557091c3b492ad1e3cdde1efe3dabb05dd9625bdbfd3bba1e392fe175d89602"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -610,7 +610,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "3577066cfd45cb77a816bd0c004a20747899a7f788bcb49590e0176499715f89"
+      "sha256": "94d141283e47bdad162dc18d0579228c9bec6f6a974f4f83e945534de1659b53"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
@@ -631,6 +631,10 @@
     "scripts/tests/test_repo_layout.py": {
       "role": "test",
       "sha256": "3560dba495462b51d85d68d12dc779616436671558f30553e244b7ffdc76f163"
+    },
+    "scripts/tests/test_runtime_parity_matrix.py": {
+      "role": "repo-only",
+      "sha256": "ae8a76c6e90a47b2f0b6fdffc7237faf19ae0f5342a46af310fc9da011dc793a"
     },
     "scripts/tests/test_runtime_smoke.py": {
       "role": "repo-only",

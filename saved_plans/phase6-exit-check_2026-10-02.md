@@ -9,8 +9,9 @@ section:
 > Phase 5 adopter run.
 
 Every observation below was taken at `7040d289942a80b0a87f6447048d29e3f37964d5`
-(`main`) on 2026-10-02, unless it names another revision. **This record declares
-nothing.** Declaring the exit is the operator's call, as it was for Phase 5.
+(`main`) on 2026-10-02, unless it names another revision. **This record makes no
+declaration of its own.** Declaring the exit is the operator's call, as it was for Phase 5;
+the record documents the operator's decision where one was taken.
 
 ## What "the parity matrix" covers
 
@@ -151,3 +152,77 @@ amendment, and to add a deterministic check over the table as Phase 6 item 10,
 here. That means re-running this check against the exit as written and, if it holds,
 archiving the parity plan behind the matrix, which is #880's step 4. Until then the
 parity plan stays as it is.
+
+## Re-run after item 10 — 2026-10-02
+
+[#919](https://github.com/topij/agentic-dev-kit/issues/919), Phase 6 item 10, added a
+deterministic check over the table. This section re-checks the exit as written against
+it. The sections above stand as they were taken at `7040d28`.
+
+### The table: now enforced
+
+`runtime-parity.md`'s front matter now declares the *Capability matrix* rows with their
+statuses (`capability_matrix`) and the records the per-runtime sub-table links
+(`lane_isolation_records`). `scripts/tests/test_runtime_parity_matrix.py` holds each
+table to its declaration: the rows, their order, each status cell's opening term
+against a vocabulary the file states, and the sub-table's runtime and record per row.
+It also resolves the file's relative links and in-file anchors, in the Markdown and HTML
+forms it parses. The adoption
+fixtures now scan a fixed `.claude/`, `.agents/`, `.codex/` set, so the positive check
+names the cause of the `adoption.surfaces.codex` mutation above.
+
+Mutations, each in its own `git clone --no-hardlinks` of the branch, detached at
+`53980ae889d9abbbb960c42944d428712a6e9469`, applied by a script that asserted one
+match, read back with `git diff --stat`, then run with
+`env -u FORCE_COLOR make mutation-test` on 2026-10-02:
+
+| Mutation | Result | Matrix test |
+|---|---|---|
+| Delete everything from `## Capability matrix` up to `## Live promotion boundary` | `16 failed, 3968 passed, 1 skipped, 1 deselected in 717.67s (0:11:57)` | failed |
+| Delete the *Runtime memory tripwire* row | `11 failed, 3973 passed, 1 skipped, 1 deselected in 673.68s (0:11:13)` | failed |
+| Rename the sub-table's heading, breaking `#headless-lane-isolation-per-runtime` | `7 failed, 3977 passed, 1 skipped, 1 deselected in 691.79s (0:11:31)` | failed |
+| Change the *Adapter upgrade* row's status cell from `aligned:` to `gap:` | `8 failed, 3976 passed, 1 skipped, 1 deselected in 716.17s (0:11:56)` | failed |
+
+How to read the failure counts: `env -u FORCE_COLOR make test` at the same revision
+on 2026-10-02 printed `2 failed, 3983 passed, 1 skipped in 726.14s (0:12:06)`. Those two
+were `test_kit_doctor.py::test_repo_only_paths_are_hashed_but_not_offered_to_an_adopter`
+and `test_portability.py::test_runtime_parity_contract_rejects_a_gap_with_no_real_surface`,
+both from #919's own change and both repaired in `605de00`, which touches neither the
+parity doc nor the matrix test. Each mutation's kill is
+`test_runtime_parity_matrix.py::test_the_capability_matrix_matches_its_declaration`,
+which passed in that baseline. The other failures in each count are the matrix test's
+own negative controls, whose text anchors the mutation removed.
+
+### Part 2 after item 10
+
+Item 10 adds no adopter run, so the cs-toolkit replay still confirms `workflow_contract`
+and was compared against no table row. One sentence in Part 2 above overstates, and is
+corrected here rather than in place: not every table row names its own live record.
+Some cite a stamped record, in the cell or through the *Lifecycle validation boundary*
+and *Live promotion boundary* sections. This record checked no other row against any
+run. The check above holds every row to the declaration; whether a row's claim is true
+is left unaudited, and #919 stays open to carry that audit.
+
+### Verdict after item 10
+
+| Half | Enforced by deterministic checks | Confirmed by the Phase 5 adopter run |
+|---|---|---|
+| `workflow_contract` | yes | yes |
+| `adoption` | yes; the positive check now names the cause | not applicable, as above |
+| Table and sub-table | yes, at `53980ae` | no |
+
+**The exit as written still does not hold for the table**, on its second clause alone.
+
+### Decision
+
+On 2026-10-02 the operator chose to declare the exit under a recorded amendment rather
+than hold it again. #923's review panel found the amendment as first worded overstated
+what confirms the table's rows. On 2026-10-03 the operator chose to declare under the
+narrowed amendment below rather than hold.
+
+**The operator declared the Phase 6 exit, under this amendment:** the parity matrix is
+enforced by deterministic checks. Its declaration is confirmed by the Phase 5 adopter
+run. Its table's rows that cite a stamped live record rest on that record. The others
+were checked against no run here: the check holds them to the declaration, and their
+truth is left unaudited, as *Part 2 after item 10* sets out. The parity plan is archived
+behind the matrix in the same change, which is #880's step 4.

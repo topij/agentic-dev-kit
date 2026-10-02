@@ -61,6 +61,12 @@ RUNTIMES = runtime_adapters.RUNTIMES
 # bytes, and neither a runtime surface nor anything `init.sh` reads.
 NOT_COPIED = ("saved_plans/",)
 
+# The directories an install may hold only declared files in, as the parity doc's
+# *Adoption footprint* names them. Fixed rather than derived from the declaration: once
+# a runtime's last declared surface was removed, a derived set dropped that directory
+# from the scan, and only the negative control below noticed (#919).
+RUNTIME_DIRS = (".claude", ".agents", ".codex")
+
 # How `init.sh`'s closing line tells each runtime to start, per the README's adapter
 # table.
 SESSION_START = {"claude": "/session-start", "codex": "$session-start"}
@@ -253,15 +259,14 @@ def _assert_install_matches_declaration(install: Install, declaration: dict) -> 
         assert (root / rel).is_file(), f"{adopter.name}: declared {rel} is missing from the install"
 
     # Nothing undeclared lands in a runtime's own directory.
-    runtime_dirs = {PurePosixPath(rel).parts[0] for rel in footprint if rel.startswith(".")}
     present = {
         path.relative_to(root).as_posix()
-        for top in runtime_dirs
+        for top in RUNTIME_DIRS
         for path in (root / top).rglob("*")
         if not path.is_dir()
     }
     expected = {
-        rel for rel in footprint | set(adopter.own) if PurePosixPath(rel).parts[0] in runtime_dirs
+        rel for rel in footprint | set(adopter.own) if PurePosixPath(rel).parts[0] in RUNTIME_DIRS
     }
     assert present == expected, (
         f"{adopter.name}: runtime directories hold undeclared {sorted(present - expected)} "
@@ -416,6 +421,17 @@ def test_an_undeclared_runtime_file_fails(installs, name, tmp_path):
             AssertionError, match="undeclared"
         ):
             _assert_install_matches_declaration(install, declaration)
+
+
+@pytest.mark.parametrize("name", [adopter.name for adopter in ADOPTERS])
+def test_a_runtime_directory_stays_scanned_once_its_last_surface_is_undeclared(installs, name):
+    declaration = _declaration()
+    assert declaration["adoption"]["surfaces"]["codex"] == [".codex/hooks.json"], (
+        "this test removes Codex's only declared surface; re-pick the surface if that changed"
+    )
+    declaration["adoption"]["surfaces"]["codex"] = []
+    with pytest.raises(AssertionError, match=r"undeclared \['\.codex/hooks\.json'\]"):
+        _assert_install_matches_declaration(installs[name], declaration)
 
 
 @pytest.mark.parametrize("name", [adopter.name for adopter in ADOPTERS])
