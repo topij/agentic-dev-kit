@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.12"
+# dependencies = []
+# ///
 """Record the local heartbeat of an engine-backed systemize run.
 
 ``start`` before the fetch; ``tick --step NAME`` after the digest and after each

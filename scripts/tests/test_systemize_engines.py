@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -14,9 +16,11 @@ from _repo_layout import engine_dir  # noqa: E402
 sys.path.insert(0, str(engine_dir(Path(__file__)) / "lib"))
 from test_systemize_support import (  # noqa: E402
     DATE,
+    ENGINE_DIR,
     ENGINES,
     HEAD,
     comment,
+    engines_rel,
     fake_env,
     make_repo,
     pr,
@@ -26,6 +30,61 @@ from test_systemize_support import (  # noqa: E402
 )
 
 BOT = "coderabbitai"
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_standalone_metadata_declares_stdlib_dependencies(name) -> None:
+    text = (ENGINE_DIR / name).read_text(encoding="utf-8")
+    metadata = text.split("# /// script\n", 1)[1].split("# ///", 1)[0]
+    parsed = tomllib.loads("\n".join(line.removeprefix("# ") for line in metadata.splitlines()))
+    assert parsed == {"requires-python": ">=3.12", "dependencies": []}
+
+
+def test_verify_cli_refuses_findings_deleted_but_pr_retained(env_for, tmp_path) -> None:
+    root, _, env = env_for()
+    _ok(run_engine(root, "fetch_merged_prs.py", run_args(), env))
+    built = _ok(run_engine(root, "digest_merged_prs.py", run_args(), env))
+    candidate = json.loads(Path(built["digest_path"]).read_text())
+    candidate["prs"][0]["findings"] = []
+    tampered = tmp_path / "deleted.json"
+    tampered.write_text(json.dumps(candidate), encoding="utf-8")
+    before = tampered.read_bytes()
+    result = run_engine(root, "digest_merged_prs.py", [*run_args(), "--verify", str(tampered)], env)
+    assert result.returncode == 1
+    assert "finding evidence" in result.stderr
+    assert tampered.read_bytes() == before
+
+
+@pytest.mark.parametrize("prior_heartbeat", [False, True])
+def test_fetch_cli_uses_adopter_timeout_before_any_artifact_write(env_for, tmp_path, prior_heartbeat) -> None:
+    def configured(text):
+        old = "  subprocess_timeout_seconds: 60"
+        assert old in text
+        return text.replace(old, "  subprocess_timeout_seconds: 1", 1)
+
+    root, state, env = env_for(config_edit=configured)
+    if prior_heartbeat:
+        _ok(run_engine(root, "heartbeat_cli.py", ["start", *run_args()], env))
+    before = {p.relative_to(state): p.read_bytes() for p in state.rglob("*") if p.is_file()}
+    assert bool(before) is prior_heartbeat
+    gh = tmp_path / "bin" / "gh"
+    original = gh.read_text()
+    old = "import json, os, sys"
+    assert old in original
+    gh.write_text(original.replace(old, old + "\nimport time\ntime.sleep(5)", 1))
+    assert "time.sleep(5)" in gh.read_text()
+    # The outer bound kills a disconnected-config mutant before its default
+    # forge timeout; the real entry point must stop at the adopter's bound.
+    result = subprocess.run(
+        [sys.executable, "-B", str(root / engines_rel(root) / "fetch_merged_prs.py"), *run_args()],
+        cwd=root, env=env, capture_output=True, text=True, check=False, timeout=3,
+    )
+    assert result.returncode == 1, result.stderr
+    assert "forge read timed out: gh" in result.stderr
+    after = {p.relative_to(state): p.read_bytes() for p in state.rglob("*") if p.is_file()}
+    assert after == before
+    assert state.exists() is prior_heartbeat
+    assert not (root / "reports").exists()
 
 
 def window_prs() -> list[dict]:

@@ -87,6 +87,7 @@ class Settings:
     heartbeat_job: str | None
     heartbeat_pattern: str | None
     control_inputs: tuple[Path, ...]
+    subprocess_timeout_seconds: int = 60
 
     def window_days_for(self, requested: int) -> int:
         if requested not in (self.lookback_days, self.backfill_days):
@@ -214,6 +215,10 @@ def load_settings(start: Path | None = None) -> Settings:
         _get(config, f"systemize.{key}")
 
     ints = {key: _positive_int(section, key) for key in POSITIVE_INT_KEYS}
+    timeout = _positive_int(
+        {"subprocess_timeout_seconds": section.get("subprocess_timeout_seconds", 60)},
+        "subprocess_timeout_seconds",
+    )
     if ints["pattern_threshold"] < 2:
         raise SystemizeError("systemize.pattern_threshold must be at least 2")
     if ints["backfill_days"] < ints["lookback_days"]:
@@ -317,4 +322,5 @@ def load_settings(start: Path | None = None) -> Settings:
         heartbeat_job=job,
         heartbeat_pattern=heartbeat,
         control_inputs=tuple(Path(os.path.abspath(p)) for p in controls),
+        subprocess_timeout_seconds=timeout,
     )

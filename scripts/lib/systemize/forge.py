@@ -12,6 +12,7 @@ import re
 import subprocess
 from collections.abc import Callable
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -20,10 +21,12 @@ from .errors import SystemizeError
 Runner = Callable[[list[str], Path | None], subprocess.CompletedProcess[str]]
 
 
-def subprocess_runner(argv: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+def subprocess_runner(argv: list[str], cwd: Path | None = None, *, timeout: int = 60) -> subprocess.CompletedProcess[str]:
     try:
-        return subprocess.run(argv, cwd=cwd, check=False, capture_output=True, text=True)
-    except OSError as exc:
+        return subprocess.run(argv, cwd=cwd, check=False, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        raise SystemizeError(f"forge read timed out: {argv[0]}") from exc
+    except (OSError, OverflowError) as exc:
         raise SystemizeError(f"forge read unavailable: cannot run {argv[0]}: {exc}") from exc
 
 
@@ -79,9 +82,9 @@ def parse_time(value: Any, what: str) -> datetime:
 
 
 class GitHubReader:
-    def __init__(self, root: Path, runner: Runner = subprocess_runner) -> None:
+    def __init__(self, root: Path, runner: Runner | None = None, *, timeout_seconds: int = 60) -> None:
         self.root = root
-        self.runner = runner
+        self.runner = runner if runner is not None else partial(subprocess_runner, timeout=timeout_seconds)
 
     def _json(self, argv: list[str], what: str) -> Any:
         result = self.runner(argv, self.root)

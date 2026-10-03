@@ -68,6 +68,8 @@ def test_heartbeat_keys_are_required_only_engine_backed(tmp_path: Path, key: str
     "key, value, message",
     [
         ("lookback_days", "true", "positive integer"),
+        ("subprocess_timeout_seconds", "0", "positive integer"),
+        ("subprocess_timeout_seconds", "true", "positive integer"),
         ("lookback_days", "0", "positive integer"),
         ("batch_size", "-1", "positive integer"),
         ("batch_size", '"25"', "positive integer"),
@@ -190,3 +192,10 @@ def test_the_overlay_is_part_of_the_fingerprint(tmp_path: Path) -> None:
     assert after.config["notify"]["user_key"] == "U1"
     assert after.fingerprint != before
     assert json.dumps(after.config)  # still a JSON-able merged view
+
+
+def test_timeout_can_be_configured_and_older_config_uses_default(tmp_path: Path) -> None:
+    settings = load_settings(make_repo(tmp_path, config_edit=_set("subprocess_timeout_seconds", "3")))
+    assert settings.subprocess_timeout_seconds == 3
+    legacy = load_settings(make_repo(tmp_path / "legacy", config_edit=_drop("subprocess_timeout_seconds")))
+    assert legacy.subprocess_timeout_seconds == 60

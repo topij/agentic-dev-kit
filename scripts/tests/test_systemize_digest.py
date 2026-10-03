@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -171,3 +172,63 @@ def test_verify_rejects_a_foreign_or_altered_header(settings) -> None:
             normalize.verify(mutated, digest, "candidate")
     with pytest.raises(SystemizeError, match="prs\\[\\]"):
         normalize.verify({**digest, "prs": "not a list"}, digest, "candidate")
+
+
+@pytest.mark.parametrize("field", [
+    "id", "source", "path", "line", "source_severity", "severity", "severity_mapped",
+    "addressed", "guideline_citation", "url",
+])
+def test_verify_rejects_altered_or_missing_finding_evidence(settings, field) -> None:
+    expected = normalize.build(_raw([_pr(1, ("🔴 Critical", False))], settings), settings, [])
+    for remove in (False, True):
+        candidate = deepcopy(expected)
+        finding = candidate["prs"][0]["findings"][0]
+        if remove:
+            del finding[field]
+        else:
+            finding[field] = "altered"
+        with pytest.raises(SystemizeError, match="finding evidence"):
+            normalize.verify(candidate, expected, "candidate")
+
+
+@pytest.mark.parametrize("mutation", ["delete", "add", "count", "unaddressed", "max", "refs", "extra"])
+def test_verify_rejects_changed_population_and_pr_evidence(settings, mutation) -> None:
+    expected = normalize.build(_raw([_pr(1, ("🔴 Critical", False))], settings), settings, [])
+    candidate = deepcopy(expected)
+    pr = candidate["prs"][0]
+    if mutation == "delete":
+        pr["findings"] = []
+    elif mutation == "add":
+        pr["findings"].append(deepcopy(pr["findings"][0]))
+    else:
+        key = {"count": "finding_count", "unaddressed": "unaddressed_count", "max": "max_severity",
+               "refs": "tracker_refs", "extra": "invented"}[mutation]
+        pr[key] = "altered"
+    with pytest.raises(SystemizeError, match="finding evidence"):
+        normalize.verify(candidate, expected, "candidate")
+
+
+def test_verify_allows_only_typed_text_cleaning_latitude(settings) -> None:
+    expected = normalize.build(_raw([_pr(1, ("x", False))], settings), settings, [])
+    candidate = deepcopy(expected)
+    finding = candidate["prs"][0]["findings"][0]
+    finding.update(text="Agent cleaned text", text_truncated=True)
+    normalize.verify(candidate, expected, "candidate")
+    for field, value in (("text", None), ("text_truncated", "true")):
+        broken = deepcopy(candidate)
+        broken["prs"][0]["findings"][0][field] = value
+        with pytest.raises(SystemizeError, match="finding evidence"):
+            normalize.verify(broken, expected, "candidate")
+
+
+def test_verify_rejects_boolean_counts_and_line_numbers(settings) -> None:
+    expected = normalize.build(_raw([_pr(1, ("x", False))], settings), settings, [])
+    for field in ("finding_count", "unaddressed_count", "number"):
+        candidate = deepcopy(expected)
+        candidate["prs"][0][field] = True
+        with pytest.raises(SystemizeError):
+            normalize.verify(candidate, expected, "candidate")
+    candidate = deepcopy(expected)
+    candidate["findings_pr_count"] = True
+    with pytest.raises(SystemizeError):
+        normalize.verify(candidate, expected, "candidate")

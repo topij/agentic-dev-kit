@@ -198,6 +198,8 @@ systemize:
   # Exact forge logins trusted as operator review-finding sources. Empty is the
   # adopter-safe default; ./init.sh prompts rather than trusting a foreign identity.
   operator_logins: []
+  # Bound each forge and artifact Git read; a timeout stops without publishing.
+  subprocess_timeout_seconds: 60
   lookback_days: 7
   backfill_days: 28
   pattern_threshold: 2

@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.12"
+# dependencies = []
+# ///
 """Normalize a systemize raw bundle into the capped review-finding digest.
 
 With ``--verify PATH`` it writes nothing: it recomputes the ordered capped

@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.12"
+# dependencies = []
+# ///
 """Fetch every merged pull request in a systemize window into the raw bundle.
 
 Invoked by the post-merge-systemize workflow in engine-backed mode, after the
@@ -26,7 +30,8 @@ def parser() -> Parser:
 
 def action(args, settings):
     return run(
-        settings, GitHubReader(settings.root), mode=args.mode, window_days=args.window_days, date=args.date
+        settings, GitHubReader(settings.root, timeout_seconds=settings.subprocess_timeout_seconds),
+        mode=args.mode, window_days=args.window_days, date=args.date
     )
 
 
