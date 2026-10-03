@@ -20,6 +20,44 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-03 (Review proportionality, #585, in Claude Code)
+
+**Shipped.** PR #927, squash `8ea91add`: a fallback review's lens count follows the PR's
+declared class. `review.safety_critical_paths` in `config/dev-model.yaml` declares the
+safety-critical files, `pr_watch` classes a PR from Git against that list as committed at
+the PR's base, and `fallback:lens` records a standard PR's one isolated lens. The doctrine
+is *How many lenses* in `fallback-review-panel.md`.
+
+**Decided by the operator** in this session, and recorded in #927's description:
+
+- Workflow documents take one lens. Keeping two on them until #370 measured them was
+  declined.
+- A standard PR's one lens is correctness when every changed path is a handoff or
+  friction-log file, and adversarial otherwise.
+- A PR that changes `config/dev-model.yaml` is safety-critical.
+- The class being computed by the PR's own checkout, and a template adopter inheriting
+  the kit's list, are documented in #927 and ticketed rather than fixed there.
+
+The operator also authorized merging #927 and this wrap-up.
+
+**Filed on the operator's approval of each exact text:** #928, #929, #930, #931 and #932;
+a scope comment on #928; occurrence comments on #838, #149 and #643.
+
+**Review.** CodeRabbit's auto-review stayed off, so the fallback panel reviewed #927: full
+panels at `3fd97b9`, `8bc4d39`, `c894a0b`, `9abb619` and `e86bcf1`, then dual-lens LOW delta
+passes at `48594a2` and `1603de6`. Each round's disposition and both delta passes' verdict
+lines are posted on #927.
+
+**Verified.** `env -u FORCE_COLOR make test` at `1603de695fd233c9acdd05b722001658cd44499b`
+on 2026-10-03, in `/Users/topi/Coding/agentic-dev-kit`, printed `4057 passed, 1 skipped in
+615.42s (0:10:15)`. `git diff --stat 1603de6 8ea91add` printed nothing, so the squash
+commit's tree is that head's.
+
+**Not established.** Whether `baseRefOid` trails the base branch on an open PR: #929 rests
+on the lens's reading of merged PRs, and nothing in this session exercised it live.
+
+______________________________________________________________________
+
 ## Session — 2026-10-03 (Phase 6 item 10, #919, and the #585 decision, in Claude Code)
 
 **Shipped.** PR #923, squash `3246e72`: Phase 6 item 10.
@@ -276,18 +314,16 @@ ______________________________________________________________________
 
 ### Review proportionality
 
-**Status:** decided on 2026-10-02, not started. The fallback panel's lens count follows
-a change's class: only the safety-critical class keeps the two-lens floor, and code
-outside the safety-critical paths takes one isolated lens. Keeping two lenses on
-workflow docs until #370 measures them was proposed, not decided. The decision and its
-constraints are #585's 2026-10-02 comment. **Owner:**
-[#585](https://github.com/topij/agentic-dev-kit/issues/585); related #666, #403, #921.
+**Status:** the lens-count half of #585's 2026-10-02 decision shipped in #927
+(`8ea91add`): the class is computed from `review.safety_critical_paths`, and a standard PR
+takes one isolated lens. The record-prose row of that decision is not built: its
+deterministic checks, and a lens told which spans stay executed. **Owner:**
+[#585](https://github.com/topij/agentic-dev-kit/issues/585); related #921, #403, #666, and
+the class's documented limits #928, #929, #930 and #931.
 
-▶ Next: implement #585 per its 2026-10-02 decision comment — declare the safety-critical
-path set once in `config/dev-model.yaml`, then a single-lens receipt the merge gate
-accepts by class. `scripts/pr_watch.py` is safety-critical: read
-`docs/agentic-dev-kit/safety-critical-changes.md` first and hold the PR for the
-operator's merge.
+▶ Next: #921 — render the delta pass's two classification draws as separate named items
+in `scripts/panel_prompt.py`, which any class-dependent delta relies on; then #585's
+record-prose row.
 
 ### Scratch retention
 
