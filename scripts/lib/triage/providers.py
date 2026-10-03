@@ -9,6 +9,7 @@ import subprocess
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from http.client import HTTPException
 from pathlib import Path
 from typing import Any, Protocol
 from urllib.error import HTTPError, URLError
@@ -245,9 +246,11 @@ class LinearIssues:
                     if exc.code == 400:
                         try:
                             retryable = self._rate_limited(json.load(exc))
-                        except (ValueError, TypeError, OSError):
+                        except (HTTPException, OSError):
+                            retryable = True
+                        except (ValueError, TypeError):
                             retryable = False
-            except (URLError, TimeoutError, OSError):
+            except (URLError, TimeoutError, OSError, HTTPException):
                 retryable = True
             except (ValueError, TypeError):
                 pass

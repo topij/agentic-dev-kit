@@ -342,6 +342,74 @@ def test_linear_http400_mutation_reconciles_without_retry(monkeypatch, landed):
     assert observed.verified_route == ("failed-response-then-exact-read-back" if landed else None)
 
 
+@pytest.mark.parametrize("failure", ["header", "body", "rate-body"])
+@pytest.mark.parametrize("exhausted", [False, True])
+def test_linear_http_protocol_failure_retries_reads(monkeypatch, failure, exhausted):
+    from http.client import BadStatusLine, IncompleteRead
+    from io import BytesIO
+    from urllib.error import HTTPError
+
+    from triage import providers
+
+    calls, slept = [], []
+    class BrokenResponse(BytesIO):
+        def read(self, *args):
+            raise IncompleteRead(b"partial", 10)
+    def request(req, timeout):
+        calls.append(req)
+        if exhausted or len(calls) == 1:
+            if failure == "header":
+                raise BadStatusLine("broken")
+            if failure == "rate-body":
+                raise HTTPError(req.full_url, 400, "bad request", {}, BrokenResponse())
+            return BrokenResponse()
+        return BytesIO(json.dumps({"data": {"project": {"id": "project"}}}).encode())
+    monkeypatch.setattr(providers, "urlopen", request)
+    tracker = LinearIssues(api_key="key", sleep=slept.append)
+    if exhausted:
+        with pytest.raises(TriageError, match="unavailable or incomplete"):
+            tracker._query("query Project { project { id } }", {})
+        assert len(calls) == len(tracker.READ_RETRY_DELAYS) + 1
+        assert slept == list(tracker.READ_RETRY_DELAYS)
+    else:
+        assert tracker._query("query Project { project { id } }", {}) == {"project": {"id": "project"}}
+        assert len(calls) == 2 and slept == [1.0]
+
+
+@pytest.mark.parametrize("failure", ["header", "body", "rate-body"])
+@pytest.mark.parametrize("landed", [False, True])
+def test_linear_http_protocol_mutation_reconciles_without_retry(monkeypatch, failure, landed):
+    from http.client import BadStatusLine, IncompleteRead
+    from io import BytesIO
+    from urllib.error import HTTPError
+
+    from triage import providers
+
+    transport = LinearTransport()
+    creates = []
+    class BrokenResponse(BytesIO):
+        def read(self, *args):
+            raise IncompleteRead(b"partial", 10)
+    def request(req, timeout):
+        value = json.loads(req.data)
+        query, variables = value["query"], value["variables"]
+        if "TriageCreate(" in query:
+            creates.append(value)
+            if landed:
+                transport(query, variables)
+            if failure == "header":
+                raise BadStatusLine("broken")
+            if failure == "rate-body":
+                raise HTTPError(req.full_url, 400, "bad request", {}, BrokenResponse())
+            return BrokenResponse()
+        return BytesIO(json.dumps(transport(query, variables)).encode())
+    monkeypatch.setattr(providers, "urlopen", request)
+    observed = LinearIssues(api_key="key", sleep=lambda _: None).create(LINEAR_DESTINATION, linear_payload())
+    assert len(creates) == 1
+    assert observed.status == ("verified" if landed else "ambiguous")
+    assert observed.verified_route == ("failed-response-then-exact-read-back" if landed else None)
+
+
 @pytest.mark.parametrize("backend, flag, expected", [
     ("linear", "--enable-tracker", LinearIssues),
     ("github-issues", "--enable-tracker", GitHubIssues),

@@ -89,6 +89,8 @@ def approval_for(state: dict, command: str = "approve all") -> dict:
 
 @pytest.mark.parametrize("adopter_host", [False, True])
 def test_linear_approval_and_uncertain_create_resume_keep_frozen_authority(tmp_path, monkeypatch, adopter_host):
+    from http.client import IncompleteRead
+
     if adopter_host:
         host = tmp_path / "adopter"
         (host / "config").mkdir(parents=True)
@@ -124,13 +126,15 @@ def test_linear_approval_and_uncertain_create_resume_keep_frozen_authority(tmp_p
     transport = LinearTransport()
     malformed = {"parent": "teams"}
     def lost_create(query, variables):
+        if malformed["parent"] == "protocol":
+            raise IncompleteRead(b"partial", 10)
         if "TriageProjectTeams(" in query and malformed["parent"] == "teams":
             return {"data": {"project": ["bad"]}}
         if "TriageIssueLabels(" in query and malformed["parent"] == "labels":
             return {"data": {"issue": ["bad"]}}
         if "TriageCreate(" in query:
             transport.calls.append((query, variables))
-            raise TimeoutError("outcome unknown")
+            raise IncompleteRead(b"partial", 10)
         return transport(query, variables)
     tracker = LinearIssues(transport=lost_create, sleep=lambda _: None)
     drafted = run("new", context="interactive", request=supplied, start=root, tracker=tracker)
@@ -148,6 +152,13 @@ def test_linear_approval_and_uncertain_create_resume_keep_frozen_authority(tmp_p
                          tracker=tracker, approval_context=approval_context(presented), head_authority=FakeForge([]))
     assert malformed_held["outcome"] == "operator-held"
     assert "Linear connection is missing" in malformed_held["detail"]
+    assert not (state_root / "triage/triage-pipeline-gate_live.lock").exists()
+    assert not any("TriageCreate(" in query for query, _ in transport.calls)
+    malformed["parent"] = "protocol"
+    protocol_held = run("resume", context="interactive", request={}, start=root,
+                        tracker=tracker, head_authority=FakeForge([]))
+    assert protocol_held["outcome"] == "operator-held"
+    assert "Linear API response is unavailable or incomplete" in protocol_held["detail"]
     assert not (state_root / "triage/triage-pipeline-gate_live.lock").exists()
     assert not any("TriageCreate(" in query for query, _ in transport.calls)
     malformed["parent"] = None
