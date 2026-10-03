@@ -122,8 +122,9 @@ COMPUTE_CARRIER: dict[str, str] = {
 }
 
 # The two draws the doctrine makes mandatory on every delta pass, as `(flag, name)`.
-# The name is what the lens's verdict line must begin with, so the cockpit can check
-# both are present by reading line starts instead of judging what a lens meant.
+# The name is what the lens's verdict line must begin with, so whoever posts the lines
+# can see a missing one by its absent name instead of judging what a lens meant. No
+# engine reads lens reports for these names yet; #921 carries that check.
 DELTA_DRAWS: tuple[tuple[str, str], ...] = (
     ("--draw-prose-class", "prose-class"),
     ("--draw-safety-critical", "safety-critical"),
