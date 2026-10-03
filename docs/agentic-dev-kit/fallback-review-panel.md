@@ -875,8 +875,8 @@ lenses that ran, which is also what tells the two forms apart on the audit
 trail, `--compose-parent <last-reviewed-sha>` naming the standing receipt the
 pass extends, and `--head` the polled sha. A safety-critical pull request owes
 two lenses on every pass, the delta pass included, so the poll render flags a
-one-lens delta receipt there; on a standard pull request it reads one as what
-the pull request owes.
+one-lens delta receipt there; on a standard pull request it reads a composed one
+as what the pull request owes.
 
 **The dual form is how a safety-critical change keeps rule 2's floor.**
 Rule 2 wants two disjoint lenses before merge, and this file used to read
