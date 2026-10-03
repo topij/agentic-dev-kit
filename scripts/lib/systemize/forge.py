@@ -26,7 +26,7 @@ def subprocess_runner(argv: list[str], cwd: Path | None = None, *, timeout: int 
         return subprocess.run(argv, cwd=cwd, check=False, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired as exc:
         raise SystemizeError(f"forge read timed out: {argv[0]}") from exc
-    except OSError as exc:
+    except (OSError, OverflowError) as exc:
         raise SystemizeError(f"forge read unavailable: cannot run {argv[0]}: {exc}") from exc
 
 

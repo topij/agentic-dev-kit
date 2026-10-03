@@ -106,7 +106,7 @@ def _is_tracked(repo: Path, path: Path, *, timeout: int) -> bool:
             text=True,
             timeout=timeout,
         )
-    except (OSError, subprocess.TimeoutExpired) as exc:
+    except (OSError, subprocess.TimeoutExpired, OverflowError) as exc:
         raise SystemizeError(f"artifact Git tracking read unavailable: {path}") from exc
     if result.returncode not in (0, 1):
         raise SystemizeError(f"artifact Git tracking read failed: {path}")

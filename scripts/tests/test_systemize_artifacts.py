@@ -48,6 +48,16 @@ def test_forge_timeout_is_bound_and_fail_closed() -> None:
         subprocess_runner([sys.executable, "-c", "import time; time.sleep(30)"], timeout=1)
 
 
+@pytest.mark.parametrize("reader", ["forge", "tracking"])
+def test_unrepresentable_subprocess_timeout_is_a_controlled_hard_stop(ctx, reader) -> None:
+    _, _, _, root = ctx
+    with pytest.raises(SystemizeError, match="unavailable"):
+        if reader == "forge":
+            subprocess_runner([sys.executable, "-c", "pass"], timeout=10**1000)
+        else:
+            artifacts._is_tracked(root, root / "report", timeout=10**1000)
+
+
 def test_tracking_timeout_preserves_all_targets(ctx, monkeypatch) -> None:
     settings, targets, sandbox, _ = ctx
     def timed_out(argv, **kwargs):

@@ -317,7 +317,7 @@
         "scripts/lib/systemize/heartbeat.py"
       ],
       "role": "engine",
-      "sha256": "86eb1aca64d7e43768b86d35ea73bd4b5dabfd00096c1ee9d13c6907145a28fc"
+      "sha256": "d88bc0ea98750f3377d4f319b8b347804d4e006a33e326722e473e47602110ce"
     },
     "scripts/lib/systemize/cli.py": {
       "required_by": [
@@ -377,7 +377,7 @@
         "scripts/lib/systemize/fetch.py"
       ],
       "role": "engine",
-      "sha256": "1abe5eaf950c0a815ad37ac664e10bdb0e0e6b470cf55a1899f48acd782c729b"
+      "sha256": "080dd87fc211b8955b770d9b2990ac9298e35bde72ff3bbf8e57f35c510551ce"
     },
     "scripts/lib/systemize/heartbeat.py": {
       "required_by": [
@@ -646,7 +646,7 @@
     },
     "scripts/tests/test_systemize_artifacts.py": {
       "role": "test",
-      "sha256": "7a64a0804fedd43704ee0fd0b7301a5e0528e3a779af5b0266dbedb6b5e67f9d"
+      "sha256": "4769c0cbcfd9df6b0698e9970eb6ca6b46164e869d25c4fd59801a46e0308503"
     },
     "scripts/tests/test_systemize_config.py": {
       "role": "test",
