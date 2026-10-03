@@ -29,10 +29,13 @@ Four properties, each earned by a real failure:
    what the prompt aimed lenses at, not how big the pass was — and that carry-forward
    had no home except an author remembering to type it.
 4. **One channel per kind of framing.** ``--carry-forward`` carries what prior rounds
-   *covered*; ``--delta-draws`` carries the author's own classification of the change,
-   which the doctrine hands to a **delta lens only**, precisely so it can be disputed.
-   Sharing one flag between the two is how a full panel came to be handed its author's
-   draws — the anchoring **No framing** exists to keep out of a full panel.
+   *covered*; ``--draw-prose-class`` and ``--draw-safety-critical`` carry the author's
+   own classification of the change, which the doctrine hands to a **delta lens only**,
+   precisely so it can be disputed. Sharing one flag between the two is how a full panel
+   came to be handed its author's draws — the anchoring **No framing** exists to keep
+   out of a full panel. Each draw has its own flag, and the LOW rule's repair boundary
+   has ``--repair-boundary``, because one free-text block holding all three let a lens
+   decide what counted as a draw (#921).
 
 This assembles the prompt. It does not launch lenses, build worktrees, or read reports:
 ``--lenses`` staying self-reported is #32, and this is what a real check would build on.
@@ -51,11 +54,13 @@ Usage:
         --scratch /tmp/panel --pr 218 --carry-forward "Rounds 1-3 found everything in
         the author's claims and nothing in the changed content. Invert that."
 
-A delta pass — and only a delta pass — adds the author's stated draws for the lens
-to dispute, as a continuation of either form above::
+A delta pass — and only a delta pass — adds the author's two stated draws for the
+lens to dispute, and for a LOW repair the boundary it must stay within, as a
+continuation of either form above::
 
-        --delta-draws "Prose class: record prose (a handoff block, nothing reads it).
-        Safety-critical: not under safety-critical-changes.md."
+        --draw-prose-class "record prose: a handoff block, nothing reads it" \\
+        --draw-safety-critical "not under safety-critical-changes.md" \\
+        --repair-boundary "Prior finding (LOW): ... Repair: commit abc123 only."
 
 Exits 2 on any condition that would produce a misleading prompt.
 """
@@ -115,6 +120,16 @@ COMPUTE_CARRIER: dict[str, str] = {
         "rollout `turn_context`"
     ),
 }
+
+# The two draws the doctrine makes mandatory on every delta pass, as `(flag, name)`.
+# The name is what the lens's verdict line must begin with, so the cockpit can check
+# both are present by reading line starts instead of judging what a lens meant.
+DELTA_DRAWS: tuple[tuple[str, str], ...] = (
+    ("--draw-prose-class", "prose-class"),
+    ("--draw-safety-critical", "safety-critical"),
+)
+REPAIR_VERDICT = "repair"
+
 
 class PromptError(Exception):
     """A condition that would make the emitted prompt misleading."""
@@ -368,10 +383,13 @@ def render(
     base_from_remote: bool,
     branch_from_checkout: bool = True,
     # Defaulted, and the direction is what earns the default: a caller that forgets
-    # this parameter emits a FULL-panel prompt carrying no draws, which is the safe
-    # render. No omission here can silently add author framing — passing the flag on
+    # these parameters emits a FULL-panel prompt carrying no draws, which is the safe
+    # render. No omission here can silently add author framing — passing the flags on
     # a full panel still can, which nothing here is able to detect (see the render).
-    delta_draws: str | None = None,
+    # `delta_draws` maps each DELTA_DRAWS name to the author's text, and holds both
+    # names or is None; `build` refuses anything in between.
+    delta_draws: dict[str, str] | None = None,
+    repair_boundary: str | None = None,
 ) -> str:
     # An unconfigured runtime legitimately means "inherit the cockpit's compute"
     # (the doctrine says so), but a TYPO looks identical. Saying which runtime was
@@ -439,8 +457,8 @@ def render(
     )
     # A delta pass is the doctrine's ONE sanctioned exception to **No framing**: the
     # delta lens is handed the author's stated draws — the prose class and the
-    # safety-critical boundary — precisely in order to dispute them. It gets its own
-    # flag rather than sharing `--carry-forward` because the two were confused in
+    # safety-critical boundary — precisely in order to dispute them. They get their
+    # own flags rather than sharing `--carry-forward` because the two were confused in
     # practice: draws typed into `--carry-forward` reached FULL-panel prompts, which
     # the doctrine says carry none of this ("Full-panel lens prompts are untouched by
     # all of this").
@@ -449,27 +467,59 @@ def render(
     # the delta-pass rules sit mid-paragraph under "Re-running, and when to stop" with
     # no heading to anchor a slice on, and a substring anchor is exactly the fragility
     # `_HEADING` refuses. The cost is a second copy that can drift, so the doctrine
-    # names this flag beside the rule — the two are found together.
-    draws = (
-        "\n## The author's stated draws — dispute them\n\n"
-        "This is a **delta pass** — asserted by whoever assembled this prompt, not\n"
-        "observed here. What follows is the author's own classification of\n"
-        "this change, handed to you because disputing it is your first duty here. It is\n"
-        "the one anchoring this panel accepts on purpose, and it is confined to a delta\n"
-        "pass: a full panel's prompt carries no draw at all.\n\n"
-        f"{delta_draws.strip()}\n\n"
-        "End your report with **one verdict line per draw**: name the draw, then\n"
-        "`confirmed` or `disputed`, with your reason. Confirm a draw only if you checked\n"
-        'it yourself — "confirmed" means every draw is confirmed. Report disputes\n'
-        "without changing their severity to fit a disposition. For a reviewer-marked\n"
-        "LOW/P3 repair, follow the shared LOW delta-or-ticket rule: a containment\n"
-        "dispute without severity escalation calls for a ticket, not a full restart.\n"
-        "Do not confirm coverage for disputed code remaining in the candidate; the\n"
-        "coordinator must withdraw it and delta-review the removal, or hold it.\n"
-        "Other disputes follow the shared panel policy for their severity and scope.\n"
-        if delta_draws is not None and delta_draws.strip()
-        else ""
-    )
+    # names these flags beside the rule — the two are found together.
+    draws = ""
+    if delta_draws is not None:
+        # Each draw renders under the name its verdict line must begin with. On #920
+        # the draws and the repair boundary arrived as one paragraph, and one lens
+        # answered the repairs only: "one verdict line per draw" let it decide what a
+        # draw was. Naming them here, and the lines expected back, takes that away.
+        items = "\n".join(
+            f"- **`{name}`** — {delta_draws[name].strip()}" for _, name in DELTA_DRAWS
+        )
+        expected = "\n".join(
+            f"    {name}: confirmed|disputed — <your reason>" for _, name in DELTA_DRAWS
+        )
+        repair = ""
+        repair_rule = ""
+        if repair_boundary is not None and repair_boundary.strip():
+            repair = (
+                "\n### The repair boundary\n\n"
+                "This is the prior finding, its original severity and the exact repair\n"
+                "under review, under the shared LOW delta-or-ticket rule. It is not a draw:\n"
+                "check that the repair stays inside it and evaluate the behaviour it\n"
+                "affects, without hunting unrelated defects across the whole PR.\n\n"
+                f"{repair_boundary.strip()}\n"
+            )
+            repair_rule = (
+                f"After them, add one line per repair named in the boundary, beginning\n"
+                f"`{REPAIR_VERDICT}:`, saying whether it is contained.\n"
+            )
+        draws = (
+            "\n## The author's stated draws — dispute them\n\n"
+            "This is a **delta pass** — asserted by whoever assembled this prompt, not\n"
+            "observed here. What follows is the author's own classification of\n"
+            "this change, handed to you because disputing it is your first duty here. It is\n"
+            "the one anchoring this panel accepts on purpose, and it is confined to a delta\n"
+            "pass: a full panel's prompt carries no draw at all. There are exactly two\n"
+            "draws, and both are required:\n\n"
+            f"{items}\n"
+            f"{repair}\n"
+            "End your report with **one verdict line per draw**, each beginning with the\n"
+            "draw's name exactly as written above, then `confirmed` or `disputed`, with\n"
+            "your reason:\n\n"
+            f"{expected}\n\n"
+            "A report missing either line has given no verdict on that draw.\n"
+            f"{repair_rule}"
+            "Confirm a draw only if you checked\n"
+            'it yourself — "confirmed" means every draw is confirmed. Report disputes\n'
+            "without changing their severity to fit a disposition. For a reviewer-marked\n"
+            "LOW/P3 repair, follow the shared LOW delta-or-ticket rule: a containment\n"
+            "dispute without severity escalation calls for a ticket, not a full restart.\n"
+            "Do not confirm coverage for disputed code remaining in the candidate; the\n"
+            "coordinator must withdraw it and delta-review the removal, or hold it.\n"
+            "Other disputes follow the shared panel policy for their severity and scope.\n"
+        )
     # The base label must match the path actually taken. Saying "resolved from the
     # remote" over an author-supplied base would assert the one property this script
     # exists to guarantee, on the one path where it does not hold.
@@ -565,6 +615,37 @@ def agent_definition(root: Path, lens: str, runtime: str) -> str:
         raise PromptError(str(exc)) from exc
 
 
+def _delta_inputs(args: argparse.Namespace) -> tuple[dict[str, str] | None, str | None]:
+    """Return the delta pass's named draws and repair boundary, or refuse a partial set.
+
+    Passing any delta flag says this is a delta pass, and the doctrine makes both
+    draws that pass's first duty. Rendering one without the other would ask the lens
+    for a verdict on a draw nobody stated, so a partial set is refused here rather
+    than discovered when a verdict line is missing.
+    """
+    if args.delta_draws is not None:
+        raise PromptError(
+            "--delta-draws was split so a lens cannot skip a draw (#921). Pass "
+            "--draw-prose-class and --draw-safety-critical, and the LOW rule's prior "
+            "finding and repair boundary, if any, via --repair-boundary."
+        )
+    given = {
+        name: _override(flag, getattr(args, flag[2:].replace("-", "_")))
+        for flag, name in DELTA_DRAWS
+    }
+    repair = _override("--repair-boundary", args.repair_boundary)
+    if all(value is None for value in given.values()) and repair is None:
+        return None, None
+    missing = [flag for flag, name in DELTA_DRAWS if given[name] is None]
+    if missing:
+        raise PromptError(
+            f"a delta pass needs both draws, and {', '.join(missing)} was not passed. "
+            "The lens owes a verdict on each, so a draw left out is a verdict the pass "
+            "never asks for."
+        )
+    return {name: value for name, value in given.items() if value is not None}, repair
+
+
 def build(args: argparse.Namespace) -> str:
     # The repo under review is a parameter, not a module constant, so the engine can
     # be pointed at a checkout other than its own — and so its own tests can build a
@@ -581,7 +662,7 @@ def build(args: argparse.Namespace) -> str:
     o_base_branch = _override("--base-branch", args.base_branch)
     o_scratch = _override("--scratch", args.scratch)
     o_carry = _override("--carry-forward", args.carry_forward)
-    o_draws = _override("--delta-draws", args.delta_draws)
+    draws, o_repair = _delta_inputs(args)
     o_verify = _override("--verify-command", args.verify_command)
     o_runtime = _override("--runtime", args.runtime) or "claude"
     # --lens is required=True, so argparse guarantees presence but not content; an
@@ -631,7 +712,8 @@ def build(args: argparse.Namespace) -> str:
         scratch=o_scratch,
         pr=args.pr,
         carry_forward=o_carry,
-        delta_draws=o_draws,
+        delta_draws=draws,
+        repair_boundary=o_repair,
         verify_command=o_verify,
         base_from_remote=base_from_remote,
         branch_from_checkout=o_branch is None,
@@ -670,11 +752,29 @@ def main(argv: list[str] | None = None) -> int:
         "full panel's prompt carries neither",
     )
     parser.add_argument(
+        "--draw-prose-class",
+        default=None,
+        help="DELTA PASS ONLY: the author's prose-class draw for the lens to dispute; "
+        "requires --draw-safety-critical. Omit both for a full panel — the draws are "
+        "the doctrine's one exception to No framing",
+    )
+    parser.add_argument(
+        "--draw-safety-critical",
+        default=None,
+        help="DELTA PASS ONLY: the author's safety-critical boundary draw for the lens "
+        "to dispute; requires --draw-prose-class",
+    )
+    parser.add_argument(
+        "--repair-boundary",
+        default=None,
+        help="DELTA PASS ONLY: the LOW rule's prior finding, its original severity and "
+        "the exact repair boundary; requires both draws",
+    )
+    parser.add_argument(
         "--delta-draws",
         default=None,
-        help="DELTA PASS ONLY: the author's stated draws (prose class, safety-critical "
-        "boundary) for the lens to dispute, ending its report with one verdict line per "
-        "draw. Omit for a full panel — this is the doctrine's one exception to No framing",
+        help="removed: refused with a pointer to --draw-prose-class, "
+        "--draw-safety-critical and --repair-boundary",
     )
     parser.add_argument(
         "--verify-command",
@@ -699,6 +799,9 @@ def main(argv: list[str] | None = None) -> int:
                     ("--pr", args.pr),
                     ("--carry-forward", args.carry_forward),
                     ("--delta-draws", args.delta_draws),
+                    ("--draw-prose-class", args.draw_prose_class),
+                    ("--draw-safety-critical", args.draw_safety_critical),
+                    ("--repair-boundary", args.repair_boundary),
                     ("--verify-command", args.verify_command),
                 )
                 if value is not None

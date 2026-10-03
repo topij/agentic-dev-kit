@@ -338,7 +338,7 @@ def test_a_full_panel_prompt_carries_no_authors_draw(repo):
 
     The doctrine hands the author's stated draws to the **delta lens only** —
     "Full-panel lens prompts are untouched by all of this" — so the draws section must be
-    unreachable without `--delta-draws`, including from a prompt that carries a
+    unreachable without the draw flags, including from a prompt that carries a
     carry-forward. Unpinned, moving the draws render under the carry-forward guard
     reproduces the exact anchoring, and every other test still passes.
     """
@@ -357,18 +357,21 @@ def test_a_full_panel_prompt_carries_no_authors_draw(repo):
     assert "one verdict line per draw" not in with_carry.stdout
 
 
+DRAWS = (
+    "--draw-prose-class", "PROSE-MARKER record prose",
+    "--draw-safety-critical", "SAFETY-MARKER not under it",
+)
+
+
 def test_delta_draws_reach_the_lens_with_the_duty_to_dispute_them(repo):
     """Handing a lens the author's classification without the dispute duty and the
     per-draw verdict line is anchoring with nothing asked in return — which is what
     the doctrine's exception buys the panel."""
     base, head = _revs(repo)
-    marker = "Prose class: record prose. Safety-critical: not under it."
-    out = _run(
-        repo, "--lens", "correctness", "--head", head, "--base", base,
-        "--delta-draws", marker,
-    )
+    out = _run(repo, "--lens", "correctness", "--head", head, "--base", base, *DRAWS)
     assert out.returncode == 0, out.stderr
-    assert marker in out.stdout
+    assert "PROSE-MARKER record prose" in out.stdout
+    assert "SAFETY-MARKER not under it" in out.stdout
     assert "The author's stated draws — dispute them" in out.stdout
     assert "one verdict line per draw" in out.stdout
     assert "disputing it is your first duty" in out.stdout
@@ -384,6 +387,83 @@ def test_delta_draws_reach_the_lens_with_the_duty_to_dispute_them(repo):
     # Named by this test's neighbours and pinned by nothing until now — swapping it for
     # `yes`/`no` passed the whole file.
     assert "`confirmed` or `disputed`" in out.stdout
+
+
+def test_each_draw_renders_under_the_name_its_verdict_line_begins_with(repo):
+    """#921: the draws and the repair boundary arrived as one paragraph on #920, and
+    one lens gave verdict lines for the repairs only. Each draw is now a named item,
+    and the prompt spells out the two lines it expects back, so a missing one is
+    visible by its absent name rather than by judging what the lens meant."""
+    base, head = _revs(repo)
+    out = _run(repo, "--lens", "correctness", "--head", head, "--base", base, *DRAWS)
+    assert out.returncode == 0, out.stderr
+    assert "- **`prose-class`** — PROSE-MARKER record prose" in out.stdout
+    assert "- **`safety-critical`** — SAFETY-MARKER not under it" in out.stdout
+    assert "    prose-class: confirmed|disputed" in out.stdout
+    assert "    safety-critical: confirmed|disputed" in out.stdout
+    assert "A report missing either line has given no verdict on that draw." in out.stdout
+    # The draws sit in the order the expected lines do, so the two lists read side by side.
+    assert out.stdout.index("PROSE-MARKER") < out.stdout.index("SAFETY-MARKER")
+
+
+def test_the_repair_boundary_is_its_own_block_and_not_a_draw(repo):
+    """The repair boundary is what the LOW rule hands a delta lens beside the draws.
+    Rendered as a draw, it lets the lens answer it in place of one; rendered apart, it
+    asks for its own `repair:` lines after the two draw lines."""
+    base, head = _revs(repo)
+    boundary = "Prior finding (LOW): BOUNDARY-MARKER. Repair: one commit."
+    out = _run(
+        repo, "--lens", "correctness", "--head", head, "--base", base, *DRAWS,
+        "--repair-boundary", boundary,
+    )
+    assert out.returncode == 0, out.stderr
+    assert "### The repair boundary" in out.stdout
+    assert boundary in out.stdout
+    assert "It is not a draw" in out.stdout
+    assert "beginning\n`repair:`" in out.stdout
+    # The boundary block opens after both draws and closes before the verdict
+    # instruction. Above the draws, it would sit under "There are exactly two draws"
+    # and read as one of them.
+    assert out.stdout.index("SAFETY-MARKER") < out.stdout.index("### The repair boundary")
+    assert out.stdout.index(boundary) < out.stdout.index("one verdict line per draw")
+
+    without = _run(repo, "--lens", "correctness", "--head", head, "--base", base, *DRAWS)
+    assert without.returncode == 0, without.stderr
+    assert "### The repair boundary" not in without.stdout
+    assert "`repair:`" not in without.stdout
+
+
+@pytest.mark.parametrize(
+    "args, missing",
+    [
+        (("--draw-prose-class", "x"), "--draw-safety-critical"),
+        (("--draw-safety-critical", "x"), "--draw-prose-class"),
+        (("--repair-boundary", "x"), "--draw-prose-class, --draw-safety-critical"),
+    ],
+)
+def test_a_partial_delta_pass_is_refused(repo, args, missing):
+    """Any delta flag declares a delta pass, and the doctrine makes both draws that
+    pass's first duty. Rendering one draw would ask for a verdict on a draw nobody
+    stated, which the lens then cannot be faulted for skipping."""
+    base, head = _revs(repo)
+    out = _run(repo, "--lens", "correctness", "--head", head, "--base", base, *args)
+    assert out.returncode == 2, out.stdout[:200]
+    assert f"{missing} was not passed" in out.stderr
+    assert out.stdout == ""
+
+
+def test_the_removed_delta_draws_flag_is_refused_with_its_replacements(repo):
+    """`--delta-draws` took all three in one block, which is the #921 defect. Accepting
+    it silently would keep that path open for every caller who has not read the
+    CHANGELOG, so it refuses and names the flags that replace it."""
+    base, head = _revs(repo)
+    out = _run(
+        repo, "--lens", "correctness", "--head", head, "--base", base, "--delta-draws", "x",
+    )
+    assert out.returncode == 2, out.stdout[:200]
+    for flag in ("--draw-prose-class", "--draw-safety-critical", "--repair-boundary"):
+        assert flag in out.stderr
+    assert out.stdout == ""
 
 
 def test_the_carry_forward_section_tells_the_lens_what_it_is_not(repo):
@@ -688,7 +768,8 @@ def test_an_empty_base_override_is_refused_not_silently_remote_resolved(repo):
     "flag",
     [
         "--branch", "--base", "--base-branch", "--scratch", "--carry-forward",
-        "--delta-draws", "--verify-command",
+        "--draw-prose-class", "--draw-safety-critical", "--repair-boundary",
+        "--verify-command",
     ],
 )
 def test_every_optional_override_refuses_an_empty_value(repo, flag):
@@ -1044,6 +1125,7 @@ def test_agent_definition_is_a_claude_surface_and_refuses_codex(repo):
 @pytest.mark.parametrize(
     "flag, value",
     [("--head", "deadbeef"), ("--pr", "7"), ("--carry-forward", "x"), ("--delta-draws", "y"),
+     ("--draw-prose-class", "y"), ("--draw-safety-critical", "y"), ("--repair-boundary", "y"),
      ("--base", "abc"), ("--branch", "b"), ("--scratch", "/tmp/x"), ("--verify-command", "make test"),
      ("--base-branch", "main")],
 )

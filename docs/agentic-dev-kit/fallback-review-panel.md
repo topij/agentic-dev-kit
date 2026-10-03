@@ -686,7 +686,8 @@ never happened or invent a receipt for an incomplete or wrong-revision review.
 A pending ticket write does not by itself dispose of a finding for merge.
 
 For a LOW delta, hand the lens the prior finding, its original severity and the
-exact repair boundary through `panel_prompt.py --delta-draws`. The lens checks
+exact repair boundary through `panel_prompt.py --repair-boundary`, beside the two
+draws every delta pass carries. The lens checks
 that the repair is contained and evaluates its affected behavior; it is not asked
 to hunt unrelated defects across the whole PR. Do not claim behavior is record
 prose to qualify. Preserve the normal independent safety-critical boundary check
@@ -699,7 +700,7 @@ If the disputed repair is already committed, withdraw that repair and delta-revi
 its removal against the standing reviewed parent before proceeding. If withdrawal
 restores exactly that parent's tree, the parent-to-head file diff is empty and the
 prompt renderer refuses it. Render the withdrawal comparison instead, with
-`--base <disputed-repair-head> --head <withdrawal-head>`. In `--delta-draws`, name
+`--base <disputed-repair-head> --head <withdrawal-head>`. In `--repair-boundary`, name
 that comparison separately from the standing reviewed parent and require the lens
 to verify exact parent/withdrawal tree equality and read every commit message in
 `git log <reviewed-parent>..<withdrawal-head>`, including the withdrawn repair.
@@ -906,15 +907,19 @@ reference, no instruction to a future reader, no claim a process consumes.
 For the record-prose route, each delta lens reads both surfaces, and its first duty is to dispute both
 stated draws — the prose class and the safety-critical boundary; "confirmed"
 means both are confirmed. The launch prompt requires each lens to end its
-report with **one verdict line per draw**. That prompt is assembled by
-`panel_prompt.py --delta-draws`, which is the **only** channel a draw takes:
-`--carry-forward` renders under a heading about what prior rounds *covered*,
-so a draw typed there is framing a full pass is not entitled to hand a lens —
+report with **one verdict line per draw**, beginning with the draw's name:
+`prose-class:` and `safety-critical:`. That prompt is assembled by
+`panel_prompt.py --draw-prose-class` and `--draw-safety-critical`, which are the
+**only** channel a draw takes, and it refuses one without the other. A LOW
+repair's boundary goes to `--repair-boundary`, never into a draw, so it cannot
+stand in for one (`#921`). `--carry-forward` renders under a heading about what
+prior rounds *covered*, so a draw typed there is framing a full pass is not
+entitled to hand a lens —
 which is how full panels came to carry their author's draws before the flags
-were separated. **Run a full pass with no `--delta-draws` at all** — and read
+were separated. **Run a full pass with no draw flags at all** — and read
 that as a rule for whoever assembles the prompt, not as a guarantee the engine
-enforces. It cannot know which pass it is being run for, so the flag passed on
-a full pass still renders the draws: separating the channels removed the way
+enforces. It cannot know which pass it is being run for, so the flags passed on
+a full pass still render the draws: separating the channels removed the way
 this happened by default, and closed nothing against doing it on purpose, which
 is `#32`'s self-reporting gap arriving in one more place.
 **Every verdict line is posted on
