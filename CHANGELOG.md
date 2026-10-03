@@ -42,6 +42,15 @@ starts.
 
 ---
 
+## #927 — A fallback review's lens count follows the PR's declared class
+
+- **ADDED — config keys:** `review.safety_critical_paths`, a list of fnmatch path patterns naming the files `docs/agentic-dev-kit/safety-critical-changes.md` governs. Leave it absent until it lists every one of your gate files, including each path in your `.claude/rules/safety-critical-changes.md`. Absent or malformed, every PR is treated as safety-critical and keeps the two-lens fallback panel, as before. Once it is declared, a PR that changes none of the listed paths may take one isolated lens. `init.sh` does not seed the key.
+- **ADDED — engine CLI surface:** `pr_watch.py --record-review "fallback:lens" --lenses <one lens>` records a one-lens full pass. It refuses any other number of lenses, a PR that changes a listed path, and a PR it cannot class.
+- **CHANGED — return shape:** the poll report and the `--record-review` result gain `review_class` (`class`, `matched_paths`, `unclassified`). `fetch_pr_view`, `rest_pr_view` and `fetch_review_snapshot` now carry `baseRefOid`. Refresh `pr_watch.py` in your engine directory with `scripts/hooks/pr_followup_hook.py`, `docs/agentic-dev-kit/fallback-review-panel.md`, `docs/agentic-dev-kit/safety-critical-changes.md`, `docs/agentic-dev-kit/workflows/pr-watch.md`, `kit-manifest.json`, `scripts/tests/test_pr_watch.py` and `scripts/tests/test_pr_followup_hook.py`. A test of yours that pins `ReviewConfig`'s fields or the engine's config-derived globals must add `safety_critical_paths` and `_SAFETY_CRITICAL_PATHS`.
+- **CHANGED — gate semantics:** on a PR classed standard, a composed `fallback:delta` receipt whose full parent records one lens is now valid merge evidence; it used to be invalid on every PR. Nothing else `mergeable` decides changes, and a safety-critical PR is unchanged.
+
+---
+
 ## #907 — `GitHubForge`'s sweep-cleanup guard decides containment by filesystem identity
 
 CHANGED — gate semantics: Refresh `lib/triage/model.py`, `lib/triage/engine.py` and `lib/triage/providers.py` in your engine directory together, with `kit-manifest.json` and `scripts/tests/test_triage_providers.py`. The worktree-containment predicate moved from `engine.py` to `model.py` as `worktree_conflicts_with_checkout`, and both `engine.py` and `providers.py` import it from there, so either one refreshed without `model.py` fails to import. On a case-insensitive filesystem, `GitHubForge`'s `sweep-cleanup` action now reports every artifact `kept` for a differently cased path to the caller checkout, to a path inside it, or to its parent. It used to let the cleanup's git commands run against such a path, so the remote branch's compare-and-delete could delete the branch.
