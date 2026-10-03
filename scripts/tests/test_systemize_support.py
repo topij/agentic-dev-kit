@@ -54,6 +54,7 @@ review:
 systemize:
   analysis_tier: expensive
   operator_logins: []
+  subprocess_timeout_seconds: 60
   lookback_days: 7
   backfill_days: 28
   pattern_threshold: 2
