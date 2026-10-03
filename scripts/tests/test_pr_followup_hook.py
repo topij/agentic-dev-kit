@@ -1088,7 +1088,11 @@ def test_the_panel_reminder_names_both_routes_the_review_class_chooses():
     assert "A safety-critical PR takes the PANEL" in text
     assert '--record-review "fallback:panel" --lenses <names>' in text
     assert "A standard PR takes one isolated lens" in text
-    assert '--record-review "fallback:lens" --lenses <name>' in text
+    assert (
+        '`uv run scripts/pr_watch.py <PR#> --record-review "fallback:lens" '
+        "--lenses <name> --head <polled-sha>`" in text
+    )
+    assert "the one *How many lenses* names" in text
     assert "review waiver" in text
 
 

@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "8fcf740408907fed1c55b7d54463cdd3e450892f0cdfa26bd128477ed25ca613"
+      "sha256": "4052177816a47ce699ee15a0f5e5bc4b80037b506b36928db9473e9e2cc433b2"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -40,7 +40,7 @@
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
-      "sha256": "004f0f5e98330e28a265eac19ed6a763a747c56de4cc8111128692fcc5b4e75f"
+      "sha256": "a87e5ac680cd264f6be034ca5473080d4c6185928378bf4f74a81fecaf5ccb2c"
     },
     "docs/agentic-dev-kit/workflows/adopt.md": {
       "role": "workflow",
@@ -144,7 +144,7 @@
     },
     "scripts/hooks/pr_followup_hook.py": {
       "role": "hook",
-      "sha256": "f1aef2bdee82a27ea888d356a2974234e9db2fbd64087c75b05108eca0f9113a"
+      "sha256": "c0649db424739c7476a3bf3b2b92ea1d61d1db27f313f250d58846dbe509f637"
     },
     "scripts/hooks/pre-push": {
       "role": "hook",
@@ -514,7 +514,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "b84d2ca83ef0675a407b4316d8bd033b928a46897817052f99cba18f34bc9364"
+      "sha256": "5841a9bc453323fd2940e36a4c1ef9c94be83583020305ada2bfb55abd30616e"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
@@ -546,7 +546,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "2d5b424ad53683bf4f9bef6f69bded8dc71b21e9c2a8ccb8ea8a326a2b01715c"
+      "sha256": "f3a3808b7cd5e77158f09eee4532d61cccc37264f1a4b73bb0fe38aec1a22310"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -614,11 +614,11 @@
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
-      "sha256": "bef3cfb42b378787c3b634343405c3c7469256e89e402de025fe1477f6d2b88b"
+      "sha256": "0ceea168d257d98817575b410d4875436e35a5926f10788d7523f8e3191f52b0"
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "3f72f8cbd34e9124e63f330733ab046804d40607f3b062f9a81801f25b6def98"
+      "sha256": "45cee2534adbd364339251d97d182d7d205521fabc303f67ddd267372ef14fcd"
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",

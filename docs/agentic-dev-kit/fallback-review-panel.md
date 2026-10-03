@@ -126,7 +126,11 @@ diffing the head against the pull request's base, and reports it as
 constraint: a trigger the author sets is a control the author can opt out of.
 For the same reason the list is read as committed at the pull request's base,
 so a pull request cannot shorten the list it is classed by, and a pull request
-that changes the list is itself safety-critical.
+that changes `config/dev-model.yaml` at all is safety-critical: that file
+declares the list and points at other gate files. What this does not protect is
+the code computing the class, which runs from the checkout like the rest of the
+engine: a pull request that changes `pr_watch.py` or its config reader is classed
+by its own version of them (`#928`).
 
 **It fails toward two.** An undeclared or malformed `review.safety_critical_paths`,
 or a base and head that Git cannot diff, leaves the pull request unclassed, and an
@@ -151,6 +155,14 @@ review for customer-facing gates*. A change outside those files is outside its
 scope. Workflow documents take one lens as well, until `#370` measures what the
 panel finds there. `#585`'s operator decision of 2026-10-02 sets all of this, and
 reads the earlier counter-examples by class.
+
+**What the engine enforces, and what it leaves to you.** It refuses
+`fallback:lens` on a pull request it does not class standard, and it holds a
+composed delta's full parent to the class: two lenses, or a `fallback:lens` pass
+on a standard pull request. Everything else here binds whoever runs the review. A
+standalone receipt's lens count stays a self-reported claim (`#32`) that the poll
+prints and the merge gate does not read, so a one-lens receipt on a
+safety-critical pull request still satisfies the gate, flagged.
 
 **What the class leaves alone.** No opening review is a delta pass. Operator-merge
 still follows `safety-critical-changes.md`. And a single-lens receipt stays
@@ -916,8 +928,9 @@ more coverage than the class needed overclaims nothing. Post the verdict,
 note the disagreement, leave the draw to the operator.) Record composition
 mechanically: pass `--compose-parent <last-reviewed-sha>` with the
 `fallback:delta` receipt. The engine requires a standing receipt at that exact
-parent that meets the pull request's class — two lenses, or one when
-`review_class` is standard — (or an already-valid composed chain), proves each boundary is
+parent that meets the pull request's class — two lenses, or, when
+`review_class` is standard, a one-lens `fallback:lens` pass — (or an
+already-valid composed chain), proves each boundary is
 ancestral, records the exact changed paths (both the source and destination of a
 rename), preserves each pass's review-bot caveats, and revalidates the chain,
 paths, and caveats on every poll. Missing objects, non-ancestry, a broken

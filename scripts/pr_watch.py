@@ -4344,8 +4344,15 @@ def _merge_base_paths(base: str, head: str, what: str) -> list[str]:
 # The list is read as committed at the PR's BASE, never from the checkout this
 # engine runs in. That checkout is usually the PR's own branch, so reading it
 # would let a PR drop a path from the list and be classed by the shorter one.
-# For the same reason a PR that changes the list itself is safety-critical:
-# moving the boundary owes the review the boundary protects.
+# A PR that changes `config/dev-model.yaml` at all is safety-critical too: that
+# file declares the list and points at other gate files
+# (`parallel.claude_settings_profile`, `paths.engines`), so a key-by-key
+# comparison could miss the next pointer.
+#
+# What this does NOT protect is the code computing the class. It runs from the
+# same checkout, so a PR that changes this engine or `lib/kitconfig.py` is
+# classed by its own version of them. `pr_watch.py` is on the shipped list;
+# `kitconfig.py` is not, and `#928` carries that.
 #
 # Every way this can fail lands on the safety-critical class, and that includes
 # an undeclared key, so a repo that never declares the list keeps the two-lens
@@ -4397,42 +4404,25 @@ def _declared_safety_critical_paths(rev: str) -> frozenset[str] | None:
     return None if normalized is None else frozenset(normalized)
 
 
-def _declaration_changed(base: str, head: str) -> bool:
-    """Whether the PR changed ``review.safety_critical_paths``, from its merge base."""
-    try:
-        found = subprocess.run(  # noqa: S603
-            ["git", "merge-base", base, head],  # noqa: S607
-            cwd=str(REPO_ROOT),
-            capture_output=True,
-            timeout=10,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise ValueError(f"could not establish the PR's merge base: {exc}") from exc
-    fork = found.stdout.decode("utf-8", errors="replace").strip()
-    if found.returncode != 0 or not _COMMIT_SHA_RE.match(fork):
-        detail = found.stderr.decode("utf-8", errors="replace").strip()
-        raise ValueError(f"could not establish the PR's merge base: {detail}")
-    return _declared_safety_critical_paths(fork) != _declared_safety_critical_paths(head)
-
-
 def pr_review_class(
     base: object, head: object, *, patterns: object = _UNSET
 ) -> dict:
     """Class the change from ``base`` to ``head`` by the declared safety-critical paths.
 
-    Returns ``{"class", "matched_paths", "changes_declaration", "unclassified"}``.
+    Returns ``{"class", "matched_paths", "changes_config", "unclassified"}``.
     ``unclassified`` is the reason no class could be computed, and is ``None``
     when one was; an unclassified change is reported as safety-critical.
     ``base`` is the PR's base commit, and the list is read as committed there.
     The diff runs from the merge base of ``base`` and ``head``, so a stale base
-    widens it rather than narrowing it. ``patterns`` replaces the list read at
-    ``base`` and skips the check for a changed list; it exists for tests.
+    widens it rather than narrowing it. ``changes_config`` is whether the PR
+    changes the config that declares the list, which classes it safety-critical
+    whatever else it changes. ``patterns`` replaces the list read at ``base``;
+    it exists for tests.
     """
     result: dict = {
         "class": REVIEW_CLASS_SAFETY_CRITICAL,
         "matched_paths": [],
-        "changes_declaration": False,
+        "changes_config": False,
         "unclassified": None,
     }
     if not all(
@@ -4461,13 +4451,9 @@ def pr_review_class(
         result["unclassified"] = f"{exc} (fetch the PR's base and head, then poll again)"
         return result
     try:
-        changes_declaration = (
-            patterns is _UNSET
-            and _config_rel_path() in paths
-            and _declaration_changed(str(base), str(head))
-        )
+        changes_config = _config_rel_path() in paths
     except Exception as exc:  # noqa: BLE001 — every failure leaves the PR unclassed
-        result["unclassified"] = str(exc)
+        result["unclassified"] = f"could not name the config path: {exc}"
         return result
     matched = [
         path
@@ -4475,8 +4461,8 @@ def pr_review_class(
         if any(fnmatch.fnmatchcase(path, pattern) for pattern in declared)
     ]
     result["matched_paths"] = matched
-    result["changes_declaration"] = bool(changes_declaration)
-    if not matched and not changes_declaration:
+    result["changes_config"] = changes_config
+    if not matched and not changes_config:
         result["class"] = REVIEW_CLASS_STANDARD
     return result
 
@@ -4509,11 +4495,28 @@ def _describe_review_class(review_class: object) -> str:
     if matched:
         more = f" and {len(matched) - 1} more" if len(matched) > 1 else ""
         changes.append(f"{matched[0]}{more} under review.safety_critical_paths")
-    if review_class.get("changes_declaration") is True:
-        changes.append("the review.safety_critical_paths list itself")
+    if review_class.get("changes_config") is True:
+        changes.append("the config that declares review.safety_critical_paths")
     if not changes:
         return "the PR is classed safety-critical"
     return "it changes " + " and ".join(changes)
+
+
+def _anchors_a_delta(source: str, lenses: list[str], lens_floor: int) -> bool:
+    """Whether a full pass may anchor a composed delta at ``lens_floor``.
+
+    Two distinct lenses always may. At a floor of one, so only on a PR classed
+    standard, so may a ``fallback:lens`` pass and nothing else: Degraded mode's
+    ``fallback:<runtime>`` is one lens in the author's context, which a
+    composed delta never extended before the class existed.
+    """
+    countable = len(_countable_lenses(lenses))
+    if countable >= 2:
+        return True
+    return lens_floor <= 1 and countable == 1 and source.strip() == SINGLE_LENS_SOURCE
+
+
+_ONE_LENS_PARENT_ERROR = f"is neither a dual-lens pass nor a one-lens {SINGLE_LENS_SOURCE} pass"
 
 
 def _validate_composed_coverage(
@@ -4547,10 +4550,10 @@ def _validate_composed_coverage(
         return False, "full_parent.source is missing"
     if full_source.strip() == "fallback:delta":
         return False, "full_parent cannot itself be a delta receipt"
-    if len(_countable_lenses(full_lenses)) < max(lens_floor, 1):
+    if not _anchors_a_delta(full_source, full_lenses, lens_floor):
         if lens_floor >= 2:
             return False, "full_parent does not record a dual-lens pass"
-        return False, "full_parent records no review lens"
+        return False, f"full_parent {_ONE_LENS_PARENT_ERROR}"
     try:
         _receipt_caveats(full)
     except ValueError as exc:
@@ -4627,10 +4630,10 @@ def _compose_coverage(
             raise ValueError("standing parent receipt has no review source")
         if prior_source.strip() == "fallback:delta":
             raise ValueError("a legacy delta receipt cannot serve as a full parent")
-        if len(_countable_lenses(prior_lenses)) < max(lens_floor, 1):
+        if not _anchors_a_delta(prior_source, prior_lenses, lens_floor):
             if lens_floor >= 2:
                 raise ValueError("standing parent receipt is not a dual-lens full pass")
-            raise ValueError("standing parent receipt records no review lens")
+            raise ValueError(f"standing parent receipt {_ONE_LENS_PARENT_ERROR}")
         full_parent = {
             "head": parent_head,
             "source": prior_source,

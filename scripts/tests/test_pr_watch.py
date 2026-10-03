@@ -10634,7 +10634,7 @@ def test_review_class_is_safety_critical_when_a_declared_path_changes(
     assert result == {
         "class": "safety-critical",
         "matched_paths": [GATE_PATH],
-        "changes_declaration": False,
+        "changes_config": False,
         "unclassified": None,
     }
     assert pr_watch._lens_floor(result) == 2
@@ -10654,7 +10654,7 @@ def test_review_class_is_standard_when_no_declared_path_changes(
     assert result == {
         "class": "standard",
         "matched_paths": [],
-        "changes_declaration": False,
+        "changes_config": False,
         "unclassified": None,
     }
     assert pr_watch._lens_floor(result) == 1
@@ -10792,10 +10792,10 @@ def test_the_list_is_read_at_the_base_not_from_the_checkout(
 
     assert result["class"] == "safety-critical"
     assert result["matched_paths"] == [GATE_PATH]
-    assert result["changes_declaration"] is True
+    assert result["changes_config"] is True
     assert pr_watch._describe_review_class(result) == (
         f"it changes {GATE_PATH} under review.safety_critical_paths and the "
-        "review.safety_critical_paths list itself"
+        "config that declares review.safety_critical_paths"
     )
 
 
@@ -10812,13 +10812,15 @@ def test_a_pr_that_changes_only_the_list_is_safety_critical(
 
     assert result["class"] == "safety-critical"
     assert result["matched_paths"] == []
-    assert result["changes_declaration"] is True
+    assert result["changes_config"] is True
     assert pr_watch._lens_floor(result) == 2
 
 
-def test_reordering_the_list_or_changing_other_config_is_not_a_list_change(
+def test_any_change_to_the_config_is_safety_critical(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    """The config declares the list and points at other gate files, so even a
+    change that leaves the list's meaning alone owes two lenses."""
     pr_watch = _load_pr_watch()
     repo, _git, commit = _class_repo(tmp_path)
     base = commit({"config/dev-model.yaml": _declaring([GATE_PATH, "lib/*"])}, "base")
@@ -10828,39 +10830,69 @@ def test_reordering_the_list_or_changing_other_config_is_not_a_list_change(
 
     result = pr_watch.pr_review_class(base, head)
 
-    assert result["class"] == "standard"
-    assert result["changes_declaration"] is False
+    assert result["class"] == "safety-critical"
+    assert result["matched_paths"] == []
+    assert result["changes_config"] is True
+
+
+def test_repointing_the_lane_profile_at_an_unlisted_file_is_safety_critical(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """PR #927's first adversarial round: the list names the shipped profile
+    path, so pointing `parallel.claude_settings_profile` at a new file changed
+    nothing the list matched, and the PR owed one lens."""
+    pr_watch = _load_pr_watch()
+    repo, _git, commit = _class_repo(tmp_path)
+    profile = "config/claude-lane-settings.json"
+    config = _declaring([GATE_PATH, profile]) + f"parallel:\n  claude_settings_profile: {profile}\n"
+    base = commit({"config/dev-model.yaml": config, profile: "{}\n"}, "base")
+    head = commit(
+        {
+            "config/dev-model.yaml": config.replace(
+                f"claude_settings_profile: {profile}",
+                "claude_settings_profile: config/permissive-lane.json",
+            ),
+            "config/permissive-lane.json": '{"permissions": {"allow": ["*"]}}\n',
+        },
+        "repoint the lane profile",
+    )
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    result = pr_watch.pr_review_class(base, head)
+
+    assert result["matched_paths"] == []
+    assert result["changes_config"] is True
+    assert result["class"] == "safety-critical"
 
 
 def test_a_list_changed_on_the_base_side_is_not_the_prs_change(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """The base adds to the list after the fork. The PR, which edits another
-    config key, did not change the list; the base's longer list still applies."""
+    """The base adds to the list after the fork. The PR never touched the
+    config, so it is not classed by that change, but the base's longer list is
+    the one it is classed by."""
     pr_watch = _load_pr_watch()
     repo, git, commit = _class_repo(tmp_path)
     commit({"config/dev-model.yaml": _declaring([GATE_PATH]), "docs/a.md": "a\n"}, "root")
     git("branch", "feature")
+    git("branch", "docs-only")
     base_tip = commit(
         {"config/dev-model.yaml": _declaring([GATE_PATH, "lib/*"])}, "the base adds lib"
     )
     git("checkout", "-q", "feature")
-    head = commit(
-        {
-            "config/dev-model.yaml": _declaring([GATE_PATH]).replace(
-                "[coderabbit]", "[otherbot]"
-            ),
-            "lib/helper.py": "x = 1\n",
-        },
-        "the PR changes a bot and lib",
-    )
+    head = commit({"lib/helper.py": "x = 1\n", "docs/a.md": "b\n"}, "the PR changes lib")
+    git("checkout", "-q", "docs-only")
+    docs_head = commit({"docs/a.md": "c\n"}, "the PR changes docs")
     monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
 
     result = pr_watch.pr_review_class(base_tip, head)
+    docs_only = pr_watch.pr_review_class(base_tip, docs_head)
 
-    assert result["changes_declaration"] is False
+    assert result["changes_config"] is False
     assert result["matched_paths"] == ["lib/helper.py"]
     assert result["class"] == "safety-critical"
+    assert docs_only["changes_config"] is False
+    assert docs_only["class"] == "standard"
 
 
 @pytest.mark.parametrize(
@@ -11088,8 +11120,33 @@ def test_a_standard_pr_still_refuses_a_parent_with_no_lens(
     pr_watch = _load_pr_watch()
     lensless = {"head": CLASS_PARENT, "source": "coderabbit:comment-verdict"}
 
-    with pytest.raises(ValueError, match="records no review lens"):
+    with pytest.raises(
+        ValueError, match="is neither a dual-lens pass nor a one-lens fallback:lens pass"
+    ):
         _compose_on_class(monkeypatch, pr_watch, lensless, ["docs/a.md"])
+
+
+def test_a_standard_pr_refuses_a_one_lens_degraded_parent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PR #927's first correctness round: on a standard PR the floor dropped to
+    one lens, and a Degraded-mode receipt, one lens in the author's context,
+    began to anchor a composed delta. Only an isolated `fallback:lens` may."""
+    pr_watch = _load_pr_watch()
+    degraded = {"head": CLASS_PARENT, "source": "fallback:codex", "lenses": ["correctness"]}
+
+    with pytest.raises(
+        ValueError, match="is neither a dual-lens pass nor a one-lens fallback:lens pass"
+    ):
+        _compose_on_class(monkeypatch, pr_watch, degraded, ["docs/a.md"])
+
+    receipt = _single_lens_composed_receipt()
+    receipt["coverage"]["full_parent"] = {**degraded}
+    monkeypatch.setattr(pr_watch, "_delta_paths", lambda base, head: ["docs/a.md"])
+    assert pr_watch._validate_composed_coverage(receipt, HEAD_SHA, lens_floor=1) == (
+        False,
+        "full_parent is neither a dual-lens pass nor a one-lens fallback:lens pass",
+    )
 
 
 def _single_lens_composed_receipt() -> dict:

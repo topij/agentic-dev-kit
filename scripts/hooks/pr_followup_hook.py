@@ -317,8 +317,10 @@ def _fallback_instruction(
             f"reviewer per lens ({', '.join(lenses)}) — recorded with "
             f"`uv run {engines_dir}/pr_watch.py <PR#> "
             f'--record-review "{panel_source}" --lenses <names> --head <polled-sha>`. '
-            "A standard PR takes one isolated lens, recorded with "
-            '`--record-review "fallback:lens" --lenses <name>`. '
+            "A standard PR takes one isolated lens, the one *How many lenses* "
+            "names there, recorded with "
+            f"`uv run {engines_dir}/pr_watch.py <PR#> "
+            '--record-review "fallback:lens" --lenses <name> --head <polled-sha>`. '
             "Never treat the outage as a review waiver." + lens_compute
             # Appended only for the PANEL branch: the degraded one-lens fallback
             # runs in the cockpit's own context, so there is no separate lens to
