@@ -104,7 +104,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "7a1bb4db2a58f120027f26eb670982e46dec2d27fdb6b48f766dd21905c9e257"
+      "sha256": "b7508d15fae3cab3826af3be041be17b4a2643f7eec90ea8ff64b88488092b20"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -402,7 +402,7 @@
         "scripts/lib/systemize/digest.py"
       ],
       "role": "engine",
-      "sha256": "5e3524fc08060568e91ef8cb79e045180067008f3a1716d684b268d65b06b5f1"
+      "sha256": "f060c78843ec436fbb80cc9a97b42b4be2e9a9811597ac4d6544006efda05c90"
     },
     "scripts/lib/triage/__init__.py": {
       "role": "engine",
@@ -546,7 +546,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "ceb07be31b4181f21222b59f6d163da2a2b102e7e96893f43f25aa761ae01956"
+      "sha256": "3aed1c4c13606dbe4131efee37a9830e10af4a2fc6e6cb84b9f94331db4f620f"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -610,7 +610,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "8ce15ec7c5fe7d5e9e4d6c5020294eff16bcae6b8ee24b743e7b8b635fc9e276"
+      "sha256": "27290b03ec5af2b61a6511ba985306158eef29d340c4af8851f82b217f76ba3b"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
@@ -650,11 +650,11 @@
     },
     "scripts/tests/test_systemize_config.py": {
       "role": "test",
-      "sha256": "9bccbcd67e8eef99f485e094f236d8ff7a3ea5cd7541ab3839521fae8e288420"
+      "sha256": "a3a2cbd02bbb291e1d81864b6927befbd3c899631d87926a41ae50dfeafd4dcc"
     },
     "scripts/tests/test_systemize_digest.py": {
       "role": "test",
-      "sha256": "2773ab0fc72e1124b4f9a8771831612c868fa78011ef59780eeb55be07b8d80d"
+      "sha256": "fd18e8cabf9862f2dce4061c37917565def1a317cba72926918c99cd0a9d68c2"
     },
     "scripts/tests/test_systemize_engines.py": {
       "role": "test",

@@ -238,11 +238,22 @@ def _evidence(prs: Any) -> Any:
     return evidence
 
 
+def _same(actual: Any, expected: Any) -> bool:
+    # Python considers True equal to 1; evidence and counts retain JSON types.
+    if type(actual) is not type(expected):
+        return False
+    if isinstance(expected, dict):
+        return actual.keys() == expected.keys() and all(_same(actual[k], v) for k, v in expected.items())
+    if isinstance(expected, list):
+        return len(actual) == len(expected) and all(_same(a, e) for a, e in zip(actual, expected, strict=True))
+    return actual == expected
+
+
 def verify(candidate: dict[str, Any], expected: dict[str, Any], path: str) -> None:
     identity.check_header(candidate, kind=identity.DIGEST_KIND, path=path)
-    problems = [name for name in VERIFIED_FIELDS if candidate.get(name) != expected.get(name)]
+    problems = [name for name in VERIFIED_FIELDS if name not in candidate or not _same(candidate[name], expected.get(name))]
     prs = candidate.get("prs")
-    if _evidence(prs) != _evidence(expected["prs"]):
+    if not _same(_evidence(prs), _evidence(expected["prs"])):
         problems.append("prs[] (ordered capped finding evidence)")
     if problems:
         raise SystemizeError(f"{path}: digest disagrees with its raw bundle on: {', '.join(problems)}")

@@ -1351,6 +1351,8 @@ migrate_kit_schema() {
   analysis_tier: expensive
   # Exact forge logins trusted as operator review-finding sources.
   operator_logins: []
+  # Bound each forge and artifact Git read; a timeout stops without publishing.
+  subprocess_timeout_seconds: 60
   lookback_days: 7
   backfill_days: 28
   pattern_threshold: 2

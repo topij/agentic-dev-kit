@@ -219,3 +219,16 @@ def test_verify_allows_only_typed_text_cleaning_latitude(settings) -> None:
         broken["prs"][0]["findings"][0][field] = value
         with pytest.raises(SystemizeError, match="finding evidence"):
             normalize.verify(broken, expected, "candidate")
+
+
+def test_verify_rejects_boolean_counts_and_line_numbers(settings) -> None:
+    expected = normalize.build(_raw([_pr(1, ("x", False))], settings), settings, [])
+    for field in ("finding_count", "unaddressed_count", "number"):
+        candidate = deepcopy(expected)
+        candidate["prs"][0][field] = True
+        with pytest.raises(SystemizeError):
+            normalize.verify(candidate, expected, "candidate")
+    candidate = deepcopy(expected)
+    candidate["findings_pr_count"] = True
+    with pytest.raises(SystemizeError):
+        normalize.verify(candidate, expected, "candidate")

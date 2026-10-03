@@ -192,3 +192,10 @@ def test_the_overlay_is_part_of_the_fingerprint(tmp_path: Path) -> None:
     assert after.config["notify"]["user_key"] == "U1"
     assert after.fingerprint != before
     assert json.dumps(after.config)  # still a JSON-able merged view
+
+
+def test_timeout_can_be_configured_and_older_config_uses_default(tmp_path: Path) -> None:
+    settings = load_settings(make_repo(tmp_path, config_edit=_set("subprocess_timeout_seconds", "3")))
+    assert settings.subprocess_timeout_seconds == 3
+    legacy = load_settings(make_repo(tmp_path / "legacy", config_edit=_drop("subprocess_timeout_seconds")))
+    assert legacy.subprocess_timeout_seconds == 60
