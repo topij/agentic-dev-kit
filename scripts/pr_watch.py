@@ -4490,9 +4490,10 @@ def _lens_floor(review_class: object) -> int:
 
 
 # The one-lens sources a standard PR's receipt may carry without a warning: its
-# isolated full pass, and a delta pass. Degraded mode's `fallback:<runtime>` is
-# one lens in the author's context, and a one-lens `fallback:panel` is a
-# mislabel, so both stay flagged on every class.
+# isolated full pass, and a delta pass that composes onto one, which
+# :func:`_one_lens_is_owed` checks. Degraded mode's `fallback:<runtime>` is one
+# lens in the author's context, and a one-lens `fallback:panel` is a mislabel,
+# so both stay flagged on every class.
 _OWED_ONE_LENS_SOURCES = (SINGLE_LENS_SOURCE, "fallback:delta")
 
 

@@ -566,10 +566,11 @@ author re-reading their own diff. **Cite them by name, never by number.**
    review evidence: fallback:codex — ⚠ ONE lens claimed (correctness) — not a dual-lens pass; it changes scripts/pr_watch.py under review.safety_critical_paths
    ```
 
-   On a standard pull request a one-lens `fallback:lens` or `fallback:delta`
-   receipt reads as what the pull request owes. Any other one-lens receipt is
-   flagged, Degraded mode's included, because the standard class's one lens is an
-   isolated one.
+   On a standard pull request a one-lens `fallback:lens` receipt, or a composed
+   `fallback:delta` one, reads as what the pull request owes. Any other one-lens
+   receipt is flagged, including Degraded mode's and a delta receipt with no
+   composed parent, because the standard class's one lens is an isolated full
+   pass.
 
    That is genuinely useful — a one-lens pass is visible at merge time instead of
    buried in the record command's stdout — and it is worth exactly what an honest
