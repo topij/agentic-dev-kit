@@ -41,7 +41,7 @@
   safety-critical paths takes one lens. Posted on #585 on approval of its exact text, as
   [this comment](https://github.com/topij/agentic-dev-kit/issues/585#issuecomment-5960721970),
   and read back identical.
-- Merge #923 and this wrap-up when clean, and run the rest unattended.
+- Authorized merging #923 and this wrap-up when clean, and running the rest unattended.
 
 **Review.** CodeRabbit's auto-review stayed off, so the fallback panel reviewed #923: the
 full panel at `9f23607`, then dual-lens delta passes at `0fb420d` and `f60b530`. Each
@@ -55,15 +55,15 @@ stopped under the LOW delta-or-ticket rule; its residual findings are parked bel
 revision.
 
 **Not established.** Which matrix rows' claims are true; #919 carries that. Read on
-2026-10-03, its tracker body did not yet say so.
+2026-10-03, its tracker body did not yet say so; the comment below now does.
 
 **Parked, not filed**, because no operator was present to approve a payload: the
 2026-10-03 entries in `docs/kit-friction-log.md`. Once the operator was back, two were
-filed on approval of their exact text and read back identical: the matrix guard's
+filed on approval of their exact text, and each read back identical to that text: the matrix guard's
 residue as #925, and a comment on #919 scoping the row audit.
 
 Closed workstream *Phase 6 — gate parity and roll it out*: the operator declared its
-exit, and closed it on 2026-10-03. Its residue is on #919, #905, #915, #916 and #917.
+exit, and closed it on 2026-10-03. Its residue is on #919, #925, #905, #915, #916 and #917.
 
 ______________________________________________________________________
 
