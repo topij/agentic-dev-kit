@@ -1,6 +1,6 @@
 """Shared fixtures for the systemize engine tests (collected, but holds no tests).
 
-``make_repo`` builds a throwaway git repository carrying the shipped config and
+``make_repo`` builds a throwaway git repository carrying controlled config and
 the real engine set, so every test runs the installed layout rather than the kit
 checkout. ``FAKE_GH`` is a stand-in ``gh`` that serves paged GraphQL from a JSON
 fixture; it runs as a real subprocess both on ``PATH`` and behind the in-process
@@ -31,6 +31,48 @@ LIB_FILES = ("kitconfig.py", "triage/__init__.py", "triage/canonical.py")
 LIB_DIRS = ("state_paths", "systemize")
 HEAD = "a" * 40
 DATE = "2026-09-23"
+
+# Test identities and limits belong to the fixture, not the adopter's policy.
+# Only the installed engine path is read from the host configuration.
+FIXTURE_CONFIG = '''paths:
+  engines: {engines}
+  handoff: docs/handoff.md
+  friction_log: docs/friction-log.md
+state:
+  dirname: state
+vcs:
+  protected_branch: main
+models:
+  tiers:
+    expensive: judgment
+notify:
+  user_key: ""
+review:
+  bots: [coderabbit]
+  bot_author_aliases:
+    coderabbit: [coderabbitai, "coderabbitai[bot]"]
+systemize:
+  analysis_tier: expensive
+  operator_logins: []
+  lookback_days: 7
+  backfill_days: 28
+  pattern_threshold: 2
+  tracker_severity: high
+  batch_size: 25
+  single_pass_max_prs: 60
+  max_findings_prs_per_run: 75
+  cache_pattern: "state/cache/merged-prs_{window}_{mode}_{date}.json"
+  digest_cache_pattern: "state/cache/merged-prs-digest_{window}_{mode}_{date}.json"
+  report_root: reports
+  report_pattern: "reports/post-merge-systemize_{window}_{mode}_{date}.md"
+  fetch_engine: fetch_merged_prs.py
+  digest_engine: digest_merged_prs.py
+  heartbeat_engine: heartbeat_cli.py
+  heartbeat_job: post-merge-systemize
+  heartbeat_pattern: "state/automation-progress/post-merge-systemize_{window}_{mode}_{date}.json"
+  commit_subject: "docs(systemize): promote recurring review patterns"
+  pr_draft: false
+'''
 
 FAKE_GH = r'''#!/usr/bin/env python3
 import json, os, sys
@@ -112,7 +154,8 @@ out({"data": {"repository": {"pullRequest": {connection: page(items, cursor, op)
 def make_repo(tmp_path: Path, *, engines: tuple[str, ...] = ENGINES, config_edit=None) -> Path:
     root = tmp_path / "repo"
     (root / "config").mkdir(parents=True)
-    text = (REPO_ROOT / "config/dev-model.yaml").read_text(encoding="utf-8")
+    host = loads((REPO_ROOT / "config/dev-model.yaml").read_text(encoding="utf-8"))
+    text = FIXTURE_CONFIG.replace("{engines}", json.dumps(host["paths"]["engines"]))
     if config_edit is not None:
         text = config_edit(text)
     (root / "config/dev-model.yaml").write_text(text, encoding="utf-8")

@@ -14,6 +14,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _repo_layout import engine_dir  # noqa: E402
 
 sys.path.insert(0, str(engine_dir(Path(__file__)) / "lib"))
+import test_systemize_support as support  # noqa: E402
+from kitconfig import loads  # noqa: E402
 from systemize.config import (  # noqa: E402
     REQUIRED_KEYS,
     fingerprint,
@@ -21,7 +23,7 @@ from systemize.config import (  # noqa: E402
     normalize_login,
 )
 from systemize.errors import SystemizeError  # noqa: E402
-from test_systemize_support import ENGINES, engines_rel, make_repo  # noqa: E402
+from test_systemize_support import ENGINES, REPO_ROOT, engines_rel, make_repo  # noqa: E402
 
 
 def _set(key: str, value: str):
@@ -41,10 +43,11 @@ def _drop(key: str):
 
 
 def test_shipped_config_loads_engine_backed(tmp_path: Path) -> None:
-    settings = load_settings(make_repo(tmp_path))
+    text = (REPO_ROOT / "config/dev-model.yaml").read_text(encoding="utf-8")
+    settings = load_settings(make_repo(tmp_path, config_edit=lambda _: text))
     assert settings.engine_mode == "engine-backed"
-    assert settings.heartbeat_job == "post-merge-systemize"
-    assert "coderabbitai[bot]" in settings.reviewer_logins
+    assert settings.heartbeat_job == loads(text)["systemize"]["heartbeat_job"]
+    assert settings.operator_logins or settings.reviewer_logins
 
 
 @pytest.mark.parametrize("key", REQUIRED_KEYS)
@@ -97,15 +100,48 @@ def test_invalid_values_stop_naming_the_invariant(tmp_path: Path, key, value, me
 
 def test_an_empty_trusted_source_union_stops(tmp_path: Path) -> None:
     def edit(text: str) -> str:
-        return text.replace("  bots: [coderabbit]\n", "  bots: []\n", 1)
+        text = re.sub(r"^  bots:.*$", "  bots: []", text, count=1, flags=re.MULTILINE)
+        return _set("operator_logins", "[]")(text)
+    root = make_repo(tmp_path, config_edit=edit)
+    written = loads((root / "config/dev-model.yaml").read_text(encoding="utf-8"))
+    assert written["review"]["bots"] == []
+    assert written["systemize"]["operator_logins"] == []
     with pytest.raises(SystemizeError, match="no trusted review source"):
-        load_settings(make_repo(tmp_path, config_edit=edit))
+        load_settings(root)
+
+
+@pytest.mark.parametrize("bots", ['["coderabbit"]', "[]"])
+def test_adopter_operator_with_quoted_or_no_bots_is_valid(tmp_path: Path, bots: str) -> None:
+    def edit(text: str) -> str:
+        text = re.sub(r"^  bots:.*$", f"  bots: {bots}", text, count=1, flags=re.MULTILINE)
+        return _set("operator_logins", '["adopter-operator"]')(text)
+    settings = load_settings(make_repo(tmp_path, config_edit=edit))
+    assert settings.operator_logins == ("adopter-operator",)
+    assert settings.config["review"]["bots"] == loads(f"bots: {bots}")["bots"]
+    assert bool(settings.reviewer_logins) == (bots != "[]")
 
 
 def test_aliases_are_trusted_only_when_listed(tmp_path: Path) -> None:
     settings = load_settings(make_repo(tmp_path))
     assert settings.reviewer_logins == {"coderabbit", "coderabbitai", "coderabbitai[bot]"}
     assert "coderabbit-shim" not in settings.reviewer_logins
+
+
+@pytest.mark.parametrize("bots", ['["adopter-bot"]', "[]"])
+def test_fixture_does_not_inherit_adopter_policy(tmp_path: Path, monkeypatch, bots: str) -> None:
+    host = tmp_path / "adopter"
+    (host / "config").mkdir(parents=True)
+    (host / "config/dev-model.yaml").write_text(
+        f'paths:\n  engines: scripts/devkit\nreview:\n  bots: {bots}\n'
+        'systemize:\n  operator_logins: ["adopter-operator"]\n  batch_size: 5\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(support, "REPO_ROOT", host)
+    settings = load_settings(make_repo(tmp_path))
+    assert settings.engine_dir == settings.root / "scripts/devkit"
+    assert settings.operator_logins == ()
+    assert settings.reviewer_logins == {"coderabbit", "coderabbitai", "coderabbitai[bot]"}
+    assert settings.batch_size == 25
 
 
 def test_login_normalization_lowercases_ascii_only() -> None:
