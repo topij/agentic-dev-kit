@@ -219,6 +219,15 @@ class LinearIssues:
         with urlopen(request, timeout=30) as response:
             return json.load(response)
 
+    @staticmethod
+    def _rate_limited(value: Any) -> bool:
+        errors = value.get("errors") if isinstance(value, dict) else None
+        return isinstance(errors, list) and bool(errors) and all(
+            isinstance(e, dict) and isinstance(e.get("extensions"), dict)
+            and e["extensions"].get("code") == "RATELIMITED"
+            for e in errors
+        )
+
     def _query(self, query: str, variables: dict[str, Any], *, mutation: bool = False) -> dict:
         delays = () if mutation else self.READ_RETRY_DELAYS
         for attempt in range(len(delays) + 1):
@@ -227,14 +236,17 @@ class LinearIssues:
                 value = self.transport(query, variables)
                 if isinstance(value, dict) and not value.get("errors") and isinstance(value.get("data"), dict):
                     return value["data"]
-                errors = value.get("errors") if isinstance(value, dict) else None
-                retryable = isinstance(errors, list) and bool(errors) and all(
-                    isinstance(e, dict) and isinstance(e.get("extensions"), dict)
-                    and e["extensions"].get("code") == "RATELIMITED"
-                    for e in errors
-                )
+                retryable = self._rate_limited(value)
             except HTTPError as exc:
-                retryable = exc.code == 429 or 500 <= exc.code < 600
+                # Linear documents GraphQL rate limiting as HTTP 400 with a
+                # RATELIMITED body. Other bad requests remain permanent errors.
+                with exc:
+                    retryable = exc.code == 429 or 500 <= exc.code < 600
+                    if exc.code == 400:
+                        try:
+                            retryable = self._rate_limited(json.load(exc))
+                        except (ValueError, TypeError, OSError):
+                            retryable = False
             except (URLError, TimeoutError, OSError):
                 retryable = True
             except (ValueError, TypeError):
@@ -310,12 +322,17 @@ class LinearIssues:
     def _read_issue(self, destination: dict, iid: str, marker: str) -> dict:
         query = f"query TriageIssue($id: String!) {{ issue(id: $id) {{ {self.ISSUE_FIELDS} }} }}"
         issue = self._query(query, {"id": iid}).get("issue")
+        url = issue.get("url") if isinstance(issue, dict) else None
+        try:
+            link = urlparse(url) if isinstance(url, str) else None
+            valid_link = link is not None and link.hostname == "linear.app" and link.scheme == "https"
+        except ValueError:
+            valid_link = False
         if (not isinstance(issue, dict) or issue.get("id") != iid
                 or issue.get("team") != {"id": destination["team_id"]}
                 or issue.get("project") != {"id": destination["project_id"], "name": destination["project"]}
                 or not isinstance(issue.get("identifier"), str) or not issue["identifier"]
-                or not isinstance(issue.get("url"), str) or urlparse(issue["url"]).hostname != "linear.app"
-                or urlparse(issue["url"]).scheme != "https"
+                or not valid_link
                 or not isinstance(issue.get("title"), str)
                 or not isinstance(issue.get("description"), str) or issue["description"].count(marker) != 1):
             raise TriageError("Linear issue identity, marker or destination read-back mismatch", outcome="operator-held")

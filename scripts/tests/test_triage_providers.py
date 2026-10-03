@@ -153,7 +153,7 @@ def test_linear_create_waits_for_listing_visibility():
     assert slept == [1.0, 2.0]
 
 
-@pytest.mark.parametrize("fault", ["cursor", "pageinfo", "team", "labels", "marker", "project"])
+@pytest.mark.parametrize("fault", ["cursor", "pageinfo", "team", "labels", "marker", "project", "url"])
 def test_linear_incomplete_or_wrong_readback_fails_closed(fault):
     transport = LinearTransport()
     tracker = LinearIssues(transport=transport, sleep=lambda _: None)
@@ -172,6 +172,8 @@ def test_linear_incomplete_or_wrong_readback_fails_closed(fault):
                 issue["project"] = {"id": "foreign", "name": "Adopter"}
             elif fault == "marker":
                 issue["description"] += "\n" + MARKER
+            elif fault == "url":
+                issue["url"] = "https://["
         if "TriageIssueLabels(" in query and fault == "labels":
             value["data"]["issue"]["labels"]["nodes"] = [{"id": "label", "name": None}]
         return value
@@ -265,6 +267,79 @@ def test_linear_rate_limit_retry_then_success():
         return transport(query, variables)
     assert LinearIssues(transport=throttled, sleep=slept.append).search(LINEAR_DESTINATION, MARKER) == []
     assert slept == [1.0]
+
+
+@pytest.mark.parametrize("status", [400, 429, 503])
+@pytest.mark.parametrize("exhausted", [False, True])
+def test_linear_http_rate_limit_retries_reads(monkeypatch, exhausted, status):
+    from io import BytesIO
+    from urllib.error import HTTPError
+
+    from triage import providers
+
+    calls, slept = [], []
+    def request(req, timeout):
+        calls.append(req)
+        if exhausted or len(calls) == 1:
+            body = {"errors": [{"message": "private-key", "extensions": {"code": "RATELIMITED"}}]}
+            raise HTTPError(req.full_url, status, "rate limited", {}, BytesIO(json.dumps(body).encode()))
+        return BytesIO(json.dumps({"data": {"project": {"id": "project"}}}).encode())
+    monkeypatch.setattr(providers, "urlopen", request)
+    tracker = LinearIssues(api_key="private-key", sleep=slept.append)
+    if exhausted:
+        with pytest.raises(TriageError, match="unavailable or incomplete") as error:
+            tracker._query("query Project { project { id } }", {})
+        assert "private-key" not in str(error.value)
+        assert len(calls) == len(tracker.READ_RETRY_DELAYS) + 1
+        assert slept == list(tracker.READ_RETRY_DELAYS)
+    else:
+        assert tracker._query("query Project { project { id } }", {}) == {"project": {"id": "project"}}
+        assert len(calls) == 2 and slept == [1.0]
+
+
+@pytest.mark.parametrize("body", [b"not JSON", b'{"errors": []}',
+    b'{"errors": [{"extensions": {"code": "AUTHENTICATION_ERROR"}}]}',
+    b'{"errors": [{"extensions": {"code": "RATELIMITED"}}, {"extensions": {"code": "FORBIDDEN"}}]}'])
+def test_linear_http400_permanent_errors_do_not_retry(monkeypatch, body):
+    from io import BytesIO
+    from urllib.error import HTTPError
+
+    from triage import providers
+
+    calls, slept = [], []
+    def request(req, timeout):
+        calls.append(req)
+        raise HTTPError(req.full_url, 400, "bad request", {}, BytesIO(body))
+    monkeypatch.setattr(providers, "urlopen", request)
+    with pytest.raises(TriageError, match="unavailable or incomplete"):
+        LinearIssues(api_key="key", sleep=slept.append)._query("query Project { project { id } }", {})
+    assert len(calls) == 1 and slept == []
+
+
+@pytest.mark.parametrize("landed", [False, True])
+def test_linear_http400_mutation_reconciles_without_retry(monkeypatch, landed):
+    from io import BytesIO
+    from urllib.error import HTTPError
+
+    from triage import providers
+
+    transport = LinearTransport()
+    creates = []
+    def request(req, timeout):
+        value = json.loads(req.data)
+        query, variables = value["query"], value["variables"]
+        if "TriageCreate(" in query:
+            creates.append(value)
+            if landed:
+                transport(query, variables)
+            body = {"errors": [{"extensions": {"code": "RATELIMITED"}}]}
+            raise HTTPError(req.full_url, 400, "rate limited", {}, BytesIO(json.dumps(body).encode()))
+        return BytesIO(json.dumps(transport(query, variables)).encode())
+    monkeypatch.setattr(providers, "urlopen", request)
+    observed = LinearIssues(api_key="key", sleep=lambda _: None).create(LINEAR_DESTINATION, linear_payload())
+    assert len(creates) == 1
+    assert observed.status == ("verified" if landed else "ambiguous")
+    assert observed.verified_route == ("failed-response-then-exact-read-back" if landed else None)
 
 
 @pytest.mark.parametrize("backend, flag, expected", [
