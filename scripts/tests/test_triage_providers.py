@@ -187,6 +187,67 @@ def test_linear_workspace_label_readback_is_valid():
     assert LinearIssues(transport=workspace_label, sleep=lambda _: None).create(LINEAR_DESTINATION, linear_payload()).status == "verified"
 
 
+
+@pytest.mark.parametrize("response_lost", [False, True])
+def test_linear_post_create_mixed_marker_matches_cannot_verify(response_lost):
+    transport = LinearTransport()
+    transport.fault = "timeout" if response_lost else None
+    payload = linear_payload()
+    other = {**payload, "title": "Different issue with the same marker"}
+    def collision(query, variables):
+        try:
+            return transport(query, variables)
+        finally:
+            if "TriageCreate(" in query:
+                assert len(transport.issues) == 1
+                transport.issues.append({**transport.issues[0], "id": "collision", "identifier": "ADO-18", "title": other["title"]})
+    observed = LinearIssues(transport=collision, sleep=lambda _: None).create(LINEAR_DESTINATION, payload)
+    assert observed.status == "ambiguous" and observed.verified_route is None
+    assert {item["payload_digest"] for item in observed.read_back["matches"]} == {digest(payload), digest(other)}
+    assert sum("TriageCreate(" in query for query, _ in transport.calls) == 1
+
+
+
+@pytest.mark.parametrize("connection", ["catalog", "applied"])
+def test_linear_missing_label_scope_is_not_assumed_workspace(monkeypatch, connection):
+    transport = LinearTransport()
+    transport.labels[0]["team"] = None
+    def incomplete(query, variables):
+        result = transport(query, variables)
+        if "TriageCreate(" in query:
+            transport.issues[0]["labels"][0]["team"] = None
+        if connection == "catalog" and "TriageLabels(" in query:
+            for label in result["data"]["issueLabels"]["nodes"]:
+                label.pop("team")
+        if connection == "applied" and "TriageIssueLabels(" in query:
+            for label in result["data"]["issue"]["labels"]["nodes"]:
+                label.pop("team")
+        return result
+    with pytest.raises(TriageError, match="label.*read-back mismatch"):
+        LinearIssues(transport=incomplete, sleep=lambda _: None).create(LINEAR_DESTINATION, linear_payload())
+    assert sum("TriageCreate(" in query for query, _ in transport.calls) == (0 if connection == "catalog" else 1)
+
+
+def test_linear_missing_issue_description_holds_before_creation():
+    transport = LinearTransport()
+    transport.issues.append({"id": "old", "description": None})
+    def incomplete(query, variables):
+        result = transport(query, variables)
+        if "TriageIssues(" in query:
+            for issue in result["data"]["issues"]["nodes"]:
+                issue.pop("description")
+        return result
+    with pytest.raises(TriageError, match="issue listing is malformed"):
+        LinearIssues(transport=incomplete, sleep=lambda _: None).create(LINEAR_DESTINATION, linear_payload())
+    assert not any("TriageCreate(" in query for query, _ in transport.calls)
+
+
+def test_linear_explicit_null_description_is_complete_negative_evidence():
+    transport = LinearTransport()
+    transport.issues.append({"id": "old", "description": None})
+    assert LinearIssues(transport=transport, sleep=lambda _: None).create(LINEAR_DESTINATION, linear_payload()).status == "verified"
+
+
 def test_linear_create_waits_for_listing_visibility():
     transport = LinearTransport()
     original = transport.__call__

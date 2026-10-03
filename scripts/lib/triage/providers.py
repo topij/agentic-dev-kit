@@ -318,6 +318,7 @@ class LinearIssues:
             team = label.get("team")
             if (not isinstance(label.get("name"), str) or not label["name"]
                     or not isinstance(label.get("isGroup"), bool)
+                    or "team" not in label
                     or (team is not None and team != {"id": destination["team_id"]})):
                 raise TriageError("Linear label read-back mismatch", outcome="operator-held")
         return labels
@@ -348,7 +349,8 @@ class LinearIssues:
         for label in labels:
             choices = [item for item in allowed if item["name"] == label.get("name") and not item["isGroup"]]
             if (len(choices) != 1 or label["id"] != choices[0]["id"]
-                    or label.get("isGroup") is not False or label.get("team") != choices[0]["team"]):
+                    or label.get("isGroup") is not False or "team" not in label
+                    or label["team"] != choices[0]["team"]):
                 raise TriageError("Linear issue label identity or scope read-back mismatch", outcome="operator-held")
         names = [label.get("name") for label in labels]
         if any(not isinstance(n, str) or not n for n in names) or len(names) != len(set(names)):
@@ -369,7 +371,7 @@ class LinearIssues:
         matches = []
         for issue in issues:
             body = issue.get("description")
-            if body is not None and not isinstance(body, str):
+            if "description" not in issue or (body is not None and not isinstance(body, str)):
                 raise TriageError("Linear issue listing is malformed", outcome="operator-held")
             if isinstance(body, str) and marker in body:
                 matches.append(self._read_issue(destination, issue["id"], marker))
