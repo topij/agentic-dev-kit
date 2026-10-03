@@ -10715,6 +10715,8 @@ def test_review_class_patterns_are_fnmatch_whose_star_crosses_directories() -> N
         (None, CLASS_HEAD, (GATE_PATH,), "base or head commit is unknown"),
         (CLASS_BASE, None, (GATE_PATH,), "base or head commit is unknown"),
         ("--output=/tmp/x", CLASS_HEAD, (GATE_PATH,), "base or head commit is unknown"),
+        (CLASS_BASE + "zz", CLASS_HEAD, (GATE_PATH,), "base or head commit is unknown"),
+        (CLASS_BASE + "\n", CLASS_HEAD, (GATE_PATH,), "base or head commit is unknown"),
         (CLASS_BASE, "final-head", (GATE_PATH,), "base or head commit is unknown"),
     ],
 )
@@ -11250,7 +11252,7 @@ def test_a_one_lens_receipt_on_a_safety_critical_pr_still_satisfies_the_gate(
 
 
 STANDARD_OWED = "which is what this PR owes: no path in review.safety_critical_paths changed"
-STANDARD_NOT_ISOLATED = "not a dual-lens pass; a standard PR's one lens is an isolated fallback:lens pass"
+STANDARD_NOT_ISOLATED = "⚠ ONE lens claimed (adversarial) — a standard PR's one lens is an isolated fallback:lens pass"
 
 
 @pytest.mark.parametrize(
@@ -11316,6 +11318,41 @@ def test_the_record_render_reads_a_one_lens_receipt_by_its_source(
 
     assert ("⚠ one lens only (correctness)" in rendered) is warned
     assert ("one lens (correctness), which is what this PR owes" in rendered) is not warned
+    if warned:
+        # Rule 2 does not reach a standard PR, so its warning must not cite it.
+        assert (
+            "⚠ one lens only (correctness) — a standard PR's one lens is an "
+            "isolated fallback:lens pass"
+        ) in rendered
+        assert "rule 2" not in rendered
+
+
+def test_a_padded_source_still_reads_as_owed() -> None:
+    pr_watch = _load_pr_watch()
+    standard = {"class": "standard", "matched_paths": [], "changes_config": False, "unclassified": None}
+    assert pr_watch._one_lens_is_owed(standard, " fallback:lens ")
+    assert not pr_watch._one_lens_is_owed(standard, " fallback:codex ")
+
+
+def test_a_padded_pattern_still_matches_its_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Losing the strip would quietly move a padded gate path to one lens."""
+    pr_watch = _load_pr_watch()
+    repo, _git, commit = _class_repo(tmp_path)
+    base = commit(
+        {
+            "config/dev-model.yaml": f'review:\n  safety_critical_paths:\n    - " {GATE_PATH} "\n',
+            GATE_PATH: "gate = 1\n",
+        },
+        "base",
+    )
+    head = commit({GATE_PATH: "gate = 2\n"}, "change the gate")
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    result = pr_watch.pr_review_class(base, head)
+
+    assert result["matched_paths"] == [GATE_PATH]
 
 
 @pytest.mark.parametrize(

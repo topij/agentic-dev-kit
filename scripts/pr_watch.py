@@ -4371,7 +4371,8 @@ def _merge_base_paths(base: str, head: str, what: str) -> list[str]:
 SINGLE_LENS_SOURCE = "fallback:lens"
 REVIEW_CLASS_SAFETY_CRITICAL = "safety-critical"
 REVIEW_CLASS_STANDARD = "standard"
-_COMMIT_SHA_RE = re.compile(r"^[0-9a-f]{7,64}$")
+# Matched whole, with `fullmatch`: `$` alone would accept a trailing newline.
+_COMMIT_SHA_RE = re.compile(r"[0-9a-f]{7,64}")
 _UNSET = object()
 
 
@@ -4433,7 +4434,7 @@ def pr_review_class(
         "unclassified": None,
     }
     if not all(
-        isinstance(sha, str) and _COMMIT_SHA_RE.match(sha) for sha in (base, head)
+        isinstance(sha, str) and _COMMIT_SHA_RE.fullmatch(sha) for sha in (base, head)
     ):
         result["unclassified"] = "the PR's base or head commit is unknown"
         return result
@@ -4501,13 +4502,20 @@ def _one_lens_is_owed(review_class: object, source: object) -> bool:
     )
 
 
-def _one_lens_warning_suffix(review_class: object) -> str:
-    """What the ⚠ one-lens line adds about the class, or nothing without one."""
+_NOT_ISOLATED = f"a standard PR's one lens is an isolated {SINGLE_LENS_SOURCE} pass"
+
+
+def _one_lens_warning(review_class: object, owed_two: str) -> str:
+    """What follows the dash on a ⚠ one-lens line.
+
+    On a standard PR rule 2 does not apply, so the line says what that class
+    does owe. Elsewhere it is ``owed_two`` plus why the PR owes two lenses.
+    """
     if not isinstance(review_class, dict):
-        return ""
+        return owed_two
     if _lens_floor(review_class) == 1:
-        return f"; a standard PR's one lens is an isolated {SINGLE_LENS_SOURCE} pass"
-    return f"; {_describe_review_class(review_class)}"
+        return _NOT_ISOLATED
+    return f"{owed_two}; {_describe_review_class(review_class)}"
 
 
 def _describe_review_class(review_class: object) -> str:
@@ -5599,9 +5607,8 @@ def render(report: dict) -> str:
                 f"{_describe_review_class(review_class)}"
             )
         elif named:
-            detail = (
-                f"⚠ ONE lens claimed ({named[0]}) — not a dual-lens pass"
-                + _one_lens_warning_suffix(review_class)
+            detail = f"⚠ ONE lens claimed ({named[0]}) — " + _one_lens_warning(
+                review_class, "not a dual-lens pass"
             )
         else:
             detail = "no lenses recorded"
@@ -5747,9 +5754,12 @@ def render_record_review(report: dict) -> str:
         )
     elif len(_countable_lenses(named)) == 1:
         lines.append(
-            f"  ⚠ one lens only ({named[0]}) — `safety-critical-changes.md` rule 2 "
-            "holds that a single-lens verdict is not a green light"
-            + _one_lens_warning_suffix(review_class)
+            f"  ⚠ one lens only ({named[0]}) — "
+            + _one_lens_warning(
+                review_class,
+                "`safety-critical-changes.md` rule 2 holds that a single-lens "
+                "verdict is not a green light",
+            )
         )
     elif named:
         lines.append(f"  lenses: {', '.join(named)}")

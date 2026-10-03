@@ -122,9 +122,10 @@ matching it is **safety-critical**: its review takes both configured lenses,
 and rule 2 binds it exactly as before. Any other pull request is **standard**:
 its review takes **one isolated lens**. `pr_watch` computes the class from Git,
 diffing the head against the pull request's base, and reports it as
-`review_class` on every poll. The author does not draw it, which keeps `#120`'s
-constraint: a trigger the author sets is a control the author can opt out of.
-For the same reason the list is read as committed at the pull request's base,
+`review_class` on every poll. The author does not state it, which is what `#120`'s
+constraint asks for: a trigger the author sets is a control the author can opt out
+of. That holds for the list, as below, and not for the engine computing the class,
+as the end of this paragraph says. For the same reason the list is read as committed at the pull request's base,
 so a pull request cannot shorten the list it is classed by, and a pull request
 that changes `config/dev-model.yaml` at all is safety-critical: that file
 declares the list and points at other gate files. What this does not protect is
@@ -871,9 +872,10 @@ must stay able to tell apart) and never
 `review.fallback_panel.receipt_source` — with `--lenses` naming exactly the
 lenses that ran, which is also what tells the two forms apart on the audit
 trail, `--compose-parent <last-reviewed-sha>` naming the standing receipt the
-pass extends, and `--head` the polled sha. The poll render flags a one-lens
-receipt only where the pull request owes two lenses, and a safety-critical
-pull request owes two on every pass, the delta pass included.
+pass extends, and `--head` the polled sha. A safety-critical pull request owes
+two lenses on every pass, the delta pass included, so the poll render flags a
+one-lens delta receipt there; on a standard pull request it reads one as what
+the pull request owes.
 
 **The dual form is how a safety-critical change keeps rule 2's floor.**
 Rule 2 wants two disjoint lenses before merge, and this file used to read
