@@ -58,7 +58,12 @@ revision.
 2026-10-03, its tracker body did not yet say so.
 
 **Parked, not filed**, because no operator was present to approve a payload: the
-2026-10-03 entries in `docs/kit-friction-log.md`, including a drafted comment for #919.
+2026-10-03 entries in `docs/kit-friction-log.md`. Once the operator was back, two were
+filed on approval of their exact text and read back identical: the matrix guard's
+residue as #925, and a comment on #919 scoping the row audit.
+
+Closed workstream *Phase 6 — gate parity and roll it out*: the operator declared its
+exit, and closed it on 2026-10-03. Its residue is on #919, #905, #915, #916 and #917.
 
 ______________________________________________________________________
 
@@ -268,37 +273,6 @@ ______________________________________________________________________
 ______________________________________________________________________
 
 ## Workstreams
-
-### Phase 6 — gate parity and roll it out
-
-**Status:** items 1 to 3 shipped on 2026-10-01, in #893, #888 and #887; items 4 and 5
-the same day, in #897 and #902; item 6 the same day, in #904, which also recorded
-#878 step 3's answer; items 7 and 8 on 2026-10-02, in #913, with the first stamped
-smoke record; item 9 the same day, in #920, squash `d9f757d`. #920 archives the
-convergence plan behind a pointer and records the Phase 6 exit check at `7040d28`
-(`saved_plans/phase6-exit-check_2026-10-02.md`). The check found `workflow_contract`
-enforced and confirmed by the Phase 5 replay, `adoption` enforced, and the capability
-table unenforced. The operator held the exit and added item 10, #919. #923, squash
-`3246e72` on 2026-10-03, added the check over the table, re-ran the exit check, and
-archived the parity plan behind a pointer; the operator declared the exit under the
-amendment that record states. Closing this workstream is the operator's call.
-#906 removed the duplication #887 left in `runtime-parity.md`.
-#663, item 4's owner, stays open for residue that is not
-Phase 6 work; its 2026-10-01 comment names it. #905 carries deferred LOW findings
-from #904, #915 a deferred LOW finding from #913's review, and #916 and #917 what
-#913's live runs found. #911 clarified #906’s lifecycle references on 2026-10-02.
-**Owner:**
-[#919](https://github.com/topij/agentic-dev-kit/issues/919), for the audit of which
-matrix rows' claims are true, which the exit left open;
-[#905](https://github.com/topij/agentic-dev-kit/issues/905),
-[#915](https://github.com/topij/agentic-dev-kit/issues/915),
-[#916](https://github.com/topij/agentic-dev-kit/issues/916),
-[#917](https://github.com/topij/agentic-dev-kit/issues/917).
-
-▶ Next: approve, edit or decline the #919 scoping comment parked in
-`docs/kit-friction-log.md` under 2026-10-03, then #919's row audit: which matrix rows'
-claims are pinned by tests. The rest of the residue is carried by #905, #915, #916 and
-#917.
 
 ### Review proportionality
 
