@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -38,10 +39,13 @@ def git(repo: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
-def repository(tmp_path: Path) -> Path:
+def repository(tmp_path: Path, *, config_text: str | None = None) -> Path:
     root = tmp_path / "repo"
     (root / "config").mkdir(parents=True)
-    shutil.copy2(REPO_ROOT / "config/dev-model.yaml", root / "config/dev-model.yaml")
+    if config_text is None:
+        shutil.copy2(REPO_ROOT / "config/dev-model.yaml", root / "config/dev-model.yaml")
+    else:
+        (root / "config/dev-model.yaml").write_text(config_text, encoding="utf-8")
     config = root / "config/dev-model.yaml"
     config.write_text(config.read_text(encoding="utf-8").replace("  engines: scripts/devkit\n", "  engines: scripts\n"), encoding="utf-8")
     (root / "docs").mkdir()
@@ -83,8 +87,22 @@ def approval_for(state: dict, command: str = "approve all") -> dict:
     }
 
 
-def test_linear_approval_and_uncertain_create_resume_keep_frozen_authority(tmp_path, monkeypatch):
-    root = repository(tmp_path)
+@pytest.mark.parametrize("adopter_host", [False, True])
+def test_linear_approval_and_uncertain_create_resume_keep_frozen_authority(tmp_path, monkeypatch, adopter_host):
+    if adopter_host:
+        host = tmp_path / "adopter"
+        (host / "config").mkdir(parents=True)
+        (host / "config/dev-model.yaml").write_text(
+            'tracker:\n  backend: linear\n  project_name: "Other adopter"\n'
+            'review:\n  bots: ["adopter-bot"]\nsystemize:\n  operator_logins: ["adopter-operator"]\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", host)
+    # Controlled kit fixture data is installed with these tests; adopter policy
+    # is intentionally not a source for the approval and recovery scenario.
+    fixture = Path(__file__).parent / "fixtures/init-config.json"
+    config_text = "\n".join(json.loads(fixture.read_text(encoding="utf-8"))) + "\n"
+    root = repository(tmp_path, config_text=config_text)
     config = root / "config/dev-model.yaml"
     text = config.read_text(encoding="utf-8")
     for old, new in (
