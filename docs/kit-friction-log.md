@@ -24,6 +24,23 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-10-04
+
+- **The cockpit changed verification state while claiming an isolated run.** Severity L,
+  kept for accumulation. `env -u FORCE_COLOR make test` at
+  `8385211ea8ac0051df40d919ff0bd8515f43f8df` on 2026-10-03, in
+  `/private/tmp/devkit-validation-integrity`, failed the suite state guard after the
+  author polled `pr-watch` concurrently in that checkout. The quiet detached rerun
+  supplied the verification evidence instead. The existing state-isolation requirement
+  already governs the mistake; this entry proposes no new rule.
+- **A public fallback disposition initially contained its local filename.** Severity L,
+  kept for accumulation. The author supplied `/private/tmp/devkit-pr937-disposition.md`
+  and `/private/tmp/devkit-pr938-parent-disposition.md` as `--disposition` values. That
+  argument is literal text; stdin requires `--disposition -`. The author read back the
+  public comments, replaced their bodies with the completed reports and verified exact
+  read-back. The later composed receipt used stdin. The existing CLI contract already
+  supplies the correct route; this entry records the misuse for recurrence.
+
 ## 2026-10-03
 
 Parked rather than filed: this wrap-up ran with no operator present, so no tracker

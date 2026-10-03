@@ -5,6 +5,55 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-01 (Phase 6 item 6, #890 and #891, unattended in Claude Code)
+
+**Shipped.**
+
+- PR #904, squash `0c7669a`: Phase 6 item 6. `runtime-parity.md` gains an `adoption`
+  front-matter block, scoped to the template route. Repo-only fixtures in
+  `scripts/tests/test_adoption_fixtures.py` install the kit into fresh Codex-only,
+  Claude-only and dual-runtime repositories and check each install against it. #878
+  closed on merge.
+- PR #906, squash `c6b663d`: each headless-lane record's claims now live once, in the
+  per-runtime sub-table of `runtime-parity.md`. #890 closed on merge.
+
+**Held for the operator.** PR #907 is the fix for #891: `GitHubForge`'s sweep-cleanup
+guard now decides containment by filesystem identity, through #889's predicate moved to
+`model.py`. It gates a destructive operation, so `safety-critical-changes.md` makes it
+operator-merge, and this session did not merge it. Its full-panel receipt at `704bde3`
+was recorded from the worktree #907 was built in, whose state file was then copied into
+the main checkout's `state/`; the two-lens delta receipt at `fcff926` composed on it
+there (#563's mechanism; occurrence noted there).
+
+**Decided by the operator**, in this session, before it ran unattended:
+
+- #878 step 3: a single-runtime adopter keeps receiving the other runtime's adapters,
+  recorded as `other_runtime: installed`, and on #878.
+- Scope: #878, then #890 and #891, then wrap-up. Pull requests merge when clean, and
+  LOW review findings are filed.
+- Issue-shaped friction at wrap-up is filed without per-payload approval. That departs
+  from `wrap-up.md`'s exact-payload rule; #909 asks which should hold.
+
+**Filed**, each read back: #905 and #908, the deferred LOW findings of #904 and #906;
+#909. Occurrence comments on #563, #844 and #643.
+
+**Review.** CodeRabbit's auto-review stayed off, so the fallback panel reviewed each
+pull request. #904 had a full panel at `2581034` and again at `1f37c00`. #906 had a
+full panel at `54c2f75`. #907 had a full panel at `704bde3` and a delta at `fcff926`.
+Each round's disposition is posted on its pull request.
+
+**Verified.** Each pull request's body carries its `env -u FORCE_COLOR make test`
+stamp at the head that merged or is held, each run on 2026-10-01 with exit 0:
+
+- at `1f37c00` (#904) and at `54c2f75` (#906), in `/Users/topi/Coding/agentic-dev-kit`;
+- at `fcff926` (#907), in a `git worktree add` of it under the session scratchpad.
+
+`gh run list --commit` showed the `Test` workflow `success` on `main` for `0c7669a` and
+`c6b663d`.
+
+**Not established.** #907's case-variant tests skip on a case-sensitive filesystem,
+which is what CI runs; they ran on this machine's case-insensitive one.
+
 ### 2026-10-01 (Phase 6 item 5, in Claude Code)
 
 **Shipped.** PR #902, squash `65e9d2d`: Phase 6 item 5. #243 closed on merge.
