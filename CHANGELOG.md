@@ -42,6 +42,22 @@ starts.
 
 ---
 
+## #934 — A delta pass's two draws are separate named flags
+
+- **BREAKING (engine CLI surface)** — `panel_prompt.py --delta-draws` now exits 2 and
+  names its replacements. Pass the prose-class draw as `--draw-prose-class <text>` and
+  the safety-critical draw as `--draw-safety-critical <text>`; either one without the
+  other exits 2. The LOW rule's prior finding, original severity and repair boundary go
+  to `--repair-boundary <text>`, which also requires both draws. **Update any script,
+  runbook or wrapper that assembles a delta-pass prompt.** Refresh `panel_prompt.py` in
+  your engine directory with `docs/agentic-dev-kit/fallback-review-panel.md`,
+  `scripts/tests/test_panel_prompt.py` and `kit-manifest.json`.
+- **CHANGED (engine CLI surface)** — a delta-pass prompt lists each draw under its name
+  and asks for verdict lines beginning `prose-class:` and `safety-critical:`, then one
+  `repair:` line per repair when `--repair-boundary` is given. **A test asserting a
+  delta prompt's exact text must be updated.** Full-panel prompts are unchanged, and
+  the doctrine's contract section, which every prompt quotes, is unchanged.
+
 ## #927 — A fallback review's lens count follows the PR's declared class
 
 - **ADDED — config keys:** `review.safety_critical_paths`, a list of fnmatch path patterns naming the files `docs/agentic-dev-kit/safety-critical-changes.md` governs. Leave it absent until it lists every one of your gate files, including each path in your `.claude/rules/safety-critical-changes.md`. Absent, empty or malformed, every PR is treated as safety-critical and keeps the two-lens fallback panel, as before. Once it is declared, a PR that changes none of the listed paths may take one isolated lens. `pr_watch.py` reads the list as committed at the PR's base commit, so a PR's own edit to it never classes that PR, and it classes any PR that changes `config/dev-model.yaml` as safety-critical. `init.sh` does not seed the key, but a repo created from the kit's template, or by copying the kit's `config/dev-model.yaml`, already holds the kit's own list: add your gate files to it, or delete it (#930).
