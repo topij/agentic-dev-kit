@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "60ecad0c5c7271c431013ab2e05b7b6d20f805bfbaf817c784e7e724355b6968"
+      "sha256": "bf5ce38906942a3823142154b57fedb8886a79a4a71630bca8f18fcf6ee879ef"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -40,7 +40,7 @@
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
-      "sha256": "0a099d2eff11c6d6b6990c8d0f038b12d9c897f6f2956a894972e010b4a2a924"
+      "sha256": "004f0f5e98330e28a265eac19ed6a763a747c56de4cc8111128692fcc5b4e75f"
     },
     "docs/agentic-dev-kit/workflows/adopt.md": {
       "role": "workflow",
@@ -60,7 +60,7 @@
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "98eaefec62e9589508b1cd79a496b4e31a328a41207d48e726a6b42df1f4dfcc"
+      "sha256": "ee0af277c6a55ec95c84a24a46b88c31b844e1860d49c95021f9afe1ed6ab36d"
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
@@ -144,7 +144,7 @@
     },
     "scripts/hooks/pr_followup_hook.py": {
       "role": "hook",
-      "sha256": "44cef5b23085bf39601cf02f845e69cc077e58e2e0b241e018aedea3c562afc1"
+      "sha256": "f1aef2bdee82a27ea888d356a2974234e9db2fbd64087c75b05108eca0f9113a"
     },
     "scripts/hooks/pre-push": {
       "role": "hook",
@@ -514,7 +514,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "dde03372e917e05217930f9be56ef1d5d937b1192b5793d6f342f52dd362f296"
+      "sha256": "6540458a8e2ac9be304cc5c49e7012edacc000bda832c9ac4ccf6ddb186b3261"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
@@ -610,15 +610,15 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "94d141283e47bdad162dc18d0579228c9bec6f6a974f4f83e945534de1659b53"
+      "sha256": "8ce15ec7c5fe7d5e9e4d6c5020294eff16bcae6b8ee24b743e7b8b635fc9e276"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
-      "sha256": "810a73c0e55c1b4cbbeb4c1209ef43d41f837f7ba841de3a97c589e80082dc68"
+      "sha256": "bef3cfb42b378787c3b634343405c3c7469256e89e402de025fe1477f6d2b88b"
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "40221e809727f02ded1415d7c7a3c271a0b62dff0ebc82b8367a39312db020ed"
+      "sha256": "9916fead77d8fc462843d0ea28984471d7379c6a9a36ac39570a0ffc6dd91d71"
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",

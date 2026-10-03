@@ -296,6 +296,29 @@ review:
   #
   #   bot_app_slugs:
   #     coderabbit: [some-other-app-slug]
+  # The paths docs/agentic-dev-kit/safety-critical-changes.md governs: files that
+  # gate sends, destructive operations or kill/recovery paths. This is the one
+  # declared list (#585). `.claude/rules/safety-critical-changes.md` repeats it
+  # for Claude Code, because rule frontmatter cannot read this file.
+  #
+  # It sets how many lenses a fallback review owes. A PR that changes any
+  # matching path takes the two-lens panel; any other PR may take one isolated
+  # lens, recorded as `fallback:lens`. pr_watch.py computes that class from Git
+  # rather than taking it from the PR's author.
+  #
+  # Leave it absent rather than guess. Absent or malformed, every PR is treated
+  # as safety-critical, which is the two-lens behaviour from before this key
+  # existed, whereas a list that misses one of your gate files sends that file
+  # to one lens. Patterns use Python's fnmatch, where `*` also matches `/`.
+  safety_critical_paths:
+    - "scripts/dev_session.sh"
+    - "scripts/devkit/dev_session.sh"
+    - "scripts/launch_lane.py"
+    - "scripts/devkit/launch_lane.py"
+    # The shipped `parallel.claude_settings_profile`.
+    - "config/claude-lane-settings.json"
+    - "scripts/pr_watch.py"
+    - "scripts/devkit/pr_watch.py"
   # The independent pass to run when a configured bot can't review. TWO shapes,
   # and the difference is whether the reviewer is independent of the author:
   #
@@ -313,14 +336,16 @@ review:
   # mutation-test new branches) is kit doctrine and lives in
   # docs/agentic-dev-kit/fallback-review-panel.md.
   #
-  # Three receipt literals exist, one per pass: `fallback:panel` (the
-  # receipt_source below), `fallback:<runtime>` (the Degraded-mode
-  # author-context run of fallback_commands — e.g. `fallback:claude`), and
-  # `fallback:delta` (the record-prose delta pass defined in that doctrine
-  # file's stopping section — one lens ordinarily, both lenses for a change
-  # under safety-critical-changes.md; `--lenses` records which form ran).
-  # The last two are literals the recording agent writes on the receipt, not
-  # config keys — never set receipt_source to either.
+  # Four receipt literals exist, one per pass: `fallback:panel` (the
+  # receipt_source below), `fallback:lens` (one isolated lens, the opening pass
+  # a PR outside `safety_critical_paths` may take instead of the panel),
+  # `fallback:<runtime>` (the Degraded-mode author-context run of
+  # fallback_commands — e.g. `fallback:claude`), and `fallback:delta` (the
+  # record-prose delta pass defined in that doctrine file's stopping section —
+  # one lens ordinarily, both lenses for a change under
+  # safety-critical-changes.md; `--lenses` records which form ran). The last
+  # three are literals the recording agent writes on the receipt, not config
+  # keys — never set receipt_source to any of them.
   #
   # A FOURTH literal exists and is not a fallback pass at all:
   # `<bot>:comment-verdict` (#44), for a reviewer that announced a clean review

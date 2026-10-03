@@ -2,7 +2,8 @@
 
 What to run when your configured review bot can't. Read this whenever
 `pr_watch` reports a reviewer as unavailable, and before recording any
-`fallback:` receipt.
+`fallback:` receipt. How many isolated lenses the review takes is set by the
+pull request's class: see *How many lenses*.
 
 This file is **what executes**: the contract, the procedure, the receipt
 commands. The measurements behind each rule, and the designs that were tried and
@@ -90,7 +91,9 @@ author is blind to, which are exactly the ones that survive to production.
 `safety-critical-changes.md` rule 2 already says a single-lens verdict "is an
 incomplete review, not a green light". A single command cannot satisfy a rule
 that asks for two disjoint lenses, so the mechanism was violating the doctrine
-it was meant to serve.
+it was meant to serve. A pull request outside that rule's scope takes one lens
+(*How many lenses*), but that lens is still isolated: what a command in the
+author's context lacks is independence, whatever the lens count.
 
 **The evidence is disjointness, not volume** — the companion has the measured
 case.
@@ -107,7 +110,56 @@ describes only what the two shipped lenses are *for*:
 
 They are the two the doctrine names, and they are chosen to overlap as little
 as possible. Add or replace lenses for your own risk profile (a data-migration
-lens, a performance lens): two disjoint lenses is the floor, not the ceiling.
+lens, a performance lens): two disjoint lenses is the safety-critical class's
+floor, not its ceiling.
+
+## How many lenses
+
+**A pull request's class sets the count, and the engine computes the class.**
+`review.safety_critical_paths` in `config/dev-model.yaml` lists the files
+`safety-critical-changes.md` governs. A pull request that changes any path
+matching it is **safety-critical**: its review takes both configured lenses,
+and rule 2 binds it exactly as before. Any other pull request is **standard**:
+its review takes **one isolated lens**. `pr_watch` computes the class from Git,
+diffing the head against the pull request's base, and reports it as
+`review_class` on every poll. The author does not draw it, which keeps `#120`'s
+constraint: a trigger the author sets is a control the author can opt out of.
+
+**It fails toward two.** An undeclared or malformed `review.safety_critical_paths`,
+or a base and head that Git cannot diff, leaves the pull request unclassed, and an
+unclassed pull request is treated as safety-critical. So a repository that never
+declares the list owes what it owed before the class existed.
+
+**The full pass** is the review over the whole pull request that its class sets:
+the panel for a safety-critical pull request, one isolated lens for a standard one.
+An opening review is a full pass. So is the re-run after a fix round that changes
+behaviour.
+
+**Which lens a standard pull request takes is fixed, not chosen per pull
+request:** **correctness** when every path it changes is one of `paths.handoff`,
+`paths.handoff_history`, `paths.friction_log` and `paths.friction_log_archive`,
+and **adversarial** otherwise. The engine cannot verify which lens ran (`--lenses`
+stays self-reported, `#32`), so this binds whoever launches it.
+
+**Why rule 2 does not reach a standard pull request.** `safety-critical-changes.md`
+applies to behavioral changes in files that gate customer-facing sends,
+destructive operations or kill/recovery paths, and rule 2 is headed *Dual-lens
+review for customer-facing gates*. A change outside those files is outside its
+scope. Workflow documents take one lens as well, until `#370` measures what the
+panel finds there. `#585`'s operator decision of 2026-10-02 sets all of this, and
+reads the earlier counter-examples by class.
+
+**What the class leaves alone.** No opening review is a delta pass. Operator-merge
+still follows `safety-critical-changes.md`. And a single-lens receipt stays
+distinguishable on the audit trail from `fallback:panel` and `fallback:delta`.
+
+**So there are three sanctioned single-lens passes, and each rests on a fact the
+author does not set:** a standard pull request's full pass; the **delta pass** for
+record prose or a reviewer-marked LOW repair, on a pull request outside the
+safety-critical class; and **Degraded mode** below, where the runtime cannot
+isolate a reviewer. A safety-critical pull request takes no single-lens pass: its
+record-prose deltas take the dual form. Running fewer lenses because a change
+looks smaller is still not on the list.
 
 ## What compute a lens gets
 
@@ -406,8 +458,9 @@ author re-reading their own diff. **Cite them by name, never by number.**
    forbids it to a **lens**, whose HEAD was chosen by the runtime rather than by
    anyone who knows the target. Refresh `<base>` while you are at it: a stale base
    here miscalibrates step 3's plausibility check as well as every lens's diff.
-2. Launch **one isolated reviewer per lens**, concurrently, each with the
-   contract above and its lens focus. Use whatever isolation your runtime has
+2. Launch **one isolated reviewer per lens** the pull request's class owes
+   (*How many lenses*; the `review_class` a poll reports), concurrently when there
+   are two, each with the contract above and its lens focus. Use whatever isolation your runtime has
    (a subagent, a separate session, a second person). If it has none, see
    *Degraded mode*. State the **repo, branch and head sha under review**
    explicitly — see **Right revision** on why the runtime's own isolation may not
@@ -460,12 +513,12 @@ author re-reading their own diff. **Cite them by name, never by number.**
    Fix other real findings, and reply-with-reason to the rest. A fix to executable
    behaviour carries the positive construction and hostile mutation that *What the
    author owes the loop* pairs with it.
-6. **Re-run after the fix round.** Not optional — whether it is the full panel
+6. **Re-run after the fix round.** Not optional — whether it is the full pass
    or a delta pass is decided below: apply the LOW rule first; otherwise use
    what the fix round's delta contains, then — for how many lenses the delta pass takes — by whether the
    change sits under `safety-critical-changes.md`, which never takes the
    single-lens form.
-7. Record the receipt with the lenses that actually ran:
+7. Record the receipt with the lenses that actually ran. The panel:
 
    ```sh
    uv run <engine-dir>/pr_watch.py <PR#> \
@@ -473,6 +526,10 @@ author re-reading their own diff. **Cite them by name, never by number.**
      --lenses <names of the lenses that actually ran> \
      --head <polled-sha>
    ```
+
+   A standard pull request's one-lens full pass records `fallback:lens`, with
+   `--lenses` naming exactly that one lens. The engine refuses `fallback:lens` on
+   a pull request it classes safety-critical or cannot class.
 
    **`--lenses` is self-reported, and the engine does not verify it.** You write
    the source and the lens names in one invocation; nothing binds either to a
@@ -485,8 +542,11 @@ author re-reading their own diff. **Cite them by name, never by number.**
    (no receipt, or one bound to an older head, prints nothing):
 
    ```text
-   review evidence: fallback:codex — ⚠ ONE lens claimed (correctness) — not a dual-lens pass
+   review evidence: fallback:codex — ⚠ ONE lens claimed (correctness) — not a dual-lens pass; it changes scripts/pr_watch.py under review.safety_critical_paths
    ```
+
+   The warning prints only where the pull request owes two lenses. On a standard
+   pull request the line says one lens is what it owes.
 
    That is genuinely useful — a one-lens pass is visible at merge time instead of
    buried in the record command's stdout — and it is worth exactly what an honest
@@ -761,14 +821,15 @@ deliberately because the full diff stays in scope, and bounded by taking
 the author's memory. (Promoted to doctrine without the cost measurement `#163`
 Sink 2 asked for — the companion records that gap.)
 
-**Outside the LOW rule, step 6's full panel is for a delta that contains behaviour.** A fix round
+**Outside the LOW rule, step 6's full pass is for a delta that contains behaviour.** A fix round
 that touched executable code or executed prose gets the full re-run,
 unchanged — including a fix a lens prescribed verbatim: measured across the
 loop, a remediation is its most defect-dense surface, not its safest, so a
 lens-specified acceptance criterion is not self-validating (the companion
 holds that refutation). Whether a change sits under
-`safety-critical-changes.md` is itself an author-drawn boundary — state that
-draw in the PR alongside the prose class. A fix round whose delta is record
+`safety-critical-changes.md` is the `review_class` `pr_watch` computes from
+`review.safety_critical_paths`; state it in the PR alongside the prose class,
+which the author draws. A fix round whose delta is record
 prose only — deletions of record prose, trims, messages that act on
 nothing — contains nothing that acts, and the proportionate re-check is **a
 delta pass: one
@@ -788,9 +849,9 @@ must stay able to tell apart) and never
 `review.fallback_panel.receipt_source` — with `--lenses` naming exactly the
 lenses that ran, which is also what tells the two forms apart on the audit
 trail, `--compose-parent <last-reviewed-sha>` naming the standing receipt the
-pass extends, and `--head` the polled sha. Expect the poll render to flag a
-one-lens receipt; for a sanctioned single-lens delta pass that flag is the
-audit trail speaking, not an instruction to run the panel the pass replaced.
+pass extends, and `--head` the polled sha. The poll render flags a one-lens
+receipt only where the pull request owes two lenses, and a safety-critical
+pull request owes two on every pass, the delta pass included.
 
 **The dual form is how a safety-critical change keeps rule 2's floor.**
 Rule 2 wants two disjoint lenses before merge, and this file used to read
@@ -823,12 +884,12 @@ means both are confirmed. The launch prompt requires each lens to end its
 report with **one verdict line per draw**. That prompt is assembled by
 `panel_prompt.py --delta-draws`, which is the **only** channel a draw takes:
 `--carry-forward` renders under a heading about what prior rounds *covered*,
-so a draw typed there is framing a full panel is not entitled to hand a lens —
+so a draw typed there is framing a full pass is not entitled to hand a lens —
 which is how full panels came to carry their author's draws before the flags
-were separated. **Run a full panel with no `--delta-draws` at all** — and read
+were separated. **Run a full pass with no `--delta-draws` at all** — and read
 that as a rule for whoever assembles the prompt, not as a guarantee the engine
 enforces. It cannot know which pass it is being run for, so the flag passed on
-a full panel still renders the draws: separating the channels removed the way
+a full pass still renders the draws: separating the channels removed the way
 this happened by default, and closed nothing against doing it on purpose, which
 is `#32`'s self-reporting gap arriving in one more place.
 **Every verdict line is posted on
@@ -840,7 +901,7 @@ lines are what make "no verdict yet" distinguishable from "confirmed" — so
 they get the same outside-the-tree artifact rule the logged disposition
 carries. A dispute from either lens moves the round toward more review,
 never less. **Outside the LOW route, a disputed prose class is a behaviour-containing delta** — the
-full panel is owed. **A disputed safety-critical boundary is stronger**:
+full pass is owed. **A disputed safety-critical boundary is stronger**:
 treat the change as sitting under `safety-critical-changes.md` until the
 dispute is resolved — and the resolution is an artifact the operator authors
 on the PR, existing before any receipt or merge, never a relayed account by
@@ -851,8 +912,9 @@ pass: the round already ran at the stricter form, and a receipt carrying
 more coverage than the class needed overclaims nothing. Post the verdict,
 note the disagreement, leave the draw to the operator.) Record composition
 mechanically: pass `--compose-parent <last-reviewed-sha>` with the
-`fallback:delta` receipt. The engine requires a standing dual-lens receipt at
-that exact parent (or an already-valid composed chain), proves each boundary is
+`fallback:delta` receipt. The engine requires a standing receipt at that exact
+parent that meets the pull request's class — two lenses, or one when
+`review_class` is standard — (or an already-valid composed chain), proves each boundary is
 ancestral, records the exact changed paths (both the source and destination of a
 rename), preserves each pass's review-bot caveats, and revalidates the chain,
 paths, and caveats on every poll. Missing objects, non-ancestry, a broken
@@ -865,14 +927,14 @@ safety-critical classifications; the receipt establishes Git boundaries and
 what the recorded passes covered, not that the posted verdicts are honest. A
 logged disposition that produced no commit needs less
 still: there is no new head, so there is nothing to re-review. The
-single-lens form is the second sanctioned single-lens pass, beside Degraded
-mode — conditioned on the record-prose boundary or a reviewer-marked LOW repair,
-not the author's own risk assessment; the dual form joins neither list, being two-lens. The
+single-lens form is one of the sanctioned single-lens passes *How many lenses*
+lists, conditioned on the record-prose boundary or a reviewer-marked LOW
+repair, not the author's own risk assessment; the dual form is two-lens. The
 delta pass moves no floor in either form: a PR's initial review takes the
-full panel — or Degraded mode, only where isolation is impossible — never a
-delta pass. The author still draws the class, states it in the PR, and can
-draw it wrong — the same design-against weakness the live two-class gate
-above carries.
+full pass its class sets — or Degraded mode, only where isolation is
+impossible — never a delta pass. The author still draws the prose class, states
+it in the PR, and can draw it wrong — the same design-against weakness the live
+two-class gate above carries.
 
 **A loop therefore ends in exactly one of three states**, each leaving a
 review artifact standing at the merging head — `#305` is the record of
@@ -883,7 +945,7 @@ running this loop before they were named:
   or replied-with-reason, per the gates above. No commit means no new head,
   so the standing receipt survives and step 6 has nothing to re-review.
 - **A fix round lands, its proportionate re-check runs at the new head, and
-  that re-check yields no further commit** — the delta pass for a LOW repair; otherwise the full panel for a delta
+  that re-check yields no further commit** — the delta pass for a LOW repair; otherwise the full pass for a delta
   containing behaviour or the delta pass for record prose, single- or
   dual-lens by the class rule above. A re-check that finds something
   re-enters the loop: its findings are fixed (a new fix round) or disposed
@@ -929,18 +991,9 @@ shipped gate adds is that the choice is stated in the PR, where a reviewer can
 dispute it.
 
 **A separate question, often confused with these: how many lenses.** None of the three
-touched it. Lens count is not bounded by class — `safety-critical-changes.md`
-rule 2 wants two disjoint lenses **before merge**, and the two sanctioned
-single-lens passes are this file's own refinements, not readings of that rule:
-**Degraded mode** below, conditioned on the runtime being unable to isolate
-reviewers, and the **delta pass** for record prose or reviewer-marked LOW repairs,
-conditioned on the boundaries above — and never single-lens for a
-change under `safety-critical-changes.md`, whose record-prose deltas take the
-dual form, both configured lenses, so the merging head keeps two-lens coverage
-whatever the last delta contained. Each condition is a fact about the
-environment or the repo, not about what the change is worth. A proposal to run
-fewer lenses for a "smaller" change is still an argument against that rule,
-not against these three.
+touched it, and none of them sets it. *How many lenses* does, from the
+operator's declared `review.safety_critical_paths` rather than from anything
+the author writes or judges about the change's size.
 
 ## Degraded mode
 

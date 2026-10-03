@@ -307,12 +307,18 @@ def _fallback_instruction(
     # stop them: the engine records `--lenses` without verifying it (issue #32),
     # so this wording is the only thing steering it.
     if len({lens.casefold() for lens in lenses}) >= 2:
+        # The PR's class, which `pr_watch.py` reports as `review_class`, decides
+        # between the two routes (#585). This hook does not compute it: it fires
+        # before a poll has run, and naming both routes costs nothing.
         return (
-            "If a review bot is unavailable, run the fallback review PANEL — one "
-            f"isolated, fresh-context reviewer per lens ({', '.join(lenses)}), per "
-            "docs/agentic-dev-kit/fallback-review-panel.md — and record it with "
+            "If a review bot is unavailable, run the fallback review the PR's "
+            "`review_class` owes, per docs/agentic-dev-kit/fallback-review-panel.md. "
+            "A safety-critical PR takes the PANEL — one isolated, fresh-context "
+            f"reviewer per lens ({', '.join(lenses)}) — recorded with "
             f"`uv run {engines_dir}/pr_watch.py <PR#> "
             f'--record-review "{panel_source}" --lenses <names> --head <polled-sha>`. '
+            "A standard PR takes one isolated lens, recorded with "
+            '`--record-review "fallback:lens" --lenses <name>`. '
             "Never treat the outage as a review waiver." + lens_compute
             # Appended only for the PANEL branch: the degraded one-lens fallback
             # runs in the cockpit's own context, so there is no separate lens to

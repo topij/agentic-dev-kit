@@ -1075,6 +1075,23 @@ def test_a_fault_confined_to_lens_compute_does_not_drop_the_panel(monkeypatch):
     )
 
 
+def test_the_panel_reminder_names_both_routes_the_review_class_chooses():
+    """#585: a standard PR takes one isolated lens. A reminder naming only the
+    panel would tell every PR's author to buy two lenses."""
+    hook = _load_hook()
+
+    text = hook._fallback_instruction(
+        "/code-review", ["adversarial", "correctness"], "fallback:panel", "scripts"
+    )
+
+    assert "`review_class`" in text
+    assert "A safety-critical PR takes the PANEL" in text
+    assert '--record-review "fallback:panel" --lenses <names>' in text
+    assert "A standard PR takes one isolated lens" in text
+    assert '--record-review "fallback:lens" --lenses <name>' in text
+    assert "review waiver" in text
+
+
 # ── #301: the runtime is a parameter, not a hardcoded key ────────────────────
 
 

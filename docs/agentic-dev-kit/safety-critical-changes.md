@@ -10,6 +10,11 @@ principle this rule operationalizes. Agent-specific adapters should bind this
 shared doctrine through `.claude/rules/`, `AGENTS.md`, or a triggered repository
 skill; do not fork the doctrine into runtime-specific copies.
 
+`review.safety_critical_paths` in `config/dev-model.yaml` declares which files
+these are. A fallback review takes rule 2's two lenses on a pull request that
+changes one of them, and one isolated lens otherwise: see *How many lenses* in
+[`fallback-review-panel.md`](fallback-review-panel.md).
+
 1. **Deterministic gate > NLP/keyword matcher.** A matcher over free-text (approval
    keywords, cancel phrases) is inherently leaky — repeated review rounds on a
    leaky matcher each tend to find a *new* wrong-send, not close the class of bug.

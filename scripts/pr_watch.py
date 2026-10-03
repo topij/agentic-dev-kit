@@ -88,6 +88,7 @@ Usage:
     uv run scripts/pr_watch.py --mark-seen      # ack exactly what the last poll reported
     uv run scripts/pr_watch.py 916 --record-review "fallback:codex" --head <polled-sha>
     uv run <engine-dir>/pr_watch.py 916 --record-review "fallback:panel" --head <polled-sha> --disposition -  # findings on stdin
+    uv run <engine-dir>/pr_watch.py 916 --record-review "fallback:lens" --lenses adversarial --head <polled-sha>  # standard-class PR only
     uv run <engine-dir>/pr_watch.py 916 --record-review "fallback:delta" --compose-parent <reviewed-parent> --head <polled-sha>
     uv run scripts/pr_watch.py 916 --assert-draft  # correct a drifted draft bit after `gh pr create --draft`
     uv run scripts/pr_watch.py 916 --assert-ready  # correct after ready creation/transition, and before merge
@@ -113,6 +114,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import hashlib
 import json
 import os
@@ -404,6 +406,23 @@ class ReviewConfig(NamedTuple):
     bot_app_slugs: dict[str, frozenset[str]]
     bot_pending_grace_minutes: float
     settle_grace_minutes: float
+    # None means UNDECLARED, which is not the same as an empty list: see
+    # :func:`pr_review_class` for why undeclared classes every PR safety-critical.
+    safety_critical_paths: tuple[str, ...] | None = None
+
+
+def _normalize_safety_critical_paths(value: Any) -> tuple[str, ...] | None:
+    """Normalize ``review.safety_critical_paths``, or reject all of it.
+
+    ``None`` (undeclared, or malformed) keeps every PR at two lenses. A list is
+    taken whole or not at all: dropping one malformed entry would quietly move
+    the file it named to one lens, the unsafe direction.
+    """
+    if not isinstance(value, list) or not all(
+        isinstance(pattern, str) and pattern.strip() for pattern in value
+    ):
+        return None
+    return tuple(pattern.strip() for pattern in value)
 
 
 def _normalize_bot_author_aliases(value: Any) -> dict[str, frozenset[str]] | None:
@@ -477,6 +496,10 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
       requirement that a baseline exist at all, so a fresh clone still blocks
       for the one poll it takes to record one (#190 is not a timing bug and is
       not opted out of here). Setting it high is fail-closed.
+    - ``safety_critical_paths`` absent or malformed -> ``None``, which classes
+      every PR safety-critical. An explicit empty list is honored as "no path
+      here is safety-critical" — the operator's declaration, like
+      ``noise_markers: []``.
     """
     defaults = ReviewConfig(
         noise_markers=_DEFAULT_NOISE_MARKERS,
@@ -558,6 +581,14 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
             or settle_grace < 0
         ):
             settle_grace = _DEFAULT_SETTLE_GRACE_MINUTES
+        raw_safety_paths = get(config, "review.safety_critical_paths", None)
+        safety_paths = _normalize_safety_critical_paths(raw_safety_paths)
+        if raw_safety_paths is not None and safety_paths is None:
+            print(
+                "warning: review.safety_critical_paths must be a list of non-empty "
+                "path patterns; treating every PR as safety-critical",
+                file=sys.stderr,
+            )
     except FileNotFoundError:
         # `load_config` raises this for an absent config file — a standalone
         # engine run. Defaults are exactly right; stay quiet.
@@ -597,6 +628,7 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
         bot_app_slugs=app_slugs,
         bot_pending_grace_minutes=float(grace),
         settle_grace_minutes=float(settle_grace),
+        safety_critical_paths=safety_paths,
     )
 
 
@@ -611,6 +643,7 @@ _REVIEW_BOT_AUTHOR_ALIASES = _REVIEW_CONFIG.bot_author_aliases
 _REVIEW_BOT_APP_SLUGS = _REVIEW_CONFIG.bot_app_slugs
 _BOT_PENDING_GRACE_MINUTES = _REVIEW_CONFIG.bot_pending_grace_minutes
 _SETTLE_GRACE_MINUTES = _REVIEW_CONFIG.settle_grace_minutes
+_SAFETY_CRITICAL_PATHS = _REVIEW_CONFIG.safety_critical_paths
 
 
 # --------------------------------------------------------------------------- gh
@@ -1480,6 +1513,7 @@ def rest_pr_view(pr: int, *, token: str) -> tuple[dict, list[dict], RestCheckRea
         ),
         "isDraft": bool(pr_data.get("draft")),
         "baseRefName": (pr_data.get("base") or {}).get("ref"),
+        "baseRefOid": (pr_data.get("base") or {}).get("sha"),
         # REST's `mergeable_state` (clean/dirty/blocked/behind/unstable/…) is a
         # different enum than GraphQL's `mergeStateStatus`, passed through
         # upper-cased. This DOES feed a merge blocker: `build_report` branches on
@@ -2027,7 +2061,8 @@ def fetch_pr_view(pr: int) -> tuple[dict, list[dict], RestCheckReads | None]:
             # `body` rides along for `evidence_findings`: the verification stamp
             # `#603` compares against the head is written in the PR body as often
             # as in a comment.
-            "number,title,url,state,isDraft,baseRefName,mergeStateStatus,reviewDecision,headRefOid,statusCheckRollup,reviews,comments,body",
+            # `baseRefOid` is what :func:`pr_review_class` diffs the head against.
+            "number,title,url,state,isDraft,baseRefName,baseRefOid,mergeStateStatus,reviewDecision,headRefOid,statusCheckRollup,reviews,comments,body",
         ]
     )
     inline = _gh_json(
@@ -2037,13 +2072,15 @@ def fetch_pr_view(pr: int) -> tuple[dict, list[dict], RestCheckReads | None]:
 
 
 def fetch_review_snapshot(pr: int) -> dict:
-    """``number``/``headRefOid``/``reviews`` for one PR. ``gh`` only.
+    """``number``/``headRefOid``/``baseRefOid``/``reviews`` for one PR. ``gh`` only.
 
     No REST branch on purpose: its only caller is :func:`record_review`, which
     writes a receipt that authorizes a merge, and :func:`require_gh_backend`
     refuses that on REST before this is reached.
     """
-    return _gh_json(["pr", "view", str(pr), "--json", "number,headRefOid,reviews"])
+    return _gh_json(
+        ["pr", "view", str(pr), "--json", "number,headRefOid,baseRefOid,reviews"]
+    )
 
 
 def _read_is_draft(pr: int) -> bool:
@@ -3991,8 +4028,14 @@ def record_review(
     ``lenses`` names the review lenses that actually ran (see
     ``docs/agentic-dev-kit/fallback-review-panel.md``). Recorded verbatim so a
     one-lens pass is distinguishable from a panel in the audit trail: the
-    doctrine holds that a single-lens verdict is not a green light, and without
-    this a degraded `fallback:` receipt reads exactly like a full one.
+    doctrine holds that a single-lens verdict is not a green light on a PR that
+    owes two lenses, and without this a degraded `fallback:` receipt reads
+    exactly like a full one.
+
+    ``fallback:lens`` (:data:`SINGLE_LENS_SOURCE`) is an isolated one-lens
+    opening pass. It must name exactly one lens, and it is refused on a PR that
+    :func:`pr_review_class` does not class standard, since that PR owes two
+    (#585). The refusal is computed here from Git, not taken from the caller.
 
     ``compose_parent`` is the exact standing receipt head that a
     ``fallback:delta`` pass extends. The engine preserves that full parent,
@@ -4034,6 +4077,13 @@ def record_review(
     expected_head = expected_head.strip()
     if not expected_head:
         raise ValueError("expected reviewed head must not be empty")
+    named_lenses = [part.strip() for part in (lenses or "").split(",") if part.strip()]
+    if source == SINGLE_LENS_SOURCE and (
+        len(named_lenses) != 1 or len(_countable_lenses(named_lenses)) != 1
+    ):
+        raise ValueError(
+            f"{SINGLE_LENS_SOURCE} records one isolated lens: pass --lenses <that lens's name>"
+        )
     snapshot = fetch_review_snapshot(pr)
     current_head = snapshot.get("headRefOid")
     if not current_head:
@@ -4042,6 +4092,13 @@ def record_review(
         raise ValueError(
             f"PR head changed during review (expected {expected_head}, current {current_head}); "
             "review the new head before recording evidence"
+        )
+    review_class = pr_review_class(snapshot.get("baseRefOid"), current_head)
+    if source == SINGLE_LENS_SOURCE and _lens_floor(review_class) > 1:
+        raise ValueError(
+            f"{SINGLE_LENS_SOURCE} is a one-lens pass and this PR owes two: "
+            f"{_describe_review_class(review_class)}. Run the panel and record "
+            "it under review.fallback_panel.receipt_source"
         )
     now = now or datetime.now(timezone.utc)
     state = load_state(pr)
@@ -4094,7 +4151,6 @@ def record_review(
         "source": source,
         "recorded_at": now.isoformat(),
     }
-    named_lenses = [part.strip() for part in (lenses or "").split(",") if part.strip()]
     if named_lenses:
         receipt["lenses"] = named_lenses
     if allow_pending_bot:
@@ -4132,7 +4188,9 @@ def record_review(
         previous = state.get("review_receipt")
         if not isinstance(previous, dict):
             raise ValueError("no standing review receipt exists to compose with")
-        receipt["coverage"] = _compose_coverage(previous, parent_head, receipt)
+        receipt["coverage"] = _compose_coverage(
+            previous, parent_head, receipt, lens_floor=_lens_floor(review_class)
+        )
     if disposition is not None:
         # Last, after every refusal and after the receipt is fully assembled, so
         # the comment can never describe a receipt that was then refused — and
@@ -4159,7 +4217,12 @@ def record_review(
             )
     state["review_receipt"] = receipt
     save_state(pr, state)
-    return {"pr": pr, "recorded_review": True, "review_receipt": receipt}
+    return {
+        "pr": pr,
+        "recorded_review": True,
+        "review_receipt": receipt,
+        "review_class": review_class,
+    }
 
 
 # ----------------------------------------------------------------------- main
@@ -4241,6 +4304,15 @@ def _delta_paths(base: str, head: str) -> list[str]:
     if ancestor.returncode != 0:
         detail = ancestor.stderr.decode("utf-8", errors="replace").strip()
         raise ValueError(f"could not establish review-delta ancestry: {detail}")
+    return _merge_base_paths(base, head, "review-delta paths")
+
+
+def _merge_base_paths(base: str, head: str, what: str) -> list[str]:
+    """Every path changed from ``base``'s merge base with ``head`` to ``head``.
+
+    Renames are listed on both sides, so moving a file away from a path counts
+    as changing that path. Any failure raises ``ValueError`` naming ``what``.
+    """
 
     try:
         diff = subprocess.run(  # noqa: S603
@@ -4261,19 +4333,122 @@ def _delta_paths(base: str, head: str) -> list[str]:
             check=False,
         )
     except (OSError, subprocess.SubprocessError) as exc:
-        raise ValueError(f"could not establish review-delta paths: {exc}") from exc
+        raise ValueError(f"could not establish {what}: {exc}") from exc
     if diff.returncode != 0:
         detail = diff.stderr.decode("utf-8", errors="replace").strip()
-        raise ValueError(f"could not establish review-delta paths: {detail}")
+        raise ValueError(f"could not establish {what}: {detail}")
     try:
         decoded = diff.stdout.decode("utf-8")
     except UnicodeDecodeError as exc:
-        raise ValueError("could not establish review-delta paths: non-UTF-8 path") from exc
+        raise ValueError(f"could not establish {what}: non-UTF-8 path") from exc
     return sorted(path for path in decoded.split("\0") if path)
 
 
-def _validate_composed_coverage(receipt: dict, current_head: str) -> tuple[bool, str | None]:
-    """Validate a composed receipt against its exact Git ancestry and paths."""
+# ------------------------------------------------------- the review class (#585)
+#
+# How many lenses a fallback review owes follows the PR's CLASS, and the class
+# is computed here from paths the operator declared rather than drawn by the
+# author: `#120` records that a trigger the author sets is a control the author
+# can opt out of. One boundary decides the lens count. A PR that changes any
+# path matching `review.safety_critical_paths` is safety-critical and keeps
+# `safety-critical-changes.md` rule 2's two-lens floor; any other PR may take
+# one isolated lens, recorded as `fallback:lens`. #585's 2026-10-02 comment is
+# the decision.
+#
+# Every way this can fail lands on the safety-critical class, and that includes
+# an undeclared key, so a repo that never declares the list keeps the two-lens
+# behaviour it had before the class existed. The class only ever relaxes what a
+# standard PR owes. Nothing here lets a safety-critical PR owe less.
+#
+# Patterns match with `fnmatch.fnmatchcase`, whose `*` also crosses `/`. That
+# over-matches, which errs toward two lenses.
+SINGLE_LENS_SOURCE = "fallback:lens"
+REVIEW_CLASS_SAFETY_CRITICAL = "safety-critical"
+REVIEW_CLASS_STANDARD = "standard"
+_COMMIT_SHA_RE = re.compile(r"^[0-9a-f]{7,64}$")
+_UNSET = object()
+
+
+def pr_review_class(
+    base: object, head: object, *, patterns: object = _UNSET
+) -> dict:
+    """Class the change from ``base`` to ``head`` by the declared safety-critical paths.
+
+    Returns ``{"class", "matched_paths", "unclassified"}``. ``unclassified`` is
+    the reason no class could be computed, and is ``None`` when one was; an
+    unclassified change is reported as safety-critical. ``base`` is the PR's
+    base commit: the diff runs from its merge base with ``head``, so a stale
+    base widens the diff rather than narrowing it.
+    """
+    declared = _SAFETY_CRITICAL_PATHS if patterns is _UNSET else patterns
+    result: dict = {
+        "class": REVIEW_CLASS_SAFETY_CRITICAL,
+        "matched_paths": [],
+        "unclassified": None,
+    }
+    if declared is None:
+        result["unclassified"] = "review.safety_critical_paths is not declared"
+        return result
+    if not all(
+        isinstance(sha, str) and _COMMIT_SHA_RE.match(sha) for sha in (base, head)
+    ):
+        result["unclassified"] = "the PR's base or head commit is unknown"
+        return result
+    try:
+        paths = _merge_base_paths(str(base), str(head), "the PR's changed paths")
+    except ValueError as exc:
+        result["unclassified"] = f"{exc} (fetch the PR's base and head, then poll again)"
+        return result
+    matched = [
+        path
+        for path in paths
+        if any(fnmatch.fnmatchcase(path, pattern) for pattern in declared)
+    ]
+    if matched:
+        result["matched_paths"] = matched
+        return result
+    result["class"] = REVIEW_CLASS_STANDARD
+    return result
+
+
+def _lens_floor(review_class: object) -> int:
+    """Distinct lenses a full pass owes the PR: one only when it is classed standard."""
+    if (
+        isinstance(review_class, dict)
+        and review_class.get("class") == REVIEW_CLASS_STANDARD
+        and review_class.get("unclassified") is None
+    ):
+        return 1
+    return 2
+
+
+def _describe_review_class(review_class: object) -> str:
+    """Why the PR is in its class, in one line, for a refusal or a render."""
+    if not isinstance(review_class, dict):
+        return "the PR could not be classed"
+    if review_class.get("unclassified"):
+        return f"the PR could not be classed ({_flat(review_class['unclassified'], 200)})"
+    if _lens_floor(review_class) == 1:
+        return "no path in review.safety_critical_paths changed"
+    matched = [
+        _flat(path, 80)
+        for path in review_class.get("matched_paths") or []
+        if isinstance(path, str)
+    ]
+    if not matched:
+        return "the PR is classed safety-critical"
+    more = f" and {len(matched) - 1} more" if len(matched) > 1 else ""
+    return f"it changes {matched[0]}{more} under review.safety_critical_paths"
+
+
+def _validate_composed_coverage(
+    receipt: dict, current_head: str, *, lens_floor: int = 2
+) -> tuple[bool, str | None]:
+    """Validate a composed receipt against its exact Git ancestry and paths.
+
+    ``lens_floor`` is how many distinct lenses the full parent must record:
+    :func:`_lens_floor` of the PR's class, two unless the PR is classed standard.
+    """
 
     if "coverage" not in receipt:
         return True, None
@@ -4297,8 +4472,10 @@ def _validate_composed_coverage(receipt: dict, current_head: str) -> tuple[bool,
         return False, "full_parent.source is missing"
     if full_source.strip() == "fallback:delta":
         return False, "full_parent cannot itself be a delta receipt"
-    if len(_countable_lenses(full_lenses)) < 2:
-        return False, "full_parent does not record a dual-lens pass"
+    if len(_countable_lenses(full_lenses)) < max(lens_floor, 1):
+        if lens_floor >= 2:
+            return False, "full_parent does not record a dual-lens pass"
+        return False, "full_parent records no review lens"
     try:
         _receipt_caveats(full)
     except ValueError as exc:
@@ -4354,8 +4531,14 @@ def _validate_composed_coverage(receipt: dict, current_head: str) -> tuple[bool,
     return True, None
 
 
-def _compose_coverage(previous: dict, parent_head: str, receipt: dict) -> dict:
-    """Extend exact prior evidence with the current ``fallback:delta`` pass."""
+def _compose_coverage(
+    previous: dict, parent_head: str, receipt: dict, *, lens_floor: int = 2
+) -> dict:
+    """Extend exact prior evidence with the current ``fallback:delta`` pass.
+
+    ``lens_floor`` is the PR class's floor for the full parent; see
+    :func:`_validate_composed_coverage`.
+    """
 
     if previous.get("head") != parent_head:
         raise ValueError(
@@ -4369,8 +4552,10 @@ def _compose_coverage(previous: dict, parent_head: str, receipt: dict) -> dict:
             raise ValueError("standing parent receipt has no review source")
         if prior_source.strip() == "fallback:delta":
             raise ValueError("a legacy delta receipt cannot serve as a full parent")
-        if len(_countable_lenses(prior_lenses)) < 2:
-            raise ValueError("standing parent receipt is not a dual-lens full pass")
+        if len(_countable_lenses(prior_lenses)) < max(lens_floor, 1):
+            if lens_floor >= 2:
+                raise ValueError("standing parent receipt is not a dual-lens full pass")
+            raise ValueError("standing parent receipt records no review lens")
         full_parent = {
             "head": parent_head,
             "source": prior_source,
@@ -4381,7 +4566,9 @@ def _compose_coverage(previous: dict, parent_head: str, receipt: dict) -> dict:
             full_parent["recorded_at"] = previous["recorded_at"]
         deltas: list[dict] = []
     else:
-        valid, error = _validate_composed_coverage(previous, parent_head)
+        valid, error = _validate_composed_coverage(
+            previous, parent_head, lens_floor=lens_floor
+        )
         if not valid:
             raise ValueError(f"standing composed receipt is invalid: {error}")
         full_parent = dict(existing["full_parent"])
@@ -4413,7 +4600,9 @@ def _compose_coverage(previous: dict, parent_head: str, receipt: dict) -> dict:
         "deltas": deltas,
     }
     candidate = {**receipt, "coverage": coverage}
-    valid, error = _validate_composed_coverage(candidate, receipt["head"])
+    valid, error = _validate_composed_coverage(
+        candidate, receipt["head"], lens_floor=lens_floor
+    )
     if not valid:
         raise ValueError(f"could not validate composed review coverage: {error}")
     return coverage
@@ -4727,6 +4916,9 @@ def build_report(
     receipt_head = (
         review_receipt.get("head") if isinstance(review_receipt, dict) else None
     )
+    # Computed on every poll, not only when a receipt needs it: it is also how
+    # the report tells the cockpit which fallback pass this PR owes (#585).
+    review_class = pr_review_class(view.get("baseRefOid"), head)
     coverage_valid = True
     coverage_error: str | None = None
     if (
@@ -4736,7 +4928,7 @@ def build_report(
         and isinstance(head, str)
     ):
         coverage_valid, coverage_error = _validate_composed_coverage(
-            review_receipt, head
+            review_receipt, head, lens_floor=_lens_floor(review_class)
         )
     receipt_valid = bool(head) and receipt_head == head and coverage_valid
     # The second route to the same requirement (#350, direction 1). See
@@ -4879,6 +5071,9 @@ def build_report(
         "merge_state": merge_state,
         "review_decision": review_decision,
         "review_evidence": review_evidence,
+        # Which fallback pass this PR owes: see :func:`pr_review_class`. It gates
+        # through one place only, the full-parent floor of a composed receipt.
+        "review_class": review_class,
         "review_bots": review_bots,
         # Reported, never gating — see :func:`evidence_findings` for why a
         # judgement drawn from prose must not close a gate the deterministic
@@ -5283,10 +5478,20 @@ def render(report: dict) -> str:
         named = [_flat(lens, 40) for lens in evidence.get("lenses") or []]
         distinct = len(_countable_lenses(named))
         source = _flat(evidence.get("source"))
+        review_class = report.get("review_class")
         if distinct >= 2:
             detail = f"{distinct} lenses claimed ({', '.join(named)})"
+        elif distinct == 1 and _lens_floor(review_class) == 1:
+            # The class decides whether one lens is a shortfall (#585). This is
+            # still a claim; what changed is only the floor it is read against.
+            detail = (
+                f"one lens claimed ({named[0]}), which is what this PR owes: "
+                f"{_describe_review_class(review_class)}"
+            )
         elif named:
             detail = f"⚠ ONE lens claimed ({named[0]}) — not a dual-lens pass"
+            if isinstance(review_class, dict):
+                detail += f"; {_describe_review_class(review_class)}"
         else:
             detail = "no lenses recorded"
         lines.append(f"  review evidence: {source} — {detail}")
@@ -5360,6 +5565,19 @@ def render(report: dict) -> str:
                 "did not see the commits since. Re-run the verification at this head "
                 "and stamp it in a comment here"
             )
+    # What a fallback review of this head owes, while none stands (#585). Once
+    # evidence exists the line above says what it stands for instead.
+    review_class = report.get("review_class")
+    if isinstance(review_class, dict) and not evidence.get("valid"):
+        owed = (
+            f"one isolated lens, recorded as {SINGLE_LENS_SOURCE}"
+            if _lens_floor(review_class) == 1
+            else "the two-lens panel"
+        )
+        lines.append(
+            f"  review class: {_flat(review_class.get('class'))} — a fallback review "
+            f"owes {owed} ({_describe_review_class(review_class)})"
+        )
     for blocker in report.get("merge_blockers") or []:
         lines.append(f"  ✗ merge blocker: {blocker}")
     if report["new_comments"]:
@@ -5408,10 +5626,21 @@ def render_record_review(report: dict) -> str:
         else []
     )
     named = [_flat(lens, 40) for lens in named]
-    if len(_countable_lenses(named)) == 1:
+    review_class = report.get("review_class")
+    if len(_countable_lenses(named)) == 1 and _lens_floor(review_class) == 1:
+        lines.append(
+            f"  one lens ({named[0]}), which is what this PR owes: "
+            f"{_describe_review_class(review_class)}"
+        )
+    elif len(_countable_lenses(named)) == 1:
         lines.append(
             f"  ⚠ one lens only ({named[0]}) — `safety-critical-changes.md` rule 2 "
             "holds that a single-lens verdict is not a green light"
+            + (
+                f"; {_describe_review_class(review_class)}"
+                if isinstance(review_class, dict)
+                else ""
+            )
         )
     elif named:
         lines.append(f"  lenses: {', '.join(named)}")
