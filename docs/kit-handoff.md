@@ -371,5 +371,6 @@ The upstream validation record remains #919; the Linear acceptance record remain
 ▶ Next: In cs-toolkit, refresh the kit from `410108fb115a0bf063f737d9961b5ec4f68d641d`, reconcile its
 retirement helper with the completed-state contract, run `make check-root` and
 `make test-devkit`, then open the held upgrade PR and finish the remaining Codex runtime
-validation. Install the declined triage engines with the Linear configuration and exact
-operator-approved tracker payloads described in #939.
+validation. Install the declined triage engines following #939 with the Linear
+destination configuration and credentials. Obtain exact operator approval of each live
+tracker payload before its write; this kit session supplies no live-payload approval.
