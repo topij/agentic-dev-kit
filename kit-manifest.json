@@ -489,7 +489,7 @@
         "scripts/triage_friction_log.py"
       ],
       "role": "engine",
-      "sha256": "320585d1ef11f63e2948f9fb317fe2cba709c5a957184e841817c04026be5988"
+      "sha256": "bd3a6e8dcab70777463931cef766ed3c95a417aac73d94b10d6ffaf814bd0d02"
     },
     "scripts/lib/triage/recovery.py": {
       "required_by": [
@@ -682,7 +682,7 @@
     },
     "scripts/tests/test_triage_engine.py": {
       "role": "test",
-      "sha256": "eb372a36e83d6f7d980cf85203401b2a23de0d93faa4caabb31d69e23eb70043"
+      "sha256": "29b2bc066f9417f5034b6bcd9d0edc2315ab0c12a460882f945c35c8685acbeb"
     },
     "scripts/tests/test_triage_gate.py": {
       "role": "test",
@@ -698,7 +698,7 @@
     },
     "scripts/tests/test_triage_providers.py": {
       "role": "test",
-      "sha256": "4d5431cb1b02e4efc7738e0e0a36be6af39eb633a5f422b4beefac743b44bda3"
+      "sha256": "95f92833eca067e54e975e7a1596caaf29c5e53a3e253e14474d9b1724677859"
     },
     "scripts/tests/test_triage_recovery.py": {
       "role": "test",

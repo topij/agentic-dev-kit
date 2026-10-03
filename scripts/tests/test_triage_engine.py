@@ -122,7 +122,12 @@ def test_linear_approval_and_uncertain_create_resume_keep_frozen_authority(tmp_p
     supplied = request(root)
     supplied["proposals"][0]["project"] = "Adopter"
     transport = LinearTransport()
+    malformed = {"parent": "teams"}
     def lost_create(query, variables):
+        if "TriageProjectTeams(" in query and malformed["parent"] == "teams":
+            return {"data": {"project": ["bad"]}}
+        if "TriageIssueLabels(" in query and malformed["parent"] == "labels":
+            return {"data": {"issue": ["bad"]}}
         if "TriageCreate(" in query:
             transport.calls.append((query, variables))
             raise TimeoutError("outcome unknown")
@@ -139,8 +144,15 @@ def test_linear_approval_and_uncertain_create_resume_keep_frozen_authority(tmp_p
                   tracker=tracker, approval_context=approval_context(presented, operator="foreign"), head_authority=FakeForge([]))
     assert refused["outcome"] == "operator-held"
     assert transport.calls == []
-    held = run("resume", context="interactive", request={"approval": approval_for(presented)}, start=root,
-               tracker=tracker, approval_context=approval_context(presented), head_authority=FakeForge([]))
+    malformed_held = run("resume", context="interactive", request={"approval": approval_for(presented)}, start=root,
+                         tracker=tracker, approval_context=approval_context(presented), head_authority=FakeForge([]))
+    assert malformed_held["outcome"] == "operator-held"
+    assert "Linear connection is missing" in malformed_held["detail"]
+    assert not (state_root / "triage/triage-pipeline-gate_live.lock").exists()
+    assert not any("TriageCreate(" in query for query, _ in transport.calls)
+    malformed["parent"] = None
+    held = run("resume", context="interactive", request={}, start=root,
+               tracker=tracker, head_authority=FakeForge([]))
     assert held["outcome"] == "operator-held"
     retained = loads_exact(state_path.read_bytes())
     assert retained["operations"][0]["status"] == "ambiguous"
@@ -152,6 +164,13 @@ def test_linear_approval_and_uncertain_create_resume_keep_frozen_authority(tmp_p
     transport.issues.append({"id": "issue", "identifier": "ADO-17", "url": "https://linear.app/w/issue/ADO-17",
                             "title": payload["title"], "description": payload["body"], "team": {"id": "team"},
                             "project": {"id": "project", "name": "Adopter"}, "labels": [{"id": "label", "name": "bug"}]})
+    malformed["parent"] = "labels"
+    malformed_held = run("resume", context="interactive", request={}, start=root, tracker=tracker, head_authority=FakeForge([]))
+    assert malformed_held["outcome"] == "operator-held"
+    assert "Linear connection is missing" in malformed_held["detail"]
+    assert not (state_root / "triage/triage-pipeline-gate_live.lock").exists()
+    assert sum("TriageCreate(" in q for q, _ in transport.calls) == creates
+    malformed["parent"] = None
     resumed = run("resume", context="interactive", request={}, start=root, tracker=tracker, head_authority=FakeForge([]))
     assert resumed["verified_tracker_identifiers"] == ["ADO-17"]
     assert sum("TriageCreate(" in q for q, _ in transport.calls) == creates

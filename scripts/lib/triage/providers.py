@@ -288,7 +288,7 @@ class LinearIssues:
             raise TriageError("Linear project read-back mismatch", outcome="operator-held")
         query = ("query TriageProjectTeams($id: String!, $cursor: String) { project(id: $id) { "
                  f"teams(first: 100, after: $cursor) {{ {self.PAGE_INFO} nodes {{ id }} }} }} }}")
-        teams = self._pages(query, {"id": destination["project_id"]}, lambda d: (d.get("project") or {}).get("teams"))
+        teams = self._pages(query, {"id": destination["project_id"]}, lambda d: d["project"].get("teams") if isinstance(d.get("project"), dict) else None)
         if destination["team_id"] not in [t["id"] for t in teams]:
             raise TriageError("Linear project is outside the configured team", outcome="operator-held")
 
@@ -323,7 +323,7 @@ class LinearIssues:
         # an issue carrying an extra label the operator never approved.
         query = ("query TriageIssueLabels($id: String!, $cursor: String) { issue(id: $id) { "
                  f"labels(includeArchived: true, first: 100, after: $cursor) {{ {self.PAGE_INFO} nodes {{ id name }} }} }} }}")
-        labels = self._pages(query, {"id": iid}, lambda d: (d.get("issue") or {}).get("labels"))
+        labels = self._pages(query, {"id": iid}, lambda d: d["issue"].get("labels") if isinstance(d.get("issue"), dict) else None)
         names = [label.get("name") for label in labels]
         if any(not isinstance(n, str) or not n for n in names) or len(names) != len(set(names)):
             raise TriageError("Linear issue label read-back is ambiguous", outcome="operator-held")

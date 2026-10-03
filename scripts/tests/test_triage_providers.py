@@ -179,6 +179,34 @@ def test_linear_incomplete_or_wrong_readback_fails_closed(fault):
         LinearIssues(transport=altered).search(LINEAR_DESTINATION, MARKER)
 
 
+@pytest.mark.parametrize("operation, parent", [("TriageProjectTeams(", "project"), ("TriageIssueLabels(", "issue")])
+@pytest.mark.parametrize("malformed", [["bad"], "bad", True, 7])
+def test_linear_malformed_nested_connection_is_controlled(operation, parent, malformed):
+    transport = LinearTransport()
+    assert LinearIssues(transport=transport, sleep=lambda _: None).create(LINEAR_DESTINATION, linear_payload()).status == "verified"
+    def altered(query, variables):
+        if operation in query:
+            return {"data": {parent: malformed}}
+        return transport(query, variables)
+    with pytest.raises(TriageError, match="Linear connection is missing"):
+        LinearIssues(transport=altered, sleep=lambda _: None).search(LINEAR_DESTINATION, MARKER)
+    assert sum("TriageCreate(" in query for query, _ in transport.calls) == 1
+
+
+def test_linear_create_refuses_mismatched_response_uuid():
+    transport = LinearTransport()
+    def altered(query, variables):
+        value = transport(query, variables)
+        if "TriageCreate(" in query:
+            value["data"]["issueCreate"]["issue"]["id"] = "foreign-uuid"
+        return value
+    observed = LinearIssues(transport=altered, sleep=lambda _: None).create(LINEAR_DESTINATION, linear_payload())
+    assert observed.status == "ambiguous"
+    assert observed.verified_route is None
+    assert observed.read_back["matches"][0]["id"] == "issue"
+    assert observed.response["issue"]["id"] == "foreign-uuid"
+
+
 def test_linear_read_retries_are_bounded_and_partial_data_is_refused():
     calls = []
     slept = []
