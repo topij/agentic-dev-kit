@@ -5,6 +5,42 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-01 (Phase 6 item 5, in Claude Code)
+
+**Shipped.** PR #902, squash `65e9d2d`: Phase 6 item 5. #243 closed on merge.
+
+- Each adapter's runtime-specific text moved from `_CURRENT_CONTEXTS` into
+  `scripts/lib/adapter_templates/<runtime>/<slug>.md`, read from beside the renderer.
+  The rendered adapters are byte-identical.
+- `adopt`, `upgrade` and `pr-watch` gained word-for-word pins with appended-instruction
+  mutations.
+- `fallback-review-panel.md` no longer cites a "step 5" of the Codex `pr-watch` binding.
+
+**Decided by the operator.**
+
+- The templates sit beside the renderer, not under `docs/templates/` as #243's
+  2026-09-02 comment proposed.
+- #902 closes #243, and merges once clean.
+
+**Filed**, on the operator's approval of its exact text and read back identical: an
+occurrence comment on #644
+([issuecomment-5937818741](https://github.com/topij/agentic-dev-kit/issues/644#issuecomment-5937818741)).
+It reproduces that intermittent failure by launching the test as a shell `&` job,
+which starts it with SIGINT ignored.
+
+**Review.** CodeRabbit's auto-review stayed off, so the fallback panel reviewed #902:
+the full dual-lens panel at `a459006`, then adversarial delta passes over the repair
+commits. Delta passes 1 and 2 each disputed a draw, both about another test's handling
+of the templates, so neither recorded a receipt. Delta pass 3 confirmed every draw,
+and its receipt at `947bc22` composes on the full panel's. Each round's disposition is
+posted on the PR.
+
+**Verified.** `env -u FORCE_COLOR make test` at `a459006`, in
+`/Users/topi/Coding/agentic-dev-kit` on 2026-10-01: `3792 passed, 1 skipped in
+519.66s (0:08:39)`. The repair commits carry focused verification, recorded on the PR.
+For the merged tree, `gh run list --commit 65e9d2d334de4277dd2bbb031667bd666c3da9ee`
+showed the `Test` workflow completed `success` on `main`.
+
 ### 2026-10-01 (Phase 6 item 4, and a scratch and branch cleanup, in Claude Code)
 
 **Shipped.** PR #897, squash `6e4c439`: Phase 6 item 4 (#663).
