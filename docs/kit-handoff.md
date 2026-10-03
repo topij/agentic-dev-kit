@@ -56,9 +56,9 @@ The exact-head watch receipt and authorized merge are recorded on #939.
 
 **Not established.** No live Linear write or cs-toolkit runtime validation was performed.
 cs-toolkit remains on `chore/kit-upgrade-2026-10-03` at
-`ac7203341f50b5e39f5fe6f7f758b8f7e439cdf5`, as supplied by the operator; its upgrade PR
-was held. This session changed only the kit. The new workstream assignment was not
-explicitly confirmed; it does not replace another workstream's starter.
+`ac7203341f50b5e39f5fe6f7f758b8f7e439cdf5`, as supplied by the operator; its local upgrade
+work was held pending these upstream fixes. This session changed only the kit.
+The new workstream assignment was not explicitly confirmed; it does not replace another workstream's starter.
 Workflow mistakes were recorded for accumulation in the friction inbox; no tracker write
 was made. Implementation follows the destination and approval decisions already recorded in #6;
 destination configuration, API credentials and exact live payload approval remain adopter actions.
@@ -370,7 +370,7 @@ The upstream validation record remains #919; the Linear acceptance record remain
 
 ▶ Next: In cs-toolkit, refresh the kit from `410108fb115a0bf063f737d9961b5ec4f68d641d`, reconcile its
 retirement helper with the completed-state contract, run `make check-root` and
-`make test-devkit`, then open the held upgrade PR and finish the remaining Codex runtime
+`make test-devkit`, then open an upgrade PR and finish the remaining Codex runtime
 validation. Install the declined triage engines following #939 with the Linear
 destination configuration and credentials. Obtain exact operator approval of each live
 tracker payload before its write; this kit session supplies no live-payload approval.
