@@ -16,6 +16,7 @@ ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
+from test_triage_providers import LINEAR_DESTINATION, LinearIssues, LinearTransport  # noqa: E402
 from triage import engine as triage_engine  # noqa: E402
 from triage.approval import ApprovalContext  # noqa: E402
 from triage.canonical import decode_bytes, digest, dumps, encode_bytes, loads_exact  # noqa: E402
@@ -80,6 +81,64 @@ def approval_for(state: dict, command: str = "approve all") -> dict:
         "command": command,
         "proposal_set_digest": proposal_set_digest,
     }
+
+
+def test_linear_approval_and_uncertain_create_resume_keep_frozen_authority(tmp_path, monkeypatch):
+    root = repository(tmp_path)
+    config = root / "config/dev-model.yaml"
+    text = config.read_text(encoding="utf-8")
+    for old, new in (
+        ("backend: github-issues", "backend: linear"),
+        ('project_name: "topij/agentic-dev-kit"', 'project_name: "Adopter"'),
+        ('url: "https://github.com/topij/agentic-dev-kit/issues"', 'url: "https://linear.app/w/project/p"'),
+        ('team_id: ""', 'team_id: "team"'), ('project_id: ""', 'project_id: "project"'),
+        ('label_name: ""', 'label_name: "bug"'),
+    ):
+        assert old in text
+        text = text.replace(old, new, 1)
+    config.write_text(text, encoding="utf-8")
+    git(root, "add", "config/dev-model.yaml")
+    git(root, "commit", "-m", "Linear fixture policy")
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    supplied = request(root)
+    supplied["proposals"][0]["project"] = "Adopter"
+    transport = LinearTransport()
+    def lost_create(query, variables):
+        if "TriageCreate(" in query:
+            transport.calls.append((query, variables))
+            raise TimeoutError("outcome unknown")
+        return transport(query, variables)
+    tracker = LinearIssues(transport=lost_create, sleep=lambda _: None)
+    drafted = run("new", context="interactive", request=supplied, start=root, tracker=tracker)
+    assert drafted["outcome"] == "operator-held"
+    assert transport.calls == []
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    presented = loads_exact(state_path.read_bytes())
+    frozen_path = Path(drafted["frozen_snapshot"])
+    frozen_bytes = frozen_path.read_bytes()
+    refused = run("resume", context="interactive", request={"approval": approval_for(presented)}, start=root,
+                  tracker=tracker, approval_context=approval_context(presented, operator="foreign"), head_authority=FakeForge([]))
+    assert refused["outcome"] == "operator-held"
+    assert transport.calls == []
+    held = run("resume", context="interactive", request={"approval": approval_for(presented)}, start=root,
+               tracker=tracker, approval_context=approval_context(presented), head_authority=FakeForge([]))
+    assert held["outcome"] == "operator-held"
+    retained = loads_exact(state_path.read_bytes())
+    assert retained["operations"][0]["status"] == "ambiguous"
+    assert retained["operations"][0]["destination"] == LINEAR_DESTINATION
+    creates = sum("TriageCreate(" in q for q, _ in transport.calls)
+    run("resume", context="interactive", request={}, start=root, tracker=tracker, head_authority=FakeForge([]))
+    assert sum("TriageCreate(" in q for q, _ in transport.calls) == creates
+    payload = retained["proposal_payloads"][0]["payload"]
+    transport.issues.append({"id": "issue", "identifier": "ADO-17", "url": "https://linear.app/w/issue/ADO-17",
+                            "title": payload["title"], "description": payload["body"], "team": {"id": "team"},
+                            "project": {"id": "project", "name": "Adopter"}, "labels": [{"id": "label", "name": "bug"}]})
+    resumed = run("resume", context="interactive", request={}, start=root, tracker=tracker, head_authority=FakeForge([]))
+    assert resumed["verified_tracker_identifiers"] == ["ADO-17"]
+    assert sum("TriageCreate(" in q for q, _ in transport.calls) == creates
+    assert frozen_path.read_bytes() == frozen_bytes
+    assert loads_exact(state_path.read_bytes())["proposal_payloads"] == presented["proposal_payloads"]
 
 
 def approval_context(state: dict, command: str = "approve all", operator: str = "operator") -> ApprovalContext:

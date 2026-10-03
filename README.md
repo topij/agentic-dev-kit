@@ -422,8 +422,11 @@ carried `true` now hard-stops rather than opening completed work as a draft. Blo
 on other fields can still be refused when its continuation resembles migrator-owned
 structure; normalize any refused value to an ordinary same-line form before retrying.
 
-The triage engines' tracker adapter covers GitHub Issues; see
-[issue #6](https://github.com/topij/agentic-dev-kit/issues/6) for other trackers.
+The triage engines cover GitHub Issues and Linear through `--enable-tracker`, selected
+from `tracker.backend`. Linear requires the configured team/project, exact approved
+labels and `LINEAR_API_KEY`; see the shared
+[engine CLI](docs/agentic-dev-kit/workflows/triage-friction-log.md#engine-cli)
+for setup and invocation. Other tracker backends remain unavailable.
 
 ## Parallel dev sessions
 

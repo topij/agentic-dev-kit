@@ -11,7 +11,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
 from .canonical import decode_bytes, digest, digest_bytes
 from .model import TriageError, terminal_pr_watch_receipt, worktree_conflicts_with_checkout
@@ -192,6 +194,212 @@ class GitHubIssues:
             return ProviderObservation("verified", response, exact[0], route)
         if result.returncode and not matches:
             return ProviderObservation("failed", response, {"matches": []})
+        return ProviderObservation("ambiguous", response, {"matches": matches})
+
+
+class LinearIssues:
+    """Linear GraphQL adapter; mutations are never retried without reconciliation."""
+
+    ENDPOINT = "https://api.linear.app/graphql"
+    READ_RETRY_DELAYS = (1.0, 2.0, 4.0)
+    CREATE_LISTING_RETRY_DELAYS = (1.0, 2.0, 4.0, 8.0)
+    PAGE_INFO = "pageInfo { hasNextPage endCursor }"
+    ISSUE_FIELDS = "id identifier url title description team { id } project { id name }"
+
+    def __init__(self, *, transport=None, sleep=time.sleep, api_key=None) -> None:
+        self.api_key = api_key if api_key is not None else os.environ.get("LINEAR_API_KEY")
+        self.transport = transport if transport is not None else self._http
+        self.sleep = sleep
+
+    def _http(self, query: str, variables: dict[str, Any]) -> Any:
+        if not isinstance(self.api_key, str) or not self.api_key.strip():
+            raise TriageError("set LINEAR_API_KEY for the selected Linear tracker", outcome="operator-held")
+        request = Request(self.ENDPOINT, data=json.dumps({"query": query, "variables": variables}).encode(),
+                          headers={"Authorization": self.api_key, "Content-Type": "application/json"}, method="POST")
+        with urlopen(request, timeout=30) as response:
+            return json.load(response)
+
+    def _query(self, query: str, variables: dict[str, Any], *, mutation: bool = False) -> dict:
+        delays = () if mutation else self.READ_RETRY_DELAYS
+        for attempt in range(len(delays) + 1):
+            retryable = False
+            try:
+                value = self.transport(query, variables)
+                if isinstance(value, dict) and not value.get("errors") and isinstance(value.get("data"), dict):
+                    return value["data"]
+                errors = value.get("errors") if isinstance(value, dict) else None
+                retryable = isinstance(errors, list) and bool(errors) and all(
+                    isinstance(e, dict) and isinstance(e.get("extensions"), dict)
+                    and e["extensions"].get("code") == "RATELIMITED"
+                    for e in errors
+                )
+            except HTTPError as exc:
+                retryable = exc.code == 429 or 500 <= exc.code < 600
+            except (URLError, TimeoutError, OSError):
+                retryable = True
+            except (ValueError, TypeError):
+                pass
+            if not retryable or attempt == len(delays):
+                # Transport bodies and exception text may carry credentials or
+                # private response content; durable state gets only this verdict.
+                raise TriageError("Linear API response is unavailable or incomplete", outcome="operator-held")
+            self.sleep(delays[attempt])
+        raise AssertionError("unreachable retry state")
+
+    def _pages(self, query: str, variables: dict, select) -> list[dict]:
+        items = []
+        cursor = None
+        seen = set()
+        ids = set()
+        while True:
+            connection = select(self._query(query, {**variables, "cursor": cursor}))
+            if not isinstance(connection, dict):
+                raise TriageError("Linear connection is missing", outcome="operator-held")
+            info, nodes = connection.get("pageInfo"), connection.get("nodes")
+            if not isinstance(info, dict) or not isinstance(info.get("hasNextPage"), bool) or not isinstance(nodes, list):
+                raise TriageError("Linear pagination is incomplete", outcome="operator-held")
+            for node in nodes:
+                if not isinstance(node, dict) or not isinstance(node.get("id"), str) or not node["id"] or node["id"] in ids:
+                    raise TriageError("Linear page identity is malformed or repeated", outcome="operator-held")
+                ids.add(node["id"])
+                items.append(node)
+            if not info["hasNextPage"]:
+                return items
+            cursor = info.get("endCursor")
+            if not isinstance(cursor, str) or not cursor or cursor in seen:
+                raise TriageError("Linear pagination cursor is missing or repeated", outcome="operator-held")
+            seen.add(cursor)
+
+    @staticmethod
+    def _destination(destination: dict) -> None:
+        if destination.get("backend") != "linear" or destination.get("host") != "linear.app":
+            raise TriageError("unsupported Linear destination", outcome="operator-held")
+        for name in ("team_id", "project_id", "project"):
+            if not isinstance(destination.get(name), str) or not destination[name].strip():
+                raise TriageError(f"Linear destination lacks {name}", outcome="operator-held")
+        if not isinstance(destination.get("label_name"), str):
+            raise TriageError("Linear label policy is invalid", outcome="operator-held")
+
+    def _project(self, destination: dict) -> None:
+        self._destination(destination)
+        query = "query TriageProject($id: String!) { project(id: $id) { id name } }"
+        project = self._query(query, {"id": destination["project_id"]}).get("project")
+        if project != {"id": destination["project_id"], "name": destination["project"]}:
+            raise TriageError("Linear project read-back mismatch", outcome="operator-held")
+        query = ("query TriageProjectTeams($id: String!, $cursor: String) { project(id: $id) { "
+                 f"teams(first: 100, after: $cursor) {{ {self.PAGE_INFO} nodes {{ id }} }} }} }}")
+        teams = self._pages(query, {"id": destination["project_id"]}, lambda d: (d.get("project") or {}).get("teams"))
+        if destination["team_id"] not in [t["id"] for t in teams]:
+            raise TriageError("Linear project is outside the configured team", outcome="operator-held")
+
+    def list_labels(self, destination: dict) -> list[dict]:
+        self._destination(destination)
+        query = ("query TriageLabels($filter: IssueLabelFilter, $cursor: String) { "
+                 f"issueLabels(filter: $filter, first: 100, after: $cursor) {{ {self.PAGE_INFO} "
+                 "nodes { id name isGroup team { id } } } }")
+        variables = {"filter": {"or": [{"team": {"id": {"eq": destination["team_id"]}}}, {"team": {"null": True}}]}}
+        labels = self._pages(query, variables, lambda d: d.get("issueLabels"))
+        for label in labels:
+            team = label.get("team")
+            if (not isinstance(label.get("name"), str) or not label["name"]
+                    or not isinstance(label.get("isGroup"), bool)
+                    or (team is not None and team != {"id": destination["team_id"]})):
+                raise TriageError("Linear label read-back mismatch", outcome="operator-held")
+        return labels
+
+    def _read_issue(self, destination: dict, iid: str, marker: str) -> dict:
+        query = f"query TriageIssue($id: String!) {{ issue(id: $id) {{ {self.ISSUE_FIELDS} }} }}"
+        issue = self._query(query, {"id": iid}).get("issue")
+        if (not isinstance(issue, dict) or issue.get("id") != iid
+                or issue.get("team") != {"id": destination["team_id"]}
+                or issue.get("project") != {"id": destination["project_id"], "name": destination["project"]}
+                or not isinstance(issue.get("identifier"), str) or not issue["identifier"]
+                or not isinstance(issue.get("url"), str) or urlparse(issue["url"]).hostname != "linear.app"
+                or urlparse(issue["url"]).scheme != "https"
+                or not isinstance(issue.get("title"), str)
+                or not isinstance(issue.get("description"), str) or issue["description"].count(marker) != 1):
+            raise TriageError("Linear issue identity, marker or destination read-back mismatch", outcome="operator-held")
+        query = ("query TriageIssueLabels($id: String!, $cursor: String) { issue(id: $id) { "
+                 f"labels(first: 100, after: $cursor) {{ {self.PAGE_INFO} nodes {{ id name }} }} }} }}")
+        labels = self._pages(query, {"id": iid}, lambda d: (d.get("issue") or {}).get("labels"))
+        names = [label.get("name") for label in labels]
+        if any(not isinstance(n, str) or not n for n in names) or len(names) != len(set(names)):
+            raise TriageError("Linear issue label read-back is ambiguous", outcome="operator-held")
+        payload = {"title": issue["title"], "body": issue["description"], "project": issue["project"]["name"], "labels": sorted(names)}
+        return {"id": iid, "identifier": issue["identifier"], "url": issue["url"], "payload": payload,
+                "payload_digest": digest(payload), "marker": marker, "destination": destination}
+
+    def search(self, destination: dict, marker: str) -> list[dict]:
+        self._project(destination)
+        if not isinstance(marker, str) or not marker or marker.count("triage-payload:") != 1:
+            raise TriageError("invalid tracker marker", outcome="operator-held")
+        # Include archived issues so a past issue cannot disappear from dedup.
+        query = ("query TriageIssues($filter: IssueFilter, $cursor: String) { "
+                 f"issues(filter: $filter, includeArchived: true, first: 100, after: $cursor) {{ {self.PAGE_INFO} "
+                 "nodes { id description } } }")
+        issues = self._pages(query, {"filter": {"project": {"id": {"eq": destination["project_id"]}}}}, lambda d: d.get("issues"))
+        matches = []
+        for issue in issues:
+            body = issue.get("description")
+            if body is not None and not isinstance(body, str):
+                raise TriageError("Linear issue listing is malformed", outcome="operator-held")
+            if isinstance(body, str) and marker in body:
+                matches.append(self._read_issue(destination, issue["id"], marker))
+        return matches
+
+    def create(self, destination: dict, payload: dict) -> ProviderObservation:
+        self._project(destination)
+        if payload.get("project") != destination["project"]:
+            raise TriageError("approved Linear project differs from configured destination", outcome="operator-held")
+        label_names = payload.get("labels")
+        required = destination["label_name"]
+        if (not isinstance(label_names, list) or any(not isinstance(n, str) or not n for n in label_names)
+                or len(label_names) != len(set(label_names)) or (required and required not in label_names)):
+            raise TriageError("approved Linear labels do not satisfy configured policy", outcome="operator-held")
+        labels = self.list_labels(destination)
+        label_ids = []
+        for name in label_names:
+            choices = [label for label in labels if label["name"] == name and not label["isGroup"]]
+            if len(choices) != 1:
+                raise TriageError("approved Linear label is missing or ambiguous", outcome="operator-held")
+            label_ids.append(choices[0]["id"])
+        body = payload.get("body")
+        markers = [line for line in body.splitlines() if "triage-payload:" in line] if isinstance(body, str) else []
+        if len(markers) != 1 or body.count(markers[0]) != 1:
+            raise TriageError("approved Linear marker is missing or ambiguous", outcome="operator-held")
+        marker = markers[0]
+        prior = self.search(destination, marker)
+        if prior:
+            exact = len(prior) == 1 and prior[0]["payload_digest"] == digest(payload)
+            return ProviderObservation("verified" if exact else "ambiguous", None,
+                                       prior[0] if exact else {"matches": prior}, "pre-existing-exact-match" if exact else None)
+        query = "mutation TriageCreate($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { id identifier } } }"
+        inputs = {"teamId": destination["team_id"], "projectId": destination["project_id"],
+                  "title": payload["title"], "description": body, "labelIds": label_ids}
+        response = None
+        failed = False
+        try:
+            response = self._query(query, {"input": inputs}, mutation=True).get("issueCreate")
+        except TriageError:
+            failed = True
+            response = {"error": "create outcome unknown"}
+        returned_issue = response.get("issue") if isinstance(response, dict) else None
+        returned = returned_issue.get("identifier") if isinstance(returned_issue, dict) else None
+        returned_id = returned_issue.get("id") if isinstance(returned_issue, dict) else None
+        success = isinstance(response, dict) and response.get("success") is True
+        matches = self.search(destination, marker)
+        for delay in self.CREATE_LISTING_RETRY_DELAYS:
+            visible = any(m["identifier"] == returned for m in matches) if returned else bool(matches)
+            if visible:
+                break
+            self.sleep(delay)
+            matches = self.search(destination, marker)
+        exact = [m for m in matches if m["payload_digest"] == digest(payload)]
+        if (len(matches) == 1 and len(exact) == 1
+                and (returned is None or returned == exact[0]["identifier"])
+                and (returned_id is None or returned_id == exact[0]["id"])):
+            route = "failed-response-then-exact-read-back" if failed else "created-and-read-back" if success and returned else "ambiguous-response-then-exact-read-back"
+            return ProviderObservation("verified", response, exact[0], route)
         return ProviderObservation("ambiguous", response, {"matches": matches})
 
 

@@ -48,6 +48,31 @@ class TriageError(RuntimeError):
         self.outcome = outcome
 
 
+def tracker_destination(tracker: dict[str, Any]) -> dict[str, Any]:
+    destination = {
+        "backend": tracker.get("backend"),
+        "host": urlparse(str(tracker.get("url", ""))).hostname,
+        "repository": tracker.get("project_name"),
+        "project": tracker.get("project_name"),
+    }
+    if destination["backend"] == "linear":
+        linear = tracker.get("linear")
+        if not isinstance(linear, dict):
+            raise TriageError("tracker.linear must be a mapping", outcome="operator-held")
+        for key in ("team_id", "project_id"):
+            value = linear.get(key)
+            if not isinstance(value, str) or not value.strip():
+                raise TriageError(f"tracker.linear.{key} is required", outcome="operator-held")
+            destination[key] = value
+        label = linear.get("label_name", "")
+        if not isinstance(label, str):
+            raise TriageError("tracker.linear.label_name must be a string", outcome="operator-held")
+        destination["label_name"] = label
+        if destination["host"] != "linear.app" or not isinstance(destination["project"], str) or not destination["project"]:
+            raise TriageError("Linear requires tracker.url on linear.app and project_name", outcome="operator-held")
+    return destination
+
+
 @dataclass(frozen=True)
 class Paths:
     repo: Path
@@ -626,12 +651,7 @@ def validate_state(value: Any, *, settings: Settings, mode: str, retiring: bool 
         proposal_by_candidate = {
             item["candidate_id"]: item for item in proposals or []
         }
-        configured_destination = {
-            "backend": settings.tracker.get("backend"),
-            "host": urlparse(str(settings.tracker.get("url", ""))).hostname,
-            "repository": settings.tracker.get("project_name"),
-            "project": settings.tracker.get("project_name"),
-        }
+        configured_destination = tracker_destination(settings.tracker)
         for operation in operations:
             if not isinstance(operation, dict):
                 raise TriageError("tracker operation has the wrong shape", outcome="operator-held")

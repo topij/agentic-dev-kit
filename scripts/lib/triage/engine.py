@@ -36,6 +36,7 @@ from .model import (
     state_base,
     terminal_pr_watch_receipt,
     today_string,
+    tracker_destination,
     validate_state,
     validate_sweep_cleanup,
 )
@@ -978,8 +979,7 @@ def _advance_tracker_batch(
     capabilities: dict[str, dict[str, str]],
     tracker: TrackerProvider,
 ) -> tuple[dict[str, Any], str, str]:
-    tracker_host = urlparse(str(settings.tracker.get("url", ""))).hostname
-    destination = {"backend": settings.tracker.get("backend"), "host": tracker_host, "repository": settings.tracker.get("project_name"), "project": settings.tracker.get("project_name")}
+    destination = tracker_destination(settings.tracker)
     operations: list[dict[str, Any]] = deepcopy(writing.get("operations", []))
     proposals = {proposal["candidate_id"]: proposal for proposal in writing["proposal_payloads"]}
     filed = [decision for decision in writing["decisions"] if decision["decision"] == "file"]

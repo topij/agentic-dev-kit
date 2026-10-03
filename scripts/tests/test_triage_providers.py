@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -17,10 +19,227 @@ from datetime import date  # noqa: E402
 
 from triage.canonical import digest  # noqa: E402
 from triage.model import TriageError  # noqa: E402
-from triage.providers import GitHubForge, GitHubIssues  # noqa: E402
+from triage.providers import GitHubForge, GitHubIssues, LinearIssues  # noqa: E402
 
 DESTINATION = {"backend": "github-issues", "host": "github.com", "repository": "owner/repo", "project": "owner/repo"}
 MARKER = "<!-- triage-payload:session:TRI-01:" + "a" * 64 + " -->"
+
+LINEAR_DESTINATION = {"backend": "linear", "host": "linear.app", "repository": "Adopter",
+                      "project": "Adopter", "team_id": "team", "project_id": "project", "label_name": "bug"}
+
+
+class LinearTransport:
+    def __init__(self):
+        self.calls = []
+        self.issues = []
+        self.labels = [{"id": "label", "name": "bug", "isGroup": False, "team": {"id": "team"}}]
+        self.fault = None
+        self.lag = 0
+
+    def page(self, nodes, variables):
+        start = int(variables.get("cursor") or 0)
+        # A deliberately short page with hasNextPage exercises cursor authority.
+        more = start + 1 < len(nodes)
+        return {"nodes": nodes[start:start + 1],
+                "pageInfo": {"hasNextPage": more, "endCursor": str(start + 1) if more else None}}
+
+    def __call__(self, query, variables):
+        self.calls.append((query, variables))
+        if "TriageProjectTeams(" in query:
+            result = {"project": {"teams": self.page([{"id": "other"}, {"id": "team"}], variables)}}
+        elif "TriageProject(" in query:
+            result = {"project": {"id": "project", "name": "Adopter"}}
+        elif "TriageLabels(" in query:
+            result = {"issueLabels": self.page(self.labels, variables)}
+        elif "TriageIssueLabels(" in query:
+            issue = next(i for i in self.issues if i["id"] == variables["id"])
+            result = {"issue": {"labels": self.page(issue["labels"], variables)}}
+        elif "TriageIssue(" in query:
+            result = {"issue": {k: v for k, v in next(i for i in self.issues if i["id"] == variables["id"]).items() if k != "labels"}}
+        elif "TriageIssues(" in query:
+            assert "includeArchived: true" in query
+            nodes = [{"id": i["id"], "description": i["description"]} for i in self.issues]
+            if self.lag:
+                self.lag -= 1
+                nodes = []
+            result = {"issues": self.page(nodes, variables)}
+        elif "TriageCreate(" in query:
+            item = variables["input"]
+            assert item["teamId"] == "team" and item["projectId"] == "project"
+            assert item["labelIds"] == ["label"]
+            self.issues.append({"id": "issue", "identifier": "ADO-17", "url": "https://linear.app/w/issue/ADO-17",
+                                "title": item["title"], "description": item["description"],
+                                "team": {"id": item["teamId"]}, "project": {"id": item["projectId"], "name": "Adopter"},
+                                "labels": [{"id": "label", "name": "bug"}]})
+            if self.fault == "timeout":
+                raise TimeoutError("create response lost")
+            if self.fault == "duplicate":
+                self.issues.append({**self.issues[-1], "id": "duplicate", "identifier": "ADO-18"})
+            result = {"issueCreate": {"success": True, "issue": {"id": "issue", "identifier": "ADO-17"}}}
+        else:
+            raise AssertionError(query)
+        return {"data": result}
+
+
+def linear_payload():
+    return {"title": "title", "body": "body\n" + MARKER, "project": "Adopter", "labels": ["bug"]}
+
+
+def test_linear_create_readback_paginates_team_labels_and_issues():
+    transport = LinearTransport()
+    transport.labels.insert(0, {"id": "unrelated", "name": "other", "isGroup": False, "team": None})
+    transport.issues.append({"id": "old", "description": "unrelated"})
+    slept = []
+    tracker = LinearIssues(transport=transport, sleep=slept.append)
+    observed = tracker.create(LINEAR_DESTINATION, linear_payload())
+    assert observed.status == "verified"
+    assert observed.verified_route == "created-and-read-back"
+    assert observed.read_back["payload"] == linear_payload()
+    assert observed.read_back["identifier"] == "ADO-17"
+    assert any("TriageLabels(" in q and v["cursor"] == "1" for q, v in transport.calls)
+    assert any("TriageIssues(" in q and v["cursor"] == "1" for q, v in transport.calls)
+    assert slept == []
+    before = sum("TriageCreate(" in q for q, _ in transport.calls)
+    assert tracker.create(LINEAR_DESTINATION, linear_payload()).verified_route == "pre-existing-exact-match"
+    assert sum("TriageCreate(" in q for q, _ in transport.calls) == before
+
+
+@pytest.mark.parametrize("fault, status", [("timeout", "verified"), ("duplicate", "ambiguous")])
+def test_linear_uncertain_create_never_retries_mutation(fault, status):
+    transport = LinearTransport()
+    transport.fault = fault
+    observed = LinearIssues(transport=transport, sleep=lambda _: None).create(LINEAR_DESTINATION, linear_payload())
+    assert observed.status == status
+    assert sum("TriageCreate(" in q for q, _ in transport.calls) == 1
+    if fault == "timeout":
+        assert observed.verified_route == "failed-response-then-exact-read-back"
+
+
+def test_linear_create_waits_for_listing_visibility():
+    transport = LinearTransport()
+    original = transport.__call__
+    def lagged(query, variables):
+        result = original(query, variables)
+        if "TriageCreate(" in query:
+            transport.lag = 2
+        return result
+    slept = []
+    observed = LinearIssues(transport=lagged, sleep=slept.append).create(LINEAR_DESTINATION, linear_payload())
+    assert observed.status == "verified"
+    assert slept == [1.0, 2.0]
+
+
+@pytest.mark.parametrize("fault", ["cursor", "pageinfo", "team", "labels", "marker", "project"])
+def test_linear_incomplete_or_wrong_readback_fails_closed(fault):
+    transport = LinearTransport()
+    tracker = LinearIssues(transport=transport, sleep=lambda _: None)
+    tracker.create(LINEAR_DESTINATION, linear_payload())
+    original = transport.__call__
+    def altered(query, variables):
+        value = original(query, variables)
+        if "TriageIssues(" in query and fault in {"cursor", "pageinfo"}:
+            connection = value["data"]["issues"]
+            connection["pageInfo"] = {"hasNextPage": True, "endCursor": None} if fault == "cursor" else {}
+        if "TriageIssue(" in query:
+            issue = value["data"]["issue"]
+            if fault == "team":
+                issue["team"] = {"id": "foreign"}
+            elif fault == "project":
+                issue["project"] = {"id": "foreign", "name": "Adopter"}
+            elif fault == "marker":
+                issue["description"] += "\n" + MARKER
+        if "TriageIssueLabels(" in query and fault == "labels":
+            value["data"]["issue"]["labels"]["nodes"] = [{"id": "label", "name": None}]
+        return value
+    with pytest.raises(TriageError):
+        LinearIssues(transport=altered).search(LINEAR_DESTINATION, MARKER)
+
+
+def test_linear_read_retries_are_bounded_and_partial_data_is_refused():
+    calls = []
+    slept = []
+    def timed_out(query, variables):
+        calls.append(query)
+        raise TimeoutError("unavailable")
+    tracker = LinearIssues(transport=timed_out, sleep=slept.append)
+    with pytest.raises(TriageError):
+        tracker.search(LINEAR_DESTINATION, MARKER)
+    assert slept == list(tracker.READ_RETRY_DELAYS)
+    assert len(calls) == len(slept) + 1
+    tracker = LinearIssues(transport=lambda *_: {"data": {"project": {}}, "errors": [{"message": "partial"}]})
+    with pytest.raises(TriageError):
+        tracker.search(LINEAR_DESTINATION, MARKER)
+
+
+@pytest.mark.parametrize("labels", [[], ["missing"], ["bug", "bug"]])
+def test_linear_label_policy_never_changes_approved_payload(labels):
+    transport = LinearTransport()
+    payload = {**linear_payload(), "labels": labels}
+    with pytest.raises(TriageError):
+        LinearIssues(transport=transport).create(LINEAR_DESTINATION, payload)
+    assert not any("TriageCreate(" in q for q, _ in transport.calls)
+    assert payload["labels"] == labels
+
+
+def test_linear_missing_credential_and_http_timeout(monkeypatch):
+    import triage.providers as providers
+    monkeypatch.delenv("LINEAR_API_KEY", raising=False)
+    with pytest.raises(TriageError, match="LINEAR_API_KEY"):
+        LinearIssues()._http("query", {})
+    captured = []
+    def timed_out(request, *, timeout):
+        captured.append((request, timeout))
+        raise TimeoutError("read timed out")
+    monkeypatch.setattr(providers, "urlopen", timed_out)
+    slept = []
+    tracker = LinearIssues(api_key="private-key", sleep=slept.append)
+    with pytest.raises(TriageError) as error:
+        tracker.search(LINEAR_DESTINATION, MARKER)
+    assert "private-key" not in str(error.value)
+    assert all(timeout == 30 for _, timeout in captured)
+    assert captured[0][0].get_header("Authorization") == "private-key"
+    assert json.loads(captured[0][0].data)["variables"] == {"id": "project"}
+    assert slept == list(tracker.READ_RETRY_DELAYS)
+
+
+def test_linear_rate_limit_retry_then_success():
+    transport = LinearTransport()
+    slept = []
+    calls = []
+    def throttled(query, variables):
+        calls.append(query)
+        if len(calls) == 1:
+            return {"data": {}, "errors": [{"extensions": {"code": "RATELIMITED"}}]}
+        return transport(query, variables)
+    assert LinearIssues(transport=throttled, sleep=slept.append).search(LINEAR_DESTINATION, MARKER) == []
+    assert slept == [1.0]
+
+
+@pytest.mark.parametrize("backend, flag, expected", [
+    ("linear", "--enable-tracker", LinearIssues),
+    ("github-issues", "--enable-tracker", GitHubIssues),
+    ("github-issues", "--enable-github-tracker", GitHubIssues),
+])
+def test_cli_selects_tracker_from_merged_settings(monkeypatch, tmp_path, backend, flag, expected):
+    spec = importlib.util.spec_from_file_location("triage_cli_selection", ENGINE_DIR / "triage_friction_log.py")
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    settings = SimpleNamespace(tracker={"backend": backend}, paths=SimpleNamespace(repo=tmp_path, engine_dir=ENGINE_DIR))
+    monkeypatch.setattr(cli, "load_settings", lambda _: settings)
+    observed = []
+    def run(*args, **kwargs):
+        observed.append(kwargs["tracker"])
+        return {"outcome": "operator-held"}
+    monkeypatch.setattr(cli, "run", run)
+    assert cli.main(["resume", flag]) == 0
+    assert isinstance(observed[0], expected)
+
+
+def test_cli_rejects_conflicting_tracker_flags():
+    spec = importlib.util.spec_from_file_location("triage_cli_flags", ENGINE_DIR / "triage_friction_log.py")
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    assert cli.main(["--enable-tracker", "--enable-github-tracker"]) == 2
 
 
 class Runner:

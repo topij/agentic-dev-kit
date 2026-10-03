@@ -1301,8 +1301,34 @@ not exist yet. The first continuation holds a path inside the checkout, such as 
 `.claude/worktrees/` directory, or one containing it, operator-held before the branch or
 worktree is created.
 
-External adapters are disabled unless selected explicitly. `--enable-github-tracker`
-permits only approved GitHub Issues transitions. Because GitHub's issue list lags a fresh
+External adapters are disabled unless selected explicitly. `--enable-tracker` selects
+`github-issues` or `linear` from the merged `tracker.backend`; unsupported backends stop.
+`--enable-github-tracker` remains a GitHub-only compatibility flag; the flags are mutually
+exclusive. Selection enables only exactly approved payload transitions.
+
+For Linear, set `tracker.project_name` to the project's exact name, `tracker.url` to its
+`https://linear.app/...` URL, and `tracker.linear.team_id` and `project_id` to the model
+UUIDs. A nonempty `tracker.linear.label_name` must appear in each approved payload's
+labels; the adapter never adds labels to an approved payload. Label names resolve to
+unique non-group labels in the configured team or workspace. Missing or ambiguous labels
+hold the transition. Export a personal API key as `LINEAR_API_KEY` in the invoking
+environment; do not put it in tracked config or request JSON. Both Codex and Claude invoke
+the same engine beneath `paths.engines`, for example:
+
+```sh
+uv run <engine-dir>/triage_friction_log.py resume --enable-tracker --request <canonical-request.json> --approval-context <attested-context.json>
+```
+
+The adapter checks project/team membership, pages issue and label connections to
+completion, includes archived issues in marker searches, and reads matched issues back
+individually. Every payload field and destination must match. Network errors, partial
+GraphQL data and unusable cursors hold the transition. Read retries and post-create
+visibility retries are bounded; the create mutation is never automatically retried.
+An uncertain create remains retained for marker reconciliation on resume. An empty
+search after an uncertain create is not permission to create again. Authentication and
+API conventions follow [Linear's API guide](https://linear.app/developers/graphql).
+
+Because GitHub's issue list lags a fresh
 create, that adapter re-reads the list on a short bounded backoff after a successful
 create until the list shows the issue the response names, then judges the marker
 matches exactly as before; a list that never shows it leaves the create ambiguous.
