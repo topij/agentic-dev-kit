@@ -50,10 +50,12 @@ class LinearTransport:
         elif "TriageProject(" in query:
             result = {"project": {"id": "project", "name": "Adopter"}}
         elif "TriageLabels(" in query:
-            result = {"issueLabels": self.page(self.labels, variables)}
+            labels = [label for label in self.labels if not label.get("archived") or "includeArchived: true" in query]
+            result = {"issueLabels": self.page(labels, variables)}
         elif "TriageIssueLabels(" in query:
             issue = next(i for i in self.issues if i["id"] == variables["id"])
-            labels = [{"id": label["id"], "name": label["name"]} for label in issue["labels"]
+            labels = [{"id": label["id"], "name": label["name"], "isGroup": label.get("isGroup", False),
+                       "team": label.get("team", {"id": "team"})} for label in issue["labels"]
                       if not label.get("archived") or "includeArchived: true" in query]
             result = {"issue": {"labels": self.page(labels, variables)}}
         elif "TriageIssue(" in query:
@@ -121,7 +123,8 @@ def test_linear_uncertain_create_never_retries_mutation(fault, status):
 def test_linear_archived_extra_label_cannot_verify_approved_payload(timing):
     transport = LinearTransport()
     tracker = LinearIssues(transport=transport, sleep=lambda _: None)
-    extra = {"id": "hidden", "name": "unapproved-archived", "archived": True}
+    extra = {"id": "hidden", "name": "unapproved-archived", "archived": True, "isGroup": False, "team": None}
+    transport.labels.append(extra)
     if timing == "existing":
         assert tracker.create(LINEAR_DESTINATION, linear_payload()).status == "verified"
         transport.issues[0]["labels"].append(extra)
@@ -137,6 +140,51 @@ def test_linear_archived_extra_label_cannot_verify_approved_payload(timing):
     assert observed.verified_route is None
     assert observed.read_back["matches"][0]["payload"]["labels"] == ["bug", "unapproved-archived"]
     assert sum("TriageCreate(" in query for query, _ in transport.calls) == 1
+
+
+
+@pytest.mark.parametrize("timing", ["existing", "created"])
+@pytest.mark.parametrize("fault", ["foreign-team", "wrong-id", "group", "scope-mismatch", "ambiguous-name"])
+def test_linear_label_readback_requires_resolved_identity_and_scope(timing, fault):
+    transport = LinearTransport()
+    tracker = LinearIssues(transport=transport, sleep=lambda _: None)
+    def corrupt():
+        label = transport.issues[0]["labels"][0]
+        if fault == "foreign-team":
+            label.update(id="foreign", team={"id": "foreign-team"})
+        elif fault == "wrong-id":
+            label["id"] = "not-the-resolved-label"
+        elif fault == "group":
+            label["isGroup"] = True
+        elif fault == "scope-mismatch":
+            label["team"] = None
+        else:
+            transport.labels.append({"id": "duplicate", "name": "bug", "isGroup": False, "team": None, "archived": True})
+    if timing == "existing":
+        assert tracker.create(LINEAR_DESTINATION, linear_payload()).status == "verified"
+        corrupt()
+        with pytest.raises(TriageError, match="label identity or scope"):
+            tracker.create(LINEAR_DESTINATION, linear_payload())
+    else:
+        def altered(query, variables):
+            result = transport(query, variables)
+            if "TriageCreate(" in query:
+                corrupt()
+            return result
+        with pytest.raises(TriageError, match="label identity or scope"):
+            LinearIssues(transport=altered, sleep=lambda _: None).create(LINEAR_DESTINATION, linear_payload())
+    assert sum("TriageCreate(" in query for query, _ in transport.calls) == 1
+
+
+def test_linear_workspace_label_readback_is_valid():
+    transport = LinearTransport()
+    transport.labels[0]["team"] = None
+    def workspace_label(query, variables):
+        result = transport(query, variables)
+        if "TriageCreate(" in query:
+            transport.issues[0]["labels"][0]["team"] = None
+        return result
+    assert LinearIssues(transport=workspace_label, sleep=lambda _: None).create(LINEAR_DESTINATION, linear_payload()).status == "verified"
 
 
 def test_linear_create_waits_for_listing_visibility():

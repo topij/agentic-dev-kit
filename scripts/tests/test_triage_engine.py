@@ -189,6 +189,37 @@ def test_linear_approval_and_uncertain_create_resume_keep_frozen_authority(tmp_p
     assert loads_exact(state_path.read_bytes())["proposal_payloads"] == presented["proposal_payloads"]
 
 
+
+def test_malformed_linear_tracker_url_is_controlled_and_releases_gate(tmp_path, monkeypatch):
+    fixture = Path(__file__).parent / "fixtures/init-config.json"
+    text = "\n".join(json.loads(fixture.read_text(encoding="utf-8"))) + "\n"
+    for old, new in (("backend: github-issues", "backend: linear"),
+                     ('project_name: "topij/agentic-dev-kit"', 'project_name: "Adopter"'),
+                     ('url: "https://github.com/topij/agentic-dev-kit/issues"', 'url: "https://["'),
+                     ('team_id: ""', 'team_id: "team"'), ('project_id: ""', 'project_id: "project"')):
+        assert old in text
+        text = text.replace(old, new, 1)
+    root = repository(tmp_path, config_text=text)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    supplied = request(root)
+    supplied["proposals"][0]["project"] = "Adopter"
+    transport = LinearTransport()
+    tracker = LinearIssues(transport=transport, sleep=lambda _: None)
+    drafted = run("new", context="interactive", request=supplied, start=root, tracker=tracker)
+    assert drafted["outcome"] == "operator-held"
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    presented = loads_exact(state_path.read_bytes())
+    frozen = Path(drafted["frozen_snapshot"]).read_bytes()
+    held = run("resume", context="interactive", request={"approval": approval_for(presented)}, start=root,
+               tracker=tracker, approval_context=approval_context(presented), head_authority=FakeForge([]))
+    assert held["outcome"] == "operator-held" and "tracker.url is malformed" in held["detail"]
+    assert not (state_root / "triage/triage-pipeline-gate_live.lock").exists()
+    assert transport.calls == []
+    assert Path(drafted["frozen_snapshot"]).read_bytes() == frozen
+    assert loads_exact(state_path.read_bytes())["proposal_payloads"] == presented["proposal_payloads"]
+
+
 def approval_context(state: dict, command: str = "approve all", operator: str = "operator") -> ApprovalContext:
     proposal_set_digest = digest(state["proposal_payload_digests"])
     return ApprovalContext(

@@ -49,9 +49,13 @@ class TriageError(RuntimeError):
 
 
 def tracker_destination(tracker: dict[str, Any]) -> dict[str, Any]:
+    try:
+        host = urlparse(str(tracker.get("url", ""))).hostname
+    except ValueError as exc:
+        raise TriageError("tracker.url is malformed", outcome="operator-held") from exc
     destination = {
         "backend": tracker.get("backend"),
-        "host": urlparse(str(tracker.get("url", ""))).hostname,
+        "host": host,
         "repository": tracker.get("project_name"),
         "project": tracker.get("project_name"),
     }

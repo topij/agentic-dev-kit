@@ -1321,7 +1321,9 @@ uv run <engine-dir>/triage_friction_log.py resume --enable-tracker --request <ca
 
 The adapter checks project/team membership, pages issue and label connections to
 completion, includes archived issues in marker searches, and reads matched issues back
-individually. Every payload field and destination must match. Network errors, partial
+individually. Applied label IDs, group state and team/workspace scope must match the
+paginated allowed label catalog, including archived labels. Ambiguous name resolution
+holds the transition. Every payload field and destination must match. Network errors, partial
 GraphQL data and unusable cursors hold the transition. Read retries and post-create
 visibility retries are bounded; the create mutation is never automatically retried.
 An uncertain create remains retained for marker reconciliation on resume. An empty

@@ -307,10 +307,10 @@ class LinearIssues:
         if destination["team_id"] not in [t["id"] for t in teams]:
             raise TriageError("Linear project is outside the configured team", outcome="operator-held")
 
-    def list_labels(self, destination: dict) -> list[dict]:
+    def list_labels(self, destination: dict, *, include_archived: bool = False) -> list[dict]:
         self._destination(destination)
         query = ("query TriageLabels($filter: IssueLabelFilter, $cursor: String) { "
-                 f"issueLabels(filter: $filter, first: 100, after: $cursor) {{ {self.PAGE_INFO} "
+                 f"issueLabels(filter: $filter, includeArchived: {str(include_archived).lower()}, first: 100, after: $cursor) {{ {self.PAGE_INFO} "
                  "nodes { id name isGroup team { id } } } }")
         variables = {"filter": {"or": [{"team": {"id": {"eq": destination["team_id"]}}}, {"team": {"null": True}}]}}
         labels = self._pages(query, variables, lambda d: d.get("issueLabels"))
@@ -342,8 +342,14 @@ class LinearIssues:
         # Archived labels are still payload evidence; hiding one could verify
         # an issue carrying an extra label the operator never approved.
         query = ("query TriageIssueLabels($id: String!, $cursor: String) { issue(id: $id) { "
-                 f"labels(includeArchived: true, first: 100, after: $cursor) {{ {self.PAGE_INFO} nodes {{ id name }} }} }} }}")
+                 f"labels(includeArchived: true, first: 100, after: $cursor) {{ {self.PAGE_INFO} nodes {{ id name isGroup team {{ id }} }} }} }} }}")
         labels = self._pages(query, {"id": iid}, lambda d: d["issue"].get("labels") if isinstance(d.get("issue"), dict) else None)
+        allowed = self.list_labels(destination, include_archived=True) if labels else []
+        for label in labels:
+            choices = [item for item in allowed if item["name"] == label.get("name") and not item["isGroup"]]
+            if (len(choices) != 1 or label["id"] != choices[0]["id"]
+                    or label.get("isGroup") is not False or label.get("team") != choices[0]["team"]):
+                raise TriageError("Linear issue label identity or scope read-back mismatch", outcome="operator-held")
         names = [label.get("name") for label in labels]
         if any(not isinstance(n, str) or not n for n in names) or len(names) != len(set(names)):
             raise TriageError("Linear issue label read-back is ambiguous", outcome="operator-held")
