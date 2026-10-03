@@ -27,7 +27,8 @@
 ## 2026-10-03
 
 Parked rather than filed: this wrap-up ran with no operator present, so no tracker
-payload could be approved. The first two carry a drafted payload.
+payload could be approved. The first two carried a drafted payload, and were filed afterwards on
+the operator's approval, as each one's annotation says.
 
 - **The matrix guard's LOW residue from #923's last delta pass.** Severity L.
   - **Observed** in #923's last delta pass at `f60b530`; its disposition there names the
@@ -46,7 +47,7 @@ payload could be approved. The first two carry a drafted payload.
     control per pattern branch named; leave the unparsed forms out of the claim, which
     already names the parsed forms only.
   - **Drafted title:** "Matrix guard: tilde fences, unpinned link-pattern branches, and
-    the link forms it does not parse".
+    the link forms it does not parse". **Filed as #925** on the operator's approval, with an added "Related: #216" line.
 - **#919's tracker body does not scope the row audit the records now assign to it.**
   Severity M. The handoff, the exit record and the plan pointer all name #919 as the
   owner of "which matrix rows' claims are true". Read on 2026-10-03, #919's body
@@ -57,6 +58,7 @@ payload could be approved. The first two carry a drafted payload.
   `saved_plans/phase6-exit-check_2026-10-02.md`. This issue stays open for what that
   amendment leaves unaudited: for each capability-matrix row that cites no stamped live
   record, name the tests that pin its repository side, or record that none does."
+  **Posted on #919** on the operator's approval.
 - **`make lint` does not see an untracked file, so a lint failure surfaced only after a
   stamp run started.** Severity L. Lint passed on a new, still-untracked test file; after
   it was committed, the `make test` stamp at `7c26636` stopped at ruff B905, and
