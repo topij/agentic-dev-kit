@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -16,6 +17,7 @@ ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
+from test_triage_providers import LINEAR_DESTINATION, LinearIssues, LinearTransport  # noqa: E402
 from triage import engine as triage_engine  # noqa: E402
 from triage.approval import ApprovalContext  # noqa: E402
 from triage.canonical import decode_bytes, digest, dumps, encode_bytes, loads_exact  # noqa: E402
@@ -37,10 +39,13 @@ def git(repo: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
-def repository(tmp_path: Path) -> Path:
+def repository(tmp_path: Path, *, config_text: str | None = None) -> Path:
     root = tmp_path / "repo"
     (root / "config").mkdir(parents=True)
-    shutil.copy2(REPO_ROOT / "config/dev-model.yaml", root / "config/dev-model.yaml")
+    if config_text is None:
+        shutil.copy2(REPO_ROOT / "config/dev-model.yaml", root / "config/dev-model.yaml")
+    else:
+        (root / "config/dev-model.yaml").write_text(config_text, encoding="utf-8")
     config = root / "config/dev-model.yaml"
     config.write_text(config.read_text(encoding="utf-8").replace("  engines: scripts/devkit\n", "  engines: scripts\n"), encoding="utf-8")
     (root / "docs").mkdir()
@@ -80,6 +85,139 @@ def approval_for(state: dict, command: str = "approve all") -> dict:
         "command": command,
         "proposal_set_digest": proposal_set_digest,
     }
+
+
+@pytest.mark.parametrize("adopter_host", [False, True])
+def test_linear_approval_and_uncertain_create_resume_keep_frozen_authority(tmp_path, monkeypatch, adopter_host):
+    from http.client import IncompleteRead
+
+    if adopter_host:
+        host = tmp_path / "adopter"
+        (host / "config").mkdir(parents=True)
+        (host / "config/dev-model.yaml").write_text(
+            'tracker:\n  backend: linear\n  project_name: "Other adopter"\n'
+            'review:\n  bots: ["adopter-bot"]\nsystemize:\n  operator_logins: ["adopter-operator"]\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", host)
+    # Controlled kit fixture data is installed with these tests; adopter policy
+    # is intentionally not a source for the approval and recovery scenario.
+    fixture = Path(__file__).parent / "fixtures/init-config.json"
+    config_text = "\n".join(json.loads(fixture.read_text(encoding="utf-8"))) + "\n"
+    root = repository(tmp_path, config_text=config_text)
+    config = root / "config/dev-model.yaml"
+    text = config.read_text(encoding="utf-8")
+    for old, new in (
+        ("backend: github-issues", "backend: linear"),
+        ('project_name: "topij/agentic-dev-kit"', 'project_name: "Adopter"'),
+        ('url: "https://github.com/topij/agentic-dev-kit/issues"', 'url: "https://linear.app/w/project/p"'),
+        ('team_id: ""', 'team_id: "team"'), ('project_id: ""', 'project_id: "project"'),
+        ('label_name: ""', 'label_name: "bug"'),
+    ):
+        assert old in text
+        text = text.replace(old, new, 1)
+    config.write_text(text, encoding="utf-8")
+    git(root, "add", "config/dev-model.yaml")
+    git(root, "commit", "-m", "Linear fixture policy")
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    supplied = request(root)
+    supplied["proposals"][0]["project"] = "Adopter"
+    transport = LinearTransport()
+    malformed = {"parent": "teams"}
+    def lost_create(query, variables):
+        if malformed["parent"] == "protocol":
+            raise IncompleteRead(b"partial", 10)
+        if "TriageProjectTeams(" in query and malformed["parent"] == "teams":
+            return {"data": {"project": ["bad"]}}
+        if "TriageIssueLabels(" in query and malformed["parent"] == "labels":
+            return {"data": {"issue": ["bad"]}}
+        if "TriageCreate(" in query:
+            transport.calls.append((query, variables))
+            raise IncompleteRead(b"partial", 10)
+        return transport(query, variables)
+    tracker = LinearIssues(transport=lost_create, sleep=lambda _: None)
+    drafted = run("new", context="interactive", request=supplied, start=root, tracker=tracker)
+    assert drafted["outcome"] == "operator-held"
+    assert transport.calls == []
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    presented = loads_exact(state_path.read_bytes())
+    frozen_path = Path(drafted["frozen_snapshot"])
+    frozen_bytes = frozen_path.read_bytes()
+    refused = run("resume", context="interactive", request={"approval": approval_for(presented)}, start=root,
+                  tracker=tracker, approval_context=approval_context(presented, operator="foreign"), head_authority=FakeForge([]))
+    assert refused["outcome"] == "operator-held"
+    assert transport.calls == []
+    malformed_held = run("resume", context="interactive", request={"approval": approval_for(presented)}, start=root,
+                         tracker=tracker, approval_context=approval_context(presented), head_authority=FakeForge([]))
+    assert malformed_held["outcome"] == "operator-held"
+    assert "Linear connection is missing" in malformed_held["detail"]
+    assert not (state_root / "triage/triage-pipeline-gate_live.lock").exists()
+    assert not any("TriageCreate(" in query for query, _ in transport.calls)
+    malformed["parent"] = "protocol"
+    protocol_held = run("resume", context="interactive", request={}, start=root,
+                        tracker=tracker, head_authority=FakeForge([]))
+    assert protocol_held["outcome"] == "operator-held"
+    assert "Linear API response is unavailable or incomplete" in protocol_held["detail"]
+    assert not (state_root / "triage/triage-pipeline-gate_live.lock").exists()
+    assert not any("TriageCreate(" in query for query, _ in transport.calls)
+    malformed["parent"] = None
+    held = run("resume", context="interactive", request={}, start=root,
+               tracker=tracker, head_authority=FakeForge([]))
+    assert held["outcome"] == "operator-held"
+    retained = loads_exact(state_path.read_bytes())
+    assert retained["operations"][0]["status"] == "ambiguous"
+    assert retained["operations"][0]["destination"] == LINEAR_DESTINATION
+    creates = sum("TriageCreate(" in q for q, _ in transport.calls)
+    run("resume", context="interactive", request={}, start=root, tracker=tracker, head_authority=FakeForge([]))
+    assert sum("TriageCreate(" in q for q, _ in transport.calls) == creates
+    payload = retained["proposal_payloads"][0]["payload"]
+    transport.issues.append({"id": "issue", "identifier": "ADO-17", "url": "https://linear.app/w/issue/ADO-17",
+                            "title": payload["title"], "description": payload["body"], "team": {"id": "team"},
+                            "project": {"id": "project", "name": "Adopter"}, "labels": [{"id": "label", "name": "bug"}]})
+    malformed["parent"] = "labels"
+    malformed_held = run("resume", context="interactive", request={}, start=root, tracker=tracker, head_authority=FakeForge([]))
+    assert malformed_held["outcome"] == "operator-held"
+    assert "Linear connection is missing" in malformed_held["detail"]
+    assert not (state_root / "triage/triage-pipeline-gate_live.lock").exists()
+    assert sum("TriageCreate(" in q for q, _ in transport.calls) == creates
+    malformed["parent"] = None
+    resumed = run("resume", context="interactive", request={}, start=root, tracker=tracker, head_authority=FakeForge([]))
+    assert resumed["verified_tracker_identifiers"] == ["ADO-17"]
+    assert sum("TriageCreate(" in q for q, _ in transport.calls) == creates
+    assert frozen_path.read_bytes() == frozen_bytes
+    assert loads_exact(state_path.read_bytes())["proposal_payloads"] == presented["proposal_payloads"]
+
+
+
+def test_malformed_linear_tracker_url_is_controlled_and_releases_gate(tmp_path, monkeypatch):
+    fixture = Path(__file__).parent / "fixtures/init-config.json"
+    text = "\n".join(json.loads(fixture.read_text(encoding="utf-8"))) + "\n"
+    for old, new in (("backend: github-issues", "backend: linear"),
+                     ('project_name: "topij/agentic-dev-kit"', 'project_name: "Adopter"'),
+                     ('url: "https://github.com/topij/agentic-dev-kit/issues"', 'url: "https://["'),
+                     ('team_id: ""', 'team_id: "team"'), ('project_id: ""', 'project_id: "project"')):
+        assert old in text
+        text = text.replace(old, new, 1)
+    root = repository(tmp_path, config_text=text)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    supplied = request(root)
+    supplied["proposals"][0]["project"] = "Adopter"
+    transport = LinearTransport()
+    tracker = LinearIssues(transport=transport, sleep=lambda _: None)
+    drafted = run("new", context="interactive", request=supplied, start=root, tracker=tracker)
+    assert drafted["outcome"] == "operator-held"
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    presented = loads_exact(state_path.read_bytes())
+    frozen = Path(drafted["frozen_snapshot"]).read_bytes()
+    held = run("resume", context="interactive", request={"approval": approval_for(presented)}, start=root,
+               tracker=tracker, approval_context=approval_context(presented), head_authority=FakeForge([]))
+    assert held["outcome"] == "operator-held" and "tracker.url is malformed" in held["detail"]
+    assert not (state_root / "triage/triage-pipeline-gate_live.lock").exists()
+    assert transport.calls == []
+    assert Path(drafted["frozen_snapshot"]).read_bytes() == frozen
+    assert loads_exact(state_path.read_bytes())["proposal_payloads"] == presented["proposal_payloads"]
 
 
 def approval_context(state: dict, command: str = "approve all", operator: str = "operator") -> ApprovalContext:

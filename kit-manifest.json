@@ -68,7 +68,7 @@
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
-      "sha256": "fb4010ae58293f17d643415855ca61a63911c9909f76240061f3b49fd89c17b0"
+      "sha256": "5fbe0addc13d18589712d77d437ef357e8d06b12dfecb4dfb150d6d4ac058f9c"
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
@@ -442,7 +442,7 @@
         "scripts/triage_friction_log.py"
       ],
       "role": "engine",
-      "sha256": "19f36b866720adc7e4c9d544a188318a242b703511818e3993614a6dfec822e1"
+      "sha256": "c99e1133b37edcb85c7036c2a61b485a770ebdf422403cefab03fc3c6658a3cb"
     },
     "scripts/lib/triage/finalize.py": {
       "required_by": [
@@ -481,7 +481,7 @@
         "scripts/triage_friction_log.py"
       ],
       "role": "engine",
-      "sha256": "9bbfc0fbf726867ea7dc7f7736cbc7e24050e4401275e5d777f5f4444cc1043d"
+      "sha256": "7beaf8655d7b74a2023ec16fd68e1d63f97d32483ba644dae427174942b8f4b9"
     },
     "scripts/lib/triage/providers.py": {
       "required_by": [
@@ -489,7 +489,7 @@
         "scripts/triage_friction_log.py"
       ],
       "role": "engine",
-      "sha256": "78ddd669c813385fafb5d4969e8977e8fe5e9aa44215dfd3b4eac6783acd67e9"
+      "sha256": "ec0643678ea7b93d0f881079d745a0dddffea16d38f03f206b58c01cf359ba9c"
     },
     "scripts/lib/triage/recovery.py": {
       "required_by": [
@@ -682,7 +682,7 @@
     },
     "scripts/tests/test_triage_engine.py": {
       "role": "test",
-      "sha256": "9db07c34a15b649e83e3d70bab57ac46c7d638a31131e8d8957d7b7ff1c5f857"
+      "sha256": "547b9a7bea164675c51f62b05bc450aeb22bb6c94c5e7fa1ce8a6a091439acf3"
     },
     "scripts/tests/test_triage_gate.py": {
       "role": "test",
@@ -698,7 +698,7 @@
     },
     "scripts/tests/test_triage_providers.py": {
       "role": "test",
-      "sha256": "147058873d51da64560ed0fdb83e87b07e7e6a183e72dfbe8830d97a985a10a5"
+      "sha256": "3355ab11f879da7faa00706bc1334918d23a525b8d186f64793e57ab8b30d440"
     },
     "scripts/tests/test_triage_recovery.py": {
       "role": "test",
@@ -713,7 +713,7 @@
         "scripts/finalize_triage.py"
       ],
       "role": "engine",
-      "sha256": "7694e908aba4bcbba2a196248593f3e1c8123152588cfccdd673b168f6a949d2"
+      "sha256": "c547f1ef8ac3dc935d0cf345c4baa393489b1f43c74abffc55c3c6644fa82bc9"
     },
     "scripts/verify_live_validation_bundle.py": {
       "role": "repo-only",

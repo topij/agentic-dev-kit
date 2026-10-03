@@ -17,7 +17,7 @@ from triage.model import (
     TriageError,  # noqa: E402
     load_settings,  # noqa: E402
 )
-from triage.providers import GitHubForge, GitHubIssues  # noqa: E402
+from triage.providers import GitHubForge, GitHubIssues, LinearIssues  # noqa: E402
 from triage.storage import observe  # noqa: E402
 
 
@@ -32,7 +32,9 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--context", choices=("interactive", "unattended"), default="interactive")
     result.add_argument("--request", type=Path, help="RFC 8785 canonical request JSON")
     result.add_argument("--approval-context", type=Path, help="runtime-attested canonical approval identity/read-back")
-    result.add_argument("--enable-github-tracker", action="store_true", help="allow an approved live tracker transition through gh")
+    trackers = result.add_mutually_exclusive_group()
+    trackers.add_argument("--enable-github-tracker", action="store_true", help="allow an approved live GitHub tracker transition through gh")
+    trackers.add_argument("--enable-tracker", action="store_true", help="select the approved tracker adapter from merged configuration")
     result.add_argument("--enable-github-forge", action="store_true", help="allow an approved finalization transition through git and gh")
     return result
 
@@ -78,7 +80,7 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, CanonicalError, TriageError) as exc:
             print(dumps(hard_stop(str(exc))).decode())
             return 2
-    tracker = GitHubIssues() if args.enable_github_tracker else None
+    tracker = None
     approval_context = None
     if args.approval_context is not None:
         try:
@@ -93,7 +95,15 @@ def main(argv: list[str] | None = None) -> int:
             print(dumps(hard_stop(str(exc))).decode())
             return 2
     try:
-        configured = load_settings(Path(__file__)) if args.enable_github_forge or args.enable_github_tracker else None
+        configured = load_settings(Path(__file__)) if args.enable_github_forge or args.enable_github_tracker or args.enable_tracker else None
+        if args.enable_github_tracker or args.enable_tracker:
+            backend = configured.tracker.get("backend")
+            if backend == "github-issues":
+                tracker = GitHubIssues()
+            elif backend == "linear" and args.enable_tracker:
+                tracker = LinearIssues()
+            else:
+                raise TriageError(f"unsupported selected tracker backend: {backend}")
     except (OSError, TriageError, TypeError, ValueError) as exc:
         print(dumps(hard_stop(str(exc))).decode())
         return 2
