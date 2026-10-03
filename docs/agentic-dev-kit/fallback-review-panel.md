@@ -130,11 +130,11 @@ so a pull request cannot shorten the list it is classed by, and a pull request
 that changes `config/dev-model.yaml` at all is safety-critical: that file
 declares the list and points at other gate files. What this does not protect is
 the code computing the class, which runs from the checkout like the rest of the
-engine: a pull request that changes `pr_watch.py` or its config reader is classed
-by its own version of them (`#928`). Nor does it follow the base branch: the base
-commit is the one the forge records for the pull request (`baseRefOid`), which can
-trail the branch, so a path added to the list there may not reach a pull request
-opened before it.
+engine: a pull request that changes `pr_watch.py`, or any file on its import path,
+is classed by its own version of them (`#928`). Nor does it follow the base branch:
+the base commit is the one the forge records for the pull request (`baseRefOid`),
+which can trail the branch, so a path added to the list there may not reach a pull
+request opened before it (`#929`).
 
 **It fails toward two.** An undeclared, empty or malformed `review.safety_critical_paths`,
 or a base and head that Git cannot diff, leaves the pull request unclassed, and an
@@ -173,8 +173,8 @@ safety-critical pull request still satisfies the gate, flagged.
 still follows `safety-critical-changes.md`. And a single-lens receipt stays
 distinguishable on the audit trail from `fallback:panel` and `fallback:delta`.
 
-**The sanctioned single-lens passes each rest on a fact the author does not
-set:** a standard pull request's full pass; the **delta pass** for record prose or
+**The sanctioned single-lens passes each rest on a condition other than the
+author's own risk assessment:** a standard pull request's full pass; the **delta pass** for record prose or
 a reviewer-marked LOW repair, on a pull request outside the safety-critical class;
 and **Degraded mode** below, where the runtime cannot isolate a reviewer. On a
 safety-critical pull request only Degraded mode is left, and it leaves rule 2

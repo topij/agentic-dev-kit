@@ -42,6 +42,10 @@ cp -r /path/to/agentic-dev-kit/. .
 
 `init.sh` prompts you for a handful of values — project name, agent runtime, tracker board,
 the protected branch, your review bot — and stamps them into `config/dev-model.yaml`.
+That file arrives with `review.safety_critical_paths` listing only the kit's own gate
+files. Add your own send, destructive and kill/recovery paths to it, or delete the key:
+absent, every pull request keeps the two-lens fallback review, while a list that misses a
+gate file sends that file to one lens (#930).
 It renders the narrative docs and root entry points — `AGENTS.md`, which holds
 the contract, and `CLAUDE.md`, which imports it with `@AGENTS.md` because Claude Code reads
 `CLAUDE.md` and not `AGENTS.md` — from `docs/templates/`, installs the pre-push hook, and

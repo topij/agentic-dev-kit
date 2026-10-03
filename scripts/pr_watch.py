@@ -4354,17 +4354,20 @@ def _merge_base_paths(base: str, head: str, what: str) -> list[str]:
 # comparison could miss the next pointer.
 #
 # What this does NOT protect is the code computing the class. It runs from the
-# same checkout, so a PR that changes this engine or `lib/kitconfig.py` is
-# classed by its own version of them. `pr_watch.py` is on the shipped list;
-# `kitconfig.py` is not, and `#928` carries that. Nor does the base follow its
-# branch: `baseRefOid` is the commit the forge recorded for the PR, which can
-# trail the branch tip, so a path added to the list there may not reach a PR
-# opened before it.
+# same checkout, so a PR that changes this engine, or any file on its import
+# path (`lib/kitconfig.py`, or a module shadowing the standard library), is
+# classed by its own version of them; `#928` carries that. Nor does the base
+# follow its branch: `baseRefOid` is the commit the forge recorded for the PR,
+# which can trail the branch tip, so a path added to the list there may not
+# reach a PR opened before it (`#929`). Paths are read relative to the Git top
+# level, which is assumed to be REPO_ROOT (`#931`).
 #
 # Every way this can fail lands on the safety-critical class, and that includes
 # an undeclared key, so a repo that never declares the list keeps the two-lens
 # behaviour it had before the class existed. The class only ever relaxes what a
-# standard PR owes. Nothing here lets a safety-critical PR owe less.
+# standard PR owes. Nothing here lets a safety-critical PR owe less, though the
+# gate enforces little of what it owes: see *What the engine enforces* in
+# fallback-review-panel.md.
 #
 # Patterns match with `fnmatch.fnmatchcase`, whose `*` also crosses `/`. That
 # over-matches, which errs toward two lenses.
@@ -4493,13 +4496,19 @@ def _lens_floor(review_class: object) -> int:
 _OWED_ONE_LENS_SOURCES = (SINGLE_LENS_SOURCE, "fallback:delta")
 
 
-def _one_lens_is_owed(review_class: object, source: object) -> bool:
-    """Whether a one-lens receipt from ``source`` is what this PR's class owes."""
-    return (
-        _lens_floor(review_class) == 1
-        and isinstance(source, str)
-        and source.strip() in _OWED_ONE_LENS_SOURCES
-    )
+def _one_lens_is_owed(review_class: object, source: object, *, composed: bool) -> bool:
+    """Whether a one-lens receipt from ``source`` is what this PR's class owes.
+
+    A ``fallback:delta`` receipt counts only when ``composed``: one with no
+    coverage extends nothing, so it stood in for the opening pass, which is
+    never a delta pass.
+    """
+    if _lens_floor(review_class) != 1 or not isinstance(source, str):
+        return False
+    source = source.strip()
+    if source == "fallback:delta":
+        return composed
+    return source in _OWED_ONE_LENS_SOURCES
 
 
 _NOT_ISOLATED = f"a standard PR's one lens is an isolated {SINGLE_LENS_SOURCE} pass"
@@ -5599,7 +5608,11 @@ def render(report: dict) -> str:
         review_class = report.get("review_class")
         if distinct >= 2:
             detail = f"{distinct} lenses claimed ({', '.join(named)})"
-        elif distinct == 1 and _one_lens_is_owed(review_class, evidence.get("source")):
+        elif distinct == 1 and _one_lens_is_owed(
+            review_class,
+            evidence.get("source"),
+            composed=isinstance(evidence.get("coverage"), dict),
+        ):
             # The class decides whether one lens is a shortfall (#585). This is
             # still a claim; what changed is only the floor it is read against.
             detail = (
@@ -5746,7 +5759,9 @@ def render_record_review(report: dict) -> str:
     named = [_flat(lens, 40) for lens in named]
     review_class = report.get("review_class")
     if len(_countable_lenses(named)) == 1 and _one_lens_is_owed(
-        review_class, receipt.get("source")
+        review_class,
+        receipt.get("source"),
+        composed=isinstance(receipt.get("coverage"), dict),
     ):
         lines.append(
             f"  one lens ({named[0]}), which is what this PR owes: "

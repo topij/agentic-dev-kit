@@ -307,10 +307,12 @@ review:
   # rather than taking it from the PR's author. It reads this list as committed
   # at the PR's base, so a PR cannot shorten the list it is classed by, and it
   # classes any PR that changes this file as safety-critical. The engine
-  # computing the class runs from the checkout, so a PR that changes the engine
-  # or its config reader is classed by its own version of them (#928). And the
-  # base is the commit the forge records for the PR, which can trail the base
-  # branch, so a path added here may not reach a PR opened before it.
+  # computing the class runs from the checkout, so a PR that changes the engine,
+  # or any file on its import path, is classed by its own version of them
+  # (#928). And the base is the commit the forge records for the PR, which can
+  # trail the base branch, so a path added here may not reach a PR opened before
+  # it (#929). A repo created from the kit's template holds the kit's own list:
+  # add your gate files to it, or delete it (#930).
   #
   # Leave it absent rather than guess. Absent, empty or malformed, every PR is
   # treated as safety-critical, which is the two-lens behaviour from before this key
