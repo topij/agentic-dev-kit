@@ -33,6 +33,7 @@ class LinearTransport:
         self.calls = []
         self.issues = []
         self.labels = [{"id": "label", "name": "bug", "isGroup": False, "team": {"id": "team"}}]
+        self.ancestors = []
         self.fault = None
         self.lag = 0
 
@@ -49,6 +50,8 @@ class LinearTransport:
             result = {"project": {"teams": self.page([{"id": "other"}, {"id": "team"}], variables)}}
         elif "TriageProject(" in query:
             result = {"project": {"id": "project", "name": "Adopter"}}
+        elif "TriageLabelTeams(" in query:
+            result = {"team": {"id": variables["id"], "ancestors": self.ancestors}}
         elif "TriageLabels(" in query:
             labels = [label for label in self.labels if not label.get("archived") or "includeArchived: true" in query]
             result = {"issueLabels": self.page(labels, variables)}
@@ -174,6 +177,53 @@ def test_linear_label_readback_requires_resolved_identity_and_scope(timing, faul
         with pytest.raises(TriageError, match="label identity or scope"):
             LinearIssues(transport=altered, sleep=lambda _: None).create(LINEAR_DESTINATION, linear_payload())
     assert sum("TriageCreate(" in query for query, _ in transport.calls) == 1
+
+
+@pytest.mark.parametrize("lost_response", [False, True])
+def test_linear_inherited_ancestor_label_creation_and_reconciliation(lost_response):
+    transport = LinearTransport()
+    transport.ancestors = [{"id": "parent"}, {"id": "root-team"}]
+    transport.labels[0]["team"] = {"id": "root-team"}
+    if lost_response:
+        transport.fault = "timeout"
+    def inherited(query, variables):
+        if "TriageLabels(" in query:
+            assert variables["filter"]["or"][0] == {"team": {"id": {"in": ["parent", "root-team", "team"]}}}
+        result = transport(query, variables)
+        if "TriageCreate(" in query:
+            transport.issues[0]["labels"][0]["team"] = {"id": "root-team"}
+        if "TriageIssueLabels(" in query:
+            # Lost mutation responses still leave the issue with its inherited label.
+            result["data"]["issue"]["labels"]["nodes"][0]["team"] = {"id": "root-team"}
+        return result
+    tracker = LinearIssues(transport=inherited, sleep=lambda _: None)
+    assert tracker.create(LINEAR_DESTINATION, linear_payload()).status == "verified"
+    assert tracker.create(LINEAR_DESTINATION, linear_payload()).verified_route == "pre-existing-exact-match"
+    assert sum("TriageCreate(" in q for q, _ in transport.calls) == 1
+
+
+@pytest.mark.parametrize("team", [None, {}, {"id": "foreign", "ancestors": []}, {"id": "team"},
+    {"id": "team", "ancestors": None}, {"id": "team", "ancestors": [None]},
+    {"id": "team", "ancestors": [{"id": ""}]}, {"id": "team", "ancestors": [{"id": "team"}]},
+    {"id": "team", "ancestors": [{"id": "parent"}, {"id": "parent"}]}])
+def test_linear_incomplete_or_repeated_label_hierarchy_refuses_mutation(team):
+    transport = LinearTransport()
+    def incomplete(query, variables):
+        if "TriageLabelTeams(" in query:
+            return {"data": {"team": team}}
+        return transport(query, variables)
+    with pytest.raises(TriageError, match="label team hierarchy"):
+        LinearIssues(transport=incomplete, sleep=lambda _: None).create(LINEAR_DESTINATION, linear_payload())
+    assert not any("TriageCreate(" in q for q, _ in transport.calls)
+
+
+def test_linear_unrelated_team_label_cannot_enter_inherited_catalog():
+    transport = LinearTransport()
+    transport.ancestors = [{"id": "parent"}]
+    transport.labels[0]["team"] = {"id": "unrelated"}
+    with pytest.raises(TriageError, match="label read-back mismatch"):
+        LinearIssues(transport=transport, sleep=lambda _: None).create(LINEAR_DESTINATION, linear_payload())
+    assert not any("TriageCreate(" in q for q, _ in transport.calls)
 
 
 def test_linear_workspace_label_readback_is_valid():

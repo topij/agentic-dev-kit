@@ -307,19 +307,37 @@ class LinearIssues:
         if destination["team_id"] not in [t["id"] for t in teams]:
             raise TriageError("Linear project is outside the configured team", outcome="operator-held")
 
+    def _label_teams(self, destination: dict) -> set[str]:
+        # Linear exposes the complete ancestor list, rather than a connection.
+        # A subteam inherits those labels; unrelated teams remain out of scope.
+        query = "query TriageLabelTeams($id: String!) { team(id: $id) { id ancestors { id } } }"
+        team = self._query(query, {"id": destination["team_id"]}).get("team")
+        ancestors = team.get("ancestors") if isinstance(team, dict) else None
+        if not isinstance(team, dict) or team.get("id") != destination["team_id"] or not isinstance(ancestors, list):
+            raise TriageError("Linear label team hierarchy is incomplete", outcome="operator-held")
+        ids = {destination["team_id"]}
+        for ancestor in ancestors:
+            if (not isinstance(ancestor, dict) or set(ancestor) != {"id"}
+                    or not isinstance(ancestor["id"], str) or not ancestor["id"] or ancestor["id"] in ids):
+                raise TriageError("Linear label team hierarchy is malformed or repeated", outcome="operator-held")
+            ids.add(ancestor["id"])
+        return ids
+
     def list_labels(self, destination: dict, *, include_archived: bool = False) -> list[dict]:
         self._destination(destination)
+        team_ids = self._label_teams(destination)
         query = ("query TriageLabels($filter: IssueLabelFilter, $cursor: String) { "
                  f"issueLabels(filter: $filter, includeArchived: {str(include_archived).lower()}, first: 100, after: $cursor) {{ {self.PAGE_INFO} "
                  "nodes { id name isGroup team { id } } } }")
-        variables = {"filter": {"or": [{"team": {"id": {"eq": destination["team_id"]}}}, {"team": {"null": True}}]}}
+        variables = {"filter": {"or": [{"team": {"id": {"in": sorted(team_ids)}}}, {"team": {"null": True}}]}}
         labels = self._pages(query, variables, lambda d: d.get("issueLabels"))
         for label in labels:
             team = label.get("team")
             if (not isinstance(label.get("name"), str) or not label["name"]
                     or not isinstance(label.get("isGroup"), bool)
                     or "team" not in label
-                    or (team is not None and team != {"id": destination["team_id"]})):
+                    or (team is not None and (not isinstance(team, dict) or set(team) != {"id"}
+                                          or not isinstance(team["id"], str) or team["id"] not in team_ids))):
                 raise TriageError("Linear label read-back mismatch", outcome="operator-held")
         return labels
 
