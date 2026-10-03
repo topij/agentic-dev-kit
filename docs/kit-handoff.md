@@ -20,6 +20,51 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-04 (cs-toolkit Codex validation and Linear installation)
+
+**Shipped.** Fixture portability in [#937](https://github.com/topij/agentic-dev-kit/pull/937),
+`163af2d82491f77dd4daeef916e3ec31522e76b7`: controlled configuration, verified mutations,
+quoted adopter bots plus an operator, and operator-only configuration. Validation fixes
+in [#938](https://github.com/topij/agentic-dev-kit/pull/938),
+`bcfe07b578bf59fb510e105ad91a5c6fae071f32`: bounded fail-closed subprocess reads,
+complete typed finding-evidence verification, and standalone script metadata.
+
+**Linear.** Installation support in [#939](https://github.com/topij/agentic-dev-kit/pull/939),
+`410108fb115a0bf063f737d9961b5ec4f68d641d`: configured-backend opt-in, exact approval,
+frozen-input/idempotency preservation, paginated read-back and bounded retries.
+Read-back verifies label identity and inherited team scope; the transport refuses redirects.
+No additional design decision blocks implementation. Live destination configuration,
+credentials, exact payload approval and acceptance remain adopter work.
+
+**Decided.** The operator authorized merging this session's PRs when clean. CodeRabbit
+skipped review; the configured independent fallback supplied the adversarial fixture
+review and the validation panel with its composed LOW delta. Native rollout records
+confirmed the configured reviewer model and effort. Public disposition comments that
+initially contained local filenames were corrected and read back.
+
+**Verified.** `env -u FORCE_COLOR make test` at
+`626bf01f2408d0d53ca6139bd3aa5419bbdeb866` on 2026-10-04, in
+`/private/tmp/devkit-linear-triage`, printed `4195 passed, 1 skipped in 616.02s
+(0:10:16)`. The contained LOW redirect repair at
+`6f1b3022aca1dd138edc9477387ca5086087dc9e` ran
+`uv run --with pytest --with pyyaml pytest -q scripts/tests/test_triage_providers.py
+scripts/tests/test_triage_engine.py
+scripts/tests/test_kit_doctor.py::test_kit_repo_self_check_is_clean` on 2026-10-04, in
+the same directory, and printed `327 passed in 46.61s`. Its fresh adversarial delta
+posted the named verdicts before composition on the retained full-review parent.
+The exact-head watch receipt and authorized merge are recorded on #939.
+
+**Not established.** No live Linear write or cs-toolkit runtime validation was performed.
+cs-toolkit remains on `chore/kit-upgrade-2026-10-03` at
+`ac7203341f50b5e39f5fe6f7f758b8f7e439cdf5`, as supplied by the operator; its local upgrade
+work was held pending these upstream fixes. This session changed only the kit.
+The new workstream assignment was not explicitly confirmed; it does not replace another workstream's starter.
+Workflow mistakes were recorded for accumulation in the friction inbox; no tracker write
+was made. Implementation follows the destination and approval decisions already recorded in #6;
+destination configuration, API credentials and exact live payload approval remain adopter actions.
+
+______________________________________________________________________
+
 ## Session — 2026-10-03 (Delta-pass named draws, #921, in Claude Code)
 
 **Shipped.** PR #934, squash `41beacb8`: `panel_prompt.py` takes a delta pass's two draws
@@ -252,57 +297,6 @@ merge as `cb92fd5`, removes #891 from its owners, and continues with #859.
 
 ______________________________________________________________________
 
-## Session — 2026-10-01 (Phase 6 item 6, #890 and #891, unattended in Claude Code)
-
-**Shipped.**
-
-- PR #904, squash `0c7669a`: Phase 6 item 6. `runtime-parity.md` gains an `adoption`
-  front-matter block, scoped to the template route. Repo-only fixtures in
-  `scripts/tests/test_adoption_fixtures.py` install the kit into fresh Codex-only,
-  Claude-only and dual-runtime repositories and check each install against it. #878
-  closed on merge.
-- PR #906, squash `c6b663d`: each headless-lane record's claims now live once, in the
-  per-runtime sub-table of `runtime-parity.md`. #890 closed on merge.
-
-**Held for the operator.** PR #907 is the fix for #891: `GitHubForge`'s sweep-cleanup
-guard now decides containment by filesystem identity, through #889's predicate moved to
-`model.py`. It gates a destructive operation, so `safety-critical-changes.md` makes it
-operator-merge, and this session did not merge it. Its full-panel receipt at `704bde3`
-was recorded from the worktree #907 was built in, whose state file was then copied into
-the main checkout's `state/`; the two-lens delta receipt at `fcff926` composed on it
-there (#563's mechanism; occurrence noted there).
-
-**Decided by the operator**, in this session, before it ran unattended:
-
-- #878 step 3: a single-runtime adopter keeps receiving the other runtime's adapters,
-  recorded as `other_runtime: installed`, and on #878.
-- Scope: #878, then #890 and #891, then wrap-up. Pull requests merge when clean, and
-  LOW review findings are filed.
-- Issue-shaped friction at wrap-up is filed without per-payload approval. That departs
-  from `wrap-up.md`'s exact-payload rule; #909 asks which should hold.
-
-**Filed**, each read back: #905 and #908, the deferred LOW findings of #904 and #906;
-#909. Occurrence comments on #563, #844 and #643.
-
-**Review.** CodeRabbit's auto-review stayed off, so the fallback panel reviewed each
-pull request. #904 had a full panel at `2581034` and again at `1f37c00`. #906 had a
-full panel at `54c2f75`. #907 had a full panel at `704bde3` and a delta at `fcff926`.
-Each round's disposition is posted on its pull request.
-
-**Verified.** Each pull request's body carries its `env -u FORCE_COLOR make test`
-stamp at the head that merged or is held, each run on 2026-10-01 with exit 0:
-
-- at `1f37c00` (#904) and at `54c2f75` (#906), in `/Users/topi/Coding/agentic-dev-kit`;
-- at `fcff926` (#907), in a `git worktree add` of it under the session scratchpad.
-
-`gh run list --commit` showed the `Test` workflow `success` on `main` for `0c7669a` and
-`c6b663d`.
-
-**Not established.** #907's case-variant tests skip on a case-sensitive filesystem,
-which is what CI runs; they ran on this machine's case-insensitive one.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -365,3 +359,18 @@ and an engine-owned rollback waits for a recurrence (#892).
 
 ▶ Next: #859 — triage recover calls a completed state valid on `canonical_state`
 alone, so a missing frozen artifact dead-ends it.
+
+### cs-toolkit Codex validation and Linear installation
+
+**Status:** fixture and validation fixes shipped in #937 and #938. Linear installation support shipped in #939
+at `410108fb115a0bf063f737d9961b5ec4f68d641d`; live acceptance remains adopter work.
+The upstream validation record remains #919; the Linear acceptance record remains #6.
+**Owner:** [#919](https://github.com/topij/agentic-dev-kit/issues/919),
+[#6](https://github.com/topij/agentic-dev-kit/issues/6).
+
+▶ Next: In cs-toolkit, refresh the kit from `410108fb115a0bf063f737d9961b5ec4f68d641d`, reconcile its
+retirement helper with the completed-state contract, run `make check-root` and
+`make test-devkit`, then open an upgrade PR and finish the remaining Codex runtime
+validation. Install the declined triage engines following #939 with the Linear
+destination configuration and credentials. Obtain exact operator approval of each live
+tracker payload before its write; this kit session supplies no live-payload approval.
