@@ -61,7 +61,6 @@ def _pin_engine_defaults(module: ModuleType) -> None:
     module._REVIEW_BOT_APP_SLUGS = defaults.bot_app_slugs
     module._BOT_PENDING_GRACE_MINUTES = defaults.bot_pending_grace_minutes
     module._SETTLE_GRACE_MINUTES = defaults.settle_grace_minutes
-    module._SAFETY_CRITICAL_PATHS = defaults.safety_critical_paths
 
 
 def _pin_engine_backend(module: ModuleType) -> None:
@@ -2942,7 +2941,6 @@ def test_missing_config_falls_back_to_defaults_silently(
         pr_watch._DEFAULT_REVIEW_BOT_APP_SLUGS,
         pr_watch._DEFAULT_BOT_PENDING_GRACE_MINUTES,
         pr_watch._DEFAULT_SETTLE_GRACE_MINUTES,
-        None,
     )
     assert capsys.readouterr().err == ""
 
@@ -3093,7 +3091,6 @@ def test_every_config_derived_global_is_pinned() -> None:
         ),
         "_BOT_PENDING_GRACE_MINUTES": (-99999.0, "bot_pending_grace_minutes"),
         "_SETTLE_GRACE_MINUTES": (-99998.0, "settle_grace_minutes"),
-        "_SAFETY_CRITICAL_PATHS": (("zzz-sentinel-path",), "safety_critical_paths"),
     }
 
     # If someone adds a field to ReviewConfig, this fails until they extend the
@@ -10612,8 +10609,12 @@ def _class_repo(tmp_path: Path):
 
 
 def _classed(pr_watch, monkeypatch, paths: list[str], patterns=(GATE_PATH,)) -> None:
-    """Make `pr_review_class` see ``paths`` changed under ``patterns``."""
-    monkeypatch.setattr(pr_watch, "_SAFETY_CRITICAL_PATHS", patterns)
+    """Make `pr_review_class` see ``paths`` changed, with ``patterns`` at the base."""
+    monkeypatch.setattr(
+        pr_watch,
+        "_declared_safety_critical_paths",
+        lambda rev: None if patterns is None else frozenset(patterns),
+    )
     monkeypatch.setattr(
         pr_watch, "_merge_base_paths", lambda base, head, what: list(paths)
     )
@@ -10633,6 +10634,7 @@ def test_review_class_is_safety_critical_when_a_declared_path_changes(
     assert result == {
         "class": "safety-critical",
         "matched_paths": [GATE_PATH],
+        "changes_declaration": False,
         "unclassified": None,
     }
     assert pr_watch._lens_floor(result) == 2
@@ -10649,7 +10651,12 @@ def test_review_class_is_standard_when_no_declared_path_changes(
 
     result = pr_watch.pr_review_class(base, head, patterns=(GATE_PATH,))
 
-    assert result == {"class": "standard", "matched_paths": [], "unclassified": None}
+    assert result == {
+        "class": "standard",
+        "matched_paths": [],
+        "changes_declaration": False,
+        "unclassified": None,
+    }
     assert pr_watch._lens_floor(result) == 1
 
 
@@ -10754,42 +10761,149 @@ def test_a_floor_is_two_unless_the_class_is_a_computed_standard() -> None:
     assert pr_watch._lens_floor({"class": "standard", "unclassified": None}) == 1
 
 
-def test_safety_critical_paths_are_read_from_config(tmp_path: Path) -> None:
+def _declaring(paths: list[str] | str | None) -> str:
+    """A committed config declaring ``paths`` (absent for None, raw for a str)."""
+    if paths is None:
+        return "review:\n  bots: [coderabbit]\n"
+    if isinstance(paths, str):
+        return f"review:\n  safety_critical_paths: {paths}\n"
+    entries = "".join(f'    - "{path}"\n' for path in paths)
+    return f"review:\n  bots: [coderabbit]\n  safety_critical_paths:\n{entries}"
+
+
+def test_the_list_is_read_at_the_base_not_from_the_checkout(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The checkout is the PR's own branch here, and it drops the gate from the
+    list. Classing by it would give this PR one lens for changing the gate."""
     pr_watch = _load_pr_watch()
-    declared = pr_watch._load_review_config(
-        _write_config(
-            tmp_path / "declared",
-            'review:\n  safety_critical_paths:\n    - " scripts/gate.py "\n    - "lib/*"\n',
-        )
+    repo, _git, commit = _class_repo(tmp_path)
+    base = commit(
+        {"config/dev-model.yaml": _declaring([GATE_PATH]), GATE_PATH: "gate = 1\n"},
+        "base",
     )
-    empty = pr_watch._load_review_config(
-        _write_config(tmp_path / "empty", "review:\n  safety_critical_paths: []\n")
+    head = commit(
+        {"config/dev-model.yaml": _declaring([]), GATE_PATH: "gate = 2\n"},
+        "drop the gate from the list and change it",
     )
-    absent = pr_watch._load_review_config(
-        _write_config(tmp_path / "absent", "review:\n  bots: [coderabbit]\n")
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    result = pr_watch.pr_review_class(base, head)
+
+    assert result["class"] == "safety-critical"
+    assert result["matched_paths"] == [GATE_PATH]
+    assert result["changes_declaration"] is True
+    assert pr_watch._describe_review_class(result) == (
+        f"it changes {GATE_PATH} under review.safety_critical_paths and the "
+        "review.safety_critical_paths list itself"
     )
 
-    assert declared.safety_critical_paths == ("scripts/gate.py", "lib/*")
-    assert empty.safety_critical_paths == ()
-    assert absent.safety_critical_paths is None
+
+def test_a_pr_that_changes_only_the_list_is_safety_critical(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    pr_watch = _load_pr_watch()
+    repo, _git, commit = _class_repo(tmp_path)
+    base = commit({"config/dev-model.yaml": _declaring([GATE_PATH, "lib/*"])}, "base")
+    head = commit({"config/dev-model.yaml": _declaring(["lib/*"])}, "shrink the list")
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    result = pr_watch.pr_review_class(base, head)
+
+    assert result["class"] == "safety-critical"
+    assert result["matched_paths"] == []
+    assert result["changes_declaration"] is True
+    assert pr_watch._lens_floor(result) == 2
+
+
+def test_reordering_the_list_or_changing_other_config_is_not_a_list_change(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    pr_watch = _load_pr_watch()
+    repo, _git, commit = _class_repo(tmp_path)
+    base = commit({"config/dev-model.yaml": _declaring([GATE_PATH, "lib/*"])}, "base")
+    reordered = _declaring(["lib/*", GATE_PATH]).replace("[coderabbit]", "[otherbot]")
+    head = commit({"config/dev-model.yaml": reordered}, "reorder, change a bot")
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    result = pr_watch.pr_review_class(base, head)
+
+    assert result["class"] == "standard"
+    assert result["changes_declaration"] is False
+
+
+def test_a_list_changed_on_the_base_side_is_not_the_prs_change(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The base adds to the list after the fork. The PR, which edits another
+    config key, did not change the list; the base's longer list still applies."""
+    pr_watch = _load_pr_watch()
+    repo, git, commit = _class_repo(tmp_path)
+    commit({"config/dev-model.yaml": _declaring([GATE_PATH]), "docs/a.md": "a\n"}, "root")
+    git("branch", "feature")
+    base_tip = commit(
+        {"config/dev-model.yaml": _declaring([GATE_PATH, "lib/*"])}, "the base adds lib"
+    )
+    git("checkout", "-q", "feature")
+    head = commit(
+        {
+            "config/dev-model.yaml": _declaring([GATE_PATH]).replace(
+                "[coderabbit]", "[otherbot]"
+            ),
+            "lib/helper.py": "x = 1\n",
+        },
+        "the PR changes a bot and lib",
+    )
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    result = pr_watch.pr_review_class(base_tip, head)
+
+    assert result["changes_declaration"] is False
+    assert result["matched_paths"] == ["lib/helper.py"]
+    assert result["class"] == "safety-critical"
 
 
 @pytest.mark.parametrize(
-    "value",
-    ['"scripts/gate.py"', '\n    - "scripts/gate.py"\n    - ""', "\n    - 7"],
+    "declared", [None, '"scripts/gate.py"', '\n    - "scripts/gate.py"\n    - ""', "\n    - 7"]
 )
-def test_a_malformed_safety_critical_list_is_dropped_whole_and_warned(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], value: str
+def test_an_undeclared_or_malformed_list_at_the_base_leaves_the_pr_unclassed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, declared: str | None
 ) -> None:
-    """Keeping the good entries would move the dropped one's file to one lens."""
+    """A malformed list is dropped whole: keeping its good entries would move the
+    dropped entry's file to one lens."""
     pr_watch = _load_pr_watch()
+    repo, _git, commit = _class_repo(tmp_path)
+    base = commit({"config/dev-model.yaml": _declaring(declared)}, "base")
+    head = commit({"docs/a.md": "a\n"}, "docs only")
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
 
-    resolved = pr_watch._load_review_config(
-        _write_config(tmp_path, f"review:\n  safety_critical_paths: {value}\n")
-    )
+    result = pr_watch.pr_review_class(base, head)
 
-    assert resolved.safety_critical_paths is None
-    assert "treating every PR as safety-critical" in capsys.readouterr().err
+    assert result["class"] == "safety-critical"
+    assert "not declared at the PR's base, or is malformed there" in result["unclassified"]
+
+
+def test_a_base_with_no_config_leaves_the_pr_unclassed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    pr_watch = _load_pr_watch()
+    repo, _git, commit = _class_repo(tmp_path)
+    base = commit({"docs/a.md": "a\n"}, "base")
+    head = commit({"docs/a.md": "b\n"}, "head")
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    result = pr_watch.pr_review_class(base, head)
+
+    assert result["class"] == "safety-critical"
+    assert "could not read config/dev-model.yaml at" in result["unclassified"]
+
+
+def test_the_config_path_the_class_reads_is_kitconfigs() -> None:
+    pr_watch = _load_pr_watch()
+    sys.path.insert(0, str(ENGINE_DIR / "lib"))
+    import kitconfig  # noqa: PLC0415
+
+    assert pr_watch._config_rel_path() == kitconfig.DEFAULT_CONFIG_PATH
 
 
 def _record_lens(

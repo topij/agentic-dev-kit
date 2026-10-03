@@ -304,7 +304,9 @@ review:
   # It sets how many lenses a fallback review owes. A PR that changes any
   # matching path takes the two-lens panel; any other PR may take one isolated
   # lens, recorded as `fallback:lens`. pr_watch.py computes that class from Git
-  # rather than taking it from the PR's author.
+  # rather than taking it from the PR's author, and reads this list as
+  # committed at the PR's base: a PR cannot change its own class, and a PR that
+  # changes this list is itself safety-critical.
   #
   # Leave it absent rather than guess. Absent or malformed, every PR is treated
   # as safety-critical, which is the two-lens behaviour from before this key

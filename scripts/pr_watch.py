@@ -406,13 +406,13 @@ class ReviewConfig(NamedTuple):
     bot_app_slugs: dict[str, frozenset[str]]
     bot_pending_grace_minutes: float
     settle_grace_minutes: float
-    # None means UNDECLARED, which is not the same as an empty list: see
-    # :func:`pr_review_class` for why undeclared classes every PR safety-critical.
-    safety_critical_paths: tuple[str, ...] | None = None
 
 
 def _normalize_safety_critical_paths(value: Any) -> tuple[str, ...] | None:
     """Normalize ``review.safety_critical_paths``, or reject all of it.
+
+    Not part of :class:`ReviewConfig`: :func:`pr_review_class` reads the list as
+    committed at the PR's base, never from the checkout this runs in.
 
     ``None`` (undeclared, or malformed) keeps every PR at two lenses. A list is
     taken whole or not at all: dropping one malformed entry would quietly move
@@ -496,10 +496,6 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
       requirement that a baseline exist at all, so a fresh clone still blocks
       for the one poll it takes to record one (#190 is not a timing bug and is
       not opted out of here). Setting it high is fail-closed.
-    - ``safety_critical_paths`` absent or malformed -> ``None``, which classes
-      every PR safety-critical. An explicit empty list is honored as "no path
-      here is safety-critical" — the operator's declaration, like
-      ``noise_markers: []``.
     """
     defaults = ReviewConfig(
         noise_markers=_DEFAULT_NOISE_MARKERS,
@@ -581,14 +577,6 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
             or settle_grace < 0
         ):
             settle_grace = _DEFAULT_SETTLE_GRACE_MINUTES
-        raw_safety_paths = get(config, "review.safety_critical_paths", None)
-        safety_paths = _normalize_safety_critical_paths(raw_safety_paths)
-        if raw_safety_paths is not None and safety_paths is None:
-            print(
-                "warning: review.safety_critical_paths must be a list of non-empty "
-                "path patterns; treating every PR as safety-critical",
-                file=sys.stderr,
-            )
     except FileNotFoundError:
         # `load_config` raises this for an absent config file — a standalone
         # engine run. Defaults are exactly right; stay quiet.
@@ -628,7 +616,6 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
         bot_app_slugs=app_slugs,
         bot_pending_grace_minutes=float(grace),
         settle_grace_minutes=float(settle_grace),
-        safety_critical_paths=safety_paths,
     )
 
 
@@ -643,7 +630,6 @@ _REVIEW_BOT_AUTHOR_ALIASES = _REVIEW_CONFIG.bot_author_aliases
 _REVIEW_BOT_APP_SLUGS = _REVIEW_CONFIG.bot_app_slugs
 _BOT_PENDING_GRACE_MINUTES = _REVIEW_CONFIG.bot_pending_grace_minutes
 _SETTLE_GRACE_MINUTES = _REVIEW_CONFIG.settle_grace_minutes
-_SAFETY_CRITICAL_PATHS = _REVIEW_CONFIG.safety_critical_paths
 
 
 # --------------------------------------------------------------------------- gh
@@ -4355,6 +4341,12 @@ def _merge_base_paths(base: str, head: str, what: str) -> list[str]:
 # one isolated lens, recorded as `fallback:lens`. #585's 2026-10-02 comment is
 # the decision.
 #
+# The list is read as committed at the PR's BASE, never from the checkout this
+# engine runs in. That checkout is usually the PR's own branch, so reading it
+# would let a PR drop a path from the list and be classed by the shorter one.
+# For the same reason a PR that changes the list itself is safety-critical:
+# moving the boundary owes the review the boundary protects.
+#
 # Every way this can fail lands on the safety-critical class, and that includes
 # an undeclared key, so a repo that never declares the list keeps the two-lens
 # behaviour it had before the class existed. The class only ever relaxes what a
@@ -4369,45 +4361,123 @@ _COMMIT_SHA_RE = re.compile(r"^[0-9a-f]{7,64}$")
 _UNSET = object()
 
 
+def _config_rel_path() -> str:
+    """The repo-relative config path, as :mod:`kitconfig` defines it."""
+    from kitconfig import DEFAULT_CONFIG_PATH  # noqa: PLC0415
+
+    return DEFAULT_CONFIG_PATH
+
+
+def _declared_safety_critical_paths(rev: str) -> frozenset[str] | None:
+    """``review.safety_critical_paths`` as committed at ``rev``.
+
+    ``None`` when the config committed there declares no usable list. Raises
+    ``ValueError`` when that config cannot be read or parsed at all.
+    """
+    config_path = "the config"
+    try:
+        from kitconfig import get, loads  # noqa: PLC0415
+
+        config_path = _config_rel_path()
+        shown = subprocess.run(  # noqa: S603
+            ["git", "show", f"{rev}:{config_path}"],  # noqa: S607
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+        if shown.returncode != 0:
+            raise ValueError(shown.stderr.decode("utf-8", errors="replace").strip())
+        declared = get(
+            loads(shown.stdout.decode("utf-8")), "review.safety_critical_paths", None
+        )
+    except Exception as exc:  # noqa: BLE001 — every failure leaves the PR unclassed
+        raise ValueError(f"could not read {config_path} at {rev}: {exc}") from exc
+    normalized = _normalize_safety_critical_paths(declared)
+    return None if normalized is None else frozenset(normalized)
+
+
+def _declaration_changed(base: str, head: str) -> bool:
+    """Whether the PR changed ``review.safety_critical_paths``, from its merge base."""
+    try:
+        found = subprocess.run(  # noqa: S603
+            ["git", "merge-base", base, head],  # noqa: S607
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError(f"could not establish the PR's merge base: {exc}") from exc
+    fork = found.stdout.decode("utf-8", errors="replace").strip()
+    if found.returncode != 0 or not _COMMIT_SHA_RE.match(fork):
+        detail = found.stderr.decode("utf-8", errors="replace").strip()
+        raise ValueError(f"could not establish the PR's merge base: {detail}")
+    return _declared_safety_critical_paths(fork) != _declared_safety_critical_paths(head)
+
+
 def pr_review_class(
     base: object, head: object, *, patterns: object = _UNSET
 ) -> dict:
     """Class the change from ``base`` to ``head`` by the declared safety-critical paths.
 
-    Returns ``{"class", "matched_paths", "unclassified"}``. ``unclassified`` is
-    the reason no class could be computed, and is ``None`` when one was; an
-    unclassified change is reported as safety-critical. ``base`` is the PR's
-    base commit: the diff runs from its merge base with ``head``, so a stale
-    base widens the diff rather than narrowing it.
+    Returns ``{"class", "matched_paths", "changes_declaration", "unclassified"}``.
+    ``unclassified`` is the reason no class could be computed, and is ``None``
+    when one was; an unclassified change is reported as safety-critical.
+    ``base`` is the PR's base commit, and the list is read as committed there.
+    The diff runs from the merge base of ``base`` and ``head``, so a stale base
+    widens it rather than narrowing it. ``patterns`` replaces the list read at
+    ``base`` and skips the check for a changed list; it exists for tests.
     """
-    declared = _SAFETY_CRITICAL_PATHS if patterns is _UNSET else patterns
     result: dict = {
         "class": REVIEW_CLASS_SAFETY_CRITICAL,
         "matched_paths": [],
+        "changes_declaration": False,
         "unclassified": None,
     }
-    if declared is None:
-        result["unclassified"] = "review.safety_critical_paths is not declared"
-        return result
     if not all(
         isinstance(sha, str) and _COMMIT_SHA_RE.match(sha) for sha in (base, head)
     ):
         result["unclassified"] = "the PR's base or head commit is unknown"
         return result
     try:
+        declared = (
+            _declared_safety_critical_paths(str(base))
+            if patterns is _UNSET
+            else patterns
+        )
+    except ValueError as exc:
+        result["unclassified"] = str(exc)
+        return result
+    if declared is None:
+        result["unclassified"] = (
+            "review.safety_critical_paths is not declared at the PR's base, or is "
+            "malformed there"
+        )
+        return result
+    try:
         paths = _merge_base_paths(str(base), str(head), "the PR's changed paths")
     except ValueError as exc:
         result["unclassified"] = f"{exc} (fetch the PR's base and head, then poll again)"
+        return result
+    try:
+        changes_declaration = (
+            patterns is _UNSET
+            and _config_rel_path() in paths
+            and _declaration_changed(str(base), str(head))
+        )
+    except Exception as exc:  # noqa: BLE001 — every failure leaves the PR unclassed
+        result["unclassified"] = str(exc)
         return result
     matched = [
         path
         for path in paths
         if any(fnmatch.fnmatchcase(path, pattern) for pattern in declared)
     ]
-    if matched:
-        result["matched_paths"] = matched
-        return result
-    result["class"] = REVIEW_CLASS_STANDARD
+    result["matched_paths"] = matched
+    result["changes_declaration"] = bool(changes_declaration)
+    if not matched and not changes_declaration:
+        result["class"] = REVIEW_CLASS_STANDARD
     return result
 
 
@@ -4435,10 +4505,15 @@ def _describe_review_class(review_class: object) -> str:
         for path in review_class.get("matched_paths") or []
         if isinstance(path, str)
     ]
-    if not matched:
+    changes = []
+    if matched:
+        more = f" and {len(matched) - 1} more" if len(matched) > 1 else ""
+        changes.append(f"{matched[0]}{more} under review.safety_critical_paths")
+    if review_class.get("changes_declaration") is True:
+        changes.append("the review.safety_critical_paths list itself")
+    if not changes:
         return "the PR is classed safety-critical"
-    more = f" and {len(matched) - 1} more" if len(matched) > 1 else ""
-    return f"it changes {matched[0]}{more} under review.safety_critical_paths"
+    return "it changes " + " and ".join(changes)
 
 
 def _validate_composed_coverage(

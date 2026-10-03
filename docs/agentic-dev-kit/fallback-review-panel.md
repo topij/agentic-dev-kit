@@ -124,6 +124,9 @@ its review takes **one isolated lens**. `pr_watch` computes the class from Git,
 diffing the head against the pull request's base, and reports it as
 `review_class` on every poll. The author does not draw it, which keeps `#120`'s
 constraint: a trigger the author sets is a control the author can opt out of.
+For the same reason the list is read as committed at the pull request's base,
+so a pull request cannot shorten the list it is classed by, and a pull request
+that changes the list is itself safety-critical.
 
 **It fails toward two.** An undeclared or malformed `review.safety_critical_paths`,
 or a base and head that Git cannot diff, leaves the pull request unclassed, and an
