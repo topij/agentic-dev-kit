@@ -420,7 +420,7 @@ partial engine set.
 
 `systemize.subprocess_timeout_seconds` bounds each forge subprocess and artifact Git
 tracking read. It must be a positive integer; an older configuration that omits it uses
-the default `60`. A timeout or failed tracking read stops before artifact publication.
+the default `60`. A timeout or failed tracking read stops before the failing engine publishes its target artifact; a heartbeat started before the fetch remains available for error completion.
 
 1. `heartbeat_engine start` — before the fetch. The heartbeat state is bound to the
    job, window, date, mode and config fingerprint, because the run identity needs the
