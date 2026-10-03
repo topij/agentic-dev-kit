@@ -14866,6 +14866,29 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
     assert "`launch_lane.py`" in rename_entry
 
 
+@pytest.mark.kit_repo_only(
+    "config/dev-model.yaml",
+    ".claude/rules/safety-critical-changes.md",
+)
+def test_the_claude_rule_repeats_the_declared_safety_critical_paths() -> None:
+    """`review.safety_critical_paths` is the one declared list (#585): it sets a
+    fallback review's lens count. Claude's rule frontmatter cannot read config,
+    so it carries a copy, and a copy that drifts sends a gate file to one lens
+    or reviews a non-gate file as safety-critical."""
+    config = yaml.safe_load(
+        (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
+    )
+    declared = config["review"]["safety_critical_paths"]
+    claude_rule = (
+        REPO_ROOT / ".claude" / "rules" / "safety-critical-changes.md"
+    ).read_text(encoding="utf-8")
+    frontmatter = yaml.safe_load(claude_rule.split("---", 2)[1])
+
+    assert sorted(frontmatter["paths"]) == sorted(declared)
+    assert len(declared) == len(set(declared))
+    assert config["parallel"]["claude_settings_profile"] in declared
+
+
 @pytest.mark.evidence
 @pytest.mark.kit_repo_only("saved_plans/codex-hooks-live-probe/.codex/hooks.json")
 def test_codex_live_validation_fixture_commands_are_executable(

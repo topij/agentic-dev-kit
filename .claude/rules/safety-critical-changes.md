@@ -1,4 +1,7 @@
 ---
+# Keep this list equal to `review.safety_critical_paths` in config/dev-model.yaml.
+# That key is what sets a fallback review's lens count, and this frontmatter
+# cannot read it.
 paths:
   - "scripts/dev_session.sh"
   - "scripts/devkit/dev_session.sh"

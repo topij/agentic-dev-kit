@@ -10569,3 +10569,951 @@ def test_numeric_platform_identity_can_be_acknowledged_without_a_node_id() -> No
     assert not handled["new_comments"] and handled["mergeable"]
     distinct = _occurrence_report(pr_watch, "inline", [{**raw, "id": 18}], seen)
     assert distinct["new_comments"] and not distinct["mergeable"]
+
+
+# --------------------------------------------------------------------------- #
+# the review class: a fallback review's lens count follows the declared
+# safety-critical paths (#585)
+# --------------------------------------------------------------------------- #
+
+CLASS_BASE = "cccc333cccc333cccc333cccc333cccc333cccc3"
+CLASS_PARENT = "aaaa111aaaa111aaaa111aaaa111aaaa111aaaa1"
+CLASS_HEAD = "bbbb222bbbb222bbbb222bbbb222bbbb222bbbb2"
+GATE_PATH = "scripts/pr_watch.py"
+
+
+def _class_repo(tmp_path: Path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def git(*args: str) -> str:
+        result = subprocess.run(
+            ["git", *args], cwd=repo, text=True, capture_output=True, check=True
+        )
+        return result.stdout.strip()
+
+    git("init", "-q")
+    git("config", "user.name", "Review Class Test")
+    git("config", "user.email", "review-class@example.test")
+
+    def commit(files: dict[str, str], message: str) -> str:
+        for path, body in files.items():
+            target = repo / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(body, encoding="utf-8")
+        git("add", "-A")
+        git("commit", "-qm", message)
+        return git("rev-parse", "HEAD")
+
+    return repo, git, commit
+
+
+def _classed(pr_watch, monkeypatch, paths: list[str], patterns=(GATE_PATH,)) -> None:
+    """Make `pr_review_class` see ``paths`` changed, with ``patterns`` at the base."""
+    monkeypatch.setattr(
+        pr_watch,
+        "_declared_safety_critical_paths",
+        lambda rev: None if patterns is None else frozenset(patterns),
+    )
+    monkeypatch.setattr(
+        pr_watch, "_merge_base_paths", lambda base, head, what: list(paths)
+    )
+
+
+def test_review_class_is_safety_critical_when_a_declared_path_changes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    pr_watch = _load_pr_watch()
+    repo, _git, commit = _class_repo(tmp_path)
+    base = commit({GATE_PATH: "gate = 1\n", "docs/a.md": "a\n"}, "base")
+    head = commit({GATE_PATH: "gate = 2\n", "docs/a.md": "b\n"}, "change the gate")
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    result = pr_watch.pr_review_class(base, head, patterns=(GATE_PATH,))
+
+    assert result == {
+        "class": "safety-critical",
+        "matched_paths": [GATE_PATH],
+        "changes_config": False,
+        "unclassified": None,
+    }
+    assert pr_watch._lens_floor(result) == 2
+
+
+def test_review_class_is_standard_when_no_declared_path_changes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    pr_watch = _load_pr_watch()
+    repo, _git, commit = _class_repo(tmp_path)
+    base = commit({GATE_PATH: "gate = 1\n", "docs/a.md": "a\n"}, "base")
+    head = commit({"docs/a.md": "b\n"}, "docs only")
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    result = pr_watch.pr_review_class(base, head, patterns=(GATE_PATH,))
+
+    assert result == {
+        "class": "standard",
+        "matched_paths": [],
+        "changes_config": False,
+        "unclassified": None,
+    }
+    assert pr_watch._lens_floor(result) == 1
+
+
+def test_review_class_diffs_from_the_merge_base_not_from_the_base_tip(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The base branch moves on after the fork. A gate change that landed on the
+    base side is not this PR's change, and a two-dot diff would count it."""
+    pr_watch = _load_pr_watch()
+    repo, git, commit = _class_repo(tmp_path)
+    commit({GATE_PATH: "gate = 1\n", "docs/a.md": "a\n"}, "root")
+    git("branch", "feature")
+    base_tip = commit({GATE_PATH: "gate = 2\n"}, "the base changes the gate")
+    git("checkout", "-q", "feature")
+    head = commit({"docs/a.md": "b\n"}, "the PR changes docs")
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    result = pr_watch.pr_review_class(base_tip, head, patterns=(GATE_PATH,))
+
+    assert result["class"] == "standard"
+
+
+def test_review_class_counts_a_file_renamed_away_from_a_declared_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    pr_watch = _load_pr_watch()
+    repo, git, commit = _class_repo(tmp_path)
+    base = commit({GATE_PATH: "gate = 1\n"}, "base")
+    (repo / "docs").mkdir()
+    git("mv", GATE_PATH, "docs/moved.py")
+    git("commit", "-qm", "move the gate")
+    head = git("rev-parse", "HEAD")
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    result = pr_watch.pr_review_class(base, head, patterns=(GATE_PATH,))
+
+    assert result["class"] == "safety-critical"
+    assert result["matched_paths"] == [GATE_PATH]
+
+
+def test_review_class_patterns_are_fnmatch_whose_star_crosses_directories() -> None:
+    pr_watch = _load_pr_watch()
+    import fnmatch  # noqa: PLC0415
+
+    assert fnmatch.fnmatchcase("scripts/devkit/pr_watch.py", "scripts/*")
+    with pytest.MonkeyPatch.context() as mp:
+        _classed(pr_watch, mp, ["scripts/devkit/pr_watch.py"], patterns=("scripts/*",))
+        result = pr_watch.pr_review_class(CLASS_BASE, CLASS_HEAD)
+    assert result["matched_paths"] == ["scripts/devkit/pr_watch.py"]
+
+
+@pytest.mark.parametrize(
+    ("base", "head", "patterns", "reason"),
+    [
+        (CLASS_BASE, CLASS_HEAD, None, "not declared"),
+        (None, CLASS_HEAD, (GATE_PATH,), "base or head commit is unknown"),
+        (CLASS_BASE, None, (GATE_PATH,), "base or head commit is unknown"),
+        ("--output=/tmp/x", CLASS_HEAD, (GATE_PATH,), "base or head commit is unknown"),
+        (CLASS_BASE + "zz", CLASS_HEAD, (GATE_PATH,), "base or head commit is unknown"),
+        (CLASS_BASE + "\n", CLASS_HEAD, (GATE_PATH,), "base or head commit is unknown"),
+        (CLASS_BASE, "final-head", (GATE_PATH,), "base or head commit is unknown"),
+    ],
+)
+def test_an_unclassed_pr_is_treated_as_safety_critical(
+    base, head, patterns, reason
+) -> None:
+    pr_watch = _load_pr_watch()
+
+    result = pr_watch.pr_review_class(base, head, patterns=patterns)
+
+    assert result["class"] == "safety-critical"
+    assert reason in result["unclassified"]
+    assert pr_watch._lens_floor(result) == 2
+
+
+def test_a_diff_git_cannot_produce_is_treated_as_safety_critical(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    pr_watch = _load_pr_watch()
+    repo, _git, commit = _class_repo(tmp_path)
+    head = commit({"docs/a.md": "a\n"}, "head")
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    result = pr_watch.pr_review_class("0" * 40, head, patterns=(GATE_PATH,))
+
+    assert result["class"] == "safety-critical"
+    assert "could not establish the PR's changed paths" in result["unclassified"]
+    assert "fetch" in result["unclassified"]
+
+
+def test_patterns_match_the_path_exactly_as_git_prints_it() -> None:
+    """The config comment's claim: a `./` prefix, a trailing `/` or a different
+    case never matches."""
+    pr_watch = _load_pr_watch()
+    for pattern in ("./scripts/pr_watch.py", "scripts/pr_watch.py/", "SCRIPTS/pr_watch.py"):
+        with pytest.MonkeyPatch.context() as mp:
+            _classed(pr_watch, mp, [GATE_PATH], patterns=(pattern,))
+            result = pr_watch.pr_review_class(CLASS_BASE, CLASS_HEAD)
+        assert result["class"] == "standard", pattern
+
+
+def test_a_floor_is_two_unless_the_class_is_a_computed_standard() -> None:
+    pr_watch = _load_pr_watch()
+    assert pr_watch._lens_floor(None) == 2
+    assert pr_watch._lens_floor({"class": "standard", "unclassified": "x"}) == 2
+    assert pr_watch._lens_floor({"class": "safety-critical", "unclassified": None}) == 2
+    assert pr_watch._lens_floor({"class": "standard", "unclassified": None}) == 1
+
+
+def _declaring(paths: list[str] | str | None) -> str:
+    """A committed config declaring ``paths`` (absent for None, raw for a str)."""
+    if paths is None:
+        return "review:\n  bots: [coderabbit]\n"
+    if isinstance(paths, str):
+        return f"review:\n  safety_critical_paths: {paths}\n"
+    entries = "".join(f'    - "{path}"\n' for path in paths)
+    return f"review:\n  bots: [coderabbit]\n  safety_critical_paths:\n{entries}"
+
+
+def test_the_list_is_read_at_the_base_not_from_the_checkout(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The checkout is the PR's own branch here, and it drops the gate from the
+    list. Classing by it would give this PR one lens for changing the gate."""
+    pr_watch = _load_pr_watch()
+    repo, _git, commit = _class_repo(tmp_path)
+    base = commit(
+        {"config/dev-model.yaml": _declaring([GATE_PATH]), GATE_PATH: "gate = 1\n"},
+        "base",
+    )
+    head = commit(
+        {"config/dev-model.yaml": _declaring([]), GATE_PATH: "gate = 2\n"},
+        "drop the gate from the list and change it",
+    )
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    result = pr_watch.pr_review_class(base, head)
+
+    assert result["class"] == "safety-critical"
+    assert result["matched_paths"] == [GATE_PATH]
+    assert result["changes_config"] is True
+    assert pr_watch._describe_review_class(result) == (
+        f"it changes {GATE_PATH} under review.safety_critical_paths and the "
+        "config that declares review.safety_critical_paths"
+    )
+
+
+def test_a_pr_that_changes_only_the_list_is_safety_critical(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    pr_watch = _load_pr_watch()
+    repo, _git, commit = _class_repo(tmp_path)
+    base = commit({"config/dev-model.yaml": _declaring([GATE_PATH, "lib/*"])}, "base")
+    head = commit({"config/dev-model.yaml": _declaring(["lib/*"])}, "shrink the list")
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    result = pr_watch.pr_review_class(base, head)
+
+    assert result["class"] == "safety-critical"
+    assert result["matched_paths"] == []
+    assert result["changes_config"] is True
+    assert pr_watch._lens_floor(result) == 2
+
+
+def test_any_change_to_the_config_is_safety_critical(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The config declares the list and points at other gate files, so even a
+    change that leaves the list's meaning alone owes two lenses."""
+    pr_watch = _load_pr_watch()
+    repo, _git, commit = _class_repo(tmp_path)
+    base = commit({"config/dev-model.yaml": _declaring([GATE_PATH, "lib/*"])}, "base")
+    reordered = _declaring(["lib/*", GATE_PATH]).replace("[coderabbit]", "[otherbot]")
+    head = commit({"config/dev-model.yaml": reordered}, "reorder, change a bot")
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    result = pr_watch.pr_review_class(base, head)
+
+    assert result["class"] == "safety-critical"
+    assert result["matched_paths"] == []
+    assert result["changes_config"] is True
+
+
+def test_repointing_the_lane_profile_at_an_unlisted_file_is_safety_critical(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """PR #927's first adversarial round: the list names the shipped profile
+    path, so pointing `parallel.claude_settings_profile` at a new file changed
+    nothing the list matched, and the PR owed one lens."""
+    pr_watch = _load_pr_watch()
+    repo, _git, commit = _class_repo(tmp_path)
+    profile = "config/claude-lane-settings.json"
+    config = _declaring([GATE_PATH, profile]) + f"parallel:\n  claude_settings_profile: {profile}\n"
+    base = commit({"config/dev-model.yaml": config, profile: "{}\n"}, "base")
+    head = commit(
+        {
+            "config/dev-model.yaml": config.replace(
+                f"claude_settings_profile: {profile}",
+                "claude_settings_profile: config/permissive-lane.json",
+            ),
+            "config/permissive-lane.json": '{"permissions": {"allow": ["*"]}}\n',
+        },
+        "repoint the lane profile",
+    )
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    result = pr_watch.pr_review_class(base, head)
+
+    assert result["matched_paths"] == []
+    assert result["changes_config"] is True
+    assert result["class"] == "safety-critical"
+
+
+def test_a_list_changed_on_the_base_side_is_not_the_prs_change(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The base adds to the list after the fork. The PR never touched the
+    config, so it is not classed by that change, but the base's longer list is
+    the one it is classed by."""
+    pr_watch = _load_pr_watch()
+    repo, git, commit = _class_repo(tmp_path)
+    commit({"config/dev-model.yaml": _declaring([GATE_PATH]), "docs/a.md": "a\n"}, "root")
+    git("branch", "feature")
+    git("branch", "docs-only")
+    base_tip = commit(
+        {"config/dev-model.yaml": _declaring([GATE_PATH, "lib/*"])}, "the base adds lib"
+    )
+    git("checkout", "-q", "feature")
+    head = commit({"lib/helper.py": "x = 1\n", "docs/a.md": "b\n"}, "the PR changes lib")
+    git("checkout", "-q", "docs-only")
+    docs_head = commit({"docs/a.md": "c\n"}, "the PR changes docs")
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    result = pr_watch.pr_review_class(base_tip, head)
+    docs_only = pr_watch.pr_review_class(base_tip, docs_head)
+
+    assert result["changes_config"] is False
+    assert result["matched_paths"] == ["lib/helper.py"]
+    assert result["class"] == "safety-critical"
+    assert docs_only["changes_config"] is False
+    assert docs_only["class"] == "standard"
+
+
+@pytest.mark.parametrize(
+    "declared",
+    [None, "[]", '"scripts/gate.py"', '\n    - "scripts/gate.py"\n    - ""', "\n    - 7"],
+)
+def test_an_undeclared_or_malformed_list_at_the_base_leaves_the_pr_unclassed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, declared: str | None
+) -> None:
+    """A malformed list is dropped whole: keeping its good entries would move the
+    dropped entry's file to one lens."""
+    pr_watch = _load_pr_watch()
+    repo, _git, commit = _class_repo(tmp_path)
+    base = commit({"config/dev-model.yaml": _declaring(declared)}, "base")
+    head = commit({"docs/a.md": "a\n"}, "docs only")
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    result = pr_watch.pr_review_class(base, head)
+
+    assert result["class"] == "safety-critical"
+    assert (
+        "not declared at the PR's base, or is empty or malformed there"
+        in result["unclassified"]
+    )
+
+
+def test_a_base_with_no_config_leaves_the_pr_unclassed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    pr_watch = _load_pr_watch()
+    repo, _git, commit = _class_repo(tmp_path)
+    base = commit({"docs/a.md": "a\n"}, "base")
+    head = commit({"docs/a.md": "b\n"}, "head")
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    result = pr_watch.pr_review_class(base, head)
+
+    assert result["class"] == "safety-critical"
+    assert "could not read config/dev-model.yaml at" in result["unclassified"]
+
+
+def test_the_config_path_the_class_reads_is_kitconfigs() -> None:
+    pr_watch = _load_pr_watch()
+    sys.path.insert(0, str(ENGINE_DIR / "lib"))
+    import kitconfig  # noqa: PLC0415
+
+    assert pr_watch._config_rel_path() == kitconfig.DEFAULT_CONFIG_PATH
+
+
+def _record_lens(
+    monkeypatch: pytest.MonkeyPatch,
+    pr_watch,
+    *,
+    lenses: str | None,
+    snapshot: dict | None = None,
+    source: str = "fallback:lens",
+) -> tuple[list[dict], dict]:
+    monkeypatch.setattr(pr_watch, "require_gh_backend", lambda operation: None)
+    monkeypatch.setattr(
+        pr_watch,
+        "fetch_review_snapshot",
+        lambda pr: snapshot
+        or {"number": pr, "headRefOid": CLASS_HEAD, "baseRefOid": CLASS_BASE, "reviews": []},
+    )
+    monkeypatch.setattr(
+        pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "ok")
+    )
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
+    saved: list[dict] = []
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: saved.append(state))
+    report = pr_watch.record_review(9, source, CLASS_HEAD, lenses=lenses, now=NOW)
+    return saved, report
+
+
+def test_a_single_lens_receipt_is_recorded_on_a_standard_pr(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    _classed(pr_watch, monkeypatch, ["docs/a.md"])
+
+    saved, report = _record_lens(monkeypatch, pr_watch, lenses="adversarial")
+
+    assert saved[0]["review_receipt"] == {
+        "head": CLASS_HEAD,
+        "source": "fallback:lens",
+        "recorded_at": NOW.isoformat(),
+        "lenses": ["adversarial"],
+    }
+    assert report["review_class"]["class"] == "standard"
+    rendered = pr_watch.render_record_review(report)
+    assert "one lens (adversarial), which is what this PR owes" in rendered
+    assert "⚠ one lens only" not in rendered
+
+
+@pytest.mark.parametrize(
+    "lenses",
+    [None, "", "adversarial,correctness", "adversarial, focused on the gate", "two words"],
+)
+def test_a_single_lens_receipt_must_name_exactly_one_lens(
+    monkeypatch: pytest.MonkeyPatch, lenses: str | None
+) -> None:
+    pr_watch = _load_pr_watch()
+    _classed(pr_watch, monkeypatch, ["docs/a.md"])
+
+    with pytest.raises(ValueError, match="records one isolated lens"):
+        _record_lens(monkeypatch, pr_watch, lenses=lenses)
+
+
+def test_a_single_lens_receipt_is_refused_on_a_safety_critical_pr(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    _classed(pr_watch, monkeypatch, ["docs/a.md", GATE_PATH])
+    saved: list[dict] = []
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: saved.append(state))
+
+    with pytest.raises(ValueError, match=f"owes two: it changes {GATE_PATH}"):
+        _record_lens(monkeypatch, pr_watch, lenses="adversarial")
+    assert saved == []
+
+
+def test_a_single_lens_receipt_is_refused_on_a_pr_that_cannot_be_classed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    _classed(pr_watch, monkeypatch, ["docs/a.md"])
+
+    with pytest.raises(ValueError, match="could not be classed"):
+        _record_lens(
+            monkeypatch,
+            pr_watch,
+            lenses="adversarial",
+            snapshot={"number": 9, "headRefOid": CLASS_HEAD, "reviews": []},
+        )
+
+
+def test_a_one_lens_panel_receipt_on_a_safety_critical_pr_records_as_before(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Safety-critical behaviour is unchanged: the class adds no refusal for
+    the sources that existed before it, only for `fallback:lens`."""
+    pr_watch = _load_pr_watch()
+    _classed(pr_watch, monkeypatch, [GATE_PATH])
+
+    saved, report = _record_lens(
+        monkeypatch, pr_watch, lenses="correctness", source="fallback:panel"
+    )
+
+    assert saved[0]["review_receipt"]["source"] == "fallback:panel"
+    rendered = pr_watch.render_record_review(report)
+    assert "⚠ one lens only (correctness)" in rendered
+    assert f"it changes {GATE_PATH} under review.safety_critical_paths" in rendered
+
+
+def _compose_on_class(
+    monkeypatch: pytest.MonkeyPatch, pr_watch, previous: dict, changed: list[str]
+) -> dict:
+    _classed(pr_watch, monkeypatch, changed)
+    monkeypatch.setattr(pr_watch, "require_gh_backend", lambda operation: None)
+    monkeypatch.setattr(
+        pr_watch,
+        "fetch_review_snapshot",
+        lambda pr: {
+            "number": pr,
+            "headRefOid": CLASS_HEAD,
+            "baseRefOid": CLASS_BASE,
+            "reviews": [],
+        },
+    )
+    monkeypatch.setattr(
+        pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "ok")
+    )
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: {"review_receipt": previous})
+    saved: list[dict] = []
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: saved.append(state))
+    monkeypatch.setattr(pr_watch, "_delta_paths", lambda base, head: ["docs/a.md"])
+    pr_watch.record_review(
+        9,
+        "fallback:delta",
+        CLASS_HEAD,
+        lenses="correctness",
+        compose_parent=CLASS_PARENT,
+        now=NOW,
+    )
+    return saved[0]["review_receipt"]
+
+
+SINGLE_LENS_PARENT = {
+    "head": CLASS_PARENT,
+    "source": "fallback:lens",
+    "lenses": ["adversarial"],
+}
+
+
+def test_a_standard_pr_composes_a_delta_onto_a_single_lens_parent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+
+    receipt = _compose_on_class(
+        monkeypatch, pr_watch, dict(SINGLE_LENS_PARENT), ["docs/a.md"]
+    )
+
+    assert receipt["coverage"]["full_parent"]["source"] == "fallback:lens"
+    assert pr_watch._validate_composed_coverage(receipt, CLASS_HEAD, lens_floor=1) == (
+        True,
+        None,
+    )
+    assert pr_watch._validate_composed_coverage(receipt, CLASS_HEAD) == (
+        False,
+        "full_parent does not record a dual-lens pass",
+    )
+
+
+def test_a_safety_critical_pr_still_refuses_a_single_lens_parent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+
+    with pytest.raises(ValueError, match="not a dual-lens full pass"):
+        _compose_on_class(
+            monkeypatch, pr_watch, dict(SINGLE_LENS_PARENT), ["docs/a.md", GATE_PATH]
+        )
+
+
+def test_a_standard_pr_still_refuses_a_parent_with_no_lens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    lensless = {"head": CLASS_PARENT, "source": "coderabbit:comment-verdict"}
+
+    with pytest.raises(
+        ValueError, match="is neither a dual-lens pass nor a one-lens fallback:lens pass"
+    ):
+        _compose_on_class(monkeypatch, pr_watch, lensless, ["docs/a.md"])
+
+
+def test_a_standard_pr_refuses_a_one_lens_degraded_parent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PR #927's first correctness round: on a standard PR the floor dropped to
+    one lens, and a Degraded-mode receipt, one lens in the author's context,
+    began to anchor a composed delta. Only an isolated `fallback:lens` may."""
+    pr_watch = _load_pr_watch()
+    degraded = {"head": CLASS_PARENT, "source": "fallback:codex", "lenses": ["correctness"]}
+
+    with pytest.raises(
+        ValueError, match="is neither a dual-lens pass nor a one-lens fallback:lens pass"
+    ):
+        _compose_on_class(monkeypatch, pr_watch, degraded, ["docs/a.md"])
+
+    receipt = _single_lens_composed_receipt()
+    receipt["coverage"]["full_parent"] = {**degraded}
+    monkeypatch.setattr(pr_watch, "_delta_paths", lambda base, head: ["docs/a.md"])
+    assert pr_watch._validate_composed_coverage(receipt, HEAD_SHA, lens_floor=1) == (
+        False,
+        "full_parent is neither a dual-lens pass nor a one-lens fallback:lens pass",
+    )
+
+
+def _single_lens_composed_receipt() -> dict:
+    delta = {
+        "base": CLASS_PARENT,
+        "head": HEAD_SHA,
+        "source": "fallback:delta",
+        "lenses": ["correctness"],
+        "paths": ["docs/a.md"],
+        "recorded_at": NOW.isoformat(),
+    }
+    return {
+        "head": HEAD_SHA,
+        "source": "fallback:delta",
+        "lenses": ["correctness"],
+        "recorded_at": NOW.isoformat(),
+        "coverage": {
+            "version": 1,
+            "full_parent": dict(SINGLE_LENS_PARENT),
+            "deltas": [delta],
+        },
+    }
+
+
+@pytest.mark.parametrize(
+    ("changed", "valid"),
+    [(["docs/a.md"], True), (["docs/a.md", GATE_PATH], False)],
+)
+def test_the_merge_gate_reads_a_single_lens_parent_against_the_pr_class(
+    monkeypatch: pytest.MonkeyPatch, changed: list[str], valid: bool
+) -> None:
+    pr_watch = _load_pr_watch()
+    _classed(pr_watch, monkeypatch, changed)
+    monkeypatch.setattr(pr_watch, "_delta_paths", lambda base, head: ["docs/a.md"])
+    view = _reviewed_view(pr_watch, baseRefOid=CLASS_BASE)
+
+    report = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        review_receipt=_single_lens_composed_receipt(),
+        **_settled(view),
+    )
+
+    assert report["review_evidence"]["valid"] is valid
+    assert report["mergeable"] is valid
+    blocker = (
+        "composed review coverage is invalid: "
+        "full_parent does not record a dual-lens pass"
+    )
+    assert (blocker in report["merge_blockers"]) is not valid
+    assert report["review_class"]["class"] == ("standard" if valid else "safety-critical")
+
+
+def test_an_unclassed_pr_keeps_the_dual_lens_parent_requirement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No `baseRefOid` in the view, so the class cannot be computed."""
+    pr_watch = _load_pr_watch()
+    _classed(pr_watch, monkeypatch, ["docs/a.md"])
+    monkeypatch.setattr(pr_watch, "_delta_paths", lambda base, head: ["docs/a.md"])
+    view = _reviewed_view(pr_watch)
+
+    report = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        review_receipt=_single_lens_composed_receipt(),
+        **_settled(view),
+    )
+
+    assert report["review_evidence"]["valid"] is False
+    assert report["review_class"]["unclassified"]
+
+
+def test_a_one_lens_receipt_on_a_safety_critical_pr_still_satisfies_the_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The class adds no merge blocker: a safety-critical PR owes what it owed."""
+    pr_watch = _load_pr_watch()
+    _classed(pr_watch, monkeypatch, [GATE_PATH])
+    view = _reviewed_view(pr_watch, baseRefOid=CLASS_BASE)
+
+    report = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        review_receipt={"head": HEAD_SHA, "source": "fallback:panel", "lenses": ["correctness"]},
+        **_settled(view),
+    )
+
+    assert report["review_evidence"]["valid"] is True
+    assert report["mergeable"] is True
+
+
+STANDARD_OWED = "which is what this PR owes: no path in review.safety_critical_paths changed"
+STANDARD_NOT_ISOLATED = "⚠ ONE lens claimed (adversarial) — a standard PR's one lens is an isolated fallback:lens pass"
+
+
+@pytest.mark.parametrize(
+    ("changed", "base", "source", "expected", "warned"),
+    [
+        (["docs/a.md"], CLASS_BASE, "fallback:lens", STANDARD_OWED, False),
+        (["docs/a.md"], CLASS_BASE, "fallback:delta", STANDARD_NOT_ISOLATED, True),
+        (["docs/a.md"], CLASS_BASE, "fallback:codex", STANDARD_NOT_ISOLATED, True),
+        (["docs/a.md"], CLASS_BASE, "fallback:panel", STANDARD_NOT_ISOLATED, True),
+        ([GATE_PATH], CLASS_BASE, "fallback:lens", f"not a dual-lens pass; it changes {GATE_PATH} under review.safety_critical_paths", True),
+        (["docs/a.md"], None, "fallback:lens", "not a dual-lens pass; the PR could not be classed", True),
+    ],
+)
+def test_the_poll_render_reads_a_one_lens_receipt_against_the_class(
+    monkeypatch: pytest.MonkeyPatch,
+    changed: list[str],
+    base: str | None,
+    source: str,
+    expected: str,
+    warned: bool,
+) -> None:
+    """PR #927's second round: a one-lens Degraded-mode receipt is not what a
+    standard PR owes, and the render must not say it is."""
+    pr_watch = _load_pr_watch()
+    _classed(pr_watch, monkeypatch, changed)
+    view = _reviewed_view(pr_watch, baseRefOid=base)
+
+    rendered = pr_watch.render(
+        pr_watch.build_report(
+            view,
+            [],
+            set(),
+            review_receipt={
+                "head": HEAD_SHA,
+                "source": source,
+                "lenses": ["adversarial"],
+            },
+            **_settled(view),
+        )
+    )
+
+    assert expected in rendered
+    assert ("⚠ ONE lens claimed (adversarial)" in rendered) is warned
+
+
+@pytest.mark.parametrize(
+    ("source", "composed", "warned"),
+    [
+        ("fallback:lens", False, False),
+        ("fallback:delta", True, False),
+        ("fallback:delta", False, True),
+        ("fallback:codex", False, True),
+    ],
+)
+def test_the_record_render_reads_a_one_lens_receipt_by_its_source(
+    monkeypatch: pytest.MonkeyPatch, source: str, composed: bool, warned: bool
+) -> None:
+    """PR #927's fourth round: a delta receipt with no composed parent stood in
+    for the opening pass, which is never a delta pass, so it is flagged."""
+    pr_watch = _load_pr_watch()
+    standard = {"class": "standard", "matched_paths": [], "changes_config": False, "unclassified": None}
+    receipt = {"head": CLASS_HEAD, "source": source, "lenses": ["correctness"]}
+    if composed:
+        receipt["coverage"] = _single_lens_composed_receipt()["coverage"]
+
+    rendered = pr_watch.render_record_review(
+        {"pr": 9, "review_receipt": receipt, "review_class": standard}
+    )
+
+    assert ("⚠ one lens only (correctness)" in rendered) is warned
+    assert ("one lens (correctness), which is what this PR owes" in rendered) is not warned
+    if warned:
+        # Rule 2 does not reach a standard PR, so its warning must not cite it.
+        assert (
+            "⚠ one lens only (correctness) — a standard PR's one lens is an "
+            "isolated fallback:lens pass"
+        ) in rendered
+        assert "rule 2" not in rendered
+
+
+def test_a_padded_source_still_reads_as_owed() -> None:
+    pr_watch = _load_pr_watch()
+    standard = {"class": "standard", "matched_paths": [], "changes_config": False, "unclassified": None}
+    assert pr_watch._one_lens_is_owed(standard, " fallback:lens ", composed=False)
+    assert pr_watch._one_lens_is_owed(standard, " fallback:delta ", composed=True)
+    assert not pr_watch._one_lens_is_owed(standard, " fallback:codex ", composed=False)
+
+
+def test_a_padded_pattern_still_matches_its_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Losing the strip would quietly move a padded gate path to one lens."""
+    pr_watch = _load_pr_watch()
+    repo, _git, commit = _class_repo(tmp_path)
+    base = commit(
+        {
+            "config/dev-model.yaml": f'review:\n  safety_critical_paths:\n    - " {GATE_PATH} "\n',
+            GATE_PATH: "gate = 1\n",
+        },
+        "base",
+    )
+    head = commit({GATE_PATH: "gate = 2\n"}, "change the gate")
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    result = pr_watch.pr_review_class(base, head)
+
+    assert result["matched_paths"] == [GATE_PATH]
+
+
+@pytest.mark.parametrize(
+    ("changed", "owed"),
+    [
+        (["docs/a.md"], "review class: standard — a fallback review owes one isolated lens, recorded as fallback:lens"),
+        ([GATE_PATH], "review class: safety-critical — a fallback review owes the two-lens panel"),
+    ],
+)
+def test_the_poll_render_says_what_a_fallback_review_owes_while_none_stands(
+    monkeypatch: pytest.MonkeyPatch, changed: list[str], owed: str
+) -> None:
+    pr_watch = _load_pr_watch()
+    _classed(pr_watch, monkeypatch, changed)
+    view = _reviewed_view(pr_watch, baseRefOid=CLASS_BASE)
+
+    report = pr_watch.build_report(view, [], set(), **_settled(view))
+    rendered = pr_watch.render(report)
+
+    assert owed in rendered
+    with_receipt = pr_watch.render(
+        pr_watch.build_report(
+            view,
+            [],
+            set(),
+            review_receipt={
+                "head": HEAD_SHA,
+                "source": "fallback:panel",
+                "lenses": ["adversarial", "correctness"],
+            },
+            **_settled(view),
+        )
+    )
+    assert "review class:" not in with_receipt
+
+
+def test_both_transports_fetch_the_base_commit_the_class_reads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    asked: list[list[str]] = []
+
+    def fake_gh_json(args):
+        asked.append(args)
+        return {} if args[0] == "pr" else []
+
+    monkeypatch.setattr(pr_watch, "_gh_json", fake_gh_json)
+    pr_watch.fetch_pr_view(9)
+    pr_watch.fetch_review_snapshot(9)
+    for call in (asked[0], asked[-1]):
+        assert "baseRefOid" in call[call.index("--json") + 1].split(",")
+
+    monkeypatch.setattr(
+        pr_watch,
+        "_http_get",
+        lambda url, token, **kw: (
+            {"number": 9, "head": {"sha": HEAD_SHA}, "base": {"ref": "main", "sha": CLASS_BASE}},
+            None,
+        ),
+    )
+    monkeypatch.setattr(pr_watch, "_http_get_all", lambda url, token, **kw: [])
+    monkeypatch.setattr(pr_watch, "_rest_fetch_checks", lambda sha, **kw: ([], []))
+    monkeypatch.setattr(pr_watch, "_rest_repo_slug", lambda: ("o", "r"))
+    rest_view, _, _ = pr_watch.rest_pr_view(9, token="t")
+    assert rest_view["baseRefOid"] == CLASS_BASE
+
+
+def test_the_poll_render_reads_a_composed_one_lens_delta_as_owed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    _classed(pr_watch, monkeypatch, ["docs/a.md"])
+    monkeypatch.setattr(pr_watch, "_delta_paths", lambda base, head: ["docs/a.md"])
+    view = _reviewed_view(pr_watch, baseRefOid=CLASS_BASE)
+
+    rendered = pr_watch.render(
+        pr_watch.build_report(
+            view,
+            [],
+            set(),
+            review_receipt=_single_lens_composed_receipt(),
+            **_settled(view),
+        )
+    )
+
+    assert "fallback:delta — one lens claimed (correctness), which is what this PR owes" in rendered
+
+
+def test_the_class_description_names_one_path_and_counts_the_rest() -> None:
+    """The matched paths come from Git, so a newline in one must not reach the
+    terminal, and only the first is named."""
+    pr_watch = _load_pr_watch()
+
+    described = pr_watch._describe_review_class(
+        {
+            "class": "safety-critical",
+            "matched_paths": ["scripts/a\nb.py", "scripts/c.py", "scripts/d.py"],
+            "changes_config": False,
+            "unclassified": None,
+        }
+    )
+
+    assert "\n" not in described
+    assert described.endswith("and 2 more under review.safety_critical_paths")
+    assert "scripts/c.py" not in described
+
+
+def _wired_repo(tmp_path: Path):
+    """A real repo whose base declares the gate and whose head changes it."""
+    repo, _git, commit = _class_repo(tmp_path)
+    base = commit(
+        {"config/dev-model.yaml": _declaring([GATE_PATH]), GATE_PATH: "gate = 1\n"},
+        "base",
+    )
+    head = commit({GATE_PATH: "gate = 2\n"}, "change the gate")
+    return repo, base, head
+
+
+def test_record_review_classes_the_pr_from_its_own_base_and_head(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """PR #927's fourth round: every other class test patched the diff or called
+    `pr_review_class` directly, so swapping or repeating the base and head at
+    this call site left the guard dead under a green suite."""
+    pr_watch = _load_pr_watch()
+    repo, base, head = _wired_repo(tmp_path)
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+    monkeypatch.setattr(pr_watch, "require_gh_backend", lambda operation: None)
+    monkeypatch.setattr(
+        pr_watch,
+        "fetch_review_snapshot",
+        lambda pr: {"number": pr, "headRefOid": head, "baseRefOid": base, "reviews": []},
+    )
+    monkeypatch.setattr(
+        pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "ok")
+    )
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
+    saved: list[dict] = []
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: saved.append(state))
+
+    with pytest.raises(ValueError, match=f"owes two: it changes {GATE_PATH}"):
+        pr_watch.record_review(9, "fallback:lens", head, lenses="adversarial", now=NOW)
+    assert saved == []
+
+
+def test_build_report_classes_the_pr_from_its_own_base_and_head(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    pr_watch = _load_pr_watch()
+    repo, base, head = _wired_repo(tmp_path)
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+    view = _reviewed_view(pr_watch, headRefOid=head, baseRefOid=base)
+
+    report = pr_watch.build_report(view, [], set(), **_settled(view))
+
+    assert report["review_class"]["class"] == "safety-critical"
+    assert report["review_class"]["matched_paths"] == [GATE_PATH]

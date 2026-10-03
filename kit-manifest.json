@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "60ecad0c5c7271c431013ab2e05b7b6d20f805bfbaf817c784e7e724355b6968"
+      "sha256": "458c0b0b7e1486e53841c3d573f15eed1e82c7dd2ec2c079a64f9add2df6cb56"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -40,7 +40,7 @@
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
-      "sha256": "0a099d2eff11c6d6b6990c8d0f038b12d9c897f6f2956a894972e010b4a2a924"
+      "sha256": "a87e5ac680cd264f6be034ca5473080d4c6185928378bf4f74a81fecaf5ccb2c"
     },
     "docs/agentic-dev-kit/workflows/adopt.md": {
       "role": "workflow",
@@ -60,7 +60,7 @@
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "98eaefec62e9589508b1cd79a496b4e31a328a41207d48e726a6b42df1f4dfcc"
+      "sha256": "ee0af277c6a55ec95c84a24a46b88c31b844e1860d49c95021f9afe1ed6ab36d"
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
@@ -104,7 +104,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "4067a518dd8ac591a4dceb588de098f1c8f0c662231d8f3a82abfaab11e45f40"
+      "sha256": "7a1bb4db2a58f120027f26eb670982e46dec2d27fdb6b48f766dd21905c9e257"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -144,7 +144,7 @@
     },
     "scripts/hooks/pr_followup_hook.py": {
       "role": "hook",
-      "sha256": "44cef5b23085bf39601cf02f845e69cc077e58e2e0b241e018aedea3c562afc1"
+      "sha256": "c0649db424739c7476a3bf3b2b92ea1d61d1db27f313f250d58846dbe509f637"
     },
     "scripts/hooks/pre-push": {
       "role": "hook",
@@ -514,7 +514,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "dde03372e917e05217930f9be56ef1d5d937b1192b5793d6f342f52dd362f296"
+      "sha256": "29ad70130dc3435970bb70419579d4c6b42bf9650c10ab346260ab60ce7ef1ea"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
@@ -546,7 +546,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "711d00f3cda460a5771dfbe68ff08defdd95fd0e6ac32d641a3ca4305abbd1f6"
+      "sha256": "ceb07be31b4181f21222b59f6d163da2a2b102e7e96893f43f25aa761ae01956"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -610,15 +610,15 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "94d141283e47bdad162dc18d0579228c9bec6f6a974f4f83e945534de1659b53"
+      "sha256": "8ce15ec7c5fe7d5e9e4d6c5020294eff16bcae6b8ee24b743e7b8b635fc9e276"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
-      "sha256": "810a73c0e55c1b4cbbeb4c1209ef43d41f837f7ba841de3a97c589e80082dc68"
+      "sha256": "0ceea168d257d98817575b410d4875436e35a5926f10788d7523f8e3191f52b0"
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "40221e809727f02ded1415d7c7a3c271a0b62dff0ebc82b8367a39312db020ed"
+      "sha256": "46bdc5fff5c86a083ef5d07bf8ce2f29ba3d2af0b23c213eb3b3c4b8d686bdd6"
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",

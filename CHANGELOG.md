@@ -42,6 +42,15 @@ starts.
 
 ---
 
+## #927 — A fallback review's lens count follows the PR's declared class
+
+- **ADDED — config keys:** `review.safety_critical_paths`, a list of fnmatch path patterns naming the files `docs/agentic-dev-kit/safety-critical-changes.md` governs. Leave it absent until it lists every one of your gate files, including each path in your `.claude/rules/safety-critical-changes.md`. Absent, empty or malformed, every PR is treated as safety-critical and keeps the two-lens fallback panel, as before. Once it is declared, a PR that changes none of the listed paths may take one isolated lens. `pr_watch.py` reads the list as committed at the PR's base commit, so a PR's own edit to it never classes that PR, and it classes any PR that changes `config/dev-model.yaml` as safety-critical. `init.sh` does not seed the key, but a repo created from the kit's template, or by copying the kit's `config/dev-model.yaml`, already holds the kit's own list: add your gate files to it, or delete it (#930).
+- **ADDED — engine CLI surface:** `pr_watch.py --record-review "fallback:lens" --lenses <one lens>` records a one-lens full pass. It refuses any other number of lenses, and a PR it classes safety-critical or cannot class.
+- **CHANGED — return shape:** the poll report and the `--record-review` result gain `review_class` (`class`, `matched_paths`, `changes_config`, `unclassified`). `fetch_pr_view`, `rest_pr_view` and `fetch_review_snapshot` now carry `baseRefOid`. Refresh `pr_watch.py` in your engine directory with `scripts/hooks/pr_followup_hook.py`, `docs/agentic-dev-kit/fallback-review-panel.md`, `docs/agentic-dev-kit/safety-critical-changes.md`, `docs/agentic-dev-kit/workflows/pr-watch.md`, `kit-manifest.json`, `scripts/tests/test_pr_watch.py`, `scripts/tests/test_pr_followup_hook.py` and `scripts/tests/fixtures/init-config.json`.
+- **CHANGED — gate semantics:** on a PR classed standard, a composed `fallback:delta` receipt whose full parent is a one-lens `fallback:lens` pass is now valid merge evidence; it used to be invalid on every PR. A one-lens parent recorded under any other source stays invalid. Nothing else `mergeable` decides changes, and a safety-critical PR is unchanged.
+
+---
+
 ## #907 — `GitHubForge`'s sweep-cleanup guard decides containment by filesystem identity
 
 CHANGED — gate semantics: Refresh `lib/triage/model.py`, `lib/triage/engine.py` and `lib/triage/providers.py` in your engine directory together, with `kit-manifest.json` and `scripts/tests/test_triage_providers.py`. The worktree-containment predicate moved from `engine.py` to `model.py` as `worktree_conflicts_with_checkout`, and both `engine.py` and `providers.py` import it from there, so either one refreshed without `model.py` fails to import. On a case-insensitive filesystem, `GitHubForge`'s `sweep-cleanup` action now reports every artifact `kept` for a differently cased path to the caller checkout, to a path inside it, or to its parent. It used to let the cleanup's git commands run against such a path, so the remote branch's compare-and-delete could delete the branch.

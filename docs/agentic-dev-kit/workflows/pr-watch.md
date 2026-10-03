@@ -210,10 +210,13 @@ Repeat until the report says **converged**:
 
    - **Reviewer unavailable** (`review_unavailable_reason` is set — rate limit,
      skipped review, no credits), current-head `review_evidence` is invalid, and
-     `review_bots.blockers` is empty: run the **fallback review panel** —
-     `review.fallback_panel`, one isolated fresh-context reviewer per lens. Read
-     [`../fallback-review-panel.md`](../fallback-review-panel.md) for the contract
-     each lens gets; it is what makes the pass independent of you. A blocked bot
+     `review_bots.blockers` is empty: run the **fallback review** the poll's
+     `review_class` owes, one isolated fresh-context reviewer per lens. A
+     safety-critical PR takes the panel, every lens in `review.fallback_panel`; a
+     standard PR takes one lens, the one *How many lenses* in
+     [`../fallback-review-panel.md`](../fallback-review-panel.md) names. Read that
+     file for the contract each lens gets; it is what makes the pass independent
+     of you. A blocked bot
      is an action signal, never auto-noise or a review waiver. Acknowledge the
      notice only after every finding is handled, then bind the pass to the exact
      `head` from the poll you reviewed:
@@ -225,17 +228,21 @@ Repeat until the report says **converged**:
        --disposition -   # findings and how each was disposed, on stdin
      ```
 
+     A standard PR's one lens records `--record-review "fallback:lens"` with
+     `--lenses` naming that lens; the engine refuses `fallback:lens` on a PR it
+     classes safety-critical or cannot class.
+
      `--lenses` names what actually ran, so a degraded one-lens pass is
      distinguishable from a panel in the audit trail. It is **self-reported** —
      the engine records it and shows it at merge time, but cannot verify it. If your
      runtime cannot isolate a reviewer, run `review.fallback_commands` instead
-     and record it as `fallback:<runtime>` with the single lens named. The
-     other single-lens receipt is the **delta pass** for record prose or LOW repairs (the panel
+     and record it as `fallback:<runtime>` with the single lens named. A further
+     single-lens receipt is the **delta pass** for record prose or LOW repairs (the panel
      doc's stopping section): an isolated lens over a fix round's delta,
      recorded as the literal `fallback:delta` with its one lens named — never
      `fallback:<runtime>`, which is reserved for the author-context degraded
      run — plus `--compose-parent <last-reviewed-sha>`. That flag preserves the
-     standing full-panel receipt, records the reviewed delta boundary and exact
+     standing full-pass receipt, records the reviewed delta boundary and exact
      changed paths, and makes ancestry/path drift invalidate merge evidence. For a
      lane, use `<engine-dir>/dev_session.sh pr-watch <scope>` with the same flags.
      If current-head evidence is already valid, do not rerun the panel; keep the
@@ -583,7 +590,8 @@ Self-pace on a bounded cadence — don't busy-wait:
 
   ```
   review evidence: fallback:panel — 2 lenses claimed (adversarial, correctness)
-  review evidence: fallback:codex — ⚠ ONE lens claimed (correctness) — not a dual-lens pass
+  review evidence: fallback:codex — ⚠ ONE lens claimed (correctness) — not a dual-lens pass; it changes scripts/pr_watch.py under review.safety_critical_paths
+  review evidence: fallback:lens — one lens claimed (adversarial), which is what this PR owes: no path in review.safety_critical_paths changed
   ```
 
   Self-reported: `--lenses` is written by whoever ran `--record-review`, and the

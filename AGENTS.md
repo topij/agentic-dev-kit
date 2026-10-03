@@ -257,7 +257,10 @@ adopter's.
   `docs/agentic-dev-kit/safety-critical-changes.md` completely before changing any
   gate, launch-authority, or merge-authority path. This precise root instruction is
   the Codex binding; Claude's
-  path-scoped rule binds the same shared file. Do not restate its doctrine here or in
+  path-scoped rule binds the same shared file. `review.safety_critical_paths` in
+  `config/dev-model.yaml` is the declared list of these files, and a pull request
+  that changes one of them, or that config file itself, owes the two-lens fallback
+  review. Do not restate its doctrine here or in
   either runtime adapter.
 - All configuration lives in `config/dev-model.yaml`; skills and engines read it from
   there. Never hardcode a value that belongs in it.

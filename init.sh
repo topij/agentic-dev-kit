@@ -2710,6 +2710,9 @@ echo ""
 echo "agentic-dev-kit is bootstrapped (kit schema v2)."
 echo "Review config/dev-model.yaml for any remaining values (paths, doc_budgets,"
 echo "models, systemize, review.fallback_panel.lenses) and edit to taste."
+echo "review.safety_critical_paths, if present, lists only the kit's own gate files:"
+echo "add yours (send, destructive and kill/recovery paths) or delete the key, which"
+echo "keeps every PR at the two-lens fallback review (#930)."
 echo ""
 # The per-file `left untouched (--no-clobber):` lines are printed where the
 # decision happens, hundreds of lines of output earlier. Repeat them here: the
