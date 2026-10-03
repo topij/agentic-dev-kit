@@ -319,8 +319,10 @@ class LinearIssues:
                 or not isinstance(issue.get("title"), str)
                 or not isinstance(issue.get("description"), str) or issue["description"].count(marker) != 1):
             raise TriageError("Linear issue identity, marker or destination read-back mismatch", outcome="operator-held")
+        # Archived labels are still payload evidence; hiding one could verify
+        # an issue carrying an extra label the operator never approved.
         query = ("query TriageIssueLabels($id: String!, $cursor: String) { issue(id: $id) { "
-                 f"labels(first: 100, after: $cursor) {{ {self.PAGE_INFO} nodes {{ id name }} }} }} }}")
+                 f"labels(includeArchived: true, first: 100, after: $cursor) {{ {self.PAGE_INFO} nodes {{ id name }} }} }} }}")
         labels = self._pages(query, {"id": iid}, lambda d: (d.get("issue") or {}).get("labels"))
         names = [label.get("name") for label in labels]
         if any(not isinstance(n, str) or not n for n in names) or len(names) != len(set(names)):

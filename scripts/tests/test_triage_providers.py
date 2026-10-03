@@ -53,7 +53,9 @@ class LinearTransport:
             result = {"issueLabels": self.page(self.labels, variables)}
         elif "TriageIssueLabels(" in query:
             issue = next(i for i in self.issues if i["id"] == variables["id"])
-            result = {"issue": {"labels": self.page(issue["labels"], variables)}}
+            labels = [{"id": label["id"], "name": label["name"]} for label in issue["labels"]
+                      if not label.get("archived") or "includeArchived: true" in query]
+            result = {"issue": {"labels": self.page(labels, variables)}}
         elif "TriageIssue(" in query:
             result = {"issue": {k: v for k, v in next(i for i in self.issues if i["id"] == variables["id"]).items() if k != "labels"}}
         elif "TriageIssues(" in query:
@@ -113,6 +115,28 @@ def test_linear_uncertain_create_never_retries_mutation(fault, status):
     assert sum("TriageCreate(" in q for q, _ in transport.calls) == 1
     if fault == "timeout":
         assert observed.verified_route == "failed-response-then-exact-read-back"
+
+
+@pytest.mark.parametrize("timing", ["existing", "created"])
+def test_linear_archived_extra_label_cannot_verify_approved_payload(timing):
+    transport = LinearTransport()
+    tracker = LinearIssues(transport=transport, sleep=lambda _: None)
+    extra = {"id": "hidden", "name": "unapproved-archived", "archived": True}
+    if timing == "existing":
+        assert tracker.create(LINEAR_DESTINATION, linear_payload()).status == "verified"
+        transport.issues[0]["labels"].append(extra)
+        observed = tracker.create(LINEAR_DESTINATION, linear_payload())
+    else:
+        def altered(query, variables):
+            result = transport(query, variables)
+            if "TriageCreate(" in query:
+                transport.issues[0]["labels"].append(extra)
+            return result
+        observed = LinearIssues(transport=altered, sleep=lambda _: None).create(LINEAR_DESTINATION, linear_payload())
+    assert observed.status == "ambiguous"
+    assert observed.verified_route is None
+    assert observed.read_back["matches"][0]["payload"]["labels"] == ["bug", "unapproved-archived"]
+    assert sum("TriageCreate(" in query for query, _ in transport.calls) == 1
 
 
 def test_linear_create_waits_for_listing_visibility():
