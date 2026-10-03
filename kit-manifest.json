@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "4052177816a47ce699ee15a0f5e5bc4b80037b506b36928db9473e9e2cc433b2"
+      "sha256": "7027154055aeddee9e57ae6e4c1c263876b4cd77a7a620ce7cc94dd761288aa3"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -514,7 +514,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "5841a9bc453323fd2940e36a4c1ef9c94be83583020305ada2bfb55abd30616e"
+      "sha256": "4b8cedf80a0480aae75c6564ff10fbd34d4851ad166d30a492bbdf7719d02715"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
@@ -546,7 +546,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "f3a3808b7cd5e77158f09eee4532d61cccc37264f1a4b73bb0fe38aec1a22310"
+      "sha256": "aec1ad7932aa25a0018e6576a60a6c38455961f1f63f71c3837535add2eb2ea3"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -618,7 +618,7 @@
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "45cee2534adbd364339251d97d182d7d205521fabc303f67ddd267372ef14fcd"
+      "sha256": "4bee3cc4325339e719a2de78bd7a8274014e1e6683619012cd3446d17c75d6b9"
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",

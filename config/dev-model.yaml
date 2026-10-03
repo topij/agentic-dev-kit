@@ -308,10 +308,12 @@ review:
   # at the PR's base, so a PR cannot shorten the list it is classed by, and it
   # classes any PR that changes this file as safety-critical. The engine
   # computing the class runs from the checkout, so a PR that changes the engine
-  # or its config reader is classed by its own version of them (#928).
+  # or its config reader is classed by its own version of them (#928). And the
+  # base is the commit the forge records for the PR, which can trail the base
+  # branch, so a path added here may not reach a PR opened before it.
   #
-  # Leave it absent rather than guess. Absent or malformed, every PR is treated
-  # as safety-critical, which is the two-lens behaviour from before this key
+  # Leave it absent rather than guess. Absent, empty or malformed, every PR is
+  # treated as safety-critical, which is the two-lens behaviour from before this key
   # existed, whereas a list that misses one of your gate files sends that file
   # to one lens. Patterns use Python's fnmatch, where `*` also matches `/`. Each
   # is matched against the repo-relative path exactly as Git prints it, so a
@@ -342,16 +344,16 @@ review:
   # mutation-test new branches) is kit doctrine and lives in
   # docs/agentic-dev-kit/fallback-review-panel.md.
   #
-  # Four receipt literals exist, one per pass: `fallback:panel` (the
+  # These receipt literals exist, one per pass: `fallback:panel` (the
   # receipt_source below), `fallback:lens` (one isolated lens, the opening pass
   # a PR outside `safety_critical_paths` may take instead of the panel),
   # `fallback:<runtime>` (the Degraded-mode author-context run of
   # fallback_commands — e.g. `fallback:claude`), and `fallback:delta` (the
   # record-prose delta pass defined in that doctrine file's stopping section —
   # one lens ordinarily, both lenses for a change under
-  # safety-critical-changes.md; `--lenses` records which form ran). The last
-  # three are literals the recording agent writes on the receipt, not config
-  # keys — never set receipt_source to any of them.
+  # safety-critical-changes.md; `--lenses` records which form ran). All but
+  # `fallback:panel` are literals the recording agent writes on the receipt, not
+  # config keys — never set receipt_source to any of them.
   #
   # A further literal exists and is not a fallback pass at all:
   # `<bot>:comment-verdict` (#44), for a reviewer that announced a clean review

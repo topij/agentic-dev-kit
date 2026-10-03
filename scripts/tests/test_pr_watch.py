@@ -10745,12 +10745,15 @@ def test_a_diff_git_cannot_produce_is_treated_as_safety_critical(
     assert "fetch" in result["unclassified"]
 
 
-def test_an_explicit_empty_list_declares_no_safety_critical_path() -> None:
+def test_patterns_match_the_path_exactly_as_git_prints_it() -> None:
+    """The config comment's claim: a `./` prefix, a trailing `/` or a different
+    case never matches."""
     pr_watch = _load_pr_watch()
-    with pytest.MonkeyPatch.context() as mp:
-        _classed(pr_watch, mp, [GATE_PATH], patterns=())
-        result = pr_watch.pr_review_class(CLASS_BASE, CLASS_HEAD)
-    assert result["class"] == "standard"
+    for pattern in ("./scripts/pr_watch.py", "scripts/pr_watch.py/", "SCRIPTS/pr_watch.py"):
+        with pytest.MonkeyPatch.context() as mp:
+            _classed(pr_watch, mp, [GATE_PATH], patterns=(pattern,))
+            result = pr_watch.pr_review_class(CLASS_BASE, CLASS_HEAD)
+        assert result["class"] == "standard", pattern
 
 
 def test_a_floor_is_two_unless_the_class_is_a_computed_standard() -> None:
@@ -10896,7 +10899,8 @@ def test_a_list_changed_on_the_base_side_is_not_the_prs_change(
 
 
 @pytest.mark.parametrize(
-    "declared", [None, '"scripts/gate.py"', '\n    - "scripts/gate.py"\n    - ""', "\n    - 7"]
+    "declared",
+    [None, "[]", '"scripts/gate.py"', '\n    - "scripts/gate.py"\n    - ""', "\n    - 7"],
 )
 def test_an_undeclared_or_malformed_list_at_the_base_leaves_the_pr_unclassed(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, declared: str | None
@@ -10912,7 +10916,10 @@ def test_an_undeclared_or_malformed_list_at_the_base_leaves_the_pr_unclassed(
     result = pr_watch.pr_review_class(base, head)
 
     assert result["class"] == "safety-critical"
-    assert "not declared at the PR's base, or is malformed there" in result["unclassified"]
+    assert (
+        "not declared at the PR's base, or is empty or malformed there"
+        in result["unclassified"]
+    )
 
 
 def test_a_base_with_no_config_leaves_the_pr_unclassed(
@@ -11242,21 +11249,31 @@ def test_a_one_lens_receipt_on_a_safety_critical_pr_still_satisfies_the_gate(
     assert report["mergeable"] is True
 
 
+STANDARD_OWED = "which is what this PR owes: no path in review.safety_critical_paths changed"
+STANDARD_NOT_ISOLATED = "not a dual-lens pass; a standard PR's one lens is an isolated fallback:lens pass"
+
+
 @pytest.mark.parametrize(
-    ("changed", "base", "expected", "warned"),
+    ("changed", "base", "source", "expected", "warned"),
     [
-        (["docs/a.md"], CLASS_BASE, "which is what this PR owes: no path in review.safety_critical_paths changed", False),
-        ([GATE_PATH], CLASS_BASE, f"not a dual-lens pass; it changes {GATE_PATH} under review.safety_critical_paths", True),
-        (["docs/a.md"], None, "not a dual-lens pass; the PR could not be classed", True),
+        (["docs/a.md"], CLASS_BASE, "fallback:lens", STANDARD_OWED, False),
+        (["docs/a.md"], CLASS_BASE, "fallback:delta", STANDARD_OWED, False),
+        (["docs/a.md"], CLASS_BASE, "fallback:codex", STANDARD_NOT_ISOLATED, True),
+        (["docs/a.md"], CLASS_BASE, "fallback:panel", STANDARD_NOT_ISOLATED, True),
+        ([GATE_PATH], CLASS_BASE, "fallback:lens", f"not a dual-lens pass; it changes {GATE_PATH} under review.safety_critical_paths", True),
+        (["docs/a.md"], None, "fallback:lens", "not a dual-lens pass; the PR could not be classed", True),
     ],
 )
 def test_the_poll_render_reads_a_one_lens_receipt_against_the_class(
     monkeypatch: pytest.MonkeyPatch,
     changed: list[str],
     base: str | None,
+    source: str,
     expected: str,
     warned: bool,
 ) -> None:
+    """PR #927's second round: a one-lens Degraded-mode receipt is not what a
+    standard PR owes, and the render must not say it is."""
     pr_watch = _load_pr_watch()
     _classed(pr_watch, monkeypatch, changed)
     view = _reviewed_view(pr_watch, baseRefOid=base)
@@ -11268,7 +11285,7 @@ def test_the_poll_render_reads_a_one_lens_receipt_against_the_class(
             set(),
             review_receipt={
                 "head": HEAD_SHA,
-                "source": "fallback:lens",
+                "source": source,
                 "lenses": ["adversarial"],
             },
             **_settled(view),
@@ -11277,6 +11294,28 @@ def test_the_poll_render_reads_a_one_lens_receipt_against_the_class(
 
     assert expected in rendered
     assert ("⚠ ONE lens claimed (adversarial)" in rendered) is warned
+
+
+@pytest.mark.parametrize(
+    ("source", "warned"),
+    [("fallback:lens", False), ("fallback:delta", False), ("fallback:codex", True)],
+)
+def test_the_record_render_reads_a_one_lens_receipt_by_its_source(
+    monkeypatch: pytest.MonkeyPatch, source: str, warned: bool
+) -> None:
+    pr_watch = _load_pr_watch()
+    standard = {"class": "standard", "matched_paths": [], "changes_config": False, "unclassified": None}
+
+    rendered = pr_watch.render_record_review(
+        {
+            "pr": 9,
+            "review_receipt": {"head": CLASS_HEAD, "source": source, "lenses": ["correctness"]},
+            "review_class": standard,
+        }
+    )
+
+    assert ("⚠ one lens only (correctness)" in rendered) is warned
+    assert ("one lens (correctness), which is what this PR owes" in rendered) is not warned
 
 
 @pytest.mark.parametrize(

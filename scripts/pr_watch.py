@@ -414,12 +414,16 @@ def _normalize_safety_critical_paths(value: Any) -> tuple[str, ...] | None:
     Not part of :class:`ReviewConfig`: :func:`pr_review_class` reads the list as
     committed at the PR's base, never from the checkout this runs in.
 
-    ``None`` (undeclared, or malformed) keeps every PR at two lenses. A list is
-    taken whole or not at all: dropping one malformed entry would quietly move
-    the file it named to one lens, the unsafe direction.
+    ``None`` (undeclared, empty, or malformed) keeps every PR at two lenses. A
+    list is taken whole or not at all: dropping one malformed entry would
+    quietly move the file it named to one lens, the unsafe direction. An empty
+    list is refused for the same reason: every repo running this engine has its
+    own gate files, so declaring none is a mistake rather than a policy.
     """
-    if not isinstance(value, list) or not all(
-        isinstance(pattern, str) and pattern.strip() for pattern in value
+    if (
+        not isinstance(value, list)
+        or not value
+        or not all(isinstance(pattern, str) and pattern.strip() for pattern in value)
     ):
         return None
     return tuple(pattern.strip() for pattern in value)
@@ -4352,7 +4356,10 @@ def _merge_base_paths(base: str, head: str, what: str) -> list[str]:
 # What this does NOT protect is the code computing the class. It runs from the
 # same checkout, so a PR that changes this engine or `lib/kitconfig.py` is
 # classed by its own version of them. `pr_watch.py` is on the shipped list;
-# `kitconfig.py` is not, and `#928` carries that.
+# `kitconfig.py` is not, and `#928` carries that. Nor does the base follow its
+# branch: `baseRefOid` is the commit the forge recorded for the PR, which can
+# trail the branch tip, so a path added to the list there may not reach a PR
+# opened before it.
 #
 # Every way this can fail lands on the safety-critical class, and that includes
 # an undeclared key, so a repo that never declares the list keeps the two-lens
@@ -4442,7 +4449,7 @@ def pr_review_class(
     if declared is None:
         result["unclassified"] = (
             "review.safety_critical_paths is not declared at the PR's base, or is "
-            "malformed there"
+            "empty or malformed there"
         )
         return result
     try:
@@ -4476,6 +4483,31 @@ def _lens_floor(review_class: object) -> int:
     ):
         return 1
     return 2
+
+
+# The one-lens sources a standard PR's receipt may carry without a warning: its
+# isolated full pass, and a delta pass. Degraded mode's `fallback:<runtime>` is
+# one lens in the author's context, and a one-lens `fallback:panel` is a
+# mislabel, so both stay flagged on every class.
+_OWED_ONE_LENS_SOURCES = (SINGLE_LENS_SOURCE, "fallback:delta")
+
+
+def _one_lens_is_owed(review_class: object, source: object) -> bool:
+    """Whether a one-lens receipt from ``source`` is what this PR's class owes."""
+    return (
+        _lens_floor(review_class) == 1
+        and isinstance(source, str)
+        and source.strip() in _OWED_ONE_LENS_SOURCES
+    )
+
+
+def _one_lens_warning_suffix(review_class: object) -> str:
+    """What the ⚠ one-lens line adds about the class, or nothing without one."""
+    if not isinstance(review_class, dict):
+        return ""
+    if _lens_floor(review_class) == 1:
+        return f"; a standard PR's one lens is an isolated {SINGLE_LENS_SOURCE} pass"
+    return f"; {_describe_review_class(review_class)}"
 
 
 def _describe_review_class(review_class: object) -> str:
@@ -5559,7 +5591,7 @@ def render(report: dict) -> str:
         review_class = report.get("review_class")
         if distinct >= 2:
             detail = f"{distinct} lenses claimed ({', '.join(named)})"
-        elif distinct == 1 and _lens_floor(review_class) == 1:
+        elif distinct == 1 and _one_lens_is_owed(review_class, evidence.get("source")):
             # The class decides whether one lens is a shortfall (#585). This is
             # still a claim; what changed is only the floor it is read against.
             detail = (
@@ -5567,9 +5599,10 @@ def render(report: dict) -> str:
                 f"{_describe_review_class(review_class)}"
             )
         elif named:
-            detail = f"⚠ ONE lens claimed ({named[0]}) — not a dual-lens pass"
-            if isinstance(review_class, dict):
-                detail += f"; {_describe_review_class(review_class)}"
+            detail = (
+                f"⚠ ONE lens claimed ({named[0]}) — not a dual-lens pass"
+                + _one_lens_warning_suffix(review_class)
+            )
         else:
             detail = "no lenses recorded"
         lines.append(f"  review evidence: {source} — {detail}")
@@ -5705,7 +5738,9 @@ def render_record_review(report: dict) -> str:
     )
     named = [_flat(lens, 40) for lens in named]
     review_class = report.get("review_class")
-    if len(_countable_lenses(named)) == 1 and _lens_floor(review_class) == 1:
+    if len(_countable_lenses(named)) == 1 and _one_lens_is_owed(
+        review_class, receipt.get("source")
+    ):
         lines.append(
             f"  one lens ({named[0]}), which is what this PR owes: "
             f"{_describe_review_class(review_class)}"
@@ -5714,11 +5749,7 @@ def render_record_review(report: dict) -> str:
         lines.append(
             f"  ⚠ one lens only ({named[0]}) — `safety-critical-changes.md` rule 2 "
             "holds that a single-lens verdict is not a green light"
-            + (
-                f"; {_describe_review_class(review_class)}"
-                if isinstance(review_class, dict)
-                else ""
-            )
+            + _one_lens_warning_suffix(review_class)
         )
     elif named:
         lines.append(f"  lenses: {', '.join(named)}")

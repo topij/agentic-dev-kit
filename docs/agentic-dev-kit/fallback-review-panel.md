@@ -130,9 +130,12 @@ that changes `config/dev-model.yaml` at all is safety-critical: that file
 declares the list and points at other gate files. What this does not protect is
 the code computing the class, which runs from the checkout like the rest of the
 engine: a pull request that changes `pr_watch.py` or its config reader is classed
-by its own version of them (`#928`).
+by its own version of them (`#928`). Nor does it follow the base branch: the base
+commit is the one the forge records for the pull request (`baseRefOid`), which can
+trail the branch, so a path added to the list there may not reach a pull request
+opened before it.
 
-**It fails toward two.** An undeclared or malformed `review.safety_critical_paths`,
+**It fails toward two.** An undeclared, empty or malformed `review.safety_critical_paths`,
 or a base and head that Git cannot diff, leaves the pull request unclassed, and an
 unclassed pull request is treated as safety-critical. So a repository that never
 declares the list owes what it owed before the class existed.
@@ -152,9 +155,10 @@ stays self-reported, `#32`), so this binds whoever launches it.
 applies to behavioral changes in files that gate customer-facing sends,
 destructive operations or kill/recovery paths, and rule 2 is headed *Dual-lens
 review for customer-facing gates*. A change outside those files is outside its
-scope. Workflow documents take one lens as well, until `#370` measures what the
-panel finds there. `#585`'s operator decision of 2026-10-02 sets all of this, and
-reads the earlier counter-examples by class.
+scope. `#585`'s operator decision of 2026-10-02 sets this, and reads the earlier
+counter-examples by class. Workflow documents take one lens as well: the operator
+decided that on 2026-10-03, as `#927`'s description records, and declined to keep
+two lenses on them until the panel's findings there were measured.
 
 **What the engine enforces, and what it leaves to you.** It refuses
 `fallback:lens` on a pull request it does not class standard, and it holds a
@@ -168,13 +172,14 @@ safety-critical pull request still satisfies the gate, flagged.
 still follows `safety-critical-changes.md`. And a single-lens receipt stays
 distinguishable on the audit trail from `fallback:panel` and `fallback:delta`.
 
-**So there are three sanctioned single-lens passes, and each rests on a fact the
-author does not set:** a standard pull request's full pass; the **delta pass** for
-record prose or a reviewer-marked LOW repair, on a pull request outside the
-safety-critical class; and **Degraded mode** below, where the runtime cannot
-isolate a reviewer. A safety-critical pull request takes no single-lens pass: its
-record-prose deltas take the dual form. Running fewer lenses because a change
-looks smaller is still not on the list.
+**The sanctioned single-lens passes each rest on a fact the author does not
+set:** a standard pull request's full pass; the **delta pass** for record prose or
+a reviewer-marked LOW repair, on a pull request outside the safety-critical class;
+and **Degraded mode** below, where the runtime cannot isolate a reviewer. On a
+safety-critical pull request only Degraded mode is left, and it leaves rule 2
+unmet, which the pull request must say; that class's record-prose deltas take the
+dual form. Running fewer lenses because a change looks smaller is still not on the
+list.
 
 ## What compute a lens gets
 
@@ -560,8 +565,10 @@ author re-reading their own diff. **Cite them by name, never by number.**
    review evidence: fallback:codex — ⚠ ONE lens claimed (correctness) — not a dual-lens pass; it changes scripts/pr_watch.py under review.safety_critical_paths
    ```
 
-   The warning prints only where the pull request owes two lenses. On a standard
-   pull request the line says one lens is what it owes.
+   On a standard pull request a one-lens `fallback:lens` or `fallback:delta`
+   receipt reads as what the pull request owes. Any other one-lens receipt is
+   flagged, Degraded mode's included, because the standard class's one lens is an
+   isolated one.
 
    That is genuinely useful — a one-lens pass is visible at merge time instead of
    buried in the record command's stdout — and it is worth exactly what an honest
