@@ -403,7 +403,7 @@ def test_linear_missing_credential_and_http_timeout(monkeypatch):
     def timed_out(request, *, timeout):
         captured.append((request, timeout))
         raise TimeoutError("read timed out")
-    monkeypatch.setattr(providers, "urlopen", timed_out)
+    monkeypatch.setattr(providers, "_linear_urlopen", timed_out)
     slept = []
     tracker = LinearIssues(api_key="private-key", sleep=slept.append)
     with pytest.raises(TriageError) as error:
@@ -413,6 +413,58 @@ def test_linear_missing_credential_and_http_timeout(monkeypatch):
     assert captured[0][0].get_header("Authorization") == "private-key"
     assert json.loads(captured[0][0].data)["variables"] == {"id": "project"}
     assert slept == list(tracker.READ_RETRY_DELAYS)
+
+
+@pytest.mark.parametrize("status", [301, 302, 303, 307, 308])
+@pytest.mark.parametrize("cross_origin", [False, True])
+@pytest.mark.parametrize("mutation", [False, True])
+def test_linear_real_http_redirect_never_forwards_credential_or_request(monkeypatch, status, cross_origin, mutation):
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from threading import Thread
+
+    received = []
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.respond()
+
+        def do_GET(self):
+            self.respond()
+
+        def respond(self):
+            received.append((self.path, self.command, self.headers.get("Authorization")))
+            if self.path == "/graphql":
+                self.send_response(status)
+                host = "localhost" if cross_origin else "127.0.0.1"
+                self.send_header("Location", f"http://{host}:{self.server.server_port}/capture")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+            else:
+                body = b'{"data": {}}'
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
+    thread.start()
+    try:
+        monkeypatch.setattr(LinearIssues, "ENDPOINT", f"http://127.0.0.1:{server.server_port}/graphql")
+        slept = []
+        tracker = LinearIssues(api_key="sentinel-credential", sleep=slept.append)
+        with pytest.raises(TriageError, match="unavailable or incomplete") as error:
+            tracker._query("mutation Probe" if mutation else "query Probe", {}, mutation=mutation)
+        assert "sentinel-credential" not in str(error.value)
+        assert received == [("/graphql", "POST", "sentinel-credential")]
+        assert slept == []
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+    assert not thread.is_alive()
 
 
 def test_linear_rate_limit_retry_then_success():
@@ -443,7 +495,7 @@ def test_linear_http_rate_limit_retries_reads(monkeypatch, exhausted, status):
             body = {"errors": [{"message": "private-key", "extensions": {"code": "RATELIMITED"}}]}
             raise HTTPError(req.full_url, status, "rate limited", {}, BytesIO(json.dumps(body).encode()))
         return BytesIO(json.dumps({"data": {"project": {"id": "project"}}}).encode())
-    monkeypatch.setattr(providers, "urlopen", request)
+    monkeypatch.setattr(providers, "_linear_urlopen", request)
     tracker = LinearIssues(api_key="private-key", sleep=slept.append)
     if exhausted:
         with pytest.raises(TriageError, match="unavailable or incomplete") as error:
@@ -469,7 +521,7 @@ def test_linear_http400_permanent_errors_do_not_retry(monkeypatch, body):
     def request(req, timeout):
         calls.append(req)
         raise HTTPError(req.full_url, 400, "bad request", {}, BytesIO(body))
-    monkeypatch.setattr(providers, "urlopen", request)
+    monkeypatch.setattr(providers, "_linear_urlopen", request)
     with pytest.raises(TriageError, match="unavailable or incomplete"):
         LinearIssues(api_key="key", sleep=slept.append)._query("query Project { project { id } }", {})
     assert len(calls) == 1 and slept == []
@@ -494,7 +546,7 @@ def test_linear_http400_mutation_reconciles_without_retry(monkeypatch, landed):
             body = {"errors": [{"extensions": {"code": "RATELIMITED"}}]}
             raise HTTPError(req.full_url, 400, "rate limited", {}, BytesIO(json.dumps(body).encode()))
         return BytesIO(json.dumps(transport(query, variables)).encode())
-    monkeypatch.setattr(providers, "urlopen", request)
+    monkeypatch.setattr(providers, "_linear_urlopen", request)
     observed = LinearIssues(api_key="key", sleep=lambda _: None).create(LINEAR_DESTINATION, linear_payload())
     assert len(creates) == 1
     assert observed.status == ("verified" if landed else "ambiguous")
@@ -523,7 +575,7 @@ def test_linear_http_protocol_failure_retries_reads(monkeypatch, failure, exhaus
                 raise HTTPError(req.full_url, 400, "bad request", {}, BrokenResponse())
             return BrokenResponse()
         return BytesIO(json.dumps({"data": {"project": {"id": "project"}}}).encode())
-    monkeypatch.setattr(providers, "urlopen", request)
+    monkeypatch.setattr(providers, "_linear_urlopen", request)
     tracker = LinearIssues(api_key="key", sleep=slept.append)
     if exhausted:
         with pytest.raises(TriageError, match="unavailable or incomplete"):
@@ -562,7 +614,7 @@ def test_linear_http_protocol_mutation_reconciles_without_retry(monkeypatch, fai
                 raise HTTPError(req.full_url, 400, "bad request", {}, BrokenResponse())
             return BrokenResponse()
         return BytesIO(json.dumps(transport(query, variables)).encode())
-    monkeypatch.setattr(providers, "urlopen", request)
+    monkeypatch.setattr(providers, "_linear_urlopen", request)
     observed = LinearIssues(api_key="key", sleep=lambda _: None).create(LINEAR_DESTINATION, linear_payload())
     assert len(creates) == 1
     assert observed.status == ("verified" if landed else "ambiguous")

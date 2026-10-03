@@ -14,10 +14,21 @@ from pathlib import Path
 from typing import Any, Protocol
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from .canonical import decode_bytes, digest, digest_bytes
 from .model import TriageError, terminal_pr_watch_receipt, worktree_conflicts_with_checkout
+
+
+class _RejectLinearRedirects(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # The credential and approved mutation belong to the fixed API endpoint.
+        # urllib's default redirect handler forwards Authorization to other origins.
+        return None
+
+
+def _linear_urlopen(request: Request, *, timeout: int):
+    return build_opener(_RejectLinearRedirects()).open(request, timeout=timeout)
 
 
 @dataclass(frozen=True)
@@ -217,7 +228,7 @@ class LinearIssues:
             raise TriageError("set LINEAR_API_KEY for the selected Linear tracker", outcome="operator-held")
         request = Request(self.ENDPOINT, data=json.dumps({"query": query, "variables": variables}).encode(),
                           headers={"Authorization": self.api_key, "Content-Type": "application/json"}, method="POST")
-        with urlopen(request, timeout=30) as response:
+        with _linear_urlopen(request, timeout=30) as response:
             return json.load(response)
 
     @staticmethod
