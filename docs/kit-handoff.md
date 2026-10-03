@@ -20,6 +20,42 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-03 (Delta-pass named draws, #921, in Claude Code)
+
+**Shipped.** PR #934, squash `41beacb8`: `panel_prompt.py` takes a delta pass's two draws
+as `--draw-prose-class` and `--draw-safety-critical`, refuses one without the other, and
+names the verdict line each must begin with. The LOW rule's repair boundary goes to
+`--repair-boundary`, and `--delta-draws` is refused with a pointer to the three flags.
+The CHANGELOG entry is under #934. #921 stays open for its other half: a cockpit-side
+check that each lens's verdict lines carry both names.
+
+**Decided by the operator.** Start #921 from the session-start pick, merge #934, and
+merge this wrap-up when clean.
+
+**Review.** CodeRabbit skipped #934, so the fallback review ran: one adversarial lens as
+the full pass at `53b4569`, then one correctness lens as a LOW delta pass over the repair
+`e9d1c4b`. The delta prompt was the first rendered with the new flags, and its lens
+returned both named verdict lines. Each round's disposition and the delta's verdict lines
+are posted on #934.
+
+**Verified.** `env -u FORCE_COLOR make test` at `53b4569d86e4eca043cc1e95382673796c47df2f`
+on 2026-10-03, in `/Users/topi/Coding/agentic-dev-kit`, printed `4068 passed, 1 skipped in
+611.11s (0:10:11)`. The repair `e9d1c4b` had focused runs only, recorded in #934's body.
+`git diff --stat e9d1c4b 41beacb8` printed nothing, and `gh run list --commit
+41beacb8fa54e290c83a04c7617fcf7a0d07c490` showed the `Test` workflow completed `success`.
+
+**Not established.** The repair's focused runs ran on the uncommitted tree, so #934's
+body stamps no revision for them, and `pr_watch` reported `verification_stamp_behind_head`
+at `e9d1c4b`.
+
+**Answered, not acted on.** The operator asked when to run the final Codex validation and
+when to upgrade cs-toolkit. The answer given: upgrade cs-toolkit soon, because its pin
+`e698ec47` predates #740 and #914 stops authorized work there; settle cs-toolkit's
+`review.safety_critical_paths` first (#930); and run the upgrade in a Codex session so it
+doubles as the Codex validation. No workstream records this yet.
+
+______________________________________________________________________
+
 ## Session — 2026-10-03 (Review proportionality, #585, in Claude Code)
 
 **Shipped.** PR #927, squash `8ea91add`: a fallback review's lens count follows the PR's
@@ -267,44 +303,6 @@ which is what CI runs; they ran on this machine's case-insensitive one.
 
 ______________________________________________________________________
 
-## Session — 2026-10-01 (Phase 6 item 5, in Claude Code)
-
-**Shipped.** PR #902, squash `65e9d2d`: Phase 6 item 5. #243 closed on merge.
-
-- Each adapter's runtime-specific text moved from `_CURRENT_CONTEXTS` into
-  `scripts/lib/adapter_templates/<runtime>/<slug>.md`, read from beside the renderer.
-  The rendered adapters are byte-identical.
-- `adopt`, `upgrade` and `pr-watch` gained word-for-word pins with appended-instruction
-  mutations.
-- `fallback-review-panel.md` no longer cites a "step 5" of the Codex `pr-watch` binding.
-
-**Decided by the operator.**
-
-- The templates sit beside the renderer, not under `docs/templates/` as #243's
-  2026-09-02 comment proposed.
-- #902 closes #243, and merges once clean.
-
-**Filed**, on the operator's approval of its exact text and read back identical: an
-occurrence comment on #644
-([issuecomment-5937818741](https://github.com/topij/agentic-dev-kit/issues/644#issuecomment-5937818741)).
-It reproduces that intermittent failure by launching the test as a shell `&` job,
-which starts it with SIGINT ignored.
-
-**Review.** CodeRabbit's auto-review stayed off, so the fallback panel reviewed #902:
-the full dual-lens panel at `a459006`, then adversarial delta passes over the repair
-commits. Delta passes 1 and 2 each disputed a draw, both about another test's handling
-of the templates, so neither recorded a receipt. Delta pass 3 confirmed every draw,
-and its receipt at `947bc22` composes on the full panel's. Each round's disposition is
-posted on the PR.
-
-**Verified.** `env -u FORCE_COLOR make test` at `a459006`, in
-`/Users/topi/Coding/agentic-dev-kit` on 2026-10-01: `3792 passed, 1 skipped in
-519.66s (0:08:39)`. The repair commits carry focused verification, recorded on the PR.
-For the merged tree, `gh run list --commit 65e9d2d334de4277dd2bbb031667bd666c3da9ee`
-showed the `Test` workflow completed `success` on `main`.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -316,14 +314,15 @@ ______________________________________________________________________
 
 **Status:** the lens-count half of #585's 2026-10-02 decision shipped in #927
 (`8ea91add`): the class is computed from `review.safety_critical_paths`, and a standard PR
-takes one isolated lens. The record-prose row of that decision is not built: its
-deterministic checks, and a lens told which spans stay executed. **Owner:**
+takes one isolated lens. #934 (`41beacb8`) gave a delta pass's two draws their own named
+flags; #921 stays open for the cockpit-side check of the verdict-line names. The
+record-prose row of #585's decision is not built: its deterministic checks, and a lens
+told which spans stay executed. **Owner:**
 [#585](https://github.com/topij/agentic-dev-kit/issues/585); related #921, #403, #666, and
 the class's documented limits #928, #929, #930 and #931.
 
-▶ Next: #921 — render the delta pass's two classification draws as separate named items
-in `scripts/panel_prompt.py`, which any class-dependent delta relies on; then #585's
-record-prose row.
+▶ Next: #585's record-prose row — its deterministic checks, and a lens told which spans
+stay executed.
 
 ### Scratch retention
 
