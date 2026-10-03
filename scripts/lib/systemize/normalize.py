@@ -215,15 +215,34 @@ def build(raw: dict[str, Any], settings: Settings, citation_paths: list[str]) ->
 VERIFIED_FIELDS = (
     "run_identity_digest", "window", "forge_repo", "protected_branch_head", "config_fingerprint",
     "batching", "input_cap", "findings_pr_count", "single_pass_recommended", "n_batches",
+    "window_start", "window_end", "severity_limitations",
 )
+
+
+def _evidence(prs: Any) -> Any:
+    if not isinstance(prs, list):
+        return None
+    evidence = []
+    for pr in prs:
+        if not isinstance(pr, dict) or not isinstance(pr.get("findings"), list):
+            return None
+        findings = []
+        for finding in pr["findings"]:
+            if not isinstance(finding, dict) or not isinstance(finding.get("text"), str):
+                return None
+            if not isinstance(finding.get("text_truncated"), bool):
+                return None
+            # Text cleaning may differ, but every evidence field remains exact.
+            findings.append({k: v for k, v in finding.items() if k not in ("text", "text_truncated")})
+        evidence.append({**pr, "findings": findings})
+    return evidence
 
 
 def verify(candidate: dict[str, Any], expected: dict[str, Any], path: str) -> None:
     identity.check_header(candidate, kind=identity.DIGEST_KIND, path=path)
     problems = [name for name in VERIFIED_FIELDS if candidate.get(name) != expected.get(name)]
     prs = candidate.get("prs")
-    numbers = [p.get("number") for p in prs] if isinstance(prs, list) and all(isinstance(p, dict) for p in prs) else None
-    if numbers != [p["number"] for p in expected["prs"]]:
-        problems.append("prs[] (ordered capped identities)")
+    if _evidence(prs) != _evidence(expected["prs"]):
+        problems.append("prs[] (ordered capped finding evidence)")
     if problems:
         raise SystemizeError(f"{path}: digest disagrees with its raw bundle on: {', '.join(problems)}")

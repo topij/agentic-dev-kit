@@ -395,6 +395,11 @@ Stop if the artifact's `prs[]`, cap disclosure, or derived fields disagree; a di
 cannot select its own evidence or working-set policy. A cap is a bounded analysis, not
 permission to describe the whole window as reviewed.
 
+Verification compares every finding's identity and non-text evidence, including source,
+severity, addressed state and citation evidence, plus the pull request's counts and
+references. Only cleaned `text` and its `text_truncated` flag may differ; both retain
+their schema types. Removing, adding or altering finding evidence stops verification.
+
 If the fetched bundle contains no merged pull request, write a complete report saying
 there was nothing to systemize, optionally notify, complete the configured heartbeat in
 engine-backed mode, and exit successfully.
@@ -412,6 +417,10 @@ UTC days ending with that date. Exit `0` prints one JSON envelope naming the
 artifact paths and `run_identity_digest`; exit `1` is a hard stop with one stderr line
 naming the failed check; exit `2` is a rejected invocation. Each refuses to run from a
 partial engine set.
+
+`systemize.subprocess_timeout_seconds` bounds each forge subprocess and artifact Git
+tracking read. It must be a positive integer; an older configuration that omits it uses
+the default `60`. A timeout or failed tracking read stops before artifact publication.
 
 1. `heartbeat_engine start` — before the fetch. The heartbeat state is bound to the
    job, window, date, mode and config fingerprint, because the run identity needs the

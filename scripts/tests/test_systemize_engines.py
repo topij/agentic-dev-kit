@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,7 @@ from _repo_layout import engine_dir  # noqa: E402
 sys.path.insert(0, str(engine_dir(Path(__file__)) / "lib"))
 from test_systemize_support import (  # noqa: E402
     DATE,
+    ENGINE_DIR,
     ENGINES,
     HEAD,
     comment,
@@ -26,6 +28,29 @@ from test_systemize_support import (  # noqa: E402
 )
 
 BOT = "coderabbitai"
+
+
+@pytest.mark.parametrize("name", ENGINES)
+def test_standalone_metadata_declares_stdlib_dependencies(name) -> None:
+    text = (ENGINE_DIR / name).read_text(encoding="utf-8")
+    metadata = text.split("# /// script\n", 1)[1].split("# ///", 1)[0]
+    parsed = tomllib.loads("\n".join(line.removeprefix("# ") for line in metadata.splitlines()))
+    assert parsed == {"requires-python": ">=3.12", "dependencies": []}
+
+
+def test_verify_cli_refuses_findings_deleted_but_pr_retained(env_for, tmp_path) -> None:
+    root, _, env = env_for()
+    _ok(run_engine(root, "fetch_merged_prs.py", run_args(), env))
+    built = _ok(run_engine(root, "digest_merged_prs.py", run_args(), env))
+    candidate = json.loads(Path(built["digest_path"]).read_text())
+    candidate["prs"][0]["findings"] = []
+    tampered = tmp_path / "deleted.json"
+    tampered.write_text(json.dumps(candidate), encoding="utf-8")
+    before = tampered.read_bytes()
+    result = run_engine(root, "digest_merged_prs.py", [*run_args(), "--verify", str(tampered)], env)
+    assert result.returncode == 1
+    assert "finding evidence" in result.stderr
+    assert tampered.read_bytes() == before
 
 
 def window_prs() -> list[dict]:

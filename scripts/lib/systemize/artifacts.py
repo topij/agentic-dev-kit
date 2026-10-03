@@ -95,15 +95,21 @@ def _within(path: Path, root: Path) -> bool:
     return path == root or path.is_relative_to(root)
 
 
-def _is_tracked(repo: Path, path: Path) -> bool:
+def _is_tracked(repo: Path, path: Path, *, timeout: int) -> bool:
     if not _within(path, repo):
         return False
-    result = subprocess.run(
-        ["git", "-C", str(repo), "ls-files", "--error-unmatch", "--", str(path.relative_to(repo))],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo), "ls-files", "--error-unmatch", "--", str(path.relative_to(repo))],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise SystemizeError(f"artifact Git tracking read unavailable: {path}") from exc
+    if result.returncode not in (0, 1):
+        raise SystemizeError(f"artifact Git tracking read failed: {path}")
     return result.returncode == 0
 
 
@@ -144,7 +150,7 @@ def check_targets(settings: Settings, targets: list[Target]) -> None:
             if ident in control_ids or ident in seen_ids:
                 raise SystemizeError(f"{target.label}: existing target {path} aliases another artifact or control input")
             seen_ids.add(ident)
-        if _is_tracked(settings.root, path):
+        if _is_tracked(settings.root, path, timeout=settings.subprocess_timeout_seconds):
             raise SystemizeError(f"{target.label}: {path} is tracked by Git")
 
 

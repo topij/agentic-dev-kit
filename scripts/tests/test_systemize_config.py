@@ -68,6 +68,8 @@ def test_heartbeat_keys_are_required_only_engine_backed(tmp_path: Path, key: str
     "key, value, message",
     [
         ("lookback_days", "true", "positive integer"),
+        ("subprocess_timeout_seconds", "0", "positive integer"),
+        ("subprocess_timeout_seconds", "true", "positive integer"),
         ("lookback_days", "0", "positive integer"),
         ("batch_size", "-1", "positive integer"),
         ("batch_size", '"25"', "positive integer"),

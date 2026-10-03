@@ -19,6 +19,7 @@ from systemize import artifacts, identity  # noqa: E402
 from systemize.config import load_settings  # noqa: E402
 from systemize.errors import SystemizeError  # noqa: E402
 from systemize.fetch import all_targets  # noqa: E402
+from systemize.forge import subprocess_runner  # noqa: E402
 from test_systemize_support import DATE, HEAD, make_repo  # noqa: E402
 
 
@@ -40,6 +41,37 @@ def _target(targets, label):
 def _run_id(settings, head=HEAD):
     return identity.run_identity(forge_repo="o/r", window_days=7, head=head,
                                  fingerprint=settings.fingerprint, mode="test")
+
+
+def test_forge_timeout_is_bound_and_fail_closed() -> None:
+    with pytest.raises(SystemizeError, match="forge read timed out"):
+        subprocess_runner([sys.executable, "-c", "import time; time.sleep(30)"], timeout=1)
+
+
+def test_tracking_timeout_preserves_all_targets(ctx, monkeypatch) -> None:
+    settings, targets, sandbox, _ = ctx
+    def timed_out(argv, **kwargs):
+        assert kwargs["timeout"] == settings.subprocess_timeout_seconds
+        raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+    monkeypatch.setattr(artifacts.subprocess, "run", timed_out)
+    with pytest.raises(SystemizeError, match="tracking read unavailable"):
+        artifacts.check_targets(settings, targets)
+    assert not sandbox.exists()
+    assert all(not target.path.exists() for target in targets)
+
+
+@pytest.mark.parametrize("code, expected", [(0, True), (1, False), (128, None)])
+def test_tracking_read_distinguishes_untracked_from_git_failure(ctx, monkeypatch, code, expected) -> None:
+    settings, _, _, root = ctx
+    def completed(argv, **kwargs):
+        assert kwargs["timeout"] == 3
+        return subprocess.CompletedProcess(argv, code, "", "")
+    monkeypatch.setattr(artifacts.subprocess, "run", completed)
+    if expected is None:
+        with pytest.raises(SystemizeError, match="tracking read failed"):
+            artifacts._is_tracked(root, root / "report", timeout=3)
+    else:
+        assert artifacts._is_tracked(root, root / "report", timeout=3) is expected
 
 
 def test_state_targets_land_in_the_sandbox_and_nothing_is_created(ctx) -> None:
