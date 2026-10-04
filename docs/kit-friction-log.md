@@ -26,6 +26,12 @@
 
 ## 2026-10-04
 
+- **A PR poll initially put its receipt in the real state tree during synthetic
+  validation.** Severity L, kept for accumulation. During #943's 2026-10-04 delivery,
+  the cockpit polled without its intended `DEVKIT_STATE_ROOT`. It moved only that
+  newly created receipt to the disposable watch root before the full gates, then
+  supplied the root explicitly on subsequent polls. The existing state-isolation
+  requirement governs the mistake; this entry proposes no new rule.
 - **The cockpit changed verification state while claiming an isolated run.** Severity L,
   kept for accumulation. `env -u FORCE_COLOR make test` at
   `8385211ea8ac0051df40d919ff0bd8515f43f8df` on 2026-10-03, in
