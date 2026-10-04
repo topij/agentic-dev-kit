@@ -5,6 +5,56 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-03 (Phase 6 item 10, #919, and the #585 decision, in Claude Code)
+
+**Shipped.** PR #923, squash `3246e72`: Phase 6 item 10.
+
+- `runtime-parity.md`'s front matter declares `capability_matrix` and
+  `lane_isolation_records`; `scripts/tests/test_runtime_parity_matrix.py` holds each
+  table to its declaration and resolves the file's links in the forms it parses.
+- `saved_plans/phase6-exit-check_2026-10-02.md` records the re-run and the declaration.
+  `saved_plans/codex-parity-plan_2026-08-23.md` is a pointer.
+- #919 stays open for the row audit the exit left open.
+
+**Subsequent event — 2026-10-04.** The row audit shipped in
+[#946](https://github.com/topij/agentic-dev-kit/pull/946), and #919's closure was read
+back during the cs-toolkit acceptance workstream. Its residual bounded-test gaps
+are recorded on #947.
+
+**Decided by the operator.**
+
+- Declare the Phase 6 exit under a recorded amendment rather than hold it (2026-10-02).
+  #923's correctness lens then found the offered wording overstated, and the operator
+  declared under the narrowed amendment the exit record states (2026-10-03).
+- #585: the lens count follows a change's class, and only the safety-critical class
+  inherits `safety-critical-changes.md` rule 2's two-lens floor; code outside the
+  safety-critical paths takes one lens. Posted on #585 on approval of its exact text, as
+  [this comment](https://github.com/topij/agentic-dev-kit/issues/585#issuecomment-5960721970),
+  and read back identical.
+- Authorized merging #923 and this wrap-up when clean, and running the rest unattended.
+
+**Review.** CodeRabbit's auto-review stayed off, so the fallback panel reviewed #923: the
+full panel at `9f23607`, then dual-lens delta passes at `0fb420d` and `f60b530`. Each
+round's disposition and the delta passes' verdict lines are posted on #923. The loop
+stopped under the LOW delta-or-ticket rule; its residual findings are parked below.
+
+**Verified.** `env -u FORCE_COLOR make test` at
+`f60b530acdd5ca38afaae042e26103fd85a15e1a` on 2026-10-02 (UTC), in
+`/Users/topi/Coding/agentic-dev-kit`, printed `3992 passed, 1 skipped in 674.78s
+(0:11:14)`. The exit-check record carries the mutation runs, each with its command and
+revision.
+
+**Not established.** Which matrix rows' claims are true; #919 carries that. Read on
+2026-10-03, its tracker body did not yet say so; the comment below now does.
+
+**Parked, not filed**, because no operator was present to approve a payload: the
+2026-10-03 entries in `docs/kit-friction-log.md`. Once the operator was back, two were
+filed on approval of their exact text, and each read back identical to that text: the matrix guard's
+residue as #925, and a comment on #919 scoping the row audit.
+
+Closed workstream *Phase 6 — gate parity and roll it out*: the operator declared its
+exit, and closed it on 2026-10-03. Its residue is on #919, #925, #905, #915, #916 and #917.
+
 ### 2026-10-02 (Phase 6 item 9, #880, in Claude Code)
 
 **Shipped.** PR #920, squash `d9f757d`: Phase 6 item 9.

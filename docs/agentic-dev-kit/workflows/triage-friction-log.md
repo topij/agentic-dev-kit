@@ -193,6 +193,55 @@ intent or held receipt.
 | Tracker or finalization write fails or is ambiguous | Read back before retry; unresolved state is operator-held. |
 | Test mode | Permit declared local artifacts and optional `[TEST]` notification only; prohibit tracker, source-document, and forge writes. |
 
+### Historical flat gates
+
+Ordinary entries retain the canonical gate contract. An interactive `recover` or
+`test` may opt into the historical flat gate classifier with
+`--legacy-gate-context <canonical-owner-context.json>`. Never rewrite an older gate
+into a modern lease. Keep its complete raw bytes and filesystem observations in
+the recovery capture; its timestamp-shaped process observation is not an OS
+process-start identity.
+
+The runtime builds this owner context only from the present operator's read-back:
+`source: current-session`, a nonempty `operator_identity`, and `source_read_back`
+containing that same `approver_identity`, the operator's `text`, and
+`legacy_gate_owner`. The latter binds `gate_digest` to the exact raw gate,
+`recorded_host` and `recorded_pid` to its values, `local_host` to the current machine,
+and requires explicit `same_machine: true` and `owner_terminated: true`. A bare
+"approved" reply does not establish host or termination evidence. The engine also
+requires a negative local PID probe; a live, reused or uncertain PID holds before
+state observation. It verifies the original draft head as an ancestor of the
+freshly queried protected remote head, with the local protected ref matching that
+observation. Foreign provenance and changed owner or configuration evidence hold.
+The capture-time protected head remains a historical observation; ordinary branch
+advancement does not invalidate a prepared action or completed recovery receipt
+while the original draft remains a verified protected ancestor. No age threshold
+proves termination. Refresh a stale protected ref before retrying recovery.
+
+Owner evidence permits capture and classification only. The separate
+`--approval-context` and `recovery_approval` must approve the exact displayed
+action-core digest before quarantine. Historical owner context cannot be combined
+with unattended execution, proposals, draft approvals or external adapters. If the
+historical blocking gate is absent, rerun through an ordinary entry to inspect the
+recorded recovery evidence; owner context never starts a draft.
+Retries recheck the recorded action-specific approval and classify the captured gate
+from its exact bytes. Removing historical metadata or renaming the action cannot
+bypass those checks. The approving identity must match the present operator identity
+retained in the historical owner evidence.
+
+For live state, the supported historical reservation has `phase: reserved`,
+`engine_mode: llm-only`, no frozen snapshot or inbox digest, and empty attempt,
+tracker, repository and pull-request evidence. Its identity and initial reservation
+claims must match the captured gate exactly. The old logical gate binding and its
+claimed digest are retained as historical evidence, never modern lease authority.
+The displayed `retire-historical-prefreeze-reservation` action binds the complete
+capture and exact quarantine targets. On action-specific approval, preserve the
+unchanged state and gate in quarantine and publish `recovered-safe-to-restart`;
+never import an old approval or start a replacement run automatically. A separately
+invoked `new` verifies that receipt and freezes the current inbox under a fresh
+identity. Other historical state shapes remain held. Test state keeps the existing
+test-confined held-evidence contract.
+
 ### Completed-state retirement
 
 A valid `completed` state holds no pending approval, attempt, sweep, or merge, so it does

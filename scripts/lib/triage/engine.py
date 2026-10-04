@@ -48,10 +48,12 @@ from .recovery import (
     persist_test_gate_held,
     prepare_gate_only,
     prepare_state_action,
+    recovery_gate_record,
     resume_gate_only,
     resume_state_action,
     state_action_plan,
     test_gate_state_plan,
+    validate_historical_prepared,
 )
 from .storage import (
     ArtifactStore,
@@ -306,14 +308,19 @@ def _prepared_gate_only_bundle(
     return bundle
 
 
-def _require_terminated_owner(gate_raw: bytes) -> None:
+def _require_terminated_owner(gate_raw: bytes, store: ArtifactStore | None = None) -> None:
     """Hold unless the owner of these exact gate bytes is proven dead (#863).
 
-    Only the record's shape is validated here, not its repository or configuration
+    For canonical records only the shape is validated here, not repository or configuration
     identity: the bundle was found by this gate's exact digest and its capture already
     checked that identity. Re-checking against the current configuration would hold
     an approved, half-done transition for good after any configuration change.
+    Historical context instead validates its separate provenance and owner evidence;
+    it never supplies a current lease.
     """
+    if store is not None and store.legacy_gate_context is not None:
+        recovery_gate_record(store, gate_raw)
+        return
     try:
         record = loads_exact(gate_raw)
     except Exception as exc:
@@ -332,6 +339,9 @@ def _blocking_recovery(
     gate_observation, gate_raw = observe(store.gate_path, allow_links=True)
     if gate_raw is None:
         raise TriageError("blocking gate disappeared", outcome="operator-held")
+    # State presence and recovery-bundle reads are also observations. Prove the
+    # blocking owner dead before selecting any state-bearing recovery predicate.
+    _require_terminated_owner(gate_raw, store)
     _, state_raw = observe(store.state_path)
     gate_only_state = _gate_only_state_value(store, state_raw)
     if gate_only_state is not None:
@@ -353,7 +363,7 @@ def _blocking_recovery(
             # An ungated `recover` leaves its capture bound to its own gate, so this
             # bundle's owner may still be running. Plan from it or act on it only
             # once that owner is proven dead (#863).
-            _require_terminated_owner(gate_raw)
+            _require_terminated_owner(gate_raw, store)
         if kind in {"gate-only-prepared", "test-gate-only-prepared"}:
             receipt = resume_gate_only(store, settings, bundle)
             return "operator-held", receipt["kind"], None
@@ -459,6 +469,7 @@ def _restart_receipt(store: ArtifactStore, raw: bytes) -> tuple[dict[str, Any], 
         or receipt_core.get("configured_bundle_path") != str(expected_path)
     ):
         raise TriageError("safe-restart action binding mismatch", outcome="operator-held")
+    validate_historical_prepared(store, envelope)
     try:
         approved_quarantine = Observation(**receipt["quarantine_observation"])
     except (TypeError, ValueError) as exc:
@@ -1727,6 +1738,7 @@ def run(
     tracker: TrackerProvider | None = None,
     notification: NotificationProvider | None = None,
     approval_context: ApprovalContext | None = None,
+    legacy_gate_context: ApprovalContext | None = None,
     forge: ForgeProvider | None = None,
     head_authority: ForgeProvider | None = None,
 ) -> dict[str, Any]:
@@ -1743,6 +1755,12 @@ def run(
     if not isinstance(context, str) or context not in {"interactive", "unattended"}:
         return _result(capabilities, "hard-stop", mode="unknown", engine_mode=None, report=None, frozen=None, resume_action="supply an explicit execution context", detail="invalid execution context")
     mode = "test" if entry == "test" else "live"
+    if legacy_gate_context is not None and (
+        context != "interactive" or entry not in {"recover", "test"}
+        or tracker is not None or forge is not None or notification is not None
+        or set(request) - {"recovery_approval"}
+    ):
+        return _result(capabilities, "hard-stop", mode=mode, engine_mode=None, report=None, frozen=None, resume_action="use historical owner evidence only for isolated interactive recovery", detail="historical gate evidence cannot authorize draft, approval or external writes")
     observed_protected_head = None
     result_engine_mode: str | None = None
     result_report: str | None = None
@@ -1757,7 +1775,7 @@ def run(
         capabilities["shared-state-resolver"] = {"status": "ready", "mechanism": "own-session resolve_write_path"}
         capabilities["draft-finalize-engine-set"] = {"status": "ready", "mechanism": settings.engine_mode}
         capabilities["runtime-compute-selection"] = {"status": "degraded", "mechanism": f"{settings.analysis_tier} is instructed guidance"}
-        store = ArtifactStore(settings, mode)
+        store = ArtifactStore(settings, mode, legacy_gate_context=legacy_gate_context)
         try:
             lease = acquire(store, repository_identity=repository_identity(settings), config_fingerprint=settings.fingerprint, run_identity=None)
         except TriageError as gate_error:
@@ -1768,6 +1786,9 @@ def run(
             return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="use interactive recover for a proven-dead owner", detail=str(gate_error))
         capabilities["single-writer-state-gate"] = {"status": "ready", "mechanism": "exclusive complete-record hard-link gate"}
         try:
+            if legacy_gate_context is not None:
+                lease.release()
+                return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="use the ordinary entry to inspect or resume recorded recovery evidence", detail="historical owner evidence requires a blocking historical gate")
             state_observation, state_raw = observe(store.state_path)
             if state_raw is None:
                 if entry in {"resume", "recover"}:
