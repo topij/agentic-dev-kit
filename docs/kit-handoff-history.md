@@ -5,6 +5,38 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-02 (Phase 6 items 7 and 8, #879, in Claude Code)
+
+**Shipped.** PR #913, squash `947fca0`: `scripts/runtime_smoke.py`, a repo-only runner
+started by hand rather than in pull-request CI. In a fixture built from a kit revision,
+under isolated client homes, it drives a pinned Codex and a pinned Claude Code through
+instruction and skill or command discovery, SessionStart and PostToolUse, native review,
+the fallback panel and a lane through `scripts/launch_lane.py`. Each row records evidence
+read from the runtime's own artifacts, or the reason it could not run. The first stamped
+record, from a run at `0c2c200`, is `saved_plans/runtime-smoke-evidence_2026-10-02/`,
+and `saved_plans/runtime-smoke_2026-10-02.md` is its narrative. #879 closed on merge.
+
+**Decided.**
+
+- Trust is granted per invocation, and only in isolated homes the operator created and
+  logged in to. For the Codex hook probe alone, the operator authorized the hook-trust
+  bypass and a `-c` project-trust override; the fixture's hook output reached a Codex
+  session only with both (the narrative's observation 2).
+- A smoke record is an observation, not a promotion bundle
+  (`live-validation-evidence.md`, *On-demand smoke records*), so no parity-matrix row
+  moved.
+
+**Verified.** `env -u FORCE_COLOR make test` at
+`ec06c3bd2ded880fabcf674e33d8947035d37b4d` on 2026-10-02 in
+`/Users/topi/Coding/agentic-dev-kit` printed `3969 passed, 1 skipped in 645.24s
+(0:10:45)`. The squash's tree is that revision's.
+
+**Not established.** The narrative's own section names what the record does not show.
+The runner's stops were exercised against fake clients only.
+
+**Filed.** #915, from #913's review; #916 and #917, from the live runs. Observations
+went to #802, #643 and #408 as comments.
+
 ### 2026-10-02 (Phase 6 Codex validation)
 
 **Shipped.** PR #911, squash `0298191`: #908's lifecycle record now names the
