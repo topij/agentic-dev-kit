@@ -2387,77 +2387,9 @@ def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_valida
     ]
 
 
-# Long options that select compute, per client. Claude's `--agent`/`--agents` carry a
-# definition's `model` and `effort`, and `--settings` can carry a model.
-_LONG_COMPUTE_OPTIONS = {
-    "codex": {"model", "config", "profile"},
-    "claude": {"model", "effort", "fallback-model", "agent", "agents", "settings"},
-}
-# Short options that select compute, per client: Codex's `-m` model, `-c` config and
-# `-p` profile. Claude's short options (`-p` print, `-c` continue, `-r` resume) select none.
-_SHORT_COMPUTE_OPTIONS = {"codex": {"m", "c", "p"}, "claude": set()}
-
-
-def _compute_controls(runtime: str, command: list[str]) -> list[str]:
-    """The arguments in a headless command that could select model or effort.
-
-    Long options by name, case-insensitively, with or without `=value`, plus any name
-    mentioning a model or effort; short options by the client's own letters, attached
-    value or not (`-mgpt-5` sets Codex's model as `-m gpt-5` does); and any other
-    argument naming a model or effort, such as a bare config value.
-    """
-    controls = []
-    for arg in command[1:]:
-        lowered = arg.lower()
-        if lowered.startswith("--"):
-            name = lowered[2:].split("=", 1)[0]
-            if name in _LONG_COMPUTE_OPTIONS[runtime] or "model" in name or "effort" in name:
-                controls.append(arg)
-        elif arg.startswith("-") and len(arg) > 1:
-            if arg[1] in _SHORT_COMPUTE_OPTIONS[runtime]:
-                controls.append(arg)
-        elif "model" in lowered or "effort" in lowered:
-            controls.append(arg)
-    return controls
-
-
-@pytest.mark.parametrize(
-    "runtime, command",
-    [
-        ("codex", ["codex", "exec", "-mgpt-5"]),
-        ("codex", ["codex", "exec", "-m", "gpt-5"]),
-        ("codex", ["codex", "exec", "--model=gpt-5"]),
-        ("codex", ["codex", "exec", "--MODEL=gpt-5"]),
-        ("codex", ["codex", "exec", "--reasoning-effort=low"]),
-        ("codex", ["codex", "exec", "-cmodel_reasoning_effort=low"]),
-        ("codex", ["codex", "exec", "-c", "model_reasoning_effort=low"]),
-        ("codex", ["codex", "exec", "model_reasoning_effort=low"]),
-        ("codex", ["codex", "exec", "-p", "fast"]),
-        ("codex", ["codex", "exec", "-pfast"]),
-        ("claude", ["claude", "-p", "--model", "opus"]),
-        ("claude", ["claude", "-p", "--effort=high"]),
-        ("claude", ["claude", "-p", "--fallback-model", "sonnet"]),
-        ("claude", ["claude", "-p", "--agent", "adversarial"]),
-        ("claude", ["claude", "-p", "--agents", "{}"]),
-        ("claude", ["claude", "-p", "--settings", "lane.json"]),
-    ],
-)
-def test_a_compute_control_in_a_headless_command_is_recognised(runtime: str, command: list[str]) -> None:
-    assert _compute_controls(runtime, command)
-
-
-@pytest.mark.parametrize(
-    "runtime, command",
-    [
-        ("codex", ["codex", "exec"]),
-        ("codex", ["codex", "exec", "--json"]),
-        ("claude", ["claude", "-p"]),
-        ("claude", ["claude", "-p", "-c"]),
-        ("claude", ["claude", "-p", "--verbose"]),
-    ],
-)
-def test_a_headless_command_without_a_compute_control_is_not_flagged(runtime: str, command: list[str]) -> None:
-    assert _compute_controls(runtime, command) == []
+# The shipped lane commands, argument for argument. Each is a subcommand or mode with
+# no compute in it: Codex's `exec`, Claude's `-p` (print).
+_SHIPPED_HEADLESS_COMMANDS = {"codex": ["codex", "exec"], "claude": ["claude", "-p"]}
 
 
 @pytest.mark.kit_repo_only("config/dev-model.yaml")
@@ -2468,16 +2400,23 @@ def test_shipped_headless_commands_carry_no_compute_control() -> None:
     a control. `test_each_declared_policy_reaches_the_child_argv_in_the_fixed_slot`
     pins that the launcher adds none, but against fixture commands; this holds the
     shipped `parallel.<runtime>_headless_command` values, which the launcher reads
-    verbatim, to the same claim. Kit source only: an adopter may set a control there
-    on purpose, and its suite should not fail for it.
+    verbatim, to the same claim.
+
+    Equality rather than a scan for control flags: each client's options are an open
+    set (Claude's `--agent` and `--settings` carry compute, Codex's `--oss` picks a
+    provider), so a list of known controls is never complete. Any argument added to a
+    shipped command fails here, to be read for compute before this pin moves. Kit
+    source only: an adopter may set a control there on purpose, and its suite should
+    not fail for it.
     """
     require_kit_source()
     launcher = _load_launcher()
     config = launcher.load_config(REPO_ROOT / "config" / "dev-model.yaml", overlay=False)
-    for runtime, binary in (("codex", "codex"), ("claude", "claude")):
-        command = launcher.get(config, f"parallel.{runtime}_headless_command", None)
-        assert isinstance(command, list) and command[0] == binary, command
-        assert _compute_controls(runtime, command) == [], command
+    shipped = {
+        runtime: launcher.get(config, f"parallel.{runtime}_headless_command", None)
+        for runtime in _SHIPPED_HEADLESS_COMMANDS
+    }
+    assert shipped == _SHIPPED_HEADLESS_COMMANDS
 
 
 @pytest.mark.parametrize("mode", ["regular", "symlink", "fifo-race", "directory-race", "symlink-race", "changed"])
