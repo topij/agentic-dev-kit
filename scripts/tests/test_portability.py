@@ -20091,3 +20091,21 @@ def test_archive_unconfirmed_pending_preserves_concurrent_edit(tmp_path, mode, f
     assert "rollback was not attempted" in result.stderr
     assert Path(observed["stages"][1]).read_text().count(body) == 1
     assert Path(observed["stages"][2]).read_text() == originals[0]
+
+
+@pytest.mark.parametrize("name", [
+    "archive_plan_sessions.py", "check_doc_budget.py", "check_memory_budget.py",
+    "digest_merged_prs.py", "fetch_merged_prs.py", "finalize_triage.py",
+    "heartbeat_cli.py", "kit_doctor.py", "panel_prompt.py", "pr_watch.py",
+    "runtime_smoke.py", "triage_friction_log.py", "verify_live_validation_bundle.py",
+])
+def test_supported_standalone_entry_points_declare_python_floor_and_dependencies(name):
+    import tomllib
+
+    engine = ENGINE_DIR / name
+    if not engine.is_file():
+        pytest.skip("standalone engine not installed")
+    text = engine.read_text(encoding="utf-8")
+    metadata = text.split("# /// script\n", 1)[1].split("# ///", 1)[0]
+    parsed = tomllib.loads("\n".join(line.removeprefix("# ") for line in metadata.splitlines()))
+    assert parsed == {"requires-python": ">=3.12", "dependencies": []}

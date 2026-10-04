@@ -99,7 +99,8 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install test dependencies
-        run: python -m pip install pytest pyyaml
+        # Standalone entry-point boundaries execute uv against disposable projects.
+        run: python -m pip install pytest pyyaml uv==0.12.3
       - name: Lint Python (ruff)
         # The kit shipped engines that nothing had ever linted (issue #58). Two
         # of them were copied into a mature repo with repo-wide ruff and failed

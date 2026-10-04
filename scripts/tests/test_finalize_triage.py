@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _repo_layout import engine_dir, find_repo_root  # noqa: E402
+from _repo_layout import engine_dir, find_repo_root, triage_config_text  # noqa: E402
 
 ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
@@ -58,9 +58,7 @@ def git(repo: Path, *args: str) -> str:
 def repository(tmp_path: Path, *, prior_marker: bool = False) -> Path:
     root = tmp_path / "repo"
     (root / "config").mkdir(parents=True)
-    shutil.copy2(REPO_ROOT / "config/dev-model.yaml", root / "config/dev-model.yaml")
-    config = root / "config/dev-model.yaml"
-    config.write_text(config.read_text(encoding="utf-8").replace("  engines: scripts/devkit\n", "  engines: scripts\n"), encoding="utf-8")
+    (root / "config/dev-model.yaml").write_text(triage_config_text(), encoding="utf-8")
     (root / "docs").mkdir()
     # `prior_marker` adds an earlier sweep's graduation marker, which a current
     # sweep moves to the archive and a pre-#187 one left in place.
@@ -166,10 +164,10 @@ def test_archive_only_finalize_retains_exact_new_block_and_waits_for_merge(
 ) -> None:
     root = repository(tmp_path)
     config = root / "config/dev-model.yaml"
-    config.write_text(
-        config.read_text(encoding="utf-8").replace("project_name: topij/agentic-dev-kit", "project_name: central/triage-tracker"),
-        encoding="utf-8",
-    )
+    before = config.read_text(encoding="utf-8")
+    changed = before.replace('project_name: "topij/agentic-dev-kit"', 'project_name: "central/triage-tracker"')
+    assert changed != before, "tracker destination fault injection did not land"
+    config.write_text(changed, encoding="utf-8")
     state_root = tmp_path / "state-root"
     monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
     draft_request, candidate_id = proposal_request(root)
@@ -1003,7 +1001,7 @@ def test_retained_old_pattern_finalization_state_replays_cleanly_under_the_new_d
     """#807 point 2b, at the shape the previous engine actually wrote: a
     verified branch-create whose branch has no `{session}` segment, replayed
     through the current engine's own commit-validation function against this
-    repo's shipped config, which now defaults `vcs.triage_branch_pattern` to
+    controlled fixture config with `vcs.triage_branch_pattern` set to
     `chore/triage-{date}-{session}`."""
     root = repository(tmp_path)
     state_root = tmp_path / "state-root"

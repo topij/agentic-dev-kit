@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _repo_layout import engine_dir, find_repo_root  # noqa: E402
+from _repo_layout import engine_dir, find_repo_root, triage_config_text  # noqa: E402
 
 ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
@@ -21,9 +23,7 @@ from triage.engine import run  # noqa: E402
 def repo(tmp_path: Path) -> Path:
     root = tmp_path / "repo"
     (root / "config").mkdir(parents=True)
-    shutil.copy2(REPO_ROOT / "config/dev-model.yaml", root / "config/dev-model.yaml")
-    config = root / "config/dev-model.yaml"
-    config.write_text(config.read_text(encoding="utf-8").replace("  engines: scripts/devkit\n", "  engines: scripts\n"), encoding="utf-8")
+    (root / "config/dev-model.yaml").write_text(triage_config_text(), encoding="utf-8")
     (root / "docs").mkdir()
     (root / "docs/kit-friction-log.md").write_text("# Log\n", encoding="utf-8")
     (root / "docs/kit-friction-log-archive.md").write_text("# Archive\n", encoding="utf-8")
@@ -204,3 +204,42 @@ def test_no_argument_starts_absent_session_while_resume_absence_hard_stops(
     started = run(None, context="interactive", request={}, start=implicit_root)
     assert started["outcome"] == "successful-completion"
     assert (implicit_state / "triage/triage-pipeline-state_live.json").exists()
+
+
+@pytest.mark.parametrize("name", ["triage_friction_log.py", "finalize_triage.py"])
+def test_triage_standalone_metadata_declares_stdlib_dependencies(name):
+    text = (ENGINE_DIR / name).read_text(encoding="utf-8")
+    metadata = text.split("# /// script\n", 1)[1].split("# ///", 1)[0]
+    parsed = tomllib.loads("\n".join(line.removeprefix("# ") for line in metadata.splitlines()))
+    assert parsed == {"requires-python": ">=3.12", "dependencies": []}
+
+
+@pytest.mark.parametrize("name", ["triage_friction_log.py", "finalize_triage.py"])
+def test_uv_standalone_triage_ignores_root_project(tmp_path, name):
+    root = repo(tmp_path)
+    installed = root / "scripts/devkit"
+    installed.mkdir(parents=True)
+    for engine in ("triage_friction_log.py", "finalize_triage.py"):
+        shutil.copy2(ENGINE_DIR / engine, installed / engine)
+    shutil.copytree(ENGINE_DIR / "lib", installed / "lib", ignore=shutil.ignore_patterns("__pycache__", "tests"))
+    project = root / "pyproject.toml"
+    project.write_text(
+        '[project]\nname = "synthetic-root-must-not-resolve"\nversion = "0.0.0"\n'
+        'requires-python = ">=3.12"\ndependencies = ["devkit-root-must-not-resolve==0.0.0"]\n',
+        encoding="utf-8",
+    )
+    before = project.read_bytes()
+    env = {**os.environ, "DEVKIT_STATE_ROOT": str(tmp_path / "state-root"), "UV_NO_PROGRESS": "1"}
+    result = subprocess.run(
+        ["uv", "run", "--offline", "--no-python-downloads", "--python", sys.executable,
+         str(installed / name), "--unknown-flag"],
+        cwd=root, env=env, capture_output=True, text=True, timeout=60, check=False,
+    )
+    assert result.returncode == 2, result.stderr
+    envelope = loads_exact(result.stdout.strip().encode())
+    assert envelope["outcome"] == "hard-stop"
+    assert "invalid CLI arguments" in envelope["detail"]
+    assert project.read_bytes() == before
+    assert not (root / ".venv").exists()
+    assert not (root / "uv.lock").exists()
+    assert not (tmp_path / "state-root").exists()

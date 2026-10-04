@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.12"
+# dependencies = []
+# ///
 """Resume a triage session through accounting and exact finalization."""
 
 from __future__ import annotations

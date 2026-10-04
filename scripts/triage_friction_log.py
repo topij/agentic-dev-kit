@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.12"
+# dependencies = []
+# ///
 """CLI for deterministic draft, resume, approval, accounting, and recovery."""
 
 from __future__ import annotations
