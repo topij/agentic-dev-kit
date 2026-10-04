@@ -237,12 +237,36 @@ executes against fake trackers and forges.
 
 ## Negative controls
 
-Each added test was run against a mutation of the code or file it guards, in a
-`git clone --no-hardlinks` of this branch detached at the revision named below, with
-the mutation applied by a script that asserted exactly one match. *Caught by the
-existing suite* reads the unmutated tests' result on the same mutation.
+Every mutation was applied twice, each time to a fresh `git clone --no-hardlinks` of
+this repository: once detached at `b309bb8ae4aaa0729df569014032e16830cf1504`, the commit
+that adds the tests, and once at `7467c9b552b4eeb50dc9bab25ad69a5add89254d`, before
+them. A script applied each edit after asserting it matched exactly once, and
+`git diff --stat` read it back. Both sides ran
+`uv run --with pytest --with pyyaml pytest -q -p no:cacheprovider -m 'not driftcheck'`
+with `DEVKIT_STATE_ROOT` and `--basetemp` under the session scratchpad, on 2026-10-04.
+`not driftcheck` keeps the manifest self-check from failing on every byte change, as
+`make mutation-test` does. The added test ran at `b309bb8`. At `7467c9b`, the run took
+the whole test modules that exercise the mutated file, named in the last column, not
+the whole suite.
 
-NEGATIVE-CONTROLS-PLACEHOLDER
+| Mutation | Added test at `b309bb8` | Modules at `7467c9b` |
+|---|---|---|
+| `check_doc_budget.py` returns 1 whenever a doc is over budget, `--strict` or not | `test_doc_budget_cli_warns_without_blocking_and_blocks_only_under_strict`: `1 failed` | `test_portability.py`, `test_kitconfig.py`, `test_init_sh.py`, `test_check_memory_budget.py`: `1111 passed` |
+| `check_doc_budget.py`'s `render` prints within-budget docs under `--quiet` | the same test: `1 failed` | the same modules: `1111 passed` |
+| a `PostToolUse` handler running `check_memory_budget.py` added to `.codex/hooks.json` and its fixture copy | `test_no_shipped_codex_hook_names_the_claude_only_memory_engine`: `1 failed` | `test_init_sh.py`, `test_kit_doctor.py`: `887 passed, 1 deselected` |
+| `pr_followup_hook.py` adds a `systemMessage` beside `hookSpecificOutput` | `test_entrypoint_emits_scoped_read_only_policy_and_lifecycle_prerequisites`: `20 failed` | `test_pr_followup_hook.py`, `test_init_sh.py`: `503 passed` |
+| `parallel.claude_headless_command` gains `--model opus`, config and fixture alike | `test_shipped_headless_commands_carry_no_compute_control`: `1 failed` | `test_lane_launcher.py`, `test_init_sh.py`: `584 passed` |
+| `kit_doctor.py` gains a `models.runtime_mappings` key read | `test_no_shipped_engine_reads_runtime_mappings`: `1 failed` | `test_init_sh.py`, `test_kit_doctor.py`: `887 passed, 1 deselected` |
+| `dev_session.sh merge` drops `--match-head-commit "$validated_head"` | `test_scope_pr_watch_and_merge_share_lane_state_and_pinned_repo`: `1 failed` | `test_portability.py`, `test_lane_launcher.py`: `892 passed, 2 warnings` |
+| `sweep_ids` loses its unaccounted-batch refusal | `test_sweep_set_refuses_a_filed_decision_without_a_verified_operation`: `3 failed` | `test_finalize_triage.py`, `test_triage_engine.py`, `test_triage_recovery.py`: `270 passed` |
+| triage test mode renders only when no tracker is supplied | `test_test_mode_writes_nothing_through_providers_it_is_handed`: `1 failed` | `test_triage_engine.py`, `test_finalize_triage.py`, `test_triage_inputs.py`: `279 passed` |
+| `docs/templates/CLAUDE.md.tmpl`'s comment closes below `@AGENTS.md` | `test_a_fresh_install_receives_the_declared_footprint`: `3 failed` | `test_adoption_fixtures.py`, `test_init_sh.py`: `373 passed` |
+| the kit's root `CLAUDE.md` fences its `@AGENTS.md` | `test_the_kits_own_claude_md_actively_imports_agents_md`: `1 failed` | `test_init_sh.py`, `test_adoption_fixtures.py`: `373 passed` |
+| a tracked root `AGENTS.override.md` | `test_a_fresh_install_receives_the_declared_footprint`: `3 failed` | `test_adoption_fixtures.py`, `test_kit_doctor.py`: `566 passed, 1 deselected` |
+| `kit_doctor.py` hard-codes `scripts/` in the canonical doc-budget command | `test_the_codex_commands_printed_for_a_vendored_engine_dir_verify_in_the_doctor`: `1 failed` | `test_init_sh.py`, `test_kit_doctor.py`: `887 passed, 1 deselected` |
+
+Each failure was the added test or the assertion this change added to an existing one.
+No module run at `7467c9b` caught any of these mutations.
 
 ## What stays unestablished
 
