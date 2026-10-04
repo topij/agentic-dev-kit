@@ -309,6 +309,17 @@ def _assert_install_matches_declaration(install: Install, declaration: dict) -> 
     # through CLAUDE.md's import.
     claude_md = (root / "CLAUDE.md").read_text(encoding="utf-8").splitlines()
     assert "@AGENTS.md" in claude_md, f"{adopter.name}: CLAUDE.md does not import AGENTS.md"
+    # A line is not an import inside a comment or a fence; `init.sh` checks the
+    # rendered file with its active-import predicate and says so when it is not (#919).
+    assert "CLAUDE.md does not import AGENTS.md" not in install.stdout, (
+        f"{adopter.name}: init.sh found no active @AGENTS.md import in the rendered CLAUDE.md"
+    )
+    # In Codex's instruction chain an `AGENTS.override.md` takes precedence over the
+    # `AGENTS.md` before it (a nested one was observed doing so in
+    # `saved_plans/codex-safety-doctrine-live-validation_2026-08-24.md`), so the install
+    # ships none and the shared contract is what Codex reads (#919).
+    overrides = sorted(str(path.relative_to(root)) for path in root.rglob("AGENTS.override.md"))
+    assert not overrides, f"{adopter.name}: the install ships {overrides}"
 
     for rel, body in adopter.own.items():
         assert (root / rel).read_text(encoding="utf-8") == body, (

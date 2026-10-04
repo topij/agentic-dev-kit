@@ -20,6 +20,7 @@ from types import ModuleType
 
 import pytest
 from _repo_layout import find_repo_root
+from conftest import require_kit_source
 
 ENGINE_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = find_repo_root(ENGINE_DIR)
@@ -2384,6 +2385,38 @@ def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_valida
         "Bash(uv run scripts/kit_doctor.py:*)",
         "Bash(uv run scripts/devkit/kit_doctor.py:*)",
     ]
+
+
+# The shipped lane commands, argument for argument. Each is a subcommand or mode with
+# no compute in it: Codex's `exec`, Claude's `-p` (print).
+_SHIPPED_HEADLESS_COMMANDS = {"codex": ["codex", "exec"], "claude": ["claude", "-p"]}
+
+
+@pytest.mark.kit_repo_only("config/dev-model.yaml")
+def test_shipped_headless_commands_carry_no_compute_control() -> None:
+    """The shipped lane commands leave model and effort to the client (#919).
+
+    `runtime-parity.md`'s *Capability tiers* row says neither headless wrapper carries
+    a control. `test_each_declared_policy_reaches_the_child_argv_in_the_fixed_slot`
+    pins that the launcher adds none, but against fixture commands; this holds the
+    shipped `parallel.<runtime>_headless_command` values, which the launcher reads
+    verbatim, to the same claim.
+
+    Equality rather than a scan for control flags: each client's options are an open
+    set (Claude's `--agent` and `--settings` carry compute, Codex's `--oss` picks a
+    provider), so a list of known controls is never complete. Any argument added to a
+    shipped command fails here, to be read for compute before this pin moves. Kit
+    source only: an adopter may set a control there on purpose, and its suite should
+    not fail for it.
+    """
+    require_kit_source()
+    launcher = _load_launcher()
+    config = launcher.load_config(REPO_ROOT / "config" / "dev-model.yaml", overlay=False)
+    shipped = {
+        runtime: launcher.get(config, f"parallel.{runtime}_headless_command", None)
+        for runtime in _SHIPPED_HEADLESS_COMMANDS
+    }
+    assert shipped == _SHIPPED_HEADLESS_COMMANDS
 
 
 @pytest.mark.parametrize("mode", ["regular", "symlink", "fifo-race", "directory-race", "symlink-race", "changed"])

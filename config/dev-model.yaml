@@ -594,12 +594,11 @@ models:
     cheap: mechanical
     default: standard
     expensive: judgment
-  # STATUS, per runtime: ADVISORY on both. No engine reads this map:
-  # `grep -rn runtime_mappings scripts/ init.sh` finds init.sh's migration write
-  # and test pins, never an engine (read at 16b07d6 and re-read at e128cdc, where
-  # this PR's own tests had joined the pins — the panel's correctness lens caught
-  # two earlier versions of this parenthetical enumerating too few files, which
-  # is why it now names the kinds and not the files). So a workflow's tier
+  # STATUS, per runtime: ADVISORY on both. No shipped engine reads this map:
+  # besides init.sh's migration write, its only reader is the kit repository's
+  # own smoke runner, which is not shipped and applies the `cheap` values to its
+  # probes. `test_no_shipped_engine_reads_runtime_mappings` in
+  # scripts/tests/test_init_sh.py holds that set. So a workflow's tier
   # reaches a session only when the
   # cockpit or the operator applies the value by hand — the delegation tool's
   # `model` parameter, `claude -p --model/--effort`, `codex -m` and

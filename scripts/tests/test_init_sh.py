@@ -2164,6 +2164,28 @@ def test_an_active_agents_import_suppresses_the_hint(
     )
 
 
+def test_the_kits_own_claude_md_actively_imports_agents_md(tmp_path: Path) -> None:
+    """The kit's root `CLAUDE.md` reaches `AGENTS.md` by a live import (#919).
+
+    `runtime-parity.md`'s *Repository instructions* row says `CLAUDE.md` imports the
+    shared contract. The fresh-install fixtures hold the rendered entry point to it;
+    nothing held the kit's own, which other tests read only for its marker line.
+    With the marker removed, the file is an adopter's in-use `CLAUDE.md`, and the
+    installer's active-import predicate decides it.
+    """
+    require_kit_source()
+    own = (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    first, _, rest = own.partition("\n")
+    assert kit_own_marker() in first, first
+    repo = _fixture(tmp_path, config=shipped_config(), templates=True)
+    (repo / "CLAUDE.md").write_text(rest, encoding="utf-8")
+
+    result = _run_init(repo)
+
+    assert (repo / "CLAUDE.md").read_text(encoding="utf-8") == rest, "the in-use file was replaced"
+    assert "does not import AGENTS.md" not in result.stdout, result.stdout
+
+
 # --------------------------------------------------------------------------- #
 # .gitignore appends
 # --------------------------------------------------------------------------- #
@@ -3340,6 +3362,83 @@ def test_both_runtime_mappings_comments_declare_the_status_per_runtime():
         )
 
 
+# Every executable kit source outside the tests that names `runtime_mappings` in code,
+# and why. The map is advisory because no engine an adopter receives applies it.
+RUNTIME_MAPPINGS_READERS = {
+    "init.sh": "the schema migration writes the map; it never reads a value back",
+    "scripts/runtime_smoke.py": "the repo-only smoke runner applies the cheap tier to its own probes",
+}
+
+
+def _names_runtime_mappings(path: Path) -> bool:
+    """Whether `path` names the key outside a comment."""
+    import io
+    import tokenize
+
+    text = path.read_text(encoding="utf-8", errors="replace")
+    if path.suffix == ".py":
+        return any(
+            token.type != tokenize.COMMENT and "runtime_mappings" in token.string
+            for token in tokenize.generate_tokens(io.StringIO(text).readline)
+        )
+    return any(
+        "runtime_mappings" in line and not line.lstrip().startswith("#")
+        for line in text.splitlines()
+    )
+
+
+@pytest.mark.kit_repo_only("scripts/runtime_smoke.py")
+def test_no_shipped_engine_reads_runtime_mappings() -> None:
+    """`ADVISORY on both` rests on which engines read the map, so hold that set (#919).
+
+    The reference config's comment and `runtime-parity.md`'s *Capability tiers* row
+    once said no engine reads `models.runtime_mappings`. `runtime_smoke.py` (#913)
+    made that false without touching either. This names every reader, and requires
+    each one besides the migration to be repo-only, so it never reaches an adopter.
+
+    It scans every tracked file outside the tests under `scripts/`, and `init.sh`,
+    that is Python, shell, or carries a shebang: an extensionless hook such as
+    `scripts/hooks/pre-push` ships too. The adapter templates are Markdown an agent
+    reads, not code, and are left out. A name scan: a reader that builds the key from
+    parts, or walks `models` without naming it, is not seen.
+    """
+    require_kit_source()
+    import importlib.util
+
+    tracked = subprocess.run(
+        ["git", "ls-files", "--", "init.sh", "scripts"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+    def executable(name: str) -> bool:
+        if name == "init.sh" or name.endswith((".py", ".sh")):
+            return True
+        with (REPO_ROOT / name).open("rb") as handle:
+            return handle.read(2) == b"#!"
+
+    sources = [name for name in tracked if "/tests/" not in name and executable(name)]
+    assert {"scripts/pr_watch.py", "scripts/hooks/pre-push"} <= set(sources), (
+        "the scan missed an engine it must reach"
+    )
+    readers = {name for name in sources if _names_runtime_mappings(REPO_ROOT / name)}
+    assert readers == set(RUNTIME_MAPPINGS_READERS), sorted(readers)
+
+    spec = importlib.util.spec_from_file_location("kit_doctor_readers", ENGINE_DIR / "kit_doctor.py")
+    assert spec is not None and spec.loader is not None
+    doctor = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = doctor
+    try:
+        spec.loader.exec_module(doctor)
+    finally:
+        sys.modules.pop(spec.name, None)
+    roles = dict(doctor.KIT_OWNED)
+    assert {name: roles.get(name) for name in readers - {"init.sh"}} == {
+        "scripts/runtime_smoke.py": doctor.REPO_ONLY_ROLE
+    }
+
+
 def test_init_sh_stamps_the_same_tier_mapping_defaults_as_the_reference_config(
     tmp_path: Path,
 ) -> None:
@@ -3903,6 +4002,30 @@ def test_the_shipped_codex_session_start_carries_no_matcher() -> None:
     assert "check_memory_budget.py" not in commands[0]
 
 
+def test_no_shipped_codex_hook_names_the_claude_only_memory_engine() -> None:
+    """The memory tripwire is kept off Codex under every event, not only SessionStart.
+
+    `runtime-parity.md`'s *Runtime memory tripwire* row says never invoke the Claude
+    engine on Codex. The test above reads only the SessionStart entries whose command
+    names a budget engine, and the doctor's own check fires on its exact canonical
+    string, so a `PostToolUse` handler, or any other spelling, would pass both
+    (#919). This walks every string in the shipped file instead.
+    """
+    def strings(node: object) -> list[str]:
+        if isinstance(node, str):
+            return [node]
+        if isinstance(node, dict):
+            return [s for key, value in node.items() for s in (key, *strings(value))]
+        if isinstance(node, list):
+            return [s for item in node for s in strings(item)]
+        return []
+
+    parsed = json.loads(shipped_codex_hooks().read_text(encoding="utf-8"))
+    found = strings(parsed)
+    assert any("check_doc_budget.py" in s for s in found), "the walk reached no shipped command"
+    assert not [s for s in found if "check_memory_budget" in s]
+
+
 def test_the_budget_advisory_prints_the_shipped_codex_commands_verbatim(
     tmp_path: Path,
 ) -> None:
@@ -3930,6 +4053,65 @@ def test_the_budget_advisory_prints_the_shipped_codex_commands_verbatim(
         if "budget.py" in line
     }
     assert printed == set(_codex_session_start_commands())
+
+
+def test_the_codex_commands_printed_for_a_vendored_engine_dir_verify_in_the_doctor(
+    tmp_path: Path,
+) -> None:
+    """What `init.sh` prints under `scripts/devkit/` is what the doctor verifies (#919).
+
+    `runtime-parity.md`'s *Lifecycle validation boundary* says the repository checks
+    match the canonical lifecycle form `init.sh` prints. The test above compares
+    the printout with the shipped file, and the doctor's lifecycle tests compare the
+    shipped file with its own form, both at `scripts/` only. An adopter that vendors
+    the engines elsewhere pastes the printed commands, so this builds the hook file
+    from them, with the event, matcher and timeout the advisory states.
+    """
+    import importlib.util
+
+    config = V1_CONFIG.replace("paths:\n", "paths:\n  engines: scripts/devkit\n", 1)
+    assert "engines: scripts/devkit" in config
+    repo = _fixture(tmp_path, config=config, git=True)
+    for rel in ("check_doc_budget.py", "hooks/pr_followup_hook.py"):
+        engine = repo / "scripts" / "devkit" / rel
+        engine.parent.mkdir(parents=True, exist_ok=True)
+        engine.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+
+    stdout = _run_init(repo).stdout
+    printed = [line.strip() for line in stdout.splitlines() if line.strip().startswith('root="$(git rev-parse')]
+    by_engine = {
+        name: [line for line in printed if f"scripts/devkit/{rel}" in line]
+        for name, rel in (
+            ("check_doc_budget.py", "check_doc_budget.py"),
+            ("pr_followup_hook.py", "hooks/pr_followup_hook.py"),
+        )
+    }
+    assert all(len(lines) == 1 for lines in by_engine.values()), printed
+    assert "omit matcher" in stdout and "timeout to 15 seconds" in stdout
+    assert 'matcher "^Bash$"' in stdout and "timeout to 10 seconds" in stdout
+    (repo / ".codex").mkdir()
+    (repo / ".codex" / "hooks.json").write_text(json.dumps({"hooks": {
+        "SessionStart": [{"hooks": [
+            {"type": "command", "command": by_engine["check_doc_budget.py"][0], "timeout": 15},
+        ]}],
+        "PostToolUse": [{"matcher": "^Bash$", "hooks": [
+            {"type": "command", "command": by_engine["pr_followup_hook.py"][0], "timeout": 10},
+        ]}],
+    }}), encoding="utf-8")
+
+    spec = importlib.util.spec_from_file_location("kit_doctor_vendored", ENGINE_DIR / "kit_doctor.py")
+    assert spec is not None and spec.loader is not None
+    doctor = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = doctor
+    try:
+        spec.loader.exec_module(doctor)
+    finally:
+        sys.modules.pop(spec.name, None)
+    codex = [s for s in doctor.inspect_registrations(repo, "scripts/devkit") if s.runtime == "codex"]
+    assert {s.detail for s in codex if s.state == "verified"} == {
+        "check_doc_budget.py canonical lifecycle form verified",
+        "pr_followup_hook.py canonical lifecycle form verified",
+    }, [(s.state, s.detail) for s in codex]
 
 
 def _claude_session_start_commands() -> list[str]:
