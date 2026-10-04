@@ -27,11 +27,10 @@ triage process had stopped, approved TRI-27 for the retained test session only,
 parked every other test candidate, and approved the upstream compatibility repair
 plan. Those decisions did not approve a live recovery mutation or Linear payload.
 
-**Completed in test.** The unchanged installed test entry at cs-toolkit
-`ca3b9aca830554625aba57708383f8f45eb33c5e` on 2026-10-04, in
-`/Users/topi/Coding/in-parallel/cs-toolkit`, returned `degraded-success` with the
-`test-render` receipt for session `5d68cdbff45c4ecbb561dfc6832d0f11`. Its state,
-receipt and proposed diff were read back. No external write or source sweep occurred.
+**Applied in test.** On 2026-10-04 the operator's test-only decisions were applied
+to retained session `5d68cdbff45c4ecbb561dfc6832d0f11` in cs-toolkit. The local
+evidence directory below retains `test-completed-state.json`,
+`test-completion-receipt.json`, `test-completed-report.md` and `test-proposed.diff`.
 
 **Developed.** [#952](https://github.com/topij/agentic-dev-kit/pull/952) carries the
 approved historical-gate compatibility repair. Recovery keeps the original bytes,
@@ -39,10 +38,9 @@ requires owner evidence before state observation, and separates capture from exa
 action approval. Local approval, capture, test-completion, verification and review
 receipts are retained under
 `state/review-evidence/cs-toolkit-linear-acceptance_2026-10-04/finalize-decisions/`.
-The installed `acquire`/`observe` capture at adopter
-`ca3b9aca830554625aba57708383f8f45eb33c5e` on 2026-10-04, in
-`/Users/topi/Coding/in-parallel/cs-toolkit`, retained the historical pre-freeze
-reservation bytes for a separately approved recovery action. No recovery mutation,
+On 2026-10-04 this preparation retained the historical reservation bytes in
+`held-live-state.raw` and `read-only-live-state-capture.json` in that directory
+for a separately approved recovery action. No recovery mutation,
 live frozen run, approved Linear payload or Linear write was performed during this
 preparation. Adopter engine/configuration, root legacy
 artifacts, host automation and credentials were preserved.

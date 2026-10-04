@@ -173,7 +173,11 @@ def test_historical_owner_evidence_refuses_uncertain_or_foreign_capture(tmp_path
     assert not store.recovery_path(digest_bytes(gate_raw)).exists()
 
 
-@pytest.mark.parametrize("field,value", [("frozen_snapshot", {}), ("attempts", [{"status": "ambiguous"}]),
+@pytest.mark.parametrize("field,value", [("frozen_snapshot", {}), ("frozen_inbox_digest", "f" * 64),
+                                        ("attempts", [{"status": "ambiguous"}]),
+                                        ("verified_tracker_identifiers", ["TRI-27"]),
+                                        ("repository_evidence", [{"result": "recorded"}]),
+                                        ("pull_request_evidence", [{"result": "recorded"}]),
                                         ("approval_record", {"decision": "approve"}), ("phase", "completed"),
                                         ("phase", "unknown"),
                                         ("engine_mode", "engine-backed")])
@@ -290,7 +294,8 @@ def test_historical_action_cannot_omit_owner_evidence_with_rehashed_envelope(tmp
     assert store.gate_path.read_bytes() == gate_raw and store.state_path.read_bytes() == state_raw
 
 
-def test_historical_quarantine_interruption_resumes_exact_approved_transition(tmp_path, monkeypatch):
+@pytest.mark.parametrize("advance", [False, True])
+def test_historical_quarantine_interruption_resumes_exact_approved_transition(tmp_path, monkeypatch, advance):
     root, store, gate_raw, state_raw, owner, _ = historical_fixture(tmp_path, monkeypatch)
     planned = invoke(root, owner)
     request, context = approval_files(tmp_path, planned["recovery_plan"]["action_core_digest"])
@@ -316,7 +321,51 @@ main(sys.argv[1:])
                               "--request", str(request), "--approval-context", str(context)], cwd=root, env=env, timeout=20)
     assert stopped.returncode == 73 and not store.state_path.exists()
     assert store.gate_path.read_bytes() == gate_raw
+    if advance:
+        git(root, "commit", "--allow-empty", "-m", "protected branch advances during interruption")
+        git(root, "push", "origin", "main")
     resumed = invoke(root, owner)
     assert resumed["detail"] == "recovered-safe-to-restart"
     assert Path(planned["recovery_plan"]["action_core"]["quarantine_path"]).read_bytes() == state_raw
     assert not store.gate_path.exists()
+
+
+@pytest.mark.parametrize("decision", ["reject", "approve"])
+def test_rehashed_prepared_action_cannot_strip_historical_classification(tmp_path, monkeypatch, decision):
+    root, store, gate_raw, state_raw, owner, _ = historical_fixture(tmp_path, monkeypatch)
+    plan = invoke(root, owner)["recovery_plan"]
+    bundle_path = store.recovery_path(digest_bytes(gate_raw))
+    bundle = loads_exact(bundle_path.read_bytes())
+    del bundle["capture_core"]["legacy_gate_owner_evidence"]
+    bundle["capture_core_digest"] = canonical_digest(bundle["capture_core"])
+    action = {**plan["action_core"], "action": "abandon-invalid-state",
+              "capture_core_digest": bundle["capture_core_digest"]}
+    action_digest = canonical_digest(action)
+    prepared = {**bundle, "kind": "state-present-prepared", "action_core": action,
+                "action_core_digest": action_digest,
+                "approval": {"decision": decision, "source": "current-session",
+                             "approver_identity": "operator", "core_digest": action_digest}}
+    bundle_path.write_bytes(dumps(prepared))
+    result = invoke(root, owner)
+    assert result["outcome"] == "operator-held"
+    assert "approval" in result["detail"] if decision == "reject" else "owner evidence is missing" in result["detail"]
+    assert store.gate_path.read_bytes() == gate_raw and store.state_path.read_bytes() == state_raw
+    assert not Path(action["quarantine_path"]).exists()
+
+
+def test_completed_historical_recovery_survives_protected_branch_advance(tmp_path, monkeypatch):
+    root, store, gate_raw, state_raw, owner, _ = historical_fixture(tmp_path, monkeypatch)
+    plan = invoke(root, owner)["recovery_plan"]
+    request, context = approval_files(tmp_path, plan["action_core_digest"])
+    assert invoke(root, owner, request=request, approval=context)["detail"] == "recovered-safe-to-restart"
+    receipt = loads_exact(store.state_path.read_bytes())
+    bundle_path = Path(receipt["configured_bundle_path"])
+    prepared_raw = bundle_path.read_bytes()
+    git(root, "commit", "--allow-empty", "-m", "protected branch advances before restart")
+    git(root, "push", "origin", "main")
+    result = engine.run("new", context="interactive", request={}, start=root)
+    assert result["frozen_snapshot"]
+    assert loads_exact(store.state_path.read_bytes())["run_identity"]["session"] != "historical-session"
+    assert bundle_path.read_bytes() == prepared_raw
+    assert Path(plan["action_core"]["quarantine_path"]).read_bytes() == state_raw
+    assert store.gate_path.with_name(store.gate_path.name + ".quarantine-" + digest_bytes(gate_raw)[:16]).read_bytes() == gate_raw

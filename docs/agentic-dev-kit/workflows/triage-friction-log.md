@@ -212,8 +212,11 @@ and requires explicit `same_machine: true` and `owner_terminated: true`. A bare
 requires a negative local PID probe; a live, reused or uncertain PID holds before
 state observation. It verifies the original draft head as an ancestor of the
 freshly queried protected remote head, with the local protected ref matching that
-observation. Foreign provenance and changed evidence hold. No age threshold proves
-termination. Refresh a stale protected ref before presenting a new capture.
+observation. Foreign provenance and changed owner or configuration evidence hold.
+The capture-time protected head remains a historical observation; ordinary branch
+advancement does not invalidate a prepared action or completed recovery receipt
+while the original draft remains a verified protected ancestor. No age threshold
+proves termination. Refresh a stale protected ref before retrying recovery.
 
 Owner evidence permits capture and classification only. The separate
 `--approval-context` and `recovery_approval` must approve the exact displayed
@@ -221,6 +224,9 @@ action-core digest before quarantine. Historical owner context cannot be combine
 with unattended execution, proposals, draft approvals or external adapters. If the
 historical blocking gate is absent, rerun through an ordinary entry to inspect the
 recorded recovery evidence; owner context never starts a draft.
+Retries recheck the recorded action-specific approval and classify the captured gate
+from its exact bytes. Removing historical metadata or renaming the action cannot
+bypass those checks.
 
 For live state, the supported historical reservation has `phase: reserved`,
 `engine_mode: llm-only`, no frozen snapshot or inbox digest, and empty attempt,

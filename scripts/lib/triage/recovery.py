@@ -82,17 +82,33 @@ def _legacy_capture_fields(store: ArtifactStore, raw: bytes) -> dict[str, Any]:
 
 
 def _validate_legacy_capture(store: ArtifactStore, core: dict[str, Any]) -> dict[str, Any] | None:
+    raw = decode_bytes(core["old_gate_bytes"])
+    if digest_bytes(raw) != core["old_gate_digest"]:
+        raise TriageError("captured gate digest mismatch", outcome="operator-held")
+    try:
+        validate_record(loads_exact(raw))
+        historical = False
+    except (ValueError, TriageError):
+        historical = True
     evidence = core.get("legacy_gate_owner_evidence")
     if evidence is None:
+        if historical:
+            raise TriageError("historical recovery owner evidence is missing", outcome="operator-held")
         return None
     if not isinstance(evidence, dict):
         raise TriageError("historical owner evidence is malformed", outcome="operator-held")
-    raw = decode_bytes(core["old_gate_bytes"])
-    if digest_bytes(raw) != core["old_gate_digest"] or evidence.get("gate_digest") != core["old_gate_digest"]:
+    if evidence.get("gate_digest") != core["old_gate_digest"]:
         raise TriageError("historical owner evidence digest mismatch", outcome="operator-held")
     _, current_raw = observe(store.gate_path, allow_links=True)
     context = ApprovalContext(evidence.get("source"), evidence.get("operator_identity"), evidence.get("source_read_back"))
     record, observed = read_legacy_gate(store, raw, context, check_owner=current_raw == raw)
+    # The remote head is a dated observation, not immutable owner provenance.
+    # read_legacy_gate still requires a fresh matching protected ref and verifies
+    # that the original draft remains its ancestor on every retry.
+    captured_head = evidence.get("observed_protected_head")
+    if not isinstance(captured_head, str) or not OID_RE.fullmatch(captured_head):
+        raise TriageError("historical protected observation is malformed", outcome="operator-held")
+    observed["observed_protected_head"] = captured_head
     if record != core.get("old_gate_record") or observed != evidence:
         raise TriageError("historical owner evidence or recovery configuration changed", outcome="operator-held")
     return record
@@ -788,13 +804,19 @@ def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str
 
 def validate_historical_prepared(store: ArtifactStore, prepared: dict[str, Any]) -> None:
     core, action = prepared["capture_core"], prepared["action_core"]
+    approval = prepared.get("approval")
+    operator = approval.get("approver_identity", "") if isinstance(approval, dict) else ""
+    _approval(prepared["action_core_digest"], approval, operator=operator)
+    if action.get("action") not in {
+        "preserve-valid-state-and-quarantine-old-gate", "abandon-invalid-state",
+        "retire-terminal-invalid-state", "retire-historical-prefreeze-reservation",
+    }:
+        raise TriageError("prepared recovery action is unsupported", outcome="operator-held")
+    legacy_record = _validate_legacy_capture(store, core)
     historical = action.get("action") == "retire-historical-prefreeze-reservation"
-    if historical or "legacy_gate_owner_evidence" in core:
-        if _validate_legacy_capture(store, core) is None:
+    if historical or legacy_record is not None:
+        if legacy_record is None:
             raise TriageError("historical recovery owner evidence is missing", outcome="operator-held")
-        approval = prepared.get("approval")
-        operator = approval.get("approver_identity", "") if isinstance(approval, dict) else ""
-        _approval(prepared["action_core_digest"], approval, operator=operator)
         expected = state_action_plan(store, store.settings, {"capture_core": core, "capture_core_digest": prepared["capture_core_digest"]})
         if expected.get("action_core") != action:
             raise TriageError("historical recovery action changed", outcome="operator-held")
