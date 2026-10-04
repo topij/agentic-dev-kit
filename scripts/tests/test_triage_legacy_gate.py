@@ -193,6 +193,49 @@ def test_historical_prefreeze_action_refuses_unrecognized_or_external_evidence(t
     assert store.gate_path.read_bytes() == gate_raw and store.state_path.read_bytes() == state_raw
 
 
+@pytest.mark.parametrize("field", [
+    "run_identity", "config_fingerprint", "gate_owner_token", "mode", "schema_version",
+    "binding-shape", "binding-extra", "binding-gate_path", "binding-owner_token",
+    "binding-owner_run_identity", "binding-gate_claim_core_digest",
+    "claim-reason", "claim-previous_gate_binding", "claim-current_gate_binding",
+    "claim-captured_state_digest", "claim-recovery_bundle_digest", "claim-approval_digest",
+    "claim-extra",
+])
+def test_historical_prefreeze_action_refuses_inconsistent_identity_or_reservation_claims(tmp_path, monkeypatch, field):
+    root, store, gate_raw, state_raw, owner, _ = historical_fixture(tmp_path, monkeypatch)
+    state = json.loads(state_raw)
+    if field == "run_identity":
+        state[field]["session"] = "unrelated-state-session"
+    elif field == "config_fingerprint":
+        state[field] = "f" * 64
+    elif field == "gate_owner_token":
+        state[field] = "unrelated-state-owner"
+    elif field == "mode":
+        state[field] = "test"
+    elif field == "schema_version":
+        state[field] = True
+    elif field.startswith("binding-"):
+        name = field.removeprefix("binding-")
+        binding = state["gate_binding"]
+        if name == "shape":
+            state["gate_binding"] = "unsupported-binding"
+        elif name == "owner_run_identity":
+            binding[name]["session"] = "unrelated-binding-session"
+        else:
+            binding[name] = "unrelated-binding-value"
+        # Keep the initial claim consistent with this changed binding so a
+        # separate claim mismatch cannot falsely kill a missing binding guard.
+        state["state_claim"]["current_gate_binding"] = state["gate_binding"]
+    else:
+        name = field.removeprefix("claim-")
+        state["state_claim"][name] = "unsupported-initial-claim"
+    state_raw = (json.dumps(state, sort_keys=True) + "\n").encode()
+    store.state_path.write_bytes(state_raw)
+    result = invoke(root, owner)
+    assert result["outcome"] == "operator-held" and result["recovery_plan"].get("held") is not None
+    assert store.gate_path.read_bytes() == gate_raw and store.state_path.read_bytes() == state_raw
+
+
 def test_historical_gate_context_cannot_enable_writes_or_unattended_execution(tmp_path, monkeypatch):
     root, store, gate_raw, state_raw, owner, _ = historical_fixture(tmp_path, monkeypatch)
     for extra in (("--enable-tracker",), ("--enable-github-forge",), ("--context", "unattended")):
