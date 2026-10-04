@@ -31,6 +31,19 @@ def configured_repo(tmp_path: Path) -> Path:
     return root
 
 
+def test_controlled_fixture_config_needs_no_optional_init_snapshot(tmp_path):
+    # A selective installation can omit init's recorded fixture while keeping
+    # triage tests. Exercise the installed helper in that layout.
+    shutil.copy2(Path(__file__).parent / "_triage_fixture.py", tmp_path / "_triage_fixture.py")
+    result = subprocess.run(
+        [sys.executable, "-I", "-c",
+         "import sys; sys.path.insert(0, '.'); from _triage_fixture import triage_config_text; print(triage_config_text(), end='')"],
+        cwd=tmp_path, capture_output=True, text=True, check=True,
+    )
+    assert result.stdout == triage_config_text()
+    assert not (tmp_path / "fixtures").exists()
+
+
 def test_partial_engine_set_is_rejected(tmp_path: Path) -> None:
     root = configured_repo(tmp_path)
     (root / "scripts/finalize_triage.py").unlink()

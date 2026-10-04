@@ -165,10 +165,10 @@ def test_archive_only_finalize_retains_exact_new_block_and_waits_for_merge(
 ) -> None:
     root = repository(tmp_path)
     config = root / "config/dev-model.yaml"
-    config.write_text(
-        config.read_text(encoding="utf-8").replace("project_name: topij/agentic-dev-kit", "project_name: central/triage-tracker"),
-        encoding="utf-8",
-    )
+    before = config.read_text(encoding="utf-8")
+    changed = before.replace('project_name: "topij/agentic-dev-kit"', 'project_name: "central/triage-tracker"')
+    assert changed != before, "tracker destination fault injection did not land"
+    config.write_text(changed, encoding="utf-8")
     state_root = tmp_path / "state-root"
     monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
     draft_request, candidate_id = proposal_request(root)

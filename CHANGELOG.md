@@ -47,9 +47,8 @@ starts.
 - **CHANGED (engine CLI surface)** — `triage_friction_log.py` and `finalize_triage.py`
   declare Python `>=3.12` and standard-library-only PEP 723 metadata for standalone
   `uv run`. Refresh these entry points with their existing `lib/` dependencies.
-- Refresh the installed triage test modules and generated manifest. Install
-  `tests/_triage_fixture.py` with its existing `tests/fixtures/init-config.json`
-  dependency. Keep adopter paths, branch patterns, tracker destination and review
+- Refresh the installed triage test modules and generated manifest, including
+  `tests/_triage_fixture.py`. Keep adopter paths, branch patterns, tracker destination and review
   policy; ordinary fixtures now own their configuration (#941, #942).
 
 ## #939 — Approved Linear triage through the configured tracker

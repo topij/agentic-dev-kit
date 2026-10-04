@@ -33,14 +33,17 @@ scripts/devkit/run_installed_tests.py --root
 `8f64414405870debe69259ef04d3a27668f1734e` on 2026-10-04 in that disposable directory,
 printed `1235 passed, 2 skipped in 92.70s (0:01:32)`. The installation reproduced
 cs-toolkit's declared install/decline decisions with synthetic data and the required
-new helper. Final-head kit verification and independent review belong on #943.
+new helper. `env -u FORCE_COLOR DEVKIT_STATE_ROOT=/private/tmp/devkit-triage-upgrade-20261004-GwSfUv/kit-sandbox make test`
+at `273db1ed7fea679228551c5594e5d9d4e2e9b9fe` on 2026-10-04, in
+`/Users/topi/Coding/agentic-dev-kit`, printed `4242 passed, 1 skipped in 654.36s (0:10:54)`.
+Final-head CI and independent review belong on #943.
 
 **Authority and limits.** Merge and the next adopter pin remain operator decisions.
 The operator supplied cs-toolkit checkpoint `f4047447cbafa7549e866f37db9ff7f88a5156b6`;
 this session did not change it, its installed pin, legacy artifacts or host automation.
 No live tracker write or frozen run was approved or attempted. #919 stays open for
-its broader runtime audit. Workstream assignment was not confirmed, so this entry's
-blockers are recorded separately from the existing validation workstream.
+its broader runtime audit. The operator assigned these repairs to the existing
+cs-toolkit Codex validation and Linear installation workstream.
 
 ______________________________________________________________________
 
@@ -359,25 +362,18 @@ alone, so a missing frozen artifact dead-ends it.
 
 **Status:** fixture and validation fixes shipped in #937 and #938. Linear installation support shipped in #939
 at `410108fb115a0bf063f737d9961b5ec4f68d641d`; live acceptance remains adopter work.
+The triage upgrade blockers #941 and #942 are addressed on #943 for operator review.
 The upstream validation record remains #919; the Linear acceptance record remains #6.
 **Owner:** [#919](https://github.com/topij/agentic-dev-kit/issues/919),
-[#6](https://github.com/topij/agentic-dev-kit/issues/6).
-
-▶ Next: In cs-toolkit, refresh the kit from `410108fb115a0bf063f737d9961b5ec4f68d641d`, reconcile its
-retirement helper with the completed-state contract, run `make check-root` and
-`make test-devkit`, then open an upgrade PR and finish the remaining Codex runtime
-validation. Install the declined triage engines following #939 with the Linear
-destination configuration and credentials. Obtain exact operator approval of each live
-tracker payload before its write; this kit session supplies no live-payload approval.
-
-
-### cs-toolkit triage upgrade blockers
-
-**Status:** repair submitted on [#943](https://github.com/topij/agentic-dev-kit/pull/943).
-**Owner:** [#941](https://github.com/topij/agentic-dev-kit/issues/941),
+[#6](https://github.com/topij/agentic-dev-kit/issues/6),
+[#941](https://github.com/topij/agentic-dev-kit/issues/941),
 [#942](https://github.com/topij/agentic-dev-kit/issues/942).
 
-▶ Next: Review #943's exact candidate and merge on the operator's approval; then
-consider that commit for a separately approved cs-toolkit pin, refresh the declared
-files including the test helper, and rerun the adopter gates. #919's runtime audit
-and #6's live acceptance remain separate obligations.
+▶ Next: Review #943's exact candidate and merge on the operator's approval, then
+consider its reviewed commit for a separately approved cs-toolkit pin. Refresh the
+declared files including the shared test helper, reconcile the retirement helper with
+the completed-state contract, and run `make check-root` and `make test-devkit` before
+opening the adopter upgrade PR. Finish #919's remaining Codex runtime validation and
+#6's live Linear acceptance separately. Installing declined triage engines, configuring
+credentials and approving exact live payloads remain adopter decisions; this kit session
+supplies no live-payload approval.

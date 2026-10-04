@@ -534,7 +534,7 @@
     },
     "scripts/tests/_triage_fixture.py": {
       "role": "test",
-      "sha256": "e4d0665ef8578e8c14fff9a4fb492cd542c9261eb9b4b7b0b0d514c7c5646922"
+      "sha256": "5b5a02614eef12a30563e211581308d92f46b2aa5fa3abc53e8abb64149b2474"
     },
     "scripts/tests/conftest.py": {
       "role": "test",
@@ -574,7 +574,7 @@
     },
     "scripts/tests/test_finalize_triage.py": {
       "role": "test",
-      "sha256": "7dece61a7e8feddfe8ca0564183023a96a592f81180ea42c74772a7342d08622"
+      "sha256": "5317802611bb979e2d6e3af4abcc40733d9ba97e220043e0bf1124b0eacb0057"
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
@@ -682,7 +682,7 @@
     },
     "scripts/tests/test_triage_config.py": {
       "role": "test",
-      "sha256": "395eea8b3a2498835c3c95ed93d55cf9c4b4a361cf37b0b5d9c0836eea281209"
+      "sha256": "d936112479aea861db9f2247da4530f66d7edd903ecd4d806e615cc9430546cc"
     },
     "scripts/tests/test_triage_engine.py": {
       "role": "test",
