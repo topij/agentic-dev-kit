@@ -817,6 +817,7 @@ def validate_historical_prepared(store: ArtifactStore, prepared: dict[str, Any])
     if historical or legacy_record is not None:
         if legacy_record is None:
             raise TriageError("historical recovery owner evidence is missing", outcome="operator-held")
+        _approval(prepared["action_core_digest"], approval, operator=core["legacy_gate_owner_evidence"]["operator_identity"])
         expected = state_action_plan(store, store.settings, {"capture_core": core, "capture_core_digest": prepared["capture_core_digest"]})
         if expected.get("action_core") != action:
             raise TriageError("historical recovery action changed", outcome="operator-held")

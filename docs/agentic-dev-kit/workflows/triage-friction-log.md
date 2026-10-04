@@ -226,7 +226,8 @@ historical blocking gate is absent, rerun through an ordinary entry to inspect t
 recorded recovery evidence; owner context never starts a draft.
 Retries recheck the recorded action-specific approval and classify the captured gate
 from its exact bytes. Removing historical metadata or renaming the action cannot
-bypass those checks.
+bypass those checks. The approving identity must match the present operator identity
+retained in the historical owner evidence.
 
 For live state, the supported historical reservation has `phase: reserved`,
 `engine_mode: llm-only`, no frozen snapshot or inbox digest, and empty attempt,

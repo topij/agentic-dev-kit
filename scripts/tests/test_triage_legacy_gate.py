@@ -255,7 +255,8 @@ def test_historical_provenance_requires_fresh_protected_remote_observation(tmp_p
     assert invoke(root, owner)["recovery_plan"]["action_core"]["action"] == "retire-historical-prefreeze-reservation"
 
 
-@pytest.mark.parametrize("field,value", [("decision", "reject"), ("core_digest", "f" * 64), ("approval", []), ("approver_identity", True)])
+@pytest.mark.parametrize("field,value", [("decision", "reject"), ("core_digest", "f" * 64), ("approval", []),
+                                       ("approver_identity", True), ("approver_identity", "different-operator")])
 def test_historical_safe_restart_rechecks_action_specific_approval(tmp_path, monkeypatch, field, value):
     root, store, _, _, owner, _ = historical_fixture(tmp_path, monkeypatch)
     plan = invoke(root, owner)["recovery_plan"]
@@ -277,6 +278,23 @@ def test_historical_safe_restart_rechecks_action_specific_approval(tmp_path, mon
     result = engine.run("new", context="interactive", request={}, start=root)
     assert result["outcome"] == "operator-held" and "approval" in result["detail"]
     assert store.state_path.read_bytes() == rejected_raw
+
+
+def test_historical_quarantine_requires_the_captured_operator_identity(tmp_path, monkeypatch):
+    root, store, gate_raw, state_raw, owner, _ = historical_fixture(tmp_path, monkeypatch)
+    plan = invoke(root, owner)["recovery_plan"]
+    request, context = approval_files(tmp_path, plan["action_core_digest"])
+    approval_request = loads_exact(request.read_bytes())
+    approval_request["recovery_approval"]["approver_identity"] = "different-operator"
+    approval_context = loads_exact(context.read_bytes())
+    approval_context["operator_identity"] = "different-operator"
+    approval_context["source_read_back"] = approval_request["recovery_approval"]
+    request.write_bytes(dumps(approval_request))
+    context.write_bytes(dumps(approval_context))
+    result = invoke(root, owner, request=request, approval=context)
+    assert result["outcome"] == "operator-held" and "approval identity" in result["detail"]
+    assert store.gate_path.read_bytes() == gate_raw and store.state_path.read_bytes() == state_raw
+    assert not Path(plan["action_core"]["quarantine_path"]).exists()
 
 
 def test_historical_action_cannot_omit_owner_evidence_with_rehashed_envelope(tmp_path, monkeypatch):
@@ -369,3 +387,31 @@ def test_completed_historical_recovery_survives_protected_branch_advance(tmp_pat
     assert bundle_path.read_bytes() == prepared_raw
     assert Path(plan["action_core"]["quarantine_path"]).read_bytes() == state_raw
     assert store.gate_path.with_name(store.gate_path.name + ".quarantine-" + digest_bytes(gate_raw)[:16]).read_bytes() == gate_raw
+
+
+def test_historical_draft_must_be_a_protected_ancestor_before_capture(tmp_path, monkeypatch):
+    root, store, gate_raw, state_raw, owner, _ = historical_fixture(tmp_path, monkeypatch)
+    git(root, "checkout", "--orphan", "unrelated-draft")
+    git(root, "commit", "-m", "unrelated historical draft")
+    unrelated_head = git(root, "rev-parse", "HEAD")
+    git(root, "checkout", "main")
+    record = json.loads(gate_raw)
+    identity = record["run_identity"]
+    remote = git(root, "remote", "get-url", "origin")
+    identity.update(repository_identity=remote + "#" + unrelated_head, protected_branch_head=unrelated_head)
+    gate_raw = (json.dumps(record, sort_keys=True) + "\n").encode()
+    state = json.loads(state_raw)
+    state["run_identity"] = identity
+    state["gate_binding"]["owner_run_identity"] = identity
+    state["state_claim"]["current_gate_binding"] = state["gate_binding"]
+    state_raw = (json.dumps(state, sort_keys=True) + "\n").encode()
+    context = loads_exact(owner.read_bytes())
+    context["source_read_back"]["legacy_gate_owner"]["gate_digest"] = digest_bytes(gate_raw)
+    store.gate_path.write_bytes(gate_raw)
+    store.state_path.write_bytes(state_raw)
+    owner.write_bytes(dumps(context))
+    result = invoke(root, owner)
+    assert result["outcome"] == "operator-held" and "not a verified protected ancestor" in result["detail"]
+    assert result["recovery_plan"] is None
+    assert store.gate_path.read_bytes() == gate_raw and store.state_path.read_bytes() == state_raw
+    assert not store.recovery_path(digest_bytes(gate_raw)).exists()
