@@ -155,7 +155,7 @@ authority. The complete capture and this classification must be approved separat
         return False
     if (
         set(state) != BASE_KEYS or state.get("kind") != "triage-run-state"
-        or isinstance(state.get("schema_version"), bool) or state.get("schema_version") != 1
+        or type(state.get("schema_version")) is not int or state.get("schema_version") != 1
         or state.get("phase") != "reserved" or state.get("engine_mode") != "llm-only"
         or state.get("mode") != store.mode or state.get("run_identity") != gate["run_identity"]
         or state.get("config_fingerprint") != gate["run_identity"]["config_fingerprint"]

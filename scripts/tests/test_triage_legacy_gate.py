@@ -19,7 +19,7 @@ from triage.model import load_settings
 from triage.storage import ArtifactStore
 
 
-def historical_fixture(tmp_path, monkeypatch, *, active=False):
+def historical_fixture(tmp_path, monkeypatch, *, active=False, mode="live"):
     root = repository(tmp_path)
     # Exercise the installed CLI and read-only remote provenance with a real local
     # bare remote. No network, operator repository or tracker is involved.
@@ -37,21 +37,21 @@ def historical_fixture(tmp_path, monkeypatch, *, active=False):
     if not active:
         process.wait(timeout=10)
     settings = load_settings(root)
-    store = ArtifactStore(settings, "live")
+    store = ArtifactStore(settings, mode)
     identity = {
         "repository_identity": str(remote) + "#" + git(root, "rev-parse", "HEAD"),
         "protected_branch_head": git(root, "rev-parse", "HEAD"),
-        "friction_log": "docs/kit-friction-log.md", "mode": "live",
+        "friction_log": "docs/kit-friction-log.md", "mode": mode,
         "session": "historical-session", "config_fingerprint": "a" * 64,
     }
     gate = {"created_at": 1790939543.119891, "host": "historical-host.example",
             "owner_token": "historical-owner", "pid": process.pid,
             "process_start_observation": 1790939543.11989, "run_identity": identity}
-    binding = {"gate_path": settings.paths.gate_fragment.replace("{mode}", "live"),
+    binding = {"gate_path": settings.paths.gate_fragment.replace("{mode}", mode),
                "owner_token": gate["owner_token"], "owner_run_identity": identity,
                "gate_claim_core_digest": "b" * 64}
     state = {"kind": "triage-run-state", "schema_version": 1, "phase": "reserved",
-             "mode": "live", "engine_mode": "llm-only", "run_identity": identity,
+             "mode": mode, "engine_mode": "llm-only", "run_identity": identity,
              "config_fingerprint": identity["config_fingerprint"],
              "gate_owner_token": gate["owner_token"], "gate_binding": binding,
              "state_claim": {"reason": "initial-reservation", "previous_gate_binding": None,
@@ -74,8 +74,8 @@ def historical_fixture(tmp_path, monkeypatch, *, active=False):
     return root, store, gate_raw, state_raw, owner_path, process
 
 
-def invoke(root, owner, *, request=None, approval=None, extra=()):
-    argv = [sys.executable, str(root / "scripts/triage_friction_log.py"), "recover", "--legacy-gate-context", str(owner)]
+def invoke(root, owner, *, request=None, approval=None, extra=(), entry="recover"):
+    argv = [sys.executable, str(root / "scripts/triage_friction_log.py"), entry, "--legacy-gate-context", str(owner)]
     if request is not None:
         argv += ["--request", str(request), "--approval-context", str(approval)]
     completed = subprocess.run(argv + list(extra), cwd=root, capture_output=True, text=True, timeout=20)
@@ -180,7 +180,7 @@ def test_historical_owner_evidence_refuses_uncertain_or_foreign_capture(tmp_path
                                         ("pull_request_evidence", [{"result": "recorded"}]),
                                         ("approval_record", {"decision": "approve"}), ("phase", "completed"),
                                         ("phase", "unknown"),
-                                        ("engine_mode", "engine-backed")])
+                                        ("engine_mode", "engine-backed"), ("schema_version", 1.0)])
 def test_historical_prefreeze_action_refuses_unrecognized_or_external_evidence(tmp_path, monkeypatch, field, value):
     root, store, gate_raw, state_raw, owner, _ = historical_fixture(tmp_path, monkeypatch)
     state = json.loads(state_raw)
@@ -458,3 +458,36 @@ def test_historical_draft_must_be_a_protected_ancestor_before_capture(tmp_path, 
     assert result["recovery_plan"] is None
     assert store.gate_path.read_bytes() == gate_raw and store.state_path.read_bytes() == state_raw
     assert not store.recovery_path(digest_bytes(gate_raw)).exists()
+
+
+def test_installed_historical_test_gate_publishes_only_approved_held_evidence(tmp_path, monkeypatch):
+    root, store, gate_raw, state_raw, owner, _ = historical_fixture(tmp_path, monkeypatch, mode="test")
+    live = ArtifactStore(store.settings, "live")
+    before = {p: p.read_bytes() if p.exists() else None for p in (live.gate_path, live.state_path)}
+    planned = invoke(root, owner, entry="test")
+    assert planned["outcome"] == "operator-held"
+    assert planned["detail"] == "blocking test gate state capture awaits exact held-evidence approval"
+    plan = planned["recovery_plan"]
+    assert plan["capture_core"]["mode"] == "test"
+    assert "action_core" not in plan
+    bundle_path = Path(plan["capture_core"]["configured_bundle_path"])
+    assert not bundle_path.exists()
+    request, context = approval_files(tmp_path, "f" * 64)
+    refused = invoke(root, owner, entry="test", request=request, approval=context)
+    assert refused["outcome"] == "operator-held" and "does not bind" in refused["detail"]
+    assert not bundle_path.exists()
+    request, context = approval_files(tmp_path, plan["capture_core_digest"])
+    held = invoke(root, owner, entry="test", request=request, approval=context)
+    assert held["outcome"] == "operator-held" and held["detail"] == "test-gate-state-present"
+    raw_bundle = bundle_path.read_bytes()
+    evidence = loads_exact(raw_bundle)
+    assert evidence["kind"] == "state-present-test-gate-held"
+    assert evidence["capture_core"] == plan["capture_core"]
+    assert evidence["approval"]["core_digest"] == plan["capture_core_digest"]
+    assert invoke(root, owner, entry="test")["outcome"] == "operator-held"
+    assert bundle_path.read_bytes() == raw_bundle
+    assert store.gate_path.read_bytes() == gate_raw and store.state_path.read_bytes() == state_raw
+    assert not list(store.state_path.parent.glob("*.quarantine-*"))
+    assert not held["frozen_snapshot"] and held["report"] is None
+    for path, raw in before.items():
+        assert (path.read_bytes() if path.exists() else None) == raw
