@@ -20,6 +20,7 @@ from types import ModuleType
 
 import pytest
 from _repo_layout import find_repo_root
+from conftest import require_kit_source
 
 ENGINE_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = find_repo_root(ENGINE_DIR)
@@ -2386,6 +2387,46 @@ def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_valida
     ]
 
 
+def _compute_controls(runtime: str, command: list[str]) -> list[str]:
+    """The arguments in a headless command that could select model or effort.
+
+    Long options by name, with or without `=value`; short options by their letter,
+    attached value or not (`-mgpt-5` sets Codex's model as `-m gpt-5` does). `-p` is
+    Claude's print mode and not a control; Codex's `-p` is `--profile`.
+    """
+    controls = []
+    for arg in command[1:]:
+        if arg.startswith("--"):
+            name = arg[2:].split("=", 1)[0]
+            if name in {"model", "effort", "config", "profile"} or "model" in name or "effort" in name:
+                controls.append(arg)
+        elif arg.startswith("-") and len(arg) > 1:
+            if arg[1] in {"m", "c"} or (arg[1] == "p" and (runtime == "codex" or arg != "-p")):
+                controls.append(arg)
+        elif "model" in arg or "effort" in arg:
+            controls.append(arg)
+    return controls
+
+
+@pytest.mark.parametrize(
+    "runtime, command",
+    [
+        ("codex", ["codex", "exec", "-mgpt-5"]),
+        ("codex", ["codex", "exec", "-m", "gpt-5"]),
+        ("codex", ["codex", "exec", "--model=gpt-5"]),
+        ("codex", ["codex", "exec", "-cmodel_reasoning_effort=low"]),
+        ("codex", ["codex", "exec", "-c", "model_reasoning_effort=low"]),
+        ("codex", ["codex", "exec", "-p", "fast"]),
+        ("codex", ["codex", "exec", "-pfast"]),
+        ("claude", ["claude", "-p", "--model", "opus"]),
+        ("claude", ["claude", "-p", "--effort=high"]),
+        ("claude", ["claude", "-pfoo"]),
+    ],
+)
+def test_a_compute_control_in_a_headless_command_is_recognised(runtime: str, command: list[str]) -> None:
+    assert _compute_controls(runtime, command)
+
+
 @pytest.mark.kit_repo_only("config/dev-model.yaml")
 def test_shipped_headless_commands_carry_no_compute_control() -> None:
     """The shipped lane commands leave model and effort to the client (#919).
@@ -2394,24 +2435,16 @@ def test_shipped_headless_commands_carry_no_compute_control() -> None:
     a control. `test_each_declared_policy_reaches_the_child_argv_in_the_fixed_slot`
     pins that the launcher adds none, but against fixture commands; this holds the
     shipped `parallel.<runtime>_headless_command` values, which the launcher reads
-    verbatim, to the same claim.
+    verbatim, to the same claim. Kit source only: an adopter may set a control there
+    on purpose, and its suite should not fail for it.
     """
+    require_kit_source()
     launcher = _load_launcher()
     config = launcher.load_config(REPO_ROOT / "config" / "dev-model.yaml", overlay=False)
-    controls = {"-m", "--model", "--effort", "-c", "--config", "--profile", "-p"}
     for runtime, binary in (("codex", "codex"), ("claude", "claude")):
         command = launcher.get(config, f"parallel.{runtime}_headless_command", None)
         assert isinstance(command, list) and command[0] == binary, command
-        # `-p` is Claude's print mode, not a control; Codex's `-p` is `--profile`.
-        allowed = {"-p"} if runtime == "claude" else set()
-        assert not [
-            arg
-            for arg in command[1:]
-            if (arg in controls - allowed)
-            or arg.startswith(("--model=", "--effort=", "--profile="))
-            or "model" in arg
-            or "effort" in arg
-        ], command
+        assert _compute_controls(runtime, command) == [], command
 
 
 @pytest.mark.parametrize("mode", ["regular", "symlink", "fifo-race", "directory-race", "symlink-race", "changed"])

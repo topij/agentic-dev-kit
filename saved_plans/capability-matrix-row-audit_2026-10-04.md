@@ -14,7 +14,7 @@ its node id, never a line number, so the citation survives an edit above it.
 
 ## What counts as evidence
 
-The audit sorts every piece of evidence into one of three classes, and a row's claim is
+The audit sorts every piece of evidence into one of these classes, and a row's claim is
 only as established as the weakest class its clauses need.
 
 - **Declaration consistency.** A test compares one text with another: a declaration with
@@ -33,13 +33,13 @@ names, order, status terms and links. That is declaration consistency about the 
 itself, and it establishes no row's claim; this audit does not count it as evidence for
 any row.
 
-Several rows describe workflows an agent executes from prose. For those, a test that
-pins the prose establishes that the workflow document says it, not that an agent does it.
-The audit names that limit wherever it applies rather than repeating it as a gap.
+Where a row describes a workflow an agent executes from prose, a test that pins the
+prose establishes that the workflow document says it, not that an agent does it. The
+audit names that limit wherever it applies rather than repeating it as a gap.
 
 ## Rows and their records
 
-Two rows rest on stamped live records for their claims and are outside the narrowed
+These rows rest on stamped live records for their claims and are outside the narrowed
 scope; they are named here so the scope is visible.
 
 - *Safety-critical doctrine*: [`codex-safety-doctrine-live-validation_2026-08-24.md`](codex-safety-doctrine-live-validation_2026-08-24.md).
@@ -47,11 +47,13 @@ scope; they are named here so the scope is visible.
   [per-runtime sub-table](../docs/agentic-dev-kit/runtime-parity.md#headless-lane-isolation-per-runtime)
   links.
 
-Five rows cite a stamped record for part of the claim and make repository-side claims
-beside it. The audit covers their repository side:
+These rows rest on a stamped record for part of the claim and make repository-side
+claims beside it. The audit covers their repository side:
 
-- *Document-budget tripwire* and *PR follow-through*: the Codex lifecycle record
-  [`codex-hooks-live-validation_2026-08-23.md`](codex-hooks-live-validation_2026-08-23.md).
+- *Document-budget tripwire* and *PR follow-through*: their cells name no record; their
+  trusted-client half rests on the Codex lifecycle record
+  [`codex-hooks-live-validation_2026-08-23.md`](codex-hooks-live-validation_2026-08-23.md),
+  which the *Lifecycle validation boundary* section cites.
 - *Review fallback* and *Capability tiers*: the calibration record
   [`capability-tier-calibration-live-validation_2026-08-27.md`](capability-tier-calibration-live-validation_2026-08-27.md).
 - *Command permissions*: the `#606`, `#627` and `#631` measurements and
@@ -62,9 +64,9 @@ The remaining rows cite no record: *Repository instructions*, *Workflow adapters
 presentation*, *Post-merge integrations*, *Session-start and wrap-up integrations*,
 *Triage integrations*, *Adapter upgrade* and *Drift inspection*.
 
-## Findings that changed the matrix
+## Findings that changed the contract
 
-Three claims were false or overstated at `7467c9b5`, and this change corrects them.
+These claims were false or overstated at `7467c9b5`, and this change corrects them.
 
 1. **Capability tiers: "advisory on both runtimes because no engine reads it".** False
    since `#913` (`947fca07`, 2026-10-02): `scripts/runtime_smoke.py` reads
@@ -80,10 +82,9 @@ Three claims were false or overstated at `7467c9b5`, and this change corrects th
    records one prior generation, template version 1. That generation reproduces every
    adapter the kit shipped at `2f2561f3^`, the parent of `#635`, which introduced the
    renderer: each declared adapter at that revision equals its version-1 render. Adapter
-   text shipped before that revision does not match either render, so `/upgrade`
-   classifies it `adopter-owned` and preserves it rather than refreshing it. That is the
-   safe direction, but "prior rendered forms" overstated it, and the row now names the one
-   generation. "Exact" was also dropped: `kit-current` compares after newline
+   text that matches neither render, which some earlier shipped forms do not, classifies
+   `adopter-owned` and is preserved rather than refreshed. That is the safe direction, but
+   "prior rendered forms" overstated it, and the row now names the one generation. "Exact" was also dropped: `kit-current` compares after newline
    normalization, as `workflows/upgrade.md` already says.
 3. ***Lifecycle validation boundary*: "objects printed by `init.sh`".** `init.sh` prints
    the command strings and states the event, matcher and timeout in prose. The handler
@@ -165,7 +166,7 @@ Each row lists the clause, the evidence, its class, and what stays unestablished
 | Clause | Evidence | Class | Limits and gaps |
 |---|---|---|---|
 | Per-key, per-runtime mechanical/advisory declarations | `test_init_sh.py::test_per_runtime_config_maps_declare_status_on_each_install_surface`, `test_both_runtime_mappings_comments_declare_the_status_per_runtime` | declaration consistency | Their docstrings say they check presence and vocabulary, not that a carrier applies a value. |
-| Advisory because no shipped engine reads the map | **Added**: `test_init_sh.py::test_no_shipped_engine_reads_runtime_mappings` holds the reader set to `init.sh` (writer) and `scripts/runtime_smoke.py` (repo-only) | declaration consistency over engine sources | A name scan: a reader that builds the key from parts, or walks `models` without naming it, is not seen. |
+| Advisory because no shipped engine reads the map | **Added**: `test_init_sh.py::test_no_shipped_engine_reads_runtime_mappings` holds the reader set to `init.sh` (writer) and `scripts/runtime_smoke.py` (repo-only) | declaration consistency over engine sources | A name scan over Python, shell and shebang files: a reader that builds the key from parts, or walks `models` without naming it, is not seen. |
 | `lens_compute` is mechanical on both through different carriers | Claude: as in *Review fallback*. Codex: instructed argv | behavioural (Claude), instructed (Codex) | Codex's "mechanical" rests on the calibration record plus a cockpit following the adapter text. |
 | Neither headless wrapper carries a control | `test_lane_launcher.py::test_each_declared_policy_reaches_the_child_argv_in_the_fixed_slot` (the launcher adds none, over fixture commands); **added**: `test_lane_launcher.py::test_shipped_headless_commands_carry_no_compute_control` over the shipped commands | behavioural, and declaration consistency over the shipped config | What a lane then runs at is client behaviour. |
 
@@ -191,10 +192,11 @@ Each row lists the clause, the evidence, its class, and what stays unestablished
 
 ### Session-start and wrap-up integrations
 
-Almost every clause is pinned as declaration consistency only, by
+Both workflows are agent-executed, and the clauses in the last row below are pinned as
+declaration consistency only, by
 `test_portability.py::test_bookend_integrations_are_shared_thin_declared_and_manifested`
-and `test_bookend_integration_semantic_mutations_are_rejected`. Both workflows are
-agent-executed. The behavioural coverage is the engines they call:
+and `test_bookend_integration_semantic_mutations_are_rejected`. The behavioural coverage
+is the engines they call:
 
 | Clause | Evidence | Class | Limits and gaps |
 |---|---|---|---|
@@ -205,8 +207,8 @@ agent-executed. The behavioural coverage is the engines they call:
 
 ### Triage integrations
 
-Coverage is extensive and largely behavioural: `run()` in `scripts/lib/triage/engine.py`
-executes against fake trackers and forges.
+The behavioural tests execute `run()` in `scripts/lib/triage/engine.py` against fake
+trackers and forges.
 
 | Clause | Evidence | Class | Limits and gaps |
 |---|---|---|---|
@@ -222,7 +224,7 @@ executes against fake trackers and forges.
 
 | Clause | Evidence | Class | Limits and gaps |
 |---|---|---|---|
-| The current and the one recorded prior form classify separately from authored bytes | `test_kit_doctor.py::test_shipped_runtime_adapters_equal_the_renderer_for_both_runtimes`, `test_authored_adapter_change_is_reported_and_preserved_for_each_runtime`, `test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned` | behavioural (classifier) | The legacy-body hashes are checked against the bytes shipped at `2f2561f3^`. Older generated forms read as adopter-owned; see *Findings*. |
+| The current and the one recorded prior form classify separately from authored bytes | `test_kit_doctor.py::test_shipped_runtime_adapters_equal_the_renderer_for_both_runtimes`, `test_authored_adapter_change_is_reported_and_preserved_for_each_runtime`, `test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned` | behavioural (classifier) | The legacy-body hashes are checked against the bytes shipped at `2f2561f3^`. Text matching neither render reads as adopter-owned; see *Findings*. |
 | `/upgrade` runs the fetched kit's classifier, installs missing bindings and refreshes stale ones | `test_kit_doctor.py::test_adapter_report_cli_is_read_only_and_does_not_require_adopter_config`, `test_adapter_report_refuses_a_source_adapter_the_renderer_does_not_own` | behavioural (report only) | The report never writes; the install/refresh/preserve mapping is agent-executed prose in `workflows/upgrade.md`, unpinned. |
 | Adapter ownership never enters the drift gate | `test_kit_doctor.py::test_shipped_runtime_adapters_equal_the_renderer_for_both_runtimes` (no `KIT_OWNED` path under `.claude/` or `.agents/`), `test_adapter_report_refuses_drift_and_write_options` | declaration consistency and CLI separation | No default-mode doctor run shows an adapter edit leaves the gate unchanged. |
 
@@ -231,7 +233,7 @@ executes against fake trackers and forges.
 | Clause | Evidence | Class | Limits and gaps |
 |---|---|---|---|
 | Claude registration paths resolved; `permissions.allow` coverage against the configured engine path | `test_kit_doctor.py` registration and permission-coverage tests (see *Command permissions*) | behavioural | — |
-| Lens definitions compared with the running doctor's output; generator drift stays on the file axis | `test_kit_doctor.py::test_lens_definition_inspection_reports_missing_current_and_stale`, `test_a_configured_compute_change_makes_the_definition_stale`, `test_lens_inspection_does_not_execute_the_adopter_generator` | behavioural | Several are `evidence`-marked. |
+| Lens definitions compared with the running doctor's output; generator drift stays on the file axis | `test_kit_doctor.py::test_lens_definition_inspection_reports_missing_current_and_stale`, `test_a_configured_compute_change_makes_the_definition_stale`, `test_lens_inspection_does_not_execute_the_adopter_generator` | behavioural | — |
 | Codex: merged project hook sources, enablement aliases, structure for exact strings only | `test_kit_doctor.py` Codex lifecycle tests | behavioural | — |
 | No adopter-owned generated lens surface on Codex | `test_panel_prompt.py::test_agent_definition_is_a_claude_surface_and_refuses_codex` | behavioural | — |
 

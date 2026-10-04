@@ -3362,8 +3362,8 @@ def test_both_runtime_mappings_comments_declare_the_status_per_runtime():
         )
 
 
-# Every kit source outside the tests that names `runtime_mappings` in code, and why.
-# The map is advisory because no engine an adopter receives applies it.
+# Every executable kit source outside the tests that names `runtime_mappings` in code,
+# and why. The map is advisory because no engine an adopter receives applies it.
 RUNTIME_MAPPINGS_READERS = {
     "init.sh": "the schema migration writes the map; it never reads a value back",
     "scripts/runtime_smoke.py": "the repo-only smoke runner applies the cheap tier to its own probes",
@@ -3396,8 +3396,11 @@ def test_no_shipped_engine_reads_runtime_mappings() -> None:
     made that false without touching either. This names every reader, and requires
     each one besides the migration to be repo-only, so it never reaches an adopter.
 
-    A name scan: a reader that builds the key from parts, or walks `models` without
-    naming it, is not seen.
+    It scans every tracked file outside the tests under `scripts/`, and `init.sh`,
+    that is Python, shell, or carries a shebang: an extensionless hook such as
+    `scripts/hooks/pre-push` ships too. The adapter templates are Markdown an agent
+    reads, not code, and are left out. A name scan: a reader that builds the key from
+    parts, or walks `models` without naming it, is not seen.
     """
     require_kit_source()
     import importlib.util
@@ -3409,12 +3412,16 @@ def test_no_shipped_engine_reads_runtime_mappings() -> None:
         text=True,
         check=True,
     ).stdout.splitlines()
-    sources = [
-        name
-        for name in tracked
-        if "/tests/" not in name and (name == "init.sh" or name.endswith((".py", ".sh")))
-    ]
-    assert "scripts/pr_watch.py" in sources, "the scan reached no engine"
+    def executable(name: str) -> bool:
+        if name == "init.sh" or name.endswith((".py", ".sh")):
+            return True
+        with (REPO_ROOT / name).open("rb") as handle:
+            return handle.read(2) == b"#!"
+
+    sources = [name for name in tracked if "/tests/" not in name and executable(name)]
+    assert {"scripts/pr_watch.py", "scripts/hooks/pre-push"} <= set(sources), (
+        "the scan missed an engine it must reach"
+    )
     readers = {name for name in sources if _names_runtime_mappings(REPO_ROOT / name)}
     assert readers == set(RUNTIME_MAPPINGS_READERS), sorted(readers)
 

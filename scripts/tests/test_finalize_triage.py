@@ -150,7 +150,10 @@ def test_sweep_set_is_union_of_verified_filed_and_explicit_archive_decisions() -
     "operations",
     [
         [],
-        [{"candidate_id": "TRI-01", "decision": "file", "status": "ambiguous"}],
+        [
+            {"candidate_id": "TRI-01", "decision": "file", "status": "verified"},
+            {"candidate_id": "TRI-02", "decision": "file", "status": "ambiguous"},
+        ],
         [{"candidate_id": "TRI-01", "decision": "file", "status": "verified"}],
     ],
     ids=["unattempted", "ambiguous", "one-of-two-verified"],
