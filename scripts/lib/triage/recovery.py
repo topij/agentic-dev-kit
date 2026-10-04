@@ -28,7 +28,7 @@ def _approval(core_digest: str, supplied: dict[str, Any], *, operator: str) -> d
         raise TriageError("recovery approval has the wrong shape", outcome="operator-held")
     if supplied["decision"] != "approve" or supplied["core_digest"] != core_digest:
         raise TriageError("recovery approval is not bound to the prepared core", outcome="operator-held")
-    if supplied["source"] != "current-session" or supplied["approver_identity"] != operator or not operator:
+    if supplied["source"] != "current-session" or supplied["approver_identity"] != operator or not isinstance(operator, str) or not operator:
         raise TriageError("recovery approval identity is not authoritative", outcome="operator-held")
     return supplied
 
@@ -792,7 +792,9 @@ def validate_historical_prepared(store: ArtifactStore, prepared: dict[str, Any])
     if historical or "legacy_gate_owner_evidence" in core:
         if _validate_legacy_capture(store, core) is None:
             raise TriageError("historical recovery owner evidence is missing", outcome="operator-held")
-        _approval(prepared["action_core_digest"], prepared["approval"], operator=prepared["approval"].get("approver_identity", ""))
+        approval = prepared.get("approval")
+        operator = approval.get("approver_identity", "") if isinstance(approval, dict) else ""
+        _approval(prepared["action_core_digest"], approval, operator=operator)
         expected = state_action_plan(store, store.settings, {"capture_core": core, "capture_core_digest": prepared["capture_core_digest"]})
         if expected.get("action_core") != action:
             raise TriageError("historical recovery action changed", outcome="operator-held")

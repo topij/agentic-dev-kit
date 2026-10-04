@@ -24,6 +24,16 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-10-05
+
+- **A fallback review's full suite overlapped its scratch mutations.** Severity L,
+  kept for accumulation. In #952's initial adversarial review, `make test` at
+  `84cda2321c8d1e82db54b9f11a478a38b2c207fe` on 2026-10-04, in
+  `/private/tmp/mut-adversarial-84cda232`, observed temporary mutant bytes. The reviewer
+  interrupted that contaminated run, verified restoration and reran before reporting;
+  no clean verdict was accepted from the interrupted run. Existing review isolation
+  and behavioral-mutation requirements govern this event; it proposes no new rule.
+
 ## 2026-10-04
 
 - **A PR poll initially put its receipt in the real state tree during synthetic

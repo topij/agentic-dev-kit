@@ -311,10 +311,12 @@ def _prepared_gate_only_bundle(
 def _require_terminated_owner(gate_raw: bytes, store: ArtifactStore | None = None) -> None:
     """Hold unless the owner of these exact gate bytes is proven dead (#863).
 
-    Only the record's shape is validated here, not its repository or configuration
+    For canonical records only the shape is validated here, not repository or configuration
     identity: the bundle was found by this gate's exact digest and its capture already
     checked that identity. Re-checking against the current configuration would hold
     an approved, half-done transition for good after any configuration change.
+    Historical context instead validates its separate provenance and owner evidence;
+    it never supplies a current lease.
     """
     if store is not None and store.legacy_gate_context is not None:
         recovery_gate_record(store, gate_raw)

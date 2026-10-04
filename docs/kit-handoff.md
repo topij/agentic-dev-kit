@@ -20,6 +20,35 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-05 (cs-toolkit test completion and historical gate recovery)
+
+**Decided.** The operator established that the recorded host was this Mac and its
+triage process had stopped, approved TRI-27 for the retained test session only,
+parked every other test candidate, and approved the upstream compatibility repair
+plan. Those decisions did not approve a live recovery mutation or Linear payload.
+
+**Completed in test.** The unchanged installed test entry at cs-toolkit
+`ca3b9aca830554625aba57708383f8f45eb33c5e` on 2026-10-04, in
+`/Users/topi/Coding/in-parallel/cs-toolkit`, returned `degraded-success` with the
+`test-render` receipt for session `5d68cdbff45c4ecbb561dfc6832d0f11`. Its state,
+receipt and proposed diff were read back. No external write or source sweep occurred.
+
+**Developed.** [#952](https://github.com/topij/agentic-dev-kit/pull/952) carries the
+approved historical-gate compatibility repair. Recovery keeps the original bytes,
+requires owner evidence before state observation, and separates capture from exact
+action approval. Local approval, capture, test-completion, verification and review
+receipts are retained under
+`state/review-evidence/cs-toolkit-linear-acceptance_2026-10-04/finalize-decisions/`.
+The installed `acquire`/`observe` capture at adopter
+`ca3b9aca830554625aba57708383f8f45eb33c5e` on 2026-10-04, in
+`/Users/topi/Coding/in-parallel/cs-toolkit`, retained the historical pre-freeze
+reservation bytes for a separately approved recovery action. No recovery mutation,
+live frozen run, approved Linear payload or Linear write was performed during this
+preparation. Adopter engine/configuration, root legacy
+artifacts, host automation and credentials were preserved.
+
+______________________________________________________________________
+
 ## Session — 2026-10-04 (cs-toolkit acceptance preparation, in Codex)
 
 **Prepared.** The retained test session `5d68cdbff45c4ecbb561dfc6832d0f11`
@@ -262,53 +291,6 @@ on the lens's reading of merged PRs, and nothing in this session exercised it li
 
 ______________________________________________________________________
 
-## Session — 2026-10-03 (Phase 6 item 10, #919, and the #585 decision, in Claude Code)
-
-**Shipped.** PR #923, squash `3246e72`: Phase 6 item 10.
-
-- `runtime-parity.md`'s front matter declares `capability_matrix` and
-  `lane_isolation_records`; `scripts/tests/test_runtime_parity_matrix.py` holds each
-  table to its declaration and resolves the file's links in the forms it parses.
-- `saved_plans/phase6-exit-check_2026-10-02.md` records the re-run and the declaration.
-  `saved_plans/codex-parity-plan_2026-08-23.md` is a pointer.
-- #919 stays open for the row audit the exit left open.
-
-**Decided by the operator.**
-
-- Declare the Phase 6 exit under a recorded amendment rather than hold it (2026-10-02).
-  #923's correctness lens then found the offered wording overstated, and the operator
-  declared under the narrowed amendment the exit record states (2026-10-03).
-- #585: the lens count follows a change's class, and only the safety-critical class
-  inherits `safety-critical-changes.md` rule 2's two-lens floor; code outside the
-  safety-critical paths takes one lens. Posted on #585 on approval of its exact text, as
-  [this comment](https://github.com/topij/agentic-dev-kit/issues/585#issuecomment-5960721970),
-  and read back identical.
-- Authorized merging #923 and this wrap-up when clean, and running the rest unattended.
-
-**Review.** CodeRabbit's auto-review stayed off, so the fallback panel reviewed #923: the
-full panel at `9f23607`, then dual-lens delta passes at `0fb420d` and `f60b530`. Each
-round's disposition and the delta passes' verdict lines are posted on #923. The loop
-stopped under the LOW delta-or-ticket rule; its residual findings are parked below.
-
-**Verified.** `env -u FORCE_COLOR make test` at
-`f60b530acdd5ca38afaae042e26103fd85a15e1a` on 2026-10-02 (UTC), in
-`/Users/topi/Coding/agentic-dev-kit`, printed `3992 passed, 1 skipped in 674.78s
-(0:11:14)`. The exit-check record carries the mutation runs, each with its command and
-revision.
-
-**Not established.** Which matrix rows' claims are true; #919 carries that. Read on
-2026-10-03, its tracker body did not yet say so; the comment below now does.
-
-**Parked, not filed**, because no operator was present to approve a payload: the
-2026-10-03 entries in `docs/kit-friction-log.md`. Once the operator was back, two were
-filed on approval of their exact text, and each read back identical to that text: the matrix guard's
-residue as #925, and a comment on #919 scoping the row audit.
-
-Closed workstream *Phase 6 — gate parity and roll it out*: the operator declared its
-exit, and closed it on 2026-10-03. Its residue is on #919, #925, #905, #915, #916 and #917.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -386,10 +368,15 @@ Its validation stamps are on that adopter PR; #944 tracks the LOW CLI-help follo
 records its preserved capture and the test freeze. **Owner:**
 [#6](https://github.com/topij/agentic-dev-kit/issues/6).
 
-▶ Next: obtain host/owner evidence for cs-toolkit's preserved live gate and select a
-separate compatibility recovery plan; the installed parser cannot consume its older format.
-Review the retained test session's `awaiting-approval` report and decide its exact test
-payload set before decision/render completion. The local `resume-01a1085e` evidence
-directory retains those bindings and the prepared #6 update. After recovery, prepare
-the live frozen run and semantic triage, obtain exact operator approval of its payloads
-and identity before a Linear write, then read back the result and hold any ambiguity.
+The operator supplied the host/termination facts and test decision, and approved
+the upstream compatibility plan. The retained test run completed its render route;
+local receipts are under `finalize-decisions/` in the acceptance evidence directory.
+PR #952 carries the repair; the per-file adopter comparison remains a proposal.
+
+▶ Next: revalidate #952's head-bound review/merge evidence and present the exact
+adopter refresh plan. After reviewed adoption, obtain exact approval of the displayed
+live recovery action core before changing the preserved gate or reservation. Then
+prepare the live frozen run and semantic triage, present its complete Linear payloads
+and immutable identity for approval, read back any approved write, and hold ambiguity.
+Keep root legacy artifacts, host automation and credentials unchanged. Record the
+subsequent acceptance evidence on #6 only after its exact comment payload is approved.

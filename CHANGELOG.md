@@ -42,6 +42,21 @@ starts.
 
 ---
 
+## #952 — Explicit historical triage gate recovery
+
+- **ADDED (engine CLI surface)** — refresh `triage_friction_log.py`,
+  `lib/triage/engine.py`, `storage.py`, `recovery.py`, and the new `legacy_gate.py`
+  together. For a preserved historical flat gate, use interactive `recover`
+  (or test-confined `test`) with `--legacy-gate-context` containing current-session
+  machine and termination evidence bound to its exact raw digest. Ordinary entries
+  retain the canonical gate contract. Do not normalize an old gate into a lease.
+- Refresh the shared triage workflow, doctor, installed tests and generated install
+  baseline. Keep existing declines. Owner evidence permits a capture only;
+  approve the displayed recovery action-core digest separately before quarantine.
+  A supported historical pre-freeze reservation produces a safe-restart receipt;
+  invoke `new` separately to freeze the current inbox. Other historical state stays
+  held. Do not enable external adapters during historical gate recovery.
+
 ## #943 — Triage fixture portability and standalone invocation
 
 - **CHANGED (engine CLI surface)** — `triage_friction_log.py` and `finalize_triage.py`

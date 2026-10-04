@@ -208,8 +208,8 @@ def test_historical_capture_is_opt_in_and_owner_context_cannot_start_a_run(tmp_p
     assert not store.recovery_path(digest_bytes(gate_raw)).exists()
 
 
-@pytest.mark.parametrize("supplied", [{"proposals": []}, {"approval": {"command": "approve all", "proposal_set_digest": "f" * 64}}])
-def test_historical_owner_context_rejects_draft_analysis_and_approval(tmp_path, monkeypatch, supplied):
+@pytest.mark.parametrize("supplied", [{"proposals": []}, {"approval": {"command": "approve all", "proposal_set_digest": "f" * 64}}, {"finalize": True}])
+def test_historical_owner_context_rejects_draft_analysis_approval_and_finalization(tmp_path, monkeypatch, supplied):
     root, store, gate_raw, state_raw, owner, _ = historical_fixture(tmp_path, monkeypatch)
     context = ApprovalContext(**loads_exact(owner.read_bytes()))
     result = engine.run("recover", context="interactive", request=supplied, start=root, legacy_gate_context=context)
@@ -251,7 +251,8 @@ def test_historical_provenance_requires_fresh_protected_remote_observation(tmp_p
     assert invoke(root, owner)["recovery_plan"]["action_core"]["action"] == "retire-historical-prefreeze-reservation"
 
 
-def test_historical_safe_restart_rechecks_action_specific_approval(tmp_path, monkeypatch):
+@pytest.mark.parametrize("field,value", [("decision", "reject"), ("core_digest", "f" * 64), ("approval", []), ("approver_identity", True)])
+def test_historical_safe_restart_rechecks_action_specific_approval(tmp_path, monkeypatch, field, value):
     root, store, _, _, owner, _ = historical_fixture(tmp_path, monkeypatch)
     plan = invoke(root, owner)["recovery_plan"]
     request, context = approval_files(tmp_path, plan["action_core_digest"])
@@ -261,13 +262,16 @@ def test_historical_safe_restart_rechecks_action_specific_approval(tmp_path, mon
     bundle_path = Path(receipt["configured_bundle_path"])
     envelope = loads_exact(bundle_path.read_bytes())
     # Recomputing outer hashes does not turn a refused decision into approval.
-    envelope["approval"]["decision"] = "reject"
+    if field == "approval":
+        envelope["approval"] = value
+    else:
+        envelope["approval"][field] = value
     bundle_path.write_bytes(dumps(envelope))
     receipt["prepared_envelope_digest"] = digest_bytes(dumps(envelope))
     store.state_path.write_bytes(dumps(receipt))
     rejected_raw = store.state_path.read_bytes()
     result = engine.run("new", context="interactive", request={}, start=root)
-    assert result["outcome"] == "operator-held" and "not bound" in result["detail"]
+    assert result["outcome"] == "operator-held" and "approval" in result["detail"]
     assert store.state_path.read_bytes() == rejected_raw
 
 
