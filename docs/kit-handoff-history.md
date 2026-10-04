@@ -5,6 +5,33 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-02 (Phase 6 Codex validation)
+
+**Shipped.** PR #911, squash `0298191`: #908's lifecycle record now names the
+Capability tiers matrix row and identifies the writing-lane records as the ones
+with accompanying designs. The manifest was regenerated.
+
+**Observed.** The Codex session exercised skill discovery, session-start sources,
+ready PR creation, PR follow-through hook delivery, and the fallback panel. Each
+fresh `codex exec` lens's native `turn_context` confirmed the configured model and
+effort. To avoid #802's trust side effect, the operator approved starting reviewers
+in the already trusted checkout and directing them to separate review trees.
+The panel's disposition is on #911; local observations and native excerpts are in
+`state/review-evidence/codex-validation-20261002/` (gitignored).
+
+**Verified.** `env -u FORCE_COLOR make test` at
+`4985e4c1d99419ee39144682b576582ca8943038` on 2026-10-02 in
+`/Users/topi/Coding/agentic-dev-kit` passed on a quiet tracked tree.
+
+**Not established.** No SessionStart output reached this chat. The trusted hooks
+were inspected in a separate CLI session; the desktop hook UI was unavailable.
+Native `/review`, parallel lanes, Claude smoke tests and the on-demand runner were
+not exercised. The #879 observation comment was drafted for operator approval;
+this session makes no parity-matrix promotion.
+
+**Corrected.** At the operator's request, the triage workstream records #907's
+merge as `cb92fd5`, removes #891 from its owners, and continues with #859.
+
 ### 2026-10-01 (Phase 6 item 6, #890 and #891, unattended in Claude Code)
 
 **Shipped.**

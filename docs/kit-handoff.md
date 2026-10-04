@@ -20,6 +20,30 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-04 (cs-toolkit triage upgrade blockers)
+
+**Implemented.** [#943](https://github.com/topij/agentic-dev-kit/pull/943) addresses
+#941 and #942: controlled installed triage fixtures, asserted fault injections,
+separate adopter-layout controls, and standalone triage entry-point metadata.
+The generated manifest tracks the shared test helper; the CHANGELOG gives its refresh instructions.
+
+**Verified.** `uv run --no-project --with pytest --with pyyaml python
+scripts/devkit/run_installed_tests.py --root
+/private/tmp/devkit-triage-upgrade-20261004-GwSfUv/adopter`, using kit
+`8f64414405870debe69259ef04d3a27668f1734e` on 2026-10-04 in that disposable directory,
+printed `1235 passed, 2 skipped in 92.70s (0:01:32)`. The installation reproduced
+cs-toolkit's declared install/decline decisions with synthetic data and the required
+new helper. Final-head kit verification and independent review belong on #943.
+
+**Authority and limits.** Merge and the next adopter pin remain operator decisions.
+The operator supplied cs-toolkit checkpoint `f4047447cbafa7549e866f37db9ff7f88a5156b6`;
+this session did not change it, its installed pin, legacy artifacts or host automation.
+No live tracker write or frozen run was approved or attempted. #919 stays open for
+its broader runtime audit. Workstream assignment was not confirmed, so this entry's
+blockers are recorded separately from the existing validation workstream.
+
+______________________________________________________________________
+
 ## Session — 2026-10-04 (cs-toolkit Codex validation and Linear installation)
 
 **Shipped.** Fixture portability in [#937](https://github.com/topij/agentic-dev-kit/pull/937),
@@ -268,35 +292,6 @@ went to #802, #643 and #408 as comments.
 
 ______________________________________________________________________
 
-## Session — 2026-10-02 (Phase 6 Codex validation)
-
-**Shipped.** PR #911, squash `0298191`: #908's lifecycle record now names the
-Capability tiers matrix row and identifies the writing-lane records as the ones
-with accompanying designs. The manifest was regenerated.
-
-**Observed.** The Codex session exercised skill discovery, session-start sources,
-ready PR creation, PR follow-through hook delivery, and the fallback panel. Each
-fresh `codex exec` lens's native `turn_context` confirmed the configured model and
-effort. To avoid #802's trust side effect, the operator approved starting reviewers
-in the already trusted checkout and directing them to separate review trees.
-The panel's disposition is on #911; local observations and native excerpts are in
-`state/review-evidence/codex-validation-20261002/` (gitignored).
-
-**Verified.** `env -u FORCE_COLOR make test` at
-`4985e4c1d99419ee39144682b576582ca8943038` on 2026-10-02 in
-`/Users/topi/Coding/agentic-dev-kit` passed on a quiet tracked tree.
-
-**Not established.** No SessionStart output reached this chat. The trusted hooks
-were inspected in a separate CLI session; the desktop hook UI was unavailable.
-Native `/review`, parallel lanes, Claude smoke tests and the on-demand runner were
-not exercised. The #879 observation comment was drafted for operator approval;
-this session makes no parity-matrix promotion.
-
-**Corrected.** At the operator's request, the triage workstream records #907's
-merge as `cb92fd5`, removes #891 from its owners, and continues with #859.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -374,3 +369,15 @@ retirement helper with the completed-state contract, run `make check-root` and
 validation. Install the declined triage engines following #939 with the Linear
 destination configuration and credentials. Obtain exact operator approval of each live
 tracker payload before its write; this kit session supplies no live-payload approval.
+
+
+### cs-toolkit triage upgrade blockers
+
+**Status:** repair submitted on [#943](https://github.com/topij/agentic-dev-kit/pull/943).
+**Owner:** [#941](https://github.com/topij/agentic-dev-kit/issues/941),
+[#942](https://github.com/topij/agentic-dev-kit/issues/942).
+
+▶ Next: Review #943's exact candidate and merge on the operator's approval; then
+consider that commit for a separately approved cs-toolkit pin, refresh the declared
+files including the test helper, and rerun the adopter gates. #919's runtime audit
+and #6's live acceptance remain separate obligations.
