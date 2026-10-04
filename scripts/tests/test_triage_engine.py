@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 import sys
 import time
@@ -12,6 +11,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _repo_layout import engine_dir, find_repo_root  # noqa: E402
+from _triage_fixture import triage_config_text  # noqa: E402
 
 ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
@@ -42,12 +42,9 @@ def git(repo: Path, *args: str) -> str:
 def repository(tmp_path: Path, *, config_text: str | None = None) -> Path:
     root = tmp_path / "repo"
     (root / "config").mkdir(parents=True)
-    if config_text is None:
-        shutil.copy2(REPO_ROOT / "config/dev-model.yaml", root / "config/dev-model.yaml")
-    else:
-        (root / "config/dev-model.yaml").write_text(config_text, encoding="utf-8")
-    config = root / "config/dev-model.yaml"
-    config.write_text(config.read_text(encoding="utf-8").replace("  engines: scripts/devkit\n", "  engines: scripts\n"), encoding="utf-8")
+    (root / "config/dev-model.yaml").write_text(
+        triage_config_text() if config_text is None else config_text, encoding="utf-8"
+    )
     (root / "docs").mkdir()
     (root / "docs/kit-friction-log.md").write_bytes(b"# Log\n\n## 2026-01-02\n\n- **Active defect.** details.\n")
     (root / "docs/kit-friction-log-archive.md").write_text("# Archive\n", encoding="utf-8")

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import sys
 import time
@@ -11,6 +10,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _repo_layout import engine_dir, find_repo_root  # noqa: E402
+from _triage_fixture import triage_config_text  # noqa: E402
 
 ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
@@ -33,15 +33,7 @@ from triage.storage import (  # noqa: E402
 def _triage_repository(tmp_path: Path) -> Path:
     repo = tmp_path / "repo"
     (repo / "config").mkdir(parents=True)
-    source_config = REPO_ROOT / "config/dev-model.yaml"
-    shutil.copy2(source_config, repo / "config/dev-model.yaml")
-    config = repo / "config/dev-model.yaml"
-    config.write_text(
-        config.read_text(encoding="utf-8").replace(
-            "  engines: scripts/devkit\n", "  engines: scripts\n"
-        ),
-        encoding="utf-8",
-    )
+    (repo / "config/dev-model.yaml").write_text(triage_config_text(), encoding="utf-8")
     (repo / "docs").mkdir()
     (repo / "docs/kit-friction-log.md").write_bytes(
         b"# Log\n\n## 2026-01-02\n\n"
