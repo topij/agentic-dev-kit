@@ -2387,23 +2387,36 @@ def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_valida
     ]
 
 
+# Long options that select compute, per client. Claude's `--agent`/`--agents` carry a
+# definition's `model` and `effort`, and `--settings` can carry a model.
+_LONG_COMPUTE_OPTIONS = {
+    "codex": {"model", "config", "profile"},
+    "claude": {"model", "effort", "fallback-model", "agent", "agents", "settings"},
+}
+# Short options that select compute, per client: Codex's `-m` model, `-c` config and
+# `-p` profile. Claude's short options (`-p` print, `-c` continue, `-r` resume) select none.
+_SHORT_COMPUTE_OPTIONS = {"codex": {"m", "c", "p"}, "claude": set()}
+
+
 def _compute_controls(runtime: str, command: list[str]) -> list[str]:
     """The arguments in a headless command that could select model or effort.
 
-    Long options by name, with or without `=value`; short options by their letter,
-    attached value or not (`-mgpt-5` sets Codex's model as `-m gpt-5` does). `-p` is
-    Claude's print mode and not a control; Codex's `-p` is `--profile`.
+    Long options by name, case-insensitively, with or without `=value`, plus any name
+    mentioning a model or effort; short options by the client's own letters, attached
+    value or not (`-mgpt-5` sets Codex's model as `-m gpt-5` does); and any other
+    argument naming a model or effort, such as a bare config value.
     """
     controls = []
     for arg in command[1:]:
-        if arg.startswith("--"):
-            name = arg[2:].split("=", 1)[0]
-            if name in {"model", "effort", "config", "profile"} or "model" in name or "effort" in name:
+        lowered = arg.lower()
+        if lowered.startswith("--"):
+            name = lowered[2:].split("=", 1)[0]
+            if name in _LONG_COMPUTE_OPTIONS[runtime] or "model" in name or "effort" in name:
                 controls.append(arg)
         elif arg.startswith("-") and len(arg) > 1:
-            if arg[1] in {"m", "c"} or (arg[1] == "p" and (runtime == "codex" or arg != "-p")):
+            if arg[1] in _SHORT_COMPUTE_OPTIONS[runtime]:
                 controls.append(arg)
-        elif "model" in arg or "effort" in arg:
+        elif "model" in lowered or "effort" in lowered:
             controls.append(arg)
     return controls
 
@@ -2414,17 +2427,37 @@ def _compute_controls(runtime: str, command: list[str]) -> list[str]:
         ("codex", ["codex", "exec", "-mgpt-5"]),
         ("codex", ["codex", "exec", "-m", "gpt-5"]),
         ("codex", ["codex", "exec", "--model=gpt-5"]),
+        ("codex", ["codex", "exec", "--MODEL=gpt-5"]),
+        ("codex", ["codex", "exec", "--reasoning-effort=low"]),
         ("codex", ["codex", "exec", "-cmodel_reasoning_effort=low"]),
         ("codex", ["codex", "exec", "-c", "model_reasoning_effort=low"]),
+        ("codex", ["codex", "exec", "model_reasoning_effort=low"]),
         ("codex", ["codex", "exec", "-p", "fast"]),
         ("codex", ["codex", "exec", "-pfast"]),
         ("claude", ["claude", "-p", "--model", "opus"]),
         ("claude", ["claude", "-p", "--effort=high"]),
-        ("claude", ["claude", "-pfoo"]),
+        ("claude", ["claude", "-p", "--fallback-model", "sonnet"]),
+        ("claude", ["claude", "-p", "--agent", "adversarial"]),
+        ("claude", ["claude", "-p", "--agents", "{}"]),
+        ("claude", ["claude", "-p", "--settings", "lane.json"]),
     ],
 )
 def test_a_compute_control_in_a_headless_command_is_recognised(runtime: str, command: list[str]) -> None:
     assert _compute_controls(runtime, command)
+
+
+@pytest.mark.parametrize(
+    "runtime, command",
+    [
+        ("codex", ["codex", "exec"]),
+        ("codex", ["codex", "exec", "--json"]),
+        ("claude", ["claude", "-p"]),
+        ("claude", ["claude", "-p", "-c"]),
+        ("claude", ["claude", "-p", "--verbose"]),
+    ],
+)
+def test_a_headless_command_without_a_compute_control_is_not_flagged(runtime: str, command: list[str]) -> None:
+    assert _compute_controls(runtime, command) == []
 
 
 @pytest.mark.kit_repo_only("config/dev-model.yaml")

@@ -81,10 +81,11 @@ These claims were false or overstated at `7467c9b5`, and this change corrects th
 2. **Adapter upgrade: "classifies exact current and prior rendered forms".** The renderer
    records one prior generation, template version 1. That generation reproduces every
    adapter the kit shipped at `2f2561f3^`, the parent of `#635`, which introduced the
-   renderer: each declared adapter at that revision equals its version-1 render. Adapter
-   text that matches neither render, which some earlier shipped forms do not, classifies
-   `adopter-owned` and is preserved rather than refreshed. That is the safe direction, but
-   "prior rendered forms" overstated it, and the row now names the one generation. "Exact" was also dropped: `kit-current` compares after newline
+   renderer: each declared adapter at that revision equals its version-1 render. Earlier
+   shipped adapter text that matches neither render classifies `adopter-owned` and is
+   preserved rather than refreshed. That is the safe direction, but
+   "prior rendered forms" overstated it, and the row now names the one generation.
+   "Exact" was also dropped: `kit-current` compares after newline
    normalization, as `workflows/upgrade.md` already says.
 3. ***Lifecycle validation boundary*: "objects printed by `init.sh`".** `init.sh` prints
    the command strings and states the event, matcher and timeout in prose. The handler
@@ -224,7 +225,7 @@ trackers and forges.
 
 | Clause | Evidence | Class | Limits and gaps |
 |---|---|---|---|
-| The current and the one recorded prior form classify separately from authored bytes | `test_kit_doctor.py::test_shipped_runtime_adapters_equal_the_renderer_for_both_runtimes`, `test_authored_adapter_change_is_reported_and_preserved_for_each_runtime`, `test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned` | behavioural (classifier) | The legacy-body hashes are checked against the bytes shipped at `2f2561f3^`. Text matching neither render reads as adopter-owned; see *Findings*. |
+| The current and the one recorded prior form classify separately from authored bytes | `test_kit_doctor.py::test_shipped_runtime_adapters_equal_the_renderer_for_both_runtimes`, `test_authored_adapter_change_is_reported_and_preserved_for_each_runtime`, `test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned` | behavioural (classifier) | The legacy-body hashes are checked against the bytes shipped at `2f2561f3^`. Text matching neither render reads as adopter-owned; see *Findings that changed the contract*. |
 | `/upgrade` runs the fetched kit's classifier, installs missing bindings and refreshes stale ones | `test_kit_doctor.py::test_adapter_report_cli_is_read_only_and_does_not_require_adopter_config`, `test_adapter_report_refuses_a_source_adapter_the_renderer_does_not_own` | behavioural (report only) | The report never writes; the install/refresh/preserve mapping is agent-executed prose in `workflows/upgrade.md`, unpinned. |
 | Adapter ownership never enters the drift gate | `test_kit_doctor.py::test_shipped_runtime_adapters_equal_the_renderer_for_both_runtimes` (no `KIT_OWNED` path under `.claude/` or `.agents/`), `test_adapter_report_refuses_drift_and_write_options` | declaration consistency and CLI separation | No default-mode doctor run shows an adapter edit leaves the gate unchanged. |
 
@@ -269,6 +270,9 @@ the whole suite.
 
 Each failure was the added test or the assertion this change added to an existing one.
 No module run at `7467c9b` caught any of these mutations.
+
+The review panel's round-1 fixes changed some of these tests after `b309bb8`. The
+fix-round mutations and their results are in the round-1 disposition on #946.
 
 ## What stays unestablished
 

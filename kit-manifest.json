@@ -590,7 +590,7 @@
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
-      "sha256": "86007f1e9b35529778571d0c35439333495f1df1819dc600e1d0f98eeb4b43e2"
+      "sha256": "91a0bab1ea9de74538d65602a0d2fd6448026241313180f09ac64b21d0f2d50b"
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "repo-only",
