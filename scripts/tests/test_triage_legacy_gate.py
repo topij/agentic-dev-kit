@@ -140,7 +140,7 @@ def test_active_historical_owner_is_held_before_state_observation(tmp_path, monk
         process.wait(timeout=10)
 
 
-@pytest.mark.parametrize("change", ["host", "digest", "foreign", "source", "pid", "timestamp", "duplicate"])
+@pytest.mark.parametrize("change", ["host", "digest", "foreign", "source", "pid", "overflow-pid", "timestamp", "duplicate"])
 def test_historical_owner_evidence_refuses_uncertain_or_foreign_capture(tmp_path, monkeypatch, change):
     root, store, gate_raw, state_raw, owner, _ = historical_fixture(tmp_path, monkeypatch)
     context = loads_exact(owner.read_bytes())
@@ -155,9 +155,12 @@ def test_historical_owner_evidence_refuses_uncertain_or_foreign_capture(tmp_path
         record["run_identity"]["repository_identity"] = "foreign#" + record["run_identity"]["protected_branch_head"]
     elif change == "pid":
         record["pid"] = True
+    elif change == "overflow-pid":
+        record["pid"] = 2 ** 40
+        context["source_read_back"]["legacy_gate_owner"]["recorded_pid"] = record["pid"]
     elif change == "timestamp":
         record["created_at"] = float("nan")
-    if change in {"foreign", "pid", "timestamp"}:
+    if change in {"foreign", "pid", "overflow-pid", "timestamp"}:
         gate_raw = (json.dumps(record) + "\n").encode()
         context["source_read_back"]["legacy_gate_owner"]["gate_digest"] = digest_bytes(gate_raw)
     if change == "duplicate":
@@ -203,6 +206,49 @@ def test_historical_capture_is_opt_in_and_owner_context_cannot_start_a_run(tmp_p
     assert result["detail"] == "historical owner evidence requires a blocking historical gate"
     assert store.state_path.read_bytes() == state_raw and not store.gate_path.exists()
     assert not store.recovery_path(digest_bytes(gate_raw)).exists()
+
+
+@pytest.mark.parametrize("supplied", [{"proposals": []}, {"approval": {"command": "approve all", "proposal_set_digest": "f" * 64}}])
+def test_historical_owner_context_rejects_draft_analysis_and_approval(tmp_path, monkeypatch, supplied):
+    root, store, gate_raw, state_raw, owner, _ = historical_fixture(tmp_path, monkeypatch)
+    context = ApprovalContext(**loads_exact(owner.read_bytes()))
+    result = engine.run("recover", context="interactive", request=supplied, start=root, legacy_gate_context=context)
+    assert result["outcome"] == "hard-stop"
+    assert "cannot authorize draft, approval or external writes" in result["detail"]
+    assert store.gate_path.read_bytes() == gate_raw and store.state_path.read_bytes() == state_raw
+    assert not store.recovery_path(digest_bytes(gate_raw)).exists()
+
+
+def test_uncertain_historical_process_probe_holds_before_state_observation(tmp_path, monkeypatch):
+    from triage import legacy_gate
+
+    root, store, gate_raw, state_raw, owner, _ = historical_fixture(tmp_path, monkeypatch)
+    def uncertain(pid, signal):
+        raise PermissionError("process is not observable")
+    monkeypatch.setattr(legacy_gate.os, "kill", uncertain)
+    original = engine.observe
+    def guarded(path, **kwargs):
+        assert path != store.state_path, "uncertain owner must be rejected before state observation"
+        return original(path, **kwargs)
+    monkeypatch.setattr(engine, "observe", guarded)
+    result = engine.run("recover", context="interactive", request={}, start=root,
+                        legacy_gate_context=ApprovalContext(**loads_exact(owner.read_bytes())))
+    assert result["outcome"] == "operator-held" and "uncertain" in result["detail"]
+    assert store.gate_path.read_bytes() == gate_raw and store.state_path.read_bytes() == state_raw
+
+
+def test_historical_provenance_requires_fresh_protected_remote_observation(tmp_path, monkeypatch):
+    root, store, gate_raw, state_raw, owner, _ = historical_fixture(tmp_path, monkeypatch)
+    git(root, "commit", "--allow-empty", "-m", "remote advance")
+    git(root, "push", "origin", "main")
+    # Push updates the local tracking ref, so recreate the stale observation.
+    git(root, "update-ref", "refs/remotes/origin/main", "HEAD^")
+    result = invoke(root, owner)
+    assert result["outcome"] == "operator-held" and "refresh the protected ref" in result["detail"]
+    assert store.gate_path.read_bytes() == gate_raw and store.state_path.read_bytes() == state_raw
+    assert not store.recovery_path(digest_bytes(gate_raw)).exists()
+    git(root, "update-ref", "refs/remotes/origin/main", "HEAD")
+    assert invoke(root, owner)["recovery_plan"]["action_core"]["action"] == "retire-historical-prefreeze-reservation"
 
 
 def test_historical_safe_restart_rechecks_action_specific_approval(tmp_path, monkeypatch):

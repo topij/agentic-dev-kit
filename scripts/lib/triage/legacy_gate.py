@@ -110,7 +110,7 @@ def read_gate(store: Any, raw: bytes, context: ApprovalContext, *, check_owner: 
             os.kill(pid, 0)
         except ProcessLookupError:
             pass
-        except (PermissionError, OSError) as exc:
+        except (PermissionError, OSError, OverflowError) as exc:
             raise _held("historical gate process observation is uncertain") from exc
         else:
             raise _held("historical gate PID is active or reused")
