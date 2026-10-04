@@ -41,7 +41,7 @@ ______________________________________________________________________
 
 ## Session — 2026-10-04 (#919 capability-matrix row audit)
 
-**Opened, not merged.** [#946](https://github.com/topij/agentic-dev-kit/pull/946) delivers
+**Opened in that session.** [#946](https://github.com/topij/agentic-dev-kit/pull/946) delivers
 #919's narrowed scope. `saved_plans/capability-matrix-row-audit_2026-10-04.md` maps each
 matrix row's repository-side clauses to tests, separates declaration consistency from
 behavioural and runtime-observed evidence, and names what stays unestablished. It also:
@@ -52,7 +52,9 @@ behavioural and runtime-observed evidence, and names what stays unestablished. I
 - records each added test's negative control.
 
 The PR changes `config/dev-model.yaml`'s comment, so it is safety-critical and
-operator-merge. #919 stays open until it merges.
+operator-merge. **Subsequent disposition — 2026-10-04:** #946 merged as
+`785c012414c94bdc335c84bf95f6747813ba1337`, and #919 was closed. This discharges
+the earlier sessions' #919 open-status instructions.
 
 **Review.** CodeRabbit skipped. Full two-lens fallback passes at `02642f54` and
 `4497e8c` preceded the LOW repairs. The first LOW repair extended a control-flag scan,
