@@ -20,6 +20,28 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-04 (cs-toolkit acceptance preparation, in Codex)
+
+**Prepared.** The retained test session `5d68cdbff45c4ecbb561dfc6832d0f11`
+advanced to `awaiting-approval` through the installed test entry. Its complete payload
+set consists of explicit test-only fixtures; live semantic triage remains outstanding.
+The exact report, proposal-set binding, client observations, installation checks and
+recovery prerequisites are retained under
+`state/review-evidence/cs-toolkit-linear-acceptance_2026-10-04/resume-01a1085e/`.
+
+**Held.** No test decision was invented, so decision accounting and diff rendering
+remain pending. The live gate matched the preserved capture; its older format fails
+the installed canonical and record-shape checks. Host identity and owner termination
+remain unestablished. The prepared recovery plan grants no mutation authority.
+No live frozen run or approved Linear payload was produced.
+
+**Authority.** The operator requested autonomous continuation before going to sleep.
+The plan's separate recovery and exact-payload approval boundaries were retained.
+Legacy artifacts, host automations, credentials and installed engines were preserved.
+Publication of the prepared acceptance update on #6 awaits its exact-payload decision.
+
+______________________________________________________________________
+
 ## Session — 2026-10-04 (cs-toolkit Linear acceptance attempt, in Codex)
 
 **Recorded.** [The acceptance attempt on #6](https://github.com/topij/agentic-dev-kit/issues/6#issuecomment-5983052800)
@@ -364,7 +386,10 @@ Its validation stamps are on that adopter PR; #944 tracks the LOW CLI-help follo
 records its preserved capture and the test freeze. **Owner:**
 [#6](https://github.com/topij/agentic-dev-kit/issues/6).
 
-▶ Next: reconcile cs-toolkit's preserved live gate from #6's evidence through a separately
-authorized recovery plan. Then resume the retained test freeze through proposal/decision/render,
-prepare the live frozen run, and obtain exact operator approval of its payload and identity
-before a Linear write; read back the result and hold any ambiguity.
+▶ Next: obtain host/owner evidence for cs-toolkit's preserved live gate and select a
+separate compatibility recovery plan; the installed parser cannot consume its older format.
+Review the retained test session's `awaiting-approval` report and decide its exact test
+payload set before decision/render completion. The local `resume-01a1085e` evidence
+directory retains those bindings and the prepared #6 update. After recovery, prepare
+the live frozen run and semantic triage, obtain exact operator approval of its payloads
+and identity before a Linear write, then read back the result and hold any ambiguity.
