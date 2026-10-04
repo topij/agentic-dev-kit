@@ -9,8 +9,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _repo_layout import engine_dir, find_repo_root  # noqa: E402
-from _triage_fixture import triage_config_text  # noqa: E402
+from _repo_layout import engine_dir, find_repo_root, triage_config_text  # noqa: E402
 
 ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
@@ -34,10 +33,10 @@ def configured_repo(tmp_path: Path) -> Path:
 def test_controlled_fixture_config_needs_no_optional_init_snapshot(tmp_path):
     # A selective installation can omit init's recorded fixture while keeping
     # triage tests. Exercise the installed helper in that layout.
-    shutil.copy2(Path(__file__).parent / "_triage_fixture.py", tmp_path / "_triage_fixture.py")
+    shutil.copy2(Path(__file__).parent / "_repo_layout.py", tmp_path / "_repo_layout.py")
     result = subprocess.run(
         [sys.executable, "-I", "-c",
-         "import sys; sys.path.insert(0, '.'); from _triage_fixture import triage_config_text; print(triage_config_text(), end='')"],
+         "import sys; sys.path.insert(0, '.'); from _repo_layout import triage_config_text; print(triage_config_text(), end='')"],
         cwd=tmp_path, capture_output=True, text=True, check=True,
     )
     assert result.stdout == triage_config_text()
@@ -151,13 +150,27 @@ def test_ordinary_fixtures_ignore_adopter_policy(tmp_path, monkeypatch, module_n
 
 @pytest.mark.parametrize("layout", ["docs", "engines", "branch", "linear", "combined"])
 def test_supported_adopter_layout_creates_frozen_state(tmp_path, monkeypatch, layout):
-    from test_triage_engine import git, repository
     from triage.canonical import loads_exact
     from triage.engine import _branch_date, run
     from triage.model import tracker_destination
     from triage.providers import FakeTracker
 
-    repo = repository(tmp_path)
+    repo = configured_repo(tmp_path)
+
+    def git(repo, *args):
+        return subprocess.run(
+            ["git", "-C", str(repo), *args], check=True, capture_output=True, text=True,
+        ).stdout.strip()
+
+    (repo / "docs").mkdir()
+    (repo / "docs/kit-friction-log.md").write_bytes(b"# Log\n\n## 2026-01-02\n\n- **Active defect.** details.\n")
+    (repo / "docs/kit-friction-log-archive.md").write_text("# Archive\n", encoding="utf-8")
+    git(repo, "config", "user.email", "test@example.invalid")
+    git(repo, "config", "user.name", "Test")
+    git(repo, "add", ".")
+    git(repo, "commit", "-m", "synthetic fixture")
+    git(repo, "remote", "add", "origin", "https://github.com/example/project.git")
+    git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
     config = repo / "config/dev-model.yaml"
     text = config.read_text(encoding="utf-8")
     if layout in {"docs", "combined"}:

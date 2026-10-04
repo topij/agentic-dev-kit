@@ -9,8 +9,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _repo_layout import engine_dir, find_repo_root  # noqa: E402
-from _triage_fixture import triage_config_text  # noqa: E402
+from _repo_layout import engine_dir, find_repo_root, triage_config_text  # noqa: E402
 
 ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)

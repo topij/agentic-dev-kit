@@ -27,16 +27,12 @@
 separate adopter-layout controls, and standalone triage entry-point metadata.
 The generated manifest tracks the shared test helper; the CHANGELOG gives its refresh instructions.
 
-**Verified.** `uv run --no-project --with pytest --with pyyaml python
-scripts/devkit/run_installed_tests.py --root
-/private/tmp/devkit-triage-upgrade-20261004-GwSfUv/adopter`, using kit
-`8f64414405870debe69259ef04d3a27668f1734e` on 2026-10-04 in that disposable directory,
-printed `1235 passed, 2 skipped in 92.70s (0:01:32)`. The installation reproduced
-cs-toolkit's declared install/decline decisions with synthetic data and the required
-new helper. `env -u FORCE_COLOR DEVKIT_STATE_ROOT=/private/tmp/devkit-triage-upgrade-20261004-GwSfUv/kit-sandbox make test`
+**Verified.** `env -u FORCE_COLOR DEVKIT_STATE_ROOT=/private/tmp/devkit-triage-upgrade-20261004-GwSfUv/kit-sandbox make test`
 at `273db1ed7fea679228551c5594e5d9d4e2e9b9fe` on 2026-10-04, in
 `/Users/topi/Coding/agentic-dev-kit`, printed `4242 passed, 1 skipped in 654.36s (0:10:54)`.
-Final-head CI and independent review belong on #943.
+Final-candidate kit and disposable declared-install receipts, CI and independent
+review belong on #943. The reviewer found an optional-fixture dependency; the repair
+keeps controlled policy in the helper those test modules already require.
 
 **Authority and limits.** Merge and the next adopter pin remain operator decisions.
 The operator supplied cs-toolkit checkpoint `f4047447cbafa7549e866f37db9ff7f88a5156b6`;

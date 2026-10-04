@@ -48,7 +48,7 @@ starts.
   declare Python `>=3.12` and standard-library-only PEP 723 metadata for standalone
   `uv run`. Refresh these entry points with their existing `lib/` dependencies.
 - Refresh the installed triage test modules and generated manifest, including
-  `tests/_triage_fixture.py`. Keep adopter paths, branch patterns, tracker destination and review
+  their existing `tests/_repo_layout.py` helper. Keep adopter paths, branch patterns, tracker destination and review
   policy; ordinary fixtures now own their configuration (#941, #942).
 
 ## #939 — Approved Linear triage through the configured tracker

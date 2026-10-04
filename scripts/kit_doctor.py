@@ -351,7 +351,6 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # adopter-facing `KIT_OWNED` entry without filtering engine and test roles,
     # so an adopter who does not vendor tests gets `declined`, not a silent gap.
     ("scripts/tests/_repo_layout.py", "test"),
-    ("scripts/tests/_triage_fixture.py", "test"),
     ("scripts/tests/conftest.py", "test"),
     ("scripts/tests/test_check_memory_budget.py", "test"),
     ("scripts/tests/test_ci_workflow.py", "test"),
