@@ -20,6 +20,42 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-04 (#919 capability-matrix row audit)
+
+**Opened, not merged.** [#946](https://github.com/topij/agentic-dev-kit/pull/946) delivers
+#919's narrowed scope. `saved_plans/capability-matrix-row-audit_2026-10-04.md` maps each
+matrix row's repository-side clauses to tests, separates declaration consistency from
+behavioural and runtime-observed evidence, and names what stays unestablished. It also:
+
+- corrects the *Capability tiers*, *Adapter upgrade* and *Lifecycle validation boundary*
+  claims that were false or overstated;
+- adds tests where a bounded repository test establishes a clause;
+- records each added test's negative control.
+
+The PR changes `config/dev-model.yaml`'s comment, so it is safety-critical and
+operator-merge. #919 stays open until it merges.
+
+**Review.** CodeRabbit skipped. Full two-lens fallback passes at `02642f54` and
+`4497e8c` preceded the LOW repairs. The first LOW repair extended a control-flag scan,
+and the adversarial lens disputed its containment, so no receipt was recorded for it. The
+final repair `12b11e6` pins the shipped headless commands exactly instead. Its two-lens
+`fallback:delta` receipt composes on the `4497e8c` panel. Dispositions and verdict lines
+are on #946, which `pr_watch` reported converged and mergeable at `12b11e6`.
+
+**Verified.** `env -u FORCE_COLOR DEVKIT_STATE_ROOT=<session scratchpad> make test` at
+`12b11e6222b09798944ff6618be8873160182dc1` on 2026-10-04, in
+`/Users/topi/Coding/agentic-dev-kit`, printed `4254 passed, 1 skipped in 651.24s
+(0:10:51)`. CI's `Test` passed at that head.
+
+**Filed** on the operator's approval of each exact text, each read back identical: #947,
+holding the audit's remaining bounded-test gaps; occurrence comments on #120 and #720.
+
+**Not established.** Client behaviour, agent-executed workflow steps, and a Codex
+cockpit applying `lens_compute`; the record lists them. No live Linear payload or frozen
+run was executed, and cs-toolkit was not touched.
+
+______________________________________________________________________
+
 ## Session — 2026-10-04 (cs-toolkit repair delivery and adoption)
 
 **Shipped.** [#943](https://github.com/topij/agentic-dev-kit/pull/943) merged as
@@ -278,40 +314,6 @@ kept.
 
 ______________________________________________________________________
 
-## Session — 2026-10-02 (Phase 6 items 7 and 8, #879, in Claude Code)
-
-**Shipped.** PR #913, squash `947fca0`: `scripts/runtime_smoke.py`, a repo-only runner
-started by hand rather than in pull-request CI. In a fixture built from a kit revision,
-under isolated client homes, it drives a pinned Codex and a pinned Claude Code through
-instruction and skill or command discovery, SessionStart and PostToolUse, native review,
-the fallback panel and a lane through `scripts/launch_lane.py`. Each row records evidence
-read from the runtime's own artifacts, or the reason it could not run. The first stamped
-record, from a run at `0c2c200`, is `saved_plans/runtime-smoke-evidence_2026-10-02/`,
-and `saved_plans/runtime-smoke_2026-10-02.md` is its narrative. #879 closed on merge.
-
-**Decided.**
-
-- Trust is granted per invocation, and only in isolated homes the operator created and
-  logged in to. For the Codex hook probe alone, the operator authorized the hook-trust
-  bypass and a `-c` project-trust override; the fixture's hook output reached a Codex
-  session only with both (the narrative's observation 2).
-- A smoke record is an observation, not a promotion bundle
-  (`live-validation-evidence.md`, *On-demand smoke records*), so no parity-matrix row
-  moved.
-
-**Verified.** `env -u FORCE_COLOR make test` at
-`ec06c3bd2ded880fabcf674e33d8947035d37b4d` on 2026-10-02 in
-`/Users/topi/Coding/agentic-dev-kit` printed `3969 passed, 1 skipped in 645.24s
-(0:10:45)`. The squash's tree is that revision's.
-
-**Not established.** The narrative's own section names what the record does not show.
-The runner's stops were exercised against fake clients only.
-
-**Filed.** #915, from #913's review; #916 and #917, from the live runs. Observations
-went to #802, #643 and #408 as comments.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -382,10 +384,11 @@ repairs; #943 supplied the triage upgrade repairs. cs-toolkit adopted pin
 `60b9727f65ee1bb7ffb5418f85e23d814cd4f1bd` in
 [cs-toolkit #2528](https://github.com/in-parallel-oy/cs-toolkit/pull/2528).
 Its validation stamps are on that adopter PR; #944 tracks the LOW CLI-help follow-up.
+#919's row audit is [#946](https://github.com/topij/agentic-dev-kit/pull/946), open and
+held for operator merge at `12b11e6` when this was written on 2026-10-04; #947 holds the audit's remaining bounded-test gaps.
 **Owner:** [#919](https://github.com/topij/agentic-dev-kit/issues/919),
 [#6](https://github.com/topij/agentic-dev-kit/issues/6).
 
-▶ Next: #919 — audit the remaining capability-matrix claims, naming the tests or
-stamped runtime records that establish each, and recording the gaps. Keep #6's live
-Linear acceptance separate: obtain exact operator approval of the payload and frozen
-run before execution; this session supplies no live-payload approval.
+▶ Next: the operator merges #946 if it is still mergeable at `12b11e6`, then closes #919.
+After that, #6's live Linear acceptance, which needs exact operator approval of the
+payload and the frozen run before anything executes.
