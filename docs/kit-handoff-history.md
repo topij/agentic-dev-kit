@@ -5,6 +5,52 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-02 (Phase 6 item 9, #880, in Claude Code)
+
+**Shipped.** PR #920, squash `d9f757d`: Phase 6 item 9.
+
+- `docs/kit-convergence-plan.md` is now a pointer;
+  `git show 09fcbe8:docs/kit-convergence-plan.md` prints the archived text.
+- `saved_plans/phase6-exit-check_2026-10-02.md` records the Phase 6 exit check at
+  `7040d28`, with the command and revision behind each verdict.
+- #880 closed on merge.
+
+**Decided by the operator.**
+
+- Hold the Phase 6 exit, rather than declare it under an amendment that narrows "the
+  parity matrix" to the front-matter declaration.
+- Add item 10, #919, filed on approval of its exact text. It adds a check over the
+  capability table, then re-runs the exit check.
+- Merge #920 when clean.
+
+**Review.** CodeRabbit's auto-review stayed off, so the fallback panel reviewed #920.
+
+- The full dual-lens panel ran at `89ddbe0`.
+- A dual-lens delta pass covered the repair commit `92bad59`. It was dual because the
+  correctness lens marked one finding LOW-MEDIUM. Its receipt composes on the panel's.
+- Each round's disposition and the delta's verdict lines are posted on #920.
+
+**Verified.**
+
+- `env -u FORCE_COLOR make test` at `89ddbe0d3f8116c85b69cd16ed1a8a6de5d5c2d3` on
+  2026-10-02, in `/Users/topi/Coding/agentic-dev-kit`, printed `3969 passed, 1 skipped
+  in 662.86s (0:11:02)`.
+- The repair commit changed only record prose. A link check covered it, as recorded on
+  #920.
+- `gh run list --commit d9f757da193bcf91c5cc4c0c2d211dcf71085023` showed the `Test`
+  workflow completed `success` on `main`.
+
+**Not established.** The record does not audit which table rows have their repository
+side pinned by other tests; #919 carries that. The record's mutation clones were not
+kept.
+
+**Filed**, each on the operator's approval of its exact text, and read back identical:
+
+- #919;
+- #921, from the delta pass: a lens skipped the two classification verdicts;
+- an occurrence comment on #578: the suite now outlasts the lens timeout that issue
+  suggests.
+
 ### 2026-10-02 (Phase 6 items 7 and 8, #879, in Claude Code)
 
 **Shipped.** PR #913, squash `947fca0`: `scripts/runtime_smoke.py`, a repo-only runner

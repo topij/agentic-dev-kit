@@ -20,9 +20,28 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-04 (cs-toolkit Linear acceptance attempt, in Codex)
+
+**Recorded.** [The acceptance attempt on #6](https://github.com/topij/agentic-dev-kit/issues/6#issuecomment-5983052800)
+retains the installation checks, destination and credential plan, client observations,
+native rollout reference, test freeze and held live preflight. The comment was read back
+identical. Local artifacts are in `state/review-evidence/cs-toolkit-linear-acceptance_2026-10-04/`.
+
+**Held.** The live preflight returned `single-writer gate is already held`; no live
+frozen run or payload reached approval. No Linear write or recovery mutation occurred.
+The operator's legacy-artifact, host-automation and credential boundaries were preserved.
+The test run reached its freeze stage, not proposal/decision/render completion.
+
+**Plan retained.** Use the installed kit pin and merged Linear destination, with the
+existing secure credential loader. No cs-toolkit configuration or engine change was needed
+for this attempt. The operator named this workstream and requested replacing its stale
+starter; #946's merge and #919's closure were read back before the update.
+
+______________________________________________________________________
+
 ## Session — 2026-10-04 (#919 capability-matrix row audit)
 
-**Opened, not merged.** [#946](https://github.com/topij/agentic-dev-kit/pull/946) delivers
+**Opened in that session.** [#946](https://github.com/topij/agentic-dev-kit/pull/946) delivers
 #919's narrowed scope. `saved_plans/capability-matrix-row-audit_2026-10-04.md` maps each
 matrix row's repository-side clauses to tests, separates declaration consistency from
 behavioural and runtime-observed evidence, and names what stays unestablished. It also:
@@ -33,7 +52,9 @@ behavioural and runtime-observed evidence, and names what stays unestablished. I
 - records each added test's negative control.
 
 The PR changes `config/dev-model.yaml`'s comment, so it is safety-critical and
-operator-merge. #919 stays open until it merges.
+operator-merge. **Subsequent disposition — 2026-10-04:** #946 merged as
+`785c012414c94bdc335c84bf95f6747813ba1337`, and #919 was closed. This discharges
+the earlier sessions' #919 open-status instructions.
 
 **Review.** CodeRabbit skipped. Full two-lens fallback passes at `02642f54` and
 `4497e8c` preceded the LOW repairs. The first LOW repair extended a control-flag scan,
@@ -266,54 +287,6 @@ exit, and closed it on 2026-10-03. Its residue is on #919, #925, #905, #915, #91
 
 ______________________________________________________________________
 
-## Session — 2026-10-02 (Phase 6 item 9, #880, in Claude Code)
-
-**Shipped.** PR #920, squash `d9f757d`: Phase 6 item 9.
-
-- `docs/kit-convergence-plan.md` is now a pointer;
-  `git show 09fcbe8:docs/kit-convergence-plan.md` prints the archived text.
-- `saved_plans/phase6-exit-check_2026-10-02.md` records the Phase 6 exit check at
-  `7040d28`, with the command and revision behind each verdict.
-- #880 closed on merge.
-
-**Decided by the operator.**
-
-- Hold the Phase 6 exit, rather than declare it under an amendment that narrows "the
-  parity matrix" to the front-matter declaration.
-- Add item 10, #919, filed on approval of its exact text. It adds a check over the
-  capability table, then re-runs the exit check.
-- Merge #920 when clean.
-
-**Review.** CodeRabbit's auto-review stayed off, so the fallback panel reviewed #920.
-
-- The full dual-lens panel ran at `89ddbe0`.
-- A dual-lens delta pass covered the repair commit `92bad59`. It was dual because the
-  correctness lens marked one finding LOW-MEDIUM. Its receipt composes on the panel's.
-- Each round's disposition and the delta's verdict lines are posted on #920.
-
-**Verified.**
-
-- `env -u FORCE_COLOR make test` at `89ddbe0d3f8116c85b69cd16ed1a8a6de5d5c2d3` on
-  2026-10-02, in `/Users/topi/Coding/agentic-dev-kit`, printed `3969 passed, 1 skipped
-  in 662.86s (0:11:02)`.
-- The repair commit changed only record prose. A link check covered it, as recorded on
-  #920.
-- `gh run list --commit d9f757da193bcf91c5cc4c0c2d211dcf71085023` showed the `Test`
-  workflow completed `success` on `main`.
-
-**Not established.** The record does not audit which table rows have their repository
-side pinned by other tests; #919 carries that. The record's mutation clones were not
-kept.
-
-**Filed**, each on the operator's approval of its exact text, and read back identical:
-
-- #919;
-- #921, from the delta pass: a lens skipped the two classification verdicts;
-- an occurrence comment on #578: the suite now outlasts the lens timeout that issue
-  suggests.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -384,11 +357,14 @@ repairs; #943 supplied the triage upgrade repairs. cs-toolkit adopted pin
 `60b9727f65ee1bb7ffb5418f85e23d814cd4f1bd` in
 [cs-toolkit #2528](https://github.com/in-parallel-oy/cs-toolkit/pull/2528).
 Its validation stamps are on that adopter PR; #944 tracks the LOW CLI-help follow-up.
-#919's row audit is [#946](https://github.com/topij/agentic-dev-kit/pull/946), open and
-held for operator merge at `12b11e6` when this was written on 2026-10-04; #947 holds the audit's remaining bounded-test gaps.
-**Owner:** [#919](https://github.com/topij/agentic-dev-kit/issues/919),
+#919's row audit shipped in [#946](https://github.com/topij/agentic-dev-kit/pull/946)
+(`785c012414c94bdc335c84bf95f6747813ba1337`), and #919 was closed on 2026-10-04;
+#947 holds the audit's remaining bounded-test gaps. The Codex acceptance attempt on
+2026-10-04 stopped at the pre-existing live writer gate; [#6's evidence](https://github.com/topij/agentic-dev-kit/issues/6#issuecomment-5983052800)
+records its preserved capture and the test freeze. **Owner:**
 [#6](https://github.com/topij/agentic-dev-kit/issues/6).
 
-▶ Next: the operator merges #946 if it is still mergeable at `12b11e6`, then closes #919.
-After that, #6's live Linear acceptance, which needs exact operator approval of the
-payload and the frozen run before anything executes.
+▶ Next: reconcile cs-toolkit's preserved live gate from #6's evidence through a separately
+authorized recovery plan. Then resume the retained test freeze through proposal/decision/render,
+prepare the live frozen run, and obtain exact operator approval of its payload and identity
+before a Linear write; read back the result and hold any ambiguity.
