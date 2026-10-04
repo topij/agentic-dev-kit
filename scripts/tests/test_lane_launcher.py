@@ -2386,6 +2386,34 @@ def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_valida
     ]
 
 
+@pytest.mark.kit_repo_only("config/dev-model.yaml")
+def test_shipped_headless_commands_carry_no_compute_control() -> None:
+    """The shipped lane commands leave model and effort to the client (#919).
+
+    `runtime-parity.md`'s *Capability tiers* row says neither headless wrapper carries
+    a control. `test_each_declared_policy_reaches_the_child_argv_in_the_fixed_slot`
+    pins that the launcher adds none, but against fixture commands; this holds the
+    shipped `parallel.<runtime>_headless_command` values, which the launcher reads
+    verbatim, to the same claim.
+    """
+    launcher = _load_launcher()
+    config = launcher.load_config(REPO_ROOT / "config" / "dev-model.yaml", overlay=False)
+    controls = {"-m", "--model", "--effort", "-c", "--config", "--profile", "-p"}
+    for runtime, binary in (("codex", "codex"), ("claude", "claude")):
+        command = launcher.get(config, f"parallel.{runtime}_headless_command", None)
+        assert isinstance(command, list) and command[0] == binary, command
+        # `-p` is Claude's print mode, not a control; Codex's `-p` is `--profile`.
+        allowed = {"-p"} if runtime == "claude" else set()
+        assert not [
+            arg
+            for arg in command[1:]
+            if (arg in controls - allowed)
+            or arg.startswith(("--model=", "--effort=", "--profile="))
+            or "model" in arg
+            or "effort" in arg
+        ], command
+
+
 @pytest.mark.parametrize("mode", ["regular", "symlink", "fifo-race", "directory-race", "symlink-race", "changed"])
 def test_stable_regular_reader_rejects_special_file_races_without_blocking(tmp_path: Path, mode: str) -> None:
     driver = r"""

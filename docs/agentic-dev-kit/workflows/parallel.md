@@ -255,7 +255,7 @@ suggestion and the operator applies it through the runtime's own controls — on
 `-c model_reasoning_effort=<level>`; the aliases and levels `models.runtime_mappings`
 names are the ones each client accepted when calibrated (the `models` comment in
 `config/dev-model.yaml` carries the stamp). `models.runtime_mappings` itself is
-advisory on both runtimes: no engine reads it. The supported headless wrapper
+advisory on both runtimes: no shipped engine reads it. The supported headless wrapper
 deliberately inherits the client's compute on both runtimes and carries neither control:
 the launcher establishes worktree, environment, identity, and receipt authority only.
 What "inherit" resolves to differs by trust route — a Claude lane under the wrapper's

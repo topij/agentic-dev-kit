@@ -1089,6 +1089,13 @@ def test_scope_pr_watch_and_merge_share_lane_state_and_pinned_repo(
     assert "|attacker/other|" not in gh_calls
     assert f"{repo}|unset|repo view" in gh_calls
     assert f"{repo}|owner/project|pr merge" in gh_calls
+    # The merge is bound to the head pr-watch validated, so a push after validation
+    # makes GitHub refuse it rather than merge an unreviewed head (#919).
+    merges = [line for line in gh_calls.splitlines() if "|pr merge " in line]
+    assert merges == [
+        f"{repo}|owner/project|pr merge --repo owner/project 8 --squash "
+        "--delete-branch --match-head-commit reviewed-head"
+    ]
 
 
 @pytest.mark.evidence
@@ -15711,6 +15718,63 @@ def test_doc_budget_remedy_substitutes_the_budget_placeholder(tmp_path: Path) ->
 
     assert "--target-lines 3" in report, report
     assert "{budget}" not in report, "placeholder leaked into the operator-facing warning"
+
+
+def test_doc_budget_cli_warns_without_blocking_and_blocks_only_under_strict(
+    tmp_path: Path,
+) -> None:
+    """The tripwire's exit codes and quiet output, run the way a hook runs it (#919).
+
+    `runtime-parity.md`'s *Document-budget tripwire* row rests on the engine's
+    repository semantics being deterministic, and its docstring promises them: exit
+    0 whether or not a doc is over budget, 1 only under `--strict`, 2 for a missing
+    configured doc, and silence under `--quiet` while every doc is within budget.
+    The other doc-budget tests call `render` and `evaluate`; nothing ran `main`.
+    """
+    repo = tmp_path / "project"
+    config_path = repo / "config" / "dev-model.yaml"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(
+        """doc_budgets:
+  - path: plan.md
+    budget: 3
+    archive: history.md
+    remedy: "sweep it"
+""",
+        encoding="utf-8",
+    )
+    plan = repo / "plan.md"
+
+    def run(*flags: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(  # noqa: S603
+            [sys.executable, str(ENGINE_DIR / "check_doc_budget.py"), "--root", str(repo),
+             "--config", str(config_path), *flags],
+            capture_output=True, text=True, check=False, timeout=60,
+        )
+
+    plan.write_text("a\nb\nc\n", encoding="utf-8")
+    within = run("--quiet")
+    assert (within.returncode, within.stdout, within.stderr) == (0, "", "")
+    assert run("--quiet", "--strict").returncode == 0
+    assert run().stdout.startswith("✓ plan.md 3/3 lines")
+    assert json.loads(run("--json").stdout) == {
+        "any_over": False,
+        "docs": [{"path": "plan.md", "lines": 3, "budget": 3, "over": False}],
+    }
+
+    plan.write_text("a\nb\nc\nd\n", encoding="utf-8")
+    over = run("--quiet")
+    assert over.returncode == 0, "the tripwire warns; it must not block the session"
+    assert over.stdout.startswith("⚠ plan.md is 4 lines (budget ~3)"), over.stdout
+    strict = run("--quiet", "--strict")
+    assert strict.returncode == 1
+    assert strict.stdout == over.stdout
+    assert json.loads(run("--json").stdout)["any_over"] is True
+
+    plan.unlink()
+    missing = run("--quiet")
+    assert missing.returncode == 2
+    assert "configured doc not found" in missing.stderr
 
 
 def test_shipped_doc_budget_remedies_never_restate_the_budget_as_a_literal() -> None:

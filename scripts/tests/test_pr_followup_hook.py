@@ -173,7 +173,13 @@ def test_entrypoint_emits_scoped_read_only_policy_and_lifecycle_prerequisites(
     )
     assert process.returncode == 0, process.stderr
     assert process.stderr == ""
-    result = json.loads(process.stdout)["hookSpecificOutput"]
+    emitted = json.loads(process.stdout)
+    # Model-visible context only: no `systemMessage` or other display field, so no
+    # outcome rests on how a client presents one (`runtime-parity.md`, *Interactive
+    # hook-message presentation*, #608 and #919).
+    assert set(emitted) == {"hookSpecificOutput"}, sorted(emitted)
+    result = emitted["hookSpecificOutput"]
+    assert set(result) == {"hookEventName", "additionalContext"}, sorted(result)
     assert result["hookEventName"] == "PostToolUse"
     context = result["additionalContext"]
     _assert_read_only_continuation(context)

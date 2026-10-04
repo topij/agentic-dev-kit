@@ -306,6 +306,40 @@ def test_test_mode_completes_without_external_provider(tmp_path: Path, monkeypat
     assert loads_exact(state_path.read_bytes())["phase"] == "reserved"
 
 
+def test_test_mode_writes_nothing_through_providers_it_is_handed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test mode stays off the tracker and the forge even when both are supplied (#919).
+
+    The test above passes no tracker, so it cannot tell test mode's own refusal from
+    the absence of a provider. Here a tracker that would create and a forge are both
+    handed in, with finalization requested; neither may be asked to write.
+    """
+    root = repository(tmp_path)
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(tmp_path / "state-root"))
+    inbox_before = (root / "docs/kit-friction-log.md").read_bytes()
+    archive_before = (root / "docs/kit-friction-log-archive.md").read_bytes()
+    run("test", context="interactive", request=request(root), start=root)
+    state_path = tmp_path / "state-root/triage/triage-pipeline-state_test.json"
+    presented = loads_exact(state_path.read_bytes())
+    tracker = FakeTracker([], ProviderObservation("verified", {"number": 40}, {"number": 40}, "created-and-read-back"))
+    forge = FakeForge([])
+    result = run(
+        "test", context="interactive",
+        request={"approval": approval_for(presented), "finalize": True},
+        start=root, approval_context=approval_context(presented),
+        tracker=tracker, forge=forge, head_authority=forge,
+    )
+    assert result["outcome"] == "degraded-success"
+    assert tracker.calls == []
+    assert [call for call, _ in forge.calls if not call.startswith("authority:")] == []
+    state = loads_exact(state_path.read_bytes())
+    assert state["completion"]["route"] == "test-render"
+    assert [operation["status"] for operation in state["operations"]] == ["would-create"]
+    assert (root / "docs/kit-friction-log.md").read_bytes() == inbox_before
+    assert (root / "docs/kit-friction-log-archive.md").read_bytes() == archive_before
+
+
 def test_report_presents_historical_source_digest_and_safe_literal_fence(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -146,6 +146,36 @@ def test_sweep_set_is_union_of_verified_filed_and_explicit_archive_decisions() -
     assert sweep_ids(state) == {"TRI-01", "TRI-02"}
 
 
+@pytest.mark.parametrize(
+    "operations",
+    [
+        [],
+        [{"candidate_id": "TRI-01", "decision": "file", "status": "ambiguous"}],
+        [{"candidate_id": "TRI-01", "decision": "file", "status": "verified"}],
+    ],
+    ids=["unattempted", "ambiguous", "one-of-two-verified"],
+)
+def test_sweep_set_refuses_a_filed_decision_without_a_verified_operation(operations) -> None:
+    """No inbox entry leaves the inbox for a filing that was not read back (#919).
+
+    The test above covers the accounted batch only. Sweeping a filed entry whose
+    tracker write is unverified would archive it with no ticket behind it, which is
+    the partial-batch loss `runtime-parity.md`'s *Triage integrations* row says the
+    accounted sweep set prevents.
+    """
+    state = {
+        "decisions": [
+            {"candidate_id": "TRI-01", "decision": "file"},
+            {"candidate_id": "TRI-02", "decision": "file"},
+            {"candidate_id": "TRI-03", "decision": "archive"},
+        ],
+        "operations": operations,
+    }
+    with pytest.raises(TriageError, match="not authoritatively accounted") as raised:
+        sweep_ids(state)
+    assert raised.value.outcome == "operator-held"
+
+
 def test_fabricated_verified_watch_receipt_is_rejected_at_engine_boundary() -> None:
     head = "a" * 40
     url = "https://github.com/owner/repo/pull/17"
