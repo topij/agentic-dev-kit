@@ -36,6 +36,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--context", choices=("interactive", "unattended"), default="interactive")
     result.add_argument("--request", type=Path, help="RFC 8785 canonical request JSON")
     result.add_argument("--approval-context", type=Path, help="runtime-attested canonical approval identity/read-back")
+    result.add_argument("--legacy-gate-context", type=Path, help="runtime-attested historical gate owner evidence; interactive recovery only")
     trackers = result.add_mutually_exclusive_group()
     trackers.add_argument("--enable-github-tracker", action="store_true", help="allow an approved live GitHub tracker transition through gh")
     trackers.add_argument("--enable-tracker", action="store_true", help="select the approved tracker adapter from merged configuration")
@@ -86,15 +87,28 @@ def main(argv: list[str] | None = None) -> int:
             return 2
     tracker = None
     approval_context = None
-    if args.approval_context is not None:
+    legacy_gate_context = None
+    if args.legacy_gate_context is not None and (
+        args.entry not in {"recover", "test"} or args.context != "interactive"
+        or args.enable_tracker or args.enable_github_tracker or args.enable_github_forge
+    ):
+        print(dumps(hard_stop("historical gate evidence requires interactive recovery without external adapters")).decode())
+        return 2
+    for context_name, context_path in (("approval", args.approval_context), ("historical gate", args.legacy_gate_context)):
+        if context_path is None:
+            continue
         try:
-            _, context_raw = observe(args.approval_context)
+            _, context_raw = observe(context_path)
             if context_raw is None:
-                raise CanonicalError("approval context file is missing")
+                raise CanonicalError(f"{context_name} context file is missing")
             raw_context = loads_exact(context_raw)
             if not isinstance(raw_context, dict) or set(raw_context) != {"source", "operator_identity", "source_read_back"}:
                 raise CanonicalError("approval context has the wrong shape")
-            approval_context = ApprovalContext(**raw_context)
+            parsed_context = ApprovalContext(**raw_context)
+            if context_name == "approval":
+                approval_context = parsed_context
+            else:
+                legacy_gate_context = parsed_context
         except (OSError, CanonicalError, TriageError, TypeError) as exc:
             print(dumps(hard_stop(str(exc))).decode())
             return 2
@@ -113,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     authority = GitHubForge(configured.paths.repo, pr_watch=configured.paths.engine_dir / "pr_watch.py") if configured is not None else None
     forge = authority if args.enable_github_forge else None
-    result = run(args.entry, context=args.context, request=request, start=Path(__file__), tracker=tracker, approval_context=approval_context, forge=forge, head_authority=authority)
+    result = run(args.entry, context=args.context, request=request, start=Path(__file__), tracker=tracker, approval_context=approval_context, legacy_gate_context=legacy_gate_context, forge=forge, head_authority=authority)
     print(dumps(result).decode())
     return 0 if result["outcome"] in {"successful-completion", "degraded-success", "operator-held"} else 2
 
