@@ -66,6 +66,10 @@ def _git_read(repo: Any, *args: str) -> tuple[int, str]:
                     cleanup_detail += "; owned child termination unavailable"
             try:
                 process.communicate(timeout=1)
+            except UnicodeError:
+                # Decoding happens after reap and pipe closure. Keep the
+                # original failure and any cleanup uncertainty already observed.
+                pass
             except (OSError, subprocess.TimeoutExpired):
                 # A credential or SSH helper may detach from the owned group
                 # while retaining its pipes. Reaping Git cannot confirm those

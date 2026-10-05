@@ -844,3 +844,65 @@ def test_historical_provenance_invalid_git_remote_bytes_hold(tmp_path):
     config.write_bytes(config.read_bytes() + b'\n[remote "origin"]\n\turl = https://example.invalid/\xff\n')
     with pytest.raises(TriageError, match="provenance read is unavailable"):
         legacy_gate._git_read(root, "remote", "get-url", "origin")
+
+
+@pytest.mark.parametrize("initial", ["timeout", "read-error"])
+@pytest.mark.parametrize("group_denied", [False, True])
+def test_historical_cleanup_decoding_preserves_original_observations(tmp_path, monkeypatch, initial, group_denied):
+    root, store, gate_raw, state_raw, owner, _ = historical_fixture(tmp_path, monkeypatch)
+    original = legacy_gate.Popen
+    owned = []
+    ready = tmp_path / "child-ready"
+
+    def invalid_live_child(argv, **kwargs):
+        if argv[3] != "ls-remote":
+            return original(argv, **kwargs)
+        program = "import os,sys,time; from pathlib import Path; os.write(1,bytes([255])); Path(sys.argv[1]).write_text('ready'); time.sleep(60)"
+        child = original([sys.executable, "-c", program, str(ready)], **kwargs)
+        owned.append(child)
+        deadline = time.monotonic() + 5
+        while not ready.exists() and time.monotonic() < deadline:
+            time.sleep(.01)
+        assert ready.exists() and child.poll() is None
+        if initial == "read-error":
+            communicate = child.communicate
+            reads = []
+
+            def read_error(*, timeout):
+                reads.append(timeout)
+                if len(reads) == 1:
+                    raise OSError("injected initial pipe read error")
+                return communicate(timeout=timeout)
+
+            child.communicate = read_error
+        return child
+
+    def deny_owned_group(pid, sig):
+        assert owned and pid == owned[-1].pid
+        raise PermissionError("injected owned group denial")
+
+    monkeypatch.setattr(legacy_gate, "Popen", invalid_live_child)
+    if group_denied:
+        monkeypatch.setattr(legacy_gate.os, "killpg", deny_owned_group)
+    monkeypatch.setattr(legacy_gate, "PROVENANCE_TIMEOUT_SECONDS", .05)
+    try:
+        result = engine.run("recover", context="interactive", start=root,
+                            legacy_gate_context=ApprovalContext(**loads_exact(owner.read_bytes())))
+        assert result["outcome"] == "operator-held"
+        assert owned and all(child.poll() is not None for child in owned)
+        assert all(child.stdout.closed and child.stderr.closed for child in owned)
+        assert store.gate_path.read_bytes() == gate_raw and store.state_path.read_bytes() == state_raw
+        assert not store.recovery_path(digest_bytes(gate_raw)).exists()
+        if group_denied:
+            assert "process-group cleanup unavailable; descendant cleanup uncertain" in result["detail"]
+        if initial == "timeout":
+            assert "provenance read timed out" in result["detail"]
+        else:
+            assert "provenance read is unavailable" in result["detail"]
+    finally:
+        for child in owned:
+            if child.poll() is None:
+                child.kill()
+            child.wait(timeout=5)
+            child.stdout.close()
+            child.stderr.close()
