@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import replace
+from datetime import date
 from pathlib import PurePath
 from typing import Any
 
@@ -106,6 +107,17 @@ def rejection_proof(
     ):
         _held("project rejection invocation is outside the retained installed route")
     try:
+        if date.fromisoformat(invocation["date"]).isoformat() != invocation["date"]:
+            _held("project rejection invocation date is not canonical")
+    except ValueError as exc:
+        raise TriageError("project rejection invocation date is invalid", outcome="operator-held") from exc
+    # The validated gate binding identifies the exact state-write root, including
+    # a configured sandbox. A matching trailing path alone does not bind a freeze.
+    frozen_root = PurePath(state["gate_binding"]["gate_path"])
+    for _ in PurePath(settings.paths.gate_fragment.replace("{mode}", "live")).parts[1:]:
+        frozen_root = frozen_root.parent
+    expected_frozen = str(frozen_root.joinpath(*PurePath(state["frozen_snapshot"]["path"]).parts[1:]))
+    try:
         stdout = decode_bytes(proof["stdout_raw"])
         response = loads_exact(stdout.removesuffix(b"\n"))
     except (CanonicalError, TypeError, ValueError) as exc:
@@ -116,9 +128,7 @@ def rejection_proof(
         or response.get("execution_mode") != "live" or response.get("detail") != PROJECT_GUARD_DETAIL
         or response.get("verified_tracker_identifiers") != []
         or response.get("report") != proposal["report_binding"]["path"]
-        or not isinstance(response.get("frozen_snapshot"), str)
-        or not PurePath(response["frozen_snapshot"]).is_absolute()
-        or PurePath(response["frozen_snapshot"]).parts[-len(PurePath(state["frozen_snapshot"]["path"]).parts[1:]):] != PurePath(state["frozen_snapshot"]["path"]).parts[1:]
+        or response.get("frozen_snapshot") != expected_frozen
         or response.get("candidate_index") != state["frozen_snapshot"]["content"]["candidate_index"]
     ):
         _held("terminal invocation does not establish the declared pre-create guard")

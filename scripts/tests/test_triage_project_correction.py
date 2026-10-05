@@ -144,7 +144,7 @@ def test_correction_preserves_failed_bytes_requires_new_approval_and_creates_onc
     assert corrected["proposal_correction"]["action_core_digest"] == planned["recovery_plan"]["action_core_digest"]
 
 
-@pytest.mark.parametrize("fault", ["no-observer", "unknown-adapter", "wrong-state", "wrong-route", "wrong-output", "wrong-report", "wrong-freeze", "wrong-index", "wrong-revision", "wrong-operator", "uncertain-attempt", "earlier-attempt", "unattended", "request-proof", "mixed-finalize"])
+@pytest.mark.parametrize("fault", ["no-observer", "unknown-adapter", "wrong-state", "wrong-route", "wrong-output", "wrong-report", "wrong-freeze", "same-suffix-foreign-freeze", "wrong-index", "wrong-date", "invalid-calendar-date", "wrong-revision", "wrong-operator", "uncertain-attempt", "earlier-attempt", "unattended", "request-proof", "mixed-finalize"])
 def test_correction_refuses_uncertainty_and_untrusted_authority(tmp_path, monkeypatch, fault):
     root, path, _, tracker, transport, observer, raw, _, _ = rejected_run(tmp_path, monkeypatch)
     proof = deepcopy(observer.source_read_back)
@@ -158,7 +158,7 @@ def test_correction_refuses_uncertainty_and_untrusted_authority(tmp_path, monkey
         proof["state_digest"] = "a" * 64
     elif fault == "wrong-route":
         proof["route"] = "caller-says-no-write"
-    elif fault in {"wrong-output", "wrong-report", "wrong-freeze", "wrong-index"}:
+    elif fault in {"wrong-output", "wrong-report", "wrong-freeze", "same-suffix-foreign-freeze", "wrong-index"}:
         output = loads_exact(decode_bytes(proof["stdout_raw"]).removesuffix(b"\n"))
         if fault == "wrong-output":
             output["detail"] = "create outcome unknown"
@@ -166,11 +166,15 @@ def test_correction_refuses_uncertainty_and_untrusted_authority(tmp_path, monkey
             output["report"] = "/another/run.md"
         elif fault == "wrong-freeze":
             output["frozen_snapshot"] = "/another/freeze.json"
+        elif fault == "same-suffix-foreign-freeze":
+            output["frozen_snapshot"] = "/foreign-prefix" + output["frozen_snapshot"]
         else:
             output["candidate_index"] = []
         changed = dumps(output) + b"\n"
         proof["stdout_raw"] = encode_bytes(changed)
         proof["invocation"]["stdout_sha256"] = digest_bytes(changed)
+    elif fault in {"wrong-date", "invalid-calendar-date"}:
+        proof["invocation"]["date"] = "definitely-not-a-date" if fault == "wrong-date" else "2026-02-30"
     elif fault == "wrong-revision":
         proof["invocation"]["revision"] = "a" * 40
     elif fault in {"uncertain-attempt", "earlier-attempt"}:
@@ -251,7 +255,7 @@ def test_any_marker_landing_holds_correction_even_after_action_approval(tmp_path
 
 
 @pytest.mark.parametrize("drift", ["frozen", "configuration", "pagination", "stale-approval", "report"])
-def test_correction_revalidates_every_action_binding(tmp_path, monkeypatch, drift):
+def test_correction_revalidates_mutated_action_inputs(tmp_path, monkeypatch, drift):
     root, path, draft, tracker, transport, observer, raw, _, _ = rejected_run(tmp_path, monkeypatch)
     _, approved_request, approved_context = plan_and_approval(root, tracker, observer)
     if drift == "frozen":
@@ -397,6 +401,66 @@ def test_receipt_revalidates_retained_history_and_intent(tmp_path, monkeypatch, 
     receipt["action_core_digest"] = digest(core)
     receipt["approval"]["core_digest"] = digest(core)
     with pytest.raises(TriageError):
+        canonical_state(dumps(state), settings=load_settings(root), mode="live")
+
+
+def test_corrected_receipt_rejects_rehashed_current_title_tamper(tmp_path, monkeypatch):
+    from triage.model import TriageError
+
+    root, path, _, tracker, _, observer, _, _, _ = rejected_run(tmp_path, monkeypatch)
+    _, approved, context = plan_and_approval(root, tracker, observer)
+    engine.run(
+        "correct-project",
+        context="interactive",
+        start=root,
+        request=approved,
+        tracker=tracker,
+        rejection_context=observer,
+        approval_context=context,
+    )
+    state = loads_exact(path.read_bytes())
+    proposal = state["proposal_payloads"][0]
+    core = {**proposal["payload_core"], "title": "Tampered current title"}
+    core_digest = digest(core)
+    marker = (
+        f"<!-- triage-payload:{state['run_identity']['session']}:"
+        f"{proposal['candidate_id']}:{core_digest} -->"
+    )
+    payload = {
+        **proposal["payload"],
+        "title": core["title"],
+        "body": core["body_without_marker"].rstrip() + "\n\n" + marker,
+    }
+    changed = {
+        **proposal,
+        "payload_core": core,
+        "payload_core_digest": core_digest,
+        "marker": marker,
+        "payload": payload,
+        "payload_digest": digest(payload),
+    }
+    proposals = [changed, *deepcopy(state["proposal_payloads"][1:])]
+    report_core = {
+        "run_identity": state["run_identity"],
+        "frozen_inbox_digest": state["frozen_inbox_digest"],
+        "proposals": [
+            {
+                "candidate_id": item["candidate_id"],
+                "source_block_digest": item["source_block_digest"],
+                "payload_digest": item["payload_digest"],
+            }
+            for item in proposals
+        ],
+    }
+    binding = {
+        "path": proposal["report_binding"]["path"],
+        "report_core": report_core,
+        "report_core_digest": digest(report_core),
+    }
+    proposals = [{**item, "report_binding": binding} for item in proposals]
+    state["proposal_payloads"] = proposals
+    state["proposal_payload_digests"] = [item["payload_digest"] for item in proposals]
+    with pytest.raises(TriageError, match="changed beyond"):
         canonical_state(dumps(state), settings=load_settings(root), mode="live")
 
 

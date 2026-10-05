@@ -816,7 +816,7 @@ arguments and an unrelated program hold. For a runtime-local invoker, the truste
 observer must audit the launcher and delegation chain, retain the actual launcher argv
 and its source evidence independently, and normalize only the observed installed CLI
 delegation; normalization is not inferred from argv tokens. The invocation also binds
-the exact revision, repository directory, date, exit code and stdout SHA-256.
+the exact revision, repository directory, canonical ISO date, exit code and stdout SHA-256.
 Rejection evidence enables planning only, never mutation authority.
 
 Under the normal gate, planning validates the immutable freeze and fully pages original
