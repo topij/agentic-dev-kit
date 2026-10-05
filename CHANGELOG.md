@@ -42,6 +42,16 @@ starts.
 
 ---
 
+## #962 — Undecodable historical provenance hold
+
+Refresh `scripts/lib/triage/legacy_gate.py` and
+`scripts/tests/test_triage_legacy_gate.py` together. Decoding failures reached
+through the historical provenance reader return `operator-held`, retaining
+cleanup uncertainty already observed. Preserve blocking artifacts and obtain
+exact recovery approval after readable provenance is available. Malformed origin
+identity can still fail before historical recovery; do not infer a structured hold
+or normalize that identity.
+
 ## #961 — Historical provenance read-error cleanup
 
 Refresh `scripts/lib/triage/legacy_gate.py` and
