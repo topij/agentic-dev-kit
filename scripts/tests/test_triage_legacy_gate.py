@@ -16,7 +16,7 @@ from triage import engine, legacy_gate
 from triage.approval import ApprovalContext
 from triage.canonical import digest as canonical_digest
 from triage.canonical import digest_bytes, dumps, loads_exact
-from triage.model import load_settings
+from triage.model import TriageError, load_settings
 from triage.storage import ArtifactStore
 
 
@@ -329,6 +329,8 @@ def test_historical_quarantine_requires_the_captured_operator_identity(tmp_path,
     plan = invoke(root, owner)["recovery_plan"]
     request, context = approval_files(tmp_path, plan["action_core_digest"])
     approval_request = loads_exact(request.read_bytes())
+    bundle_path = store.recovery_path(digest_bytes(gate_raw))
+    captured_bundle = bundle_path.read_bytes()
     approval_request["recovery_approval"]["approver_identity"] = "different-operator"
     approval_context = loads_exact(context.read_bytes())
     approval_context["operator_identity"] = "different-operator"
@@ -339,6 +341,11 @@ def test_historical_quarantine_requires_the_captured_operator_identity(tmp_path,
     assert result["outcome"] == "operator-held" and "approval identity" in result["detail"]
     assert store.gate_path.read_bytes() == gate_raw and store.state_path.read_bytes() == state_raw
     assert not Path(plan["action_core"]["quarantine_path"]).exists()
+    assert bundle_path.read_bytes() == captured_bundle
+    request, context = approval_files(tmp_path, plan["action_core_digest"])
+    retried = invoke(root, owner, request=request, approval=context)
+    assert retried["detail"] == "recovered-safe-to-restart"
+    assert Path(plan["action_core"]["quarantine_path"]).read_bytes() == state_raw
 
 
 def test_historical_action_cannot_omit_owner_evidence_with_rehashed_envelope(tmp_path, monkeypatch):
@@ -546,6 +553,76 @@ def test_historical_provenance_timeout_holds_before_capture(tmp_path, monkeypatc
         while any(helper_running(pid) for pid in helper_pids) and time.monotonic() < deadline:
             time.sleep(0.025)
         assert all(not helper_running(pid) for pid in helper_pids), "owned test helper did not reach terminal state"
+
+
+def test_denied_group_cleanup_reaps_owned_provenance_child(tmp_path, monkeypatch):
+    root, store, gate_raw, state_raw, owner_path, _ = historical_fixture(tmp_path, monkeypatch)
+    owner = ApprovalContext(**loads_exact(owner_path.read_bytes()))
+    original_popen = legacy_gate.Popen
+    children = []
+
+    def stall_remote(argv, **kwargs):
+        if argv[3] == "ls-remote":
+            child = original_popen([sys.executable, "-c", "import time; time.sleep(60)"], **kwargs)
+            children.append(child)
+            return child
+        return original_popen(argv, **kwargs)
+
+    def deny_group(*args):
+        raise PermissionError("group signaling denied")
+
+    monkeypatch.setattr(legacy_gate, "Popen", stall_remote)
+    monkeypatch.setattr(legacy_gate.os, "killpg", deny_group)
+    monkeypatch.setattr(legacy_gate, "PROVENANCE_TIMEOUT_SECONDS", 0.05)
+    try:
+        began = time.monotonic()
+        result = engine.run("recover", context="interactive", start=root, legacy_gate_context=owner)
+        assert time.monotonic() - began < 5
+        assert result["outcome"] == "operator-held"
+        assert "descendant cleanup uncertain" in result["detail"]
+        assert children and all(child.poll() is not None for child in children)
+        assert all(child.stdout.closed and child.stderr.closed for child in children)
+        assert store.gate_path.read_bytes() == gate_raw and store.state_path.read_bytes() == state_raw
+        assert not store.recovery_path(digest_bytes(gate_raw)).exists()
+    finally:
+        for child in children:
+            if child.poll() is None:
+                child.kill()
+            child.wait(timeout=10)
+
+
+def test_denied_child_cleanup_closes_pipes_and_holds_uncertainty(tmp_path, monkeypatch):
+    import io
+
+    class DeniedChild:
+        pid = 123
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        killed = False
+        waited = False
+
+        def communicate(self, *, timeout):
+            raise subprocess.TimeoutExpired("git", timeout)
+
+        def kill(self):
+            self.killed = True
+            raise PermissionError("child signaling denied")
+
+        def wait(self, *, timeout):
+            self.waited = True
+            raise subprocess.TimeoutExpired("git", timeout)
+
+    child = DeniedChild()
+
+    def deny_group(*args):
+        raise PermissionError("group signaling denied")
+
+    monkeypatch.setattr(legacy_gate, "Popen", lambda *args, **kwargs: child)
+    monkeypatch.setattr(legacy_gate.os, "killpg", deny_group)
+    with pytest.raises(TriageError, match="owned child termination unconfirmed") as raised:
+        legacy_gate._git_read(tmp_path, "remote", "get-url", "origin")
+    assert raised.value.outcome == "operator-held"
+    assert child.killed and child.waited and child.stdout.closed and child.stderr.closed
 
 
 def test_rehashed_historical_action_with_owner_evidence_cannot_change(tmp_path, monkeypatch):

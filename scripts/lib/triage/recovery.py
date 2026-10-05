@@ -432,6 +432,10 @@ def prepare_state_action(
     action_core = plan["action_core"]
     action_digest = plan["action_core_digest"]
     approved = _approval(action_digest, approval, operator=operator)
+    if core.get("legacy_gate_owner_evidence") is not None:
+        # Reject a foreign approver before publishing preparation; otherwise the
+        # rejected envelope prevents the captured operator from retrying.
+        _approval(action_digest, approved, operator=core["legacy_gate_owner_evidence"]["operator_identity"])
     prepared = {
         "kind": "state-present-prepared",
         "schema_version": 1,
