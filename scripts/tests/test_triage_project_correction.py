@@ -404,6 +404,54 @@ def test_receipt_revalidates_retained_history_and_intent(tmp_path, monkeypatch, 
         canonical_state(dumps(state), settings=load_settings(root), mode="live")
 
 
+@pytest.mark.parametrize("field", ["title", "body_without_marker", "labels"])
+def test_retained_correction_rejects_fully_rehashed_non_project_change(tmp_path, monkeypatch, field):
+    from triage.model import TriageError
+
+    root, path, _, tracker, _, observer, _, _, _ = rejected_run(tmp_path, monkeypatch)
+    _, approved, context = plan_and_approval(root, tracker, observer)
+    engine.run("correct-project", context="interactive", start=root, request=approved,
+               tracker=tracker, rejection_context=observer, approval_context=context)
+    state = loads_exact(path.read_bytes())
+    receipt = state["proposal_correction"]
+    core = receipt["action_core"]
+    old = loads_exact(decode_bytes(core["captured_state_raw"]))
+    supplied = [
+        {"candidate_id": item["candidate_id"], "source_block_digest": item["source_block_digest"],
+         **deepcopy(item["payload_core"])}
+        for item in core["corrected_proposal_payloads"]
+    ]
+    if field == "labels":
+        supplied[0][field].append("additional-label")
+    else:
+        supplied[0][field] += " tampered retained intent"
+    proposals, payload_digests, _ = engine._proposal_records(
+        engine.parse(decode_bytes(old["frozen_snapshot"]["raw"])), supplied,
+        run_identity=old["run_identity"], frozen_digest=old["frozen_inbox_digest"],
+        report_path=Path(old["proposal_payloads"][0]["report_binding"]["path"]),
+        configured_project=core["destination"]["project"],
+    )
+    initial = {
+        **old, "phase": "awaiting-approval", "proposal_payloads": proposals,
+        "proposal_payload_digests": payload_digests, "approval": None, "decisions": [], "attempts": [],
+    }
+    initial.pop("operations")
+    # Generic proposal validation accepts this self-consistent hostile fixture;
+    # only the retained project-only intent boundary should reject it.
+    engine.validate_state(initial, settings=load_settings(root), mode="live")
+    report = engine._report_text(initial, core["report_capabilities"], "operator-held", immutable_correction=True)
+    core.update(
+        corrected_proposal_payloads=proposals, corrected_proposal_set_digest=digest(payload_digests),
+        corrected_report_raw=encode_bytes(report), corrected_report_digest=digest_bytes(report),
+    )
+    receipt["action_core_digest"] = digest(core)
+    receipt["approval"]["core_digest"] = digest(core)
+    state["proposal_payloads"] = deepcopy(proposals)
+    state["proposal_payload_digests"] = payload_digests
+    with pytest.raises(TriageError, match="beyond the configured project"):
+        canonical_state(dumps(state), settings=load_settings(root), mode="live")
+
+
 def test_approved_correction_receipt_remains_readable_under_a_later_interpreter(tmp_path, monkeypatch):
     root, path, _, tracker, _, observer, _, _, _ = rejected_run(tmp_path, monkeypatch)
     _, approved, context = plan_and_approval(root, tracker, observer)
