@@ -550,6 +550,64 @@ def test_corrected_report_remains_immutable_through_noop_and_filing(tmp_path, mo
     assert transport.calls == calls
 
 
+def test_completed_corrected_run_still_checks_immutable_report(tmp_path, monkeypatch):
+    root, path, draft, tracker, _, observer, _, _, _ = rejected_run(tmp_path, monkeypatch)
+    _, correction_request, correction_context = plan_and_approval(root, tracker, observer)
+    engine.run(
+        "correct-project",
+        context="interactive",
+        start=root,
+        request=correction_request,
+        tracker=tracker,
+        rejection_context=observer,
+        approval_context=correction_context,
+    )
+    corrected = loads_exact(path.read_bytes())
+    completed = engine.run(
+        "resume",
+        context="interactive",
+        start=root,
+        request={"approval": approval_for(corrected, "cancel")},
+        approval_context=approval_context(corrected, "cancel"),
+        tracker=tracker,
+        head_authority=FakeForge([]),
+    )
+    assert completed["detail"] == "active session resumed"
+    assert loads_exact(path.read_bytes())["phase"] == "completed"
+
+    report = Path(draft["report"])
+    report.write_bytes(b"tampered after completed correction\n")
+    retained = path.read_bytes()
+    replay = engine.run("resume", context="interactive", start=root, tracker=tracker)
+
+    assert replay["outcome"] == "operator-held"
+    assert "report changed" in replay["detail"]
+    assert report.read_bytes() == b"tampered after completed correction\n"
+    assert path.read_bytes() == retained
+
+
+@pytest.mark.parametrize("phase", ["forge-finalize", "archive-sweep", "completed"])
+def test_corrected_report_stays_immutable_in_finalization(tmp_path, monkeypatch, phase):
+    root, path, draft, tracker, _, observer, _, _, _ = rejected_run(
+        tmp_path, monkeypatch
+    )
+    _, approved, context = plan_and_approval(root, tracker, observer)
+    engine.run(
+        "correct-project",
+        context="interactive",
+        start=root,
+        request=approved,
+        tracker=tracker,
+        rejection_context=observer,
+        approval_context=context,
+    )
+    report = Path(draft["report"])
+    presentation = report.read_bytes()
+    state = loads_exact(path.read_bytes())
+    state["phase"] = phase
+    engine._write_report(report, state, engine._capabilities(), "operator-held")
+    assert report.read_bytes() == presentation
+
 def installed_cli(root, tmp_path, *, entry="correct-project", request_data=None, context=None, observer=None, cutpoint="none"):
     argv = [entry, "--context", "interactive"]
     for flag, value in (("--request", request_data), ("--approval-context", context), ("--rejection-context", observer)):

@@ -2099,6 +2099,8 @@ def run(
                     candidate_index=state["frozen_snapshot"]["content"]["candidate_index"],
                     **_pr_result_fields(state),
                 )
+            if "proposal_correction" in state:
+                _resume_project_correction_report(store, lease, state)
             if state["phase"] == "completed":
                 completion = state["completion"]
                 lease.release()
@@ -2115,8 +2117,6 @@ def run(
                     candidate_index=state["frozen_snapshot"]["content"]["candidate_index"],
                     **_pr_result_fields(state),
                 )
-            if "proposal_correction" in state:
-                _resume_project_correction_report(store, lease, state)
             if state["phase"] == "awaiting-approval" and isinstance(request.get("approval"), dict):
                 _approval_authority(state, request, approval_context)
             state, state_digest = _rebind(store, lease, state, state_raw)
