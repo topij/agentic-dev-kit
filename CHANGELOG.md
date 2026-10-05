@@ -42,6 +42,13 @@ starts.
 
 ---
 
+## #961 — Historical provenance read-error cleanup
+
+Refresh `scripts/lib/triage/legacy_gate.py` and
+`scripts/tests/test_triage_legacy_gate.py` together. Historical recovery now applies its existing
+bounded owned-process cleanup after an initial pipe-read error, then returns `operator-held` with the unavailable diagnostic. Preserve the
+blocking artifacts and exact recovery approval boundary.
+
 ## #959 — Detached provenance helper cleanup uncertainty
 
 Refresh `scripts/lib/triage/legacy_gate.py` and

@@ -616,6 +616,52 @@ def test_historical_provenance_timeout_holds_before_capture(tmp_path, monkeypatc
 
 
 
+def test_historical_provenance_read_error_reaps_owned_child_before_capture(tmp_path, monkeypatch):
+    root, store, gate_raw, state_raw, owner_path, _ = historical_fixture(tmp_path, monkeypatch)
+    owner = ApprovalContext(**loads_exact(owner_path.read_bytes()))
+    original_popen = legacy_gate.Popen
+    children = []
+    reads = []
+
+    def fail_selected_read(argv, **kwargs):
+        if argv[3] != "ls-remote":
+            return original_popen(argv, **kwargs)
+        child = original_popen([sys.executable, "-c", "import time; time.sleep(60)"], **kwargs)
+        children.append(child)
+        communicate = child.communicate
+
+        def read_error(*, timeout):
+            reads.append(timeout)
+            if len(reads) == 1:
+                assert child.poll() is None, "the owned child must be alive when its read fails"
+                raise OSError("injected provenance pipe read failure")
+            return communicate(timeout=timeout)
+
+        child.communicate = read_error
+        return child
+
+    monkeypatch.setattr(legacy_gate, "Popen", fail_selected_read)
+    started = time.monotonic()
+    try:
+        result = engine.run("recover", context="interactive", request={}, start=root, legacy_gate_context=owner)
+        assert result["outcome"] == "operator-held"
+        assert "historical gate provenance read is unavailable" in result["detail"]
+        assert time.monotonic() - started < 5
+        assert len(children) == 1
+        child = children[0]
+        assert child.poll() is not None, "the owned provenance child survived its read error"
+        assert child.stdout.closed and child.stderr.closed
+        assert store.gate_path.read_bytes() == gate_raw and store.state_path.read_bytes() == state_raw
+        assert not store.recovery_path(digest_bytes(gate_raw)).exists()
+    finally:
+        for child in children:
+            if child.poll() is None:
+                child.kill()
+            child.wait(timeout=5)
+            child.stdout.close()
+            child.stderr.close()
+
+
 def test_detached_provenance_helper_holds_cleanup_uncertainty_before_capture(tmp_path, monkeypatch):
     root, store, gate_raw, state_raw, owner_path, _ = historical_fixture(tmp_path, monkeypatch)
     owner = ApprovalContext(**loads_exact(owner_path.read_bytes()))
