@@ -20,6 +20,35 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-05 (cs-toolkit LIVE recovery and project-name hold, in Codex)
+
+The operator approved the installed recovery action
+`1217af39a6eedcd2a4697bb34952a8941014bedd801de29bd46bfc3199094f2d`.
+The installed invoker applied it and the retained verification helper read back
+the exact quarantine bytes, original filesystem identities and safe-restart receipt.
+Commands, directory, revision and date are retained in the recovery receipts under
+`state/review-evidence/cs-toolkit-linear-acceptance_2026-10-04/finalize-decisions/`.
+The primary adopter advanced to actual main
+`bbcd3f167185518ff4860c6c80d523657452aef0`; its installed triage contract and
+kit pin `66a8044865e5ef43d633270c2ce224827de3aa35` were preserved.
+
+The replacement LIVE run froze session `62970e59c292424c8db6b8ae75f3e81e`.
+The operator selected TRI-01 for preparation, parked the other candidates, then
+approved its complete exact Linear payload. I incorrectly prepared the project
+as `CS-ToolkitDev`; configuration and Linear use `CS-Toolkit Dev`. The adapter
+rejected the payload before its create mutation, after the engine had persisted
+an `attempting` record. The complete mutation-prohibited marker search found no
+matching issue; its command, revision, date and directory are retained in
+`live-62970e59-project-mismatch-marker-readback.json`. No identifier was returned.
+Live acceptance remains incomplete, with the valid in-flight state preserved.
+The installed workflow supplies no project correction for that phase; no raw
+state edit, replacement freeze or source sweep was attempted. [#6](https://github.com/topij/agentic-dev-kit/issues/6#issuecomment-5995157879)
+records the hold and correction. Resume from
+`RESUME-LIVE-PROJECT-MISMATCH-62970e59.md` in the evidence directory.
+The separate frozen kit-friction archive/park decision remains pending.
+
+______________________________________________________________________
+
 ## Session — 2026-10-05 (cs-toolkit recovery repair delivery, in Codex)
 
 **Shipped upstream.** Historical gate compatibility merged through #952
@@ -270,42 +299,6 @@ destination configuration, API credentials and exact live payload approval remai
 
 ______________________________________________________________________
 
-## Session — 2026-10-03 (Delta-pass named draws, #921, in Claude Code)
-
-**Shipped.** PR #934, squash `41beacb8`: `panel_prompt.py` takes a delta pass's two draws
-as `--draw-prose-class` and `--draw-safety-critical`, refuses one without the other, and
-names the verdict line each must begin with. The LOW rule's repair boundary goes to
-`--repair-boundary`, and `--delta-draws` is refused with a pointer to the three flags.
-The CHANGELOG entry is under #934. #921 stays open for its other half: a cockpit-side
-check that each lens's verdict lines carry both names.
-
-**Decided by the operator.** Start #921 from the session-start pick, merge #934, and
-merge this wrap-up when clean.
-
-**Review.** CodeRabbit skipped #934, so the fallback review ran: one adversarial lens as
-the full pass at `53b4569`, then one correctness lens as a LOW delta pass over the repair
-`e9d1c4b`. The delta prompt was the first rendered with the new flags, and its lens
-returned both named verdict lines. Each round's disposition and the delta's verdict lines
-are posted on #934.
-
-**Verified.** `env -u FORCE_COLOR make test` at `53b4569d86e4eca043cc1e95382673796c47df2f`
-on 2026-10-03, in `/Users/topi/Coding/agentic-dev-kit`, printed `4068 passed, 1 skipped in
-611.11s (0:10:11)`. The repair `e9d1c4b` had focused runs only, recorded in #934's body.
-`git diff --stat e9d1c4b 41beacb8` printed nothing, and `gh run list --commit
-41beacb8fa54e290c83a04c7617fcf7a0d07c490` showed the `Test` workflow completed `success`.
-
-**Not established.** The repair's focused runs ran on the uncommitted tree, so #934's
-body stamps no revision for them, and `pr_watch` reported `verification_stamp_behind_head`
-at `e9d1c4b`.
-
-**Answered, not acted on.** The operator asked when to run the final Codex validation and
-when to upgrade cs-toolkit. The answer given: upgrade cs-toolkit soon, because its pin
-`e698ec47` predates #740 and #914 stops authorized work there; settle cs-toolkit's
-`review.safety_critical_paths` first (#930); and run the upgrade in a Codex session so it
-doubles as the Codex validation. No workstream records this yet.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -374,15 +367,15 @@ alone, so a missing frozen artifact dead-ends it.
 **Status:** cs-toolkit installation [#2535](https://github.com/in-parallel-oy/cs-toolkit/pull/2535)
 merged as `33816d5f9558024796fe08552e41164440ace88d` and was delivered with
 kit pin `66a8044865e5ef43d633270c2ce224827de3aa35`. The retained TEST route
-completed. Installed recovery captured the historical live reservation and
-presented exact action digest
-`1217af39a6eedcd2a4697bb34952a8941014bedd801de29bd46bfc3199094f2d`;
-its decision remains pending. The operator established the owner facts and approved
-installation/recovery/payload scope and clean merges. Actual action and live payload
-bindings remain separate. **Owner:** [#6](https://github.com/topij/agentic-dev-kit/issues/6).
+completed. Exact installed recovery was approved and applied. LIVE session
+`62970e59c292424c8db6b8ae75f3e81e` received exact TRI-01 filing approval,
+but the author-prepared project-name mismatch was rejected before create. The
+valid tracker-write state retains its unsettled attempt; no raw correction or
+replacement freeze was made. Live acceptance is incomplete.
+**Owner:** [#6](https://github.com/topij/agentic-dev-kit/issues/6#issuecomment-5995157879).
 
-▶ Next: Resume installed recovery from the exact displayed action and the operator's
-bound decision in the retained evidence; preserve quarantine bytes and read back the
-safe-restart receipt. Then freeze a fresh live run, present its complete Linear payload
-and immutable identity for exact approval, and read back approved writes. Preserve root
-legacy artifacts, host automation and credentials; append acceptance evidence to #6.
+▶ Next: Read `RESUME-LIVE-PROJECT-MISMATCH-62970e59.md` in the retained
+acceptance evidence and resolve the supported no-write reconciliation/proposal
+correction design on #6. Preserve the immutable freeze, approvals, attempt and
+quarantines; a corrected payload needs fresh exact approval. Leave the separate
+kit-friction decision, root legacy artifacts, host automation and credentials alone.
