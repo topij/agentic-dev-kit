@@ -42,6 +42,15 @@ starts.
 
 ---
 
+## #957 — Historical recovery rejection and cleanup
+
+Refresh `scripts/lib/triage/recovery.py`, `legacy_gate.py`, and
+`scripts/tests/test_triage_legacy_gate.py` together. A rejected foreign approver
+leaves the capture reusable by the captured operator. Provenance timeout reports
+retain `operator-held` and identify uncertain cleanup when signaling is denied.
+Preserve already-disputed bundles for operator recovery, existing declines and
+the action-specific approval boundary.
+
 ## #955 — Bounded historical triage provenance reads
 
 Refresh `scripts/lib/triage/legacy_gate.py` and
