@@ -42,6 +42,14 @@ starts.
 
 ---
 
+## #962 — Undecodable historical provenance hold
+
+Refresh `scripts/lib/triage/legacy_gate.py` and
+`scripts/tests/test_triage_legacy_gate.py` together. Historical recovery now
+returns `operator-held` when provenance output cannot be decoded. Preserve the
+blocking artifacts and obtain exact recovery approval after readable provenance
+is available; unreadable repository identity is never normalized for recovery.
+
 ## #961 — Historical provenance read-error cleanup
 
 Refresh `scripts/lib/triage/legacy_gate.py` and
