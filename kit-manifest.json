@@ -710,7 +710,7 @@
     },
     "scripts/tests/test_triage_legacy_gate.py": {
       "role": "test",
-      "sha256": "15d2ef57bc289bc3eec75c9853e19960b5eae14f125fb4ad031af1788c2ce751"
+      "sha256": "d61eb65786e687e4a57b228f04205054b0b9524a7e137dc9e60896ad472efa6b"
     },
     "scripts/tests/test_triage_providers.py": {
       "role": "test",
