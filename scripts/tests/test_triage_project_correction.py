@@ -18,7 +18,7 @@ from test_triage_engine import (
     request,
 )
 from test_triage_providers import LinearIssues, LinearTransport
-from triage import engine
+from triage import engine, project_correction
 from triage.approval import ApprovalContext
 from triage.canonical import decode_bytes, digest, digest_bytes, dumps, encode_bytes, loads_exact
 from triage.model import canonical_state, load_settings
@@ -608,6 +608,56 @@ def test_corrected_report_stays_immutable_in_finalization(tmp_path, monkeypatch,
     engine._write_report(report, state, engine._capabilities(), "operator-held")
     assert report.read_bytes() == presentation
 
+def completed_corrected(root_factory_tmp_path, monkeypatch):
+    tmp_path = root_factory_tmp_path
+    root, path, _, tracker, _, observer, _, _, _ = rejected_run(tmp_path, monkeypatch)
+    _, request, context = plan_and_approval(root, tracker, observer)
+    engine.run(
+        "correct-project",
+        context="interactive",
+        start=root,
+        request=request,
+        tracker=tracker,
+        rejection_context=observer,
+        approval_context=context,
+    )
+    corrected = loads_exact(path.read_bytes())
+    completed = engine.run(
+        "resume",
+        context="interactive",
+        start=root,
+        request={"approval": approval_for(corrected, "cancel")},
+        approval_context=approval_context(corrected, "cancel"),
+        tracker=tracker,
+        head_authority=FakeForge([]),
+    )
+    assert completed["detail"] == "active session resumed"
+    assert loads_exact(path.read_bytes())["phase"] == "completed"
+    return root
+
+
+def test_completed_corrected_state_retires_without_guard_contract_change(tmp_path, monkeypatch):
+    root = completed_corrected(tmp_path, monkeypatch)
+    result = engine.run("new", context="interactive", start=root, request={})
+    assert result["detail"].startswith("retired completed state to "), result
+
+
+def test_completed_corrected_state_retires_after_guard_contract_changes(tmp_path, monkeypatch):
+    root = completed_corrected(tmp_path, monkeypatch)
+
+    monkeypatch.setattr(project_correction, "PROJECT_GUARD_PROVIDER_SHA256", "f" * 64)
+    result = engine.run("new", context="interactive", start=root, request={})
+    assert result["detail"].startswith("retired completed state to "), result
+
+def test_completed_corrected_state_retires_after_engine_path_change(tmp_path, monkeypatch):
+    root = completed_corrected(tmp_path, monkeypatch)
+    config = root / "config/dev-model.yaml"
+    config.write_text(config.read_text().replace("  engines: scripts\n", "  engines: scripts-alt\n"))
+    (root / "scripts-alt").mkdir()
+    result = engine.run("new", context="interactive", start=root, request={})
+    assert result["detail"].startswith("retired completed state to "), result
+
+
 def installed_cli(root, tmp_path, *, entry="correct-project", request_data=None, context=None, observer=None, cutpoint="none"):
     argv = [entry, "--context", "interactive"]
     for flag, value in (("--request", request_data), ("--approval-context", context), ("--rejection-context", observer)):
@@ -627,7 +677,7 @@ sys.path.insert(0, str(Path.cwd() / "scripts"))
 import triage_friction_log as cli
 sys.path.insert(0, sys.argv[1])
 from test_triage_providers import LinearTransport
-from triage import engine
+from triage import engine, project_correction
 from triage.providers import LinearIssues
 from triage.canonical import dumps
 transport = LinearTransport()

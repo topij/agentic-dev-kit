@@ -30,7 +30,9 @@ from .model import (
 # This is a security contract identifier, not an installation/version reading.
 # The declared adapter rejects a differing project before its create mutation.
 # A runtime attestation cannot substitute an unknown provider implementation.
-PROJECT_GUARD_PROVIDER_SHA256 = "ec0643678ea7b93d0f881079d745a0dddffea16d38f03f206b58c01cf359ba9c"
+# Schema-one receipts retain this historical contract across later kit upgrades.
+V1_PROJECT_GUARD_PROVIDER_SHA256 = "ec0643678ea7b93d0f881079d745a0dddffea16d38f03f206b58c01cf359ba9c"
+PROJECT_GUARD_PROVIDER_SHA256 = V1_PROJECT_GUARD_PROVIDER_SHA256
 PROJECT_GUARD_DETAIL = "approved Linear project differs from configured destination"
 
 
@@ -41,7 +43,7 @@ def _held(message: str) -> None:
 def rejection_proof(
     state: dict[str, Any], raw: bytes, settings: Settings,
     context: ApprovalContext | None,
-    *, require_current_interpreter: bool = True,
+    *, historical_receipt: bool = False,
 ) -> dict[str, Any]:
     """Validate a trusted observer's bound legacy guard evidence, without I/O."""
     if (
@@ -84,7 +86,9 @@ def rejection_proof(
     if (
         proof["state_digest"] != digest_bytes(raw)
         or not isinstance(proof["report_digest"], str) or SHA256_RE.fullmatch(proof["report_digest"]) is None
-        or proof["provider_source_sha256"] != PROJECT_GUARD_PROVIDER_SHA256
+        or proof["provider_source_sha256"] != (
+            V1_PROJECT_GUARD_PROVIDER_SHA256 if historical_receipt else PROJECT_GUARD_PROVIDER_SHA256
+        )
         or proof["route"] != "observed-unmodified-installed-linear-adapter"
     ):
         _held("project rejection observer does not bind the retained adapter and state")
@@ -101,7 +105,7 @@ def rejection_proof(
         or not isinstance(command, list) or any(not isinstance(item, str) for item in command)
         or len(command) != 10 or not PurePath(command[0]).is_absolute()
         or re.fullmatch(r"python(?:3(?:\.\d+)?)?", PurePath(command[0]).name, flags=re.IGNORECASE) is None
-        or (require_current_interpreter and command[0] != sys.executable)
+        or (not historical_receipt and command[0] != sys.executable)
         or command[1] != installed_cli
         or command[2:6] != ["resume", "--context", "interactive", "--request"]
         or not PurePath(command[6]).is_absolute()
@@ -179,7 +183,7 @@ def validate_receipt(value: dict[str, Any], settings: Settings) -> None:
     configuration = core["configuration"]
     if not isinstance(configuration, dict) or not isinstance(configuration.get("tracker"), dict):
         _held("project correction configuration evidence is invalid")
-    old_settings = replace(settings, fingerprint=digest(configuration), tracker=configuration["tracker"])
+    old_settings = replace(settings, config=configuration, fingerprint=digest(configuration), tracker=configuration["tracker"])
     if not isinstance(old_value, dict) or "proposal_correction" in old_value:
         _held("project correction cannot contain another correction history")
     old = canonical_state(old_raw, settings=old_settings, mode="live")
@@ -188,7 +192,7 @@ def validate_receipt(value: dict[str, Any], settings: Settings) -> None:
         _held("project correction retained observer is invalid")
     # Planning and application bind the executing interpreter. A later receipt
     # read validates that approved historical observation, not a future runtime.
-    rejection_proof(old, old_raw, old_settings, ApprovalContext(**observer), require_current_interpreter=False)
+    rejection_proof(old, old_raw, old_settings, ApprovalContext(**observer), historical_receipt=True)
     if observer["source_read_back"]["report_digest"] != core["captured_report_digest"]:
         _held("project correction report differs from the observed original presentation")
     approval = receipt["approval"]
