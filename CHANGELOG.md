@@ -42,6 +42,14 @@ starts.
 
 ---
 
+## #955 — Bounded historical triage provenance reads
+
+Refresh `scripts/lib/triage/legacy_gate.py` and
+`scripts/tests/test_triage_legacy_gate.py` together. Historical gate recovery now
+returns `operator-held` when its Git provenance probe times out, preserving the
+unchanged gate and reservation. No configuration migration is required; retain
+all existing declines and action-specific approval requirements.
+
 ## #952 — Explicit historical triage gate recovery
 
 - **ADDED (engine CLI surface)** — refresh `triage_friction_log.py`,
