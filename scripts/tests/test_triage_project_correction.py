@@ -419,12 +419,14 @@ def test_project_only_correction_refuses_body_modification_before_rebinding(tmp_
     assert Path(draft["report"]).read_bytes() == report
 
 
-@pytest.mark.parametrize("fault", ["unrelated-program", "relative-interpreter", "contradictory-context", "duplicate-flag", "missing-context", "different-entry", "relative-request"])
+@pytest.mark.parametrize("fault", ["unrelated-program", "unrelated-interpreter", "relative-interpreter", "contradictory-context", "duplicate-flag", "missing-context", "different-entry", "relative-request"])
 def test_rejection_observer_binds_the_exact_normalized_installed_cli_route(tmp_path, monkeypatch, fault):
     root, path, draft, tracker, transport, observer, raw, _, _ = rejected_run(tmp_path, monkeypatch)
     command = observer.source_read_back["invocation"]["command"]
     if fault == "unrelated-program":
         command[1] = str(root / "unrelated-program.py")
+    elif fault == "unrelated-interpreter":
+        command[0] = "/usr/bin/true"
     elif fault == "relative-interpreter":
         command[0] = "python"
     elif fault == "contradictory-context":

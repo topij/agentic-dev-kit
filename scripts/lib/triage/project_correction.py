@@ -8,6 +8,7 @@ unknown adapters and transport/create failures remain in flight.
 
 from __future__ import annotations
 
+import re
 from dataclasses import replace
 from pathlib import PurePath
 from typing import Any
@@ -96,6 +97,7 @@ def rejection_proof(
         or not isinstance(invocation.get("date"), str) or not invocation["date"]
         or not isinstance(command, list) or any(not isinstance(item, str) for item in command)
         or len(command) != 10 or not PurePath(command[0]).is_absolute()
+        or re.fullmatch(r"python(?:3(?:\.\d+)?)?", PurePath(command[0]).name, flags=re.IGNORECASE) is None
         or command[1] != installed_cli
         or command[2:6] != ["resume", "--context", "interactive", "--request"]
         or not PurePath(command[6]).is_absolute()
