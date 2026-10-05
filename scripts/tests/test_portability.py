@@ -3860,6 +3860,10 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
             "prohibit-create-update-comment",
         ),
         "approved-payload-changed": ("require-new-exact-payload-approval",),
+        "linear-project-mismatch": ("refuse-before-proposal-publication-or-attempt",),
+        "project-correction": (
+            "attested-pre-create-rejection-exact-action-approval-retain-history-require-fresh-filing-approval",
+        ),
         "ambiguous-external-write": ("read-back-before-retry-or-operator-hold",),
         "partial-tracker-batch": ("hold-before-archive-sweep",),
         "test-mode-external-write": (
@@ -3949,6 +3953,8 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         "No argument, valid active state in any other phase",
         "resume, neither valid active state nor gate-only receipt",
         "resume, valid active state",
+        "Interactive correct-project, eligible valid rejected LIVE batch",
+        "Unattended correct-project, or correction mixed with draft, filing, notification or forge work",
         "new, neither active state nor gate-only receipt",
         "new, valid completed live state",
         "new, active live state in any other phase",
