@@ -5,6 +5,49 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-04 (cs-toolkit Codex validation and Linear installation)
+
+**Shipped.** Fixture portability in [#937](https://github.com/topij/agentic-dev-kit/pull/937),
+`163af2d82491f77dd4daeef916e3ec31522e76b7`: controlled configuration, verified mutations,
+quoted adopter bots plus an operator, and operator-only configuration. Validation fixes
+in [#938](https://github.com/topij/agentic-dev-kit/pull/938),
+`bcfe07b578bf59fb510e105ad91a5c6fae071f32`: bounded fail-closed subprocess reads,
+complete typed finding-evidence verification, and standalone script metadata.
+
+**Linear.** Installation support in [#939](https://github.com/topij/agentic-dev-kit/pull/939),
+`410108fb115a0bf063f737d9961b5ec4f68d641d`: configured-backend opt-in, exact approval,
+frozen-input/idempotency preservation, paginated read-back and bounded retries.
+Read-back verifies label identity and inherited team scope; the transport refuses redirects.
+No additional design decision blocks implementation. Live destination configuration,
+credentials, exact payload approval and acceptance remain adopter work.
+
+**Decided.** The operator authorized merging this session's PRs when clean. CodeRabbit
+skipped review; the configured independent fallback supplied the adversarial fixture
+review and the validation panel with its composed LOW delta. Native rollout records
+confirmed the configured reviewer model and effort. Public disposition comments that
+initially contained local filenames were corrected and read back.
+
+**Verified.** `env -u FORCE_COLOR make test` at
+`626bf01f2408d0d53ca6139bd3aa5419bbdeb866` on 2026-10-04, in
+`/private/tmp/devkit-linear-triage`, printed `4195 passed, 1 skipped in 616.02s
+(0:10:16)`. The contained LOW redirect repair at
+`6f1b3022aca1dd138edc9477387ca5086087dc9e` ran
+`uv run --with pytest --with pyyaml pytest -q scripts/tests/test_triage_providers.py
+scripts/tests/test_triage_engine.py
+scripts/tests/test_kit_doctor.py::test_kit_repo_self_check_is_clean` on 2026-10-04, in
+the same directory, and printed `327 passed in 46.61s`. Its fresh adversarial delta
+posted the named verdicts before composition on the retained full-review parent.
+The exact-head watch receipt and authorized merge are recorded on #939.
+
+**Not established.** No live Linear write or cs-toolkit runtime validation was performed.
+cs-toolkit remains on `chore/kit-upgrade-2026-10-03` at
+`ac7203341f50b5e39f5fe6f7f758b8f7e439cdf5`, as supplied by the operator; its local upgrade
+work was held pending these upstream fixes. This session changed only the kit.
+The new workstream assignment was not explicitly confirmed; it does not replace another workstream's starter.
+Workflow mistakes were recorded for accumulation in the friction inbox; no tracker write
+was made. Implementation follows the destination and approval decisions already recorded in #6;
+destination configuration, API credentials and exact live payload approval remain adopter actions.
+
 ### 2026-10-03 (Delta-pass named draws, #921, in Claude Code)
 
 **Shipped.** PR #934, squash `41beacb8`: `panel_prompt.py` takes a delta pass's two draws
