@@ -10,8 +10,11 @@ from __future__ import annotations
 import json
 import math
 import os
+import signal
 import socket
 import subprocess
+from contextlib import suppress
+from subprocess import Popen
 from typing import Any
 
 from .approval import ApprovalContext
@@ -22,13 +25,43 @@ from .model import (
     SHA256_RE,
     TOKEN_RE,
     TriageError,
-    git_output,
-    repository_identity,
 )
 
 
 def _held(detail: str) -> TriageError:
     return TriageError(detail, outcome="operator-held")
+
+
+# A recovery probe must return while preserving the blocked artifacts. This is
+# an internal per-process bound, not authority to age out a historical owner.
+PROVENANCE_TIMEOUT_SECONDS = 30
+
+
+def _git_read(repo: Any, *args: str) -> tuple[int, str]:
+    argv = ["git", "-C", str(repo), *args]
+    try:
+        process = Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                        text=True, start_new_session=True)
+        try:
+            stdout, stderr = process.communicate(timeout=PROVENANCE_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired as exc:
+            # Git may be waiting for SSH or a credential helper that inherited
+            # its output pipes. Kill only this newly owned process group; killing
+            # Git alone can leave communicate waiting forever on those pipes.
+            with suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGKILL)
+            try:
+                process.communicate(timeout=1)
+            except subprocess.TimeoutExpired:
+                process.stdout.close()
+                process.stderr.close()
+                process.wait(timeout=1)
+            raise _held("historical gate provenance read timed out") from exc
+    except (OSError, subprocess.TimeoutExpired, OverflowError) as exc:
+        raise _held("historical gate provenance read is unavailable") from exc
+    if process.returncode not in {0, 1}:
+        raise _held(f"historical gate git {' '.join(args)} failed: {stderr.strip()}")
+    return process.returncode, stdout.strip()
 
 
 def historical_json(raw: bytes) -> dict[str, Any]:
@@ -74,8 +107,10 @@ def read_gate(store: Any, raw: bytes, context: ApprovalContext, *, check_owner: 
     head = identity["protected_branch_head"]
     if not isinstance(head, str) or not OID_RE.fullmatch(head):
         raise _held("historical gate draft head is malformed")
-    repo = repository_identity(store.settings)
-    if identity["repository_identity"] != repo["remote"] + "#" + head or identity["mode"] != store.mode:
+    remote_status, remote = _git_read(store.settings.paths.repo, "remote", "get-url", "origin")
+    if remote_status or not remote:
+        raise _held("historical gate repository remote is unverifiable")
+    if identity["repository_identity"] != remote + "#" + head or identity["mode"] != store.mode:
         raise _held("historical gate belongs to another repository or mode")
     if identity["friction_log"] != str(store.settings.paths.friction_log.relative_to(store.settings.paths.repo)):
         raise _held("historical gate friction-log identity is foreign")
@@ -116,19 +151,18 @@ def read_gate(store: Any, raw: bytes, context: ApprovalContext, *, check_owner: 
             raise _held("historical gate PID is active or reused")
     ref = f"refs/heads/{store.settings.protected_branch}"
     try:
-        remote_line = git_output(store.settings.paths.repo, "ls-remote", "--exit-code", "origin", ref)
+        remote_status, remote_line = _git_read(store.settings.paths.repo, "ls-remote", "--exit-code", "origin", ref)
+        if remote_status:
+            raise _held("historical gate protected head is unverifiable")
         parts = remote_line.split("\t")
         if len(parts) != 2 or parts[1] != ref or not OID_RE.fullmatch(parts[0]):
             raise _held("historical gate protected head is unverifiable")
         observed_head = parts[0]
-        local_head = git_output(store.settings.paths.repo, "rev-parse", f"refs/remotes/origin/{store.settings.protected_branch}")
-        if local_head != observed_head:
+        local_status, local_head = _git_read(store.settings.paths.repo, "rev-parse", f"refs/remotes/origin/{store.settings.protected_branch}")
+        if local_status or local_head != observed_head:
             raise _held("refresh the protected ref before historical gate recovery")
-        ancestor = subprocess.run(
-            ["git", "-C", str(store.settings.paths.repo), "merge-base", "--is-ancestor", head, observed_head],
-            capture_output=True, check=False,
-        )
-        if ancestor.returncode:
+        ancestor_status, _ = _git_read(store.settings.paths.repo, "merge-base", "--is-ancestor", head, observed_head)
+        if ancestor_status:
             raise _held("historical gate draft head is not a verified protected ancestor")
     except TriageError as exc:
         raise _held(str(exc)) from exc

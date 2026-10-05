@@ -7,11 +7,12 @@ import shutil
 import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
 from test_triage_engine import ENGINE_DIR, git, repository
-from triage import engine
+from triage import engine, legacy_gate
 from triage.approval import ApprovalContext
 from triage.canonical import digest as canonical_digest
 from triage.canonical import digest_bytes, dumps, loads_exact
@@ -491,3 +492,76 @@ def test_installed_historical_test_gate_publishes_only_approved_held_evidence(tm
     assert not held["frozen_snapshot"] and held["report"] is None
     for path, raw in before.items():
         assert (path.read_bytes() if path.exists() else None) == raw
+
+
+@pytest.mark.parametrize("operation, helper", [("remote", False), ("ls-remote", False), ("rev-parse", False), ("merge-base", False), ("ls-remote", True)])
+def test_historical_provenance_timeout_holds_before_capture(tmp_path, monkeypatch, operation, helper):
+    root, store, gate_raw, state_raw, owner_path, _ = historical_fixture(tmp_path, monkeypatch)
+    owner = ApprovalContext(**loads_exact(owner_path.read_bytes()))
+    original_popen = legacy_gate.Popen
+    stalled = []
+    helper_pids = []
+
+    def helper_running(pid):
+        status = subprocess.run(["ps", "-p", str(pid), "-o", "stat="], capture_output=True, text=True, timeout=2)
+        assert status.returncode in {0, 1} and not status.stderr.strip()
+        # A killed orphan may briefly remain a zombie before the OS reaps it.
+        return bool(status.stdout.strip()) and not status.stdout.strip().startswith("Z")
+
+    def stall_selected(argv, **kwargs):
+        if argv[3] == operation:
+            program = "import time; time.sleep(60)"
+            if helper:
+                # Finite lifetime lets a surviving cleanup mutant terminate
+                # without signaling a PID after its parent has been reaped.
+                program = "import subprocess,sys,time; helper=subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(10)']); print(helper.pid, flush=True); time.sleep(60)"
+            child = original_popen([sys.executable, "-c", program], **kwargs)
+            stalled.append(child)
+            if helper:
+                pid = int(child.stdout.readline().strip())
+                helper_pids.append(pid)
+                assert helper_running(pid), "helper must be running before the provenance deadline"
+            return child
+        return original_popen(argv, **kwargs)
+
+    monkeypatch.setattr(legacy_gate, "Popen", stall_selected)
+    monkeypatch.setattr(legacy_gate, "PROVENANCE_TIMEOUT_SECONDS", 0.05)
+    try:
+        began = time.monotonic()
+        result = engine.run("recover", context="interactive", start=root, legacy_gate_context=owner)
+        assert time.monotonic() - began < 5
+        assert result["outcome"] == "operator-held"
+        assert "provenance read timed out" in result["detail"]
+        assert stalled and all(child.poll() is not None for child in stalled)
+        assert bool(helper_pids) == helper
+        assert all(not helper_running(pid) for pid in helper_pids), "provenance helper survived process-group cleanup"
+        assert store.gate_path.read_bytes() == gate_raw and store.state_path.read_bytes() == state_raw
+        assert not store.recovery_path(digest_bytes(gate_raw)).exists()
+    finally:
+        for child in stalled:
+            if child.poll() is None:
+                child.kill()
+                child.wait(timeout=5)
+        deadline = time.monotonic() + 12
+        while any(helper_running(pid) for pid in helper_pids) and time.monotonic() < deadline:
+            time.sleep(0.025)
+        assert all(not helper_running(pid) for pid in helper_pids), "owned test helper did not reach terminal state"
+
+
+def test_rehashed_historical_action_with_owner_evidence_cannot_change(tmp_path, monkeypatch):
+    root, store, gate_raw, state_raw, owner, _ = historical_fixture(tmp_path, monkeypatch)
+    plan = invoke(root, owner)["recovery_plan"]
+    bundle_path = store.recovery_path(digest_bytes(gate_raw))
+    bundle = loads_exact(bundle_path.read_bytes())
+    assert bundle["capture_core"]["legacy_gate_owner_evidence"]
+    action = {**plan["action_core"], "action": "abandon-invalid-state"}
+    action_digest = canonical_digest(action)
+    approved = {"decision": "approve", "source": "current-session", "approver_identity": "operator", "core_digest": action_digest}
+    prepared = {**bundle, "kind": "state-present-prepared", "action_core": action,
+                "action_core_digest": action_digest, "approval": approved}
+    bundle_path.write_bytes(dumps(prepared))
+    result = invoke(root, owner)
+    assert result["outcome"] == "operator-held"
+    assert "historical recovery action changed" in result["detail"]
+    assert store.gate_path.read_bytes() == gate_raw and store.state_path.read_bytes() == state_raw
+    assert not Path(action["quarantine_path"]).exists()
