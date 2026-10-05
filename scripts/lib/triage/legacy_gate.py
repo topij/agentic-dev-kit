@@ -44,7 +44,7 @@ def _git_read(repo: Any, *args: str) -> tuple[int, str]:
                         text=True, start_new_session=True)
         try:
             stdout, stderr = process.communicate(timeout=PROVENANCE_TIMEOUT_SECONDS)
-        except subprocess.TimeoutExpired as exc:
+        except (OSError, subprocess.TimeoutExpired) as exc:
             # Git may be waiting for SSH or a credential helper that inherited
             # its output pipes. Kill only this newly owned process group; killing
             # Git alone can leave communicate waiting forever on those pipes.
@@ -83,7 +83,8 @@ def _git_read(repo: Any, *args: str) -> tuple[int, str]:
                 for stream in (process.stdout, process.stderr):
                     with suppress(OSError):
                         stream.close()
-            raise _held("historical gate provenance read timed out" + cleanup_detail) from exc
+            failure = "historical gate provenance read timed out" if isinstance(exc, subprocess.TimeoutExpired) else "historical gate provenance read is unavailable"
+            raise _held(failure + cleanup_detail) from exc
     except (OSError, subprocess.TimeoutExpired, OverflowError) as exc:
         raise _held("historical gate provenance read is unavailable") from exc
     if process.returncode not in {0, 1}:
