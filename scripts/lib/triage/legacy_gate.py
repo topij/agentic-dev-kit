@@ -48,15 +48,37 @@ def _git_read(repo: Any, *args: str) -> tuple[int, str]:
             # Git may be waiting for SSH or a credential helper that inherited
             # its output pipes. Kill only this newly owned process group; killing
             # Git alone can leave communicate waiting forever on those pipes.
-            with suppress(ProcessLookupError):
+            cleanup_detail = ""
+            try:
                 os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            except OSError:
+                # A restricted runtime may allow terminating the owned child
+                # while denying group signals. Reap that child where possible,
+                # but never claim its descendants were stopped.
+                cleanup_detail = "; process-group cleanup unavailable; descendant cleanup uncertain"
+                try:
+                    process.kill()
+                except ProcessLookupError:
+                    pass
+                except OSError:
+                    cleanup_detail += "; owned child termination unavailable"
             try:
                 process.communicate(timeout=1)
-            except subprocess.TimeoutExpired:
-                process.stdout.close()
-                process.stderr.close()
-                process.wait(timeout=1)
-            raise _held("historical gate provenance read timed out") from exc
+            except (OSError, subprocess.TimeoutExpired):
+                for stream in (process.stdout, process.stderr):
+                    with suppress(OSError):
+                        stream.close()
+                try:
+                    process.wait(timeout=1)
+                except (OSError, subprocess.TimeoutExpired):
+                    cleanup_detail += "; owned child termination unconfirmed"
+            finally:
+                for stream in (process.stdout, process.stderr):
+                    with suppress(OSError):
+                        stream.close()
+            raise _held("historical gate provenance read timed out" + cleanup_detail) from exc
     except (OSError, subprocess.TimeoutExpired, OverflowError) as exc:
         raise _held("historical gate provenance read is unavailable") from exc
     if process.returncode not in {0, 1}:

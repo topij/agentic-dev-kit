@@ -206,6 +206,8 @@ def prepare_gate_only(
     gate_digest = core["old_gate_digest"]
     bundle_path = Path(core["configured_bundle_path"])
     approved = _approval(core_digest, approval, operator=operator)
+    if core.get("legacy_gate_owner_evidence") is not None:
+        _approval(core_digest, approved, operator=core["legacy_gate_owner_evidence"]["operator_identity"])
     replacement_run_identity = {
         "kind": "gate-only-recovery",
         "mode": store.mode,
@@ -271,7 +273,10 @@ def resume_gate_only(store: ArtifactStore, settings: Settings, envelope: dict[st
     gate_raw = decode_bytes(core["old_gate_bytes"])
     if digest_bytes(gate_raw) != core["old_gate_digest"]:
         raise TriageError("prepared old gate bytes mismatch", outcome="operator-held")
-    _validate_legacy_capture(store, core)
+    legacy_record = _validate_legacy_capture(store, core)
+    if legacy_record is not None:
+        _approval(envelope["prepared_core_digest"], envelope["approval"],
+                  operator=core["legacy_gate_owner_evidence"]["operator_identity"])
     intent_raw = dumps(intent)
     _, state_raw = observe(store.state_path)
     if state_raw is None:
@@ -402,6 +407,8 @@ def persist_test_gate_held(
         raise TriageError("test-gate capture changed before held publication", outcome="operator-held")
     approved = _approval(plan["capture_core_digest"], approval, operator=operator)
     core = plan["capture_core"]
+    if core.get("legacy_gate_owner_evidence") is not None:
+        _approval(plan["capture_core_digest"], approved, operator=core["legacy_gate_owner_evidence"]["operator_identity"])
     held = {
         "kind": "state-present-test-gate-held",
         "schema_version": 1,
@@ -432,6 +439,10 @@ def prepare_state_action(
     action_core = plan["action_core"]
     action_digest = plan["action_core_digest"]
     approved = _approval(action_digest, approval, operator=operator)
+    if core.get("legacy_gate_owner_evidence") is not None:
+        # Reject a foreign approver before publishing preparation; otherwise the
+        # rejected envelope prevents the captured operator from retrying.
+        _approval(action_digest, approved, operator=core["legacy_gate_owner_evidence"]["operator_identity"])
     prepared = {
         "kind": "state-present-prepared",
         "schema_version": 1,
