@@ -67,6 +67,11 @@ def _git_read(repo: Any, *args: str) -> tuple[int, str]:
             try:
                 process.communicate(timeout=1)
             except (OSError, subprocess.TimeoutExpired):
+                # A credential or SSH helper may detach from the owned group
+                # while retaining its pipes. Reaping Git cannot confirm those
+                # helpers stopped, and their PIDs are not signaling authority.
+                if "descendant cleanup uncertain" not in cleanup_detail:
+                    cleanup_detail += "; descendant cleanup uncertain"
                 for stream in (process.stdout, process.stderr):
                     with suppress(OSError):
                         stream.close()
