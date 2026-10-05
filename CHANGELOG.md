@@ -57,6 +57,10 @@ digest separately through `recovery_approval` and `--approval-context`, then app
 complete corrected filing payload through ordinary `resume`. Preserve the optional
 `proposal_correction` receipt and its prepared artifact; old filing approval is not
 reused. Unknown or uncertain writes remain held.
+Bind the observer to the exact normalized installed CLI argv and retain any invoker's
+audited delegation evidence. The corrected proposal presentation stays immutable through
+filing and finalization; use canonical state and completion receipts for later operation
+status. This bounded correction preserves captured bodies and refuses `modify`.
 
 ## #962 — Undecodable historical provenance hold
 

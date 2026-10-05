@@ -807,9 +807,16 @@ transport/create outcomes cannot use this route.
 The canonical observer has `source: current-session`, `operator_identity`, and
 `source_read_back` containing `state_digest`, the original presentation `report_digest`, `provider_source_sha256`,
 `route: observed-unmodified-installed-linear-adapter`, `invocation`, and base64
-`stdout_raw`. The invocation binds its command array (installed `resume --enable-tracker`
-without forge enablement), exact revision and repository directory, date, exit code and
-stdout SHA-256. Rejection evidence enables planning only, never mutation authority.
+`stdout_raw`. The invocation binds the exact normalized installed CLI command array:
+`[<absolute Python interpreter>, <absolute installed triage_friction_log.py>, resume,
+--context, interactive, --request, <absolute request>, --approval-context,
+<absolute context>, --enable-tracker]`. Extra, missing, reordered or contradictory
+arguments and an unrelated program hold. For a runtime-local invoker, the trusted
+observer must audit the launcher and delegation chain, retain the actual launcher argv
+and its source evidence independently, and normalize only the observed installed CLI
+delegation; normalization is not inferred from argv tokens. The invocation also binds
+the exact revision, repository directory, date, exit code and stdout SHA-256.
+Rejection evidence enables planning only, never mutation authority.
 
 Under the normal gate, planning validates the immutable freeze and fully pages original
 and corrected marker searches. Any match or incomplete search holds. The exact action
@@ -827,8 +834,12 @@ publish the complete prepared correction receipt, then compare-and-replace state
 attempts and filing approval while retaining their exact original bytes in the receipt.
 Before an ordinary continuation rebinds state, rewrites a report or accepts filing
 approval, it verifies the exact prepared correction receipt and completes any pending
-report publication. Replace the report only from its captured original bytes to the approved corrected
-bytes. A competing or missing report holds without overwriting it. Correction never
+report publication. Replace the report only from its captured original bytes to the
+approved corrected bytes. Thereafter preserve that presentation byte-for-byte through
+filing and finalization; read later operation status from canonical state and completion
+receipts. This bounded project-only continuation refuses `modify` before rebinding state
+and retains its exact captured proposal bodies. A competing or missing report holds
+without overwriting it, including after filing. Correction never
 calls create. Present the complete corrected set for fresh exact filing approval through
 the ordinary `resume` path; the rejected old approval cannot match its digests.
 
@@ -839,7 +850,7 @@ and quarantine only that dead gate. Correction then retries the unchanged prepar
 or, if state already committed, verifies the exact prepared receipt and resumes only its
 approved old-to-corrected report transition. If evidence changed, re-plan and obtain fresh
 exact approval or hold; never reconstruct uncertain history. Replaying `correct-project`
-after a normal body modification or later filing does not replace the later report.
+after later filing preserves the immutable corrected presentation.
 
 ```console
 uv run <engine-dir>/triage_friction_log.py correct-project --context interactive --enable-tracker --rejection-context /absolute/path/observed-rejection.json

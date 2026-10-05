@@ -89,7 +89,9 @@ def rejected_run(tmp_path, monkeypatch, *, installed=False):
         "report_digest": digest_bytes(Path(draft["report"]).read_bytes()),
         "route": "observed-unmodified-installed-linear-adapter",
         "invocation": {
-            "command": ["python", "installed-triage.py", "resume", "--enable-tracker"],
+            "command": [sys.executable, str(root / "scripts/triage_friction_log.py"), "resume",
+                        "--context", "interactive", "--request", str(root / "approved-request.json"),
+                        "--approval-context", str(root / "approved-context.json"), "--enable-tracker"],
             "revision": state["run_identity"]["protected_branch_head"], "directory": str(root),
             "date": "2026-10-05", "exit_code": 0, "stdout_sha256": digest_bytes(stdout),
         },
@@ -398,22 +400,73 @@ def test_receipt_revalidates_retained_history_and_intent(tmp_path, monkeypatch, 
         canonical_state(dumps(state), settings=load_settings(root), mode="live")
 
 
-def test_normal_body_modification_keeps_history_and_correction_replay_preserves_later_report(tmp_path, monkeypatch):
+def test_project_only_correction_refuses_body_modification_before_rebinding(tmp_path, monkeypatch):
     root, path, draft, tracker, _, observer, raw, _, _ = rejected_run(tmp_path, monkeypatch)
     _, approved, context = plan_and_approval(root, tracker, observer)
     engine.run("correct-project", context="interactive", start=root, request=approved,
                tracker=tracker, rejection_context=observer, approval_context=context)
     state = loads_exact(path.read_bytes())
+    retained = path.read_bytes()
+    report = Path(draft["report"]).read_bytes()
     changed = engine.run("resume", context="interactive", start=root,
                          request={"approval": {"command": "modify TRI-01: corrected details", "proposal_set_digest": digest(state["proposal_payload_digests"])}},
                          approval_context=approval_context(state, "modify TRI-01: corrected details"))
     assert changed["outcome"] == "operator-held"
-    modified = canonical_state(path.read_bytes(), settings=load_settings(root), mode="live")
-    assert modified["proposal_payloads"][0]["payload_core"]["body_without_marker"] == "corrected details"
-    assert decode_bytes(modified["proposal_correction"]["action_core"]["captured_state_raw"]) == raw
-    report = Path(draft["report"]).read_bytes()
+    assert "modify is unavailable" in changed["detail"]
+    assert path.read_bytes() == retained and Path(draft["report"]).read_bytes() == report
+    assert decode_bytes(state["proposal_correction"]["action_core"]["captured_state_raw"]) == raw
     engine.run("correct-project", context="interactive", start=root, tracker=tracker)
     assert Path(draft["report"]).read_bytes() == report
+
+
+@pytest.mark.parametrize("fault", ["unrelated-program", "relative-interpreter", "contradictory-context", "duplicate-flag", "missing-context", "different-entry", "relative-request"])
+def test_rejection_observer_binds_the_exact_normalized_installed_cli_route(tmp_path, monkeypatch, fault):
+    root, path, draft, tracker, transport, observer, raw, _, _ = rejected_run(tmp_path, monkeypatch)
+    command = observer.source_read_back["invocation"]["command"]
+    if fault == "unrelated-program":
+        command[1] = str(root / "unrelated-program.py")
+    elif fault == "relative-interpreter":
+        command[0] = "python"
+    elif fault == "contradictory-context":
+        command[4] = "unattended"
+    elif fault == "duplicate-flag":
+        command.append("--enable-tracker")
+    elif fault == "missing-context":
+        del command[3:5]
+    elif fault == "different-entry":
+        command[2] = "new"
+    else:
+        command[6] = "request.json"
+    report = Path(draft["report"]).read_bytes()
+    calls = list(transport.calls)
+    result = engine.run("correct-project", context="interactive", start=root, tracker=tracker, rejection_context=observer)
+    assert result["recovery_plan"] is None and "installed route" in result["detail"]
+    assert path.read_bytes() == raw and Path(draft["report"]).read_bytes() == report
+    assert transport.calls == calls
+
+
+def test_corrected_report_remains_immutable_through_noop_and_filing(tmp_path, monkeypatch):
+    root, path, draft, tracker, transport, observer, _, _, _ = rejected_run(tmp_path, monkeypatch)
+    _, approved, context = plan_and_approval(root, tracker, observer)
+    engine.run("correct-project", context="interactive", start=root, request=approved,
+               tracker=tracker, rejection_context=observer, approval_context=context)
+    report = Path(draft["report"])
+    presentation = report.read_bytes()
+    for _ in range(2):
+        result = engine.run("resume", context="interactive", start=root, tracker=tracker)
+        assert result["detail"] == "active session resumed" and report.read_bytes() == presentation
+    state = loads_exact(path.read_bytes())
+    result = engine.run("resume", context="interactive", start=root, tracker=tracker, head_authority=FakeForge([]),
+                        request={"approval": approval_for(state)}, approval_context=approval_context(state))
+    assert result["verified_tracker_identifiers"] == ["ADO-17"]
+    assert report.read_bytes() == presentation
+    report.write_bytes(b"independent evidence after filing\n")
+    retained = path.read_bytes()
+    calls = list(transport.calls)
+    replay = engine.run("resume", context="interactive", start=root, tracker=tracker)
+    assert "report changed" in replay["detail"]
+    assert path.read_bytes() == retained and report.read_bytes() == b"independent evidence after filing\n"
+    assert transport.calls == calls
 
 
 def installed_cli(root, tmp_path, *, entry="correct-project", request_data=None, context=None, observer=None, cutpoint="none"):

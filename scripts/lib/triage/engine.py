@@ -652,7 +652,7 @@ def _literal_block(label: str, raw: bytes, *, info: str = "") -> list[str]:
     return [f"{label} ({description}):", "", fence + info if verbatim else fence, rendered, fence]
 
 
-def _report_text(state: dict[str, Any], capabilities: dict[str, dict[str, str]], outcome: str) -> bytes:
+def _report_text(state: dict[str, Any], capabilities: dict[str, dict[str, str]], outcome: str, *, immutable_correction: bool = False) -> bytes:
     # Every value taken from state, configuration or a service enters the report
     # through _inline_literal or _literal_block and in no other way. The report's
     # Markdown structure is the engine's own; no inbox, proposal-analysis or
@@ -665,6 +665,12 @@ def _report_text(state: dict[str, Any], capabilities: dict[str, dict[str, str]],
         f"Frozen inbox digest: {_inline_literal(state['frozen_inbox_digest'])}",
         "", "## Capabilities", "",
     ]
+    if immutable_correction:
+        lines[:0] = [
+            "# Immutable corrected proposal presentation", "",
+            "This records the correction presentation. Read the canonical run state and completion receipt for later operation status.",
+            "The captured proposal bodies remain fixed; this correction route does not accept `modify`.", "",
+        ]
     for name in CAPABILITIES:
         entry = capabilities[name]
         lines.append(
@@ -724,6 +730,9 @@ def _report_text(state: dict[str, Any], capabilities: dict[str, dict[str, str]],
 
 
 def _write_report(path: Path, state: dict[str, Any], capabilities: dict[str, dict[str, str]], outcome: str) -> None:
+    if "proposal_correction" in state:
+        _preserve_corrected_report(path, state)
+        return
     atomic_replace(path, _report_text(state, capabilities, outcome))
 
 
@@ -906,6 +915,8 @@ def _approval_authority(
         raise TriageError("approval command must be exact", outcome="operator-held")
     digests = {proposal["candidate_id"]: proposal["payload_digest"] for proposal in state["proposal_payloads"]}
     decisions = parse_commands(command, digests)
+    if "proposal_correction" in state and any(item["decision"] == "modify" for item in decisions):
+        raise TriageError("project correction preserves captured bodies; modify is unavailable", outcome="operator-held")
     approval = approval_record(
         decisions,
         context=approval_context,
@@ -1756,6 +1767,14 @@ def _publish_corrected_report(lease: GateLease, path: Path, core: dict[str, Any]
     atomic_replace(path, approved, expected_digest=core["captured_report_digest"])
 
 
+def _preserve_corrected_report(path: Path, state: dict[str, Any]) -> None:
+    """Keep the approved presentation immutable throughout its continuation."""
+    _, current = observe(path)
+    approved = decode_bytes(state["proposal_correction"]["action_core"]["corrected_report_raw"])
+    if current != approved:
+        raise TriageError("project correction report changed; preserve the competing evidence", outcome="operator-held")
+
+
 def _resume_project_correction_report(store: ArtifactStore, lease: GateLease, state: dict[str, Any]) -> None:
     """Check correction evidence before ordinary resume can rewrite or send."""
     receipt = state["proposal_correction"]
@@ -1767,6 +1786,8 @@ def _resume_project_correction_report(store: ArtifactStore, lease: GateLease, st
         and state["proposal_payloads"] == receipt["action_core"]["corrected_proposal_payloads"]
     ):
         _publish_corrected_report(lease, Path(state["proposal_payloads"][0]["report_binding"]["path"]), receipt["action_core"])
+    else:
+        _preserve_corrected_report(Path(state["proposal_payloads"][0]["report_binding"]["path"]), state)
 
 
 def _correct_project(
@@ -1813,7 +1834,7 @@ def _correct_project(
         "proposal_payload_digests": corrected_digests, "approval": None, "decisions": [], "attempts": [],
     }
     initial_presentation.pop("operations")
-    corrected_report = _report_text(initial_presentation, capabilities, "operator-held")
+    corrected_report = _report_text(initial_presentation, capabilities, "operator-held", immutable_correction=True)
     core = {
         "kind": "linear-project-correction", "schema_version": 1,
         "run_identity": state["run_identity"], "frozen_inbox_digest": state["frozen_inbox_digest"],

@@ -88,14 +88,19 @@ def rejection_proof(
     if not isinstance(invocation, dict):
         _held("project rejection invocation is missing")
     command = invocation.get("command")
+    installed_cli = str(settings.paths.repo / settings.config["paths"]["engines"] / "triage_friction_log.py")
     if (
         invocation.get("revision") != state["run_identity"]["protected_branch_head"]
         or invocation.get("directory") != str(settings.paths.repo)
         or isinstance(invocation.get("exit_code"), bool) or invocation.get("exit_code") != 0
         or not isinstance(invocation.get("date"), str) or not invocation["date"]
         or not isinstance(command, list) or any(not isinstance(item, str) for item in command)
-        or "resume" not in command or "--enable-tracker" not in command
-        or "--enable-github-forge" in command
+        or len(command) != 10 or not PurePath(command[0]).is_absolute()
+        or command[1] != installed_cli
+        or command[2:6] != ["resume", "--context", "interactive", "--request"]
+        or not PurePath(command[6]).is_absolute()
+        or command[7] != "--approval-context" or not PurePath(command[8]).is_absolute()
+        or command[9] != "--enable-tracker"
     ):
         _held("project rejection invocation is outside the retained installed route")
     try:
@@ -209,15 +214,11 @@ def validate_receipt(value: dict[str, Any], settings: Settings) -> None:
     ):
         _held("project correction report capabilities are invalid")
     from .engine import _report_text
-    if corrected_report != _report_text(initial_presentation, capabilities, "operator-held"):
+    if corrected_report != _report_text(initial_presentation, capabilities, "operator-held", immutable_correction=True):
         _held("project correction report does not present its exact corrected proposals")
     if any(item.get("payload_core", {}).get("project") != core["destination"]["project"] for item in value.get("proposal_payloads", [])):
         _held("project correction current proposals changed the corrected destination")
-    for before, after in zip(corrected, value["proposal_payloads"], strict=True):
-        if after["payload_core"] != {**before["payload_core"], "body_without_marker": after["payload_core"]["body_without_marker"]}:
-            _held("project correction current proposals changed beyond a normal body modification")
-    # Later normal body modifications may change the current proposals, but a
-    # project correction is only initially published without an approval. The
-    # immutable correction core always preserves its exact initial presentation.
+    if value["proposal_payloads"] != corrected:
+        _held("project correction current proposals changed beyond its captured project-only correction")
     if value.get("approval") is not None and value["approval"] == old["approval"]:
         _held("project correction reused the rejected filing approval")
