@@ -550,7 +550,9 @@ def test_corrected_report_remains_immutable_through_noop_and_filing(tmp_path, mo
     assert transport.calls == calls
 
 
-def test_completed_corrected_run_still_checks_immutable_report(tmp_path, monkeypatch):
+@pytest.mark.parametrize("entry", [None, "new", "resume", "correct-project"])
+@pytest.mark.parametrize("report_fault", ["changed", "missing"])
+def test_completed_corrected_run_still_checks_immutable_report(tmp_path, monkeypatch, entry, report_fault):
     root, path, draft, tracker, _, observer, _, _, _ = rejected_run(tmp_path, monkeypatch)
     _, correction_request, correction_context = plan_and_approval(root, tracker, observer)
     engine.run(
@@ -576,13 +578,19 @@ def test_completed_corrected_run_still_checks_immutable_report(tmp_path, monkeyp
     assert loads_exact(path.read_bytes())["phase"] == "completed"
 
     report = Path(draft["report"])
-    report.write_bytes(b"tampered after completed correction\n")
+    if report_fault == "changed":
+        report.write_bytes(b"tampered after completed correction\n")
+    else:
+        report.unlink()
     retained = path.read_bytes()
-    replay = engine.run("resume", context="interactive", start=root, tracker=tracker)
+    replay = engine.run(entry, context="interactive", start=root, tracker=tracker)
 
     assert replay["outcome"] == "operator-held"
     assert "report changed" in replay["detail"]
-    assert report.read_bytes() == b"tampered after completed correction\n"
+    if report_fault == "changed":
+        assert report.read_bytes() == b"tampered after completed correction\n"
+    else:
+        assert not report.exists()
     assert path.read_bytes() == retained
 
 

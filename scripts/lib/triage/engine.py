@@ -2048,6 +2048,8 @@ def run(
                 outcome, detail, plan = _correct_project(settings, store, lease, state, state_raw, request, approval_context, rejection_context, tracker, capabilities)
                 lease.release()
                 return _result(capabilities, outcome, mode=mode, engine_mode=state["engine_mode"], report=result_report, frozen=result_frozen, resume_action="present and approve the exact corrected payload" if plan is None else "approve the exact project correction action", detail=detail, recovery_plan=plan, candidate_index=state["frozen_snapshot"]["content"]["candidate_index"])
+            if "proposal_correction" in state:
+                _resume_project_correction_report(store, lease, state)
             if state.get("finalization_operations"):
                 _validate_forge_prefix(
                     state["finalization_operations"], state, settings
@@ -2099,8 +2101,6 @@ def run(
                     candidate_index=state["frozen_snapshot"]["content"]["candidate_index"],
                     **_pr_result_fields(state),
                 )
-            if "proposal_correction" in state:
-                _resume_project_correction_report(store, lease, state)
             if state["phase"] == "completed":
                 completion = state["completion"]
                 lease.release()
