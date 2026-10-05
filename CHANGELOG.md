@@ -42,6 +42,26 @@ starts.
 
 ---
 
+## #969 — Attested Linear project correction
+
+Refresh the triage CLI, `lib/triage/engine.py`, `model.py` and new
+`project_correction.py` together, with the shared triage workflow and installed tests.
+Set analysis proposals to the exact merged Linear project name; mismatches now hold
+before publication or entering an attempted-write phase.
+
+For an eligible historical pre-create project rejection, use interactive
+`correct-project --enable-tracker --rejection-context <observed-rejection.json>`.
+Independently establish the declared installed guard and original terminal/state/report
+evidence; marker absence alone is insufficient. Approve the complete correction action
+digest separately through `recovery_approval` and `--approval-context`, then approve the
+complete corrected filing payload through ordinary `resume`. Preserve the optional
+`proposal_correction` receipt and its prepared artifact; old filing approval is not
+reused. Unknown or uncertain writes remain held.
+Bind the observer to the exact normalized installed CLI argv and retain any invoker's
+audited delegation evidence. The corrected proposal presentation stays immutable through
+filing and finalization; use canonical state and completion receipts for later operation
+status. This bounded correction preserves captured bodies and refuses `modify`.
+
 ## #962 — Undecodable historical provenance hold
 
 Refresh `scripts/lib/triage/legacy_gate.py` and

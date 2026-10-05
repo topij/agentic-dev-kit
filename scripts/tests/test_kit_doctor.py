@@ -2341,6 +2341,7 @@ def test_the_shell_source_dependency_is_a_KNOWN_GAP_not_an_oversight():
         "scripts/lib/triage/inbox.py",
         "scripts/lib/triage/legacy_gate.py",
         "scripts/lib/triage/model.py",
+        "scripts/lib/triage/project_correction.py",
         "scripts/lib/triage/providers.py",
         "scripts/lib/triage/recovery.py",
         "scripts/lib/triage/storage.py",
