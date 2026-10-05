@@ -812,8 +812,13 @@ The canonical observer has `source: current-session`, `operator_identity`, and
 `[<absolute Python interpreter>, <absolute installed triage_friction_log.py>, resume,
 --context, interactive, --request, <absolute request>, --approval-context,
 <absolute context>, --enable-tracker]`. Extra, missing, reordered or contradictory
-arguments and an unrelated program hold. For a runtime-local invoker, the trusted
-observer must audit the launcher and delegation chain, retain the actual launcher argv
+arguments and an unrelated program hold. The interpreter path must equal the interpreter
+executing the installed CLI; run correction through that original interpreter or hold.
+This comparison gates planning and application; later reads of the exact approved receipt
+validate its captured historical invocation without binding a future CLI interpreter.
+This current-runtime binding does not independently authenticate historical execution.
+For a runtime-local invoker, the trusted observer must audit the launcher and delegation
+chain, retain the actual launcher argv
 and its source evidence independently, and normalize only the observed installed CLI
 delegation; normalization is not inferred from argv tokens. The invocation also binds
 the exact revision, repository directory, canonical ISO date, exit code and stdout SHA-256.
@@ -853,9 +858,12 @@ approved old-to-corrected report transition. If evidence changed, re-plan and ob
 exact approval or hold; never reconstruct uncertain history. Replaying `correct-project`
 after later filing preserves the immutable corrected presentation.
 
+`<original-python>` is the absolute interpreter path in the retained invocation.
+Use it for both planning and application.
+
 ```console
-uv run <engine-dir>/triage_friction_log.py correct-project --context interactive --enable-tracker --rejection-context /absolute/path/observed-rejection.json
-uv run <engine-dir>/triage_friction_log.py correct-project --context interactive --enable-tracker --rejection-context /absolute/path/observed-rejection.json --request /absolute/path/correction-request.json --approval-context /absolute/path/correction-approval.json
+<original-python> <engine-dir>/triage_friction_log.py correct-project --context interactive --enable-tracker --rejection-context /absolute/path/observed-rejection.json
+<original-python> <engine-dir>/triage_friction_log.py correct-project --context interactive --enable-tracker --rejection-context /absolute/path/observed-rejection.json --request /absolute/path/correction-request.json --approval-context /absolute/path/correction-approval.json
 ```
 
 ## Invalid-state recovery

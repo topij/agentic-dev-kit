@@ -404,6 +404,19 @@ def test_receipt_revalidates_retained_history_and_intent(tmp_path, monkeypatch, 
         canonical_state(dumps(state), settings=load_settings(root), mode="live")
 
 
+def test_approved_correction_receipt_remains_readable_under_a_later_interpreter(tmp_path, monkeypatch):
+    root, path, _, tracker, _, observer, _, _, _ = rejected_run(tmp_path, monkeypatch)
+    _, approved, context = plan_and_approval(root, tracker, observer)
+    engine.run("correct-project", context="interactive", start=root, request=approved,
+               tracker=tracker, rejection_context=observer, approval_context=context)
+    raw = path.read_bytes()
+    with monkeypatch.context() as patch:
+        patch.setattr(sys, "executable", "/future-runtime/python")
+        parsed = canonical_state(raw, settings=load_settings(root), mode="live")
+    assert parsed["proposal_correction"] == loads_exact(raw)["proposal_correction"]
+    assert path.read_bytes() == raw
+
+
 def test_corrected_receipt_rejects_rehashed_current_title_tamper(tmp_path, monkeypatch):
     from triage.model import TriageError
 
@@ -483,7 +496,7 @@ def test_project_only_correction_refuses_body_modification_before_rebinding(tmp_
     assert Path(draft["report"]).read_bytes() == report
 
 
-@pytest.mark.parametrize("fault", ["unrelated-program", "unrelated-interpreter", "relative-interpreter", "contradictory-context", "duplicate-flag", "missing-context", "different-entry", "relative-request"])
+@pytest.mark.parametrize("fault", ["unrelated-program", "unrelated-interpreter", "non-current-interpreter", "relative-interpreter", "contradictory-context", "duplicate-flag", "missing-context", "different-entry", "relative-request"])
 def test_rejection_observer_binds_the_exact_normalized_installed_cli_route(tmp_path, monkeypatch, fault):
     root, path, draft, tracker, transport, observer, raw, _, _ = rejected_run(tmp_path, monkeypatch)
     command = observer.source_read_back["invocation"]["command"]
@@ -491,6 +504,8 @@ def test_rejection_observer_binds_the_exact_normalized_installed_cli_route(tmp_p
         command[1] = str(root / "unrelated-program.py")
     elif fault == "unrelated-interpreter":
         command[0] = "/usr/bin/true"
+    elif fault == "non-current-interpreter":
+        command[0] = str(Path("/foreign-runtime") / Path(sys.executable).name)
     elif fault == "relative-interpreter":
         command[0] = "python"
     elif fault == "contradictory-context":

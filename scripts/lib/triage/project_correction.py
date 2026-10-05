@@ -9,6 +9,7 @@ unknown adapters and transport/create failures remain in flight.
 from __future__ import annotations
 
 import re
+import sys
 from dataclasses import replace
 from datetime import date
 from pathlib import PurePath
@@ -40,6 +41,7 @@ def _held(message: str) -> None:
 def rejection_proof(
     state: dict[str, Any], raw: bytes, settings: Settings,
     context: ApprovalContext | None,
+    *, require_current_interpreter: bool = True,
 ) -> dict[str, Any]:
     """Validate a trusted observer's bound legacy guard evidence, without I/O."""
     if (
@@ -99,6 +101,7 @@ def rejection_proof(
         or not isinstance(command, list) or any(not isinstance(item, str) for item in command)
         or len(command) != 10 or not PurePath(command[0]).is_absolute()
         or re.fullmatch(r"python(?:3(?:\.\d+)?)?", PurePath(command[0]).name, flags=re.IGNORECASE) is None
+        or (require_current_interpreter and command[0] != sys.executable)
         or command[1] != installed_cli
         or command[2:6] != ["resume", "--context", "interactive", "--request"]
         or not PurePath(command[6]).is_absolute()
@@ -183,7 +186,9 @@ def validate_receipt(value: dict[str, Any], settings: Settings) -> None:
     observer = core["rejection_observer"]
     if not isinstance(observer, dict) or set(observer) != {"source", "operator_identity", "source_read_back"}:
         _held("project correction retained observer is invalid")
-    rejection_proof(old, old_raw, old_settings, ApprovalContext(**observer))
+    # Planning and application bind the executing interpreter. A later receipt
+    # read validates that approved historical observation, not a future runtime.
+    rejection_proof(old, old_raw, old_settings, ApprovalContext(**observer), require_current_interpreter=False)
     if observer["source_read_back"]["report_digest"] != core["captured_report_digest"]:
         _held("project correction report differs from the observed original presentation")
     approval = receipt["approval"]
