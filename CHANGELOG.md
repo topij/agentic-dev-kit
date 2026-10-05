@@ -46,7 +46,9 @@ starts.
 
 Refresh `scripts/lib/triage/recovery.py`, `legacy_gate.py`, and
 `scripts/tests/test_triage_legacy_gate.py` together. A rejected foreign approver
-leaves the capture reusable by the captured operator. Provenance timeout reports
+leaves state-present captures reusable by the captured operator and gate-only or
+test-held evidence unpublished. Gate-only resume also requires the captured
+operator identity. Provenance timeout reports
 retain `operator-held` and identify uncertain cleanup when signaling is denied.
 Preserve already-disputed bundles for operator recovery, existing declines and
 the action-specific approval boundary.

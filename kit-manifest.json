@@ -508,7 +508,7 @@
         "scripts/lib/triage/engine.py"
       ],
       "role": "engine",
-      "sha256": "dcac3d362090277c29fb7ba8e28df8a6fcfa306d887994366e6ffc57956df110"
+      "sha256": "4f4962d88eb807348de1bad4178a52b8534b422cd14fce01887f5115ef19db54"
     },
     "scripts/lib/triage/storage.py": {
       "required_by": [
@@ -710,7 +710,7 @@
     },
     "scripts/tests/test_triage_legacy_gate.py": {
       "role": "test",
-      "sha256": "902b1d88e38b0a473064b3816456fb22abcb25fab7ca14186c1536a1a90bf572"
+      "sha256": "cdf00766e59fbdeb76c97f083215f277a21001883052c9348fce70dad7602ac1"
     },
     "scripts/tests/test_triage_providers.py": {
       "role": "test",
