@@ -42,6 +42,15 @@ starts.
 
 ---
 
+## #959 — Detached provenance helper cleanup uncertainty
+
+Refresh `scripts/lib/triage/legacy_gate.py` and
+`scripts/tests/test_triage_legacy_gate.py` together. Preserve the blocking artifacts
+when bounded cleanup cannot finish communicating: `operator-held` now identifies
+descendant cleanup uncertainty even after the owned Git child was reaped. Detached
+credential or SSH helpers may outlive that process group; retain the hold for
+operator direction rather than treating Git's reap as helper termination.
+
 ## #957 — Historical recovery rejection and cleanup
 
 Refresh `scripts/lib/triage/recovery.py`, `legacy_gate.py`, and

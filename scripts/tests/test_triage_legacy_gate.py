@@ -615,6 +615,55 @@ def test_historical_provenance_timeout_holds_before_capture(tmp_path, monkeypatc
         assert all(not helper_running(pid) for pid in helper_pids), "owned test helper did not reach terminal state"
 
 
+
+def test_detached_provenance_helper_holds_cleanup_uncertainty_before_capture(tmp_path, monkeypatch):
+    root, store, gate_raw, state_raw, owner_path, _ = historical_fixture(tmp_path, monkeypatch)
+    owner = ApprovalContext(**loads_exact(owner_path.read_bytes()))
+    original_popen = legacy_gate.Popen
+    children, helper_pids = [], []
+
+    def helper_running(pid):
+        status = subprocess.run(["ps", "-p", str(pid), "-o", "stat="], capture_output=True, text=True, timeout=2)
+        assert status.returncode in {0, 1} and not status.stderr.strip()
+        return bool(status.stdout.strip()) and not status.stdout.strip().startswith("Z")
+
+    def detach_selected(argv, **kwargs):
+        if argv[3] == "ls-remote":
+            # The finite helper retains the pipes from a separate session. Its
+            # PID is observed only; cleanup never signals an unowned helper.
+            program = "import subprocess,sys,time; helper=subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(10)'], start_new_session=True); print(helper.pid, flush=True); time.sleep(60)"
+            child = original_popen([sys.executable, "-c", program], **kwargs)
+            children.append(child)
+            helper_pid = int(child.stdout.readline().strip())
+            helper_pids.append(helper_pid)
+            assert helper_running(helper_pid)
+            return child
+        return original_popen(argv, **kwargs)
+
+    monkeypatch.setattr(legacy_gate, "Popen", detach_selected)
+    monkeypatch.setattr(legacy_gate, "PROVENANCE_TIMEOUT_SECONDS", 0.05)
+    try:
+        began = time.monotonic()
+        result = engine.run("recover", context="interactive", start=root, legacy_gate_context=owner)
+        assert time.monotonic() - began < 5
+        assert result["outcome"] == "operator-held"
+        assert "descendant cleanup uncertain" in result["detail"]
+        assert children and all(child.poll() is not None for child in children)
+        assert all(child.stdout.closed and child.stderr.closed for child in children)
+        assert helper_pids and all(helper_running(pid) for pid in helper_pids)
+        assert store.gate_path.read_bytes() == gate_raw and store.state_path.read_bytes() == state_raw
+        assert not store.recovery_path(digest_bytes(gate_raw)).exists()
+    finally:
+        for child in children:
+            if child.poll() is None:
+                child.kill()
+            child.wait(timeout=5)
+        deadline = time.monotonic() + 15
+        while any(helper_running(pid) for pid in helper_pids) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert all(not helper_running(pid) for pid in helper_pids), "finite detached helper did not terminate"
+
+
 def test_denied_group_cleanup_reaps_owned_provenance_child(tmp_path, monkeypatch):
     root, store, gate_raw, state_raw, owner_path, _ = historical_fixture(tmp_path, monkeypatch)
     owner = ApprovalContext(**loads_exact(owner_path.read_bytes()))
