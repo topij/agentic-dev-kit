@@ -797,3 +797,50 @@ def test_rehashed_historical_action_with_owner_evidence_cannot_change(tmp_path, 
     assert "historical recovery action changed" in result["detail"]
     assert store.gate_path.read_bytes() == gate_raw and store.state_path.read_bytes() == state_raw
     assert not Path(action["quarantine_path"]).exists()
+
+
+@pytest.mark.parametrize("stream", [1, 2])
+def test_historical_provenance_decoding_error_holds_before_capture(tmp_path, monkeypatch, stream):
+    root, store, gate_raw, state_raw, owner, _ = historical_fixture(tmp_path, monkeypatch)
+    original = legacy_gate.Popen
+    owned = []
+
+    def malformed_remote(argv, **kwargs):
+        if argv[3] != "ls-remote":
+            return original(argv, **kwargs)
+        child = original([sys.executable, "-c", f"import os; os.write({stream}, bytes([255]))"], **kwargs)
+        owned.append(child)
+        return child
+
+    def unexpected_signal(*args):
+        pytest.fail("decoding an already reaped child must not signal its PID")
+
+    monkeypatch.setattr(legacy_gate, "Popen", malformed_remote)
+    monkeypatch.setattr(legacy_gate.os, "killpg", unexpected_signal)
+    try:
+        result = engine.run("recover", context="interactive", start=root,
+                            legacy_gate_context=ApprovalContext(**loads_exact(owner.read_bytes())))
+        assert result["outcome"] == "operator-held"
+        assert "provenance read is unavailable" in result["detail"]
+        assert owned and all(child.returncode == 0 for child in owned)
+        assert all(child.stdout.closed and child.stderr.closed for child in owned)
+        assert store.gate_path.read_bytes() == gate_raw
+        assert store.state_path.read_bytes() == state_raw
+        assert not store.recovery_path(digest_bytes(gate_raw)).exists()
+    finally:
+        for child in owned:
+            if child.poll() is None:
+                child.kill()
+                child.wait(timeout=5)
+            child.stdout.close()
+            child.stderr.close()
+
+
+def test_historical_provenance_invalid_git_remote_bytes_hold(tmp_path):
+    root = tmp_path / "malformed-remote"
+    root.mkdir()
+    git(root, "init")
+    config = root / ".git/config"
+    config.write_bytes(config.read_bytes() + b'\n[remote "origin"]\n\turl = https://example.invalid/\xff\n')
+    with pytest.raises(TriageError, match="provenance read is unavailable"):
+        legacy_gate._git_read(root, "remote", "get-url", "origin")

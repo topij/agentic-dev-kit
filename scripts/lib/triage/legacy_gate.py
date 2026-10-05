@@ -85,7 +85,10 @@ def _git_read(repo: Any, *args: str) -> tuple[int, str]:
                         stream.close()
             failure = "historical gate provenance read timed out" if isinstance(exc, subprocess.TimeoutExpired) else "historical gate provenance read is unavailable"
             raise _held(failure + cleanup_detail) from exc
-    except (OSError, subprocess.TimeoutExpired, OverflowError) as exc:
+    except (OSError, subprocess.TimeoutExpired, OverflowError, UnicodeError) as exc:
+        # Text decoding can fail after communicate has reaped the child and
+        # closed its pipes. Unreadable output is unavailable provenance, never
+        # authority to signal a completed PID or normalize repository identity.
         raise _held("historical gate provenance read is unavailable") from exc
     if process.returncode not in {0, 1}:
         raise _held(f"historical gate git {' '.join(args)} failed: {stderr.strip()}")
