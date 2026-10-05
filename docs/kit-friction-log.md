@@ -26,6 +26,18 @@
 
 ## 2026-10-05
 
+- **The disposition filename was supplied as literal text again.** Severity L,
+  kept for accumulation beside the 2026-10-04 instance below. During #959's
+  2026-10-05 delivery, `--disposition` received the report path instead of stdin.
+  Readback exposed the filename; the author replaced the public comment with the
+  complete report and verified exact readback. Use `--disposition -` with stdin;
+  the existing CLI contract supplies this remedy, with no new mechanism proposed.
+- **An installation push preceded root verification's terminal result.** Severity L,
+  kept for accumulation. During cs-toolkit #2535's 2026-10-05 delivery, candidate
+  `e54c7eb1a8aabacd257963b493149a3eaf1a5106` was pushed while root checks ran.
+  The run completed afterward; subsequent candidates completed checks before
+  pushing. Existing before-push discipline supplies the remedy; no new gate is proposed.
+
 - **A fallback review's full suite overlapped its scratch mutations.** Severity L,
   kept for accumulation. In #952's initial adversarial review, `make test` at
   `84cda2321c8d1e82db54b9f11a478a38b2c207fe` on 2026-10-04, in
