@@ -322,6 +322,55 @@ def test_report_changed_after_state_commit_is_preserved_and_replay_holds(tmp_pat
     assert decode_bytes(plan["recovery_plan"]["action_core"]["corrected_report_raw"]) != competing
 
 
+@pytest.mark.parametrize("entry", [None, "resume"])
+@pytest.mark.parametrize("approved_filing", [False, True])
+def test_ordinary_resume_cannot_bypass_competing_report_hold(tmp_path, monkeypatch, entry, approved_filing):
+    root, path, draft, tracker, transport, observer, _, _, _ = rejected_run(tmp_path, monkeypatch)
+    _, approved, context = plan_and_approval(root, tracker, observer)
+    report = Path(draft["report"])
+    competing = b"competing evidence must survive\n"
+    persist = engine._persist
+    with monkeypatch.context() as patch:
+        def competing_report(*args, **kwargs):
+            result = persist(*args, **kwargs)
+            report.write_bytes(competing)
+            return result
+        patch.setattr(engine, "_persist", competing_report)
+        result = engine.run("correct-project", context="interactive", start=root, request=approved,
+                            tracker=tracker, rejection_context=observer, approval_context=context)
+    assert "report changed" in result["detail"]
+    retained = path.read_bytes()
+    state = loads_exact(retained)
+    result = engine.run(entry, context="interactive", start=root, tracker=tracker, head_authority=FakeForge([]),
+                        request={"approval": approval_for(state)} if approved_filing else {},
+                        approval_context=approval_context(state) if approved_filing else None)
+    assert report.read_bytes() == competing
+    assert path.read_bytes() == retained
+    assert "report changed" in result["detail"]
+    assert not any("mutation " in query for query, _ in transport.calls)
+
+
+@pytest.mark.parametrize("fault", ["missing", "changed"])
+def test_ordinary_resume_checks_prepared_correction_before_filing(tmp_path, monkeypatch, fault):
+    root, path, draft, tracker, transport, observer, _, _, _ = rejected_run(tmp_path, monkeypatch)
+    _, approved, context = plan_and_approval(root, tracker, observer)
+    engine.run("correct-project", context="interactive", start=root, request=approved,
+               tracker=tracker, rejection_context=observer, approval_context=context)
+    retained = path.read_bytes()
+    state = loads_exact(retained)
+    prepared = path.parent / ("recovery-bundle_live_" + state["proposal_correction"]["action_core_digest"] + ".json")
+    if fault == "missing":
+        prepared.unlink()
+    else:
+        prepared.write_bytes(b"changed")
+    report = Path(draft["report"]).read_bytes()
+    result = engine.run("resume", context="interactive", start=root, tracker=tracker, head_authority=FakeForge([]),
+                        request={"approval": approval_for(state)}, approval_context=approval_context(state))
+    assert "prepared receipt changed or is missing" in result["detail"]
+    assert path.read_bytes() == retained and Path(draft["report"]).read_bytes() == report
+    assert not any("mutation " in query for query, _ in transport.calls)
+
+
 @pytest.mark.parametrize("fault", ["state-bytes", "report-bytes", "corrected-report", "observer", "project-and-rehash", "title-and-rehash", "approval-reuse"])
 def test_receipt_revalidates_retained_history_and_intent(tmp_path, monkeypatch, fault):
     from triage.model import TriageError

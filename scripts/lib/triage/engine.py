@@ -1756,6 +1756,19 @@ def _publish_corrected_report(lease: GateLease, path: Path, core: dict[str, Any]
     atomic_replace(path, approved, expected_digest=core["captured_report_digest"])
 
 
+def _resume_project_correction_report(store: ArtifactStore, lease: GateLease, state: dict[str, Any]) -> None:
+    """Check correction evidence before ordinary resume can rewrite or send."""
+    receipt = state["proposal_correction"]
+    _, retained_raw = observe(store.recovery_path(receipt["action_core_digest"]))
+    if retained_raw != dumps(receipt):
+        raise TriageError("project correction prepared receipt changed or is missing", outcome="operator-held")
+    if (
+        state["phase"] == "awaiting-approval" and state["approval"] is None
+        and state["proposal_payloads"] == receipt["action_core"]["corrected_proposal_payloads"]
+    ):
+        _publish_corrected_report(lease, Path(state["proposal_payloads"][0]["report_binding"]["path"]), receipt["action_core"])
+
+
 def _correct_project(
     settings: Settings, store: ArtifactStore, lease: GateLease,
     state: dict[str, Any], raw: bytes, request: dict[str, Any],
@@ -1764,15 +1777,7 @@ def _correct_project(
 ) -> tuple[str, str, dict[str, Any] | None]:
     """Prepare or apply only the approved no-write project correction."""
     if "proposal_correction" in state:
-        receipt = state["proposal_correction"]
-        _, retained_raw = observe(store.recovery_path(receipt["action_core_digest"]))
-        if retained_raw != dumps(receipt):
-            raise TriageError("project correction prepared receipt changed or is missing", outcome="operator-held")
-        if (
-            state["phase"] == "awaiting-approval" and state["approval"] is None
-            and state["proposal_payloads"] == receipt["action_core"]["corrected_proposal_payloads"]
-        ):
-            _publish_corrected_report(lease, Path(state["proposal_payloads"][0]["report_binding"]["path"]), receipt["action_core"])
+        _resume_project_correction_report(store, lease, state)
         return "operator-held", "project correction already applied; filing approval is separate", None
     if type(tracker) is not LinearIssues:
         raise TriageError("project correction requires the installed Linear read-back adapter", outcome="operator-held")
@@ -2089,6 +2094,8 @@ def run(
                     candidate_index=state["frozen_snapshot"]["content"]["candidate_index"],
                     **_pr_result_fields(state),
                 )
+            if "proposal_correction" in state:
+                _resume_project_correction_report(store, lease, state)
             if state["phase"] == "awaiting-approval" and isinstance(request.get("approval"), dict):
                 _approval_authority(state, request, approval_context)
             state, state_digest = _rebind(store, lease, state, state_raw)

@@ -825,7 +825,9 @@ On exact approval, revalidate state/report/freeze and marker searches, exclusive
 publish the complete prepared correction receipt, then compare-and-replace state with
 `awaiting-approval`. Retain that receipt in `proposal_correction`; clear current decisions,
 attempts and filing approval while retaining their exact original bytes in the receipt.
-Replace the report only from its captured original bytes to the approved corrected
+Before an ordinary continuation rebinds state, rewrites a report or accepts filing
+approval, it verifies the exact prepared correction receipt and completes any pending
+report publication. Replace the report only from its captured original bytes to the approved corrected
 bytes. A competing or missing report holds without overwriting it. Correction never
 calls create. Present the complete corrected set for fresh exact filing approval through
 the ordinary `resume` path; the rejected old approval cannot match its digests.
