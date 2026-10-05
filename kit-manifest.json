@@ -726,7 +726,7 @@
     },
     "scripts/tests/test_triage_project_correction.py": {
       "role": "test",
-      "sha256": "8a955c774a6dbf36ad68237fbbd0dab1376d15c6a0bcb6fc8d7d7cc03b9a626b"
+      "sha256": "bbf4bb521bbabf87067718f9a2b3a4b75d96417dc982579803880876b8eaa12c"
     },
     "scripts/tests/test_triage_providers.py": {
       "role": "test",
