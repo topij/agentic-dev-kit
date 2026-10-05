@@ -5,6 +5,40 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-03 (Delta-pass named draws, #921, in Claude Code)
+
+**Shipped.** PR #934, squash `41beacb8`: `panel_prompt.py` takes a delta pass's two draws
+as `--draw-prose-class` and `--draw-safety-critical`, refuses one without the other, and
+names the verdict line each must begin with. The LOW rule's repair boundary goes to
+`--repair-boundary`, and `--delta-draws` is refused with a pointer to the three flags.
+The CHANGELOG entry is under #934. #921 stays open for its other half: a cockpit-side
+check that each lens's verdict lines carry both names.
+
+**Decided by the operator.** Start #921 from the session-start pick, merge #934, and
+merge this wrap-up when clean.
+
+**Review.** CodeRabbit skipped #934, so the fallback review ran: one adversarial lens as
+the full pass at `53b4569`, then one correctness lens as a LOW delta pass over the repair
+`e9d1c4b`. The delta prompt was the first rendered with the new flags, and its lens
+returned both named verdict lines. Each round's disposition and the delta's verdict lines
+are posted on #934.
+
+**Verified.** `env -u FORCE_COLOR make test` at `53b4569d86e4eca043cc1e95382673796c47df2f`
+on 2026-10-03, in `/Users/topi/Coding/agentic-dev-kit`, printed `4068 passed, 1 skipped in
+611.11s (0:10:11)`. The repair `e9d1c4b` had focused runs only, recorded in #934's body.
+`git diff --stat e9d1c4b 41beacb8` printed nothing, and `gh run list --commit
+41beacb8fa54e290c83a04c7617fcf7a0d07c490` showed the `Test` workflow completed `success`.
+
+**Not established.** The repair's focused runs ran on the uncommitted tree, so #934's
+body stamps no revision for them, and `pr_watch` reported `verification_stamp_behind_head`
+at `e9d1c4b`.
+
+**Answered, not acted on.** The operator asked when to run the final Codex validation and
+when to upgrade cs-toolkit. The answer given: upgrade cs-toolkit soon, because its pin
+`e698ec47` predates #740 and #914 stops authorized work there; settle cs-toolkit's
+`review.safety_critical_paths` first (#930); and run the upgrade in a Codex session so it
+doubles as the Codex validation. No workstream records this yet.
+
 ### 2026-10-03 (Review proportionality, #585, in Claude Code)
 
 **Shipped.** PR #927, squash `8ea91add`: a fallback review's lens count follows the PR's
