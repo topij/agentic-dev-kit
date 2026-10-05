@@ -20,6 +20,39 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-06 (cs-toolkit installed correction and landed Markdown hold, in Codex)
+
+Source [#969](https://github.com/topij/agentic-dev-kit/pull/969) merged as
+`01269cc80e05ecab1987ebaa97ee76bba306afee`; installation
+[#2545](https://github.com/in-parallel-oy/cs-toolkit/pull/2545) merged and was
+delivered as `cddb46c284d92b3261b0ec1977d82fa3a629cbcf`, pinning that source.
+The operator authorized checked installation/archive/wrap-up merges and delegated
+approval of the exact project-only action and complete corrected filing payload.
+Concrete presentations retain that human text beside runtime-computed digests;
+they do not invent a later human reply. Configured reviewers ran at
+`gpt-5.6-sol` / `medium`; GitHub runner cancellations were retried at the same
+reviewed head without a review waiver or permanent configuration change.
+
+The installed correction applied action
+`767e470416961a2aa43a0a0e422bd79d46ce47875b13bc2179139c0d8d9d82f9`,
+retaining rejected evidence and clearing its approval. The approved corrected
+create landed CUS-1670, but Linear changed Markdown bullets from `-` to `*`.
+`libs/report-utils/.venv/bin/python live-62970e59-normalization-readback.py`
+at `cddb46c284d92b3261b0ec1977d82fa3a629cbcf` on 2026-10-05 UTC, in
+`/Users/topi/Coding/in-parallel/cs-toolkit`, recorded the ambiguous exact-payload
+mismatch with mutation-prohibited marker searches, independent by-ID readback
+and unchanged retained state/report/quarantine bytes. No duplicate create,
+issue update, raw state edit, replacement freeze or TRI-01 archive followed.
+[The acceptance record](https://github.com/topij/agentic-dev-kit/issues/6#issuecomment-6003071493)
+retains the commands, actual results and digests. A bounded representation
+reconciliation design awaits the operator before further engineering.
+This entry supersedes the earlier project-name resume instruction; the separate
+frozen kit-friction decision remains pending. Follow-ups #970 and #971 were
+recorded without fixes claimed. Evidence remains under
+`state/review-evidence/cs-toolkit-linear-acceptance_2026-10-04/finalize-decisions/`.
+
+______________________________________________________________________
+
 ## Session — 2026-10-05 (cs-toolkit LIVE recovery and project-name hold, in Codex)
 
 The operator approved the installed recovery action
@@ -254,51 +287,6 @@ cs-toolkit Codex validation and Linear installation workstream.
 
 ______________________________________________________________________
 
-## Session — 2026-10-04 (cs-toolkit Codex validation and Linear installation)
-
-**Shipped.** Fixture portability in [#937](https://github.com/topij/agentic-dev-kit/pull/937),
-`163af2d82491f77dd4daeef916e3ec31522e76b7`: controlled configuration, verified mutations,
-quoted adopter bots plus an operator, and operator-only configuration. Validation fixes
-in [#938](https://github.com/topij/agentic-dev-kit/pull/938),
-`bcfe07b578bf59fb510e105ad91a5c6fae071f32`: bounded fail-closed subprocess reads,
-complete typed finding-evidence verification, and standalone script metadata.
-
-**Linear.** Installation support in [#939](https://github.com/topij/agentic-dev-kit/pull/939),
-`410108fb115a0bf063f737d9961b5ec4f68d641d`: configured-backend opt-in, exact approval,
-frozen-input/idempotency preservation, paginated read-back and bounded retries.
-Read-back verifies label identity and inherited team scope; the transport refuses redirects.
-No additional design decision blocks implementation. Live destination configuration,
-credentials, exact payload approval and acceptance remain adopter work.
-
-**Decided.** The operator authorized merging this session's PRs when clean. CodeRabbit
-skipped review; the configured independent fallback supplied the adversarial fixture
-review and the validation panel with its composed LOW delta. Native rollout records
-confirmed the configured reviewer model and effort. Public disposition comments that
-initially contained local filenames were corrected and read back.
-
-**Verified.** `env -u FORCE_COLOR make test` at
-`626bf01f2408d0d53ca6139bd3aa5419bbdeb866` on 2026-10-04, in
-`/private/tmp/devkit-linear-triage`, printed `4195 passed, 1 skipped in 616.02s
-(0:10:16)`. The contained LOW redirect repair at
-`6f1b3022aca1dd138edc9477387ca5086087dc9e` ran
-`uv run --with pytest --with pyyaml pytest -q scripts/tests/test_triage_providers.py
-scripts/tests/test_triage_engine.py
-scripts/tests/test_kit_doctor.py::test_kit_repo_self_check_is_clean` on 2026-10-04, in
-the same directory, and printed `327 passed in 46.61s`. Its fresh adversarial delta
-posted the named verdicts before composition on the retained full-review parent.
-The exact-head watch receipt and authorized merge are recorded on #939.
-
-**Not established.** No live Linear write or cs-toolkit runtime validation was performed.
-cs-toolkit remains on `chore/kit-upgrade-2026-10-03` at
-`ac7203341f50b5e39f5fe6f7f758b8f7e439cdf5`, as supplied by the operator; its local upgrade
-work was held pending these upstream fixes. This session changed only the kit.
-The new workstream assignment was not explicitly confirmed; it does not replace another workstream's starter.
-Workflow mistakes were recorded for accumulation in the friction inbox; no tracker write
-was made. Implementation follows the destination and approval decisions already recorded in #6;
-destination configuration, API credentials and exact live payload approval remain adopter actions.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -364,18 +352,20 @@ alone, so a missing frozen artifact dead-ends it.
 
 ### cs-toolkit Codex validation and Linear installation
 
-**Status:** cs-toolkit installation [#2535](https://github.com/in-parallel-oy/cs-toolkit/pull/2535)
-merged as `33816d5f9558024796fe08552e41164440ace88d` and was delivered with
-kit pin `66a8044865e5ef43d633270c2ce224827de3aa35`. The retained TEST route
-completed. Exact installed recovery was approved and applied. LIVE session
-`62970e59c292424c8db6b8ae75f3e81e` received exact TRI-01 filing approval,
-but the author-prepared project-name mismatch was rejected before create. The
-valid tracker-write state retains its unsettled attempt; no raw correction or
-replacement freeze was made. Live acceptance is incomplete.
-**Owner:** [#6](https://github.com/topij/agentic-dev-kit/issues/6#issuecomment-5995157879).
+**Status:** source #969 and installation #2545 merged, with cs-toolkit delivered
+at `cddb46c284d92b3261b0ec1977d82fa3a629cbcf` and kit pin
+`01269cc80e05ecab1987ebaa97ee76bba306afee`. Exact project-only correction and
+fresh corrected TRI-01 approval were applied under the operator's delegated
+sleep-time authority. The installed read-only reconciliation command in the
+2026-10-06 session entry recorded a landed CUS-1670 Markdown representation
+mismatch; its tracker operation remains ambiguous in the retained receipt,
+not verified or archive-accounted. TEST remains separate; the LIVE freeze,
+original rejected history and quarantines were preserved.
+**Owner:** [#6 acceptance evidence](https://github.com/topij/agentic-dev-kit/issues/6#issuecomment-6003071493).
 
-▶ Next: Read `RESUME-LIVE-PROJECT-MISMATCH-62970e59.md` in the retained
-acceptance evidence and resolve the supported no-write reconciliation/proposal
-correction design on #6. Preserve the immutable freeze, approvals, attempt and
-quarantines; a corrected payload needs fresh exact approval. Leave the separate
-kit-friction decision, root legacy artifacts, host automation and credentials alone.
+▶ Next: Read `live-62970e59-landed-markdown-decision-presented.md` in the retained
+acceptance evidence and obtain the operator's bounded reconciliation design
+decision before extending implementation. Reconcile existing CUS-1670 through
+a supported route; do not create a duplicate, bypass exact matching or edit raw
+state. Archive TRI-01 only after verified accounting. Preserve parked entries,
+the separate kit-friction decision, root legacy artifacts, automation and credentials.
