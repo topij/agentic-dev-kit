@@ -493,9 +493,10 @@ tracker-write, forge-finalize, archive-sweep or completed route described in *At
 Linear project correction*. It carries exactly `action_core`, `action_core_digest` and
 `approval`. Validate the original captured canonical state independently, its no-write
 observer, project-only corrected proposals, complete report bytes and exact action
-approval on every state read. It cannot nest another correction. Current proposals may
-subsequently change only through the ordinary body-modification contract; their original
-run/freeze and corrected destination stay bound. No other extra state fields are accepted.
+approval on every state read. It cannot nest another correction. Current proposals must
+remain equal to the captured corrected set; this continuation refuses body modification.
+The original run/freeze and corrected destination stay bound. No other extra state fields
+are accepted.
 `config_fingerprint` equals `run_identity.config_fingerprint`.
 `config_fingerprint` and `frozen_inbox_digest` are lowercase SHA-256 strings, and
 `protected_branch_head` is a lowercase full commit identifier. Reject a missing, extra,
