@@ -1020,6 +1020,14 @@ def _advance_tracker_batch(
     operations: list[dict[str, Any]] = deepcopy(writing.get("operations", []))
     proposals = {proposal["candidate_id"]: proposal for proposal in writing["proposal_payloads"]}
     filed = [decision for decision in writing["decisions"] if decision["decision"] == "file"]
+    if "proposal_correction" in writing:
+        # Fresh filing approval can arrive after correction reconciliation. Keep
+        # the original identity authoritative across that gap before any create.
+        original = loads_exact(decode_bytes(writing["proposal_correction"]["action_core"]["captured_state_raw"]))
+        original_proposals = {proposal["candidate_id"]: proposal for proposal in original["proposal_payloads"]}
+        for decision in filed:
+            if tracker.search(destination, original_proposals[decision["candidate_id"]]["marker"]):
+                raise TriageError("original project correction marker appeared before filing; preserve the in-flight run", outcome="operator-held")
     if operations and operations[-1].get("status") != "verified":
         pending = operations[-1]
         proposal = proposals[pending["candidate_id"]]

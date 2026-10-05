@@ -254,6 +254,46 @@ def test_any_marker_landing_holds_correction_even_after_action_approval(tmp_path
     assert not any("mutation " in query for query, _ in transport.calls)
 
 
+@pytest.mark.parametrize("observation", ["original-marker", "incomplete-search"])
+def test_original_marker_reconciled_after_correction_before_fresh_filing(tmp_path, monkeypatch, observation):
+    root, path, draft, tracker, transport, observer, raw, _, _ = rejected_run(tmp_path, monkeypatch)
+    _, approved, context = plan_and_approval(root, tracker, observer)
+    applied = engine.run("correct-project", context="interactive", start=root, request=approved,
+                         tracker=tracker, rejection_context=observer, approval_context=context)
+    assert "correction applied" in applied["detail"]
+    original = loads_exact(raw)["proposal_payloads"][0]
+    if observation == "original-marker":
+        transport.issues.append({
+            "id": "late-original", "identifier": "ADO-99", "url": "https://linear.app/w/issue/ADO-99",
+            "title": original["payload"]["title"], "description": original["payload"]["body"],
+            "team": {"id": "team"}, "project": {"id": "project", "name": "Adopter"},
+            "labels": [{"id": "label", "name": "bug"}],
+        })
+    else:
+        original_transport = tracker.transport
+        def incomplete(query, variables):
+            if "TriageIssues(" in query:
+                return {"data": {"issues": {"nodes": [], "pageInfo": {"hasNextPage": True, "endCursor": None}}}}
+            return original_transport(query, variables)
+        tracker.transport = incomplete
+    state = loads_exact(path.read_bytes())
+    report = Path(draft["report"]).read_bytes()
+    result = engine.run("resume", context="interactive", start=root, tracker=tracker, head_authority=FakeForge([]),
+                        request={"approval": approval_for(state)}, approval_context=approval_context(state))
+    retained = loads_exact(path.read_bytes())
+    assert result["outcome"] == "operator-held"
+    assert retained["verified_tracker_identifiers"] == []
+    assert retained["operations"] == [] and retained["attempts"] == []
+    assert retained["proposal_correction"] == state["proposal_correction"]
+    assert Path(draft["report"]).read_bytes() == report
+    assert not any("mutation " in query for query, _ in transport.calls)
+    if observation == "original-marker":
+        assert "original project correction marker appeared" in result["detail"]
+        assert transport.issues[0]["description"] == original["payload"]["body"]
+    else:
+        assert "pagination" in result["detail"]
+
+
 @pytest.mark.parametrize("drift", ["frozen", "configuration", "pagination", "stale-approval", "report"])
 def test_correction_revalidates_mutated_action_inputs(tmp_path, monkeypatch, drift):
     root, path, draft, tracker, transport, observer, raw, _, _ = rejected_run(tmp_path, monkeypatch)
