@@ -5,6 +5,43 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-04 (cs-toolkit acceptance preparation, in Codex)
+
+**Prepared.** The retained test session `5d68cdbff45c4ecbb561dfc6832d0f11`
+advanced to `awaiting-approval` through the installed test entry. Its complete payload
+set consists of explicit test-only fixtures; live semantic triage remains outstanding.
+The exact report, proposal-set binding, client observations, installation checks and
+recovery prerequisites are retained under
+`state/review-evidence/cs-toolkit-linear-acceptance_2026-10-04/resume-01a1085e/`.
+
+**Held.** No test decision was invented, so decision accounting and diff rendering
+remain pending. The live gate matched the preserved capture; its older format fails
+the installed canonical and record-shape checks. Host identity and owner termination
+remain unestablished. The prepared recovery plan grants no mutation authority.
+No live frozen run or approved Linear payload was produced.
+
+**Authority.** The operator requested autonomous continuation before going to sleep.
+The plan's separate recovery and exact-payload approval boundaries were retained.
+Legacy artifacts, host automations, credentials and installed engines were preserved.
+Publication of the prepared acceptance update on #6 awaits its exact-payload decision.
+
+### 2026-10-04 (cs-toolkit Linear acceptance attempt, in Codex)
+
+**Recorded.** [The acceptance attempt on #6](https://github.com/topij/agentic-dev-kit/issues/6#issuecomment-5983052800)
+retains the installation checks, destination and credential plan, client observations,
+native rollout reference, test freeze and held live preflight. The comment was read back
+identical. Local artifacts are in `state/review-evidence/cs-toolkit-linear-acceptance_2026-10-04/`.
+
+**Held.** The live preflight returned `single-writer gate is already held`; no live
+frozen run or payload reached approval. No Linear write or recovery mutation occurred.
+The operator's legacy-artifact, host-automation and credential boundaries were preserved.
+The test run reached its freeze stage, not proposal/decision/render completion.
+
+**Plan retained.** Use the installed kit pin and merged Linear destination, with the
+existing secure credential loader. No cs-toolkit configuration or engine change was needed
+for this attempt. The operator named this workstream and requested replacing its stale
+starter; #946's merge and #919's closure were read back before the update.
+
 ### 2026-10-04 (#919 capability-matrix row audit)
 
 **Opened in that session.** [#946](https://github.com/topij/agentic-dev-kit/pull/946) delivers
