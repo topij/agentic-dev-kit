@@ -36,7 +36,8 @@ then archived TRI-01 through the engine's sweep
 [in-parallel-oy/cs-toolkit#2552](https://github.com/in-parallel-oy/cs-toolkit/pull/2552),
 which merged as `c84d76c6536cad8d0f0d131b8cb095463ad11a12`. The run completed.
 [The acceptance record on #6](https://github.com/topij/agentic-dev-kit/issues/6#issuecomment-6012620438)
-holds the commands, revisions, directories and results. #6 stays open.
+holds the commands, revisions, directories and results. #6 stays open. This
+supersedes the earlier 2026-10-06 Codex entry's pending reconciliation design.
 
 Filed on the operator's approval of each exact text, each read back identical:
 - #974, the learning: classify a held state as a recurring defect or a one-off
@@ -51,7 +52,8 @@ and #975 covers removing the pin along with its path.
 Closed workstream cs-toolkit Codex validation and Linear installation: the
 operator closed it once LIVE acceptance completed. Its follow-ups are #974, #975
 and #976. The separate frozen kit-friction decision
-(`469bcd5829244adeb17443d1a45a6c01`) remains pending and untouched.
+(`469bcd5829244adeb17443d1a45a6c01`) remains pending and untouched; the new
+*Kit friction-log triage* workstream carries it.
 
 ______________________________________________________________________
 
@@ -384,3 +386,14 @@ and an engine-owned rollback waits for a recurrence (#892).
 
 ▶ Next: #859 — triage recover calls a completed state valid on `canonical_state`
 alone, so a missing frozen artifact dead-ends it.
+
+### Kit friction-log triage
+
+**Status:** the 2026-10-05 recovery-delivery session entry records a kit budget triage
+that froze session `469bcd5829244adeb17443d1a45a6c01` and left its archive-or-park
+decision pending, with every inbox block preserved. A search on 2026-10-06 of this
+repository's `state/` and of `~/.local/state/agentic-dev-kit` found no retained state
+for that session. **Owner:** that session entry.
+
+▶ Next: locate session `469bcd58`'s retained triage state, or confirm with the operator
+that it is gone, before any `triage-friction-log` sweep of the kit inbox.
