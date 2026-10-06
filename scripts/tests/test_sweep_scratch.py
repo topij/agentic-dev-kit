@@ -1,10 +1,11 @@
 """Tests for scripts/sweep_scratch.py — the scratch report and guarded removal (#900).
 
 Every fixture lives under pytest's ``tmp_path``; nothing here points the engine at
-a real scratch directory. The engine deletes files, so each refusal has a test
-that asserts the protected path survives ``--apply``, and the refusals that are
-the only guard for their case have a second test that neutralises the guard and
-asserts the same fixture is then removed — proof the first test discriminates.
+a real scratch directory. The engine deletes files, so the refusals listed in
+``test_each_refusal_is_what_keeps_its_fixture`` each have a fixture that survives
+``--apply`` and a twin that neutralises the guard and asserts the same fixture is
+then removed — proof the first test discriminates. The mount-point refusals are
+not pinned here: building a mount needs privileges a test run does not have.
 """
 
 from __future__ import annotations
@@ -373,6 +374,19 @@ def _linked_worktree_of_unconfigured_repo(base: Path, repo: Path) -> tuple[list[
     return [scratch], scratch / "entry"
 
 
+def _main_repo_with_outside_worktree(base: Path, repo: Path) -> tuple[list[Path], Path]:
+    scratch = base / "scratch"
+    clone = scratch / "entry" / "clone"
+    clone.mkdir(parents=True)
+    _git(clone, "init", "-q")
+    _git(clone, "config", "user.email", "test@example.com")
+    _git(clone, "config", "user.name", "Test")
+    _git(clone, "commit", "-q", "--allow-empty", "-m", "seed")
+    _git(clone, "worktree", "add", "-q", "--detach", str(base / "outside-wt"))
+    _set_age(scratch / "entry", OLD)
+    return [scratch], scratch / "entry"
+
+
 def _fresh_entry(base: Path, repo: Path) -> tuple[list[Path], Path]:
     scratch = base / "scratch"
     _tree(scratch / "entry", age=60)
@@ -394,6 +408,9 @@ def _entry_is_another_root(base: Path, repo: Path) -> tuple[list[Path], Path]:
         pytest.param(
             _linked_worktree_of_unconfigured_repo, "_linked_gitdir_reason", id="linked-worktree"
         ),
+        pytest.param(
+            _main_repo_with_outside_worktree, "_main_repo_reason", id="outside-worktree"
+        ),
         pytest.param(_fresh_entry, "grace_reason", id="grace-window"),
         pytest.param(_entry_is_another_root, "configured_root_reason", id="configured-root"),
     ],
@@ -409,6 +426,57 @@ def test_each_refusal_is_what_keeps_its_fixture(
     _run(roots, repo, older_than=0)
 
     assert entry.exists() is not neutralised
+
+
+def test_unparseable_git_file_keeps_the_entry(root: Path, repo: Path):
+    entry = root / "entry"
+    entry.mkdir()
+    (entry / ".git").write_text("garbage\n", encoding="utf-8")
+    _set_age(entry, OLD)
+    reports, outcomes = _run([root], repo, older_than=0)
+    assert _owners(reports) == {"entry": sweep.LIVE}
+    assert "unparseable .git file" in reports[0].entries[0].reason
+    assert outcomes == []
+    assert entry.is_dir()
+
+
+def test_worktree_registered_after_the_report_is_rechecked_before_removal(
+    root: Path, repo: Path, monkeypatch
+):
+    entry = _tree(root / "entry")
+    settings = _settings([root], repo)
+    reports = sweep.survey(settings, root=repo, now=time.time())
+    assert _owners(reports) == {"entry": sweep.STALE}
+    monkeypatch.setattr(sweep, "registered_worktrees", lambda repos: [str(entry)])
+    outcomes = sweep.apply(reports, settings, older_than=0)
+    assert [(o.action, o.reason.startswith("now live-worktree")) for o in outcomes] == [("kept", True)]
+    assert entry.is_dir()
+
+
+def test_cli_failed_removal_exits_one(root: Path, repo: Path, base: Path, monkeypatch, capsys):
+    _tree(root / "old-session")
+    cfg = _config(base / "dev-model.yaml", roots=[str(root)], repos=[str(repo)])
+
+    def fail(entry: str, root_path: str, identity) -> None:
+        raise OSError(13, "Permission denied", entry)
+
+    monkeypatch.setattr(sweep, "remove_entry", fail)
+    assert sweep.main(["--config", str(cfg), "--apply", "--older-than", "1d"]) == 1
+    assert "failed" in capsys.readouterr().out
+
+
+def test_empty_worktree_repos_is_a_config_error(root: Path, base: Path, capsys):
+    cfg = base / "dev-model.yaml"
+    cfg.write_text(
+        f'scratch:\n  roots:\n    - "{root}"\n  grace_window: 1h\n  worktree_repos: []\n',
+        encoding="utf-8",
+    )
+    assert sweep.main(["--config", str(cfg)]) == 2
+    assert "worktree_repos is empty" in capsys.readouterr().err
+
+
+def test_grace_reason_never_prints_a_negative_age():
+    assert "-" not in sweep.grace_reason(-5000.0, 3600)
 
 
 # --------------------------------------------------------------------------- #

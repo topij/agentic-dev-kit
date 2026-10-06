@@ -15,9 +15,13 @@ child of a root is one **entry**, and every entry gets exactly one owner class:
 
 ``live-worktree``
     The entry is, contains or sits inside a worktree registered with one of the
-    ``scratch.worktree_repos`` (``git worktree list --porcelain``), or it holds a
+    ``scratch.worktree_repos`` (``git worktree list --porcelain``); or it holds a
     ``.git`` file pointing at a git dir that still exists outside the entry — a
-    linked worktree of some repository this config does not name.
+    linked worktree of some repository this config does not name; or it holds a
+    repository whose ``.git/worktrees/*/gitdir`` names a worktree that still
+    exists outside the entry, which removing the entry would orphan. A ``.git``
+    file or ``worktrees`` record the engine cannot read or parse also lands here,
+    with that as its reason: kept, as if live.
 ``in-grace``
     Something anywhere inside the entry was modified within
     ``scratch.grace_window``. The newest mtime over the whole tree decides, not the
@@ -50,8 +54,10 @@ Usage (``<engine-dir>`` is ``paths.engines``):
 Ages are ``<n>s``, ``<n>m``, ``<n>h`` or ``<n>d``.
 
 Exit codes:
-    0 — report printed, or every eligible entry removed.
-    1 — a configured root was refused, or an eligible entry could not be removed.
+    0 — report printed, and no root refused and no removal failed. An entry kept
+        because its re-check no longer judged it removable is reported as
+        ``kept`` and is not a failure.
+    1 — a configured root was refused, or a removal was attempted and failed.
     2 — usage or config error, or the worktree registrations could not be read.
 """
 
@@ -241,7 +247,7 @@ def configured_root_reason(path: str, roots: list[str]) -> str | None:
 
 def grace_reason(age: float, grace_seconds: int) -> str | None:
     if age < grace_seconds:
-        return f"modified {format_age(age)} ago, inside the {format_age(grace_seconds)} grace window"
+        return f"modified {format_age(max(0.0, age))} ago, inside the {format_age(grace_seconds)} grace window"
     return None
 
 
@@ -263,6 +269,43 @@ def _linked_gitdir_reason(git_file: str, entry: str) -> str | None:
         return None  # a submodule whose git dir lives inside the same entry
     if os.path.exists(target):
         return f"linked worktree {os.path.dirname(git_file)} of an unconfigured repository ({target})"
+    return None
+
+
+def _main_repo_reason(git_dir: str, entry: str) -> str | None:
+    """A ``.git`` directory whose linked worktrees live outside the entry.
+
+    Removing the entry deletes the git dir those worktrees point back at, so they
+    stop being repositories. Reads ``<git_dir>/worktrees/*/gitdir``, each the path
+    of one worktree's ``.git`` file.
+    """
+    records = os.path.join(git_dir, "worktrees")
+    try:
+        names = sorted(os.listdir(records))
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        return f"unreadable worktree records {records}: {exc.strerror}"
+    for name in names:
+        gitdir_file = os.path.join(records, name, "gitdir")
+        try:
+            with open(gitdir_file, encoding="utf-8", errors="replace") as handle:
+                text = handle.read(_GIT_FILE_MAX + 1)
+        except FileNotFoundError:
+            continue  # a half-pruned record names no worktree
+        except OSError as exc:
+            return f"unreadable worktree record {gitdir_file}: {exc.strerror}"
+        lines = text.strip().splitlines()
+        if len(text) > _GIT_FILE_MAX or len(lines) != 1:
+            return f"unparseable worktree record {gitdir_file}"
+        target = lines[0].strip()
+        if not os.path.isabs(target):
+            target = os.path.join(os.path.dirname(gitdir_file), target)
+        worktree = os.path.dirname(os.path.realpath(target))
+        if worktree == entry or worktree.startswith(entry + os.sep):
+            continue
+        if os.path.exists(target):
+            return f"repository whose worktree {worktree} lives outside this entry"
     return None
 
 
@@ -302,8 +345,11 @@ def scan(entry: str, top: os.stat_result) -> _Scan:
                 result.problems.append(f"{child} is on another filesystem")
                 if name in dirnames:
                     dirnames.remove(name)
-            if name == ".git" and stat.S_ISREG(st.st_mode) and result.linked is None:
-                result.linked = _linked_gitdir_reason(child, entry)
+            if name == ".git" and result.linked is None:
+                if stat.S_ISREG(st.st_mode):
+                    result.linked = _linked_gitdir_reason(child, entry)
+                elif stat.S_ISDIR(st.st_mode):
+                    result.linked = _main_repo_reason(child, entry)
     return result
 
 
