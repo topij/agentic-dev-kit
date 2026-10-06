@@ -2720,7 +2720,8 @@ def _reduce_latest_bot_reviews(
     ``states`` is the displacement policy, and it is the whole difference:
 
     - ``None`` — every review participates, so the newest one wins whatever it
-      says. That is "which commit did this bot last *look at*", which is what
+      says; the one exception is a bodyless ``COMMENTED`` review, which both
+      callers skip before this policy applies (#981, beside the skip). That is "which commit did this bot last *look at*", which is what
       coverage reports and what ``#350``'s evidence route needs: a clean review
       is ordinarily ``COMMENTED``, and a rule that let it be outranked would
       leave the ordinary clean review unable to supply evidence.
@@ -2779,9 +2780,10 @@ def _reduce_latest_bot_reviews(
         # bot's reply on an inline thread in exactly that object, bound to the
         # head current at reply time — so without this skip, replying to the
         # author's fix on a thread "covered" a head the bot never reviewed, and
-        # `qualifying_bot_coverage` opened the gate on it. Observed on
-        # cs-toolkit PR 2308 (2026-09-14), on both transports: the bot's real
-        # reviews carried a body, its thread-reply wrappers an empty one.
+        # `qualifying_bot_coverage` opened the gate on it. cs-toolkit PR 2308's
+        # reviews (submitted 2026-09-14), read on both transports on 2026-10-06:
+        # the bot's real reviews carried a body, its thread-reply wrappers an
+        # empty one.
         #
         # Skipped rather than recorded with a flag, for the same reason the
         # displacement policy below skips: a wrapper must not displace the
@@ -3411,8 +3413,9 @@ def bot_head_objections(
 
     The sibling of :func:`bot_review_coverage`, and the reason the objection read
     is no longer computed from it. Coverage reduces to one entry per bot,
-    newest-wins **regardless of state**, because its question is which commit the
-    bot last looked at. Asking the objection question of that answer meant a
+    newest-wins **regardless of state** (a bodyless ``COMMENTED`` aside, which is
+    not a review; #981), because its question is which commit the bot last
+    looked at. Asking the objection question of that answer meant a
     bot's own follow-up ``COMMENTED`` at the same head did not merely outrank its
     earlier ``CHANGES_REQUESTED`` — it removed it from the structure the blocker
     was computed from. Two blockers became zero with no commit pushed, no head
@@ -3489,7 +3492,7 @@ def objecting_bot_coverage(review_bots: dict, head: str | None) -> list[str]:
     objecting = {
         entry.get("bot")
         # `objections`, NOT `coverage` (#494). Coverage is newest-wins over every
-        # state, so a bot's own later non-verdict review at this same head
+        # state (a bodyless `COMMENTED` aside; #981), so a bot's own later non-verdict review at this same head
         # deleted its objection from the list before this ever read it. Same
         # entry shape, so every clause below is unchanged — the fix is which
         # reduction the clauses are applied to.
