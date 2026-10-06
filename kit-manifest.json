@@ -443,7 +443,7 @@
         "scripts/triage_friction_log.py"
       ],
       "role": "engine",
-      "sha256": "443e81c5426fa8c697da30623720fe9cb446754095a8c23fbbfdcf5c7326949a"
+      "sha256": "9d2be3408ed5490c87af0825618cad8345a8af60c032ea03e6d20bde18a1b24a"
     },
     "scripts/lib/triage/finalize.py": {
       "required_by": [
