@@ -705,7 +705,9 @@
   "  grace_window: 24h\n",
   "  # Repositories whose registered worktrees (`git worktree list`) are never\n",
   "  # removed, nor any entry holding one. A relative path resolves against the repo\n",
-  "  # root. A root inside one of these worktrees has every entry protected.\n",
+  "  # root. A root inside one of these worktrees has every entry protected, and so\n",
+  "  # does an entry holding a registered worktree: a review lens's worktree left\n",
+  "  # registered keeps its whole session directory until `git worktree prune`.\n",
   "  worktree_repos:\n",
   "    - \".\"\n"
 ]

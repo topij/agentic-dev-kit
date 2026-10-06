@@ -704,6 +704,8 @@ scratch:
   grace_window: 24h
   # Repositories whose registered worktrees (`git worktree list`) are never
   # removed, nor any entry holding one. A relative path resolves against the repo
-  # root. A root inside one of these worktrees has every entry protected.
+  # root. A root inside one of these worktrees has every entry protected, and so
+  # does an entry holding a registered worktree: a review lens's worktree left
+  # registered keeps its whole session directory until `git worktree prune`.
   worktree_repos:
     - "."

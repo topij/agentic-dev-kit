@@ -499,6 +499,71 @@ def test_registration_of_a_worktree_path_holding_a_newline_is_read_whole(root: P
     assert str(odd) in sweep.registered_worktrees([repo])
 
 
+def test_linked_worktree_whose_git_dir_cannot_be_statted_is_kept(base: Path, repo: Path):
+    roots, entry = _linked_worktree_of_unconfigured_repo(base, repo)
+    other = base / "other-repo"
+    other.chmod(0)
+    try:
+        reports, outcomes = _run(roots, repo, older_than=0)
+    finally:
+        other.chmod(0o755)
+    assert _owners(reports) == {"entry": sweep.LIVE}
+    assert "cannot stat" in reports[0].entries[0].reason
+    assert outcomes == []
+    assert entry.is_dir()
+
+
+def test_failed_worktree_reread_during_apply_keeps_the_entry(root: Path, repo: Path, monkeypatch):
+    entry = _tree(root / "entry")
+    settings = _settings([root], repo)
+    reports = sweep.survey(settings, root=repo, now=time.time())
+    assert _owners(reports) == {"entry": sweep.STALE}
+
+    def fail(repos):
+        raise sweep.ConfigError("git worktree list failed")
+
+    monkeypatch.setattr(sweep, "registered_worktrees", fail)
+    outcomes = sweep.apply(reports, settings, older_than=0)
+    assert [o.action for o in outcomes] == ["kept"]
+    assert entry.is_dir()
+
+
+def test_entry_touched_after_the_report_is_rechecked_against_older_than(root: Path, repo: Path):
+    entry = _tree(root / "entry", age=30 * DAY)
+    settings = _settings([root], repo, grace=60)
+    reports = sweep.survey(settings, root=repo, now=time.time())
+    _set_age(entry, 2 * DAY)  # still past the grace window, now younger than --older-than
+    outcomes = sweep.apply(reports, settings, older_than=7 * DAY)
+    assert [o.action for o in outcomes] == ["kept"]
+    assert entry.is_dir()
+
+
+def test_relative_worktree_repo_resolves_against_the_repo_root(base: Path, repo: Path, root: Path):
+    cfg = _config(base / "dev-model.yaml", roots=[str(root)], repos=["."])
+    assert sweep.load_settings(cfg, root=repo).repos == [repo]
+
+
+def test_a_refused_root_is_still_protected_as_an_entry_of_another(root: Path, repo: Path):
+    inner = root / "file.txt"
+    inner.write_text("x\n", encoding="utf-8")
+    _set_age(inner, OLD)
+    reports, outcomes = _run([root, inner], repo, older_than=0)
+    assert [r.status for r in reports] == ["ok", "refused"]
+    assert _owners(reports) == {"file.txt": sweep.UNCLASSIFIED}
+    assert outcomes == []
+    assert inner.exists()
+
+
+def test_an_entry_holding_a_deeper_configured_root_is_kept(root: Path, repo: Path):
+    deeper = root / "a" / "b"
+    deeper.mkdir(parents=True)
+    _set_age(root / "a", OLD)
+    reports, outcomes = _run([root, deeper], repo, older_than=0)
+    first = next(r for r in reports if r.root == str(root))
+    assert {os.path.basename(e.path): e.owner for e in first.entries} == {"a": sweep.UNCLASSIFIED}
+    assert deeper.is_dir()
+
+
 def test_entry_replaced_after_the_report_is_kept(root: Path, repo: Path):
     entry = _tree(root / "entry")
     settings = _settings([root], repo)

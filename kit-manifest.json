@@ -531,7 +531,7 @@
     },
     "scripts/sweep_scratch.py": {
       "role": "engine",
-      "sha256": "9bda6c8ffe3b029b9b8f29f2ec6a11f3f1e55108892d867c40566b3a536261ad"
+      "sha256": "13aca6c3e500f025a7b6bc1fef9114c3dbac0fbbcfc2014c78b64a5be0bfd2c6"
     },
     "scripts/tests/_repo_layout.py": {
       "role": "test",
@@ -551,7 +551,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "a8cd47f5074586951e5f65e26660d351e0f1e52617c75273a16c2a7d75e8ba01"
+      "sha256": "a5718a2abd5d4f721e1895fb9fb83db9dda12e1f5bea16baaf8f4ba01ef4a423"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -651,7 +651,7 @@
     },
     "scripts/tests/test_sweep_scratch.py": {
       "role": "test",
-      "sha256": "27e09b76f324aedd3e52b26a4bebf8dcf154bb50464bf3f9883accb9e13f5978"
+      "sha256": "f0a313b39ced063116abe1a7ad32f231896d9a14a8eb4d0ada9ea6d9c8ece947"
     },
     "scripts/tests/test_systemize_artifacts.py": {
       "role": "test",

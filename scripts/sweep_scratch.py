@@ -266,6 +266,21 @@ def grace_reason(age: float, grace_seconds: int) -> str | None:
     return None
 
 
+def _target_state(path: str) -> str:
+    """``present``, ``gone`` or ``unknown``. Only a missing path is ``gone``.
+
+    ``os.path.exists`` answers False on a permission error too, which would read
+    an unreachable live worktree as an abandoned one.
+    """
+    try:
+        os.stat(path)
+    except FileNotFoundError:
+        return "gone"
+    except (OSError, ValueError):
+        return "unknown"
+    return "present"
+
+
 def _linked_gitdir_reason(git_file: str, entry: str) -> str | None:
     """A ``.git`` file whose git dir exists outside the entry is someone's live worktree."""
     try:
@@ -281,12 +296,14 @@ def _linked_gitdir_reason(git_file: str, entry: str) -> str | None:
         target = os.path.join(os.path.dirname(git_file), target)
     try:
         target = os.path.realpath(target)
-        exists = os.path.exists(target)
     except (OSError, ValueError):
         return f"unparseable .git file {git_file}"
     if target.startswith(entry + os.sep):
         return None  # a submodule whose git dir lives inside the same entry
-    if exists:
+    state = _target_state(target)
+    if state == "unknown":
+        return f"cannot stat the git dir {target} named by {git_file}"
+    if state == "present":
         return f"linked worktree {os.path.dirname(git_file)} of an unconfigured repository ({target})"
     return None
 
@@ -339,12 +356,14 @@ def _main_repo_reason(git_dir: str, entry: str) -> str | None:
             target = os.path.join(os.path.dirname(gitdir_file), target)
         try:
             worktree = os.path.dirname(os.path.realpath(target))
-            exists = os.path.exists(target)
         except (OSError, ValueError):
             return f"unparseable worktree record {gitdir_file}"
         if worktree == entry or worktree.startswith(entry + os.sep):
             continue
-        if exists:
+        state = _target_state(target)
+        if state == "unknown":
+            return f"cannot stat the worktree {worktree} named by {gitdir_file}"
+        if state == "present":
             return f"repository whose worktree {worktree} lives outside this entry"
     return None
 
@@ -496,7 +515,8 @@ def survey(settings: Settings, *, root: Path, now: float) -> list[RootReport]:
         path = path.rstrip("/") or "/"
         status, reason = validate_root(path)
         expanded.append((path, status, reason))
-    usable = [path for path, status, _ in expanded if status == "ok"]
+    # Every configured root is protected as an entry, refused ones included.
+    protected = [path for path, _, _ in expanded if os.path.isabs(path)]
     worktrees = registered_worktrees(settings.repos)
     reports: list[RootReport] = []
     for path, status, reason in expanded:
@@ -504,7 +524,7 @@ def survey(settings: Settings, *, root: Path, now: float) -> list[RootReport]:
         reports.append(report)
         if status != "ok":
             continue
-        others = [r for r in usable if r != path]
+        others = [r for r in protected if r != path]
         try:
             report.device = os.stat(path).st_dev
             names = sorted(os.listdir(path))
@@ -535,12 +555,12 @@ class Outcome:
 def apply(
     reports: list[RootReport], settings: Settings, *, older_than: int, now_fn=time.time
 ) -> list[Outcome]:
-    usable = [r.root for r in reports if r.status == "ok"]
+    protected = [r.root for r in reports if os.path.isabs(r.root)]
     outcomes: list[Outcome] = []
     for report in reports:
         if report.status != "ok" or report.device is None:
             continue
-        others = [r for r in usable if r != report.root]
+        others = [r for r in protected if r != report.root]
         for entry in report.entries:
             if entry.owner != STALE or entry.age_seconds is None or entry.age_seconds < older_than:
                 continue
