@@ -47,8 +47,8 @@ were added, on the operator's approval of each exact text and read back identica
 to #643 (lenses launched from the rendered prompt file) and #666 (successive
 prose-only LOW rounds).
 
-Closed workstream Merge-gate review evidence: opened and closed this session, since
-#981 is fixed and nothing is outstanding.
+Closed workstream Merge-gate review evidence: the operator closed it in this session,
+once #981 was fixed with nothing outstanding.
 
 ______________________________________________________________________
 
