@@ -20,6 +20,42 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-06 (one-run triage recovery paths removed, in Claude Code)
+
+[#978](https://github.com/topij/agentic-dev-kit/pull/978) removed #969's `correct-project`
+route and #952's historical flat-gate recovery. It merged as
+`7c0f6de429f0a7e1a627d0b20e8eb952a46ac395`. The removal took their CLI flags, tests,
+`KIT_OWNED` entries and workflow sections with it, and `recovery.py` is back to its #765
+shape. Installation
+[in-parallel-oy/cs-toolkit#2558](https://github.com/in-parallel-oy/cs-toolkit/pull/2558)
+merged as `31dde6c28f4a15f6c9063ae3e500fb5fa26d2e75`. #975 is closed.
+
+Decided: `model.py` keeps a shape check that lets a completed LIVE state carrying a
+`proposal_correction` receipt parse. cs-toolkit's completed state carries one, and only a
+session-starting entry retires a completed state. That entry also freezes the inbox and
+starts a new run, so retiring the state early would have pre-empted cs-toolkit's scheduled
+Friday draft. The check lets that draft retire the state under either engine.
+`test_a_completed_state_with_a_project_correction_receipt_still_retires` pins it.
+The check's removal is #979.
+
+Also checked: no adopter state root on this machine holds a live historical flat gate.
+cs-toolkit's recovery bundles are left as history.
+
+Not established: the retirement itself. Read-only validation of cs-toolkit's real state passed
+under both the kit and the installed code on 2026-10-06 (the commands are in #978's and
+#2558's bodies). Neither ran the retirement.
+
+cs-toolkit's main checkout was not pulled and still sat on its pre-install commit at
+wrap-up. Its scheduled jobs run from that checkout, so the removal is live there only once
+it is updated.
+
+Review: #978 had one adversarial lens. Its LOW findings went to #979 and to this entry.
+#2558 merged on CodeRabbit's comment-verdict of its head. The two-lens panel did not run
+there, because the reviewer was available and the copied code was byte-identical to
+#978's reviewed code.
+
+______________________________________________________________________
+
 ## Session — 2026-10-06 (cs-toolkit LIVE acceptance completed, in Claude Code)
 
 The operator judged the acceptance work over-built and chose the smallest fix for
@@ -242,88 +278,6 @@ starter; #946's merge and #919's closure were read back before the update.
 
 ______________________________________________________________________
 
-## Session — 2026-10-04 (#919 capability-matrix row audit)
-
-**Opened in that session.** [#946](https://github.com/topij/agentic-dev-kit/pull/946) delivers
-#919's narrowed scope. `saved_plans/capability-matrix-row-audit_2026-10-04.md` maps each
-matrix row's repository-side clauses to tests, separates declaration consistency from
-behavioural and runtime-observed evidence, and names what stays unestablished. It also:
-
-- corrects the *Capability tiers*, *Adapter upgrade* and *Lifecycle validation boundary*
-  claims that were false or overstated;
-- adds tests where a bounded repository test establishes a clause;
-- records each added test's negative control.
-
-The PR changes `config/dev-model.yaml`'s comment, so it is safety-critical and
-operator-merge. **Subsequent disposition — 2026-10-04:** #946 merged as
-`785c012414c94bdc335c84bf95f6747813ba1337`, and #919 was closed. This discharges
-the earlier sessions' #919 open-status instructions.
-
-**Review.** CodeRabbit skipped. Full two-lens fallback passes at `02642f54` and
-`4497e8c` preceded the LOW repairs. The first LOW repair extended a control-flag scan,
-and the adversarial lens disputed its containment, so no receipt was recorded for it. The
-final repair `12b11e6` pins the shipped headless commands exactly instead. Its two-lens
-`fallback:delta` receipt composes on the `4497e8c` panel. Dispositions and verdict lines
-are on #946, which `pr_watch` reported converged and mergeable at `12b11e6`.
-
-**Verified.** `env -u FORCE_COLOR DEVKIT_STATE_ROOT=<session scratchpad> make test` at
-`12b11e6222b09798944ff6618be8873160182dc1` on 2026-10-04, in
-`/Users/topi/Coding/agentic-dev-kit`, printed `4254 passed, 1 skipped in 651.24s
-(0:10:51)`. CI's `Test` passed at that head.
-
-**Filed** on the operator's approval of each exact text, each read back identical: #947,
-holding the audit's remaining bounded-test gaps; occurrence comments on #120 and #720.
-
-**Not established.** Client behaviour, agent-executed workflow steps, and a Codex
-cockpit applying `lens_compute`; the record lists them. No live Linear payload or frozen
-run was executed, and cs-toolkit was not touched.
-
-______________________________________________________________________
-
-## Session — 2026-10-04 (cs-toolkit repair delivery and adoption)
-
-**Shipped.** [#943](https://github.com/topij/agentic-dev-kit/pull/943) merged as
-`60b9727f65ee1bb7ffb5418f85e23d814cd4f1bd`, delivering #941 and #942.
-cs-toolkit adopted that pin in [#2528](https://github.com/in-parallel-oy/cs-toolkit/pull/2528),
-merged as `162b4601a39a68145e4c6b5b985e5430d9474058`. Configuration and decline decisions
-were preserved. This delivery supersedes the earlier sessions' held-upgrade status.
-
-**Adopter evidence.** `make check-root` and `make test-devkit` at
-`9572a35feba59337f7a7392a7f11783185e0645d` on 2026-10-04, in
-`/Users/topi/Coding/in-parallel/cs-toolkit`, passed as recorded on #2528. Their local
-verification receipt retains the output hashes; #943 retains the final kit and
-disposable-install receipts and independent review disposition.
-
-**Limits and planning.** No live Linear payload or frozen run was executed. #919's
-runtime audit and #6's live acceptance remain separate; #944 tracks the LOW CLI-help
-reference. The briefing recommended #585, beginning with #921's classification-verdict
-check; the operator has not selected that work. Other workstream starters are retained.
-
-______________________________________________________________________
-
-## Session — 2026-10-04 (cs-toolkit triage upgrade blockers)
-
-**Implemented.** [#943](https://github.com/topij/agentic-dev-kit/pull/943) addresses
-#941 and #942: controlled installed triage fixtures, asserted fault injections,
-separate adopter-layout controls, and standalone triage entry-point metadata.
-The generated manifest tracks the shared test helper; the CHANGELOG gives its refresh instructions.
-
-**Verified.** `env -u FORCE_COLOR DEVKIT_STATE_ROOT=/private/tmp/devkit-triage-upgrade-20261004-GwSfUv/kit-sandbox make test`
-at `273db1ed7fea679228551c5594e5d9d4e2e9b9fe` on 2026-10-04, in
-`/Users/topi/Coding/agentic-dev-kit`, printed `4242 passed, 1 skipped in 654.36s (0:10:54)`.
-Final-candidate kit and disposable declared-install receipts, CI and independent
-review belong on #943. The reviewer found an optional-fixture dependency; the repair
-keeps controlled policy in the helper those test modules already require.
-
-**Authority and limits.** Merge and the next adopter pin remain operator decisions.
-The operator supplied cs-toolkit checkpoint `f4047447cbafa7549e866f37db9ff7f88a5156b6`;
-this session did not change it, its installed pin, legacy artifacts or host automation.
-No live tracker write or frozen run was approved or attempted. #919 stays open for
-its broader runtime audit. The operator assigned these repairs to the existing
-cs-toolkit Codex validation and Linear installation workstream.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -386,6 +340,16 @@ and an engine-owned rollback waits for a recurrence (#892).
 
 ▶ Next: #859 — triage recover calls a completed state valid on `canonical_state`
 alone, so a missing frozen artifact dead-ends it.
+
+### Triage one-run cleanup
+
+**Status:** #978 and its cs-toolkit installation removed the one-run recovery paths. A
+shape check in `model.py` stays until cs-toolkit's completed LIVE state, which carries a
+`proposal_correction` receipt, retires. **Owner:**
+[#979](https://github.com/topij/agentic-dev-kit/issues/979).
+
+▶ Next: once cs-toolkit's scheduled triage draft has retired its completed LIVE state,
+confirm no state root holds a `proposal_correction`, then remove the shim (#979).
 
 ### Kit friction-log triage
 
