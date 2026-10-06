@@ -153,14 +153,18 @@ import pytest
 # COLOUR IS OFF FOR THE WHOLE SUITE, set here at import (#884). Python 3.13+
 # colourises tracebacks when `FORCE_COLOR` is set, every child inherits it, and
 # tests that match a child's stderr as plain text then fail on escape codes —
-# `FORCE_COLOR=3 make test` failed tests that pass without it. This file is the
-# one place every test directory reaches, `tests/` and `lib/state_paths/tests/`
-# alike, and its import precedes both directories' conftests, every fixture
-# (session-scoped ones included) and every test, so no subprocess the suite
-# starts can see the caller's setting. Neutralised at the source rather than
+# `FORCE_COLOR=3 make test` failed tests that pass without it. From the repo
+# root, as `make test` runs, this file is collected for both `tests/` and
+# `lib/state_paths/tests/`, and its import precedes both directories'
+# conftests, every fixture (session-scoped ones included) and every test, so no
+# subprocess the suite starts can see the caller's setting. A pytest invoked
+# from inside a test directory does not collect it (no ini file sets the
+# rootdir), and keeps the caller's colour. Neutralised at the source rather than
 # stripped per assertion, so a new subprocess test inherits it without knowing.
 # `PYTHON_COLORS=0` alone wins in CPython; `NO_COLOR` covers tools that honour
-# only the cross-tool convention. `test_state_guard.py` pins the effect.
+# only the cross-tool convention. Setting them in this process also turns off
+# pytest's own terminal colour, interactively too: the price of one global
+# setting. `test_state_guard.py` pins the combined effect, not each variable.
 os.environ.pop("FORCE_COLOR", None)
 os.environ["NO_COLOR"] = "1"
 os.environ["PYTHON_COLORS"] = "0"
