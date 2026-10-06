@@ -20,6 +20,41 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-06 (cs-toolkit LIVE acceptance completed, in Claude Code)
+
+The operator judged the acceptance work over-built and chose the smallest fix for
+the landed-Markdown hold. [#973](https://github.com/topij/agentic-dev-kit/pull/973)
+compares tracker payloads with list markers outside fenced code spelled `-`. The
+engine's existing resume reconciliation did the rest, with no new contract,
+state shape or approval step. #973 merged as
+`6aadec23ac4ac543b7381ca550cf03a5638602f1`. Installation
+[in-parallel-oy/cs-toolkit#2551](https://github.com/in-parallel-oy/cs-toolkit/pull/2551)
+merged as `fb0004704e2d43ccd1a3c21c4f85c0944b6811c6`, pinning it.
+
+The installed `resume` verified TRI-01 as CUS-1670. Three finalize continuations
+then archived TRI-01 through the engine's sweep
+[in-parallel-oy/cs-toolkit#2552](https://github.com/in-parallel-oy/cs-toolkit/pull/2552),
+which merged as `c84d76c6536cad8d0f0d131b8cb095463ad11a12`. The run completed.
+[The acceptance record on #6](https://github.com/topij/agentic-dev-kit/issues/6#issuecomment-6012620438)
+holds the commands, revisions, directories and results. #6 stays open.
+
+Filed on the operator's approval of each exact text, each read back identical:
+- #974, the learning: classify a held state as a recurring defect or a one-off
+  incident before building an engine mechanism.
+- #975: remove the one-run triage recovery paths.
+- #976, with a follow-up comment: LOW residue from #973's and #2551's reviews.
+
+`project_correction.py`'s pin on the `providers.py` digest failed #973's first CI
+run, although the project guard was untouched. The digest list is now append-only,
+and #975 covers removing the pin along with its path.
+
+Closed workstream cs-toolkit Codex validation and Linear installation: the
+operator closed it once LIVE acceptance completed. Its follow-ups are #974, #975
+and #976. The separate frozen kit-friction decision
+(`469bcd5829244adeb17443d1a45a6c01`) remains pending and untouched.
+
+______________________________________________________________________
+
 ## Session — 2026-10-06 (cs-toolkit installed correction and landed Markdown hold, in Codex)
 
 Source [#969](https://github.com/topij/agentic-dev-kit/pull/969) merged as
@@ -349,23 +384,3 @@ and an engine-owned rollback waits for a recurrence (#892).
 
 ▶ Next: #859 — triage recover calls a completed state valid on `canonical_state`
 alone, so a missing frozen artifact dead-ends it.
-
-### cs-toolkit Codex validation and Linear installation
-
-**Status:** source #969 and installation #2545 merged, with cs-toolkit delivered
-at `cddb46c284d92b3261b0ec1977d82fa3a629cbcf` and kit pin
-`01269cc80e05ecab1987ebaa97ee76bba306afee`. Exact project-only correction and
-fresh corrected TRI-01 approval were applied under the operator's delegated
-sleep-time authority. The installed read-only reconciliation command in the
-2026-10-06 session entry recorded a landed CUS-1670 Markdown representation
-mismatch; its tracker operation remains ambiguous in the retained receipt,
-not verified or archive-accounted. TEST remains separate; the LIVE freeze,
-original rejected history and quarantines were preserved.
-**Owner:** [#6 acceptance evidence](https://github.com/topij/agentic-dev-kit/issues/6#issuecomment-6003071493).
-
-▶ Next: Read `live-62970e59-landed-markdown-decision-presented.md` in the retained
-acceptance evidence and obtain the operator's bounded reconciliation design
-decision before extending implementation. Reconcile existing CUS-1670 through
-a supported route; do not create a duplicate, bypass exact matching or edit raw
-state. Archive TRI-01 only after verified accounting. Preserve parked entries,
-the separate kit-friction decision, root legacy artifacts, automation and credentials.
