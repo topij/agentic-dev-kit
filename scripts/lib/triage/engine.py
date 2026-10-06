@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import difflib
 import re
+from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -1525,6 +1526,33 @@ def _validate_forge_prefix(
             raise TriageError("forge predecessor binding mismatch", outcome="operator-held")
 
 
+def validate_session_state(
+    store: ArtifactStore,
+    settings: Settings,
+    state_raw: bytes,
+    *,
+    mode: str,
+    retiring: bool,
+    retain: Callable[[dict[str, Any], Path], None] | None = None,
+) -> tuple[dict[str, Any], Path]:
+    """The validity predicate a session-starting entry applies before it retires.
+
+    `canonical_state` alone accepts a state whose published frozen artifact is
+    gone or whose forge prefix does not bind, and the session-starting path
+    hard-stops on either. `recover` and `state_action_plan` judge validity with
+    this same function, so a state they call valid is one that path accepts
+    (#859). `retain` sees the parsed state once its frozen artifact is proven,
+    so a forge-prefix failure can still report it.
+    """
+    state = canonical_state(state_raw, settings=settings, mode=mode, retiring=retiring)
+    frozen_path = _validate_frozen_artifact(store, state)
+    if retain is not None:
+        retain(state, frozen_path)
+    if state.get("finalization_operations"):
+        _validate_forge_prefix(state["finalization_operations"], state, settings)
+    return state, frozen_path
+
+
 def _forge_destination(remote: str) -> tuple[str, str]:
     if remote.startswith("git@") and ":" in remote:
         host, repository = remote[4:].split(":", 1)
@@ -1827,8 +1855,11 @@ def run(
                 try:
                     # A completed state that is valid but for a later config
                     # change is one a session-starting entry retires; treating
-                    # it as invalid here would hold it for good (#833).
-                    canonical_state(state_raw, settings=settings, mode=mode, retiring=True)
+                    # it as invalid here would hold it for good (#833). A state
+                    # that path would hard-stop on is not valid either, or the
+                    # refusal below sends the operator to an entry that fails
+                    # (#859).
+                    validate_session_state(store, settings, state_raw, mode=mode, retiring=True)
                 except TriageError:
                     captured = capture_state_present(store, settings, require_terminated=False, publish=True)
                     plan = state_action_plan(store, settings, captured)
@@ -1867,18 +1898,18 @@ def run(
                     receipt = resume_state_action(store, prepared)
                     lease.held = False
                     return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="restart test only from the exact recovery receipt", detail=str(receipt.get("kind")))
+            def retain(parsed: dict[str, Any], path: Path) -> None:
+                nonlocal result_state, result_frozen, result_report
+                result_state = parsed
+                result_frozen = str(path)
+                if parsed.get("proposal_payloads"):
+                    result_report = parsed["proposal_payloads"][0]["report_binding"]["path"]
+
             # A session-starting entry retires a completed state below, so it may
             # accept one written under an earlier configuration; see `validate_state`.
-            state = canonical_state(state_raw, settings=settings, mode=mode, retiring=entry in {None, "new", "test"})
-            frozen_path = _validate_frozen_artifact(store, state)
-            result_state = state
-            result_frozen = str(frozen_path)
-            if state.get("proposal_payloads"):
-                result_report = state["proposal_payloads"][0]["report_binding"]["path"]
-            if state.get("finalization_operations"):
-                _validate_forge_prefix(
-                    state["finalization_operations"], state, settings
-                )
+            state, frozen_path = validate_session_state(
+                store, settings, state_raw, mode=mode, retiring=entry in {None, "new", "test"}, retain=retain
+            )
             if state["phase"] == "completed" and entry in {None, "new", "test"}:
                 # A completed session holds no pending approval, attempt or merge,
                 # so a session-starting entry retires it rather than letting it end

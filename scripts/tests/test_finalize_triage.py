@@ -49,6 +49,7 @@ from triage.model import (  # noqa: E402
     validate_sweep_cleanup,
 )
 from triage.providers import FakeForge, ProviderObservation  # noqa: E402
+from triage.storage import ArtifactStore  # noqa: E402
 
 
 def git(repo: Path, *args: str) -> str:
@@ -1641,6 +1642,79 @@ def test_recover_refuses_a_completed_state_valid_but_for_a_later_config_change(
     assert state_path.read_bytes() == raw
     restarted = run("new", context="interactive", request={}, start=root)
     assert loads_exact(state_path.read_bytes())["phase"] == "reserved", restarted
+
+
+def _plan_recover_in_child(root: Path) -> dict:
+    """Run `recover` without approval in its own process, as through the CLI, so
+    its gate owner is proven dead before an approval acts on the capture (#863)."""
+    child = (
+        "import sys\nfrom pathlib import Path\nfrom triage.canonical import dumps\n"
+        "from triage.engine import run\n"
+        "print(dumps(run('recover', context='interactive', request={}, start=Path(sys.argv[1]))).decode(), flush=True)\n"
+    )
+    environment = {**os.environ, "PYTHONPATH": str(ENGINE_DIR / "lib") + os.pathsep + str(ENGINE_DIR)}
+    completed = subprocess.run([sys.executable, "-c", child, str(root)], check=True, capture_output=True, text=True, env=environment)
+    return loads_exact(completed.stdout.strip().encode())
+
+
+def _drop_frozen_artifact(root: Path, terminal: dict, *, drift: bool) -> None:
+    """Delete the run's published frozen-inbox artifact, and with `drift` also
+    change the configuration after the run finished (#859's reproduction)."""
+    ArtifactStore(load_settings(root), "live").resolve(terminal["frozen_snapshot"]["path"]).unlink()
+    if drift:
+        config = root / "config/dev-model.yaml"
+        config.write_text(
+            config.read_text(encoding="utf-8").replace("bot_pending_grace_minutes: 15", "bot_pending_grace_minutes: 16"),
+            encoding="utf-8",
+        )
+
+
+@pytest.mark.evidence
+@pytest.mark.parametrize("drift", [False, True], ids=["current-config", "config-drift"])
+def test_recover_retires_a_completed_state_whose_frozen_artifact_is_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, drift: bool
+) -> None:
+    """#859: `canonical_state` alone accepts a completed state whose published
+    frozen artifact is gone, and the session-starting entry hard-stops on it.
+    `recover` judges it with that entry's predicate, so it routes to the
+    invalid-state plan, retires the finished run on exact approval, and `new`
+    then starts fresh instead of the operator being sent to an entry that fails.
+    With the old `canonical_state`-only judgement `recover` refused it as valid."""
+    root, state_path, worktree, terminal = _engine_completed_sweep(tmp_path, monkeypatch)
+    _land_sweep(root, worktree)
+    _drop_frozen_artifact(root, terminal, drift=drift)
+    raw = state_path.read_bytes()
+    assert canonical_state(raw, settings=load_settings(root), mode="live", retiring=True)["phase"] == "completed"
+
+    planned = _plan_recover_in_child(root)
+    assert planned["outcome"] == "operator-held"
+    assert planned["detail"] == "invalid state captured before parse"
+    plan = planned["recovery_plan"]
+    assert plan["action_core"]["action"] == "retire-terminal-invalid-state"
+    assert state_path.read_bytes() == raw
+
+    request, context = _recover_approval(plan["action_core_digest"])
+    recovered = run("recover", context="interactive", request=request, start=root, approval_context=context)
+    assert recovered["detail"] == "recovered-safe-to-restart"
+    assert Path(plan["action_core"]["quarantine_path"]).read_bytes() == raw
+    restarted = run("new", context="interactive", request={}, start=root)
+    assert restarted["detail"] == "verified recovery receipt replaced by reserved new state"
+    assert loads_exact(state_path.read_bytes())["phase"] == "reserved"
+
+
+@pytest.mark.evidence
+def test_recover_holds_a_completed_state_whose_frozen_artifact_is_missing_and_sweep_unproven(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same routing holds a run whose sweep git does not prove, bytes
+    untouched, rather than refusing it as valid."""
+    root, state_path, _worktree, terminal = _engine_completed_sweep(tmp_path, monkeypatch)
+    _drop_frozen_artifact(root, terminal, drift=False)
+    raw = state_path.read_bytes()
+    held = run("recover", context="interactive", request={}, start=root)
+    assert held["outcome"] == "operator-held"
+    assert held["detail"] == "external-attempt-absence-unproven"
+    assert state_path.read_bytes() == raw
 
 
 @pytest.mark.evidence

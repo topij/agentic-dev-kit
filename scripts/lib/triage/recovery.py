@@ -8,7 +8,7 @@ from typing import Any
 
 from .canonical import decode_bytes, digest, digest_bytes, dumps, encode_bytes, loads_exact
 from .gate import acquire, owner_status, validate_record
-from .model import BASE_KEYS, OID_RE, Settings, TriageError, canonical_state, repository_identity
+from .model import BASE_KEYS, OID_RE, Settings, TriageError, repository_identity
 from .storage import (
     ArtifactStore,
     Observation,
@@ -663,10 +663,16 @@ def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str
     core = bundle.get("capture_core")
     if not isinstance(core, dict) or digest(core) != bundle.get("capture_core_digest"):
         raise TriageError("state capture digest mismatch", outcome="operator-held")
+    # Imported here: the engine imports this module.
+    from .engine import validate_session_state
+
     state_raw = decode_bytes(core["state_bytes"])
     valid = False
     try:
-        canonical_state(state_raw, settings=settings, mode=store.mode)
+        # The session-starting predicate, not `canonical_state` alone: a state
+        # whose frozen artifact is gone is not preserved as valid, because the
+        # entry `recover` would send the operator to hard-stops on it (#859).
+        validate_session_state(store, settings, state_raw, mode=store.mode, retiring=False)
         valid = True
     except TriageError:
         pass

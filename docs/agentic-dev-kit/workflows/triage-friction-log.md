@@ -866,10 +866,15 @@ second time or start work under an unowned gate.
 Classify invalid captured state conservatively. Only a readable state that proves it
 never reached `attempting` and contains no verified tracker identifier or repository/PR
 evidence may offer `abandon <action-core-digest>` to the present interactive operator.
-`recover` judges validity the way a session-starting entry does, so a completed state
-that is valid but for a configuration change made after it finished is refused as valid
+`recover` judges validity with the predicate a session-starting entry applies before
+retiring: state validation, then the published frozen snapshot artifact, then the forge
+operations' read-backs and predecessor bindings. A completed state that is valid but for
+a configuration change made after it finished passes it, so it is refused as valid
 (`captured state is valid; recovery refused`) and left for *Completed-state retirement*
-rather than captured as invalid.
+rather than captured as invalid. A state that fails only the artifact or forge checks
+fails it, so it is captured and classified below rather than refused toward an entry that
+would stop on it; the action plan applies the same checks before it may select
+`preserve-valid-state-and-quarantine-old-gate`.
 The one other invalid state that leaves the held route is a **finished** run, in either
 layout. Both need phase `completed`, completion route `archive-sweep`, every tracker and
 notification operation `verified`, every forge operation `verified` (a `pr-watch`
