@@ -531,7 +531,7 @@
     },
     "scripts/sweep_scratch.py": {
       "role": "engine",
-      "sha256": "73ec673535830d83aae75bc5b560649938487b2414b82fe04f478d66cadf2ef2"
+      "sha256": "9bda6c8ffe3b029b9b8f29f2ec6a11f3f1e55108892d867c40566b3a536261ad"
     },
     "scripts/tests/_repo_layout.py": {
       "role": "test",
@@ -651,7 +651,7 @@
     },
     "scripts/tests/test_sweep_scratch.py": {
       "role": "test",
-      "sha256": "2ff18d021b1470c621ab3e0c7e39aaeef7941d5657a1e7e41be063cce861ae9d"
+      "sha256": "27e09b76f324aedd3e52b26a4bebf8dcf154bb50464bf3f9883accb9e13f5978"
     },
     "scripts/tests/test_systemize_artifacts.py": {
       "role": "test",

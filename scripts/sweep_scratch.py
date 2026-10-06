@@ -18,8 +18,9 @@ child of a root is one **entry**, and every entry gets exactly one owner class:
     ``scratch.worktree_repos`` (``git worktree list --porcelain``); or it holds a
     ``.git`` file pointing at a git dir that still exists outside the entry — a
     linked worktree of some repository this config does not name; or it holds a
-    repository whose ``.git/worktrees/*/gitdir`` names a worktree that still
-    exists outside the entry, which removing the entry would orphan. A ``.git``
+    git dir (a ``.git`` directory, a bare repository, or a ``--separate-git-dir``
+    target) whose ``worktrees/*/gitdir`` names a worktree that still exists
+    outside the entry, which removing the entry would orphan. A ``.git``
     file or ``worktrees`` record the engine cannot read or parse also lands here,
     with that as its reason: kept, as if live.
 ``in-grace``
@@ -204,7 +205,7 @@ def registered_worktrees(repos: list[Path]) -> list[str]:
     for repo in repos:
         try:
             result = subprocess.run(
-                ["git", "-C", str(repo), "worktree", "list", "--porcelain"],
+                ["git", "-C", str(repo), "worktree", "list", "--porcelain", "-z"],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -215,7 +216,8 @@ def registered_worktrees(repos: list[Path]) -> list[str]:
             raise ConfigError(
                 f"git worktree list failed for {repo}: {result.stderr.strip() or result.returncode}"
             )
-        for line in result.stdout.splitlines():
+        # -z: NUL-terminated fields, so a path holding a newline stays whole.
+        for line in result.stdout.split("\0"):
             if line.startswith("worktree "):
                 found.append(os.path.realpath(line[len("worktree "):]))
     if not found:
@@ -289,6 +291,16 @@ def _linked_gitdir_reason(git_file: str, entry: str) -> str | None:
     return None
 
 
+def _looks_like_git_dir(path: str) -> bool:
+    """A git dir by layout: a ``HEAD`` file and a ``worktrees`` directory, never followed."""
+    try:
+        head = os.lstat(os.path.join(path, "HEAD"))
+        records = os.lstat(os.path.join(path, "worktrees"))
+    except OSError:
+        return False
+    return stat.S_ISREG(head.st_mode) and stat.S_ISDIR(records.st_mode)
+
+
 def _main_repo_reason(git_dir: str, entry: str) -> str | None:
     """A ``.git`` directory whose linked worktrees live outside the entry.
 
@@ -306,10 +318,17 @@ def _main_repo_reason(git_dir: str, entry: str) -> str | None:
     for name in names:
         gitdir_file = os.path.join(records, name, "gitdir")
         try:
-            with open(gitdir_file, encoding="utf-8", errors="replace") as handle:
-                text = handle.read(_GIT_FILE_MAX + 1)
+            st = os.lstat(gitdir_file)
         except FileNotFoundError:
             continue  # a half-pruned record names no worktree
+        except OSError as exc:
+            return f"unreadable worktree record {gitdir_file}: {exc.strerror}"
+        if not stat.S_ISREG(st.st_mode):
+            # Never open a FIFO or device: the read would block the sweep.
+            return f"unparseable worktree record {gitdir_file}"
+        try:
+            with open(gitdir_file, encoding="utf-8", errors="replace") as handle:
+                text = handle.read(_GIT_FILE_MAX + 1)
         except OSError as exc:
             return f"unreadable worktree record {gitdir_file}: {exc.strerror}"
         lines = text.strip().splitlines()
@@ -348,6 +367,8 @@ def scan(entry: str, top: os.stat_result) -> _Scan:
     result = _Scan(size=_usage(top), newest=top.st_mtime)
     if not stat.S_ISDIR(top.st_mode):
         return result
+    if _looks_like_git_dir(entry):
+        result.linked = _main_repo_reason(entry, entry)  # the entry is itself a git dir
 
     def onerror(exc: OSError) -> None:
         result.problems.append(f"unreadable {exc.filename}: {exc.strerror}")
@@ -366,10 +387,12 @@ def scan(entry: str, top: os.stat_result) -> _Scan:
                 result.problems.append(f"{child} is on another filesystem")
                 if name in dirnames:
                     dirnames.remove(name)
-            if name == ".git" and result.linked is None:
-                if stat.S_ISREG(st.st_mode):
+            if result.linked is None:
+                if name == ".git" and stat.S_ISREG(st.st_mode):
                     result.linked = _linked_gitdir_reason(child, entry)
-                elif stat.S_ISDIR(st.st_mode):
+                elif stat.S_ISDIR(st.st_mode) and (name == ".git" or _looks_like_git_dir(child)):
+                    # `.git`, a bare repository, or a --separate-git-dir target:
+                    # each may hold worktree records naming trees elsewhere.
                     result.linked = _main_repo_reason(child, entry)
     return result
 

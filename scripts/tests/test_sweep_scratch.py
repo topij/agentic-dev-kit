@@ -465,6 +465,40 @@ def test_git_file_naming_an_impossible_path_keeps_the_entry_and_the_sweep_runs(r
     assert poisoned.is_dir() and not stale.exists()
 
 
+def test_fifo_worktree_record_keeps_the_entry_without_blocking(root: Path, repo: Path, base: Path):
+    records = root / "fifo" / ".git" / "worktrees" / "x"
+    records.mkdir(parents=True)
+    os.mkfifo(records / "gitdir")
+    _set_age(root / "fifo", OLD)
+    cfg = _config(base / "dev-model.yaml", roots=[str(root)], repos=[str(repo)])
+    # In a child with a deadline: opening the FIFO would block forever, and a hung
+    # test is a worse signal than a failed one.
+    done = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--config", str(cfg), "--json"],
+        capture_output=True, text=True, timeout=60, cwd=REPO_ROOT,
+    )
+    assert done.returncode == 0, done.stderr
+    owners = {os.path.basename(e["path"]): e["owner"] for e in json.loads(done.stdout)["roots"][0]["entries"]}
+    assert owners == {"fifo": sweep.LIVE}
+
+
+def test_bare_repository_with_an_outside_worktree_is_kept(root: Path, repo: Path, base: Path):
+    bare = root / "barerepo.git"
+    _git(base, "clone", "-q", "--bare", str(repo), str(bare))
+    _git(bare, "worktree", "add", "-q", "--detach", str(base / "outside-wt"))
+    _set_age(bare, OLD)
+    reports, outcomes = _run([root], repo, older_than=0)
+    assert _owners(reports) == {"barerepo.git": sweep.LIVE}
+    assert outcomes == []
+    assert bare.is_dir()
+
+
+def test_registration_of_a_worktree_path_holding_a_newline_is_read_whole(root: Path, repo: Path):
+    odd = root / "we ird\nnl"
+    _git(repo, "worktree", "add", "-q", "--detach", str(odd))
+    assert str(odd) in sweep.registered_worktrees([repo])
+
+
 def test_entry_replaced_after_the_report_is_kept(root: Path, repo: Path):
     entry = _tree(root / "entry")
     settings = _settings([root], repo)
