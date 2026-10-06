@@ -48,6 +48,42 @@ class TriageError(RuntimeError):
         self.outcome = outcome
 
 
+_CODE_FENCE = re.compile(r" {0,3}(`{3,}|~{3,})")
+_LIST_MARKER = re.compile(r"^([ \t]*)[-*+](?=[ \t])")
+
+
+def _hyphen_list_markers(body: str) -> str:
+    """Spell each unordered-list marker outside a fenced code block as `-`."""
+    lines = body.split("\n")
+    fence = ""
+    for index, line in enumerate(lines):
+        opened = _CODE_FENCE.match(line)
+        if fence:
+            if (opened and opened.group(1)[0] == fence[0] and len(opened.group(1)) >= len(fence)
+                    and not line[opened.end():].strip()):
+                fence = ""
+        elif opened:
+            fence = opened.group(1)
+        else:
+            lines[index] = _LIST_MARKER.sub(r"\1-", line, count=1)
+    return "\n".join(lines)
+
+
+def tracker_payload_matches(observed: Any, approved: dict[str, Any]) -> bool:
+    """Whether a tracker read-back carries the approved payload.
+
+    Linear stores Markdown through its editor and returns every bullet as `*`,
+    whatever was sent: CUS-1670 came back that way on 2026-10-05. So a bullet's
+    marker is compared as `-` on both sides. Every other byte of the title,
+    body, project and labels must still be equal, and the read-back keeps the
+    bytes the tracker returned.
+    """
+    if not isinstance(observed, dict) or not isinstance(observed.get("body"), str) or not isinstance(approved.get("body"), str):
+        return False
+    return (digest({**observed, "body": _hyphen_list_markers(observed["body"])})
+            == digest({**approved, "body": _hyphen_list_markers(approved["body"])}))
+
+
 def tracker_destination(tracker: dict[str, Any]) -> dict[str, Any]:
     try:
         host = urlparse(str(tracker.get("url", ""))).hostname
@@ -696,9 +732,8 @@ def validate_state(value: Any, *, settings: Settings, mode: str, retiring: bool 
                     not isinstance(read_back, dict)
                     or not isinstance(operation.get("returned_identifier"), str)
                     or read_back.get("identifier") != operation.get("returned_identifier")
-                    or read_back.get("payload") != proposal["payload"]
-                    or digest(read_back.get("payload")) != operation.get("proposal_digest")
-                    or read_back.get("payload_digest") != operation.get("proposal_digest")
+                    or not tracker_payload_matches(read_back.get("payload"), proposal["payload"])
+                    or read_back.get("payload_digest") != digest(read_back.get("payload"))
                     or read_back.get("marker") != operation.get("marker")
                     or read_back.get("destination") != operation.get("destination")
                 ):

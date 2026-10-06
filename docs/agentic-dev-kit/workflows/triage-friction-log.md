@@ -563,14 +563,18 @@ phase are forbidden earlier.
   digest, frozen payload marker, exact
   tracker destination, returned identifier, and authoritative read-back, and use only
   `attempting`, `verified`, `failed`, or `ambiguous`. A `verified` read-back repeats the
-  operation's identifier, payload digest, marker, and destination exactly. Its exact
+  operation's identifier, marker, and destination exactly. Its exact
   `verified_route` is `created-and-read-back`, `pre-existing-exact-match`,
   `failed-response-then-exact-read-back`, or
   `ambiguous-response-then-exact-read-back`; the retained response must match that route
   and no route may fabricate a successful create. The read-back carries the observed
-  canonical `{title, body, project, labels}` plus its independently recomputed digest;
-  exact verification requires that payload, digest, marker, destination, and identifier
-  to match the approved operation. The complete decision plan plus its exact attempted
+  canonical `{title, body, project, labels}` as the tracker returned it, plus its
+  independently recomputed digest. Verification requires the marker, destination, and
+  identifier to match the operation, and the observed payload to equal the approved one
+  except in how each unordered-list marker outside a fenced code block is spelled:
+  Linear's editor returns every bullet as `*`, so `-`, `*` and `+` compare equal there.
+  That is what an *exact* tracker match means in this section; any other difference
+  leaves the attempt ambiguous. The complete decision plan plus its exact attempted
   operation prefix accounts for every approved tracker payload without cross-payload or duplicate
   identifier reuse. The
   `verified_tracker_identifiers` array equals the ordered returned identifiers of

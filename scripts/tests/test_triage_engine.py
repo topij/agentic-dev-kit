@@ -83,19 +83,7 @@ def approval_for(state: dict, command: str = "approve all") -> dict:
     }
 
 
-@pytest.mark.parametrize("adopter_host", [False, True])
-def test_linear_approval_and_uncertain_create_resume_keep_frozen_authority(tmp_path, monkeypatch, adopter_host):
-    from http.client import IncompleteRead
-
-    if adopter_host:
-        host = tmp_path / "adopter"
-        (host / "config").mkdir(parents=True)
-        (host / "config/dev-model.yaml").write_text(
-            'tracker:\n  backend: linear\n  project_name: "Other adopter"\n'
-            'review:\n  bots: ["adopter-bot"]\nsystemize:\n  operator_logins: ["adopter-operator"]\n',
-            encoding="utf-8",
-        )
-        monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", host)
+def linear_repository(tmp_path: Path) -> Path:
     # Controlled kit fixture data is installed with these tests; adopter policy
     # is intentionally not a source for the approval and recovery scenario.
     fixture = Path(__file__).parent / "fixtures/init-config.json"
@@ -115,6 +103,23 @@ def test_linear_approval_and_uncertain_create_resume_keep_frozen_authority(tmp_p
     config.write_text(text, encoding="utf-8")
     git(root, "add", "config/dev-model.yaml")
     git(root, "commit", "-m", "Linear fixture policy")
+    return root
+
+
+@pytest.mark.parametrize("adopter_host", [False, True])
+def test_linear_approval_and_uncertain_create_resume_keep_frozen_authority(tmp_path, monkeypatch, adopter_host):
+    from http.client import IncompleteRead
+
+    if adopter_host:
+        host = tmp_path / "adopter"
+        (host / "config").mkdir(parents=True)
+        (host / "config/dev-model.yaml").write_text(
+            'tracker:\n  backend: linear\n  project_name: "Other adopter"\n'
+            'review:\n  bots: ["adopter-bot"]\nsystemize:\n  operator_logins: ["adopter-operator"]\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", host)
+    root = linear_repository(tmp_path)
     state_root = tmp_path / "state-root"
     monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
     supplied = request(root)
@@ -183,6 +188,72 @@ def test_linear_approval_and_uncertain_create_resume_keep_frozen_authority(tmp_p
     assert sum("TriageCreate(" in q for q, _ in transport.calls) == creates
     assert frozen_path.read_bytes() == frozen_bytes
     assert loads_exact(state_path.read_bytes())["proposal_payloads"] == presented["proposal_payloads"]
+
+
+def test_linear_ambiguous_create_reconciles_when_the_issue_differs_only_in_bullet_markers(tmp_path, monkeypatch):
+    from http.client import IncompleteRead
+
+    root = linear_repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    supplied = request(root)
+    supplied["proposals"][0]["project"] = "Adopter"
+    supplied["proposals"][0]["body_without_marker"] = "Proposed change:\n\n- first\n- second"
+    transport = LinearTransport()
+    def lost_create(query, variables):
+        if "TriageCreate(" in query:
+            transport.calls.append((query, variables))
+            raise IncompleteRead(b"partial", 10)
+        return transport(query, variables)
+    tracker = LinearIssues(transport=lost_create, sleep=lambda _: None)
+    run("new", context="interactive", request=supplied, start=root, tracker=tracker)
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    presented = loads_exact(state_path.read_bytes())
+    held = run("resume", context="interactive", request={"approval": approval_for(presented)}, start=root,
+               tracker=tracker, approval_context=approval_context(presented), head_authority=FakeForge([]))
+    assert held["outcome"] == "operator-held"
+    assert loads_exact(state_path.read_bytes())["operations"][0]["status"] == "ambiguous"
+    payload = presented["proposal_payloads"][0]["payload"]
+    assert "\n- first\n- second\n" in payload["body"]
+    landed = {"id": "issue", "identifier": "ADO-17", "url": "https://linear.app/w/issue/ADO-17",
+              "title": payload["title"], "description": payload["body"].replace("\n- first", "\n* changed"),
+              "team": {"id": "team"}, "project": {"id": "project", "name": "Adopter"},
+              "labels": [{"id": "label", "name": "bug"}]}
+    transport.issues.append(landed)
+    changed = run("resume", context="interactive", request={}, start=root, tracker=tracker, head_authority=FakeForge([]))
+    assert changed["outcome"] == "operator-held"
+    assert loads_exact(state_path.read_bytes())["operations"][0]["status"] == "ambiguous"
+    stored = payload["body"].replace("\n- ", "\n* ")
+    landed["description"] = stored
+    resumed = run("resume", context="interactive", request={}, start=root, tracker=tracker, head_authority=FakeForge([]))
+    assert resumed["verified_tracker_identifiers"] == ["ADO-17"]
+    retained = loads_exact(state_path.read_bytes())
+    operation = retained["operations"][0]
+    assert operation["verified_route"] == "ambiguous-response-then-exact-read-back"
+    assert operation["read_back"]["payload"]["body"] == stored
+    assert retained["proposal_payloads"] == presented["proposal_payloads"]
+    # The verified state, holding the tracker's own bytes, still loads and resumes.
+    again = run("resume", context="interactive", request={}, start=root, tracker=tracker, head_authority=FakeForge([]))
+    assert again["outcome"] != "hard-stop"
+    assert again["verified_tracker_identifiers"] == ["ADO-17"]
+    assert sum("TriageCreate(" in q for q, _ in transport.calls) == 1
+    # A stored read-back must still carry its own digest and the approved content.
+    verified_raw = state_path.read_bytes()
+    read_back = operation["read_back"]
+    other = {**read_back["payload"], "body": stored.replace("* second", "* other")}
+    for forged in (
+        {**read_back, "payload_digest": presented["proposal_payloads"][0]["payload_digest"]},
+        {**read_back, "payload": other, "payload_digest": digest(other)},
+    ):
+        state = loads_exact(verified_raw)
+        state["operations"][0]["read_back"] = forged
+        state["attempts"][-1]["read_back"] = forged
+        tampered = dumps(state)
+        state_path.write_bytes(tampered)
+        refused = run("resume", context="interactive", request={}, start=root, tracker=tracker, head_authority=FakeForge([]))
+        assert refused["outcome"] == "operator-held"
+        assert "verified tracker read-back mismatch" in refused["detail"]
+        assert state_path.read_bytes() == tampered
 
 
 

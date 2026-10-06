@@ -17,7 +17,12 @@ from urllib.parse import urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from .canonical import decode_bytes, digest, digest_bytes
-from .model import TriageError, terminal_pr_watch_receipt, worktree_conflicts_with_checkout
+from .model import (
+    TriageError,
+    terminal_pr_watch_receipt,
+    tracker_payload_matches,
+    worktree_conflicts_with_checkout,
+)
 
 
 class _RejectLinearRedirects(HTTPRedirectHandler):
@@ -193,7 +198,7 @@ class GitHubIssues:
                     break
                 self.sleep(delay)
                 matches = self.search(destination, marker)
-        exact = [item for item in matches if item["payload_digest"] == digest(payload)]
+        exact = [item for item in matches if tracker_payload_matches(item["payload"], payload)]
         if len(exact) == 1 and len(matches) == 1:
             if result.returncode == 0 and response_identifier is not None and str(response_identifier) != exact[0]["identifier"]:
                 return ProviderObservation("ambiguous", response, {"matches": matches})
@@ -429,7 +434,7 @@ class LinearIssues:
         marker = markers[0]
         prior = self.search(destination, marker)
         if prior:
-            exact = len(prior) == 1 and prior[0]["payload_digest"] == digest(payload)
+            exact = len(prior) == 1 and tracker_payload_matches(prior[0]["payload"], payload)
             return ProviderObservation("verified" if exact else "ambiguous", None,
                                        prior[0] if exact else {"matches": prior}, "pre-existing-exact-match" if exact else None)
         query = "mutation TriageCreate($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { id identifier } } }"
@@ -453,7 +458,7 @@ class LinearIssues:
                 break
             self.sleep(delay)
             matches = self.search(destination, marker)
-        exact = [m for m in matches if m["payload_digest"] == digest(payload)]
+        exact = [m for m in matches if tracker_payload_matches(m["payload"], payload)]
         if (len(matches) == 1 and len(exact) == 1
                 and (returned is None or returned == exact[0]["identifier"])
                 and (returned_id is None or returned_id == exact[0]["id"])):

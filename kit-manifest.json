@@ -68,7 +68,7 @@
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
-      "sha256": "c1cf3632e4df1d0bfc648507438ea3da3a690349d5f1cb72816f6527440af8a4"
+      "sha256": "56add8acde40aae47250cc5064f52cf9717a25b553147c2abda1ce05738cae3b"
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
@@ -449,7 +449,7 @@
         "scripts/triage_friction_log.py"
       ],
       "role": "engine",
-      "sha256": "20beb8ac93bc8022c14922d72e1ba4799e9f02da2d3da4917e04de0f439d859f"
+      "sha256": "45f3fae579455c3af4673cd26a2a68a00816c788bb1878251ef2f736808bd72a"
     },
     "scripts/lib/triage/finalize.py": {
       "required_by": [
@@ -497,7 +497,7 @@
         "scripts/triage_friction_log.py"
       ],
       "role": "engine",
-      "sha256": "bd1fae1ca74f74d053f103a5d5ca3f2276c58a6112f4d02d1d4f247240e2af42"
+      "sha256": "1f0e580938820a7e6df94673af007caf8fcd171dd48bdc5191fe3ae082187642"
     },
     "scripts/lib/triage/project_correction.py": {
       "required_by": [
@@ -513,7 +513,7 @@
         "scripts/triage_friction_log.py"
       ],
       "role": "engine",
-      "sha256": "ec0643678ea7b93d0f881079d745a0dddffea16d38f03f206b58c01cf359ba9c"
+      "sha256": "85af18ae8153ff495dd631dcc1e95ef43811bfae64e335e0ed880f20490f0ca3"
     },
     "scripts/lib/triage/recovery.py": {
       "required_by": [
@@ -706,7 +706,7 @@
     },
     "scripts/tests/test_triage_engine.py": {
       "role": "test",
-      "sha256": "e59a91d1c8fe58bff8d1960cc61dbdd520cac20e4f3282142258124561dcb0fe"
+      "sha256": "e4c8502e9ddcae58c891694329dc6f2e47955110699ab585b7ef6ddd124adb3f"
     },
     "scripts/tests/test_triage_gate.py": {
       "role": "test",
@@ -730,7 +730,7 @@
     },
     "scripts/tests/test_triage_providers.py": {
       "role": "test",
-      "sha256": "3355ab11f879da7faa00706bc1334918d23a525b8d186f64793e57ab8b30d440"
+      "sha256": "ba6da7352334a030670268de4f7bca285285de4de00a455bba7a2605a5af8221"
     },
     "scripts/tests/test_triage_recovery.py": {
       "role": "test",

@@ -18,7 +18,7 @@ sys.path.insert(0, str(ENGINE_DIR / "lib"))
 from datetime import date  # noqa: E402
 
 from triage.canonical import digest  # noqa: E402
-from triage.model import TriageError  # noqa: E402
+from triage.model import TriageError, tracker_payload_matches  # noqa: E402
 from triage.providers import GitHubForge, GitHubIssues, LinearIssues  # noqa: E402
 
 DESTINATION = {"backend": "github-issues", "host": "github.com", "repository": "owner/repo", "project": "owner/repo"}
@@ -120,6 +120,53 @@ def test_linear_uncertain_create_never_retries_mutation(fault, status):
     assert sum("TriageCreate(" in q for q, _ in transport.calls) == 1
     if fault == "timeout":
         assert observed.verified_route == "failed-response-then-exact-read-back"
+
+
+BULLETED = ("Proposed change:\n\n- first\n  - nested\n- second `-`\n\n"
+            "```sh\n- literal\n```\n\n~~~\n- tilde literal\n~~~\n\n- after\n\n")
+# What Linear returned for CUS-1670 on 2026-10-05: every bullet as `*`, code untouched.
+LINEAR_FORM = ("Proposed change:\n\n* first\n  * nested\n* second `-`\n\n"
+               "```sh\n- literal\n```\n\n~~~\n- tilde literal\n~~~\n\n* after\n\n")
+
+
+@pytest.mark.parametrize("stored, verified", [
+    (LINEAR_FORM, True),
+    (LINEAR_FORM.replace("* ", "+ "), True),
+    # Anything beyond the marker is still a different payload.
+    (LINEAR_FORM.replace("* second", "* changed"), False),
+    (LINEAR_FORM.replace("* first", "*first"), False),
+    (LINEAR_FORM.replace("- literal", "* literal"), False),
+    (LINEAR_FORM.replace("- tilde literal", "* tilde literal"), False),
+])
+def test_linear_bullet_marker_spelling_alone_does_not_block_verification(stored, verified):
+    transport = LinearTransport()
+    def store_as(query, variables):
+        result = transport(query, variables)
+        if "TriageCreate(" in query:
+            transport.issues[-1]["description"] = stored + MARKER
+        return result
+    payload = {**linear_payload(), "body": BULLETED + MARKER}
+    tracker = LinearIssues(transport=store_as, sleep=lambda _: None)
+    observed = tracker.create(LINEAR_DESTINATION, payload)
+    assert observed.status == ("verified" if verified else "ambiguous")
+    if verified:
+        assert observed.read_back["payload"]["body"] == stored + MARKER
+        assert observed.read_back["payload_digest"] == digest({**payload, "body": stored + MARKER})
+        assert tracker.create(LINEAR_DESTINATION, payload).verified_route == "pre-existing-exact-match"
+    assert sum("TriageCreate(" in q for q, _ in transport.calls) == 1
+
+
+@pytest.mark.parametrize("observed, matches", [
+    ({"title": "t", "body": "* a\n- b", "project": "p", "labels": ["x"]}, True),
+    ({"title": "t", "body": "- a\n- b\n", "project": "p", "labels": ["x"]}, False),
+    ({"title": "T", "body": "- a\n- b", "project": "p", "labels": ["x"]}, False),
+    ({"title": "t", "body": "- a\n- b", "project": "p", "labels": ["x", "y"]}, False),
+    ({"title": "t", "body": "- a\n- b", "project": "p", "labels": ["x"], "extra": 1}, False),
+    ({"title": "t", "body": None, "project": "p", "labels": ["x"]}, False),
+    (None, False),
+])
+def test_tracker_payload_matches_only_relaxes_the_list_marker(observed, matches):
+    assert tracker_payload_matches(observed, {"title": "t", "body": "- a\n- b", "project": "p", "labels": ["x"]}) is matches
 
 
 @pytest.mark.parametrize("timing", ["existing", "created"])
