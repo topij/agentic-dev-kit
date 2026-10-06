@@ -2724,8 +2724,9 @@ def _reduce_latest_bot_reviews(
       coverage reports and what ``#350``'s evidence route needs: a clean review
       is ordinarily ``COMMENTED``, and a rule that let it be outranked would
       leave the ordinary clean review unable to supply evidence. The one
-      exception is a bodyless ``COMMENTED`` review, which both callers skip
-      before this policy applies (#981, beside the skip).
+      exception is a bodyless ``COMMENTED`` review, which this function skips
+      before applying either policy, so neither caller sees it (#981, beside
+      the skip).
     - a state set — only those states may displace an earlier entry. That is
       "what is this bot's latest *verdict*", where a non-verdict submission must
       not be able to erase one (``#494``).
