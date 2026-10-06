@@ -120,7 +120,7 @@
     },
     "scripts/conftest.py": {
       "role": "engine",
-      "sha256": "cbd806414f7e51e8722fd99d41e3b9a1040a18125059322fd212a78cb03de6d7"
+      "sha256": "fe8379057f759aa9aa2bd1fbf941eba00603d6d35c07e867528ac30c66633112"
     },
     "scripts/dev_session.sh": {
       "role": "engine",
@@ -510,7 +510,7 @@
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
-      "sha256": "f5a1332ea66186d5e7feb700b1147e063c1e02287b1e5099802a1d3163a694fd"
+      "sha256": "dedcade672f8542b948e6ba497f5ed902659e485302e3523bf46845a6f2e588e"
     },
     "scripts/pr_watch.py": {
       "role": "engine",
@@ -606,7 +606,7 @@
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
-      "sha256": "557ad6abaacd0240d08ab447daa61d231c2d067fdf6f1ef570cca03d6b4da09b"
+      "sha256": "9de2c9e4ab6b5280dd2e4a393c1bb77371e88098978b00268de03995f1bb6b27"
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
@@ -642,7 +642,7 @@
     },
     "scripts/tests/test_state_guard.py": {
       "role": "test",
-      "sha256": "7f16413fd3e8f11871c0dddbd55aab1c321c86e27519cad0b7509643061009ba"
+      "sha256": "8ea6db59de234366f28a8a0a223eccef1514bd638daeb07dcd21a5cb04c6e1d6"
     },
     "scripts/tests/test_systemize_artifacts.py": {
       "role": "test",

@@ -24,9 +24,11 @@ gap `test_mutation_gate.py` records for itself.
 
 from __future__ import annotations
 
+import argparse
 import difflib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -464,6 +466,35 @@ def test_the_removed_delta_draws_flag_is_refused_with_its_replacements(repo):
     for flag in ("--draw-prose-class", "--draw-safety-critical", "--repair-boundary"):
         assert flag in out.stderr
     assert out.stdout == ""
+
+
+def test_help_names_only_flags_the_parser_accepts(monkeypatch):
+    """`--carry-forward`'s help sent draws to `--delta-draws` after that flag was
+    retired (#944), so `--help` pointed callers at a refusal. Every flag any help
+    string names must be a live option; the retired one stays registered only to
+    refuse, and is recognised here by its `removed:` help."""
+    panel_prompt = _load()
+    captured = {}
+
+    class _Captured(Exception):
+        pass
+
+    def _capture(self, *_args, **_kwargs):
+        captured["parser"] = self
+        raise _Captured
+
+    monkeypatch.setattr(argparse.ArgumentParser, "parse_args", _capture)
+    with pytest.raises(_Captured):
+        panel_prompt.main([])
+    actions = [a for a in captured["parser"]._actions if a.option_strings]
+    retired = {
+        flag for a in actions if (a.help or "").startswith("removed:") for flag in a.option_strings
+    }
+    assert retired == {"--delta-draws"}
+    accepted = {flag for a in actions for flag in a.option_strings} - retired
+    for action in actions:
+        named = set(re.findall(r"--[a-z][a-z-]*", action.help or ""))
+        assert named <= accepted, (action.option_strings, named - accepted)
 
 
 def test_the_carry_forward_section_tells_the_lens_what_it_is_not(repo):

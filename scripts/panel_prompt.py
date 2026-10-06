@@ -749,8 +749,8 @@ def main(argv: list[str] | None = None) -> int:
         "--carry-forward",
         default=None,
         help="what prior rounds COVERED — the round-to-round aim that has no other home. "
-        "Never the author's draws or risk assessment: those go to --delta-draws, and a "
-        "full panel's prompt carries neither",
+        "Never the author's draws or risk assessment: those go to --draw-prose-class and "
+        "--draw-safety-critical, and a full panel's prompt carries neither",
     )
     parser.add_argument(
         "--draw-prose-class",
