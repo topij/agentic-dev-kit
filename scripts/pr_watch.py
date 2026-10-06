@@ -2720,11 +2720,12 @@ def _reduce_latest_bot_reviews(
     ``states`` is the displacement policy, and it is the whole difference:
 
     - ``None`` — every review participates, so the newest one wins whatever it
-      says; the one exception is a bodyless ``COMMENTED`` review, which both
-      callers skip before this policy applies (#981, beside the skip). That is "which commit did this bot last *look at*", which is what
+      says. That is "which commit did this bot last *look at*", which is what
       coverage reports and what ``#350``'s evidence route needs: a clean review
       is ordinarily ``COMMENTED``, and a rule that let it be outranked would
-      leave the ordinary clean review unable to supply evidence.
+      leave the ordinary clean review unable to supply evidence. The one
+      exception is a bodyless ``COMMENTED`` review, which both callers skip
+      before this policy applies (#981, beside the skip).
     - a state set — only those states may displace an earlier entry. That is
       "what is this bot's latest *verdict*", where a non-verdict submission must
       not be able to erase one (``#494``).
@@ -3492,9 +3493,10 @@ def objecting_bot_coverage(review_bots: dict, head: str | None) -> list[str]:
     objecting = {
         entry.get("bot")
         # `objections`, NOT `coverage` (#494). Coverage is newest-wins over every
-        # state (a bodyless `COMMENTED` aside; #981), so a bot's own later non-verdict review at this same head
-        # deleted its objection from the list before this ever read it. Same
-        # entry shape, so every clause below is unchanged — the fix is which
+        # state (a bodyless `COMMENTED` aside; #981), so a bot's own later
+        # non-verdict review at this same head deleted its objection from the
+        # list before this ever read it. Same entry shape, so every clause
+        # below is unchanged — the fix is which
         # reduction the clauses are applied to.
         for entry in review_bots.get("objections") or []
         # `covers_head is True` AND `sha == head`: identity, not truthiness, and
