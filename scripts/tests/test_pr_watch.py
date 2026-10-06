@@ -3369,16 +3369,28 @@ Summary only.
 # --------------------------------------------------------------------------- #
 
 
-def _review(login: str, sha: str, at: str, state: str = "COMMENTED") -> dict:
+def _review(
+    login: str,
+    sha: str,
+    at: str,
+    state: str = "COMMENTED",
+    body: str = "<!-- walkthrough_start --> review summary",
+) -> dict:
     # `COMMENTED` by default because that is what the configured bot's reviews
     # actually carry on this repo — including its clean ones, verified against
     # PR #484's live review list. A default of `APPROVED` would make the suite
     # exercise a state the real reviewer rarely emits.
+    #
+    # A body by default because a real review carries one: a bodyless
+    # `COMMENTED` is a thread-reply wrapper, which coverage skips (#981). The
+    # body is noise-marked so it does not surface as a fresh comment and hold
+    # `converged` — these tests are about coverage, not the comment loop.
     return {
         "author": {"login": login},
         "commit": {"oid": sha},
         "submittedAt": at,
         "state": state,
+        "body": body,
     }
 
 
@@ -3470,6 +3482,92 @@ def test_bot_coverage_at_the_head_is_evidence_with_no_receipt() -> None:
     rendered = pr_watch.render(report)
     assert "coderabbit" in rendered
     assert "no lenses recorded" not in rendered
+
+
+def test_a_bots_thread_reply_wrapper_is_not_a_review_of_the_head() -> None:
+    """#981, in the shape cs-toolkit PR 2308 recorded on 2026-09-14.
+
+    The bot reviews head A. The author pushes B and replies on the bot's inline
+    thread; the bot replies back. GitHub wraps that reply in a ``COMMENTED``
+    review object with an EMPTY body, bound to B. Coverage took it as the bot's
+    review of B, so the gate reported "the configured review bot reviewed this
+    head" and the PR was mergeable with no receipt — for a head the bot never
+    reviewed.
+    """
+    pr_watch = _load_pr_watch()
+    view = _green_view(
+        reviews=[
+            _review("coderabbitai", "aaaa111", "2026-09-14T16:34:46Z"),
+            _review("coderabbitai", "abc123", "2026-09-14T16:45:30Z", body=""),
+        ]
+    )
+
+    report = pr_watch.build_report(view, [], set(), **_settled(view))
+
+    assert report["review_evidence"]["valid"] is False
+    assert report["mergeable"] is False
+    # Not merely refused: the wrapper does not displace the real review either,
+    # so the warning names the commit the bot actually reviewed.
+    assert [(e["sha"], e["covers_head"]) for e in report["review_bots"]["coverage"]] == [
+        ("aaaa111", False)
+    ]
+    assert "aaaa111" in pr_watch.render(report)
+
+    # The release valve is unchanged: the bot's real review of B supplies the
+    # evidence, and a later wrapper at B does not take it away again.
+    view["reviews"] += [
+        _review("coderabbitai", "abc123", "2026-09-14T17:05:16Z"),
+        _review("coderabbitai", "abc123", "2026-09-14T17:06:44Z", body=""),
+    ]
+    report = pr_watch.build_report(view, [], set(), **_settled(view))
+    assert report["review_evidence"]["route"] == "bot-coverage"
+    assert report["mergeable"] is True
+
+
+@pytest.mark.parametrize("body", ["", "  \n", None, 7, ["x"]])
+@pytest.mark.parametrize("rest", [False, True])
+def test_every_empty_body_spelling_of_a_commented_review_is_skipped(body, rest) -> None:
+    """Whitespace, a missing key and a non-string body all read as empty — the
+    fail-closed direction — on both transports' spellings."""
+    pr_watch = _load_pr_watch()
+    if rest:
+        raw = {"user": {"login": "coderabbitai"}, "state": "COMMENTED",
+               "commit_id": "abc123", "submitted_at": "2026-09-14T16:45:30Z"}
+    else:
+        raw = _review("coderabbitai", "abc123", "2026-09-14T16:45:30Z")
+        del raw["body"]
+    if body is not None:
+        raw["body"] = body
+
+    assert pr_watch.bot_review_coverage([raw], "abc123") == []
+
+
+def test_a_bodyless_approval_still_counts_and_a_bodyless_objection_still_blocks() -> None:
+    """The skip is scoped to ``COMMENTED``. An approval with no text is still a
+    verdict, and an empty-bodied ``CHANGES_REQUESTED`` is still an objection."""
+    pr_watch = _load_pr_watch()
+    approved = _green_view(
+        reviews=[_review("coderabbitai", "abc123", "2026-09-14T16:45:30Z", "APPROVED", "")]
+    )
+    report = pr_watch.build_report(approved, [], set(), **_settled(approved))
+    assert report["review_evidence"]["route"] == "bot-coverage"
+    assert report["mergeable"] is True
+
+    objecting = _green_view(
+        reviews=[
+            _review("coderabbitai", "abc123", "2026-09-14T16:45:30Z", "CHANGES_REQUESTED", ""),
+            _review("coderabbitai", "abc123", "2026-09-14T16:50:00Z", body=""),
+        ]
+    )
+    report = pr_watch.build_report(
+        objecting,
+        [],
+        set(),
+        review_receipt={"head": "abc123", "source": "fallback:panel"},
+        **_settled(objecting),
+    )
+    assert report["mergeable"] is False
+    assert any("coderabbit" in b for b in report["merge_blockers"])
 
 
 def test_stale_receipt_beside_qualifying_bot_coverage_nulls_out_head() -> None:
@@ -7504,6 +7602,7 @@ def test_coverage_reads_rests_review_spellings() -> None:
             "state": "COMMENTED",
             "commit_id": "0ldc0mm1t",
             "submitted_at": "2026-07-25T10:00:00Z",
+            "body": "<!-- walkthrough_start --> review summary",
         }
     ]
     coverage = pr_watch.bot_review_coverage(rest_reviews, "newhead")

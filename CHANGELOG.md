@@ -42,6 +42,17 @@ starts.
 
 ---
 
+## #982 — A bot's empty thread-reply review no longer counts as coverage
+
+CHANGED (gate semantics, report shape): `pr_watch.py` skips a configured bot's
+`COMMENTED` review whose body is empty or whitespace. It no longer satisfies the
+`bot-coverage` route to `mergeable`, and it no longer appears in
+`review_bots.coverage`, so a head that only received a bot's inline-thread reply now
+needs the bot's real review or a `--record-review` receipt. Refresh
+`scripts/pr_watch.py` with its installed tests; a test fixture that builds a bot
+review with no `body` must give it one to keep counting as coverage. A bodyless
+`APPROVED` still counts.
+
 ## #978 — One-run triage recovery paths removed
 
 BREAKING (engine CLI surface): the `correct-project` entry and the `--rejection-context`

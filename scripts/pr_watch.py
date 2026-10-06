@@ -2679,6 +2679,10 @@ def bot_review_coverage(
     not merely over-report a warning, it would authorize merges. Widen what
     counts as coverage only with that in view.
 
+    A ``COMMENTED`` review with an empty body is skipped entirely: it is the
+    object GitHub creates for a bot's reply on an inline thread, not a review
+    (#981; the reasoning is beside the skip in :func:`_reduce_latest_bot_reviews`).
+
     Returns one entry per bot with at least one review carrying a usable commit
     SHA, newest first: ``{bot, sha, submitted_at, covers_head}``. A bot whose
     reviews all lack one is indistinguishable here from a bot that never
@@ -2719,7 +2723,10 @@ def _reduce_latest_bot_reviews(
       says. That is "which commit did this bot last *look at*", which is what
       coverage reports and what ``#350``'s evidence route needs: a clean review
       is ordinarily ``COMMENTED``, and a rule that let it be outranked would
-      leave the ordinary clean review unable to supply evidence.
+      leave the ordinary clean review unable to supply evidence. The one
+      exception is a bodyless ``COMMENTED`` review, which this function skips
+      before applying either policy, so neither caller sees it (#981, beside
+      the skip).
     - a state set — only those states may displace an earlier entry. That is
       "what is this bot's latest *verdict*", where a non-verdict submission must
       not be able to erase one (``#494``).
@@ -2771,6 +2778,31 @@ def _reduce_latest_bot_reviews(
         # under-reporting bias the rest of this function takes.
         state = raw.get("state")
         state = state.strip().upper() if isinstance(state, str) else ""
+        # A bodyless `COMMENTED` object is not a review (#981). GitHub wraps a
+        # bot's reply on an inline thread in exactly that object, bound to the
+        # head current at reply time — so without this skip, replying to the
+        # author's fix on a thread "covered" a head the bot never reviewed, and
+        # `qualifying_bot_coverage` opened the gate on it. cs-toolkit PR 2308's
+        # reviews (submitted 2026-09-14), read on both transports on 2026-10-06:
+        # the bot's real reviews carried a body, its thread-reply wrappers an
+        # empty one.
+        #
+        # Skipped rather than recorded with a flag, for the same reason the
+        # displacement policy below skips: a wrapper must not displace the
+        # bot's earlier real review either, or `covers_head` would merely go
+        # false on the wrong entry and the "last review was of <sha>" warning
+        # would name the wrapper's commit instead of the reviewed one.
+        #
+        # KNOWN BOUND, in the fail-closed direction: a bot that posts its
+        # findings only as inline comments under an empty review body loses
+        # coverage for that review, and the PR falls back to needing a receipt.
+        # Telling such a review from a wrapper takes linking inline comments to
+        # their review, which the `gh` transport's review ids do not support.
+        # `APPROVED` is untouched: an approval with no text is still a verdict.
+        # A non-string body counts as empty: the fail-closed direction.
+        body = raw.get("body")
+        if state == "COMMENTED" and not (isinstance(body, str) and body.strip()):
+            continue
         # The displacement policy, applied BEFORE the recency compare so a
         # skipped review cannot win on its timestamp. `continue`, not a
         # fall-through: a non-participating review must leave any earlier entry
@@ -3383,8 +3415,9 @@ def bot_head_objections(
 
     The sibling of :func:`bot_review_coverage`, and the reason the objection read
     is no longer computed from it. Coverage reduces to one entry per bot,
-    newest-wins **regardless of state**, because its question is which commit the
-    bot last looked at. Asking the objection question of that answer meant a
+    newest-wins **regardless of state** (a bodyless ``COMMENTED`` aside, which is
+    not a review; #981), because its question is which commit the bot last
+    looked at. Asking the objection question of that answer meant a
     bot's own follow-up ``COMMENTED`` at the same head did not merely outrank its
     earlier ``CHANGES_REQUESTED`` — it removed it from the structure the blocker
     was computed from. Two blockers became zero with no commit pushed, no head
@@ -3461,9 +3494,10 @@ def objecting_bot_coverage(review_bots: dict, head: str | None) -> list[str]:
     objecting = {
         entry.get("bot")
         # `objections`, NOT `coverage` (#494). Coverage is newest-wins over every
-        # state, so a bot's own later non-verdict review at this same head
-        # deleted its objection from the list before this ever read it. Same
-        # entry shape, so every clause below is unchanged — the fix is which
+        # state (a bodyless `COMMENTED` aside; #981), so a bot's own later
+        # non-verdict review at this same head deleted its objection from the
+        # list before this ever read it. Same entry shape, so every clause
+        # below is unchanged — the fix is which
         # reduction the clauses are applied to.
         for entry in review_bots.get("objections") or []
         # `covers_head is True` AND `sha == head`: identity, not truthiness, and
