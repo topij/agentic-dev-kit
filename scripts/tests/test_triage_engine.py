@@ -1267,6 +1267,39 @@ def test_recover_refuses_valid_ungated_state_without_changing_bytes(
     assert state_path.read_bytes() == before
 
 
+def test_recover_refuses_an_in_flight_state_whose_frozen_artifact_is_missing_and_resume_continues_after_restore(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#859 narrows what `recover` calls valid only for a completed state. An in-flight
+    run whose frozen artifact is missing is still refused as valid, writes no
+    held evidence and leaves the gate free, so restoring the artifact lets it
+    resume. Judging it invalid captured it into a terminal hold."""
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    drafted = run("new", context="interactive", request=request(root), start=root)
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    assert loads_exact(state_path.read_bytes())["phase"] != "completed"
+    frozen = Path(drafted["frozen_snapshot"])
+    frozen_raw = frozen.read_bytes()
+    frozen.unlink()
+    before = state_path.read_bytes()
+    entries_before = sorted(path.relative_to(state_root) for path in state_root.rglob("*"))
+
+    result = run("recover", context="interactive", request={}, start=root)
+    assert result["outcome"] == "operator-held"
+    assert result["detail"] == "captured state is valid; recovery refused"
+    assert state_path.read_bytes() == before
+    assert sorted(path.relative_to(state_root) for path in state_root.rglob("*")) == entries_before
+
+    frozen.write_bytes(frozen_raw)
+    supplied = request(root)
+    supplied["approval"] = {"command": "approve all", "proposal_set_digest": "0" * 64}
+    resumed = run("resume", context="interactive", request=supplied, start=root)
+    # Past the artifact check and the gate: it stops only at the approval step.
+    assert resumed["detail"] == "approval requires a trusted runtime context", resumed
+
+
 def test_resume_records_fast_forward_protected_head_without_changing_draft_identity(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

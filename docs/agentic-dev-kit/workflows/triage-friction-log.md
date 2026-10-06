@@ -831,7 +831,9 @@ foreign or prior owner. Missing or mismatched current ownership or termination e
 stops operator-held. Other entries and unattended execution preserve it operator-held.
 
 Decode the lossless capture and require its raw-byte digest before parsing. Parse and
-validate only the captured bytes, never the still-live path. Record the parse
+validate only the captured bytes, never the still-live path. In state validation the
+one live read is a completed state's frozen artifact, as the classification paragraph
+below says; proving a sweep reads git live, as its own paragraphs say. Record the parse
 result and current and recorded identities in a candidate `action_core`. The prepared
 envelope embeds the complete immutable capture core and digest, the action core and
 digest, and the exact decision plus approver identity bound to `action_core_digest`.
@@ -866,10 +868,24 @@ second time or start work under an unowned gate.
 Classify invalid captured state conservatively. Only a readable state that proves it
 never reached `attempting` and contains no verified tracker identifier or repository/PR
 evidence may offer `abandon <action-core-digest>` to the present interactive operator.
-`recover` judges validity the way a session-starting entry does, so a completed state
-that is valid but for a configuration change made after it finished is refused as valid
+`recover` judges a completed state with the predicate a session-starting entry applies
+before retiring it: state validation, then the published frozen snapshot artifact, then
+the forge-prefix checks on its forge operations. A completed state that is valid but for
+a configuration change made after it finished passes it, so it is refused as valid
 (`captured state is valid; recovery refused`) and left for *Completed-state retirement*
-rather than captured as invalid.
+rather than captured as invalid. A completed state that fails only the artifact or forge
+checks, including an artifact it cannot read, fails it. It is captured and offered
+`retire-terminal-invalid-state` only when git proves its sweep, as below; otherwise
+`recover` writes nothing and refuses it (`state fails the session-starting checks and no
+retirement is proven; recovery refused`), so restoring the artifact or landing the sweep
+still leaves a route out, and the action plan preserves it as before when it passes
+state validation under the current configuration (one that fails that is classified as
+any invalid state). A state in any
+other phase is judged by state validation alone, so an in-flight run whose artifact is
+missing is refused as valid and resumes once the artifact is restored. The `test` entry's
+own recovery branch still judges by state validation alone. For a completed state the
+action plan reads the live frozen artifact at plan time: the capture holds only the
+state and gate bytes.
 The one other invalid state that leaves the held route is a **finished** run, in either
 layout. Both need phase `completed`, completion route `archive-sweep`, every tracker and
 notification operation `verified`, every forge operation `verified` (a `pr-watch`

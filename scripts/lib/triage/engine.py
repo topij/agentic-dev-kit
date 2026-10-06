@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import difflib
 import re
+from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -1525,6 +1526,81 @@ def _validate_forge_prefix(
             raise TriageError("forge predecessor binding mismatch", outcome="operator-held")
 
 
+def validate_session_state(
+    store: ArtifactStore,
+    settings: Settings,
+    state_raw: bytes,
+    *,
+    mode: str,
+    retiring: bool,
+    retain: Callable[[dict[str, Any], Path], None] | None = None,
+) -> tuple[dict[str, Any], Path]:
+    """The validity predicate a session-starting entry applies before it retires.
+
+    `canonical_state` alone accepts a state whose published frozen artifact is
+    gone or whose forge prefix does not bind, and the session-starting path
+    hard-stops on either. `validate_recoverable_state` applies this function to
+    a completed state, so recovery calls valid only a completed state that path
+    accepts (#859). The `test` entry's own recovery branch still judges with
+    `canonical_state` alone. `retain` sees the parsed state once its frozen
+    artifact is proven, so a forge-prefix failure can still report it.
+    """
+    state = canonical_state(state_raw, settings=settings, mode=mode, retiring=retiring)
+    frozen_path = _validate_frozen_artifact(store, state)
+    if retain is not None:
+        retain(state, frozen_path)
+    if state.get("finalization_operations"):
+        _validate_forge_prefix(state["finalization_operations"], state, settings)
+    return state, frozen_path
+
+
+def _parses(state_raw: bytes, settings: Settings, mode: str) -> bool:
+    try:
+        canonical_state(state_raw, settings=settings, mode=mode, retiring=True)
+    except TriageError:
+        return False
+    return True
+
+
+def validate_recoverable_state(
+    store: ArtifactStore,
+    settings: Settings,
+    state_raw: bytes,
+    *,
+    mode: str,
+    retiring: bool,
+) -> None:
+    """The validity `recover` and `state_action_plan` apply (#859).
+
+    A completed state is judged by `validate_session_state`: its retirement is
+    the session-starting path's, so one that path would hard-stop on is not
+    valid: recovery retires it, holds it, or refuses it with its own reason, as
+    below, instead of refusing it as valid toward an entry that fails. Any
+    other state keeps `canonical_state` alone. An
+    in-flight run whose frozen artifact is missing or unreadable is refused as
+    valid and keeps its gate free, so restoring the artifact lets it resume;
+    judging it invalid would capture it into a terminal hold that nothing
+    clears. An artifact that cannot be read makes a completed state fail this
+    predicate rather than raise an exception that escapes recovery with its gate
+    held. A completed state that fails only the artifact or forge checks, and
+    so still passes `canonical_state` as a retiring entry, is captured by
+    `recover` only when its retirement is proven; otherwise `recover` refuses
+    it, writing nothing. When retirement is not proven, `state_action_plan`
+    preserves such a state if it also passes `canonical_state` under the
+    current configuration, and holds it otherwise. A completed state that fails
+    `canonical_state` itself is captured as any invalid state.
+    """
+    state = canonical_state(state_raw, settings=settings, mode=mode, retiring=retiring)
+    if state.get("phase") != "completed":
+        return
+    try:
+        validate_session_state(store, settings, state_raw, mode=mode, retiring=retiring)
+    except OSError as exc:
+        raise TriageError(
+            f"published frozen snapshot artifact is unreadable ({type(exc).__name__})"
+        ) from exc
+
+
 def _forge_destination(remote: str) -> tuple[str, str]:
     if remote.startswith("git@") and ":" in remote:
         host, repository = remote[4:].split(":", 1)
@@ -1827,9 +1903,22 @@ def run(
                 try:
                     # A completed state that is valid but for a later config
                     # change is one a session-starting entry retires; treating
-                    # it as invalid here would hold it for good (#833).
-                    canonical_state(state_raw, settings=settings, mode=mode, retiring=True)
+                    # it as invalid here would hold it for good (#833). A
+                    # completed state that path would hard-stop on is not valid
+                    # either, or the refusal below sends the operator to an
+                    # entry that fails (#859).
+                    validate_recoverable_state(store, settings, state_raw, mode=mode, retiring=True)
                 except TriageError:
+                    if _parses(state_raw, settings, mode):
+                        # The state itself is valid and fails only the artifact
+                        # or forge checks. Capture it into the invalid-state
+                        # route only when the plan can retire it; otherwise a
+                        # restorable state would be held for good.
+                        proposed = state_action_plan(store, settings, captured)
+                        action = (proposed.get("action_core") or {}).get("action")
+                        if action != "retire-terminal-invalid-state":
+                            lease.release()
+                            return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="restore the published frozen snapshot artifact, or land the run's sweep, then retry", detail="state fails the session-starting checks and no retirement is proven; recovery refused")
                     captured = capture_state_present(store, settings, require_terminated=False, publish=True)
                     plan = state_action_plan(store, settings, captured)
                     if plan.get("held") is not None:
@@ -1867,18 +1956,18 @@ def run(
                     receipt = resume_state_action(store, prepared)
                     lease.held = False
                     return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="restart test only from the exact recovery receipt", detail=str(receipt.get("kind")))
+            def retain(parsed: dict[str, Any], path: Path) -> None:
+                nonlocal result_state, result_frozen, result_report
+                result_state = parsed
+                result_frozen = str(path)
+                if parsed.get("proposal_payloads"):
+                    result_report = parsed["proposal_payloads"][0]["report_binding"]["path"]
+
             # A session-starting entry retires a completed state below, so it may
             # accept one written under an earlier configuration; see `validate_state`.
-            state = canonical_state(state_raw, settings=settings, mode=mode, retiring=entry in {None, "new", "test"})
-            frozen_path = _validate_frozen_artifact(store, state)
-            result_state = state
-            result_frozen = str(frozen_path)
-            if state.get("proposal_payloads"):
-                result_report = state["proposal_payloads"][0]["report_binding"]["path"]
-            if state.get("finalization_operations"):
-                _validate_forge_prefix(
-                    state["finalization_operations"], state, settings
-                )
+            state, frozen_path = validate_session_state(
+                store, settings, state_raw, mode=mode, retiring=entry in {None, "new", "test"}, retain=retain
+            )
             if state["phase"] == "completed" and entry in {None, "new", "test"}:
                 # A completed session holds no pending approval, attempt or merge,
                 # so a session-starting entry retires it rather than letting it end

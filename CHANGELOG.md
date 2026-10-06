@@ -56,6 +56,22 @@ adopt it, copy the `scratch:` block from the kit's config into yours and review 
 `roots` before running `--apply`; without the block the engine exits 2 and touches
 nothing.
 
+## #985 — Triage `recover` retires a completed state the session-starting entry stops on
+
+CHANGED (gate semantics): a **completed** state that passes state validation but whose
+published frozen snapshot artifact is missing, unreadable or mismatched, or whose forge
+operations fail the session-starting forge-prefix checks, is no longer answered
+`captured state is valid; recovery refused` by interactive `recover` when git proves
+its archive sweep: it is captured as invalid and offered `retire-terminal-invalid-state`.
+When no retirement is proven, `recover` writes nothing and answers `state fails the
+session-starting checks and no retirement is proven; recovery refused`; restoring the
+artifact, or landing the sweep, leaves the run recoverable as before. The dead-owner
+recovery plan likewise offers retirement for a proven sweep and otherwise still
+preserves a state that passes state validation under the current configuration. A state in any other phase is judged as before. The `test` entry's
+own recovery branch is unchanged. Refresh `lib/triage/engine.py` and `recovery.py`
+together, with the shared triage workflow and installed tests; a test that expected the
+refusal for a completed state whose sweep is proven must expect the retirement plan.
+
 ## #982 — A bot's empty thread-reply review no longer counts as coverage
 
 CHANGED (gate semantics, report shape): `pr_watch.py` skips a configured bot's
