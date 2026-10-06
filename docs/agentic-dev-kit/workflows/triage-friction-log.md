@@ -573,8 +573,10 @@ phase are forbidden earlier.
   identifier to match the operation, and the observed payload to equal the approved one
   except in how each unordered-list marker outside a fenced code block is spelled:
   Linear's editor returns every bullet as `*`, so `-`, `*` and `+` compare equal there.
-  That is what an *exact* tracker match means in this section; any other difference
-  leaves the attempt ambiguous. The complete decision plan plus its exact attempted
+  A fence counts only when opened within three spaces of the margin, so a marker in
+  indented or list-nested code is relaxed as well. That is what an *exact* tracker
+  match means throughout this workflow; any other difference leaves the attempt
+  ambiguous. The complete decision plan plus its exact attempted
   operation prefix accounts for every approved tracker payload without cross-payload or duplicate
   identifier reuse. The
   `verified_tracker_identifiers` array equals the ordered returned identifiers of
@@ -1266,8 +1268,9 @@ marker and record the complete pre-existing match set. One authoritative pre-exi
 exact payload match records `verified` with its read-back identifier without a create.
 Any multiple or non-exact marker match is ambiguous and stops operator-held. Only an
 authoritative empty match set permits persisting `attempting` and calling create. After a
-success response, read back the item and require exact project, title, body, labels,
-marker, and returned identifier before recording `verified`.
+success response, read back the item and require an exact tracker match, as the
+`tracker-write` state defines it, on project, title, body, labels, marker, and returned
+identifier before recording `verified`.
 
 If the create fails or returns ambiguously, read back by the exact marker before any
 retry. One exact payload match verifies the write. No match proves no landing only when

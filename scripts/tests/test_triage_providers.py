@@ -169,6 +169,12 @@ def test_tracker_payload_matches_only_relaxes_the_list_marker(observed, matches)
     assert tracker_payload_matches(observed, {"title": "t", "body": "- a\n- b", "project": "p", "labels": ["x"]}) is matches
 
 
+def test_tracker_payload_matches_relaxes_the_approved_side_too():
+    def payload(body):
+        return {"title": "t", "body": body, "project": "p", "labels": ["x"]}
+    assert tracker_payload_matches(payload("- a\n- b"), payload("* a\n+ b")) is True
+
+
 @pytest.mark.parametrize("approved, observed", [
     # Only the leading marker is relaxed, never a `*` or `+` inside the text.
     ("- a *b* c", "- a -b- c"),
