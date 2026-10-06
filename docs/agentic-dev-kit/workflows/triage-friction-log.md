@@ -820,8 +820,10 @@ arguments and an unrelated program hold. The interpreter path must equal the int
 executing the installed CLI; run correction through that original interpreter or hold.
 This comparison gates planning and application; later reads of the exact approved receipt
 validate its captured historical invocation without binding a future CLI interpreter.
-Receipt decoding uses the captured configuration and schema-one guard contract rather
-than a later runtime's engine path or provider contract.
+Receipt decoding uses the captured configuration rather than a later runtime's engine
+path, and accepts any provider digest the engine lists for this guard. A new
+correction binds the newest listed digest; a provider change that keeps the guard
+appends its digest to the list and never replaces one.
 This current-runtime binding does not independently authenticate historical execution.
 For a runtime-local invoker, the trusted observer must audit the launcher and delegation
 chain, retain the actual launcher argv

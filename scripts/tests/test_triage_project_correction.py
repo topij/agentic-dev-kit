@@ -741,7 +741,10 @@ def test_completed_corrected_state_retires_without_guard_contract_change(tmp_pat
 def test_completed_corrected_state_retires_after_guard_contract_changes(tmp_path, monkeypatch):
     root = completed_corrected(tmp_path, monkeypatch)
 
-    monkeypatch.setattr(project_correction, "PROJECT_GUARD_PROVIDER_SHA256", "f" * 64)
+    # An upgrade appends the next provider digest; the retained receipt binds the earlier one.
+    upgraded = (*project_correction.PROJECT_GUARD_PROVIDER_SHA256S, "f" * 64)
+    monkeypatch.setattr(project_correction, "PROJECT_GUARD_PROVIDER_SHA256S", upgraded)
+    monkeypatch.setattr(project_correction, "PROJECT_GUARD_PROVIDER_SHA256", upgraded[-1])
     result = engine.run("new", context="interactive", start=root, request={})
     assert result["detail"].startswith("retired completed state to "), result
 
