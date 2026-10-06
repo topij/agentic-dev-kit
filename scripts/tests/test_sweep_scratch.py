@@ -453,6 +453,37 @@ def test_worktree_registered_after_the_report_is_rechecked_before_removal(
     assert entry.is_dir()
 
 
+def test_git_file_naming_an_impossible_path_keeps_the_entry_and_the_sweep_runs(root: Path, repo: Path):
+    poisoned = root / "poisoned"
+    poisoned.mkdir()
+    (poisoned / ".git").write_bytes(b"gitdir: /tmp/a\x00b\n")
+    _set_age(poisoned, OLD)
+    stale = _tree(root / "stale")
+    reports, outcomes = _run([root], repo, older_than=0)
+    assert _owners(reports) == {"poisoned": sweep.LIVE, "stale": sweep.STALE}
+    assert [(os.path.basename(o.path), o.action) for o in outcomes] == [("stale", "removed")]
+    assert poisoned.is_dir() and not stale.exists()
+
+
+def test_entry_replaced_after_the_report_is_kept(root: Path, repo: Path):
+    entry = _tree(root / "entry")
+    settings = _settings([root], repo)
+    reports = sweep.survey(settings, root=repo, now=time.time())
+    assert _owners(reports) == {"entry": sweep.STALE}
+    holder = root.parent / "holder"
+    entry.rename(holder)  # keeps the old inode alive, so the new one cannot reuse it
+    _tree(root / "entry")
+    outcomes = sweep.apply(reports, settings, older_than=0)
+    assert [(o.action, o.reason) for o in outcomes] == [("kept", "replaced since it was classified")]
+    assert (root / "entry").is_dir()
+
+
+@pytest.mark.parametrize("raw", ["/tmp/{uid.real}", "/tmp/{repo_slug!r}", "/tmp/{uid:>9}", "/tmp/{home}"])
+def test_placeholders_other_than_the_two_plain_ones_are_refused(raw: str, base: Path):
+    with pytest.raises(ValueError):
+        sweep.expand_root(raw, root=base)
+
+
 def test_cli_failed_removal_exits_one(root: Path, repo: Path, base: Path, monkeypatch, capsys):
     _tree(root / "old-session")
     cfg = _config(base / "dev-model.yaml", roots=[str(root)], repos=[str(repo)])

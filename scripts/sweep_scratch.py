@@ -31,8 +31,13 @@ child of a root is one **entry**, and every entry gets exactly one owner class:
 ``unclassified``
     Anything the engine could not fully classify: a symlink entry, an entry that
     is neither a file nor a directory, an unreadable path inside it, an entry that
-    is or holds a mount point, or an entry that is or holds another configured
-    root. Always kept.
+    is or holds a mount point on another device (a same-device bind mount shares
+    ``st_dev`` and is not detected), or an entry that is or holds another
+    configured root. Always kept.
+
+Age is the newest **mtime** in the entry. A tree extracted or copied with its
+original timestamps (``cp -a``, ``rsync -a``, an archive) looks as old as its
+source, so add a root only where every child is disposable whatever its age.
 
 Report mode (the default) changes nothing. ``--apply --older-than <age>`` removes
 ``stale`` entries whose newest mtime is at least ``<age>`` old, and nothing else.
@@ -55,8 +60,9 @@ Ages are ``<n>s``, ``<n>m``, ``<n>h`` or ``<n>d``.
 
 Exit codes:
     0 — report printed, and no root refused and no removal failed. An entry kept
-        because its re-check no longer judged it removable is reported as
-        ``kept`` and is not a failure.
+        because its re-check no longer judged it removable, including a worktree
+        re-read that failed mid-apply, is reported as ``kept`` and is not a
+        failure.
     1 — a configured root was refused, or a removal was attempted and failed.
     2 — usage or config error, or the worktree registrations could not be read.
 """
@@ -69,6 +75,7 @@ import os
 import re
 import shutil
 import stat
+import string
 import subprocess
 import sys
 import time
@@ -154,9 +161,15 @@ def expand_root(raw: str, *, root: Path) -> str:
     """Substitute ``{uid}`` and ``{repo_slug}``. Any other placeholder is an error."""
     values = {"uid": str(os.getuid()), "repo_slug": repo_slug(root)}
     try:
-        return raw.format_map(values)
-    except (KeyError, ValueError, IndexError) as exc:
-        raise ValueError(f"unknown or malformed placeholder in {raw!r} ({exc})") from exc
+        fields = list(string.Formatter().parse(raw))
+    except ValueError as exc:
+        raise ValueError(f"malformed placeholder in {raw!r} ({exc})") from exc
+    for _literal, name, spec, conversion in fields:
+        if name is None:
+            continue
+        if name not in values or spec or conversion:
+            raise ValueError(f"unknown or malformed placeholder {{{name}}} in {raw!r}")
+    return raw.format_map(values)
 
 
 def validate_root(path: str) -> tuple[str, str | None]:
@@ -264,10 +277,14 @@ def _linked_gitdir_reason(git_file: str, entry: str) -> str | None:
     target = lines[0][len("gitdir:"):].strip()
     if not os.path.isabs(target):
         target = os.path.join(os.path.dirname(git_file), target)
-    target = os.path.realpath(target)
+    try:
+        target = os.path.realpath(target)
+        exists = os.path.exists(target)
+    except (OSError, ValueError):
+        return f"unparseable .git file {git_file}"
     if target.startswith(entry + os.sep):
         return None  # a submodule whose git dir lives inside the same entry
-    if os.path.exists(target):
+    if exists:
         return f"linked worktree {os.path.dirname(git_file)} of an unconfigured repository ({target})"
     return None
 
@@ -301,10 +318,14 @@ def _main_repo_reason(git_dir: str, entry: str) -> str | None:
         target = lines[0].strip()
         if not os.path.isabs(target):
             target = os.path.join(os.path.dirname(gitdir_file), target)
-        worktree = os.path.dirname(os.path.realpath(target))
+        try:
+            worktree = os.path.dirname(os.path.realpath(target))
+            exists = os.path.exists(target)
+        except (OSError, ValueError):
+            return f"unparseable worktree record {gitdir_file}"
         if worktree == entry or worktree.startswith(entry + os.sep):
             continue
-        if os.path.exists(target):
+        if exists:
             return f"repository whose worktree {worktree} lives outside this entry"
     return None
 
