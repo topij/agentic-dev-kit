@@ -88,7 +88,9 @@ Repeat until the report says **converged**:
 
    The coverage route is deliberately narrow, and everything it cannot see falls
    back to the receipt requirement rather than opening the gate: a review whose
-   commit SHA is unusable, a verdict that arrived only as a comment (`#44`), or a
+   commit SHA is unusable, a verdict that arrived only as a comment (`#44`), a
+   `COMMENTED` review with an empty body (`#981` — the object the forge creates for
+   a bot's reply on an inline thread, bound to whatever head was current), or a
    bot-state read that failed all yield no evidence. A *pending* bot still blocks on
    its own grace window, and an unacknowledged outage notice still blocks
    `converged`.

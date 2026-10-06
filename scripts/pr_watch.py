@@ -2679,6 +2679,10 @@ def bot_review_coverage(
     not merely over-report a warning, it would authorize merges. Widen what
     counts as coverage only with that in view.
 
+    A ``COMMENTED`` review with an empty body is skipped entirely: it is the
+    object GitHub creates for a bot's reply on an inline thread, not a review
+    (#981; the reasoning is beside the skip in :func:`_reduce_latest_bot_reviews`).
+
     Returns one entry per bot with at least one review carrying a usable commit
     SHA, newest first: ``{bot, sha, submitted_at, covers_head}``. A bot whose
     reviews all lack one is indistinguishable here from a bot that never
@@ -2771,6 +2775,30 @@ def _reduce_latest_bot_reviews(
         # under-reporting bias the rest of this function takes.
         state = raw.get("state")
         state = state.strip().upper() if isinstance(state, str) else ""
+        # A bodyless `COMMENTED` object is not a review (#981). GitHub wraps a
+        # bot's reply on an inline thread in exactly that object, bound to the
+        # head current at reply time — so without this skip, replying to the
+        # author's fix on a thread "covered" a head the bot never reviewed, and
+        # `qualifying_bot_coverage` opened the gate on it. Observed on
+        # cs-toolkit PR 2308 (2026-09-14), on both transports: the bot's real
+        # reviews carried a body, its thread-reply wrappers an empty one.
+        #
+        # Skipped rather than recorded with a flag, for the same reason the
+        # displacement policy below skips: a wrapper must not displace the
+        # bot's earlier real review either, or `covers_head` would merely go
+        # false on the wrong entry and the "last review was of <sha>" warning
+        # would name the wrapper's commit instead of the reviewed one.
+        #
+        # KNOWN BOUND, in the fail-closed direction: a bot that posts its
+        # findings only as inline comments under an empty review body loses
+        # coverage for that review, and the PR falls back to needing a receipt.
+        # Telling such a review from a wrapper takes linking inline comments to
+        # their review, which the `gh` transport's review ids do not support.
+        # `APPROVED` is untouched: an approval with no text is still a verdict.
+        # A non-string body counts as empty: the fail-closed direction.
+        body = raw.get("body")
+        if state == "COMMENTED" and not (isinstance(body, str) and body.strip()):
+            continue
         # The displacement policy, applied BEFORE the recency compare so a
         # skipped review cannot win on its timestamp. `continue`, not a
         # fall-through: a non-participating review must leave any earlier entry
