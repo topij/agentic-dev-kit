@@ -531,7 +531,7 @@
     },
     "scripts/sweep_scratch.py": {
       "role": "engine",
-      "sha256": "e9243d6d7901688f53023eaf0df4ebc857aa2d2732996c679cc4545a5b5e8f84"
+      "sha256": "0968d6f8840b69d939d949ff05294ed3f3777c027ca5036abc2956ae059d7c62"
     },
     "scripts/tests/_repo_layout.py": {
       "role": "test",

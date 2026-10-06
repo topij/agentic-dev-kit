@@ -26,8 +26,9 @@ child of a root is one **entry**, and every entry gets exactly one owner class:
     Neither of the above, and fully scanned.
 ``unclassified``
     Anything the engine could not fully classify: a symlink entry, an entry that
-    is neither a file nor a directory, an unreadable path inside it, a mount point
-    inside it, or an entry that holds another configured root. Always kept.
+    is neither a file nor a directory, an unreadable path inside it, an entry that
+    is or holds a mount point, or an entry that is or holds another configured
+    root. Always kept.
 
 Report mode (the default) changes nothing. ``--apply --older-than <age>`` removes
 ``stale`` entries whose newest mtime is at least ``<age>`` old, and nothing else.
@@ -307,9 +308,18 @@ def scan(entry: str, top: os.stat_result) -> _Scan:
 
 
 def classify(
-    entry: str, *, worktrees: list[str], roots: list[str], grace_seconds: int, now: float
+    entry: str,
+    *,
+    device: int,
+    worktrees: list[str],
+    roots: list[str],
+    grace_seconds: int,
+    now: float,
 ) -> Entry:
-    """One owner class for one direct child of a root. Fails closed to ``unclassified``."""
+    """One owner class for one direct child of a root. Fails closed to ``unclassified``.
+
+    ``device`` is the root's ``st_dev``: an entry on another one is a mount point.
+    """
     try:
         top = os.lstat(entry)
     except OSError as exc:
@@ -319,14 +329,16 @@ def classify(
         return Entry(entry, UNCLASSIFIED, reason="a symlink; never followed", identity=identity)
     if not (stat.S_ISDIR(top.st_mode) or stat.S_ISREG(top.st_mode)):
         return Entry(entry, UNCLASSIFIED, reason="neither a file nor a directory", identity=identity)
-    reason = configured_root_reason(entry, roots)
-    if reason:
-        return Entry(entry, UNCLASSIFIED, reason=reason, identity=identity)
-    reason = live_worktree_reason(entry, worktrees)
-    if reason:
-        return Entry(entry, LIVE, reason=reason, identity=identity)
+    if top.st_dev != device:
+        return Entry(entry, UNCLASSIFIED, reason="a mount point", identity=identity)
     found = scan(entry, top)
     age = max(0, int(now - found.newest))
+    reason = configured_root_reason(entry, roots)
+    if reason:
+        return Entry(entry, UNCLASSIFIED, found.size, age, reason, identity)
+    reason = live_worktree_reason(entry, worktrees)
+    if reason:
+        return Entry(entry, LIVE, found.size, age, reason, identity)
     if found.problems:
         shown = "; ".join(found.problems[:3])
         more = f" (+{len(found.problems) - 3} more)" if len(found.problems) > 3 else ""
@@ -380,6 +392,7 @@ class RootReport:
     status: str
     reason: str | None = None
     entries: list[Entry] = field(default_factory=list)
+    device: int | None = field(default=None, repr=False)
 
 
 def survey(settings: Settings, *, root: Path, now: float) -> list[RootReport]:
@@ -403,6 +416,7 @@ def survey(settings: Settings, *, root: Path, now: float) -> list[RootReport]:
             continue
         others = [r for r in usable if r != path]
         try:
+            report.device = os.stat(path).st_dev
             names = sorted(os.listdir(path))
         except OSError as exc:
             report.status, report.reason = "refused", f"cannot list: {exc.strerror}"
@@ -411,6 +425,7 @@ def survey(settings: Settings, *, root: Path, now: float) -> list[RootReport]:
             report.entries.append(
                 classify(
                     os.path.join(path, name),
+                    device=report.device,
                     worktrees=worktrees,
                     roots=others,
                     grace_seconds=settings.grace_seconds,
@@ -433,7 +448,7 @@ def apply(
     usable = [r.root for r in reports if r.status == "ok"]
     outcomes: list[Outcome] = []
     for report in reports:
-        if report.status != "ok":
+        if report.status != "ok" or report.device is None:
             continue
         others = [r for r in usable if r != report.root]
         for entry in report.entries:
@@ -449,6 +464,7 @@ def apply(
                 continue
             fresh = classify(
                 entry.path,
+                device=report.device,
                 worktrees=worktrees,
                 roots=others,
                 grace_seconds=settings.grace_seconds,
