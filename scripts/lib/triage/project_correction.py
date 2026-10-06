@@ -30,9 +30,13 @@ from .model import (
 # This is a security contract identifier, not an installation/version reading.
 # The declared adapter rejects a differing project before its create mutation.
 # A runtime attestation cannot substitute an unknown provider implementation.
-# Schema-one receipts retain this historical contract across later kit upgrades.
-V1_PROJECT_GUARD_PROVIDER_SHA256 = "ec0643678ea7b93d0f881079d745a0dddffea16d38f03f206b58c01cf359ba9c"
-PROJECT_GUARD_PROVIDER_SHA256 = V1_PROJECT_GUARD_PROVIDER_SHA256
+# Append the new digest whenever `providers.py` changes and its guard still holds;
+# a new correction binds the newest, and a retained receipt may bind any of them.
+PROJECT_GUARD_PROVIDER_SHA256S = (
+    "ec0643678ea7b93d0f881079d745a0dddffea16d38f03f206b58c01cf359ba9c",  # #969
+    "85af18ae8153ff495dd631dcc1e95ef43811bfae64e335e0ed880f20490f0ca3",  # #973: read-back comparison only
+)
+PROJECT_GUARD_PROVIDER_SHA256 = PROJECT_GUARD_PROVIDER_SHA256S[-1]
 PROJECT_GUARD_DETAIL = "approved Linear project differs from configured destination"
 
 
@@ -86,8 +90,8 @@ def rejection_proof(
     if (
         proof["state_digest"] != digest_bytes(raw)
         or not isinstance(proof["report_digest"], str) or SHA256_RE.fullmatch(proof["report_digest"]) is None
-        or proof["provider_source_sha256"] != (
-            V1_PROJECT_GUARD_PROVIDER_SHA256 if historical_receipt else PROJECT_GUARD_PROVIDER_SHA256
+        or proof["provider_source_sha256"] not in (
+            PROJECT_GUARD_PROVIDER_SHA256S if historical_receipt else (PROJECT_GUARD_PROVIDER_SHA256,)
         )
         or proof["route"] != "observed-unmodified-installed-linear-adapter"
     ):

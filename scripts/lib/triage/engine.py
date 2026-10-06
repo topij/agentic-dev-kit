@@ -37,6 +37,7 @@ from .model import (
     terminal_pr_watch_receipt,
     today_string,
     tracker_destination,
+    tracker_payload_matches,
     validate_state,
     validate_sweep_cleanup,
 )
@@ -1032,7 +1033,7 @@ def _advance_tracker_batch(
         pending = operations[-1]
         proposal = proposals[pending["candidate_id"]]
         matches = tracker.search(destination, proposal["marker"])
-        exact = [match for match in matches if match.get("payload_digest") == proposal["payload_digest"]]
+        exact = [match for match in matches if tracker_payload_matches(match.get("payload"), proposal["payload"])]
         reconciliation_route = (
             "failed-response-then-exact-read-back"
             if pending.get("status") == "failed"
@@ -1058,7 +1059,7 @@ def _advance_tracker_batch(
     for decision in filed[len(operations):]:
         proposal = proposals[decision["candidate_id"]]
         matches = tracker.search(destination, proposal["marker"])
-        exact = [match for match in matches if match.get("payload_digest") == proposal["payload_digest"]]
+        exact = [match for match in matches if tracker_payload_matches(match.get("payload"), proposal["payload"])]
         if len(matches) == 1 and len(exact) == 1:
             operation = {"candidate_id": decision["candidate_id"], "decision": "file", "proposal_digest": proposal["payload_digest"], "marker": proposal["marker"], "destination": destination, "status": "verified", "response": None, "returned_identifier": exact[0]["identifier"], "read_back": exact[0], "verified_route": "pre-existing-exact-match", "search_read_back": matches}
             operations.append(operation)

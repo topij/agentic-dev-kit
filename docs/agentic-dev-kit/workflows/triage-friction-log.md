@@ -563,14 +563,20 @@ phase are forbidden earlier.
   digest, frozen payload marker, exact
   tracker destination, returned identifier, and authoritative read-back, and use only
   `attempting`, `verified`, `failed`, or `ambiguous`. A `verified` read-back repeats the
-  operation's identifier, payload digest, marker, and destination exactly. Its exact
+  operation's identifier, marker, and destination exactly. Its exact
   `verified_route` is `created-and-read-back`, `pre-existing-exact-match`,
   `failed-response-then-exact-read-back`, or
   `ambiguous-response-then-exact-read-back`; the retained response must match that route
   and no route may fabricate a successful create. The read-back carries the observed
-  canonical `{title, body, project, labels}` plus its independently recomputed digest;
-  exact verification requires that payload, digest, marker, destination, and identifier
-  to match the approved operation. The complete decision plan plus its exact attempted
+  canonical `{title, body, project, labels}` as the tracker returned it, plus its
+  independently recomputed digest. Verification requires the marker, destination, and
+  identifier to match the operation, and the observed payload to equal the approved one
+  except in how each unordered-list marker outside a fenced code block is spelled:
+  Linear's editor returns every bullet as `*`, so `-`, `*` and `+` compare equal there.
+  A fence counts only when opened within three spaces of the margin, so a marker in
+  indented or list-nested code is relaxed as well. That is what an *exact* tracker
+  match means throughout this workflow; any other difference leaves the attempt
+  ambiguous. The complete decision plan plus its exact attempted
   operation prefix accounts for every approved tracker payload without cross-payload or duplicate
   identifier reuse. The
   `verified_tracker_identifiers` array equals the ordered returned identifiers of
@@ -816,8 +822,10 @@ arguments and an unrelated program hold. The interpreter path must equal the int
 executing the installed CLI; run correction through that original interpreter or hold.
 This comparison gates planning and application; later reads of the exact approved receipt
 validate its captured historical invocation without binding a future CLI interpreter.
-Receipt decoding uses the captured configuration and schema-one guard contract rather
-than a later runtime's engine path or provider contract.
+Receipt decoding uses the captured configuration rather than a later runtime's engine
+path, and accepts any provider digest the engine lists for this guard. A new
+correction binds the newest listed digest; a provider change that keeps the guard
+appends its digest to the list and never replaces one.
 This current-runtime binding does not independently authenticate historical execution.
 For a runtime-local invoker, the trusted observer must audit the launcher and delegation
 chain, retain the actual launcher argv
@@ -1260,8 +1268,9 @@ marker and record the complete pre-existing match set. One authoritative pre-exi
 exact payload match records `verified` with its read-back identifier without a create.
 Any multiple or non-exact marker match is ambiguous and stops operator-held. Only an
 authoritative empty match set permits persisting `attempting` and calling create. After a
-success response, read back the item and require exact project, title, body, labels,
-marker, and returned identifier before recording `verified`.
+success response, read back the item and require an exact tracker match, as the
+`tracker-write` state defines it, on project, title, body, labels, marker, and returned
+identifier before recording `verified`.
 
 If the create fails or returns ambiguously, read back by the exact marker before any
 retry. One exact payload match verifies the write. No match proves no landing only when
