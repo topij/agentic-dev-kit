@@ -873,13 +873,16 @@ the forge-prefix checks on its forge operations. A completed state that is valid
 a configuration change made after it finished passes it, so it is refused as valid
 (`captured state is valid; recovery refused`) and left for *Completed-state retirement*
 rather than captured as invalid. A completed state that fails only the artifact or forge
-checks, including an artifact it cannot read, fails it, so it is captured and classified
-below rather than refused toward an entry that would stop on it. A state in any other
-phase is judged by state validation alone, so an in-flight run whose artifact is missing
-is refused as valid and resumes once the artifact is restored. The action plan applies
-the same judgement before it may select `preserve-valid-state-and-quarantine-old-gate`,
-and for a completed state it reads the live frozen artifact at plan time: the capture
-holds only the state and gate bytes.
+checks, including an artifact it cannot read, fails it. It is captured and offered
+`retire-terminal-invalid-state` only when git proves its sweep, as below; otherwise
+`recover` writes nothing and refuses it (`state fails the session-starting checks and no
+retirement is proven; recovery refused`), so restoring the artifact or landing the sweep
+still leaves a route out, and the action plan preserves it as before. A state in any
+other phase is judged by state validation alone, so an in-flight run whose artifact is
+missing is refused as valid and resumes once the artifact is restored. The `test` entry's
+own recovery branch still judges by state validation alone. For a completed state the
+action plan reads the live frozen artifact at plan time: the capture holds only the
+state and gate bytes.
 The one other invalid state that leaves the held route is a **finished** run, in either
 layout. Both need phase `completed`, completion route `archive-sweep`, every tracker and
 notification operation `verified`, every forge operation `verified` (a `pr-watch`

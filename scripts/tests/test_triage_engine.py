@@ -1296,8 +1296,8 @@ def test_recover_refuses_an_in_flight_state_whose_frozen_artifact_is_missing_and
     supplied = request(root)
     supplied["approval"] = {"command": "approve all", "proposal_set_digest": "0" * 64}
     resumed = run("resume", context="interactive", request=supplied, start=root)
-    assert "gate" not in str(resumed.get("detail")), resumed
-    assert loads_exact(state_path.read_bytes())["phase"] == "awaiting-approval"
+    # Past the artifact check and the gate: it stops only at the approval step.
+    assert resumed["detail"] == "approval requires a trusted runtime context", resumed
 
 
 def test_resume_records_fast_forward_protected_head_without_changing_draft_identity(

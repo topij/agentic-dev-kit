@@ -1703,18 +1703,55 @@ def test_recover_retires_a_completed_state_whose_frozen_artifact_is_missing(
 
 
 @pytest.mark.evidence
-def test_recover_holds_a_completed_state_whose_frozen_artifact_is_missing_and_sweep_unproven(
+def test_recover_refuses_a_completed_state_whose_frozen_artifact_is_missing_and_sweep_unproven(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The same routing holds a run whose sweep git does not prove, bytes
-    untouched, rather than refusing it as valid."""
+    """With no retirement proven, `recover` refuses the state and writes nothing,
+    rather than capturing it into a held state that nothing clears. Restoring the
+    artifact then lets `new` retire the completed run as before."""
     root, state_path, _worktree, terminal = _engine_completed_sweep(tmp_path, monkeypatch)
+    frozen = ArtifactStore(load_settings(root), "live").resolve(terminal["frozen_snapshot"]["path"])
+    frozen_raw = frozen.read_bytes()
     _drop_frozen_artifact(root, terminal, drift=False)
     raw = state_path.read_bytes()
-    held = run("recover", context="interactive", request={}, start=root)
-    assert held["outcome"] == "operator-held"
-    assert held["detail"] == "external-attempt-absence-unproven"
+    state_dir = state_path.parent
+    entries_before = sorted(path.name for path in state_dir.iterdir())
+
+    refused = run("recover", context="interactive", request={}, start=root)
+    assert refused["outcome"] == "operator-held"
+    assert refused["detail"] == "state fails the session-starting checks and no retirement is proven; recovery refused"
     assert state_path.read_bytes() == raw
+    assert sorted(path.name for path in state_dir.iterdir()) == entries_before
+
+    frozen.write_bytes(frozen_raw)
+    restarted = run("new", context="interactive", request={}, start=root)
+    assert "single-writer gate" not in str(restarted.get("detail")), restarted
+    assert loads_exact(state_path.read_bytes())["phase"] == "reserved"
+
+
+@pytest.mark.evidence
+def test_state_action_plan_preserves_a_completed_state_whose_retirement_is_unproven(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The dead-owner plan keeps the pre-#859 answer for a state that passes state
+    validation and fails only the artifact check with no retirement proven: it
+    preserves the state rather than returning a terminal hold."""
+    from triage.gate import acquire
+    from triage.model import repository_identity
+    from triage.recovery import capture_state_present, state_action_plan
+
+    root, _state_path, _worktree, terminal = _engine_completed_sweep(tmp_path, monkeypatch)
+    _drop_frozen_artifact(root, terminal, drift=False)
+    settings = load_settings(root)
+    store = ArtifactStore(settings, "live")
+    lease = acquire(store, repository_identity=repository_identity(settings), config_fingerprint=settings.fingerprint, run_identity=None)
+    try:
+        captured = capture_state_present(store, settings, require_terminated=False, publish=False)
+        plan = state_action_plan(store, settings, captured)
+    finally:
+        lease.release()
+    assert plan["held"] is None
+    assert plan["action_core"]["action"] == "preserve-valid-state-and-quarantine-old-gate"
 
 
 @pytest.mark.evidence

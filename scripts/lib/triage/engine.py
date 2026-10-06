@@ -1554,6 +1554,14 @@ def validate_session_state(
     return state, frozen_path
 
 
+def _parses(state_raw: bytes, settings: Settings, mode: str) -> bool:
+    try:
+        canonical_state(state_raw, settings=settings, mode=mode, retiring=True)
+    except TriageError:
+        return False
+    return True
+
+
 def validate_recoverable_state(
     store: ArtifactStore,
     settings: Settings,
@@ -1571,7 +1579,9 @@ def validate_recoverable_state(
     in-flight run whose frozen artifact is missing or unreadable is refused as
     valid and keeps its gate free, so restoring the artifact lets it resume;
     judging it invalid would capture it into a terminal hold that nothing
-    clears. An artifact that cannot be read is invalid for a completed state
+    clears. For the same reason a completed state that fails only these checks
+    is captured as invalid only when its retirement is proven: `recover` refuses
+    it otherwise, writing nothing, and `state_action_plan` preserves it. An artifact that cannot be read is invalid for a completed state
     rather than an exception that escapes recovery with its gate held.
     """
     state = canonical_state(state_raw, settings=settings, mode=mode, retiring=retiring)
@@ -1893,6 +1903,16 @@ def run(
                     # entry that fails (#859).
                     validate_recoverable_state(store, settings, state_raw, mode=mode, retiring=True)
                 except TriageError:
+                    if _parses(state_raw, settings, mode):
+                        # The state itself is valid and fails only the artifact
+                        # or forge checks. Capture it into the invalid-state
+                        # route only when the plan can retire it; otherwise a
+                        # restorable state would be held for good.
+                        proposed = state_action_plan(store, settings, captured)
+                        action = (proposed.get("action_core") or {}).get("action")
+                        if action != "retire-terminal-invalid-state":
+                            lease.release()
+                            return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="restore the published frozen snapshot artifact, or land the run's sweep, then retry", detail="state fails the session-starting checks and no retirement is proven; recovery refused")
                     captured = capture_state_present(store, settings, require_terminated=False, publish=True)
                     plan = state_action_plan(store, settings, captured)
                     if plan.get("held") is not None:

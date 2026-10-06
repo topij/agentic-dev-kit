@@ -8,7 +8,7 @@ from typing import Any
 
 from .canonical import decode_bytes, digest, digest_bytes, dumps, encode_bytes, loads_exact
 from .gate import acquire, owner_status, validate_record
-from .model import BASE_KEYS, OID_RE, Settings, TriageError, repository_identity
+from .model import BASE_KEYS, OID_RE, Settings, TriageError, canonical_state, repository_identity
 from .storage import (
     ArtifactStore,
     Observation,
@@ -668,7 +668,10 @@ def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str
 
     state_raw = decode_bytes(core["state_bytes"])
     valid = False
+    parses = False
     try:
+        canonical_state(state_raw, settings=settings, mode=store.mode)
+        parses = True
         # `recover`'s own predicate: a completed state whose frozen artifact
         # is gone is not preserved as valid, because the entry `recover` would
         # send the operator to hard-stops on it (#859). An in-flight state
@@ -713,10 +716,17 @@ def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str
                 "merge_commit_reachable_from": landed,
                 "swept_candidates": sorted(_swept_blocks(parsed) or {}),
             } if landed else None
-        if not abandonable and terminal_evidence is None:
+        if not abandonable and terminal_evidence is None and parses:
+            # A completed state that passes state validation and fails only the
+            # artifact or forge checks, with no retirement proven: preserve it
+            # as before #859 rather than hold it for good. Restoring its
+            # artifact, or landing its sweep, leaves a route out.
+            action = "preserve-valid-state-and-quarantine-old-gate"
+        elif not abandonable and terminal_evidence is None:
             held = {**bundle, "kind": "state-present-held", "terminal_classification": "external-attempt-absence-unproven"}
             return {"held": held}
-        action = "abandon-invalid-state" if abandonable else "retire-terminal-invalid-state"
+        else:
+            action = "abandon-invalid-state" if abandonable else "retire-terminal-invalid-state"
     quarantine_path = str(store.state_path) + f".quarantine-{core['state_digest'][:16]}"
     moves_state = action in {"abandon-invalid-state", "retire-terminal-invalid-state"}
     receipt_core = {

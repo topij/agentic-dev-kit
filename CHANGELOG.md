@@ -42,21 +42,21 @@ starts.
 
 ---
 
-## #985 — Triage `recover` no longer refuses a completed state the session-starting entry stops on
+## #985 — Triage `recover` retires a completed state the session-starting entry stops on
 
 CHANGED (gate semantics): a **completed** state that passes state validation but whose
 published frozen snapshot artifact is missing, unreadable or mismatched, or whose forge
 operations fail the session-starting forge-prefix checks, is no longer answered
-`captured state is valid; recovery refused` by interactive `recover`. It is captured and
-classified as invalid: a finished run whose sweep git proves is offered
-`retire-terminal-invalid-state`, anything else is held (`external-attempt-absence-unproven`).
-The state-present recovery plan applies the same judgement, so a dead-owner recovery no
-longer offers `preserve-valid-state-and-quarantine-old-gate` for such a state. A state in
-any other phase is judged as before, so an in-flight run whose artifact is missing is
-still refused as valid and can resume once the artifact is restored. Refresh
-`lib/triage/engine.py` and `recovery.py` together, with the shared triage workflow and
-installed tests; a test that expected the refusal for such a completed state must expect
-the recovery plan instead.
+`captured state is valid; recovery refused` by interactive `recover` when git proves
+its archive sweep: it is captured as invalid and offered `retire-terminal-invalid-state`.
+When no retirement is proven, `recover` writes nothing and answers `state fails the
+session-starting checks and no retirement is proven; recovery refused`; restoring the
+artifact, or landing the sweep, leaves the run recoverable as before. The dead-owner
+recovery plan likewise offers retirement for a proven sweep and otherwise still
+preserves the state. A state in any other phase is judged as before. The `test` entry's
+own recovery branch is unchanged. Refresh `lib/triage/engine.py` and `recovery.py`
+together, with the shared triage workflow and installed tests; a test that expected the
+refusal for a completed state whose sweep is proven must expect the retirement plan.
 
 ## #982 — A bot's empty thread-reply review no longer counts as coverage
 
