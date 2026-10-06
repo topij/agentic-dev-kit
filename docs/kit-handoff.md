@@ -25,8 +25,8 @@
 [#978](https://github.com/topij/agentic-dev-kit/pull/978) removed #969's `correct-project`
 route and #952's historical flat-gate recovery. It merged as
 `7c0f6de429f0a7e1a627d0b20e8eb952a46ac395`. The removal took their CLI flags, tests,
-`KIT_OWNED` entries and workflow sections with it, and `recovery.py` is back to its #765
-shape. Installation
+`KIT_OWNED` entries and workflow sections with it. `recovery.py` matches its pre-#952
+revision except for the `isinstance(operator, str)` hardening in `_approval`. Installation
 [in-parallel-oy/cs-toolkit#2558](https://github.com/in-parallel-oy/cs-toolkit/pull/2558)
 merged as `31dde6c28f4a15f6c9063ae3e500fb5fa26d2e75`. #975 is closed.
 
@@ -38,7 +38,7 @@ Friday draft. The check lets that draft retire the state under either engine.
 `test_a_completed_state_with_a_project_correction_receipt_still_retires` pins it.
 The check's removal is #979.
 
-Also checked: no adopter state root on this machine holds a live historical flat gate.
+Also checked, on 2026-10-06: no adopter state root on this machine held a live historical flat gate.
 cs-toolkit's recovery bundles are left as history.
 
 Not established: the retirement itself. Read-only validation of cs-toolkit's real state passed
@@ -49,7 +49,8 @@ cs-toolkit's main checkout was not pulled and still sat on its pre-install commi
 wrap-up. Its scheduled jobs run from that checkout, so the removal is live there only once
 it is updated.
 
-Review: #978 had one adversarial lens. Its LOW findings went to #979 and to this entry.
+Review: #978 had one adversarial lens. Its LOW on the shim's unpinned conditions went to
+#979; its LOW on this handoff's stale #975 wording is answered by #975's closure above.
 #2558 merged on CodeRabbit's comment-verdict of its head. The two-lens panel did not run
 there, because the reviewer was available and the copied code was byte-identical to
 #978's reviewed code.
