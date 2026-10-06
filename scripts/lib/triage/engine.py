@@ -1574,8 +1574,9 @@ def validate_recoverable_state(
 
     A completed state is judged by `validate_session_state`: its retirement is
     the session-starting path's, so one that path would hard-stop on is not
-    valid, and recovery may retire or hold it instead of refusing it toward an
-    entry that fails. Any other state keeps `canonical_state` alone. An
+    valid: recovery retires it, holds it, or refuses it with its own reason, as
+    below, instead of refusing it as valid toward an entry that fails. Any
+    other state keeps `canonical_state` alone. An
     in-flight run whose frozen artifact is missing or unreadable is refused as
     valid and keeps its gate free, so restoring the artifact lets it resume;
     judging it invalid would capture it into a terminal hold that nothing
@@ -1586,8 +1587,8 @@ def validate_recoverable_state(
     `recover` only when its retirement is proven; otherwise `recover` refuses
     it, writing nothing. When retirement is not proven, `state_action_plan`
     preserves such a state if it also passes `canonical_state` under the
-    current configuration, and holds it otherwise. A completed state that fails `canonical_state` itself is
-    captured as any invalid state.
+    current configuration, and holds it otherwise. A completed state that fails
+    `canonical_state` itself is captured as any invalid state.
     """
     state = canonical_state(state_raw, settings=settings, mode=mode, retiring=retiring)
     if state.get("phase") != "completed":
