@@ -664,15 +664,16 @@ def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str
     if not isinstance(core, dict) or digest(core) != bundle.get("capture_core_digest"):
         raise TriageError("state capture digest mismatch", outcome="operator-held")
     # Imported here: the engine imports this module.
-    from .engine import validate_session_state
+    from .engine import validate_recoverable_state
 
     state_raw = decode_bytes(core["state_bytes"])
     valid = False
     try:
-        # The session-starting predicate, not `canonical_state` alone: a state
-        # whose frozen artifact is gone is not preserved as valid, because the
-        # entry `recover` would send the operator to hard-stops on it (#859).
-        validate_session_state(store, settings, state_raw, mode=store.mode, retiring=False)
+        # `recover`'s own predicate: a completed state whose frozen artifact
+        # is gone is not preserved as valid, because the entry `recover` would
+        # send the operator to hard-stops on it (#859). An in-flight state
+        # keeps `canonical_state` alone, so it stays restorable.
+        validate_recoverable_state(store, settings, state_raw, mode=store.mode, retiring=False)
         valid = True
     except TriageError:
         pass

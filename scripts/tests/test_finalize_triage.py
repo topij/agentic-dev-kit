@@ -1718,6 +1718,53 @@ def test_recover_holds_a_completed_state_whose_frozen_artifact_is_missing_and_sw
 
 
 @pytest.mark.evidence
+@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root reads a mode-000 file")
+def test_recover_judges_a_completed_state_with_an_unreadable_frozen_artifact_invalid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unreadable frozen artifact makes the completed state invalid for
+    recovery rather than an OSError that escapes `recover` with its gate held."""
+    root, state_path, worktree, terminal = _engine_completed_sweep(tmp_path, monkeypatch)
+    _land_sweep(root, worktree)
+    frozen = ArtifactStore(load_settings(root), "live").resolve(terminal["frozen_snapshot"]["path"])
+    raw = state_path.read_bytes()
+    frozen.chmod(0)
+    try:
+        planned = _plan_recover_in_child(root)
+    finally:
+        frozen.chmod(0o600)
+    assert planned["outcome"] == "operator-held"
+    assert planned["detail"] == "invalid state captured before parse"
+    assert planned["recovery_plan"]["action_core"]["action"] == "retire-terminal-invalid-state"
+    assert state_path.read_bytes() == raw
+
+
+@pytest.mark.evidence
+def test_recover_judges_a_completed_state_failing_only_its_forge_prefix_invalid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The forge half of the session-starting predicate reaches `recover`: with
+    the frozen artifact intact and the forge-prefix check failing, the completed
+    state routes to the invalid-state plan instead of being refused as valid."""
+    from triage import engine as triage_engine
+
+    root, state_path, worktree, terminal = _engine_completed_sweep(tmp_path, monkeypatch)
+    _land_sweep(root, worktree)
+    assert terminal.get("finalization_operations")
+    raw = state_path.read_bytes()
+
+    def mismatch(*_args: object, **_kwargs: object) -> None:
+        raise TriageError("forge predecessor binding mismatch", outcome="operator-held")
+
+    monkeypatch.setattr(triage_engine, "_validate_forge_prefix", mismatch)
+    held = run("recover", context="interactive", request={}, start=root)
+    assert held["outcome"] == "operator-held"
+    assert held["detail"] == "invalid state captured before parse"
+    assert held["recovery_plan"]["action_core"]["action"] == "retire-terminal-invalid-state"
+    assert state_path.read_bytes() == raw
+
+
+@pytest.mark.evidence
 def test_recover_takes_the_first_parent_merge_commit_of_a_merge_landed_sweep(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

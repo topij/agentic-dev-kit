@@ -1539,10 +1539,11 @@ def validate_session_state(
 
     `canonical_state` alone accepts a state whose published frozen artifact is
     gone or whose forge prefix does not bind, and the session-starting path
-    hard-stops on either. `recover` and `state_action_plan` judge validity with
-    this same function, so a state they call valid is one that path accepts
-    (#859). `retain` sees the parsed state once its frozen artifact is proven,
-    so a forge-prefix failure can still report it.
+    hard-stops on either. `validate_recoverable_state` applies this function to
+    a completed state, so recovery calls valid only a completed state that path
+    accepts (#859). The `test` entry's own recovery branch still judges with
+    `canonical_state` alone. `retain` sees the parsed state once its frozen
+    artifact is proven, so a forge-prefix failure can still report it.
     """
     state = canonical_state(state_raw, settings=settings, mode=mode, retiring=retiring)
     frozen_path = _validate_frozen_artifact(store, state)
@@ -1551,6 +1552,37 @@ def validate_session_state(
     if state.get("finalization_operations"):
         _validate_forge_prefix(state["finalization_operations"], state, settings)
     return state, frozen_path
+
+
+def validate_recoverable_state(
+    store: ArtifactStore,
+    settings: Settings,
+    state_raw: bytes,
+    *,
+    mode: str,
+    retiring: bool,
+) -> None:
+    """The validity `recover` and `state_action_plan` apply (#859).
+
+    A completed state is judged by `validate_session_state`: its retirement is
+    the session-starting path's, so one that path would hard-stop on is not
+    valid, and recovery may retire or hold it instead of refusing it toward an
+    entry that fails. Any other state keeps `canonical_state` alone. An
+    in-flight run whose frozen artifact is missing or unreadable is refused as
+    valid and keeps its gate free, so restoring the artifact lets it resume;
+    judging it invalid would capture it into a terminal hold that nothing
+    clears. An artifact that cannot be read is invalid for a completed state
+    rather than an exception that escapes recovery with its gate held.
+    """
+    state = canonical_state(state_raw, settings=settings, mode=mode, retiring=retiring)
+    if state.get("phase") != "completed":
+        return
+    try:
+        validate_session_state(store, settings, state_raw, mode=mode, retiring=retiring)
+    except OSError as exc:
+        raise TriageError(
+            f"published frozen snapshot artifact is unreadable ({type(exc).__name__})"
+        ) from exc
 
 
 def _forge_destination(remote: str) -> tuple[str, str]:
@@ -1855,11 +1887,11 @@ def run(
                 try:
                     # A completed state that is valid but for a later config
                     # change is one a session-starting entry retires; treating
-                    # it as invalid here would hold it for good (#833). A state
-                    # that path would hard-stop on is not valid either, or the
-                    # refusal below sends the operator to an entry that fails
-                    # (#859).
-                    validate_session_state(store, settings, state_raw, mode=mode, retiring=True)
+                    # it as invalid here would hold it for good (#833). A
+                    # completed state that path would hard-stop on is not valid
+                    # either, or the refusal below sends the operator to an
+                    # entry that fails (#859).
+                    validate_recoverable_state(store, settings, state_raw, mode=mode, retiring=True)
                 except TriageError:
                     captured = capture_state_present(store, settings, require_terminated=False, publish=True)
                     plan = state_action_plan(store, settings, captured)
