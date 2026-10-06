@@ -42,6 +42,20 @@ starts.
 
 ---
 
+## #985 — Triage `recover` no longer refuses a state the session-starting entry stops on
+
+CHANGED (gate semantics): a state that passes state validation but whose published
+frozen snapshot artifact is missing or mismatched, or whose forge operations fail their
+read-back or predecessor checks, is no longer answered `captured state is valid; recovery
+refused` by interactive `recover`. It is captured and classified as invalid: a finished
+run whose sweep git proves is offered `retire-terminal-invalid-state`, anything else is
+held (`external-attempt-absence-unproven`). The state-present recovery plan applies the
+same checks, so a dead-owner recovery no longer offers
+`preserve-valid-state-and-quarantine-old-gate` for such a state. Refresh
+`lib/triage/engine.py` and `recovery.py` together, with the shared triage workflow and
+installed tests; a test that expected the refusal for such a state must expect the
+recovery plan instead.
+
 ## #982 — A bot's empty thread-reply review no longer counts as coverage
 
 CHANGED (gate semantics, report shape): `pr_watch.py` skips a configured bot's
