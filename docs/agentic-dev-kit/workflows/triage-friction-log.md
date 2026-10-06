@@ -831,8 +831,8 @@ foreign or prior owner. Missing or mismatched current ownership or termination e
 stops operator-held. Other entries and unattended execution preserve it operator-held.
 
 Decode the lossless capture and require its raw-byte digest before parsing. Parse and
-validate only the captured bytes, never the still-live state path; a completed state's
-frozen artifact is the one live read, as the classification paragraph below says. Record the parse
+validate only the captured bytes, never the still-live path. The one live read is a
+completed state's frozen artifact, as the classification paragraph below says. Record the parse
 result and current and recorded identities in a candidate `action_core`. The prepared
 envelope embeds the complete immutable capture core and digest, the action core and
 digest, and the exact decision plus approver identity bound to `action_core_digest`.
