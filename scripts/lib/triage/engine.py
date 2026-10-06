@@ -1584,9 +1584,9 @@ def validate_recoverable_state(
     held. A completed state that fails only the artifact or forge checks, and
     so still passes `canonical_state` as a retiring entry, is captured by
     `recover` only when its retirement is proven; otherwise `recover` refuses
-    it, writing nothing. `state_action_plan` preserves such a state when it
-    also passes `canonical_state` under the current configuration, and holds it
-    otherwise. A completed state that fails `canonical_state` itself is
+    it, writing nothing. When retirement is not proven, `state_action_plan`
+    preserves such a state if it also passes `canonical_state` under the
+    current configuration, and holds it otherwise. A completed state that fails `canonical_state` itself is
     captured as any invalid state.
     """
     state = canonical_state(state_raw, settings=settings, mode=mode, retiring=retiring)
