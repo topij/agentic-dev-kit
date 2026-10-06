@@ -27,13 +27,13 @@ The operator asked for an overnight autonomous session in separate worktrees, an
 - **#984** (for #884 and #944) merged as `4e27661e075dba8d2569bc086c9effdf9c757b2b`.
   - The suite now neutralises colour at `scripts/conftest.py` import.
   - The `--carry-forward` help names the live draw flags.
-  - `FORCE_COLOR=3 make test` at `4b0e7d4e063e19a9384635596faba0c2eee2c36f` on 2026-10-06, in the lane worktree, printed `4293 passed, 1 skipped`.
+  - `FORCE_COLOR=3 make test` at `4b0e7d4e063e19a9384635596faba0c2eee2c36f` on 2026-10-06, in the lane worktree, printed `4293 passed, 1 skipped`. The one later commit changed a comment and its manifest hash, with CI's run only.
 - **#985** (for #859) merged as `6ccc1744291f887ffbee8c9fe31c16d731617831`.
   - `recover` retires a completed state that fails only the frozen-artifact or forge-prefix checks, when git proves its sweep.
   - It refuses one with no proven retirement and writes nothing.
   - In-flight states keep the old judgement.
   - The panel rejected the earlier designs as HIGH regressions into a terminal hold; the PR's comments hold every round.
-  - `make test` at `d9e951a3a421c8b959675d9e3daa0d0b4608a06a` on 2026-10-07, in the lane worktree, printed `4297 passed, 1 skipped`. Later commits are tests and docstrings, reviewed by delta passes.
+  - `make test` at `d9e951a3a421c8b959675d9e3daa0d0b4608a06a` on 2026-10-07, in the lane worktree, printed `4297 passed, 1 skipped`. Later commits are tests, docstrings, the CHANGELOG entry, the triage workflow doc and the manifest, reviewed by delta passes.
 - **#986** (#900's scratch sweep engine) is **open and held for the operator** at `d9a1fd571daf8181b434e362de48d055abce4dd6`.
   - Every full two-lens pass found new fail-open edge cases in what the engine judges removable, so the cockpit stopped the loop rather than merge a file-deleting engine.
   - The round-5 disposition comment on the PR lists the open findings.
