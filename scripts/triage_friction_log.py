@@ -32,12 +32,10 @@ class CanonicalArgumentParser(argparse.ArgumentParser):
 
 def parser() -> argparse.ArgumentParser:
     result = CanonicalArgumentParser(description=__doc__)
-    result.add_argument("entry", nargs="?", choices=("resume", "new", "recover", "test", "correct-project"))
+    result.add_argument("entry", nargs="?", choices=("resume", "new", "recover", "test"))
     result.add_argument("--context", choices=("interactive", "unattended"), default="interactive")
     result.add_argument("--request", type=Path, help="RFC 8785 canonical request JSON")
     result.add_argument("--approval-context", type=Path, help="runtime-attested canonical approval identity/read-back")
-    result.add_argument("--legacy-gate-context", type=Path, help="runtime-attested historical gate owner evidence; interactive recovery only")
-    result.add_argument("--rejection-context", type=Path, help="trusted runtime observer of the exact installed Linear project guard; correct-project only")
     trackers = result.add_mutually_exclusive_group()
     trackers.add_argument("--enable-github-tracker", action="store_true", help="allow an approved live GitHub tracker transition through gh")
     trackers.add_argument("--enable-tracker", action="store_true", help="select the approved tracker adapter from merged configuration")
@@ -88,37 +86,15 @@ def main(argv: list[str] | None = None) -> int:
             return 2
     tracker = None
     approval_context = None
-    legacy_gate_context = None
-    rejection_context = None
-    if args.rejection_context is not None and args.entry != "correct-project":
-        print(dumps(hard_stop("rejection context is only for correct-project")).decode())
-        return 2
-    if args.entry == "correct-project" and (args.context != "interactive" or args.enable_github_forge or args.enable_github_tracker or args.legacy_gate_context is not None):
-        print(dumps(hard_stop("project correction requires isolated interactive Linear read-back")).decode())
-        return 2
-    if args.legacy_gate_context is not None and (
-        args.entry not in {"recover", "test"} or args.context != "interactive"
-        or args.enable_tracker or args.enable_github_tracker or args.enable_github_forge
-    ):
-        print(dumps(hard_stop("historical gate evidence requires interactive recovery without external adapters")).decode())
-        return 2
-    for context_name, context_path in (("approval", args.approval_context), ("historical gate", args.legacy_gate_context), ("rejection", args.rejection_context)):
-        if context_path is None:
-            continue
+    if args.approval_context is not None:
         try:
-            _, context_raw = observe(context_path)
+            _, context_raw = observe(args.approval_context)
             if context_raw is None:
-                raise CanonicalError(f"{context_name} context file is missing")
+                raise CanonicalError("approval context file is missing")
             raw_context = loads_exact(context_raw)
             if not isinstance(raw_context, dict) or set(raw_context) != {"source", "operator_identity", "source_read_back"}:
                 raise CanonicalError("approval context has the wrong shape")
-            parsed_context = ApprovalContext(**raw_context)
-            if context_name == "approval":
-                approval_context = parsed_context
-            elif context_name == "historical gate":
-                legacy_gate_context = parsed_context
-            else:
-                rejection_context = parsed_context
+            approval_context = ApprovalContext(**raw_context)
         except (OSError, CanonicalError, TriageError, TypeError) as exc:
             print(dumps(hard_stop(str(exc))).decode())
             return 2
@@ -137,7 +113,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     authority = GitHubForge(configured.paths.repo, pr_watch=configured.paths.engine_dir / "pr_watch.py") if configured is not None else None
     forge = authority if args.enable_github_forge else None
-    result = run(args.entry, context=args.context, request=request, start=Path(__file__), tracker=tracker, approval_context=approval_context, legacy_gate_context=legacy_gate_context, rejection_context=rejection_context, forge=forge, head_authority=authority)
+    result = run(args.entry, context=args.context, request=request, start=Path(__file__), tracker=tracker, approval_context=approval_context, forge=forge, head_authority=authority)
     print(dumps(result).decode())
     return 0 if result["outcome"] in {"successful-completion", "degraded-success", "operator-held"} else 2
 

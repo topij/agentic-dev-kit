@@ -14,7 +14,6 @@ from typing import Any
 from state_paths import resolve_write_path
 from state_paths.resolver import STATE_DIRNAME
 
-from .approval import ApprovalContext
 from .canonical import digest_bytes, dumps
 from .model import Settings, TriageError
 
@@ -385,10 +384,9 @@ def unlink_inode(path: Path, approved: Observation, approved_raw: bytes, *, allo
 
 
 class ArtifactStore:
-    def __init__(self, settings: Settings, mode: str, *, legacy_gate_context: ApprovalContext | None = None) -> None:
+    def __init__(self, settings: Settings, mode: str) -> None:
         self.settings = settings
         self.mode = mode
-        self.legacy_gate_context = legacy_gate_context
         if STATE_DIRNAME != "state":
             raise TriageError("state resolver dirname mismatch")
 

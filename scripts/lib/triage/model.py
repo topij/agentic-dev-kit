@@ -460,6 +460,18 @@ def validate_state(value: Any, *, settings: Settings, mode: str, retiring: bool 
         elif route == "archive-sweep":
             required = BASE_KEYS | {"proposal_payloads", "proposal_payload_digests", "approval", "notification_thread_reference", "notification_operations", "decisions", "operations", "finalization_operations", "archive_sweep", "completion"}
     if "proposal_correction" in value:
+        # #969's project-correction route is gone (#975). The one state it wrote,
+        # cs-toolkit's completed LIVE run, still has to parse for a session-starting
+        # entry to retire it, so a completed live state may carry the receipt; the
+        # engine never acts on it. Remove this once no state root holds one.
+        receipt = value["proposal_correction"]
+        if (
+            phase != "completed" or value.get("mode") != "live"
+            or not isinstance(receipt, dict) or set(receipt) != {"action_core", "action_core_digest", "approval"}
+            or not isinstance(receipt["action_core"], dict)
+            or receipt["action_core"].get("kind") != "linear-project-correction"
+        ):
+            raise TriageError("project correction receipt is only retired, never continued", outcome="operator-held")
         required = required | {"proposal_correction"}
     if set(value) != required:
         raise TriageError("triage state has missing or extra phase fields", outcome="operator-held")
@@ -950,10 +962,6 @@ def validate_state(value: Any, *, settings: Settings, mode: str, retiring: bool 
                 raise TriageError("archive completion receipt authority mismatch", outcome="operator-held")
         else:
             raise TriageError("completed receipt route is invalid", outcome="operator-held")
-    if "proposal_correction" in value:
-        from .project_correction import validate_receipt
-
-        validate_receipt(value, settings)
     return value
 
 

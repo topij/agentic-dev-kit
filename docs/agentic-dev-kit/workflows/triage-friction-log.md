@@ -155,8 +155,6 @@ intent or held receipt.
 | No argument, valid active state in any other phase | Resume the recorded phase and mode. |
 | `resume`, neither valid active state nor gate-only receipt | Hard-stop without an external write. |
 | `resume`, valid active state | Resume the recorded phase and mode; never replace the active session. A `completed` state reports its completed receipt without mutation. |
-| Interactive `correct-project`, eligible valid rejected LIVE batch | Apply only *Attested Linear project correction* below; planning cannot file, sweep or replace the freeze, and mutation requires the exact action approval. |
-| Unattended `correct-project`, or correction mixed with draft, filing, notification or forge work | Hold before an artifact transition. |
 | `new`, neither active state nor gate-only receipt | Start a new live draft. |
 | `new`, valid `completed` live state | Under the held gate, retire the completed state (below), then start a new live draft. |
 | `new`, active live state in any other phase | Refuse; never overwrite an approval-bound session. |
@@ -194,55 +192,6 @@ intent or held receipt.
 | Missing, malformed, or identity-mismatched live frozen snapshot/state outside `recover`, other than a `completed` state a session-starting entry retires across a configuration change (*Completed-state retirement*) | Hard-stop before tracker writes; name `recover` as the safe interactive transition; after an attempted or verified write, preserve operator-held evidence and never whole-sweep. Test-state remediation stays on the isolated `test` entry. |
 | Tracker or finalization write fails or is ambiguous | Read back before retry; unresolved state is operator-held. |
 | Test mode | Permit declared local artifacts and optional `[TEST]` notification only; prohibit tracker, source-document, and forge writes. |
-
-### Historical flat gates
-
-Ordinary entries retain the canonical gate contract. An interactive `recover` or
-`test` may opt into the historical flat gate classifier with
-`--legacy-gate-context <canonical-owner-context.json>`. Never rewrite an older gate
-into a modern lease. Keep its complete raw bytes and filesystem observations in
-the recovery capture; its timestamp-shaped process observation is not an OS
-process-start identity.
-
-The runtime builds this owner context only from the present operator's read-back:
-`source: current-session`, a nonempty `operator_identity`, and `source_read_back`
-containing that same `approver_identity`, the operator's `text`, and
-`legacy_gate_owner`. The latter binds `gate_digest` to the exact raw gate,
-`recorded_host` and `recorded_pid` to its values, `local_host` to the current machine,
-and requires explicit `same_machine: true` and `owner_terminated: true`. A bare
-"approved" reply does not establish host or termination evidence. The engine also
-requires a negative local PID probe; a live, reused or uncertain PID holds before
-state observation. It verifies the original draft head as an ancestor of the
-freshly queried protected remote head, with the local protected ref matching that
-observation. Foreign provenance and changed owner or configuration evidence hold.
-The capture-time protected head remains a historical observation; ordinary branch
-advancement does not invalidate a prepared action or completed recovery receipt
-while the original draft remains a verified protected ancestor. No age threshold
-proves termination. Refresh a stale protected ref before retrying recovery.
-
-Owner evidence permits capture and classification only. The separate
-`--approval-context` and `recovery_approval` must approve the exact displayed
-action-core digest before quarantine. Historical owner context cannot be combined
-with unattended execution, proposals, draft approvals or external adapters. If the
-historical blocking gate is absent, rerun through an ordinary entry to inspect the
-recorded recovery evidence; owner context never starts a draft.
-Retries recheck the recorded action-specific approval and classify the captured gate
-from its exact bytes. Removing historical metadata or renaming the action cannot
-bypass those checks. The approving identity must match the present operator identity
-retained in the historical owner evidence.
-
-For live state, the supported historical reservation has `phase: reserved`,
-`engine_mode: llm-only`, no frozen snapshot or inbox digest, and empty attempt,
-tracker, repository and pull-request evidence. Its identity and initial reservation
-claims must match the captured gate exactly. The old logical gate binding and its
-claimed digest are retained as historical evidence, never modern lease authority.
-The displayed `retire-historical-prefreeze-reservation` action binds the complete
-capture and exact quarantine targets. On action-specific approval, preserve the
-unchanged state and gate in quarantine and publish `recovered-safe-to-restart`;
-never import an old approval or start a replacement run automatically. A separately
-invoked `new` verifies that receipt and freezes the current inbox under a fresh
-identity. Other historical state shapes remain held. Test state keeps the existing
-test-confined held-evidence contract.
 
 ### Completed-state retirement
 
@@ -411,7 +360,6 @@ conditional capability ready before its trigger.
 | `tracker-without-exact-payload-approval` | `prohibit-create-update-comment` |
 | `approved-payload-changed` | `require-new-exact-payload-approval` |
 | `linear-project-mismatch` | `refuse-before-proposal-publication-or-attempt` |
-| `project-correction` | `attested-pre-create-rejection-exact-action-approval-retain-history-require-fresh-filing-approval` |
 | `ambiguous-external-write` | `read-back-before-retry-or-operator-hold` |
 | `partial-tracker-batch` | `hold-before-archive-sweep` |
 | `test-mode-external-write` | `prohibit-tracker-friction-archive-branch-commit-push-pr` |
@@ -488,15 +436,11 @@ fixes the mode and `receipt-to-reserved` cutpoint; no other phase may carry it. 
 before replacement leaves the receipt authoritative, while a crash after replacement
 resumes the reserved state. No ordinary phase
 action is allowed until current gate bytes match the persisted binding.
-An optional `proposal_correction` is permitted only on the LIVE awaiting-approval,
-tracker-write, forge-finalize, archive-sweep or completed route described in *Attested
-Linear project correction*. It carries exactly `action_core`, `action_core_digest` and
-`approval`. Validate the original captured canonical state independently, its no-write
-observer, project-only corrected proposals, complete report bytes and exact action
-approval on every state read. It cannot nest another correction. Current proposals must
-remain equal to the captured corrected set; this continuation refuses body modification.
-The original run/freeze and corrected destination stay bound. No other extra state fields
-are accepted.
+A `proposal_correction` receipt, written only by the removed `correct-project` route,
+is accepted on a `completed` LIVE state alone, and only its shape is checked: exactly
+`action_core`, `action_core_digest` and `approval`, with `action_core.kind`
+`linear-project-correction`. A session-starting entry then retires that state like any
+other; nothing continues from the receipt. No other extra state fields are accepted.
 `config_fingerprint` equals `run_identity.config_fingerprint`.
 `config_fingerprint` and `frozen_inbox_digest` are lowercase SHA-256 strings, and
 `protected_branch_head` is a lowercase full commit identifier. Reject a missing, extra,
@@ -779,7 +723,7 @@ Select the first matching row and report exactly one overall outcome.
 
 ## Entry points and context
 
-Accept exactly one of `resume`, `new`, `recover`, `test`, or `correct-project`, or no argument. `test` starts a new
+Accept exactly one of `resume`, `new`, `recover`, or `test`, or no argument. `test` starts a new
 test draft or resumes the separate test state; it never selects live state. No argument
 resumes valid live state when present and otherwise starts a live draft. `new` refuses
 when live state exists. `resume` requires valid live state. `recover` is interactive and
@@ -787,94 +731,11 @@ requires an active live-state file or a blocking live gate; it does not decide w
 state is valid until after raw capture. Scheduled or unattended recovery holds without
 changing an artifact.
 
-## Attested Linear project correction
+## Linear project guard
 
 A proposal's Linear project must equal the exact merged `tracker.project_name` before
 publication and again before approval enters `tracker-write`. A mismatch preserves the
 reservation or displayed state without creating an attempted operation.
-
-`correct-project` is a separate interactive continuation for a valid historical LIVE
-batch rejected by the installed Linear adapter's project guard before its create
-mutation. It does not start or abandon a run, file an issue, sweep a source, or change
-configuration. Only a batch with a single unsettled `attempting` filing and all other
-candidates parked is eligible; earlier attempts, responses, verified writes, finalization
-or notification evidence hold. Other provider failures remain in flight.
-
-The runtime supplies `--rejection-context` outside request JSON. This is the same trusted
-observer boundary as `--approval-context`, not an authenticated service receipt. A direct
-CLI caller creating this file attests its contents. The observer must independently
-establish the unmodified installed provider implementation, the actual terminal invocation
-and output, and the captured state. The engine accepts only the declared historical
-provider source digest for the pre-create project guard, the exact guard response bound
-to the frozen report/index, and the original approving operator. Current source bytes,
-a matching error string or marker absence alone do not establish historical execution;
-hold if the invoking runtime cannot establish it. Unknown implementations and uncertain
-transport/create outcomes cannot use this route.
-
-The canonical observer has `source: current-session`, `operator_identity`, and
-`source_read_back` containing `state_digest`, the original presentation `report_digest`, `provider_source_sha256`,
-`route: observed-unmodified-installed-linear-adapter`, `invocation`, and base64
-`stdout_raw`. The invocation binds the exact normalized installed CLI command array:
-`[<absolute Python interpreter>, <absolute installed triage_friction_log.py>, resume,
---context, interactive, --request, <absolute request>, --approval-context,
-<absolute context>, --enable-tracker]`. Extra, missing, reordered or contradictory
-arguments and an unrelated program hold. The interpreter path must equal the interpreter
-executing the installed CLI; run correction through that original interpreter or hold.
-This comparison gates planning and application; later reads of the exact approved receipt
-validate its captured historical invocation without binding a future CLI interpreter.
-Receipt decoding uses the captured configuration rather than a later runtime's engine
-path, and accepts any provider digest the engine lists for this guard. A new
-correction binds the newest listed digest; a provider change that keeps the guard
-appends its digest to the list and never replaces one.
-This current-runtime binding does not independently authenticate historical execution.
-For a runtime-local invoker, the trusted observer must audit the launcher and delegation
-chain, retain the actual launcher argv
-and its source evidence independently, and normalize only the observed installed CLI
-delegation; normalization is not inferred from argv tokens. The invocation also binds
-the exact revision, repository directory, canonical ISO date, exit code and stdout SHA-256.
-Rejection evidence enables planning only, never mutation authority.
-
-Under the normal gate, planning validates the immutable freeze and fully pages original
-and corrected marker searches. Any match or incomplete search holds. The exact action
-core retains the original state/report bytes, approval and attempt, configuration,
-observer, destination, complete corrected proposals and digests, and exact corrected
-report bytes. Correction changes only each proposal's project to the configured name;
-core, marker, final payload and ordered set digests are recomputed under the same run.
-Present that complete action before accepting a separate current-session
-`recovery_approval` of its `action_core_digest`, from the retained approving operator.
-An old recovery or filing approval does not authorize it.
-
-On exact approval, revalidate state/report/freeze and marker searches, exclusively
-publish the complete prepared correction receipt, then compare-and-replace state with
-`awaiting-approval`. Retain that receipt in `proposal_correction`; clear current decisions,
-attempts and filing approval while retaining their exact original bytes in the receipt.
-Before an ordinary continuation rebinds state, rewrites a report or accepts filing
-approval, it verifies the exact prepared correction receipt and completes any pending
-report publication. Replace the report only from its captured original bytes to the
-approved corrected bytes. Thereafter preserve that presentation byte-for-byte through
-filing and finalization; read later operation status from canonical state and completion
-receipts. This bounded project-only continuation refuses `modify` before rebinding state
-and retains its exact captured proposal bodies. A competing or missing report holds
-without overwriting it, including after filing. Correction never
-calls create. Present the complete corrected set for fresh exact filing approval through
-the ordinary `resume` path; the rejected old approval cannot match its digests.
-
-A handled failure before state publication leaves the original state and prepared
-receipt available for exact retry. Process termination retains its gate: use the existing
-proven-dead-owner `recover` action and its separate exact approval to preserve valid state
-and quarantine only that dead gate. Correction then retries the unchanged prepared action,
-or, if state already committed, verifies the exact prepared receipt and resumes only its
-approved old-to-corrected report transition. If evidence changed, re-plan and obtain fresh
-exact approval or hold; never reconstruct uncertain history. Replaying `correct-project`
-after later filing preserves the immutable corrected presentation.
-
-`<original-python>` is the absolute interpreter path in the retained invocation.
-Use it for both planning and application.
-
-```console
-<original-python> <engine-dir>/triage_friction_log.py correct-project --context interactive --enable-tracker --rejection-context /absolute/path/observed-rejection.json
-<original-python> <engine-dir>/triage_friction_log.py correct-project --context interactive --enable-tracker --rejection-context /absolute/path/observed-rejection.json --request /absolute/path/correction-request.json --approval-context /absolute/path/correction-approval.json
-```
 
 ## Invalid-state recovery
 
@@ -1422,8 +1283,7 @@ The configured entry points are `<engine-dir>/triage_friction_log.py` for draft,
 approval, accounting, recovery and continuation, and `<engine-dir>/finalize_triage.py`
 for a `resume`-defaulting finalization invocation; `paths.engines` and the two
 `triage.*_engine` fragments select their installed locations. Both accept canonical RFC 8785
-JSON through `--request`. A request file and each `--approval-context`, `--legacy-gate-context` or
-`--rejection-context` file must be
+JSON through `--request`. A request file and an `--approval-context` file must be
 single-link regular files. The approval-context file is a runtime-attested boundary:
 an embedding runtime supplies the current operator or independently read notification
 thread there. Proposal or approval JSON cannot establish that identity by repeating a
