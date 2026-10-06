@@ -42,7 +42,7 @@ starts.
 
 ---
 
-## #PRNUM — Scratch sweep engine and the `scratch:` config block
+## #986 — Scratch sweep engine and the `scratch:` config block
 
 ADDED (config keys, engine CLI surface): `config/dev-model.yaml` gains a `scratch:`
 block with three required keys: `roots` (a list of absolute directories, with `{uid}`
