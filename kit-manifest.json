@@ -706,7 +706,7 @@
     },
     "scripts/tests/test_triage_engine.py": {
       "role": "test",
-      "sha256": "e4c8502e9ddcae58c891694329dc6f2e47955110699ab585b7ef6ddd124adb3f"
+      "sha256": "516c1d045e2e15acc5637e107f3098eb1d6ad6aadacfa2a3a16733fa3136567f"
     },
     "scripts/tests/test_triage_gate.py": {
       "role": "test",
@@ -730,7 +730,7 @@
     },
     "scripts/tests/test_triage_providers.py": {
       "role": "test",
-      "sha256": "ba6da7352334a030670268de4f7bca285285de4de00a455bba7a2605a5af8221"
+      "sha256": "6344375a2b25900661b21d3751387153d318f661bbab845bc156d1f096b3b38f"
     },
     "scripts/tests/test_triage_recovery.py": {
       "role": "test",

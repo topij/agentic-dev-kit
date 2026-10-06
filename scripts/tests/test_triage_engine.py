@@ -29,6 +29,7 @@ from triage.model import (  # noqa: E402
     TriageError,
     canonical_state,
     load_settings,
+    tracker_destination,
 )
 from triage.providers import FakeForge, FakeTracker, ProviderObservation  # noqa: E402
 
@@ -979,6 +980,37 @@ def test_live_attempt_is_persisted_before_fake_create(tmp_path: Path, monkeypatc
     assert result["outcome"] == "operator-held"
     assert result["verified_tracker_identifiers"] == ["17"]
     assert [call[0] for call in tracker.calls] == ["search", "create"]
+
+
+def test_pre_existing_issue_with_only_bullet_markers_changed_verifies_without_create(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    supplied = request(root)
+    supplied["proposals"][0]["body_without_marker"] = "Proposed change:\n\n- first\n- second"
+    run("new", context="interactive", request=supplied, start=root)
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    presented = loads_exact(state_path.read_bytes())
+    proposal = presented["proposal_payloads"][0]
+    stored = {**proposal["payload"], "body": proposal["payload"]["body"].replace("\n- ", "\n* ")}
+    assert stored != proposal["payload"]
+    match = {
+        "identifier": "17",
+        "payload": stored,
+        "payload_digest": digest(stored),
+        "marker": proposal["marker"],
+        "destination": tracker_destination(load_settings(root).tracker),
+    }
+    tracker = FakeTracker([match])
+    result = run("resume", context="interactive", request={"approval": approval_for(presented)}, start=root,
+                 tracker=tracker, approval_context=approval_context(presented), head_authority=FakeForge([]))
+    assert result["verified_tracker_identifiers"] == ["17"]
+    assert [call[0] for call in tracker.calls] == ["search"]
+    operation = loads_exact(state_path.read_bytes())["operations"][0]
+    assert operation["verified_route"] == "pre-existing-exact-match"
+    assert operation["read_back"]["payload"] == stored
 
 
 def test_labels_are_canonical_before_approval_and_changed_readback_cannot_verify(

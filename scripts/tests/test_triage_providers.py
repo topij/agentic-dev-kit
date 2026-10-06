@@ -169,6 +169,41 @@ def test_tracker_payload_matches_only_relaxes_the_list_marker(observed, matches)
     assert tracker_payload_matches(observed, {"title": "t", "body": "- a\n- b", "project": "p", "labels": ["x"]}) is matches
 
 
+@pytest.mark.parametrize("approved, observed", [
+    # Only the leading marker is relaxed, never a `*` or `+` inside the text.
+    ("- a *b* c", "- a -b- c"),
+    ("- a + b", "- a - b"),
+    # A marker needs the space after it; `*a*` is emphasis, not a bullet.
+    ("*a* b", "-a* b"),
+    # Inside a fence that has not closed, a bullet is code: a different fence
+    # character, a shorter run, or trailing text does not close it.
+    ("```\n- x\n~~~\n- y\n```", "```\n- x\n~~~\n* y\n```"),
+    ("````\n- x\n```\n- y\n````", "````\n- x\n```\n* y\n````"),
+    ("```\n- x\n``` not a close\n- y\n```", "```\n- x\n``` not a close\n* y\n```"),
+])
+def test_tracker_payload_matches_keeps_text_and_open_fences_exact(approved, observed):
+    def payload(body):
+        return {"title": "t", "body": body, "project": "p", "labels": ["x"]}
+    assert tracker_payload_matches(payload(observed), payload(approved)) is False
+    assert tracker_payload_matches(payload(approved), payload(approved)) is True
+
+
+def test_github_create_verifies_a_read_back_that_differs_only_in_bullet_markers() -> None:
+    payload = {"title": "title", "body": "- first\n- second\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
+    stored = {**payload, "body": "* first\n+ second\n" + MARKER}
+    runner = Runner([
+        (0, {"number": 101}),
+        (0, [{"number": 101, "body": stored["body"]}]),
+        (0, issue(101, stored)),
+    ])
+    tracker, slept = adapter(runner)
+    observed = tracker.create(DESTINATION, payload)
+    assert observed.status == "verified" and observed.verified_route == "created-and-read-back"
+    assert observed.read_back["payload"] == stored
+    assert observed.read_back["payload_digest"] == digest(stored)
+    assert slept == []
+
+
 @pytest.mark.parametrize("timing", ["existing", "created"])
 def test_linear_archived_extra_label_cannot_verify_approved_payload(timing):
     transport = LinearTransport()
