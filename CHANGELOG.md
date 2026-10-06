@@ -42,6 +42,17 @@ starts.
 
 ---
 
+## #973 — Tracker read-back ignores bullet-marker spelling
+
+Refresh `scripts/lib/triage/model.py`, `engine.py` and `providers.py` together, with
+the shared triage workflow and installed tests. A tracker read-back that differs from
+the approved payload only in unordered-list markers (`-`, `*` or `+` outside fenced
+code) now verifies instead of holding as ambiguous. A verified read-back's `payload`
+and `payload_digest` are now the tracker's own bytes and their digest, not the
+approved ones; read the approved payload from `proposal_payloads`. A run held at
+`tracker-write` for that difference alone verifies on the next plain `resume`, with
+no new approval.
+
 ## #969 — Attested Linear project correction
 
 Refresh the triage CLI, `lib/triage/engine.py`, `model.py` and new
