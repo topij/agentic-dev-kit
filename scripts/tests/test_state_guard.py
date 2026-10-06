@@ -977,3 +977,39 @@ def test_one_invalid_entry_voids_its_valid_neighbours(tmp_path: Path) -> None:
     result = _run_pytest(tmp_path, _SHAPES["tests-only"])
     assert result.returncode != 0, result.stdout + result.stderr
     assert f"{_EVIDENCE}/new.json" in result.stdout + result.stderr
+
+
+# --------------------------------------------------------------------------- #
+# colour neutralisation (#884) — the engine-root conftest's other duty
+# --------------------------------------------------------------------------- #
+
+_RAISE = "raise RuntimeError('plain-traceback-probe')"
+
+
+def _traceback_of_a_raising_child(env: dict[str, str] | None = None) -> str:
+    result = subprocess.run(
+        [sys.executable, "-c", _RAISE], capture_output=True, text=True, env=env, timeout=60
+    )
+    assert result.returncode != 0
+    assert "plain-traceback-probe" in result.stderr, result.stderr
+    return result.stderr
+
+
+def test_a_child_inheriting_force_color_prints_a_plain_traceback(monkeypatch) -> None:
+    """`FORCE_COLOR=3 make test` failed tests matching a child's stderr as text
+    (#884). The child here inherits the suite's environment unchanged, with
+    `FORCE_COLOR=3` back in it, so only the conftest's other two settings stand
+    between it and a coloured traceback; removing them fails this on Python 3.13+.
+    """
+    monkeypatch.setenv("FORCE_COLOR", "3")
+    assert "\x1b" not in _traceback_of_a_raising_child()
+
+
+@pytest.mark.skipif(sys.version_info < (3, 13), reason="tracebacks are never coloured before 3.13")
+def test_the_traceback_probe_sees_colour_without_the_neutralisation() -> None:
+    """The control for the test above: without `NO_COLOR` and `PYTHON_COLORS`,
+    this interpreter does colour the same child, so the plain result there is the
+    conftest's doing rather than an interpreter that never colours."""
+    env = {k: v for k, v in os.environ.items() if k not in ("NO_COLOR", "PYTHON_COLORS")}
+    env["FORCE_COLOR"] = "3"
+    assert "\x1b" in _traceback_of_a_raising_child(env)
