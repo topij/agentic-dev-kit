@@ -389,11 +389,12 @@ alone, so a missing frozen artifact dead-ends it.
 
 ### Kit friction-log triage
 
-**Status:** the 2026-10-05 recovery-delivery session entry records a kit budget triage
-that froze session `469bcd5829244adeb17443d1a45a6c01` and left its archive-or-park
-decision pending, with every inbox block preserved. A search on 2026-10-06 of this
-repository's `state/` and of `~/.local/state/agentic-dev-kit` found no retained state
-for that session. **Owner:** that session entry.
+**Status:** a kit budget triage froze inbox session `469bcd5829244adeb17443d1a45a6c01`
+on 2026-10-05 and left it awaiting approval, with every inbox block preserved. Its
+frozen inbox and pipeline state sit in an isolated state root,
+`state/review-evidence/cs-toolkit-linear-acceptance_2026-10-04/finalize-decisions/kit-friction-budget-state/`;
+the live `state/triage/` holds nothing for it. **Owner:** that retained state.
 
-▶ Next: locate session `469bcd58`'s retained triage state, or confirm with the operator
-that it is gone, before any `triage-friction-log` sweep of the kit inbox.
+▶ Next: present session `469bcd58`'s retained proposals to the operator and obtain
+their archive-or-park decisions before any other `triage-friction-log` sweep of the kit
+inbox.
