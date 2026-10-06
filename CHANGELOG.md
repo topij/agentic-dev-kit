@@ -53,7 +53,7 @@ When no retirement is proven, `recover` writes nothing and answers `state fails 
 session-starting checks and no retirement is proven; recovery refused`; restoring the
 artifact, or landing the sweep, leaves the run recoverable as before. The dead-owner
 recovery plan likewise offers retirement for a proven sweep and otherwise still
-preserves the state. A state in any other phase is judged as before. The `test` entry's
+preserves a state that passes state validation under the current configuration. A state in any other phase is judged as before. The `test` entry's
 own recovery branch is unchanged. Refresh `lib/triage/engine.py` and `recovery.py`
 together, with the shared triage workflow and installed tests; a test that expected the
 refusal for a completed state whose sweep is proven must expect the retirement plan.

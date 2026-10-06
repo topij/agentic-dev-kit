@@ -1703,16 +1703,18 @@ def test_recover_retires_a_completed_state_whose_frozen_artifact_is_missing(
 
 
 @pytest.mark.evidence
+@pytest.mark.parametrize("drift", [False, True], ids=["current-config", "config-drift"])
 def test_recover_refuses_a_completed_state_whose_frozen_artifact_is_missing_and_sweep_unproven(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, drift: bool
 ) -> None:
     """With no retirement proven, `recover` refuses the state and writes nothing,
     rather than capturing it into a held state that nothing clears. Restoring the
-    artifact then lets `new` retire the completed run as before."""
+    artifact then lets `new` retire the completed run as before. The config-drift
+    case pins that the refusal judges parsing as a retiring entry does."""
     root, state_path, _worktree, terminal = _engine_completed_sweep(tmp_path, monkeypatch)
     frozen = ArtifactStore(load_settings(root), "live").resolve(terminal["frozen_snapshot"]["path"])
     frozen_raw = frozen.read_bytes()
-    _drop_frozen_artifact(root, terminal, drift=False)
+    _drop_frozen_artifact(root, terminal, drift=drift)
     raw = state_path.read_bytes()
     state_dir = state_path.parent
     entries_before = sorted(path.name for path in state_dir.iterdir())
@@ -1777,7 +1779,7 @@ def test_recover_judges_a_completed_state_with_an_unreadable_frozen_artifact_inv
 
 
 @pytest.mark.evidence
-def test_recover_judges_a_completed_state_failing_only_its_forge_prefix_invalid(
+def test_recover_routes_a_completed_state_whose_forge_prefix_check_fails_to_the_plan(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The forge half of the session-starting predicate reaches `recover`: with

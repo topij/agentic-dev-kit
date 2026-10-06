@@ -1574,15 +1574,16 @@ def validate_recoverable_state(
 
     A completed state is judged by `validate_session_state`: its retirement is
     the session-starting path's, so one that path would hard-stop on is not
-    valid, and recovery may retire or hold it instead of refusing it toward an
+    valid, and recovery may retire it instead of refusing it toward an
     entry that fails. Any other state keeps `canonical_state` alone. An
     in-flight run whose frozen artifact is missing or unreadable is refused as
     valid and keeps its gate free, so restoring the artifact lets it resume;
     judging it invalid would capture it into a terminal hold that nothing
-    clears. For the same reason a completed state that fails only these checks
-    is captured as invalid only when its retirement is proven: `recover` refuses
-    it otherwise, writing nothing, and `state_action_plan` preserves it. An artifact that cannot be read is invalid for a completed state
-    rather than an exception that escapes recovery with its gate held.
+    clears. An artifact that cannot be read makes a completed state fail this
+    predicate rather than raise an exception that escapes recovery with its gate
+    held. `recover` captures a completed state that fails it only when its
+    retirement is proven; otherwise `recover` refuses it, writing nothing, and
+    `state_action_plan` preserves it.
     """
     state = canonical_state(state_raw, settings=settings, mode=mode, retiring=retiring)
     if state.get("phase") != "completed":

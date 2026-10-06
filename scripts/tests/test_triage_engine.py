@@ -1270,7 +1270,7 @@ def test_recover_refuses_valid_ungated_state_without_changing_bytes(
 def test_recover_refuses_an_in_flight_state_whose_frozen_artifact_is_missing_and_resume_continues_after_restore(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """#859 widens `recover`'s validity only for a completed state. An in-flight
+    """#859 narrows what `recover` calls valid only for a completed state. An in-flight
     run whose frozen artifact is missing is still refused as valid, writes no
     held evidence and leaves the gate free, so restoring the artifact lets it
     resume. Judging it invalid captured it into a terminal hold."""

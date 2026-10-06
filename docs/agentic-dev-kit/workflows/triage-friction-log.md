@@ -831,8 +831,9 @@ foreign or prior owner. Missing or mismatched current ownership or termination e
 stops operator-held. Other entries and unattended execution preserve it operator-held.
 
 Decode the lossless capture and require its raw-byte digest before parsing. Parse and
-validate only the captured bytes, never the still-live path. The one live read is a
-completed state's frozen artifact, as the classification paragraph below says. Record the parse
+validate only the captured bytes, never the still-live path. In state validation the
+one live read is a completed state's frozen artifact, as the classification paragraph
+below says; proving a sweep reads git live, as its own paragraphs say. Record the parse
 result and current and recorded identities in a candidate `action_core`. The prepared
 envelope embeds the complete immutable capture core and digest, the action core and
 digest, and the exact decision plus approver identity bound to `action_core_digest`.
@@ -877,7 +878,9 @@ checks, including an artifact it cannot read, fails it. It is captured and offer
 `retire-terminal-invalid-state` only when git proves its sweep, as below; otherwise
 `recover` writes nothing and refuses it (`state fails the session-starting checks and no
 retirement is proven; recovery refused`), so restoring the artifact or landing the sweep
-still leaves a route out, and the action plan preserves it as before. A state in any
+still leaves a route out, and the action plan preserves it as before when it passes
+state validation under the current configuration (one that fails that is classified as
+any invalid state). A state in any
 other phase is judged by state validation alone, so an in-flight run whose artifact is
 missing is refused as valid and resumes once the artifact is restored. The `test` entry's
 own recovery branch still judges by state validation alone. For a completed state the
