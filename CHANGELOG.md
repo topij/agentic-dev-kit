@@ -42,6 +42,26 @@ starts.
 
 ---
 
+## #978 — One-run triage recovery paths removed
+
+BREAKING (engine CLI surface): the `correct-project` entry and the `--rejection-context`
+and `--legacy-gate-context` flags are gone from `triage_friction_log.py`; passing any of
+them is now an argument error.
+
+**Before you refresh**, finish any held run that needs either path with the engine you
+have installed. If you cannot, resolve it manually: a historical flat gate whose owner
+you have confirmed gone is moved aside by hand, and a run that wrote nothing externally
+is discarded and started fresh. Finish any recovery already prepared against a
+historical gate first, too. After the refresh, a historical-format gate holds as
+malformed, and a non-completed state carrying `proposal_correction` holds.
+
+Then refresh `scripts/triage_friction_log.py` and `lib/triage/engine.py`, `model.py`,
+`recovery.py` and `storage.py` together, with the shared triage workflow and installed
+tests. Delete `lib/triage/project_correction.py`, `lib/triage/legacy_gate.py`,
+`tests/test_triage_project_correction.py` and `tests/test_triage_legacy_gate.py` from
+your engine directory; the kit no longer ships them. A `completed` LIVE state that
+carries a `proposal_correction` receipt still retires on the next session-starting run.
+
 ## #973 — Tracker read-back ignores bullet-marker spelling
 
 Refresh `scripts/lib/triage/model.py`, `engine.py`, `providers.py` and

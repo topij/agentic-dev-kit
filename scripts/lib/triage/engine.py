@@ -42,10 +42,8 @@ from .model import (
     validate_sweep_cleanup,
 )
 from .model import worktree_conflicts_with_checkout as _worktree_conflicts_with_checkout
-from .project_correction import rejection_proof
 from .providers import (
     ForgeProvider,
-    LinearIssues,
     NotificationProvider,
     ProviderObservation,
     TrackerProvider,
@@ -56,12 +54,10 @@ from .recovery import (
     persist_test_gate_held,
     prepare_gate_only,
     prepare_state_action,
-    recovery_gate_record,
     resume_gate_only,
     resume_state_action,
     state_action_plan,
     test_gate_state_plan,
-    validate_historical_prepared,
 )
 from .storage import (
     ArtifactStore,
@@ -316,19 +312,14 @@ def _prepared_gate_only_bundle(
     return bundle
 
 
-def _require_terminated_owner(gate_raw: bytes, store: ArtifactStore | None = None) -> None:
+def _require_terminated_owner(gate_raw: bytes) -> None:
     """Hold unless the owner of these exact gate bytes is proven dead (#863).
 
-    For canonical records only the shape is validated here, not repository or configuration
+    Only the record's shape is validated here, not its repository or configuration
     identity: the bundle was found by this gate's exact digest and its capture already
     checked that identity. Re-checking against the current configuration would hold
     an approved, half-done transition for good after any configuration change.
-    Historical context instead validates its separate provenance and owner evidence;
-    it never supplies a current lease.
     """
-    if store is not None and store.legacy_gate_context is not None:
-        recovery_gate_record(store, gate_raw)
-        return
     try:
         record = loads_exact(gate_raw)
     except Exception as exc:
@@ -349,7 +340,7 @@ def _blocking_recovery(
         raise TriageError("blocking gate disappeared", outcome="operator-held")
     # State presence and recovery-bundle reads are also observations. Prove the
     # blocking owner dead before selecting any state-bearing recovery predicate.
-    _require_terminated_owner(gate_raw, store)
+    _require_terminated_owner(gate_raw)
     _, state_raw = observe(store.state_path)
     gate_only_state = _gate_only_state_value(store, state_raw)
     if gate_only_state is not None:
@@ -371,7 +362,7 @@ def _blocking_recovery(
             # An ungated `recover` leaves its capture bound to its own gate, so this
             # bundle's owner may still be running. Plan from it or act on it only
             # once that owner is proven dead (#863).
-            _require_terminated_owner(gate_raw, store)
+            _require_terminated_owner(gate_raw)
         if kind in {"gate-only-prepared", "test-gate-only-prepared"}:
             receipt = resume_gate_only(store, settings, bundle)
             return "operator-held", receipt["kind"], None
@@ -477,7 +468,6 @@ def _restart_receipt(store: ArtifactStore, raw: bytes) -> tuple[dict[str, Any], 
         or receipt_core.get("configured_bundle_path") != str(expected_path)
     ):
         raise TriageError("safe-restart action binding mismatch", outcome="operator-held")
-    validate_historical_prepared(store, envelope)
     try:
         approved_quarantine = Observation(**receipt["quarantine_observation"])
     except (TypeError, ValueError) as exc:
@@ -653,7 +643,7 @@ def _literal_block(label: str, raw: bytes, *, info: str = "") -> list[str]:
     return [f"{label} ({description}):", "", fence + info if verbatim else fence, rendered, fence]
 
 
-def _report_text(state: dict[str, Any], capabilities: dict[str, dict[str, str]], outcome: str, *, immutable_correction: bool = False) -> bytes:
+def _report_text(state: dict[str, Any], capabilities: dict[str, dict[str, str]], outcome: str) -> bytes:
     # Every value taken from state, configuration or a service enters the report
     # through _inline_literal or _literal_block and in no other way. The report's
     # Markdown structure is the engine's own; no inbox, proposal-analysis or
@@ -666,12 +656,6 @@ def _report_text(state: dict[str, Any], capabilities: dict[str, dict[str, str]],
         f"Frozen inbox digest: {_inline_literal(state['frozen_inbox_digest'])}",
         "", "## Capabilities", "",
     ]
-    if immutable_correction:
-        lines[:0] = [
-            "# Immutable corrected proposal presentation", "",
-            "This records the correction presentation. Read the canonical run state and completion receipt for later operation status.",
-            "The captured proposal bodies remain fixed; this correction route does not accept `modify`.", "",
-        ]
     for name in CAPABILITIES:
         entry = capabilities[name]
         lines.append(
@@ -731,9 +715,6 @@ def _report_text(state: dict[str, Any], capabilities: dict[str, dict[str, str]],
 
 
 def _write_report(path: Path, state: dict[str, Any], capabilities: dict[str, dict[str, str]], outcome: str) -> None:
-    if "proposal_correction" in state:
-        _preserve_corrected_report(path, state)
-        return
     atomic_replace(path, _report_text(state, capabilities, outcome))
 
 
@@ -916,8 +897,6 @@ def _approval_authority(
         raise TriageError("approval command must be exact", outcome="operator-held")
     digests = {proposal["candidate_id"]: proposal["payload_digest"] for proposal in state["proposal_payloads"]}
     decisions = parse_commands(command, digests)
-    if "proposal_correction" in state and any(item["decision"] == "modify" for item in decisions):
-        raise TriageError("project correction preserves captured bodies; modify is unavailable", outcome="operator-held")
     approval = approval_record(
         decisions,
         context=approval_context,
@@ -1021,14 +1000,6 @@ def _advance_tracker_batch(
     operations: list[dict[str, Any]] = deepcopy(writing.get("operations", []))
     proposals = {proposal["candidate_id"]: proposal for proposal in writing["proposal_payloads"]}
     filed = [decision for decision in writing["decisions"] if decision["decision"] == "file"]
-    if "proposal_correction" in writing:
-        # Fresh filing approval can arrive after correction reconciliation. Keep
-        # the original identity authoritative across that gap before any create.
-        original = loads_exact(decode_bytes(writing["proposal_correction"]["action_core"]["captured_state_raw"]))
-        original_proposals = {proposal["candidate_id"]: proposal for proposal in original["proposal_payloads"]}
-        for decision in filed:
-            if tracker.search(destination, original_proposals[decision["candidate_id"]]["marker"]):
-                raise TriageError("original project correction marker appeared before filing; preserve the in-flight run", outcome="operator-held")
     if operations and operations[-1].get("status") != "verified":
         pending = operations[-1]
         proposal = proposals[pending["candidate_id"]]
@@ -1764,137 +1735,6 @@ def _advance_finalize(
     return _advance_finalize(settings, store, lease, state, state_digest, request, capabilities, forge)
 
 
-def _publish_corrected_report(lease: GateLease, path: Path, core: dict[str, Any]) -> None:
-    """Resume only the exact old-to-approved-report transition."""
-    lease.verify()
-    _, current = observe(path)
-    approved = decode_bytes(core["corrected_report_raw"])
-    if current == approved:
-        return
-    if current != decode_bytes(core["captured_report_raw"]):
-        raise TriageError("project correction report changed; preserve the competing evidence", outcome="operator-held")
-    atomic_replace(path, approved, expected_digest=core["captured_report_digest"])
-
-
-def _preserve_corrected_report(path: Path, state: dict[str, Any]) -> None:
-    """Keep the approved presentation immutable throughout its continuation."""
-    _, current = observe(path)
-    approved = decode_bytes(state["proposal_correction"]["action_core"]["corrected_report_raw"])
-    if current != approved:
-        raise TriageError("project correction report changed; preserve the competing evidence", outcome="operator-held")
-
-
-def _resume_project_correction_report(store: ArtifactStore, lease: GateLease, state: dict[str, Any]) -> None:
-    """Check correction evidence before ordinary resume can rewrite or send."""
-    receipt = state["proposal_correction"]
-    _, retained_raw = observe(store.recovery_path(receipt["action_core_digest"]))
-    if retained_raw != dumps(receipt):
-        raise TriageError("project correction prepared receipt changed or is missing", outcome="operator-held")
-    if (
-        state["phase"] == "awaiting-approval" and state["approval"] is None
-        and state["proposal_payloads"] == receipt["action_core"]["corrected_proposal_payloads"]
-    ):
-        _publish_corrected_report(lease, Path(state["proposal_payloads"][0]["report_binding"]["path"]), receipt["action_core"])
-    else:
-        _preserve_corrected_report(Path(state["proposal_payloads"][0]["report_binding"]["path"]), state)
-
-
-def _correct_project(
-    settings: Settings, store: ArtifactStore, lease: GateLease,
-    state: dict[str, Any], raw: bytes, request: dict[str, Any],
-    approval_context: ApprovalContext | None, rejection_context: ApprovalContext | None,
-    tracker: TrackerProvider | None, capabilities: dict[str, dict[str, str]],
-) -> tuple[str, str, dict[str, Any] | None]:
-    """Prepare or apply only the approved no-write project correction."""
-    if "proposal_correction" in state:
-        _resume_project_correction_report(store, lease, state)
-        return "operator-held", "project correction already applied; filing approval is separate", None
-    if type(tracker) is not LinearIssues:
-        raise TriageError("project correction requires the installed Linear read-back adapter", outcome="operator-held")
-    proof = rejection_proof(state, raw, settings, rejection_context)
-    destination = tracker_destination(settings.tracker)
-    candidates = parse(decode_bytes(state["frozen_snapshot"]["raw"]))
-    supplied = [
-        {"candidate_id": item["candidate_id"], "source_block_digest": item["source_block_digest"],
-         **item["payload_core"], "project": destination["project"]}
-        for item in state["proposal_payloads"]
-    ]
-    report_path = Path(state["proposal_payloads"][0]["report_binding"]["path"])
-    _, report_raw = observe(report_path)
-    if report_raw is None:
-        raise TriageError("project correction requires the original complete report", outcome="operator-held")
-    if digest_bytes(report_raw) != proof["source_read_back"]["report_digest"]:
-        raise TriageError("project correction report differs from the observed original presentation", outcome="operator-held")
-    corrected, corrected_digests, _ = _proposal_records(
-        candidates, supplied, run_identity=state["run_identity"],
-        frozen_digest=state["frozen_inbox_digest"], report_path=report_path,
-        configured_project=destination["project"],
-    )
-    candidate = state["operations"][0]["candidate_id"]
-    before = next(item for item in state["proposal_payloads"] if item["candidate_id"] == candidate)
-    after = next(item for item in corrected if item["candidate_id"] == candidate)
-    original_matches = tracker.search(destination, before["marker"])
-    corrected_matches = tracker.search(destination, after["marker"])
-    if original_matches or corrected_matches:
-        raise TriageError("project correction marker reconciliation is not empty; preserve the in-flight run", outcome="operator-held")
-    capabilities["tracker-write-readback"] = {"status": "not-triggered", "mechanism": "original no-write evidence retained; corrected proposals need new exact approval"}
-    initial_presentation = {
-        **state, "phase": "awaiting-approval", "proposal_payloads": corrected,
-        "proposal_payload_digests": corrected_digests, "approval": None, "decisions": [], "attempts": [],
-    }
-    initial_presentation.pop("operations")
-    corrected_report = _report_text(initial_presentation, capabilities, "operator-held", immutable_correction=True)
-    core = {
-        "kind": "linear-project-correction", "schema_version": 1,
-        "run_identity": state["run_identity"], "frozen_inbox_digest": state["frozen_inbox_digest"],
-        "configuration": settings.config, "captured_state_raw": encode_bytes(raw),
-        "captured_state_digest": digest_bytes(raw), "captured_report_raw": encode_bytes(report_raw),
-        "captured_report_digest": digest_bytes(report_raw), "destination": destination,
-        "corrected_report_raw": encode_bytes(corrected_report), "corrected_report_digest": digest_bytes(corrected_report),
-        "report_capabilities": capabilities,
-        "rejection_observer": proof, "original_marker_read_back": original_matches,
-        "corrected_marker_read_back": corrected_matches, "corrected_proposal_payloads": corrected,
-        "corrected_proposal_set_digest": digest(corrected_digests),
-        "transition": "re-present-without-filing-approval",
-    }
-    core_digest = digest(core)
-    plan = {"action_core": core, "action_core_digest": core_digest}
-    approval = _recovery_approval(request, approval_context, core_digest)
-    if approval is None:
-        return "operator-held", "project correction awaits exact action approval", plan
-    if approval["approver_identity"] != proof["operator_identity"]:
-        raise TriageError("project correction approval differs from the retained operator", outcome="operator-held")
-    lease.verify()
-    _, fresh_raw = observe(store.state_path)
-    _, fresh_report = observe(report_path)
-    if fresh_raw != raw or fresh_report != report_raw:
-        raise TriageError("project correction evidence changed before application", outcome="operator-held")
-    _validate_frozen_artifact(store, state)
-    receipt = {"action_core": core, "action_core_digest": core_digest, "approval": approval}
-    path = store.recovery_path(core_digest)
-    preflight_artifacts([path], controls=[store.state_path, store.gate_path, report_path, settings.paths.friction_log, settings.paths.archive, settings.paths.repo / "config/dev-model.yaml"], repo=settings.paths.repo)
-    _, existing_raw = observe(path)
-    if existing_raw is None:
-        exclusive_create(path, dumps(receipt))
-    elif existing_raw != dumps(receipt):
-        raise TriageError("project correction prepared receipt conflicts", outcome="operator-held")
-    represented = {
-        **state, "phase": "awaiting-approval", "proposal_payloads": corrected,
-        "proposal_payload_digests": corrected_digests, "approval": None, "decisions": [],
-        "attempts": [], "proposal_correction": receipt,
-        "gate_owner_token": lease.owner_token, "gate_binding": lease.binding,
-        "state_claim": {
-            "reason": "normal-resume", "previous_gate_binding": state["gate_binding"],
-            "current_gate_binding": lease.binding, "captured_state_digest": digest_bytes(raw),
-            "recovery_bundle_digest": None, "approval_digest": None,
-        },
-    }
-    represented.pop("operations")
-    _persist(store, lease, represented, previous_digest=digest_bytes(raw))
-    _publish_corrected_report(lease, report_path, core)
-    return "operator-held", "project correction applied; complete corrected filing approval is pending", None
-
-
 def run(
     entry: str | None,
     *,
@@ -1904,8 +1744,6 @@ def run(
     tracker: TrackerProvider | None = None,
     notification: NotificationProvider | None = None,
     approval_context: ApprovalContext | None = None,
-    legacy_gate_context: ApprovalContext | None = None,
-    rejection_context: ApprovalContext | None = None,
     forge: ForgeProvider | None = None,
     head_authority: ForgeProvider | None = None,
 ) -> dict[str, Any]:
@@ -1917,24 +1755,11 @@ def run(
     shape_error = _request_shape_error(request)
     if shape_error is not None:
         return _result(capabilities, "hard-stop", mode="unknown", engine_mode=None, report=None, frozen=None, resume_action="supply a well-typed canonical request", detail=shape_error)
-    if entry is not None and (not isinstance(entry, str) or entry not in {"resume", "new", "recover", "test", "correct-project"}):
+    if entry is not None and (not isinstance(entry, str) or entry not in {"resume", "new", "recover", "test"}):
         return _result(capabilities, "hard-stop", mode="unknown", engine_mode=None, report=None, frozen=None, resume_action="invoke with a supported entry keyword", detail="unknown or combined entry keyword")
     if not isinstance(context, str) or context not in {"interactive", "unattended"}:
         return _result(capabilities, "hard-stop", mode="unknown", engine_mode=None, report=None, frozen=None, resume_action="supply an explicit execution context", detail="invalid execution context")
     mode = "test" if entry == "test" else "live"
-    if rejection_context is not None and entry != "correct-project":
-        return _result(capabilities, "hard-stop", mode=mode, engine_mode=None, report=None, frozen=None, resume_action="use rejection evidence only for correct-project", detail="rejection observer cannot authorize ordinary transitions")
-    if entry == "correct-project" and (
-        context != "interactive" or forge is not None or notification is not None
-        or legacy_gate_context is not None or set(request) - {"recovery_approval"}
-    ):
-        return _result(capabilities, "operator-held", mode=mode, engine_mode=None, report=None, frozen=None, resume_action="use isolated interactive project correction", detail="project correction cannot perform unattended, source, notification or forge work")
-    if legacy_gate_context is not None and (
-        context != "interactive" or entry not in {"recover", "test"}
-        or tracker is not None or forge is not None or notification is not None
-        or set(request) - {"recovery_approval"}
-    ):
-        return _result(capabilities, "hard-stop", mode=mode, engine_mode=None, report=None, frozen=None, resume_action="use historical owner evidence only for isolated interactive recovery", detail="historical gate evidence cannot authorize draft, approval or external writes")
     observed_protected_head = None
     result_engine_mode: str | None = None
     result_report: str | None = None
@@ -1949,7 +1774,7 @@ def run(
         capabilities["shared-state-resolver"] = {"status": "ready", "mechanism": "own-session resolve_write_path"}
         capabilities["draft-finalize-engine-set"] = {"status": "ready", "mechanism": settings.engine_mode}
         capabilities["runtime-compute-selection"] = {"status": "degraded", "mechanism": f"{settings.analysis_tier} is instructed guidance"}
-        store = ArtifactStore(settings, mode, legacy_gate_context=legacy_gate_context)
+        store = ArtifactStore(settings, mode)
         try:
             lease = acquire(store, repository_identity=repository_identity(settings), config_fingerprint=settings.fingerprint, run_identity=None)
         except TriageError as gate_error:
@@ -1960,12 +1785,9 @@ def run(
             return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="use interactive recover for a proven-dead owner", detail=str(gate_error))
         capabilities["single-writer-state-gate"] = {"status": "ready", "mechanism": "exclusive complete-record hard-link gate"}
         try:
-            if legacy_gate_context is not None:
-                lease.release()
-                return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="use the ordinary entry to inspect or resume recorded recovery evidence", detail="historical owner evidence requires a blocking historical gate")
             state_observation, state_raw = observe(store.state_path)
             if state_raw is None:
-                if entry in {"resume", "recover", "correct-project"}:
+                if entry in {"resume", "recover"}:
                     lease.release()
                     return _result(capabilities, "hard-stop", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="start with new or no argument" if entry == "resume" else "no recovery is available", detail="required active state is absent")
                 state, state_digest, report_path, frozen_path, candidates, terminal = _new_draft(settings, store, lease, capabilities, request, context=context, notification=notification)
@@ -2053,12 +1875,6 @@ def run(
             result_frozen = str(frozen_path)
             if state.get("proposal_payloads"):
                 result_report = state["proposal_payloads"][0]["report_binding"]["path"]
-            if entry == "correct-project":
-                outcome, detail, plan = _correct_project(settings, store, lease, state, state_raw, request, approval_context, rejection_context, tracker, capabilities)
-                lease.release()
-                return _result(capabilities, outcome, mode=mode, engine_mode=state["engine_mode"], report=result_report, frozen=result_frozen, resume_action="present and approve the exact corrected payload" if plan is None else "approve the exact project correction action", detail=detail, recovery_plan=plan, candidate_index=state["frozen_snapshot"]["content"]["candidate_index"])
-            if "proposal_correction" in state:
-                _resume_project_correction_report(store, lease, state)
             if state.get("finalization_operations"):
                 _validate_forge_prefix(
                     state["finalization_operations"], state, settings
