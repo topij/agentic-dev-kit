@@ -42,7 +42,7 @@ starts.
 
 ---
 
-## #1000 — Scratch sweep: containment is judged by filesystem identity
+## #1005 — Scratch sweep: containment is judged by filesystem identity
 
 CHANGED (engine CLI surface): `sweep_scratch.py` now refuses (exit 1) a root that is or
 contains your home directory or a `scratch.worktree_repos` repository when it is spelled

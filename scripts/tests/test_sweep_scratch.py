@@ -1062,8 +1062,49 @@ def test_entry_that_is_an_aliased_configured_root_is_kept(base: Path):
     assert sweep.configured_root_reason(str(real / "inner" / "deep"), [str(alias / "inner")]) is None
 
 
+def test_identity_compares_the_device_as_well_as_the_inode(base: Path, monkeypatch):
+    """Two paths sharing an inode number on different devices are different paths."""
+    outer, inner = base / "outer", base / "inner"
+    outer.mkdir()
+    inner.mkdir()
+    real_stat = os.stat
+    outer_st = real_stat(outer)
+
+    def stat(path, *args, **kwargs):
+        st = real_stat(path, *args, **kwargs)
+        if os.fspath(path) == str(inner):
+            fields = list(st)
+            fields[1], fields[2] = outer_st.st_ino, outer_st.st_dev + 1
+            return os.stat_result(fields)
+        return st
+
+    monkeypatch.setattr(sweep.os, "stat", stat)
+    assert sweep._holds(str(outer), str(inner)) is False
+
+
 def test_a_missing_guarded_path_does_not_refuse_the_root(root: Path, base: Path):
     assert sweep.validate_root(str(root), [str(base / "gone" / "home")]) == ("ok", None)
+
+
+@pytest.mark.parametrize(
+    "check",
+    [
+        pytest.param(lambda path, held: sweep.validate_root(path, held)[0] == "refused", id="validate_root"),
+        pytest.param(lambda path, held: sweep.live_worktree_reason(path, held) is not None, id="live_worktree_reason"),
+        pytest.param(
+            lambda path, held: sweep.repository_store_reason(path, held) is not None, id="repository_store_reason"
+        ),
+        pytest.param(
+            lambda path, held: sweep.configured_root_reason(path, held) is not None, id="configured_root_reason"
+        ),
+    ],
+)
+def test_a_path_under_a_regular_file_fails_closed(check, root: Path, base: Path):
+    """``NotADirectoryError`` is not "missing": a guarded path or store under a file
+    (a bad ``alternates`` line, say) is unknown, so the root is refused or the entry kept."""
+    blocker = base / "blocker"
+    blocker.write_text("")
+    assert check(str(root), [str(blocker / "repo")])
 
 
 @pytest.mark.parametrize(

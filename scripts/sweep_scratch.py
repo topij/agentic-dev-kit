@@ -58,10 +58,13 @@ symlink anywhere in its path, is not a directory, or is or contains the user's
 home directory or one of the ``scratch.worktree_repos``. A root that does not
 exist is reported as absent. The root itself is never removed.
 
-"Is or contains", here and in the owner classes above, is judged by filesystem
+"Is or contains" in the root refusal above, and in the registered-worktree,
+repository-store and configured-root owner classes, is judged by filesystem
 identity (``st_dev``, ``st_ino``) as well as by path string, so a root spelled in
 another case on a case-insensitive filesystem is still caught. A path that exists
 but cannot be statted counts as contained: the root is refused, or the entry kept.
+The ``.git``-pointer checks still compare strings; a case variant there misses, and
+a miss keeps the entry.
 
 Known limits, each one a reason to configure only a root whose every child is
 disposable:
