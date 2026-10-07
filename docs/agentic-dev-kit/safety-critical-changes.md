@@ -40,7 +40,9 @@ changes one of them or that config file, and one isolated lens otherwise: see
    provisional, not proof of safety. Be aware that "finds nothing new" may never
    arrive: see [`fallback-review-panel.md`](fallback-review-panel.md) for the
    observed base rate and for the stopping criterion to use instead — blast
-   radius, not round count.
+   radius, not round count. A spent `review.round_budget` hands the next round
+   to the operator ([`workflows/pr-watch.md`](workflows/pr-watch.md), *Round
+   budget*); it never ends review on its own.
 
     **A fix round addresses only what the review found** — and what it found is the
     finding, not a licence to build. The minimum that resolves it is the fix; a new
