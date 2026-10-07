@@ -380,6 +380,11 @@ _DEFAULT_SETTLE_GRACE_MINUTES = 3.0
 # can read as green. True is the safe default — see :func:`summarize_checks`.
 _DEFAULT_REQUIRE_CI = True
 
+# How many FIX rounds a pull request's review may take after its opening review
+# before the loop stops and the operator decides — see
+# :func:`review_round_summary`. A budget, not a gate: it moves no predicate.
+_DEFAULT_REVIEW_ROUND_BUDGET = 2
+
 # Same pattern as check_doc_budget.py: the reader ships beside the engines, so
 # deriving its directory from THIS file keeps working when the kit is vendored
 # under a nested dir (scripts/devkit/).
@@ -406,6 +411,7 @@ class ReviewConfig(NamedTuple):
     bot_app_slugs: dict[str, frozenset[str]]
     bot_pending_grace_minutes: float
     settle_grace_minutes: float
+    round_budget: int
 
 
 def _normalize_safety_critical_paths(value: Any) -> tuple[str, ...] | None:
@@ -500,6 +506,9 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
       requirement that a baseline exist at all, so a fresh clone still blocks
       for the one poll it takes to record one (#190 is not a timing bug and is
       not opted out of here). Setting it high is fail-closed.
+    - ``round_budget`` accepts a non-negative integer (``bool`` rejected, as
+      above); anything else keeps the default and warns. ``0`` is legitimate: the
+      opening review's findings already go to the operator.
     """
     defaults = ReviewConfig(
         noise_markers=_DEFAULT_NOISE_MARKERS,
@@ -512,6 +521,7 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
         bot_app_slugs=dict(_DEFAULT_REVIEW_BOT_APP_SLUGS),
         bot_pending_grace_minutes=_DEFAULT_BOT_PENDING_GRACE_MINUTES,
         settle_grace_minutes=_DEFAULT_SETTLE_GRACE_MINUTES,
+        round_budget=_DEFAULT_REVIEW_ROUND_BUDGET,
     )
     try:
         from kitconfig import get, get_str_list, load_config
@@ -581,6 +591,23 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
             or settle_grace < 0
         ):
             settle_grace = _DEFAULT_SETTLE_GRACE_MINUTES
+        round_budget = get(config, "review.round_budget", _DEFAULT_REVIEW_ROUND_BUDGET)
+        if round_budget is None:
+            # `round_budget:` with no value reads as absent, like the lists above.
+            round_budget = _DEFAULT_REVIEW_ROUND_BUDGET
+        elif (
+            isinstance(round_budget, bool)
+            or not isinstance(round_budget, int)
+            or round_budget < 0
+        ):
+            # Warned, unlike the grace values: a budget silently back at its
+            # default is a different stopping point from the one the adopter set.
+            print(
+                "warning: review.round_budget must be a non-negative integer; "
+                f"using pr_watch's built-in {_DEFAULT_REVIEW_ROUND_BUDGET}",
+                file=sys.stderr,
+            )
+            round_budget = _DEFAULT_REVIEW_ROUND_BUDGET
     except FileNotFoundError:
         # `load_config` raises this for an absent config file — a standalone
         # engine run. Defaults are exactly right; stay quiet.
@@ -620,6 +647,7 @@ def _load_review_config(config_path: str | Path | None = None) -> ReviewConfig:
         bot_app_slugs=app_slugs,
         bot_pending_grace_minutes=float(grace),
         settle_grace_minutes=float(settle_grace),
+        round_budget=round_budget,
     )
 
 
@@ -634,6 +662,7 @@ _REVIEW_BOT_AUTHOR_ALIASES = _REVIEW_CONFIG.bot_author_aliases
 _REVIEW_BOT_APP_SLUGS = _REVIEW_CONFIG.bot_app_slugs
 _BOT_PENDING_GRACE_MINUTES = _REVIEW_CONFIG.bot_pending_grace_minutes
 _SETTLE_GRACE_MINUTES = _REVIEW_CONFIG.settle_grace_minutes
+_REVIEW_ROUND_BUDGET = _REVIEW_CONFIG.round_budget
 
 
 # --------------------------------------------------------------------------- gh
@@ -3702,6 +3731,8 @@ def load_state(pr: int) -> dict:
     :func:`persist_poll`. Its presence is not evidence for the current head:
     :func:`build_report` decides that at read time by comparing
     ``receipt["head"]`` against the polled head, and a push invalidates it.
+    ``review_rounds`` lists the heads a review round was recorded at, for the
+    round budget (see :func:`review_round_summary`); it is evidence of nothing.
     """
     path = _seen_path(pr)
     if not path.is_file():
@@ -4010,6 +4041,191 @@ def evidence_findings(
     return findings
 
 
+# ------------------------------------------------------------- review rounds
+
+
+def _recorded_review_rounds(value: object) -> list[dict]:
+    """The usable entries of a state file's ``review_rounds`` list.
+
+    A malformed entry is dropped rather than refusing the list. The count only
+    ever stops the loop sooner, so losing an entry errs toward one more round,
+    which is where the loop stood before the budget existed.
+    """
+    if not isinstance(value, list):
+        return []
+    return [
+        entry
+        for entry in value
+        if isinstance(entry, dict)
+        and isinstance(entry.get("head"), str)
+        and entry["head"].strip()
+    ]
+
+
+def _note_review_round(
+    state: dict, head: str, *, source: str, lenses: list[str], now: datetime
+) -> bool:
+    """Add ``head`` to ``state``'s reviewed heads; ``False`` when already there.
+
+    One entry per head: a second pass over the same head (a lens re-run, the
+    receipt recorded after the round itself was) is the same round.
+    """
+    rounds = _recorded_review_rounds(state.get("review_rounds"))
+    state["review_rounds"] = rounds
+    if any(entry["head"] == head for entry in rounds):
+        return False
+    entry: dict = {"head": head, "source": source, "recorded_at": now.isoformat()}
+    if lenses:
+        entry["lenses"] = list(lenses)
+    rounds.append(entry)
+    return True
+
+
+def review_round_summary(
+    recorded: object,
+    reviews: list[dict],
+    head: str | None,
+    *,
+    budget: int | None = None,
+    bots: tuple[str, ...] | None = None,
+) -> dict:
+    """How many review rounds the pull request has taken, against its budget.
+
+    A round is a distinct head that a review covered: one recorded with
+    ``--record-round`` or ``--record-review``, or one a configured bot reviewed.
+    The budget is ``review.round_budget`` fix rounds after the opening review,
+    so ``limit`` reviewed heads in all.
+
+    **A budget, not a gate.** Nothing here moves ``converged`` or ``mergeable``:
+    a spent budget means the next fix round needs the operator's go-ahead, which
+    ``pr-watch.md`` (*Round budget*) carries. Gating on it would let a count the
+    author partly reports open or close the merge.
+
+    Bot reviews are read one at a time through :func:`_reduce_latest_bot_reviews`,
+    so what counts as a bot's review here (the anchored identity match, a usable
+    sha, the bodyless-``COMMENTED`` skip of #981) cannot drift from what the
+    coverage read counts.
+
+    The count is a floor. A round that ran and was never recorded is missing
+    from it, and an undercount only delays the stop.
+    """
+    if budget is None:
+        budget = _REVIEW_ROUND_BUDGET
+    heads: dict[str, list[str]] = {}
+    for entry in _recorded_review_rounds(recorded):
+        source = entry.get("source")
+        label = source if isinstance(source, str) and source.strip() else "recorded"
+        by = heads.setdefault(entry["head"], [])
+        if label not in by:
+            by.append(label)
+    for raw in reviews or []:
+        for review in _reduce_latest_bot_reviews([raw], head, bots):
+            by = heads.setdefault(review["sha"], [])
+            if review["bot"] not in by:
+                by.append(review["bot"])
+    count = len(heads)
+    limit = budget + 1
+    head_reviewed = isinstance(head, str) and head in heads
+    return {
+        "reviewed_heads": [{"head": sha, "by": by} for sha, by in heads.items()],
+        "count": count,
+        "budget": budget,
+        "limit": limit,
+        "spent": count >= limit,
+        "head_reviewed": head_reviewed,
+        # Reviewing the current head would take a round past the budget.
+        "next_round_needs_operator": count >= limit and not head_reviewed,
+    }
+
+
+def _resolve_reviewed_head(reviewed: str, current_head: str) -> str:
+    """The full sha of ``reviewed``, which must be the PR head or an ancestor.
+
+    An ancestor is accepted so a round can still be recorded after its fix was
+    pushed — the ordering `#852` found for receipts. Anything else would count a
+    head the pull request never had.
+    """
+    if reviewed == current_head:
+        return current_head
+    try:
+        parsed = subprocess.run(  # noqa: S603
+            ["git", "rev-parse", "--verify", "--quiet", f"{reviewed}^{{commit}}"],  # noqa: S607
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError(f"could not resolve reviewed head {reviewed}: {exc}") from exc
+    full = parsed.stdout.decode("utf-8", errors="replace").strip()
+    if parsed.returncode != 0 or not full:
+        raise ValueError(
+            f"reviewed head {reviewed} is not a commit in this checkout; "
+            "fetch the pull request's head and retry"
+        )
+    if full == current_head:
+        return full
+    try:
+        ancestor = subprocess.run(  # noqa: S603
+            ["git", "merge-base", "--is-ancestor", full, current_head],  # noqa: S607
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError(f"could not establish reviewed-head ancestry: {exc}") from exc
+    if ancestor.returncode == 1:
+        raise ValueError(
+            f"reviewed head {full} is neither the PR head ({current_head}) "
+            "nor an ancestor of it"
+        )
+    if ancestor.returncode != 0:
+        detail = ancestor.stderr.decode("utf-8", errors="replace").strip()
+        raise ValueError(f"could not establish reviewed-head ancestry: {detail}")
+    return full
+
+
+def record_round(
+    pr: int,
+    reviewed_head: str,
+    *,
+    lenses: str | None = None,
+    now: datetime | None = None,
+) -> dict:
+    """Record that a review pass ran at ``reviewed_head``, without a receipt.
+
+    The round budget counts reviewed heads, and a round whose findings send the
+    author back to fix them records no receipt: ``--record-review`` comes only
+    once the findings are handled. This is how such a round is counted. It
+    writes no review evidence and changes no gate.
+    """
+    require_gh_backend("--record-round")
+    reviewed_head = reviewed_head.strip()
+    if not reviewed_head:
+        raise ValueError("reviewed head must not be empty")
+    named_lenses = [part.strip() for part in (lenses or "").split(",") if part.strip()]
+    snapshot = fetch_review_snapshot(pr)
+    current_head = snapshot.get("headRefOid")
+    if not current_head:
+        raise ValueError("PR has no headRefOid; cannot place the review round")
+    head = _resolve_reviewed_head(reviewed_head, current_head)
+    now = now or datetime.now(timezone.utc)
+    state = load_state(pr)
+    added = _note_review_round(
+        state, head, source="round", lenses=named_lenses, now=now
+    )
+    save_state(pr, state)
+    return {
+        "pr": pr,
+        "recorded_round": added,
+        "head": head,
+        "review_rounds": review_round_summary(
+            state.get("review_rounds"), snapshot.get("reviews") or [], current_head
+        ),
+    }
+
+
 def record_review(
     pr: int,
     source: str,
@@ -4239,6 +4455,9 @@ def record_review(
                 set(previous_seen if isinstance(previous_seen, list) else [])
                 | {ack_key}
             )
+    # A receipt is a review of its head, so that head is a round too (a no-op
+    # when `--record-round` already counted it).
+    _note_review_round(state, expected_head, source=source, lenses=named_lenses, now=now)
     state["review_receipt"] = receipt
     save_state(pr, state)
     return {
@@ -4841,6 +5060,7 @@ def build_report(
     prior_head: str | None = None,
     prior_max_total: int = 0,
     review_receipt: dict | None = None,
+    review_rounds: list[dict] | None = None,
     check_details: list[dict] | CheckDetails | None = None,
     now: datetime | None = None,
     prior_pending_since: dict | None = None,  # already head-scoped by the caller
@@ -5237,6 +5457,10 @@ def build_report(
         # through one place only, the full-parent floor of a composed receipt.
         "review_class": review_class,
         "review_bots": review_bots,
+        # Reported, never gating: see :func:`review_round_summary`.
+        "review_rounds": review_round_summary(
+            review_rounds, view.get("reviews") or [], head
+        ),
         # Reported, never gating — see :func:`evidence_findings` for why a
         # judgement drawn from prose must not close a gate the deterministic
         # checks above have opened.
@@ -5744,6 +5968,7 @@ def render(report: dict) -> str:
             f"  review class: {_flat(review_class.get('class'))} — a fallback review "
             f"owes {owed} ({_describe_review_class(review_class)})"
         )
+    lines.extend(_render_review_rounds(report.get("review_rounds")))
     for blocker in report.get("merge_blockers") or []:
         lines.append(f"  ✗ merge blocker: {blocker}")
     if report["new_comments"]:
@@ -5763,6 +5988,49 @@ def render(report: dict) -> str:
                 )
             else:
                 lines.append(f"  • [{c['kind']}] @{c['author']}{loc}: {c['excerpt']}")
+    return "\n".join(lines)
+
+
+def _render_review_rounds(summary: object) -> list[str]:
+    """The round-budget lines of a render: see :func:`review_round_summary`.
+
+    Silent before any round is counted, so a fresh pull request's first poll
+    carries no budget noise.
+    """
+    if not isinstance(summary, dict):
+        return []
+    count, limit = summary.get("count"), summary.get("limit")
+    if not isinstance(count, int) or not isinstance(limit, int) or count < 1:
+        return []
+    budget = limit - 1
+    tally = (
+        f"{count} reviewed head{'s' if count != 1 else ''} of {limit} "
+        f"(the opening review + {budget} fix round{'s' if budget != 1 else ''}, "
+        "review.round_budget)"
+    )
+    if summary.get("next_round_needs_operator"):
+        return [
+            f"  ⚠ round budget spent: {tally}, and this head has not been reviewed. "
+            "Reviewing it takes a round past the budget, so it needs the operator's "
+            "go-ahead on the PR first: post the decision packet and wait "
+            "(pr-watch.md, Round budget)"
+        ]
+    if summary.get("spent"):
+        return [
+            f"  ⚠ round budget spent: {tally}. If this head's review leaves findings "
+            "to act on, do not push another fix round: post the decision packet and "
+            "wait for the operator (pr-watch.md, Round budget)"
+        ]
+    return [f"  review rounds: {tally}"]
+
+
+def render_record_round(report: dict) -> str:
+    verb = "recorded" if report.get("recorded_round") else "already counted"
+    lines = [
+        f"PR #{report['pr']} — {verb} a review round at head "
+        f"{_flat(report.get('head'), 60)} (no receipt; gates nothing)"
+    ]
+    lines.extend(_render_review_rounds(report.get("review_rounds")))
     return "\n".join(lines)
 
 
@@ -5898,6 +6166,8 @@ def persist_poll(pr: int, report: dict, seen: set[str]) -> dict:
       :func:`record_review` ever originates one. It is not head-checked here —
       :func:`build_report` compares its stamped head against the polled head, so
       a receipt surviving a push is expected and is invalidated at read time.
+    - ``review_rounds`` is carried forward the same way: only
+      :func:`record_round` and :func:`record_review` add to it.
     """
     new_state = {
         "seen": sorted(seen),
@@ -5953,6 +6223,11 @@ def persist_poll(pr: int, report: dict, seen: set[str]) -> dict:
     previous = load_state(pr)
     if isinstance(previous.get("review_receipt"), dict):
         new_state["review_receipt"] = previous["review_receipt"]
+    # Carried like the receipt: only `--record-round` and `--record-review`
+    # write it, and a poll that dropped it would reset the round count.
+    rounds = _recorded_review_rounds(previous.get("review_rounds"))
+    if rounds:
+        new_state["review_rounds"] = rounds
     save_state(pr, new_state)
     return new_state
 
@@ -5990,7 +6265,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--head",
         metavar="EXPECTED_SHA",
-        help="exact head SHA reviewed; required with --record-review",
+        help=(
+            "exact head SHA reviewed; required with --record-review and with "
+            "--record-round"
+        ),
     )
     parser.add_argument(
         "--allow-pending-bot-review",
@@ -6005,7 +6283,8 @@ def main(argv: list[str] | None = None) -> int:
         "--lenses",
         metavar="NAMES",
         help=(
-            "with --record-review: comma-separated review lenses that actually ran "
+            "with --record-review or --record-round: comma-separated review lenses "
+            "that actually ran "
             "(e.g. adversarial,correctness). Recorded on the receipt so a one-lens "
             "pass is distinguishable from a panel — see "
             "docs/agentic-dev-kit/fallback-review-panel.md"
@@ -6048,6 +6327,15 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     mode_group.add_argument(
+        "--record-round",
+        action="store_true",
+        help=(
+            "count a review pass that ran at --head toward review.round_budget, "
+            "without a receipt: for a round whose findings are going back to be "
+            "fixed. --head may be the PR head or an ancestor of it"
+        ),
+    )
+    mode_group.add_argument(
         "--assert-draft",
         action="store_true",
         help=(
@@ -6067,12 +6355,14 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.record_review is not None and not args.head:
         parser.error("--record-review requires --head <polled-sha>")
-    if args.head and args.record_review is None:
-        parser.error("--head is only valid with --record-review")
+    if args.record_round and not args.head:
+        parser.error("--record-round requires --head <reviewed-sha>")
+    if args.head and args.record_review is None and not args.record_round:
+        parser.error("--head is only valid with --record-review or --record-round")
     if args.allow_pending_bot_review and args.record_review is None:
         parser.error("--allow-pending-bot-review is only valid with --record-review")
-    if args.lenses and args.record_review is None:
-        parser.error("--lenses is only valid with --record-review")
+    if args.lenses and args.record_review is None and not args.record_round:
+        parser.error("--lenses is only valid with --record-review or --record-round")
     if args.compose_parent and args.record_review is None:
         parser.error("--compose-parent is only valid with --record-review")
     if args.compose_parent and args.record_review != "fallback:delta":
@@ -6081,6 +6371,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--disposition is only valid with --record-review")
     if args.no_persist and (
         args.mark_seen
+        or args.record_round
         or args.record_review is not None
         or args.assert_draft
         or args.assert_ready
@@ -6088,6 +6379,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--no-persist is only valid with a plain poll")
     if args.all_comments and (
         args.mark_seen
+        or args.record_round
         or args.record_review is not None
         or args.assert_draft
         or args.assert_ready
@@ -6111,6 +6403,18 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(mark_report, ensure_ascii=False))
         else:
             print(render_mark_seen(mark_report))
+        return 0
+
+    if args.record_round:
+        try:
+            round_report = record_round(pr, args.head, lenses=args.lenses)
+        except (RuntimeError, KeyError, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        if args.json:
+            print(json.dumps(round_report, ensure_ascii=False))
+        else:
+            print(render_record_round(round_report))
         return 0
 
     if args.record_review is not None:
@@ -6178,6 +6482,7 @@ def main(argv: list[str] | None = None) -> int:
         prior_head=state.get("head"),
         prior_max_total=int(state.get("max_total") or 0),
         review_receipt=state.get("review_receipt"),
+        review_rounds=state.get("review_rounds"),
         check_details=check_details,
         prior_pending_since=read_pending_since(state, view.get("headRefOid")),
         prior_settle_since=settle_since,

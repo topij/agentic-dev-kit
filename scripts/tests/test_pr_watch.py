@@ -61,6 +61,7 @@ def _pin_engine_defaults(module: ModuleType) -> None:
     module._REVIEW_BOT_APP_SLUGS = defaults.bot_app_slugs
     module._BOT_PENDING_GRACE_MINUTES = defaults.bot_pending_grace_minutes
     module._SETTLE_GRACE_MINUTES = defaults.settle_grace_minutes
+    module._REVIEW_ROUND_BUDGET = defaults.round_budget
 
 
 def _pin_engine_backend(module: ModuleType) -> None:
@@ -2941,6 +2942,7 @@ def test_missing_config_falls_back_to_defaults_silently(
         pr_watch._DEFAULT_REVIEW_BOT_APP_SLUGS,
         pr_watch._DEFAULT_BOT_PENDING_GRACE_MINUTES,
         pr_watch._DEFAULT_SETTLE_GRACE_MINUTES,
+        pr_watch._DEFAULT_REVIEW_ROUND_BUDGET,
     )
     assert capsys.readouterr().err == ""
 
@@ -3091,6 +3093,7 @@ def test_every_config_derived_global_is_pinned() -> None:
         ),
         "_BOT_PENDING_GRACE_MINUTES": (-99999.0, "bot_pending_grace_minutes"),
         "_SETTLE_GRACE_MINUTES": (-99998.0, "settle_grace_minutes"),
+        "_REVIEW_ROUND_BUDGET": (-99997, "round_budget"),
     }
 
     # If someone adds a field to ReviewConfig, this fails until they extend the
@@ -11616,3 +11619,290 @@ def test_build_report_classes_the_pr_from_its_own_base_and_head(
 
     assert report["review_class"]["class"] == "safety-critical"
     assert report["review_class"]["matched_paths"] == [GATE_PATH]
+
+
+# --------------------------------------------------------------------------- #
+# review round budget: counted from reviewed heads, reported, gating nothing
+# --------------------------------------------------------------------------- #
+
+
+def _bot_review(sha: str, *, author: str = "coderabbitai", body: str = "Review", state: str = "COMMENTED") -> dict:
+    return {
+        "author": {"login": author},
+        "state": state,
+        "body": body,
+        "submittedAt": "2026-07-25T11:00:00Z",
+        "commit": {"oid": sha},
+    }
+
+
+def _round_budget(tmp_path: Path, text: str, capsys: pytest.CaptureFixture[str]) -> tuple[int, str]:
+    pr_watch = _load_pr_watch()
+    path = tmp_path / "dev-model.yaml"
+    path.write_text(text, encoding="utf-8")
+    budget = pr_watch._load_review_config(path).round_budget
+    return budget, capsys.readouterr().err
+
+
+def test_round_budget_defaults_to_two_fix_rounds(tmp_path: Path, capsys) -> None:
+    pr_watch = _load_pr_watch()
+    assert pr_watch._REVIEW_ROUND_BUDGET == 2
+    assert _round_budget(tmp_path, "review:\n  bots: []\n", capsys) == (2, "")
+    assert _round_budget(tmp_path, "review:\n  round_budget:\n", capsys) == (2, "")
+
+
+def test_round_budget_takes_a_non_negative_integer(tmp_path: Path, capsys) -> None:
+    assert _round_budget(tmp_path, "review:\n  round_budget: 5\n", capsys) == (5, "")
+    assert _round_budget(tmp_path, "review:\n  round_budget: 0\n", capsys) == (0, "")
+
+
+@pytest.mark.parametrize("nonsense", ["-1", "1.5", "true", "two", "[2]"])
+def test_an_unusable_round_budget_warns_and_keeps_the_default(
+    tmp_path: Path, capsys, nonsense: str
+) -> None:
+    budget, err = _round_budget(tmp_path, f"review:\n  round_budget: {nonsense}\n", capsys)
+    assert budget == 2
+    assert "review.round_budget must be a non-negative integer" in err
+
+
+def test_round_summary_counts_distinct_reviewed_heads_from_both_sources() -> None:
+    pr_watch = _load_pr_watch()
+    recorded = [
+        {"head": "h0", "source": "round"},
+        {"head": "h1", "source": "fallback:panel"},
+        {"head": "h1", "source": "round"},  # a second pass at h1 is the same round
+        {"head": ""},  # malformed entries are dropped, never counted
+        "garbage",
+    ]
+    reviews = [_bot_review("h0"), _bot_review("h2")]
+
+    summary = pr_watch.review_round_summary(recorded, reviews, "h2", budget=2)
+
+    assert summary["count"] == 3
+    assert summary["reviewed_heads"] == [
+        {"head": "h0", "by": ["round", "coderabbit"]},
+        {"head": "h1", "by": ["fallback:panel", "round"]},
+        {"head": "h2", "by": ["coderabbit"]},
+    ]
+    assert (summary["budget"], summary["limit"]) == (2, 3)
+    assert summary["spent"] is True
+    assert summary["head_reviewed"] is True
+    assert summary["next_round_needs_operator"] is False
+
+
+def test_round_summary_reads_bot_reviews_through_the_coverage_rules() -> None:
+    """A thread-reply wrapper (#981) and a lookalike login are not reviews here
+    either: counting them would spend the budget on rounds that never ran."""
+    pr_watch = _load_pr_watch()
+    reviews = [
+        _bot_review("wrapper", body=""),
+        _bot_review("lookalike", author="xcoderabbitai"),
+        _bot_review("real"),
+    ]
+
+    summary = pr_watch.review_round_summary([], reviews, "real", budget=2)
+
+    assert [entry["head"] for entry in summary["reviewed_heads"]] == ["real"]
+
+
+def test_round_budget_is_spent_at_the_opening_review_plus_the_fix_rounds() -> None:
+    pr_watch = _load_pr_watch()
+
+    def summary(heads: list[str], current: str) -> dict:
+        recorded = [{"head": h, "source": "round"} for h in heads]
+        return pr_watch.review_round_summary(recorded, [], current, budget=2)
+
+    assert summary(["h0", "h1"], "h1")["spent"] is False
+    assert summary(["h0", "h1"], "h2")["next_round_needs_operator"] is False
+    third = summary(["h0", "h1", "h2"], "h2")
+    assert (third["spent"], third["next_round_needs_operator"]) == (True, False)
+    fourth = summary(["h0", "h1", "h2"], "h3")
+    assert (fourth["spent"], fourth["next_round_needs_operator"]) == (True, True)
+    zero = pr_watch.review_round_summary([{"head": "h0"}], [], "h1", budget=0)
+    assert zero["next_round_needs_operator"] is True
+
+
+def test_a_spent_round_budget_moves_no_gate() -> None:
+    pr_watch = _load_pr_watch()
+    view = _green_view()
+    receipt = {"head": "abc123", "source": "fallback:codex"}
+    spent_rounds = [{"head": h, "source": "round"} for h in ("h0", "h1", "abc123")]
+    past_rounds = [{"head": h, "source": "round"} for h in ("h0", "h1", "h2")]
+
+    plain = pr_watch.build_report(view, [], set(), review_receipt=receipt, **_settled(view))
+    spent = pr_watch.build_report(
+        view, [], set(), review_receipt=receipt, review_rounds=spent_rounds, **_settled(view)
+    )
+    past = pr_watch.build_report(
+        view, [], set(), review_receipt=receipt, review_rounds=past_rounds, **_settled(view)
+    )
+
+    assert spent["review_rounds"]["spent"] is True
+    assert past["review_rounds"]["next_round_needs_operator"] is True
+    for report in (spent, past):
+        assert report["converged"] == plain["converged"] is True
+        assert report["mergeable"] == plain["mergeable"] is True
+        assert report["merge_blockers"] == plain["merge_blockers"]
+
+
+def test_render_says_nothing_before_a_round_and_warns_once_the_budget_is_spent() -> None:
+    pr_watch = _load_pr_watch()
+    view = _green_view()
+
+    def rendered(rounds: list[str]) -> str:
+        recorded = [{"head": h, "source": "round"} for h in rounds]
+        return pr_watch.render(pr_watch.build_report(view, [], set(), review_rounds=recorded))
+
+    silent = rendered([])
+    assert "review rounds" not in silent and "round budget" not in silent
+    assert "review rounds: 1 reviewed head of 3" in rendered(["abc123"])
+    spent = rendered(["h0", "h1", "abc123"])
+    assert "⚠ round budget spent: 3 reviewed heads of 3" in spent
+    assert "do not push another fix round" in spent
+    past = rendered(["h0", "h1", "h2"])
+    assert "this head has not been reviewed" in past
+    assert "operator's go-ahead" in past
+
+
+def _rounds_repo(tmp_path: Path) -> tuple[Path, list[str]]:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def git(*args: str) -> str:
+        result = subprocess.run(
+            ["git", *args], cwd=repo, text=True, capture_output=True, check=True
+        )
+        return result.stdout.strip()
+
+    git("init", "-q")
+    git("config", "user.name", "Round Budget Test")
+    git("config", "user.email", "round-budget@example.test")
+    heads = []
+    for name in ("opening", "fix-1", "side"):
+        if name == "side":
+            git("checkout", "-q", "-b", "side", heads[0])
+        (repo / "file.txt").write_text(f"{name}\n", encoding="utf-8")
+        git("add", ".")
+        git("commit", "-qm", name)
+        heads.append(git("rev-parse", "HEAD"))
+    return repo, heads
+
+
+def _record_round(monkeypatch, pr_watch, tmp_path, *, current: str, reviewed: str) -> dict:
+    monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path / "state")
+    monkeypatch.setattr(pr_watch, "require_gh_backend", lambda operation: None)
+    monkeypatch.setattr(
+        pr_watch,
+        "fetch_review_snapshot",
+        lambda pr: {"number": pr, "headRefOid": current, "reviews": []},
+    )
+    return pr_watch.record_round(9, reviewed, lenses="adversarial", now=NOW)
+
+
+def test_record_round_counts_the_current_head_once(monkeypatch, tmp_path: Path) -> None:
+    pr_watch = _load_pr_watch()
+    repo, (opening, _fix, _side) = _rounds_repo(tmp_path)
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    first = _record_round(monkeypatch, pr_watch, tmp_path, current=opening, reviewed=opening)
+    again = _record_round(monkeypatch, pr_watch, tmp_path, current=opening, reviewed=opening)
+
+    assert first["recorded_round"] is True
+    assert again["recorded_round"] is False
+    assert again["review_rounds"]["count"] == 1
+    state = pr_watch.load_state(9)
+    assert state["review_rounds"] == [
+        {
+            "head": opening,
+            "source": "round",
+            "recorded_at": NOW.isoformat(),
+            "lenses": ["adversarial"],
+        }
+    ]
+    assert "review_receipt" not in state, "a round is not review evidence"
+
+
+def test_record_round_accepts_an_abbreviated_ancestor_of_the_head(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """The fix may already be pushed when the round is recorded (#852's order)."""
+    pr_watch = _load_pr_watch()
+    repo, (opening, fix, _side) = _rounds_repo(tmp_path)
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+
+    report = _record_round(monkeypatch, pr_watch, tmp_path, current=fix, reviewed=opening[:9])
+
+    assert report["head"] == opening
+    assert report["review_rounds"]["head_reviewed"] is False
+
+
+@pytest.mark.parametrize("which", ["side", "unknown"])
+def test_record_round_refuses_a_head_the_pr_never_had(
+    monkeypatch, tmp_path: Path, which: str
+) -> None:
+    pr_watch = _load_pr_watch()
+    repo, (_opening, fix, side) = _rounds_repo(tmp_path)
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+    reviewed = side if which == "side" else "0" * 40
+
+    with pytest.raises(ValueError, match="ancestor|not a commit"):
+        _record_round(monkeypatch, pr_watch, tmp_path, current=fix, reviewed=reviewed)
+
+    assert not (tmp_path / "state" / "9.json").exists()
+
+
+def test_record_review_counts_its_head_as_a_round(monkeypatch) -> None:
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "require_gh_backend", lambda operation: None)
+    monkeypatch.setattr(
+        pr_watch,
+        "fetch_review_snapshot",
+        lambda pr: {"number": pr, "headRefOid": "abc123", "reviews": []},
+    )
+    monkeypatch.setattr(
+        pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "ok")
+    )
+    monkeypatch.setattr(
+        pr_watch,
+        "load_state",
+        lambda pr: {"review_rounds": [{"head": "h0", "source": "round"}]},
+    )
+    saved: list[dict] = []
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: saved.append(state))
+
+    pr_watch.record_review(9, "fallback:panel", "abc123", lenses="adversarial,correctness", now=NOW)
+
+    assert [entry["head"] for entry in saved[0]["review_rounds"]] == ["h0", "abc123"]
+    assert saved[0]["review_rounds"][1]["source"] == "fallback:panel"
+
+
+def test_a_poll_carries_the_recorded_rounds_forward(monkeypatch, tmp_path: Path) -> None:
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path)
+    rounds = [{"head": "h0", "source": "round", "recorded_at": NOW.isoformat()}]
+    pr_watch.save_state(9, {"review_rounds": rounds})
+    view = _green_view(number=9)
+    report = pr_watch.build_report(view, [], set(), review_rounds=rounds)
+
+    pr_watch.persist_poll(9, report, set())
+
+    assert pr_watch.load_state(9)["review_rounds"] == rounds
+
+
+def test_record_round_cli_requires_head(capsys) -> None:
+    pr_watch = _load_pr_watch()
+
+    with pytest.raises(SystemExit):
+        pr_watch.main(["9", "--record-round"])
+
+    assert "--record-round requires --head" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("extra", [["--no-persist"], ["--record-review", "fallback:panel"]])
+def test_record_round_cli_is_its_own_mode(capsys, extra: list[str]) -> None:
+    pr_watch = _load_pr_watch()
+
+    with pytest.raises(SystemExit):
+        pr_watch.main(["9", "--record-round", "--head", "abc123", *extra])
+
+    assert "error" in capsys.readouterr().err

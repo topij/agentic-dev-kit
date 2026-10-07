@@ -568,6 +568,16 @@ review:
   # checks have not registered yet, and guessing there is the fail-open the guard
   # exists to prevent.
   settle_grace_minutes: 3
+  # How many FIX rounds a pull request's review may take after its opening review
+  # before the watch loop stops for the operator. A round is a distinct head that
+  # a review covered: a configured bot's review, or one recorded with
+  # `pr_watch.py --record-round` / `--record-review`. Once the budget is spent the
+  # poll prints `⚠ round budget spent`, and a further fix round needs the
+  # operator's go-ahead on the PR (pr-watch.md, *Round budget*). Reported only: it
+  # moves neither `converged` nor `mergeable`. Each round costs a review and a CI
+  # run, which is the cost this caps. `0` sends the opening review's findings
+  # straight to the operator.
+  round_budget: 2
   # Whether a PR must have at least one real (non-informational) CI check before
   # pr_watch will report green. True is the safe default: it stops an autonomous
   # merge on a PR whose CI never ran. Set false for a repo with no CI at all —

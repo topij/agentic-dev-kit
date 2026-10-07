@@ -42,6 +42,27 @@ starts.
 
 ---
 
+## #993 — A review round budget: the loop stops for the operator after the opening review + `review.round_budget` fix rounds
+
+ADDED (config key): `review.round_budget`, optional, a non-negative integer, default
+`2`. An unusable value warns on stderr and keeps the default.
+
+ADDED (engine CLI surface): `pr_watch.py <PR#> --record-round --head <sha> [--lenses
+<names>]` counts a review pass at that head toward the budget, without a receipt.
+`--head` may be the PR head or an ancestor of it. It is its own mode, like
+`--record-review`, and the `--head`/`--lenses` usage errors now name both flags.
+
+ADDED (report shape): the poll report carries `review_rounds` (`reviewed_heads`,
+`count`, `budget`, `limit`, `spent`, `head_reviewed`, `next_round_needs_operator`), and
+the text render prints a `review rounds:` line or a `⚠ round budget spent` warning. The
+per-PR state file gains a `review_rounds` list, which `--record-review` also appends to.
+Nothing gates on any of it: `converged`, `mergeable` and `done` are unchanged.
+
+To take it: refresh `scripts/pr_watch.py`, `scripts/hooks/pr_followup_hook.py`, the
+shared `pr-watch.md`, `fallback-review-panel.md` and `safety-critical-changes.md`, with
+their installed tests. A test that compares `ReviewConfig` or `_load_review_config`'s
+result field by field gains `round_budget`. Set the key only to change the default.
+
 ## #985 — Triage `recover` retires a completed state the session-starting entry stops on
 
 CHANGED (gate semantics): a **completed** state that passes state validation but whose

@@ -401,7 +401,9 @@ def _watch_instruction(
             lens_compute,
         )
         + " Only stop early if you hit something that genuinely needs an "
-        "operator decision."
+        "operator decision. A spent review round budget is one: when the poll "
+        "prints `⚠ round budget spent` and findings remain to act on, post the "
+        "decision packet and stop rather than push another fix round."
     )
 
 

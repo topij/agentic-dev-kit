@@ -263,6 +263,21 @@ Repeat until the report says **converged**:
    - Verify each finding against the *current* code before acting — some go stale
      across rounds (a later commit already fixed it).
 
+1. **Count the round before you fix it.** A review that leaves findings to fix
+   records no receipt yet, so record the round itself, against the head that was
+   reviewed:
+
+   ```sh
+   uv run <engine-dir>/pr_watch.py <PR#> --record-round --head <reviewed-sha> \
+     --lenses <names of the lenses that ran>
+   ```
+
+   It writes no review evidence and gates nothing; it is what
+   `review.round_budget` counts. A configured bot's review counts its own head,
+   and `--record-review` counts the head it binds, so neither needs this. Then
+   read the poll's `review_rounds`: **if `spent` is true, do not push the fix
+   round** — go to *Round budget* under Stop conditions.
+
 1. **Acknowledge the round:** once you've handled this round's findings, run `uv run
    <engine-dir>/pr_watch.py <PR#> --mark-seen` so they don't resurface. `--mark-seen` never
    re-polls `gh` — it promotes the exact set of comment keys that your last `--json`
@@ -492,13 +507,36 @@ Self-pace on a bounded cadence — don't busy-wait:
   flaky-infra failure that won't clear on re-run; an external dependency; a finding
   that needs an operator product/design call). Stop, report the specific blocker, and
   ask. Don't loop forever on something only the operator can unblock.
-- **Bound the loop** — if you've gone ~8–10 rounds without converging, stop and
-  summarize where it stands rather than looping indefinitely. This bounds *this* loop —
-  poll, fix, acknowledge — and applies whatever the change is. It is **not** the fallback
-  panel's stopping criterion, which is per-change, applies only when your review bot is
-  unavailable, and lives in
-  [`../fallback-review-panel.md`](../fallback-review-panel.md). Neither one is licence to
-  stop polling a red PR.
+- **Round budget** — a pull request's review gets the opening review plus
+  `review.round_budget` fix rounds. A round is a distinct head that a review covered,
+  whoever reviewed it; the poll reports the count as `review_rounds` and prints
+  `⚠ round budget spent` once it reaches the limit. Each round costs a review and a CI
+  run, in every repository that runs this loop, and the measured long tails came from
+  fix rounds whose own repairs carried the next finding.
+
+  **When the budget is spent and the last review left findings to act on, stop.** Do
+  not push another fix round. Post one comment on the PR, the **decision packet**:
+
+  - each open finding, with the severity and regression label its reviewer gave it,
+    and what fixing it would touch;
+  - the LOW findings already routed to tickets, linked;
+  - the options: merge with the remaining findings ticketed, authorize a stated
+    number of further rounds, split the change, or withdraw the repair that grew.
+
+  Then report the PR as held for the operator and end the loop. The operator's answer
+  goes on the PR. A go-ahead names how many further rounds it covers, and the poll keeps
+  printing the warning through them, because the count does not reset. A LOW finding
+  still takes delta review or a ticket and needs no go-ahead to be ticketed.
+
+  **What the budget does not do.** It moves neither `converged` nor `mergeable`, and it
+  waives nothing. A finding above LOW that is still open is not merged past by an agent
+  on budget grounds; that call is the operator's. The blast-radius rules in
+  [`../fallback-review-panel.md`](../fallback-review-panel.md) still decide which
+  findings a round acts on, and a safety-critical pull request stays operator-merge.
+  If the last review left nothing to act on, the spent budget changes nothing: finish
+  the loop as usual. A red check is not a review round, so fixing it needs no go-ahead.
+  The head that fix produces is unreviewed, though, and once the budget is spent its
+  review needs one like any other.
 
 ## Notes
 

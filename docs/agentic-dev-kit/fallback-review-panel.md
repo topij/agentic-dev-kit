@@ -738,6 +738,14 @@ So the stopping criterion is **blast radius, not round count**:
 - Something **reported but never acted on** (a warning, a log line, a report
   field) — a round or two is proportionate. Worst case is a wrong message.
 
+**Past the round budget, "keep going" is the operator's call.** `review.round_budget`
+gives a pull request its opening review plus that many fix rounds, and
+[`pr-watch.md`](workflows/pr-watch.md) (*Round budget*) stops the loop there with a
+decision packet. Blast radius still decides which findings a round acts on and what
+the packet recommends; for a gate that is usually more rounds. The budget decides only
+who authorizes them. It stops nothing short of review: a finding above LOW that is
+still open is never merged past on budget grounds.
+
 After applying the LOW rule, that classification decides **which remaining
 findings to act on before merging**, and it
 **narrows step 5 rather than replacing it**. If a change does not clearly sit in one
