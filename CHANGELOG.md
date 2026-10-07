@@ -55,7 +55,8 @@ the class, keep it out of the list at any case. A pinned test that expects a cas
 variant to class standard needs updating.
 
 BREAKING (engine CLI surface): `pr_watch.py --record-round --head <sha>` now refuses
-anything that is not a lower-case hex sha of seven or more characters, with exit 2
+a value that is not, once surrounding whitespace is stripped, a lower-case hex sha of
+seven or more characters, with exit 2
 (#994). A ref such as `HEAD`, `HEAD~1` or a branch name was accepted before, and so was
 an upper-case sha. It also refuses a hex name that Git resolves to a ref rather than to
 the commit it abbreviates. Pass the reviewed commit's sha, full or abbreviated, as the

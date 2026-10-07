@@ -11907,7 +11907,7 @@ def test_record_round_refuses_a_commit_that_is_not_an_ancestor_of_the_head(
     assert not (tmp_path / "state" / "9.json").exists()
 
 
-@pytest.mark.parametrize("reviewed", ["HEAD~1", "HEAD^", "side~1", "opening-upper"])
+@pytest.mark.parametrize("reviewed", ["HEAD~1", "HEAD^", "side~1", "opening-upper", "opening-6"])
 def test_record_round_refuses_a_head_that_is_not_a_hex_sha(
     monkeypatch, tmp_path: Path, reviewed: str
 ) -> None:
@@ -11918,6 +11918,10 @@ def test_record_round_refuses_a_head_that_is_not_a_hex_sha(
     monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
     if reviewed == "opening-upper":
         reviewed = opening.upper()
+    elif reviewed == "opening-6":
+        # Six hex characters: below the seven the refusal promises. Git would
+        # resolve it to the opening commit, an ancestor, if it were let through.
+        reviewed = opening[:6]
 
     with pytest.raises(ValueError, match="is not a commit sha"):
         _record_round(monkeypatch, pr_watch, tmp_path, current=fix, reviewed=reviewed)
@@ -11940,6 +11944,23 @@ def test_record_round_refuses_a_hex_name_that_git_reads_as_a_ref(
         _record_round(monkeypatch, pr_watch, tmp_path, current=fix, reviewed=shadow)
 
     assert not (tmp_path / "state" / "9.json").exists()
+
+
+def test_record_round_accepts_a_hex_name_that_is_a_ref_to_the_commit_it_abbreviates(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """The shadow check refuses a ref that resolves elsewhere, not every hex name
+    that is also a ref: one pointing at the commit it abbreviates is that commit."""
+    pr_watch = _load_pr_watch()
+    repo, (opening, fix, _side) = _rounds_repo(tmp_path)
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+    same = opening[:8]
+    subprocess.run(["git", "branch", same, opening], cwd=repo, check=True)
+
+    recorded = _record_round(monkeypatch, pr_watch, tmp_path, current=fix, reviewed=same)
+
+    assert recorded["recorded_round"] is True
+    assert pr_watch.load_state(9)["review_rounds"][0]["head"] == opening
 
 
 def test_record_review_counts_its_head_as_a_round(monkeypatch) -> None:

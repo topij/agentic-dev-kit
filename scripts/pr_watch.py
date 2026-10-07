@@ -4169,7 +4169,8 @@ def _resolve_reviewed_head(reviewed: str, current_head: str) -> str:
     the check is left at ancestry rather than walking the pull request's commits.
     A commit that is not an ancestor is refused, and so is a hex name that Git
     resolves to a ref rather than to the commit it abbreviates. The caller
-    passes only hex, so no ref is resolved against the caller's checkout.
+    passes only hex; a hex name Git reads as a ref is still resolved, and is
+    then refused here, so a ref never reaches the ancestry check.
     """
     if reviewed == current_head:
         return current_head
@@ -4194,7 +4195,8 @@ def _resolve_reviewed_head(reviewed: str, current_head: str) -> str:
         # or tag named like a sha would be read as that ref.
         raise ValueError(
             f"reviewed head {reviewed} resolved to {full}, which it does not "
-            "abbreviate: a ref of that name shadows it"
+            "abbreviate: a ref of that name shadows it, or it names an object "
+            "that is not that commit, such as an annotated tag"
         )
     if full == current_head:
         return full

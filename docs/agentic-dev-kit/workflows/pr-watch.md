@@ -539,7 +539,7 @@ Self-pace on a bounded cadence — don't busy-wait:
   Then report the PR as held for the operator and end the loop. The operator's answer
   goes on the PR. A go-ahead names how many further rounds it covers, and the poll keeps
   printing the warning through them, because the count does not reset. A LOW finding
-  still takes delta review or a ticket and needs no go-ahead to be ticketed.
+  needs no go-ahead to be ticketed; fixing it takes one, as below.
 
   The count lives in the per-PR state file, apart from bot reviews, which the forge
   holds. A lost or corrupt state file, a poll that reads a different state root

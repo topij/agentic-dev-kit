@@ -324,6 +324,8 @@
   "  # is matched against the repo-relative path as Git prints it, so a `./`\n",
   "  # prefix or a trailing `/` never matches. Case is ignored, because a\n",
   "  # case-insensitive filesystem checks a case variant out onto the same file (#991).\n",
+  "  # Unicode normalization is not applied: on a filesystem that also ignores it, a\n",
+  "  # non-ASCII pattern can be reached through the other normalization form.\n",
   "  safety_critical_paths:\n",
   "    - \"scripts/dev_session.sh\"\n",
   "    - \"scripts/devkit/dev_session.sh\"\n",
