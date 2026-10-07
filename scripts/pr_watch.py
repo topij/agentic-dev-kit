@@ -72,7 +72,7 @@ message rather than a `FileNotFoundError` traceback. Selection is per call, neve
 memoized: see `_resolve_backend`.
 
 **On REST this engine POLLS ONLY.** `mergeable` is false by construction, and
-`--record-review` / `--assert-draft` / `--assert-ready` refuse. It does still
+`--record-review` / `--record-round` / `--assert-draft` / `--assert-ready` refuse. It does still
 write its own per-PR watch state (the seen-set, the settle baseline, the grace
 clock) — "polls only" means it never authorizes a merge and never mutates the PR,
 not that it touches no disk. Calling that "read-only" was imprecise. So the watch loop works without `gh`, and merge authorization still
@@ -757,8 +757,8 @@ def _resolve_backend() -> tuple[str, str | None]:
             "the watch engine needs one or the other. Install and authenticate "
             "`gh`, or set GH_TOKEN or GITHUB_TOKEN to a token with `repo` scope "
             "for the REST fallback, which POLLS ONLY: `--record-review`, "
-            "`--assert-draft` and `--assert-ready` need `gh` either way (issue "
-            "#94)."
+            "`--record-round`, `--assert-draft` and `--assert-ready` need `gh` "
+            "either way (issue #94)."
         )
     return "rest", token
 
@@ -842,7 +842,9 @@ def require_gh_backend(operation: str) -> None:
     the PR. Each carried its own fail-open on #91 — a receipt written from a
     truncated read recorded no `bot_signal`, and `--assert-ready` reported
     success from a body that never contained a draft bit. Rather than validate
-    those paths, REST does not get them.
+    those paths, REST does not get them. `--record-round` writes no receipt and
+    gates nothing, but it reads the PR head it binds to, so it takes the same
+    transport rather than a second one with its own truncation behaviour.
     """
     backend, _ = _resolve_backend()
     if backend == "rest":
@@ -4108,7 +4110,10 @@ def review_round_summary(
     carries a ``review.unavailable_markers`` phrase is the bot announcing it did
     NOT review ("Review skipped"), and counting it would spend the budget on
     rounds that never ran. A real review that quotes such a phrase is skipped
-    too, which undercounts.
+    too, which undercounts. So is an unsubmitted ``PENDING`` review. And the
+    #981 skip means a bot review that left its findings only as inline comments
+    under an empty body is not counted: ``pr-watch.md`` has the agent record
+    that round with ``--record-round``.
 
     The count is a floor. A round that ran and was never recorded is missing
     from it, and an undercount only delays the stop; the coarser *Bound the
@@ -4128,6 +4133,9 @@ def review_round_summary(
         if isinstance(body, str) and review_unavailable_reason(body) is not None:
             continue
         for review in _reduce_latest_bot_reviews([raw], head, bots):
+            if review["state"] == "PENDING":
+                # An unsubmitted draft review: nobody has been told anything yet.
+                continue
             by = heads.setdefault(review["sha"], [])
             if review["bot"] not in by:
                 by.append(review["bot"])

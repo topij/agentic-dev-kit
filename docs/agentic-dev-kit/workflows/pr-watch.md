@@ -274,10 +274,13 @@ Repeat until the report says **converged**:
    ```
 
    It writes no review evidence and gates nothing; it is what
-   `review.round_budget` counts. A configured bot's review counts its own head,
-   and `--record-review` counts the head it binds, so neither needs this. Then
-   read the poll's `review_rounds`: **if `spent` is true, do not push the fix
-   round** — go to *Round budget* under Stop conditions.
+   `review.round_budget` counts. It needs the `gh` backend, like `--record-review`.
+   A configured bot's submitted review counts its own head, and `--record-review`
+   counts the head it binds, so neither needs this, with one exception: a bot
+   review whose findings are only inline comments under an empty body is not
+   counted (`#981`), so record that round. Then read the poll's `review_rounds`:
+   **if `spent` is true, do not push the fix round unless an operator go-ahead on
+   the PR covers it** — go to *Round budget* under Stop conditions.
 
 1. **Acknowledge the round:** once you've handled this round's findings, run `uv run
    <engine-dir>/pr_watch.py <PR#> --mark-seen` so they don't resurface. `--mark-seen` never
@@ -535,9 +538,10 @@ Self-pace on a bounded cadence — don't busy-wait:
   still takes delta review or a ticket and needs no go-ahead to be ticketed.
 
   The count lives in the per-PR state file, apart from bot reviews, which the forge
-  holds. A lost or corrupt state file, or a poll that reads a different state root
-  from the one the rounds were recorded in (`#563`), undercounts. That errs toward
-  more rounds, and *Bound the loop* below still applies.
+  holds. A lost or corrupt state file, a poll that reads a different state root
+  from the one the rounds were recorded in (`#563`), a session without `gh`, or a
+  force-push that leaves a reviewed head off the branch's history all undercount.
+  That errs toward more rounds, and *Bound the loop* below still applies.
 
   **What the budget does not do.** It moves neither `converged` nor `mergeable`, and it
   waives nothing. A finding above LOW that is still open is not merged past by an agent

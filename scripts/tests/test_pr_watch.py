@@ -11854,7 +11854,7 @@ def test_record_round_accepts_an_abbreviated_ancestor_of_the_head(
 
 
 @pytest.mark.parametrize("which", ["side", "unknown"])
-def test_record_round_refuses_a_head_the_pr_never_had(
+def test_record_round_refuses_a_commit_that_is_not_an_ancestor_of_the_head(
     monkeypatch, tmp_path: Path, which: str
 ) -> None:
     pr_watch = _load_pr_watch()
@@ -11919,6 +11919,50 @@ def test_a_plain_poll_reads_the_recorded_rounds_from_state(monkeypatch) -> None:
         "h0",
         "h1",
     ]
+
+
+def test_a_plain_poll_counts_bot_reviews_against_the_configured_budget(monkeypatch) -> None:
+    """Through `main`, both halves the budget rests on: the poll's own review
+    list reaches the count, and the configured budget (not the default) sets the
+    limit."""
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "_REVIEW_ROUND_BUDGET", 0)
+    view = _green_view(number=9, reviews=[_bot_review("h9")])
+
+    report = _poll_via_main(monkeypatch, pr_watch, {}, view)
+
+    rounds = report["review_rounds"]
+    assert rounds["reviewed_heads"] == [{"head": "h9", "by": ["coderabbit"]}]
+    assert (rounds["budget"], rounds["limit"], rounds["spent"]) == (0, 1, True)
+    assert rounds["next_round_needs_operator"] is True, "the head abc123 is unreviewed"
+
+
+def test_round_summary_does_not_count_an_unsubmitted_bot_review() -> None:
+    pr_watch = _load_pr_watch()
+    reviews = [_bot_review("draft", state="PENDING"), _bot_review("real")]
+
+    summary = pr_watch.review_round_summary([], reviews, "real", budget=2)
+
+    assert [entry["head"] for entry in summary["reviewed_heads"]] == ["real"]
+
+
+def test_record_round_cli_forwards_the_head_and_lenses(monkeypatch, capsys) -> None:
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "resolve_pr", lambda explicit: 9)
+    calls: list[tuple] = []
+
+    def fake_record_round(pr, head, *, lenses=None, now=None):
+        calls.append((pr, head, lenses))
+        return {"pr": pr, "recorded_round": True, "head": head, "review_rounds": {}}
+
+    monkeypatch.setattr(pr_watch, "record_round", fake_record_round)
+
+    assert pr_watch.main(
+        ["9", "--record-round", "--head", "abc123", "--lenses", "adversarial,correctness"]
+    ) == 0
+
+    assert calls == [(9, "abc123", "adversarial,correctness")]
+    assert "recorded a review round at head abc123" in capsys.readouterr().out
 
 
 def test_record_round_takes_the_current_head_without_a_local_commit(
