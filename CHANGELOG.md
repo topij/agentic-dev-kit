@@ -64,6 +64,16 @@ recovery`. A test state in any other phase is judged as before. Refresh
 `lib/triage/engine.py` with the shared triage workflow and installed tests; a test that
 expected the hard-stop for such a completed test state must expect the refusal.
 
+## #1003 — `panel_prompt.py --scratch` refuses a tree it cannot confirm (#999)
+
+BREAKING (engine CLI surface): `panel_prompt.py --scratch <path>` now exits 2 unless
+`git -C <path> rev-parse HEAD` equals the full `--head` sha **and** HEAD there is
+detached. A path that is not a git tree, a missing path, a tree on a branch, and
+a failed git invocation are all refused. Before, any value rendered as "a detached
+worktree at that sha has been built for you". If you pass `--scratch`, build the tree
+first with `git worktree add --detach <path> <head>` and pass that path. Omitting
+`--scratch` is unchanged.
+
 ## #986 — Scratch sweep engine and the `scratch:` config block
 
 ADDED (config keys, engine CLI surface): `config/dev-model.yaml` gains a `scratch:`
