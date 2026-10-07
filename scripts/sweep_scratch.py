@@ -58,6 +58,14 @@ symlink anywhere in its path, is not a directory, or is or contains the user's
 home directory or one of the ``scratch.worktree_repos``. A root that does not
 exist is reported as absent. The root itself is never removed.
 
+"Is or contains" in the root refusal above, and in the registered-worktree,
+repository-store and configured-root owner classes, is judged by filesystem
+identity (``st_dev``, ``st_ino``) as well as by path string, so a root spelled in
+another case on a case-insensitive filesystem is still caught. A path that exists
+but cannot be statted counts as contained: the root is refused, or the entry kept.
+The ``.git``-pointer checks still compare strings; a case variant there misses, and
+a miss keeps the entry.
+
 Known limits, each one a reason to configure only a root whose every child is
 disposable:
 
@@ -222,6 +230,39 @@ def guarded_paths(repos: list[Path]) -> list[str]:
     return sorted(homes) + [os.path.realpath(r) for r in repos]
 
 
+def _identity(path: str) -> tuple[int, int]:
+    st = os.stat(path)
+    return (st.st_dev, st.st_ino)
+
+
+def _lineage(path: str) -> list[tuple[int, int]]:
+    """Identities of an absolute ``path`` and of each of its ancestors up to ``/``."""
+    found = [_identity(path)]
+    while (parent := os.path.dirname(path)) != path:
+        path = parent
+        found.append(_identity(path))
+    return found
+
+
+def _holds(outer: str, inner: str) -> bool | None:
+    """Whether ``outer`` is ``inner`` or one of its ancestors; ``None`` when unknown.
+
+    Compared as strings and by ``(st_dev, st_ino)``. ``realpath`` keeps the caller's
+    case on a case-insensitive filesystem, so ``…/box`` and ``…/Box`` are two strings
+    naming one directory (#1000); identity is what they share. A path that does not
+    exist holds, and is held by, nothing beyond the string comparison. Any other stat
+    failure is ``None``, which every caller treats as held.
+    """
+    if outer == inner or inner.startswith(outer + os.sep):
+        return True
+    try:
+        return _identity(outer) in _lineage(inner)
+    except FileNotFoundError:
+        return False
+    except (OSError, ValueError):
+        return None
+
+
 def validate_root(path: str, guarded: list[str] | None = None) -> tuple[str, str | None]:
     """``(status, reason)`` where status is ``ok``, ``absent`` or ``refused``."""
     if not os.path.isabs(path):
@@ -241,7 +282,10 @@ def validate_root(path: str, guarded: list[str] | None = None) -> tuple[str, str
     if not os.path.isdir(trimmed):
         return "refused", "not a directory"
     for held in guarded or []:
-        if held == trimmed or held.startswith(trimmed + os.sep):
+        holds = _holds(trimmed, held)
+        if holds is None:
+            return "refused", f"cannot stat it or {held}, a home or worktree repository, to compare them"
+        if holds:
             return "refused", f"holds {held}, a home or worktree repository"
     return "ok", None
 
@@ -393,20 +437,30 @@ class Entry:
     identity: tuple[int, int] | None = field(default=None, repr=False)
 
 
-def _overlaps(a: str, b: str) -> bool:
-    return a == b or a.startswith(b + os.sep) or b.startswith(a + os.sep)
+def _overlaps(a: str, b: str) -> bool | None:
+    """Either path is or holds the other; ``None`` when that cannot be told (see ``_holds``)."""
+    both = (_holds(a, b), _holds(b, a))
+    if True in both:
+        return True
+    return None if None in both else False
 
 
 def live_worktree_reason(path: str, worktrees: list[str]) -> str | None:
     for wt in worktrees:
-        if _overlaps(path, wt):
+        overlap = _overlaps(path, wt)
+        if overlap is None:
+            return f"cannot stat it or the registered worktree {wt} to compare them"
+        if overlap:
             return f"registered worktree {wt}"
     return None
 
 
 def repository_store_reason(path: str, stores: list[str]) -> str | None:
     for store in stores:
-        if _overlaps(path, store):
+        overlap = _overlaps(path, store)
+        if overlap is None:
+            return f"cannot stat it or the git dir or object store {store} to compare them"
+        if overlap:
             return f"git dir or object store {store} of a configured repository"
     return None
 
@@ -415,7 +469,10 @@ def configured_root_reason(path: str, roots: list[str]) -> str | None:
     # One direction only: an entry that IS or CONTAINS another root. Every entry of
     # a root nested inside this one sits under that root, and is not refused for it.
     for other in roots:
-        if path == other or other.startswith(path + os.sep):
+        holds = _holds(path, other)
+        if holds is None:
+            return f"cannot stat it or the configured root {other} to compare them"
+        if holds:
             return f"holds the configured root {other}"
     return None
 

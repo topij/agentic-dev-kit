@@ -980,3 +980,153 @@ def test_a_moved_worktree_git_dir_names_git_worktree_repair(root: Path, repo: Pa
     (wt / ".git").write_text("gitdir: /nonexistent/elsewhere\n", encoding="utf-8")
     with pytest.raises(sweep.ConfigError, match="git worktree repair"):
         sweep.repository_stores([str(wt)])
+
+
+# --------------------------------------------------------------------------- #
+# containment by filesystem identity, not by path string (#1000)
+# --------------------------------------------------------------------------- #
+
+
+def _string_only_holds(outer: str, inner: str) -> bool:
+    return outer == inner or inner.startswith(outer + os.sep)
+
+
+def _require_case_insensitive(base: Path) -> None:
+    (base / "CaseProbe").mkdir()
+    if not (base / "caseprobe").exists():
+        pytest.skip("the filesystem under tmp_path is case-sensitive; no case-variant spelling exists")
+
+
+@pytest.mark.parametrize("neutralised", [False, True], ids=["identity", "string-only"])
+def test_case_variant_root_holding_a_worktree_repo_is_refused(
+    neutralised: bool, base: Path, monkeypatch
+):
+    _require_case_insensitive(base)
+    repo = _seeded(base / "Box" / "Repo")
+    _set_age(base / "Box", OLD)
+    if neutralised:
+        monkeypatch.setattr(sweep, "_holds", _string_only_holds)
+    settings = sweep.Settings(roots=[str(base / "box")], grace_seconds=0, repos=[repo])
+
+    reports = sweep.survey(settings, root=repo, now=time.time())
+    sweep.apply(reports, settings, older_than=0)
+
+    assert (reports[0].status == "refused") is not neutralised
+    assert (repo / ".git").is_dir() is not neutralised
+
+
+@pytest.mark.parametrize("reason", ["live_worktree_reason", "repository_store_reason"])
+def test_case_variant_entry_overlapping_a_registration_is_kept(reason: str, base: Path):
+    _require_case_insensitive(base)
+    (base / "Box" / "wt" / "deep").mkdir(parents=True)
+    held = [str(base / "Box" / "wt")]
+    check = getattr(sweep, reason)
+    assert check(str(base / "box" / "wt"), held) is not None  # the same directory
+    assert check(str(base / "box"), held) is not None  # the entry holds it
+    assert check(str(base / "box" / "wt" / "deep"), held) is not None  # it holds the entry
+
+
+def _aliased(base: Path) -> tuple[Path, Path]:
+    """A real directory and a symlink spelling of it: two strings, one inode, on any
+    filesystem. Guarded paths and registrations are realpaths, so the engine never
+    meets this spelling itself; it stands in for a case variant on Linux CI."""
+    real = base / "real"
+    (real / "inner" / "deep").mkdir(parents=True)
+    (base / "alias").symlink_to(real)
+    return real, base / "alias"
+
+
+def test_root_holding_an_aliased_guarded_path_is_refused(base: Path):
+    real, alias = _aliased(base)
+    assert sweep.validate_root(str(real), [str(alias / "inner")])[0] == "refused"
+    assert sweep.validate_root(str(real), [str(alias)])[0] == "refused"
+    assert sweep.validate_root(str(real / "inner" / "deep"), [str(alias / "inner")]) == ("ok", None)
+
+
+@pytest.mark.parametrize("reason", ["live_worktree_reason", "repository_store_reason"])
+def test_entry_overlapping_an_aliased_registration_is_kept(reason: str, base: Path):
+    real, alias = _aliased(base)
+    check = getattr(sweep, reason)
+    assert check(str(real / "inner"), [str(alias / "inner")]) is not None
+    assert check(str(real), [str(alias / "inner")]) is not None
+    assert check(str(real / "inner" / "deep"), [str(alias / "inner")]) is not None
+    (base / "elsewhere").mkdir()
+    assert check(str(real / "inner"), [str(base / "elsewhere")]) is None
+
+
+def test_entry_that_is_an_aliased_configured_root_is_kept(base: Path):
+    real, alias = _aliased(base)
+    assert sweep.configured_root_reason(str(real / "inner"), [str(alias / "inner")]) is not None
+    assert sweep.configured_root_reason(str(real), [str(alias / "inner" / "deep")]) is not None
+    # One direction only: an entry inside another root is not kept for it.
+    assert sweep.configured_root_reason(str(real / "inner" / "deep"), [str(alias / "inner")]) is None
+
+
+def test_identity_compares_the_device_as_well_as_the_inode(base: Path, monkeypatch):
+    """Two paths sharing an inode number on different devices are different paths."""
+    outer, inner = base / "outer", base / "inner"
+    outer.mkdir()
+    inner.mkdir()
+    real_stat = os.stat
+    outer_st = real_stat(outer)
+
+    def stat(path, *args, **kwargs):
+        st = real_stat(path, *args, **kwargs)
+        if os.fspath(path) == str(inner):
+            fields = list(st)
+            fields[1], fields[2] = outer_st.st_ino, outer_st.st_dev + 1
+            return os.stat_result(fields)
+        return st
+
+    monkeypatch.setattr(sweep.os, "stat", stat)
+    assert sweep._holds(str(outer), str(inner)) is False
+
+
+def test_a_missing_guarded_path_does_not_refuse_the_root(root: Path, base: Path):
+    assert sweep.validate_root(str(root), [str(base / "gone" / "home")]) == ("ok", None)
+
+
+@pytest.mark.parametrize(
+    "check",
+    [
+        pytest.param(lambda path, held: sweep.validate_root(path, held)[0] == "refused", id="validate_root"),
+        pytest.param(lambda path, held: sweep.live_worktree_reason(path, held) is not None, id="live_worktree_reason"),
+        pytest.param(
+            lambda path, held: sweep.repository_store_reason(path, held) is not None, id="repository_store_reason"
+        ),
+        pytest.param(
+            lambda path, held: sweep.configured_root_reason(path, held) is not None, id="configured_root_reason"
+        ),
+    ],
+)
+def test_a_path_under_a_regular_file_fails_closed(check, root: Path, base: Path):
+    """``NotADirectoryError`` is not "missing": a guarded path or store under a file
+    (a bad ``alternates`` line, say) is unknown, so the root is refused or the entry kept."""
+    blocker = base / "blocker"
+    blocker.write_text("")
+    assert check(str(root), [str(blocker / "repo")])
+
+
+@pytest.mark.parametrize(
+    "check",
+    [
+        pytest.param(lambda path, held: sweep.validate_root(path, held)[0] == "refused", id="validate_root"),
+        pytest.param(lambda path, held: sweep.live_worktree_reason(path, held) is not None, id="live_worktree_reason"),
+        pytest.param(
+            lambda path, held: sweep.repository_store_reason(path, held) is not None, id="repository_store_reason"
+        ),
+        pytest.param(
+            lambda path, held: sweep.configured_root_reason(path, held) is not None, id="configured_root_reason"
+        ),
+    ],
+)
+def test_a_path_that_cannot_be_statted_fails_closed(check, root: Path, base: Path):
+    if os.geteuid() == 0:
+        pytest.skip("root stats through a 000 directory")
+    locked = base / "locked"
+    (locked / "repo").mkdir(parents=True)
+    locked.chmod(0)
+    try:
+        assert check(str(root), [str(locked / "repo")])
+    finally:
+        locked.chmod(0o700)

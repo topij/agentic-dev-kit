@@ -62,6 +62,40 @@ an upper-case sha. It also refuses a hex name that Git resolves to a ref rather 
 the commit it abbreviates. Pass the reviewed commit's sha, full or abbreviated, as the
 poll's `head` field and `git log` print it. `--record-review --head` is unchanged.
 
+## #1005 — Scratch sweep: containment is judged by filesystem identity
+
+CHANGED (engine CLI surface): `sweep_scratch.py` now refuses (exit 1) a root that is or
+contains your home directory or a `scratch.worktree_repos` repository when it is spelled
+in another case on a case-insensitive filesystem; before, such a root was swept. A root is
+also refused when it or a guarded path exists but cannot be statted, with a reason starting
+`cannot stat it or …`. An entry that matches a registered worktree, a repository store or
+another configured root under a different spelling is now kept. An entry whose comparison
+cannot be statted is kept too, with a `cannot stat it or …` reason. Nothing to do unless
+the sweep now refuses a root: then write the root in its on-disk case, or fix the
+permissions that block the stat.
+
+## #1004 — Triage recovery names the failed check, and `test` judges a completed state as `recover` does
+
+CHANGED (report shape): when interactive `recover` refuses a completed state with `state
+fails the session-starting checks and no retirement is proven; recovery refused` because
+its forge operations fail the forge-prefix checks, `resume_action` is now `reconcile the
+state's recorded forge operations with the forge, or land the run's sweep, then retry`.
+A refusal for a missing, unreadable or mismatched frozen artifact keeps `restore the
+published frozen snapshot artifact, or land the run's sweep, then retry`.
+
+CHANGED (gate semantics): the `test` entry judges a **completed** test state with
+`recover`'s predicate. One that passes state validation but whose published frozen
+artifact is missing, unreadable or mismatched no longer hard-stops at the session-starting checks: interactive `test` captures it for
+`retire-terminal-invalid-state` when its retirement is proven, and otherwise writes
+nothing and answers `test state fails the session-starting checks and no retirement is
+proven; recovery refused`, with the artifact `resume_action` ending `then rerun test`. A
+test completion records no finalization operations, so the forge-prefix checks never
+apply to it.
+Unattended `test` preserves it as `invalid test state preserved without unattended
+recovery`. A test state in any other phase is judged as before. Refresh
+`lib/triage/engine.py` with the shared triage workflow and installed tests; a test that
+expected the hard-stop for such a completed test state must expect the refusal.
+
 ## #1003 — `panel_prompt.py --scratch` refuses a tree it cannot confirm (#999)
 
 BREAKING (engine CLI surface): `panel_prompt.py --scratch <path>` now exits 2 unless
