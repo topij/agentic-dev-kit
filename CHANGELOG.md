@@ -49,7 +49,7 @@ ADDED (config key): `review.round_budget`, optional, a non-negative integer, def
 
 ADDED (engine CLI surface): `pr_watch.py <PR#> --record-round --head <sha> [--lenses
 <names>]` counts a review pass at that head toward the budget, without a receipt.
-`--head` may be the PR head or an ancestor of it. It is its own mode, like
+`--head` may be the PR head or any commit that is its ancestor. It is its own mode, like
 `--record-review`, and the `--head`/`--lenses` usage errors now name both flags.
 
 ADDED (report shape): the poll report carries `review_rounds` (`reviewed_heads`,

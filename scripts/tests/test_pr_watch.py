@@ -11705,6 +11705,20 @@ def test_round_summary_reads_bot_reviews_through_the_coverage_rules() -> None:
     assert [entry["head"] for entry in summary["reviewed_heads"]] == ["real"]
 
 
+def test_round_summary_does_not_count_a_bot_announcing_it_did_not_review() -> None:
+    """A review object whose body is a skip notice is the bot saying no review
+    happened; counted, a skip per push would spend the budget on nothing."""
+    pr_watch = _load_pr_watch()
+    skipped = "Review skipped: auto reviews are disabled on this repository."
+    assert pr_watch.review_unavailable_reason(skipped) is not None, "guard: a marker phrase"
+    reviews = [_bot_review(f"h{i}", body=skipped) for i in range(3)] + [_bot_review("real")]
+
+    summary = pr_watch.review_round_summary([], reviews, "real", budget=2)
+
+    assert [entry["head"] for entry in summary["reviewed_heads"]] == ["real"]
+    assert summary["spent"] is False
+
+
 def test_round_budget_is_spent_at_the_opening_review_plus_the_fix_rounds() -> None:
     pr_watch = _load_pr_watch()
 
@@ -11755,7 +11769,10 @@ def test_render_says_nothing_before_a_round_and_warns_once_the_budget_is_spent()
 
     silent = rendered([])
     assert "review rounds" not in silent and "round budget" not in silent
-    assert "review rounds: 1 reviewed head of 3" in rendered(["abc123"])
+    assert (
+        "review rounds: 1 reviewed head of 3 (the opening review + 2 fix rounds, "
+        "review.round_budget)"
+    ) in rendered(["abc123"])
     spent = rendered(["h0", "h1", "abc123"])
     assert "⚠ round budget spent: 3 reviewed heads of 3" in spent
     assert "do not push another fix round" in spent
@@ -11889,6 +11906,51 @@ def test_a_poll_carries_the_recorded_rounds_forward(monkeypatch, tmp_path: Path)
     assert pr_watch.load_state(9)["review_rounds"] == rounds
 
 
+def test_a_plain_poll_reads_the_recorded_rounds_from_state(monkeypatch) -> None:
+    """Through `main`: the summary is only worth anything if the poll call site
+    hands it the state file's rounds."""
+    pr_watch = _load_pr_watch()
+    state = {"review_rounds": [{"head": h, "source": "round"} for h in ("h0", "h1")]}
+
+    report = _poll_via_main(monkeypatch, pr_watch, state, _green_view(number=9))
+
+    assert report["review_rounds"]["count"] == 2
+    assert [entry["head"] for entry in report["review_rounds"]["reviewed_heads"]] == [
+        "h0",
+        "h1",
+    ]
+
+
+def test_record_round_takes_the_current_head_without_a_local_commit(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """The reviewed head is the PR head itself: no local object is needed, so a
+    checkout that has not fetched it can still count the round."""
+    pr_watch = _load_pr_watch()
+    repo, _heads = _rounds_repo(tmp_path)
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+    remote_only = "f" * 40
+
+    report = _record_round(
+        monkeypatch, pr_watch, tmp_path, current=remote_only, reviewed=remote_only
+    )
+
+    assert report["head"] == remote_only
+    assert report["review_rounds"]["head_reviewed"] is True
+
+
+def test_head_alone_names_both_modes_that_take_it(capsys) -> None:
+    pr_watch = _load_pr_watch()
+
+    with pytest.raises(SystemExit):
+        pr_watch.main(["9", "--head", "abc123"])
+
+    assert (
+        "--head is only valid with --record-review or --record-round"
+        in capsys.readouterr().err
+    )
+
+
 def test_record_round_cli_requires_head(capsys) -> None:
     pr_watch = _load_pr_watch()
 
@@ -11898,11 +11960,18 @@ def test_record_round_cli_requires_head(capsys) -> None:
     assert "--record-round requires --head" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("extra", [["--no-persist"], ["--record-review", "fallback:panel"]])
-def test_record_round_cli_is_its_own_mode(capsys, extra: list[str]) -> None:
+@pytest.mark.parametrize(
+    "extra, message",
+    [
+        (["--no-persist"], "--no-persist is only valid with a plain poll"),
+        (["--all-comments", "--json"], "--all-comments is only valid with a plain poll"),
+        (["--record-review", "fallback:panel"], "not allowed with argument"),
+    ],
+)
+def test_record_round_cli_is_its_own_mode(capsys, extra: list[str], message: str) -> None:
     pr_watch = _load_pr_watch()
 
     with pytest.raises(SystemExit):
         pr_watch.main(["9", "--record-round", "--head", "abc123", *extra])
 
-    assert "error" in capsys.readouterr().err
+    assert message in capsys.readouterr().err

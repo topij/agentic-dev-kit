@@ -1807,4 +1807,5 @@ def test_the_watch_instruction_names_a_spent_round_budget_as_a_stop(monkeypatch,
     reminder = hook.build_reminder()
 
     assert "round budget spent" in reminder
+    assert "`review_rounds.spent` is true" in reminder, "the --json poll's field, not only the render"
     assert "decision packet" in reminder

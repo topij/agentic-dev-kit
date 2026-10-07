@@ -572,7 +572,8 @@ review:
   # before the watch loop stops for the operator. A round is a distinct head that
   # a review covered: a configured bot's review, or one recorded with
   # `pr_watch.py --record-round` / `--record-review`. Once the budget is spent the
-  # poll prints `⚠ round budget spent`, and a further fix round needs the
+  # poll's `review_rounds.spent` is true (the text render prints `⚠ round budget
+  # spent`), and a further fix round needs the
   # operator's go-ahead on the PR (pr-watch.md, *Round budget*). Reported only: it
   # moves neither `converged` nor `mergeable`. Each round costs a review and a CI
   # run, which is the cost this caps. `0` sends the opening review's findings

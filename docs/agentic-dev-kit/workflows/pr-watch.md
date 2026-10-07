@@ -62,8 +62,8 @@ Repeat until the report says **converged**:
 
 1. **Poll.** `uv run <engine-dir>/pr_watch.py <PR#> --json` (omit `<PR#>` for the current
    branch). Read `converged`, `mergeable`, `checks` (`all_green`, `failing[]`, `pending`),
-   `merge_blockers[]`, `review_evidence`, `review_bots`, `evidence_findings[]`, and
-   `new_comments[]`.
+   `merge_blockers[]`, `review_evidence`, `review_bots`, `evidence_findings[]`,
+   `review_rounds`, and `new_comments[]`.
 
    The two predicates answer different questions and you need both:
 
@@ -255,7 +255,8 @@ Repeat until the report says **converged**:
    - **LOW/P3 finding:** use the delta-or-ticket rule above, including for a
      low-severity regression. Do not restart the full process.
    - **Real finding** above LOW (a bug, a missing guard, a correctness/clarity issue): fix it in
-     the code, commit, push. Re-running the local gate first.
+     the code, commit, push. Re-running the local gate first. **Before that push, take
+     the next step**: count the round and check the budget.
    - **Nitpick you disagree with** (style preference, out-of-scope, already-correct):
      **reply with a brief reason** rather than changing code — `gh pr comment <PR#>
      --body "..."` for a top-level reply, summarizing what you addressed vs. skipped
@@ -509,10 +510,12 @@ Self-pace on a bounded cadence — don't busy-wait:
   ask. Don't loop forever on something only the operator can unblock.
 - **Round budget** — a pull request's review gets the opening review plus
   `review.round_budget` fix rounds. A round is a distinct head that a review covered,
-  whoever reviewed it; the poll reports the count as `review_rounds` and prints
-  `⚠ round budget spent` once it reaches the limit. Each round costs a review and a CI
-  run, in every repository that runs this loop, and the measured long tails came from
-  fix rounds whose own repairs carried the next finding.
+  whoever reviewed it. The poll reports the count as `review_rounds`; once it reaches
+  the limit, `review_rounds.spent` is true and the text render prints `⚠ round budget
+  spent`. When reviewing the current head would itself go past the limit,
+  `review_rounds.next_round_needs_operator` is true as well. Each round costs a review
+  and a CI run, in every repository that runs this loop; `#305` and `#666` hold
+  occurrences where fix rounds' own repairs carried the next finding.
 
   **When the budget is spent and the last review left findings to act on, stop.** Do
   not push another fix round. Post one comment on the PR, the **decision packet**:
@@ -523,20 +526,33 @@ Self-pace on a bounded cadence — don't busy-wait:
   - the options: merge with the remaining findings ticketed, authorize a stated
     number of further rounds, split the change, or withdraw the repair that grew.
 
+  When the head moved without findings, such as a CI fix after the last review, the
+  packet says what moved it and asks for the one review the new head needs.
+
   Then report the PR as held for the operator and end the loop. The operator's answer
   goes on the PR. A go-ahead names how many further rounds it covers, and the poll keeps
   printing the warning through them, because the count does not reset. A LOW finding
   still takes delta review or a ticket and needs no go-ahead to be ticketed.
+
+  The count lives in the per-PR state file, apart from bot reviews, which the forge
+  holds. A lost or corrupt state file, or a poll that reads a different state root
+  from the one the rounds were recorded in (`#563`), undercounts. That errs toward
+  more rounds, and *Bound the loop* below still applies.
 
   **What the budget does not do.** It moves neither `converged` nor `mergeable`, and it
   waives nothing. A finding above LOW that is still open is not merged past by an agent
   on budget grounds; that call is the operator's. The blast-radius rules in
   [`../fallback-review-panel.md`](../fallback-review-panel.md) still decide which
   findings a round acts on, and a safety-critical pull request stays operator-merge.
-  If the last review left nothing to act on, the spent budget changes nothing: finish
-  the loop as usual. A red check is not a review round, so fixing it needs no go-ahead.
+  If the last review covered the current head and left nothing to act on, the spent
+  budget changes nothing: finish the loop as usual. A red check is not a review round, so fixing it needs no go-ahead.
   The head that fix produces is unreviewed, though, and once the budget is spent its
   review needs one like any other.
+- **Bound the loop** — if you've gone ~8–10 polls of fixing without converging, for any
+  reason (red checks included), stop and summarize where it stands rather than looping
+  indefinitely. This bounds *this* loop — poll, fix, acknowledge — whatever the change
+  is; the round budget above bounds only review rounds. Neither is licence to stop
+  polling a red PR.
 
 ## Notes
 

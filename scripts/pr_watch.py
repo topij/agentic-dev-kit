@@ -4104,10 +4104,15 @@ def review_round_summary(
     Bot reviews are read one at a time through :func:`_reduce_latest_bot_reviews`,
     so what counts as a bot's review here (the anchored identity match, a usable
     sha, the bodyless-``COMMENTED`` skip of #981) cannot drift from what the
-    coverage read counts.
+    coverage read counts. One skip is added on top: a review object whose body
+    carries a ``review.unavailable_markers`` phrase is the bot announcing it did
+    NOT review ("Review skipped"), and counting it would spend the budget on
+    rounds that never ran. A real review that quotes such a phrase is skipped
+    too, which undercounts.
 
     The count is a floor. A round that ran and was never recorded is missing
-    from it, and an undercount only delays the stop.
+    from it, and an undercount only delays the stop; the coarser *Bound the
+    loop* rule in ``pr-watch.md`` still applies to a loop the count misses.
     """
     if budget is None:
         budget = _REVIEW_ROUND_BUDGET
@@ -4119,6 +4124,9 @@ def review_round_summary(
         if label not in by:
             by.append(label)
     for raw in reviews or []:
+        body = raw.get("body") if isinstance(raw, dict) else None
+        if isinstance(body, str) and review_unavailable_reason(body) is not None:
+            continue
         for review in _reduce_latest_bot_reviews([raw], head, bots):
             by = heads.setdefault(review["sha"], [])
             if review["bot"] not in by:
@@ -4142,8 +4150,11 @@ def _resolve_reviewed_head(reviewed: str, current_head: str) -> str:
     """The full sha of ``reviewed``, which must be the PR head or an ancestor.
 
     An ancestor is accepted so a round can still be recorded after its fix was
-    pushed — the ordering `#852` found for receipts. Anything else would count a
-    head the pull request never had.
+    pushed — the ordering `#852` found for receipts. Ancestry is the whole check:
+    a base-branch commit is an ancestor too, though the pull request never had it
+    as a head. Recording one only adds a round, which stops the loop sooner, so
+    the check is left at ancestry rather than walking the pull request's commits.
+    A commit that is not an ancestor is refused.
     """
     if reviewed == current_head:
         return current_head
@@ -6012,14 +6023,15 @@ def _render_review_rounds(summary: object) -> list[str]:
         return [
             f"  ⚠ round budget spent: {tally}, and this head has not been reviewed. "
             "Reviewing it takes a round past the budget, so it needs the operator's "
-            "go-ahead on the PR first: post the decision packet and wait "
-            "(pr-watch.md, Round budget)"
+            "go-ahead on the PR first. Unless one already covers it, post the "
+            "decision packet and wait (pr-watch.md, Round budget)"
         ]
     if summary.get("spent"):
         return [
             f"  ⚠ round budget spent: {tally}. If this head's review leaves findings "
-            "to act on, do not push another fix round: post the decision packet and "
-            "wait for the operator (pr-watch.md, Round budget)"
+            "to act on and no operator go-ahead on the PR covers another round, do "
+            "not push another fix round: post the decision packet and wait "
+            "(pr-watch.md, Round budget)"
         ]
     return [f"  review rounds: {tally}"]
 
