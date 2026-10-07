@@ -42,7 +42,7 @@ starts.
 
 ---
 
-## #1001, #1002 — Triage recovery names the failed check, and `test` judges a completed state as `recover` does
+## #1004 — Triage recovery names the failed check, and `test` judges a completed state as `recover` does
 
 CHANGED (report shape): when interactive `recover` refuses a completed state with `state
 fails the session-starting checks and no retirement is proven; recovery refused` because
