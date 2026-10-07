@@ -5,6 +5,84 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-05 (cs-toolkit recovery repair delivery, in Codex)
+
+**Shipped upstream.** Historical gate compatibility merged through #952
+(`70d74130374c010d7070e1de6742ef0aaf189959`), bounded provenance cleanup through
+#955 (`6071c791729b381551989bfaf153a8cbb8176651`), captured-operator retry and
+owned-child cleanup through #957 (`e3e75f8fbd3d2289b4d0edf12a2481427e0389a3`),
+and detached-helper uncertainty through #959
+(`7b9d3cdf34c39090bf57f6404d30b2572a045c4f`). Their PRs retain verification
+and independent review dispositions. LOW follow-ups were filed as #953, #954,
+#956, #958 and #960; #960's exact payload was approved and read back identical.
+
+**Read-error and decoding repairs delivered.** [#961](https://github.com/topij/agentic-dev-kit/pull/961)
+merged as `425c13f56792c1528e1721441bae62308e5dee53` and
+[#962](https://github.com/topij/agentic-dev-kit/pull/962) as
+`66a8044865e5ef43d633270c2ce224827de3aa35`. The latter merged tree matched
+reviewed `45b42bf49d30191c35896bb618df9047be7d2b0a` exactly. `make test` at
+`45b42bf49d30191c35896bb618df9047be7d2b0a` on 2026-10-05, in
+`/private/tmp/mut-adversarial-45b42bf-sol61-v8q2pC9T`, printed
+`4336 passed, 1 skipped in 864.38s`. Actual app rollouts retain the approved
+session-only reviewer compute separately from failed CLI attempts. The MED
+ordinary-wrapper limitation remains documented in #963; #964 records the LOW
+test selection/deadline regression. Neither is claimed as a fixed mechanism.
+Installation [#2535](https://github.com/in-parallel-oy/cs-toolkit/pull/2535)
+merged as `33816d5f9558024796fe08552e41164440ace88d`, with its tree matched
+to reviewed candidate `308e15a9700654b98025709ff92d3bc01178a2f0` before delivery
+to the primary checkout. It incorporates refreshed cs-toolkit main
+`42db0d0ec6fd0531d70834f07dfbd883bfbff31a` and pins the verified source merge.
+`make check-root` at `308e15a9700654b98025709ff92d3bc01178a2f0` on 2026-10-05, in
+`/private/tmp/mut-adversarial-308e15a9-app-sol61.JSrnIW/repo`, exited successfully;
+its pytest summary printed `7642 passed, 4 skipped in 481.02s`.
+Destination hashes, protected files and declines were checked after delivery.
+The citation LOW reuses #954; the duplicate-key fixture LOW is filed as #966.
+
+**Review learning.** Build the process ownership and failure matrix before review,
+including read and decode errors beside timeout/cleanup transitions. The existing
+shared doctrine already requires that matrix; no new general rule was added.
+Keep provider failures as failures, reconcile any still-running owned command,
+and observe compute through the actual launch route. The concrete reviewer-route
+follow-up was filed as #965 under the operator’s instruction to create needed
+devkit tickets; exact payload and readback remain in the retained evidence.
+
+**Authority and evidence.** Installation and clean merges were authorized. The
+session-local `invoke_installed.py recover` at `33816d5f9558024796fe08552e41164440ace88d` on 2026-10-05,
+in `/Users/topi/Coding/in-parallel/cs-toolkit`, captured the preserved gate and
+reservation and returned an action awaiting exact approval. Its core digest is
+`1217af39a6eedcd2a4697bb34952a8941014bedd801de29bd46bfc3199094f2d`.
+The complete display, owner facts, original bytes and receipts remain under
+`state/review-evidence/cs-toolkit-linear-acceptance_2026-10-04/finalize-decisions/`.
+No quarantine, replacement live freeze or Linear write occurred. TEST decisions
+remain TEST-only; root legacy artifacts, host automation and credentials were preserved.
+The kit's separate budget triage froze session `469bcd5829244adeb17443d1a45a6c01`;
+its archive/park decision remains pending, with every inbox block preserved.
+
+### 2026-10-05 (cs-toolkit test completion and historical gate recovery)
+
+**Decided.** The operator established that the recorded host was this Mac and its
+triage process had stopped, approved TRI-27 for the retained test session only,
+parked every other test candidate, and approved the upstream compatibility repair
+plan. Those decisions did not approve a live recovery mutation or Linear payload.
+
+**Applied in test.** On 2026-10-04 the operator's test-only decisions were applied
+to retained session `5d68cdbff45c4ecbb561dfc6832d0f11` in cs-toolkit. The local
+evidence directory below retains `test-completed-state.json`,
+`test-completion-receipt.json`, `test-completed-report.md` and `test-proposed.diff`.
+
+**Developed.** [#952](https://github.com/topij/agentic-dev-kit/pull/952) carries the
+approved historical-gate compatibility repair. Recovery keeps the original bytes,
+requires owner evidence before state observation, and separates capture from exact
+action approval. Local approval, capture, test-completion, verification and review
+receipts are retained under
+`state/review-evidence/cs-toolkit-linear-acceptance_2026-10-04/finalize-decisions/`.
+On 2026-10-04 this preparation retained the historical reservation bytes in
+`held-live-state.raw` and `read-only-live-state-capture.json` in that directory
+for a separately approved recovery action. No recovery mutation,
+live frozen run, approved Linear payload or Linear write was performed during this
+preparation. Adopter engine/configuration, root legacy
+artifacts, host automation and credentials were preserved.
+
 ### 2026-10-04 (cs-toolkit acceptance preparation, in Codex)
 
 **Prepared.** The retained test session `5d68cdbff45c4ecbb561dfc6832d0f11`
