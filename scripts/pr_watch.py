@@ -4170,7 +4170,8 @@ def _resolve_reviewed_head(reviewed: str, current_head: str) -> str:
     A commit that is not an ancestor is refused, and so is a hex name that Git
     resolves to a ref rather than to the commit it abbreviates. The caller
     passes only hex; a hex name Git reads as a ref is still resolved, and is
-    then refused here, so a ref never reaches the ancestry check.
+    refused here unless the ref points at the commit its name abbreviates, so
+    only that commit reaches the ancestry check.
     """
     if reviewed == current_head:
         return current_head

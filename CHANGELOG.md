@@ -56,10 +56,11 @@ variant to class standard needs updating.
 
 BREAKING (engine CLI surface): `pr_watch.py --record-round --head <sha>` now refuses
 a value that is not, once surrounding whitespace is stripped, a lower-case hex sha of
-seven or more characters, with exit 2
+seven to sixty-four characters, with exit 2
 (#994). A ref such as `HEAD`, `HEAD~1` or a branch name was accepted before, and so was
 an upper-case sha. It also refuses a hex name that Git resolves to a ref rather than to
-the commit it abbreviates. Pass the reviewed commit's sha, full or abbreviated, as the
+the commit it abbreviates, and an object sha that does not peel to a commit it
+abbreviates, such as an annotated tag's. Pass the reviewed commit's sha, full or abbreviated, as the
 poll's `head` field and `git log` print it. `--record-review --head` is unchanged.
 
 ## #1005 — Scratch sweep: containment is judged by filesystem identity
