@@ -697,3 +697,66 @@ def test_shipped_config_declares_the_scratch_block():
     assert settings.roots, "scratch.roots is empty"
     assert settings.grace_seconds > 0
     assert settings.repos
+
+
+# --------------------------------------------------------------------------- #
+# roots over a home or a worktree repo; inherited GIT_* variables
+# --------------------------------------------------------------------------- #
+
+
+def _home_under_root(base: Path, repo: Path, monkeypatch, source: str) -> Path:
+    parent = base / "parent"
+    home = parent / "home"
+    home.mkdir(parents=True)
+    if source == "env":
+        monkeypatch.setenv("HOME", str(home))
+    else:
+        monkeypatch.delenv("HOME", raising=False)
+        monkeypatch.setattr(
+            sweep.pwd, "getpwuid", lambda uid: type("pw", (), {"pw_dir": str(home)})()
+        )
+    return parent
+
+
+@pytest.mark.parametrize("neutralised", [False, True], ids=["guarded", "neutralised"])
+@pytest.mark.parametrize(
+    "make_root",
+    [
+        pytest.param(lambda base, repo, mp: _home_under_root(base, repo, mp, "env"), id="holds-HOME"),
+        pytest.param(lambda base, repo, mp: _home_under_root(base, repo, mp, "pwd"), id="holds-pw-home"),
+        pytest.param(lambda base, repo, mp: base, id="holds-worktree-repo"),
+    ],
+)
+def test_root_holding_a_home_or_worktree_repo_is_refused(
+    make_root, neutralised: bool, base: Path, repo: Path, monkeypatch
+):
+    parent = make_root(base, repo, monkeypatch)
+    sibling = _tree(parent / "sibling-repo")
+    if neutralised:
+        monkeypatch.setattr(sweep, "guarded_paths", lambda repos: [])
+
+    reports, _ = _run([parent], repo, older_than=0)
+
+    assert (reports[0].status == "refused") is not neutralised
+    assert sibling.exists() is not neutralised
+
+
+def test_root_equal_to_the_worktree_repo_is_refused(repo: Path):
+    reports, outcomes = _run([repo], repo, older_than=0)
+    assert reports[0].status == "refused"
+    assert "worktree repository" in reports[0].reason
+    assert outcomes == []
+
+
+def test_registrations_ignore_an_inherited_git_dir(base: Path, repo: Path, monkeypatch):
+    other = base / "other"
+    other.mkdir()
+    _git(other, "init", "-q")
+    _git(other, "-c", "user.email=t@e", "-c", "user.name=T", "commit", "-q", "--allow-empty", "-m", "s")
+    _git(other, "worktree", "add", "-q", str(base / "other-wt"))
+    monkeypatch.setenv("GIT_DIR", str(other / ".git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(other))
+
+    found = sweep.registered_worktrees([repo])
+
+    assert found == [str(repo)]

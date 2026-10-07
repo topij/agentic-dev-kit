@@ -5,8 +5,9 @@
 # ///
 """Report, and on request remove, stale scratch under the configured artifact roots.
 
-Session scratchpads and review-lens copies accumulate until the disk fills
-(#900). This engine is the one boundary for clearing them: an allowlistable
+Session scratchpads accumulate until the disk fills (#900); review-lens clones
+under the system temp dir and killed pytest basetemps do too, but no root here
+covers them. This engine is the one boundary for clearing a configured root: an allowlistable
 command in place of ad-hoc ``rm -rf``.
 
 The roots and the grace window are read from ``config/dev-model.yaml`` under
@@ -48,8 +49,25 @@ enough, and is the same inode it classified.
 
 A root is refused, and none of its entries touched, when it is not absolute after
 placeholder expansion, is ``/``, contains ``..``, is itself a symlink, has a
-symlink anywhere in its path, or is not a directory. A root that does not exist
-is reported as absent. The root itself is never removed.
+symlink anywhere in its path, is not a directory, or is or contains the user's
+home directory or one of the ``scratch.worktree_repos``. A root that does not
+exist is reported as absent. The root itself is never removed.
+
+Known limits, each one a reason to configure only a root whose every child is
+disposable:
+
+- A git dir inside an entry that a repository *outside* it depends on — the
+  outside main worktree of a ``--separate-git-dir`` repository, or a ``--shared``
+  clone whose ``objects/info/alternates`` points in — is not detected, and the
+  entry can be ``stale``. Only linked worktrees (``worktrees/*/gitdir``) are read;
+  nothing can enumerate every repository on disk that points into an entry.
+- A root over some other directory of repositories is refused only when it holds
+  the home directory or a configured worktree repo. An idle sibling repository
+  with no linked worktree is otherwise judged by age like anything else.
+- A ``.git`` file whose git dir sits on an unmounted volume reads as an orphaned
+  worktree, and the entry can be ``stale``.
+- ``git worktree list -z`` needs git 2.36 or later. An older git fails the
+  registration read, which exits 2 and touches nothing.
 
 Usage (``<engine-dir>`` is ``paths.engines``):
 
@@ -71,8 +89,10 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
+import pwd
 import re
 import shutil
 import stat
@@ -173,7 +193,23 @@ def expand_root(raw: str, *, root: Path) -> str:
     return raw.format_map(values)
 
 
-def validate_root(path: str) -> tuple[str, str | None]:
+def guarded_paths(repos: list[Path]) -> list[str]:
+    """Real paths no root may equal or contain: the user's home and each worktree repo.
+
+    A root that holds one of these is a code or home directory, not scratch, and its
+    other children are judged by age alone. Only these paths are knowable; a root
+    over some other directory of repositories is not detected (see ``scratch:``).
+    """
+    homes: set[str] = set()
+    env_home = os.environ.get("HOME")
+    if env_home and os.path.isabs(env_home):
+        homes.add(os.path.realpath(env_home))
+    with contextlib.suppress(KeyError):  # no passwd entry for this uid
+        homes.add(os.path.realpath(pwd.getpwuid(os.getuid()).pw_dir))
+    return sorted(homes) + [os.path.realpath(r) for r in repos]
+
+
+def validate_root(path: str, guarded: list[str] | None = None) -> tuple[str, str | None]:
     """``(status, reason)`` where status is ``ok``, ``absent`` or ``refused``."""
     if not os.path.isabs(path):
         return "refused", "not an absolute path"
@@ -191,6 +227,9 @@ def validate_root(path: str) -> tuple[str, str | None]:
         return "refused", f"a symlink in its path; configure {real} if that is meant"
     if not os.path.isdir(trimmed):
         return "refused", "not a directory"
+    for held in guarded or []:
+        if held == trimmed or held.startswith(trimmed + os.sep):
+            return "refused", f"holds {held}, a home or worktree repository"
     return "ok", None
 
 
@@ -202,6 +241,9 @@ def validate_root(path: str) -> tuple[str, str | None]:
 def registered_worktrees(repos: list[Path]) -> list[str]:
     """Real paths of every worktree each repo registers. Any failure raises ConfigError."""
     found: list[str] = []
+    # Run from a git hook, an inherited GIT_DIR or GIT_WORK_TREE would point
+    # `git -C` at another repository's registrations.
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     for repo in repos:
         try:
             result = subprocess.run(
@@ -209,6 +251,7 @@ def registered_worktrees(repos: list[Path]) -> list[str]:
                 capture_output=True,
                 text=True,
                 check=False,
+                env=env,
             )
         except OSError as exc:
             raise ConfigError(f"cannot run git for {repo}: {exc}") from exc
@@ -505,6 +548,7 @@ class RootReport:
 
 
 def survey(settings: Settings, *, root: Path, now: float) -> list[RootReport]:
+    guarded = guarded_paths(settings.repos)
     expanded: list[tuple[str, str, str | None]] = []
     for raw in settings.roots:
         try:
@@ -513,7 +557,7 @@ def survey(settings: Settings, *, root: Path, now: float) -> list[RootReport]:
             expanded.append((raw, "refused", str(exc)))
             continue
         path = path.rstrip("/") or "/"
-        status, reason = validate_root(path)
+        status, reason = validate_root(path, guarded)
         expanded.append((path, status, reason))
     # Every configured root is protected as an entry, refused ones included.
     protected = [path for path, _, _ in expanded if os.path.isabs(path)]

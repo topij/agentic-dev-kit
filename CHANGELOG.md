@@ -51,7 +51,8 @@ and `{repo_slug}` placeholders), `grace_window` (an age such as `24h`) and
 engine `sweep_scratch.py` reads it: with no flags it prints a report, `--json`
 makes the report machine-readable, and `--apply --older-than <age>` removes stale
 entries. It exits 0 on success, 1 when a root is refused or an eligible entry could not
-be removed, and 2 on a usage or config error, including a missing `scratch:` key. To
+be removed, and 2 on a usage or config error, including a missing `scratch:` key. It
+needs git 2.36 or later. To
 adopt it, copy the `scratch:` block from the kit's config into yours and review its
 `roots` before running `--apply`; without the block the engine exits 2 and touches
 nothing.

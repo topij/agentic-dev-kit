@@ -155,7 +155,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "00c8426561755fe718f59cde7ded283c3424b54221ef540178f73dfdd1ba903d"
+      "sha256": "6e0219e0324b569afe7f0a7c7ed95b4a980daa6a75d3ce2ea216f3db5605a1be"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -248,7 +248,8 @@
         "scripts/lib/systemize/config.py",
         "scripts/lib/triage/model.py",
         "scripts/panel_prompt.py",
-        "scripts/pr_watch.py"
+        "scripts/pr_watch.py",
+        "scripts/sweep_scratch.py"
       ],
       "role": "engine",
       "sha256": "428fa7e24e9efec1a8f65f15ba2d1673df819196bce3ccabe1a850afa7ff988a"
@@ -529,6 +530,10 @@
       "role": "repo-only",
       "sha256": "02ea87c1a97922aed59b4da0be934a641c03a3f4de49a1e680d2b1d3b7add2f8"
     },
+    "scripts/sweep_scratch.py": {
+      "role": "engine",
+      "sha256": "c3613ff7efd59a4b79ef591b3126dc01d73947f4a600173e97d8b76f09b8ecd2"
+    },
     "scripts/tests/_repo_layout.py": {
       "role": "test",
       "sha256": "72506c1098817741dbad36cde39a486a0a10bc6739f8e98678b0bcfff4051fc3"
@@ -547,7 +552,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "8dbcc9b240eae66a4d52819f83e1becd2edf2c084c65ee3e1dc4fd976ab2de76"
+      "sha256": "33e183c03a887b2c07f5d2648eac21318fe0f5925f6ff7575f73bec7007fce20"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -579,7 +584,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "0557091c3b492ad1e3cdde1efe3dabb05dd9625bdbfd3bba1e392fe175d89602"
+      "sha256": "690a76e12ab6e6f729f45284a19e73359775a62cd7279c12222de557f99c4d59"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -611,7 +616,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "82a4abaf88ba67ed580de219b67d6744459ee56de1db79fadc29998bfba1ffa1"
+      "sha256": "74e0aabe0310e624207c7fb81cd27b6700c5c7e5061df85c6d28f716ce6c2b4a"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
@@ -644,6 +649,10 @@
     "scripts/tests/test_state_guard.py": {
       "role": "test",
       "sha256": "8ea6db59de234366f28a8a0a223eccef1514bd638daeb07dcd21a5cb04c6e1d6"
+    },
+    "scripts/tests/test_sweep_scratch.py": {
+      "role": "test",
+      "sha256": "e49cbadfd08a05f9220bbf4acb6a088d7a0c8b26b3a72a5ff2d90a9e57c0ee5c"
     },
     "scripts/tests/test_systemize_artifacts.py": {
       "role": "test",
