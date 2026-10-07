@@ -5,9 +5,9 @@
 # ///
 """Report, and on request remove, stale scratch under the configured artifact roots.
 
-Session scratchpads accumulate until the disk fills (#900); review-lens clones
-under the system temp dir and killed pytest basetemps do too, but no root here
-covers them. This engine is the one boundary for clearing a configured root: an allowlistable
+Session scratchpads accumulate until the disk fills (#900), and so do
+review-lens copies and killed pytest basetemps; a root reaches only what sits
+under it, so a copy made directly under the system temp dir is not covered. This engine is the one boundary for clearing a configured root: an allowlistable
 command in place of ad-hoc ``rm -rf``.
 
 The roots and the grace window are read from ``config/dev-model.yaml`` under
@@ -76,6 +76,9 @@ disposable:
   with no linked worktree is otherwise judged by age like anything else.
 - A ``.git`` file whose git dir sits on an unmounted volume reads as an orphaned
   worktree, and the entry can be ``stale``.
+- A registered worktree whose directory remains but whose ``.git`` is gone
+  makes the git-dir read fail, which exits 2 and touches nothing until
+  ``git worktree prune`` clears the registration.
 - ``git worktree list -z`` needs git 2.36 or later. An older git fails the
   registration read, which exits 2 and touches nothing.
 
@@ -297,7 +300,8 @@ def _git_common_dir(worktree: str, env: dict[str, str]) -> str:
     if result.returncode != 0 or not os.path.isabs(path):
         raise ConfigError(
             f"cannot read the git dir of {worktree}: {result.stderr.strip() or result.returncode}"
-            " (a deleted worktree's registration is cleared by `git worktree prune`)"
+            " (if its directory or .git was deleted, `git worktree prune` clears the"
+            " registration; if its .git names a moved git dir, `git worktree repair`)"
         )
     return os.path.realpath(path)
 
@@ -346,12 +350,12 @@ def repository_stores(worktrees: list[str]) -> list[str]:
     pending: list[tuple[str, int]] = []
     for worktree in worktrees:
         state = _target_state(worktree)
-        if state == "present":
-            state = _target_state(os.path.join(worktree, ".git"))
         if state == "gone":
-            # A prunable registration: its directory or its `.git` was deleted.
-            # Its common git dir is the one every other worktree of that
-            # repository reports.
+            # A prunable registration: its directory was deleted. Its common git
+            # dir is the one every other worktree of that repository reports.
+            # A directory whose `.git` alone is gone is not skipped: a bare
+            # repository has no `.git` either, and skipping it would drop its
+            # object store. That case exits 2 (see the limits above).
             continue
         if state == "unknown":
             raise ConfigError(f"cannot stat the registered worktree {worktree}")

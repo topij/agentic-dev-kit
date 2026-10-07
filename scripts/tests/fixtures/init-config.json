@@ -726,7 +726,7 @@
   "  # root. A root inside one of these worktrees has every entry protected, and so\n",
   "  # does an entry holding a registered worktree: a review lens's worktree left\n",
   "  # registered keeps its whole session directory until `git worktree remove`\n",
-  "  # (`git worktree prune` releases it only once its directory is gone).\n",
+  "  # (`git worktree prune` releases it once its directory or its .git is gone).\n",
   "  worktree_repos:\n",
   "    - \".\"\n"
 ]

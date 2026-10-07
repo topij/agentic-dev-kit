@@ -725,6 +725,6 @@ scratch:
   # root. A root inside one of these worktrees has every entry protected, and so
   # does an entry holding a registered worktree: a review lens's worktree left
   # registered keeps its whole session directory until `git worktree remove`
-  # (`git worktree prune` releases it only once its directory is gone).
+  # (`git worktree prune` releases it once its directory or its .git is gone).
   worktree_repos:
     - "."

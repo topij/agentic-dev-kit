@@ -928,18 +928,55 @@ def test_an_extracted_copy_with_old_mtimes_is_judged_by_its_ctime(root: Path, re
     assert (root / "copy").is_dir()
 
 
-def test_a_worktree_registration_whose_git_file_is_gone_does_not_wedge_the_sweep(root: Path, repo: Path):
+def test_a_worktree_registration_whose_git_file_is_gone_refuses_the_survey(root: Path, repo: Path):
     _git(repo, "worktree", "add", "-q", "--detach", str(root / "lens1"))
     (root / "lens1" / ".git").unlink()  # the directory stays; git calls it prunable
-    junk = _tree(root / "junk")
-    reports, outcomes = _run([root], repo, older_than=0)
-    assert _owners(reports) == {"lens1": sweep.LIVE, "junk": sweep.STALE}
-    assert [o.path for o in outcomes if o.action == "removed"] == [str(junk)]
+    _tree(root / "junk")
+    with pytest.raises(sweep.ConfigError, match="git worktree prune"):
+        _run([root], repo, older_than=0)
 
 
-def test_an_unreadable_worktree_git_dir_names_git_worktree_prune(root: Path, repo: Path, base: Path, monkeypatch):
+def test_a_bare_configured_repos_borrowed_object_store_is_kept(root: Path, repo: Path, base: Path):
+    bare = base / "configured.git"
+    _git(base, "clone", "-q", "--bare", str(repo), str(bare))
+    store = _seeded(root / "objstore") / ".git" / "objects"
+    (bare / "objects" / "info" / "alternates").write_text(f"{store}\n", encoding="utf-8")
+    _set_age(root / "objstore", OLD)
+    settings = sweep.Settings(roots=[str(root)], grace_seconds=GRACE, repos=[repo, bare])
+    reports = sweep.survey(settings, root=repo, now=time.time())
+    assert _owners(reports) == {"objstore": sweep.LIVE}
+    assert sweep.apply(reports, settings, older_than=0) == []
+    assert store.is_dir()
+
+
+def test_a_file_entry_restored_with_an_old_mtime_is_judged_by_its_ctime(root: Path, repo: Path, base: Path):
+    old = base / "old.txt"
+    old.write_text("x\n", encoding="utf-8")
+    _set_age(old, OLD)
+    subprocess.run(["cp", "-p", str(old), str(root / "restored.txt")], check=True)
+    reports, outcomes = _run([root], repo, older_than=7 * DAY)
+    assert _owners(reports) == {"restored.txt": sweep.GRACE}
+    assert outcomes == []
+
+
+def test_a_copy_into_an_existing_subdirectory_is_judged_by_its_ctime(root: Path, repo: Path, base: Path):
+    # The entry's own timestamps are older than the grace window; only the
+    # copied children's ctimes are fresh.
+    deep = root / "entry" / "deep"
+    deep.mkdir(parents=True)
+    time.sleep(2.5)
+    src = _tree(base / "src")
+    subprocess.run(["cp", "-Rp", str(src), str(deep / "copy")], check=True)
+    stamp = time.time() - OLD
+    os.utime(deep, (stamp, stamp))
+    reports, outcomes = _run([root], repo, older_than=0, grace=2)
+    assert _owners(reports) == {"entry": sweep.GRACE}
+    assert outcomes == []
+
+
+def test_a_moved_worktree_git_dir_names_git_worktree_repair(root: Path, repo: Path, base: Path, monkeypatch):
     wt = base / "wt"
     _git(repo, "worktree", "add", "-q", "--detach", str(wt))
     (wt / ".git").write_text("gitdir: /nonexistent/elsewhere\n", encoding="utf-8")
-    with pytest.raises(sweep.ConfigError, match="git worktree prune"):
+    with pytest.raises(sweep.ConfigError, match="git worktree repair"):
         sweep.repository_stores([str(wt)])
