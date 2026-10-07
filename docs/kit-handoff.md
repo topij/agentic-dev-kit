@@ -20,6 +20,70 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-07 (review round budget, in Claude Code)
+
+[#993](https://github.com/topij/agentic-dev-kit/pull/993) merged as
+`2d40c96024f642fa60b656b03d53d34a93349fdc`. A pull request's review now gets the
+opening review plus `review.round_budget` fix rounds. Past that, the watch loop posts
+a decision packet and stops for the operator instead of pushing another fix round.
+`pr_watch.py` counts distinct reviewed heads from configured bots' submitted reviews,
+`--record-review`, and the new `--record-round`, and reports them as `review_rounds`.
+It gates nothing. `pr-watch.md` carries the *Round budget* stop condition beside the
+generic loop bound, and the panel doctrine, safety-critical rule 3 and the
+follow-through hook say the same. The CHANGELOG entry tells adopters what to refresh.
+
+Decided: the operator set the default at the opening review plus 2 fix rounds. The
+motive is cost in adopting repositories: review tokens, and GitHub Actions minutes,
+which this public repository does not pay. The budget is report-only rather than a
+gate, so that a count the author partly self-reports cannot open or close a merge.
+Not built: routing a non-regression MEDIUM in a fix round like a LOW, which needs its
+own operator decision.
+
+Not established: whether the budget shortens review in practice; nothing has measured
+it yet. The count also misses rounds that go unrecorded, and `pr-watch.md` names those
+cases.
+
+Verification: `make test` at `59eeee935113e4f6fa015b6e97ff5cd1abc91107` on 2026-10-07,
+in `/Users/topi/Coding/agentic-dev-kit-round-budget`, printed `4332 passed, 1 skipped`.
+CI's `toolkit` run passed at that head.
+
+Review: two-lens panel rounds at `6db144ca`, `753e6099` and `59eeee93`. Each round's
+disposition comment on the PR holds its findings. The round at `59eeee93` found
+nothing above LOW, and the PR's own budget was spent there, so its LOW findings went
+to a ticket rather than a further round.
+
+Filed this session: #994.
+
+______________________________________________________________________
+
+## Session — 2026-10-07 (overnight autonomous parallel lanes, in Claude Code)
+
+The operator asked for an overnight autonomous session in separate worktrees, and authorized merging every PR "when clean". Three headless lanes ran under `launch_lane.py`, and the cockpit ran each PR's review and fix rounds.
+
+- **#984** (for #884 and #944) merged as `4e27661e075dba8d2569bc086c9effdf9c757b2b`.
+  - The suite now neutralises colour at `scripts/conftest.py` import.
+  - The `--carry-forward` help names the live draw flags.
+  - `FORCE_COLOR=3 make test` at `4b0e7d4e063e19a9384635596faba0c2eee2c36f` on 2026-10-06, in the lane worktree, printed `4293 passed, 1 skipped`. The one later commit changed a comment and its manifest hash, with CI's run only.
+- **#985** (for #859) merged as `6ccc1744291f887ffbee8c9fe31c16d731617831`.
+  - `recover` retires a completed state that fails only the frozen-artifact or forge-prefix checks, when git proves its sweep.
+  - It refuses one with no proven retirement and writes nothing.
+  - In-flight states keep the old judgement.
+  - The panel rejected the earlier designs as HIGH regressions into a terminal hold; the PR's comments hold every round.
+  - `make test` at `d9e951a3a421c8b959675d9e3daa0d0b4608a06a` on 2026-10-07, in the lane worktree, printed `4297 passed, 1 skipped`. Later commits are tests, docstrings, the CHANGELOG entry, the triage workflow doc and the manifest, reviewed by delta passes.
+- **#986** (#900's scratch sweep engine) is **open and held for the operator** at `d9a1fd571daf8181b434e362de48d055abce4dd6`.
+  - Every full two-lens pass found new fail-open edge cases in what the engine judges removable, so the cockpit stopped the loop rather than merge a file-deleting engine.
+  - The round-5 disposition comment on the PR lists the open findings.
+  - `make test` at that head on 2026-10-07, in `/Users/topi/Coding/dev-model-sessions/scratch-sweep/wt`, printed `4367 passed, 1 skipped`.
+  - `--apply` was never run against a real directory.
+
+Decided: #986 was held, not merged. The operator's "merge when clean" did not cover a destructive engine with open low-to-medium fail-open findings.
+
+Not established: the `test` entry's own recovery branch still judges by `canonical_state` alone, which is the #859 class in test mode. It is parked in the friction log, untracked.
+
+Lanes ran with no operator present, so no tracker write was made. This session's friction is parked in the friction log.
+
+______________________________________________________________________
+
 ## Session — 2026-10-06 (merge gate ignores a bot's empty thread-reply review, in Claude Code)
 
 [#982](https://github.com/topij/agentic-dev-kit/pull/982) merged as
@@ -188,129 +252,6 @@ The separate frozen kit-friction archive/park decision remains pending.
 
 ______________________________________________________________________
 
-## Session — 2026-10-05 (cs-toolkit recovery repair delivery, in Codex)
-
-**Shipped upstream.** Historical gate compatibility merged through #952
-(`70d74130374c010d7070e1de6742ef0aaf189959`), bounded provenance cleanup through
-#955 (`6071c791729b381551989bfaf153a8cbb8176651`), captured-operator retry and
-owned-child cleanup through #957 (`e3e75f8fbd3d2289b4d0edf12a2481427e0389a3`),
-and detached-helper uncertainty through #959
-(`7b9d3cdf34c39090bf57f6404d30b2572a045c4f`). Their PRs retain verification
-and independent review dispositions. LOW follow-ups were filed as #953, #954,
-#956, #958 and #960; #960's exact payload was approved and read back identical.
-
-**Read-error and decoding repairs delivered.** [#961](https://github.com/topij/agentic-dev-kit/pull/961)
-merged as `425c13f56792c1528e1721441bae62308e5dee53` and
-[#962](https://github.com/topij/agentic-dev-kit/pull/962) as
-`66a8044865e5ef43d633270c2ce224827de3aa35`. The latter merged tree matched
-reviewed `45b42bf49d30191c35896bb618df9047be7d2b0a` exactly. `make test` at
-`45b42bf49d30191c35896bb618df9047be7d2b0a` on 2026-10-05, in
-`/private/tmp/mut-adversarial-45b42bf-sol61-v8q2pC9T`, printed
-`4336 passed, 1 skipped in 864.38s`. Actual app rollouts retain the approved
-session-only reviewer compute separately from failed CLI attempts. The MED
-ordinary-wrapper limitation remains documented in #963; #964 records the LOW
-test selection/deadline regression. Neither is claimed as a fixed mechanism.
-Installation [#2535](https://github.com/in-parallel-oy/cs-toolkit/pull/2535)
-merged as `33816d5f9558024796fe08552e41164440ace88d`, with its tree matched
-to reviewed candidate `308e15a9700654b98025709ff92d3bc01178a2f0` before delivery
-to the primary checkout. It incorporates refreshed cs-toolkit main
-`42db0d0ec6fd0531d70834f07dfbd883bfbff31a` and pins the verified source merge.
-`make check-root` at `308e15a9700654b98025709ff92d3bc01178a2f0` on 2026-10-05, in
-`/private/tmp/mut-adversarial-308e15a9-app-sol61.JSrnIW/repo`, exited successfully;
-its pytest summary printed `7642 passed, 4 skipped in 481.02s`.
-Destination hashes, protected files and declines were checked after delivery.
-The citation LOW reuses #954; the duplicate-key fixture LOW is filed as #966.
-
-**Review learning.** Build the process ownership and failure matrix before review,
-including read and decode errors beside timeout/cleanup transitions. The existing
-shared doctrine already requires that matrix; no new general rule was added.
-Keep provider failures as failures, reconcile any still-running owned command,
-and observe compute through the actual launch route. The concrete reviewer-route
-follow-up was filed as #965 under the operator’s instruction to create needed
-devkit tickets; exact payload and readback remain in the retained evidence.
-
-**Authority and evidence.** Installation and clean merges were authorized. The
-session-local `invoke_installed.py recover` at `33816d5f9558024796fe08552e41164440ace88d` on 2026-10-05,
-in `/Users/topi/Coding/in-parallel/cs-toolkit`, captured the preserved gate and
-reservation and returned an action awaiting exact approval. Its core digest is
-`1217af39a6eedcd2a4697bb34952a8941014bedd801de29bd46bfc3199094f2d`.
-The complete display, owner facts, original bytes and receipts remain under
-`state/review-evidence/cs-toolkit-linear-acceptance_2026-10-04/finalize-decisions/`.
-No quarantine, replacement live freeze or Linear write occurred. TEST decisions
-remain TEST-only; root legacy artifacts, host automation and credentials were preserved.
-The kit's separate budget triage froze session `469bcd5829244adeb17443d1a45a6c01`;
-its archive/park decision remains pending, with every inbox block preserved.
-
-______________________________________________________________________
-
-## Session — 2026-10-05 (cs-toolkit test completion and historical gate recovery)
-
-**Decided.** The operator established that the recorded host was this Mac and its
-triage process had stopped, approved TRI-27 for the retained test session only,
-parked every other test candidate, and approved the upstream compatibility repair
-plan. Those decisions did not approve a live recovery mutation or Linear payload.
-
-**Applied in test.** On 2026-10-04 the operator's test-only decisions were applied
-to retained session `5d68cdbff45c4ecbb561dfc6832d0f11` in cs-toolkit. The local
-evidence directory below retains `test-completed-state.json`,
-`test-completion-receipt.json`, `test-completed-report.md` and `test-proposed.diff`.
-
-**Developed.** [#952](https://github.com/topij/agentic-dev-kit/pull/952) carries the
-approved historical-gate compatibility repair. Recovery keeps the original bytes,
-requires owner evidence before state observation, and separates capture from exact
-action approval. Local approval, capture, test-completion, verification and review
-receipts are retained under
-`state/review-evidence/cs-toolkit-linear-acceptance_2026-10-04/finalize-decisions/`.
-On 2026-10-04 this preparation retained the historical reservation bytes in
-`held-live-state.raw` and `read-only-live-state-capture.json` in that directory
-for a separately approved recovery action. No recovery mutation,
-live frozen run, approved Linear payload or Linear write was performed during this
-preparation. Adopter engine/configuration, root legacy
-artifacts, host automation and credentials were preserved.
-
-______________________________________________________________________
-
-## Session — 2026-10-04 (cs-toolkit acceptance preparation, in Codex)
-
-**Prepared.** The retained test session `5d68cdbff45c4ecbb561dfc6832d0f11`
-advanced to `awaiting-approval` through the installed test entry. Its complete payload
-set consists of explicit test-only fixtures; live semantic triage remains outstanding.
-The exact report, proposal-set binding, client observations, installation checks and
-recovery prerequisites are retained under
-`state/review-evidence/cs-toolkit-linear-acceptance_2026-10-04/resume-01a1085e/`.
-
-**Held.** No test decision was invented, so decision accounting and diff rendering
-remain pending. The live gate matched the preserved capture; its older format fails
-the installed canonical and record-shape checks. Host identity and owner termination
-remain unestablished. The prepared recovery plan grants no mutation authority.
-No live frozen run or approved Linear payload was produced.
-
-**Authority.** The operator requested autonomous continuation before going to sleep.
-The plan's separate recovery and exact-payload approval boundaries were retained.
-Legacy artifacts, host automations, credentials and installed engines were preserved.
-Publication of the prepared acceptance update on #6 awaits its exact-payload decision.
-
-______________________________________________________________________
-
-## Session — 2026-10-04 (cs-toolkit Linear acceptance attempt, in Codex)
-
-**Recorded.** [The acceptance attempt on #6](https://github.com/topij/agentic-dev-kit/issues/6#issuecomment-5983052800)
-retains the installation checks, destination and credential plan, client observations,
-native rollout reference, test freeze and held live preflight. The comment was read back
-identical. Local artifacts are in `state/review-evidence/cs-toolkit-linear-acceptance_2026-10-04/`.
-
-**Held.** The live preflight returned `single-writer gate is already held`; no live
-frozen run or payload reached approval. No Linear write or recovery mutation occurred.
-The operator's legacy-artifact, host-automation and credential boundaries were preserved.
-The test run reached its freeze stage, not proposal/decision/render completion.
-
-**Plan retained.** Use the installed kit pin and merged Linear destination, with the
-existing secure credential loader. No cs-toolkit configuration or engine change was needed
-for this attempt. The operator named this workstream and requested replacing its stale
-starter; #946's merge and #919's closure were read back before the update.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -325,26 +266,32 @@ ______________________________________________________________________
 takes one isolated lens. #934 (`41beacb8`) gave a delta pass's two draws their own named
 flags; #921 stays open for the cockpit-side check of the verdict-line names. The
 record-prose row of #585's decision is not built: its deterministic checks, and a lens
-told which spans stay executed. **Owner:**
-[#585](https://github.com/topij/agentic-dev-kit/issues/585); related #921, #403, #666, and
-the class's documented limits #928, #929, #930 and #931.
+told which spans stay executed. #993 (`2d40c960`) added the review round budget: the
+opening review plus `review.round_budget` fix rounds, then an operator decision packet.
+**Owner:**
+[#585](https://github.com/topij/agentic-dev-kit/issues/585); round-budget follow-ups
+[#994](https://github.com/topij/agentic-dev-kit/issues/994); related #921, #403, #666,
+#305, and the class's documented limits #928, #929, #930 and #931.
 
-▶ Next: #585's record-prose row — its deterministic checks, and a lens told which spans
-stay executed.
+▶ Next: #994 — the round budget's LOW follow-ups (stale mode lists in `pr-watch.md`,
+the unpinned gh refusal of `--record-round`, the count wording); then #585's
+record-prose row.
 
 ### Scratch retention
 
-**Status:** filed on 2026-10-01 as #900. Review lenses' mutation clones, session
-scratchpads and killed pytest basetemps pile up under `/private/tmp` with nothing to
-sweep them. They filled the disk on 2026-09-29 and again overnight into 2026-10-01. A
-manual cleanup on 2026-10-01 removed the stale ones. `state/review-evidence/` is kept
-until #861 sets its retention rule. **Owner:** [#900](https://github.com/topij/agentic-dev-kit/issues/900),
+**Status:** #986 adds `scripts/sweep_scratch.py` (report mode plus a guarded
+`--apply`) and the `scratch:` config block. It is held for the operator at
+`d9a1fd57`, with open findings in its round-5 disposition comment. It covers session
+scratchpads only; lens clones under the system temp dir and killed pytest basetemps
+are not covered, so #900 stays open for them and for the panel, wrap-up and
+session-start integrations. `state/review-evidence/` waits on #861.
+**Owner:** [#900](https://github.com/topij/agentic-dev-kit/issues/900),
 [#861](https://github.com/topij/agentic-dev-kit/issues/861),
 [#895](https://github.com/topij/agentic-dev-kit/issues/895).
 
-▶ Next: #900 — build `scripts/sweep_scratch.py`, report mode first, then the guarded
-`--apply`. It deletes files, so read `docs/agentic-dev-kit/safety-critical-changes.md`
-first and hold the PR for the operator's merge.
+▶ Next: decide #986's open round-5 findings (a git dir an outside repository
+depends on is judged stale; no refusal of a `$HOME`-like root) — fix them or accept
+them as documented limits — then merge it under its operator class.
 
 ### Reviewer profiles
 
@@ -363,16 +310,18 @@ review-request method.
 *Completed-state retirement* doctrine names each live-mode kill cutpoint (#874), both in
 #882. #883 carries its residual points. The engine's worktree guards decide containment by
 filesystem identity (#856, in #889). PR #907 applied the shared predicate to
-`GitHubForge`’s sweep-cleanup guard (#891), merged on 2026-10-02 as `cb92fd5`.
+`GitHubForge`’s sweep-cleanup guard (#891), merged on 2026-10-02 as `cb92fd5`. #985
+(`6ccc1744`) made `recover` judge a completed state with the session-starting checks
+(#859).
 The doctrine prescribes the operator’s manual way out of the two-link state (#894),
 and an engine-owned rollback waits for a recurrence (#892).
 **Owner:**
-[#859](https://github.com/topij/agentic-dev-kit/issues/859),
 [#883](https://github.com/topij/agentic-dev-kit/issues/883),
 [#892](https://github.com/topij/agentic-dev-kit/issues/892).
 
-▶ Next: #859 — triage recover calls a completed state valid on `canonical_state`
-alone, so a missing frozen artifact dead-ends it.
+▶ Next: the `test` entry's recovery branch still judges by `canonical_state` alone
+(parked in the friction log 2026-10-07) — ticket it and apply #985's
+`validate_recoverable_state` there; then #883.
 
 ### Triage one-run cleanup
 

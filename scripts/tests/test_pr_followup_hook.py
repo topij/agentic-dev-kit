@@ -1783,3 +1783,29 @@ def test_content_in_a_key_is_not_treated_as_tool_output(monkeypatch, capsys):
     """Values only. Walking keys would let an arbitrary label pose as output."""
     hook = _load_hook()
     assert hook._response_text({"tool_response": {"https://x/pull/9": None}}) is None
+
+
+@pytest.mark.parametrize("lenses", [["zzz-lens-one", "zzz-lens-two"], ["zzz-lens-one"]])
+def test_the_watch_instruction_names_a_spent_round_budget_as_a_stop(monkeypatch, lenses):
+    """The mandate says not to yield until green and clean; a spent round budget
+    is the operator decision that overrides it, so the mandate has to say so on
+    both the panel and the one-lens branch."""
+    hook = _load_hook()
+    monkeypatch.setattr(
+        hook,
+        "_load_review_config",
+        lambda *_a, **_k: (
+            ["zzz-sentinel-bot"],
+            "/code-review",
+            "scripts",
+            lenses,
+            "fallback:test-panel",
+            "",
+        ),
+    )
+
+    reminder = hook.build_reminder()
+
+    assert "round budget spent" in reminder
+    assert "`review_rounds.spent` is true" in reminder, "the --json poll's field, not only the render"
+    assert "decision packet" in reminder

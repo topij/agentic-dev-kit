@@ -24,6 +24,37 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-10-07
+
+- **A headless Claude lane cannot open a PR with a real body.** Severity M. Lanes
+  `color-and-help` and `triage-recover-validity` each ended with the PR body undelivered.
+  - **Mechanism:** the shipped `config/claude-lane-settings.json` allows `gh pr create:*`, but a
+    multi-line `--body` was denied as shell shape.
+  - **Further refusals:** the profile has no `gh pr edit`, and a body file outside the worktree was denied.
+  - **What happened:** one lane failed before opening its PR; the other opened it with a placeholder body. The
+    cockpit opened, or rewrote, each body from the lane's final text.
+  - **Proposed fix:** have the lane contract name `gh pr create --body-file <worktree-relative file>`,
+    or add a scoped `gh pr edit` grant. The profile is safety-critical, so this needs `safety-critical-changes.md`.
+  - **Not filed:** no operator was present to approve the payload.
+- **The `test` entry's recovery branch still judges validity by `canonical_state` alone.**
+  Severity L. This was found by #985's panel at `09d06628` and `d9e951a3`. A completed test-mode state whose
+  frozen artifact is missing hard-stops `test` with no test-mode `recover` route out. This is the
+  #859 class, which #985 fixed for live `recover` only. Proposed fix: use
+  `validate_recoverable_state` in that branch. Not filed: no operator was present.
+- **The two-lens panel did not converge on a new destructive engine.** Severity M, kept
+  for accumulation beside #305 and #666. #986's scratch sweep never converged.
+  - **Pattern:** each pass found new fail-open edge cases in what the engine judges removable: a FIFO record wedge, a bare
+    repository, a permission error read as "gone", a `--separate-git-dir` layout.
+  - **What the fixes did:** each fix was real and pinned by a mutation-checked test, but the passes kept widening the
+    input space instead of closing it.
+  - **Outcome:** the cockpit held the PR for the operator.
+  - **Missing:** a mechanism. No stopping rule says when an enumerated input space is "enough" for a first
+    version of a deletion engine.
+- **A cockpit `make test` was killed by SIGTERM mid-suite.** Severity L.
+  - **Where:** at `7b581204`, in the `scratch-sweep` lane on 2026-10-07, it exited 143 at about 46%. The rerun passed.
+  - **Context:** review lenses were running their own `make test` in sibling clones at the time.
+  - **Missing:** the mechanism is unknown.
+
 ## 2026-10-05
 
 - **The disposition filename was supplied as literal text again.** Severity L,
