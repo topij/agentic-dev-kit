@@ -54,6 +54,16 @@ cannot be statted is kept too, with a `cannot stat it or …` reason. Nothing to
 the sweep now refuses a root: then write the root in its on-disk case, or fix the
 permissions that block the stat.
 
+## #1003 — `panel_prompt.py --scratch` refuses a tree it cannot confirm (#999)
+
+BREAKING (engine CLI surface): `panel_prompt.py --scratch <path>` now exits 2 unless
+`git -C <path> rev-parse HEAD` equals the full `--head` sha **and** HEAD there is
+detached. A path that is not a git tree, a missing path, a tree on a branch, and
+a failed git invocation are all refused. Before, any value rendered as "a detached
+worktree at that sha has been built for you". If you pass `--scratch`, build the tree
+first with `git worktree add --detach <path> <head>` and pass that path. Omitting
+`--scratch` is unchanged.
+
 ## #986 — Scratch sweep engine and the `scratch:` config block
 
 ADDED (config keys, engine CLI surface): `config/dev-model.yaml` gains a `scratch:`
