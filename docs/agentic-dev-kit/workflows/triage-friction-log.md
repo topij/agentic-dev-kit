@@ -891,7 +891,8 @@ one unwritten (`test state fails the session-starting checks and no retirement i
 proven; recovery refused`); unattended, it preserves the state as any invalid test
 state. A test run completes by `test-render` or `decision-only`, neither of which proves a
 retirement, so for such a state the route out is restoring its artifact, after which
-`test` retires it. For a completed state the
+`test` retires it. A test completion records no finalization operations, so the
+forge-prefix checks, and the resume action that names them, never apply to it. For a completed state the
 action plan reads the live frozen artifact at plan time: the capture holds only the
 state and gate bytes.
 The one other invalid state that leaves the held route is a **finished** run, in either
