@@ -4115,9 +4115,14 @@ def review_round_summary(
     under an empty body is not counted: ``pr-watch.md`` has the agent record
     that round with ``--record-round``.
 
-    The count is a floor. A round that ran and was never recorded is missing
-    from it, and an undercount only delays the stop; the coarser *Bound the
-    loop* rule in ``pr-watch.md`` still applies to a loop the count misses.
+    The count can run behind or ahead of the fix rounds actually taken. Behind:
+    a round that ran and was never recorded is missing from it, and an
+    undercount only delays the stop; the coarser *Bound the loop* rule in
+    ``pr-watch.md`` still applies to a loop the count misses. Ahead: a head
+    counts whatever produced it, so a bot's review of a head that a CI fix, a
+    merge from the base branch or a rebase produced is a round too. An
+    overcount stops the loop sooner, and the operator's go-ahead is what it
+    then costs.
     """
     if budget is None:
         budget = _REVIEW_ROUND_BUDGET
@@ -4162,7 +4167,9 @@ def _resolve_reviewed_head(reviewed: str, current_head: str) -> str:
     a base-branch commit is an ancestor too, though the pull request never had it
     as a head. Recording one only adds a round, which stops the loop sooner, so
     the check is left at ancestry rather than walking the pull request's commits.
-    A commit that is not an ancestor is refused.
+    A commit that is not an ancestor is refused, and so is a hex name that Git
+    resolves to a ref rather than to the commit it abbreviates. The caller
+    passes only hex, so no ref is resolved against the caller's checkout.
     """
     if reviewed == current_head:
         return current_head
@@ -4181,6 +4188,13 @@ def _resolve_reviewed_head(reviewed: str, current_head: str) -> str:
         raise ValueError(
             f"reviewed head {reviewed} is not a commit in this checkout; "
             "fetch the pull request's head and retry"
+        )
+    if not full.startswith(reviewed):
+        # Git resolves a ref before an abbreviated object name, so a branch
+        # or tag named like a sha would be read as that ref.
+        raise ValueError(
+            f"reviewed head {reviewed} resolved to {full}, which it does not "
+            "abbreviate: a ref of that name shadows it"
         )
     if full == current_head:
         return full
@@ -4217,12 +4231,22 @@ def record_round(
     The round budget counts reviewed heads, and a round whose findings send the
     author back to fix them records no receipt: ``--record-review`` comes only
     once the findings are handled. This is how such a round is counted. It
-    writes no review evidence and changes no gate.
+    writes no review evidence and changes no gate. ``reviewed_head`` is a hex
+    sha, full or abbreviated; a ref name is refused.
     """
     require_gh_backend("--record-round")
     reviewed_head = reviewed_head.strip()
     if not reviewed_head:
         raise ValueError("reviewed head must not be empty")
+    if not _COMMIT_SHA_RE.fullmatch(reviewed_head):
+        # A ref such as `HEAD~1` or a branch name resolves against this
+        # checkout, which can be stale, so it could name the wrong ancestor
+        # (#994). `--record-review` matches its `--head` against the PR head
+        # exactly, so neither mode takes a ref.
+        raise ValueError(
+            f"reviewed head {reviewed_head} is not a commit sha: pass the "
+            "lower-case hex sha that was reviewed (seven or more characters)"
+        )
     named_lenses = [part.strip() for part in (lenses or "").split(",") if part.strip()]
     snapshot = fetch_review_snapshot(pr)
     current_head = snapshot.get("headRefOid")
@@ -4643,6 +4667,17 @@ def _merge_base_paths(base: str, head: str, what: str) -> list[str]:
 #
 # Patterns match with `fnmatch.fnmatchcase`, whose `*` also crosses `/`. That
 # over-matches, which errs toward two lenses.
+#
+# A path also matches when its case-folded form matches the case-folded
+# pattern, and the config path is compared the same way (#991). On a
+# case-insensitive filesystem, a new file at `scripts/DevKit/lib/x.py` checks
+# out into `scripts/devkit/lib/`, the engine's own import path, so a
+# case-sensitive match would give it one lens. Folding over-matches on a
+# case-sensitive filesystem, where the two paths are different files, and that
+# errs toward two lenses as well. The exact match is kept beside the folded one
+# because folding can change a string's length (`ß` folds to `ss`), so a `?`
+# that matched before would not match after. Unicode normalization, which
+# APFS also ignores, is not applied.
 SINGLE_LENS_SOURCE = "fallback:lens"
 REVIEW_CLASS_SAFETY_CRITICAL = "safety-critical"
 REVIEW_CLASS_STANDARD = "standard"
@@ -4685,6 +4720,13 @@ def _declared_safety_critical_paths(rev: str) -> frozenset[str] | None:
         raise ValueError(f"could not read {config_path} at {rev}: {exc}") from exc
     normalized = _normalize_safety_critical_paths(declared)
     return None if normalized is None else frozenset(normalized)
+
+
+def _path_matches(path: str, pattern: str) -> bool:
+    """Whether ``path`` matches ``pattern`` exactly or with both case-folded (#991)."""
+    return fnmatch.fnmatchcase(path, pattern) or fnmatch.fnmatchcase(
+        path.casefold(), pattern.casefold()
+    )
 
 
 def pr_review_class(
@@ -4734,14 +4776,15 @@ def pr_review_class(
         result["unclassified"] = f"{exc} (fetch the PR's base and head, then poll again)"
         return result
     try:
-        changes_config = _config_rel_path() in paths
+        config_folded = _config_rel_path().casefold()
     except Exception as exc:  # noqa: BLE001 — every failure leaves the PR unclassed
         result["unclassified"] = f"could not name the config path: {exc}"
         return result
+    changes_config = any(path.casefold() == config_folded for path in paths)
     matched = [
         path
         for path in paths
-        if any(fnmatch.fnmatchcase(path, pattern) for pattern in declared)
+        if any(_path_matches(path, pattern) for pattern in declared)
     ]
     result["matched_paths"] = matched
     result["changes_config"] = changes_config
@@ -6352,7 +6395,8 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "count a review pass that ran at --head toward review.round_budget, "
             "without a receipt: for a round whose findings are going back to be "
-            "fixed. --head may be the PR head or an ancestor of it"
+            "fixed. --head is a hex sha, full or abbreviated, of the PR head or "
+            "an ancestor of it"
         ),
     )
     mode_group.add_argument(

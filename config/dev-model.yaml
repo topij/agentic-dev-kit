@@ -320,8 +320,9 @@ review:
   # treated as safety-critical, which is the two-lens behaviour from before this key
   # existed, whereas a list that misses one of your gate files sends that file
   # to one lens. Patterns use Python's fnmatch, where `*` also matches `/`. Each
-  # is matched against the repo-relative path exactly as Git prints it, so a
-  # `./` prefix, a trailing `/` or a different case never matches.
+  # is matched against the repo-relative path as Git prints it, so a `./`
+  # prefix or a trailing `/` never matches. Case is ignored, because a
+  # case-insensitive filesystem checks a case variant out onto the same file (#991).
   safety_critical_paths:
     - "scripts/dev_session.sh"
     - "scripts/devkit/dev_session.sh"

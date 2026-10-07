@@ -256,7 +256,8 @@ Repeat until the report says **converged**:
      low-severity regression. Do not restart the full process.
    - **Real finding** above LOW (a bug, a missing guard, a correctness/clarity issue): fix it in
      the code, commit, push. Re-running the local gate first. **Before that push, take
-     the next step**: count the round and check the budget.
+     the step after this list**, *Count the round before you fix it*: record the
+     round and check the budget.
    - **Nitpick you disagree with** (style preference, out-of-scope, already-correct):
      **reply with a brief reason** rather than changing code — `gh pr comment <PR#>
      --body "..."` for a top-level reply, summarizing what you addressed vs. skipped
@@ -275,6 +276,9 @@ Repeat until the report says **converged**:
 
    It writes no review evidence and gates nothing; it is what
    `review.round_budget` counts. It needs the `gh` backend, like `--record-review`.
+   `--head` is the reviewed commit's hex sha, full or abbreviated, and may be the PR
+   head or an ancestor of it. A ref such as `HEAD~1` or a branch name is refused,
+   because it would resolve against your checkout, which can be stale.
    A configured bot's submitted review counts its own head, and `--record-review`
    counts the head it binds, so neither needs this, with one exception: a bot
    review whose findings are only inline comments under an empty body is not
@@ -335,8 +339,8 @@ uv run <engine-dir>/pr_watch.py <PR#> --json --no-persist
 
 `--no-persist` performs the same current-state reads and builds the same report,
 but leaves the per-PR state file unchanged. It is valid only for a plain poll; it
-cannot be combined with `--mark-seen`, `--record-review`, `--assert-draft`, or
-`--assert-ready`. A merge wrapper should use this mode for its last `mergeable`
+cannot be combined with `--mark-seen`, `--record-review`, `--record-round`,
+`--assert-draft`, or `--assert-ready`. A merge wrapper should use this mode for its last `mergeable`
 check, after the normal watch-and-acknowledge loop has finished.
 
 `--all-comments`, valid only with `--json` on a plain poll, adds `all_comments[]`
@@ -374,7 +378,7 @@ draft so a later `gh pr merge` fails with *"Pull Request is still a draft"*. Exi
 the bit held **or was corrected**; exit 2 means the correction did not take.
 
 Both **require `gh`** — they mutate, and the REST fallback refuses them with exit 2, as
-it does `--record-review`.
+it does `--record-review` and `--record-round`.
 
 The one remaining flag not used in the loop above is `--allow-pending-bot-review`, which
 lets `--record-review` proceed while a configured bot's own check is still pending. Use
@@ -541,7 +545,14 @@ Self-pace on a bounded cadence — don't busy-wait:
   holds. A lost or corrupt state file, a poll that reads a different state root
   from the one the rounds were recorded in (`#563`), a session without `gh`, or a
   force-push that leaves a reviewed head off the branch's history all undercount.
-  That errs toward more rounds, and *Bound the loop* below still applies.
+  That errs toward more rounds, and *Bound the loop* below still applies. The count
+  can also run ahead of the fix rounds taken, because a head counts whatever produced
+  it: a bot's review of a head from a CI fix, a merge from the base branch or a rebase
+  is a round too. That errs toward stopping sooner, for an operator go-ahead.
+
+  Past a spent budget, a LOW fix is a fix round like any other: pushing it, and the
+  `fallback:delta` review its head then needs, takes the operator's go-ahead.
+  Without one, the LOW finding takes the ticket.
 
   **What the budget does not do.** It moves neither `converged` nor `mergeable`, and it
   waives nothing. A finding above LOW that is still open is not merged past by an agent
@@ -723,8 +734,9 @@ Self-pace on a bounded cadence — don't busy-wait:
   - `mergeable` is **false by construction**, with the merge blocker `the REST
     backend cannot authorize a merge — it polls only`. No response from GitHub can
     change that; it is not a judgement about the PR.
-  - `--record-review`, `--assert-draft` and `--assert-ready` **refuse** with exit
-    2. They write durable evidence or mutate the PR, so they need `gh`.
+  - `--record-review`, `--record-round`, `--assert-draft` and `--assert-ready`
+    **refuse** with exit 2. The two record modes write durable state bound to the
+    PR head they read, and the draft flags mutate the PR, so they need `gh`.
   - `converged` works normally, which is the point: you can run the watch-and-fix
     loop from a session without `gh` and hand the merge back to one that has it.
   - `report["backend"]` says which transport produced the poll (`gh` / `rest`).
