@@ -28,7 +28,7 @@
 
 - **Parallel lanes collide on `CHANGELOG.md` and `kit-manifest.json`, and each collision costs a review round.**
   Severity M, kept for accumulation.
-  - **What happened:** in the 2026-10-07 overnight batch, every lane that merged after the first conflicted in
+  - **What happened:** in the 2026-10-08 overnight batch (#1003–#1006), every lane that merged after the first conflicted in
     `CHANGELOG.md` (each adds a top entry) and regenerated `kit-manifest.json`. CI does not run on a conflicting PR,
     so #1006 reported no `toolkit` check until the cockpit merged `origin/main` into it. Each later merge from
     `main` moved the head, which took another delta pass and another stamp run: #1005 merged `main` twice, and #1006 twice.

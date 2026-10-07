@@ -35,7 +35,7 @@ review and fix round, merged `main` into each later lane to clear `CHANGELOG.md`
 - **#1004** (#1001, #1002) merged as `18bacdc2`.
   - A recovery refusal names the check that failed.
   - `test` judges a completed state as `recover` does.
-  - The panel showed the `test` entry's forge-prefix refusal is unreachable, so the claim was narrowed rather than tested.
+  - The panel showed no engine-written state reaches the `test` entry's forge-prefix refusal, so the claim was narrowed rather than tested.
   - `make test` at `87d06984` on 2026-10-08, in its lane worktree, printed `4438 passed, 1 skipped`.
 - **#1005** (#1000) merged as `f508d220`.
   - The scratch sweep judges root and entry containment by filesystem identity as well as by string.
