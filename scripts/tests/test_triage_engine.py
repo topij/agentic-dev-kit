@@ -1300,6 +1300,122 @@ def test_recover_refuses_an_in_flight_state_whose_frozen_artifact_is_missing_and
     assert resumed["detail"] == "approval requires a trusted runtime context", resumed
 
 
+def _completed_test_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path, Path, Path]:
+    """Drive a test-mode run to `completed` (route `test-render`) and return the
+    repository, the state root, the test state path and its frozen artifact."""
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    drafted = run("test", context="interactive", request=request(root), start=root)
+    state_path = state_root / "triage/triage-pipeline-state_test.json"
+    presented = loads_exact(state_path.read_bytes())
+    completed = run("test", context="interactive", request={"approval": approval_for(presented)}, start=root, approval_context=approval_context(presented), head_authority=FakeForge([]))
+    assert completed["outcome"] == "degraded-success"
+    assert loads_exact(state_path.read_bytes())["phase"] == "completed"
+    return root, state_root, state_path, Path(drafted["frozen_snapshot"])
+
+
+def test_test_refuses_a_completed_state_whose_frozen_artifact_is_missing_and_retirement_unproven(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#1002: `test` judged a completed state by state validation alone, so one
+    whose frozen artifact is gone fell through to the session-starting path and
+    hard-stopped there, with no route out. It now judges with `recover`'s
+    predicate: a `test-render` completion proves no retirement, so `test` refuses
+    it and writes nothing, interactive or unattended, and restoring the artifact
+    lets `test` retire it as before."""
+    root, state_root, state_path, frozen = _completed_test_state(tmp_path, monkeypatch)
+    frozen_raw = frozen.read_bytes()
+    frozen.unlink()
+    raw = state_path.read_bytes()
+    entries_before = sorted(path.relative_to(state_root) for path in state_root.rglob("*"))
+
+    refused = run("test", context="interactive", request={}, start=root)
+    assert refused["outcome"] == "operator-held"
+    assert refused["detail"] == "test state fails the session-starting checks and no retirement is proven; recovery refused"
+    assert refused["resume_action"] == "restore the published frozen snapshot artifact, or land the run's sweep, then rerun test"
+    assert state_path.read_bytes() == raw
+    assert sorted(path.relative_to(state_root) for path in state_root.rglob("*")) == entries_before
+
+    unattended = run("test", context="unattended", request={}, start=root)
+    assert unattended["outcome"] == "operator-held"
+    assert unattended["detail"] == "invalid test state preserved without unattended recovery"
+    assert state_path.read_bytes() == raw
+    assert sorted(path.relative_to(state_root) for path in state_root.rglob("*")) == entries_before
+
+    frozen.write_bytes(frozen_raw)
+    restarted = run("test", context="interactive", request={}, start=root)
+    assert restarted["detail"].startswith("retired completed state to "), restarted
+    assert loads_exact(state_path.read_bytes())["phase"] == "reserved"
+
+
+_PROVEN_RETIREMENT = r'''
+from triage import recovery
+recovery._terminal_evidence = lambda parsed: {"session": parsed["run_identity"]["session"], "verified_tracker_identifiers": [], "pull_request": None, "merge_commit": "a" * 40, "final_head": None}
+recovery._sweep_landed = lambda settings, parsed, merge_commit: "refs/remotes/origin/main"
+'''
+
+
+def test_test_retires_a_completed_state_whose_frozen_artifact_is_missing_when_retirement_is_proven(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#1002: with retirement proven, `test` captures the completed state into the
+    invalid-state route and retires it on exact approval, as `recover` does
+    (#985). No test-mode completion proves a retirement on its own, so the plan's
+    git evidence is stood in for, in the planning process and in this one; the
+    branch under test is the engine's choice to capture rather than refuse."""
+    from triage import recovery
+
+    root, state_root, state_path, frozen = _completed_test_state(tmp_path, monkeypatch)
+    frozen.unlink()
+    raw = state_path.read_bytes()
+    monkeypatch.setattr(recovery, "_terminal_evidence", lambda parsed: {"session": parsed["run_identity"]["session"], "verified_tracker_identifiers": [], "pull_request": None, "merge_commit": "a" * 40, "final_head": None})
+    monkeypatch.setattr(recovery, "_sweep_landed", lambda settings, parsed, merge_commit: "refs/remotes/origin/main")
+    child = _PROVEN_RETIREMENT + (
+        "import sys\nfrom pathlib import Path\nfrom triage.canonical import dumps\n"
+        "from triage.engine import run\n"
+        "print(dumps(run('test', context='interactive', request={}, start=Path(sys.argv[1]))).decode(), flush=True)\n"
+    )
+    environment = {**os.environ, "PYTHONPATH": str(ENGINE_DIR / "lib") + os.pathsep + str(ENGINE_DIR)}
+    planned_process = subprocess.run([sys.executable, "-c", child, str(root)], check=True, capture_output=True, text=True, env=environment)
+    planned = loads_exact(planned_process.stdout.strip().encode())
+    assert planned["detail"] == "invalid test state captured before parse", planned
+    plan = planned["recovery_plan"]
+    assert plan["action_core"]["action"] == "retire-terminal-invalid-state"
+    assert state_path.read_bytes() == raw
+
+    core_digest = plan["action_core_digest"]
+    supplied = {"decision": "approve", "source": "current-session", "approver_identity": "operator", "core_digest": core_digest}
+    context = ApprovalContext("current-session", "operator", {"decision": "approve", "approver_identity": "operator", "core_digest": core_digest})
+    recovered = run("test", context="interactive", request={"recovery_approval": supplied}, start=root, approval_context=context)
+    assert recovered["outcome"] == "operator-held", recovered
+    assert loads_exact(state_path.read_bytes())["kind"] == "test-recovered-safe-to-restart"
+    assert Path(plan["action_core"]["quarantine_path"]).read_bytes() == raw
+
+
+def test_test_keeps_judging_an_in_flight_state_whose_frozen_artifact_is_missing_by_state_validation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#1002 widens `test`'s validity for a completed state only. An in-flight
+    test state whose frozen artifact is missing still passes the entry's
+    recovery check and stops at the session-starting artifact check, writing
+    nothing, rather than being captured or refused as unproven."""
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    drafted = run("test", context="interactive", request=request(root), start=root)
+    state_path = state_root / "triage/triage-pipeline-state_test.json"
+    assert loads_exact(state_path.read_bytes())["phase"] != "completed"
+    Path(drafted["frozen_snapshot"]).unlink()
+    raw = state_path.read_bytes()
+
+    result = run("test", context="interactive", request={}, start=root)
+    assert result["outcome"] == "hard-stop", result
+    assert result["detail"] == "published frozen snapshot artifact is missing"
+    assert state_path.read_bytes() == raw
+    assert not list((state_root / "triage").glob("recovery-bundle_test_*.json"))
+
+
 def test_resume_records_fast_forward_protected_head_without_changing_draft_identity(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

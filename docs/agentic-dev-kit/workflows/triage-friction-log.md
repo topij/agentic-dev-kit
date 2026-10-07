@@ -880,10 +880,18 @@ checks, including an artifact it cannot read, fails it. It is captured and offer
 retirement is proven; recovery refused`), so restoring the artifact or landing the sweep
 still leaves a route out, and the action plan preserves it as before when it passes
 state validation under the current configuration (one that fails that is classified as
-any invalid state). A state in any
+any invalid state). The refusal's resume action names the check that failed: an
+artifact failure says to restore the published frozen snapshot artifact or land the
+run's sweep, and a forge-prefix failure, whose artifact is present, says to reconcile the
+state's recorded forge operations with the forge or land the run's sweep. A state in any
 other phase is judged by state validation alone, so an in-flight run whose artifact is
 missing is refused as valid and resumes once the artifact is restored. The `test` entry's
-own recovery branch still judges by state validation alone. For a completed state the
+own recovery branch judges a test state the same way and refuses an unproven completed
+one unwritten (`test state fails the session-starting checks and no retirement is
+proven; recovery refused`); unattended, it preserves the state as any invalid test
+state. A test run completes by `test-render` or `decision-only`, neither of which proves a
+retirement, so for such a state the route out is restoring its artifact, after which
+`test` retires it. For a completed state the
 action plan reads the live frozen artifact at plan time: the capture holds only the
 state and gate bytes.
 The one other invalid state that leaves the held route is a **finished** run, in either
