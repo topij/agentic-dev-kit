@@ -24,6 +24,33 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-10-08
+
+- **Parallel lanes collide on `CHANGELOG.md` and `kit-manifest.json`, and each collision costs a review round.**
+  Severity M, kept for accumulation.
+  - **What happened:** in the 2026-10-07 overnight batch, every lane that merged after the first conflicted in
+    `CHANGELOG.md` (each adds a top entry) and regenerated `kit-manifest.json`. CI does not run on a conflicting PR,
+    so #1006 reported no `toolkit` check until the cockpit merged `origin/main` into it. Each later merge from
+    `main` moved the head, which took another delta pass and another stamp run: #1005 merged `main` twice, and #1006 twice.
+  - **Also:** the CHANGELOG heading test needs the PR number before the PR exists. One lane opened a draft to learn
+    it; two guessed it, and one guess (`#1004`) was taken by another lane while its suite ran.
+  - **Missing:** a mechanism that stops parallel lanes sharing one append point (per-PR changelog fragments, or a
+    manifest regenerated at merge time). Not designed here.
+- **A composed delta receipt cannot gain a disposition comment afterwards.** Severity L. On #1003 the cockpit
+  recorded `fallback:delta --compose-parent <parent>` without `--disposition`, then re-ran it with `--disposition -`.
+  The engine refused: "composed review parent does not match the standing receipt head", because the standing
+  receipt was now the delta itself. The poll kept warning that no disposition comment exists, though the findings
+  were on the PR in the cockpit's own comments. Proposed fix: let `--disposition` attach to the standing receipt
+  without re-recording it. Not filed: no operator was present.
+- **Review lenses wrote into the tree they were handed, twice.** Severity L, kept for accumulation beside the
+  contract's *No writes in the tree you were given*. #1003's delta lens appended to `README.md` and reverted it.
+  #1004's adversarial lens ran `git -C <handed tree> clone . mut-…`, which put a full clone inside the tree, and its
+  `rm -rf` of that path was denied. Both trees were cockpit-built detached worktrees, so no one's work was at risk,
+  and both lenses disclosed it.
+- **A headless lane could not restore its own mutation-test edits.** Severity L. The `pr-watch-case-class` lane's
+  restore commands were denied by the lane profile, so it restored each mutant by hand. One denied restore left a
+  mutant in place while the next was applied, and one suite run carried two mutants; the lane noticed and reran it.
+
 ## 2026-10-07
 
 - **A headless Claude lane cannot open a PR with a real body.** Severity M. Lanes
@@ -36,11 +63,16 @@
   - **Proposed fix:** have the lane contract name `gh pr create --body-file <worktree-relative file>`,
     or add a scoped `gh pr edit` grant. The profile is safety-critical, so this needs `safety-critical-changes.md`.
   - **Not filed:** no operator was present to approve the payload.
+  - **Recurred 2026-10-08:** the `panel-scratch-verify` lane opened #1003 with its verification marked pending, then
+    ran `gh pr edit` and `gh pr comment` to add the stamp. Both were denied, so the run ended `failed` after its work
+    was done. The cockpit moved the stamp into the body.
 - **The `test` entry's recovery branch still judges validity by `canonical_state` alone.**
   Severity L. This was found by #985's panel at `09d06628` and `d9e951a3`. A completed test-mode state whose
   frozen artifact is missing hard-stops `test` with no test-mode `recover` route out. This is the
   #859 class, which #985 fixed for live `recover` only. Proposed fix: use
   `validate_recoverable_state` in that branch. Not filed: no operator was present.
+  *(Filed as #1002 the same day, on the operator's approval; #1004 fixed it, merged as
+  `18bacdc2`.)*
 - **The two-lens panel did not converge on a new destructive engine.** Severity M, kept
   for accumulation beside #305 and #666. #986's scratch sweep never converged.
   - **Pattern:** each pass found new fail-open edge cases in what the engine judges removable: a FIFO record wedge, a bare
@@ -164,6 +196,8 @@ the operator's approval, as each one's annotation says.
   `at <sha> on <date>` with nothing between them. **Proposed fix:** accept a clause
   between them in the parser, or have `wrap-up.md` prescribe the order "at `<sha>` on
   `<date>`, in `<dir>`".
+  **Recurred 2026-10-08** on #1006: a stamp comment in the "at `<sha>`, in `<dir>`, on `<date>`" order was not read,
+  so the poll kept naming an older head's stamp from a disposition comment.
 - **A negative control anchored on a structural boundary stopped testing anything when
   an unrelated key moved that boundary.** Severity L, kept for accumulation.
   `test_runtime_parity_contract_rejects_a_gap_with_no_real_surface` inserted its entry
