@@ -42,7 +42,7 @@ starts.
 
 ---
 
-## #PRNUM — Safety-critical paths match case-insensitively; `--record-round --head` takes only a hex sha
+## #1004 — Safety-critical paths match case-insensitively; `--record-round --head` takes only a hex sha
 
 CHANGED (gate semantics): `pr_review_class` now matches a changed path against
 `review.safety_critical_paths` both exactly and with both sides case-folded. It also
