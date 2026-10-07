@@ -66,6 +66,10 @@ disposable:
   ``stale``: the borrowed-from clone records nothing, and only the configured
   repositories' alternates are read. The same holds for a ``--separate-git-dir``
   target that is itself named ``.git``.
+- The other direction costs reclaimed space: any bare-looking git dir keeps its
+  whole entry, so a session scratchpad holding a pytest basetemp with fixture
+  repositories (an ``origin.git``, say) is never swept. The reason names the git
+  dir that kept it.
 - A root over some other directory of repositories is refused only when it holds
   the home directory or a configured worktree repo. An idle sibling repository
   with no linked worktree is otherwise judged by age like anything else.
@@ -339,6 +343,13 @@ def repository_stores(worktrees: list[str]) -> list[str]:
     stores: list[str] = []
     pending: list[tuple[str, int]] = []
     for worktree in worktrees:
+        state = _target_state(worktree)
+        if state == "gone":
+            # A prunable registration: its directory was deleted. Its common git
+            # dir is the one every other worktree of that repository reports.
+            continue
+        if state == "unknown":
+            raise ConfigError(f"cannot stat the registered worktree {worktree}")
         common = _git_common_dir(worktree, env)
         if common not in stores:
             stores.append(common)
@@ -459,10 +470,11 @@ def _looks_like_git_dir(path: str) -> bool:
     return stat.S_ISREG(head.st_mode) and stat.S_ISDIR(objects.st_mode) and stat.S_ISDIR(refs.st_mode)
 
 
-_DETACHED_GIT_DIR = (
-    "a git dir not beside its own work tree (a bare repository or a --separate-git-dir "
-    "target), which a repository outside this entry may depend on"
-)
+def _detached_git_dir(path: str) -> str:
+    return (
+        f"{path} is a git dir not beside its own work tree (a bare repository or a "
+        "--separate-git-dir target), which a repository outside this entry may depend on"
+    )
 
 
 def _main_repo_reason(git_dir: str, entry: str) -> str | None:
@@ -534,7 +546,7 @@ def scan(entry: str, top: os.stat_result) -> _Scan:
     if not stat.S_ISDIR(top.st_mode):
         return result
     if _looks_like_git_dir(entry):
-        result.linked = _DETACHED_GIT_DIR  # the entry is itself a git dir
+        result.linked = _detached_git_dir(entry)  # the entry is itself a git dir
 
     def onerror(exc: OSError) -> None:
         result.problems.append(f"unreadable {exc.filename}: {exc.strerror}")
@@ -569,7 +581,7 @@ def scan(entry: str, top: os.stat_result) -> _Scan:
                     # worktree of a --separate-git-dir repository holds the only
                     # pointer, outside. A git dir inside a `.git` (a submodule's,
                     # under modules/) belongs to the clone around it.
-                    result.linked = _DETACHED_GIT_DIR
+                    result.linked = _detached_git_dir(child)
     return result
 
 

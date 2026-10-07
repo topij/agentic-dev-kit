@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "49fb1684ddf4b3600ca38af4a5fb8dc9ea3454c56be7502f43dd064c1216940c"
+      "sha256": "932af7267818a1351827e18a688da3a743065ad0b34bf262a5149f8cfe9da763"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -512,7 +512,7 @@
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
-      "sha256": "fbdeb75e9b419b8cc89ea54f5c74ff8194b232be33ae3939edd756a0fe3ea2ad"
+      "sha256": "0e1f85854fd07626b016fd3529fa13b4a56678910a9ef00c59a92caa9ba0064d"
     },
     "scripts/pr_watch.py": {
       "role": "engine",
@@ -532,7 +532,7 @@
     },
     "scripts/sweep_scratch.py": {
       "role": "engine",
-      "sha256": "92c51c19156fbe8d3f803902636f167735d0321fd44b13649350ba162a74806d"
+      "sha256": "2f8ee25c20b38b005302aa0ff5b681cc36ed6332a804e068d9ed4d36681726fc"
     },
     "scripts/tests/_repo_layout.py": {
       "role": "test",
@@ -552,7 +552,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "ab53180d041697c3d9f8cb04e3d5b22d04c80511f0cce3c90afa96adc2cb1f81"
+      "sha256": "98bf9cf496d7f49fb2829bccede6c49fa3a4cebde2205f2b0ccdc902f76d3566"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -612,7 +612,7 @@
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
-      "sha256": "4a91e6708da42277741206445bcefe76956865273228cf322883dded46df93ae"
+      "sha256": "e18269e81bc9920784beb6d0be10b8fced2782fc656d24e6af4f9e6a14484675"
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
@@ -652,7 +652,7 @@
     },
     "scripts/tests/test_sweep_scratch.py": {
       "role": "test",
-      "sha256": "bbedb77610fcd53bd26ecd7f326846d58cbbb54be0033f57ea5b7d94f5f47ce7"
+      "sha256": "a73752ed6cdcc61c29b1cd7fedec547fe6350fcba6b38aaee229491975a66919"
     },
     "scripts/tests/test_systemize_artifacts.py": {
       "role": "test",

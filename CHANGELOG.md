@@ -45,7 +45,7 @@ starts.
 ## #986 — Scratch sweep engine and the `scratch:` config block
 
 ADDED (config keys, engine CLI surface): `config/dev-model.yaml` gains a `scratch:`
-block with three required keys: `roots` (a list of absolute directories, with `{uid}`
+block with required keys `roots` (a list of absolute directories, with `{uid}`
 and `{repo_slug}` placeholders), `grace_window` (an age such as `24h`) and
 `worktree_repos` (repositories whose registered worktrees are protected). The new
 engine `sweep_scratch.py` reads it: with no flags it prints a report, `--json`

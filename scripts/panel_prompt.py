@@ -51,7 +51,7 @@ Usage:
     uv run <engine-dir>/panel_prompt.py --lens adversarial --agent-definition \\
         > .claude/agents/adversarial.md
     uv run scripts/panel_prompt.py --lens correctness --head <sha> \\
-        --scratch /tmp/panel --pr 218 --carry-forward "Rounds 1-3 found everything in
+        --scratch <session-scratchpad>/lens-correctness-<short-sha> --pr 218 --carry-forward "Rounds 1-3 found everything in
         the author's claims and nothing in the changed content. Invert that."
 
 A delta pass — and only a delta pass — adds the author's two stated draws for the
@@ -432,10 +432,15 @@ def render(
     # doctrine's own wording without both copies being read side by side and noticed — the
     # same bet the "do not write into any tree you were handed" line above already makes
     # for item 7.
+    where = (
+        "**beside the tree you were handed"
+        if scratch is not None
+        else "**in the session scratch directory your runtime names"
+    )
     tree += (
         "- **If you also make a scratch copy of your own** (for mutation testing, say),"
         " reach it by a **fresh path**, namespaced by lens and revision — never by"
-        " removing and recreating one — and make it **beside the tree you were handed,"
+        f" removing and recreating one — and make it {where},"
         " never directly under the system temp dir**, where no sweep cleans it up."
         " A sandbox refusing `rm -rf` is refusing the wrong"
         " route, not blocking you: the fresh path was already correct. The **Scratch"

@@ -393,9 +393,10 @@ author re-reading their own diff. **Cite them by name, never by number.**
    **Create those copies in the directory that holds the tree you were handed** —
    beside it, as `<that directory>/mut-<lens>-<short-sha>/` — **never directly
    under the system temp dir** (`/tmp`, `/private/tmp`, `$TMPDIR`). The scratch
-   sweep (`sweep_scratch.py`) cleans only its configured `scratch.roots`, which
-   reach the session scratchpads; a copy left among everything else in the system
-   temp dir is never cleaned up (`#900`). Handed no tree, use the session scratch
+   sweep (`sweep_scratch.py`) cleans only its configured `scratch.roots` — the
+   kit's default names the Claude Code session scratchpads on macOS — and a copy
+   left among everything else in the system temp dir is never cleaned up
+   (`#900`). Handed no tree, use the session scratch
    directory your runtime names, and report where the copy went.
 
    The wording above was already right and a lens still hit the refusal —
@@ -498,8 +499,8 @@ author re-reading their own diff. **Cite them by name, never by number.**
 
    Build each lens's review tree yourself when the runtime lets you hand one
    over: a detached worktree at the named sha, outside the repo, under the
-   session scratchpad rather than directly in the system temp dir (item 9 has
-   why), namespaced by lens and revision —
+   session scratchpad rather than directly in the system temp dir (**Scratch
+   namespace** has why), namespaced by lens and revision —
 
    ```sh
    git worktree add --detach <scratch>/lens-<name>-<short-sha> <sha>

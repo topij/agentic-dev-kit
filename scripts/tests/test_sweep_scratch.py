@@ -889,3 +889,21 @@ def test_objects_borrowed_after_the_report_are_rechecked_before_removal(root: Pa
     outcomes = sweep.apply(reports, settings, older_than=0)
     assert [(o.action, o.reason.startswith("now live-worktree")) for o in outcomes] == [("kept", True)]
     assert src.is_dir()
+
+
+def test_a_prunable_worktree_registration_does_not_wedge_the_sweep(root: Path, repo: Path):
+    _git(repo, "worktree", "add", "-q", "--detach", str(root / "lens1"))
+    (root / "lens1" / ".git").unlink()
+    (root / "lens1").rmdir()  # deleted without `git worktree prune`
+    junk = _tree(root / "junk")
+    reports, outcomes = _run([root], repo, older_than=0)
+    assert _owners(reports) == {"junk": sweep.STALE}
+    assert [o.action for o in outcomes] == ["removed"]
+    assert not junk.exists()
+
+
+def test_the_kept_reason_names_the_git_dir_that_kept_it(root: Path, repo: Path, base: Path):
+    _git(base, "clone", "-q", "--bare", str(repo), str(root / "entry" / "fixture" / "origin.git"))
+    _set_age(root / "entry", OLD)
+    reports, _ = _run([root], repo, older_than=None)
+    assert str(root / "entry" / "fixture" / "origin.git") in reports[0].entries[0].reason
