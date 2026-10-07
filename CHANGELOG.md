@@ -42,7 +42,7 @@ starts.
 
 ---
 
-## #PRNUM — `panel_prompt.py --scratch` refuses a tree it cannot confirm (#999)
+## #1003 — `panel_prompt.py --scratch` refuses a tree it cannot confirm (#999)
 
 BREAKING (engine CLI surface): `panel_prompt.py --scratch <path>` now exits 2 unless
 `git -C <path> rev-parse HEAD` equals the full `--head` sha **and** HEAD there is
