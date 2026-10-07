@@ -708,8 +708,9 @@ scratch:
   #
   # To add a root, append a line. Add only a directory whose every child is
   # disposable: an entry is judged by its age and by worktree registration, never
-  # by what it holds. A git dir another repository depends on from outside the
-  # entry (--separate-git-dir, --shared alternates) is not detected, nor is a
+  # by what it holds. An entry holding a bare or separated git dir is kept, as is
+  # one a worktree_repos repo borrows objects from; a clone that an unconfigured
+  # repository borrows from (--shared, --reference) is not detected, nor is a
   # sibling repository with no linked worktree; the engine's docstring lists
   # these limits. Needs git 2.36+ (`git worktree list -z`).
   roots:

@@ -667,6 +667,20 @@ def test_the_scratch_namespace_fresh_path_reminder_is_present_early(repo):
     assert "Scratch namespace" in out.stdout
 
 
+def test_lens_scratch_copies_are_placed_beside_the_handed_tree(repo):
+    """#900: the scratch sweep cleans only its configured roots, so a lens copy made
+    directly under the system temp dir is never cleaned up. The early reminder says
+    where the copy goes, and the quoted contract item carries the full rule.
+    """
+    base, head = _revs(repo)
+    out = _run(repo, "--lens", "correctness", "--head", head, "--base", base, "--branch", "b")
+    assert out.returncode == 0, out.stderr
+    early = "never directly under the system temp dir**"
+    contract = "**Create those copies in the directory that holds the tree you were handed**"
+    heading = "## The contract every lens gets"
+    assert out.stdout.index(early) < out.stdout.index(heading) < out.stdout.index(contract)
+
+
 def test_the_scratch_namespace_reminder_survives_with_a_provided_worktree(repo):
     """The reminder concerns a lens's OWN scratch copy, independent of whether the
     cockpit also handed it a review tree — it must not disappear once `--scratch`

@@ -19,11 +19,15 @@ child of a root is one **entry**, and every entry gets exactly one owner class:
     ``scratch.worktree_repos`` (``git worktree list --porcelain``); or it holds a
     ``.git`` file pointing at a git dir that still exists outside the entry — a
     linked worktree of some repository this config does not name; or it holds a
-    git dir (a ``.git`` directory, a bare repository, or a ``--separate-git-dir``
-    target) whose ``worktrees/*/gitdir`` names a worktree that still exists
-    outside the entry, which removing the entry would orphan. A ``.git``
-    file or ``worktrees`` record the engine cannot read or parse also lands here,
-    with that as its reason: kept, as if live.
+    ``.git`` directory whose ``worktrees/*/gitdir`` names a worktree that still
+    exists outside the entry, which removing the entry would orphan; or it holds
+    any other git dir (a bare repository or a ``--separate-git-dir`` target, which
+    records nothing about who uses it) outside a ``.git`` directory; or it is,
+    holds or sits inside the git dir of a configured repository or an object
+    store one borrows from through ``objects/info/alternates``, followed
+    transitively. A ``.git`` file or ``worktrees`` record the engine cannot read
+    or parse also lands here, with that as its reason: kept, as if live; an
+    unreadable or quoted ``alternates`` file is an exit 2.
 ``in-grace``
     Something anywhere inside the entry was modified within
     ``scratch.grace_window``. The newest mtime over the whole tree decides, not the
@@ -56,11 +60,12 @@ exist is reported as absent. The root itself is never removed.
 Known limits, each one a reason to configure only a root whose every child is
 disposable:
 
-- A git dir inside an entry that a repository *outside* it depends on — the
-  outside main worktree of a ``--separate-git-dir`` repository, or a ``--shared``
-  clone whose ``objects/info/alternates`` points in — is not detected, and the
-  entry can be ``stale``. Only linked worktrees (``worktrees/*/gitdir``) are read;
-  nothing can enumerate every repository on disk that points into an entry.
+- An ordinary clone inside an entry that a repository the config does not name
+  borrows objects from (a ``--shared`` or ``--reference`` clone elsewhere, whose
+  ``objects/info/alternates`` points in) is not detected, and the entry can be
+  ``stale``: the borrowed-from clone records nothing, and only the configured
+  repositories' alternates are read. The same holds for a ``--separate-git-dir``
+  target that is itself named ``.git``.
 - A root over some other directory of repositories is refused only when it holds
   the home directory or a configured worktree repo. An idle sibling repository
   with no linked worktree is otherwise judged by age like anything else.
@@ -268,6 +273,91 @@ def registered_worktrees(repos: list[Path]) -> list[str]:
     return found
 
 
+# Hops followed along an alternates chain before the read gives up (and refuses).
+_ALTERNATES_MAX = 16
+
+
+def _git_common_dir(worktree: str, env: dict[str, str]) -> str:
+    try:
+        result = subprocess.run(
+            ["git", "-C", worktree, "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+    except OSError as exc:
+        raise ConfigError(f"cannot run git for {worktree}: {exc}") from exc
+    path = result.stdout.strip()
+    if result.returncode != 0 or not os.path.isabs(path):
+        raise ConfigError(
+            f"cannot read the git dir of {worktree}: {result.stderr.strip() or result.returncode}"
+        )
+    return os.path.realpath(path)
+
+
+def _alternates(objects: str) -> list[str]:
+    """Object directories ``objects/info/alternates`` borrows from; an unreadable one raises."""
+    path = os.path.join(objects, "info", "alternates")
+    try:
+        st = os.lstat(path)
+    except FileNotFoundError:
+        return []
+    except OSError as exc:
+        raise ConfigError(f"cannot read {path}: {exc.strerror}") from exc
+    if not stat.S_ISREG(st.st_mode):
+        raise ConfigError(f"{path} is not a regular file")
+    try:
+        with open(path, encoding="utf-8", errors="replace") as handle:
+            lines = handle.read().splitlines()
+    except OSError as exc:
+        raise ConfigError(f"cannot read {path}: {exc.strerror}") from exc
+    found: list[str] = []
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith('"'):
+            # A C-quoted path; not parsed here, so nothing is classified past it.
+            raise ConfigError(f"quoted path in {path}; refusing to classify without it")
+        if not os.path.isabs(line):
+            line = os.path.join(objects, line)
+        found.append(os.path.realpath(line))
+    return found
+
+
+def repository_stores(worktrees: list[str]) -> list[str]:
+    """Git dirs and borrowed object stores the configured repositories depend on.
+
+    For every registered worktree: its common git dir, and every object directory
+    reached through ``objects/info/alternates``, followed transitively. An entry
+    holding any of these is kept, because removing it breaks a configured
+    repository. A repository the config does not name is not read (see the limits
+    in the module docstring). Any failure raises ConfigError.
+    """
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    stores: list[str] = []
+    pending: list[tuple[str, int]] = []
+    for worktree in worktrees:
+        common = _git_common_dir(worktree, env)
+        if common not in stores:
+            stores.append(common)
+            pending.append((os.path.join(common, "objects"), 0))
+    seen: set[str] = set()
+    while pending:
+        objects, depth = pending.pop()
+        if objects in seen:
+            continue
+        seen.add(objects)
+        for borrowed in _alternates(objects):
+            if depth + 1 > _ALTERNATES_MAX:
+                raise ConfigError(f"alternates chain from {objects} is deeper than {_ALTERNATES_MAX}")
+            if borrowed not in stores:
+                stores.append(borrowed)
+            pending.append((borrowed, depth + 1))
+    return stores
+
+
 # --------------------------------------------------------------------------- #
 # classification
 # --------------------------------------------------------------------------- #
@@ -291,6 +381,13 @@ def live_worktree_reason(path: str, worktrees: list[str]) -> str | None:
     for wt in worktrees:
         if _overlaps(path, wt):
             return f"registered worktree {wt}"
+    return None
+
+
+def repository_store_reason(path: str, stores: list[str]) -> str | None:
+    for store in stores:
+        if _overlaps(path, store):
+            return f"git dir or object store {store} of a configured repository"
     return None
 
 
@@ -352,13 +449,20 @@ def _linked_gitdir_reason(git_file: str, entry: str) -> str | None:
 
 
 def _looks_like_git_dir(path: str) -> bool:
-    """A git dir by layout: a ``HEAD`` file and a ``worktrees`` directory, never followed."""
+    """A git dir by git's own layout test: a ``HEAD`` file, ``objects`` and ``refs``, never followed."""
     try:
         head = os.lstat(os.path.join(path, "HEAD"))
-        records = os.lstat(os.path.join(path, "worktrees"))
+        objects = os.lstat(os.path.join(path, "objects"))
+        refs = os.lstat(os.path.join(path, "refs"))
     except OSError:
         return False
-    return stat.S_ISREG(head.st_mode) and stat.S_ISDIR(records.st_mode)
+    return stat.S_ISREG(head.st_mode) and stat.S_ISDIR(objects.st_mode) and stat.S_ISDIR(refs.st_mode)
+
+
+_DETACHED_GIT_DIR = (
+    "a git dir not beside its own work tree (a bare repository or a --separate-git-dir "
+    "target), which a repository outside this entry may depend on"
+)
 
 
 def _main_repo_reason(git_dir: str, entry: str) -> str | None:
@@ -430,7 +534,7 @@ def scan(entry: str, top: os.stat_result) -> _Scan:
     if not stat.S_ISDIR(top.st_mode):
         return result
     if _looks_like_git_dir(entry):
-        result.linked = _main_repo_reason(entry, entry)  # the entry is itself a git dir
+        result.linked = _DETACHED_GIT_DIR  # the entry is itself a git dir
 
     def onerror(exc: OSError) -> None:
         result.problems.append(f"unreadable {exc.filename}: {exc.strerror}")
@@ -452,10 +556,20 @@ def scan(entry: str, top: os.stat_result) -> _Scan:
             if result.linked is None:
                 if name == ".git" and stat.S_ISREG(st.st_mode):
                     result.linked = _linked_gitdir_reason(child, entry)
-                elif stat.S_ISDIR(st.st_mode) and (name == ".git" or _looks_like_git_dir(child)):
-                    # `.git`, a bare repository, or a --separate-git-dir target:
-                    # each may hold worktree records naming trees elsewhere.
+                elif stat.S_ISDIR(st.st_mode) and name == ".git":
+                    # An ordinary clone's git dir may hold worktree records naming
+                    # trees elsewhere.
                     result.linked = _main_repo_reason(child, entry)
+                elif (
+                    stat.S_ISDIR(st.st_mode)
+                    and ".git" not in os.path.relpath(child, entry).split(os.sep)
+                    and _looks_like_git_dir(child)
+                ):
+                    # Any other git dir records nothing about who uses it: the main
+                    # worktree of a --separate-git-dir repository holds the only
+                    # pointer, outside. A git dir inside a `.git` (a submodule's,
+                    # under modules/) belongs to the clone around it.
+                    result.linked = _DETACHED_GIT_DIR
     return result
 
 
@@ -467,6 +581,7 @@ def classify(
     roots: list[str],
     grace_seconds: int,
     now: float,
+    stores: list[str],
 ) -> Entry:
     """One owner class for one direct child of a root. Fails closed to ``unclassified``.
 
@@ -488,7 +603,7 @@ def classify(
     reason = configured_root_reason(entry, roots)
     if reason:
         return Entry(entry, UNCLASSIFIED, found.size, age, reason, identity)
-    reason = live_worktree_reason(entry, worktrees)
+    reason = live_worktree_reason(entry, worktrees) or repository_store_reason(entry, stores)
     if reason:
         return Entry(entry, LIVE, found.size, age, reason, identity)
     if found.problems:
@@ -562,6 +677,7 @@ def survey(settings: Settings, *, root: Path, now: float) -> list[RootReport]:
     # Every configured root is protected as an entry, refused ones included.
     protected = [path for path, _, _ in expanded if os.path.isabs(path)]
     worktrees = registered_worktrees(settings.repos)
+    stores = repository_stores(worktrees)
     reports: list[RootReport] = []
     for path, status, reason in expanded:
         report = RootReport(path, status, reason)
@@ -581,6 +697,7 @@ def survey(settings: Settings, *, root: Path, now: float) -> list[RootReport]:
                     os.path.join(path, name),
                     device=report.device,
                     worktrees=worktrees,
+                    stores=stores,
                     roots=others,
                     grace_seconds=settings.grace_seconds,
                     now=now,
@@ -613,6 +730,7 @@ def apply(
             # the report was taken.
             try:
                 worktrees = registered_worktrees(settings.repos)
+                stores = repository_stores(worktrees)
             except ConfigError as exc:
                 outcomes.append(Outcome(entry.path, "kept", str(exc)))
                 continue
@@ -620,6 +738,7 @@ def apply(
                 entry.path,
                 device=report.device,
                 worktrees=worktrees,
+                stores=stores,
                 roots=others,
                 grace_seconds=settings.grace_seconds,
                 now=now_fn(),

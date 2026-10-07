@@ -448,6 +448,8 @@ def test_worktree_registered_after_the_report_is_rechecked_before_removal(
     reports = sweep.survey(settings, root=repo, now=time.time())
     assert _owners(reports) == {"entry": sweep.STALE}
     monkeypatch.setattr(sweep, "registered_worktrees", lambda repos: [str(entry)])
+    # The fake registration is not a repository, so its git dir cannot be read.
+    monkeypatch.setattr(sweep, "repository_stores", lambda worktrees: [])
     outcomes = sweep.apply(reports, settings, older_than=0)
     assert [(o.action, o.reason.startswith("now live-worktree")) for o in outcomes] == [("kept", True)]
     assert entry.is_dir()
@@ -760,3 +762,130 @@ def test_registrations_ignore_an_inherited_git_dir(base: Path, repo: Path, monke
     found = sweep.registered_worktrees([repo])
 
     assert found == [str(repo)]
+
+
+# --------------------------------------------------------------------------- #
+# git dirs a repository outside the entry may depend on
+# --------------------------------------------------------------------------- #
+
+
+def _seeded(path: Path, *extra: str) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    _git(path, "init", "-q", *extra)
+    _git(path, "-c", "user.email=t@e", "-c", "user.name=T", "commit", "-q", "--allow-empty", "-m", "s")
+    return path
+
+
+def test_separate_git_dir_target_inside_an_entry_is_kept(root: Path, repo: Path, base: Path):
+    (root / "entry").mkdir()
+    _seeded(base / "outside-main", f"--separate-git-dir={root / 'entry' / 'gd'}")
+    _set_age(root / "entry", OLD)
+    reports, outcomes = _run([root], repo, older_than=0)
+    assert _owners(reports) == {"entry": sweep.LIVE}
+    assert "--separate-git-dir" in reports[0].entries[0].reason
+    assert outcomes == []
+    assert (root / "entry" / "gd" / "HEAD").is_file()
+
+
+def test_entry_that_is_a_bare_repository_is_kept(root: Path, repo: Path, base: Path):
+    _git(base, "clone", "-q", "--bare", str(repo), str(root / "bare.git"))
+    _set_age(root / "bare.git", OLD)
+    reports, outcomes = _run([root], repo, older_than=0)
+    assert _owners(reports) == {"bare.git": sweep.LIVE}
+    assert outcomes == []
+
+
+def test_ordinary_clone_with_submodule_git_dirs_is_still_removed(root: Path, repo: Path, base: Path):
+    clone = root / "entry" / "clone"
+    _git(base, "clone", "-q", str(repo), str(clone))
+    sub = clone / ".git" / "modules" / "sub"
+    (sub / "objects").mkdir(parents=True)
+    (sub / "refs").mkdir()
+    (sub / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+    _set_age(root / "entry", OLD)
+    reports, outcomes = _run([root], repo, older_than=0)
+    assert _owners(reports) == {"entry": sweep.STALE}
+    assert [o.action for o in outcomes] == ["removed"]
+
+
+def test_configured_repo_borrowing_objects_from_an_entry_keeps_it(root: Path, repo: Path, base: Path):
+    src = _seeded(root / "entry" / "src")
+    (repo / ".git" / "objects" / "info" / "alternates").write_text(
+        f"{src / '.git' / 'objects'}\n", encoding="utf-8"
+    )
+    _set_age(root / "entry", OLD)
+    reports, outcomes = _run([root], repo, older_than=0)
+    assert _owners(reports) == {"entry": sweep.LIVE}
+    assert "object store" in reports[0].entries[0].reason
+    assert outcomes == []
+    assert src.is_dir()
+
+
+def test_alternates_are_followed_through_a_chain_and_relative_paths(root: Path, repo: Path, base: Path):
+    middle = _seeded(base / "middle")
+    src = _seeded(root / "entry" / "src")
+    (repo / ".git" / "objects" / "info" / "alternates").write_text(
+        f"# a comment\n\n{middle / '.git' / 'objects'}\n", encoding="utf-8"
+    )
+    relative = os.path.relpath(src / ".git" / "objects", middle / ".git" / "objects")
+    (middle / ".git" / "objects" / "info" / "alternates").write_text(f"{relative}\n", encoding="utf-8")
+    _set_age(root / "entry", OLD)
+    reports, outcomes = _run([root], repo, older_than=0)
+    assert _owners(reports) == {"entry": sweep.LIVE}
+    assert outcomes == []
+
+
+def test_configured_repo_whose_git_dir_sits_in_an_entry_keeps_it(root: Path, repo: Path, base: Path):
+    # Named `.git`, so only the configured repository's own git dir protects it.
+    gitdir = root / "entry" / "x" / ".git"
+    gitdir.parent.mkdir(parents=True)
+    other = _seeded(base / "other-main", f"--separate-git-dir={gitdir}")
+    _set_age(root / "entry", OLD)
+    settings = sweep.Settings(roots=[str(root)], grace_seconds=GRACE, repos=[repo, other])
+    reports = sweep.survey(settings, root=repo, now=time.time())
+    assert _owners(reports) == {"entry": sweep.LIVE}
+    assert sweep.apply(reports, settings, older_than=0) == []
+    assert (gitdir / "HEAD").is_file()
+
+
+def test_quoted_alternates_path_refuses_the_survey(root: Path, repo: Path):
+    (repo / ".git" / "objects" / "info" / "alternates").write_text('"/q\\tuoted"\n', encoding="utf-8")
+    with pytest.raises(sweep.ConfigError, match="quoted"):
+        _run([root], repo, older_than=None)
+
+
+def test_failed_store_reread_during_apply_keeps_the_entry(root: Path, repo: Path, monkeypatch):
+    entry = _tree(root / "entry")
+    settings = _settings([root], repo)
+    reports = sweep.survey(settings, root=repo, now=time.time())
+    assert _owners(reports) == {"entry": sweep.STALE}
+
+    def fail(worktrees):
+        raise sweep.ConfigError("boom")
+
+    monkeypatch.setattr(sweep, "repository_stores", fail)
+    outcomes = sweep.apply(reports, settings, older_than=0)
+    assert [(o.action, o.reason) for o in outcomes] == [("kept", "boom")]
+    assert entry.is_dir()
+
+
+def test_store_read_names_a_configured_repos_separated_git_dir(base: Path):
+    gitdir = base / "elsewhere" / "gd"
+    gitdir.parent.mkdir()
+    other = _seeded(base / "other-main", f"--separate-git-dir={gitdir}")
+    assert str(gitdir) in sweep.repository_stores([str(other)])
+
+
+
+def test_objects_borrowed_after_the_report_are_rechecked_before_removal(root: Path, repo: Path):
+    src = _seeded(root / "entry" / "src")
+    _set_age(root / "entry", OLD)
+    settings = _settings([root], repo)
+    reports = sweep.survey(settings, root=repo, now=time.time())
+    assert _owners(reports) == {"entry": sweep.STALE}
+    (repo / ".git" / "objects" / "info" / "alternates").write_text(
+        f"{src / '.git' / 'objects'}\n", encoding="utf-8"
+    )
+    outcomes = sweep.apply(reports, settings, older_than=0)
+    assert [(o.action, o.reason.startswith("now live-worktree")) for o in outcomes] == [("kept", True)]
+    assert src.is_dir()

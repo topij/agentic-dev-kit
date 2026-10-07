@@ -390,6 +390,14 @@ author re-reading their own diff. **Cite them by name, never by number.**
    finding: `#136` exists *because* a lens reported it, and a change that writes
    into the tree looks identical.
 
+   **Create those copies in the directory that holds the tree you were handed** —
+   beside it, as `<that directory>/mut-<lens>-<short-sha>/` — **never directly
+   under the system temp dir** (`/tmp`, `/private/tmp`, `$TMPDIR`). The scratch
+   sweep (`sweep_scratch.py`) cleans only its configured `scratch.roots`, which
+   reach the session scratchpads; a copy left among everything else in the system
+   temp dir is never cleaned up (`#900`). Handed no tree, use the session scratch
+   directory your runtime names, and report where the copy went.
+
    The wording above was already right and a lens still hit the refusal —
    round 2 of `#459`'s panel recorded one (the correctness lens, worked around
    by the fresh-path rule); round 1 explicitly recorded none, so this was not
@@ -489,8 +497,9 @@ author re-reading their own diff. **Cite them by name, never by number.**
    own.
 
    Build each lens's review tree yourself when the runtime lets you hand one
-   over: a detached worktree at the named sha, outside the repo, namespaced by
-   lens and revision —
+   over: a detached worktree at the named sha, outside the repo, under the
+   session scratchpad rather than directly in the system temp dir (item 9 has
+   why), namespaced by lens and revision —
 
    ```sh
    git worktree add --detach <scratch>/lens-<name>-<short-sha> <sha>

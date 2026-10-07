@@ -435,7 +435,9 @@ def render(
     tree += (
         "- **If you also make a scratch copy of your own** (for mutation testing, say),"
         " reach it by a **fresh path**, namespaced by lens and revision — never by"
-        " removing and recreating one. A sandbox refusing `rm -rf` is refusing the wrong"
+        " removing and recreating one — and make it **beside the tree you were handed,"
+        " never directly under the system temp dir**, where no sweep cleans it up."
+        " A sandbox refusing `rm -rf` is refusing the wrong"
         " route, not blocking you: the fresh path was already correct. The **Scratch"
         " namespace** item in the contract below has the full reasoning.\n"
     )
