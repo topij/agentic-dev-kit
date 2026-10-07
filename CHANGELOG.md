@@ -42,6 +42,18 @@ starts.
 
 ---
 
+## #1000 — Scratch sweep: containment is judged by filesystem identity
+
+CHANGED (engine CLI surface): `sweep_scratch.py` now refuses (exit 1) a root that is or
+contains your home directory or a `scratch.worktree_repos` repository when it is spelled
+in another case on a case-insensitive filesystem; before, such a root was swept. A root is
+also refused when it or a guarded path exists but cannot be statted, with a reason starting
+`cannot stat it or …`. An entry that matches a registered worktree, a repository store or
+another configured root under a different spelling is now kept. An entry whose comparison
+cannot be statted is kept too, with a `cannot stat it or …` reason. Nothing to do unless
+the sweep now refuses a root: then write the root in its on-disk case, or fix the
+permissions that block the stat.
+
 ## #986 — Scratch sweep engine and the `scratch:` config block
 
 ADDED (config keys, engine CLI surface): `config/dev-model.yaml` gains a `scratch:`
