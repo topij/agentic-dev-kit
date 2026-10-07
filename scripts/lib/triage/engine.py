@@ -1526,6 +1526,12 @@ def _validate_forge_prefix(
             raise TriageError("forge predecessor binding mismatch", outcome="operator-held")
 
 
+class ForgePrefixError(TriageError):
+    """A `validate_session_state` failure in the forge-prefix checks, so a
+    refusal can tell it from a frozen-artifact failure (#1001). Every handler of
+    `TriageError` catches it unchanged."""
+
+
 def validate_session_state(
     store: ArtifactStore,
     settings: Settings,
@@ -1540,17 +1546,21 @@ def validate_session_state(
     `canonical_state` alone accepts a state whose published frozen artifact is
     gone or whose forge prefix does not bind, and the session-starting path
     hard-stops on either. `validate_recoverable_state` applies this function to
-    a completed state, so recovery calls valid only a completed state that path
-    accepts (#859). The `test` entry's own recovery branch still judges with
-    `canonical_state` alone. `retain` sees the parsed state once its frozen
-    artifact is proven, so a forge-prefix failure can still report it.
+    a completed state, so recovery, from `recover` and from the `test` entry,
+    calls valid only a completed state that path accepts (#859, #1002).
+    `retain` sees the parsed state once its frozen artifact is proven, so a
+    forge-prefix failure can still report it; that failure is raised as
+    `ForgePrefixError` with its message and outcome kept.
     """
     state = canonical_state(state_raw, settings=settings, mode=mode, retiring=retiring)
     frozen_path = _validate_frozen_artifact(store, state)
     if retain is not None:
         retain(state, frozen_path)
     if state.get("finalization_operations"):
-        _validate_forge_prefix(state["finalization_operations"], state, settings)
+        try:
+            _validate_forge_prefix(state["finalization_operations"], state, settings)
+        except TriageError as exc:
+            raise ForgePrefixError(str(exc), outcome=exc.outcome) from exc
     return state, frozen_path
 
 
@@ -1570,7 +1580,7 @@ def validate_recoverable_state(
     mode: str,
     retiring: bool,
 ) -> None:
-    """The validity `recover` and `state_action_plan` apply (#859).
+    """The validity `recover`, the `test` entry and `state_action_plan` apply (#859, #1002).
 
     A completed state is judged by `validate_session_state`: its retirement is
     the session-starting path's, so one that path would hard-stop on is not
@@ -1584,8 +1594,8 @@ def validate_recoverable_state(
     predicate rather than raise an exception that escapes recovery with its gate
     held. A completed state that fails only the artifact or forge checks, and
     so still passes `canonical_state` as a retiring entry, is captured by
-    `recover` only when its retirement is proven; otherwise `recover` refuses
-    it, writing nothing. When retirement is not proven, `state_action_plan`
+    `recover` or `test` only when its retirement is proven; otherwise the
+    entry refuses it, writing nothing. When retirement is not proven, `state_action_plan`
     preserves such a state if it also passes `canonical_state` under the
     current configuration, and holds it otherwise. A completed state that fails
     `canonical_state` itself is captured as any invalid state.
@@ -1599,6 +1609,16 @@ def validate_recoverable_state(
         raise TriageError(
             f"published frozen snapshot artifact is unreadable ({type(exc).__name__})"
         ) from exc
+
+
+def _unproven_retirement_action(error: TriageError, *, retry: str) -> str:
+    """What an operator does about a completed state that recovery refuses
+    because it fails only the artifact or forge checks and no retirement is
+    proven. A forge-prefix failure leaves the frozen artifact present, so it
+    is not told to restore it (#1001)."""
+    if isinstance(error, ForgePrefixError):
+        return f"reconcile the state's recorded forge operations with the forge, or land the run's sweep, then {retry}"
+    return f"restore the published frozen snapshot artifact, or land the run's sweep, then {retry}"
 
 
 def _forge_destination(remote: str) -> tuple[str, str]:
@@ -1908,7 +1928,7 @@ def run(
                     # either, or the refusal below sends the operator to an
                     # entry that fails (#859).
                     validate_recoverable_state(store, settings, state_raw, mode=mode, retiring=True)
-                except TriageError:
+                except TriageError as invalid:
                     if _parses(state_raw, settings, mode):
                         # The state itself is valid and fails only the artifact
                         # or forge checks. Capture it into the invalid-state
@@ -1918,7 +1938,7 @@ def run(
                         action = (proposed.get("action_core") or {}).get("action")
                         if action != "retire-terminal-invalid-state":
                             lease.release()
-                            return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="restore the published frozen snapshot artifact, or land the run's sweep, then retry", detail="state fails the session-starting checks and no retirement is proven; recovery refused")
+                            return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action=_unproven_retirement_action(invalid, retry="retry"), detail="state fails the session-starting checks and no retirement is proven; recovery refused")
                     captured = capture_state_present(store, settings, require_terminated=False, publish=True)
                     plan = state_action_plan(store, settings, captured)
                     if plan.get("held") is not None:
@@ -1937,11 +1957,24 @@ def run(
                 return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="resume", detail="captured state is valid; recovery refused")
             if entry == "test":
                 try:
-                    canonical_state(state_raw, settings=settings, mode=mode, retiring=True)
-                except TriageError:
+                    # `recover`'s predicate (#1002): a completed test state the
+                    # session-starting path below would hard-stop on is not
+                    # valid here, or test mode has no route out of it (#859).
+                    validate_recoverable_state(store, settings, state_raw, mode=mode, retiring=True)
+                except TriageError as invalid:
                     if context == "unattended":
                         lease.release()
                         return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="rerun test interactively to inspect exact recovery evidence", detail="invalid test state preserved without unattended recovery")
+                    if _parses(state_raw, settings, mode):
+                        # As in `recover`: a parsing state that fails only the
+                        # artifact or forge checks is captured only when the
+                        # plan can retire it, and otherwise refused unwritten.
+                        probe = capture_state_present(store, settings, require_terminated=False, publish=False)
+                        proposed = state_action_plan(store, settings, probe)
+                        action = (proposed.get("action_core") or {}).get("action")
+                        if action != "retire-terminal-invalid-state":
+                            lease.release()
+                            return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action=_unproven_retirement_action(invalid, retry="rerun test"), detail="test state fails the session-starting checks and no retirement is proven; recovery refused")
                     captured = capture_state_present(store, settings, require_terminated=False, publish=True)
                     plan = state_action_plan(store, settings, captured)
                     if plan.get("held") is not None:
