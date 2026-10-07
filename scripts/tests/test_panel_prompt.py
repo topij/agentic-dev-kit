@@ -633,14 +633,100 @@ def test_the_no_worktree_write_safety_instruction_is_present(repo):
     assert "No worktree was provided" in out.stdout
 
 
-def test_a_provided_worktree_is_named_and_the_no_worktree_warning_is_dropped(repo):
+def _detached_tree(repo: Path, tmp_path: Path, rev: str, name: str = "lens-x") -> str:
+    """A real detached worktree at ``rev`` — what `--scratch` is required to name."""
+    tree = tmp_path / "scratch" / name
+    _git(repo, "worktree", "add", "-q", "--detach", str(tree), rev)
+    return str(tree)
+
+
+def test_a_provided_worktree_is_named_and_the_no_worktree_warning_is_dropped(repo, tmp_path):
+    base, head = _revs(repo)
+    tree = _detached_tree(repo, tmp_path, head)
+    out = _run(
+        repo, "--lens", "adversarial", "--head", head, "--base", base,
+        "--branch", "b", "--scratch", tree,
+    )
+    assert out.returncode == 0, out.stderr
+    assert f"has been built for you at:**\n  `{tree}`" in out.stdout
+    assert "No worktree was provided" not in out.stdout
+
+
+# --- #999: --scratch is verified, never taken on trust ---------------------------
+
+
+def _scratch_refusal(repo: Path, scratch: str) -> subprocess.CompletedProcess:
     base, head = _revs(repo)
     out = _run(
         repo, "--lens", "adversarial", "--head", head, "--base", base,
-        "--branch", "b", "--scratch", "/abs/scratch/lens-x",
+        "--branch", "b", "--scratch", scratch,
     )
-    assert "/abs/scratch/lens-x" in out.stdout
-    assert "No worktree was provided" not in out.stdout
+    assert out.returncode == 2, out.stdout
+    assert "built for you" not in out.stdout
+    # Every refusal names the remedy with the real path and the full head sha.
+    assert f"git worktree add --detach {scratch} {head}" in out.stderr
+    return out
+
+
+def test_a_scratch_tree_at_another_sha_is_refused(repo, tmp_path):
+    base, _ = _revs(repo)
+    out = _scratch_refusal(repo, _detached_tree(repo, tmp_path, base))
+    assert f"HEAD there is {base[:12]}" in out.stderr
+
+
+def test_a_scratch_tree_on_a_branch_is_refused_even_at_the_head(repo, tmp_path):
+    """#999's repro: a lane's live worktree, on its own branch, at the head. The sha
+    matches, so only the detached check stands between it and a false isolation claim.
+    """
+    _, head = _revs(repo)
+    lane = tmp_path / "lane"
+    _git(repo, "worktree", "add", "-q", "-b", "dev/artifact-detector", str(lane), head)
+    out = _scratch_refusal(repo, str(lane))
+    assert "on branch 'refs/heads/dev/artifact-detector', not detached" in out.stderr
+
+
+def test_a_scratch_path_that_is_not_a_git_tree_is_refused(repo, tmp_path):
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    out = _scratch_refusal(repo, str(plain))
+    assert "`git rev-parse HEAD` failed there" in out.stderr
+
+
+def test_a_scratch_path_that_does_not_exist_is_refused(repo, tmp_path):
+    out = _scratch_refusal(repo, str(tmp_path / "never-built"))
+    assert "`git rev-parse HEAD` failed there" in out.stderr
+
+
+def test_scratch_verification_refuses_when_git_cannot_run(repo, tmp_path, monkeypatch):
+    """git missing is a refusal, not a pass. In-process, because the engine needs git
+    for every step before this one."""
+    pp = _load()
+    _, head = _revs(repo)
+    tree = _detached_tree(repo, tmp_path, head)
+    monkeypatch.setenv("PATH", str(tmp_path / "no-git-here"))
+    with pytest.raises(pp.PromptError, match="could not run git to verify it"):
+        pp._require_scratch(tree, head)
+
+
+def test_a_failing_detached_check_is_a_refusal_not_a_detached_head(repo, tmp_path, monkeypatch):
+    """`symbolic-ref -q` signals "detached" by exiting 1, so git failing outright
+    (exit 128) must not be read as the same answer. A shim fails only that call."""
+    pp = _load()
+    _, head = _revs(repo)
+    tree = _detached_tree(repo, tmp_path, head)
+    real = shutil.which("git")
+    shim_dir = tmp_path / "shim"
+    shim_dir.mkdir()
+    shim = shim_dir / "git"
+    shim.write_text(
+        "#!/bin/sh\n"
+        'if [ "$3" = symbolic-ref ]; then echo "fatal: shimmed" >&2; exit 128; fi\n'
+        f'exec "{real}" "$@"\n'
+    )
+    shim.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{shim_dir}{os.pathsep}{os.environ['PATH']}")
+    with pytest.raises(pp.PromptError, match="`git symbolic-ref -q HEAD` failed there"):
+        pp._require_scratch(tree, head)
 
 
 def test_the_scratch_namespace_fresh_path_reminder_is_present_early(repo):
@@ -670,18 +756,20 @@ def test_the_scratch_namespace_fresh_path_reminder_is_present_early(repo):
 @pytest.mark.parametrize(
     "scratch, placement",
     [
-        pytest.param("/abs/scratch/lens-x", "**beside the tree you were handed", id="handed-tree"),
-        pytest.param(None, "**in the session scratch directory your runtime names", id="no-tree"),
+        pytest.param(True, "**beside the tree you were handed", id="handed-tree"),
+        pytest.param(False, "**in the session scratch directory your runtime names", id="no-tree"),
     ],
 )
-def test_lens_scratch_placement_names_the_handed_tree_or_the_session_scratch(repo, scratch, placement):
+def test_lens_scratch_placement_names_the_handed_tree_or_the_session_scratch(
+    repo, tmp_path, scratch, placement
+):
     """#900: the scratch sweep cleans only its configured roots, so a lens copy made
     directly under the system temp dir is never cleaned up. The early reminder names
     where the copy goes — beside a handed tree, or with none the session scratch
     directory — ahead of the quoted contract item that carries the full rule.
     """
     base, head = _revs(repo)
-    extra = ["--scratch", scratch] if scratch else []
+    extra = ["--scratch", _detached_tree(repo, tmp_path, head)] if scratch else []
     out = _run(repo, "--lens", "correctness", "--head", head, "--base", base, "--branch", "b", *extra)
     assert out.returncode == 0, out.stderr
     early = f"{placement}, never directly under the system temp dir**"
@@ -692,19 +780,20 @@ def test_lens_scratch_placement_names_the_handed_tree_or_the_session_scratch(rep
     assert other not in out.stdout
 
 
-def test_the_scratch_namespace_reminder_survives_with_a_provided_worktree(repo):
+def test_the_scratch_namespace_reminder_survives_with_a_provided_worktree(repo, tmp_path):
     """The reminder concerns a lens's OWN scratch copy, independent of whether the
     cockpit also handed it a review tree — it must not disappear once `--scratch`
     is set, since #469's failure was about mutation-test scratch, not the review tree.
     """
     base, head = _revs(repo)
+    tree = _detached_tree(repo, tmp_path, head)
     out = _run(
         repo, "--lens", "adversarial", "--head", head, "--base", base,
-        "--branch", "b", "--scratch", "/abs/scratch/lens-x",
+        "--branch", "b", "--scratch", tree,
     )
     assert out.returncode == 0, out.stderr
     assert "reach it by a **fresh path**" in out.stdout
-    assert "/abs/scratch/lens-x" in out.stdout
+    assert tree in out.stdout
 
 
 def test_a_renumbering_slip_is_refused_even_though_the_count_is_unchanged(tmp_path):

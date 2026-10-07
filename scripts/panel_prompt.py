@@ -364,6 +364,66 @@ def _require_commit(root: Path, rev: str) -> str:
         raise PromptError(f"{rev} is not a commit in this repo: {exc}") from exc
 
 
+def _require_scratch(scratch: str, head: str) -> str:
+    """Refuse a ``--scratch`` that is not a detached tree at the head under review.
+
+    The prompt tells the lens a detached worktree at the head "has been built for
+    you" at this path. Before #999 that sentence rendered for any value, and an
+    adopter pointed it at the author lane's live worktree: the author committed into
+    it mid-review, both lenses watched HEAD move, and the isolation claim was false.
+    So both halves of the claim are checked: HEAD is the head, and HEAD is detached.
+    A check that cannot run (not a git tree, git missing) refuses — it never passes.
+    The remedy is building the tree, which this script deliberately does not do: it
+    assembles prompts and has no write path.
+    """
+    remedy = (
+        f"Build one and pass that path instead:\n    git worktree add --detach {scratch} {head}"
+    )
+
+    def git_c(*args: str) -> subprocess.CompletedProcess:
+        try:
+            return subprocess.run(
+                ["git", "-C", scratch, *args], capture_output=True, text=True, check=False
+            )
+        except OSError as exc:
+            raise PromptError(
+                f"--scratch {scratch}: could not run git to verify it ({exc}). The prompt "
+                "would claim a detached worktree at the head that nothing confirmed. "
+                + remedy
+            ) from exc
+
+    found = git_c("rev-parse", "HEAD")
+    if found.returncode != 0:
+        raise PromptError(
+            f"--scratch {scratch}: `git rev-parse HEAD` failed there "
+            f"({found.stderr.strip() or f'exit {found.returncode}'}), so it cannot be "
+            "confirmed as a worktree at the head under review. " + remedy
+        )
+    if found.stdout.strip() != head:
+        raise PromptError(
+            f"--scratch {scratch}: HEAD there is {found.stdout.strip()[:12]}, not the head "
+            f"under review {head[:12]}. The prompt would tell the lens it holds the head "
+            "when it holds something else. " + remedy
+        )
+    # `symbolic-ref -q` exits 1 for a detached HEAD and 0 on a branch; anything else is
+    # git failing, which must not read as "detached".
+    ref = git_c("symbolic-ref", "-q", "HEAD")
+    if ref.returncode == 0:
+        raise PromptError(
+            f"--scratch {scratch}: HEAD there is on branch {ref.stdout.strip()!r}, not "
+            "detached. A tree on a branch is one someone can commit into mid-review — "
+            "#999 is a lane's live worktree handed over this way, and HEAD moved under "
+            "both lenses. " + remedy
+        )
+    if ref.returncode != 1:
+        raise PromptError(
+            f"--scratch {scratch}: `git symbolic-ref -q HEAD` failed there "
+            f"({ref.stderr.strip() or f'exit {ref.returncode}'}), so a detached HEAD "
+            "could not be confirmed. " + remedy
+        )
+    return scratch
+
+
 def render(
     *,
     lens: str,
@@ -686,6 +746,8 @@ def build(args: argparse.Namespace) -> str:
     roster = _lens_roster(config, args.lens)
 
     head = _require_commit(root, args.head)
+    if o_scratch is not None:
+        _require_scratch(o_scratch, head)
     branch = resolve_branch(root, o_branch, head)
     base_branch = o_base_branch or get(config, "vcs.protected_branch", "main")
     # These two must agree, or the provenance label describes the wrong path.
@@ -749,7 +811,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--base", default=None, help="override the remote-resolved base (discouraged)")
     parser.add_argument("--base-branch", default=None, help="branch to resolve the base from")
     parser.add_argument("--branch", default=None, help="branch under review (default: current)")
-    parser.add_argument("--scratch", default=None, help="worktree path to name in the prompt")
+    parser.add_argument("--scratch", default=None, help="detached worktree at --head to name in the prompt; "
+                        "verified (HEAD is --head, detached) and refused otherwise, never built")
     parser.add_argument("--pr", type=int, default=None, help="PR number, for the lens's context")
     parser.add_argument("--runtime", default="claude", help="lens_compute.<runtime> key to render")
     parser.add_argument(
