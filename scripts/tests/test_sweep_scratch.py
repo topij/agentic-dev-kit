@@ -70,6 +70,15 @@ def _tree(path: Path, *, age: int = OLD) -> Path:
     return path
 
 
+@pytest.fixture(autouse=True)
+def _mtime_only(request, monkeypatch):
+    """Fixtures backdate with ``os.utime``, which sets every ctime to now, so the
+    engine's ``max(mtime, ctime)`` would read every fixture as fresh. Age is judged
+    by mtime alone here; a test whose name holds ``ctime`` keeps the real stamp."""
+    if "ctime" not in request.node.name:
+        monkeypatch.setattr(sweep, "_stamp", lambda st: st.st_mtime)
+
+
 @pytest.fixture
 def base(tmp_path: Path) -> Path:
     # Resolved: the engine refuses a root with a symlink in its path, and macOS
@@ -449,7 +458,7 @@ def test_worktree_registered_after_the_report_is_rechecked_before_removal(
     assert _owners(reports) == {"entry": sweep.STALE}
     monkeypatch.setattr(sweep, "registered_worktrees", lambda repos: [str(entry)])
     # The fake registration is not a repository, so its git dir cannot be read.
-    monkeypatch.setattr(sweep, "repository_stores", lambda worktrees: [])
+    monkeypatch.setattr(sweep, "repository_stores", lambda *a, **k: [])
     outcomes = sweep.apply(reports, settings, older_than=0)
     assert [(o.action, o.reason.startswith("now live-worktree")) for o in outcomes] == [("kept", True)]
     assert entry.is_dir()
@@ -907,3 +916,30 @@ def test_the_kept_reason_names_the_git_dir_that_kept_it(root: Path, repo: Path, 
     _set_age(root / "entry", OLD)
     reports, _ = _run([root], repo, older_than=None)
     assert str(root / "entry" / "fixture" / "origin.git") in reports[0].entries[0].reason
+
+
+def test_an_extracted_copy_with_old_mtimes_is_judged_by_its_ctime(root: Path, repo: Path, base: Path):
+    src = _tree(base / "src")
+    subprocess.run(["cp", "-Rp", str(src), str(root / "copy")], check=True)
+    assert (root / "copy" / "sub" / "file.txt").stat().st_mtime < time.time() - OLD + DAY
+    reports, outcomes = _run([root], repo, older_than=7 * DAY)
+    assert _owners(reports) == {"copy": sweep.GRACE}
+    assert outcomes == []
+    assert (root / "copy").is_dir()
+
+
+def test_a_worktree_registration_whose_git_file_is_gone_does_not_wedge_the_sweep(root: Path, repo: Path):
+    _git(repo, "worktree", "add", "-q", "--detach", str(root / "lens1"))
+    (root / "lens1" / ".git").unlink()  # the directory stays; git calls it prunable
+    junk = _tree(root / "junk")
+    reports, outcomes = _run([root], repo, older_than=0)
+    assert _owners(reports) == {"lens1": sweep.LIVE, "junk": sweep.STALE}
+    assert [o.path for o in outcomes if o.action == "removed"] == [str(junk)]
+
+
+def test_an_unreadable_worktree_git_dir_names_git_worktree_prune(root: Path, repo: Path, base: Path, monkeypatch):
+    wt = base / "wt"
+    _git(repo, "worktree", "add", "-q", "--detach", str(wt))
+    (wt / ".git").write_text("gitdir: /nonexistent/elsewhere\n", encoding="utf-8")
+    with pytest.raises(sweep.ConfigError, match="git worktree prune"):
+        sweep.repository_stores([str(wt)])

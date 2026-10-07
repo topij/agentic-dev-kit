@@ -30,8 +30,8 @@ child of a root is one **entry**, and every entry gets exactly one owner class:
     unreadable or quoted ``alternates`` file is an exit 2.
 ``in-grace``
     Something anywhere inside the entry was modified within
-    ``scratch.grace_window``. The newest mtime over the whole tree decides, not the
-    top directory's.
+    ``scratch.grace_window``. The newest timestamp over the whole tree decides,
+    not the top directory's.
 ``stale``
     Neither of the above, and fully scanned.
 ``unclassified``
@@ -41,12 +41,13 @@ child of a root is one **entry**, and every entry gets exactly one owner class:
     ``st_dev`` and is not detected), or an entry that is or holds another
     configured root. Always kept.
 
-Age is the newest **mtime** in the entry. A tree extracted or copied with its
-original timestamps (``cp -a``, ``rsync -a``, an archive) looks as old as its
-source, so add a root only where every child is disposable whatever its age.
+Age is the newest of each path's **mtime and ctime** in the entry. A tree
+extracted or copied with its original timestamps (``cp -a``, ``rsync -a``,
+``tar -x``) keeps its source's mtimes, but the copy's ctime is when it was
+written, and ``utime`` cannot set ctime back.
 
 Report mode (the default) changes nothing. ``--apply --older-than <age>`` removes
-``stale`` entries whose newest mtime is at least ``<age>`` old, and nothing else.
+``stale`` entries whose newest timestamp is at least ``<age>`` old, and nothing else.
 Immediately before each removal it re-reads the worktree registrations and
 re-scans the entry, and it removes only if the entry is still ``stale``, still old
 enough, and is the same inode it classified.
@@ -296,6 +297,7 @@ def _git_common_dir(worktree: str, env: dict[str, str]) -> str:
     if result.returncode != 0 or not os.path.isabs(path):
         raise ConfigError(
             f"cannot read the git dir of {worktree}: {result.stderr.strip() or result.returncode}"
+            " (a deleted worktree's registration is cleared by `git worktree prune`)"
         )
     return os.path.realpath(path)
 
@@ -344,9 +346,12 @@ def repository_stores(worktrees: list[str]) -> list[str]:
     pending: list[tuple[str, int]] = []
     for worktree in worktrees:
         state = _target_state(worktree)
+        if state == "present":
+            state = _target_state(os.path.join(worktree, ".git"))
         if state == "gone":
-            # A prunable registration: its directory was deleted. Its common git
-            # dir is the one every other worktree of that repository reports.
+            # A prunable registration: its directory or its `.git` was deleted.
+            # Its common git dir is the one every other worktree of that
+            # repository reports.
             continue
         if state == "unknown":
             raise ConfigError(f"cannot stat the registered worktree {worktree}")
@@ -535,14 +540,20 @@ class _Scan:
     linked: str | None = None
 
 
+def _stamp(st: os.stat_result) -> float:
+    """When a path last changed: an mtime restored by ``tar -x`` or ``cp -a`` is
+    not, but the ctime of the restoring write is."""
+    return max(st.st_mtime, st.st_ctime)
+
+
 def _usage(st: os.stat_result) -> int:
     blocks = getattr(st, "st_blocks", None)
     return blocks * 512 if blocks is not None else st.st_size
 
 
 def scan(entry: str, top: os.stat_result) -> _Scan:
-    """Size and newest mtime over the whole tree, never following a symlink."""
-    result = _Scan(size=_usage(top), newest=top.st_mtime)
+    """Size and newest timestamp over the whole tree, never following a symlink."""
+    result = _Scan(size=_usage(top), newest=_stamp(top))
     if not stat.S_ISDIR(top.st_mode):
         return result
     if _looks_like_git_dir(entry):
@@ -560,7 +571,7 @@ def scan(entry: str, top: os.stat_result) -> _Scan:
                 result.problems.append(f"unreadable {child}: {exc.strerror}")
                 continue
             result.size += _usage(st)
-            result.newest = max(result.newest, st.st_mtime)
+            result.newest = max(result.newest, _stamp(st))
             if st.st_dev != top.st_dev:
                 result.problems.append(f"{child} is on another filesystem")
                 if name in dirnames:
