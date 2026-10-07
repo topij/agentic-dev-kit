@@ -55,9 +55,11 @@
 - **Fix rounds on #986 kept creating the next round's findings.** Severity M, kept for accumulation beside the
   entry above and `safety-critical-changes.md` rule 3.
   - **Where:** rounds 6–9 in the cockpit on 2026-10-07.
-  - **What happened:** round 8's fix for a worktree whose `.git` was gone also skipped a bare configured repository,
+  - **What happened:** the fix round 7 reviewed (`3deb7687`) tolerated a registration whose directory was deleted
+    but not one where only its `.git` was gone, and round 7's adversarial lens found that shape. The fix round 8
+    reviewed (`e1fe7c74`) tolerated a worktree whose `.git` was gone, but it also skipped a bare configured repository,
     which has no `.git`, and so dropped its object store. That made the sweep fail open. Round 8's adversarial lens
-    reproduced it, and round 9 reverted the fix.
+    reproduced it; the revert (`258fee84`) is what round 9 reviewed.
   - **Missing:** an authoring-time check for a new skip or exemption: which other inputs share the shape it keys on.
 - **A lens's report-mode run against the real shared scratch root was refused by the runtime's auto-mode classifier.**
   Severity L. Round 8's adversarial lens on #986 was refused as a "Shared Scratch Sweep", so every finding it made
