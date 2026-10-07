@@ -1722,6 +1722,7 @@ def test_recover_refuses_a_completed_state_whose_frozen_artifact_is_missing_and_
     refused = run("recover", context="interactive", request={}, start=root)
     assert refused["outcome"] == "operator-held"
     assert refused["detail"] == "state fails the session-starting checks and no retirement is proven; recovery refused"
+    assert refused["resume_action"] == "restore the published frozen snapshot artifact, or land the run's sweep, then retry"
     assert state_path.read_bytes() == raw
     assert sorted(path.name for path in state_dir.iterdir()) == entries_before
 
@@ -1801,6 +1802,34 @@ def test_recover_routes_a_completed_state_whose_forge_prefix_check_fails_to_the_
     assert held["detail"] == "invalid state captured before parse"
     assert held["recovery_plan"]["action_core"]["action"] == "retire-terminal-invalid-state"
     assert state_path.read_bytes() == raw
+
+
+@pytest.mark.evidence
+def test_recover_refusal_of_a_forge_prefix_failure_does_not_send_the_operator_to_the_artifact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#1001: a completed state whose frozen artifact is intact but whose
+    forge-prefix check fails, with no retirement proven, is refused unwritten
+    with a resume action naming the forge operations, not the artifact."""
+    from triage import engine as triage_engine
+
+    root, state_path, _worktree, terminal = _engine_completed_sweep(tmp_path, monkeypatch)
+    assert ArtifactStore(load_settings(root), "live").resolve(terminal["frozen_snapshot"]["path"]).exists()
+    raw = state_path.read_bytes()
+    state_dir = state_path.parent
+    entries_before = sorted(path.name for path in state_dir.iterdir())
+
+    def mismatch(*_args: object, **_kwargs: object) -> None:
+        raise TriageError("forge predecessor binding mismatch", outcome="operator-held")
+
+    monkeypatch.setattr(triage_engine, "_validate_forge_prefix", mismatch)
+    refused = run("recover", context="interactive", request={}, start=root)
+    assert refused["outcome"] == "operator-held"
+    assert refused["detail"] == "state fails the session-starting checks and no retirement is proven; recovery refused"
+    assert refused["resume_action"] == "reconcile the state's recorded forge operations with the forge, or land the run's sweep, then retry"
+    assert "frozen snapshot artifact" not in refused["resume_action"]
+    assert state_path.read_bytes() == raw
+    assert sorted(path.name for path in state_dir.iterdir()) == entries_before
 
 
 @pytest.mark.evidence
