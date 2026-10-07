@@ -20,6 +20,42 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-07 (scratch sweep engine merged, in Claude Code)
+
+[#986](https://github.com/topij/agentic-dev-kit/pull/986) merged as
+`dff111ae86ff0101358183c07ca8874d17bff46e`, on the operator's authorization, after
+fallback-panel rounds 6–9 in this session. `scripts/sweep_scratch.py` reports and,
+with `--apply --older-than`, removes stale direct children of `scratch.roots`. Each
+round's findings and dispositions are in its disposition comment on the PR.
+
+Decided (operator, 2026-10-07):
+- The global `rm -rf *` deny stays, so this engine is the only scratch-cleanup route.
+- Round-5 finding 1 is fixed within a bound rather than documented. An entry holding a bare
+  or separated git dir is kept, and so is one that holds a configured repository's git dir or
+  object store, including stores reached through `alternates`.
+- Round 6 also took the lens scratch-placement rule: *Scratch namespace* in
+  `fallback-review-panel.md` puts a lens's copies beside its handed tree, never
+  directly under the system temp dir.
+- Bare fixture repos in pytest basetemps pin their whole session entry. That is
+  documented and ticketed (#997) rather than loosened.
+- Round 8's `.git`-gone skip was reverted in round 9, because it dropped a bare
+  configured repo's object store (fail-open). That shape exits 2 again.
+
+Not established: how much space the sweep reclaims on this machine. A report-mode run
+during round 7 kept the largest session entries for the bare-fixture rule. `--apply`
+was never run against a real directory.
+
+Verification: `make test` at `258fee841388fb16c215dd37d0b5f79dfcc3f3c4` on 2026-10-07,
+in `/Users/topi/Coding/dev-model-sessions/scratch-sweep/wt`, printed `4426 passed, 1
+skipped`. CI's `Test` run on `main` passed at `dff111ae`.
+
+The lane worktree `/Users/topi/Coding/dev-model-sessions/scratch-sweep/wt`
+(`dev/scratch-sweep`) was left in place at this wrap-up.
+
+Filed this session: #996, #997.
+
+______________________________________________________________________
+
 ## Session — 2026-10-07 (review round budget, in Claude Code)
 
 [#993](https://github.com/topij/agentic-dev-kit/pull/993) merged as
@@ -70,7 +106,7 @@ The operator asked for an overnight autonomous session in separate worktrees, an
   - In-flight states keep the old judgement.
   - The panel rejected the earlier designs as HIGH regressions into a terminal hold; the PR's comments hold every round.
   - `make test` at `d9e951a3a421c8b959675d9e3daa0d0b4608a06a` on 2026-10-07, in the lane worktree, printed `4297 passed, 1 skipped`. Later commits are tests, docstrings, the CHANGELOG entry, the triage workflow doc and the manifest, reviewed by delta passes.
-- **#986** (#900's scratch sweep engine) is **open and held for the operator** at `d9a1fd571daf8181b434e362de48d055abce4dd6`.
+- **#986** (#900's scratch sweep engine) is **open and held for the operator** at `d9a1fd571daf8181b434e362de48d055abce4dd6`. *(Correction: it merged later the same day as `dff111ae`; see the session entry above.)*
   - Every full two-lens pass found new fail-open edge cases in what the engine judges removable, so the cockpit stopped the loop rather than merge a file-deleting engine.
   - The round-5 disposition comment on the PR lists the open findings.
   - `make test` at that head on 2026-10-07, in `/Users/topi/Coding/dev-model-sessions/scratch-sweep/wt`, printed `4367 passed, 1 skipped`.
@@ -279,19 +315,21 @@ record-prose row.
 
 ### Scratch retention
 
-**Status:** #986 adds `scripts/sweep_scratch.py` (report mode plus a guarded
-`--apply`) and the `scratch:` config block. It is held for the operator at
-`d9a1fd57`, with open findings in its round-5 disposition comment. It covers session
-scratchpads only; lens clones under the system temp dir and killed pytest basetemps
-are not covered, so #900 stays open for them and for the panel, wrap-up and
-session-start integrations. `state/review-evidence/` waits on #861.
+**Status:** `scripts/sweep_scratch.py` and the `scratch:` config block shipped in
+#986 (`dff111ae`). Its documented limits are in the engine docstring. #997 owns
+reclaiming session entries that bare fixture repos pin. #996 holds the unpinned
+guards, wording, and the `.git`-gone exit 2. #900 stays open for the round-end
+cockpit sweep, the wrap-up and session-start integrations, and listing the engine
+in `review.safety_critical_paths`. `state/review-evidence/` waits on #861.
 **Owner:** [#900](https://github.com/topij/agentic-dev-kit/issues/900),
+[#997](https://github.com/topij/agentic-dev-kit/issues/997),
+[#996](https://github.com/topij/agentic-dev-kit/issues/996),
 [#861](https://github.com/topij/agentic-dev-kit/issues/861),
 [#895](https://github.com/topij/agentic-dev-kit/issues/895).
 
-▶ Next: decide #986's open round-5 findings (a git dir an outside repository
-depends on is judged stale; no refusal of a `$HOME`-like root) — fix them or accept
-them as documented limits — then merge it under its operator class.
+▶ Next: #997 — choose how a session entry whose only git dirs are test fixtures
+becomes sweepable without reopening the outside-dependent fail-open (an operator
+design decision), then build it.
 
 ### Reviewer profiles
 

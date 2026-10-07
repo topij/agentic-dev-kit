@@ -50,6 +50,21 @@
   - **Outcome:** the cockpit held the PR for the operator.
   - **Missing:** a mechanism. No stopping rule says when an enumerated input space is "enough" for a first
     version of a deletion engine.
+  - **Later the same day:** the cockpit ran rounds 6–9 on the operator's word, and round 9 found nothing new
+    above LOW. #986 merged; see the next entry.
+- **Fix rounds on #986 kept creating the next round's findings.** Severity M, kept for accumulation beside the
+  entry above and `safety-critical-changes.md` rule 3.
+  - **Where:** rounds 6–9 in the cockpit on 2026-10-07.
+  - **What happened:** the fix round 7 reviewed (`3deb7687`) tolerated a registration whose directory was deleted
+    but not one where only its `.git` was gone, and round 7's adversarial lens found that shape. The fix round 8
+    reviewed (`e1fe7c74`) tolerated a worktree whose `.git` was gone, but it also skipped a bare configured repository,
+    which has no `.git`, and so dropped its object store. That made the sweep fail open. Round 8's adversarial lens
+    reproduced it; the revert (`258fee84`) is what round 9 reviewed.
+  - **Missing:** an authoring-time check for a new skip or exemption: which other inputs share the shape it keys on.
+- **A lens's report-mode run against the real shared scratch root was refused by the runtime's auto-mode classifier.**
+  Severity L. Round 8's adversarial lens on #986 was refused as a "Shared Scratch Sweep", so every finding it made
+  came from fixtures it built. Round 7's adversarial and round 8's correctness lens each ran report mode against the
+  real root without a refusal. **Missing:** the mechanism behind the differing outcomes.
 - **A cockpit `make test` was killed by SIGTERM mid-suite.** Severity L.
   - **Where:** at `7b581204`, in the `scratch-sweep` lane on 2026-10-07, it exited 143 at about 46%. The rerun passed.
   - **Context:** review lenses were running their own `make test` in sibling clones at the time.
