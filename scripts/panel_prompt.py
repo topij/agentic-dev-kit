@@ -68,6 +68,7 @@ Exits 2 on any condition that would produce a misleading prompt.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -375,15 +376,25 @@ def _require_scratch(scratch: str, head: str) -> str:
     A check that cannot run (not a git tree, git missing) refuses — it never passes.
     The remedy is building the tree, which this script deliberately does not do: it
     assembles prompts and has no write path.
+
+    What is checked is that much and no more, once, at assembly time: the path is
+    not required to be the tree's top level, absolute, or free of uncommitted edits,
+    and nothing re-checks it after the prompt is printed.
+
+    Inherited ``GIT_*`` variables are dropped for these calls: ``git -C`` does not
+    override an exported ``GIT_DIR``, so a hook or wrapper exporting one would have
+    every check read that repository instead of ``scratch``.
     """
     remedy = (
-        f"Build one and pass that path instead:\n    git worktree add --detach {scratch} {head}"
+        "Build one at a path that does not exist yet and pass that path instead:\n"
+        f"    git worktree add --detach <new-path> {head}"
     )
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
 
     def git_c(*args: str) -> subprocess.CompletedProcess:
         try:
             return subprocess.run(
-                ["git", "-C", scratch, *args], capture_output=True, text=True, check=False
+                ["git", "-C", scratch, *args], capture_output=True, text=True, check=False, env=env
             )
         except OSError as exc:
             raise PromptError(
@@ -812,7 +823,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--base-branch", default=None, help="branch to resolve the base from")
     parser.add_argument("--branch", default=None, help="branch under review (default: current)")
     parser.add_argument("--scratch", default=None, help="detached worktree at --head to name in the prompt; "
-                        "verified (HEAD is --head, detached) and refused otherwise, never built")
+                        "checked once (HEAD is --head, detached) and refused otherwise, never built; "
+                        "pass an absolute path, since it is printed as given")
     parser.add_argument("--pr", type=int, default=None, help="PR number, for the lens's context")
     parser.add_argument("--runtime", default="claude", help="lens_compute.<runtime> key to render")
     parser.add_argument(

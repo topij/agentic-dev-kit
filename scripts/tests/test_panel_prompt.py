@@ -663,8 +663,10 @@ def _scratch_refusal(repo: Path, scratch: str) -> subprocess.CompletedProcess:
     )
     assert out.returncode == 2, out.stdout
     assert "built for you" not in out.stdout
-    # Every refusal names the remedy with the real path and the full head sha.
-    assert f"git worktree add --detach {scratch} {head}" in out.stderr
+    # Every refusal names the remedy with the full head sha, at a fresh path: the
+    # given path may already exist (#999's live lane did), and git refuses to add a
+    # worktree over it.
+    assert f"git worktree add --detach <new-path> {head}" in out.stderr
     return out
 
 
@@ -706,6 +708,40 @@ def test_scratch_verification_refuses_when_git_cannot_run(repo, tmp_path, monkey
     monkeypatch.setenv("PATH", str(tmp_path / "no-git-here"))
     with pytest.raises(pp.PromptError, match="could not run git to verify it"):
         pp._require_scratch(tree, head)
+
+
+def test_a_scratch_tree_matching_only_a_prefix_of_the_head_is_refused(repo, tmp_path):
+    """The head comparison is on the full sha, not an abbreviation of it. Only the
+    last character differs here, so a prefix comparison of any length short of the
+    whole sha would pass this tree."""
+    pp = _load()
+    _, head = _revs(repo)
+    tree = _detached_tree(repo, tmp_path, head)
+    near = head[:-1] + ("0" if head[-1] != "0" else "1")
+    with pytest.raises(pp.PromptError, match="not the head under review"):
+        pp._require_scratch(tree, near)
+
+
+def test_an_inherited_git_dir_does_not_answer_for_the_scratch_path(repo, tmp_path):
+    """`git -C` does not override an exported GIT_DIR. With one pointing at a valid
+    detached tree, a plain directory and #999's live lane must still be refused."""
+    _, head = _revs(repo)
+    good = _detached_tree(repo, tmp_path, head)
+    git_dir = _git(Path(good), "rev-parse", "--absolute-git-dir")
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    lane = tmp_path / "lane"
+    _git(repo, "worktree", "add", "-q", "-b", "dev/live-lane", str(lane), head)
+    base, _ = _revs(repo)
+    for scratch in (plain, lane):
+        out = subprocess.run(
+            [sys.executable, str(ENGINE), "--root", str(repo), "--lens", "adversarial",
+             "--head", head, "--base", base, "--branch", "b", "--scratch", str(scratch)],
+            cwd=repo, capture_output=True, text=True, check=False,
+            env={**os.environ, "GIT_DIR": git_dir, "GIT_WORK_TREE": good},
+        )
+        assert out.returncode == 2, (scratch, out.stdout)
+        assert "built for you" not in out.stdout
 
 
 def test_a_failing_detached_check_is_a_refusal_not_a_detached_head(repo, tmp_path, monkeypatch):
