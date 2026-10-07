@@ -5,6 +5,33 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-05 (cs-toolkit LIVE recovery and project-name hold, in Codex)
+
+The operator approved the installed recovery action
+`1217af39a6eedcd2a4697bb34952a8941014bedd801de29bd46bfc3199094f2d`.
+The installed invoker applied it and the retained verification helper read back
+the exact quarantine bytes, original filesystem identities and safe-restart receipt.
+Commands, directory, revision and date are retained in the recovery receipts under
+`state/review-evidence/cs-toolkit-linear-acceptance_2026-10-04/finalize-decisions/`.
+The primary adopter advanced to actual main
+`bbcd3f167185518ff4860c6c80d523657452aef0`; its installed triage contract and
+kit pin `66a8044865e5ef43d633270c2ce224827de3aa35` were preserved.
+
+The replacement LIVE run froze session `62970e59c292424c8db6b8ae75f3e81e`.
+The operator selected TRI-01 for preparation, parked the other candidates, then
+approved its complete exact Linear payload. I incorrectly prepared the project
+as `CS-ToolkitDev`; configuration and Linear use `CS-Toolkit Dev`. The adapter
+rejected the payload before its create mutation, after the engine had persisted
+an `attempting` record. The complete mutation-prohibited marker search found no
+matching issue; its command, revision, date and directory are retained in
+`live-62970e59-project-mismatch-marker-readback.json`. No identifier was returned.
+Live acceptance remains incomplete, with the valid in-flight state preserved.
+The installed workflow supplies no project correction for that phase; no raw
+state edit, replacement freeze or source sweep was attempted. [#6](https://github.com/topij/agentic-dev-kit/issues/6#issuecomment-5995157879)
+records the hold and correction. Resume from
+`RESUME-LIVE-PROJECT-MISMATCH-62970e59.md` in the evidence directory.
+The separate frozen kit-friction archive/park decision remains pending.
+
 ### 2026-10-05 (cs-toolkit recovery repair delivery, in Codex)
 
 **Shipped upstream.** Historical gate compatibility merged through #952

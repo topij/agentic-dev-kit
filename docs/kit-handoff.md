@@ -20,6 +20,45 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-08 (overnight batch of headless lanes, in Claude Code)
+
+The operator asked for an overnight autonomous session with parallel lanes and authorized merging every PR
+"when clean", operator-class lanes included. It also approved filing #1002 and removing the merged
+`dev/scratch-sweep` lane. Headless Claude lanes ran under `launch_lane.py`, one per PR below. The cockpit ran every
+review and fix round, merged `main` into each later lane to clear `CHANGELOG.md` conflicts, and stamped
+`make test` at each merging head. `reconcile_sessions.sh` at wrap-up reconciled each lane as merged or held, as listed.
+
+- **#1003** (#999) merged as `695d35d0`, through `dev_session.sh merge` (self class).
+  - `panel_prompt.py --scratch` now refuses unless the tree is detached at `--head`.
+  - Review: one adversarial lens, then a delta pass.
+  - `make test` at `0319a8ff` on 2026-10-08, in its lane worktree, printed `4434 passed, 1 skipped`.
+- **#1004** (#1001, #1002) merged as `18bacdc2`.
+  - A recovery refusal names the check that failed.
+  - `test` judges a completed state as `recover` does.
+  - The panel showed no engine-written state reaches the `test` entry's forge-prefix refusal, so the claim was narrowed rather than tested.
+  - `make test` at `87d06984` on 2026-10-08, in its lane worktree, printed `4438 passed, 1 skipped`.
+- **#1005** (#1000) merged as `f508d220`.
+  - The scratch sweep judges root and entry containment by filesystem identity as well as by string.
+  - The engine classes it standard; the cockpit ran both lenses because it deletes files.
+  - `make test` at `b4645e26` on 2026-10-08, in its lane worktree, printed `4456 passed, 1 skipped`.
+- **#1006** (#991, #994) is **held for the operator** at `fd2dd68974a8cd0bf317c1e90985aa790bd80473`.
+  - Safety-critical paths match case-folded; `--record-round --head` takes only a hex sha.
+  - Every reviewed head has a two-lens receipt, and no round found anything above LOW.
+  - The round budget is spent with two LOWs open. Filing their ticket needs the operator, so the cockpit did not merge.
+  - The decision packet on the PR has both options.
+  - `make test` at `fd2dd689` on 2026-10-08, in its lane worktree, printed `4467 passed, 1 skipped`.
+
+Decided (cockpit): the operator's "merge when clean" was read as not covering a merge-gate PR with a LOW
+still open past a spent round budget.
+
+Not established: whether `sweep_scratch.py`'s per-component `stat` cost matters on a large root. A lens
+measured a large slowdown on a synthetic layout; nothing measured it on a real one.
+
+Filed this session: #1002. Lenses' mutation copies remain under this session's scratchpad, inside
+`scratch.roots`.
+
+______________________________________________________________________
+
 ## Session — 2026-10-07 (scratch sweep engine merged, in Claude Code)
 
 [#986](https://github.com/topij/agentic-dev-kit/pull/986) merged as
@@ -114,7 +153,7 @@ The operator asked for an overnight autonomous session in separate worktrees, an
 
 Decided: #986 was held, not merged. The operator's "merge when clean" did not cover a destructive engine with open low-to-medium fail-open findings.
 
-Not established: the `test` entry's own recovery branch still judges by `canonical_state` alone, which is the #859 class in test mode. It is parked in the friction log, untracked.
+Not established: the `test` entry's own recovery branch still judges by `canonical_state` alone, which is the #859 class in test mode. It is parked in the friction log, untracked. *(Correction: it was filed as #1002 the same day and fixed by #1004; see the 2026-10-08 entry above.)*
 
 Lanes ran with no operator present, so no tracker write was made. This session's friction is parked in the friction log.
 
@@ -259,35 +298,6 @@ recorded without fixes claimed. Evidence remains under
 
 ______________________________________________________________________
 
-## Session — 2026-10-05 (cs-toolkit LIVE recovery and project-name hold, in Codex)
-
-The operator approved the installed recovery action
-`1217af39a6eedcd2a4697bb34952a8941014bedd801de29bd46bfc3199094f2d`.
-The installed invoker applied it and the retained verification helper read back
-the exact quarantine bytes, original filesystem identities and safe-restart receipt.
-Commands, directory, revision and date are retained in the recovery receipts under
-`state/review-evidence/cs-toolkit-linear-acceptance_2026-10-04/finalize-decisions/`.
-The primary adopter advanced to actual main
-`bbcd3f167185518ff4860c6c80d523657452aef0`; its installed triage contract and
-kit pin `66a8044865e5ef43d633270c2ce224827de3aa35` were preserved.
-
-The replacement LIVE run froze session `62970e59c292424c8db6b8ae75f3e81e`.
-The operator selected TRI-01 for preparation, parked the other candidates, then
-approved its complete exact Linear payload. I incorrectly prepared the project
-as `CS-ToolkitDev`; configuration and Linear use `CS-Toolkit Dev`. The adapter
-rejected the payload before its create mutation, after the engine had persisted
-an `attempting` record. The complete mutation-prohibited marker search found no
-matching issue; its command, revision, date and directory are retained in
-`live-62970e59-project-mismatch-marker-readback.json`. No identifier was returned.
-Live acceptance remains incomplete, with the valid in-flight state preserved.
-The installed workflow supplies no project correction for that phase; no raw
-state edit, replacement freeze or source sweep was attempted. [#6](https://github.com/topij/agentic-dev-kit/issues/6#issuecomment-5995157879)
-records the hold and correction. Resume from
-`RESUME-LIVE-PROJECT-MISMATCH-62970e59.md` in the evidence directory.
-The separate frozen kit-friction archive/park decision remains pending.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -304,19 +314,22 @@ flags; #921 stays open for the cockpit-side check of the verdict-line names. The
 record-prose row of #585's decision is not built: its deterministic checks, and a lens
 told which spans stay executed. #993 (`2d40c960`) added the review round budget: the
 opening review plus `review.round_budget` fix rounds, then an operator decision packet.
+#1006 (#991's case-folded class match and #994's follow-ups) is **held for the operator** at
+`fd2dd68974a8cd0bf317c1e90985aa790bd80473`: its round budget is spent with two LOW findings open, and its
+decision packet is on the PR.
 **Owner:**
 [#585](https://github.com/topij/agentic-dev-kit/issues/585); round-budget follow-ups
 [#994](https://github.com/topij/agentic-dev-kit/issues/994); related #921, #403, #666,
 #305, and the class's documented limits #928, #929, #930 and #931.
 
-▶ Next: #994 — the round budget's LOW follow-ups (stale mode lists in `pr-watch.md`,
-the unpinned gh refusal of `--record-round`, the count wording); then #585's
-record-prose row.
+▶ Next: operator — decide #1006 from its decision packet (merge at `fd2dd689` and file the two
+LOWs as one ticket, or authorize one more fix round); then #585's record-prose row.
 
 ### Scratch retention
 
 **Status:** `scripts/sweep_scratch.py` and the `scratch:` config block shipped in
-#986 (`dff111ae`). Its documented limits are in the engine docstring. #997 owns
+#986 (`dff111ae`). Its documented limits are in the engine docstring. #1005 (`f508d220`)
+judges root and entry containment by filesystem identity as well as by path string (#1000). #997 owns
 reclaiming session entries that bare fixture repos pin. #996 holds the unpinned
 guards, wording, and the `.git`-gone exit 2. #900 stays open for the round-end
 cockpit sweep, the wrap-up and session-start integrations, and listing the engine
@@ -350,16 +363,15 @@ review-request method.
 filesystem identity (#856, in #889). PR #907 applied the shared predicate to
 `GitHubForge`’s sweep-cleanup guard (#891), merged on 2026-10-02 as `cb92fd5`. #985
 (`6ccc1744`) made `recover` judge a completed state with the session-starting checks
-(#859).
+(#859). #1004 (`18bacdc2`) names the failed check in a recovery refusal (#1001) and judges a
+completed `test` state as `recover` does (#1002).
 The doctrine prescribes the operator’s manual way out of the two-link state (#894),
 and an engine-owned rollback waits for a recurrence (#892).
 **Owner:**
 [#883](https://github.com/topij/agentic-dev-kit/issues/883),
 [#892](https://github.com/topij/agentic-dev-kit/issues/892).
 
-▶ Next: the `test` entry's recovery branch still judges by `canonical_state` alone
-(parked in the friction log 2026-10-07) — ticket it and apply #985's
-`validate_recoverable_state` there; then #883.
+▶ Next: #883 — the *Completed-state retirement* doctrine's residual precision points.
 
 ### Triage one-run cleanup
 
