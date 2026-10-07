@@ -20162,7 +20162,8 @@ def test_archive_unconfirmed_pending_preserves_concurrent_edit(tmp_path, mode, f
     "archive_plan_sessions.py", "check_doc_budget.py", "check_memory_budget.py",
     "digest_merged_prs.py", "fetch_merged_prs.py", "finalize_triage.py",
     "heartbeat_cli.py", "kit_doctor.py", "panel_prompt.py", "pr_watch.py",
-    "runtime_smoke.py", "triage_friction_log.py", "verify_live_validation_bundle.py",
+    "runtime_smoke.py", "sweep_scratch.py", "triage_friction_log.py",
+    "verify_live_validation_bundle.py",
 ])
 def test_supported_standalone_entry_points_declare_python_floor_and_dependencies(name):
     import tomllib

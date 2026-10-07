@@ -667,6 +667,31 @@ def test_the_scratch_namespace_fresh_path_reminder_is_present_early(repo):
     assert "Scratch namespace" in out.stdout
 
 
+@pytest.mark.parametrize(
+    "scratch, placement",
+    [
+        pytest.param("/abs/scratch/lens-x", "**beside the tree you were handed", id="handed-tree"),
+        pytest.param(None, "**in the session scratch directory your runtime names", id="no-tree"),
+    ],
+)
+def test_lens_scratch_placement_names_the_handed_tree_or_the_session_scratch(repo, scratch, placement):
+    """#900: the scratch sweep cleans only its configured roots, so a lens copy made
+    directly under the system temp dir is never cleaned up. The early reminder names
+    where the copy goes — beside a handed tree, or with none the session scratch
+    directory — ahead of the quoted contract item that carries the full rule.
+    """
+    base, head = _revs(repo)
+    extra = ["--scratch", scratch] if scratch else []
+    out = _run(repo, "--lens", "correctness", "--head", head, "--base", base, "--branch", "b", *extra)
+    assert out.returncode == 0, out.stderr
+    early = f"{placement}, never directly under the system temp dir**"
+    contract = "**Create those copies in the directory that holds the tree you were handed**"
+    heading = "## The contract every lens gets"
+    assert out.stdout.index(early) < out.stdout.index(heading) < out.stdout.index(contract)
+    other = "**in the session scratch directory" if scratch else "**beside the tree you were handed"
+    assert other not in out.stdout
+
+
 def test_the_scratch_namespace_reminder_survives_with_a_provided_worktree(repo):
     """The reminder concerns a lens's OWN scratch copy, independent of whether the
     cockpit also handed it a review tree — it must not disappear once `--scratch`

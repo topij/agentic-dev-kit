@@ -42,6 +42,21 @@ starts.
 
 ---
 
+## #986 — Scratch sweep engine and the `scratch:` config block
+
+ADDED (config keys, engine CLI surface): `config/dev-model.yaml` gains a `scratch:`
+block with required keys `roots` (a list of absolute directories, with `{uid}`
+and `{repo_slug}` placeholders), `grace_window` (an age such as `24h`) and
+`worktree_repos` (repositories whose registered worktrees are protected). The new
+engine `sweep_scratch.py` reads it: with no flags it prints a report, `--json`
+makes the report machine-readable, and `--apply --older-than <age>` removes stale
+entries. It exits 0 on success, 1 when a root is refused or an eligible entry could not
+be removed, and 2 on a usage or config error, including a missing `scratch:` key. It
+needs git 2.36 or later. To
+adopt it, copy the `scratch:` block from the kit's config into yours and review its
+`roots` before running `--apply`; without the block the engine exits 2 and touches
+nothing.
+
 ## #993 — A review round budget: the loop stops for the operator after the opening review + `review.round_budget` fix rounds
 
 ADDED (config key): `review.round_budget`, optional, a non-negative integer, default

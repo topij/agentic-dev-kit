@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "595eb4d15d4a62996bde8a2770fad8efd147412cd8e8fe7e00dc39e13cf10f3b"
+      "sha256": "932af7267818a1351827e18a688da3a743065ad0b34bf262a5149f8cfe9da763"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -155,7 +155,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "00c8426561755fe718f59cde7ded283c3424b54221ef540178f73dfdd1ba903d"
+      "sha256": "6e0219e0324b569afe7f0a7c7ed95b4a980daa6a75d3ce2ea216f3db5605a1be"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -248,7 +248,8 @@
         "scripts/lib/systemize/config.py",
         "scripts/lib/triage/model.py",
         "scripts/panel_prompt.py",
-        "scripts/pr_watch.py"
+        "scripts/pr_watch.py",
+        "scripts/sweep_scratch.py"
       ],
       "role": "engine",
       "sha256": "428fa7e24e9efec1a8f65f15ba2d1673df819196bce3ccabe1a850afa7ff988a"
@@ -511,7 +512,7 @@
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
-      "sha256": "dedcade672f8542b948e6ba497f5ed902659e485302e3523bf46845a6f2e588e"
+      "sha256": "0e1f85854fd07626b016fd3529fa13b4a56678910a9ef00c59a92caa9ba0064d"
     },
     "scripts/pr_watch.py": {
       "role": "engine",
@@ -528,6 +529,10 @@
     "scripts/runtime_smoke.py": {
       "role": "repo-only",
       "sha256": "02ea87c1a97922aed59b4da0be934a641c03a3f4de49a1e680d2b1d3b7add2f8"
+    },
+    "scripts/sweep_scratch.py": {
+      "role": "engine",
+      "sha256": "b6dd82778913c489bcdc020dec409f12b124fe2944901aed9ba40c1c62ab6702"
     },
     "scripts/tests/_repo_layout.py": {
       "role": "test",
@@ -547,7 +552,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "8dbcc9b240eae66a4d52819f83e1becd2edf2c084c65ee3e1dc4fd976ab2de76"
+      "sha256": "6d7859438aba0556cec6831088a0278b375c0f4b047d22534f3efb95a0601a4d"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -579,7 +584,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "0557091c3b492ad1e3cdde1efe3dabb05dd9625bdbfd3bba1e392fe175d89602"
+      "sha256": "690a76e12ab6e6f729f45284a19e73359775a62cd7279c12222de557f99c4d59"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -607,11 +612,11 @@
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
-      "sha256": "9de2c9e4ab6b5280dd2e4a393c1bb77371e88098978b00268de03995f1bb6b27"
+      "sha256": "e18269e81bc9920784beb6d0be10b8fced2782fc656d24e6af4f9e6a14484675"
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "82a4abaf88ba67ed580de219b67d6744459ee56de1db79fadc29998bfba1ffa1"
+      "sha256": "74e0aabe0310e624207c7fb81cd27b6700c5c7e5061df85c6d28f716ce6c2b4a"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
@@ -644,6 +649,10 @@
     "scripts/tests/test_state_guard.py": {
       "role": "test",
       "sha256": "8ea6db59de234366f28a8a0a223eccef1514bd638daeb07dcd21a5cb04c6e1d6"
+    },
+    "scripts/tests/test_sweep_scratch.py": {
+      "role": "test",
+      "sha256": "3f2fdd083918289f5eb2b653ce718ca01a404f17a5213fdfb3b4f84d9dca5337"
     },
     "scripts/tests/test_systemize_artifacts.py": {
       "role": "test",

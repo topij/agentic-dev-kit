@@ -336,6 +336,9 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # refreshed every engine around it and left this one at whatever version
     # the adopter first installed, while reporting `0 differ, 0 unknown`.
     ("scripts/check_memory_budget.py", "engine"),
+    # Reports and, on --apply, removes stale scratch under the roots `scratch:`
+    # configures (#900). Shipped: adopters' sessions fill the same temp dirs.
+    ("scripts/sweep_scratch.py", "engine"),
     # The kit's own test suite (#493). Role `test` rather than `engine`: nothing
     # here is imported by an engine at run time (`derive_dependencies` scans only
     # `engine` and `hook` roles), and none of it should be probed by
@@ -368,6 +371,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/test_reconcile_sessions.py", "test"),
     ("scripts/tests/test_repo_layout.py", "test"),
     ("scripts/tests/test_state_guard.py", "test"),
+    ("scripts/tests/test_sweep_scratch.py", "test"),
     ("scripts/tests/test_live_validation_bundle.py", REPO_ONLY_ROLE),
     ("scripts/tests/test_make_lint.py", REPO_ONLY_ROLE),
     ("scripts/tests/test_runtime_parity_matrix.py", REPO_ONLY_ROLE),
