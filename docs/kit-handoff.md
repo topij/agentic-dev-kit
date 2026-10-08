@@ -22,13 +22,13 @@
 
 ## Session — 2026-10-08 (changelog fragments, then a three-lane batch run overnight, in Claude Code)
 
-- **#1009 designed and built as PR #1020, held for the operator.** On the operator's choice, each PR now adds `changelog.d/<branch-slug>.md` and `CHANGELOG.md` is frozen behind a BREAKING cutover entry. `upgrade.md` Step 1 prints each fragment version a commit in range wrote. A `git merge-tree` replay of #1004–#1006 showed only `CHANGELOG.md` conflicting; `kit-manifest.json` auto-merged, so it is unchanged. The adversarial lens reviewed `c254fd90`, `751bedee` and `44ada17e`, which spent the round budget, and the last review left a Low-Medium finding (a fragment written only by a merge commit prints nothing). The decision packet is on #1020. `make test` at `44ada17e` in the main checkout on 2026-10-08 → `4476 passed, 1 skipped`.
+- **#1009 designed and built as PR #1020, held for the operator.** On the operator's choice, once #1020 merges each PR would add `changelog.d/<branch-slug>.md`, with `CHANGELOG.md` frozen behind a BREAKING cutover entry and `upgrade.md` Step 1 printing each fragment version a commit in range wrote. Until then `main`'s rule is unchanged. A `git merge-tree` replay of #1004–#1006 showed only `CHANGELOG.md` conflicting; `kit-manifest.json` auto-merged, so it is unchanged. The adversarial lens reviewed `c254fd90`, `751bedee` and `44ada17e`, which spent the round budget, and the last review left a Low-Medium finding (a fragment written only by a merge commit prints nothing). The decision packet is on #1020. `make test` at `44ada17e` in the main checkout on 2026-10-08 → `4476 passed, 1 skipped`.
 - **Lanes launched headless from `main` at `fad8597b`.** The operator first chose interactive lanes, then asked for autonomous work overnight, so each lane ran through `launch_lane.py`. Each prompt carried its ticket text, because the lane profile has no `gh issue view`.
   - `skip-shape-doctrine` (#1012) → #1021, merged as `43cb89ef` through `dev_session.sh merge`. It had a full lens pass at `ac635d8d` and two LOW delta repairs.
   - `pr-watch-trio` (#1008, #1013, #1014) → #1022, held for the operator: it is safety-critical. Its panel receipt is at `6d5343ac`, and the disposition lists the open LOWs.
   - `triage-trio` (#1016, #1017, #1018) → #1023, consciously parked by the cockpit, unmerged. It has a lens receipt at `6713c8a4`. Its #1017 fix leaves a Low-Medium gap for the `tracker-write` phase, and the right hint there is a design decision.
 - **#1022 and #1023 both ship `changelog.d/` fragments, so merge #1020 first.** Before #1020, nothing reads them.
-- `reconcile_sessions.sh pr-watch-trio triage-trio skip-shape-doctrine` reported `merged` for #1021, `held` for #1022 and `open` for #1023, which is parked as above. The lane worktrees are kept until their PRs settle.
+- `reconcile_sessions.sh pr-watch-trio triage-trio skip-shape-doctrine` reported `merged` for #1021, `held` for #1022 and `open` for #1023, which is parked as above. All three lane worktrees are kept, #1021's included, until the batch's open PRs settle.
 - Workstream assignment was not confirmed with the operator: this session added a new **Changelog fragments** entry and left every existing entry alone. #1008 is named in *Review proportionality*, and #1022 now carries it.
 
 ______________________________________________________________________
@@ -380,7 +380,7 @@ confirm no state root holds a `proposal_correction`, then remove the shim (#979)
 
 ### Changelog fragments
 
-**Status:** #1020 moves changelog entries to `changelog.d/` fragments (#1009). It is held at `44ada17e` with a decision packet, because the review round budget is spent. #1022 and #1023 carry fragments and wait on it. #507's heading check has no new headings to check once #1020 lands.
+**Status:** #1020 moves changelog entries to `changelog.d/` fragments (#1009). It is held at `44ada17e` with a decision packet, because the review round budget is spent. #1022 and #1023 carry fragments and wait on it. #507's heading check has no new entries to check once #1020 lands.
 **Owner:** [#1009](https://github.com/topij/agentic-dev-kit/issues/1009); PRs #1020, #1022, #1023.
 
 ▶ Next: the operator answers #1020's decision packet (another fix round, merge as is, or withdraw). Then merge #1022 after #1020, and settle #1023's `tracker-write` hint before merging it.
