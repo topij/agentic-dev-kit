@@ -24,210 +24,60 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
-## 2026-10-08
+## 2026-10-08 — Backlog migrated by triage session 7f6626780abd4719b8a752a5ac8856ee
 
-- **Parallel lanes collide on `CHANGELOG.md` and `kit-manifest.json`, and each collision costs a review round.**
-  Severity M, kept for accumulation.
-  - **What happened:** in the 2026-10-08 overnight batch (#1003–#1006), every lane that merged after the first conflicted in
-    `CHANGELOG.md` (each adds a top entry) and regenerated `kit-manifest.json`. CI does not run on a conflicting PR,
-    so #1006 reported no `toolkit` check until the cockpit merged `origin/main` into it. Each later merge from
-    `main` moved the head, which took another delta pass and another stamp run: #1005 merged `main` twice, and #1006 twice.
-  - **Also:** the CHANGELOG heading test needs the PR number before the PR exists. One lane opened a draft to learn
-    it; two guessed it, and one guess (`#1004`) was taken by another lane while its suite ran.
-  - **Missing:** a mechanism that stops parallel lanes sharing one append point (per-PR changelog fragments, or a
-    manifest regenerated at merge time). Not designed here.
-- **A composed delta receipt cannot gain a disposition comment afterwards.** Severity L. On #1003 the cockpit
-  recorded `fallback:delta --compose-parent <parent>` without `--disposition`, then re-ran it with `--disposition -`.
-  The engine refused: "composed review parent does not match the standing receipt head", because the standing
-  receipt was now the delta itself. The poll kept warning that no disposition comment exists, though the findings
-  were on the PR in the cockpit's own comments. Proposed fix: let `--disposition` attach to the standing receipt
-  without re-recording it. Not filed: no operator was present.
-- **Review lenses wrote into the tree they were handed, twice.** Severity L, kept for accumulation beside the
-  contract's *No writes in the tree you were given*. #1003's delta lens appended to `README.md` and reverted it.
-  #1004's adversarial lens ran `git -C <handed tree> clone . mut-…`, which put a full clone inside the tree, and its
-  `rm -rf` of that path was denied. Both trees were cockpit-built detached worktrees, so no one's work was at risk,
-  and both lenses disclosed it.
-- **A headless lane could not restore its own mutation-test edits.** Severity L. The `pr-watch-case-class` lane's
-  restore commands were denied by the lane profile, so it restored each mutant by hand. One denied restore left a
-  mutant in place while the next was applied, and one suite run carried two mutants; the lane noticed and reran it.
+Engine mode: `engine-backed`.
 
-## 2026-10-07
+Filed [#1009](https://github.com/topij/agentic-dev-kit/issues/1009) from TRI-01, the `2026-10-08` entry ``Parallel lanes collide on `CHANGELOG.md` and `kit-manifest.json`, and each collision costs a review round.``.
 
-- **A headless Claude lane cannot open a PR with a real body.** Severity M. Lanes
-  `color-and-help` and `triage-recover-validity` each ended with the PR body undelivered.
-  - **Mechanism:** the shipped `config/claude-lane-settings.json` allows `gh pr create:*`, but a
-    multi-line `--body` was denied as shell shape.
-  - **Further refusals:** the profile has no `gh pr edit`, and a body file outside the worktree was denied.
-  - **What happened:** one lane failed before opening its PR; the other opened it with a placeholder body. The
-    cockpit opened, or rewrote, each body from the lane's final text.
-  - **Proposed fix:** have the lane contract name `gh pr create --body-file <worktree-relative file>`,
-    or add a scoped `gh pr edit` grant. The profile is safety-critical, so this needs `safety-critical-changes.md`.
-  - **Not filed:** no operator was present to approve the payload.
-  - **Recurred 2026-10-08:** the `panel-scratch-verify` lane opened #1003 with its verification marked pending, then
-    ran `gh pr edit` and `gh pr comment` to add the stamp. Both were denied, so the run ended `failed` after its work
-    was done. The cockpit moved the stamp into the body.
-- **The `test` entry's recovery branch still judges validity by `canonical_state` alone.**
-  Severity L. This was found by #985's panel at `09d06628` and `d9e951a3`. A completed test-mode state whose
-  frozen artifact is missing hard-stops `test` with no test-mode `recover` route out. This is the
-  #859 class, which #985 fixed for live `recover` only. Proposed fix: use
-  `validate_recoverable_state` in that branch. Not filed: no operator was present.
-  *(Filed as #1002 the same day, on the operator's approval; #1004 fixed it, merged as
-  `18bacdc2`.)*
-- **The two-lens panel did not converge on a new destructive engine.** Severity M, kept
-  for accumulation beside #305 and #666. #986's scratch sweep never converged.
-  - **Pattern:** each pass found new fail-open edge cases in what the engine judges removable: a FIFO record wedge, a bare
-    repository, a permission error read as "gone", a `--separate-git-dir` layout.
-  - **What the fixes did:** each fix was real and pinned by a mutation-checked test, but the passes kept widening the
-    input space instead of closing it.
-  - **Outcome:** the cockpit held the PR for the operator.
-  - **Missing:** a mechanism. No stopping rule says when an enumerated input space is "enough" for a first
-    version of a deletion engine.
-  - **Later the same day:** the cockpit ran rounds 6–9 on the operator's word, and round 9 found nothing new
-    above LOW. #986 merged; see the next entry.
-- **Fix rounds on #986 kept creating the next round's findings.** Severity M, kept for accumulation beside the
-  entry above and `safety-critical-changes.md` rule 3.
-  - **Where:** rounds 6–9 in the cockpit on 2026-10-07.
-  - **What happened:** the fix round 7 reviewed (`3deb7687`) tolerated a registration whose directory was deleted
-    but not one where only its `.git` was gone, and round 7's adversarial lens found that shape. The fix round 8
-    reviewed (`e1fe7c74`) tolerated a worktree whose `.git` was gone, but it also skipped a bare configured repository,
-    which has no `.git`, and so dropped its object store. That made the sweep fail open. Round 8's adversarial lens
-    reproduced it; the revert (`258fee84`) is what round 9 reviewed.
-  - **Missing:** an authoring-time check for a new skip or exemption: which other inputs share the shape it keys on.
-- **A lens's report-mode run against the real shared scratch root was refused by the runtime's auto-mode classifier.**
-  Severity L. Round 8's adversarial lens on #986 was refused as a "Shared Scratch Sweep", so every finding it made
-  came from fixtures it built. Round 7's adversarial and round 8's correctness lens each ran report mode against the
-  real root without a refusal. **Missing:** the mechanism behind the differing outcomes.
-- **A cockpit `make test` was killed by SIGTERM mid-suite.** Severity L.
-  - **Where:** at `7b581204`, in the `scratch-sweep` lane on 2026-10-07, it exited 143 at about 46%. The rerun passed.
-  - **Context:** review lenses were running their own `make test` in sibling clones at the time.
-  - **Missing:** the mechanism is unknown.
+Filed [#1010](https://github.com/topij/agentic-dev-kit/issues/1010) from TRI-02, the `2026-10-08` entry `A composed delta receipt cannot gain a disposition comment afterwards.`.
 
-## 2026-10-05
+Filed [#1011](https://github.com/topij/agentic-dev-kit/issues/1011) from TRI-05, the `2026-10-07` entry `A headless Claude lane cannot open a PR with a real body.`.
 
-- **The disposition filename was supplied as literal text again.** Severity L,
-  kept for accumulation beside the 2026-10-04 instance below. During #959's
-  2026-10-05 delivery, `--disposition` received the report path instead of stdin.
-  Readback exposed the filename; the author replaced the public comment with the
-  complete report and verified exact readback. Use `--disposition -` with stdin;
-  the existing CLI contract supplies this remedy, with no new mechanism proposed.
-- **An installation push preceded root verification's terminal result.** Severity L,
-  kept for accumulation. During cs-toolkit #2535's 2026-10-05 delivery, candidate
-  `e54c7eb1a8aabacd257963b493149a3eaf1a5106` was pushed while root checks ran.
-  The run completed afterward; subsequent candidates completed checks before
-  pushing. Existing before-push discipline supplies the remedy; no new gate is proposed.
+Filed [#1012](https://github.com/topij/agentic-dev-kit/issues/1012) from TRI-08, the `2026-10-07` entry `Fix rounds on #986 kept creating the next round's findings.`.
 
-- **A fallback review's full suite overlapped its scratch mutations.** Severity L,
-  kept for accumulation. In #952's initial adversarial review, `make test` at
-  `84cda2321c8d1e82db54b9f11a478a38b2c207fe` on 2026-10-04, in
-  `/private/tmp/mut-adversarial-84cda232`, observed temporary mutant bytes. The reviewer
-  interrupted that contaminated run, verified restoration and reran before reporting;
-  no clean verdict was accepted from the interrupted run. Existing review isolation
-  and behavioral-mutation requirements govern this event; it proposes no new rule.
+Filed [#1013](https://github.com/topij/agentic-dev-kit/issues/1013) from TRI-11, the `2026-10-05` entry `The disposition filename was supplied as literal text again.`.
 
-## 2026-10-04
+Filed [#1014](https://github.com/topij/agentic-dev-kit/issues/1014) from TRI-20, the `2026-10-03` entry `` `pr_watch.py`'s verification-stamp parser and `wrap-up.md`'s stamp wording disagree. ``.
 
-- **A PR poll initially put its receipt in the real state tree during synthetic
-  validation.** Severity L, kept for accumulation. During #943's 2026-10-04 delivery,
-  the cockpit polled without its intended `DEVKIT_STATE_ROOT`. It moved only that
-  newly created receipt to the disposable watch root before the full gates, then
-  supplied the root explicitly on subsequent polls. The existing state-isolation
-  requirement governs the mistake; this entry proposes no new rule.
-- **The cockpit changed verification state while claiming an isolated run.** Severity L,
-  kept for accumulation. `env -u FORCE_COLOR make test` at
-  `8385211ea8ac0051df40d919ff0bd8515f43f8df` on 2026-10-03, in
-  `/private/tmp/devkit-validation-integrity`, failed the suite state guard after the
-  author polled `pr-watch` concurrently in that checkout. The quiet detached rerun
-  supplied the verification evidence instead. The existing state-isolation requirement
-  already governs the mistake; this entry proposes no new rule.
-- **A public fallback disposition initially contained its local filename.** Severity L,
-  kept for accumulation. The author supplied `/private/tmp/devkit-pr937-disposition.md`
-  and `/private/tmp/devkit-pr938-parent-disposition.md` as `--disposition` values. That
-  argument is literal text; stdin requires `--disposition -`. The author read back the
-  public comments, replaced their bodies with the completed reports and verified exact
-  read-back. The later composed receipt used stdin. The existing CLI contract already
-  supplies the correct route; this entry records the misuse for recurrence.
+Archived without filing: TRI-03, the `2026-10-08` entry `Review lenses wrote into the tree they were handed, twice.`.
+
+Archived without filing: TRI-04, the `2026-10-08` entry `A headless lane could not restore its own mutation-test edits.`.
+
+Archived without filing: TRI-06, the `2026-10-07` entry ``The `test` entry's recovery branch still judges validity by `canonical_state` alone.``.
+
+Archived without filing: TRI-07, the `2026-10-07` entry `The two-lens panel did not converge on a new destructive engine.`.
+
+Archived without filing: TRI-09, the `2026-10-07` entry `A lens's report-mode run against the real shared scratch root was refused by the runtime's auto-mode classifier.`.
+
+Archived without filing: TRI-10, the `2026-10-07` entry ``A cockpit `make test` was killed by SIGTERM mid-suite.``.
+
+Archived without filing: TRI-12, the `2026-10-05` entry `An installation push preceded root verification's terminal result.`.
+
+Archived without filing: TRI-13, the `2026-10-05` entry `A fallback review's full suite overlapped its scratch mutations.`.
+
+Archived without filing: TRI-14, the `2026-10-04` entry `A PR poll initially put its receipt in the real state tree during synthetic validation.`.
+
+Archived without filing: TRI-15, the `2026-10-04` entry `The cockpit changed verification state while claiming an isolated run.`.
+
+Archived without filing: TRI-16, the `2026-10-04` entry `A public fallback disposition initially contained its local filename.`.
+
+Archived without filing: TRI-17, the `2026-10-03` entry `The matrix guard's LOW residue from #923's last delta pass.`.
+
+Archived without filing: TRI-18, the `2026-10-03` entry `#919's tracker body does not scope the row audit the records now assign to it.`.
+
+Archived without filing: TRI-19, the `2026-10-03` entry `` `make lint` does not see an untracked file, so a lint failure surfaced only after a stamp run started. ``.
+
+Archived without filing: TRI-21, the `2026-10-03` entry `A negative control anchored on a structural boundary stopped testing anything when an unrelated key moved that boundary.`.
+
+Archived without filing: TRI-22, the `2026-10-03` entry `The option offered for an operator decision overstated its own premise.`.
+
+Archived without filing: TRI-23, the `2026-10-03` entry `#923 is a further occurrence of the shape #838 tracks.`.
+
+Approval commands: `approve TRI-01 TRI-02 TRI-05 TRI-08 TRI-11 TRI-20`, `archive TRI-03 TRI-04 TRI-06 TRI-07 TRI-09 TRI-10 TRI-12 TRI-13 TRI-14 TRI-15 TRI-16 TRI-17 TRI-18 TRI-19 TRI-21 TRI-22 TRI-23`. Approver: `topij`.
 
 ## 2026-10-03
 
 Parked rather than filed: this wrap-up ran with no operator present, so no tracker
 payload could be approved. The first two carried a drafted payload, and were filed afterwards on
 the operator's approval, as each one's annotation says.
-
-- **The matrix guard's LOW residue from #923's last delta pass.** Severity L.
-  - **Observed** in #923's last delta pass at `f60b530`; its disposition there names the
-    lens behind each item.
-    `scripts/tests/test_runtime_parity_matrix.py` misses the following:
-    - It recognises only backtick fences, so a `~~~` fence holding a `#` line still ends
-      a section early, and a rogue row after it goes unchecked. `_slugs` has the same
-      gap.
-    - It skips these link forms: unquoted or spaced `href`, `img src`, an angle-bracketed
-      target containing a space, and reference definitions inside lists or quotes.
-    - The `<?` in `LINK` and `REFERENCE`, `HREF`'s IGNORECASE, and the single-quoted
-      `href` have no test that fails when they are removed.
-  - **Mechanism:** the fence toggles test `startswith("```")` only; the link patterns
-    and their controls were written per form.
-  - **Proposed fix:** toggle on `~~~` too, in both functions, with a control; add one
-    control per pattern branch named; leave the unparsed forms out of the claim, which
-    already names the parsed forms only.
-  - **Drafted title:** "Matrix guard: tilde fences, unpinned link-pattern branches, and
-    the link forms it does not parse". **Filed as #925** on the operator's approval, with an added "Related: #216" line.
-- **#919's tracker body does not scope the row audit the records now assign to it.**
-  Severity M. The handoff, the exit record and the plan pointer all name #919 as the
-  owner of "which matrix rows' claims are true". Read on 2026-10-03, #919's body
-  described only item 10, whose acceptance #923 met, so a reader of the issue alone could
-  close it.
-  **Drafted comment for #919:** "#923 shipped item 10's check and the exit re-run; the
-  operator declared the Phase 6 exit under the amendment in
-  `saved_plans/phase6-exit-check_2026-10-02.md`. This issue stays open for what that
-  amendment leaves unaudited: for each capability-matrix row that cites no stamped live
-  record, name the tests that pin its repository side, or record that none does."
-  **Posted on #919** on the operator's approval.
-- **`make lint` does not see an untracked file, so a lint failure surfaced only after a
-  stamp run started.** Severity L. Lint passed on a new, still-untracked test file; after
-  it was committed, the `make test` stamp at `7c26636` stopped at ruff B905, and
-  the stamp and its mutation runs were restarted. **Mechanism:** the `Makefile`'s lint line feeds
-  ruff `git ls-files -z '*.py'`, which lists tracked files only. **Proposed fix:** add
-  `--others --exclude-standard` to that listing, or say in `AGENTS.md` that lint covers
-  tracked files only.
-- **`pr_watch.py`'s verification-stamp parser and `wrap-up.md`'s stamp wording
-  disagree.** Severity L. A PR body line reading "at `<sha>`, in `<dir>`, on `<date>`"
-  — the directory that `wrap-up.md` asks a verification claim to name — was reported
-  as no stamp at that head. **Mechanism:** `_VERIFICATION_STAMP_RE` requires
-  `at <sha> on <date>` with nothing between them. **Proposed fix:** accept a clause
-  between them in the parser, or have `wrap-up.md` prescribe the order "at `<sha>` on
-  `<date>`, in `<dir>`".
-  **Recurred 2026-10-08** on #1006: a stamp comment in the "at `<sha>`, in `<dir>`, on `<date>`" order was not read,
-  so the poll kept naming an older head's stamp from a disposition comment.
-- **A negative control anchored on a structural boundary stopped testing anything when
-  an unrelated key moved that boundary.** Severity L, kept for accumulation.
-  `test_runtime_parity_contract_rejects_a_gap_with_no_real_surface` inserted its entry
-  just before the front matter's closing `---`. #923 added keys after
-  `workflow_contract`, so the entry landed in another block and the test passed without
-  raising, which only the full-suite stamp showed. Repaired in #923 by asserting that
-  the insertion landed and matching the assertion's message.
-- **The option offered for an operator decision overstated its own premise.** Severity
-  M, kept for accumulation. The cockpit offered "the table's rows are confirmed by their
-  own live records" as an option, the operator chose it, and #923's correctness lens
-  then found rows that cite no stamped record, as #923's disposition at `9f23607`
-  records. The operator re-decided on a narrowed
-  wording. The shape: a decision option's factual premise was not checked against the
-  record before it was offered.
-- **#923 is a further occurrence of the shape #838 tracks.** Severity L. The full panel
-  and each of the two delta passes found one more unpinned property of the new guard.
-  Severity fell every round, and the LOW rule stopped the loop.
-
-## 2026-09-28 — Backlog migrated by triage session 3058c6ec6d0e4c4a9298351d6f8b1aaf
-
-Engine mode: `engine-backed`.
-
-Filed [#844](https://github.com/topij/agentic-dev-kit/issues/844) from TRI-01, the `2026-09-27` entry `Record text written from expectation, not read back.`.
-
-Filed [#845](https://github.com/topij/agentic-dev-kit/issues/845) from TRI-02, the `2026-09-11` entry `The review runtime stopped before delivering required adversarial coverage.`.
-
-Filed [#846](https://github.com/topij/agentic-dev-kit/issues/846) from TRI-03, the `2026-09-09` entry `A review suite encountered undecodable process-list output.`.
-
-Archived without filing: TRI-04, the `2026-08-27` entry `` `claude -p --output-format json` printed more than one JSON value on stdout in three of five cockpit probe invocations at 2.1.247, and one value on a repeat of the same invocation. ``.
-
-Archived without filing: TRI-05, the `2026-08-27` entry `` `panel_prompt.py` produced an empty prompt file and hung until the tool timeout, then rendered in about a second on an identical re-run. ``.
-
-Approval commands: `approve TRI-01 TRI-02 TRI-03`, `archive TRI-04 TRI-05`. Approver: `topij`.
