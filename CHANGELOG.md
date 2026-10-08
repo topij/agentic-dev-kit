@@ -30,18 +30,24 @@ resolves your recorded baseline kit commit into exactly the set of entries below
 are new to you; follow that.
 
 **This file is frozen. New entries go in `changelog.d/`.** Each PR with an observable
-change adds its own fragment file there, named for its branch, for example
-`changelog.d/pr-watch-sha-bound.md`. A fragment starts with a `## ` heading, then
-carries the axis lines described below. It needs no PR number: `/upgrade` Step 1 finds
-the fragments new to you from git history, and names the commit that last touched each
-one. One shared file made every parallel lane add its entry at the same top line, so
-each lane after the first conflicted there (`#1009`). Do not add entries below.
+change adds its own fragment file there, named for its branch in lower case, for
+example `changelog.d/pr-watch-sha-bound.md`. A fragment starts with a `## ` heading,
+ends with a newline, and carries the axis lines described below. It needs no PR number:
+`/upgrade` Step 1 finds the fragments new to you from git history, and names the commit
+that last touched each one. One shared file made every parallel lane add its entry at
+the same top line, so each lane after the first conflicted there (`#1009`). Do not add
+entries below.
+
+**A fragment name is used once, and a fragment is never deleted or renamed.** The lookup
+prints a fragment's current text, so a second PR writing to an existing name replaces
+the first entry for every adopter whose range holds both, and a deleted fragment drops
+out of the lookup. Edit an existing fragment only to correct that same entry.
 
 **Ordering and headings (the frozen entries).** Newest first. Each entry is headed by the
 **PR** that made the change, because the entry is authored in that PR rather than
-stamped on afterwards — see `AGENTS.md`, Ground rules. That still holds for fragments,
-which are authored in their PR too. There are no release tags: adopters pin a kit
-*commit*, not a version.
+stamped on afterwards — see `AGENTS.md`, Ground rules. Fragments are authored in their
+PR too; the commit that adds one names the PR in its subject. There are no release tags:
+adopters pin a kit *commit*, not a version.
 
 **Axes.** `BREAKING (…)` — a repo pinning the old contract fails. `CHANGED` —
 observable but compatible. `ADDED` — new surface you may adopt or ignore.

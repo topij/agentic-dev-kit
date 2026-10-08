@@ -6191,6 +6191,11 @@ def test_upgrade_changelog_lookup_reads_fragments_added_or_edited_in_range(
     _kit_commit(kit, "rename lane b fragment (#8)",
                 move=("changelog.d/old-name.md", "changelog.d/new-name.md"))
     _kit_commit(kit, "not a fragment (#9)", write={"changelog.d/notes.txt": "NOT-A-FRAGMENT\n"})
+    _kit_commit(kit, "odd names (#10)", write={
+        "changelog.d/\u00e9clair.md": "## e\n\nQUOTED-NAME-ENTRY\n",
+        "changelog.d/UPPER.MD": "## u\n\nUPPER-CASE-ENTRY\n",
+    })
+    _kit_commit(kit, "no newline (#11)", write={"changelog.d/no-newline.md": "## n\n\nNO-NEWLINE-END"})
 
     result = _run_lookup(tmp_path, baseline, kit)
     out = result.stdout
@@ -6213,6 +6218,15 @@ def test_upgrade_changelog_lookup_reads_fragments_added_or_edited_in_range(
     )
     assert "FROZEN-ENTRY" not in out, f"a frozen entry from before the range leaked.\n{out}"
     assert "NOT-A-FRAGMENT" not in out, f"a non-`.md` file printed as a fragment.\n{out}"
+    # A path the lookup cannot print is named, never dropped: git C-quotes a
+    # non-ASCII name, and `*.md` is case-sensitive, so each needs a reader.
+    for name in ("notes.txt", "UPPER.MD", '"changelog.d/\\303\\251clair.md"'):
+        assert any(ln.startswith("⚠") and name in ln for ln in out.splitlines()), (
+            f"{name} under changelog.d/ was dropped without a warning.\n{out}"
+        )
+    assert "NO-NEWLINE-END\n" in out, (
+        f"a fragment with no final newline ran into the next line.\n{out}"
+    )
     assert out.index("LANE-B-ENTRY") < out.index("LANE-A-ENTRY"), (
         f"fragments must print newest first, like the frozen file.\n{out}"
     )
@@ -6223,7 +6237,7 @@ def test_upgrade_changelog_lookup_reads_fragments_added_or_edited_in_range(
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
 @pytest.mark.parametrize(
-    "baseline_kind", ["empty", "unresolvable", "current"],
+    "baseline_kind", ["empty", "unresolvable", "current", "off-history"],
 )
 def test_upgrade_changelog_lookup_prints_no_fragment_without_a_range(
     tmp_path: Path, baseline_kind: str
@@ -6240,7 +6254,16 @@ def test_upgrade_changelog_lookup_prints_no_fragment_without_a_range(
     head = _kit_commit(kit, "only (#1)",
                        write={"CHANGELOG.md": "## #1 — frozen\n\nx\n",
                               "changelog.d/leak.md": "## leak\n\nLEAKED-FRAGMENT\n"})
-    baseline = {"empty": "", "unresolvable": "deadbeef" * 5, "current": head}[baseline_kind]
+    # A commit that resolves but is not an ancestor of HEAD: the case where a
+    # listing hoisted above the guard would print, since `<orphan>..HEAD` is all
+    # of HEAD's history.
+    branch = subprocess.run(["git", "-C", str(kit), "symbolic-ref", "--short", "HEAD"],
+                            capture_output=True, text=True, check=True).stdout.strip()
+    subprocess.run(["git", "-C", str(kit), "checkout", "-q", "--orphan", "elsewhere"], check=True)
+    orphan = _kit_commit(kit, "unrelated (#2)")
+    subprocess.run(["git", "-C", str(kit), "checkout", "-q", "-f", branch], check=True)
+    baseline = {"empty": "", "unresolvable": "deadbeef" * 5, "current": head,
+                "off-history": orphan}[baseline_kind]
 
     result = _run_lookup(tmp_path, baseline, kit)
 
@@ -6272,17 +6295,23 @@ def test_changelog_md_is_frozen_at_the_fragment_cutover() -> None:
 
 
 @pytest.mark.kit_repo_only("CHANGELOG.md")
-def test_changelog_fragments_start_with_a_heading() -> None:
-    """Each `changelog.d/*.md` fragment opens with a `## ` heading (#1009).
+def test_changelog_fragments_are_well_formed() -> None:
+    """Every file in `changelog.d/` is a fragment the lookup can print (#1009).
 
-    The lookup prints fragments one after another, so the heading is what
-    separates one entry from the next for the adopter reading them.
+    The lookup names, rather than prints, a path that is not a plain
+    lower-case `<name>.md`, so a misnamed fragment would reach an adopter only
+    as a warning. The heading separates one printed entry from the next.
     """
-    fragments = sorted((REPO_ROOT / "changelog.d").glob("*.md"))
-    for fragment in fragments:
-        first = fragment.read_text(encoding="utf-8").splitlines()[:1]
-        assert first and first[0].startswith("## "), (
-            f"{fragment.relative_to(REPO_ROOT)} does not start with a `## ` heading"
+    directory = REPO_ROOT / "changelog.d"
+    for path in sorted(directory.rglob("*")) if directory.is_dir() else []:
+        rel = path.relative_to(REPO_ROOT)
+        assert path.is_file() and re.fullmatch(r"[a-z0-9][a-z0-9._-]*\.md", path.name) \
+            and path.parent == directory, (
+            f"{rel} is not a lower-case changelog.d/<name>.md fragment"
+        )
+        text = path.read_text(encoding="utf-8")
+        assert text.startswith("## ") and text.endswith("\n"), (
+            f"{rel} must start with a `## ` heading and end with a newline"
         )
 
 

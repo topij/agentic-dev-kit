@@ -228,8 +228,8 @@ file, and everything before Step 2 must stay read-only.
 
 `kit_doctor` answers "did this drift". It never answers "what does the new one do
 differently", and Step 3 below hands you a per-file verdict without that second answer
-attached. `CHANGELOG.md` in the kit checkout is where it lives — the observable changes
-only, no rationale — and **this** is the step that can narrow it to *your* answer, because
+attached. The kit checkout's changelog is where it lives — `changelog.d/` and the
+frozen `CHANGELOG.md`, the observable changes only, no rationale — and **this** is the step that can narrow it to *your* answer, because
 the report you just ran knows which kit commit this repo installed from.
 
 Read it now, before Step 3 copies anything. Skipping it does not fail the upgrade; it
@@ -252,10 +252,12 @@ Then resolve the baseline and read the entries that landed after it. **Entries l
 places, split at a cutover**, and the block below reads both:
 
 - **`changelog.d/` holds one fragment file per PR**, for every change since the cutover.
-  A fragment is new to you exactly when a commit after your baseline added or edited it,
-  so git's own history is the index: no PR number is involved, and there is nothing for a
-  commit subject to get wrong. Each fragment prints under a line naming the commit that
-  last touched it, whose subject carries the PR.
+  A fragment prints when a commit after your baseline added or edited it, so git's own
+  history is the index: no PR number is involved, and there is nothing for a commit
+  subject to get wrong. Each fragment prints under a line naming the commit that last
+  touched it, whose subject carries the PR. A path under `changelog.d/` that is not a
+  `<name>.md` fragment, or that git prints quoted because of an unusual character, is
+  named with a `⚠` line rather than skipped: read that one by hand.
 - **`CHANGELOG.md` is frozen at the cutover** and holds every entry before it, each headed
   by the PR that made the change. A squash merge on the kit ordinarily carries its PR
   number as a trailing `(#NNN)`, so for this half those numbers are the index.
@@ -293,13 +295,20 @@ else
   SUBJECTS="$(git -C "${KIT:?KIT is not set — re-run Step 0}" log --format='%s' "$BASELINE..HEAD")"
   if [ "$COUNT" -gt 0 ]; then
     # changelog.d/: every fragment a commit in range added or edited, newest first.
+    # Every path under changelog.d/ is listed, so a misnamed one is named, not dropped.
     git -C "${KIT:?KIT is not set — re-run Step 0}" log --no-renames --diff-filter=AM \
-        --format= --name-only "$BASELINE..HEAD" -- 'changelog.d/*.md' |
+        --format= --name-only "$BASELINE..HEAD" -- changelog.d/ |
       awk 'NF && !seen[$0]++' |
       while IFS= read -r frag; do
+        case "$frag" in
+          changelog.d/*.md) ;;
+          *) echo "⚠ $frag is not a changelog.d/<name>.md fragment — read it by hand"
+             continue ;;
+        esac
         [ -f "${KIT:?KIT is not set — re-run Step 0}/$frag" ] || continue
         echo "── $frag ($(git -C "${KIT:?KIT is not set — re-run Step 0}" log -1 --format='%h %s' -- "$frag"))"
         cat "${KIT:?KIT is not set — re-run Step 0}/$frag"
+        echo
       done
     # CHANGELOG.md: entries from before the cutover, indexed by PR number.
     INDEXED="$(printf '%s\n' "$SUBJECTS" | grep -cE '\(#[0-9]+\)$' || true)"
@@ -357,8 +366,9 @@ There is no range to compute, so:
 - Read every fragment instead, newest first, then `$KIT/CHANGELOG.md` from the top, and
   treat every `BREAKING` line as applying to you until you can show otherwise. Both are
   short by construction — this is minutes, not the session `#430` describes. The
-  fragments, newest first:
-  `git -C "$KIT" log --no-renames --diff-filter=A --format= --name-only -- 'changelog.d/*.md'`.
+  fragments, newest first, are listed by
+  `git -C "$KIT" log --no-renames --diff-filter=A --format= --name-only -- changelog.d/`;
+  skip a listed name that no longer exists in `$KIT`, and read any other by hand.
 - If you know roughly when this repo last upgraded, bound it by date instead: add
   `--since=<date>` to that fragment listing, and for `CHANGELOG.md` take
   `git -C "$KIT" log --since=<date> --format='%s'` and index as above.
