@@ -24,6 +24,15 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-10-08
+
+- **An approval-pending triage session cannot survive a configuration change.** Severity L, kept for accumulation.
+  Triage session `469bcd58` froze the kit inbox on 2026-10-05 and waited for decisions. Merges then changed
+  `config/dev-model.yaml` (#993, #986, #1006), and on 2026-10-08 its `resume` returned operator-held with
+  "configuration identity mismatch", so its proposals could not be approved. A fresh draft replaced it. The binding
+  is by design: only a `completed` state is exempt (*Completed-state retirement*). The cost is that operator
+  decisions deferred across ordinary config merges are lost. Worth acting on only if it recurs.
+
 ## 2026-10-08 — Backlog migrated by triage session 7f6626780abd4719b8a752a5ac8856ee
 
 Engine mode: `engine-backed`.
@@ -75,9 +84,3 @@ Archived without filing: TRI-22, the `2026-10-03` entry `The option offered for 
 Archived without filing: TRI-23, the `2026-10-03` entry `#923 is a further occurrence of the shape #838 tracks.`.
 
 Approval commands: `approve TRI-01 TRI-02 TRI-05 TRI-08 TRI-11 TRI-20`, `archive TRI-03 TRI-04 TRI-06 TRI-07 TRI-09 TRI-10 TRI-12 TRI-13 TRI-14 TRI-15 TRI-16 TRI-17 TRI-18 TRI-19 TRI-21 TRI-22 TRI-23`. Approver: `topij`.
-
-## 2026-10-03
-
-Parked rather than filed: this wrap-up ran with no operator present, so no tracker
-payload could be approved. The first two carried a drafted payload, and were filed afterwards on
-the operator's approval, as each one's annotation says.

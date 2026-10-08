@@ -4374,6 +4374,10 @@ Approval commands: `approve TRI-01 TRI-02 TRI-03`, `archive TRI-04 TRI-05`. Appr
 
 ## 2026-10-03
 
+Parked rather than filed: this wrap-up ran with no operator present, so no tracker
+payload could be approved. The first two carried a drafted payload, and were filed afterwards on
+the operator's approval, as each one's annotation says.
+
 - **The matrix guard's LOW residue from #923's last delta pass.** Severity L.
   - **Observed** in #923's last delta pass at `f60b530`; its disposition there names the
     lens behind each item.
