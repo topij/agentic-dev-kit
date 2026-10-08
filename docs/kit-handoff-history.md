@@ -5,6 +5,37 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-06 (cs-toolkit installed correction and landed Markdown hold, in Codex)
+
+Source [#969](https://github.com/topij/agentic-dev-kit/pull/969) merged as
+`01269cc80e05ecab1987ebaa97ee76bba306afee`; installation
+[#2545](https://github.com/in-parallel-oy/cs-toolkit/pull/2545) merged and was
+delivered as `cddb46c284d92b3261b0ec1977d82fa3a629cbcf`, pinning that source.
+The operator authorized checked installation/archive/wrap-up merges and delegated
+approval of the exact project-only action and complete corrected filing payload.
+Concrete presentations retain that human text beside runtime-computed digests;
+they do not invent a later human reply. Configured reviewers ran at
+`gpt-5.6-sol` / `medium`; GitHub runner cancellations were retried at the same
+reviewed head without a review waiver or permanent configuration change.
+
+The installed correction applied action
+`767e470416961a2aa43a0a0e422bd79d46ce47875b13bc2179139c0d8d9d82f9`,
+retaining rejected evidence and clearing its approval. The approved corrected
+create landed CUS-1670, but Linear changed Markdown bullets from `-` to `*`.
+`libs/report-utils/.venv/bin/python live-62970e59-normalization-readback.py`
+at `cddb46c284d92b3261b0ec1977d82fa3a629cbcf` on 2026-10-05 UTC, in
+`/Users/topi/Coding/in-parallel/cs-toolkit`, recorded the ambiguous exact-payload
+mismatch with mutation-prohibited marker searches, independent by-ID readback
+and unchanged retained state/report/quarantine bytes. No duplicate create,
+issue update, raw state edit, replacement freeze or TRI-01 archive followed.
+[The acceptance record](https://github.com/topij/agentic-dev-kit/issues/6#issuecomment-6003071493)
+retains the commands, actual results and digests. A bounded representation
+reconciliation design awaits the operator before further engineering.
+This entry supersedes the earlier project-name resume instruction; the separate
+frozen kit-friction decision remains pending. Follow-ups #970 and #971 were
+recorded without fixes claimed. Evidence remains under
+`state/review-evidence/cs-toolkit-linear-acceptance_2026-10-04/finalize-decisions/`.
+
 ### 2026-10-05 (cs-toolkit LIVE recovery and project-name hold, in Codex)
 
 The operator approved the installed recovery action

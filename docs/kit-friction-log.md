@@ -26,6 +26,11 @@
 
 ## 2026-10-08
 
+- **The headless lane profile cannot read the lane's own ticket.** Severity M. Parked because no operator was present to approve a tracker write. `config/claude-lane-settings.json` allows no `gh issue view`, and under `dont-ask` a denied call ends the lane. `parallel.md` requires every lane brief to be grounded in the ticket body, so the cockpit put each ticket's full text into the task prompt. Lane `pr-watch-trio` also had a multi-line `git commit -m` message containing backticks refused, and fell back to repeated single-line `-m` flags. Both are the shape #1011 tracks: routine lane steps the profile denies. The fix is either a read-only `gh issue view` grant or a launcher step that embeds the ticket text. The profile is safety-critical.
+- **A full-pass review chain on an executed doc block found a new shape each round.** Severity L, kept for accumulation. On #1020 the lens found a different input-shape gap in the fragment lookup at each of its three reviewed heads: quoted names, then reused names and symlinks, then merge-only and type-changed fragments. The budget ran out with a Low-Medium open. This is the shape #1012 names for skips, here met by a lookup over git history: list every history shape (rename, merge, delete, type change, reuse) before the first review.
+- **A cockpit `pr_watch` call invalidated its own `make test` stamp again.** Severity L, kept for accumulation. A `--record-round` call made while the stamp ran wrote `state/pr-watch/1020.json`, and the suite's real-state guard (#428) failed a run in which every test passed. The rerun on a quiet tree was the stamp.
+- **A comment in `scripts/sweep_scratch.py` still says the bare-repo skip "dropped its object store".** Severity L. #1021 corrected that wording in the doctrine. The delta lens on #1021 found the same overstatement in the comment around `scripts/sweep_scratch.py:400`, which should say that the configured repository's git dir and alternates chain went unrecorded.
+
 - **An approval-pending triage session cannot survive a configuration change.** Severity L, kept for accumulation.
   Triage session `469bcd58` froze the kit inbox on 2026-10-05 and waited for decisions. Merges then changed
   `config/dev-model.yaml` (#993, #986, #1006), and on 2026-10-08 its `resume` returned operator-held with
