@@ -60,7 +60,7 @@ review and fix round, merged `main` into each later lane to clear `CHANGELOG.md`
   - Every reviewed head has a two-lens receipt, and no round found anything above LOW.
   - The round budget is spent with two LOWs open. Filing their ticket needs the operator, so the cockpit did not merge.
   - The decision packet on the PR has both options.
-  - *(Correction: it merged as `f917d946`, and its last LOW was filed as #1008; see the 2026-10-08 triage entry above.)*
+  - *(Correction: one more fix round followed, at `044f5ec6`. #1006 merged at that head as `f917d946`, and the one LOW that round left was filed as #1008.)*
   - `make test` at `fd2dd689` on 2026-10-08, in its lane worktree, printed `4467 passed, 1 skipped`.
 
 Decided (cockpit): the operator's "merge when clean" was read as not covering a merge-gate PR with a LOW
