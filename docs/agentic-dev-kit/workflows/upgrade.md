@@ -248,11 +248,22 @@ git -C "${KIT:?KIT is not set — re-run Step 0}" fetch --unshallow 2>/dev/null 
   git -C "${KIT:?KIT is not set — re-run Step 0}" fetch --depth=1000
 ```
 
-Then resolve the baseline and the PRs that landed after it. A squash merge on the kit
-ordinarily carries its PR number as a trailing `(#NNN)`, and every changelog entry is
-headed by the PR that made the change — so those numbers are the index.
+Then resolve the baseline and read the entries that landed after it. **Entries live in two
+places, split at a cutover**, and the block below reads both:
 
-**Ordinarily, not always, and the gap is silent.** A subject ending any other way —
+- **`changelog.d/` holds one fragment file per PR**, for every change since the cutover.
+  A fragment is new to you exactly when a commit after your baseline added or edited it,
+  so git's own history is the index: no PR number is involved, and there is nothing for a
+  commit subject to get wrong. Each fragment prints under a line naming the commit that
+  last touched it, whose subject carries the PR.
+- **`CHANGELOG.md` is frozen at the cutover** and holds every entry before it, each headed
+  by the PR that made the change. A squash merge on the kit ordinarily carries its PR
+  number as a trailing `(#NNN)`, so for this half those numbers are the index.
+
+Fragments replaced the single file because every parallel lane added its entry at the
+same top line, so each lane after the first conflicted there (`#1009`).
+
+**Ordinarily, not always, and the gap is silent** — for the `CHANGELOG.md` half. A subject ending any other way —
 several references (`(#37, #146)`), text inside the parens (`(#134 cause 1)`), a
 `Merge pull request` subject, or a commit that never went through a PR — yields no number
 and is simply skipped. That looks exactly like "this commit changed nothing observable",
@@ -281,10 +292,20 @@ else
   COUNT="$(git -C "${KIT:?KIT is not set — re-run Step 0}" rev-list --count "$BASELINE..HEAD")"
   SUBJECTS="$(git -C "${KIT:?KIT is not set — re-run Step 0}" log --format='%s' "$BASELINE..HEAD")"
   if [ "$COUNT" -gt 0 ]; then
+    # changelog.d/: every fragment a commit in range added or edited, newest first.
+    git -C "${KIT:?KIT is not set — re-run Step 0}" log --no-renames --diff-filter=AM \
+        --format= --name-only "$BASELINE..HEAD" -- 'changelog.d/*.md' |
+      awk 'NF && !seen[$0]++' |
+      while IFS= read -r frag; do
+        [ -f "${KIT:?KIT is not set — re-run Step 0}/$frag" ] || continue
+        echo "── $frag ($(git -C "${KIT:?KIT is not set — re-run Step 0}" log -1 --format='%h %s' -- "$frag"))"
+        cat "${KIT:?KIT is not set — re-run Step 0}/$frag"
+      done
+    # CHANGELOG.md: entries from before the cutover, indexed by PR number.
     INDEXED="$(printf '%s\n' "$SUBJECTS" | grep -cE '\(#[0-9]+\)$' || true)"
     UNINDEXED=$(( COUNT - INDEXED ))
     [ "$UNINDEXED" -gt 0 ] && echo "⚠ $UNINDEXED commit(s) in range carry no trailing (#NNN);
-   they are NOT indexed below — read CHANGELOG.md from the top as well"
+   they are NOT indexed against CHANGELOG.md — read it from the top as well"
     printf '%s\n' "$SUBJECTS" | grep -oE '\(#[0-9]+\)$' | tr -d '()#' |
       while read -r pr; do
         awk -v pr="$pr" '/^## /{p = ($2 == "#" pr)} p' "${KIT:?KIT is not set — re-run Step 0}/CHANGELOG.md"
@@ -324,7 +345,7 @@ is strictly worse than the error it replaced: an error stops you, a degraded rea
 like an answer.
 
 A PR that produced no output has no entry, and a PR with no entry made no observable
-change. That is the file's contract rather than an omission to chase.
+change. That is the changelog's contract rather than an omission to chase.
 
 **`baseline_kit_commit` empty is a real, supported value — degrade, do not guess.** Three
 causes reach it and nothing here can tell them apart: `--record-install` never ran
@@ -333,11 +354,14 @@ carries no provenance (`recorded, install provenance unknown`); or the recorded 
 not a string, which `kit_doctor` normalizes away rather than aborting the report over.
 There is no range to compute, so:
 
-- Read `$KIT/CHANGELOG.md` from the top instead, and treat every `BREAKING` line as
-  applying to you until you can show otherwise. It is newest-first and short by
-  construction — this is minutes, not the session `#430` describes.
-- If you know roughly when this repo last upgraded, bound it by date instead:
-  `git -C "$KIT" log --since=<date> --format='%s'`, then index as above.
+- Read every fragment instead, newest first, then `$KIT/CHANGELOG.md` from the top, and
+  treat every `BREAKING` line as applying to you until you can show otherwise. Both are
+  short by construction — this is minutes, not the session `#430` describes. The
+  fragments, newest first:
+  `git -C "$KIT" log --no-renames --diff-filter=A --format= --name-only -- 'changelog.d/*.md'`.
+- If you know roughly when this repo last upgraded, bound it by date instead: add
+  `--since=<date>` to that fragment listing, and for `CHANGELOG.md` take
+  `git -C "$KIT" log --since=<date> --format='%s'` and index as above.
 - Either way, **Step 4's `--record-install --from-kit "$KIT"` is what stops the next
   upgrade paying this** — the same step, and the same `kit_commit` key, that the `STALE`
   / `LOCALLY EDITED` split above already depends on.

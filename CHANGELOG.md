@@ -29,10 +29,19 @@ it does.
 resolves your recorded baseline kit commit into exactly the set of entries below that
 are new to you; follow that.
 
-**Ordering and headings.** Newest first. An entry is headed by the **PR** that made
-the change, because the entry is authored in that PR rather than stamped on
-afterwards — see `AGENTS.md`, Ground rules. There are no release tags: adopters pin a
-kit *commit*, not a version.
+**This file is frozen. New entries go in `changelog.d/`.** Each PR with an observable
+change adds its own fragment file there, named for its branch, for example
+`changelog.d/pr-watch-sha-bound.md`. A fragment starts with a `## ` heading, then
+carries the axis lines described below. It needs no PR number: `/upgrade` Step 1 finds
+the fragments new to you from git history, and names the commit that last touched each
+one. One shared file made every parallel lane add its entry at the same top line, so
+each lane after the first conflicted there (`#1009`). Do not add entries below.
+
+**Ordering and headings (the frozen entries).** Newest first. Each entry is headed by the
+**PR** that made the change, because the entry is authored in that PR rather than
+stamped on afterwards — see `AGENTS.md`, Ground rules. That still holds for fragments,
+which are authored in their PR too. There are no release tags: adopters pin a kit
+*commit*, not a version.
 
 **Axes.** `BREAKING (…)` — a repo pinning the old contract fails. `CHANGED` —
 observable but compatible. `ADDED` — new surface you may adopt or ignore.
@@ -41,6 +50,16 @@ observable but compatible. `ADDED` — new surface you may adopt or ignore.
 starts.
 
 ---
+
+## #1020 — Changelog entries move to `changelog.d/`; this file is frozen
+
+BREAKING (upgrade procedure): new entries are fragment files under `changelog.d/`, one
+per PR, and nothing new is added to this file (#1009). An older copy of
+`upgrade.md` reads only this file, so it prints no entry after this one and would
+report every later PR as making no observable change. Take the current
+`docs/agentic-dev-kit/workflows/upgrade.md` from the kit and run its Step 1 again: it
+reads both `changelog.d/` and this file. If you author changelog entries in a fork of
+the kit, add a fragment file instead of a heading here.
 
 ## #1006 — Safety-critical paths match case-insensitively; `--record-round --head` takes only a hex sha
 
