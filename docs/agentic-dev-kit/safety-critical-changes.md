@@ -66,8 +66,9 @@ changes one of them or that config file, and one isolated lens otherwise: see
     left unrecorded the git dir and alternates chain that repository's objects live
     in. The sweep failed open, the adversarial lens reproduced
     it, and the following round reviewed the revert: each fix round created the next
-    round's finding. Write the list in the PR body, where the reviewer reads it, so the
-    review checks the enumeration rather than rediscovering it. Related: `#419`, `#666`, `#305`.
+    round's finding. Write the list in the diff, as a comment beside the skip, so every
+    reviewer — a panel lens handed only the diff included — checks the enumeration
+    rather than rediscovering it. Related: `#419`, `#666`, `#305`.
 
 1. **Kill/recovery paths need an integration test.** Unit tests on the handler are
    insufficient — a kill-path can pass unit tests while the wrapper-level behavior is
