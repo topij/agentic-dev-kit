@@ -20,6 +20,20 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-08 (friction-log triage after the overnight batch, in Claude Code)
+
+- **Triage session `469bcd58` superseded.** Its `resume` returned operator-held with "configuration identity mismatch": `config/dev-model.yaml` changed after it froze, in #993, #986 and #1006. On the operator's decision its isolated state root was left untouched as evidence, and a fresh live draft was started instead.
+- **Triage run `7f662678` completed** (engine-backed, `degraded-success` because it used the session in place of a notification). The operator approved filing TRI-01, 02, 05, 08, 11 and 20, and archiving the rest.
+  - Filed and read back: #1009, #1010, #1011, #1012, #1013, #1014.
+  - The archive sweep #1015 merged as `770092ab` at its reviewed head, `3207eb04`. Its review was the correctness lens (CodeRabbit skipped). The engine read back the merge and removed the sweep's worktree and branch.
+- **This wrap-up** moved the 2026-10-03 intro paragraph the sweep left behind into the archive. The lens on #1015 had found it.
+- Filed at wrap-up, on the operator's approval of each payload: #1016, #1017, #1018.
+- **Scratch:** the operator removed the probe directory that pinned session `2d56cdd2`'s scratchpad. The removal reset that entry's modified time, so `uv run scripts/sweep_scratch.py --apply --older-than 1d` cannot reclaim it before about 2026-10-09 14:50 UTC.
+
+Closed workstream Kit friction-log triage: its step, deciding `469bcd58`, was superseded by run `7f662678`, which completed through #1015.
+
+______________________________________________________________________
+
 ## Session — 2026-10-08 (overnight batch of headless lanes, in Claude Code)
 
 The operator asked for an overnight autonomous session with parallel lanes and authorized merging every PR
@@ -46,6 +60,7 @@ review and fix round, merged `main` into each later lane to clear `CHANGELOG.md`
   - Every reviewed head has a two-lens receipt, and no round found anything above LOW.
   - The round budget is spent with two LOWs open. Filing their ticket needs the operator, so the cockpit did not merge.
   - The decision packet on the PR has both options.
+  - *(Correction: it merged as `f917d946`, and its last LOW was filed as #1008; see the 2026-10-08 triage entry above.)*
   - `make test` at `fd2dd689` on 2026-10-08, in its lane worktree, printed `4467 passed, 1 skipped`.
 
 Decided (cockpit): the operator's "merge when clean" was read as not covering a merge-gate PR with a LOW
@@ -155,7 +170,7 @@ Decided: #986 was held, not merged. The operator's "merge when clean" did not co
 
 Not established: the `test` entry's own recovery branch still judges by `canonical_state` alone, which is the #859 class in test mode. It is parked in the friction log, untracked. *(Correction: it was filed as #1002 the same day and fixed by #1004; see the 2026-10-08 entry above.)*
 
-Lanes ran with no operator present, so no tracker write was made. This session's friction is parked in the friction log.
+Lanes ran with no operator present, so no tracker write was made. This session's friction is parked in the friction log. *(Correction: the 2026-10-08 triage filed or archived these entries; see that entry above.)*
 
 ______________________________________________________________________
 
@@ -261,7 +276,8 @@ Closed workstream cs-toolkit Codex validation and Linear installation: the
 operator closed it once LIVE acceptance completed. Its follow-ups are #974, #975
 and #976. The separate frozen kit-friction decision
 (`469bcd5829244adeb17443d1a45a6c01`) remains pending and untouched; the new
-*Kit friction-log triage* workstream carries it.
+*Kit friction-log triage* workstream carries it. *(Correction: run `7f662678` superseded it on
+2026-10-08 and that workstream closed; see that session entry above.)*
 
 ______________________________________________________________________
 
@@ -314,16 +330,15 @@ flags; #921 stays open for the cockpit-side check of the verdict-line names. The
 record-prose row of #585's decision is not built: its deterministic checks, and a lens
 told which spans stay executed. #993 (`2d40c960`) added the review round budget: the
 opening review plus `review.round_budget` fix rounds, then an operator decision packet.
-#1006 (#991's case-folded class match and #994's follow-ups) is **held for the operator** at
-`fd2dd68974a8cd0bf317c1e90985aa790bd80473`: its round budget is spent with two LOW findings open, and its
-decision packet is on the PR.
+#1006 (`f917d946`) matches the class case-folded (#991) and closed #994's follow-ups; its
+last LOW is #1008.
 **Owner:**
 [#585](https://github.com/topij/agentic-dev-kit/issues/585); round-budget follow-ups
 [#994](https://github.com/topij/agentic-dev-kit/issues/994); related #921, #403, #666,
 #305, and the class's documented limits #928, #929, #930 and #931.
 
-▶ Next: operator — decide #1006 from its decision packet (merge at `fd2dd689` and file the two
-LOWs as one ticket, or authorize one more fix round); then #585's record-prose row.
+▶ Next: #585's record-prose row — its deterministic checks, and a lens told which spans
+stay executed.
 
 ### Scratch retention
 
@@ -382,15 +397,3 @@ shape check in `model.py` stays until cs-toolkit's completed LIVE state, which c
 
 ▶ Next: once cs-toolkit's scheduled triage draft has retired its completed LIVE state,
 confirm no state root holds a `proposal_correction`, then remove the shim (#979).
-
-### Kit friction-log triage
-
-**Status:** a kit budget triage froze inbox session `469bcd5829244adeb17443d1a45a6c01`
-on 2026-10-05 and left it awaiting approval, with every inbox block preserved. Its
-frozen inbox and pipeline state sit in an isolated state root,
-`state/review-evidence/cs-toolkit-linear-acceptance_2026-10-04/finalize-decisions/kit-friction-budget-state/`;
-the live `state/triage/` holds nothing for it. **Owner:** that retained state.
-
-▶ Next: present session `469bcd58`'s retained proposals to the operator and obtain
-their archive-or-park decisions before any other `triage-friction-log` sweep of the kit
-inbox.
