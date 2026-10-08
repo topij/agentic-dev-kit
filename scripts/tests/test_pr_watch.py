@@ -11923,7 +11923,7 @@ def test_record_round_refuses_a_head_that_is_not_a_hex_sha(
         # resolve it to the opening commit, an ancestor, if it were let through.
         reviewed = opening[:6]
 
-    with pytest.raises(ValueError, match="is not a commit sha"):
+    with pytest.raises(ValueError, match=r"is not a commit sha.*seven to sixty-four characters"):
         _record_round(monkeypatch, pr_watch, tmp_path, current=fix, reviewed=reviewed)
 
     assert not (tmp_path / "state" / "9.json").exists()
@@ -11942,6 +11942,27 @@ def test_record_round_refuses_a_hex_name_that_git_reads_as_a_ref(
 
     with pytest.raises(ValueError, match="a ref of that name shadows it"):
         _record_round(monkeypatch, pr_watch, tmp_path, current=fix, reviewed=shadow)
+
+    assert not (tmp_path / "state" / "9.json").exists()
+
+
+@pytest.mark.parametrize("length", [40, 10])
+def test_record_round_refuses_an_annotated_tag_object_sha(
+    monkeypatch, tmp_path: Path, length: int
+) -> None:
+    """An annotated tag's object sha is hex and resolves, but it peels to a
+    commit whose sha it does not abbreviate, so it is refused, full or short."""
+    pr_watch = _load_pr_watch()
+    repo, (opening, fix, _side) = _rounds_repo(tmp_path)
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+    subprocess.run(["git", "tag", "-a", "-m", "reviewed", "reviewed-tag", opening], cwd=repo, check=True)
+    tag_object = subprocess.run(
+        ["git", "rev-parse", "reviewed-tag"], cwd=repo, text=True, capture_output=True, check=True
+    ).stdout.strip()
+    assert tag_object != opening
+
+    with pytest.raises(ValueError, match="such as an annotated tag"):
+        _record_round(monkeypatch, pr_watch, tmp_path, current=fix, reviewed=tag_object[:length])
 
     assert not (tmp_path / "state" / "9.json").exists()
 

@@ -4248,7 +4248,7 @@ def record_round(
         # exactly, so neither mode takes a ref.
         raise ValueError(
             f"reviewed head {reviewed_head} is not a commit sha: pass the "
-            "lower-case hex sha that was reviewed (seven or more characters)"
+            "lower-case hex sha that was reviewed (seven to sixty-four characters)"
         )
     named_lenses = [part.strip() for part in (lenses or "").split(",") if part.strip()]
     snapshot = fetch_review_snapshot(pr)
