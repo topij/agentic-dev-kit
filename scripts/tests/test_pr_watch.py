@@ -8257,6 +8257,13 @@ def test_the_write_paths_refuse_on_rest(monkeypatch: pytest.MonkeyPatch) -> None
     with pytest.raises(RuntimeError, match="--record-review needs the `gh` backend"):
         pr_watch.record_review(1, source="fallback:panel", expected_head="abc123")
 
+    def no_read(pr):
+        raise AssertionError("--record-round read the PR before refusing REST")
+
+    monkeypatch.setattr(pr_watch, "fetch_review_snapshot", no_read)
+    with pytest.raises(RuntimeError, match="--record-round needs the `gh` backend"):
+        pr_watch.record_round(1, "abc1234")
+
     with pytest.raises(RuntimeError, match="needs the `gh` backend"):
         pr_watch.assert_draft_state(1, want_draft=False)
 
@@ -8374,7 +8381,7 @@ def test_the_no_backend_message_does_not_promise_a_path_that_refuses() -> None:
     # It must say the fallback polls only, so the operator is not sent down a
     # route that ends in `require_gh_backend`.
     assert "POLLS ONLY" in advice or "polls only" in advice
-    for flag in ("--record-review", "--assert-draft", "--assert-ready"):
+    for flag in ("--record-review", "--record-round", "--assert-draft", "--assert-ready"):
         assert flag in advice
 
 
@@ -10849,15 +10856,47 @@ def test_a_diff_git_cannot_produce_is_treated_as_safety_critical(
     assert "fetch" in result["unclassified"]
 
 
-def test_patterns_match_the_path_exactly_as_git_prints_it() -> None:
-    """The config comment's claim: a `./` prefix, a trailing `/` or a different
-    case never matches."""
+def test_patterns_match_the_path_as_git_prints_it() -> None:
+    """The config comment's claim: a `./` prefix or a trailing `/` never matches."""
     pr_watch = _load_pr_watch()
-    for pattern in ("./scripts/pr_watch.py", "scripts/pr_watch.py/", "SCRIPTS/pr_watch.py"):
+    for pattern in ("./scripts/pr_watch.py", "scripts/pr_watch.py/"):
         with pytest.MonkeyPatch.context() as mp:
             _classed(pr_watch, mp, [GATE_PATH], patterns=(pattern,))
             result = pr_watch.pr_review_class(CLASS_BASE, CLASS_HEAD)
         assert result["class"] == "standard", pattern
+
+
+@pytest.mark.parametrize(
+    ("path", "pattern"),
+    [
+        # #991: a new file at a case variant of a declared directory. A
+        # case-insensitive filesystem checks it out into that directory.
+        ("scripts/DevKit/lib/tempfile.py", "scripts/devkit/*"),
+        ("scripts/pr_watch.py", "SCRIPTS/pr_watch.py"),
+        # Folding turns `ß` into `ss`, which `?` no longer matches; the exact
+        # match still does.
+        ("scripts/straße.py", "scripts/stra?e.py"),
+    ],
+)
+def test_a_case_variant_path_matches_a_declared_pattern(path: str, pattern: str) -> None:
+    pr_watch = _load_pr_watch()
+    with pytest.MonkeyPatch.context() as mp:
+        _classed(pr_watch, mp, [path], patterns=(pattern,))
+        result = pr_watch.pr_review_class(CLASS_BASE, CLASS_HEAD)
+    assert result["class"] == "safety-critical"
+    assert result["matched_paths"] == [path]
+    assert result["unclassified"] is None
+
+
+def test_a_case_variant_of_the_config_path_changes_the_config() -> None:
+    """A case variant of the config checks out onto the config the engine reads."""
+    pr_watch = _load_pr_watch()
+    with pytest.MonkeyPatch.context() as mp:
+        _classed(pr_watch, mp, ["Config/Dev-Model.yaml"], patterns=(GATE_PATH,))
+        result = pr_watch.pr_review_class(CLASS_BASE, CLASS_HEAD)
+    assert result["class"] == "safety-critical"
+    assert result["matched_paths"] == []
+    assert result["changes_config"] is True
 
 
 def test_a_floor_is_two_unless_the_class_is_a_computed_standard() -> None:
@@ -11866,6 +11905,83 @@ def test_record_round_refuses_a_commit_that_is_not_an_ancestor_of_the_head(
         _record_round(monkeypatch, pr_watch, tmp_path, current=fix, reviewed=reviewed)
 
     assert not (tmp_path / "state" / "9.json").exists()
+
+
+@pytest.mark.parametrize("reviewed", ["HEAD~1", "HEAD^", "side~1", "opening-upper", "opening-6"])
+def test_record_round_refuses_a_head_that_is_not_a_hex_sha(
+    monkeypatch, tmp_path: Path, reviewed: str
+) -> None:
+    """#994: each of these resolves, in this checkout, to an ancestor of the PR
+    head. A ref resolves against the caller's checkout, which can be stale."""
+    pr_watch = _load_pr_watch()
+    repo, (opening, fix, _side) = _rounds_repo(tmp_path)
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+    if reviewed == "opening-upper":
+        reviewed = opening.upper()
+    elif reviewed == "opening-6":
+        # Six hex characters: below the seven the refusal promises. Git would
+        # resolve it to the opening commit, an ancestor, if it were let through.
+        reviewed = opening[:6]
+
+    with pytest.raises(ValueError, match=r"is not a commit sha.*seven to sixty-four characters"):
+        _record_round(monkeypatch, pr_watch, tmp_path, current=fix, reviewed=reviewed)
+
+    assert not (tmp_path / "state" / "9.json").exists()
+
+
+def test_record_round_refuses_a_hex_name_that_git_reads_as_a_ref(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """A branch named like a sha is resolved as that branch, not as an object."""
+    pr_watch = _load_pr_watch()
+    repo, (opening, fix, _side) = _rounds_repo(tmp_path)
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+    shadow = "deadbee"
+    assert not opening.startswith(shadow)
+    subprocess.run(["git", "branch", shadow, opening], cwd=repo, check=True)
+
+    with pytest.raises(ValueError, match="a ref of that name shadows it"):
+        _record_round(monkeypatch, pr_watch, tmp_path, current=fix, reviewed=shadow)
+
+    assert not (tmp_path / "state" / "9.json").exists()
+
+
+@pytest.mark.parametrize("length", [40, 10])
+def test_record_round_refuses_an_annotated_tag_object_sha(
+    monkeypatch, tmp_path: Path, length: int
+) -> None:
+    """An annotated tag's object sha is hex and resolves, but it peels to a
+    commit whose sha it does not abbreviate, so it is refused, full or short."""
+    pr_watch = _load_pr_watch()
+    repo, (opening, fix, _side) = _rounds_repo(tmp_path)
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+    subprocess.run(["git", "tag", "-a", "-m", "reviewed", "reviewed-tag", opening], cwd=repo, check=True)
+    tag_object = subprocess.run(
+        ["git", "rev-parse", "reviewed-tag"], cwd=repo, text=True, capture_output=True, check=True
+    ).stdout.strip()
+    assert tag_object != opening
+
+    with pytest.raises(ValueError, match="such as an annotated tag"):
+        _record_round(monkeypatch, pr_watch, tmp_path, current=fix, reviewed=tag_object[:length])
+
+    assert not (tmp_path / "state" / "9.json").exists()
+
+
+def test_record_round_accepts_a_hex_name_that_is_a_ref_to_the_commit_it_abbreviates(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """The shadow check refuses a ref that resolves elsewhere, not every hex name
+    that is also a ref: one pointing at the commit it abbreviates is that commit."""
+    pr_watch = _load_pr_watch()
+    repo, (opening, fix, _side) = _rounds_repo(tmp_path)
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+    same = opening[:8]
+    subprocess.run(["git", "branch", same, opening], cwd=repo, check=True)
+
+    recorded = _record_round(monkeypatch, pr_watch, tmp_path, current=fix, reviewed=same)
+
+    assert recorded["recorded_round"] is True
+    assert pr_watch.load_state(9)["review_rounds"][0]["head"] == opening
 
 
 def test_record_review_counts_its_head_as_a_round(monkeypatch) -> None:

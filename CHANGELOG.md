@@ -42,6 +42,27 @@ starts.
 
 ---
 
+## #1006 — Safety-critical paths match case-insensitively; `--record-round --head` takes only a hex sha
+
+CHANGED (gate semantics): `pr_review_class` now matches a changed path against
+`review.safety_critical_paths` both exactly and with both sides case-folded. It also
+compares the config path case-folded for `changes_config` (#991). A PR whose only
+safety-critical change is a case variant of a declared path, such as
+`scripts/DevKit/x.py` against `scripts/devkit/*`, was classed `standard` and is now
+`safety-critical`. It owes two lenses, and a `fallback:lens` receipt is refused on it.
+Nothing that classed safety-critical before classes standard now. To keep a path out of
+the class, keep it out of the list at any case. A pinned test that expects a case
+variant to class standard needs updating.
+
+BREAKING (engine CLI surface): `pr_watch.py --record-round --head <sha>` now refuses
+a value that is not, once surrounding whitespace is stripped, a lower-case hex sha of
+seven to sixty-four characters, with exit 2
+(#994). A ref such as `HEAD`, `HEAD~1` or a branch name was accepted before, and so was
+an upper-case sha. It also refuses a hex name that Git resolves to a ref rather than to
+the commit it abbreviates, and an object sha that does not peel to a commit it
+abbreviates, such as an annotated tag's. Pass the reviewed commit's sha, full or abbreviated, as the
+poll's `head` field and `git log` print it. `--record-review --head` is unchanged.
+
 ## #1005 — Scratch sweep: containment is judged by filesystem identity
 
 CHANGED (engine CLI surface): `sweep_scratch.py` now refuses (exit 1) a root that is or
