@@ -252,12 +252,14 @@ Then resolve the baseline and read the entries that landed after it. **Entries l
 places, split at a cutover**, and the block below reads both:
 
 - **`changelog.d/` holds one fragment file per PR**, for every change since the cutover.
-  A fragment prints when a commit after your baseline added or edited it, so git's own
-  history is the index: no PR number is involved, and there is nothing for a commit
-  subject to get wrong. Each fragment prints under a line naming the commit that last
-  touched it, whose subject carries the PR. A path under `changelog.d/` that is not a
-  `<name>.md` fragment, or that git prints quoted because of an unusual character, is
-  named with a `⚠` line rather than skipped: read that one by hand.
+  Every commit after your baseline that added or edited a fragment prints the fragment
+  as that commit wrote it, newest first, under a line naming the commit. So git's own
+  history is the index and no PR number is involved. Read from the commit, not from
+  the working tree, a fragment a later PR overwrote or deleted still prints, and a
+  corrected entry prints once per version. A symlink prints as its target path, never
+  as the file it points to. A path under `changelog.d/` that is not a `<name>.md`
+  fragment, or that git prints quoted because of an unusual character, is named with a
+  `⚠` line rather than skipped: read that one by hand.
 - **`CHANGELOG.md` is frozen at the cutover** and holds every entry before it, each headed
   by the PR that made the change. A squash merge on the kit ordinarily carries its PR
   number as a trailing `(#NNN)`, so for this half those numbers are the index.
@@ -294,21 +296,25 @@ else
   COUNT="$(git -C "${KIT:?KIT is not set — re-run Step 0}" rev-list --count "$BASELINE..HEAD")"
   SUBJECTS="$(git -C "${KIT:?KIT is not set — re-run Step 0}" log --format='%s' "$BASELINE..HEAD")"
   if [ "$COUNT" -gt 0 ]; then
-    # changelog.d/: every fragment a commit in range added or edited, newest first.
-    # Every path under changelog.d/ is listed, so a misnamed one is named, not dropped.
-    git -C "${KIT:?KIT is not set — re-run Step 0}" log --no-renames --diff-filter=AM \
-        --format= --name-only "$BASELINE..HEAD" -- changelog.d/ |
-      awk 'NF && !seen[$0]++' |
-      while IFS= read -r frag; do
-        case "$frag" in
-          changelog.d/*.md) ;;
-          *) echo "⚠ $frag is not a changelog.d/<name>.md fragment — read it by hand"
-             continue ;;
-        esac
-        [ -f "${KIT:?KIT is not set — re-run Step 0}/$frag" ] || continue
-        echo "── $frag ($(git -C "${KIT:?KIT is not set — re-run Step 0}" log -1 --format='%h %s' -- "$frag"))"
-        cat "${KIT:?KIT is not set — re-run Step 0}/$frag"
-        echo
+    # changelog.d/: each version of a fragment that a commit in range wrote, newest
+    # first, read from that commit — never from the working tree — so a reused name
+    # prints both entries and a deleted fragment still prints. A path under
+    # changelog.d/ that is not a <name>.md fragment is named, not dropped.
+    git -C "${KIT:?KIT is not set — re-run Step 0}" rev-list "$BASELINE..HEAD" -- changelog.d/ |
+      while IFS= read -r c; do
+        at="$(git -C "${KIT:?KIT is not set — re-run Step 0}" log -1 --format='%h %s' "$c")"
+        git -C "${KIT:?KIT is not set — re-run Step 0}" diff-tree --no-commit-id --no-renames --diff-filter=AM \
+            --name-only -r "$c" -- changelog.d/ |
+          while IFS= read -r frag; do
+            case "$frag" in
+              changelog.d/*.md) ;;
+              *) echo "⚠ $frag ($at) is not a changelog.d/<name>.md fragment — read it by hand"
+                 continue ;;
+            esac
+            echo "── $frag ($at)"
+            git -C "${KIT:?KIT is not set — re-run Step 0}" show "$c:$frag"
+            echo
+          done
       done
     # CHANGELOG.md: entries from before the cutover, indexed by PR number.
     INDEXED="$(printf '%s\n' "$SUBJECTS" | grep -cE '\(#[0-9]+\)$' || true)"
@@ -363,15 +369,14 @@ carries no provenance (`recorded, install provenance unknown`); or the recorded 
 not a string, which `kit_doctor` normalizes away rather than aborting the report over.
 There is no range to compute, so:
 
-- Read every fragment instead, newest first, then `$KIT/CHANGELOG.md` from the top, and
-  treat every `BREAKING` line as applying to you until you can show otherwise. Both are
-  short by construction — this is minutes, not the session `#430` describes. The
-  fragments, newest first, are listed by
-  `git -C "$KIT" log --no-renames --diff-filter=A --format= --name-only -- changelog.d/`;
-  skip a listed name that no longer exists in `$KIT`, and read any other by hand.
-- If you know roughly when this repo last upgraded, bound it by date instead: add
-  `--since=<date>` to that fragment listing, and for `CHANGELOG.md` take
-  `git -C "$KIT" log --since=<date> --format='%s'` and index as above.
+- Read every entry instead, and treat every `BREAKING` line as applying to you until you
+  can show otherwise. Both halves are short by construction — this is minutes, not the
+  session `#430` describes. For the fragments, run the block above with `BASELINE` set
+  to the kit's root commit, `git -C "$KIT" rev-list --max-parents=0 HEAD`; then read
+  `$KIT/CHANGELOG.md` from the top.
+- If you know roughly when this repo last upgraded, bound it by date instead: run the
+  block with `BASELINE` set to `git -C "$KIT" rev-list -1 --before=<date> HEAD`. A date
+  older than the kit's first commit gives an empty value, which takes the degraded path.
 - Either way, **Step 4's `--record-install --from-kit "$KIT"` is what stops the next
   upgrade paying this** — the same step, and the same `kit_commit` key, that the `STALE`
   / `LOCALLY EDITED` split above already depends on.

@@ -38,15 +38,16 @@ that last touched each one. One shared file made every parallel lane add its ent
 the same top line, so each lane after the first conflicted there (`#1009`). Do not add
 entries below.
 
-**A fragment name is used once, and a fragment is never deleted or renamed.** The lookup
-prints a fragment's current text, so a second PR writing to an existing name replaces
-the first entry for every adopter whose range holds both, and a deleted fragment drops
-out of the lookup. Edit an existing fragment only to correct that same entry.
+**A fragment name is used once.** The lookup prints each version a commit in the
+adopter's range wrote, so a reused name loses nothing, but it prints an unrelated entry
+under a name the reader takes for a correction. Edit an existing fragment only to correct
+that same entry.
 
 **Ordering and headings (the frozen entries).** Newest first. Each entry is headed by the
 **PR** that made the change, because the entry is authored in that PR rather than
 stamped on afterwards — see `AGENTS.md`, Ground rules. Fragments are authored in their
-PR too; the commit that adds one names the PR in its subject. There are no release tags:
+PR too, and the lookup names the commit that wrote each one; a squash merge's subject
+ends with its PR number. There are no release tags:
 adopters pin a kit *commit*, not a version.
 
 **Axes.** `BREAKING (…)` — a repo pinning the old contract fails. `CHANGED` —

@@ -6160,17 +6160,20 @@ def _kit_commit(kit: Path, subject: str, *, write: dict[str, str] | None = None,
 def test_upgrade_changelog_lookup_reads_fragments_added_or_edited_in_range(
     tmp_path: Path,
 ) -> None:
-    """Every fragment a commit after the baseline added or edited is printed (#1009).
+    """Each version of a fragment a commit in range wrote is printed (#1009).
 
     Each case is a separate way the range can go wrong:
 
     - a fragment added before the baseline and untouched since must not print;
-    - one added before it but corrected after it must print, with the correction;
-    - one added and then deleted inside the range must not print or fail;
+    - one added before it but corrected after it must print the correction only;
+    - one added and then deleted inside the range must still print: an adopter
+      whose range holds the add was owed that entry;
     - one added and then renamed inside the range must print under its new name.
-      With git's default rename detection the rename is an `R`, and the `A`
-      names a path that no longer exists, so the entry would vanish;
-    - a non-`.md` file under `changelog.d/` is not a fragment.
+      With git's default rename detection the rename is an `R`, not an `A`;
+    - a name a later PR reuses must print both entries, not only the later one;
+    - a symlink must print as its target path, never as the file it names;
+    - a non-`.md` file under `changelog.d/` is named, not printed;
+    - a commit that touches nothing under `changelog.d/` adds no line at all.
     """
     kit = tmp_path / "kit"
     subprocess.run(["git", "init", "-q", str(kit)], check=True)
@@ -6196,6 +6199,13 @@ def test_upgrade_changelog_lookup_reads_fragments_added_or_edited_in_range(
         "changelog.d/UPPER.MD": "## u\n\nUPPER-CASE-ENTRY\n",
     })
     _kit_commit(kit, "no newline (#11)", write={"changelog.d/no-newline.md": "## n\n\nNO-NEWLINE-END"})
+    _kit_commit(kit, "first use (#12)", write={"changelog.d/reused.md": "## r\n\nFIRST-USE\n"})
+    _kit_commit(kit, "second use (#13)", write={"changelog.d/reused.md": "## r\n\nSECOND-USE\n"})
+    _kit_commit(kit, "code only (#14)", write={"src/engine.py": "x = 1\n"})
+    (tmp_path / "outside.txt").write_text("OUTSIDE-SECRET\n", encoding="utf-8")
+    (kit / "changelog.d" / "linked.md").symlink_to(tmp_path / "outside.txt")
+    subprocess.run(["git", "-C", str(kit), "add", "changelog.d/linked.md"], check=True)
+    _kit_commit(kit, "symlink (#15)")
 
     result = _run_lookup(tmp_path, baseline, kit)
     out = result.stdout
@@ -6210,8 +6220,17 @@ def test_upgrade_changelog_lookup_reads_fragments_added_or_edited_in_range(
     assert "CORRECTED-WORDING" in out and "ORIGINAL-WORDING" not in out, (
         f"an entry corrected after the baseline must print as corrected.\n{out}"
     )
-    assert "GONE-ENTRY" not in out and "No such file" not in result.stderr, (
-        f"a fragment deleted in range must be skipped quietly.\n{out}\n{result.stderr}"
+    assert "GONE-ENTRY" in out, (
+        f"a fragment deleted later in the range lost its entry.\n{out}\n{result.stderr}"
+    )
+    assert "FIRST-USE" in out and "SECOND-USE" in out, (
+        f"a reused fragment name kept only one of its two entries.\n{out}"
+    )
+    assert "OUTSIDE-SECRET" not in out and str(tmp_path / "outside.txt") in out, (
+        f"a symlink fragment was read through to the file it names.\n{out}"
+    )
+    assert "src/engine.py" not in out, (
+        f"a commit outside changelog.d/ reached the fragment listing.\n{out}"
     )
     assert "LANE-B-ENTRY" in out and "changelog.d/new-name.md" in out, (
         f"a fragment renamed in range was lost; rename detection hid its add.\n{out}"
@@ -6230,9 +6249,9 @@ def test_upgrade_changelog_lookup_reads_fragments_added_or_edited_in_range(
     assert out.index("LANE-B-ENTRY") < out.index("LANE-A-ENTRY"), (
         f"fragments must print newest first, like the frozen file.\n{out}"
     )
-    assert out.count("LANE-A-ENTRY") == 1, (
-        f"a fragment touched by two commits in range printed twice.\n{out}"
-    )
+    assert out.count("LANE-A-ENTRY") == 2 and (
+        out.index("LANE-A-ENTRY, reworded") < out.index("LANE-A-ENTRY\n")
+    ), f"each version of an edited fragment must print once, newest first.\n{out}"
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
