@@ -57,6 +57,17 @@ changes one of them or that config file, and one isolated lens otherwise: see
     trading a fail-*closed* limitation for a fail-*open* mechanism. State in the PR
     which changes were requested and which were not.
 
+    **Before adding a skip or exemption, list every input that shares the shape it
+    keys on**, and say for each one whether it should be skipped. A skip is keyed on
+    something observable, and the observable is broader than the case it was written
+    for. On `#986` a fix tolerated a registration whose directory was deleted but not
+    one where only its `.git` was gone; the next fix tolerated the missing `.git`, and
+    also skipped a bare configured repository — which has no `.git` either — and so
+    dropped its object store. The sweep failed open, the adversarial lens reproduced
+    it, and the following round reviewed the revert: each fix round created the next
+    round's finding. Write the list where the reviewer reads it, so the review checks
+    the enumeration rather than rediscovering it. Related: `#419`, `#666`, `#305`.
+
 1. **Kill/recovery paths need an integration test.** Unit tests on the handler are
    insufficient — a kill-path can pass unit tests while the wrapper-level behavior is
    broken. Exercise the real signal/timeout/retry path (or a faithful harness of it)
