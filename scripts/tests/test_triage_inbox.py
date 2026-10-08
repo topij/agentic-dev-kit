@@ -478,6 +478,46 @@ def test_render_sweep_pre_187_keeps_earlier_markers_in_the_inbox() -> None:
     assert earlier not in current_active and earlier in current_archive
 
 
+def test_render_sweep_carries_an_emptied_sections_intro_to_the_archive() -> None:
+    """#1018: a sweep that removed every entry of a dated section left its heading and
+    intro paragraph in the inbox with nothing to introduce, and the archive without
+    it. The intro now goes to the archive under the same heading, ahead of the
+    entries; a section that keeps an entry keeps its intro. `pre-1018` is the old
+    rendering, kept so a sweep it committed still validates."""
+    raw = (
+        b"# Log\n\n## 2026-10-03\n\nParked rather than filed: the intro.\n\n"
+        b"- **One.** body\n\n- **Two.** body\n\n"
+        b"## 2026-10-01\n\nKept intro.\n\n- **Three.** body\n\n- **Four.** stays\n"
+    )
+    candidates = parse(raw)
+    state = _render_sweep_state(archived=["TRI-01", "TRI-02", "TRI-03"])
+    active, archive = render_sweep(raw, b"# Archive\n", candidates, state, b"")
+    assert active == b"# Log\n\n## 2026-10-01\n\nKept intro.\n\n- **Four.** stays\n"
+    assert archive == (
+        b"# Archive\n\n## 2026-10-03\n\nParked rather than filed: the intro.\n\n"
+        b"- **One.** body\n\n- **Two.** body\n\n"
+        b"## 2026-10-01\n\n- **Three.** body\n"
+    )
+    old_active, old_archive = render_sweep(raw, b"# Archive\n", candidates, state, b"", rendering="pre-1018")
+    assert old_active == b"# Log\n\n## 2026-10-03\n\nParked rather than filed: the intro.\n\n## 2026-10-01\n\nKept intro.\n\n- **Four.** stays\n"
+    assert b"Parked rather than filed" not in old_archive
+
+
+def test_render_sweep_puts_a_carried_intro_under_an_existing_archive_heading() -> None:
+    """A date the archive already has keeps one heading; the carried intro goes
+    directly under it, ahead of the entries archived there earlier."""
+    raw = b"# Log\n\n## 2026-10-03\n\nThe intro.\n\n- **One.** body\n"
+    candidates = parse(raw)
+    state = _render_sweep_state(archived=["TRI-01"])
+    prior = b"# Archive\n\n## 2026-10-03\n\n- **Earlier.** archived\n\n## 2026-10-04\n\n- **Later.** x\n"
+    active, archive = render_sweep(raw, prior, candidates, state, b"")
+    assert active == b"# Log\n"
+    assert archive == (
+        b"# Archive\n\n## 2026-10-03\n\nThe intro.\n\n- **Earlier.** archived\n\n- **One.** body\n\n"
+        b"## 2026-10-04\n\n- **Later.** x\n"
+    )
+
+
 def test_render_sweep_adds_a_blank_line_before_the_appended_archive_heading() -> None:
     raw = b"# Log\n\n## 2026-09-20\n\n- **Archived one.** body\n"
     candidates = parse(raw)

@@ -54,7 +54,12 @@ def parse_commands(text: str, proposal_digests: dict[str, str]) -> list[dict[str
             if not match:
                 raise TriageError("unknown or mixed approval command", outcome="operator-held")
             verb, ids_text = match.groups()
-            if "," in ids_text or re.search(r"\b(?:approve|archive|park|modify|cancel)\b", ids_text):
+            if "," in ids_text:
+                raise TriageError(
+                    "malformed approval command: ids are space-separated; a comma is not a separator",
+                    outcome="operator-held",
+                )
+            if re.search(r"\b(?:approve|archive|park|modify|cancel)\b", ids_text):
                 raise TriageError("mixed or malformed approval command", outcome="operator-held")
             if ids_text == "all":
                 if verb != "approve":

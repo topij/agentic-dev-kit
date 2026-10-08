@@ -1125,6 +1125,8 @@ One reply may carry several `approve <ids>`, `archive <ids>` and `park <ids>` co
 one per line, so a single decision can file some candidates and archive others. Each id
 may appear in only one command, and each line is one complete command. `approve all`,
 `modify` and `cancel` each cover the whole reply and must be sent alone.
+Ids are space-separated, as in `approve TRI-01 TRI-02`; a comma is not a separator,
+and a command containing one is refused with that reason.
 
 For an entry already handled, review its retained annotation and referenced evidence
 before choosing `archive <ids>`, which files no tracker item. If its disposition is
@@ -1196,8 +1198,11 @@ earlier graduation-marker section (its heading through to the next heading outsi
 to the archive unchanged, in file order and ahead of the swept blocks, so the inbox keeps
 only this sweep's marker and each sweep leaves the file no longer than the entries it
 kept. A marker-titled section that holds an entry line is not a marker record and stays,
-as do parked entries' dated sections. When removing a dated section that genuinely is
-empty, also remove the blank line that separated it from whatever precedes it if nothing
+as do parked entries' dated sections. When a sweep removes every entry of a dated
+section, the prose between its heading and its first entry goes to the archive with
+them, directly under the same heading and ahead of any entry already archived there,
+and the section leaves the inbox; a section that keeps an entry keeps its prose. When
+removing a dated section that genuinely is empty, also remove the blank line that separated it from whatever precedes it if nothing
 follows: otherwise an emptied trailing section leaves a blank line at EOF. In the archive,
 swept blocks whose date heading the archive already has join the last section with that
 exact heading (outside fenced code) instead of repeating it; others go in a new section
@@ -1205,7 +1210,8 @@ appended at the end, with a blank line before its heading. Either way the archiv
 exactly one newline.
 
 Commit validation, which re-renders a retained sweep commit from state, also accepts the
-three renderings older engines committed: the one that left earlier markers in the inbox,
+four renderings older engines committed: the one that left an emptied section's intro in
+the inbox, the one that also left earlier markers in the inbox,
 the one before source entries (lists of issue
 links and candidate ids, each swept date group appended under its own heading, the last
 block's trailing blank line kept), and the one before the marker record existed (a bare
@@ -1339,9 +1345,11 @@ Its trusted context is `{"source":"current-session","operator_identity":"<operat
 Recovery first returns `recovery_plan` without mutating a gate-only capture. A later
 request contains `recovery_approval` with `decision`, `source`, `approver_identity`, and
 `core_digest`; the trusted current-session read-back binds those same values.
-Finalization additionally requires `finalize: true` and an absolute isolated `worktree`
-on its first continuation. That path must lie outside the repository checkout and must
-not exist yet. The first continuation holds a path inside the checkout, such as a
+Every finalization continuation carries `finalize: true`, not only the first: without
+it a session in `forge-finalize` or `archive-sweep` does nothing and returns
+`operator-held` with `resume_action` `resume with {"finalize": true}`. The first
+continuation additionally carries an absolute isolated `worktree`. That path must lie
+outside the repository checkout and must not exist yet. The first continuation holds a path inside the checkout, such as a
 `.claude/worktrees/` directory, or one containing it, operator-held before the branch or
 worktree is created.
 

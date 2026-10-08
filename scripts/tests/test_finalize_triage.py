@@ -56,16 +56,19 @@ def git(repo: Path, *args: str) -> str:
     return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True).stdout.strip()
 
 
-def repository(tmp_path: Path, *, prior_marker: bool = False) -> Path:
+def repository(tmp_path: Path, *, prior_marker: bool = False, intro_section: bool = False) -> Path:
     root = tmp_path / "repo"
     (root / "config").mkdir(parents=True)
     (root / "config/dev-model.yaml").write_text(triage_config_text(), encoding="utf-8")
     (root / "docs").mkdir()
     # `prior_marker` adds an earlier sweep's graduation marker, which a current
-    # sweep moves to the archive and a pre-#187 one left in place.
+    # sweep moves to the archive and a pre-#187 one left in place. `intro_section`
+    # puts first a dated section with an intro and one entry, so sweeping TRI-01
+    # empties it: a current sweep archives the intro, a pre-#1018 one left it.
     (root / "docs/kit-friction-log.md").write_bytes(
         b"# Log\n\n"
         + ("## 2026-01-01 — Backlog migrated by triage session earlier\n\nEngine mode: `engine-backed`.\n\n".encode() if prior_marker else b"")
+        + (b"## 2026-01-03\n\nAn intro the sweep carries.\n\n- **Emptied section.** exact bytes.\n\n" if intro_section else b"")
         + b"## 2026-01-02\n\n"
         b"- **Approved archive.** exact bytes. **Filed 2026-01-02 as #17.**\n\n"
         b"- **Window addition.** The prior Filed annotation is discussed; keep me.\n"
@@ -329,6 +332,14 @@ def test_archive_only_finalize_retains_exact_new_block_and_waits_for_merge(
     }
     pending.pop("archive_sweep")
     state_path.write_bytes(dumps(pending))
+    # #1017: a continuation without `finalize: true` advances nothing, and its
+    # resume_action names the flag rather than a bare "resume".
+    flagless_forge = FakeForge([])
+    flagless = run("resume", context="interactive", request={}, start=root, forge=flagless_forge)
+    assert (flagless["outcome"], flagless["detail"]) == ("operator-held", "active session resumed")
+    assert flagless["resume_action"] == 'resume with {"finalize": true}'
+    assert flagless_forge.calls == []
+    assert loads_exact(state_path.read_bytes())["finalization_operations"] == pending["finalization_operations"]
     retried_forge = FakeForge([verified({
         "url": pr_url,
         "baseRefName": "main",
@@ -501,11 +512,11 @@ def test_commit_authority_failure_leaves_clean_worktree_and_fresh_retry_can_cont
 
 
 @pytest.mark.evidence
-@pytest.mark.parametrize("mutation", ["derived-content", "foreign-path", "legacy-rendering", "pre-818-rendering", "pre-187-rendering"])
+@pytest.mark.parametrize("mutation", ["derived-content", "foreign-path", "legacy-rendering", "pre-818-rendering", "pre-187-rendering", "pre-1018-rendering"])
 def test_fresh_process_refuses_mutated_retained_commit_updates_before_rebind(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
 ) -> None:
-    root = repository(tmp_path, prior_marker=mutation == "pre-187-rendering")
+    root = repository(tmp_path, prior_marker=mutation == "pre-187-rendering", intro_section=mutation == "pre-1018-rendering")
     state_root = tmp_path / "state-root"
     monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
     draft_request, candidate_id = proposal_request(root)
@@ -545,10 +556,11 @@ def test_fresh_process_refuses_mutated_retained_commit_updates_before_rebind(
         intent["updates"][0]["content"] = encode_bytes(raw)
         intent["updates"][0]["content_digest"] = digest_bytes(raw)
         expected_detail = "commit updates do not match the approved sweep"
-    elif mutation in {"legacy-rendering", "pre-818-rendering", "pre-187-rendering"}:
+    elif mutation in {"legacy-rendering", "pre-818-rendering", "pre-187-rendering", "pre-1018-rendering"}:
         # A commit an engine before #812 rendered (bare marker, no record), one
-        # before #818 rendered (no source entries, archive heading repeated), or one
-        # before #187 rendered (earlier marker left in the inbox) must still
+        # before #818 rendered (no source entries, archive heading repeated), one
+        # before #187 rendered (earlier marker left in the inbox), or one before
+        # #1018 rendered (an emptied section's intro left in the inbox) must still
         # validate, so the restart gets past the content check instead of holding
         # on it.
         updates = {update["path"]: update for update in intent["updates"]}
@@ -556,7 +568,7 @@ def test_fresh_process_refuses_mutated_retained_commit_updates_before_rebind(
         legacy = render_sweep(
             decode_bytes(inbox["previous_content"]), decode_bytes(archive["previous_content"]),
             _frozen_candidates(state), state, intent["migration_marker"].encode(),
-            rendering={"legacy-rendering": "pre-812", "pre-818-rendering": "pre-818", "pre-187-rendering": "pre-187"}[mutation],
+            rendering={"legacy-rendering": "pre-812", "pre-818-rendering": "pre-818", "pre-187-rendering": "pre-187", "pre-1018-rendering": "pre-1018"}[mutation],
         )
         assert legacy != (decode_bytes(inbox["content"]), decode_bytes(archive["content"]))
         for update, raw in zip((inbox, archive), legacy, strict=True):

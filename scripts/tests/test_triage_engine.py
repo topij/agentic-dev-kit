@@ -441,6 +441,8 @@ def test_report_presents_historical_source_digest_and_safe_literal_fence(
     assert "````\n" + source.decode("utf-8") in report
     assert "including historically annotated entries" in report
     assert "it does not archive already handled entries" in report
+    # #1016: the command help names the id separator, so a comma list is not guessed.
+    assert "Ids are space-separated, as in `approve TRI-01 TRI-02`; a comma is not a separator." in report
 
 
 @pytest.mark.parametrize(

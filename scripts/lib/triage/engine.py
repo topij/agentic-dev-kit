@@ -143,6 +143,15 @@ def _result(
     }
 
 
+def _active_resume_action(state: dict[str, Any]) -> str:
+    """The `resume_action` for an active session: the forge transition runs only
+    when the request carries `finalize: true`, so a finalize-phase session names the
+    flag every continuation needs (#1017) rather than a bare `resume`."""
+    if state.get("phase") in {"forge-finalize", "archive-sweep"}:
+        return 'resume with {"finalize": true}'
+    return "resume"
+
+
 def _pr_result_fields(state: dict[str, Any]) -> dict[str, str | None]:
     url = None
     observed = None
@@ -684,6 +693,7 @@ def _report_text(state: dict[str, Any], capabilities: dict[str, dict[str, str]],
             "Use `archive <ids>` for already handled entries without filing, and use `park <ids>` or leave an entry unmentioned to retain it.",
             "`approve all` files every displayed payload, including historically annotated entries; it does not archive already handled entries.",
             "One reply may carry several commands, one per line, such as `approve <ids>` on one line and `archive <ids>` on the next; each id may appear in only one of them. `approve all`, `modify` and `cancel` must each be sent alone.",
+            "Ids are space-separated, as in `approve TRI-01 TRI-02`; a comma is not a separator.",
         ])
     if state.get("operations"):
         lines.extend(["", "## Tracker operations", ""])
@@ -1320,7 +1330,8 @@ def _validate_commit_updates(
     committed = (decoded[inbox_rel][1], decoded[archive_rel][1])
     # A sweep an older engine committed — before #812 without the marker record,
     # before #818 without source entries and with a separate same-date archive
-    # section, before #187 with earlier markers left in the inbox — left states (completed, or mid-finalization across an upgrade) that
+    # section, before #187 with earlier markers left in the inbox, before #1018 with
+    # an emptied section's intro left in the inbox — left states (completed, or mid-finalization across an upgrade) that
     # must still validate. Every rendering is a deterministic function of the same
     # approved state and prior bytes; a commit matching none of them is rejected.
     renderings = (
@@ -2042,7 +2053,7 @@ def run(
                     engine_mode=state["engine_mode"],
                     report=result_report,
                     frozen=result_frozen,
-                    resume_action="resume",
+                    resume_action=_active_resume_action(state),
                     detail="new refuses to overwrite active state",
                     identifiers=state.get("verified_tracker_identifiers"),
                     candidate_index=state["frozen_snapshot"]["content"]["candidate_index"],
@@ -2121,7 +2132,7 @@ def run(
             if report_path is not None:
                 _write_report(report_path, state, capabilities, terminal)
             lease.release()
-            return _result(capabilities, terminal, mode=mode, engine_mode=state["engine_mode"], report=str(report_path) if report_path else None, frozen=str(frozen_path), resume_action="resume", detail="active session resumed", identifiers=state.get("verified_tracker_identifiers"), observed_protected_head=observed_protected_head, **_pr_result_fields(state))
+            return _result(capabilities, terminal, mode=mode, engine_mode=state["engine_mode"], report=str(report_path) if report_path else None, frozen=str(frozen_path), resume_action=_active_resume_action(state), detail="active session resumed", identifiers=state.get("verified_tracker_identifiers"), observed_protected_head=observed_protected_head, **_pr_result_fields(state))
         except TriageError:
             if lease.held:
                 lease.release()
