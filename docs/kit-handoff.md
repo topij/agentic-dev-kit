@@ -20,6 +20,19 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-08 (changelog fragments, then a three-lane batch run overnight, in Claude Code)
+
+- **#1009 designed and built as PR #1020, held for the operator.** On the operator's choice, once #1020 merges each PR would add `changelog.d/<branch-slug>.md`, with `CHANGELOG.md` frozen behind a BREAKING cutover entry and `upgrade.md` Step 1 printing each fragment version a commit in range wrote. Until then `main`'s rule is unchanged. A `git merge-tree` replay of #1004–#1006 showed only `CHANGELOG.md` conflicting; `kit-manifest.json` auto-merged, so it is unchanged. The adversarial lens reviewed `c254fd90`, `751bedee` and `44ada17e`, which spent the round budget, and the last review left a Low-Medium finding (a fragment written only by a merge commit prints nothing). The decision packet is on #1020. `make test` at `44ada17e` in the main checkout on 2026-10-08 → `4476 passed, 1 skipped`.
+- **Lanes launched headless from `main` at `fad8597b`.** The operator first chose interactive lanes, then asked for autonomous work overnight, so each lane ran through `launch_lane.py`. Each prompt carried its ticket text, because the lane profile has no `gh issue view`.
+  - `skip-shape-doctrine` (#1012) → #1021, merged as `43cb89ef` through `dev_session.sh merge`. It had a full lens pass at `ac635d8d` and two LOW delta repairs.
+  - `pr-watch-trio` (#1008, #1013, #1014) → #1022, held for the operator: it is safety-critical. Its panel receipt is at `6d5343ac`, and the disposition lists the open LOWs.
+  - `triage-trio` (#1016, #1017, #1018) → #1023, consciously parked by the cockpit, unmerged. It has a lens receipt at `6713c8a4`. Its #1017 fix leaves a Low-Medium gap for the `tracker-write` phase, and the right hint there is a design decision.
+- **#1022 and #1023 both ship `changelog.d/` fragments, so merge #1020 first.** Before #1020, nothing reads them.
+- `reconcile_sessions.sh pr-watch-trio triage-trio skip-shape-doctrine` reported `merged` for #1021, `held` for #1022 and `open` for #1023, which is parked as above. All three lane worktrees are kept, #1021's included, until the batch's open PRs settle.
+- Workstream assignment was not confirmed with the operator: this session added a new **Changelog fragments** entry and left every existing entry alone. #1008 is named in *Review proportionality*, and #1022 now carries it.
+
+______________________________________________________________________
+
 ## Session — 2026-10-08 (friction-log triage after the overnight batch, in Claude Code)
 
 - **Triage session `469bcd58` superseded.** Its `resume` returned operator-held with "configuration identity mismatch": `config/dev-model.yaml` changed after it froze, in #993, #986 and #1006. On the operator's decision its isolated state root was left untouched as evidence, and a fresh live draft was started instead.
@@ -281,39 +294,6 @@ and #976. The separate frozen kit-friction decision
 
 ______________________________________________________________________
 
-## Session — 2026-10-06 (cs-toolkit installed correction and landed Markdown hold, in Codex)
-
-Source [#969](https://github.com/topij/agentic-dev-kit/pull/969) merged as
-`01269cc80e05ecab1987ebaa97ee76bba306afee`; installation
-[#2545](https://github.com/in-parallel-oy/cs-toolkit/pull/2545) merged and was
-delivered as `cddb46c284d92b3261b0ec1977d82fa3a629cbcf`, pinning that source.
-The operator authorized checked installation/archive/wrap-up merges and delegated
-approval of the exact project-only action and complete corrected filing payload.
-Concrete presentations retain that human text beside runtime-computed digests;
-they do not invent a later human reply. Configured reviewers ran at
-`gpt-5.6-sol` / `medium`; GitHub runner cancellations were retried at the same
-reviewed head without a review waiver or permanent configuration change.
-
-The installed correction applied action
-`767e470416961a2aa43a0a0e422bd79d46ce47875b13bc2179139c0d8d9d82f9`,
-retaining rejected evidence and clearing its approval. The approved corrected
-create landed CUS-1670, but Linear changed Markdown bullets from `-` to `*`.
-`libs/report-utils/.venv/bin/python live-62970e59-normalization-readback.py`
-at `cddb46c284d92b3261b0ec1977d82fa3a629cbcf` on 2026-10-05 UTC, in
-`/Users/topi/Coding/in-parallel/cs-toolkit`, recorded the ambiguous exact-payload
-mismatch with mutation-prohibited marker searches, independent by-ID readback
-and unchanged retained state/report/quarantine bytes. No duplicate create,
-issue update, raw state edit, replacement freeze or TRI-01 archive followed.
-[The acceptance record](https://github.com/topij/agentic-dev-kit/issues/6#issuecomment-6003071493)
-retains the commands, actual results and digests. A bounded representation
-reconciliation design awaits the operator before further engineering.
-This entry supersedes the earlier project-name resume instruction; the separate
-frozen kit-friction decision remains pending. Follow-ups #970 and #971 were
-recorded without fixes claimed. Evidence remains under
-`state/review-evidence/cs-toolkit-linear-acceptance_2026-10-04/finalize-decisions/`.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -397,3 +377,10 @@ shape check in `model.py` stays until cs-toolkit's completed LIVE state, which c
 
 ▶ Next: once cs-toolkit's scheduled triage draft has retired its completed LIVE state,
 confirm no state root holds a `proposal_correction`, then remove the shim (#979).
+
+### Changelog fragments
+
+**Status:** #1020 moves changelog entries to `changelog.d/` fragments (#1009). It is held at `44ada17e` with a decision packet, because the review round budget is spent. #1022 and #1023 carry fragments and wait on it. #507's heading check has no new entries to check once #1020 lands.
+**Owner:** [#1009](https://github.com/topij/agentic-dev-kit/issues/1009); PRs #1020, #1022, #1023.
+
+▶ Next: the operator answers #1020's decision packet (another fix round, merge as is, or withdraw). Then merge #1022 after #1020, and settle #1023's `tracker-write` hint before merging it.
