@@ -320,7 +320,7 @@ record-prose row of #585's decision is not built: its deterministic checks, and 
 told which spans stay executed. #993 (`2d40c960`) added the review round budget: the
 opening review plus `review.round_budget` fix rounds, then an operator decision packet.
 #1006 (`f917d946`) matches the class case-folded (#991) and closed #994's follow-ups; its
-last LOW is #1008.
+last LOW, #1008, was fixed by #1022 (`54655d9d`).
 **Owner:**
 [#585](https://github.com/topij/agentic-dev-kit/issues/585); round-budget follow-ups
 [#994](https://github.com/topij/agentic-dev-kit/issues/994); related #921, #403, #666,
@@ -389,7 +389,7 @@ confirm no state root holds a `proposal_correction`, then remove the shim (#979)
 
 ### Changelog fragments
 
-**Status:** changelog entries are `changelog.d/` fragments since #1020 (`f9146c5f`), and #1022 and #1023 shipped the first two. #1026 holds the lookup's test gaps and naming wording. #507's heading check has no new entries to check.
+**Status:** changelog entries are `changelog.d/` fragments since #1020 (`f9146c5f`), and #1022 and #1023 shipped the first two. #1026 holds the lookup's test gaps and naming wording; #1022's fragment `dev-pr-watch-trio.md` already departs from that rule, which gives `pr-watch-trio.md`. #507's heading check has no new entries to check.
 **Owner:** [#1009](https://github.com/topij/agentic-dev-kit/issues/1009), [#1026](https://github.com/topij/agentic-dev-kit/issues/1026).
 
 ▶ Next: #1026 — pin the lookup's baseline range and pathspec with tests, and state one fragment naming rule.
