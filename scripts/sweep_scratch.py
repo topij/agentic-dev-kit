@@ -362,15 +362,19 @@ def _alternates(objects: str) -> list[str]:
     if not stat.S_ISREG(st.st_mode):
         raise ConfigError(f"{path} is not a regular file")
     try:
-        with open(path, encoding="utf-8", errors="replace") as handle:
-            lines = handle.read().splitlines()
+        with open(path, "rb") as handle:
+            lines = handle.read().split(b"\n")
     except OSError as exc:
         raise ConfigError(f"cannot read {path}: {exc.strerror}") from exc
     found: list[str] = []
-    for line in lines:
-        line = line.strip()
-        if not line or line.startswith("#"):
+    for raw_line in lines:
+        # Git separates entries at LF; other whitespace belongs to the path.
+        # Only empty entries and lines starting with '#' are skipped: trimming,
+        # universal-newline decoding or splitlines() can hide a borrowed store.
+        # fsdecode preserves filesystem bytes rather than replacing invalid UTF-8.
+        if not raw_line or raw_line.startswith(b"#"):
             continue
+        line = os.fsdecode(raw_line)
         if line.startswith('"'):
             # A C-quoted path; not parsed here, so nothing is classified past it.
             raise ConfigError(f"quoted path in {path}; refusing to classify without it")
