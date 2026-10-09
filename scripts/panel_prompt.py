@@ -372,7 +372,8 @@ def _require_scratch(scratch: str, head: str) -> str:
     you" at this path. Before #999 that sentence rendered for any value, and an
     adopter pointed it at the author lane's live worktree: the author committed into
     it mid-review, both lenses watched HEAD move, and the isolation claim was false.
-    The path must be inside a working tree, HEAD must be the head under review,
+    The path must name the working-tree root outside its Git metadata directory,
+    HEAD must be the head under review,
     and HEAD must be detached. A bare repository can have a detached HEAD at the
     right commit without any checked-out files for the lens to execute.
     A check that cannot run (not a git tree, git missing) refuses — it never passes.
@@ -380,7 +381,7 @@ def _require_scratch(scratch: str, head: str) -> str:
     assembles prompts and has no write path.
 
     What is checked is that much and no more, once, at assembly time: the path is
-    not required to be the tree's top level, absolute, or free of uncommitted edits,
+    not required to be absolute or free of uncommitted edits,
     and nothing re-checks it after the prompt is printed.
 
     Inherited ``GIT_*`` variables are dropped for these calls: ``git -C`` does not
@@ -425,6 +426,52 @@ def _require_scratch(scratch: str, head: str) -> str:
             f"({inside.stderr.strip() or inside.stdout.strip() or f'exit {inside.returncode}'}). "
             "A bare repository or Git metadata directory has no checked-out files "
             "for the lens to execute. " + remedy
+        )
+    top = git_c("rev-parse", "--show-toplevel")
+    top_path = top.stdout.removesuffix("\n")
+    if top.returncode != 0 or not top_path:
+        raise PromptError(
+            f"--scratch {scratch}: `git rev-parse --show-toplevel` did not confirm "
+            f"the working-tree root ({top.stderr.strip() or f'exit {top.returncode}'}). "
+            + remedy
+        )
+    try:
+        is_root = Path(scratch).samefile(top_path)
+    except OSError as exc:
+        raise PromptError(
+            f"--scratch {scratch}: could not verify the working-tree root ({exc}). "
+            + remedy
+        ) from exc
+    if not is_root:
+        raise PromptError(
+            f"--scratch {scratch}: the path is inside a working tree but is not its "
+            f"root {top_path!r}. The lens needs the repository root as its working "
+            "directory for repository-relative verification. " + remedy
+        )
+    # Git can report both a worktree and its root for an object database when
+    # core.worktree points there. Anchor the workspace against its actual metadata
+    # directory rather than trusting that configurable label as proof of a tree.
+    database = git_c("rev-parse", "--absolute-git-dir")
+    database_path = database.stdout.removesuffix("\n")
+    if database.returncode != 0 or not database_path:
+        raise PromptError(
+            f"--scratch {scratch}: could not confirm the Git metadata directory "
+            f"({database.stderr.strip() or f'exit {database.returncode}'}). " + remedy
+        )
+    try:
+        inside_database = Path(scratch).resolve(strict=True).is_relative_to(
+            Path(database_path).resolve(strict=True)
+        )
+    except OSError as exc:
+        raise PromptError(
+            f"--scratch {scratch}: could not verify the Git metadata directory ({exc}). "
+            + remedy
+        ) from exc
+    if inside_database:
+        raise PromptError(
+            f"--scratch {scratch}: a review worktree root must be outside its Git "
+            "metadata directory. Setting core.worktree to an object database does "
+            "not supply a separate checked-out tree. " + remedy
         )
     # `symbolic-ref -q` exits 1 for a detached HEAD and 0 on a branch; anything else is
     # git failing, which must not read as "detached".

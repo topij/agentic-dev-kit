@@ -711,22 +711,38 @@ def test_a_detached_object_database_is_not_a_scratch_worktree(repo, tmp_path, ki
     assert "not confirmed inside a working tree" in out.stderr
 
 
-@pytest.mark.parametrize("status, answer", [(128, "true"), (0, "")])
+@pytest.mark.parametrize("probe, status, answer", [
+    ("--is-inside-work-tree", 128, "true"),
+    ("--is-inside-work-tree", 0, ""),
+    ("--show-toplevel", 128, "root"),
+    ("--show-toplevel", 0, ""),
+    ("--show-toplevel", 0, "absent"),
+    ("--absolute-git-dir", 128, "metadata"),
+    ("--absolute-git-dir", 0, ""),
+    ("--absolute-git-dir", 0, "absent"),
+])
 def test_an_unconfirmed_working_tree_probe_refuses_the_full_prompt(
-    repo, tmp_path, monkeypatch, status, answer,
+    repo, tmp_path, monkeypatch, probe, status, answer,
 ):
     """A failed probe cannot authorize a prompt, even if it prints true; an
-    empty successful answer also establishes nothing. All other Git calls work."""
+    empty successful answer or nonexistent root also establishes nothing. All
+    other Git calls work."""
     _, head = _revs(repo)
     tree = _detached_tree(repo, tmp_path, head)
     real = shutil.which("git")
     shim_dir = tmp_path / "shim"
     shim_dir.mkdir()
     observed = tmp_path / "probe-observed"
+    if answer == "root":
+        answer = tree
+    elif answer == "metadata":
+        answer = _git(Path(tree), "rev-parse", "--absolute-git-dir")
+    elif answer == "absent":
+        answer = str(tmp_path / "absent-root")
     shim = shim_dir / "git"
     shim.write_text(
         "#!/bin/sh\n"
-        'if [ "$3" = rev-parse ] && [ "$4" = --is-inside-work-tree ]; then\n'
+        f'if [ "$3" = rev-parse ] && [ "$4" = {probe} ]; then\n'
         f'    echo called > "{observed}"\n'
         f'    echo "{answer}"\n'
         f'    exit {status}\n'
@@ -737,7 +753,60 @@ def test_an_unconfirmed_working_tree_probe_refuses_the_full_prompt(
     monkeypatch.setenv("PATH", f"{shim_dir}{os.pathsep}{os.environ['PATH']}")
     out = _scratch_refusal(repo, tree)
     assert observed.read_text().strip() == "called"
-    assert "not confirmed inside a working tree" in out.stderr
+    message = {
+        "--show-toplevel": "working-tree root",
+        "--absolute-git-dir": "Git metadata directory",
+        "--is-inside-work-tree": "not confirmed inside a working tree",
+    }[probe]
+    assert message in out.stderr
+
+
+@pytest.mark.parametrize("kind", ["root", "child"])
+def test_configuring_a_worktree_inside_the_object_database_does_not_supply_one(
+    repo, tmp_path, kind,
+):
+    _, head = _revs(repo)
+    database = tmp_path / "configured.git"
+    _git(repo, "clone", "-q", "--bare", str(repo), str(database))
+    _git(database, "update-ref", "--no-deref", "HEAD", head)
+    scratch = database if kind == "root" else database / "workspace"
+    if kind == "child":
+        scratch.mkdir()
+    _git(database, "config", "core.bare", "false")
+    _git(database, "config", "core.worktree", str(scratch))
+    assert _git(scratch, "rev-parse", "HEAD") == head
+    assert _git(scratch, "rev-parse", "--is-inside-work-tree") == "true"
+    assert Path(_git(scratch, "rev-parse", "--show-toplevel")).samefile(scratch)
+    assert Path(_git(scratch, "rev-parse", "--absolute-git-dir")).samefile(database)
+    out = _scratch_refusal(repo, str(scratch))
+    assert "root must be outside its Git metadata directory" in out.stderr
+
+
+def test_a_nested_directory_is_not_a_review_worktree_root(repo, tmp_path):
+    _, head = _revs(repo)
+    tree = Path(_detached_tree(repo, tmp_path, head))
+    nested = tree / "nested"
+    nested.mkdir()
+    assert _git(nested, "rev-parse", "HEAD") == head
+    assert _git(nested, "rev-parse", "--is-inside-work-tree") == "true"
+    out = _scratch_refusal(repo, str(nested))
+    assert "inside a working tree but is not its root" in out.stderr
+
+
+@pytest.mark.parametrize("kind", ["symlink", "relative"])
+def test_a_worktree_root_alias_is_accepted(repo, tmp_path, kind):
+    base, head = _revs(repo)
+    tree = Path(_detached_tree(repo, tmp_path, head))
+    alias = tmp_path / "alias"
+    alias.symlink_to(tree, target_is_directory=True)
+    scratch = str(alias) if kind == "symlink" else os.path.relpath(tree, repo)
+    out = _run(
+        repo, "--lens", "adversarial", "--head", head, "--base", base,
+        "--branch", "b", "--scratch", scratch,
+    )
+    assert out.returncode == 0, out.stderr
+    assert scratch in out.stdout
+    assert "built for you" in out.stdout
 
 
 def test_a_scratch_path_that_is_not_a_git_tree_is_refused(repo, tmp_path):
