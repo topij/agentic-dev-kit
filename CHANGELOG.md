@@ -26,13 +26,31 @@ gate waits for a settle baseline, read `build_report`. This file tells you only 
 it does.
 
 **How to read it during an upgrade.** Do not read from the top. `/upgrade` Step 1
-resolves your recorded baseline kit commit into exactly the set of entries below that
-are new to you; follow that.
+resolves your recorded baseline kit commit into the entries new to you, from
+`changelog.d/` and from the frozen entries below; follow that.
 
-**Ordering and headings.** Newest first. An entry is headed by the **PR** that made
-the change, because the entry is authored in that PR rather than stamped on
-afterwards — see `AGENTS.md`, Ground rules. There are no release tags: adopters pin a
-kit *commit*, not a version.
+**This file is frozen. New entries go in `changelog.d/`.** Each PR with an observable
+change adds its own fragment file there, directly in `changelog.d/` and named for the
+part of its branch after the last `/`, in lower case: branch `feat/pr-watch-sha-bound`
+writes `changelog.d/pr-watch-sha-bound.md`. A fragment is a regular file, never a
+symlink. A fragment starts with a `## ` heading,
+ends with a newline, and carries the axis lines described below. It needs no PR number:
+`/upgrade` Step 1 finds the fragments new to you from git history, and prints each
+version under the commit that wrote it. One shared file made every parallel lane add its entry at
+the same top line, so each lane after the first conflicted there (`#1009`). Do not add
+entries below.
+
+**A fragment name is used once.** The lookup prints each version a commit in the
+adopter's range wrote, so a reused name loses nothing, but it prints an unrelated entry
+under a name the reader takes for a correction. Edit an existing fragment only to correct
+that same entry.
+
+**Ordering and headings (the frozen entries).** Newest first. Each entry is headed by the
+**PR** that made the change, because the entry is authored in that PR rather than
+stamped on afterwards — see `AGENTS.md`, Ground rules. Fragments are authored in their
+PR too, and the lookup names the commit that wrote each one; a squash merge's subject
+ends with its PR number. There are no release tags:
+adopters pin a kit *commit*, not a version.
 
 **Axes.** `BREAKING (…)` — a repo pinning the old contract fails. `CHANGED` —
 observable but compatible. `ADDED` — new surface you may adopt or ignore.
@@ -41,6 +59,16 @@ observable but compatible. `ADDED` — new surface you may adopt or ignore.
 starts.
 
 ---
+
+## #1020 — Changelog entries move to `changelog.d/`; this file is frozen
+
+BREAKING (upgrade procedure): new entries are fragment files under `changelog.d/`, one
+per PR, and nothing new is added to this file (#1009). An older copy of
+`upgrade.md` reads only this file, so it prints no entry after this one and would
+report every later PR as making no observable change. Take the current
+`docs/agentic-dev-kit/workflows/upgrade.md` from the kit and run its Step 1 again: it
+reads both `changelog.d/` and this file. If you author changelog entries in a fork of
+the kit, add a fragment file instead of a heading here.
 
 ## #1006 — Safety-critical paths match case-insensitively; `--record-round --head` takes only a hex sha
 

@@ -6126,6 +6126,269 @@ def test_upgrade_changelog_lookup_reports_commits_it_could_not_index(
     )
 
 
+
+# ── changelog.d/ fragments (#1009) ─────────────────────────────────────────
+# Since the cutover each PR adds its own `changelog.d/<slug>.md` instead of a
+# heading at the top of `CHANGELOG.md`, so parallel lanes stop conflicting on
+# one append point. The lookup finds fragments from git history, so each case
+# below is a commit shape that history can express in a way a naive
+# `--diff-filter=A` listing would get wrong.
+
+_GIT_ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@e",
+            "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@e"}
+
+
+def _kit_commit(kit: Path, subject: str, *, write: dict[str, str] | None = None,
+                remove: tuple[str, ...] = (), move: tuple[str, str] | None = None) -> str:
+    """Apply one change to the fixture kit, commit it, and return its sha."""
+    env = {**os.environ, **_GIT_ENV}
+    for rel, text in (write or {}).items():
+        (kit / rel).parent.mkdir(parents=True, exist_ok=True)
+        (kit / rel).write_text(text, encoding="utf-8")
+        subprocess.run(["git", "-C", str(kit), "add", rel], check=True)
+    for rel in remove:
+        subprocess.run(["git", "-C", str(kit), "rm", "-q", rel], check=True)
+    if move:
+        subprocess.run(["git", "-C", str(kit), "mv", *move], check=True)
+    subprocess.run(["git", "-C", str(kit), "commit", "-q", "--allow-empty",
+                    "-m", subject], check=True, env=env)
+    return subprocess.run(["git", "-C", str(kit), "rev-parse", "HEAD"],
+                          capture_output=True, text=True, check=True).stdout.strip()
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_upgrade_changelog_lookup_reads_fragments_added_or_edited_in_range(
+    tmp_path: Path,
+) -> None:
+    """Each version of a fragment a commit in range wrote is printed (#1009).
+
+    Each case is a separate way the range can go wrong:
+
+    - a fragment added before the baseline and untouched since must not print;
+    - one added before it but corrected after it must print the correction only;
+    - one added and then deleted inside the range must still print: an adopter
+      whose range holds the add was owed that entry;
+    - one added and then renamed inside the range must print under its new name.
+      With git's default rename detection the rename is an `R`, not an `A`;
+    - a name a later PR reuses must print both entries, not only the later one;
+    - a symlink must print as its target path, never as the file it names;
+    - a non-`.md` file under `changelog.d/` is named, not printed;
+    - a commit that touches nothing under `changelog.d/` adds no line at all.
+    """
+    kit = tmp_path / "kit"
+    subprocess.run(["git", "init", "-q", str(kit)], check=True)
+    _kit_commit(kit, "seed (#1)", write={
+        "CHANGELOG.md": "## #1 — frozen\n\nFROZEN-ENTRY\n",
+        "changelog.d/untouched.md": "## untouched\n\nUNTOUCHED-ENTRY\n",
+        "changelog.d/corrected.md": "## corrected\n\nORIGINAL-WORDING\n",
+    })
+    baseline = _kit_commit(kit, "baseline (#2)")
+    _kit_commit(kit, "lane a (#3)", write={"changelog.d/lane-a.md": "## a\n\nLANE-A-ENTRY\n"})
+    _kit_commit(kit, "lane a, review round (#3)",
+                write={"changelog.d/lane-a.md": "## a\n\nLANE-A-ENTRY, reworded\n"})
+    _kit_commit(kit, "fix the wording (#4)",
+                write={"changelog.d/corrected.md": "## corrected\n\nCORRECTED-WORDING\n"})
+    _kit_commit(kit, "short-lived (#5)", write={"changelog.d/gone.md": "## gone\n\nGONE-ENTRY\n"})
+    _kit_commit(kit, "revert short-lived (#6)", remove=("changelog.d/gone.md",))
+    _kit_commit(kit, "lane b (#7)", write={"changelog.d/old-name.md": "## b\n\nLANE-B-ENTRY\n"})
+    _kit_commit(kit, "rename lane b fragment (#8)",
+                move=("changelog.d/old-name.md", "changelog.d/new-name.md"))
+    _kit_commit(kit, "not a fragment (#9)", write={"changelog.d/notes.txt": "NOT-A-FRAGMENT\n"})
+    _kit_commit(kit, "odd names (#10)", write={
+        "changelog.d/\u00e9clair.md": "## e\n\nQUOTED-NAME-ENTRY\n",
+        "changelog.d/UPPER.MD": "## u\n\nUPPER-CASE-ENTRY\n",
+    })
+    _kit_commit(kit, "no newline (#11)", write={"changelog.d/no-newline.md": "## n\n\nNO-NEWLINE-END"})
+    _kit_commit(kit, "first use (#12)", write={"changelog.d/reused.md": "## r\n\nFIRST-USE\n"})
+    _kit_commit(kit, "second use (#13)", write={"changelog.d/reused.md": "## r\n\nSECOND-USE\n"})
+    _kit_commit(kit, "code only (#14)", write={"src/engine.py": "x = 1\n"})
+    (tmp_path / "outside.txt").write_text("OUTSIDE-SECRET\n", encoding="utf-8")
+    (kit / "changelog.d" / "linked.md").symlink_to(tmp_path / "outside.txt")
+    subprocess.run(["git", "-C", str(kit), "add", "changelog.d/linked.md"], check=True)
+    _kit_commit(kit, "symlink (#15)")
+
+    result = _run_lookup(tmp_path, baseline, kit)
+    out = result.stdout
+
+    assert result.returncode == 0, f"stdout:\n{out}\nstderr:\n{result.stderr}"
+    assert "LANE-A-ENTRY" in out, f"a fragment added in range was not printed.\n{out}"
+    assert "lane a, review round (#3)" in out, (
+        "a fragment's header line must name the commit that wrote it, since the "
+        f"fragment itself carries no PR number.\n{out}"
+    )
+    assert "UNTOUCHED-ENTRY" not in out, f"a fragment from before the baseline leaked.\n{out}"
+    assert "CORRECTED-WORDING" in out and "ORIGINAL-WORDING" not in out, (
+        f"an entry corrected after the baseline must print as corrected.\n{out}"
+    )
+    assert "GONE-ENTRY" in out, (
+        f"a fragment deleted later in the range lost its entry.\n{out}\n{result.stderr}"
+    )
+    assert "FIRST-USE" in out and "SECOND-USE" in out, (
+        f"a reused fragment name kept only one of its two entries.\n{out}"
+    )
+    assert "OUTSIDE-SECRET" not in out and str(tmp_path / "outside.txt") in out, (
+        f"a symlink fragment was read through to the file it names.\n{out}"
+    )
+    assert "src/engine.py" not in out, (
+        f"a commit outside changelog.d/ reached the fragment listing.\n{out}"
+    )
+    assert "LANE-B-ENTRY" in out and "changelog.d/new-name.md" in out, (
+        f"a fragment renamed in range was lost; rename detection hid its add.\n{out}"
+    )
+    assert "FROZEN-ENTRY" not in out, f"a frozen entry from before the range leaked.\n{out}"
+    assert "NOT-A-FRAGMENT" not in out, f"a non-`.md` file printed as a fragment.\n{out}"
+    # A path the lookup cannot print is named, never dropped: git C-quotes a
+    # non-ASCII name, and `*.md` is case-sensitive, so each needs a reader.
+    for name in ("notes.txt", "UPPER.MD", '"changelog.d/\\303\\251clair.md"'):
+        assert any(ln.startswith("⚠") and name in ln for ln in out.splitlines()), (
+            f"{name} under changelog.d/ was dropped without a warning.\n{out}"
+        )
+    assert "NO-NEWLINE-END\n" in out, (
+        f"a fragment with no final newline ran into the next line.\n{out}"
+    )
+    assert out.index("LANE-B-ENTRY") < out.index("LANE-A-ENTRY"), (
+        f"fragments must print newest first, like the frozen file.\n{out}"
+    )
+    assert out.count("LANE-A-ENTRY") == 2 and (
+        out.index("LANE-A-ENTRY, reworded") < out.index("LANE-A-ENTRY\n")
+    ), f"each version of an edited fragment must print once, newest first.\n{out}"
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_upgrade_changelog_lookup_reads_fragments_through_merges(tmp_path: Path) -> None:
+    """A fragment reached through a merge, or changed in type, still prints (#1009).
+
+    - a fragment added on a side branch and merged with `--no-ff` prints once;
+    - a fragment written only while resolving a merge commit prints. A plain
+      `diff-tree` lists nothing for a merge, so without `-c` it was dropped;
+    - an ordinary merge whose sides added different fragments adds no line of its own;
+    - a fragment that changes from a symlink to a regular file prints its final
+      text. `--diff-filter=AM` excludes the `T` that change produces.
+    """
+    kit = tmp_path / "kit"
+    env = {**os.environ, **_GIT_ENV}
+    git = lambda *a: subprocess.run(["git", "-C", str(kit), *a], check=True,  # noqa: E731
+                                    capture_output=True, text=True, env=env).stdout.strip()
+    subprocess.run(["git", "init", "-q", str(kit)], check=True)
+    baseline = _kit_commit(kit, "seed (#1)", write={"CHANGELOG.md": "## #1 — frozen\n\nx\n"})
+    trunk = git("symbolic-ref", "--short", "HEAD")
+    git("switch", "-q", "-c", "side")
+    _kit_commit(kit, "side lane (#2)", write={"changelog.d/side.md": "## s\n\nSIDE-ENTRY\n"})
+    git("switch", "-q", trunk)
+    _kit_commit(kit, "trunk lane (#3)", write={"changelog.d/trunk.md": "## t\n\nTRUNK-ENTRY\n"})
+    git("merge", "-q", "--no-ff", "side", "-m", "merge side")
+    git("switch", "-q", "-c", "other")
+    _kit_commit(kit, "other (#4)", write={"src/x.py": "x = 1\n"})
+    git("switch", "-q", trunk)
+    git("merge", "-q", "--no-ff", "--no-commit", "other")
+    (kit / "changelog.d" / "resolved.md").write_text("## r\n\nMERGE-ONLY-ENTRY\n", encoding="utf-8")
+    git("add", "changelog.d/resolved.md")
+    git("commit", "-q", "-m", "merge other, with an entry (#5)")
+    (kit / "changelog.d" / "typed.md").symlink_to("target-path")
+    git("add", "changelog.d/typed.md")
+    _kit_commit(kit, "typed as link (#6)")
+    (kit / "changelog.d" / "typed.md").unlink()
+    _kit_commit(kit, "typed as file (#7)", write={"changelog.d/typed.md": "## y\n\nTYPED-FILE-ENTRY\n"})
+
+    result = _run_lookup(tmp_path, baseline, kit)
+    out = result.stdout
+
+    assert result.returncode == 0, f"stdout:\n{out}\nstderr:\n{result.stderr}"
+    assert out.count("SIDE-ENTRY") == 1 and out.count("TRUNK-ENTRY") == 1, (
+        f"a side-branch or trunk fragment was lost or doubled across a merge.\n{out}"
+    )
+    assert "MERGE-ONLY-ENTRY" in out and "merge other, with an entry (#5)" in out, (
+        f"a fragment written only by a merge commit was dropped.\n{out}"
+    )
+    assert "merge side" not in out, (
+        f"an ordinary merge printed a line of its own.\n{out}"
+    )
+    assert "TYPED-FILE-ENTRY" in out, (
+        f"a fragment that changed from symlink to file lost its final text.\n{out}"
+    )
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+@pytest.mark.parametrize(
+    "baseline_kind", ["empty", "unresolvable", "current", "off-history"],
+)
+def test_upgrade_changelog_lookup_prints_no_fragment_without_a_range(
+    tmp_path: Path, baseline_kind: str
+) -> None:
+    """The guard and the empty range both stop before the fragment listing (#1009).
+
+    The fragment listing sits inside the same `COUNT -gt 0` branch as the
+    `CHANGELOG.md` extraction. A refactor that hoisted it above the guard would
+    run `git log ..HEAD` on an empty baseline, which is `HEAD..HEAD` and prints
+    nothing, and would then look like a clean result.
+    """
+    kit = tmp_path / "kit"
+    subprocess.run(["git", "init", "-q", str(kit)], check=True)
+    head = _kit_commit(kit, "only (#1)",
+                       write={"CHANGELOG.md": "## #1 — frozen\n\nx\n",
+                              "changelog.d/leak.md": "## leak\n\nLEAKED-FRAGMENT\n"})
+    # A commit that resolves but is not an ancestor of HEAD: the case where a
+    # listing hoisted above the guard would print, since `<orphan>..HEAD` is all
+    # of HEAD's history.
+    branch = subprocess.run(["git", "-C", str(kit), "symbolic-ref", "--short", "HEAD"],
+                            capture_output=True, text=True, check=True).stdout.strip()
+    subprocess.run(["git", "-C", str(kit), "checkout", "-q", "--orphan", "elsewhere"], check=True)
+    orphan = _kit_commit(kit, "unrelated (#2)")
+    subprocess.run(["git", "-C", str(kit), "checkout", "-q", "-f", branch], check=True)
+    baseline = {"empty": "", "unresolvable": "deadbeef" * 5, "current": head,
+                "off-history": orphan}[baseline_kind]
+
+    result = _run_lookup(tmp_path, baseline, kit)
+
+    assert "LEAKED-FRAGMENT" not in result.stdout, (
+        f"the {baseline_kind} baseline reached the fragment listing.\n{result.stdout}"
+    )
+    expected = "up to date" if baseline_kind == "current" else "degraded path"
+    assert expected in result.stdout, (
+        f"the {baseline_kind} baseline printed no verdict.\n{result.stdout}"
+    )
+
+
+@pytest.mark.kit_repo_only("CHANGELOG.md")
+def test_changelog_md_is_frozen_at_the_fragment_cutover() -> None:
+    """No entry may be added above the cutover entry in `CHANGELOG.md` (#1009).
+
+    A new heading at the top brings back the shared append point that every
+    later parallel lane conflicts on. An updated `upgrade.md` would still print
+    such an entry, which is why nothing else would catch it.
+    """
+    headings = [
+        ln for ln in (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8").splitlines()
+        if ln.startswith("## ")
+    ]
+    assert headings and "`changelog.d/`" in headings[0], (
+        f"the newest CHANGELOG.md entry is {headings[:1]!r}, not the cutover entry. "
+        "New entries go in a `changelog.d/<branch-slug>.md` fragment."
+    )
+
+
+@pytest.mark.kit_repo_only("CHANGELOG.md")
+def test_changelog_fragments_are_well_formed() -> None:
+    """Every file in `changelog.d/` is a fragment the lookup can print (#1009).
+
+    The lookup names, rather than prints, a path that is not a plain
+    lower-case `<name>.md`, so a misnamed fragment would reach an adopter only
+    as a warning. The heading separates one printed entry from the next.
+    """
+    directory = REPO_ROOT / "changelog.d"
+    for path in sorted(directory.rglob("*")) if directory.is_dir() else []:
+        rel = path.relative_to(REPO_ROOT)
+        assert not path.is_symlink(), f"{rel} is a symlink; a fragment is a regular file"
+        assert path.is_file() and re.fullmatch(r"[a-z0-9][a-z0-9._-]*\.md", path.name) \
+            and path.parent == directory, (
+            f"{rel} is not a lower-case changelog.d/<name>.md fragment"
+        )
+        text = path.read_text(encoding="utf-8")
+        assert text.startswith("## ") and text.endswith("\n"), (
+            f"{rel} must start with a `## ` heading and end with a newline"
+        )
+
+
 # ── cockpit command permissions and the Claude matcher (#606) ────────────
 
 
