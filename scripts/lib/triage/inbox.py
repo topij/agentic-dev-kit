@@ -184,7 +184,7 @@ def exact_sweep(
     """
     active, groups = sweep_groups(current, frozen, sweep_ids, legacy=legacy)
     archived = bytearray()
-    for title, blocks in groups:
+    for title, _intro, blocks in groups:
         archived.extend(f"## {title}\n\n".encode())
         for block in blocks:
             archived.extend(block)
@@ -194,17 +194,31 @@ def exact_sweep(
 
 
 def sweep_groups(
-    current: bytes, frozen: list[Candidate], sweep_ids: set[str], *, legacy: bool = False
-) -> tuple[bytes, list[tuple[str, list[bytes]]]]:
-    """Remove the swept blocks from `current`; return (active, [(date title, blocks)]).
+    current: bytes,
+    frozen: list[Candidate],
+    sweep_ids: set[str],
+    *,
+    legacy: bool = False,
+    carry_intro: bool = False,
+) -> tuple[bytes, list[tuple[str, bytes, list[bytes]]]]:
+    """Remove the swept blocks from `current`; return (active, [(date title, intro, blocks)]).
 
     Groups are in first-swept order and each block is its exact frozen bytes.
+
+    With `carry_intro`, a dated section whose every entry this sweep removes also
+    gives up the prose between its heading and its first entry (#1018): that intro
+    is removed with the section and returned as the group's `intro`, ending in one
+    newline, so the archive keeps it under the same heading. Otherwise, and for a
+    section that keeps an entry, `intro` is empty and the prose stays put — which
+    is what every engine before #1018 committed.
     """
     selected = [candidate for candidate in frozen if candidate.candidate_id in sweep_ids]
     unknown = sweep_ids - {candidate.candidate_id for candidate in frozen}
     if unknown:
         raise TriageError(f"unknown sweep candidate: {sorted(unknown)!r}", outcome="operator-held")
     current_blocks: list[tuple[int, int, bytes, str]] = []
+    # Each dated, non-marker section with an entry: (title, intro start, first entry start, entry starts).
+    intro_spans: list[tuple[str, int, int, set[int]]] = []
     visible = _markdown_mask(current)
     sections = list(SECTION_RE.finditer(visible))
     for index, section in enumerate(sections):
@@ -216,6 +230,8 @@ def sweep_groups(
         for entry_index, entry in enumerate(entries):
             end = entries[entry_index + 1].start() if entry_index + 1 < len(entries) else section_end
             current_blocks.append((entry.start(), end, current[entry.start():end], title))
+        if entries and not is_migration_marker(title):
+            intro_spans.append((title, section.end(), entries[0].start(), {entry.start() for entry in entries}))
     removals: list[tuple[int, int]] = []
     archived_by_title: dict[str, list[bytes]] = {}
     for candidate in selected:
@@ -228,11 +244,21 @@ def sweep_groups(
         start, end, block, title = matches[0]
         removals.append((start, end))
         archived_by_title.setdefault(title, []).append(block)
+    intro_by_title: dict[str, bytes] = {}
+    if carry_intro:
+        removed_starts = {start for start, _end in removals}
+        for title, intro_start, intro_end, entry_starts in intro_spans:
+            intro = current[intro_start:intro_end]
+            if entry_starts <= removed_starts and intro.strip():
+                removals.append((intro_start, intro_end))
+                text = intro.strip(b"\n") + b"\n"
+                intro_by_title[title] = intro_by_title[title] + b"\n" + text if title in intro_by_title else text
     active = current
     for start, end in sorted(removals, reverse=True):
         active = active[:start] + active[end:]
     # A date heading remains when another entry, including a newly added one,
-    # still occupies its section. Remove only now-empty dated sections.
+    # still occupies its section. Remove only now-empty dated sections; with
+    # `carry_intro` a section this sweep emptied has already lost its intro.
     visible_active = _markdown_mask(active)
     sections = list(SECTION_RE.finditer(visible_active))
     empty_sections: list[tuple[int, int]] = []
@@ -257,7 +283,7 @@ def sweep_groups(
                 active += b"\n"
         else:
             active = active[:start] + active[end:]
-    return active, list(archived_by_title.items())
+    return active, [(title, intro_by_title.get(title, b""), blocks) for title, blocks in archived_by_title.items()]
 
 
 def take_migration_markers(active: bytes) -> tuple[bytes, list[bytes]]:
@@ -302,17 +328,19 @@ def append_archive_sections(archive: bytes, sections: list[bytes]) -> bytes:
     return archive
 
 
-def append_archive_groups(archive: bytes, groups: list[tuple[str, list[bytes]]]) -> bytes:
+def append_archive_groups(archive: bytes, groups: list[tuple[str, bytes, list[bytes]]]) -> bytes:
     """Add swept groups to `archive` the way the current renderer does (#818).
 
     A group whose `## <date>` heading already exists in the archive joins the last
     section carrying that exact heading, so each date appears once; any other group
-    is appended as a new section at the end. Blank-line separation is normalized
+    is appended as a new section at the end. A group's non-empty intro (#1018) goes
+    directly under that heading, ahead of any entry already archived there, so it
+    still introduces the section. Blank-line separation is normalized
     around what is added, and nothing added leaves a trailing blank line at EOF.
     Existing archive text is only inserted into; the blank lines at the insertion
     point are the one thing normalized.
     """
-    for title, blocks in groups:
+    for title, intro, blocks in groups:
         body = bytearray()
         for block in blocks:
             body.extend(block)
@@ -324,9 +352,14 @@ def append_archive_groups(archive: bytes, groups: list[tuple[str, list[bytes]]])
         if existing:
             index = existing[-1]
             end = sections[index + 1].start() if index + 1 < len(sections) else len(archive)
-            head = archive[:end].rstrip(b"\n") + b"\n\n" + added
+            head = archive[:end]
+            if intro:
+                body_start = sections[index].end()
+                kept = archive[body_start:end].lstrip(b"\n")
+                head = archive[:body_start] + b"\n" + intro + (b"\n" + kept if kept.strip() else b"")
+            head = head.rstrip(b"\n") + b"\n\n" + added
             archive = head + (b"\n" + archive[end:] if end < len(archive) else b"")
         else:
             separator = b"" if not archive or archive.endswith(b"\n\n") else (b"\n" if archive.endswith(b"\n") else b"\n\n")
-            archive = archive + separator + f"## {title}\n\n".encode() + added
+            archive = archive + separator + f"## {title}\n\n".encode() + (intro + b"\n" if intro else b"") + added
     return archive

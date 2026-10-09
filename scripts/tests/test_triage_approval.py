@@ -40,6 +40,15 @@ def test_mixed_or_inexact_commands_are_rejected(command: str) -> None:
         parse_commands(command, PROPOSALS)
 
 
+@pytest.mark.parametrize("command", ["approve TRI-01,TRI-02", "approve TRI-01, TRI-02", "archive TRI-01,TRI-02"])
+def test_a_comma_separated_id_list_is_refused_naming_the_separator(command: str) -> None:
+    # #1016: the operator sent the comma form the cockpit suggested and got only
+    # "mixed or malformed"; the refusal now says what to send instead.
+    with pytest.raises(TriageError, match="ids are space-separated; a comma is not a separator"):
+        parse_commands(command, PROPOSALS)
+    assert [item["decision"] for item in parse_commands(command.replace(",", " ").replace("  ", " "), PROPOSALS)] == ["file" if command.startswith("approve") else "archive"] * 2
+
+
 def test_modify_body_preserves_commas_and_requires_later_approval() -> None:
     decisions = parse_commands("modify TRI-01: replacement, with comma", PROPOSALS)
     assert decisions[0]["replacement_body"] == "replacement, with comma"
