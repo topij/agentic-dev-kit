@@ -5,6 +5,43 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-06 (cs-toolkit LIVE acceptance completed, in Claude Code)
+
+The operator judged the acceptance work over-built and chose the smallest fix for
+the landed-Markdown hold. [#973](https://github.com/topij/agentic-dev-kit/pull/973)
+compares tracker payloads with list markers outside fenced code spelled `-`. The
+engine's existing resume reconciliation did the rest, with no new contract,
+state shape or approval step. #973 merged as
+`6aadec23ac4ac543b7381ca550cf03a5638602f1`. Installation
+[in-parallel-oy/cs-toolkit#2551](https://github.com/in-parallel-oy/cs-toolkit/pull/2551)
+merged as `fb0004704e2d43ccd1a3c21c4f85c0944b6811c6`, pinning it.
+
+The installed `resume` verified TRI-01 as CUS-1670. Three finalize continuations
+then archived TRI-01 through the engine's sweep
+[in-parallel-oy/cs-toolkit#2552](https://github.com/in-parallel-oy/cs-toolkit/pull/2552),
+which merged as `c84d76c6536cad8d0f0d131b8cb095463ad11a12`. The run completed.
+[The acceptance record on #6](https://github.com/topij/agentic-dev-kit/issues/6#issuecomment-6012620438)
+holds the commands, revisions, directories and results. #6 stays open. This
+supersedes the earlier 2026-10-06 Codex entry's pending reconciliation design.
+
+Filed on the operator's approval of each exact text, each read back identical:
+- #974, the learning: classify a held state as a recurring defect or a one-off
+  incident before building an engine mechanism.
+- #975: remove the one-run triage recovery paths.
+- #976, with a follow-up comment: LOW residue from #973's and #2551's reviews.
+
+`project_correction.py`'s pin on the `providers.py` digest failed #973's first CI
+run, although the project guard was untouched. The digest list is now append-only,
+and #975 covers removing the pin along with its path.
+
+Closed workstream cs-toolkit Codex validation and Linear installation: the
+operator closed it once LIVE acceptance completed. Its follow-ups are #974, #975
+and #976. The separate frozen kit-friction decision
+(`469bcd5829244adeb17443d1a45a6c01`) remains pending and untouched; the new
+*Kit friction-log triage* workstream carries it. *(Correction: run `7f662678` superseded it on
+2026-10-08 and that workstream closed; see the 2026-10-08 friction-log triage session entry in
+`kit-handoff.md`.)*
+
 ### 2026-10-06 (cs-toolkit installed correction and landed Markdown hold, in Codex)
 
 Source [#969](https://github.com/topij/agentic-dev-kit/pull/969) merged as

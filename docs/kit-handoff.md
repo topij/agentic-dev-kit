@@ -20,6 +20,13 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-09 (tickets closed after the lane batch, in Claude Code)
+
+- On the operator's word, closed each ticket with a comment naming its merge commit: #1008, #1009, #1012, #1013, #1014, #1016, #1018. This supersedes, for those tickets, the previous entry's "still open" and "waits for the operator" lines. It also supersedes that entry's "not ticketed": #1017 now carries the gap.
+- #1017 stays open with a comment. #1023 covered the `forge-finalize` and `archive-sweep` phases; a finished `tracker-write` session's resume hint is the open design decision.
+
+______________________________________________________________________
+
 ## Session — 2026-10-09 (changelog fragments and the lane batch merged, in Claude Code)
 
 - **#1020 merged as `f9146c5f`.** The operator authorized a fourth fix round. It made `upgrade.md`'s fragment lookup read fragments written only by a merge commit (`diff-tree -c`) and type-changed fragments (`--diff-filter=AMT`), and set the fragment naming rule. Its review at `36a69208` found no fail-open in the lookup but left test gaps. The operator chose to merge and ticket them: filed and read back as #1026. `make test` at `36a69208` on 2026-10-09 in `/Users/topi/Coding/agentic-dev-kit` → `4477 passed, 1 skipped`.
@@ -265,44 +272,6 @@ there, because the reviewer was available and the copied code was byte-identical
 
 ______________________________________________________________________
 
-## Session — 2026-10-06 (cs-toolkit LIVE acceptance completed, in Claude Code)
-
-The operator judged the acceptance work over-built and chose the smallest fix for
-the landed-Markdown hold. [#973](https://github.com/topij/agentic-dev-kit/pull/973)
-compares tracker payloads with list markers outside fenced code spelled `-`. The
-engine's existing resume reconciliation did the rest, with no new contract,
-state shape or approval step. #973 merged as
-`6aadec23ac4ac543b7381ca550cf03a5638602f1`. Installation
-[in-parallel-oy/cs-toolkit#2551](https://github.com/in-parallel-oy/cs-toolkit/pull/2551)
-merged as `fb0004704e2d43ccd1a3c21c4f85c0944b6811c6`, pinning it.
-
-The installed `resume` verified TRI-01 as CUS-1670. Three finalize continuations
-then archived TRI-01 through the engine's sweep
-[in-parallel-oy/cs-toolkit#2552](https://github.com/in-parallel-oy/cs-toolkit/pull/2552),
-which merged as `c84d76c6536cad8d0f0d131b8cb095463ad11a12`. The run completed.
-[The acceptance record on #6](https://github.com/topij/agentic-dev-kit/issues/6#issuecomment-6012620438)
-holds the commands, revisions, directories and results. #6 stays open. This
-supersedes the earlier 2026-10-06 Codex entry's pending reconciliation design.
-
-Filed on the operator's approval of each exact text, each read back identical:
-- #974, the learning: classify a held state as a recurring defect or a one-off
-  incident before building an engine mechanism.
-- #975: remove the one-run triage recovery paths.
-- #976, with a follow-up comment: LOW residue from #973's and #2551's reviews.
-
-`project_correction.py`'s pin on the `providers.py` digest failed #973's first CI
-run, although the project guard was untouched. The digest list is now append-only,
-and #975 covers removing the pin along with its path.
-
-Closed workstream cs-toolkit Codex validation and Linear installation: the
-operator closed it once LIVE acceptance completed. Its follow-ups are #974, #975
-and #976. The separate frozen kit-friction decision
-(`469bcd5829244adeb17443d1a45a6c01`) remains pending and untouched; the new
-*Kit friction-log triage* workstream carries it. *(Correction: run `7f662678` superseded it on
-2026-10-08 and that workstream closed; see that session entry above.)*
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -390,6 +359,6 @@ confirm no state root holds a `proposal_correction`, then remove the shim (#979)
 ### Changelog fragments
 
 **Status:** changelog entries are `changelog.d/` fragments since #1020 (`f9146c5f`), and #1022 and #1023 shipped the first two. #1026 holds the lookup's test gaps and naming wording; #1022's fragment `dev-pr-watch-trio.md` already departs from that rule, which gives `pr-watch-trio.md`. #507's heading check has no new entries to check.
-**Owner:** [#1009](https://github.com/topij/agentic-dev-kit/issues/1009), [#1026](https://github.com/topij/agentic-dev-kit/issues/1026).
+**Owner:** [#1026](https://github.com/topij/agentic-dev-kit/issues/1026); the closed [#1009](https://github.com/topij/agentic-dev-kit/issues/1009) states the problem, and #1020 (`f9146c5f`) holds the design.
 
 ▶ Next: #1026 — pin the lookup's baseline range and pathspec with tests, and state one fragment naming rule.
