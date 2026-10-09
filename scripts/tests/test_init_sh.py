@@ -6213,7 +6213,7 @@ def test_upgrade_changelog_lookup_reads_fragments_added_or_edited_in_range(
     assert result.returncode == 0, f"stdout:\n{out}\nstderr:\n{result.stderr}"
     assert "LANE-A-ENTRY" in out, f"a fragment added in range was not printed.\n{out}"
     assert "lane a, review round (#3)" in out, (
-        "a fragment's header line must name the last commit that touched it, since the "
+        "a fragment's header line must name the commit that wrote it, since the "
         f"fragment itself carries no PR number.\n{out}"
     )
     assert "UNTOUCHED-ENTRY" not in out, f"a fragment from before the baseline leaked.\n{out}"
@@ -6252,6 +6252,60 @@ def test_upgrade_changelog_lookup_reads_fragments_added_or_edited_in_range(
     assert out.count("LANE-A-ENTRY") == 2 and (
         out.index("LANE-A-ENTRY, reworded") < out.index("LANE-A-ENTRY\n")
     ), f"each version of an edited fragment must print once, newest first.\n{out}"
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_upgrade_changelog_lookup_reads_fragments_through_merges(tmp_path: Path) -> None:
+    """A fragment reached through a merge, or changed in type, still prints (#1009).
+
+    - a fragment added on a side branch and merged with `--no-ff` prints once;
+    - a fragment written only while resolving a merge commit prints. A plain
+      `diff-tree` lists nothing for a merge, so without `-c` it was dropped;
+    - an ordinary merge whose sides added different fragments adds no line of its own;
+    - a fragment that changes from a symlink to a regular file prints its final
+      text. `--diff-filter=AM` excludes the `T` that change produces.
+    """
+    kit = tmp_path / "kit"
+    env = {**os.environ, **_GIT_ENV}
+    git = lambda *a: subprocess.run(["git", "-C", str(kit), *a], check=True,  # noqa: E731
+                                    capture_output=True, text=True, env=env).stdout.strip()
+    subprocess.run(["git", "init", "-q", str(kit)], check=True)
+    baseline = _kit_commit(kit, "seed (#1)", write={"CHANGELOG.md": "## #1 — frozen\n\nx\n"})
+    trunk = git("symbolic-ref", "--short", "HEAD")
+    git("switch", "-q", "-c", "side")
+    _kit_commit(kit, "side lane (#2)", write={"changelog.d/side.md": "## s\n\nSIDE-ENTRY\n"})
+    git("switch", "-q", trunk)
+    _kit_commit(kit, "trunk lane (#3)", write={"changelog.d/trunk.md": "## t\n\nTRUNK-ENTRY\n"})
+    git("merge", "-q", "--no-ff", "side", "-m", "merge side")
+    git("switch", "-q", "-c", "other")
+    _kit_commit(kit, "other (#4)", write={"src/x.py": "x = 1\n"})
+    git("switch", "-q", trunk)
+    git("merge", "-q", "--no-ff", "--no-commit", "other")
+    (kit / "changelog.d" / "resolved.md").write_text("## r\n\nMERGE-ONLY-ENTRY\n", encoding="utf-8")
+    git("add", "changelog.d/resolved.md")
+    git("commit", "-q", "-m", "merge other, with an entry (#5)")
+    (kit / "changelog.d" / "typed.md").symlink_to("target-path")
+    git("add", "changelog.d/typed.md")
+    _kit_commit(kit, "typed as link (#6)")
+    (kit / "changelog.d" / "typed.md").unlink()
+    _kit_commit(kit, "typed as file (#7)", write={"changelog.d/typed.md": "## y\n\nTYPED-FILE-ENTRY\n"})
+
+    result = _run_lookup(tmp_path, baseline, kit)
+    out = result.stdout
+
+    assert result.returncode == 0, f"stdout:\n{out}\nstderr:\n{result.stderr}"
+    assert out.count("SIDE-ENTRY") == 1 and out.count("TRUNK-ENTRY") == 1, (
+        f"a side-branch or trunk fragment was lost or doubled across a merge.\n{out}"
+    )
+    assert "MERGE-ONLY-ENTRY" in out and "merge other, with an entry (#5)" in out, (
+        f"a fragment written only by a merge commit was dropped.\n{out}"
+    )
+    assert "merge side" not in out, (
+        f"an ordinary merge printed a line of its own.\n{out}"
+    )
+    assert "TYPED-FILE-ENTRY" in out, (
+        f"a fragment that changed from symlink to file lost its final text.\n{out}"
+    )
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
@@ -6324,6 +6378,7 @@ def test_changelog_fragments_are_well_formed() -> None:
     directory = REPO_ROOT / "changelog.d"
     for path in sorted(directory.rglob("*")) if directory.is_dir() else []:
         rel = path.relative_to(REPO_ROOT)
+        assert not path.is_symlink(), f"{rel} is a symlink; a fragment is a regular file"
         assert path.is_file() and re.fullmatch(r"[a-z0-9][a-z0-9._-]*\.md", path.name) \
             and path.parent == directory, (
             f"{rel} is not a lower-case changelog.d/<name>.md fragment"

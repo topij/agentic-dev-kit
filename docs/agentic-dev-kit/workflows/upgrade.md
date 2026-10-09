@@ -282,8 +282,10 @@ branch's own commits have no PR number yet and would read as a fault:
 git -C "${KIT:?KIT is not set — re-run Step 0}" log --format='%s' origin/main | grep -cvE '\(#[0-9]+\)$'
 ```
 
-So the count below is a tripwire rather than a formality — if it fires, the index is
-incomplete and the top of `CHANGELOG.md` is the fallback:
+So the count below is a tripwire rather than a formality — if it fires, the
+`CHANGELOG.md` half of the index is incomplete and the top of `CHANGELOG.md` is its
+fallback. The fragment half does not read subjects, so the tripwire says nothing about
+it:
 
 ```bash
 BASELINE="$(uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --manifest "${KIT:?KIT is not set — re-run Step 0}/kit-manifest.json" --json \
@@ -298,12 +300,14 @@ else
   if [ "$COUNT" -gt 0 ]; then
     # changelog.d/: each version of a fragment that a commit in range wrote, newest
     # first, read from that commit — never from the working tree — so a reused name
-    # prints both entries and a deleted fragment still prints. A path under
+    # prints both entries and a deleted fragment still prints. `-c` lists, for a merge,
+    # the fragments it changed relative to every parent: one written while resolving
+    # the merge. A path under
     # changelog.d/ that is not a <name>.md fragment is named, not dropped.
     git -C "${KIT:?KIT is not set — re-run Step 0}" rev-list "$BASELINE..HEAD" -- changelog.d/ |
       while IFS= read -r c; do
         at="$(git -C "${KIT:?KIT is not set — re-run Step 0}" log -1 --format='%h %s' "$c")"
-        git -C "${KIT:?KIT is not set — re-run Step 0}" diff-tree --no-commit-id --no-renames --diff-filter=AM \
+        git -C "${KIT:?KIT is not set — re-run Step 0}" diff-tree -c --no-commit-id --no-renames --diff-filter=AMT \
             --name-only -r "$c" -- changelog.d/ |
           while IFS= read -r frag; do
             case "$frag" in
@@ -371,12 +375,14 @@ There is no range to compute, so:
 
 - Read every entry instead, and treat every `BREAKING` line as applying to you until you
   can show otherwise. Both halves are short by construction — this is minutes, not the
-  session `#430` describes. For the fragments, run the block above with `BASELINE` set
-  to the kit's root commit, `git -C "$KIT" rev-list --max-parents=0 HEAD`; then read
-  `$KIT/CHANGELOG.md` from the top.
+  session `#430` describes. For the fragments, run the block above with its own
+  `BASELINE=` line replaced by `BASELINE` set to the kit's root commit,
+  `git -C "$KIT" rev-list --max-parents=0 HEAD`; then read `$KIT/CHANGELOG.md` from the
+  top.
 - If you know roughly when this repo last upgraded, bound it by date instead: run the
-  block with `BASELINE` set to `git -C "$KIT" rev-list -1 --before=<date> HEAD`. A date
-  older than the kit's first commit gives an empty value, which takes the degraded path.
+  block with its `BASELINE=` line replaced the same way, by
+  `git -C "$KIT" rev-list -1 --before=<date> HEAD`. If that prints nothing, the date is
+  older than the kit's first commit: use the root commit as in the bullet above.
 - Either way, **Step 4's `--record-install --from-kit "$KIT"` is what stops the next
   upgrade paying this** — the same step, and the same `kit_commit` key, that the `STALE`
   / `LOCALLY EDITED` split above already depends on.

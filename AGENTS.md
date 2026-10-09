@@ -267,7 +267,8 @@ adopter's.
 - The living plan is `docs/kit-handoff.md` — read at session start, updated at wrap-up.
   New friction is recorded in `docs/kit-friction-log.md`.
 - **If a change is observable, the PR that makes it adds its own changelog fragment** —
-  a new file `changelog.d/<branch-slug>.md` under a name no earlier fragment used, never
+  a new file `changelog.d/<slug>.md` — `<slug>` being the branch name after its last `/`
+  — under a name no earlier fragment used, never
   an entry in the frozen `CHANGELOG.md` (`#1009`); `CHANGELOG.md`'s header says how a
   fragment is named. Observable means a repo pinning the old contract breaks: a report or return
   **shape**, **gate semantics** (`converged` / `mergeable` / `done`, a hook's exit code),

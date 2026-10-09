@@ -26,15 +26,17 @@ gate waits for a settle baseline, read `build_report`. This file tells you only 
 it does.
 
 **How to read it during an upgrade.** Do not read from the top. `/upgrade` Step 1
-resolves your recorded baseline kit commit into exactly the set of entries below that
-are new to you; follow that.
+resolves your recorded baseline kit commit into the entries new to you, from
+`changelog.d/` and from the frozen entries below; follow that.
 
 **This file is frozen. New entries go in `changelog.d/`.** Each PR with an observable
-change adds its own fragment file there, named for its branch in lower case, for
-example `changelog.d/pr-watch-sha-bound.md`. A fragment starts with a `## ` heading,
+change adds its own fragment file there, directly in `changelog.d/` and named for the
+part of its branch after the last `/`, in lower case: branch `feat/pr-watch-sha-bound`
+writes `changelog.d/pr-watch-sha-bound.md`. A fragment is a regular file, never a
+symlink. A fragment starts with a `## ` heading,
 ends with a newline, and carries the axis lines described below. It needs no PR number:
-`/upgrade` Step 1 finds the fragments new to you from git history, and names the commit
-that last touched each one. One shared file made every parallel lane add its entry at
+`/upgrade` Step 1 finds the fragments new to you from git history, and prints each
+version under the commit that wrote it. One shared file made every parallel lane add its entry at
 the same top line, so each lane after the first conflicted there (`#1009`). Do not add
 entries below.
 
