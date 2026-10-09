@@ -33,7 +33,7 @@ ______________________________________________________________________
 
 ## Workstreams
 
-### <workstream name>
+### <workstream subject — the part of the system this work changes, never a date or run mode>
 
 **Status:** <one line> · **Owner:** <the plan or tracker issue that holds the detail>
 

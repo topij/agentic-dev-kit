@@ -2907,6 +2907,17 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         assert "choosing it changes no other workstream's entry" in flattened
         assert "none of them stands in for the others" in flattened
         assert "Recency is not among them" in flattened
+        # A batch-named workstream surfaces as housekeeping; folding is wrap-up's.
+        assert (
+            "If a `## Workstreams` entry is named for a date, a run mode or a session"
+            in flattened
+        )
+        assert "and only does so with the operator's approval" in flattened
+        assert "or its status line says `assignment unconfirmed`" in flattened
+        assert (
+            "A name is not misnamed when the run mode is itself the subject"
+            in flattened
+        )
     else:
         assert capabilities == {
             "repository-config-read": (
@@ -3012,7 +3023,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             ),
             "successful-completion": (
                 "Every required and triggered conditional capability completed, each external identifier was read back or returned authoritatively, and any merge was authorized by the declared class plus the current request.",
-                "Report the durable record paths, verified merged pull request when one was required, actual tracker identifiers when approved, and one next-session starter or an explicit no-follow-up result.",
+                "Report the durable record paths, verified merged pull request when one was required, actual tracker identifiers when approved, and a next-session starter for each workstream it updated, or an explicit no-follow-up result.",
             ),
         }
         assert "kitconfig.load_config()" in flattened
@@ -3054,6 +3065,50 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "the session's work is on that entry's own plan or issue"
         ) in flattened
         assert "**It carries no `▶ Next:`**" in flattened
+        # A workstream is a subject, and a batch is filed per pull request.
+        assert (
+            "**A workstream is named for its subject, never for a date, a run mode, "
+            "or a session.**"
+        ) in flattened
+        assert (
+            "**A session that shipped unrelated changes assigns each pull request, "
+            "not the session.**"
+        ) in flattened
+        assert "apply the rule above to each pull request separately" in flattened
+        assert "Apply only the folds the operator approves." in flattened
+        assert "Without an operator, leave these entries as they are." in flattened
+        # The marker wrap-up writes is the one session-start looks for.
+        assert (
+            "end its status line with `assignment unconfirmed — may belong to "
+            "<existing name>`"
+        ) in flattened
+        assert "The first is a fold the operator approved" in flattened
+        assert (
+            "goes in the `▶ Next:` of the workstream whose change it verifies"
+            in flattened
+        )
+        assert "A scope parked without a pull request goes by the same test" in flattened
+        assert "At an interactive wrap-up, list every workstream entry marked" in flattened
+        assert "A folded entry is removed once its pieces are placed" in flattened
+        assert "or, with no ticket, the subject of the work it was scoped to" in flattened
+        assert "`Closed workstream <name>: folded into <names>`" in flattened
+        assert "if its name was a date, a run mode or a session" in flattened
+        assert (
+            "A name is not misnamed when the run mode is itself the subject"
+            in flattened
+        )
+        assert "The second is an entry the operator kept as its own workstream" in flattened
+        assert "session that worked on several sets one in each of their entries" in flattened
+        assert (
+            "A session that updated several workstreams, or folded one, can meet "
+            "another wrap-up in any of those entries"
+        ) in flattened
+        assert "the entry for each workstream it worked on" in flattened
+        assert "clearing the marker on or renaming an entry the operator kept" in flattened
+        assert (
+            "When the operator keeps an entry as its own workstream, drop its "
+            "`assignment unconfirmed` marker"
+        ) in flattened
         assert "Do not rename or edit earlier session entries" in flattened
         assert "**Leave every other workstream's entry alone.**" in flattened
         assert (
@@ -3546,6 +3601,94 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
         )),
         ("session-start", session, session.replace(
             "Recency is not among them", "Recency breaks ties", 1
+        )),
+        ("session-start", session, session.replace(
+            "is named for a date, a run mode or a session", "is stale", 1
+        )),
+        ("session-start", session, session.replace(
+            "and only does so with the operator's approval",
+            "and does so on its own", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "named for its subject, never for a date, a run mode, or a",
+            "named for its subject, or for a date, a run mode, or a", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "changes assigns each pull request, not",
+            "changes assigns the session, not", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "to each pull request separately", "to the session as a whole", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "Apply only the folds the operator approves.",
+            "Apply every fold you propose.", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "Without an operator, leave these entries as they are.",
+            "Without an operator, fold them yourself.", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "end its status line with `assignment unconfirmed — may belong to",
+            "end its status line with `unconfirmed — may belong to", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "The first is a fold the operator approved",
+            "The first is a fold you judge right", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "confirm …*) goes in the `▶ Next:` of",
+            "confirm …*) goes in the session entry of", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "A scope parked without a pull", "A scope parked without a review", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "At an interactive wrap-up, list", "At every wrap-up, list", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "A folded entry is removed once", "A folded entry is kept once", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "its own workstream, drop its", "its own workstream, keep its", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "or, with no ticket, the subject of the work", "or, with no ticket, a date of the work", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "`Closed workstream <name>: folded into <names>`",
+            "`Closed workstream <name>`", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "was a date, a run mode or a session, so", "was a date or a batch, so", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "     when the run mode is itself the subject, as in work on the lane launcher.",
+            "     when it is short.", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "The second is an entry the operator kept as its",
+            "The second is any entry you judge kept as its", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "session that worked on several sets one in each of their entries.",
+            "session that worked on several sets one in the session entry.", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "folded one, can meet another wrap-up", "folded one, never meets another wrap-up", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "the entry for each workstream it", "the entry for the workstream it", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "clearing the marker on or", "clearing nothing on or", 1
+        )),
+        ("session-start", session, session.replace(
+            "A name is not misnamed when the run mode is itself the",
+            "A name is misnamed even when the run mode is itself the", 1
+        )),
+        ("session-start", session, session.replace(
+            "status line says `assignment unconfirmed`", "status line looks stale", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "**this session began**", "**the handoff's newest entry**", 1
@@ -20175,3 +20318,33 @@ def test_supported_standalone_entry_points_declare_python_floor_and_dependencies
     metadata = text.split("# /// script\n", 1)[1].split("# ///", 1)[0]
     parsed = tomllib.loads("\n".join(line.removeprefix("# ") for line in metadata.splitlines()))
     assert parsed == {"requires-python": ">=3.12", "dependencies": []}
+
+
+def _assert_parallel_files_lanes_by_subject(text: str) -> None:
+    flattened = " ".join(text.split())
+    assert (
+        "Each lane, parked ones included, is filed under the `## Workstreams` "
+        "entry for its subject"
+    ) in flattened
+    assert (
+        "Never create a `## Workstreams` entry for the batch itself" in flattened
+    )
+
+
+def test_parallel_files_each_lane_under_its_subjects_workstream() -> None:
+    # A batch's wrap-up files each lane by subject, never in one batch entry.
+    text = (
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "parallel.md"
+    ).read_text(encoding="utf-8")
+    _assert_parallel_files_lanes_by_subject(text)
+    mutations = (
+        text.replace("Each lane,\n   parked ones included,", "Each landed lane", 1),
+        text.replace(
+            "Never create a `## Workstreams` entry for the batch itself",
+            "Create a `## Workstreams` entry for the batch itself", 1,
+        ),
+    )
+    for mutated in mutations:
+        assert mutated != text
+        with pytest.raises(AssertionError):
+            _assert_parallel_files_lanes_by_subject(mutated)

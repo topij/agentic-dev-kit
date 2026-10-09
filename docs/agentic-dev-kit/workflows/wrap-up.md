@@ -109,7 +109,7 @@ summary; read the destination first.
 | `successful-noop` | The session produced no change to any repository artifact, no friction artifact is owed, and no tracker write occurred. | Say so and create no commit or pull request. |
 | `incomplete-resumable` | A changed repository artifact has not reached an authoritative terminal state because branch/push/pull-request creation is unavailable or ambiguous, `pr-watch` is unavailable or unsettled, or an authorized merge failed or remains ambiguous after read-back. | Do not claim completion. Preserve and report the exact working-tree diff or commit, branch, pull-request URL and exact head when present, the failed, unsettled, or ambiguous capability, and a copy-pasteable safe resume step. |
 | `successful-operator-handoff` | The pull request carrying the repository artifacts is mergeable at an exact reviewed head, but the declared merge class or current authority requires an operator to act. | Leave the pull request unmerged; report its URL, exact head, merge class or authority gap, durable record paths, and the command or operator action that safely resumes it. |
-| `successful-completion` | Every required and triggered conditional capability completed, each external identifier was read back or returned authoritatively, and any merge was authorized by the declared class plus the current request. | Report the durable record paths, verified merged pull request when one was required, actual tracker identifiers when approved, and one next-session starter or an explicit no-follow-up result. |
+| `successful-completion` | Every required and triggered conditional capability completed, each external identifier was read back or returned authoritatively, and any merge was authorized by the declared class plus the current request. | Report the durable record paths, verified merged pull request when one was required, actual tracker identifiers when approved, and a next-session starter for each workstream it updated, or an explicit no-follow-up result. |
 
 ### Overall outcome precedence
 
@@ -155,16 +155,57 @@ failure makes the overall outcome `incomplete-resumable`.
      otherwise create a new entry, and say in the session entry that the
      assignment was not confirmed. A new entry cannot replace another
      workstream's next step; a wrong guess about an existing entry can.
+   - **A workstream is named for its subject, never for a date, a run mode, or a
+     session.** The subject is the part of the system the work changes: *Release
+     pipeline send guards*, not *Overnight lanes 2026-10-06*; *Automation history
+     rows*, not *Backlog lanes 2026-10-08*. A batch, a lane run or an overnight
+     session is a way of running work, not a line of work. An entry named for one
+     collects whatever its lanes happened to touch, and its `▶ Next:` becomes a
+     list of unrelated checks tied together only by "then close this
+     workstream". The test: the next session can tell from the name alone which
+     part of the system the entry is about.
+   - **A session that shipped unrelated changes assigns each pull request, not
+     the session.** That is every multi-lane batch, and any session whose pull
+     requests touch different subjects. Name a workstream for each pull request
+     by its subject, and let pull requests on one subject share it. A
+     post-merge check (*after Monday's run, confirm …*) goes in the `▶ Next:` of
+     the workstream whose change it verifies. A scope parked without a pull
+     request goes by the same test: its ticket's subject names the workstream,
+     or, with no ticket, the subject of the work it was scoped to. The session
+     entry groups its bullets by those workstream names, so a reader finds each change under the
+     subject it belongs to. **With no operator to confirm**, apply the rule above
+     to each pull request separately. When a new entry's subject looks like an
+     existing entry's but the plan-or-issue test did not match, create it anyway
+     and end its status line with `assignment unconfirmed — may belong to
+     <existing name>`, so the next wrap-up with an operator can fold it in.
+   - **Offer to fold misnamed and unconfirmed entries, but only with an operator
+     present.** At an interactive wrap-up, list every workstream entry marked
+     `assignment unconfirmed`, and every entry named for a date, run mode or
+     session. For each one, propose where its pieces go: which existing
+     workstream each pull request and each `▶ Next:` step belongs to, and the
+     subject name of any new entry. Apply only the folds the operator approves.
+     A folded entry is removed once its pieces are placed, and this session's
+     entry says so in one line: `Closed workstream <name>: folded into <names>`.
+     When the operator keeps an entry as its own workstream, drop its
+     `assignment unconfirmed` marker, and rename it for its subject if its name
+     was a date, a run mode or a session, so it is not offered again. A name is not misnamed
+     when the run mode is itself the subject, as in work on the lane launcher.
+     Without an operator, leave these entries as they are.
    - **Add a session entry** at the top of the session log: `## Session —
-     <date> (<theme>)`, then what shipped, what was decided, and what was not
+     <date> (<theme>)`. The theme names what the session changed, not only how it
+     ran: *overnight lanes* alone tells a reader nothing the date does not. The
+     entry then says what shipped, what was decided, and what was not
      established. **It carries no `▶ Next:`** — that lives in the workstream's
      entry. Do not rename or edit earlier session entries: they are a record,
      and the archive sweep moves them oldest-first because nothing live remains
      in them.
    - **Update only that workstream's entry** — its status line, its owner
      pointer, and its `▶ Next:` (the starter step below). Detail stays in the
-     owner, not here. **Leave every other workstream's entry alone.** The one
-     exception is a line this session's own work made false — a pull request it
+     owner, not here. **Leave every other workstream's entry alone.** There are
+     three exceptions. The first is a fold the operator approved, as the fold
+     bullet above describes. The second is an entry the operator kept as its
+     own workstream: drop its marker and rename it, as the same bullet says. The
+     third is a line this session's own work made false — a pull request it
      names has merged, an issue it names has closed: correct that line and say
      so to the operator. If the falsified line is that entry's `▶ Next:`, ask
      the operator rather than rewriting it, and in a run with no operator leave
@@ -192,7 +233,9 @@ failure makes the overall outcome `incomplete-resumable`.
      that one point — resolve it by keeping both entries, newest first. Two
      wrap-ups on the *same* workstream conflict in its entry, and that conflict
      is correct: reconcile the entry with the operator, and never keep one
-     side's `▶ Next:` silently.
+     side's `▶ Next:` silently. A session that updated several workstreams, or
+     folded one, can meet another wrap-up in any of those entries; reconcile
+     each conflict the same way.
    - Keep it concise — the handoff is a handoff document, not a changelog.
 
    **Author record prose defensively** — review findings concentrate in
@@ -358,7 +401,8 @@ failure makes the overall outcome `incomplete-resumable`.
    not gather. Skip the step entirely if nothing workflow-specific came up.
 
 1. **Set the workstream's next-session starter** — the `▶ Next:` line in the entry
-   for the workstream this session worked on, never in the session entry. It is a
+   for the workstream this session worked on, never in the session entry. A
+   session that worked on several sets one in each of their entries. It is a
    suggestion for whoever next picks up *that* workstream, not an assignment for the
    next session to start in the repository; `session-start` presents every
    workstream's starter and follows the operator's choice.
@@ -558,8 +602,10 @@ failure makes the overall outcome `incomplete-resumable`.
   decision the session took is not working detail: its session entry records it
 - Do NOT change the handoff's structure or add new sections without asking — but the
   `archive_plan_sessions.py` sweep (moving old session blocks to `<handoff-history>`),
-  this session's own entry in the session log, the entry for the workstream it
-  worked on (new or existing, `▶ Next:` included), and the first-run creation of
+  this session's own entry in the session log, the entry for each workstream it
+  worked on (new or existing, `▶ Next:` included), a fold of a misnamed or
+  unconfirmed entry that the operator approved, clearing the marker on or
+  renaming an entry the operator kept, and the first-run creation of
   `## Workstreams` are all documented edits, not structure changes, so do them
   without asking. Closing a workstream is not among them: it is the operator's call
 - If a backlog item was promoted to a sprint epic, move it (don't duplicate)
