@@ -188,7 +188,7 @@ failure makes the overall outcome `incomplete-resumable`.
      entry says so in one line: `Closed workstream <name>: folded into <names>`.
      When the operator keeps an entry as its own workstream, drop its
      `assignment unconfirmed` marker, and rename it for its subject if its name
-     was a date or a batch, so it is not offered again. A name is not misnamed
+     was a date, a run mode or a session, so it is not offered again. A name is not misnamed
      when the run mode is itself the subject, as in work on the lane launcher.
      Without an operator, leave these entries as they are.
    - **Add a session entry** at the top of the session log: `## Session —
@@ -202,8 +202,10 @@ failure makes the overall outcome `incomplete-resumable`.
    - **Update only that workstream's entry** — its status line, its owner
      pointer, and its `▶ Next:` (the starter step below). Detail stays in the
      owner, not here. **Leave every other workstream's entry alone.** There are
-     two exceptions. The first is a fold the operator approved, as the fold
-     bullet above describes. The second is a line this session's own work made false — a pull request it
+     three exceptions. The first is a fold the operator approved, as the fold
+     bullet above describes. The second is an entry the operator kept as its
+     own workstream: drop its marker and rename it, as the same bullet says. The
+     third is a line this session's own work made false — a pull request it
      names has merged, an issue it names has closed: correct that line and say
      so to the operator. If the falsified line is that entry's `▶ Next:`, ask
      the operator rather than rewriting it, and in a run with no operator leave
@@ -602,7 +604,8 @@ failure makes the overall outcome `incomplete-resumable`.
   `archive_plan_sessions.py` sweep (moving old session blocks to `<handoff-history>`),
   this session's own entry in the session log, the entry for each workstream it
   worked on (new or existing, `▶ Next:` included), a fold of a misnamed or
-  unconfirmed entry that the operator approved, and the first-run creation of
+  unconfirmed entry that the operator approved, clearing the marker on or
+  renaming an entry the operator kept, and the first-run creation of
   `## Workstreams` are all documented edits, not structure changes, so do them
   without asking. Closing a workstream is not among them: it is the operator's call
 - If a backlog item was promoted to a sprint epic, move it (don't duplicate)

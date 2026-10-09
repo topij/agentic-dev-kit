@@ -2914,6 +2914,10 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         )
         assert "and only does so with the operator's approval" in flattened
         assert "or its status line says `assignment unconfirmed`" in flattened
+        assert (
+            "A name is not misnamed when the run mode is itself the subject"
+            in flattened
+        )
     else:
         assert capabilities == {
             "repository-config-read": (
@@ -3086,6 +3090,21 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         assert "A scope parked without a pull request goes by the same test" in flattened
         assert "At an interactive wrap-up, list every workstream entry marked" in flattened
         assert "A folded entry is removed once its pieces are placed" in flattened
+        assert "or, with no ticket, the subject of the work it was scoped to" in flattened
+        assert "`Closed workstream <name>: folded into <names>`" in flattened
+        assert "if its name was a date, a run mode or a session" in flattened
+        assert (
+            "A name is not misnamed when the run mode is itself the subject"
+            in flattened
+        )
+        assert "The second is an entry the operator kept as its own workstream" in flattened
+        assert "session that worked on several sets one in each of their entries" in flattened
+        assert (
+            "A session that updated several workstreams, or folded one, can meet "
+            "another wrap-up in any of those entries"
+        ) in flattened
+        assert "the entry for each workstream it worked on" in flattened
+        assert "clearing the marker on or renaming an entry the operator kept" in flattened
         assert (
             "When the operator keeps an entry as its own workstream, drop its "
             "`assignment unconfirmed` marker"
@@ -3632,6 +3651,41 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
         )),
         ("wrap-up", wrap, wrap.replace(
             "its own workstream, drop its", "its own workstream, keep its", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "or, with no ticket, the subject of the work", "or, with no ticket, a date of the work", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "`Closed workstream <name>: folded into <names>`",
+            "`Closed workstream <name>`", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "was a date, a run mode or a session, so", "was a date or a batch, so", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "     when the run mode is itself the subject, as in work on the lane launcher.",
+            "     when it is short.", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "The second is an entry the operator kept as its",
+            "The second is any entry you judge kept as its", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "session that worked on several sets one in each of their entries.",
+            "session that worked on several sets one in the session entry.", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "folded one, can meet another wrap-up", "folded one, never meets another wrap-up", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "the entry for each workstream it", "the entry for the workstream it", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "clearing the marker on or", "clearing nothing on or", 1
+        )),
+        ("session-start", session, session.replace(
+            "A name is not misnamed when the run mode is itself the",
+            "A name is misnamed even when the run mode is itself the", 1
         )),
         ("session-start", session, session.replace(
             "status line says `assignment unconfirmed`", "status line looks stale", 1
