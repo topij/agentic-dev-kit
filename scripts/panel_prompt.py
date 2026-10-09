@@ -372,7 +372,9 @@ def _require_scratch(scratch: str, head: str) -> str:
     you" at this path. Before #999 that sentence rendered for any value, and an
     adopter pointed it at the author lane's live worktree: the author committed into
     it mid-review, both lenses watched HEAD move, and the isolation claim was false.
-    So both halves of the claim are checked: HEAD is the head, and HEAD is detached.
+    The path must be inside a working tree, HEAD must be the head under review,
+    and HEAD must be detached. A bare repository can have a detached HEAD at the
+    right commit without any checked-out files for the lens to execute.
     A check that cannot run (not a git tree, git missing) refuses — it never passes.
     The remedy is building the tree, which this script deliberately does not do: it
     assembles prompts and has no write path.
@@ -415,6 +417,14 @@ def _require_scratch(scratch: str, head: str) -> str:
             f"--scratch {scratch}: HEAD there is {found.stdout.strip()[:12]}, not the head "
             f"under review {head[:12]}. The prompt would tell the lens it holds the head "
             "when it holds something else. " + remedy
+        )
+    inside = git_c("rev-parse", "--is-inside-work-tree")
+    if inside.returncode != 0 or inside.stdout.strip() != "true":
+        raise PromptError(
+            f"--scratch {scratch}: the path is not confirmed inside a working tree "
+            f"({inside.stderr.strip() or inside.stdout.strip() or f'exit {inside.returncode}'}). "
+            "A bare repository or Git metadata directory has no checked-out files "
+            "for the lens to execute. " + remedy
         )
     # `symbolic-ref -q` exits 1 for a detached HEAD and 0 on a branch; anything else is
     # git failing, which must not read as "detached".

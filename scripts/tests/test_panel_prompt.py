@@ -687,6 +687,30 @@ def test_a_scratch_tree_on_a_branch_is_refused_even_at_the_head(repo, tmp_path):
     assert "on branch 'refs/heads/dev/artifact-detector', not detached" in out.stderr
 
 
+@pytest.mark.parametrize("kind", ["bare", "git-directory"])
+def test_a_detached_object_database_is_not_a_scratch_worktree(repo, tmp_path, kind):
+    """An object database can satisfy HEAD and detach checks without checked-out
+    files. Exercise the full CLI so only the working-tree check refuses it."""
+    _, head = _revs(repo)
+    if kind == "bare":
+        database = tmp_path / "bare.git"
+        _git(repo, "clone", "-q", "--bare", str(repo), str(database))
+        _git(database, "update-ref", "--no-deref", "HEAD", head)
+    else:
+        tree = Path(_detached_tree(repo, tmp_path, head))
+        database = Path(_git(tree, "rev-parse", "--absolute-git-dir"))
+    assert _git(database, "rev-parse", "HEAD") == head
+    detached = subprocess.run(
+        ["git", "-C", str(database), "symbolic-ref", "-q", "HEAD"],
+        capture_output=True, text=True, check=False,
+    )
+    assert detached.returncode == 1
+    assert _git(database, "rev-parse", "--is-inside-work-tree") == "false"
+
+    out = _scratch_refusal(repo, str(database))
+    assert "not confirmed inside a working tree" in out.stderr
+
+
 def test_a_scratch_path_that_is_not_a_git_tree_is_refused(repo, tmp_path):
     plain = tmp_path / "plain"
     plain.mkdir()
