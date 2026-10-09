@@ -10167,6 +10167,77 @@ def test_the_disposition_flag_is_only_valid_with_record_review(
     assert "--disposition is only valid with --record-review" in capsys.readouterr().err
 
 
+def _record_review_argv(disposition: str) -> list[str]:
+    return [
+        "9",
+        "--record-review",
+        "fallback:panel",
+        "--head",
+        HEAD_SHA,
+        "--disposition",
+        disposition,
+    ]
+
+
+@pytest.mark.parametrize("which", ["file", "padded", "directory"])
+def test_a_disposition_naming_an_existing_path_is_refused_before_anything_is_posted(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    which: str,
+) -> None:
+    """#1013: on #937, #938 and #959 the report's path went where its contents
+    were meant, and the path was posted verbatim as the public comment."""
+    pr_watch = _load_pr_watch()
+    posts: list[tuple[list[str], str | None]] = []
+    _stub_gh_for_record(pr_watch, monkeypatch, tmp_path, posts=posts)
+    report = tmp_path / "devkit-pr937-disposition.md"
+    report.write_text("adversarial: clean.\n", encoding="utf-8")
+    value = {
+        "file": str(report),
+        "padded": f" {report}\n",
+        "directory": str(tmp_path),
+    }[which]
+
+    with pytest.raises(SystemExit):
+        pr_watch.main(_record_review_argv(value))
+
+    err = capsys.readouterr().err
+    assert "names an existing path" in err
+    assert "--disposition -" in err
+    assert posts == []
+    assert not (tmp_path / "9.json").exists(), "a refusal records no receipt"
+
+
+def test_a_disposition_that_names_no_path_is_posted_as_given(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The refusal is for a value naming a path, not for every literal value."""
+    pr_watch = _load_pr_watch()
+    posts: list[tuple[list[str], str | None]] = []
+    _stub_gh_for_record(pr_watch, monkeypatch, tmp_path, posts=posts)
+
+    assert pr_watch.main(_record_review_argv("adversarial: clean.")) == 0
+
+    assert "adversarial: clean." in json.loads(posts[0][1])["body"]
+
+
+def test_stdin_disposition_is_read_even_beside_a_file_named_dash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`-` means stdin, whatever the working directory holds."""
+    pr_watch = _load_pr_watch()
+    posts: list[tuple[list[str], str | None]] = []
+    _stub_gh_for_record(pr_watch, monkeypatch, tmp_path, posts=posts)
+    (tmp_path / "-").write_text("not the disposition\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.stdin", io.StringIO("correctness: clean.\n"))
+
+    assert pr_watch.main(_record_review_argv("-")) == 0
+
+    assert "correctness: clean." in json.loads(posts[0][1])["body"]
+
+
 def test_a_body_stamp_naming_an_earlier_commit_is_reported_not_gated() -> None:
     """#596's reading: the body stamps the PR's FIRST commit, the merged head is
     several `fix:` commits later, and nothing compared them. Reported on the same
@@ -10307,6 +10378,48 @@ def test_a_stamp_that_wraps_across_a_line_is_still_one_stamp() -> None:
     )
 
     assert _finding(_reviewed_report(pr_watch, view), "verification_stamp_behind_head") is None
+
+
+@pytest.mark.parametrize(
+    "stamp",
+    [
+        "at `{sha}`, in `/Users/topi/Coding/agentic-dev-kit`, on 2026-10-08",
+        "at `{sha}` in `/Users/topi/my kit` on 2026-10-08",
+        "at {sha}, in /Users/topi/Coding/agentic-dev-kit, on 2026-10-08",
+        "at `{sha}` in wt on 2026-10-08",
+    ],
+)
+def test_a_stamp_naming_its_directory_between_sha_and_date_is_read(stamp: str) -> None:
+    """#1014: `wrap-up.md` asks a verification claim to name its directory, and
+    on #1006 a comment stamp that put it between the sha and the date was not
+    read, so the poll kept naming an older head's stamp."""
+    pr_watch = _load_pr_watch()
+
+    assert pr_watch.stamped_shas(f"`make test` {stamp.format(sha=HEAD_SHA)}") == [HEAD_SHA]
+    view = _reviewed_view(
+        pr_watch,
+        body=f"`make test` at `{OLDER_SHA}` on 2026-10-07 printed `2405 passed`.",
+        comments=[
+            _issue_comment(f"`make test` {stamp.format(sha=HEAD_SHA)} printed `2405 passed`.")
+        ],
+    )
+
+    assert _finding(_reviewed_report(pr_watch, view), "verification_stamp_behind_head") is None
+
+
+@pytest.mark.parametrize(
+    "prose",
+    [
+        "pinned at `{sha}`, with `$REPO` bound, on 2026-10-08",
+        "pinned at `{sha}` in a clone with no network on 2026-10-08",
+        "built at `{sha}` with `uv` on 2026-10-08",
+    ],
+)
+def test_a_clause_other_than_one_directory_still_breaks_the_stamp(prose: str) -> None:
+    """The directory is the one clause accepted between the sha and the date."""
+    pr_watch = _load_pr_watch()
+
+    assert pr_watch.stamped_shas(prose.format(sha=OLDER_SHA)) == []
 
 
 def test_both_transports_fetch_the_body_the_stamp_check_reads(
@@ -11927,6 +12040,28 @@ def test_record_round_refuses_a_head_that_is_not_a_hex_sha(
         _record_round(monkeypatch, pr_watch, tmp_path, current=fix, reviewed=reviewed)
 
     assert not (tmp_path / "state" / "9.json").exists()
+
+
+def test_record_round_takes_sixty_four_hex_characters_and_refuses_sixty_five(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """#1008: the refusal promises seven to sixty-four characters, the length of
+    a SHA-256 object name. Each value is the PR head itself, so it resolves
+    without a local object, and only the length check can refuse it."""
+    pr_watch = _load_pr_watch()
+    repo, _heads = _rounds_repo(tmp_path)
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", repo)
+    sha256_head = "a" * 64
+
+    report = _record_round(
+        monkeypatch, pr_watch, tmp_path, current=sha256_head, reviewed=sha256_head
+    )
+    assert report["head"] == sha256_head
+
+    too_long = "b" * 65
+    with pytest.raises(ValueError, match=r"is not a commit sha.*seven to sixty-four characters"):
+        _record_round(monkeypatch, pr_watch, tmp_path, current=too_long, reviewed=too_long)
+    assert [entry["head"] for entry in pr_watch.load_state(9)["review_rounds"]] == [sha256_head]
 
 
 def test_record_round_refuses_a_hex_name_that_git_reads_as_a_ref(

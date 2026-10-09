@@ -719,7 +719,8 @@ Self-pace on a bounded cadence — don't busy-wait:
     other heading does not clear it, because the check reads the marker the
     engine writes rather than matching prose.
   - `verification_stamp_behind_head` (`#603`) — the pull request carries at least
-    one verification stamp in the `` `<command>` at `<sha>` on <date> `` form and
+    one verification stamp in the `` `<command>` at `<sha>` on <date> `` form, or
+    with the directory between them as `` at `<sha>`, in `<dir>`, on <date> ``, and
     none of them names the current head. Stamps are read from the body **and**
     from every comment, so a final stamp posted as a comment at the merged head
     clears it — that is the form to use. Silent when there is no stamp at all: an

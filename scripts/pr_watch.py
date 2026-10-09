@@ -3952,8 +3952,16 @@ def _post_disposition_comment(pr: int, body: str) -> tuple[str, str | None]:
 # a stamp that has fallen behind the head, which is `#603`: the readings there
 # are of pull requests whose body stamped the first commit while the merged head
 # was several fix commits later, with nothing comparing the two.
+#
+# One clause may sit between the sha and the date: `in <dir>`, the directory
+# `wrap-up.md` asks a verification claim to name, so `at <sha>, in <dir>, on
+# <date>` is a stamp too (#1014). Only that clause: any other words between the
+# two still make it a commit named in passing.
 _VERIFICATION_STAMP_RE = re.compile(
-    r"\bat\s+`?([0-9a-f]{7,40})`?\s+on\s+\d{4}-\d{2}-\d{2}\b", re.IGNORECASE
+    r"\bat\s+`?([0-9a-f]{7,40})`?"
+    r"(?:,?\s+in\s+(?:`[^`]+`|[^\s`,]+),?)?"
+    r"\s+on\s+\d{4}-\d{2}-\d{2}\b",
+    re.IGNORECASE,
 )
 
 
@@ -6372,7 +6380,8 @@ def main(argv: list[str] | None = None) -> int:
             "with --record-review: post what the review FOUND and how each finding "
             "was disposed as a comment on the PR, under this engine's fixed heading "
             "and bound to the recorded head. The receipt is gitignored; this is the "
-            "half that survives the merge. Pass `-` to read the text from stdin"
+            "half that survives the merge. Pass `-` to read the text from stdin; "
+            "a value naming an existing path is refused"
         ),
     )
     mode_group = parser.add_mutually_exclusive_group()
@@ -6436,6 +6445,21 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--compose-parent requires --record-review fallback:delta")
     if args.disposition is not None and args.record_review is None:
         parser.error("--disposition is only valid with --record-review")
+    if (
+        args.disposition is not None
+        and args.disposition != "-"
+        and os.path.exists(args.disposition.strip())
+    ):
+        # The value is posted verbatim, so a report's path passed where its
+        # contents were meant puts a local filename in a public comment (#1013).
+        # Any existing path, a directory included, is refused. `os.path.exists`
+        # rather than `Path.exists`: it returns False for a value too long to be
+        # a path instead of raising.
+        parser.error(
+            f"--disposition {args.disposition.strip()!r} names an existing path, "
+            "and its value is posted as the comment text: pipe the report's "
+            "contents with `--disposition -`"
+        )
     if args.no_persist and (
         args.mark_seen
         or args.record_round
