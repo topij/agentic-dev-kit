@@ -39,7 +39,8 @@ operator closed it once LIVE acceptance completed. Its follow-ups are #974, #975
 and #976. The separate frozen kit-friction decision
 (`469bcd5829244adeb17443d1a45a6c01`) remains pending and untouched; the new
 *Kit friction-log triage* workstream carries it. *(Correction: run `7f662678` superseded it on
-2026-10-08 and that workstream closed; see that session entry above.)*
+2026-10-08 and that workstream closed; see the 2026-10-08 friction-log triage session entry in
+`kit-handoff.md`.)*
 
 ### 2026-10-06 (cs-toolkit installed correction and landed Markdown hold, in Codex)
 
