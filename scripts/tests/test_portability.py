@@ -2913,6 +2913,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             in flattened
         )
         assert "and only does so with the operator's approval" in flattened
+        assert "or its status line says `assignment unconfirmed`" in flattened
     else:
         assert capabilities == {
             "repository-config-read": (
@@ -3072,6 +3073,12 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         assert "apply the rule above to each pull request separately" in flattened
         assert "Apply only the folds the operator approves." in flattened
         assert "Without an operator, leave these entries as they are." in flattened
+        # The marker wrap-up writes is the one session-start looks for.
+        assert (
+            "end its status line with `assignment unconfirmed — may belong to "
+            "<existing name>`"
+        ) in flattened
+        assert "The first is a fold the operator approved" in flattened
         assert "Do not rename or edit earlier session entries" in flattened
         assert "**Leave every other workstream's entry alone.**" in flattened
         assert (
@@ -3590,6 +3597,17 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
         ("wrap-up", wrap, wrap.replace(
             "Without an operator, leave these entries as they are.",
             "Without an operator, fold them yourself.", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "end its status line with `assignment unconfirmed — may belong to",
+            "end its status line with `unconfirmed — may belong to", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "The first is a fold the operator approved",
+            "The first is a fold you judge right", 1
+        )),
+        ("session-start", session, session.replace(
+            "status line says `assignment unconfirmed`", "status line looks stale", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "**this session began**", "**the handoff's newest entry**", 1
@@ -20219,3 +20237,33 @@ def test_supported_standalone_entry_points_declare_python_floor_and_dependencies
     metadata = text.split("# /// script\n", 1)[1].split("# ///", 1)[0]
     parsed = tomllib.loads("\n".join(line.removeprefix("# ") for line in metadata.splitlines()))
     assert parsed == {"requires-python": ">=3.12", "dependencies": []}
+
+
+def _assert_parallel_files_lanes_by_subject(text: str) -> None:
+    flattened = " ".join(text.split())
+    assert (
+        "Each lane, parked ones included, is filed under the `## Workstreams` "
+        "entry for its subject"
+    ) in flattened
+    assert (
+        "Never create a `## Workstreams` entry for the batch itself" in flattened
+    )
+
+
+def test_parallel_files_each_lane_under_its_subjects_workstream() -> None:
+    # A batch's wrap-up files each lane by subject, never in one batch entry.
+    text = (
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "parallel.md"
+    ).read_text(encoding="utf-8")
+    _assert_parallel_files_lanes_by_subject(text)
+    mutations = (
+        text.replace("Each lane,\n   parked ones included,", "Each landed lane", 1),
+        text.replace(
+            "Never create a `## Workstreams` entry for the batch itself",
+            "Create a `## Workstreams` entry for the batch itself", 1,
+        ),
+    )
+    for mutated in mutations:
+        assert mutated != text
+        with pytest.raises(AssertionError):
+            _assert_parallel_files_lanes_by_subject(mutated)

@@ -169,7 +169,9 @@ failure makes the overall outcome `incomplete-resumable`.
      requests touch different subjects. Name a workstream for each pull request
      by its subject, and let pull requests on one subject share it. A
      post-merge check (*after Monday's run, confirm …*) goes in the `▶ Next:` of
-     the workstream whose change it verifies. The session entry groups its
+     the workstream whose change it verifies. A scope parked without a pull
+     request goes by the same test: its ticket's subject names the workstream.
+     The session entry groups its
      bullets by those workstream names, so a reader finds each change under the
      subject it belongs to. **With no operator to confirm**, apply the rule above
      to each pull request separately. When a new entry's subject looks like an
@@ -193,8 +195,9 @@ failure makes the overall outcome `incomplete-resumable`.
      in them.
    - **Update only that workstream's entry** — its status line, its owner
      pointer, and its `▶ Next:` (the starter step below). Detail stays in the
-     owner, not here. **Leave every other workstream's entry alone.** The one
-     exception is a line this session's own work made false — a pull request it
+     owner, not here. **Leave every other workstream's entry alone.** There are
+     two exceptions. The first is a fold the operator approved, as the fold
+     bullet above describes. The second is a line this session's own work made false — a pull request it
      names has merged, an issue it names has closed: correct that line and say
      so to the operator. If the falsified line is that entry's `▶ Next:`, ask
      the operator rather than rewriting it, and in a run with no operator leave
