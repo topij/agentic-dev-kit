@@ -830,6 +830,63 @@ def test_configured_repo_borrowing_objects_from_an_entry_keeps_it(root: Path, re
     assert src.is_dir()
 
 
+@pytest.mark.parametrize("relative", [False, True], ids=["absolute", "relative"])
+@pytest.mark.parametrize("borrow_after_survey", [False, True], ids=["survey", "apply-recheck"])
+@pytest.mark.parametrize(
+    "store_name",
+    [
+        " objects",
+        "objects ",
+        " objects ",
+        "\tobjects\t",
+        "objects\r",
+        "objects\v",
+        "objects\f",
+        "objects\u0085",
+        "objects\u2028",
+        "objects\u2029",
+    ],
+    ids=["leading-space", "trailing-space", "both-spaces", "tabs", "CR", "VT", "FF", "NEL", "LS", "PS"],
+)
+def test_borrowed_store_path_whitespace_survives_survey_and_apply(
+    root: Path, repo: Path, relative: bool, borrow_after_survey: bool, store_name: str
+):
+    objects = repo / ".git" / "objects"
+    store = root / store_name
+    # The seed exists only in scratch: an intact primary store would hide loss.
+    objects.rename(store)
+    (objects / "info").mkdir(parents=True)
+    if relative:
+        # This makes the alternate line itself start with meaningful whitespace.
+        (objects / " link").symlink_to(root, target_is_directory=True)
+        alternate = os.path.join(" link", store_name)
+    else:
+        alternate = str(store)
+    alternates = objects / "info" / "alternates"
+    _set_age(store, OLD)
+    disposable = _tree(root / "disposable")
+    settings = _settings([root], repo, grace=0)
+
+    if not borrow_after_survey:
+        alternates.write_bytes(os.fsencode(alternate) + b"\n")
+        _git(repo, "cat-file", "-e", "HEAD^{commit}")
+    reports = sweep.survey(settings, root=repo, now=time.time())
+    assert _owners(reports) == {
+        store_name: sweep.STALE if borrow_after_survey else sweep.LIVE,
+        "disposable": sweep.STALE,
+    }
+    if borrow_after_survey:
+        alternates.write_bytes(os.fsencode(alternate) + b"\n")
+        _git(repo, "cat-file", "-e", "HEAD^{commit}")
+
+    outcomes = sweep.apply(reports, settings, older_than=0)
+
+    assert not disposable.exists()
+    assert [o.path for o in outcomes if o.action == "removed"] == [str(disposable)]
+    assert store.is_dir()
+    _git(repo, "cat-file", "-e", "HEAD^{commit}")
+
+
 def test_alternates_are_followed_through_a_chain_and_relative_paths(root: Path, repo: Path, base: Path):
     middle = _seeded(base / "middle")
     src = _seeded(root / "entry" / "src")
@@ -861,6 +918,14 @@ def test_quoted_alternates_path_refuses_the_survey(root: Path, repo: Path):
     (repo / ".git" / "objects" / "info" / "alternates").write_text('"/q\\tuoted"\n', encoding="utf-8")
     with pytest.raises(sweep.ConfigError, match="quoted"):
         _run([root], repo, older_than=None)
+
+
+def test_unquoted_alternate_path_preserves_non_utf8_bytes(repo: Path):
+    objects = repo / ".git" / "objects"
+    raw_path = os.fsencode(objects) + b"/borrowed-\xff"
+    (objects / "info" / "alternates").write_bytes(raw_path + b"\n")
+
+    assert [os.fsencode(path) for path in sweep._alternates(str(objects))] == [raw_path]
 
 
 def test_failed_store_reread_during_apply_keeps_the_entry(root: Path, repo: Path, monkeypatch):
