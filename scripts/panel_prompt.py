@@ -366,24 +366,26 @@ def _require_commit(root: Path, rev: str) -> str:
 
 
 def _require_scratch(scratch: str, head: str) -> str:
-    """Refuse a ``--scratch`` that is not a detached tree at the head under review.
+    """Verify the supplied root's Git state, not checkout creation or contents.
 
-    The prompt tells the lens a detached worktree at the head "has been built for
-    you" at this path. Before #999 that sentence rendered for any value, and an
-    adopter pointed it at the author lane's live worktree: the author committed into
-    it mid-review, both lenses watched HEAD move, and the isolation claim was false.
-    So both halves of the claim are checked: HEAD is the head, and HEAD is detached.
-    A check that cannot run (not a git tree, git missing) refuses — it never passes.
-    The remedy is building the tree, which this script deliberately does not do: it
-    assembles prompts and has no write path.
+    The path must name the working-tree root outside its Git metadata directory,
+    HEAD must match the revision under review, and HEAD must be detached. A bare
+    repository can have the right detached HEAD; core.worktree can also label an
+    object database as a worktree. Neither is a usable root for the lens.
 
-    What is checked is that much and no more, once, at assembly time: the path is
-    not required to be the tree's top level, absolute, or free of uncommitted edits,
-    and nothing re-checks it after the prompt is printed.
+    These checks do not attest that files were checked out: a Git root can be
+    empty or carry uncommitted changes. Creating and inspecting the checkout is
+    the caller's responsibility. The prompt reports this boundary rather than
+    claiming that a worktree was built. Before #999, a caller supplied its live
+    branch, committed mid-review, and both lenses watched HEAD move; the detached
+    and exact-HEAD checks still refuse that assembly-time state.
 
-    Inherited ``GIT_*`` variables are dropped for these calls: ``git -C`` does not
-    override an exported ``GIT_DIR``, so a hook or wrapper exporting one would have
-    every check read that repository instead of ``scratch``.
+    Checks run once, at assembly time. The path need not be absolute or clean,
+    and nothing re-checks it after the prompt is printed. This assembler has no
+    write path and never constructs a checkout.
+
+    Inherited ``GIT_*`` variables are dropped: ``git -C`` does not override an
+    exported ``GIT_DIR``, so every check must observe the supplied path.
     """
     remedy = (
         "Build one at a path that does not exist yet and pass that path instead:\n"
@@ -415,6 +417,60 @@ def _require_scratch(scratch: str, head: str) -> str:
             f"--scratch {scratch}: HEAD there is {found.stdout.strip()[:12]}, not the head "
             f"under review {head[:12]}. The prompt would tell the lens it holds the head "
             "when it holds something else. " + remedy
+        )
+    inside = git_c("rev-parse", "--is-inside-work-tree")
+    if inside.returncode != 0 or inside.stdout.strip() != "true":
+        raise PromptError(
+            f"--scratch {scratch}: the path is not confirmed inside a working tree "
+            f"({inside.stderr.strip() or inside.stdout.strip() or f'exit {inside.returncode}'}). "
+            "A bare repository or Git metadata directory has no checked-out files "
+            "for the lens to execute. " + remedy
+        )
+    top = git_c("rev-parse", "--show-toplevel")
+    top_path = top.stdout.removesuffix("\n")
+    if top.returncode != 0 or not top_path:
+        raise PromptError(
+            f"--scratch {scratch}: `git rev-parse --show-toplevel` did not confirm "
+            f"the working-tree root ({top.stderr.strip() or f'exit {top.returncode}'}). "
+            + remedy
+        )
+    try:
+        is_root = Path(scratch).samefile(top_path)
+    except OSError as exc:
+        raise PromptError(
+            f"--scratch {scratch}: could not verify the working-tree root ({exc}). "
+            + remedy
+        ) from exc
+    if not is_root:
+        raise PromptError(
+            f"--scratch {scratch}: the path is inside a working tree but is not its "
+            f"root {top_path!r}. The lens needs the repository root as its working "
+            "directory for repository-relative verification. " + remedy
+        )
+    # Git can report both a worktree and its root for an object database when
+    # core.worktree points there. Anchor the workspace against its actual metadata
+    # directory rather than trusting that configurable label as proof of a tree.
+    database = git_c("rev-parse", "--absolute-git-dir")
+    database_path = database.stdout.removesuffix("\n")
+    if database.returncode != 0 or not database_path:
+        raise PromptError(
+            f"--scratch {scratch}: could not confirm the Git metadata directory "
+            f"({database.stderr.strip() or f'exit {database.returncode}'}). " + remedy
+        )
+    try:
+        inside_database = Path(scratch).resolve(strict=True).is_relative_to(
+            Path(database_path).resolve(strict=True)
+        )
+    except OSError as exc:
+        raise PromptError(
+            f"--scratch {scratch}: could not verify the Git metadata directory ({exc}). "
+            + remedy
+        ) from exc
+    if inside_database:
+        raise PromptError(
+            f"--scratch {scratch}: a review worktree root must be outside its Git "
+            "metadata directory. Setting core.worktree to an object database does "
+            "not supply a separate checked-out tree. " + remedy
         )
     # `symbolic-ref -q` exits 1 for a detached HEAD and 0 on a branch; anything else is
     # git failing, which must not read as "detached".
@@ -486,7 +542,11 @@ def render(
         compute_line = f"\nNo compute configured for runtime {runtime!r}; inherit the cockpit's.\n"
 
     tree = (
-        f"- **A detached worktree at that sha has been built for you at:**\n  `{scratch}`\n"
+        f"- **Caller-supplied scratch path:**\n  `{scratch}`\n"
+        "  The CLI checks its Git root and detached HEAD at the requested revision\n"
+        "  once, at assembly time. Checkout contents and cleanliness are not verified\n"
+        "  here. The caller must create and inspect the checkout; independently\n"
+        "  verify what you received.\n"
         if scratch is not None
         else "- **No worktree was provided.** Obtain the revision into a copy you made; "
         "do not write into any tree you were handed.\n"

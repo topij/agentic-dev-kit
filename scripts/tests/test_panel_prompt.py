@@ -648,11 +648,34 @@ def test_a_provided_worktree_is_named_and_the_no_worktree_warning_is_dropped(rep
         "--branch", "b", "--scratch", tree,
     )
     assert out.returncode == 0, out.stderr
-    assert f"has been built for you at:**\n  `{tree}`" in out.stdout
+    assert f"Caller-supplied scratch path:**\n  `{tree}`" in out.stdout
     assert "No worktree was provided" not in out.stdout
 
 
 # --- #999: --scratch is verified, never taken on trust ---------------------------
+
+
+def test_an_empty_git_root_reports_state_without_claiming_a_checkout(repo, tmp_path):
+    base, head = _revs(repo)
+    empty = tmp_path / "empty-root"
+    empty.mkdir()
+    database = empty / ".git"
+    _git(repo, "clone", "-q", "--bare", str(repo), str(database))
+    _git(database, "update-ref", "--no-deref", "HEAD", head)
+    _git(database, "config", "core.bare", "false")
+    _git(database, "config", "core.worktree", str(empty))
+    assert _git(empty, "rev-parse", "HEAD") == head
+    assert _git(empty, "rev-parse", "--show-toplevel") == str(empty)
+    assert list(empty.iterdir()) == [database]
+    out = _run(
+        repo, "--lens", "adversarial", "--head", head, "--base", base,
+        "--branch", "b", "--scratch", str(empty),
+    )
+    assert out.returncode == 0, out.stderr
+    assert "Caller-supplied scratch path" in out.stdout
+    assert "Checkout contents and cleanliness are not verified" in out.stdout
+    assert "caller must create and inspect the checkout" in out.stdout
+    assert "has been built for you" not in out.stdout
 
 
 def _scratch_refusal(repo: Path, scratch: str) -> subprocess.CompletedProcess:
@@ -662,7 +685,7 @@ def _scratch_refusal(repo: Path, scratch: str) -> subprocess.CompletedProcess:
         "--branch", "b", "--scratch", scratch,
     )
     assert out.returncode == 2, out.stdout
-    assert "built for you" not in out.stdout
+    assert out.stdout == ""
     # Every refusal names the remedy with the full head sha, at a fresh path: the
     # given path may already exist (#999's live lane did), and git refuses to add a
     # worktree over it.
@@ -685,6 +708,128 @@ def test_a_scratch_tree_on_a_branch_is_refused_even_at_the_head(repo, tmp_path):
     _git(repo, "worktree", "add", "-q", "-b", "dev/artifact-detector", str(lane), head)
     out = _scratch_refusal(repo, str(lane))
     assert "on branch 'refs/heads/dev/artifact-detector', not detached" in out.stderr
+
+
+@pytest.mark.parametrize("kind", ["bare", "git-directory"])
+def test_a_detached_object_database_is_not_a_scratch_worktree(repo, tmp_path, kind):
+    """An object database can satisfy HEAD and detach checks without checked-out
+    files. Exercise the full CLI so only the working-tree check refuses it."""
+    _, head = _revs(repo)
+    if kind == "bare":
+        database = tmp_path / "bare.git"
+        _git(repo, "clone", "-q", "--bare", str(repo), str(database))
+        _git(database, "update-ref", "--no-deref", "HEAD", head)
+    else:
+        tree = Path(_detached_tree(repo, tmp_path, head))
+        database = Path(_git(tree, "rev-parse", "--absolute-git-dir"))
+    assert _git(database, "rev-parse", "HEAD") == head
+    detached = subprocess.run(
+        ["git", "-C", str(database), "symbolic-ref", "-q", "HEAD"],
+        capture_output=True, text=True, check=False,
+    )
+    assert detached.returncode == 1
+    assert _git(database, "rev-parse", "--is-inside-work-tree") == "false"
+
+    out = _scratch_refusal(repo, str(database))
+    assert "not confirmed inside a working tree" in out.stderr
+
+
+@pytest.mark.parametrize("probe, status, answer", [
+    ("--is-inside-work-tree", 128, "true"),
+    ("--is-inside-work-tree", 0, ""),
+    ("--show-toplevel", 128, "root"),
+    ("--show-toplevel", 0, ""),
+    ("--show-toplevel", 0, "absent"),
+    ("--absolute-git-dir", 128, "metadata"),
+    ("--absolute-git-dir", 0, ""),
+    ("--absolute-git-dir", 0, "absent"),
+])
+def test_an_unconfirmed_working_tree_probe_refuses_the_full_prompt(
+    repo, tmp_path, monkeypatch, probe, status, answer,
+):
+    """A failed probe cannot authorize a prompt, even if it prints true; an
+    empty successful answer or nonexistent root also establishes nothing. All
+    other Git calls work."""
+    _, head = _revs(repo)
+    tree = _detached_tree(repo, tmp_path, head)
+    real = shutil.which("git")
+    shim_dir = tmp_path / "shim"
+    shim_dir.mkdir()
+    observed = tmp_path / "probe-observed"
+    if answer == "root":
+        answer = tree
+    elif answer == "metadata":
+        answer = _git(Path(tree), "rev-parse", "--absolute-git-dir")
+    elif answer == "absent":
+        answer = str(tmp_path / "absent-root")
+    shim = shim_dir / "git"
+    shim.write_text(
+        "#!/bin/sh\n"
+        f'if [ "$3" = rev-parse ] && [ "$4" = {probe} ]; then\n'
+        f'    echo called > "{observed}"\n'
+        f'    echo "{answer}"\n'
+        f'    exit {status}\n'
+        "fi\n"
+        f'exec "{real}" "$@"\n'
+    )
+    shim.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{shim_dir}{os.pathsep}{os.environ['PATH']}")
+    out = _scratch_refusal(repo, tree)
+    assert observed.read_text().strip() == "called"
+    message = {
+        "--show-toplevel": "working-tree root",
+        "--absolute-git-dir": "Git metadata directory",
+        "--is-inside-work-tree": "not confirmed inside a working tree",
+    }[probe]
+    assert message in out.stderr
+
+
+@pytest.mark.parametrize("kind", ["root", "child"])
+def test_configuring_a_worktree_inside_the_object_database_does_not_supply_one(
+    repo, tmp_path, kind,
+):
+    _, head = _revs(repo)
+    database = tmp_path / "configured.git"
+    _git(repo, "clone", "-q", "--bare", str(repo), str(database))
+    _git(database, "update-ref", "--no-deref", "HEAD", head)
+    scratch = database if kind == "root" else database / "workspace"
+    if kind == "child":
+        scratch.mkdir()
+    _git(database, "config", "core.bare", "false")
+    _git(database, "config", "core.worktree", str(scratch))
+    assert _git(scratch, "rev-parse", "HEAD") == head
+    assert _git(scratch, "rev-parse", "--is-inside-work-tree") == "true"
+    assert Path(_git(scratch, "rev-parse", "--show-toplevel")).samefile(scratch)
+    assert Path(_git(scratch, "rev-parse", "--absolute-git-dir")).samefile(database)
+    out = _scratch_refusal(repo, str(scratch))
+    assert "root must be outside its Git metadata directory" in out.stderr
+
+
+def test_a_nested_directory_is_not_a_review_worktree_root(repo, tmp_path):
+    _, head = _revs(repo)
+    tree = Path(_detached_tree(repo, tmp_path, head))
+    nested = tree / "nested"
+    nested.mkdir()
+    assert _git(nested, "rev-parse", "HEAD") == head
+    assert _git(nested, "rev-parse", "--is-inside-work-tree") == "true"
+    out = _scratch_refusal(repo, str(nested))
+    assert "inside a working tree but is not its root" in out.stderr
+
+
+@pytest.mark.parametrize("kind", ["symlink", "relative"])
+def test_a_worktree_root_alias_is_accepted(repo, tmp_path, kind):
+    base, head = _revs(repo)
+    tree = Path(_detached_tree(repo, tmp_path, head))
+    alias = tmp_path / "alias"
+    alias.symlink_to(tree, target_is_directory=True)
+    scratch = str(alias) if kind == "symlink" else os.path.relpath(tree, repo)
+    out = _run(
+        repo, "--lens", "adversarial", "--head", head, "--base", base,
+        "--branch", "b", "--scratch", scratch,
+    )
+    assert out.returncode == 0, out.stderr
+    assert scratch in out.stdout
+    assert "Caller-supplied scratch path" in out.stdout
 
 
 def test_a_scratch_path_that_is_not_a_git_tree_is_refused(repo, tmp_path):
