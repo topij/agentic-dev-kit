@@ -3019,7 +3019,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             ),
             "successful-completion": (
                 "Every required and triggered conditional capability completed, each external identifier was read back or returned authoritatively, and any merge was authorized by the declared class plus the current request.",
-                "Report the durable record paths, verified merged pull request when one was required, actual tracker identifiers when approved, and one next-session starter or an explicit no-follow-up result.",
+                "Report the durable record paths, verified merged pull request when one was required, actual tracker identifiers when approved, and a next-session starter for each workstream it updated, or an explicit no-follow-up result.",
             ),
         }
         assert "kitconfig.load_config()" in flattened
@@ -3079,6 +3079,17 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "<existing name>`"
         ) in flattened
         assert "The first is a fold the operator approved" in flattened
+        assert (
+            "goes in the `▶ Next:` of the workstream whose change it verifies"
+            in flattened
+        )
+        assert "A scope parked without a pull request goes by the same test" in flattened
+        assert "At an interactive wrap-up, list every workstream entry marked" in flattened
+        assert "A folded entry is removed once its pieces are placed" in flattened
+        assert (
+            "When the operator keeps an entry as its own workstream, drop its "
+            "`assignment unconfirmed` marker"
+        ) in flattened
         assert "Do not rename or edit earlier session entries" in flattened
         assert "**Leave every other workstream's entry alone.**" in flattened
         assert (
@@ -3605,6 +3616,22 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
         ("wrap-up", wrap, wrap.replace(
             "The first is a fold the operator approved",
             "The first is a fold you judge right", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "confirm …*) goes in the `▶ Next:` of",
+            "confirm …*) goes in the session entry of", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "A scope parked without a pull", "A scope parked without a review", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "At an interactive wrap-up, list", "At every wrap-up, list", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "A folded entry is removed once", "A folded entry is kept once", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "its own workstream, drop its", "its own workstream, keep its", 1
         )),
         ("session-start", session, session.replace(
             "status line says `assignment unconfirmed`", "status line looks stale", 1
