@@ -711,6 +711,35 @@ def test_a_detached_object_database_is_not_a_scratch_worktree(repo, tmp_path, ki
     assert "not confirmed inside a working tree" in out.stderr
 
 
+@pytest.mark.parametrize("status, answer", [(128, "true"), (0, "")])
+def test_an_unconfirmed_working_tree_probe_refuses_the_full_prompt(
+    repo, tmp_path, monkeypatch, status, answer,
+):
+    """A failed probe cannot authorize a prompt, even if it prints true; an
+    empty successful answer also establishes nothing. All other Git calls work."""
+    _, head = _revs(repo)
+    tree = _detached_tree(repo, tmp_path, head)
+    real = shutil.which("git")
+    shim_dir = tmp_path / "shim"
+    shim_dir.mkdir()
+    observed = tmp_path / "probe-observed"
+    shim = shim_dir / "git"
+    shim.write_text(
+        "#!/bin/sh\n"
+        'if [ "$3" = rev-parse ] && [ "$4" = --is-inside-work-tree ]; then\n'
+        f'    echo called > "{observed}"\n'
+        f'    echo "{answer}"\n'
+        f'    exit {status}\n'
+        "fi\n"
+        f'exec "{real}" "$@"\n'
+    )
+    shim.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{shim_dir}{os.pathsep}{os.environ['PATH']}")
+    out = _scratch_refusal(repo, tree)
+    assert observed.read_text().strip() == "called"
+    assert "not confirmed inside a working tree" in out.stderr
+
+
 def test_a_scratch_path_that_is_not_a_git_tree_is_refused(repo, tmp_path):
     plain = tmp_path / "plain"
     plain.mkdir()

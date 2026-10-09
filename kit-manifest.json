@@ -612,7 +612,7 @@
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
-      "sha256": "dd8b3f222beb51cd267217787d7b13980fdee0271b144530ffcc6218a3c13389"
+      "sha256": "2a169b9be3316fe27c0c804092f99d8d1cdf1583b06da497d02590a02faa479e"
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
