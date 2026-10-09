@@ -2907,6 +2907,12 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         assert "choosing it changes no other workstream's entry" in flattened
         assert "none of them stands in for the others" in flattened
         assert "Recency is not among them" in flattened
+        # A batch-named workstream surfaces as housekeeping; folding is wrap-up's.
+        assert (
+            "If a `## Workstreams` entry is named for a date, a run mode or a session"
+            in flattened
+        )
+        assert "and only does so with the operator's approval" in flattened
     else:
         assert capabilities == {
             "repository-config-read": (
@@ -3054,6 +3060,18 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "the session's work is on that entry's own plan or issue"
         ) in flattened
         assert "**It carries no `▶ Next:`**" in flattened
+        # A workstream is a subject, and a batch is filed per pull request.
+        assert (
+            "**A workstream is named for its subject, never for a date, a run mode, "
+            "or a session.**"
+        ) in flattened
+        assert (
+            "**A session that shipped unrelated changes assigns each pull request, "
+            "not the session.**"
+        ) in flattened
+        assert "apply the rule above to each pull request separately" in flattened
+        assert "Apply only the folds the operator approves." in flattened
+        assert "Without an operator, leave these entries as they are." in flattened
         assert "Do not rename or edit earlier session entries" in flattened
         assert "**Leave every other workstream's entry alone.**" in flattened
         assert (
@@ -3546,6 +3564,32 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
         )),
         ("session-start", session, session.replace(
             "Recency is not among them", "Recency breaks ties", 1
+        )),
+        ("session-start", session, session.replace(
+            "is named for a date, a run mode or a session", "is stale", 1
+        )),
+        ("session-start", session, session.replace(
+            "and only does so with the operator's approval",
+            "and does so on its own", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "named for its subject, never for a date, a run mode, or a",
+            "named for its subject, or for a date, a run mode, or a", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "changes assigns each pull request, not",
+            "changes assigns the session, not", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "to each pull request separately", "to the session as a whole", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "Apply only the folds the operator approves.",
+            "Apply every fold you propose.", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "Without an operator, leave these entries as they are.",
+            "Without an operator, fold them yourself.", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "**this session began**", "**the handoff's newest entry**", 1

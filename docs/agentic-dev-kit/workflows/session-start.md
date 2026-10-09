@@ -473,5 +473,10 @@ wrapped up gets no preference for it.
   session-start tripwire may have warned), mention it as a 🟢 housekeeping item
   (`wrap-up` sweeps the handoff; the `triage-friction-log` workflow graduates the inbox) — don't
   sweep inline.
+- If a `## Workstreams` entry is named for a date, a run mode or a session (*Overnight
+  lanes 2026-10-06*), or its status line says `assignment unconfirmed`, list it as a
+  🟢 housekeeping item. Name the entry. `wrap-up` offers to fold it into workstreams
+  named for their subjects, and only does so with the operator's approval. Don't fold
+  it inline.
 - Pairs with `wrap-up` (session end). Use `pr-watch` to action a 🔴 PR item,
   the `triage-friction-log` workflow to clear the inbox.

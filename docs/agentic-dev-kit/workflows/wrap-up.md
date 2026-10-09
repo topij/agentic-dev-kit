@@ -155,8 +155,38 @@ failure makes the overall outcome `incomplete-resumable`.
      otherwise create a new entry, and say in the session entry that the
      assignment was not confirmed. A new entry cannot replace another
      workstream's next step; a wrong guess about an existing entry can.
+   - **A workstream is named for its subject, never for a date, a run mode, or a
+     session.** The subject is the part of the system the work changes: *Release
+     pipeline send guards*, not *Overnight lanes 2026-10-06*; *Automation history
+     rows*, not *Backlog lanes 2026-10-08*. A batch, a lane run or an overnight
+     session is a way of running work, not a line of work. An entry named for one
+     collects whatever its lanes happened to touch, and its `▶ Next:` becomes a
+     list of unrelated checks tied together only by "then close this
+     workstream". The test: the next session can tell from the name alone which
+     part of the system the entry is about.
+   - **A session that shipped unrelated changes assigns each pull request, not
+     the session.** That is every multi-lane batch, and any session whose pull
+     requests touch different subjects. Name a workstream for each pull request
+     by its subject, and let pull requests on one subject share it. A
+     post-merge check (*after Monday's run, confirm …*) goes in the `▶ Next:` of
+     the workstream whose change it verifies. The session entry groups its
+     bullets by those workstream names, so a reader finds each change under the
+     subject it belongs to. **With no operator to confirm**, apply the rule above
+     to each pull request separately. When a new entry's subject looks like an
+     existing entry's but the plan-or-issue test did not match, create it anyway
+     and end its status line with `assignment unconfirmed — may belong to
+     <existing name>`, so the next wrap-up with an operator can fold it in.
+   - **Offer to fold misnamed and unconfirmed entries, but only with an operator
+     present.** At an interactive wrap-up, list every workstream entry marked
+     `assignment unconfirmed`, and every entry named for a date, run mode or
+     session. For each one, propose where its pieces go: which existing
+     workstream each pull request and each `▶ Next:` step belongs to, and the
+     subject name of any new entry. Apply only the folds the operator approves.
+     Without an operator, leave these entries as they are.
    - **Add a session entry** at the top of the session log: `## Session —
-     <date> (<theme>)`, then what shipped, what was decided, and what was not
+     <date> (<theme>)`. The theme names what the session changed, not only how it
+     ran: *overnight lanes* alone tells a reader nothing the date does not. The
+     entry then says what shipped, what was decided, and what was not
      established. **It carries no `▶ Next:`** — that lives in the workstream's
      entry. Do not rename or edit earlier session entries: they are a record,
      and the archive sweep moves them oldest-first because nothing live remains
@@ -559,7 +589,8 @@ failure makes the overall outcome `incomplete-resumable`.
 - Do NOT change the handoff's structure or add new sections without asking — but the
   `archive_plan_sessions.py` sweep (moving old session blocks to `<handoff-history>`),
   this session's own entry in the session log, the entry for the workstream it
-  worked on (new or existing, `▶ Next:` included), and the first-run creation of
+  worked on (new or existing, `▶ Next:` included), a fold of a misnamed or
+  unconfirmed entry that the operator approved, and the first-run creation of
   `## Workstreams` are all documented edits, not structure changes, so do them
   without asking. Closing a workstream is not among them: it is the operator's call
 - If a backlog item was promoted to a sprint epic, move it (don't duplicate)

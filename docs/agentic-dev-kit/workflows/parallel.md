@@ -343,7 +343,9 @@ wrap-up **from this cockpit session**:
    with the tally line, then PRs landed, collisions avoided, each parked scope with
    its reason, and each held scope with its PR number and what it is waiting on. Not
    one entry per session. Update the `## Workstreams` entry of each workstream a lane
-   advanced, as `wrap-up` describes; a lane never edits `<handoff>` itself.
+   advanced, as `wrap-up` describes; a lane never edits `<handoff>` itself. Each lane
+   is filed under the workstream for its subject. Never create one entry for the
+   batch: a batch is how the work ran, not a line of work.
 
 1. Open it as its own `chore: update handoff` PR (this checkout sits on the protected
    branch, so the handoff edit goes through a branch + PR like everything else;
