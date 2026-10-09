@@ -22,7 +22,7 @@
 
 ## Session — 2026-10-09 (tickets closed after the lane batch, in Claude Code)
 
-- On the operator's word, closed each ticket with a comment naming its merge commit: #1008, #1009, #1012, #1013, #1014, #1016, #1018. This supersedes the previous entry's "still open" and "waits for the operator" lines. It also supersedes that entry's "not ticketed": #1017 now carries the gap.
+- On the operator's word, closed each ticket with a comment naming its merge commit: #1008, #1009, #1012, #1013, #1014, #1016, #1018. This supersedes, for those tickets, the previous entry's "still open" and "waits for the operator" lines. It also supersedes that entry's "not ticketed": #1017 now carries the gap.
 - #1017 stays open with a comment. #1023 covered the `forge-finalize` and `archive-sweep` phases; a finished `tracker-write` session's resume hint is the open design decision.
 
 ______________________________________________________________________
@@ -359,6 +359,6 @@ confirm no state root holds a `proposal_correction`, then remove the shim (#979)
 ### Changelog fragments
 
 **Status:** changelog entries are `changelog.d/` fragments since #1020 (`f9146c5f`), and #1022 and #1023 shipped the first two. #1026 holds the lookup's test gaps and naming wording; #1022's fragment `dev-pr-watch-trio.md` already departs from that rule, which gives `pr-watch-trio.md`. #507's heading check has no new entries to check.
-**Owner:** [#1026](https://github.com/topij/agentic-dev-kit/issues/1026); the closed [#1009](https://github.com/topij/agentic-dev-kit/issues/1009) holds the design.
+**Owner:** [#1026](https://github.com/topij/agentic-dev-kit/issues/1026); the closed [#1009](https://github.com/topij/agentic-dev-kit/issues/1009) states the problem, and #1020 (`f9146c5f`) holds the design.
 
 ▶ Next: #1026 — pin the lookup's baseline range and pathspec with tests, and state one fragment naming rule.
