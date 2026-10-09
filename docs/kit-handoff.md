@@ -20,6 +20,16 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-09 (workstreams named by subject, in Claude Code)
+
+- **#1028 merged as `50145a23`, by the operator.** `wrap-up.md` now names a workstream for its subject, never a date, a run mode or a session. A session with unrelated pull requests files each one under its subject's workstream. An unattended guess is marked `assignment unconfirmed`, and an interactive wrap-up offers the operator folds for misnamed and unconfirmed entries. `session-start.md`, `parallel.md` and the handoff template follow suit. `make test` at `45819297` on 2026-10-09 in `/Users/topi/Coding/agentic-dev-kit` → `4497 passed, 1 skipped`.
+- **Review.** CodeRabbit skipped the PR. The adversarial lens ran full passes at `dae754b8` and `2fe2ce11`. A delta pass at `4cce8edb` disputed containment and spent the round budget. The operator authorized one further round (option A of the decision packet on the PR). The delta pass at `45819297` found every repair contained, and its `fallback:delta` receipt is composed on `2fe2ce11`. The remaining LOW findings were filed, on the operator's approval of the exact text, as #1030, read back identical.
+- **cs-toolkit.** On the operator's approval of each fold, in-parallel-oy/cs-toolkit#2609 merged as `3d7a6b95`. It re-filed that repository's batch-named workstreams by subject. Two LOW wording findings from its delta pass were left, on the operator's choice, for cs-toolkit's next wrap-up. They are recorded only in #2609's disposition comment.
+- An occurrence was added to #852 on the operator's approval, and reads back identical: the round-1 receipt was not recorded before the repair was pushed.
+- Not established: whether an unattended batch wrap-up files its pull requests by subject under the new rules. None has run under them yet.
+
+______________________________________________________________________
+
 ## Session — 2026-10-09 (tickets closed after the lane batch, in Claude Code)
 
 - On the operator's word, closed each ticket with a comment naming its merge commit: #1008, #1009, #1012, #1013, #1014, #1016, #1018. This supersedes, for those tickets, the previous entry's "still open" and "waits for the operator" lines. It also supersedes that entry's "not ticketed": #1017 now carries the gap.
@@ -362,3 +372,10 @@ confirm no state root holds a `proposal_correction`, then remove the shim (#979)
 **Owner:** [#1026](https://github.com/topij/agentic-dev-kit/issues/1026); the closed [#1009](https://github.com/topij/agentic-dev-kit/issues/1009) states the problem, and #1020 (`f9146c5f`) holds the design.
 
 ▶ Next: #1026 — pin the lookup's baseline range and pathspec with tests, and state one fragment naming rule.
+
+### Handoff workstream naming
+
+**Status:** #1028 (`50145a23`) names workstreams by subject and files a batch per pull request; cs-toolkit's batch-named entries were folded by in-parallel-oy/cs-toolkit#2609. #1030 holds the residual single-workstream wording, the half-pinned clauses, the run-mode carve-out, and a kept entry that cannot be named.
+**Owner:** [#1030](https://github.com/topij/agentic-dev-kit/issues/1030).
+
+▶ Next: #1030 — cover every workstream a session worked on in the "Update only that workstream's entry" bullet, pin the half-pinned clauses, give creating and detecting entries one run-mode carve-out, and define what happens to a kept entry that cannot be named and to references after a rename.

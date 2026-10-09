@@ -24,6 +24,11 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-10-09
+
+- **A review lens wrote refs into the tree it was handed.** Severity L, kept for accumulation. On in-parallel-oy/cs-toolkit#2609 the correctness lens ran `git fetch origin main` in its handed worktree. Its report gives the purpose as establishing the base's currency. *No writes in the tree you were given* forbids the write. Its `git status --short` stayed clean, so only refs were written. `git ls-remote` answers the same question without a write.
+- **The review-chain shape in the 2026-10-08 entry below recurred on #1028.** Severity L, kept for accumulation. Each adversarial pass over the new folding rules in `wrap-up.md` found new LOW findings: at `dae754b8`, at `2fe2ce11`, at `4cce8edb` and at `45819297`. A repair carried the next round's finding, when a kept-entry path added at `4cce8edb` sat outside both exception lists. The residue went to #1030.
+
 ## 2026-10-08
 
 - **The headless lane profile cannot read the lane's own ticket.** Severity M. Parked because no operator was present to approve a tracker write. `config/claude-lane-settings.json` allows no `gh issue view`, and under `dont-ask` a denied call ends the lane. `parallel.md` requires every lane brief to be grounded in the ticket body, so the cockpit put each ticket's full text into the task prompt. Lane `pr-watch-trio` also had a multi-line `git commit -m` message containing backticks refused, and fell back to repeated single-line `-m` flags. Both are the shape #1011 tracks: routine lane steps the profile denies. The fix is either a read-only `gh issue view` grant or a launcher step that embeds the ticket text. The profile is safety-critical.
