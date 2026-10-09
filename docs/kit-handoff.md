@@ -20,6 +20,22 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-09 (scratch alternate paths, in Codex)
+
+- **Scratch retention:** [#1034](https://github.com/topij/agentic-dev-kit/pull/1034)
+  merged as `79d33fb9eaca1d4da6dca0b1ca703fc384ffc657` on the operator's request,
+  addressing #1032. Unquoted alternate paths preserve whitespace and filesystem bytes.
+- **Verification:** `make test` at `fbc91bdcfa01b6fda7bb30f04dddfe8a403233f1` on 2026-10-09,
+  in `/private/tmp/claude-502/-Users-topi-Coding-agentic-dev-kit/codex-01a121d7-1032-4xh1wqvu/verify-fbc91bdc`,
+  printed `4538 passed, 1 skipped`. `gh run view 37976770841` from
+  `/Users/topi/Coding/agentic-dev-kit` on 2026-10-09 reported `Test` at
+  `79d33fb9eaca1d4da6dca0b1ca703fc384ffc657` completed with `success`.
+- **Review:** CodeRabbit skipped. The [independent adversarial receipt](https://github.com/topij/agentic-dev-kit/pull/1034#issuecomment-6087015179)
+  records focused tests and deliberate trimming, line-splitting and replacement-decoding mutations.
+- **Limits:** No production scratch sweep or adopter rollout ran in this session.
+
+______________________________________________________________________
+
 ## Session — 2026-10-09 (workstreams named by subject, in Claude Code)
 
 - **#1028 merged as `50145a23`, by the operator.** `wrap-up.md` now names a workstream for its subject, never a date, a run mode or a session. A session with unrelated pull requests files each one under its subject's workstream. An unattended guess is marked `assignment unconfirmed`, and an interactive wrap-up offers the operator folds for misnamed and unconfirmed entries. `session-start.md`, `parallel.md` and the handoff template follow suit. `make test` at `45819297` on 2026-10-09 in `/Users/topi/Coding/agentic-dev-kit` → `4497 passed, 1 skipped`.
@@ -312,7 +328,8 @@ stay executed.
 
 **Status:** `scripts/sweep_scratch.py` and the `scratch:` config block shipped in
 #986 (`dff111ae`). Its documented limits are in the engine docstring. #1005 (`f508d220`)
-judges root and entry containment by filesystem identity as well as by path string (#1000). #997 owns
+judges root and entry containment by filesystem identity as well as by path string (#1000).
+#1034 (`79d33fb9`) preserves unquoted alternate path whitespace and filesystem bytes (#1032). #997 owns
 reclaiming session entries that bare fixture repos pin. #996 holds the unpinned
 guards, wording, and the `.git`-gone exit 2. #900 stays open for the round-end
 cockpit sweep, the wrap-up and session-start integrations, and listing the engine
