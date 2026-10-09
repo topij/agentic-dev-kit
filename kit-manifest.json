@@ -512,7 +512,7 @@
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
-      "sha256": "18f71d76da59ea9edebaa717d9c56d92dcf3b8f5f4c06554328944a78cc709e9"
+      "sha256": "690b92ff034febecf0b2710de0b72d6d9d0fe79ae68d302be4a2159342cf1bdd"
     },
     "scripts/pr_watch.py": {
       "role": "engine",
@@ -612,7 +612,7 @@
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
-      "sha256": "74d5e23b6078bd1379013b67ec5534a32d56429c720b5ef89ef0d5db01992063"
+      "sha256": "a00cbe0e620104674e3eaa16ed781ad080da09e8d3b053499f6ff1f52da82c5d"
     },
     "scripts/tests/test_portability.py": {
       "role": "test",

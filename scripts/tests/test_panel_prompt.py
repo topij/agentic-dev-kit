@@ -648,11 +648,34 @@ def test_a_provided_worktree_is_named_and_the_no_worktree_warning_is_dropped(rep
         "--branch", "b", "--scratch", tree,
     )
     assert out.returncode == 0, out.stderr
-    assert f"has been built for you at:**\n  `{tree}`" in out.stdout
+    assert f"Caller-supplied scratch path:**\n  `{tree}`" in out.stdout
     assert "No worktree was provided" not in out.stdout
 
 
 # --- #999: --scratch is verified, never taken on trust ---------------------------
+
+
+def test_an_empty_git_root_reports_state_without_claiming_a_checkout(repo, tmp_path):
+    base, head = _revs(repo)
+    empty = tmp_path / "empty-root"
+    empty.mkdir()
+    database = empty / ".git"
+    _git(repo, "clone", "-q", "--bare", str(repo), str(database))
+    _git(database, "update-ref", "--no-deref", "HEAD", head)
+    _git(database, "config", "core.bare", "false")
+    _git(database, "config", "core.worktree", str(empty))
+    assert _git(empty, "rev-parse", "HEAD") == head
+    assert _git(empty, "rev-parse", "--show-toplevel") == str(empty)
+    assert list(empty.iterdir()) == [database]
+    out = _run(
+        repo, "--lens", "adversarial", "--head", head, "--base", base,
+        "--branch", "b", "--scratch", str(empty),
+    )
+    assert out.returncode == 0, out.stderr
+    assert "Caller-supplied scratch path" in out.stdout
+    assert "Checkout contents and cleanliness are not verified" in out.stdout
+    assert "caller must create and inspect the checkout" in out.stdout
+    assert "has been built for you" not in out.stdout
 
 
 def _scratch_refusal(repo: Path, scratch: str) -> subprocess.CompletedProcess:
@@ -662,7 +685,7 @@ def _scratch_refusal(repo: Path, scratch: str) -> subprocess.CompletedProcess:
         "--branch", "b", "--scratch", scratch,
     )
     assert out.returncode == 2, out.stdout
-    assert "built for you" not in out.stdout
+    assert out.stdout == ""
     # Every refusal names the remedy with the full head sha, at a fresh path: the
     # given path may already exist (#999's live lane did), and git refuses to add a
     # worktree over it.
@@ -806,7 +829,7 @@ def test_a_worktree_root_alias_is_accepted(repo, tmp_path, kind):
     )
     assert out.returncode == 0, out.stderr
     assert scratch in out.stdout
-    assert "built for you" in out.stdout
+    assert "Caller-supplied scratch path" in out.stdout
 
 
 def test_a_scratch_path_that_is_not_a_git_tree_is_refused(repo, tmp_path):
