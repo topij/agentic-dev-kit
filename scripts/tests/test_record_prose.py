@@ -330,6 +330,48 @@ def test_deletions_detect_duplicate_new_closing_matches(repo):
     assert report["findings"][0]["line"] == 4
 
 
+@pytest.mark.parametrize("before,after,kind", [
+    (f"resolves\n{LOCAL_REF}\n\nKeep boundary.\n\nresolves\nintervening text\n{LOCAL_REF}\n",
+     f"Keep boundary.\n\nresolves\n{LOCAL_REF}\n", "closing-keywords"),
+    ("[Missing](missing.md)\n\n```\nprefix\n\n[Missing](missing.md)\n```\n",
+     "prefix\n\n[Missing](missing.md)\n```\n", "links"),
+])
+def test_removed_old_match_cannot_mask_new_deletion_effect(repo, before, after, kind):
+    root, _ = repo
+    save(root, "docs/plan.md", before)
+    base = commit(root)
+    save(root, "docs/plan.md", after)
+    code, report = run((root, base), commit(root))
+    assert code == 1, report
+    assert kind in [item["check"] for item in report["findings"]]
+
+
+def test_deleted_reference_definition_rechecks_document_links(repo):
+    root, _ = repo
+    save(root, "docs/plan.md", "[Missing](missing.md)\n\n[unused]: <target with space.md>\n")
+    base = commit(root)
+    save(root, "docs/plan.md", "[Missing](missing.md)\n")
+    code, report = run((root, base), commit(root))
+    assert code == 1, report
+    assert report["findings"][0]["check"] == "links"
+
+
+def test_new_narrative_file_has_no_prior_blocks(repo):
+    root, _ = repo
+    save(root, "docs/archive.md", "[Missing](missing.md)\n")
+    code, report = run(repo, commit(root))
+    assert code == 1, report
+    assert report["findings"][0]["source"] == "docs/archive.md"
+
+
+def test_utf8_document_with_nul_has_textual_change_coordinates(repo):
+    root, _ = repo
+    save(root, "docs/plan.md", "Record\0\n\n[Missing](missing.md)\n")
+    code, report = run(repo, commit(root))
+    assert code == 1, report
+    assert report["findings"][0]["check"] == "links"
+
+
 @pytest.mark.parametrize("status", ["passed", "not-applicable", "unavailable"])
 def test_cli_does_not_write_fresh_engine_or_input_tree(repo, tmp_path, status):
     require_kit_paths("scripts/check_record_prose.py", "scripts/lib/kitconfig.py")

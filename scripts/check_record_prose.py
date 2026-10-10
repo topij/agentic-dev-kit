@@ -18,14 +18,12 @@ from __future__ import annotations
 
 import argparse
 import datetime
-import difflib
 import io
 import json
 import posixpath
 import re
 import subprocess
 import sys
-from collections import Counter
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
 
@@ -43,7 +41,7 @@ LIMITS = [
     "A historical stamp need not name the candidate head; the reviewer must judge its stated scope.",
     "Every changed narrative file and commit message remains in full independent-review scope.",
 ]
-_HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+_HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 _STAMP = re.compile(
     r"`(?P<command>[^`\n]+)`\s+at\s+`(?P<sha>[^`\n]+)`"
     r"(?:,?\s+in\s+`[^`]+`,?)?\s+on\s+(?P<date>\d{4}-\d{2}-\d{2})"
@@ -121,46 +119,71 @@ def markdown_lines(text: str) -> list[str]:
     return list(io.StringIO(text, newline=None))
 
 
-def changed_lines(root: Path, boundary: str, head: str, path: str, text: str) -> set[int]:
+def changed_lines(root: Path, boundary: str, head: str, path: str,
+                  text: str, before: str) -> tuple[set[int], dict[int, int], set[int]]:
     patch = git(root, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames",
-                "--unified=0", boundary, head, "--", path)
-    lines: set[int] = set()
-    # Git hunk coordinates count LF records. Preserve raw CR and exotic
-    # separators until those coordinates are translated to Markdown's lines.
+                "--text", "--unified=0", boundary, head, "--", path)
+
+    def records(value):
+        physical = list(io.StringIO(value))
+        spans, gaps = {}, {0: 0}
+        cursor, offset = 1, 0
+        for number, record in enumerate(physical, 1):
+            logical = markdown_lines(record)
+            spans[number] = range(cursor, cursor + len(logical))
+            cursor += len(logical)
+            offset += len("".join(logical))
+            gaps[number] = offset
+        return physical, spans, gaps
+
+    old_records, old_spans, _ = records(before)
+    new_records, new_spans, gaps = records(text)
+    added, unchanged, deleted = set(), {}, set()
+    old_cursor, new_cursor = 1, 1
+
+    def preserve(old_end, new_end):
+        for old, new in zip(range(old_cursor, old_end), range(new_cursor, new_end), strict=True):
+            if old_records[old - 1] != new_records[new - 1]:
+                raise CheckError("Git did not establish unchanged text coordinates")
+            unchanged.update(zip(new_spans[new], old_spans[old], strict=True))
+
+    # Git counts LF records; translate their exact correspondence to Markdown
+    # lines and deletion cutpoints without matching equal text at other positions.
     for line in patch.split("\n"):
         match = _HUNK.match(line)
         if match:
-            start = int(match[1])
-            count = int(match[2]) if match[2] is not None else 1
-            lines.update(range(start, start + count))
-    logical: set[int] = set()
-    cursor = 1
-    for physical, record in enumerate(io.StringIO(text), 1):
-        count = len(markdown_lines(record))
-        if physical in lines:
-            logical.update(range(cursor, cursor + count))
-        cursor += count
-    return logical
+            old_start, new_start = int(match[1]), int(match[3])
+            old_count = int(match[2]) if match[2] is not None else 1
+            new_count = int(match[4]) if match[4] is not None else 1
+            preserve(old_start if old_count else old_start + 1,
+                     new_start if new_count else new_start + 1)
+            for number in range(new_start, new_start + new_count):
+                added.update(new_spans[number])
+            if old_count and not new_count:
+                deleted.add(gaps[new_start])
+            old_cursor = old_start + old_count if old_count else old_start + 1
+            new_cursor = new_start + new_count if new_count else new_start + 1
+    preserve(len(old_records) + 1, len(new_records) + 1)
+    return added, unchanged, deleted
 
 
-def changed_blocks(before: list, after: list) -> set[int]:
+def changed_blocks(before: list, after: list, unchanged: dict[int, int]) -> set[int]:
     """Select candidate blocks whose parsed meaning changed, without line shifts."""
     def signature(token):
         return (token.type, token.tag, token.nesting, token.content,
                 tuple((child.type, child.attrGet("href"), child.attrGet("src"))
                       for child in token.children or []))
 
-    comparison = difflib.SequenceMatcher(
-        None, [signature(token) for token in before],
-        [signature(token) for token in after], autojunk=False,
-    )
+    original = {(tuple(range(token.map[0] + 1, token.map[1] + 1)), signature(token))
+                for token in before if token.map}
     affected: set[int] = set()
-    for operation, _, _, start, end in comparison.get_opcodes():
-        if operation == "equal":
+    for token in after:
+        if not token.map:
             continue
-        for token in after[start:end]:
-            if token.map:
-                affected.update(range(token.map[0] + 1, token.map[1] + 1))
+        lines = range(token.map[0] + 1, token.map[1] + 1)
+        prior = tuple(unchanged.get(line) for line in lines)
+        if (prior, signature(token)) not in original:
+            affected.update(lines)
     return affected
 
 
@@ -192,14 +215,13 @@ def check(root: Path, base: str, head: str, allowed: set[str]) -> dict:
                                    "detail": detail})
 
     def closings(text: str, source: str, added: set[int] | None = None,
-                 before: str = "") -> None:
-        previous = Counter(match.group() for match in _CLOSING.finditer(before))
+                 deleted: set[int] | None = None) -> None:
         for match in _CLOSING.finditer(text):
             ref = match["ref"]
             line = text.count("\n", 0, match.start()) + 1
             end = text.count("\n", 0, match.end()) + 1
-            if added is not None and not added.intersection(range(line, end + 1)) and previous[match.group()]:
-                previous[match.group()] -= 1
+            if (added is not None and not added.intersection(range(line, end + 1))
+                    and not any(match.start() < cut < match.end() for cut in deleted or ())):
                 continue
             if ref not in allowed:
                 finding("closing-keywords", source, line,
@@ -226,16 +248,23 @@ def check(root: Path, base: str, head: str, allowed: set[str]) -> dict:
         raw = blob(root, head, path)
         lines = markdown_lines(raw)
         text = "".join(lines)
-        added = changed_lines(root, boundary, head, path, raw)
         # Parse the entire document so reference definitions and code fences keep
         # their CommonMark meaning; select changed blocks only after parsing.
         environment: dict = {}
         tokens = parser.parse(text, environment)
         old = blob(root, boundary, path) if git(root, "ls-tree", "-z", boundary, "--", path) else ""
         before = "".join(markdown_lines(old))
-        affected = added | changed_blocks(parser.parse(before), tokens)
-        closings(text, path, added, before)
-        changed_reference = any(
+        added, unchanged, deleted = changed_lines(root, boundary, head, path, raw, old)
+        old_environment: dict = {}
+        old_tokens = parser.parse(before, old_environment)
+        affected = added | changed_blocks(old_tokens, tokens, unchanged)
+        closings(text, path, added, deleted)
+
+        def references(env):
+            return {label: (ref.get("href"), ref.get("title"))
+                    for label, ref in env.get("references", {}).items()}
+
+        changed_reference = references(old_environment) != references(environment) or any(
             affected.intersection(range(ref["map"][0] + 1, ref["map"][1] + 1))
             for ref in environment.get("references", {}).values() if "map" in ref
         )

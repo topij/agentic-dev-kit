@@ -208,10 +208,11 @@ command and result, or hold the review receipt.
 The link check covers destinations the CommonMark parser recognizes; an
 unresolved reference is literal text to that parser. It does not fetch external
 URLs or verify fragment identifiers or raw HTML destinations. It compares parsed
-blocks across the snapshots so deletions that activate links or stamps remain in
-scope, and compares raw closing matches with the prior snapshot to catch newly
-joined references. Untouched blocks are outside its scan except that a changed
-reference definition rechecks the document's links. A stamp
+blocks at the surviving Git coordinates so deletions that activate links or
+stamps remain in scope, and checks raw closing matches spanning deletion
+boundaries to catch newly joined references. Untouched blocks are outside its
+scan except that a changed reference definition rechecks the document's links.
+A stamp
 can name a valid commit without its command having run or its result being true.
 Historical run records may legitimately name a different revision from the
 candidate; the reviewer checks the claim's scope and the independent evidence.
