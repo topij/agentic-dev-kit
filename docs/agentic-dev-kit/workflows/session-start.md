@@ -477,8 +477,8 @@ workflow first, then continue under that authority.
 **When the operator names a workstream or a task** in the invocation or its
 context, that is the pick. Render the briefing as usual and recommend the named
 work; if incompatible, name its blocker and enabling condition instead of an
-executable recommendation. A 🔴 item stays in the briefing beside it rather than
-overriding the choice.
+executable recommendation; a 🔴 item stays in the briefing
+beside it rather than overriding the choice.
 The named work need not be any workstream's `▶ Next:`, and choosing it changes no
 other workstream's entry.
 

@@ -70,10 +70,11 @@ cloud or local from an OS name or a pathname. This classification is separate
 from the runtime (Codex or Claude) and execution mode (`inline` or `delegate`).
 
 Gather the complete field-limited backlog with labels or equivalent environment
-metadata. Keep full bodies out of that list's rendered output. For a candidate
-whose label is absent, fetch its body separately and retain the execution section
-for classification; use bounded batches when the backend supports them. Keep an
-unread or legacy ticket visible as `unknown`, rather than guessing. Before
+metadata. Keep full bodies out of that list's rendered output. For an unlabelled
+candidate considered for recommendation, fetch its body separately and retain the
+execution section for classification; use bounded batches when the backend supports
+them. Keep an unread or legacy ticket visible as `unknown`, rather than guessing or
+eagerly fetching every backlog body. State which candidates remain unassessed. Before
 recommending a labelled candidate, read its body, reconcile its environment
 section and acceptance criteria, and check the named prerequisites read-only.
 Missing inputs or access mean blocked in this session, even for a `cloud` ticket.

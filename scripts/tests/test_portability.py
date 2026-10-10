@@ -2831,6 +2831,10 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
                 "conditional",
                 "Required when a candidate implicates a tracker item whose live state may hide a false resolution. If the item and its claimed resolution cannot be read, do not promote that candidate to Now; name the gap.",
             ),
+            "execution-environment-read": (
+                "conditional",
+                "Establish session context and candidate requirements under ticket-execution-environment.md. Required before an executable recommendation. Unknown context or unavailable candidate inputs degrades the briefing and prevents recommending that work as executable; it does not hide blocked urgent items.",
+            ),
             "runtime-compute-selection": (
                 "optional enhancement",
                 "Apply models.runtime_mappings only when the current runtime mechanically exposes the requested control. Otherwise retain the neutral tier as instructed guidance and do not claim a switch.",
@@ -2840,6 +2844,9 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "source-failure": ("report-unavailable-never-empty-or-clean",),
             "incomplete-pagination": ("report-unavailable-or-page-to-completion",),
             "remediation-unavailable": ("no-now-promotion-for-that-candidate",),
+            "environment-incompatible-or-unknown": (
+                "visible-blocker-no-executable-recommendation",
+            ),
             "session-start-write": ("prohibited-read-only-workflow",),
             "non-interactive-invocation": (
                 "render-once-and-exit-without-wait-or-write",
@@ -2852,7 +2859,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
                 "Name the failed capability and remediation; do not render the normal briefing or recommendation.",
             ),
             "degraded-success": (
-                "Required capabilities are ready and an optional source is unavailable, or a conditional remediation read prevents a Now promotion.",
+                "Required capabilities are ready and an optional source is unavailable, or a conditional remediation read prevents a Now promotion, or execution-environment evidence prevents an executable recommendation.",
                 "Render the briefing once, label every gap at its normal display location, and make no write.",
             ),
             "successful-completion": (
@@ -3577,6 +3584,14 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
         ("wrap-up", wrap, wrap.replace(
             "Never repeat a tracker create",
             "Repeat a tracker create", 1
+        )),
+        ("session-start", session, session.replace(
+            "`execution-environment-read` | conditional |",
+            "`execution-environment-read` | optional |", 1
+        )),
+        ("session-start", session, session.replace(
+            "`environment-incompatible-or-unknown` | `visible-blocker-no-executable-recommendation`",
+            "`environment-incompatible-or-unknown` | `recommend-any-candidate`", 1
         )),
         ("session-start", session, session.replace(
             "**no entry is promoted for being the most recently updated**",

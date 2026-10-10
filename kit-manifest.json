@@ -44,7 +44,7 @@
     },
     "docs/agentic-dev-kit/ticket-execution-environment.md": {
       "role": "doctrine",
-      "sha256": "7a481583e7fbf4d86be538b1bbb2f77cf665bae8235aeddc6f76f75c8b2eb42c"
+      "sha256": "7059273f8056a275310aaec287fcbac8c1a376b4f2979698fc4f8646d12022a7"
     },
     "docs/agentic-dev-kit/workflows/adopt.md": {
       "role": "workflow",
@@ -68,7 +68,7 @@
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
-      "sha256": "82e0af57cd68bd42815b04553c11b3b7320c9ae67114ae6d967fe106717e9dd9"
+      "sha256": "fc85f053bd7b420af72962ff22573e59adc76d619552856b20654d90b3b5d648"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
@@ -556,7 +556,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "29b4054898923fd3eab7caef3fbba8da170ce48ac2e5dc8b6a9399243bd1f6be"
+      "sha256": "2b1d3a424a5cd89545357d1d5938ca68f80f1b664dba2b92dbce9ba7bb0ed035"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -620,7 +620,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "1f26449893077eee3a2cf9e70efe6c6ebfbf968b18e41d508534f6c6d42fe5ce"
+      "sha256": "66dd598236065ad872245cbd480fd53177973218070301682a38d8fa5cbde83f"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
