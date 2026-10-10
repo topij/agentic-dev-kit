@@ -185,3 +185,90 @@ def test_local_destination_is_literal_not_a_git_pathspec(repo):
     code, report = run(repo, commit(root))
     assert code == 1, report
     assert report["findings"][0]["check"] == "links"
+
+
+@pytest.mark.parametrize("separator", ["\v", "\f", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029"])
+def test_budget_agrees_with_text_stream_lines(repo, separator):
+    root, _ = repo
+    text = separator.join(["record"] * 21)
+    save(root, "docs/plan.md", text)
+    # Stream iteration is check_doc_budget's contract; splitlines disagrees.
+    with (root / "docs/plan.md").open(encoding="utf-8") as stream:
+        assert sum(1 for _ in stream) == 1
+    assert len(text.splitlines()) > 20
+    code, report = run(repo, commit(root))
+    assert code == 0, report
+    assert report["status"] == "passed"
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+@pytest.mark.parametrize("count,expected", [(20, 0), (21, 1)])
+def test_budget_translates_universal_newlines(repo, newline, count, expected):
+    root, _ = repo
+    save(root, "docs/plan.md", newline.join(["record"] * count))
+    code, report = run(repo, commit(root))
+    assert code == expected, report
+    if expected:
+        assert report["findings"][0]["check"] == "budgets"
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+@pytest.mark.parametrize("separator", ["\v", "\u2028"])
+def test_stamp_block_offsets_ignore_exotic_separators(repo, newline, separator):
+    root, _ = repo
+    baseline = newline.join(["# Plan", "", f"prefix{separator}suffix", "", "Earlier record.", ""])
+    save(root, "docs/plan.md", baseline)
+    base = commit(root)
+    save(root, "docs/plan.md", baseline.replace("Earlier record.", "`make test` at `HEAD` on 2026-10-10 printed a result."))
+    code, report = run((root, base), commit(root))
+    assert code == 1, report
+    assert report["findings"][0]["check"] == "stamps"
+    assert report["findings"][0]["line"] == 5
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+def test_changed_links_follow_commonmark_line_boundaries(repo, newline):
+    root, _ = repo
+    baseline = newline.join(["# Plan", "", "Earlier record.", "", "Target.", ""])
+    save(root, "docs/plan.md", baseline)
+    base = commit(root)
+    save(root, "docs/plan.md", baseline.replace("Target.", "[Missing](missing.md)"))
+    code, report = run((root, base), commit(root))
+    assert code == 1, report
+    assert report["findings"][0]["check"] == "links"
+    assert report["findings"][0]["line"] == 5
+
+
+def test_exotic_separator_cannot_forge_a_git_hunk(repo):
+    root, _ = repo
+    baseline = f"Earlier record: resolves {LOCAL_REF}.\n\nRecord.\n"
+    save(root, "docs/plan.md", baseline)
+    base = commit(root)
+    save(root, "docs/plan.md", baseline + "payload\u2028@@ -0,0 +1,1 @@\n")
+    code, report = run((root, base), commit(root))
+    assert code == 0, report
+    assert report["findings"] == []
+
+
+def test_empty_budget_declaration_is_unavailable(repo):
+    root, _ = repo
+    config = root / "config/dev-model.yaml"
+    text = config.read_text()
+    config.write_text(text[:text.index("doc_budgets:")] + "doc_budgets: []\n")
+    base = commit(root)
+    save(root, "docs/plan.md", "New record.\n")
+    code, report = run((root, base), commit(root))
+    assert code == 2, report
+    assert report["status"] == "unavailable"
+    assert "doc_budgets" in report["unavailable"][0]["detail"]
+
+
+@pytest.mark.parametrize("text,kind", [("[Missing](missing.md)\n", "links"), ("`make test` at `HEAD` on 2026-10-10 printed a result.\n", "stamps")])
+def test_git_color_settings_do_not_change_hunk_coordinates(repo, text, kind):
+    root, _ = repo
+    git(root, "config", "color.ui", "always")
+    git(root, "config", "color.diff", "always")
+    save(root, "docs/plan.md", text)
+    code, report = run(repo, commit(root))
+    assert code == 1, report
+    assert report["findings"][0]["check"] == kind

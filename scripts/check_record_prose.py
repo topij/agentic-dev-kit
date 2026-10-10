@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import io
 import json
 import posixpath
 import re
@@ -64,13 +65,15 @@ def git(root: Path, *args: str) -> str:
     try:
         result = subprocess.run(
             ["git", "--literal-pathspecs", *args], cwd=root, capture_output=True,
-            text=True, encoding="utf-8", timeout=30, check=False,
+            timeout=30, check=False,
         )
+        output = result.stdout.decode("utf-8")
+        error = result.stderr.decode("utf-8")
     except (OSError, UnicodeError, subprocess.TimeoutExpired) as exc:
         raise CheckError(str(exc)) from exc
     if result.returncode:
-        raise CheckError(result.stderr.strip() or f"git {args[0]} failed")
-    return result.stdout
+        raise CheckError(error.strip() or f"git {args[0]} failed")
+    return output
 
 
 def commit(root: Path, value: str) -> str:
@@ -102,24 +105,38 @@ def scope(root: Path, base: str, head: str) -> tuple[dict, str, list[str]]:
     if len(boundaries) != 1:
         raise CheckError("the comparison has no unique merge base")
     boundary = boundaries[0]
-    paths = git(root, "diff", "--name-only", "-z", "--no-renames", boundary, head).split("\0")
+    paths = git(root, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--name-only", "-z", "--no-renames", boundary, head).split("\0")
     changed = [p for p in paths if p]
     if not changed or not set(changed) <= declared:
         raise NotApplicable("the change is not confined to the configured narrative paths")
     return config, boundary, changed
 
 
-def changed_lines(root: Path, boundary: str, head: str, path: str) -> set[int]:
-    patch = git(root, "diff", "--no-ext-diff", "--no-textconv", "--no-renames",
+def markdown_lines(text: str) -> list[str]:
+    """Use text-stream newlines, as check_doc_budget and CommonMark do."""
+    return list(io.StringIO(text, newline=None))
+
+
+def changed_lines(root: Path, boundary: str, head: str, path: str, text: str) -> set[int]:
+    patch = git(root, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames",
                 "--unified=0", boundary, head, "--", path)
     lines: set[int] = set()
-    for line in patch.splitlines():
+    # Git hunk coordinates count LF records. Preserve raw CR and exotic
+    # separators until those coordinates are translated to Markdown's lines.
+    for line in patch.split("\n"):
         match = _HUNK.match(line)
         if match:
             start = int(match[1])
             count = int(match[2]) if match[2] is not None else 1
             lines.update(range(start, start + count))
-    return lines
+    logical: set[int] = set()
+    cursor = 1
+    for physical, record in enumerate(io.StringIO(text), 1):
+        count = len(markdown_lines(record))
+        if physical in lines:
+            logical.update(range(cursor, cursor + count))
+        cursor += count
+    return logical
 
 
 def local_target(source: str, target: str) -> str | None:
@@ -161,7 +178,7 @@ def check(root: Path, base: str, head: str, allowed: set[str]) -> dict:
                         f"closing reference {ref}: explicitly declare --allow-close {ref} only if intended")
 
     budgets = get(config, "doc_budgets", None)
-    if not isinstance(budgets, list):
+    if not isinstance(budgets, list) or not budgets:
         raise CheckError("doc_budgets is absent or malformed in the base config")
     for entry in budgets:
         if not isinstance(entry, dict) or not isinstance(entry.get("budget"), int) or isinstance(entry.get("budget"), bool) or entry["budget"] < 0:
@@ -169,7 +186,7 @@ def check(root: Path, base: str, head: str, allowed: set[str]) -> dict:
         path = path_value(entry.get("path"))
         if path in paths:
             text = blob(root, head, path)
-            if len(text.splitlines()) > entry["budget"]:
+            if len(markdown_lines(text)) > entry["budget"]:
                 finding("budgets", path, 1, "candidate exceeds its configured line budget")
 
     parser = MarkdownIt("commonmark")
@@ -178,9 +195,10 @@ def check(root: Path, base: str, head: str, allowed: set[str]) -> dict:
         # still must exist; deletion remains in the full review's diff.
         if not git(root, "ls-tree", "-z", head, "--", path):
             continue
-        text = blob(root, head, path)
-        lines = text.splitlines(keepends=True)
-        added = changed_lines(root, boundary, head, path)
+        raw = blob(root, head, path)
+        lines = markdown_lines(raw)
+        text = "".join(lines)
+        added = changed_lines(root, boundary, head, path, raw)
         closings(text, path, added)
         # Parse the entire document so reference definitions and code fences keep
         # their CommonMark meaning; select changed blocks only after parsing.
