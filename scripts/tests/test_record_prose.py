@@ -128,6 +128,72 @@ def test_commit_message_closure_requires_exact_intent(repo):
     assert code == 0, report
 
 
+@pytest.mark.parametrize("reference", [LOCAL_REF, FOREIGN_REF, "https://github.com/other/repo/issues/7"])
+@pytest.mark.parametrize("template", [
+    "## Filed, not fixed\n\n- `{reference}` stays open.\n",
+    "Closing\n\n1. Tracked work: `{reference}`\n",
+    "RESOLVED <!-- intervening markup -->\n\n> {reference}\n",
+    "fixes arbitrary intervening prose and punctuation;\n\n{reference}\n",
+])
+@pytest.mark.parametrize("surface", ["narrative", "commit-message"])
+def test_closing_pair_crosses_text_and_markup_with_exact_intent(repo, reference, template, surface):
+    root, _ = repo
+    text = template.format(reference=reference)
+    save(root, "docs/plan.md", text if surface == "narrative" else "New record.\n")
+    head = commit(root, text if surface == "commit-message" else "narrative update")
+    code, report = run(repo, head)
+    assert code == 1, report
+    assert report["findings"]
+    assert all(item["check"] == "closing-keywords" for item in report["findings"])
+    expected_source = "docs/plan.md" if surface == "narrative" else f"commit:{head}"
+    assert all(item["source"] == expected_source for item in report["findings"])
+    assert all(f"closing reference {reference}:" in item["detail"] for item in report["findings"])
+    if reference != LOCAL_REF:
+        code, report = run(repo, head, "--allow-close", LOCAL_REF)
+        assert code == 1, report
+        assert all(f"closing reference {reference}:" in item["detail"] for item in report["findings"])
+    code, report = run(repo, head, "--allow-close", reference)
+    assert code == 0, report
+    assert report["findings"] == []
+
+
+def test_closing_keywords_pair_with_next_reference_without_reusing_later_references(repo):
+    root, _ = repo
+    save(root, "docs/plan.md", f"fixes\nresolves\n\n- `{LOCAL_REF}`\n\n{FOREIGN_REF} stays open.\n")
+    head = commit(root)
+    code, report = run(repo, head)
+    assert code == 1, report
+    assert [item["line"] for item in report["findings"]] == [1, 2]
+    assert all(f"closing reference {LOCAL_REF}:" in item["detail"] for item in report["findings"])
+    code, report = run(repo, head, "--allow-close", LOCAL_REF)
+    assert code == 0, report
+
+
+def test_deleting_first_reference_rechecks_new_next_reference(repo):
+    root, _ = repo
+    save(root, "docs/plan.md", f"fixes\n{LOCAL_REF}\n\n{FOREIGN_REF}\n")
+    base = commit(root)
+    save(root, "docs/plan.md", f"fixes\n\n{FOREIGN_REF}\n")
+    code, report = run((root, base), commit(root), "--allow-close", LOCAL_REF)
+    assert code == 1, report
+    assert report["findings"][0]["line"] == 1
+    assert f"closing reference {FOREIGN_REF}:" in report["findings"][0]["detail"]
+
+
+@pytest.mark.parametrize("text", [
+    f"prefixed fixation resolvedness {LOCAL_REF}\n",
+    f"fixes/repo{LOCAL_REF}\n",
+    "https://github.com/other/fixes/issues/7\n",
+    f"{LOCAL_REF}\n\nfixes a later task without a reference.\n",
+])
+def test_keyword_substrings_and_reference_identity_do_not_create_closing_pairs(repo, text):
+    root, _ = repo
+    save(root, "docs/plan.md", text)
+    code, report = run(repo, commit(root))
+    assert code == 0, report
+    assert report["findings"] == []
+
+
 @pytest.mark.parametrize("text", [
     "[Outside](../../outside.md)\n",
     "[Machine file](/private/tmp/file.md)\n",

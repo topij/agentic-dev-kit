@@ -198,6 +198,10 @@ or candidate commit messages; and the commit identity and calendar date of
 recognized verification stamps.
 Declare an intended closing reference explicitly with `--allow-close`; quotes,
 code spans and negation do not make an unintended closing reference safe.
+The guard conservatively pairs each raw closing keyword with the next issue
+reference, across intervening text and markup, including heading/list boundaries.
+Review each pairing rather than treating a separator as protection from forge
+automation; exact intent declarations apply to the reference that was paired.
 An exit status alone is not the result: read `status`, `findings`, `unavailable`,
 `stamps` and `limits`. `not-applicable` means the comparison is outside its
 declared path scope, and supplies no preflight coverage. An unavailable read
@@ -209,7 +213,7 @@ The link check covers destinations the CommonMark parser recognizes; an
 unresolved reference is literal text to that parser. It does not fetch external
 URLs or verify fragment identifiers or raw HTML destinations. It compares parsed
 blocks at the surviving Git coordinates so deletions that activate links or
-stamps remain in scope, and checks raw closing matches spanning deletion
+stamps remain in scope, and checks raw keyword/reference pairings spanning deletion
 boundaries to catch newly joined references. Untouched blocks are outside its
 scan except that a changed reference definition rechecks the document's links.
 A stamp

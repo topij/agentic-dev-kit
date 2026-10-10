@@ -39,6 +39,7 @@ LIMITS = [
     "External URLs, fragment identifiers, and raw HTML destinations are not verified.",
     "A stamp's commit and date can be checked; its command's execution and claimed result cannot.",
     "A historical stamp need not name the candidate head; the reviewer must judge its stated scope.",
+    "Closing keywords pair conservatively with the next issue reference across intervening text and markup; declare each intended reference exactly.",
     "Every changed narrative file and commit message remains in full independent-review scope.",
 ]
 _HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
@@ -46,12 +47,15 @@ _STAMP = re.compile(
     r"`(?P<command>[^`\n]+)`\s+at\s+`(?P<sha>[^`\n]+)`"
     r"(?:,?\s+in\s+`[^`]+`,?)?\s+on\s+(?P<date>\d{4}-\d{2}-\d{2})"
 )
-# Scan added raw text and newly formed matches. Quotes, code and negation cannot
-# prevent forge automation on commit/PR text or satisfy the author's intent rule.
-_CLOSING = re.compile(
-    r"\b(?:close[sd]?|closing|fix(?:es|ed|ing)?|resolve[sd]?|resolving)"
-    r"[\s:*`]*?(?P<ref>(?:[\w.-]+/[\w.-]+)?#\d+|"
-    r"https://github\.com/[\w.-]+/[\w.-]+/issues/\d+)\b", re.IGNORECASE
+# The archived heading/list incident paired a negated keyword with a reference
+# across markup. Tokenize raw text and pair each keyword with the next reference,
+# rather than guessing which separators the forge permits. References are whole
+# tokens so a repository name containing a keyword cannot become that keyword.
+_CLOSING_TOKEN = re.compile(
+    r"(?P<ref>https://github\.com/[\w.-]+/[\w.-]+/issues/\d+|"
+    r"(?:[\w.-]+/[\w.-]+)?#\d+)\b|"
+    r"\b(?P<keyword>close[sd]?|closing|fix(?:es|ed|ing)?|resolve[sd]?|resolving)\b",
+    re.IGNORECASE,
 )
 
 
@@ -216,16 +220,22 @@ def check(root: Path, base: str, head: str, allowed: set[str]) -> dict:
 
     def closings(text: str, source: str, added: set[int] | None = None,
                  deleted: set[int] | None = None) -> None:
-        for match in _CLOSING.finditer(text):
-            ref = match["ref"]
-            line = text.count("\n", 0, match.start()) + 1
-            end = text.count("\n", 0, match.end()) + 1
-            if (added is not None and not added.intersection(range(line, end + 1))
-                    and not any(match.start() < cut < match.end() for cut in deleted or ())):
+        pending = []
+        for token in _CLOSING_TOKEN.finditer(text):
+            if token["keyword"]:
+                pending.append(token)
                 continue
-            if ref not in allowed:
-                finding("closing-keywords", source, line,
-                        f"closing reference {ref}: explicitly declare --allow-close {ref} only if intended")
+            ref = token["ref"]
+            for keyword in pending:
+                line = text.count("\n", 0, keyword.start()) + 1
+                end = text.count("\n", 0, token.end()) + 1
+                if (added is not None and not added.intersection(range(line, end + 1))
+                        and not any(keyword.start() < cut < token.end() for cut in deleted or ())):
+                    continue
+                if ref not in allowed:
+                    finding("closing-keywords", source, line,
+                            f"closing reference {ref}: explicitly declare --allow-close {ref} only if intended")
+            pending.clear()
 
     budgets = get(config, "doc_budgets", None)
     if not isinstance(budgets, list) or not budgets:
