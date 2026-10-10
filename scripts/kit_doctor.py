@@ -276,6 +276,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # engines (move with paths.engines)
     ("scripts/pr_watch.py", "engine"),
     ("scripts/check_doc_budget.py", "engine"),
+    ("scripts/check_record_prose.py", "engine"),
     ("scripts/archive_plan_sessions.py", "engine"),
     ("scripts/dev_session.sh", "engine"),
     ("scripts/launch_lane.py", "engine"),
@@ -364,6 +365,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/test_kitconfig.py", "test"),
     ("scripts/tests/test_mutation_gate.py", "test"),
     ("scripts/tests/test_panel_prompt.py", "test"),
+    ("scripts/tests/test_record_prose.py", "test"),
     ("scripts/tests/test_portability.py", "test"),
     ("scripts/tests/test_pr_followup_hook.py", "test"),
     ("scripts/tests/test_pre_push_hook.py", "test"),

@@ -182,6 +182,48 @@ unmet, which the pull request must say; that class's record-prose deltas take th
 dual form. Running fewer lenses because a change looks smaller is still not on the
 list.
 
+## Narrative preflight
+
+Before an opening review of a change confined to `paths.handoff`,
+`paths.handoff_history`, `paths.friction_log` and `paths.friction_log_archive`,
+run `<engine-dir>/check_record_prose.py` with `uv run`, the repository root,
+the base sha and the candidate head sha, and retain its JSON report. The engine
+reads the path declarations and budgets committed at the base, then checks Git
+objects at the candidate. It writes no state and performs no network read.
+
+Its checks cover the configured line budgets, local CommonMark destinations in
+changed blocks, closing references in added text and candidate commit messages,
+and the commit identity and calendar date of recognized verification stamps.
+Declare an intended closing reference explicitly with `--allow-close`; quotes,
+code spans and negation do not make an unintended closing reference safe.
+An exit status alone is not the result: read `status`, `findings`, `unavailable`,
+`stamps` and `limits`. `not-applicable` means the comparison is outside its
+declared path scope, and supplies no preflight coverage. An unavailable read
+supplies no passing check. Resolve a failed check before recording review
+coverage; for an unavailable check, establish it independently and retain the
+command and result, or hold the review receipt.
+
+The link check covers destinations the CommonMark parser recognizes; an
+unresolved reference is literal text to that parser. It does not fetch external
+URLs or verify fragment identifiers or raw HTML destinations. Untouched blocks
+are outside its scan except that a changed reference definition rechecks the
+document's links. A stamp
+can name a valid commit without its command having run or its result being true.
+Historical run records may legitimately name a different revision from the
+candidate; the reviewer checks the claim's scope and the independent evidence.
+The preflight does not decide whether a file or a sentence is record prose.
+
+The isolated correctness lens still reviews the full diff and commit messages.
+It checks **executed spans** at full severity: `▶ Next:` starters and their
+continuations, instructions and preconditions wherever they occur in the
+narrative, and every commit message. It also checks the proposed squash message
+before merge; a message changed after review requires its own review. Nothing
+outside a recognized marker is presumed inert. If the lens cannot establish a
+sentence's consumers or effects, it treats that sentence as executed prose.
+The launch prompt quotes this section rather than accepting an author's claim
+that the change is harmless. This is scope guidance, not reduced coverage or
+permission to calibrate severity down.
+
 ## What compute a lens gets
 
 `review.fallback_panel.lens_compute.<runtime>` sets it, with two independent and
@@ -465,7 +507,14 @@ author re-reading their own diff. **Cite them by name, never by number.**
     gets filed by default. *Regression* means the change is worse at something than
     what it replaced; *imprecision* means it is right but overstated, miscounted, or
     loosely worded. When you cannot tell, say regression — the reviewer is the
-    only party here with no stake in the cheaper answer.
+    only party here with no stake in the cheaper answer. A factually false claim,
+    including a self-referential figure that cannot have a correct value, is a
+    regression for this contract even when it narrates earlier work. It cannot
+    take the logged-imprecision route. If evidence contradicts a claim labelled
+    imprecision, the cockpit returns that evidence to the reviewer for a corrected
+    label; it does not relabel the finding itself or record coverage while the
+    contradiction remains. A false record claim is deleted or shortened, with
+    the resulting delta reviewed under the existing severity and scope rules.
 13. **Report what you reviewed, first** — required, and not as a closing note.
     Give the repo path; the `HEAD` you were **actually placed at**, which is the
     only one of these that observes your environment, since the sha you were
@@ -825,8 +874,10 @@ workflow, a hosting integration, a generated artifact, an operator acting on
 what they read) — **when in doubt, the text is executed prose**, the same
 default the two classes above already use. The author still *applies* the
 discriminator, so each logged disposition is stated in the PR, where a reviewer
-can dispute the classification. Full-panel lens prompts are untouched by all
-of this — the next paragraph stands. The one exception is the delta lens
+can dispute the classification. Full-pass prompts carry no author-drawn prose
+class; the quoted *Narrative preflight* tells a lens which executed spans it
+must check without asserting that the rest is inert. The next paragraph stands.
+The exception for author-drawn framing is the delta lens
 below, handed the author's stated draws precisely in order to dispute them:
 an anchoring accepted deliberately, like the delta boundary itself.
 

@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "932af7267818a1351827e18a688da3a743065ad0b34bf262a5149f8cfe9da763"
+      "sha256": "b6b95e0f66b1e8714f15f88e76ca6dff97efc40c94bfd3c587db0084f1c5e8f2"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -118,6 +118,10 @@
       "role": "engine",
       "sha256": "c5a96aef2415def00e15f3e1524307d35af424517445a929f8b05925f6ea5776"
     },
+    "scripts/check_record_prose.py": {
+      "role": "engine",
+      "sha256": "e9f55fb7c9b2d8cfec4ac7e1bd6b9d4c427f1603c8b86861f505e2dd4ec4825b"
+    },
     "scripts/conftest.py": {
       "role": "engine",
       "sha256": "fe8379057f759aa9aa2bd1fbf941eba00603d6d35c07e867528ac30c66633112"
@@ -155,7 +159,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "6e0219e0324b569afe7f0a7c7ed95b4a980daa6a75d3ce2ea216f3db5605a1be"
+      "sha256": "0d333f83b74058a06302a87cd78f091b19250736c4b0310912f4a2f270e13166"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -241,6 +245,7 @@
         "scripts/archive_plan_sessions.py",
         "scripts/check_doc_budget.py",
         "scripts/check_memory_budget.py",
+        "scripts/check_record_prose.py",
         "scripts/hooks/pr_followup_hook.py",
         "scripts/hooks/pre-push",
         "scripts/kit_doctor.py",
@@ -512,7 +517,7 @@
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
-      "sha256": "690b92ff034febecf0b2710de0b72d6d9d0fe79ae68d302be4a2159342cf1bdd"
+      "sha256": "c58e8505acc802b20779ef16439e528c1ae80049b0dd4e0d9a845f22a59b2456"
     },
     "scripts/pr_watch.py": {
       "role": "engine",
@@ -612,7 +617,7 @@
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
-      "sha256": "a00cbe0e620104674e3eaa16ed781ad080da09e8d3b053499f6ff1f52da82c5d"
+      "sha256": "4ab61e6e27a3902458f52158bb3f94abad27c95853f52a4441abeb2a23cb50ee"
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
@@ -633,6 +638,10 @@
     "scripts/tests/test_reconcile_sessions.py": {
       "role": "test",
       "sha256": "a12ddfbb4636376a07b3c047242a499226f47bc58a3668f1eb5a76fe1259b260"
+    },
+    "scripts/tests/test_record_prose.py": {
+      "role": "test",
+      "sha256": "403fc62164f30579cf5722f6790f9f523c4ad91ef809741543481f8aa0452614"
     },
     "scripts/tests/test_repo_layout.py": {
       "role": "test",
