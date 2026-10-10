@@ -216,8 +216,11 @@ blocks at the surviving Git coordinates so deletions that activate links or
 stamps remain in scope, and checks raw keyword/reference pairings spanning deletion
 boundaries to catch newly joined references. Untouched blocks are outside its
 scan except that a changed reference definition rechecks the document's links.
-A stamp
-can name a valid commit without its command having run or its result being true.
+Stamp fields use parsed CommonMark inline code spans, including wrapped contents
+and alternate backtick delimiters; fenced, indented and enclosing inline code
+examples are outside the run-claim scan. The reported line identifies the containing
+prose block. A stamp can name a valid commit without its command having run or its
+result being true.
 Historical run records may legitimately name a different revision from the
 candidate; the reviewer checks the claim's scope and the independent evidence.
 The preflight does not decide whether a file or a sentence is record prose.

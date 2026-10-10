@@ -43,10 +43,6 @@ LIMITS = [
     "Every changed narrative file and commit message remains in full independent-review scope.",
 ]
 _HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
-_STAMP = re.compile(
-    r"`(?P<command>[^`\n]+)`\s+at\s+`(?P<sha>[^`\n]+)`"
-    r"(?:,?\s+in\s+`[^`]+`,?)?\s+on\s+(?P<date>\d{4}-\d{2}-\d{2})"
-)
 # The archived heading/list incident paired a negated keyword with a reference
 # across markup. Tokenize raw text and pair each keyword with the next reference,
 # rather than guessing which separators the forge permits. References are whole
@@ -191,6 +187,40 @@ def changed_blocks(before: list, after: list, unchanged: dict[int, int]) -> set[
     return affected
 
 
+def verification_stamps(children: list):
+    """Recognize stamp fields from CommonMark code spans, not raw delimiters."""
+    parts = []
+    for child in children:
+        kind = child.type
+        content = child.content
+        if kind in ("softbreak", "hardbreak"):
+            kind, content = "text", "\n"
+        if kind == "text" and parts and parts[-1][0] == "text":
+            parts[-1] = (kind, parts[-1][1] + content)
+        else:
+            parts.append((kind, content))
+
+    for index, (kind, command) in enumerate(parts):
+        if kind != "code_inline" or not command or index + 3 >= len(parts):
+            continue
+        connector, revision, date_text = parts[index + 1:index + 4]
+        if (connector[0] != "text" or not re.fullmatch(r"\s+at\s+", connector[1])
+                or revision[0] != "code_inline" or date_text[0] != "text"):
+            continue
+        if re.fullmatch(r",?\s+in\s+", date_text[1]):
+            if index + 5 >= len(parts) or parts[index + 4][0] != "code_inline":
+                continue
+            date_text = parts[index + 5]
+            if date_text[0] != "text":
+                continue
+            date_prefix = r",?\s+on\s+"
+        else:
+            date_prefix = r"\s+on\s+"
+        match = re.match(date_prefix + r"(?P<date>\d{4}-\d{2}-\d{2})", date_text[1])
+        if match:
+            yield {"command": command, "sha": revision[1], "date": match["date"]}
+
+
 def local_target(source: str, target: str) -> str | None:
     url = urlsplit(target)
     if url.scheme or url.netloc or not url.path:
@@ -301,9 +331,11 @@ def check(root: Path, base: str, head: str, allowed: set[str]) -> dict:
             # blocks participate; inline backticks carry the declared stamp form.
             if token.type != "inline" or not touched:
                 continue
-            block = "".join(lines[start:end])
-            for match in _STAMP.finditer(block):
-                line = start + block.count("\n", 0, match.start()) + 1
+            # Code-span contents already have CommonMark's newline and padding
+            # normalization. Their containing block supplies the source line,
+            # as it does for parsed links; nested code examples stay literal.
+            for match in verification_stamps(token.children or []):
+                line = start + 1
                 if not re.fullmatch(r"[0-9a-fA-F]{7,40}", match["sha"]):
                     finding("stamps", path, line, "verification stamp names a moving or invalid revision")
                     continue

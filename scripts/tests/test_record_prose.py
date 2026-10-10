@@ -216,6 +216,59 @@ def test_multiline_stamp_with_directory_is_observed(repo):
     assert report["stamps"][0]["revision"] == base
 
 
+@pytest.mark.parametrize("delimiter", ["`", "``", "```"])
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+def test_wrapped_commonmark_command_rejects_moving_revision(repo, delimiter, newline):
+    root, _ = repo
+    save(root, "docs/plan.md", f"Observed {delimiter}make{newline}test{delimiter} at "
+         f"{delimiter}HEAD{delimiter} on 2026-10-10 printed a result.{newline}")
+    code, report = run(repo, commit(root))
+    assert code == 1, report
+    assert report["findings"][0]["check"] == "stamps"
+    assert report["stamps"] == []
+
+
+@pytest.mark.parametrize("delimiter", ["`", "``", "```"])
+def test_wrapped_commonmark_stamp_preserves_historical_identity(repo, delimiter):
+    root, base = repo
+    save(root, "docs/plan.md", f"Observed {delimiter} make\ntest {delimiter}\nat "
+         f"{delimiter} {base} {delimiter},\nin {delimiter}/project\npath{delimiter},\n"
+         "on\n2026-10-10 printed a result.\n")
+    code, report = run(repo, commit(root))
+    assert code == 0, report
+    assert report["stamps"] == [{"source": "docs/plan.md", "line": 1,
+                                 "command": "make test", "revision": base,
+                                 "date": "2026-10-10", "names_head": False}]
+
+
+@pytest.mark.parametrize("revision,date,expected", [
+    ("HE\nAD", "2026-10-10", 1),
+    ("abcdef0", "2026-02-30", 1),
+    ("abcdef0", "2026-10-10", 2),
+])
+def test_wrapped_command_does_not_bypass_revision_or_calendar_checks(repo, revision, date, expected):
+    root, _ = repo
+    save(root, "docs/plan.md", f"``make\ntest`` at ``{revision}`` on {date} printed a result.\n")
+    code, report = run(repo, commit(root))
+    assert code == expected, report
+    assert report["stamps"] == []
+    assert (report["findings"] or report["unavailable"])[0]["check"] == "stamps"
+
+
+@pytest.mark.parametrize("example", [
+    "`` `make\ntest` at `HEAD` on 2026-10-10 printed a result. ``\n",
+    "    `make\n    test` at `HEAD` on 2026-10-10 printed a result.\n",
+    "```markdown\n`make\ntest` at `HEAD` on 2026-10-10 printed a result.\n```\n",
+    "\\`make test\\` at \\`HEAD\\` on 2026-10-10 printed a result.\n",
+])
+def test_stamp_code_examples_are_not_run_claims(repo, example):
+    root, _ = repo
+    save(root, "docs/plan.md", example)
+    code, report = run(repo, commit(root))
+    assert code == 0, report
+    assert report["stamps"] == []
+
+
 @pytest.mark.parametrize("extra", [("--root", ""), ("--base", "HEAD"), ("--allow-close", "")])
 def test_invalid_cli_inputs_are_explicitly_unavailable(repo, extra):
     root, _ = repo

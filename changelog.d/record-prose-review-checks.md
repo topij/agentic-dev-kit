@@ -8,6 +8,9 @@ checks. Keep executed spans and commit messages in the full isolated review.
 Review the conservative keyword-to-next-reference pairings across text and
 markup, including headings and lists; declare each intended reference exactly
 with `--allow-close` instead of relying on intervening formatting.
+Use CommonMark inline code spans for verification stamps; wrapped command contents
+and alternate backtick delimiters receive the same revision and date checks.
+Stamp locations identify their containing prose block.
 
 A proved-false record claim takes deletion or shortening and review of the
 delta. Return a contradictory imprecision label to the reviewer rather than
