@@ -4040,6 +4040,11 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         workflow, re.MULTILINE,
     )
     assert metadata_timing == [("Before", "computing proposal digests")]
+    metadata_modes = re.findall(
+        r"^in (.+) drafting; the author supplies the metadata, and the$",
+        workflow, re.MULTILINE,
+    )
+    assert metadata_modes == ["engine-backed and LLM-only"]
     assert "Never add it after approval or rewrite retained proposals on resume." in flattened
     for phase in (
         "reserved",
@@ -13758,6 +13763,10 @@ def test_triage_semantic_and_adapter_mutations_are_rejected(tmp_path: Path) -> N
     ).read_text(encoding="utf-8")
     mutations = (
         workflow.replace(
+            "in engine-backed and LLM-only drafting; the author supplies the metadata",
+            "only in LLM-only drafting; the author supplies the metadata", 1,
+        ),
+        workflow.replace(
             "Before computing proposal digests, classify each proposed ticket",
             "After the tracker write succeeds, classify each proposed ticket", 1,
         ),
@@ -14256,6 +14265,16 @@ def test_triage_config_and_adapter_migration_reaches_adopters() -> None:
 
 def _assert_post_merge_semantics(workflow: str) -> None:
     flattened = " ".join(workflow.split())
+    # Parse the metadata instruction independently of the contract snapshot.
+    # This validates declared ordering and resume behavior, not tracker execution.
+    metadata_order = re.findall(
+        r"^\[`ticket-execution-environment\.md`\]"
+        r"\(\.\./ticket-execution-environment\.md\) (before|after)\n"
+        r"([^;\n]+); retained approved proposals are (not rewritten|rewritten)"
+        r" on resume\.$",
+        workflow, re.MULTILINE,
+    )
+    assert metadata_order == [("before", "computing payload digests", "not rewritten")]
     assert (
         "normative and take precedence over all later prose and runtime adapters"
         in flattened
@@ -14729,6 +14748,18 @@ def test_post_merge_systemize_semantic_mutations_are_rejected() -> None:
         / "post-merge-systemize.md"
     ).read_text(encoding="utf-8")
     mutations = (
+        workflow.replace(
+            "ticket-execution-environment.md) before\ncomputing payload digests;",
+            "ticket-execution-environment.md) after\nthe tracker write succeeds;", 1,
+        ),
+        workflow.replace(
+            "ticket-execution-environment.md) before\ncomputing payload digests;",
+            "ticket-execution-environment.md) after\ncomputing payload digests;", 1,
+        ),
+        workflow.replace(
+            "retained approved proposals are not rewritten on resume.",
+            "retained approved proposals are rewritten on resume.", 1,
+        ),
         workflow.replace(
             "`below-threshold` | Below threshold; all remaining clusters | any | "
             "`friction-log`",
