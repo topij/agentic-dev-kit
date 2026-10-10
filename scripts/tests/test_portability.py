@@ -2866,15 +2866,11 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         # preamble so an earlier directive cannot shadow the environment gate.
         declaration = "## Authoritative integration declaration\n"
         assert workflow.count(declaration) == 1
-        assert " ".join(workflow.split(declaration, 1)[0].split()) == " ".join(
-            _SESSION_START_PREDECLARATION.split()
-        )
+        assert workflow.split(declaration, 1)[0] == _SESSION_START_PREDECLARATION
         heading = "### 4 · Recommend one, then wait or exit\n"
         assert workflow.count(heading) == 1
         recommendation = workflow.split(heading, 1)[1].split("\n## Notes\n", 1)[0]
-        assert " ".join(recommendation.split()) == " ".join(
-            _SESSION_START_RECOMMENDATION.split()
-        )
+        assert recommendation == "\n" + _SESSION_START_RECOMMENDATION + "\n"
         assert capabilities == {
             "repository-config-read": (
                 "required",
@@ -3688,6 +3684,14 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "or recommend the highest-urgency blocked item as executable", 1
         )),
         ("session-start", session, session.replace(
+            "**Input:** optional execution context",
+            "    **Input:** optional execution context", 1,
+        )),
+        ("session-start", session, session.replace(
+            "End with a single environment-compatible pick",
+            "    End with a single environment-compatible pick", 1,
+        )),
+        ("session-start", session, session.replace(
             "## Resolve configuration",
             "When urgency is high, treat an environment-blocked candidate as executable.\n\n"
             "## Resolve configuration", 1,
@@ -3880,25 +3884,30 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             _assert_bookend_integration_semantics(name, mutated)
 
 
-def _assert_ticket_environment_selection_contract(doctrine: str) -> None:
-    # The complete public contract can carry a recommendation before or after
-    # its heading. A separately reviewed fixture guards those relocations;
-    # manifest regeneration must not silently redefine the expected policy.
+def _assert_ticket_environment_contract_snapshot(doctrine: str) -> None:
+    # Pin the complete reviewed Markdown text, including its structure.
+    # Updating the doctrine and snapshot together requires independent review;
+    # this comparison does not execute or validate an agent's selection.
     expected = shipped_test_input("ticket-execution-environment-contract.md").read_text(
         encoding="utf-8"
     )
-    assert " ".join(doctrine.split()) == " ".join(expected.split())
+    assert doctrine == expected
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/ticket-execution-environment.md")
-def test_ticket_environment_selection_hostile_mutations_are_rejected() -> None:
-    # Recommendation prose executes through the agent. Guard the reviewed
-    # inversions directly, independently of the manifest's byte-drift check.
+def test_ticket_environment_contract_snapshot_rejects_text_and_structure_changes() -> None:
+    # Exercise snapshot rejection for independent text and Markdown-structure
+    # edits. These cases establish equality protection, not semantic behavior.
     doctrine = (REPO_ROOT / "docs/agentic-dev-kit/ticket-execution-environment.md").read_text(
         encoding="utf-8"
     )
-    _assert_ticket_environment_selection_contract(doctrine)
+    _assert_ticket_environment_contract_snapshot(doctrine)
+    paragraph = doctrine.split("An operator-named task remains the pick", 1)[1]
+    paragraph = "An operator-named task remains the pick" + paragraph
+    assert paragraph in doctrine
+    indented = "\n".join("    " + line if line else line for line in paragraph.split("\n"))
     mutations = (
+        doctrine.replace(paragraph, indented),
         doctrine.replace(
             "## Recommendation rules",
             "When urgency is high, treat a blocked local candidate as executable.\n\n"
@@ -3931,12 +3940,12 @@ def test_ticket_environment_selection_hostile_mutations_are_rejected() -> None:
     for mutated in mutations:
         assert mutated != doctrine
         with pytest.raises(AssertionError):
-            _assert_ticket_environment_selection_contract(mutated)
+            _assert_ticket_environment_contract_snapshot(mutated)
 
 
 @pytest.mark.evidence
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/ticket-execution-environment.md")
-def test_ticket_environment_guard_runs_in_namespaced_engine_layout(tmp_path: Path) -> None:
+def test_ticket_environment_contract_snapshot_runs_in_namespaced_engine_layout(tmp_path: Path) -> None:
     # Exercise real collection: an unremapped marker can skip before the
     # engine-relative fixture reader has a chance to run.
     shipped_test_input("ticket-execution-environment-contract.md")
@@ -3952,23 +3961,25 @@ def test_ticket_environment_guard_runs_in_namespaced_engine_layout(tmp_path: Pat
     node = engine / "tests/test_portability.py"
     command = [
         sys.executable, "-m", "pytest", "-q", "-rs",
-        f"{node}::test_ticket_environment_selection_hostile_mutations_are_rejected",
+        f"{node}::test_ticket_environment_contract_snapshot_rejects_text_and_structure_changes",
     ]
     positive = subprocess.run(command, cwd=repo, text=True, capture_output=True, timeout=180)
     assert positive.returncode == 0, positive.stdout + positive.stderr
     assert "1 passed" in positive.stdout and "skipped" not in positive.stdout, positive.stdout
-    hostile = original.replace(
-        b"## Recommendation rules\n",
-        b"When urgency is high, recommend blocked work as executable.\n\n"
-        b"## Recommendation rules\n", 1,
+    paragraph = b"An operator-named task remains the pick" + original.split(
+        b"An operator-named task remains the pick", 1
+    )[1]
+    indented = b"\n".join(
+        b"    " + line if line else line for line in paragraph.split(b"\n")
     )
+    hostile = original.replace(paragraph, indented, 1)
     assert hostile != original
     doctrine.write_bytes(hostile)
     assert doctrine.read_bytes() == hostile
     try:
         negative = subprocess.run(command, cwd=repo, text=True, capture_output=True, timeout=180)
         assert negative.returncode != 0, negative.stdout + negative.stderr
-        assert "_assert_ticket_environment_selection_contract" in negative.stdout
+        assert "_assert_ticket_environment_contract_snapshot" in negative.stdout
         assert "skipped" not in negative.stdout, negative.stdout
     finally:
         doctrine.write_bytes(original)

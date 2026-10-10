@@ -11,3 +11,7 @@ unknown until their requirements are read; no backlog rewrite is automatic.
 When refreshing the portability tests, copy the contract fixture
 `scripts/tests/fixtures/ticket-execution-environment-contract.md` with
 `scripts/tests/test_portability.py` and its matching `scripts/tests/conftest.py`.
+
+These portability checks pin the reviewed Markdown snapshot, including whitespace
+structure. They do not execute an agent selecting work. Review any contract change
+before updating its snapshot; refreshing both together bypasses the equality check.
