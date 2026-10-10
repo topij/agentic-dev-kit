@@ -3,8 +3,14 @@
 Start-of-session briefing — the bookend to `wrap-up`. Reads the living handoff, the
 friction-log inbox, your tracker, and live repo/CI state; checks anything urgent
 against the narrative archives before promoting it; then proposes **what to do
-next**: candidates grouped by **urgency** and tagged `[size · model · mode]`, ending
-with one recommendation.
+next**: candidates grouped by **urgency** and tagged `[size · model · mode · environment]`, ending
+with a compatible recommendation or an explanation that no executable pick is
+available.
+
+**Input:** optional execution context, such as `cloud` or `local`. Apply
+[`ticket-execution-environment.md`](../ticket-execution-environment.md) before
+recommending or composing work; it defines ticket metadata, prerequisite checks,
+unknown handling, and the environment-blocked list.
 
 ## Resolve configuration
 
@@ -53,6 +59,7 @@ complete.
 | `config-drift-read` | optional when configured | Run only when the project defines an apply/verify mechanism. Failure renders `config drift: unavailable (<reason>)`; absence of such a project mechanism omits the capability entirely. |
 | `archive-remediation-read` | conditional | Required before promoting a candidate to `Now`. If the scoped archive lookup cannot run, keep that candidate out of `Now`, name the remediation gap, and continue with a degraded briefing. |
 | `resolved-tracker-remediation-read` | conditional | Required when a candidate implicates a tracker item whose live state may hide a false resolution. If the item and its claimed resolution cannot be read, do not promote that candidate to `Now`; name the gap. |
+| `execution-environment-read` | conditional | Establish session context and candidate requirements under `ticket-execution-environment.md`. Required before an executable recommendation. Unknown context or unavailable candidate inputs degrades the briefing and prevents recommending that work as executable; it does not hide blocked urgent items. |
 | `runtime-compute-selection` | optional enhancement | Apply `models.runtime_mappings` only when the current runtime mechanically exposes the requested control. Otherwise retain the neutral tier as instructed guidance and do not claim a switch. |
 
 ### Authority contract
@@ -62,6 +69,7 @@ complete.
 | `source-failure` | `report-unavailable-never-empty-or-clean` |
 | `incomplete-pagination` | `report-unavailable-or-page-to-completion` |
 | `remediation-unavailable` | `no-now-promotion-for-that-candidate` |
+| `environment-incompatible-or-unknown` | `visible-blocker-no-executable-recommendation` |
 | `session-start-write` | `prohibited-read-only-workflow` |
 | `non-interactive-invocation` | `render-once-and-exit-without-wait-or-write` |
 | `runtime-policy-override` | `shared-declaration-wins-and-stop` |
@@ -77,7 +85,7 @@ source that failed on the retry.
 | Outcome | Condition | Required result |
 |---|---|---|
 | `hard-stop` | A required capability is unavailable or shared/runtime policy conflicts. | Name the failed capability and remediation; do not render the normal briefing or recommendation. |
-| `degraded-success` | Required capabilities are ready and an optional source is unavailable, or a conditional remediation read prevents a `Now` promotion. | Render the briefing once, label every gap at its normal display location, and make no write. |
+| `degraded-success` | Required capabilities are ready and an optional source is unavailable, or a conditional remediation read prevents a `Now` promotion, or execution-environment evidence prevents an executable recommendation. | Render the briefing once, label every gap at its normal display location, and make no write. |
 | `successful-completion` | Required capabilities and every applicable optional or triggered conditional source are ready; every explicitly inapplicable source is named. | Render the complete briefing and one recommendation. In an interactive invocation, wait for the operator; in a non-interactive invocation, exit. A separately authorized outer request may begin work only after this read-only workflow completes. |
 
 ## What it reads
@@ -167,7 +175,8 @@ like good news, it looks like a missing handoff.
 - Read `<friction-log>` (the inbox — entries above the most-recent `## … — Backlog migrated to <tracker>` marker; everything below it is already ticketed)
 - **Tracker** (optional — if the script/key fails, note the gap and continue): a
   field-limited list-issues call against `tracker.project_name`
-  (id/identifier/title/url/state/priority/updated). Discard issues whose state type is
+  (id/identifier/title/url/state/priority/updated/labels or equivalent environment metadata).
+  Discard issues whose state type is
   `completed`/`canceled`, and print a compact table sorted urgent(1) → low(4) with
   no-priority(0) last. A missing/invalid config or missing tracker credential should
   exit non-zero with a clear message — treat any non-zero exit as the optional-tracker
@@ -243,8 +252,8 @@ like good news, it looks like a missing handoff.
 ### 1 · Classify each candidate
 
 Turn the raw signals into a deduped candidate list. Each candidate gets an **urgency
-bucket**, a **size**, a **model tier**, an **execution mode**, and a **source
-pointer**.
+bucket**, a **size**, a **model tier**, an **execution mode**, an **execution environment**,
+and a **source pointer**.
 
 **Urgency** (the grouping axis):
 
@@ -310,6 +319,14 @@ Rule of thumb: `self-contained + clear spec ⇒ delegate to default` (cheap-tier
 only for purely mechanical sweeps); `really tough / high-judgment, or
 interactive/exploratory ⇒ inline on expensive`. When in doubt, default `inline`
 (no regression vs today).
+
+**Execution environment** `cloud / local / unknown` — orthogonal to execution mode.
+Follow [`ticket-execution-environment.md`](../ticket-execution-environment.md).
+Read candidate details before recommending, check required inputs in this session,
+and put incompatible, unknown, or unavailable work in the environment-blocked list
+with its urgency and enabling condition. An absent legacy field starts unknown;
+assess the complete requirements read-only before choosing a target, without
+editing the ticket.
 
 **Source pointer** — every item shows where it came from so you can drill in:
 `handoff:<workstream>`, `friction-log <date>`, a tracker ticket id, `PR #NNN`, or the
@@ -412,6 +429,7 @@ something already classified 🟡 is later raised to 🔴, it gets the check the
 🧭 Session Start — <Day YYYY-MM-DD>
 
 Where things stand
+  • Environment: <cloud | local | unknown> · <evidence or invocation context>
   • <branch> (<clean | N uncommitted/untracked>) · <N open PRs | PRs unavailable: reason> · CI/cron: <all green | N failed/skipped | unavailable: reason>
   • Workstreams: <the entry names under ## Workstreams, one line>
   • Last session: <one-line theme from the newest session entry — context, not an assignment>
@@ -419,16 +437,19 @@ Where things stand
 What to do next
 
 🔴 Now
-  • <what>   [<S/M/L> · <cheap/default/expensive> · <inline/delegate>]   <pointer>
+  • <what>   [<S/M/L> · <cheap/default/expensive> · <inline/delegate> · <cloud/local/unknown>]   <pointer>
   • N config change(s) INERT pending a host apply step — <name1>, <name2>, …   <pointer: your drift check>
 🟡 Soon
-  • <what>   [<S/M/L> · <model> · <mode>]   <pointer>
+  • <what>   [<S/M/L> · <model> · <mode> · <cloud/local/unknown>]   <pointer>
 🟢 Whenever
-  • <what>   [<S/M/L> · <model> · <mode>]   <pointer>
+  • <what>   [<S/M/L> · <model> · <mode> · <cloud/local/unknown>]   <pointer>
+
+Environment-blocked
+  • <what> · <urgency> · <local/unknown or missing prerequisite> — <enabling condition>   <pointer>
 ```
 
 - Omit a bucket entirely if it's empty (don't print "🔴 Now: nothing"), but if **all**
-  of Now+Soon are empty, say so plainly — e.g. `✅ All clear — nothing urgent or due
+  of Now+Soon are empty and the blocked list has no urgent or due item, say so plainly — e.g. `✅ All clear — nothing urgent or due
   this week; see 🟢 Whenever for backlog.`
 - Order items within a bucket by leverage (blocking > high-value > cheap-win).
 - The config-drift line only appears when your drift check reports something
@@ -442,21 +463,26 @@ What to do next
 
 ### 4 · Recommend one, then wait or exit
 
-End with a single pick and a one-line why. In an interactive invocation, then **stop**
+End with a single environment-compatible pick and a one-line why, or report why
+no executable pick is available under the execution-environment contract. In an
+interactive invocation, then **stop**
 and let the operator choose; do not auto-start the work. In a non-interactive
-invocation, omit the question and exit after rendering the recommendation. When the
+invocation, omit the question and exit after rendering the briefing, including
+the recommendation or no-pick explanation. When the
 outer request already and separately authorizes follow-on work, complete this read-only
 workflow first, then continue under that authority.
 
 ```text
-👉 My pick: <item>   [<S/M/L> · <model> · <inline/delegate>] — <one-line rationale: why this, now>
+👉 My pick: <item>   [<S/M/L> · <model> · <inline/delegate> · <cloud/local>] — <one-line rationale: why this, now>
    <delegate ⇒ "I'll hand it to an isolated task and review the result here." | inline ⇒ "We'll run it in this session so you can steer it.">
    Want me to start it, or pick another?   # interactive only
 ```
 
 **When the operator names a workstream or a task** in the invocation or its
 context, that is the pick. Render the briefing as usual and recommend the named
-work; a 🔴 item stays in the briefing beside it rather than overriding the choice.
+work; if incompatible, name its blocker and enabling condition instead of an
+executable recommendation; a 🔴 item stays in the briefing
+beside it rather than overriding the choice.
 The named work need not be any workstream's `▶ Next:`, and choosing it changes no
 other workstream's entry.
 

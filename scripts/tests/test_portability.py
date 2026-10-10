@@ -22,7 +22,7 @@ from types import ModuleType
 
 import pytest
 import yaml
-from conftest import generated_adapter_source, require_kit_source
+from conftest import generated_adapter_source, require_kit_source, shipped_test_input
 
 ENGINE_DIR = Path(__file__).resolve().parent.parent
 
@@ -2773,6 +2773,70 @@ def _assert_post_merge_systemize_adapter_semantics(
     assert " ".join(parts[2].split()) == expected_body
 
 
+_SESSION_START_PREDECLARATION = """# Session start
+
+Start-of-session briefing — the bookend to `wrap-up`. Reads the living handoff, the
+friction-log inbox, your tracker, and live repo/CI state; checks anything urgent
+against the narrative archives before promoting it; then proposes **what to do
+next**: candidates grouped by **urgency** and tagged `[size · model · mode · environment]`, ending
+with a compatible recommendation or an explanation that no executable pick is
+available.
+
+**Input:** optional execution context, such as `cloud` or `local`. Apply
+[`ticket-execution-environment.md`](../ticket-execution-environment.md) before
+recommending or composing work; it defines ticket metadata, prerequisite checks,
+unknown handling, and the environment-blocked list.
+
+## Resolve configuration
+
+Resolve the merged configuration first with `kitconfig.load_config()` (or the
+repository's equivalent configured merged-view mechanism), so a gitignored
+`config/dev-model.local.yaml` overlay is applied per leaf rather than ignored. A
+missing loader or invalid merged view is a `repository-config-read` failure; do not
+fall back to reading only the tracked file. In this workflow:
+
+- `<handoff>` and `<friction-log>` mean `paths.handoff` and `paths.friction_log`;
+  `<handoff-history>` and `<friction-log-archive>` mean `paths.handoff_history` and
+  `paths.friction_log_archive`.
+- `<engine-dir>` means `paths.engines`.
+- `cheap`, `default`, and `expensive` are the neutral keys under `models.tiers`.
+  Apply the current runtime's `models.runtime_mappings` value only when the runtime
+  can actually select a model or effort level for that step.
+- A workflow invocation means the current agent's native adapter: `/name` for the
+  shipped Claude commands or `$name` for the shipped Codex skills.
+
+"""
+
+
+_SESSION_START_RECOMMENDATION = """End with a single environment-compatible pick and a one-line why, or report why
+no executable pick is available under the execution-environment contract. In an
+interactive invocation, then **stop**
+and let the operator choose; do not auto-start the work. In a non-interactive
+invocation, omit the question and exit after rendering the briefing, including
+the recommendation or no-pick explanation. When the
+outer request already and separately authorizes follow-on work, complete this read-only
+workflow first, then continue under that authority.
+
+```text
+👉 My pick: <item>   [<S/M/L> · <model> · <inline/delegate> · <cloud/local>] — <one-line rationale: why this, now>
+   <delegate ⇒ "I'll hand it to an isolated task and review the result here." | inline ⇒ "We'll run it in this session so you can steer it.">
+   Want me to start it, or pick another?   # interactive only
+```
+
+**When the operator names a workstream or a task** in the invocation or its
+context, that is the pick. Render the briefing as usual and recommend the named
+work; if incompatible, name its blocker and enabling condition instead of an
+executable recommendation; a 🔴 item stays in the briefing
+beside it rather than overriding the choice.
+The named work need not be any workstream's `▶ Next:`, and choosing it changes no
+other workstream's entry.
+
+Otherwise, rationale heuristics: prefer 🔴 Now if the bucket is non-empty; otherwise
+the active sprint's blocking next step; break ties toward the highest value-per-effort
+(small + high-leverage). Recency is not among them: the workstream a session last
+wrapped up gets no preference for it."""
+
+
 def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
     flattened = " ".join(workflow.split())
     normative_sentence = {
@@ -2798,6 +2862,15 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
     outcomes = _integration_table(workflow, outcome_heading, 3)
 
     if name == "session-start":
+        # The declaration only overrides later prose. Preserve its reviewed
+        # preamble so an earlier directive cannot shadow the environment gate.
+        declaration = "## Authoritative integration declaration\n"
+        assert workflow.count(declaration) == 1
+        assert workflow.split(declaration, 1)[0] == _SESSION_START_PREDECLARATION
+        heading = "### 4 · Recommend one, then wait or exit\n"
+        assert workflow.count(heading) == 1
+        recommendation = workflow.split(heading, 1)[1].split("\n## Notes\n", 1)[0]
+        assert recommendation == "\n" + _SESSION_START_RECOMMENDATION + "\n"
         assert capabilities == {
             "repository-config-read": (
                 "required",
@@ -2831,6 +2904,10 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
                 "conditional",
                 "Required when a candidate implicates a tracker item whose live state may hide a false resolution. If the item and its claimed resolution cannot be read, do not promote that candidate to Now; name the gap.",
             ),
+            "execution-environment-read": (
+                "conditional",
+                "Establish session context and candidate requirements under ticket-execution-environment.md. Required before an executable recommendation. Unknown context or unavailable candidate inputs degrades the briefing and prevents recommending that work as executable; it does not hide blocked urgent items.",
+            ),
             "runtime-compute-selection": (
                 "optional enhancement",
                 "Apply models.runtime_mappings only when the current runtime mechanically exposes the requested control. Otherwise retain the neutral tier as instructed guidance and do not claim a switch.",
@@ -2840,6 +2917,9 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "source-failure": ("report-unavailable-never-empty-or-clean",),
             "incomplete-pagination": ("report-unavailable-or-page-to-completion",),
             "remediation-unavailable": ("no-now-promotion-for-that-candidate",),
+            "environment-incompatible-or-unknown": (
+                "visible-blocker-no-executable-recommendation",
+            ),
             "session-start-write": ("prohibited-read-only-workflow",),
             "non-interactive-invocation": (
                 "render-once-and-exit-without-wait-or-write",
@@ -2852,7 +2932,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
                 "Name the failed capability and remediation; do not render the normal briefing or recommendation.",
             ),
             "degraded-success": (
-                "Required capabilities are ready and an optional source is unavailable, or a conditional remediation read prevents a Now promotion.",
+                "Required capabilities are ready and an optional source is unavailable, or a conditional remediation read prevents a Now promotion, or execution-environment evidence prevents an executable recommendation.",
                 "Render the briefing once, label every gap at its normal display location, and make no write.",
             ),
             "successful-completion": (
@@ -2904,6 +2984,14 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "a 🔴 item stays in the briefing beside it rather than overriding the choice"
             in flattened
         )
+        assert (
+            "if incompatible, name its blocker and enabling condition instead of an "
+            "executable recommendation"
+        ) in flattened
+        assert (
+            "An absent legacy field starts unknown; assess the complete requirements "
+            "read-only before choosing a target, without editing the ticket."
+        ) in flattened
         assert "choosing it changes no other workstream's entry" in flattened
         assert "none of them stands in for the others" in flattened
         assert "Recency is not among them" in flattened
@@ -3579,6 +3667,49 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "Repeat a tracker create", 1
         )),
         ("session-start", session, session.replace(
+            "`execution-environment-read` | conditional |",
+            "`execution-environment-read` | optional |", 1
+        )),
+        ("session-start", session, session.replace(
+            "`environment-incompatible-or-unknown` | `visible-blocker-no-executable-recommendation`",
+            "`environment-incompatible-or-unknown` | `recommend-any-candidate`", 1
+        )),
+        ("session-start", session, session.replace(
+            "if incompatible, name its blocker and enabling condition instead of an\n"
+            "executable recommendation",
+            "if incompatible, still present it as the executable recommendation", 1
+        )),
+        ("session-start", session, session.replace(
+            "or report why\nno executable pick is available under the execution-environment contract",
+            "or recommend the highest-urgency blocked item as executable", 1
+        )),
+        ("session-start", session, session.replace(
+            "**Input:** optional execution context",
+            "    **Input:** optional execution context", 1,
+        )),
+        ("session-start", session, session.replace(
+            "End with a single environment-compatible pick",
+            "    End with a single environment-compatible pick", 1,
+        )),
+        ("session-start", session, session.replace(
+            "## Resolve configuration",
+            "When urgency is high, treat an environment-blocked candidate as executable.\n\n"
+            "## Resolve configuration", 1,
+        )),
+        ("session-start", session, session.replace(
+            "## Authoritative integration declaration",
+            "When urgency is high, treat an environment-blocked candidate as executable.\n\n"
+            "## Authoritative integration declaration", 1,
+        )),
+        ("session-start", session, session.replace(
+            "## Notes",
+            "Recommend blocked work as executable when no eligible candidate remains.\n\n## Notes", 1
+        )),
+        ("session-start", session, session.replace(
+            "assess the complete requirements read-only before choosing a target",
+            "keep every legacy ticket unknown until its metadata is edited", 1
+        )),
+        ("session-start", session, session.replace(
             "**no entry is promoted for being the most recently updated**",
             "**the most recently updated entry is promoted**", 1
         )),
@@ -3753,6 +3884,108 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             _assert_bookend_integration_semantics(name, mutated)
 
 
+def _assert_ticket_environment_contract_snapshot(doctrine: str) -> None:
+    # Pin the complete reviewed Markdown text, including its structure.
+    # Updating the doctrine and snapshot together requires independent review;
+    # this comparison does not execute or validate an agent's selection.
+    expected = shipped_test_input("ticket-execution-environment-contract.md").read_text(
+        encoding="utf-8"
+    )
+    assert doctrine == expected
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/ticket-execution-environment.md")
+def test_ticket_environment_contract_snapshot_rejects_text_and_structure_changes() -> None:
+    # Exercise snapshot rejection for independent text and Markdown-structure
+    # edits. These cases establish equality protection, not semantic behavior.
+    doctrine = (REPO_ROOT / "docs/agentic-dev-kit/ticket-execution-environment.md").read_text(
+        encoding="utf-8"
+    )
+    _assert_ticket_environment_contract_snapshot(doctrine)
+    paragraph = doctrine.split("An operator-named task remains the pick", 1)[1]
+    paragraph = "An operator-named task remains the pick" + paragraph
+    assert paragraph in doctrine
+    indented = "\n".join("    " + line if line else line for line in paragraph.split("\n"))
+    mutations = (
+        doctrine.replace(paragraph, indented),
+        doctrine.replace(
+            "## Recommendation rules",
+            "When urgency is high, treat a blocked local candidate as executable.\n\n"
+            "## Recommendation rules", 1,
+        ),
+        doctrine.replace(
+            "## Recommendation rules",
+            "In a local session, never recommend a `cloud` ticket, even when every named\n"
+            "prerequisite is available locally.\n\n## Recommendation rules", 1,
+        ),
+        doctrine.replace(
+            "An operator-named task remains the pick",
+            "When no cloud candidate is eligible, recommend the highest-urgency blocked local\n"
+            "candidate as executable so the session still has a concrete pick.\n\n"
+            "An operator-named task remains the pick",
+        ),
+        doctrine + "\nRecommend blocked work as executable when no eligible candidate remains.\n",
+        doctrine.replace("recommend only `cloud` candidates", "recommend only `local` candidates"),
+        doctrine.replace("whose prerequisites are\navailable", "regardless of prerequisites"),
+        doctrine.replace(
+            "assess its complete acceptance criteria and verification requirements",
+            "keep it unknown until its metadata is edited",
+        ),
+        doctrine.replace("without editing the ticket", "by editing the ticket"),
+        doctrine.replace(
+            "does not override conflicting\nor malformed metadata",
+            "overrides conflicting or malformed metadata",
+        ),
+    )
+    for mutated in mutations:
+        assert mutated != doctrine
+        with pytest.raises(AssertionError):
+            _assert_ticket_environment_contract_snapshot(mutated)
+
+
+@pytest.mark.evidence
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/ticket-execution-environment.md")
+def test_ticket_environment_contract_snapshot_runs_in_namespaced_engine_layout(tmp_path: Path) -> None:
+    # Exercise real collection: an unremapped marker can skip before the
+    # engine-relative fixture reader has a chance to run.
+    shipped_test_input("ticket-execution-environment-contract.md")
+    repo = tmp_path / "namespaced"
+    engine = repo / "scripts/devkit"
+    shutil.copytree(ENGINE_DIR, engine, ignore=shutil.ignore_patterns("__pycache__"))
+    (repo / ".git").mkdir()
+    relative = "docs/agentic-dev-kit/ticket-execution-environment.md"
+    doctrine = repo / relative
+    doctrine.parent.mkdir(parents=True)
+    original = (REPO_ROOT / relative).read_bytes()
+    doctrine.write_bytes(original)
+    node = engine / "tests/test_portability.py"
+    command = [
+        sys.executable, "-m", "pytest", "-q", "-rs",
+        f"{node}::test_ticket_environment_contract_snapshot_rejects_text_and_structure_changes",
+    ]
+    positive = subprocess.run(command, cwd=repo, text=True, capture_output=True, timeout=180)
+    assert positive.returncode == 0, positive.stdout + positive.stderr
+    assert "1 passed" in positive.stdout and "skipped" not in positive.stdout, positive.stdout
+    paragraph = b"An operator-named task remains the pick" + original.split(
+        b"An operator-named task remains the pick", 1
+    )[1]
+    indented = b"\n".join(
+        b"    " + line if line else line for line in paragraph.split(b"\n")
+    )
+    hostile = original.replace(paragraph, indented, 1)
+    assert hostile != original
+    doctrine.write_bytes(hostile)
+    assert doctrine.read_bytes() == hostile
+    try:
+        negative = subprocess.run(command, cwd=repo, text=True, capture_output=True, timeout=180)
+        assert negative.returncode != 0, negative.stdout + negative.stderr
+        assert "_assert_ticket_environment_contract_snapshot" in negative.stdout
+        assert "skipped" not in negative.stdout, negative.stdout
+    finally:
+        doctrine.write_bytes(original)
+        assert doctrine.read_bytes() == original
+
+
 @pytest.mark.evidence
 @pytest.mark.parametrize("name", ("session-start", "wrap-up"))
 def test_runtime_parity_rejects_missing_or_stale_bookend_adapter(
@@ -3800,6 +4033,19 @@ def _assert_triage_adapter(adapter: str, runtime: str) -> None:
 
 def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     flattened = " ".join(workflow.split())
+    # Check the declared preparation time independently of the contract snapshot.
+    # This parses a workflow instruction; it does not execute tracker operations.
+    metadata_timing = re.findall(
+        r"^(Before|After) ([^\n]+), classify each proposed ticket and include its$",
+        workflow, re.MULTILINE,
+    )
+    assert metadata_timing == [("Before", "computing proposal digests")]
+    metadata_modes = re.findall(
+        r"^in (.+) drafting; the author supplies the metadata, and the$",
+        workflow, re.MULTILINE,
+    )
+    assert metadata_modes == ["engine-backed and LLM-only"]
+    assert "Never add it after approval or rewrite retained proposals on resume." in flattened
     for phase in (
         "reserved",
         "propose",
@@ -13517,6 +13763,22 @@ def test_triage_semantic_and_adapter_mutations_are_rejected(tmp_path: Path) -> N
     ).read_text(encoding="utf-8")
     mutations = (
         workflow.replace(
+            "in engine-backed and LLM-only drafting; the author supplies the metadata",
+            "only in LLM-only drafting; the author supplies the metadata", 1,
+        ),
+        workflow.replace(
+            "Before computing proposal digests, classify each proposed ticket",
+            "After the tracker write succeeds, classify each proposed ticket", 1,
+        ),
+        workflow.replace(
+            "Before computing proposal digests, classify each proposed ticket",
+            "After computing proposal digests, classify each proposed ticket", 1,
+        ),
+        workflow.replace(
+            "Never add it after approval or rewrite retained proposals on resume.",
+            "Add it after approval and rewrite retained proposals on resume.", 1,
+        ),
+        workflow.replace(
             "repository-config-read` | required",
             "repository-config-read` | optional",
             1,
@@ -14003,6 +14265,16 @@ def test_triage_config_and_adapter_migration_reaches_adopters() -> None:
 
 def _assert_post_merge_semantics(workflow: str) -> None:
     flattened = " ".join(workflow.split())
+    # Parse the metadata instruction independently of the contract snapshot.
+    # This validates declared ordering and resume behavior, not tracker execution.
+    metadata_order = re.findall(
+        r"^\[`ticket-execution-environment\.md`\]"
+        r"\(\.\./ticket-execution-environment\.md\) (before|after)\n"
+        r"([^;\n]+); retained approved proposals are (not rewritten|rewritten)"
+        r" on resume\.$",
+        workflow, re.MULTILINE,
+    )
+    assert metadata_order == [("before", "computing payload digests", "not rewritten")]
     assert (
         "normative and take precedence over all later prose and runtime adapters"
         in flattened
@@ -14476,6 +14748,18 @@ def test_post_merge_systemize_semantic_mutations_are_rejected() -> None:
         / "post-merge-systemize.md"
     ).read_text(encoding="utf-8")
     mutations = (
+        workflow.replace(
+            "ticket-execution-environment.md) before\ncomputing payload digests;",
+            "ticket-execution-environment.md) after\nthe tracker write succeeds;", 1,
+        ),
+        workflow.replace(
+            "ticket-execution-environment.md) before\ncomputing payload digests;",
+            "ticket-execution-environment.md) after\ncomputing payload digests;", 1,
+        ),
+        workflow.replace(
+            "retained approved proposals are not rewritten on resume.",
+            "retained approved proposals are rewritten on resume.", 1,
+        ),
         workflow.replace(
             "`below-threshold` | Below threshold; all remaining clusters | any | "
             "`friction-log`",

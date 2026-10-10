@@ -1080,6 +1080,13 @@ value as report Markdown. Historical
 annotations are evidence for the operator to consider, not executable accounting
 instructions. Present the archive and park choices alongside the filing choice.
 
+Before computing proposal digests, classify each proposed ticket and include its
+execution-environment section and configured label according to
+[`ticket-execution-environment.md`](../ticket-execution-environment.md). Apply this
+in engine-backed and LLM-only drafting; the author supplies the metadata, and the
+engine's exact-payload binding preserves it without independently verifying the
+classification. Never add it after approval or rewrite retained proposals on resume.
+
 Build the idempotency marker without a recursive digest. First canonicalize
 `{title, body_without_marker, project, labels}` and hash it as `payload_core_digest`.
 The non-rendering marker binds session id, candidate id, and that core digest. Append the
