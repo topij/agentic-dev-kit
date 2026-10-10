@@ -20,6 +20,27 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-10 (ticket execution environments, in Codex)
+
+- **Ticket execution environments:** [#1038](https://github.com/topij/agentic-dev-kit/pull/1038)
+  merged as `4271cbd7e6b8177554105205ee8f467e8b33e6ed` on the operator's request.
+  The shared ticket contract and workflow bindings carry execution requirements
+  into ticket drafting, session briefings and parallel planning.
+- **Decision:** the operator chose to file the remaining MEDIUM non-regression
+  coverage gaps and merge. [#1040](https://github.com/topij/agentic-dev-kit/issues/1040)
+  carries the approved follow-up and its `unknown` execution classification.
+  The [review disposition](https://github.com/topij/agentic-dev-kit/pull/1038#issuecomment-6100291789)
+  preserves the independent panel and the deferral.
+- **Verification:** `make test` at `30ad19f9df9af5e3d5df81ebb5039a21768118ca`
+  on 2026-10-10, in
+  `/private/tmp/claude-502/-Users-topi-Coding-agentic-dev-kit/codex-ticket-environment-4k5vbe5u/verify-30ad19f`,
+  passed. The portability checks inspect declarations and reviewed Markdown;
+  they do not execute an agent choosing work or creating tickets.
+- **Not established:** live cloud selection and the intended cloud setup's
+  verification capabilities. The operator confirmed the workstream name below.
+
+______________________________________________________________________
+
 ## Session — 2026-10-09 (scratch alternate paths, in Codex)
 
 - **Scratch retention:** [#1034](https://github.com/topij/agentic-dev-kit/pull/1034)
@@ -261,43 +282,6 @@ once #981 was fixed with nothing outstanding.
 
 ______________________________________________________________________
 
-## Session — 2026-10-06 (one-run triage recovery paths removed, in Claude Code)
-
-[#978](https://github.com/topij/agentic-dev-kit/pull/978) removed #969's `correct-project`
-route and #952's historical flat-gate recovery. It merged as
-`7c0f6de429f0a7e1a627d0b20e8eb952a46ac395`. The removal took their CLI flags, tests,
-`KIT_OWNED` entries and workflow sections with it. `recovery.py` matches its pre-#952
-revision except for the `isinstance(operator, str)` hardening in `_approval`. Installation
-[in-parallel-oy/cs-toolkit#2558](https://github.com/in-parallel-oy/cs-toolkit/pull/2558)
-merged as `31dde6c28f4a15f6c9063ae3e500fb5fa26d2e75`. #975 is closed.
-
-Decided: `model.py` keeps a shape check that lets a completed LIVE state carrying a
-`proposal_correction` receipt parse. cs-toolkit's completed state carries one, and only a
-session-starting entry retires a completed state. That entry also freezes the inbox and
-starts a new run, so retiring the state early would have pre-empted cs-toolkit's scheduled
-Friday draft. The check lets that draft retire the state under either engine.
-`test_a_completed_state_with_a_project_correction_receipt_still_retires` pins it.
-The check's removal is #979.
-
-Also checked, on 2026-10-06: no adopter state root on this machine held a live historical flat gate.
-cs-toolkit's recovery bundles are left as history.
-
-Not established: the retirement itself. Read-only validation of cs-toolkit's real state passed
-under both the kit and the installed code on 2026-10-06 (the commands are in #978's and
-#2558's bodies). Neither ran the retirement.
-
-cs-toolkit's main checkout was not pulled and still sat on its pre-install commit at
-wrap-up. Its scheduled jobs run from that checkout, so the removal is live there only once
-it is updated.
-
-Review: #978 had one adversarial lens. Its LOW on the shim's unpinned conditions went to
-#979; its LOW on this handoff's stale #975 wording is answered by #975's closure above.
-#2558 merged on CodeRabbit's comment-verdict of its head. The two-lens panel did not run
-there, because the reviewer was available and the copied code was byte-identical to
-#978's reviewed code.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -396,3 +380,13 @@ confirm no state root holds a `proposal_correction`, then remove the shim (#979)
 **Owner:** [#1030](https://github.com/topij/agentic-dev-kit/issues/1030).
 
 ▶ Next: #1030 — cover every workstream a session worked on in the "Update only that workstream's entry" bullet, pin the half-pinned clauses, give creating and detecting entries one run-mode carve-out, and define what happens to a kept entry that cannot be named and to references after a rename.
+
+### Ticket execution environments
+
+**Status:** the shared contract and workflow bindings shipped in #1038
+(`4271cbd7e6b8177554105205ee8f467e8b33e6ed`). The operator deferred the
+instruction-check coverage gaps to #1040; live cloud selection was not exercised.
+**Owner:** [#1040](https://github.com/topij/agentic-dev-kit/issues/1040).
+
+▶ Next: session-start cloud — assess #1040's inputs and verification prerequisites,
+then work on its instruction-check coverage gaps only if eligible.
