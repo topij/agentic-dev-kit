@@ -70,6 +70,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -89,6 +90,7 @@ from kitconfig import get, load_config, repo_root  # noqa: E402
 REPO_ROOT = repo_root(Path(__file__).resolve())
 DOCTRINE = "docs/agentic-dev-kit/fallback-review-panel.md"
 CONTRACT_HEADING = "## The contract every lens gets"
+NARRATIVE_HEADING = "## Narrative preflight"
 
 # A contract item opens as `N. **Name.**` at the top level of the list. Sub-bullets
 # and continuation lines are indented, so anchoring to column 0 is what keeps the
@@ -518,6 +520,7 @@ def render(
     # names or is None; `build` refuses anything in between.
     delta_draws: dict[str, str] | None = None,
     repair_boundary: str | None = None,
+    narrative_preflight: str = "",
 ) -> str:
     # An unconfigured runtime legitimately means "inherit the cockpit's compute"
     # (the doctrine says so), but a TYPO looks identical. Saying which runtime was
@@ -709,6 +712,7 @@ git show {head}:<path>
 
 Diffstat at assembly time: {diffstat}
 {verify}
+{narrative_preflight}
 Name the command that established any claim you make.
 {carry}{draws}
 ## The contract every lens gets
@@ -836,6 +840,21 @@ def build(args: argparse.Namespace) -> str:
 
     section, names = contract(root / DOCTRINE)
 
+    doctrine = (root / DOCTRINE).read_text(encoding="utf-8")
+    heading = re.search(rf"^{re.escape(NARRATIVE_HEADING)}\s*$", doctrine, re.MULTILINE)
+    if heading is None:
+        raise PromptError("the doctrine is missing its Narrative preflight section")
+    following = _NEXT_H2.search(doctrine, heading.end())
+    narrative = doctrine[heading.start():following.start() if following else len(doctrine)].rstrip()
+    engines = get(config, "paths.engines", "scripts")
+    if not isinstance(engines, str) or not engines.strip():
+        raise PromptError("paths.engines is not a usable engine directory")
+    command = shlex.join([
+        "uv", "run", str(root / engines / "check_record_prose.py"),
+        "--root", str(root), "--base", base, "--head", head, "--json",
+    ])
+    narrative += f"\n\nPreflight invocation for this comparison:\n\n```sh\n{command}\n```\n"
+
     slug = _repo_slug(_git(root, "config", "--get", "remote.origin.url"))
 
     return render(
@@ -858,6 +877,7 @@ def build(args: argparse.Namespace) -> str:
         verify_command=o_verify,
         base_from_remote=base_from_remote,
         branch_from_checkout=o_branch is None,
+        narrative_preflight=narrative,
     )
 
 

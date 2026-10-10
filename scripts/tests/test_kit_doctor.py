@@ -2268,6 +2268,7 @@ def test_dependency_graph_of_the_real_kit_names_kitconfigs_importers():
         "scripts/archive_plan_sessions.py",
         "scripts/check_doc_budget.py",
         "scripts/check_memory_budget.py",
+        "scripts/check_record_prose.py",
         "scripts/hooks/pr_followup_hook.py",
         "scripts/hooks/pre-push",
         "scripts/kit_doctor.py",

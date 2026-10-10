@@ -210,6 +210,45 @@ def test_the_contract_is_read_from_the_doctrine_not_embedded_in_the_script(tmp_p
     assert "Fresh context" not in names
 
 
+def test_narrative_preflight_is_quoted_and_names_the_comparison(repo):
+    """A full pass gets consumer scope without an author's harmlessness draw."""
+    import shlex
+
+    base, head = _revs(repo)
+    doctrine = (repo / DOCTRINE).read_text()
+    start = doctrine.index("## Narrative preflight\n")
+    end = doctrine.index("\n## What compute a lens gets", start)
+    section = doctrine[start:end].rstrip()
+    section += "\n\nPRECHECK-SCOPE-MARKER: read the changed instructions."
+    (repo / DOCTRINE).write_text(doctrine[:start] + section + "\n" + doctrine[end:])
+    out = _run(repo, "--lens", "correctness", "--head", head, "--base", base)
+    assert out.returncode == 0, out.stderr
+    assert section in out.stdout
+    assert "The author's stated draws" not in out.stdout
+    commands = [line for line in out.stdout.splitlines() if line.startswith("uv run ")]
+    invocation = next(shlex.split(line) for line in commands if "check_record_prose.py" in line)
+    assert invocation == ["uv", "run", str(repo / "scripts/check_record_prose.py"),
+                          "--root", str(repo), "--base", base, "--head", head, "--json"]
+
+
+def test_a_missing_narrative_preflight_is_not_silently_omitted(repo):
+    base, head = _revs(repo)
+    path = repo / DOCTRINE
+    path.write_text(path.read_text().replace("## Narrative preflight", "## Removed preflight"))
+    out = _run(repo, "--lens", "correctness", "--head", head, "--base", base)
+    assert out.returncode == 2
+    assert "missing its Narrative preflight" in out.stderr
+
+
+def test_false_claim_disposal_reaches_the_lens_from_the_contract(repo):
+    base, head = _revs(repo)
+    out = _run(repo, "--lens", "correctness", "--head", head, "--base", base)
+    assert out.returncode == 0, out.stderr
+    assert "A factually false claim" in out.stdout
+    assert "It cannot\n    take the logged-imprecision route" in out.stdout
+    assert "it does not relabel the finding itself" in out.stdout
+
+
 def test_a_doctrine_with_no_contract_items_is_refused(tmp_path):
     pp = _load()
     doctored = tmp_path / "doctrine.md"

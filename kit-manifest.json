@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "932af7267818a1351827e18a688da3a743065ad0b34bf262a5149f8cfe9da763"
+      "sha256": "c2ceb05757d33eea0106201d10716d59b16effa52da6df5d91d44effacc07bfd"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -122,6 +122,10 @@
       "role": "engine",
       "sha256": "c5a96aef2415def00e15f3e1524307d35af424517445a929f8b05925f6ea5776"
     },
+    "scripts/check_record_prose.py": {
+      "role": "engine",
+      "sha256": "176e83d4f8b3610ae40609d21d18fed45ca0142d04ead564a825a07292f119f8"
+    },
     "scripts/conftest.py": {
       "role": "engine",
       "sha256": "fe8379057f759aa9aa2bd1fbf941eba00603d6d35c07e867528ac30c66633112"
@@ -159,7 +163,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "33719e676d69767eb9f99c61f533080a269f0f720b76f504f64cee34c0c99c6e"
+      "sha256": "cc4f7ef124168945df5f16f658eb15aad52974df6005a35613732968adc591b0"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -245,6 +249,7 @@
         "scripts/archive_plan_sessions.py",
         "scripts/check_doc_budget.py",
         "scripts/check_memory_budget.py",
+        "scripts/check_record_prose.py",
         "scripts/hooks/pr_followup_hook.py",
         "scripts/hooks/pre-push",
         "scripts/kit_doctor.py",
@@ -516,7 +521,7 @@
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
-      "sha256": "690b92ff034febecf0b2710de0b72d6d9d0fe79ae68d302be4a2159342cf1bdd"
+      "sha256": "c58e8505acc802b20779ef16439e528c1ae80049b0dd4e0d9a845f22a59b2456"
     },
     "scripts/pr_watch.py": {
       "role": "engine",
@@ -592,7 +597,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "690a76e12ab6e6f729f45284a19e73359775a62cd7279c12222de557f99c4d59"
+      "sha256": "6f456d454dcb89f68edf47df09eacb68f31bde0885f6e46b7f6659436b3eea7c"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -620,7 +625,7 @@
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
-      "sha256": "a00cbe0e620104674e3eaa16ed781ad080da09e8d3b053499f6ff1f52da82c5d"
+      "sha256": "4ab61e6e27a3902458f52158bb3f94abad27c95853f52a4441abeb2a23cb50ee"
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
@@ -641,6 +646,10 @@
     "scripts/tests/test_reconcile_sessions.py": {
       "role": "test",
       "sha256": "a12ddfbb4636376a07b3c047242a499226f47bc58a3668f1eb5a76fe1259b260"
+    },
+    "scripts/tests/test_record_prose.py": {
+      "role": "test",
+      "sha256": "a767a2f30ad5b3251878d28d4fec5e305857dc454753555faf964f9ff3c93df1"
     },
     "scripts/tests/test_repo_layout.py": {
       "role": "test",
