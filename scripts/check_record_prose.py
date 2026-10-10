@@ -257,13 +257,14 @@ def main(argv: list[str] | None = None) -> int:
     except NotApplicable as exc:
         report = {"status": "not-applicable", "reason": str(exc), "limits": LIMITS}
     except (CheckError, ImportError, KeyError, OSError, UnicodeError, ValueError) as exc:
-        report = {"status": "unavailable", "error": str(exc), "limits": LIMITS}
+        report = {"status": "unavailable", "error": str(exc), "limits": LIMITS,
+                  "unavailable": [{"check": "input", "source": "input", "line": 0,
+                                   "detail": str(exc)}]}
+    report = {"findings": [], "unavailable": [], "stamps": [], **report}
     if args.json:
         print(json.dumps(report, ensure_ascii=False))
     else:
         print(f"Record preflight: {report['status']}")
-        if "error" in report:
-            print(report["error"])
         if "reason" in report:
             print(report["reason"])
         for item in [*report.get("findings", []), *report.get("unavailable", [])]:

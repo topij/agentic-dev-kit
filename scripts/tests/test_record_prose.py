@@ -66,7 +66,10 @@ def run(repo: tuple[Path, str], head: str, *extra: str) -> tuple[int, dict]:
         capture_output=True, text=True, timeout=90,
     )
     assert result.stdout, result.stderr
-    return result.returncode, json.loads(result.stdout)
+    report = json.loads(result.stdout)
+    assert {"status", "findings", "unavailable", "stamps", "limits"} <= report.keys(), report
+    assert all(isinstance(report[field], list) for field in ("findings", "unavailable", "stamps", "limits"))
+    return result.returncode, report
 
 
 def test_committed_snapshot_ignores_dirty_files_and_has_no_write(repo):
@@ -155,6 +158,7 @@ def test_invalid_cli_inputs_are_explicitly_unavailable(repo, extra):
     assert code == 2, report
     assert report["status"] == "unavailable"
     assert report["error"]
+    assert report["unavailable"][0]["detail"] == report["error"]
 
 
 def test_mixed_changes_supply_no_narrative_preflight_claim(repo):
@@ -164,6 +168,7 @@ def test_mixed_changes_supply_no_narrative_preflight_claim(repo):
     code, report = run(repo, commit(root))
     assert code == 0, report
     assert report["status"] == "not-applicable"
+    assert report["findings"] == report["unavailable"] == report["stamps"] == []
 
 
 def test_missing_budgeted_candidate_is_unavailable(repo):
