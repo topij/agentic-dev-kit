@@ -395,6 +395,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/fixtures/shipped-registrations/codex-hooks.json", "test"),
     ("scripts/tests/fixtures/shipped-registrations/claude-settings.json", "test"),
     ("scripts/tests/fixtures/init-config.json", "test"),
+    ("scripts/tests/fixtures/ticket-execution-environment-contract.md", "test"),
     ("scripts/tests/fixtures/entry-point-markers.json", "test"),
     # `state_paths` is a package with its own `tests/`, hashed the same way for
     # the same reason: it sits under `scripts/lib/`, so `_remap` covers it
@@ -448,6 +449,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # test_portability derives its coverage from it. Track the declaration so an
     # adopter cannot refresh the adapters or shared workflows while keeping an
     # older account of which ones are supposed to exist.
+    ("docs/agentic-dev-kit/ticket-execution-environment.md", "doctrine"),
     ("docs/agentic-dev-kit/runtime-parity.md", "doctrine"),
     ("docs/agentic-dev-kit/live-validation-evidence.md", REPO_ONLY_ROLE),
     ("docs/agentic-dev-kit/safety-critical-changes.md", "doctrine"),

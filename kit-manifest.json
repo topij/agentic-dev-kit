@@ -42,6 +42,10 @@
       "role": "doctrine",
       "sha256": "2c150653b0bb48f364fd0780250e71b5ac857ad9a13010f24048d63db7afd461"
     },
+    "docs/agentic-dev-kit/ticket-execution-environment.md": {
+      "role": "doctrine",
+      "sha256": "f82c190510d21fc7ea1c803b15d1047cc5dae7b2d684fb185af54499b0cf2a25"
+    },
     "docs/agentic-dev-kit/workflows/adopt.md": {
       "role": "workflow",
       "sha256": "125cf156316a6e64a671dbb8b5b9005b2df3237e88fa3a60ceec6b8955ed4f25"
@@ -52,11 +56,11 @@
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
-      "sha256": "763f17a962a1f121f0a96d8e1c62f9247fd76d49f866e7ac7eb993f71ee22908"
+      "sha256": "7d2e7263aff187a306ff2dfc22bb63edc3b4e0ca2e79130c4493e8c0984acfcf"
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
-      "sha256": "b5c0b6a9caba495e48a79fde3f48e33a63f3f8ca68780f2b8ca63d5ee7eadad0"
+      "sha256": "1ff52def91d31c2975f4e9790d95fac48c58c409c0e0734d7d13256df970658c"
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
@@ -64,11 +68,11 @@
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
-      "sha256": "54c5574a9a7e728d286aced42c11b2038b471ddc64a857e814ae1a061c0eee2d"
+      "sha256": "31bb8c5d818fe8919886076c338d8eb2158f81ed9af61f37499d14f3259f93f8"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
-      "sha256": "073a126289e9def1f0e10b12712f2b19656bc8ef1dc52d1955dbb1e46d954cc2"
+      "sha256": "4c92473f9a1840234ee175f0d638018ae7ff6627a02a673980134dcb6dab6e8e"
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
@@ -76,11 +80,11 @@
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "41e52226717687c9082680393fa2975e404f27cc40dac18b7594adab3423e0ad"
+      "sha256": "665a21501f88fe3944630de321159a8f1a3822824a980f731baab386dc593e87"
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
-      "sha256": "e3794b399331a16138e72c62ee74d7085bd6a5fe14e10e45e4c40ef91cf41a6b"
+      "sha256": "dcc0c2b972c71c28d12208b4c3f1fa4ccf414f31a5bea31f5e2b0c43f079f5a4"
     },
     "docs/templates/CLAUDE.md.tmpl": {
       "role": "template",
@@ -155,7 +159,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "6e0219e0324b569afe7f0a7c7ed95b4a980daa6a75d3ce2ea216f3db5605a1be"
+      "sha256": "33719e676d69767eb9f99c61f533080a269f0f720b76f504f64cee34c0c99c6e"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -552,7 +556,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "29b4054898923fd3eab7caef3fbba8da170ce48ac2e5dc8b6a9399243bd1f6be"
+      "sha256": "2b1d3a424a5cd89545357d1d5938ca68f80f1b664dba2b92dbce9ba7bb0ed035"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -561,6 +565,10 @@
     "scripts/tests/fixtures/shipped-registrations/codex-hooks.json": {
       "role": "test",
       "sha256": "66979af482546118a359db5ec3ecd5559a4dfc757ad431c198a23c26e5a9b872"
+    },
+    "scripts/tests/fixtures/ticket-execution-environment-contract.md": {
+      "role": "test",
+      "sha256": "f82c190510d21fc7ea1c803b15d1047cc5dae7b2d684fb185af54499b0cf2a25"
     },
     "scripts/tests/test_adoption_fixtures.py": {
       "role": "repo-only",
@@ -616,7 +624,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "1f26449893077eee3a2cf9e70efe6c6ebfbf968b18e41d508534f6c6d42fe5ce"
+      "sha256": "1dccd1e176fc32058c4f22cc7dce3b508ca65f21f95aee2fb48e50b3d4a10738"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

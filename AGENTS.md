@@ -262,6 +262,11 @@ adopter's.
   that changes one of them, or that config file itself, owes the two-lens fallback
   review. Do not restate its doctrine here or in
   either runtime adapter.
+- **Every new tracker ticket states its execution environment** (`cloud`, `local`,
+  or `unknown`), required inputs, and verification prerequisites before its payload
+  is presented. Follow
+  [`ticket-execution-environment.md`](docs/agentic-dev-kit/ticket-execution-environment.md);
+  `session-start` uses it to choose work compatible with its current environment.
 - All configuration lives in `config/dev-model.yaml`; skills and engines read it from
   there. Never hardcode a value that belongs in it.
 - The living plan is `docs/kit-handoff.md` — read at session start, updated at wrap-up.

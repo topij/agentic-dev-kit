@@ -10,6 +10,10 @@ status in the configured handoff, not in `AGENTS.md`.
 - At the start of a development session, use the repository's `session-start` skill
   to read the handoff, friction log, pull requests, CI, and tracker before choosing
   work.
+- When creating a tracker ticket, record its execution environment and required
+  inputs before presenting the payload. Follow
+  `docs/agentic-dev-kit/ticket-execution-environment.md`; `session-start` uses that
+  contract to recommend work compatible with the current session.
 - After opening or updating a pull request, use `pr-watch` and continue until CI is
   green and every review finding is fixed or explicitly answered.
 - Open completed work ready for review by default. Draft is only for a bounded

@@ -302,6 +302,11 @@ failure makes the overall outcome `incomplete-resumable`.
    note: if what makes the finding matter is that it might recur, park it and let
    `triage-friction-log` see the pile.
 
+   Before presenting a proposed ticket, include its execution environment,
+   required inputs, verification prerequisites, and configured environment label
+   under [`ticket-execution-environment.md`](../ticket-execution-environment.md).
+   This metadata belongs in the exact payload the operator approves.
+
    **Filing writes to a system outside this repo, so it needs the operator's
    go-ahead. Do not proceed with the tracker write until the operator confirms the
    exact payload.** Name the findings you intend to file, with their severities and
