@@ -24,6 +24,7 @@ import posixpath
 import re
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
 
@@ -39,6 +40,7 @@ LIMITS = [
     "External URLs, fragment identifiers, and raw HTML destinations are not verified.",
     "A stamp's commit and date can be checked; its command's execution and claimed result cannot.",
     "A historical stamp need not name the candidate head; the reviewer must judge its stated scope.",
+    "Stamp fields use code spans and the connectors at, optional in, and on; raw HTML and unrelated connector wording are outside this scan.",
     "Closing keywords pair conservatively with the next issue reference across intervening text and markup; declare each intended reference exactly.",
     "Every changed narrative file and commit message remains in full independent-review scope.",
 ]
@@ -189,8 +191,29 @@ def changed_blocks(before: list, after: list, unchanged: dict[int, int]) -> set[
 
 def verification_stamps(children: list):
     """Recognize stamp fields from CommonMark code spans, not raw delimiters."""
+    def separator(char):
+        return char.isspace() or unicodedata.category(char).startswith("P")
+
+    def is_connector(text, word):
+        visible = "".join(" " if separator(char) else char for char in text)
+        return visible.casefold().split() == [word]
+
+    def date_after_on(text):
+        match = re.search(r"\bon\b", text, re.IGNORECASE)
+        if not match or not all(separator(char) for char in text[:match.start()]):
+            return None
+        remainder = text[match.end():]
+        position = 0
+        while position < len(remainder) and separator(remainder[position]):
+            position += 1
+        return remainder[position:]
+
     parts = []
     for child in children:
+        # Emphasis and links change presentation rather than visible field text.
+        # Keep code spans distinct so enclosing inline examples cannot be claims.
+        if child.nesting:
+            continue
         kind = child.type
         content = child.content
         if kind in ("softbreak", "hardbreak"):
@@ -204,21 +227,27 @@ def verification_stamps(children: list):
         if kind != "code_inline" or not command or index + 3 >= len(parts):
             continue
         connector, revision, date_text = parts[index + 1:index + 4]
-        if (connector[0] != "text" or not re.fullmatch(r"\s+at\s+", connector[1])
+        if (connector[0] != "text" or not is_connector(connector[1], "at")
                 or revision[0] != "code_inline" or date_text[0] != "text"):
             continue
-        if re.fullmatch(r",?\s+in\s+", date_text[1]):
+        date_index = index + 3
+        if is_connector(date_text[1], "in"):
             if index + 5 >= len(parts) or parts[index + 4][0] != "code_inline":
                 continue
+            date_index = index + 5
             date_text = parts[index + 5]
             if date_text[0] != "text":
                 continue
-            date_prefix = r",?\s+on\s+"
+        date = date_after_on(date_text[1])
+        if date is None:
+            continue
+        if not date and date_index + 1 < len(parts) and parts[date_index + 1][0] == "code_inline":
+            date = parts[date_index + 1][1]
         else:
-            date_prefix = r"\s+on\s+"
-        match = re.match(date_prefix + r"(?P<date>\d{4}-\d{2}-\d{2})", date_text[1])
-        if match:
-            yield {"command": command, "sha": revision[1], "date": match["date"]}
+            match = re.match(r"\d{4}-\d{2}-\d{2}(?![\w-])|\S+", date)
+            date = match[0] if match else ""
+        if date:
+            yield {"command": command, "sha": revision[1], "date": date}
 
 
 def local_target(source: str, target: str) -> str | None:
@@ -340,6 +369,8 @@ def check(root: Path, base: str, head: str, allowed: set[str]) -> dict:
                     finding("stamps", path, line, "verification stamp names a moving or invalid revision")
                     continue
                 try:
+                    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", match["date"]):
+                        raise ValueError("stamp dates use YYYY-MM-DD")
                     datetime.date.fromisoformat(match["date"])
                 except ValueError:
                     finding("stamps", path, line, "verification stamp has an invalid calendar date")

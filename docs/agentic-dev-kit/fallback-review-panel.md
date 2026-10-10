@@ -217,8 +217,12 @@ stamps remain in scope, and checks raw keyword/reference pairings spanning delet
 boundaries to catch newly joined references. Untouched blocks are outside its
 scan except that a changed reference definition rechecks the document's links.
 Stamp fields use parsed CommonMark inline code spans, including wrapped contents
-and alternate backtick delimiters; fenced, indented and enclosing inline code
-examples are outside the run-claim scan. The reported line identifies the containing
+and alternate backtick delimiters. CommonMark emphasis and link wrappers do not
+hide fields; punctuation and case do not hide the `at`, optional `in` and `on`
+connectors. Dates may be plain text or code spans and must use `YYYY-MM-DD` with a
+valid calendar date. Raw HTML and unrelated connector wording are outside this
+scan; fenced, indented and enclosing inline code examples are also outside it.
+The reported line identifies the containing
 prose block. A stamp can name a valid commit without its command having run or its
 result being true.
 Historical run records may legitimately name a different revision from the

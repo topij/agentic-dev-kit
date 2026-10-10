@@ -10,6 +10,10 @@ markup, including headings and lists; declare each intended reference exactly
 with `--allow-close` instead of relying on intervening formatting.
 Use CommonMark inline code spans for verification stamps; wrapped command contents
 and alternate backtick delimiters receive the same revision and date checks.
+Expect ordinary CommonMark emphasis, link wrappers and punctuation around `at`,
+optional `in` and `on` to receive the same checks. Write dates as `YYYY-MM-DD` in
+plain text or code spans. Raw HTML and unrelated connector wording remain outside
+stamp recognition.
 Stamp locations identify their containing prose block.
 
 A proved-false record claim takes deletion or shortening and review of the

@@ -269,6 +269,73 @@ def test_stamp_code_examples_are_not_run_claims(repo, example):
     assert report["stamps"] == []
 
 
+STAMP_LAYOUTS = [
+    "{command} **at** {revision} on {date}",
+    "{command}, at {revision} on {date}",
+    "*{command}* ***at*** **{revision}**, _on_ **{date}**",
+    "{command} [at](https://example.com) {revision} [on](https://example.com) {date}",
+    "{command} — AT: {revision}; ON: {date}",
+    "{command} (at {revision}), on ({date})",
+    "{command}, **at** {revision}; **in** `{directory}`, **on** {date}",
+    "{command} **at** {revision}\n_in_ `{directory}`\n**on** {date}",
+    "{command} **at** {revision}, _on_ `{date}`",
+]
+
+
+@pytest.mark.parametrize("layout", STAMP_LAYOUTS)
+def test_formatted_stamp_preserves_historical_fields(repo, layout):
+    root, base = repo
+    record = layout.format(command="`make\ntest`", revision=f"`{base}`",
+                           directory="/project", date="2026-10-10")
+    save(root, "docs/plan.md", record + " printed a result.\n")
+    code, report = run(repo, commit(root))
+    assert code == 0, report
+    assert report["stamps"] == [{"source": "docs/plan.md", "line": 1,
+                                 "command": "make test", "revision": base,
+                                 "date": "2026-10-10", "names_head": False}]
+
+
+@pytest.mark.parametrize("layout", STAMP_LAYOUTS)
+@pytest.mark.parametrize("field", ["revision", "date"])
+def test_formatted_stamp_checks_hostile_fields(repo, layout, field):
+    root, base = repo
+    # Construct hostile fields independently of the historical-record fixture.
+    revision = "HEAD" if field == "revision" else base
+    date = "2026-02-30" if field == "date" else "2026-10-10"
+    record = layout.format(command="`make test`", revision=f"`{revision}`",
+                           directory="/project", date=date)
+    save(root, "docs/plan.md", record + " printed a result.\n")
+    code, report = run(repo, commit(root))
+    assert code == 1, report
+    assert report["findings"][0]["check"] == "stamps"
+    assert report["stamps"] == []
+
+
+@pytest.mark.parametrize("date", ["tomorrow", "20261010", "2026-W41-6", "2026-10-10junk"])
+@pytest.mark.parametrize("code_date", [False, True])
+def test_stamp_date_spelling_is_checked_in_text_and_code(repo, date, code_date):
+    root, base = repo
+    value = f"`{date}`" if code_date else date
+    save(root, "docs/plan.md", f"`make test`, **at** `{base}`, **on** {value} printed a result.\n")
+    code, report = run(repo, commit(root))
+    assert code == 1, report
+    assert report["findings"][0]["check"] == "stamps"
+
+
+@pytest.mark.parametrize("example", [
+    "`` `make test` **at** `HEAD` on 2026-10-10 ``\n",
+    "```markdown\n`make test`, at `HEAD` on 2026-10-10\n```\n",
+    "    `make test` **at** `HEAD` on 2026-10-10\n",
+    "`make test` is compared with `HEAD` on 2026-10-10.\n",
+])
+def test_formatted_examples_and_unrelated_code_are_not_stamps(repo, example):
+    root, _ = repo
+    save(root, "docs/plan.md", example)
+    code, report = run(repo, commit(root))
+    assert code == 0, report
+    assert report["stamps"] == []
+
+
 @pytest.mark.parametrize("extra", [("--root", ""), ("--base", "HEAD"), ("--allow-close", "")])
 def test_invalid_cli_inputs_are_explicitly_unavailable(repo, extra):
     root, _ = repo
