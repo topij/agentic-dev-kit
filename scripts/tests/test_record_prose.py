@@ -6,13 +6,17 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
-from _repo_layout import engine_dir
+from _repo_layout import engine_dir, find_repo_root
 from conftest import require_kit_paths
 
 ENGINE = engine_dir(Path(__file__)) / "check_record_prose.py"
+REPO_ROOT = find_repo_root(ENGINE.parent)
+ENGINE_REL = ENGINE.relative_to(REPO_ROOT).as_posix()
+KITCONFIG_REL = (ENGINE.parent / "lib/kitconfig.py").relative_to(REPO_ROOT).as_posix()
 LOCAL_REF = "#7"
 FOREIGN_REF = "other/repo#7"
 
@@ -58,7 +62,7 @@ doc_budgets:
 
 
 def run(repo: tuple[Path, str], head: str, *extra: str) -> tuple[int, dict]:
-    require_kit_paths("scripts/check_record_prose.py")
+    require_kit_paths(ENGINE_REL)
     root, base = repo
     result = subprocess.run(
         ["uv", "run", str(ENGINE), "--root", str(root), "--base", base,
@@ -560,7 +564,7 @@ def test_utf8_document_with_nul_has_textual_change_coordinates(repo):
 
 @pytest.mark.parametrize("status", ["passed", "not-applicable", "unavailable"])
 def test_cli_does_not_write_fresh_engine_or_input_tree(repo, tmp_path, status):
-    require_kit_paths("scripts/check_record_prose.py", "scripts/lib/kitconfig.py")
+    require_kit_paths(ENGINE_REL, KITCONFIG_REL)
     root, _ = repo
     fresh = tmp_path / "fresh-engine"
     (fresh / "lib").mkdir(parents=True)
@@ -591,3 +595,36 @@ def test_cli_does_not_write_fresh_engine_or_input_tree(repo, tmp_path, status):
     assert report["status"] == status
     assert result.returncode == (2 if status == "unavailable" else 0)
     assert (snapshot(fresh), snapshot(root)) == before
+
+
+@pytest.mark.parametrize("layout", ["scripts", "scripts/devkit", "tools/vendor/kit"])
+@pytest.mark.parametrize("missing", [None, "check_record_prose.py", "lib/kitconfig.py"])
+def test_prerequisites_follow_the_installed_engine_directory(tmp_path, layout, missing):
+    require_kit_paths(ENGINE_REL, KITCONFIG_REL)
+    adopter = tmp_path / "adopter"
+    tests = adopter / layout / "tests"
+    tests.mkdir(parents=True)
+    (adopter / ".git").mkdir()
+    for name in (Path(__file__).name, "conftest.py", "_repo_layout.py"):
+        shutil.copyfile(Path(__file__).parent / name, tests / name)
+    for name in ("check_record_prose.py", "lib/kitconfig.py"):
+        if name != missing:
+            destination = adopter / layout / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ENGINE.parent / name, destination)
+    module = tests.relative_to(adopter).as_posix() + "/" + Path(__file__).name
+    targets = [module + "::test_cli_does_not_write_fresh_engine_or_input_tree[passed]"]
+    if missing != "lib/kitconfig.py":
+        targets.append(module + "::test_committed_snapshot_ignores_dirty_files_and_has_no_write")
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", *targets, "-q", "-rs"],
+        cwd=adopter, capture_output=True, text=True, timeout=180,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    if missing is None:
+        assert "2 passed" in result.stdout, result.stdout
+        assert "skipped" not in result.stdout, result.stdout
+    else:
+        expected = "1 skipped" if missing == "lib/kitconfig.py" else "2 skipped"
+        assert expected in result.stdout, result.stdout
+        assert f"{layout}/{missing}" in result.stdout, result.stdout

@@ -649,7 +649,7 @@
     },
     "scripts/tests/test_record_prose.py": {
       "role": "test",
-      "sha256": "a767a2f30ad5b3251878d28d4fec5e305857dc454753555faf964f9ff3c93df1"
+      "sha256": "fd7d950be7d8c029a32fe4291f20810379c5ea17bff74751045763487693b9f5"
     },
     "scripts/tests/test_repo_layout.py": {
       "role": "test",
