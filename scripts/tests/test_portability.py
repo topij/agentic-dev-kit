@@ -4033,6 +4033,14 @@ def _assert_triage_adapter(adapter: str, runtime: str) -> None:
 
 def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     flattened = " ".join(workflow.split())
+    # Check the declared preparation time independently of the contract snapshot.
+    # This parses a workflow instruction; it does not execute tracker operations.
+    metadata_timing = re.findall(
+        r"^(Before|After) ([^\n]+), classify each proposed ticket and include its$",
+        workflow, re.MULTILINE,
+    )
+    assert metadata_timing == [("Before", "computing proposal digests")]
+    assert "Never add it after approval or rewrite retained proposals on resume." in flattened
     for phase in (
         "reserved",
         "propose",
@@ -13749,6 +13757,18 @@ def test_triage_semantic_and_adapter_mutations_are_rejected(tmp_path: Path) -> N
         REPO_ROOT / "docs/agentic-dev-kit/workflows/triage-friction-log.md"
     ).read_text(encoding="utf-8")
     mutations = (
+        workflow.replace(
+            "Before computing proposal digests, classify each proposed ticket",
+            "After the tracker write succeeds, classify each proposed ticket", 1,
+        ),
+        workflow.replace(
+            "Before computing proposal digests, classify each proposed ticket",
+            "After computing proposal digests, classify each proposed ticket", 1,
+        ),
+        workflow.replace(
+            "Never add it after approval or rewrite retained proposals on resume.",
+            "Add it after approval and rewrite retained proposals on resume.", 1,
+        ),
         workflow.replace(
             "repository-config-read` | required",
             "repository-config-read` | optional",
