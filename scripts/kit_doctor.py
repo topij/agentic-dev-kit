@@ -448,6 +448,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # test_portability derives its coverage from it. Track the declaration so an
     # adopter cannot refresh the adapters or shared workflows while keeping an
     # older account of which ones are supposed to exist.
+    ("docs/agentic-dev-kit/ticket-execution-environment.md", "doctrine"),
     ("docs/agentic-dev-kit/runtime-parity.md", "doctrine"),
     ("docs/agentic-dev-kit/live-validation-evidence.md", REPO_ONLY_ROLE),
     ("docs/agentic-dev-kit/safety-critical-changes.md", "doctrine"),

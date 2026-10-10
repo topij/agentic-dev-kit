@@ -131,6 +131,12 @@ deliberately:
    pre-flight and the disjointness test all reason over the candidates they were
    handed, so a short list looks exactly like a small backlog.
 
+1. **Check execution environment.** Apply
+   [`ticket-execution-environment.md`](../ticket-execution-environment.md) to each
+   candidate against the intended lane environment. Keep incompatible or unknown
+   work visible with its blocker; exclude it from the launchable batch. Include
+   required inputs and verification prerequisites in each selected lane's kickoff.
+
 1. **Cluster by file footprint.** Group candidates by the files/dirs each one
    touches — read the ticket and grep the code when unsure; don't infer the footprint
    from the title. Present the clusters as a table. Within a cluster, pick **at most
