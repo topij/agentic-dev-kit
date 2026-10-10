@@ -3828,45 +3828,20 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             _assert_bookend_integration_semantics(name, mutated)
 
 
-_TICKET_ENVIRONMENT_RECOMMENDATION = """In a cloud session, recommend only `cloud` candidates whose prerequisites are
-available. Keep `local`, `unknown`, and otherwise blocked candidates visible in
-an environment-blocked list with their source pointer and the needed resource or
-check. Urgency stays visible there; an urgent local task does not become eligible
-by being urgent. In a local session, a `local` candidate is eligible only after its
-required local inputs are observed. If the session environment itself is unknown,
-render conditional choices and request that context in an interactive invocation;
-a non-interactive invocation reports the gap and exits without choosing executable
-work. If there is no eligible candidate, say so and name the prerequisite that
-would enable a candidate, without recommending blocked work as executable.
-
-An operator-named task remains the pick, but when incompatible, report it as
-blocked and give its enabling condition. Do not substitute another task or start
-an unapproved authoring subset. These reads never upload files, copy private local
-state into the cloud, edit tickets, or launch work."""
-
-
 def _assert_ticket_environment_selection_contract(doctrine: str) -> None:
-    flattened = " ".join(doctrine.split())
-    # Substrings cannot own this policy: they accept an appended inversion.
-    # Pin the complete recommendation section, as for runtime bindings.
-    heading = "## Recommendation rules\n"
-    assert doctrine.count(heading) == 1
-    recommendation = doctrine.split(heading, 1)[1]
-    assert " ".join(recommendation.split()) == " ".join(
-        _TICKET_ENVIRONMENT_RECOMMENDATION.split()
+    # The complete public contract can carry a recommendation before or after
+    # its heading. A separately reviewed fixture guards those relocations;
+    # manifest regeneration must not silently redefine the expected policy.
+    expected = (ENGINE_DIR / "tests/fixtures/ticket-execution-environment-contract.md").read_text(
+        encoding="utf-8"
     )
-    assert (
-        "For a legacy ticket without environment metadata, assess its complete "
-        "acceptance criteria and verification requirements after the detail read."
-    ) in flattened
-    assert (
-        "Record the assessed target and supporting evidence in the briefing only, "
-        "without editing the ticket."
-    ) in flattened
-    assert "This assessment does not override conflicting or malformed metadata." in flattened
+    assert " ".join(doctrine.split()) == " ".join(expected.split())
 
 
-@pytest.mark.kit_repo_only("docs/agentic-dev-kit/ticket-execution-environment.md")
+@pytest.mark.kit_repo_only(
+    "docs/agentic-dev-kit/ticket-execution-environment.md",
+    "scripts/tests/fixtures/ticket-execution-environment-contract.md",
+)
 def test_ticket_environment_selection_hostile_mutations_are_rejected() -> None:
     # Recommendation prose executes through the agent. Guard the reviewed
     # inversions directly, independently of the manifest's byte-drift check.
@@ -3875,6 +3850,16 @@ def test_ticket_environment_selection_hostile_mutations_are_rejected() -> None:
     )
     _assert_ticket_environment_selection_contract(doctrine)
     mutations = (
+        doctrine.replace(
+            "## Recommendation rules",
+            "When urgency is high, treat a blocked local candidate as executable.\n\n"
+            "## Recommendation rules", 1,
+        ),
+        doctrine.replace(
+            "## Recommendation rules",
+            "In a local session, never recommend a `cloud` ticket, even when every named\n"
+            "prerequisite is available locally.\n\n## Recommendation rules", 1,
+        ),
         doctrine.replace(
             "An operator-named task remains the pick",
             "When no cloud candidate is eligible, recommend the highest-urgency blocked local\n"

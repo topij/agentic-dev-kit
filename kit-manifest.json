@@ -44,7 +44,7 @@
     },
     "docs/agentic-dev-kit/ticket-execution-environment.md": {
       "role": "doctrine",
-      "sha256": "39ddca2aeb7328fc515bbf5f75872208d5ef820782524afa5b1dfad70837ee83"
+      "sha256": "f82c190510d21fc7ea1c803b15d1047cc5dae7b2d684fb185af54499b0cf2a25"
     },
     "docs/agentic-dev-kit/workflows/adopt.md": {
       "role": "workflow",
@@ -159,7 +159,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "28442585689b2153bab2d4b94de2e492c9281ae2453243cbf68bd184da075731"
+      "sha256": "33719e676d69767eb9f99c61f533080a269f0f720b76f504f64cee34c0c99c6e"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -566,6 +566,10 @@
       "role": "test",
       "sha256": "66979af482546118a359db5ec3ecd5559a4dfc757ad431c198a23c26e5a9b872"
     },
+    "scripts/tests/fixtures/ticket-execution-environment-contract.md": {
+      "role": "test",
+      "sha256": "f82c190510d21fc7ea1c803b15d1047cc5dae7b2d684fb185af54499b0cf2a25"
+    },
     "scripts/tests/test_adoption_fixtures.py": {
       "role": "repo-only",
       "sha256": "2e1a1296b1079f06b25bb11870016883a4f9873c98d575b4e8b7d64af2bf29ec"
@@ -620,7 +624,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "32858a212303769fd9bca96f1d937b73bc8bd9bb1eaacd8a32149dfad80b2092"
+      "sha256": "0711fcd30b9b817c803a3b539fd8a9a7b08dc08ee14abb1105b74997d277ce50"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

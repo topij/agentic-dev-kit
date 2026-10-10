@@ -7,3 +7,7 @@ configure `tracker.execution_environment.labels` and provision the matching labe
 existing installs can use the body section alone. Invoke `session-start cloud` in
 a cloud session when the runtime does not supply that context. Legacy tickets stay
 unknown until their requirements are read; no backlog rewrite is automatic.
+
+When refreshing the portability tests, copy the contract fixture
+`scripts/tests/fixtures/ticket-execution-environment-contract.md` with
+`scripts/tests/test_portability.py`.
