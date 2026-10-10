@@ -187,10 +187,17 @@ list.
 Before an opening review of a change confined to `paths.handoff`,
 `paths.handoff_history`, `paths.friction_log` and `paths.friction_log_archive`,
 run `<engine-dir>/check_record_prose.py` with `uv run`, the repository root,
-the base sha and the candidate head sha, and retain its JSON report. The engine
-reads the path declarations and budgets committed at the base, then checks Git
+the base sha and the candidate head sha, and retain its JSON report. Once started,
+the engine reads the path declarations and budgets committed at the base, then checks Git
 objects at the candidate. It disables bytecode writes before importing repository
 modules, writes no state in the supplied tree, and performs no network read.
+
+Those properties describe the Python checker, not `uv` dependency bootstrap.
+Before the checker starts, `uv run` may access package indexes and write its
+dependency cache and environment. Bootstrap can fail before any JSON report
+exists. Retain stdout, stderr and the process exit status; a missing report
+supplies unavailable coverage, never a passing or `not-applicable` result.
+Apply the unavailable-check rule below before recording review coverage.
 
 Its checks cover the configured line budgets and local CommonMark destinations
 in changed blocks; closing references in added text, newly formed by deletions,
