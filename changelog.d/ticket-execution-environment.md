@@ -10,4 +10,4 @@ unknown until their requirements are read; no backlog rewrite is automatic.
 
 When refreshing the portability tests, copy the contract fixture
 `scripts/tests/fixtures/ticket-execution-environment-contract.md` with
-`scripts/tests/test_portability.py`.
+`scripts/tests/test_portability.py` and its matching `scripts/tests/conftest.py`.
