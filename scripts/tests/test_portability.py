@@ -2773,6 +2773,35 @@ def _assert_post_merge_systemize_adapter_semantics(
     assert " ".join(parts[2].split()) == expected_body
 
 
+_SESSION_START_RECOMMENDATION = """End with a single environment-compatible pick and a one-line why, or report why
+no executable pick is available under the execution-environment contract. In an
+interactive invocation, then **stop**
+and let the operator choose; do not auto-start the work. In a non-interactive
+invocation, omit the question and exit after rendering the briefing, including
+the recommendation or no-pick explanation. When the
+outer request already and separately authorizes follow-on work, complete this read-only
+workflow first, then continue under that authority.
+
+```text
+👉 My pick: <item>   [<S/M/L> · <model> · <inline/delegate> · <cloud/local>] — <one-line rationale: why this, now>
+   <delegate ⇒ "I'll hand it to an isolated task and review the result here." | inline ⇒ "We'll run it in this session so you can steer it.">
+   Want me to start it, or pick another?   # interactive only
+```
+
+**When the operator names a workstream or a task** in the invocation or its
+context, that is the pick. Render the briefing as usual and recommend the named
+work; if incompatible, name its blocker and enabling condition instead of an
+executable recommendation; a 🔴 item stays in the briefing
+beside it rather than overriding the choice.
+The named work need not be any workstream's `▶ Next:`, and choosing it changes no
+other workstream's entry.
+
+Otherwise, rationale heuristics: prefer 🔴 Now if the bucket is non-empty; otherwise
+the active sprint's blocking next step; break ties toward the highest value-per-effort
+(small + high-leverage). Recency is not among them: the workstream a session last
+wrapped up gets no preference for it."""
+
+
 def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
     flattened = " ".join(workflow.split())
     normative_sentence = {
@@ -2798,6 +2827,12 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
     outcomes = _integration_table(workflow, outcome_heading, 3)
 
     if name == "session-start":
+        heading = "### 4 · Recommend one, then wait or exit\n"
+        assert workflow.count(heading) == 1
+        recommendation = workflow.split(heading, 1)[1].split("\n## Notes\n", 1)[0]
+        assert " ".join(recommendation.split()) == " ".join(
+            _SESSION_START_RECOMMENDATION.split()
+        )
         assert capabilities == {
             "repository-config-read": (
                 "required",
@@ -3607,6 +3642,14 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "if incompatible, still present it as the executable recommendation", 1
         )),
         ("session-start", session, session.replace(
+            "or report why\nno executable pick is available under the execution-environment contract",
+            "or recommend the highest-urgency blocked item as executable", 1
+        )),
+        ("session-start", session, session.replace(
+            "## Notes",
+            "Recommend blocked work as executable when no eligible candidate remains.\n\n## Notes", 1
+        )),
+        ("session-start", session, session.replace(
             "assess the complete requirements read-only before choosing a target",
             "keep every legacy ticket unknown until its metadata is edited", 1
         )),
@@ -3785,12 +3828,33 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             _assert_bookend_integration_semantics(name, mutated)
 
 
+_TICKET_ENVIRONMENT_RECOMMENDATION = """In a cloud session, recommend only `cloud` candidates whose prerequisites are
+available. Keep `local`, `unknown`, and otherwise blocked candidates visible in
+an environment-blocked list with their source pointer and the needed resource or
+check. Urgency stays visible there; an urgent local task does not become eligible
+by being urgent. In a local session, a `local` candidate is eligible only after its
+required local inputs are observed. If the session environment itself is unknown,
+render conditional choices and request that context in an interactive invocation;
+a non-interactive invocation reports the gap and exits without choosing executable
+work. If there is no eligible candidate, say so and name the prerequisite that
+would enable a candidate, without recommending blocked work as executable.
+
+An operator-named task remains the pick, but when incompatible, report it as
+blocked and give its enabling condition. Do not substitute another task or start
+an unapproved authoring subset. These reads never upload files, copy private local
+state into the cloud, edit tickets, or launch work."""
+
+
 def _assert_ticket_environment_selection_contract(doctrine: str) -> None:
     flattened = " ".join(doctrine.split())
-    assert (
-        "In a cloud session, recommend only `cloud` candidates whose prerequisites "
-        "are available."
-    ) in flattened
+    # Substrings cannot own this policy: they accept an appended inversion.
+    # Pin the complete recommendation section, as for runtime bindings.
+    heading = "## Recommendation rules\n"
+    assert doctrine.count(heading) == 1
+    recommendation = doctrine.split(heading, 1)[1]
+    assert " ".join(recommendation.split()) == " ".join(
+        _TICKET_ENVIRONMENT_RECOMMENDATION.split()
+    )
     assert (
         "For a legacy ticket without environment metadata, assess its complete "
         "acceptance criteria and verification requirements after the detail read."
@@ -3811,6 +3875,13 @@ def test_ticket_environment_selection_hostile_mutations_are_rejected() -> None:
     )
     _assert_ticket_environment_selection_contract(doctrine)
     mutations = (
+        doctrine.replace(
+            "An operator-named task remains the pick",
+            "When no cloud candidate is eligible, recommend the highest-urgency blocked local\n"
+            "candidate as executable so the session still has a concrete pick.\n\n"
+            "An operator-named task remains the pick",
+        ),
+        doctrine + "\nRecommend blocked work as executable when no eligible candidate remains.\n",
         doctrine.replace("recommend only `cloud` candidates", "recommend only `local` candidates"),
         doctrine.replace("whose prerequisites are\navailable", "regardless of prerequisites"),
         doctrine.replace(

@@ -44,7 +44,7 @@
     },
     "docs/agentic-dev-kit/ticket-execution-environment.md": {
       "role": "doctrine",
-      "sha256": "1140f6f5831318acf1ed3785011e3abe74fb04b5e8877016580f1415629f1d5a"
+      "sha256": "39ddca2aeb7328fc515bbf5f75872208d5ef820782524afa5b1dfad70837ee83"
     },
     "docs/agentic-dev-kit/workflows/adopt.md": {
       "role": "workflow",
@@ -620,7 +620,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "22904a91ec6cfc2c15376b490a806acf14f7313112311db3cffd50d993c77ef0"
+      "sha256": "32858a212303769fd9bca96f1d937b73bc8bd9bb1eaacd8a32149dfad80b2092"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

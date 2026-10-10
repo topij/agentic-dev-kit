@@ -92,6 +92,8 @@ local plans or retained artifacts; do not assume that a tracked handoff makes it
 untracked references available. No ticket metadata is needed when the required
 inputs can be established directly from those sources.
 
+## Recommendation rules
+
 In a cloud session, recommend only `cloud` candidates whose prerequisites are
 available. Keep `local`, `unknown`, and otherwise blocked candidates visible in
 an environment-blocked list with their source pointer and the needed resource or
