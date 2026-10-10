@@ -2911,6 +2911,14 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "a 🔴 item stays in the briefing beside it rather than overriding the choice"
             in flattened
         )
+        assert (
+            "if incompatible, name its blocker and enabling condition instead of an "
+            "executable recommendation"
+        ) in flattened
+        assert (
+            "An absent legacy field starts unknown; assess the complete requirements "
+            "read-only before choosing a target, without editing the ticket."
+        ) in flattened
         assert "choosing it changes no other workstream's entry" in flattened
         assert "none of them stands in for the others" in flattened
         assert "Recency is not among them" in flattened
@@ -3594,6 +3602,15 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "`environment-incompatible-or-unknown` | `recommend-any-candidate`", 1
         )),
         ("session-start", session, session.replace(
+            "if incompatible, name its blocker and enabling condition instead of an\n"
+            "executable recommendation",
+            "if incompatible, still present it as the executable recommendation", 1
+        )),
+        ("session-start", session, session.replace(
+            "assess the complete requirements read-only before choosing a target",
+            "keep every legacy ticket unknown until its metadata is edited", 1
+        )),
+        ("session-start", session, session.replace(
             "**no entry is promoted for being the most recently updated**",
             "**the most recently updated entry is promoted**", 1
         )),
@@ -3766,6 +3783,50 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
         assert mutated != original, mutation_index
         with pytest.raises(AssertionError):
             _assert_bookend_integration_semantics(name, mutated)
+
+
+def _assert_ticket_environment_selection_contract(doctrine: str) -> None:
+    flattened = " ".join(doctrine.split())
+    assert (
+        "In a cloud session, recommend only `cloud` candidates whose prerequisites "
+        "are available."
+    ) in flattened
+    assert (
+        "For a legacy ticket without environment metadata, assess its complete "
+        "acceptance criteria and verification requirements after the detail read."
+    ) in flattened
+    assert (
+        "Record the assessed target and supporting evidence in the briefing only, "
+        "without editing the ticket."
+    ) in flattened
+    assert "This assessment does not override conflicting or malformed metadata." in flattened
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/ticket-execution-environment.md")
+def test_ticket_environment_selection_hostile_mutations_are_rejected() -> None:
+    # Recommendation prose executes through the agent. Guard the reviewed
+    # inversions directly, independently of the manifest's byte-drift check.
+    doctrine = (REPO_ROOT / "docs/agentic-dev-kit/ticket-execution-environment.md").read_text(
+        encoding="utf-8"
+    )
+    _assert_ticket_environment_selection_contract(doctrine)
+    mutations = (
+        doctrine.replace("recommend only `cloud` candidates", "recommend only `local` candidates"),
+        doctrine.replace("whose prerequisites are\navailable", "regardless of prerequisites"),
+        doctrine.replace(
+            "assess its complete acceptance criteria and verification requirements",
+            "keep it unknown until its metadata is edited",
+        ),
+        doctrine.replace("without editing the ticket", "by editing the ticket"),
+        doctrine.replace(
+            "does not override conflicting\nor malformed metadata",
+            "overrides conflicting or malformed metadata",
+        ),
+    )
+    for mutated in mutations:
+        assert mutated != doctrine
+        with pytest.raises(AssertionError):
+            _assert_ticket_environment_selection_contract(mutated)
 
 
 @pytest.mark.evidence

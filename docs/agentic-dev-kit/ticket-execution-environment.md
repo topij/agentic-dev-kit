@@ -11,7 +11,7 @@ It is shared by runtimes; it grants no tracker-write or merge authority.
 |---|---|
 | `cloud` | A fresh checkout can implement and verify the complete ticket using tracked files, reproducible fixtures, and explicitly named services or setup available to the cloud session. |
 | `local` | Completion requires an existing machine's files, ignored or untracked artifacts, retained state, another local checkout, a desktop app, hardware, or machine-bound access that the cloud session cannot reproduce. |
-| `unknown` | The required inputs or verification environment have not been established. Missing metadata means unknown, never cloud. |
+| `unknown` | The required inputs or verification environment have not been established. Missing metadata starts unknown; establish requirements before assessing a target. |
 
 Classify the acceptance criteria, not the title or the files being edited. A code
 change requiring validation against an adopter's retained ignored state is `local`.
@@ -73,8 +73,15 @@ Gather the complete field-limited backlog with labels or equivalent environment
 metadata. Keep full bodies out of that list's rendered output. For an unlabelled
 candidate considered for recommendation, fetch its body separately and retain the
 execution section for classification; use bounded batches when the backend supports
-them. Keep an unread or legacy ticket visible as `unknown`, rather than guessing or
-eagerly fetching every backlog body. State which candidates remain unassessed. Before
+them. Keep an unread ticket visible as `unknown`, rather than guessing or eagerly
+fetching every backlog body. For a legacy ticket without environment metadata,
+assess its complete acceptance criteria and verification requirements after the
+detail read. Record the assessed target and supporting evidence in the briefing
+only, without editing the ticket. Apply the same classification and prerequisite
+checks as for a new ticket; absent metadata alone neither qualifies nor permanently
+blocks the candidate. If the requirements cannot establish a target, keep it
+`unknown` with the missing evidence. This assessment does not override conflicting
+or malformed metadata. State which candidates remain unassessed. Before
 recommending a labelled candidate, read its body, reconcile its environment
 section and acceptance criteria, and check the named prerequisites read-only.
 Missing inputs or access mean blocked in this session, even for a `cloud` ticket.

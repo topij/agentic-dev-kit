@@ -4,7 +4,8 @@ Start-of-session briefing — the bookend to `wrap-up`. Reads the living handoff
 friction-log inbox, your tracker, and live repo/CI state; checks anything urgent
 against the narrative archives before promoting it; then proposes **what to do
 next**: candidates grouped by **urgency** and tagged `[size · model · mode · environment]`, ending
-with one recommendation compatible with the current execution environment.
+with a compatible recommendation or an explanation that no executable pick is
+available.
 
 **Input:** optional execution context, such as `cloud` or `local`. Apply
 [`ticket-execution-environment.md`](../ticket-execution-environment.md) before
@@ -323,7 +324,9 @@ interactive/exploratory ⇒ inline on expensive`. When in doubt, default `inline
 Follow [`ticket-execution-environment.md`](../ticket-execution-environment.md).
 Read candidate details before recommending, check required inputs in this session,
 and put incompatible, unknown, or unavailable work in the environment-blocked list
-with its urgency and enabling condition. An absent legacy field is unknown.
+with its urgency and enabling condition. An absent legacy field starts unknown;
+assess the complete requirements read-only before choosing a target, without
+editing the ticket.
 
 **Source pointer** — every item shows where it came from so you can drill in:
 `handoff:<workstream>`, `friction-log <date>`, a tracker ticket id, `PR #NNN`, or the
@@ -464,7 +467,8 @@ End with a single environment-compatible pick and a one-line why, or report why
 no executable pick is available under the execution-environment contract. In an
 interactive invocation, then **stop**
 and let the operator choose; do not auto-start the work. In a non-interactive
-invocation, omit the question and exit after rendering the recommendation. When the
+invocation, omit the question and exit after rendering the briefing, including
+the recommendation or no-pick explanation. When the
 outer request already and separately authorizes follow-on work, complete this read-only
 workflow first, then continue under that authority.
 

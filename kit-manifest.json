@@ -44,7 +44,7 @@
     },
     "docs/agentic-dev-kit/ticket-execution-environment.md": {
       "role": "doctrine",
-      "sha256": "7059273f8056a275310aaec287fcbac8c1a376b4f2979698fc4f8646d12022a7"
+      "sha256": "1140f6f5831318acf1ed3785011e3abe74fb04b5e8877016580f1415629f1d5a"
     },
     "docs/agentic-dev-kit/workflows/adopt.md": {
       "role": "workflow",
@@ -68,7 +68,7 @@
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
-      "sha256": "fc85f053bd7b420af72962ff22573e59adc76d619552856b20654d90b3b5d648"
+      "sha256": "31bb8c5d818fe8919886076c338d8eb2158f81ed9af61f37499d14f3259f93f8"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
@@ -620,7 +620,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "66dd598236065ad872245cbd480fd53177973218070301682a38d8fa5cbde83f"
+      "sha256": "22904a91ec6cfc2c15376b490a806acf14f7313112311db3cffd50d993c77ef0"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
