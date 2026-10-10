@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -62,7 +63,6 @@ def run(repo: tuple[Path, str], head: str, *extra: str) -> tuple[int, dict]:
     result = subprocess.run(
         ["uv", "run", str(ENGINE), "--root", str(root), "--base", base,
          "--head", head, "--json", *extra],
-        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
         capture_output=True, text=True, timeout=90,
     )
     assert result.stdout, result.stderr
@@ -272,3 +272,94 @@ def test_git_color_settings_do_not_change_hunk_coordinates(repo, text, kind):
     code, report = run(repo, commit(root))
     assert code == 1, report
     assert report["findings"][0]["check"] == kind
+
+
+@pytest.mark.parametrize("before,after,kind", [
+    ("```\nprefix\n\n[Missing](missing.md)\n```\n",
+     "prefix\n\n[Missing](missing.md)\n```\n", "links"),
+    ("```\nprefix\n\n`make test` at `HEAD` on 2026-10-10 printed a result.\n```\n",
+     "prefix\n\n`make test` at `HEAD` on 2026-10-10 printed a result.\n```\n", "stamps"),
+    (f"fixes\nintervening text\n{LOCAL_REF}\n", f"fixes\n{LOCAL_REF}\n", "closing-keywords"),
+    (f"fixes\n\nintervening text\n\n{LOCAL_REF}\n", f"fixes\n\n{LOCAL_REF}\n", "closing-keywords"),
+    ("[Link][destination]\n\n[destination]: <target with space.md>\n[destination]: missing.md\n",
+     "[Link][destination]\n\n[destination]: missing.md\n", "links"),
+])
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+def test_deletions_recheck_affected_meaning(repo, before, after, kind, newline):
+    root, _ = repo
+    save(root, "docs/plan.md", before.replace("\n", newline))
+    base = commit(root)
+    save(root, "docs/plan.md", after.replace("\n", newline))
+    code, report = run((root, base), commit(root))
+    assert code == 1, report
+    assert kind in [item["check"] for item in report["findings"]]
+
+
+def test_deletions_preserve_untouched_record_scope(repo):
+    root, _ = repo
+    untouched = (f"Earlier record: resolves {LOCAL_REF}. [Missing](missing.md)\n"
+                 "`make test` at `HEAD` on 2026-10-10 printed a result.\n\n")
+    save(root, "docs/plan.md", untouched + "Separate record.\n\nRemoved tail.\n")
+    base = commit(root)
+    save(root, "docs/plan.md", untouched + "Separate record.\n")
+    code, report = run((root, base), commit(root))
+    assert code == 0, report
+    assert report["findings"] == []
+
+
+def test_deletions_preserve_existing_closing_matches(repo):
+    root, _ = repo
+    baseline = f"Earlier record: resolves {LOCAL_REF}.\n\nRemoved tail.\n"
+    save(root, "docs/plan.md", baseline)
+    base = commit(root)
+    save(root, "docs/plan.md", baseline[:baseline.index("\n\n")] + "\n")
+    code, report = run((root, base), commit(root))
+    assert code == 0, report
+    assert report["findings"] == []
+
+
+def test_deletions_detect_duplicate_new_closing_matches(repo):
+    root, _ = repo
+    baseline = f"resolves\n{LOCAL_REF}\n\nresolves\nintervening text\n{LOCAL_REF}\n"
+    save(root, "docs/plan.md", baseline)
+    base = commit(root)
+    save(root, "docs/plan.md", baseline.replace("intervening text\n", ""))
+    code, report = run((root, base), commit(root))
+    assert code == 1, report
+    assert report["findings"][0]["check"] == "closing-keywords"
+    assert report["findings"][0]["line"] == 4
+
+
+@pytest.mark.parametrize("status", ["passed", "not-applicable", "unavailable"])
+def test_cli_does_not_write_fresh_engine_or_input_tree(repo, tmp_path, status):
+    require_kit_paths("scripts/check_record_prose.py", "scripts/lib/kitconfig.py")
+    root, _ = repo
+    fresh = tmp_path / "fresh-engine"
+    (fresh / "lib").mkdir(parents=True)
+    shutil.copyfile(ENGINE, fresh / ENGINE.name)
+    shutil.copyfile(ENGINE.parent / "lib/kitconfig.py", fresh / "lib/kitconfig.py")
+    save(root, ".gitignore", "__pycache__/\n*.pyc\n")
+    base = commit(root)
+    save(root, "docs/plan.md", "New record.\n")
+    if status == "not-applicable":
+        save(root, "code.py", "pass\n")
+    head = commit(root)
+
+    def snapshot(path):
+        return {p.relative_to(path).as_posix(): p.read_bytes()
+                for p in path.rglob("*") if p.is_file()}
+
+    before = snapshot(fresh), snapshot(root)
+    env = os.environ.copy()
+    env.pop("PYTHONDONTWRITEBYTECODE", None)
+    env.pop("PYTHONPYCACHEPREFIX", None)
+    result = subprocess.run(
+        ["uv", "run", str(fresh / ENGINE.name), "--root", str(root),
+         "--base", "HEAD" if status == "unavailable" else base, "--head", head, "--json"],
+        cwd=root, env=env, capture_output=True, text=True, timeout=90,
+    )
+    assert result.stdout, result.stderr
+    report = json.loads(result.stdout)
+    assert report["status"] == status
+    assert result.returncode == (2 if status == "unavailable" else 0)
+    assert (snapshot(fresh), snapshot(root)) == before

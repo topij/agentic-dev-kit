@@ -18,22 +18,26 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import difflib
 import io
 import json
 import posixpath
 import re
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
 
+# The generated invocation must stay read-only even in a fresh handed tree.
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from kitconfig import get, loads, repo_root  # noqa: E402
 
 NARRATIVE_KEYS = ("handoff", "handoff_history", "friction_log", "friction_log_archive")
 LIMITS = [
     "Only destinations parsed as CommonMark links or images are checked; unresolved reference text is not a parsed link.",
-    "Links and stamps are checked in changed Markdown blocks; a changed reference definition also rechecks document links.",
+    "Links and stamps are checked in changed Markdown blocks, including newly active blocks after deletions; a changed reference definition also rechecks document links.",
     "External URLs, fragment identifiers, and raw HTML destinations are not verified.",
     "A stamp's commit and date can be checked; its command's execution and claimed result cannot.",
     "A historical stamp need not name the candidate head; the reviewer must judge its stated scope.",
@@ -44,8 +48,8 @@ _STAMP = re.compile(
     r"`(?P<command>[^`\n]+)`\s+at\s+`(?P<sha>[^`\n]+)`"
     r"(?:,?\s+in\s+`[^`]+`,?)?\s+on\s+(?P<date>\d{4}-\d{2}-\d{2})"
 )
-# Scan raw added text, including quotes, code and negation: those do not prevent
-# forge automation acting on commit/PR text, nor satisfy the author's intent rule.
+# Scan added raw text and newly formed matches. Quotes, code and negation cannot
+# prevent forge automation on commit/PR text or satisfy the author's intent rule.
 _CLOSING = re.compile(
     r"\b(?:close[sd]?|closing|fix(?:es|ed|ing)?|resolve[sd]?|resolving)"
     r"[\s:*`]*?(?P<ref>(?:[\w.-]+/[\w.-]+)?#\d+|"
@@ -139,6 +143,27 @@ def changed_lines(root: Path, boundary: str, head: str, path: str, text: str) ->
     return logical
 
 
+def changed_blocks(before: list, after: list) -> set[int]:
+    """Select candidate blocks whose parsed meaning changed, without line shifts."""
+    def signature(token):
+        return (token.type, token.tag, token.nesting, token.content,
+                tuple((child.type, child.attrGet("href"), child.attrGet("src"))
+                      for child in token.children or []))
+
+    comparison = difflib.SequenceMatcher(
+        None, [signature(token) for token in before],
+        [signature(token) for token in after], autojunk=False,
+    )
+    affected: set[int] = set()
+    for operation, _, _, start, end in comparison.get_opcodes():
+        if operation == "equal":
+            continue
+        for token in after[start:end]:
+            if token.map:
+                affected.update(range(token.map[0] + 1, token.map[1] + 1))
+    return affected
+
+
 def local_target(source: str, target: str) -> str | None:
     url = urlsplit(target)
     if url.scheme or url.netloc or not url.path:
@@ -166,12 +191,15 @@ def check(root: Path, base: str, head: str, allowed: set[str]) -> dict:
         report["findings"].append({"check": kind, "source": source, "line": line,
                                    "detail": detail})
 
-    def closings(text: str, source: str, added: set[int] | None = None) -> None:
+    def closings(text: str, source: str, added: set[int] | None = None,
+                 before: str = "") -> None:
+        previous = Counter(match.group() for match in _CLOSING.finditer(before))
         for match in _CLOSING.finditer(text):
             ref = match["ref"]
             line = text.count("\n", 0, match.start()) + 1
             end = text.count("\n", 0, match.end()) + 1
-            if added is not None and not added.intersection(range(line, end + 1)):
+            if added is not None and not added.intersection(range(line, end + 1)) and previous[match.group()]:
+                previous[match.group()] -= 1
                 continue
             if ref not in allowed:
                 finding("closing-keywords", source, line,
@@ -199,20 +227,23 @@ def check(root: Path, base: str, head: str, allowed: set[str]) -> dict:
         lines = markdown_lines(raw)
         text = "".join(lines)
         added = changed_lines(root, boundary, head, path, raw)
-        closings(text, path, added)
         # Parse the entire document so reference definitions and code fences keep
         # their CommonMark meaning; select changed blocks only after parsing.
         environment: dict = {}
         tokens = parser.parse(text, environment)
+        old = blob(root, boundary, path) if git(root, "ls-tree", "-z", boundary, "--", path) else ""
+        before = "".join(markdown_lines(old))
+        affected = added | changed_blocks(parser.parse(before), tokens)
+        closings(text, path, added, before)
         changed_reference = any(
-            added.intersection(range(ref["map"][0] + 1, ref["map"][1] + 1))
+            affected.intersection(range(ref["map"][0] + 1, ref["map"][1] + 1))
             for ref in environment.get("references", {}).values() if "map" in ref
         )
         for token in tokens:
             if not token.map:
                 continue
             start, end = token.map
-            touched = bool(added.intersection(range(start + 1, end + 1)))
+            touched = bool(affected.intersection(range(start + 1, end + 1)))
             if not touched and not changed_reference:
                 continue
             if token.type == "inline":

@@ -189,11 +189,13 @@ Before an opening review of a change confined to `paths.handoff`,
 run `<engine-dir>/check_record_prose.py` with `uv run`, the repository root,
 the base sha and the candidate head sha, and retain its JSON report. The engine
 reads the path declarations and budgets committed at the base, then checks Git
-objects at the candidate. It writes no state and performs no network read.
+objects at the candidate. It disables bytecode writes before importing repository
+modules, writes no state in the supplied tree, and performs no network read.
 
-Its checks cover the configured line budgets, local CommonMark destinations in
-changed blocks, closing references in added text and candidate commit messages,
-and the commit identity and calendar date of recognized verification stamps.
+Its checks cover the configured line budgets and local CommonMark destinations
+in changed blocks; closing references in added text, newly formed by deletions,
+or candidate commit messages; and the commit identity and calendar date of
+recognized verification stamps.
 Declare an intended closing reference explicitly with `--allow-close`; quotes,
 code spans and negation do not make an unintended closing reference safe.
 An exit status alone is not the result: read `status`, `findings`, `unavailable`,
@@ -205,9 +207,11 @@ command and result, or hold the review receipt.
 
 The link check covers destinations the CommonMark parser recognizes; an
 unresolved reference is literal text to that parser. It does not fetch external
-URLs or verify fragment identifiers or raw HTML destinations. Untouched blocks
-are outside its scan except that a changed reference definition rechecks the
-document's links. A stamp
+URLs or verify fragment identifiers or raw HTML destinations. It compares parsed
+blocks across the snapshots so deletions that activate links or stamps remain in
+scope, and compares raw closing matches with the prior snapshot to catch newly
+joined references. Untouched blocks are outside its scan except that a changed
+reference definition rechecks the document's links. A stamp
 can name a valid commit without its command having run or its result being true.
 Historical run records may legitimately name a different revision from the
 candidate; the reviewer checks the claim's scope and the independent evidence.
