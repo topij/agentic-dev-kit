@@ -5,6 +5,36 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-06 (merge gate ignores a bot's empty thread-reply review, in Claude Code)
+
+[#982](https://github.com/topij/agentic-dev-kit/pull/982) merged as
+`54a65a4893b90d03ba15f3acdfdb52eb7ce5104e`, recording #981's completion. `pr_watch.py`'s
+coverage reduction now skips a configured bot's `COMMENTED` review with an empty
+body. GitHub creates that object for a bot's reply on an inline thread, and the
+merge gate had been accepting it as the bot's review of the head. The skip also
+keeps the wrapper from displacing the bot's earlier real review. `APPROVED` and the
+objection read are unchanged. The CHANGELOG entry tells adopters what to refresh.
+
+Decided: #981's suggested "or an inline comment at that `commit_id`" branch was not
+built. A thread reply is itself an inline comment, so the signal does not separate
+the cases. The cost is a refusal bound, written beside the skip: a bot that posts
+inline-only findings under an empty review body needs a receipt for that head.
+
+Verification: `make test` at `7f62cf6192f2d45bd3c7ad52c89fd9852427504d` on 2026-10-06,
+in `/Users/topi/Coding/agentic-dev-kit`, printed `4290 passed, 1 skipped`. The three
+later commits changed comments and docstrings only, so they got no full-suite run;
+CI's `Test` run passed on the PR's final head `35141002d5212d328e0c0b2435d86e33ac57ff68`.
+
+Review: the two-lens panel at `7f62cf6`, then three LOW delta passes. On the
+operator's choice each time, LOW wording findings were repaired rather than ticketed,
+until a pass found nothing. The PR's comments hold each pass's record. Occurrences
+were added, on the operator's approval of each exact text and read back identical,
+to #643 (lenses launched from the rendered prompt file) and #666 (successive
+prose-only LOW rounds).
+
+Retired workstream Merge-gate review evidence: the operator retired it in this session,
+after the repair for #981.
+
 ### 2026-10-06 (one-run triage recovery paths removed, in Claude Code)
 
 [#978](https://github.com/topij/agentic-dev-kit/pull/978) removed #969's `correct-project`

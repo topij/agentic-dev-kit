@@ -24,6 +24,29 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-10-10
+
+- **The repair-and-review chain shape recurred in the record-prose preflight.**
+  Severity L, kept for accumulation alongside the 2026-10-08 and 2026-10-09 entries.
+  During the session on PR #1039, the decision packets followed terminal JSON,
+  canonical line counting, deletion effects and bytecode writes, keyword/reference
+  pairings, CommonMark stamp spans, stamp-field presentation, and the dependency-bootstrap
+  assurance. A repair's subsequent full review surfaced another input shape or
+  contract claim. The operator authorized the repair rounds, then chose to defer
+  the accepted P2 regression to #1041 and merge. The PR dispositions retain the
+  reproductions and decisions; this entry accumulates the review-chain occurrence,
+  rather than proposing a broader remedy from it.
+
+- **Archival preservation met the new narrative preflight's conservative lexer.**
+  Severity L, parked because no workflow remedy was established. During this
+  wrap-up, the budget helper moved the dated merge-gate review-evidence entry into
+  history. The preflight then treated its historical ticket-state verbs as added
+  keyword/reference pairings. The shared wrap-up workflow prescribes preserving
+  earlier session entries, while the repository forbids unintended ticket-state
+  directives. The moved entry retained its dated decisions with neutral wording;
+  the archive helper itself was not changed. Whether preservation should mean
+  exact bytes or historical meaning under this guard needs a scoped decision.
+
 ## 2026-10-09
 
 - **A field-limited backlog read still exceeded the tool output limit.** Severity L, kept for accumulation. During this Codex session’s `session-start` read, `gh issue list --json number,title,labels,state,updatedAt,url --limit 500` returned label IDs, descriptions and colours, and the tool truncated the output. A rerun kept the complete query, checked its page ceiling, and rendered issue numbers, priority labels and titles compactly. This is related to #143’s payload-overflow shape; selecting fields alone did not keep the rendered payload within the tool limit.

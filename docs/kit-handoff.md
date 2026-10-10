@@ -20,6 +20,25 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-10 (record-prose preflight and executed-span review, in Codex)
+
+- **Review proportionality:** [#1039](https://github.com/topij/agentic-dev-kit/pull/1039)
+  merged as `fa905cd09c950b96fe926ceb21d69ff7c00dea7c` on the operator's request.
+  It shipped #585's Git-snapshot record-prose preflight and shared executed-span
+  guidance. #403's shortening-versus-logging precedence question was outside the change.
+- **Decision:** the operator chose to file the accepted **P2 — Regression** about
+  the `uv run` no-network assurance and merge the reviewed candidate. Filed and
+  read back as [#1041](https://github.com/topij/agentic-dev-kit/issues/1041), with
+  `cloud` execution requirements. The [review disposition](https://github.com/topij/agentic-dev-kit/pull/1039#issuecomment-6101160726)
+  preserves the independent review and the unresolved deferral.
+- **Verification:** `make test` at `c02e4c67ffc2229e779009518b8c116d2a31abd8`
+  on 2026-10-10, in `/Users/topi/Coding/agentic-dev-kit`, passed.
+  The preflight itself does not establish command execution or numerical truth.
+- **Not established:** an offline dependency-bootstrap remedy or an adopter rollout.
+  The operator confirmed the workstream assignment.
+
+______________________________________________________________________
+
 ## Session — 2026-10-10 (ticket execution environments, in Codex)
 
 - **Ticket execution environments:** [#1038](https://github.com/topij/agentic-dev-kit/pull/1038)
@@ -250,38 +269,6 @@ Lanes ran with no operator present, so no tracker write was made. This session's
 
 ______________________________________________________________________
 
-## Session — 2026-10-06 (merge gate ignores a bot's empty thread-reply review, in Claude Code)
-
-[#982](https://github.com/topij/agentic-dev-kit/pull/982) merged as
-`54a65a4893b90d03ba15f3acdfdb52eb7ce5104e`, which closed #981. `pr_watch.py`'s
-coverage reduction now skips a configured bot's `COMMENTED` review with an empty
-body. GitHub creates that object for a bot's reply on an inline thread, and the
-merge gate had been accepting it as the bot's review of the head. The skip also
-keeps the wrapper from displacing the bot's earlier real review. `APPROVED` and the
-objection read are unchanged. The CHANGELOG entry tells adopters what to refresh.
-
-Decided: #981's suggested "or an inline comment at that `commit_id`" branch was not
-built. A thread reply is itself an inline comment, so the signal does not separate
-the cases. The cost is a fail-closed bound, written beside the skip: a bot that posts
-inline-only findings under an empty review body needs a receipt for that head.
-
-Verification: `make test` at `7f62cf6192f2d45bd3c7ad52c89fd9852427504d` on 2026-10-06,
-in `/Users/topi/Coding/agentic-dev-kit`, printed `4290 passed, 1 skipped`. The three
-later commits changed comments and docstrings only, so they got no full-suite run;
-CI's `Test` run passed on the PR's final head `35141002d5212d328e0c0b2435d86e33ac57ff68`.
-
-Review: the two-lens panel at `7f62cf6`, then three LOW delta passes. On the
-operator's choice each time, LOW wording findings were fixed rather than ticketed,
-until a pass found nothing. The PR's comments hold each pass's record. Occurrences
-were added, on the operator's approval of each exact text and read back identical,
-to #643 (lenses launched from the rendered prompt file) and #666 (successive
-prose-only LOW rounds).
-
-Closed workstream Merge-gate review evidence: the operator closed it in this session,
-once #981 was fixed with nothing outstanding.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -291,22 +278,19 @@ ______________________________________________________________________
 
 ### Review proportionality
 
-**Status:** the lens-count half of #585's 2026-10-02 decision shipped in #927
-(`8ea91add`): the class is computed from `review.safety_critical_paths`, and a standard PR
-takes one isolated lens. #934 (`41beacb8`) gave a delta pass's two draws their own named
-flags; #921 stays open for the cockpit-side check of the verdict-line names. The
-record-prose row of #585's decision is not built: its deterministic checks, and a lens
-told which spans stay executed. #993 (`2d40c960`) added the review round budget: the
-opening review plus `review.round_budget` fix rounds, then an operator decision packet.
-#1006 (`f917d946`) matches the class case-folded (#991) and closed #994's follow-ups; its
-last LOW, #1008, was fixed by #1022 (`54655d9d`).
-**Owner:**
-[#585](https://github.com/topij/agentic-dev-kit/issues/585); round-budget follow-ups
-[#994](https://github.com/topij/agentic-dev-kit/issues/994); related #921, #403, #666,
-#305, and the class's documented limits #928, #929, #930 and #931.
+**Status:** #927 (`8ea91add`) shipped the computed review class; #934 (`41beacb8`)
+added named delta draws; #993 (`2d40c960`) shipped the review round budget.
+#1039 (`fa905cd09c950b96fe926ceb21d69ff7c00dea7c`) shipped #585's record-prose
+preflight and executed-span guidance on 2026-10-10. The operator deferred the
+accepted P2 regression to #1041; #403's precedence question was outside the change.
+#921 owns the cockpit check of verdict-line names.
+**Owner:** [#585](https://github.com/topij/agentic-dev-kit/issues/585),
+[#1041](https://github.com/topij/agentic-dev-kit/issues/1041); related #921, #403,
+#666, #305, and the class's documented limits #928, #929, #930 and #931.
 
-▶ Next: #585's record-prose row — its deterministic checks, and a lens told which spans
-stay executed.
+▶ Next: Implement #1041 — qualify the dependency-bootstrap assurance in
+`docs/agentic-dev-kit/fallback-review-panel.md` and verify cold-cache failure as
+unavailable coverage, using the ticket's declared prerequisites.
 
 ### Scratch retention
 
