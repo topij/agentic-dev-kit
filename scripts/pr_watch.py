@@ -740,9 +740,9 @@ def _github_token() -> str | None:
 # `gh` path -> whether its GraphQL transport answered, for THIS process only.
 _gh_graphql_probes: dict[str, bool] = {}
 
-# `rateLimit` rather than `viewer`: a GitHub App installation token, which is
-# what a cloud session carries, cannot read `viewer`, so that probe would refuse
-# a `gh` whose every other GraphQL call works.
+# `rateLimit` rather than `viewer`: it asks for nothing about the token's owner,
+# so no token type the probe might meet (a GitHub App installation token, say)
+# can fail it while other GraphQL calls would succeed.
 _GH_GRAPHQL_PROBE_QUERY = "query{rateLimit{limit}}"
 
 
@@ -801,7 +801,9 @@ def _resolve_backend() -> tuple[str, str | None]:
     same thing with ambient PATH — the first test to import the module would
     pin the backend for every test after it, and which backend that is would
     depend on whether the machine running CI happens to have `gh`.
-    ``shutil.which`` is a cheap filesystem stat, so there is nothing to cache.
+    ``shutil.which`` is a cheap filesystem stat, so PATH is not cached. The
+    GraphQL probe below is a network call and IS cached, per `gh` path and for
+    the process only; :func:`_gh_graphql_usable` says why.
 
     Never lets a missing `gh` reach the operator as a raw ``FileNotFoundError``
     traceback — that is the bug this fallback exists to fix. Callers in
@@ -820,8 +822,10 @@ def _resolve_backend() -> tuple[str, str | None]:
     token = _github_token()
     if not token and gh_path is not None:
         raise RuntimeError(
-            "`gh` is on PATH but its GraphQL API is unavailable (a Claude Code "
-            "cloud session's egress proxy refuses every GraphQL call), and there "
+            "`gh` is on PATH but a GraphQL call through it failed (see the "
+            "warning above for `gh`'s own error: a Claude Code cloud session's "
+            "egress proxy refuses every GraphQL call, and a `gh` that is not "
+            "logged in or cannot reach GitHub fails the same way), and there "
             "is no GitHub token in the environment for the REST fallback. Set "
             "GH_TOKEN or GITHUB_TOKEN; the REST fallback POLLS ONLY: "
             "`--record-review`, `--record-round`, `--assert-draft` and "
@@ -867,7 +871,8 @@ def _resolve_backend() -> tuple[str, str | None]:
 
 _REST_POLL_ONLY_BLOCKER = (
     "the REST backend cannot authorize a merge — it polls only (issue #94); "
-    "run the merge from a session with `gh` available"
+    "run the merge from a session where `gh` is installed AND its API calls "
+    "succeed — a `gh` on PATH that cannot reach GitHub is not enough"
 )
 
 
@@ -1086,8 +1091,11 @@ _truncated_reads: list[str] = []
 # ``{"surface", "url", "reason"}``. Unlike a truncated read, this is a gap the
 # poll knows it has, so `build_report` turns it into a merge blocker as well as
 # reporting it — the blocker survives #94 lifting REST's poll-only bound. It does
-# not touch `converged`: the one surface recorded here is refused for the whole
-# session, so blocking the loop on it would wedge every cloud poll.
+# not touch `converged`: in a cloud session the refusal lasts the whole session,
+# so blocking the loop on it would wedge every cloud poll. A transient 403 (a
+# rate limit) lands here too, and is not told apart; so on any poll that
+# records an entry, `converged` says nothing about status contexts, whether
+# the refusal is permanent or not.
 _unavailable_reads: list[dict] = []
 
 
@@ -5725,7 +5733,15 @@ def build_report(
         "truncated_reads": list(_truncated_reads),
         # Surfaces refused outright (see `_unavailable_reads`). Unlike
         # `truncated_reads`, each entry also raises a merge blocker above.
-        "unavailable_reads": [dict(entry) for entry in _unavailable_reads],
+        # Deduped per URL, as the render dedupes `truncated_reads`: a caller
+        # that reads the same surface twice is one gap, not two.
+        "unavailable_reads": list(
+            {
+                str(entry.get("url")): dict(entry)
+                for entry in _unavailable_reads
+                if isinstance(entry, dict)
+            }.values()
+        ),
         # Which transport produced this report. Needed by `persist_poll` so the
         # false-settle baseline is never compared across two backends that count
         # checks differently (see :func:`comparable_max_total`), and useful in the

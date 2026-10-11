@@ -12617,7 +12617,9 @@ def test_the_render_names_an_unreadable_surface() -> None:
             "reason": "403",
         }
     )
+    pr_watch._unavailable_reads.append(dict(pr_watch._unavailable_reads[0]))
     report = pr_watch.build_report(_green_view(headRefOid="abc"), [], set(), backend="rest")
+    assert len(report["unavailable_reads"]) == 1, "one surface read twice is one gap"
     text = pr_watch.render(report)
     assert "commit-statuses could NOT be read" in text
     assert "not green" in text
@@ -12648,8 +12650,12 @@ def test_only_a_403_on_the_combined_status_is_tolerated(
     assert pr_watch._unavailable_reads == []
 
 
+@pytest.mark.parametrize(
+    "fragment",
+    ["/check-runs", "/pulls/9?", "/pulls/9/reviews", "/issues/9/comments", "/pulls/9/comments"],
+)
 def test_a_403_on_another_rest_read_still_fails_the_poll(
-    monkeypatch: pytest.MonkeyPatch,
+    fragment: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     pr_watch = _load_pr_watch()
     _no_gh(pr_watch, monkeypatch)
@@ -12659,10 +12665,51 @@ def test_a_403_on_another_rest_read_still_fails_the_poll(
     class _Opener:
         @staticmethod
         def open(req, timeout=None):
-            if "/check-runs" in req.full_url:
+            path = urllib.parse.urlsplit(req.full_url).path
+            target = fragment.rstrip("?")
+            hit = path.endswith(target) if fragment.endswith("?") else fragment in req.full_url
+            if hit:
                 raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", {}, io.BytesIO(b"{}"))
             return real_open(req, timeout=timeout)
 
     monkeypatch.setattr(pr_watch, "_opener", _Opener)
     with pytest.raises(RuntimeError, match="failed \\(403 "):
         pr_watch.fetch_pr_view(9)
+
+
+def test_the_probe_is_bounded_by_a_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A hung probe must not hang the poll: the timeout is passed, not assumed."""
+    pr_watch = _load_pr_watch()
+    _gh_on_path_with_graphql(pr_watch, monkeypatch, usable=True)
+    seen_kwargs: list[dict] = []
+
+    def _run(argv, **kw):
+        seen_kwargs.append(kw)
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(pr_watch.subprocess, "run", _run)
+    assert pr_watch._resolve_backend() == ("gh", None)
+    assert isinstance(seen_kwargs[0].get("timeout"), (int, float))
+    assert 0 < seen_kwargs[0]["timeout"] <= 60
+
+
+def test_unread_statuses_make_the_bot_read_unavailable_by_the_explicit_guard(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pinned on the guard itself, not on the TypeError `_rest_check_rows`
+    would raise over `None` and the broad handler would absorb."""
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+    real_rows = pr_watch._rest_check_rows
+
+    def _rows(check_runs, statuses, **kw):
+        assert statuses is not None, "statuses=None reached _rest_check_rows"
+        return real_rows(check_runs, statuses, **kw)
+
+    monkeypatch.setattr(pr_watch, "_rest_check_rows", _rows)
+    details = pr_watch.fetch_check_details(
+        9,
+        bots=("coderabbit",),
+        rest_reads=pr_watch.RestCheckReads("deadbee", [], None),
+    )
+    assert details == pr_watch.CheckDetails([], "unavailable")

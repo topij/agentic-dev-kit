@@ -209,14 +209,16 @@ nothing (blocking `converged` would wedge the loop) and is printed by the human
 render as well as carried in the JSON. Empty on the `gh` backend.
 
 **`unavailable_reads`** lists, as `{surface, url, reason}`, any surface the REST
-token was refused outright. Today that is only `commit-statuses`: a cloud session's
-GitHub App token gets `403` from the combined-status endpoint while it can read check
-runs, reviews and comments. The poll still reports, but `checks` then covers check
+read was refused. Today that is only `commit-statuses`, on any `403` from the
+combined-status endpoint: a cloud session's GitHub App token gets one on every poll
+while it can read check runs, reviews and comments, and a rate-limited token can get
+a transient one. The engine does not tell the two apart. The poll still reports, but `checks` then covers check
 runs only, so each entry also adds the merge blocker `<surface> could not be read`,
 and the review-bot block reads `signal: unavailable`. It does not hold `converged`
-false, because the refusal lasts the whole session and would wedge the loop. A
-status-context CI result is therefore not checked by `converged` there; check it
-another way before handing the merge back. Empty on the `gh` backend.
+false, because in a cloud session the refusal lasts the whole session and would
+wedge the loop. On any poll with an entry, permanent or transient, `converged` does
+not cover status-context CI results; check them another way before handing the
+merge back. Empty on the `gh` backend.
 
 ## Review configuration
 

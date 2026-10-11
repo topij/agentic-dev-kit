@@ -13,9 +13,11 @@ takes this path, and `--record-review`, `--record-round`, `--assert-draft` and
 ADDED (report shape): the JSON report has a new `unavailable_reads` list of
 `{surface, url, reason}`. On REST, a `403` from the combined-status endpoint
 (`commits/<sha>/status`) no longer fails the poll. It adds a `commit-statuses` entry
-and the merge blocker `commit-statuses could not be read — …`, and the review-bot
-block reads `signal: unavailable`. `checks` then covers check runs only, and
-`converged` is not held false. Any other HTTP error on any read still exits 2.
+and the merge blocker `commit-statuses could not be read — …`, and, when review bots
+are configured, the review-bot block reads `signal: unavailable`. Any `403` there takes
+this path, a transient rate-limit one included. `checks` then covers check runs only,
+and `converged` is not held false. Any other HTTP error on any read the report needs
+still exits 2; the per-check identity read keeps degrading as before.
 
 A consumer that parses the report should read `unavailable_reads` beside
 `truncated_reads`. A test that puts a fake `gh` on PATH now needs that fake to answer
