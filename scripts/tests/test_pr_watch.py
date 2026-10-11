@@ -270,6 +270,86 @@ def test_the_converged_step_settles_the_review_request_before_reading_mergeable(
     assert "gates nothing" in stop
 
 
+_PR_WATCH_WORKFLOWS = REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows"
+
+
+def _between(text: str, start: str, end: str) -> str:
+    begin = text.index(start)
+    return " ".join(text[begin : text.index(end, begin)].split())
+
+
+def _assert_moved_rules_and_back_references(entry: str, reference: str) -> None:
+    """#1062 — the loop rules #1061 moved out of *Notes*, and the reference
+    file's pointers back at them.
+
+    Both files are read before any action, so a rule's placement changes no
+    read. What this pins is that a rule the loop acts on stays in the loop step
+    an agent is standing in when it acts, and that every place `report-fields.md`
+    sends the reader still exists, because renaming a bullet would otherwise
+    break the pointer silently.
+    """
+    comments = _between(entry, "1. **If there are `new_comments`", "\n1. **Count the round")
+    assert "- **Untrusted outage candidate**" in comments
+    assert "`untrusted_review_unavailable_candidate`" in comments
+    assert "never counts as reviewer evidence" in comments
+    assert (
+        "add the exact login to `review.bot_author_aliases` only after verifying it"
+        in comments
+    )
+
+    record = _between(entry, "1. **Record the independent pass", "\n1. **Pace the next poll")
+    assert "`--allow-pending-bot-review`" in record
+    assert "Use it only with evidence the queued verdict will never arrive" in record
+    assert "Give a freshly-readied PR a poll or two before recording one" in record
+
+    flat = " ".join(reference.split())
+    bullets = re.findall(r"loop's \*\*([^*]+)\*\* bullet", flat)
+    assert bullets, "report-fields.md names no loop bullet"
+    for name in bullets:
+        assert f"- **{name}**" in comments, f"report-fields.md cites a missing bullet: {name}"
+    if re.search(r"[Tt]he loop's record step", flat):
+        assert "1. **Record the independent pass" in entry
+    if "the paragraph above *Loop*" in flat:
+        before_loop = " ".join(entry[: entry.index("\n## Loop\n")].split())
+        assert "**Without `gh`, the engine polls but cannot authorize a merge**" in before_loop
+    if "*Converged* stop condition" in flat:
+        stops = entry[entry.index("\n## Stop conditions\n") :]
+        assert "\n- **Converged**" in stops
+
+
+def test_moved_loop_rules_and_report_fields_back_references_hold() -> None:
+    _assert_moved_rules_and_back_references(
+        (_PR_WATCH_WORKFLOWS / "pr-watch.md").read_text(encoding="utf-8"),
+        (_PR_WATCH_WORKFLOWS / "pr-watch" / "report-fields.md").read_text(encoding="utf-8"),
+    )
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        # Weakening the moved rules.
+        (
+            "add the exact login to `review.bot_author_aliases` only after",
+            "add the exact login to `review.bot_author_aliases` after",
+        ),
+        ("Use it only with evidence the queued verdict", "Use it with the queued verdict"),
+        # Renaming a bullet or step the reference file points at.
+        ("- **Untrusted outage candidate**", "- **Outage candidate**"),
+        ("- **Reviewer unavailable**", "- **Bot unavailable**"),
+        ("1. **Record the independent pass", "1. **Record the pass"),
+        ("- **Converged**", "- **Done**"),
+    ],
+)
+def test_moved_loop_rule_mutations_are_rejected(old: str, new: str) -> None:
+    entry = (_PR_WATCH_WORKFLOWS / "pr-watch.md").read_text(encoding="utf-8")
+    reference = (_PR_WATCH_WORKFLOWS / "pr-watch" / "report-fields.md").read_text(encoding="utf-8")
+    pattern = r"\s+".join(re.escape(word) for word in old.split())
+    mutated, applied = re.subn(pattern, new, entry)
+    assert applied >= 1, old
+    with pytest.raises((AssertionError, ValueError)):
+        _assert_moved_rules_and_back_references(mutated, reference)
+
+
 
 
 def test_done_keeps_its_original_merge_authorization_semantics() -> None:

@@ -2099,7 +2099,9 @@ _SPLIT_WORKFLOW_SUMMARIES = {
     "pr-watch": {
         "report-fields.md": (
             "*Seen state and comment filtering*, *Review-bot status*, *Evidence "
-            "findings*, *The REST backend* and *Review configuration*."
+            "findings*, *The REST backend*, *Review configuration*, *Review evidence "
+            "and merge blockers*, *The review request at convergence*, *Round "
+            "counting* and *The all-comments view*."
         ),
     },
     "triage-friction-log": {
@@ -2125,6 +2127,10 @@ _SPLIT_WORKFLOW_SECTIONS = {
             "Evidence findings",
             "The REST backend",
             "Review configuration",
+            "Review evidence and merge blockers",
+            "The review request at convergence",
+            "Round counting",
+            "The all-comments view",
         ),
     },
     "triage-friction-log": {
