@@ -20,6 +20,35 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-11 (pr-watch split into an entry and a reference file, in Claude Code)
+
+- **Skills and instruction files:** both PRs merged on the operator's request.
+  - [#1061](https://github.com/topij/agentic-dev-kit/pull/1061) as `367be931`: the
+    instructions in pr-watch's *Notes* moved into the loop steps where they apply, and
+    the field glossary moved to `docs/agentic-dev-kit/workflows/pr-watch/report-fields.md`,
+    read unconditionally like the triage reference files.
+  - [#1063](https://github.com/topij/agentic-dev-kit/pull/1063) as `ad65e539`: the
+    reasoning behind loop step 1's merge blockers, the *Converged* review request, the
+    round count and `--all-comments` moved to new sections of `report-fields.md`. A test
+    pins the rules left in the loop and each pointer between the two files.
+- **Review:** CodeRabbit skipped both PRs because its automatic reviews are disabled.
+  An isolated adversarial lens ran a `fallback:lens` full pass at `4758f232` and at
+  `e5e9b827`, and a `fallback:delta` pass at `c12224ae`. The dispositions are on each PR.
+- **Decisions:** the operator chose to ticket #1061's LOW findings, which became #1062,
+  and to fix #1063's in a delta-reviewed repair. #1059 and #1062 were closed on the
+  operator's word, each with a comment naming its merge commit.
+- **Corrected:** Review proportionality's `▶ Next:` named #1041, which #1044
+  (`8f41ea42`) had closed on 2026-10-10. On the operator's choice it now names #921.
+- **Verification:** `make test` at `c12224ae430d34e8b41cd113b0140b41d9b01caf` on
+  2026-10-11, in `/Users/topi/Coding/agentic-dev-kit`, printed `4854 passed, 1 skipped`.
+  #1061's stamp is on that PR.
+- **Filed this session:** [#1062](https://github.com/topij/agentic-dev-kit/issues/1062);
+  an occurrence comment on [#643](https://github.com/topij/agentic-dev-kit/issues/643).
+- **Not established:** whether an agent following the split pr-watch acts differently
+  from one following the single file. No trigger or behaviour evaluation ran.
+
+______________________________________________________________________
+
 ## Session — 2026-10-11 (skill bindings, invocation control and instruction-file size, in Claude Code)
 
 - **Skills and instruction files:** an assessment against Anthropic's updated skill
@@ -257,16 +286,16 @@ ______________________________________________________________________
 **Status:** #927 (`8ea91add`) shipped the computed review class; #934 (`41beacb8`)
 added named delta draws; #993 (`2d40c960`) shipped the review round budget.
 #1039 (`fa905cd09c950b96fe926ceb21d69ff7c00dea7c`) shipped #585's record-prose
-preflight and executed-span guidance on 2026-10-10. The operator deferred the
-accepted P2 regression to #1041; #403's precedence question was outside the change.
+preflight and executed-span guidance on 2026-10-10. The P2 regression the operator
+deferred to #1041 shipped in #1044 (`8f41ea42`); #403's precedence question was outside the change.
 #921 owns the cockpit check of verdict-line names.
 **Owner:** [#585](https://github.com/topij/agentic-dev-kit/issues/585),
-[#1041](https://github.com/topij/agentic-dev-kit/issues/1041); related #921, #403,
+[#921](https://github.com/topij/agentic-dev-kit/issues/921); related #403,
 #666, #305, and the class's documented limits #928, #929, #930 and #931.
 
-▶ Next: Implement #1041 — qualify the dependency-bootstrap assurance in
-`docs/agentic-dev-kit/fallback-review-panel.md` and verify cold-cache failure as
-unavailable coverage, using the ticket's declared prerequisites.
+▶ Next: #921 — make the cockpit check that a delta lens returned both the
+`prose-class:` and `safety-critical:` verdict lines before a `fallback:delta` receipt
+is recorded.
 
 ### Scratch retention
 
@@ -354,13 +383,14 @@ then work on its instruction-check coverage gaps only if eligible.
 ### Skills and instruction files
 
 **Status:** #1052 (`f7d8749a`), #1053 (`78d623c3`) and #1054 (`ea4010db`) shipped on
-2026-10-11. #1055 owns the Codex `openai.yaml` check, #1057 an absent reference file,
-#1058 the split's remaining pin gaps.
+2026-10-11, and #1061 (`367be931`) and #1063 (`ad65e539`) split pr-watch into an entry
+and `pr-watch/report-fields.md`. #1055 owns the Codex `openai.yaml` check, #1057 an
+absent reference file, #1058 the triage split's remaining pin gaps.
 **Owner:** `saved_plans/skills-and-instructions-assessment_2026-10-11.md`;
-[#1059](https://github.com/topij/agentic-dev-kit/issues/1059),
 [#1055](https://github.com/topij/agentic-dev-kit/issues/1055),
 [#1057](https://github.com/topij/agentic-dev-kit/issues/1057),
 [#1058](https://github.com/topij/agentic-dev-kit/issues/1058).
 
-▶ Next: #1059 — move pr-watch's loop instructions out of *Notes* into the loop steps,
-then split the remaining field glossary into `workflows/pr-watch/`, read unconditionally.
+▶ Next: #1057 — make `kit_doctor` report an absent reference file under
+`workflows/<slug>/` as `missing-required` when the adopter has `<slug>.md`, so
+`/upgrade` cannot leave `triage-friction-log/` or `pr-watch/` half-installed.
