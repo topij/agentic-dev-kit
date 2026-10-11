@@ -2104,6 +2104,49 @@ _SPLIT_WORKFLOW_TRIGGERS = {
 }
 
 
+# Which sections each reference file holds. A section moved behind another
+# file's trigger would be read on the wrong route, or never, so the placement
+# is pinned like the trigger itself.
+_SPLIT_WORKFLOW_SECTIONS = {
+    "triage-friction-log": {
+        "recovery.md": (
+            "Completed-state retirement",
+            "Gate-only input precedence",
+            "Test input precedence",
+            "State-present held-evidence procedure",
+            "Invalid-state recovery",
+            "Gate-only recovery transition",
+            "State-present recovery transition",
+            "Isolated test-state recovery",
+        ),
+        "state-schema.md": (
+            "Ordinary active state",
+            "Validity and abandonability",
+            "The single-writer gate file",
+        ),
+        "finalize.md": ("Tracker writes and accounting", "Finalize and sweep"),
+        "engine-cli.md": ("Engine CLI",),
+    },
+}
+
+# Cross-file reads a reference file itself requires, pinned whole.
+_SPLIT_WORKFLOW_CROSS_READS = {
+    ("triage-friction-log", "recovery.md"): (
+        "Before classifying a state as invalid or abandonable, read *Validity and "
+        "abandonability* in [`state-schema.md`](state-schema.md) completely."
+    ),
+}
+
+
+def _headings(text: str) -> list[str]:
+    """A reference file's section headings, after its title and contents list."""
+    return [
+        line.lstrip("#").strip()
+        for line in text.splitlines()
+        if line.startswith(("## ", "### ")) and line != "## Contents"
+    ]
+
+
 def _assert_split_workflow_links_and_triggers(root: Path) -> None:
     workflows = root / "docs" / "agentic-dev-kit" / "workflows"
     split = sorted(path.name for path in workflows.iterdir() if path.is_dir())
@@ -2111,22 +2154,43 @@ def _assert_split_workflow_links_and_triggers(root: Path) -> None:
     for slug, triggers in _SPLIT_WORKFLOW_TRIGGERS.items():
         entry = " ".join((workflows / f"{slug}.md").read_text(encoding="utf-8").split())
         assert "**Read a file completely, not in part, when its trigger applies**" in entry
+        assert (
+            "The files below are part of the workflow and are as normative as this one;"
+            in entry
+        ), f"{slug}.md no longer makes its reference files normative"
         files = sorted(path.name for path in (workflows / slug).glob("*.md"))
         assert files == sorted(triggers), f"{slug}/ holds {files}"
-        bullets = entry.split("## Reference files", 1)[1].split("\n## ", 1)[0]
-        bullets = bullets.split(" ## ", 1)[0].split("- [`")[1:]
+        bullets = entry.split("## Reference files", 1)[1].split(" ## ", 1)[0]
+        bullets = [bullet.strip() for bullet in bullets.split("- [`")[1:]]
         by_file = {}
         for bullet in bullets:
             name = bullet.split("`]", 1)[0].rsplit("/", 1)[-1]
             by_file[name] = bullet
         assert sorted(by_file) == files, f"{slug}.md links {sorted(by_file)}"
         for name, trigger in triggers.items():
-            assert f"]({slug}/{name})" in by_file[name]
-            assert f"Read it {trigger}" in by_file[name], f"{slug}.md: {name}'s trigger"
-            opening = (workflows / slug / name).read_text(encoding="utf-8").split("\n\n", 2)[1]
-            assert " ".join(opening.split()).startswith(f"Read this file completely {trigger}"), (
-                f"{name} does not open with its trigger"
+            text = (workflows / slug / name).read_text(encoding="utf-8")
+            bullet = by_file[name]
+            assert f"]({slug}/{name})" in bullet
+            # The bullet ends with its trigger, so nothing can be appended to it.
+            assert bullet.endswith(f"Read it {trigger}"), f"{slug}.md: {name}'s trigger"
+            opening = " ".join(text.split("\n\n", 2)[1].split())
+            assert opening.startswith(
+                f"Read this file completely {trigger} It is part of [`{slug}.md`](../{slug}.md)"
+                " and as normative as it;"
+            ), f"{name} does not open with its trigger"
+            headings = _headings(text)
+            assert headings == list(_SPLIT_WORKFLOW_SECTIONS[slug][name]), (
+                f"{name} holds {headings}"
             )
+            for cited in re.findall(r"\*([^*]+)\*", bullet.split(" — ", 1)[1].split(" Read it ", 1)[0]):
+                assert cited in headings, f"{slug}.md names *{cited}* for {name}"
+        for cited, name in re.findall(r"\*([^*]+)\*, in `([A-Za-z0-9_-]+\.md)`", entry):
+            assert cited in _headings(
+                (workflows / slug / name).read_text(encoding="utf-8")
+            ), f"{slug}.md cites *{cited}* in {name}"
+    for (slug, name), sentence in _SPLIT_WORKFLOW_CROSS_READS.items():
+        text = " ".join((workflows / slug / name).read_text(encoding="utf-8").split())
+        assert sentence in text, f"{name} lost its cross-file read"
 
 
 def test_split_workflows_link_every_reference_file_with_its_trigger() -> None:
@@ -2151,6 +2215,15 @@ def test_split_workflow_trigger_and_link_mutations_are_rejected(tmp_path: Path) 
         ("triage-friction-log/finalize.md", "and on resuming a state in `tracker-write` or a later phase",
          ""),
         ("triage-friction-log/recovery.md", "Read this file completely when", "You may read this file when"),
+        ("triage-friction-log.md", "or was entered with `recover` or `test`.",
+         "or was entered with `recover` or `test`. Skip it for a short run."),
+        ("triage-friction-log.md", "are part of the workflow and are as normative as this one;",
+         "are optional background reading;"),
+        ("triage-friction-log/recovery.md", "Before classifying a state as invalid or abandonable, read",
+         "Trust your own judgement rather than read"),
+        ("triage-friction-log/recovery.md", "and as normative as it;", "and optional;"),
+        ("triage-friction-log.md", "*Completed-state retirement*, in `recovery.md`",
+         "*Completed-state retirement*, in `engine-cli.md`"),
     )
     for index, (rel, old, new) in enumerate(mutations):
         root = tmp_path / f"case-{index}"
