@@ -160,8 +160,12 @@ like good news, it looks like a missing handoff.
   `--paginate` follows every page until none remains, so a full page is not the
   signal here — **the exit status is**. A run counts as complete only when it exits
   zero; one that exits non-zero after printing some pages is truncated, and its
-  partial output is discarded, never read as the list. Each page arrives as its own
-  JSON array, so parse them all (or pass `--slurp`) rather than the first. If every
+  partial output is discarded, never read as the list. **Check `gh`'s own exit
+  status, not a pipeline's**: piped into a parser, the pipeline reports the parser's
+  status, and a mid-pagination failure reads as a complete list. Write `gh`'s output to
+  a file and check its status before parsing, or run under `set -o pipefail`. Each page
+  arrives as its own JSON array, so parse them all (or pass `--slurp`) rather than the
+  first. If every
   route fails — `gh pr list`, this REST read, and any GitHub MCP the session offers,
   which can fail on its own credentials — render `PRs unavailable: <reason>`, never
   an empty list.
@@ -198,7 +202,9 @@ like good news, it looks like a missing handoff.
   token was refused, not a comment surface, so it does not make this layer
   unavailable. It does make that pull request's CI state partial: its `checks` then
   cover only what was read, so render its CI as `CI partial: <surface> unreadable`,
-  never as green, and list its `merge_blockers[]`.
+  never as green, and list its `merge_blockers[]`. A failure read from the surfaces
+  that were readable still makes the pull request CI-red; the partial note is added to
+  it, not put in its place.
 - your cron/CI health command (adapt to your infra)
 - your config-drift check, if you have one (parse its output for a 🔴-worthy line in *Render the briefing*)
 - Read `<handoff>`. The focus is the `## Workstreams` section: each `### <name>` entry's

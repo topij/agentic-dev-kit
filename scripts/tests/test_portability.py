@@ -3181,6 +3181,13 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "render its CI as `CI partial: <surface> unreadable`, never as green"
             in flattened
         )
+        # The fail-open edges of the REST routes: a pipe hiding gh's status, a
+        # partial note replacing a real CI-red, a refused tracker read as fine,
+        # and a status-surface gap read as a missing comment layer.
+        assert "**Check `gh`'s own exit status, not a pipeline's**" in flattened
+        assert "still makes the pull request CI-red" in flattened
+        assert "that refusal is the tracker gap unless" in flattened
+        assert "so it does not make this layer unavailable" in flattened
         # #762: workstreams, not recency, carry the handoff's next steps.
         assert (
             "**no entry is promoted for being the most recently updated**"
@@ -3752,6 +3759,18 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
         )),
         ("session-start", session, session.replace(
             "drop every row that carries a `pull_request` key", "keep every row", 1
+        )),
+        ("session-start", session, session.replace(
+            "**Check `gh`'s own exit\n  status, not a pipeline's**", "Check the status", 1
+        )),
+        ("session-start", session, session.replace(
+            "still makes the pull request CI-red", "is not shown", 1
+        )),
+        ("session-start", session, session.replace(
+            "that refusal is the tracker gap unless", "that refusal is fine unless", 1
+        )),
+        ("session-start", session, session.replace(
+            "so it does not make this layer\n  unavailable", "so it makes this layer\n  unavailable", 1
         )),
         ("session-start", session, session.replace(
             "`CI partial: <surface> unreadable`,\n  never as green", "green", 1
