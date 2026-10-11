@@ -30,15 +30,16 @@
   - [#1063](https://github.com/topij/agentic-dev-kit/pull/1063) as `ad65e539`: the
     reasoning behind loop step 1's merge blockers, the *Converged* review request, the
     round count and `--all-comments` moved to new sections of `report-fields.md`. A test
-    pins the rules left in the loop and each pointer between the two files.
+    pins the rules left in the loop and the pointers #1063 added between the two files.
 - **Review:** CodeRabbit skipped both PRs because its automatic reviews are disabled.
   An isolated adversarial lens ran a `fallback:lens` full pass at `4758f232` and at
   `e5e9b827`, and a `fallback:delta` pass at `c12224ae`. The dispositions are on each PR.
-- **Decisions:** the operator chose to ticket #1061's LOW findings, which became #1062,
-  and to fix #1063's in a delta-reviewed repair. #1059 and #1062 were closed on the
-  operator's word, each with a comment naming its merge commit.
+- **Decisions:** the operator chose to ticket two of #1061's LOW findings as #1062,
+  with the third corrected at this wrap-up, and to repair #1063's LOW findings in a
+  delta-reviewed commit. On the operator's word, #1059 and #1062 are marked done on the
+  tracker, each with a comment naming its merge commit.
 - **Corrected:** Review proportionality's `▶ Next:` named #1041, which #1044
-  (`8f41ea42`) had closed on 2026-10-10. On the operator's choice it now names #921.
+  (`8f41ea42`) had already shipped. On the operator's choice it now names #921.
 - **Verification:** `make test` at `c12224ae430d34e8b41cd113b0140b41d9b01caf` on
   2026-10-11, in `/Users/topi/Coding/agentic-dev-kit`, printed `4854 passed, 1 skipped`.
   #1061's stamp is on that PR.

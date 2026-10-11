@@ -26,10 +26,10 @@
 
 ## 2026-10-11
 
-- **Lens findings landed on the author's claims, not on behaviour.** Severity L, kept for
-  accumulation alongside the repair-and-review chain entries. On #1063 the full pass and
-  the delta pass each found a LOW where a changelog fragment or commit message said the
-  tests caught more than they did; the code under review drew no finding.
+- **Each #1063 lens pass found a LOW in the author's own claims about its tests.**
+  Severity L, kept for accumulation alongside the repair-and-review chain entries. The
+  full pass and the delta pass each found a changelog fragment or commit message saying
+  the tests caught more than they did.
 - **A CI-only failure in the pinned-preflight test passed on rerun.** Severity L, no
   mechanism yet. On #1053's first CI run,
   `test_panel_prompt.py::test_generated_preflight_authenticates_objects_before_execution[kitconfig]`
