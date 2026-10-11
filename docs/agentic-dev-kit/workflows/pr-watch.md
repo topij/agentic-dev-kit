@@ -84,7 +84,8 @@ repository and stores polls, acknowledgments, and review receipts in the lane sa
 that `dev_session.sh merge <scope>` re-checks.
 
 **Without `gh`, the engine polls but cannot authorize a merge** (*The REST backend*, in
-`report-fields.md`). `converged` works normally, which is the point: you can run the
+`report-fields.md`). A `gh` that cannot reach GitHub's GraphQL API, as in a Claude Code
+cloud session, counts as no `gh`. `converged` works normally, which is the point: you can run the
 watch-and-fix loop from a session without `gh` and hand the merge back to one that has
 it. `dev_session.sh pr-watch <scope>` itself needs `gh`, so a gh-less session must
 invoke the engine directly, and on a **fork** checkout pass an explicit PR number.

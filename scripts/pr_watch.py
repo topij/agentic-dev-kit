@@ -64,12 +64,16 @@ The transport is a thin layer; the classification + diff + done logic are pure
 functions (tested). Stdlib only.
 
 **Two backends, with different authority.** `gh` is the default whenever the
-binary is on PATH, and its behaviour is unchanged. When `gh` is absent — cloud and
-container sessions with no binary and no way to run an interactive
-`gh auth login` — the same fields are read from the GitHub REST API using
-`GH_TOKEN`/`GITHUB_TOKEN`. With neither, the engine exits 2 with an actionable
-message rather than a `FileNotFoundError` traceback. Selection is per call, never
-memoized: see `_resolve_backend`.
+binary is on PATH and a GraphQL probe through it succeeds, and its behaviour is
+unchanged. When `gh` is absent — container sessions with no binary and no way to
+run an interactive `gh auth login` — or present but unable to reach GraphQL, as in
+a Claude Code cloud session whose egress proxy refuses it, the same fields are read
+from the GitHub REST API using `GH_TOKEN`/`GITHUB_TOKEN`. With no token, the engine
+exits 2 with an actionable message rather than a `FileNotFoundError` traceback.
+Selection re-reads PATH on every call and probes each `gh` once per process: see
+`_resolve_backend`. A surface the REST token cannot read at all (the combined
+commit status, in a cloud session) is named in `unavailable_reads` and blocks the
+merge; it is never read as empty.
 
 **On REST this engine POLLS ONLY.** `mergeable` is false by construction, and
 `--record-review` / `--record-round` / `--assert-draft` / `--assert-ready` refuse. It does still
@@ -733,6 +737,61 @@ def _github_token() -> str | None:
     return os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
 
 
+# `gh` path -> whether its GraphQL transport answered, for THIS process only.
+_gh_graphql_probes: dict[str, bool] = {}
+
+# `rateLimit` rather than `viewer`: a GitHub App installation token, which is
+# what a cloud session carries, cannot read `viewer`, so that probe would refuse
+# a `gh` whose every other GraphQL call works.
+_GH_GRAPHQL_PROBE_QUERY = "query{rateLimit{limit}}"
+
+
+def _gh_graphql_usable(gh_path: str) -> bool:
+    """Whether `gh` at ``gh_path`` can make a GraphQL call. Never raises.
+
+    Any failure reads as unusable, whatever its cause — the proxy's refusal, an
+    unauthenticated `gh`, a network fault, a timeout. That is the fail-closed
+    direction: an unusable answer selects REST, which can poll but never
+    authorize a merge, and the write paths then refuse through
+    :func:`require_gh_backend`. Nothing here parses the error text.
+
+    **Memoized per path for the life of the process, deliberately.** One poll
+    resolves the backend several times (`main`, :func:`fetch_pr_view`,
+    :func:`fetch_check_details`). A network probe that answered differently
+    between those calls would let `main` thread ``"gh"`` into `build_report`
+    while REST performed the reads — exactly the drift
+    :func:`rest_cannot_authorize_merge` exists to rule out. A fresh process per
+    poll re-probes, which is all the #48 lesson asks; the module-level dict is
+    also fresh for every test that loads the engine.
+    """
+    cached = _gh_graphql_probes.get(gh_path)
+    if cached is not None:
+        return cached
+    try:
+        result = subprocess.run(  # noqa: S603
+            [gh_path, "api", "graphql", "-f", f"query={_GH_GRAPHQL_PROBE_QUERY}"],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=str(REPO_ROOT),
+            timeout=20,
+        )
+        usable = result.returncode == 0
+        detail = (result.stderr or "").strip()
+    except (OSError, subprocess.SubprocessError) as exc:
+        usable = False
+        detail = str(exc)
+    if not usable:
+        print(
+            "warning: `gh` is on PATH but its GraphQL API did not answer "
+            f"({' '.join(detail.split())[:160] or 'no error text'}); falling "
+            "back to the REST backend, which polls only",
+            file=sys.stderr,
+        )
+    _gh_graphql_probes[gh_path] = usable
+    return usable
+
+
 def _resolve_backend() -> tuple[str, str | None]:
     """Pick ``"gh"`` or ``"rest"``, or raise a clear, actionable RuntimeError.
 
@@ -747,10 +806,27 @@ def _resolve_backend() -> tuple[str, str | None]:
     Never lets a missing `gh` reach the operator as a raw ``FileNotFoundError``
     traceback — that is the bug this fallback exists to fix. Callers in
     :func:`main` already catch ``RuntimeError`` and print ``error: …`` + exit 2.
+
+    **Chosen by capability, not presence.** A Claude Code cloud session has `gh`
+    on PATH while its egress proxy refuses every GraphQL call, so every
+    ``gh pr view`` failed there. `gh` is used only when :func:`_gh_graphql_usable`
+    says its GraphQL transport answers; otherwise this is the REST backend, with
+    REST's poll-only bound. The probe's own result is memoized per `gh` path for
+    the process — see that function for why PATH is not.
     """
-    if shutil.which("gh") is not None:
+    gh_path = shutil.which("gh")
+    if gh_path is not None and _gh_graphql_usable(gh_path):
         return "gh", None
     token = _github_token()
+    if not token and gh_path is not None:
+        raise RuntimeError(
+            "`gh` is on PATH but its GraphQL API is unavailable (a Claude Code "
+            "cloud session's egress proxy refuses every GraphQL call), and there "
+            "is no GitHub token in the environment for the REST fallback. Set "
+            "GH_TOKEN or GITHUB_TOKEN; the REST fallback POLLS ONLY: "
+            "`--record-review`, `--record-round`, `--assert-draft` and "
+            "`--assert-ready` need a `gh` whose GraphQL calls succeed (issue #94)."
+        )
     if not token:
         raise RuntimeError(
             "`gh` CLI not found on PATH and no GitHub token in the environment — "
@@ -851,7 +927,7 @@ def require_gh_backend(operation: str) -> None:
         raise RuntimeError(
             f"{operation} needs the `gh` backend: the REST fallback polls only "
             "(issue #94). Install and authenticate `gh`, or run this from a "
-            "session that has it."
+            "session where it can reach GitHub's GraphQL API."
         )
 
 
@@ -925,6 +1001,19 @@ class _ApiOnlyRedirectHandler(urllib.request.HTTPRedirectHandler):
 _opener = urllib.request.build_opener(_ApiOnlyRedirectHandler)
 
 
+class _HttpStatusError(RuntimeError):
+    """A GitHub API GET that answered with an HTTP error status.
+
+    A ``RuntimeError`` so every existing handler still catches it; the ``code``
+    is for the one caller that tells a status apart — the combined-status read in
+    :func:`_rest_fetch_checks`.
+    """
+
+    def __init__(self, message: str, code: int) -> None:
+        super().__init__(message)
+        self.code = code
+
+
 def _http_get(url: str, token: str, *, timeout: int = 30) -> tuple[Any, str | None]:
     """GET ``url``, returning (parsed JSON, the raw ``Link`` header or None)."""
     req = urllib.request.Request(_check_api_url(url), headers=_http_headers(token))  # noqa: S310
@@ -933,13 +1022,14 @@ def _http_get(url: str, token: str, *, timeout: int = 30) -> tuple[Any, str | No
             body = resp.read()
             link = resp.headers.get("Link")
     except urllib.error.HTTPError as exc:
-        raise RuntimeError(
+        raise _HttpStatusError(
             f"GitHub API GET {url} failed ({exc.code} {exc.reason})"
             + (
                 " — the token may lack `repo` scope or have expired"
                 if exc.code in (401, 403)
                 else ""
-            )
+            ),
+            exc.code,
         ) from exc
     except urllib.error.URLError as exc:
         raise RuntimeError(f"GitHub API GET {url} failed: {exc.reason}") from exc
@@ -991,6 +1081,24 @@ _truncation_warned: set[str] = set()
 # drops the NEWEST comments — where fresh findings live — and an agent reading
 # "converged" needs to see that its comment read was incomplete.
 _truncated_reads: list[str] = []
+
+# Surfaces this process could not read AT ALL, as
+# ``{"surface", "url", "reason"}``. Unlike a truncated read, this is a gap the
+# poll knows it has, so `build_report` turns it into a merge blocker as well as
+# reporting it — the blocker survives #94 lifting REST's poll-only bound. It does
+# not touch `converged`: the one surface recorded here is refused for the whole
+# session, so blocking the loop on it would wedge every cloud poll.
+_unavailable_reads: list[dict] = []
+
+
+def _record_unavailable_read(surface: str, url: str, reason: str) -> None:
+    """Record, and say on stderr, that ``surface`` could not be read at all."""
+    _unavailable_reads.append({"surface": surface, "url": url, "reason": reason})
+    print(
+        f"warning: {surface} could not be read ({' '.join(reason.split())[:160]}) "
+        "— the report names this gap; it is NOT read as an empty surface",
+        file=sys.stderr,
+    )
 
 
 def _warn_pagination_truncated(url: str, max_pages: int) -> None:
@@ -1465,8 +1573,11 @@ def _rest_review_decision(reviews: list[dict]) -> str | None:
 
 def _rest_fetch_checks(
     sha: str, *, token: str, slug: tuple[str, str] | None = None
-) -> tuple[list[dict], list[dict]]:
-    """Both check surfaces for one commit: Checks API runs + combined statuses."""
+) -> tuple[list[dict], list[dict] | None]:
+    """Both check surfaces for one commit: Checks API runs + combined statuses.
+
+    The statuses are ``None`` when the token cannot read them (see below).
+    """
     slug = slug if slug is not None else _rest_repo_slug()
     check_runs = _http_get_all_wrapped(
         _rest_api(f"commits/{sha}/check-runs?per_page=100", slug), token, "check_runs"
@@ -1478,9 +1589,34 @@ def _rest_fetch_checks(
     # `Link` header, so past 100 contexts the missing ones read as "not present"
     # rather than "not yet read" — the exact false green the sibling read's
     # docstring cites, in the same function.
-    statuses = _http_get_all_wrapped(
-        _rest_api(f"commits/{sha}/status?per_page=100", slug), token, "statuses"
-    )
+    #
+    # A 403 here means the token cannot read commit statuses at all: a Claude
+    # Code cloud session's GitHub App token reads check runs, reviews and
+    # comments but gets `403 Resource not accessible by integration` from this
+    # endpoint. That returns ``None`` — "not read" — never ``[]``, which would
+    # say "this commit has no status contexts" and let `all_green` stand on
+    # check runs alone. The gap is recorded in `_unavailable_reads`, which
+    # `build_report` turns into a merge blocker. Every other status, and a 403
+    # from any other read, still raises.
+    #
+    # Inputs that share this shape — an HTTP 403 on a REST read — and whether
+    # each is tolerated: this combined-status read, yes; `pulls/{n}`,
+    # `check-runs`, `reviews`, `issues/{n}/comments` and `pulls/{n}/comments`,
+    # no, because the report has no honest way to stand without them; a 403 from
+    # GitHub's rate limiter on this same endpoint, yes, since it is
+    # indistinguishable without parsing error text and is reported the same
+    # fail-closed way; the plural `statuses` identity read in
+    # `fetch_check_details`, already degraded by its own handler.
+    status_url = _rest_api(f"commits/{sha}/status?per_page=100", slug)
+    try:
+        statuses: list[dict] | None = _http_get_all_wrapped(
+            status_url, token, "statuses"
+        )
+    except _HttpStatusError as exc:
+        if exc.code != 403:
+            raise
+        _record_unavailable_read("commit-statuses", status_url, str(exc))
+        statuses = None
     return check_runs, statuses
 
 
@@ -1496,7 +1632,7 @@ class RestCheckReads(NamedTuple):
 
     sha: str
     check_runs: list[dict]
-    statuses: list[dict]
+    statuses: list[dict] | None  # None: the combined-status read was refused
 
 
 def rest_pr_view(pr: int, *, token: str) -> tuple[dict, list[dict], RestCheckReads]:
@@ -1544,7 +1680,9 @@ def rest_pr_view(pr: int, *, token: str) -> tuple[dict, list[dict], RestCheckRea
         "mergeStateStatus": (str(pr_data.get("mergeable_state") or "").upper() or None),
         "reviewDecision": _rest_review_decision(reviews),
         "headRefOid": sha,
-        "statusCheckRollup": _rest_check_rows(check_runs, statuses),
+        # `or []` is safe only because a `None` was already recorded in
+        # `_unavailable_reads`, which blocks the merge and is rendered.
+        "statusCheckRollup": _rest_check_rows(check_runs, statuses or []),
         "reviews": reviews,
         "comments": _http_get_all(
             _rest_api(f"issues/{pr}/comments?per_page=100", slug), token
@@ -1894,6 +2032,12 @@ def fetch_check_details(
                 if not sha:
                     raise RuntimeError(f"PR #{pr} response carried no head SHA")
                 check_runs, statuses = _rest_fetch_checks(sha, token=token, slug=slug)
+            if statuses is None:
+                # The status surface is where #23's outage marker lives, so a
+                # read without it is not an "ok" read for either bot guard.
+                raise RuntimeError(
+                    "commit statuses are unreadable with this token (HTTP 403)"
+                )
             rows = _rest_check_rows(check_runs, statuses)
             # The #95 identity read, whenever a row's identity has a consumer
             # this poll. Check runs already carry `app.slug` from the fetch
@@ -5466,6 +5610,18 @@ def build_report(
     rest_blocker = rest_cannot_authorize_merge(backend)
     if rest_blocker:
         merge_blockers.append(rest_blocker)
+    # A surface the poll could not read is not a surface with nothing on it, so
+    # `checks.all_green` here covers only what was read. Not left to the REST
+    # bound above: that bound is #94's to lift, and this gap is not.
+    for gap in dict.fromkeys(
+        str(entry.get("surface") or "a check surface")
+        for entry in _unavailable_reads
+        if isinstance(entry, dict)
+    ):
+        merge_blockers.append(
+            f"{gap} could not be read — the check rollup omits it, so its "
+            "state is unknown, not green"
+        )
     if pr_state != "OPEN":
         merge_blockers.append(f"PR state is {pr_state}")
     if bool(view.get("isDraft")):
@@ -5567,6 +5723,9 @@ def build_report(
         # environment-caused blocker. Empty on the `gh` backend, which paginates
         # through `gh` itself.
         "truncated_reads": list(_truncated_reads),
+        # Surfaces refused outright (see `_unavailable_reads`). Unlike
+        # `truncated_reads`, each entry also raises a merge blocker above.
+        "unavailable_reads": [dict(entry) for entry in _unavailable_reads],
         # Which transport produced this report. Needed by `persist_poll` so the
         # false-settle baseline is never compared across two backends that count
         # checks differently (see :func:`comparable_max_total`), and useful in the
@@ -5661,6 +5820,12 @@ def render(report: dict) -> str:
             f"  ⚠ a paginated read was TRUNCATED at the page ceiling ({truncated}) "
             "— this poll did NOT see every check/comment, so `converged` may be "
             "premature"
+        )
+    for gap in report.get("unavailable_reads") or []:
+        lines.append(
+            f"  ⚠ {gap.get('surface')} could NOT be read ({gap.get('url')}) — "
+            "`checks` covers only the surfaces that were read; this gap is not "
+            "green"
         )
     # A bot mid-review of a just-pushed head is behind it BY CONSTRUCTION, and
     # the pending line above already says a verdict is coming. Warning there too

@@ -7,6 +7,8 @@ import re
 import shutil
 import subprocess
 import sys
+import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -98,6 +100,12 @@ def _pin_engine_backend(module: ModuleType) -> None:
             return shutil.which(name)
 
     module.shutil = _ShutilPinnedToGh
+    # The GraphQL probe is pinned for the same reason: unpinned, every test that
+    # puts a `gh` on PATH would run a real `gh api graphql` against the network,
+    # and pass or fail on this machine's `gh` login. A test whose SUBJECT is the
+    # probe restores the real function from `_gh_graphql_usable_unpinned`.
+    module._gh_graphql_usable_unpinned = module._gh_graphql_usable
+    module._gh_graphql_usable = lambda _gh_path: True
 
 
 def _load_pr_watch(*, pin_defaults: bool = True) -> ModuleType:
@@ -12380,3 +12388,281 @@ def test_record_round_cli_is_its_own_mode(capsys, extra: list[str], message: str
         pr_watch.main(["9", "--record-round", "--head", "abc123", *extra])
 
     assert message in capsys.readouterr().err
+
+
+# --- cloud sessions: `gh` present but GraphQL refused; combined status 403 ----
+#
+# A Claude Code cloud session has `gh` on PATH, an egress proxy that refuses
+# every GraphQL call, and a GitHub App token that reads check runs, reviews and
+# comments over REST but gets 403 from the combined-status endpoint.
+
+_GRAPHQL_REFUSED = "HTTP 403: GitHub GraphQL is not available from Claude Code sessions"
+
+
+def _gh_on_path_with_graphql(
+    module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    usable: bool,
+    token: str | None = "cl0ud",
+) -> list[list[str]]:
+    """`gh` on PATH, the REAL probe restored, and `gh api graphql` answering
+    ``usable``. Returns every argv the probe ran."""
+    monkeypatch.setattr(module.shutil, "which", lambda _name: "/usr/bin/gh")
+    monkeypatch.setattr(module, "_gh_graphql_usable", module._gh_graphql_usable_unpinned)
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    if token is not None:
+        monkeypatch.setenv("GH_TOKEN", token)
+    probes: list[list[str]] = []
+
+    class _Subprocess:
+        SubprocessError = subprocess.SubprocessError
+        TimeoutExpired = subprocess.TimeoutExpired
+        CompletedProcess = subprocess.CompletedProcess
+
+        @staticmethod
+        def run(argv, **_kw):
+            if list(argv[1:3]) != ["api", "graphql"]:
+                raise AssertionError(f"only the GraphQL probe may spawn here: {argv}")
+            probes.append(list(argv))
+            return subprocess.CompletedProcess(
+                argv, 0 if usable else 1, "", "" if usable else _GRAPHQL_REFUSED
+            )
+
+    monkeypatch.setattr(module, "subprocess", _Subprocess)
+    return probes
+
+
+def test_gh_with_graphql_refused_selects_rest_and_probes_once(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    pr_watch = _load_pr_watch()
+    probes = _gh_on_path_with_graphql(pr_watch, monkeypatch, usable=False)
+
+    # One poll resolves the backend several times; every answer must agree, and
+    # the network probe must run once — a probe that could flip mid-poll would
+    # let `main` thread "gh" over data REST read.
+    for _ in range(3):
+        assert pr_watch._resolve_backend() == ("rest", "cl0ud")
+    assert len(probes) == 1
+    assert probes[0][0] == "/usr/bin/gh"
+    assert "query=query{rateLimit{limit}}" in probes[0]
+    assert pr_watch.rest_cannot_authorize_merge("rest") is not None
+    assert "GraphQL API did not answer" in capsys.readouterr().err
+
+
+def test_gh_with_graphql_working_still_selects_gh(monkeypatch: pytest.MonkeyPatch) -> None:
+    pr_watch = _load_pr_watch()
+    probes = _gh_on_path_with_graphql(pr_watch, monkeypatch, usable=True)
+
+    assert pr_watch._resolve_backend() == ("gh", None)
+    assert pr_watch._resolve_backend() == ("gh", None)
+    assert len(probes) == 1
+
+
+def test_gh_with_graphql_refused_and_no_token_is_actionable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    _gh_on_path_with_graphql(pr_watch, monkeypatch, usable=False, token=None)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        pr_watch._resolve_backend()
+    message = str(excinfo.value)
+    assert "GraphQL" in message and "GH_TOKEN" in message
+    # The write paths refuse rather than proceeding on either backend.
+    with pytest.raises(RuntimeError):
+        pr_watch.require_gh_backend("--record-review")
+
+
+def test_gh_with_graphql_refused_refuses_the_write_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The REST bound must hold for a `gh` that is merely unable to reach
+    GraphQL, not only for an absent one (issue #94)."""
+    pr_watch = _load_pr_watch()
+    _gh_on_path_with_graphql(pr_watch, monkeypatch, usable=False)
+
+    with pytest.raises(RuntimeError, match="needs the `gh` backend"):
+        pr_watch.require_gh_backend("--record-review")
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [OSError("exec format error"), subprocess.TimeoutExpired(["gh"], 20)],
+)
+def test_a_probe_that_cannot_run_reads_as_unusable(
+    failure: Exception, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pr_watch = _load_pr_watch()
+    _gh_on_path_with_graphql(pr_watch, monkeypatch, usable=True)
+
+    def _raise(*_a, **_k):
+        raise failure
+
+    monkeypatch.setattr(pr_watch.subprocess, "run", _raise)
+    assert pr_watch._resolve_backend() == ("rest", "cl0ud")
+
+
+def _cloud_rest_opener(
+    module: ModuleType, monkeypatch: pytest.MonkeyPatch, *, status_code: int = 403
+) -> list[str]:
+    """The socket below `_http_get`: every read answers except the combined
+    status, which answers ``status_code``."""
+    attempted: list[str] = []
+    bodies = {
+        "/pulls/9/reviews": [],
+        "/pulls/9/comments": [],
+        "/issues/9/comments": [],
+        "/commits/deadbee/check-runs": {
+            "total_count": 1,
+            "check_runs": [
+                {
+                    "name": "Test",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "output": {"title": ""},
+                    "started_at": "2026-10-11T08:00:00Z",
+                    "app": {"slug": "github-actions"},
+                }
+            ],
+        },
+        "/pulls/9": {
+            "number": 9,
+            "title": "cloud",
+            "html_url": "https://github.com/owner/repo/pull/9",
+            "state": "open",
+            "draft": False,
+            "base": {"ref": "main", "sha": "base000"},
+            "mergeable_state": "clean",
+            "head": {"sha": "deadbee"},
+            "body": "",
+        },
+    }
+
+    class _Resp:
+        def __init__(self, body: object) -> None:
+            self._body = json.dumps(body).encode()
+            self.headers: dict[str, str] = {}
+
+        def read(self) -> bytes:
+            return self._body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_a):
+            return False
+
+    class _Opener:
+        @staticmethod
+        def open(req, timeout=None):
+            url = req.full_url
+            attempted.append(url)
+            path = urllib.parse.urlsplit(url).path
+            if path.endswith("/commits/deadbee/status"):
+                raise urllib.error.HTTPError(
+                    url, status_code, "Forbidden", {}, io.BytesIO(b"{}")
+                )
+            for fragment, body in bodies.items():
+                if path.endswith(fragment):
+                    return _Resp(body)
+            raise AssertionError(f"unrouted GET {url}")
+
+    monkeypatch.setattr(module, "_opener", _Opener)
+    monkeypatch.setattr(module, "_rest_repo_slug", lambda: ("owner", "repo"))
+    return attempted
+
+
+def test_cloud_poll_reports_and_names_the_unreadable_statuses(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The acceptance case end to end: `gh` on PATH with GraphQL refused, and a
+    REST token that cannot read the combined status. The poll exits 0 with a
+    report that names the gap, and never reads it as zero statuses or green."""
+    pr_watch = _load_pr_watch()
+    _gh_on_path_with_graphql(pr_watch, monkeypatch, usable=False)
+    attempted = _cloud_rest_opener(pr_watch, monkeypatch)
+
+    def _no_gh_call(*_a, **_k):
+        raise AssertionError("no `gh` call may run once GraphQL is refused")
+
+    monkeypatch.setattr(pr_watch, "_gh", _no_gh_call)
+
+    assert pr_watch.main(["9", "--json", "--no-persist"]) == 0
+    report = json.loads(capsys.readouterr().out)
+
+    assert report["backend"] == "rest"
+    assert [gap["surface"] for gap in report["unavailable_reads"]] == ["commit-statuses"]
+    assert report["unavailable_reads"][0]["url"].endswith("/commits/deadbee/status?per_page=100")
+    assert "403" in report["unavailable_reads"][0]["reason"]
+    assert any(
+        b.startswith("commit-statuses could not be read") for b in report["merge_blockers"]
+    )
+    assert report["mergeable"] is False
+    # The bot guards read the status surface (#23), so they are not "ok".
+    assert report["review_bots"]["signal"] == "unavailable"
+    # The surfaces that WERE readable were read.
+    assert any("/check-runs" in url for url in attempted)
+    assert any("/issues/9/comments" in url for url in attempted)
+
+
+def test_the_render_names_an_unreadable_surface() -> None:
+    pr_watch = _load_pr_watch()
+    pr_watch._unavailable_reads.append(
+        {
+            "surface": "commit-statuses",
+            "url": "https://api.github.com/repos/o/r/commits/abc/status",
+            "reason": "403",
+        }
+    )
+    report = pr_watch.build_report(_green_view(headRefOid="abc"), [], set(), backend="rest")
+    text = pr_watch.render(report)
+    assert "commit-statuses could NOT be read" in text
+    assert "not green" in text
+
+
+def test_build_report_blocks_the_merge_on_an_unreadable_surface_on_any_backend() -> None:
+    """The blocker is not REST's poll-only bound under another name: lifting
+    #94 must not lift it."""
+    pr_watch = _load_pr_watch()
+    pr_watch._unavailable_reads.append(
+        {"surface": "commit-statuses", "url": "u", "reason": "403"}
+    )
+    report = pr_watch.build_report(_green_view(headRefOid="abc"), [], set(), backend="gh")
+    assert "commit-statuses could not be read — the check rollup omits it, so its state is unknown, not green" in report["merge_blockers"]
+    assert report["mergeable"] is False
+
+
+@pytest.mark.parametrize("code", [401, 404, 500])
+def test_only_a_403_on_the_combined_status_is_tolerated(
+    code: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+    _cloud_rest_opener(pr_watch, monkeypatch, status_code=code)
+
+    with pytest.raises(RuntimeError, match=f"failed \\({code} "):
+        pr_watch.fetch_pr_view(9)
+    assert pr_watch._unavailable_reads == []
+
+
+def test_a_403_on_another_rest_read_still_fails_the_poll(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pr_watch = _load_pr_watch()
+    _no_gh(pr_watch, monkeypatch)
+    _cloud_rest_opener(pr_watch, monkeypatch)
+    real_open = pr_watch._opener.open
+
+    class _Opener:
+        @staticmethod
+        def open(req, timeout=None):
+            if "/check-runs" in req.full_url:
+                raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", {}, io.BytesIO(b"{}"))
+            return real_open(req, timeout=timeout)
+
+    monkeypatch.setattr(pr_watch, "_opener", _Opener)
+    with pytest.raises(RuntimeError, match="failed \\(403 "):
+        pr_watch.fetch_pr_view(9)
