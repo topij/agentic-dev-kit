@@ -20,6 +20,7 @@ import argparse
 import datetime
 import io
 import json
+import os
 import posixpath
 import re
 import subprocess
@@ -68,8 +69,11 @@ class NotApplicable(CheckError):
 def git(root: Path, *args: str) -> str:
     try:
         result = subprocess.run(
-            ["git", "--literal-pathspecs", *args], cwd=root, capture_output=True,
-            timeout=30, check=False,
+            ["git", "--no-replace-objects", "--literal-pathspecs", *args],
+            cwd=root, capture_output=True, timeout=30, check=False,
+            # Replacement refs and grafts rewrite object/history reads without
+            # changing the named SHA. Keep every read on the stored objects.
+            env={**os.environ, "GIT_GRAFT_FILE": os.devnull},
         )
         output = result.stdout.decode("utf-8")
         error = result.stderr.decode("utf-8")
@@ -244,8 +248,11 @@ def verification_stamps(children: list):
         if not date and date_index + 1 < len(parts) and parts[date_index + 1][0] == "code_inline":
             date = parts[date_index + 1][1]
         else:
-            match = re.match(r"\d{4}-\d{2}-\d{2}(?![\w-])|\S+", date)
-            date = match[0] if match else ""
+            match = re.match(r"\S+", date)
+            # Only trailing sentence punctuation and closing delimiters are
+            # separators. Punctuation inside a token cannot hide a suffix;
+            # slash, hyphen and underscore remain part of the date spelling.
+            date = match[0].rstrip(".,;:!?…—)]}\"'»”’") if match else ""
         if date:
             yield {"command": command, "sha": revision[1], "date": date}
 

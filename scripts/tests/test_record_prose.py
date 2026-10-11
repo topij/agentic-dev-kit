@@ -315,7 +315,12 @@ def test_formatted_stamp_checks_hostile_fields(repo, layout, field):
     assert report["stamps"] == []
 
 
-@pytest.mark.parametrize("date", ["tomorrow", "20261010", "2026-W41-6", "2026-10-10junk"])
+@pytest.mark.parametrize("date", [
+    "tomorrow", "20261010", "2026-W41-6", "2026-10-10junk",
+    "2026-10-10/junk", "2026-10-10/2026-10-11", "2026-10-10:junk",
+    "2026-10-10,junk", "2026-10-10.junk", "2026-10-10(junk)",
+    "2026-10-10—junk", "2026-10-10_", "2026-10-10-", "2026-10-10/",
+])
 @pytest.mark.parametrize("code_date", [False, True])
 def test_stamp_date_spelling_is_checked_in_text_and_code(repo, date, code_date):
     root, base = repo
@@ -324,6 +329,44 @@ def test_stamp_date_spelling_is_checked_in_text_and_code(repo, date, code_date):
     code, report = run(repo, commit(root))
     assert code == 1, report
     assert report["findings"][0]["check"] == "stamps"
+
+
+@pytest.mark.parametrize("suffix", [".", ",", ";", ":", "!", "?", "…", "—", ").", "]", "}", '"', "'", "»", "”", "’"])
+def test_plain_stamp_dates_allow_trailing_sentence_punctuation(repo, suffix):
+    root, base = repo
+    save(root, "docs/plan.md", f"`make test` at `{base}` on 2026-10-10{suffix} Result recorded.\n")
+    code, report = run(repo, commit(root))
+    assert code == 0, report
+    assert report["status"] == "passed"
+    assert [stamp["date"] for stamp in report["stamps"]] == ["2026-10-10"]
+
+
+@pytest.mark.parametrize("rewrite", ["replace", "alternate-replace", "graft", "external-graft"])
+def test_local_history_rewrites_cannot_change_the_named_candidate(repo, monkeypatch, tmp_path, rewrite):
+    root, base = repo
+    save(root, "docs/plan.md", "[Missing](missing.md)\n")
+    head = commit(root)
+    if rewrite in ("replace", "alternate-replace"):
+        save(root, "docs/plan.md", "Replacement record.\n")
+        git(root, "add", "docs/plan.md")
+        tree = git(root, "write-tree")
+        replacement = git(root, "commit-tree", tree, "-p", base, "-m", "replacement")
+        if rewrite == "replace":
+            git(root, "replace", head, replacement)
+        else:
+            git(root, "update-ref", f"refs/test-replacements/{head}", replacement)
+            monkeypatch.setenv("GIT_REPLACE_REF_BASE", "refs/test-replacements/")
+    else:
+        graft = root / ".git/info/grafts" if rewrite == "graft" else tmp_path / "external-grafts"
+        graft.write_text(head + "\n")
+        if rewrite == "external-graft":
+            monkeypatch.setenv("GIT_GRAFT_FILE", str(graft))
+    code, report = run(repo, head)
+    assert code == 1, report
+    assert report["status"] == "failed"
+    assert report["head"] == head
+    assert report["merge_base"] == base
+    assert any(item["check"] == "links" and "missing.md" in item["detail"] for item in report["findings"])
 
 
 @pytest.mark.parametrize("example", [
