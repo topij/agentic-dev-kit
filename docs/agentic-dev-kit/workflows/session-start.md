@@ -189,8 +189,12 @@ like good news, it looks like a missing handoff.
   If the engine exits non-zero, if `truncated_reads[]` is non-empty, or if this second
   layer is otherwise missing, render `PRs unavailable: review findings <reason>`
   rather than silently omitting unresolved bot feedback. The engine's `gh` backend
-  reads through `gh pr view`, which is GraphQL too, so where GraphQL is refused this
-  layer fails and renders unavailable under the same rule.
+  reads through `gh pr view`, which is GraphQL too, so where a GraphQL probe through
+  `gh` fails the engine reads over REST instead. That needs `GH_TOKEN` or
+  `GITHUB_TOKEN`; without one it exits non-zero, and this layer renders unavailable
+  under the same rule. An `unavailable_reads[]` entry names a check surface the REST
+  token was refused, not a comment surface, so it does not make this layer
+  unavailable.
 - your cron/CI health command (adapt to your infra)
 - your config-drift check, if you have one (parse its output for a 🔴-worthy line in *Render the briefing*)
 - Read `<handoff>`. The focus is the `## Workstreams` section: each `### <name>` entry's
