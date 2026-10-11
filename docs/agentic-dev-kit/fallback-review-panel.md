@@ -186,15 +186,27 @@ list.
 
 Before an opening review of a change confined to `paths.handoff`,
 `paths.handoff_history`, `paths.friction_log` and `paths.friction_log_archive`,
-run `<engine-dir>/check_record_prose.py` with `uv run`, the repository root,
-the base sha and the candidate head sha, and retain its JSON report. Once started,
-the engine reads the path declarations and budgets committed at the base, then checks Git
-objects at the candidate. It disables bytecode writes before importing repository
-modules, writes no state in the supplied tree, and performs no network read.
+run the preflight invocation emitted by `<engine-dir>/panel_prompt.py` and
+retain its JSON report. Assembly pins the candidate's committed checker and
+`lib/kitconfig.py` as Git blob IDs and SHA-256 digests. The generated invocation
+loads and authenticates those bytes before executing either module in isolated
+Python, without checkout import paths or bytecode writes. A supplied review
+scratch tree is its execution root. Direct checker CLI use loads local engine
+bytes; use the generated invocation for pinned review evidence.
 
-Those properties describe the Python checker, not `uv` dependency bootstrap.
-Before the checker starts, `uv run` may access package indexes and write its
-dependency cache and environment. Bootstrap can fail before any JSON report
+Once started, the checker reads the path declarations and budgets committed at
+the base, then checks Git objects at the candidate. Its Git reads disable
+replacement objects, grafts, and promisor lazy fetches. Missing objects and Git
+versions without `--no-lazy-fetch` support supply unavailable coverage. The
+checker writes no state in the supplied tree and performs no network read.
+
+The assembler, generated command, Git, Python, uv, and installed third-party
+packages remain trusted execution inputs; pinning repository modules does not
+certify that their committed code is safe. The full independent review still
+applies. Bootstrap requirements are read from the committed checker's script
+metadata. Before the checker starts, `uv run` may access package indexes and
+write its dependency cache and isolated environment; it ignores project and uv
+configuration discovery. Bootstrap can fail before any JSON report
 exists. Retain stdout, stderr and the process exit status; a missing report
 supplies unavailable coverage, never a passing or `not-applicable` result.
 Apply the unavailable-check rule below before recording review coverage.

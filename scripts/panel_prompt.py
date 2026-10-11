@@ -68,12 +68,15 @@ Exits 2 on any condition that would produce a misleading prompt.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import re
 import shlex
 import stat
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 from kit_doctor import (  # noqa: E402
@@ -86,7 +89,7 @@ from kit_doctor import (  # noqa: E402
 # regeneration command must reach the exact engine that owns the renderer, not
 # an untracked ``lib/kit_doctor.py`` that happens to shadow it on ``sys.path``.
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
-from kitconfig import get, load_config, repo_root  # noqa: E402
+from kitconfig import get, load_config, loads, repo_root  # noqa: E402
 
 REPO_ROOT = repo_root(Path(__file__).resolve())
 DOCTRINE = "docs/agentic-dev-kit/fallback-review-panel.md"
@@ -813,6 +816,95 @@ def _preflight_checker(root: Path, engines: object) -> Path:
     return target
 
 
+# This inline launcher is part of the generated prompt, not a later filesystem
+# lookup. Read and authenticate every local module before executing any of them.
+# Python -I excludes cwd/PYTHONPATH/user-site imports; -B prevents bytecode writes.
+_PREFLIGHT_LAUNCHER = r'''import hashlib, json, os, subprocess, sys, types
+spec = json.loads(sys.argv.pop(1))
+try:
+    sources = []
+    for name, path, oid, digest in spec:
+        result = subprocess.run(
+            ["git", "--no-lazy-fetch", "--no-replace-objects", "--literal-pathspecs",
+             "-C", sys.argv[2], "cat-file", "blob", oid],
+            capture_output=True, timeout=30, check=True,
+            env={**os.environ, "GIT_GRAFT_FILE": os.devnull, "GIT_NO_LAZY_FETCH": "1"})
+        data = result.stdout
+        if hashlib.sha256(data).hexdigest() != digest:
+            raise ValueError("preflight source digest mismatch: " + path)
+        sources.append((name, path, compile(data, path, "exec")))
+    for name, path, code in sources:
+        module = types.ModuleType(name)
+        module.__file__ = path
+        if name == "__main__":
+            sys.argv[0] = path
+        sys.modules[name] = module
+        exec(code, module.__dict__)
+except Exception as exc:
+    print(json.dumps({"status": "unavailable", "findings": [], "stamps": [],
+        "limits": ["Pinned preflight engine could not execute; no coverage supplied."],
+        "unavailable": [{"check": "engine", "source": "engine", "line": 0,
+                         "detail": str(exc)}]}))
+    sys.exit(2)
+'''
+
+
+def _preflight_object(root: Path, head: str, path: str) -> tuple[str, bytes]:
+    def read(*args: str) -> bytes:
+        try:
+            return subprocess.run(
+                ["git", "--no-lazy-fetch", "--no-replace-objects", "--literal-pathspecs", *args],
+                cwd=root, capture_output=True, timeout=30, check=True,
+                env={**os.environ, "GIT_GRAFT_FILE": os.devnull, "GIT_NO_LAZY_FETCH": "1"},
+            ).stdout
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise PromptError(f"committed preflight source unavailable: {head}:{path}: {exc}") from exc
+
+    entry = read("ls-tree", "-z", head, "--", path)
+    fields = entry.split(b"\t", 1)
+    if len(fields) != 2 or fields[1] != path.encode() + b"\0":
+        raise PromptError(f"committed preflight source missing: {head}:{path}")
+    mode, kind, oid = fields[0].split()
+    if mode not in (b"100644", b"100755") or kind != b"blob":
+        raise PromptError(f"committed preflight source is not a regular file: {head}:{path}")
+    return oid.decode(), read("cat-file", "blob", oid.decode())
+
+
+def _preflight_command(root: Path, execution_root: Path, base: str, head: str) -> str:
+    _, config_bytes = _preflight_object(root, head, "config/dev-model.yaml")
+    config = loads(config_bytes.decode())
+    checker = _preflight_checker(root, get(config, "paths.engines", "scripts"))
+    spec = []
+    for name, path in [("kitconfig", checker.parent / "lib/kitconfig.py"),
+                       ("__main__", checker)]:
+        relative = path.relative_to(root).as_posix()
+        oid, source = _preflight_object(root, head, relative)
+        spec.append((name, str(execution_root / relative), oid, hashlib.sha256(source).hexdigest()))
+    # Bootstrap requirements come from the same committed checker whose bytes
+    # will run, never from a dirty checkout or an independently maintained pin.
+    metadata = re.search(r"(?m)^# /// script\n((?:#.*\n)*?)# ///$", source.decode())
+    if metadata is None:
+        raise PromptError("committed preflight checker has no script metadata")
+    try:
+        settings = tomllib.loads("\n".join(line[2:] if line.startswith("# ") else ""
+                                          for line in metadata[1].splitlines()))
+        python = settings["requires-python"]
+        dependencies = settings["dependencies"]
+        if not isinstance(python, str) or not python or not isinstance(dependencies, list):
+            raise ValueError("invalid requires-python or dependencies")
+        if any(not isinstance(dep, str) or not dep for dep in dependencies):
+            raise ValueError("invalid dependency")
+    except (KeyError, ValueError) as exc:
+        raise PromptError(f"committed preflight script metadata unavailable: {exc}") from exc
+    command = ["uv", "run", "--no-config", "--no-project", "--isolated", "--python", python]
+    for dependency in dependencies:
+        command.extend(["--with", dependency])
+    command.extend(["python", "-I", "-B", "-c", f"exec({_PREFLIGHT_LAUNCHER!r})",
+                    json.dumps(spec), "--root", str(execution_root),
+                    "--base", base, "--head", head, "--json"])
+    return shlex.join(command)
+
+
 def build(args: argparse.Namespace) -> str:
     # The repo under review is a parameter, not a module constant, so the engine can
     # be pointed at a checkout other than its own — and so its own tests can build a
@@ -870,11 +962,8 @@ def build(args: argparse.Namespace) -> str:
         raise PromptError("the doctrine is missing its Narrative preflight section")
     following = _NEXT_H2.search(doctrine, heading.end())
     narrative = doctrine[heading.start():following.start() if following else len(doctrine)].rstrip()
-    checker = _preflight_checker(root, get(config, "paths.engines", "scripts"))
-    command = shlex.join([
-        "uv", "run", str(checker),
-        "--root", str(root), "--base", base, "--head", head, "--json",
-    ])
+    command = _preflight_command(root, Path(o_scratch).resolve() if o_scratch else root,
+                                 base, head)
     narrative += f"\n\nPreflight invocation for this comparison:\n\n```sh\n{command}\n```\n"
 
     slug = _repo_slug(_git(root, "config", "--get", "remote.origin.url"))

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import stat
 import subprocess
@@ -785,3 +786,34 @@ def test_prerequisites_follow_the_installed_engine_directory(tmp_path, layout, m
         expected = "1 skipped" if missing == "lib/kitconfig.py" else "2 skipped"
         assert expected in result.stdout, result.stdout
         assert f"{layout}/{missing}" in result.stdout, result.stdout
+
+
+@pytest.mark.parametrize("inherited", [None, "0"])
+def test_partial_clone_missing_objects_do_not_trigger_fetches(repo, tmp_path, monkeypatch, inherited):
+    root, base = repo
+    save(root, "docs/plan.md", "Candidate.\n")
+    head = commit(root)
+    git(root, "config", "uploadpack.allowFilter", "true")
+    partial = tmp_path / "partial"
+    subprocess.run(["git", "clone", "--filter=blob:none", "--no-checkout", root.as_uri(), str(partial)],
+                   check=True, capture_output=True)
+    marker = tmp_path / "fetch-attempt"
+    upload = tmp_path / "upload-pack"
+    upload.write_text(f"#!/bin/sh\nprintf attempted > {shlex.quote(str(marker))}\nexit 1\n")
+    upload.chmod(0o700)
+    git(partial, "config", "remote.origin.uploadpack", str(upload))
+    if inherited is not None:
+        monkeypatch.setenv("GIT_NO_LAZY_FETCH", inherited)
+    else:
+        monkeypatch.delenv("GIT_NO_LAZY_FETCH", raising=False)
+    before = tree_snapshot(partial)
+    code, report = run((partial, base), head)
+    assert code == 2 and report["status"] == "unavailable", report
+    assert not marker.exists(), report
+    assert tree_snapshot(partial) == before
+    # Positive control: the missing object really does request the transport
+    # without the checker's guard, rather than this being a complete clone.
+    env = {**os.environ, "GIT_NO_LAZY_FETCH": "0"}
+    subprocess.run(["git", "show", f"{base}:config/dev-model.yaml"], cwd=partial,
+                   capture_output=True, env=env, timeout=30)
+    assert marker.exists()

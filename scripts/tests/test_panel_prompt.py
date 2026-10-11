@@ -43,6 +43,8 @@ from _repo_layout import engine_dir, find_repo_root  # noqa: E402
 
 REPO_ROOT = find_repo_root(Path(__file__).resolve())
 ENGINE = engine_dir(Path(__file__).resolve()) / "panel_prompt.py"
+CHECKER_REL = (ENGINE.parent / "check_record_prose.py").relative_to(REPO_ROOT).as_posix()
+KITCONFIG_REL = (ENGINE.parent / "lib/kitconfig.py").relative_to(REPO_ROOT).as_posix()
 DOCTRINE = Path("docs") / "agentic-dev-kit" / "fallback-review-panel.md"
 
 # NOT a module-level marker. An earlier version marked the whole module on the
@@ -123,7 +125,10 @@ def repo(tmp_path: Path) -> Path:
     (root / "config").mkdir(parents=True)
     (root / "docs" / "agentic-dev-kit").mkdir(parents=True)
     (root / "scripts").mkdir()
-    (root / "scripts/check_record_prose.py").write_text("# fixture preflight target\n")
+    (root / "scripts/check_record_prose.py").write_text(
+        '# /// script\n# requires-python = ">=3.12"\n# dependencies = []\n# ///\n')
+    (root / "scripts/lib").mkdir()
+    (root / "scripts/lib/kitconfig.py").write_text("# fixture parser\n")
 
     # The real doctrine, so the contract these tests assert on is the shipped one.
     (root / DOCTRINE).write_text(doctrine_text())
@@ -229,8 +234,11 @@ def test_narrative_preflight_is_quoted_and_names_the_comparison(repo):
     assert "The author's stated draws" not in out.stdout
     commands = [line for line in out.stdout.splitlines() if line.startswith("uv run ")]
     invocation = next(shlex.split(line) for line in commands if "check_record_prose.py" in line)
-    assert invocation == ["uv", "run", str(repo / "scripts/check_record_prose.py"),
-                          "--root", str(repo), "--base", base, "--head", head, "--json"]
+    assert invocation[:5] == ["uv", "run", "--no-config", "--no-project", "--isolated"]
+    assert invocation[-7:] == ["--root", str(repo), "--base", base, "--head", head, "--json"]
+    spec = json.loads(invocation[invocation.index("-c") + 2])
+    assert [row[0] for row in spec] == ["kitconfig", "__main__"]
+    assert spec[-1][1] == str(repo / "scripts/check_record_prose.py")
 
 
 @pytest.mark.parametrize("layout", ["scripts/devkit", "tools/vendor kit", "."])
@@ -241,13 +249,19 @@ def test_preflight_command_uses_a_real_checker_in_the_configured_directory(repo,
     directory = repo / layout
     directory.mkdir(parents=True, exist_ok=True)
     checker = directory / "check_record_prose.py"
-    checker.write_text("# fixture preflight target\n")
+    checker.write_bytes((repo / "scripts/check_record_prose.py").read_bytes())
+    (directory / "lib").mkdir(exist_ok=True)
+    (directory / "lib/kitconfig.py").write_text("# fixture parser\n")
     config = repo / "config/dev-model.yaml"
     config.write_text(config.read_text() + f"paths:\n  engines: {layout}\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "configured engine layout")
+    head = _git(repo, "rev-parse", "HEAD")
     out = _run(repo, "--lens", "correctness", "--head", head, "--base", base)
     assert out.returncode == 0, out.stderr
     commands = [shlex.split(line) for line in out.stdout.splitlines() if line.startswith("uv run ")]
-    assert any(command[:3] == ["uv", "run", str(checker)] for command in commands)
+    spec = json.loads(commands[-1][commands[-1].index("-c") + 2])
+    assert spec[-1][1] == str(checker)
 
 
 @pytest.mark.parametrize("shape", [
@@ -289,6 +303,9 @@ def test_preflight_refuses_escaped_aliased_or_non_file_checker_paths(repo, shape
             target.mkdir()
     config = repo / "config/dev-model.yaml"
     config.write_text(config.read_text() + f"paths:\n  engines: {engines}\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "hostile engine layout")
+    head = _git(repo, "rev-parse", "HEAD")
     out = _run(repo, "--lens", "correctness", "--head", head, "--base", base)
     assert out.returncode == 2
     assert "preflight checker path" in out.stderr or "repository-relative" in out.stderr
@@ -1726,3 +1743,141 @@ def test_committed_lens_comparison_in_relocated_layout(tmp_path, engine_rel, rec
         finally:
             definition.write_bytes(original)
         assert definition.read_bytes() == original
+
+
+@pytest.fixture
+def executable_preflight(repo):
+    require_kit_paths(CHECKER_REL, KITCONFIG_REL)
+    for source, target in [(ENGINE.parent / "check_record_prose.py", "scripts/check_record_prose.py"),
+                           (ENGINE.parent / "lib/kitconfig.py", "scripts/lib/kitconfig.py")]:
+        (repo / target).write_bytes(source.read_bytes())
+    config = repo / "config/dev-model.yaml"
+    config.write_text(config.read_text() + "paths:\n  handoff: docs/plan.md\n"
+                      "  handoff_history: docs/history.md\n  friction_log: docs/inbox.md\n"
+                      "  friction_log_archive: docs/archive.md\ndoc_budgets:\n  - path: docs/plan.md\n    budget: 20\n")
+    (repo / "docs/plan.md").write_text("Baseline.\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "install checker")
+    base = _git(repo, "rev-parse", "HEAD")
+    (repo / "docs/plan.md").write_text("[Missing](not-present.md)\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "hostile narrative")
+    return repo, base, _git(repo, "rev-parse", "HEAD")
+
+
+def preflight_argv(root, base, head):
+    import shlex
+
+    out = _run(root, "--lens", "adversarial", "--head", head, "--base", base)
+    assert out.returncode == 0, out.stderr
+    return next(shlex.split(line) for line in out.stdout.splitlines()
+                if line.startswith("uv run ") and "check_record_prose.py" in line)
+
+
+@pytest.mark.parametrize("when", ["before", "after"])
+@pytest.mark.parametrize("target", ["checker", "parser", "dependency", "project", "replacement"])
+def test_generated_preflight_ignores_mutable_execution_inputs(executable_preflight, monkeypatch, when, target):
+    root, base, head = executable_preflight
+    forged = 'import json; print(json.dumps({"status":"passed","findings":[],"unavailable":[],"stamps":[],"limits":[]})); raise SystemExit(0)\n'
+    command = preflight_argv(root, base, head) if when == "after" else None
+    if target in ("checker", "parser"):
+        path = "scripts/check_record_prose.py" if target == "checker" else "scripts/lib/kitconfig.py"
+        (root / path).write_text(forged)
+    elif target == "dependency":
+        (root / "scripts/lib/markdown_it.py").write_text(forged)
+        (root / "sitecustomize.py").write_text(forged)
+        monkeypatch.setenv("PYTHONPATH", str(root))
+    elif target == "project":
+        (root / "pyproject.toml").write_text("invalid project metadata [\n")
+        (root / "uv.toml").write_text("invalid uv settings [\n")
+    else:
+        original = _git(root, "rev-parse", f"{head}:scripts/check_record_prose.py")
+        fake = subprocess.run(["git", "hash-object", "-w", "--stdin"], cwd=root,
+                              input=forged, text=True, capture_output=True, check=True).stdout.strip()
+        _git(root, "replace", original, fake)
+    # The assembler is the trusted producer of the invocation. Inject Python
+    # startup poisoning only into the generated command, not its producer.
+    if command is None:
+        with monkeypatch.context() as clean:
+            clean.delenv("PYTHONPATH", raising=False)
+            command = preflight_argv(root, base, head)
+    # Run from the poisoned project too: uv discovery and Python's cwd search
+    # must not supply code before the pinned checker gets control.
+    result = subprocess.run(command, cwd=root, capture_output=True, text=True, timeout=90)
+    report = json.loads(result.stdout)
+    assert result.returncode == 1, (result.stderr, report)
+    assert report["status"] == "failed"
+    assert any(item["check"] == "links" for item in report["findings"])
+
+
+@pytest.mark.parametrize("target", ["kitconfig", "__main__"])
+def test_generated_preflight_authenticates_objects_before_execution(executable_preflight, target):
+    import zlib
+
+    root, base, head = executable_preflight
+    command = preflight_argv(root, base, head)
+    spec = json.loads(command[command.index("-c") + 2])
+    oid = next(row[2] for row in spec if row[0] == target)
+    data = b'print("forged"); raise SystemExit(0)\n'
+    object_path = root / ".git/objects" / oid[:2] / oid[2:]
+    object_path.chmod(0o600)
+    object_path.write_bytes(zlib.compress(b"blob " + str(len(data)).encode() + b"\0" + data))
+    result = subprocess.run(command, cwd=root, capture_output=True, text=True, timeout=90)
+    report = json.loads(result.stdout)
+    assert result.returncode == 2, result.stderr
+    assert report["status"] == "unavailable"
+    assert "digest mismatch" in report["unavailable"][0]["detail"]
+    assert "forged" not in result.stdout
+
+
+
+def test_generated_preflight_uses_supplied_review_tree(executable_preflight, tmp_path):
+    import shlex
+
+    root, base, head = executable_preflight
+    scratch = tmp_path / "review"
+    subprocess.run(["git", "clone", "--no-hardlinks", str(root), str(scratch)],
+                   check=True, capture_output=True)
+    _git(scratch, "checkout", "--detach", head)
+    out = _run(root, "--lens", "adversarial", "--head", head, "--base", base,
+               "--scratch", str(scratch))
+    assert out.returncode == 0, out.stderr
+    command = next(shlex.split(line) for line in out.stdout.splitlines()
+                   if line.startswith("uv run ") and "check_record_prose.py" in line)
+    assert command[command.index("--root") + 1] == str(scratch)
+    result = subprocess.run(command, cwd=scratch, capture_output=True, text=True, timeout=90)
+    assert result.returncode == 1 and json.loads(result.stdout)["status"] == "failed"
+    spec = json.loads(command[command.index("-c") + 2])
+    oid = spec[-1][2]
+    (scratch / ".git/objects" / oid[:2] / oid[2:]).unlink()
+    result = subprocess.run(command, cwd=scratch, capture_output=True, text=True, timeout=90)
+    assert result.returncode == 2 and json.loads(result.stdout)["status"] == "unavailable"
+
+
+
+def test_generated_preflight_does_not_fetch_missing_engine_blobs(executable_preflight, tmp_path):
+    import shlex
+
+    root, base, head = executable_preflight
+    _git(root, "config", "uploadpack.allowFilter", "true")
+    partial = tmp_path / "partial"
+    subprocess.run(["git", "clone", "--filter=blob:none", "--no-checkout", root.as_uri(), str(partial)],
+                   capture_output=True, check=True)
+    _git(partial, "update-ref", "--no-deref", "HEAD", head)
+    marker = tmp_path / "engine-fetch-attempt"
+    upload = tmp_path / "upload-pack"
+    upload.write_text(f"#!/bin/sh\nprintf attempted > {shlex.quote(str(marker))}\nexit 1\n")
+    upload.chmod(0o700)
+    _git(partial, "config", "remote.origin.uploadpack", str(upload))
+    out = _run(root, "--lens", "adversarial", "--head", head, "--base", base,
+               "--scratch", str(partial))
+    assert out.returncode == 0, out.stderr
+    command = next(shlex.split(line) for line in out.stdout.splitlines()
+                   if line.startswith("uv run ") and "check_record_prose.py" in line)
+    result = subprocess.run(command, cwd=partial, capture_output=True, text=True, timeout=90)
+    assert result.returncode == 2 and json.loads(result.stdout)["status"] == "unavailable"
+    assert not marker.exists()
+    spec = json.loads(command[command.index("-c") + 2])
+    subprocess.run(["git", "cat-file", "blob", spec[0][2]], cwd=partial,
+                   capture_output=True, timeout=30, env={**os.environ, "GIT_NO_LAZY_FETCH": "0"})
+    assert marker.exists()

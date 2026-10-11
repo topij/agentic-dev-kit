@@ -31,7 +31,10 @@ from urllib.parse import unquote, urlsplit
 
 # The generated invocation must stay read-only even in a fresh handed tree.
 sys.dont_write_bytecode = True
-sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+# The generated launcher preloads the pinned parser. Do not add a mutable
+# checkout directory to its isolated import path; direct CLI use loads locally.
+if "kitconfig" not in sys.modules:
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from kitconfig import get, loads, repo_root  # noqa: E402
 
 NARRATIVE_KEYS = ("handoff", "handoff_history", "friction_log", "friction_log_archive")
@@ -69,11 +72,11 @@ class NotApplicable(CheckError):
 def git(root: Path, *args: str) -> str:
     try:
         result = subprocess.run(
-            ["git", "--no-replace-objects", "--literal-pathspecs", *args],
+            ["git", "--no-lazy-fetch", "--no-replace-objects", "--literal-pathspecs", *args],
             cwd=root, capture_output=True, timeout=30, check=False,
             # Replacement refs and grafts rewrite object/history reads without
             # changing the named SHA. Keep every read on the stored objects.
-            env={**os.environ, "GIT_GRAFT_FILE": os.devnull},
+            env={**os.environ, "GIT_GRAFT_FILE": os.devnull, "GIT_NO_LAZY_FETCH": "1"},
         )
         output = result.stdout.decode("utf-8")
         error = result.stderr.decode("utf-8")
