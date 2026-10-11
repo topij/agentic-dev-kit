@@ -2058,7 +2058,8 @@ def test_help_documents_the_flag(tmp_path: Path) -> None:
 
 def test_an_in_use_claude_md_without_the_import_is_reported(tmp_path: Path) -> None:
     """Leaving their file alone is correct and also leaves the two runtimes on
-    different contracts, because Claude Code reads CLAUDE.md and not AGENTS.md.
+    different contracts, because Claude Code reads an existing CLAUDE.md instead
+    of AGENTS.md.
     init.sh must say so rather than edit their file."""
     repo = _fixture(tmp_path, config=shipped_config(), templates=True)
     (repo / "CLAUDE.md").write_text("# CLAUDE.md — mine\n", encoding="utf-8")

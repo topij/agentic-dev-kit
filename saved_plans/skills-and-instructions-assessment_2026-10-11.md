@@ -116,13 +116,16 @@ incident record and rationale to a linked doc, for example
 `docs/agentic-dev-kit/record-prose.md`. Block-level HTML comments are stripped by Claude
 Code but not documented as stripped by Codex, so they are not a parity-safe home for it.
 
-### 4. A stale claim ships to adopters
+### 4. An unconditional claim ships to adopters
 
 `docs/templates/CLAUDE.md.tmpl` says "Claude Code reads `CLAUDE.md` and **not**
-`AGENTS.md`". Since Claude Code `2.1.277` it reads `AGENTS.md` when no `CLAUDE.md` exists.
-The import is still the right choice; the reason given for it is not. Reword to: the
-import works in every session, including those where native `AGENTS.md` reading is off,
-and it keeps `CLAUDE.md` free for Claude-only additions.
+`AGENTS.md`". Since Claude Code `2.1.277` it reads `AGENTS.md` when no `CLAUDE.md`
+exists. Where a `CLAUDE.md` exists, which is always the case once the kit installs one,
+Claude Code by default reads it *instead of* `AGENTS.md`. So the import is required, not
+merely preferable, and the template's conclusion holds. Only the unconditional wording
+is wrong. *Correction after the first draft of this record, which called the claim
+stale outright.* Reword it, and its copies in `docs/getting-started.md`, `README.md` and
+an `init.sh` comment, to the conditional form.
 
 ### 5. No skill evaluations or cross-model testing
 
