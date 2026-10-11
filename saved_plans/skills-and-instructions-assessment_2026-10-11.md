@@ -155,6 +155,7 @@ commands and subagents for stale or conflicting instructions and could run in CI
    moving Claude bindings to `.claude/skills/` in the same pass.
 5. Add trigger and completion evals, starting with the lens agents and `pr-watch`.
 
-Items 1, 2 and 4 are observable to adopters and owe changelog fragments. Item 4 owes a
+Item 2 is observable to adopters and owes a changelog fragment. Items 1 and 4 change no
+report shape, gate, config key or engine CLI, so they owe none. Item 4 owes a
 check against `docs/agentic-dev-kit/safety-critical-changes.md` if moving detail behind
 the engines touches `scripts/pr_watch.py` or `scripts/launch_lane.py`.
