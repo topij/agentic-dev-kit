@@ -426,7 +426,7 @@ structure; normalize any refused value to an ordinary same-line form before retr
 The triage engines cover GitHub Issues and Linear through `--enable-tracker`, selected
 from `tracker.backend`. Linear requires the configured team/project, exact approved
 labels and `LINEAR_API_KEY`; see the shared
-[engine CLI](docs/agentic-dev-kit/workflows/triage-friction-log.md#engine-cli)
+[engine CLI](docs/agentic-dev-kit/workflows/triage-friction-log/engine-cli.md)
 for setup and invocation. Other tracker backends remain unavailable.
 
 ## Parallel dev sessions

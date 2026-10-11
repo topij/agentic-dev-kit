@@ -415,6 +415,9 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("docs/agentic-dev-kit/workflows/session-start.md", "workflow"),
     ("docs/agentic-dev-kit/workflows/wrap-up.md", "workflow"),
     ("docs/agentic-dev-kit/workflows/pr-watch.md", "workflow"),
+    # Its reference file, linked from it; tracked for the same reason as
+    # triage-friction-log's below.
+    ("docs/agentic-dev-kit/workflows/pr-watch/engine-reference.md", "workflow"),
     ("docs/agentic-dev-kit/workflows/parallel.md", "workflow"),
     # Tracked for exactly the reason fallback-review-panel.md is (see below):
     # parallel.md is manifest-owned and /upgrade-refreshed, and links here
@@ -441,6 +444,13 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # No Codex binding and no shared doc until #243's first slice; both landed
     # together, so this entry and .agents/skills/triage-friction-log/ are a pair.
     ("docs/agentic-dev-kit/workflows/triage-friction-log.md", "workflow"),
+    # The workflow's reference files: part of the same workflow, linked from it,
+    # and read under its triggers. Untracked, an upgrade would refresh the entry
+    # and not the files it sends the reader to — #146's shape again.
+    ("docs/agentic-dev-kit/workflows/triage-friction-log/recovery.md", "workflow"),
+    ("docs/agentic-dev-kit/workflows/triage-friction-log/state-schema.md", "workflow"),
+    ("docs/agentic-dev-kit/workflows/triage-friction-log/finalize.md", "workflow"),
+    ("docs/agentic-dev-kit/workflows/triage-friction-log/engine-cli.md", "workflow"),
     # Post-merge extraction has the same ownership split as triage above: runtime
     # adapters are intentionally adopter-owned, while this shared source carries
     # the behavior that /upgrade must refresh and drift inspection must see.

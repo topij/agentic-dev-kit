@@ -16,6 +16,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _repo_layout import find_repo_root  # noqa: E402
+from conftest import read_workflow  # noqa: E402
 
 ENGINE_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = find_repo_root(ENGINE_DIR)
@@ -184,9 +185,9 @@ def _green_view(**overrides):
 
 
 def test_workflow_routes_check_only_review_outages_to_the_fallback_panel() -> None:
-    workflow = (
+    workflow = read_workflow(
         REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "pr-watch.md"
-    ).read_text(encoding="utf-8")
+    )
 
     start = workflow.index("If `review_bots.unavailable` contains an entry")
     end = workflow.index("\n1. **If `converged`", start)
@@ -234,9 +235,9 @@ def test_the_converged_step_settles_the_review_request_before_reading_mergeable(
     Pinned as prose because the fix is prose: the engine's `⚠ review owed` line
     reports the state, and this step is what acts on it.
     """
-    workflow = (
+    workflow = read_workflow(
         REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "pr-watch.md"
-    ).read_text(encoding="utf-8")
+    )
 
     start = workflow.index("1. **If `converged`:**")
     end = workflow.index("\n1. **If checks are still", start)

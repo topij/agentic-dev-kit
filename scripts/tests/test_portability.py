@@ -22,7 +22,12 @@ from types import ModuleType
 
 import pytest
 import yaml
-from conftest import generated_adapter_source, require_kit_source, shipped_test_input
+from conftest import (
+    generated_adapter_source,
+    read_workflow,
+    require_kit_source,
+    shipped_test_input,
+)
 
 ENGINE_DIR = Path(__file__).resolve().parent.parent
 
@@ -2303,7 +2308,7 @@ def _assert_baseline_ready_policy(baseline: str) -> None:
 def test_pull_request_visibility_is_ready_by_default_with_a_bounded_draft_exception(
 ) -> None:
     workflow_root = REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows"
-    policy = (workflow_root / "pr-watch.md").read_text(encoding="utf-8")
+    policy = read_workflow(workflow_root / "pr-watch.md")
     _assert_ready_draft_policy(policy)
 
     flattened_policy = _flatten_prose(policy)
@@ -2391,9 +2396,7 @@ def test_pull_request_visibility_is_ready_by_default_with_a_bounded_draft_except
     assert "`pr-watch --assert-ready` before the normal watch-and-fix loop" in shared_workflows["wrap-up"]
 
     configured_workflows = {
-        "triage.pr_draft": (workflow_root / "triage-friction-log.md").read_text(
-            encoding="utf-8"
-        ),
+        "triage.pr_draft": read_workflow(workflow_root / "triage-friction-log.md"),
         "systemize.pr_draft": (workflow_root / "post-merge-systemize.md").read_text(
             encoding="utf-8"
         ),
@@ -4107,7 +4110,8 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     assert (
         "The capability, authority, artifact, input, gate-only input precedence, test "
         "input precedence, recovery-transition, and completion rows in this "
-        "document are normative. They take precedence over later explanatory prose "
+        "workflow and its reference files are normative. They take precedence over "
+        "later explanatory prose "
         "and runtime adapters."
     ) in flattened
     input_order = (
@@ -4818,7 +4822,7 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     )
     isolated_test_recovery = workflow.split(
         "### Isolated test-state recovery\n", 1
-    )[1].split("\n### Execution context", 1)[0]
+    )[1].split("\n#", 1)[0]  # the section ends at the next heading, in any file
     assert " ".join(isolated_test_recovery.split()) == (
         "The `test` entry resolves only the test state, test gate, and test "
         "artifacts; it never reads or changes a live path. When interactive `test` "
@@ -13617,9 +13621,9 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
     ".agents/skills/triage-friction-log",
 )
 def test_triage_integration_is_config_owned_shared_and_thin(tmp_path: Path) -> None:
-    workflow = (
+    workflow = read_workflow(
         REPO_ROOT / "docs/agentic-dev-kit/workflows/triage-friction-log.md"
-    ).read_text(encoding="utf-8")
+    )
     claude = (REPO_ROOT / ".claude/commands/triage-friction-log.md").read_text(
         encoding="utf-8"
     )
@@ -13758,9 +13762,9 @@ def test_triage_integration_is_config_owned_shared_and_thin(tmp_path: Path) -> N
     ".agents/skills/triage-friction-log",
 )
 def test_triage_semantic_and_adapter_mutations_are_rejected(tmp_path: Path) -> None:
-    workflow = (
+    workflow = read_workflow(
         REPO_ROOT / "docs/agentic-dev-kit/workflows/triage-friction-log.md"
-    ).read_text(encoding="utf-8")
+    )
     mutations = (
         workflow.replace(
             "in engine-backed and LLM-only drafting; the author supplies the metadata",

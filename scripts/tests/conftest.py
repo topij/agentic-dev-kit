@@ -133,6 +133,29 @@ def _hermetic_state_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setenv("DEVKIT_STATE_ROOT", str(tmp_path / "state"))
 
 
+def read_workflow(path: Path) -> str:
+    """A shared workflow's complete text: the entry file, then its reference files.
+
+    A workflow at ``workflows/<slug>.md`` may keep part of its normative text in
+    ``workflows/<slug>/*.md`` and link each file from the entry. The agent reads
+    them as one workflow, so a pin on that workflow's prose reads them as one too.
+    They are appended in the order the entry first links them, which keeps the
+    sections each file holds in the order a reader meets them.
+    """
+
+    import re
+
+    entry = path.read_text(encoding="utf-8")
+    seen: list[str] = []
+    for name in re.findall(rf"\]\({re.escape(path.stem)}/([A-Za-z0-9_-]+\.md)\)", entry):
+        if name not in seen:
+            seen.append(name)
+    parts = [entry]
+    for name in seen:
+        parts.append((path.parent / path.stem / name).read_text(encoding="utf-8"))
+    return "\n".join(parts)
+
+
 def require_kit_paths(*paths: str) -> None:
     """Skip the current test unless every path is present, from inside a fixture.
 
