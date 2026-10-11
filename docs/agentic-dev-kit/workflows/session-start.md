@@ -95,7 +95,7 @@ source that failed on the retry.
 | Living handoff   | `<handoff>` — every entry under `## Workstreams` (status, owner, `▶ Next:`), plus the newest session entries as context                  |
 | Friction inbox   | `<friction-log>` — entries since the last "Backlog migrated" marker                                                                  |
 | Tracker backlog  | your tracker's list-issues command/script — project `tracker.project_name` (open only — drop `completed`/`canceled`). Pass an explicit row limit *and* select fields; see the gather for why these are two separate limits and why a full page must be treated as truncated |
-| Open PRs         | `gh pr list` plus a read-only `pr_watch.py --json --no-persist --all-comments` poll per pull request — anything draft / CI-red / awaiting-review (the PR-follow-through rule). Page both the list and review findings completely |
+| Open PRs         | `gh pr list` (or its REST equivalent, `gh api --paginate` on the `pulls` route) plus a read-only `pr_watch.py --json --no-persist --all-comments` poll per pull request — anything draft / CI-red / awaiting-review (the PR-follow-through rule). Page both the list and review findings completely |
 | Working tree     | `git status --short` plus a symbolic-branch read or explicit `DETACHED at <sha>` classification — unfinished business from last session |
 | CI/cron health   | your cron/CI runner's status command (adapt to your infra — e.g. a wrapper script that logs recent job outcomes)                         |
 | Config drift     | your host config-apply step, if you have one (e.g. a `verify --json`-style check comparing committed config against applied host state) — drop this bullet entirely if it doesn't generalize to your setup |
@@ -139,6 +139,31 @@ like good news, it looks like a missing handoff.
   **truncated** one returns valid JSON with fewer rows than exist, which no exit
   code reveals and only the full-page check catches.
 
+  **A GraphQL refusal is a failed `gh`, not a working one.** `gh pr list` reads
+  through GitHub's GraphQL API, and some environments refuse every GraphQL call while
+  REST through `gh api` still works — a Claude Code cloud session's egress proxy
+  answers `HTTP 403: GitHub GraphQL is not available from Claude Code sessions`
+  (seen by an adopter on 2026-10-11). Treat that error as `gh` unavailable for every
+  fallback purpose, and read the list through the REST route instead, an accepted
+  equivalent:
+
+  ```sh
+  gh api --paginate 'repos/<owner>/<repo>/pulls?state=open&per_page=100'
+  ```
+
+  The REST response names the fields differently (`draft` for `isDraft`,
+  `user.login` for `author`) and carries no `reviewDecision` or
+  `statusCheckRollup`; the per-PR read below supplies review and CI state. The
+  truncation rule above covers this route too, in the form that fits it:
+  `--paginate` follows every page until none remains, so a full page is not the
+  signal here — **the exit status is**. A run counts as complete only when it exits
+  zero; one that exits non-zero after printing some pages is truncated, and its
+  partial output is discarded, never read as the list. Each page arrives as its own
+  JSON array, so parse them all (or pass `--slurp`) rather than the first. If every
+  route fails — `gh pr list`, this REST read, and any GitHub MCP the session offers,
+  which can fail on its own credentials — render `PRs unavailable: <reason>`, never
+  an empty list.
+
   The list response is discovery, not complete review health. For every returned pull
   request, read its review evidence through the watch engine, read-only:
 
@@ -163,7 +188,9 @@ like good news, it looks like a missing handoff.
   `forge-pr-read` ready from list metadata or an acknowledgement-filtered view alone.
   If the engine exits non-zero, if `truncated_reads[]` is non-empty, or if this second
   layer is otherwise missing, render `PRs unavailable: review findings <reason>`
-  rather than silently omitting unresolved bot feedback.
+  rather than silently omitting unresolved bot feedback. The engine's `gh` backend
+  reads through `gh pr view`, which is GraphQL too, so where GraphQL is refused this
+  layer fails and renders unavailable under the same rule.
 - your cron/CI health command (adapt to your infra)
 - your config-drift check, if you have one (parse its output for a 🔴-worthy line in *Render the briefing*)
 - Read `<handoff>`. The focus is the `## Workstreams` section: each `### <name>` entry's
@@ -180,7 +207,13 @@ like good news, it looks like a missing handoff.
   `completed`/`canceled`, and print a compact table sorted urgent(1) → low(4) with
   no-priority(0) last. A missing/invalid config or missing tracker credential should
   exit non-zero with a clear message — treat any non-zero exit as the optional-tracker
-  gap (note it and continue) — never act on a partial payload.
+  gap (note it and continue) — never act on a partial payload. On a `github-issues`
+  tracker, `gh issue list` is GraphQL and fails the same way as `gh pr list` above:
+  that refusal is the tracker gap unless the REST route
+  `gh api --paginate 'repos/<owner>/<repo>/issues?state=open&per_page=100'` succeeds,
+  complete by the same exit-status rule. That route also returns pull requests, so
+  drop every row that carries a `pull_request` key, and it returns each issue's body,
+  so select the fields above with `--jq` rather than reading whole rows.
 
   **The call has two independent limits, and using one against the other's failure
   silently loses issues.** Field selection bounds the *bytes per row*; the row limit

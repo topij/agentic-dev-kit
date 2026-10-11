@@ -3156,6 +3156,24 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "Do not mark `forge-pr-read` ready from list metadata or an "
             "acknowledgement-filtered view alone"
         ) in flattened
+        # A forge that refuses GraphQL (a Claude Code cloud session's egress
+        # proxy) must leave the PR list on its REST route, complete only by exit
+        # status, and unavailable rather than empty when every route fails.
+        assert (
+            "gh api --paginate 'repos/<owner>/<repo>/pulls?state=open&per_page=100'"
+        ) in flattened
+        assert (
+            "Treat that error as `gh` unavailable for every fallback purpose"
+            in flattened
+        )
+        assert (
+            "A run counts as complete only when it exits zero; one that exits "
+            "non-zero after printing some pages is truncated, and its partial "
+            "output is discarded, never read as the list."
+        ) in flattened
+        assert (
+            "render `PRs unavailable: <reason>`, never an empty list" in flattened
+        )
         # #762: workstreams, not recency, carry the handoff's next steps.
         assert (
             "**no entry is promoted for being the most recently updated**"
@@ -3708,6 +3726,22 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
         ("session-start", session, session.replace(
             "if `truncated_reads[]` is non-empty, ",
             "", 1
+        )),
+        ("session-start", session, session.replace(
+            "'repos/<owner>/<repo>/pulls?state=open&per_page=100'",
+            "'repos/<owner>/<repo>/pulls?state=open'", 1
+        )),
+        ("session-start", session, session.replace(
+            "Treat that error as `gh` unavailable for every\n  fallback purpose",
+            "Treat that error as an empty list", 1
+        )),
+        ("session-start", session, session.replace(
+            "is truncated, and its\n  partial output is discarded, never read as the list.",
+            "is complete, and its\n  partial output is read as the list.", 1
+        )),
+        ("session-start", session, session.replace(
+            "render `PRs unavailable: <reason>`, never\n  an empty list.",
+            "render an empty list.", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "`kitconfig.load_config()`", "`config/dev-model.yaml`", 1
