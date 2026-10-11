@@ -144,7 +144,8 @@ like good news, it looks like a missing handoff.
   REST through `gh api` still works — a Claude Code cloud session's egress proxy
   answers `HTTP 403: GitHub GraphQL is not available from Claude Code sessions`
   (seen by an adopter on 2026-10-11). Treat that error as `gh` unavailable for every
-  fallback purpose, and read the list through the REST route instead, an accepted
+  fallback purpose (a GitHub MCP route your runtime offers, and the unavailable
+  rendering below), and read the list through the REST route instead, an accepted
   equivalent:
 
   ```sh
@@ -152,7 +153,8 @@ like good news, it looks like a missing handoff.
   ```
 
   The REST response names the fields differently (`draft` for `isDraft`,
-  `user.login` for `author`) and carries no `reviewDecision` or
+  `user.login` for `author`, which spells an app `dependabot[bot]` where `gh pr list`
+  gives `app/dependabot`, so match an automation author in either form) and carries no `reviewDecision` or
   `statusCheckRollup`; the per-PR read below supplies review and CI state. The
   truncation rule above covers this route too, in the form that fits it:
   `--paginate` follows every page until none remains, so a full page is not the
@@ -194,7 +196,9 @@ like good news, it looks like a missing handoff.
   `GITHUB_TOKEN`; without one it exits non-zero, and this layer renders unavailable
   under the same rule. An `unavailable_reads[]` entry names a check surface the REST
   token was refused, not a comment surface, so it does not make this layer
-  unavailable.
+  unavailable. It does make that pull request's CI state partial: its `checks` then
+  cover only what was read, so render its CI as `CI partial: <surface> unreadable`,
+  never as green, and list its `merge_blockers[]`.
 - your cron/CI health command (adapt to your infra)
 - your config-drift check, if you have one (parse its output for a 🔴-worthy line in *Render the briefing*)
 - Read `<handoff>`. The focus is the `## Workstreams` section: each `### <name>` entry's

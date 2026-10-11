@@ -3174,6 +3174,13 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         assert (
             "render `PRs unavailable: <reason>`, never an empty list" in flattened
         )
+        # The REST /issues route returns pull requests too, and a token refused
+        # the combined status leaves `checks` partial rather than green.
+        assert "drop every row that carries a `pull_request` key" in flattened
+        assert (
+            "render its CI as `CI partial: <surface> unreadable`, never as green"
+            in flattened
+        )
         # #762: workstreams, not recency, carry the handoff's next steps.
         assert (
             "**no entry is promoted for being the most recently updated**"
@@ -3742,6 +3749,12 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
         ("session-start", session, session.replace(
             "render `PRs unavailable: <reason>`, never\n  an empty list.",
             "render an empty list.", 1
+        )),
+        ("session-start", session, session.replace(
+            "drop every row that carries a `pull_request` key", "keep every row", 1
+        )),
+        ("session-start", session, session.replace(
+            "`CI partial: <surface> unreadable`,\n  never as green", "green", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "`kitconfig.load_config()`", "`config/dev-model.yaml`", 1
