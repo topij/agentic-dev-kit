@@ -442,7 +442,7 @@ def test_shipped_runtime_adapters_equal_the_renderer_for_both_runtimes():
         encoding="utf-8"
     )
     assert "fetched kit's adapter renderer" in parity
-    assert "authored command preserved" in parity
+    assert "authored command at the retired" in parity
     assert "authored skill preserved" in parity
     assert not {
         path

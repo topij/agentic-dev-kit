@@ -36,7 +36,7 @@
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
-      "sha256": "d3ea0600de7bfce244bc76b4b8777ab848dcc5027ee4cdcbe1f08acfeae77bf9"
+      "sha256": "25c99ee49422804855651ffad07ffceb2d2e49e911bed5a0681250233b226b61"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
@@ -272,7 +272,7 @@
         "scripts/kit_doctor.py"
       ],
       "role": "engine",
-      "sha256": "fb770f8cf8810e6077f464277c74f2408714e48c3bf48173cb2c3fb93eb812db"
+      "sha256": "3b70edeae199147ec35f69ca039fd6531b1b596b1b70b4b1419b1e52c05633fe"
     },
     "scripts/lib/state_paths/__init__.py": {
       "required_by": [
@@ -537,7 +537,7 @@
     },
     "scripts/runtime_smoke.py": {
       "role": "repo-only",
-      "sha256": "91a3e4205676b2a0ae7c0bdcfaed4cf322a311188b4dfa1940c3e095b17afb58"
+      "sha256": "e3fbd84d90c92889d7be5ff0b79f04153fb6ae6c534ca1bdf1c6d540f1309ec3"
     },
     "scripts/sweep_scratch.py": {
       "role": "engine",
@@ -597,7 +597,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "db7aa803f48f8afa5a55c891b8c24676730ffedd1d9b93d958a28a460ebfc5f6"
+      "sha256": "7821f93a31df1e2165e662ab113cfa7209bc3d1ebf275063fbd20827e38a7e11"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",

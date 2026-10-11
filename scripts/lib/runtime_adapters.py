@@ -34,8 +34,9 @@ LEGACY_CLAUDE_COMMAND_PATH = ".claude/commands/{slug}.md"
 # reads `disable-model-invocation: true` from the rendered skill; Codex reads
 # `policy.allow_implicit_invocation: false` from the skill's `agents/openai.yaml`,
 # which this module does not render. Both still run when invoked by name. Probed
-# live on 2026-10-11 against Claude Code 2.1.296 and codex-cli 0.153.4: each hid
-# the marked skill from the model's listing and ran it when named.
+# live on 2026-10-11 against Claude Code 2.1.296 and codex-cli 0.153.4, in an
+# uncommitted scratch repository: `claude -p` and `codex exec` each left the marked
+# probe skill out of the skills they listed, and each ran it when named.
 EXPLICIT_INVOCATION_ONLY = frozenset({"adopt", "upgrade", "triage-friction-log"})
 
 _DISPLAY_NAMES = {
