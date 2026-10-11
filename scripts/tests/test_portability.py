@@ -2077,6 +2077,80 @@ isolation, and delegation mechanisms.""",
     assert body in allowed_bodies
 
 
+_SPLIT_WORKFLOW_TRIGGERS = {
+    # Each split workflow's entry names every reference file and says when to
+    # read it. The triggers are what make the split safe: with the links kept
+    # and the triggers weakened to "optional", nothing else here fails.
+    "triage-friction-log": (
+        "**Read a file completely, not in part, when its trigger applies**",
+        "Read it when the run captures a `completed` state",
+        "Read it in LLM-only mode before writing or validating any state",
+        "Read it before the first tracker action",
+        "Read it once engine-backed mode is selected",
+    ),
+    "pr-watch": (
+        "**Read it completely, not in part**, before a final authorization poll",
+        "`review_bots` lists a bot as unavailable, pending or behind the head;",
+        "`evidence_findings[]` or `truncated_reads` is non-empty",
+    ),
+}
+
+
+def _assert_split_workflow_links_and_triggers(root: Path) -> None:
+    workflows = root / "docs" / "agentic-dev-kit" / "workflows"
+    split = sorted(path.name for path in workflows.iterdir() if path.is_dir())
+    assert split == sorted(_SPLIT_WORKFLOW_TRIGGERS), split
+    for slug, triggers in _SPLIT_WORKFLOW_TRIGGERS.items():
+        entry = (workflows / f"{slug}.md").read_text(encoding="utf-8")
+        for reference in sorted((workflows / slug).glob("*.md")):
+            link = f"]({slug}/{reference.name})"
+            assert link in entry, f"{slug}.md does not link {reference.name}"
+            assert reference.read_text(encoding="utf-8").split("\n\n", 2)[1].startswith(
+                "Read this file completely"
+            ), f"{reference.name} does not open with its trigger"
+        flat = " ".join(entry.split())
+        for trigger in triggers:
+            assert trigger in flat, f"{slug}.md lost its trigger: {trigger!r}"
+
+
+def test_split_workflows_link_every_reference_file_with_its_trigger() -> None:
+    require_kit_source()
+    _assert_split_workflow_links_and_triggers(REPO_ROOT)
+
+
+def test_split_workflow_trigger_and_link_mutations_are_rejected(tmp_path: Path) -> None:
+    require_kit_source()
+    source = REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows"
+    mutations = {
+        "triage-friction-log.md": (
+            ("**Read a file completely, not in part, when its trigger applies**",
+             "These files are optional background"),
+            ("](triage-friction-log/finalize.md)", "](finalize.md)"),
+        ),
+        "pr-watch.md": (
+            ("**Read it completely, not in part**, before a final authorization poll",
+             "Optional."),
+            ("`evidence_findings[]` or `truncated_reads` is non-empty", "anything"),
+        ),
+        "pr-watch/engine-reference.md": (
+            ("Read this file completely before", "You may read this file before"),
+        ),
+    }
+    for rel, pairs in mutations.items():
+        for old, new in pairs:
+            root = tmp_path / f"case-{len(list(tmp_path.iterdir()))}"
+            shutil.copytree(source, root / "docs" / "agentic-dev-kit" / "workflows")
+            target = root / "docs" / "agentic-dev-kit" / "workflows" / rel
+            text = target.read_text(encoding="utf-8")
+            # Match across the file's line breaks, and leave every other byte alone.
+            pattern = r"\s+".join(re.escape(word) for word in old.split())
+            mutated, applied = re.subn(pattern, new, text)
+            assert applied >= 1, (rel, old)
+            target.write_text(mutated, encoding="utf-8")
+            with pytest.raises(AssertionError):
+                _assert_split_workflow_links_and_triggers(root)
+
+
 def test_parallel_adapter_policy_contradictions_are_rejected() -> None:
     for path in (
         REPO_ROOT / ".claude" / "commands" / "parallel.md",

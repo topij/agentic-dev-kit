@@ -1332,6 +1332,29 @@ def test_every_tracked_file_under_scripts_is_kit_owned():
         "kit_doctor.py --generate-manifest."
     )
 
+def test_every_tracked_file_under_the_shared_workflows_is_kit_owned():
+    """Every file git tracks under `docs/agentic-dev-kit/workflows/` is `KIT_OWNED`.
+
+    A workflow may keep part of its text in `workflows/<slug>/*.md` and link it
+    from the entry. An untracked reference file would be refreshed by no upgrade,
+    so an adopter's refreshed entry would send the reader to a file they do not
+    have — #146's shape. `test_shipped_manifest_covers_every_kit_owned_file`
+    cannot see it, for the reason the test above gives for `scripts/`.
+    """
+    require_kit_source()
+    tracked = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "ls-files", "-z", "--",
+         "docs/agentic-dev-kit/workflows"],
+        check=True, capture_output=True,
+    ).stdout.decode("utf-8").split("\0")
+    owned = {rel for rel, _ in kit_doctor.KIT_OWNED}
+    unlisted = sorted(rel for rel in tracked if rel and rel not in owned)
+    assert not unlisted, (
+        f"tracked under docs/agentic-dev-kit/workflows/ but absent from KIT_OWNED: "
+        f"{unlisted}. Add each with the `workflow` role, then run "
+        "kit_doctor.py --generate-manifest."
+    )
+
 def test_the_reference_registrations_match_the_shipped_files():
     """The reference copies under `tests/fixtures/shipped-registrations/` must
     equal the registrations the kit actually ships (#534).

@@ -13,8 +13,11 @@ run it without being asked.
 and as normative as it: the *Read-only act-time poll* and the *Notes* on what each
 report field means. A section cited by name, or as *above* or *below*, may sit there.
 **Read it completely, not in part**, before a final authorization poll or a read-only
-judgement of a pull request, and whenever a report field, blocker or flag you must act on
-is not explained in this file.
+judgement of a pull request, and before acting on a poll in which any of these holds:
+`review_bots` lists a bot as unavailable, pending or behind the head;
+`evidence_findings[]` or `truncated_reads` is non-empty; or the engine reports the REST
+backend. Read it as well whenever a report field, blocker or flag you must act on is not
+explained in this file.
 
 ## Ready and draft policy
 
@@ -337,8 +340,9 @@ Repeat until the report says **converged**:
 ## The draft-bit flags — they CORRECT, they do not check
 
 `--assert-draft` and `--assert-ready` are documented in `pr_watch.py`'s own docstring,
-used by the ready/draft policy above, and noted under the REST backend in the Notes
-section below. Their names badly undersell what they do. Read this before using either.
+used by the ready/draft policy above, and noted under the REST backend in the Notes in
+[`pr-watch/engine-reference.md`](pr-watch/engine-reference.md). Their names badly
+undersell what they do. Read this before using either.
 
 **Both mutate the PR.** Despite "assert", neither is a read-only check. Each reads
 `isDraft`, and if it does not match, issues the corrective `gh pr ready` (for

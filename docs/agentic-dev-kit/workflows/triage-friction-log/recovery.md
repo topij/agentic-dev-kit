@@ -7,6 +7,9 @@ gate, recovery intent, receipt or bundle, finds invalid state, or was entered wi
 section cited by name, or as *above* or *below*, may sit in that file or another of its
 reference files.
 
+Before classifying a state as invalid or abandonable, read *Validity and abandonability*
+in [`state-schema.md`](state-schema.md) completely.
+
 ## Contents
 
 - Completed-state retirement

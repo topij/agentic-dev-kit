@@ -151,12 +151,12 @@ intent or held receipt.
 |---|---|
 | Unknown or combined entry keyword | Hard-stop before capability probing or writes. |
 | No argument, neither active state nor gate-only receipt | Start a new live draft. |
-| No argument, valid `completed` live state | Under the held gate, retire the completed state (below), then start a new live draft. |
+| No argument, valid `completed` live state | Under the held gate, retire the completed state (*Completed-state retirement*, in `recovery.md`), then start a new live draft. |
 | No argument, valid active state in any other phase | Resume the recorded phase and mode. |
 | `resume`, neither valid active state nor gate-only receipt | Hard-stop without an external write. |
 | `resume`, valid active state | Resume the recorded phase and mode; never replace the active session. A `completed` state reports its completed receipt without mutation. |
 | `new`, neither active state nor gate-only receipt | Start a new live draft. |
-| `new`, valid `completed` live state | Under the held gate, retire the completed state (below), then start a new live draft. |
+| `new`, valid `completed` live state | Under the held gate, retire the completed state (*Completed-state retirement*, in `recovery.md`), then start a new live draft. |
 | `new`, active live state in any other phase | Refuse; never overwrite an approval-bound session. |
 | Interactive `recover`, active live state and no blocking gate | Under the single-writer gate, capture raw bytes and filesystem observations before parsing the captured copy; valid state then refuses and directs to `resume`, while invalid state enters recovery. Recovery never authorizes a tracker, source, or forge write. |
 | Interactive `recover`, blocking gate without a gate-only receipt | Capture the complete published gate and its filesystem observations; prove owner termination and require exact operator approval before quarantining the unchanged gate, whether or not active state exists. When state is absent, publish a blocking `gate-only-recovery-intent` before gate quarantine; never infer safe restart. |
@@ -169,7 +169,7 @@ intent or held receipt.
 | Any live invocation with a gate-only held receipt | Preserve the receipt, quarantined gate, and bundle; report operator-held and never start, resume, or reconstruct a draft automatically. |
 | Scheduled or unattended `recover` | Report operator-held without acquiring the single-writer gate, capturing state, or changing an artifact. |
 | `test`, no test state, test gate, or test recovery receipt | Start a test draft with test identity and test state; never read, replace, or resume live state. |
-| `test`, valid `completed` test state and no blocking test gate | Under the held test gate, retire the completed test state (below), then start a new test draft; never read, replace, or resume live state. |
+| `test`, valid `completed` test state and no blocking test gate | Under the held test gate, retire the completed test state (*Completed-state retirement*, in `recovery.md`), then start a new test draft; never read, replace, or resume live state. |
 | `test`, valid test state in any other phase and no blocking test gate | Resume only that test state; never read, replace, or resume live state. |
 | `test`, `test-recovered-safe-to-restart` receipt and no blocking test gate | Under the test gate, verify the receipt and bundle, parse the current inbox, then digest-check and replace only that receipt with the reserved new test state. Preserve the receipt if parsing or replacement fails. |
 | Interactive `test`, blocking test gate, no held bundle, and owner active or uncertain | Preserve the gate and any test artifact byte-identically; report operator-held without writing a bundle or intent. |
@@ -195,7 +195,7 @@ intent or held receipt.
 
 ## Reference files
 
-This workflow is split so that a run reads only what its route needs. The four files
+This workflow is split so that a run reads only what its route needs. The files
 below are part of the workflow and are as normative as this one; a section cited here by
 name, or as *above* or *below*, may sit in any of them. **Read a file completely, not in
 part, when its trigger applies**, and before taking the action it governs:
@@ -212,7 +212,7 @@ part, when its trigger applies**, and before taking the action it governs:
 - [`triage-friction-log/finalize.md`](triage-friction-log/finalize.md) — *Tracker writes and
   accounting* and *Finalize and sweep*. Read it before the first tracker action, and on
   resuming a state in `tracker-write` or a later phase.
-- [`triage-friction-log/engine-cli.md`](triage-friction-log/engine-cli.md) — the two engines'
+- [`triage-friction-log/engine-cli.md`](triage-friction-log/engine-cli.md) — the engines'
   invocations and outputs. Read it once engine-backed mode is selected, before the first
   engine call.
 

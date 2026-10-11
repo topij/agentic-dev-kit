@@ -265,6 +265,8 @@ phase are forbidden earlier.
   record `degraded-success` when an optional interactive notification degraded after the
   decisions became durable.
 
+## Validity and abandonability
+
 Validate the exact base and the complete phase-owned shape before treating a captured
 state as valid. A recognized phase with incomplete or invalid phase-owned fields is
 uncertain, not abandonable. An unrecognized phase is invalid, but it is abandonable
