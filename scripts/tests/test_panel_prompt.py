@@ -122,6 +122,8 @@ def repo(tmp_path: Path) -> Path:
     root = tmp_path / "repo"
     (root / "config").mkdir(parents=True)
     (root / "docs" / "agentic-dev-kit").mkdir(parents=True)
+    (root / "scripts").mkdir()
+    (root / "scripts/check_record_prose.py").write_text("# fixture preflight target\n")
 
     # The real doctrine, so the contract these tests assert on is the shipped one.
     (root / DOCTRINE).write_text(doctrine_text())
@@ -229,6 +231,68 @@ def test_narrative_preflight_is_quoted_and_names_the_comparison(repo):
     invocation = next(shlex.split(line) for line in commands if "check_record_prose.py" in line)
     assert invocation == ["uv", "run", str(repo / "scripts/check_record_prose.py"),
                           "--root", str(repo), "--base", base, "--head", head, "--json"]
+
+
+@pytest.mark.parametrize("layout", ["scripts/devkit", "tools/vendor kit", "."])
+def test_preflight_command_uses_a_real_checker_in_the_configured_directory(repo, layout):
+    import shlex
+
+    base, head = _revs(repo)
+    directory = repo / layout
+    directory.mkdir(parents=True, exist_ok=True)
+    checker = directory / "check_record_prose.py"
+    checker.write_text("# fixture preflight target\n")
+    config = repo / "config/dev-model.yaml"
+    config.write_text(config.read_text() + f"paths:\n  engines: {layout}\n")
+    out = _run(repo, "--lens", "correctness", "--head", head, "--base", base)
+    assert out.returncode == 0, out.stderr
+    commands = [shlex.split(line) for line in out.stdout.splitlines() if line.startswith("uv run ")]
+    assert any(command[:3] == ["uv", "run", str(checker)] for command in commands)
+
+
+@pytest.mark.parametrize("shape", [
+    "absolute", "parent", "parent-reentry", "directory-symlink-outside",
+    "directory-symlink-inside", "file-symlink-outside", "file-symlink-inside",
+    "dangling-symlink", "missing", "directory-target", "file-parent",
+])
+def test_preflight_refuses_escaped_aliased_or_non_file_checker_paths(repo, shape):
+    base, head = _revs(repo)
+    outside = repo.parent / "foreign"
+    outside.mkdir()
+    (outside / "check_record_prose.py").write_text("# foreign checker\n")
+    target = repo / "scripts/check_record_prose.py"
+    engines = "scripts"
+    if shape == "absolute":
+        engines = str(outside)
+    elif shape == "parent":
+        engines = "../foreign"
+    elif shape == "parent-reentry":
+        engines = "../repo/scripts"
+    elif shape.startswith("directory-symlink"):
+        engines = "alias"
+        destination = outside if shape.endswith("outside") else repo / "scripts"
+        (repo / engines).symlink_to(destination, target_is_directory=True)
+    elif shape == "file-parent":
+        engines = "not-a-directory"
+        (repo / engines).write_text("file\n")
+    else:
+        target.unlink()
+        if shape.startswith("file-symlink"):
+            destination = outside / "check_record_prose.py"
+            if shape.endswith("inside"):
+                destination = repo / "other.py"
+                destination.write_text("# other checker\n")
+            target.symlink_to(destination)
+        elif shape == "dangling-symlink":
+            target.symlink_to(outside / "absent.py")
+        elif shape == "directory-target":
+            target.mkdir()
+    config = repo / "config/dev-model.yaml"
+    config.write_text(config.read_text() + f"paths:\n  engines: {engines}\n")
+    out = _run(repo, "--lens", "correctness", "--head", head, "--base", base)
+    assert out.returncode == 2
+    assert "preflight checker path" in out.stderr or "repository-relative" in out.stderr
+    assert out.stdout == ""
 
 
 def test_a_missing_narrative_preflight_is_not_silently_omitted(repo):

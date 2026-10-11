@@ -71,6 +71,7 @@ import argparse
 import os
 import re
 import shlex
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -789,6 +790,29 @@ def _delta_inputs(args: argparse.Namespace) -> tuple[dict[str, str] | None, str 
     return {name: value for name, value in given.items() if value is not None}, repair
 
 
+def _preflight_checker(root: Path, engines: object) -> Path:
+    """Require a repository-relative route through real directories to a file."""
+    if not isinstance(engines, str) or not engines.strip():
+        raise PromptError("paths.engines is not a usable engine directory")
+    relative = Path(engines)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise PromptError("paths.engines must be repository-relative without parent traversal")
+    # Reject symlink redirects even when their target is inside the repository:
+    # the emitted command must name this checkout's checker, not a redirect.
+    target = root
+    parts = (*relative.parts, "check_record_prose.py")
+    for index, part in enumerate(parts):
+        target /= part
+        try:
+            mode = target.lstat().st_mode
+        except (OSError, ValueError) as exc:
+            raise PromptError(f"preflight checker path cannot be read: {target} ({exc})") from exc
+        expected_kind = stat.S_ISREG if index == len(parts) - 1 else stat.S_ISDIR
+        if not expected_kind(mode):
+            raise PromptError(f"preflight checker path must use real directories and a regular file: {target}")
+    return target
+
+
 def build(args: argparse.Namespace) -> str:
     # The repo under review is a parameter, not a module constant, so the engine can
     # be pointed at a checkout other than its own — and so its own tests can build a
@@ -846,11 +870,9 @@ def build(args: argparse.Namespace) -> str:
         raise PromptError("the doctrine is missing its Narrative preflight section")
     following = _NEXT_H2.search(doctrine, heading.end())
     narrative = doctrine[heading.start():following.start() if following else len(doctrine)].rstrip()
-    engines = get(config, "paths.engines", "scripts")
-    if not isinstance(engines, str) or not engines.strip():
-        raise PromptError("paths.engines is not a usable engine directory")
+    checker = _preflight_checker(root, get(config, "paths.engines", "scripts"))
     command = shlex.join([
-        "uv", "run", str(root / engines / "check_record_prose.py"),
+        "uv", "run", str(checker),
         "--root", str(root), "--base", base, "--head", head, "--json",
     ])
     narrative += f"\n\nPreflight invocation for this comparison:\n\n```sh\n{command}\n```\n"
