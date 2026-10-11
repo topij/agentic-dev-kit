@@ -88,7 +88,7 @@
     },
     "docs/templates/CLAUDE.md.tmpl": {
       "role": "template",
-      "sha256": "e3195e5484d13f90122aa5ffacd9192e07b8445f5f0ab0cd44feced058fd23b3"
+      "sha256": "1f2f85a7383243b7f518501b19150941027e461afcee3102e1aa1b5fbf72d39b"
     },
     "docs/templates/friction-log-archive.md.tmpl": {
       "role": "template",
@@ -108,7 +108,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "b7508d15fae3cab3826af3be041be17b4a2643f7eec90ea8ff64b88488092b20"
+      "sha256": "60df6447ffac5fa002d521c8516bf20653ce7be6c0e9a6c0f3839f555861fa83"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -593,7 +593,7 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "22709ed836f2ff466a4d8c4e95f13edd8822d356e41bc3f006fa0a4ce385a478"
+      "sha256": "2f7412b2f19db5607205df92d105f54b5dfe1c9ebc5058b76fe6486d03ff01a7"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
