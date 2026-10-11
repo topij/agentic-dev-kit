@@ -12620,6 +12620,10 @@ def test_the_render_names_an_unreadable_surface() -> None:
     pr_watch._unavailable_reads.append(dict(pr_watch._unavailable_reads[0]))
     report = pr_watch.build_report(_green_view(headRefOid="abc"), [], set(), backend="rest")
     assert len(report["unavailable_reads"]) == 1, "one surface read twice is one gap"
+    other = dict(pr_watch._unavailable_reads[0], url="https://api.github.com/repos/o/r/commits/def/status")
+    pr_watch._unavailable_reads.append(other)
+    distinct = pr_watch.build_report(_green_view(headRefOid="abc"), [], set(), backend="rest")
+    assert len(distinct["unavailable_reads"]) == 2, "two URLs are two gaps"
     text = pr_watch.render(report)
     assert "commit-statuses could NOT be read" in text
     assert "not green" in text

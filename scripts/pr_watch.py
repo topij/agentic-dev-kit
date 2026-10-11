@@ -741,8 +741,7 @@ def _github_token() -> str | None:
 _gh_graphql_probes: dict[str, bool] = {}
 
 # `rateLimit` rather than `viewer`: it asks for nothing about the token's owner,
-# so no token type the probe might meet (a GitHub App installation token, say)
-# can fail it while other GraphQL calls would succeed.
+# so the probe does not depend on what kind of identity the token belongs to.
 _GH_GRAPHQL_PROBE_QUERY = "query{rateLimit{limit}}"
 
 
@@ -1091,8 +1090,9 @@ _truncated_reads: list[str] = []
 # ``{"surface", "url", "reason"}``. Unlike a truncated read, this is a gap the
 # poll knows it has, so `build_report` turns it into a merge blocker as well as
 # reporting it — the blocker survives #94 lifting REST's poll-only bound. It does
-# not touch `converged`: in a cloud session the refusal lasts the whole session,
-# so blocking the loop on it would wedge every cloud poll. A transient 403 (a
+# not touch `converged`: where the token is refused this endpoint, as cs-toolkit
+# reported for a cloud session, the refusal recurs on every poll, so blocking
+# the loop on it would wedge it. A transient 403 (a
 # rate limit) lands here too, and is not told apart; so on any poll that
 # records an entry, `converged` says nothing about status contexts, whether
 # the refusal is permanent or not.
@@ -1598,10 +1598,10 @@ def _rest_fetch_checks(
     # rather than "not yet read" — the exact false green the sibling read's
     # docstring cites, in the same function.
     #
-    # A 403 here means the token cannot read commit statuses at all: a Claude
-    # Code cloud session's GitHub App token reads check runs, reviews and
-    # comments but gets `403 Resource not accessible by integration` from this
-    # endpoint. That returns ``None`` — "not read" — never ``[]``, which would
+    # A 403 here is read as "the token cannot read commit statuses". cs-toolkit
+    # reported on 2026-10-11 that its Claude Code cloud session's GitHub App
+    # token read check runs, reviews and comments but got `403 Resource not
+    # accessible by integration` from this endpoint. That returns ``None`` — "not read" — never ``[]``, which would
     # say "this commit has no status contexts" and let `all_green` stand on
     # check runs alone. The gap is recorded in `_unavailable_reads`, which
     # `build_report` turns into a merge blocker. Every other status, and a 403
