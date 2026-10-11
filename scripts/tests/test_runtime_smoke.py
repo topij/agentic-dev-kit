@@ -1344,7 +1344,7 @@ if values["--agent"]:
     effort = re.search(r"^effort:\s*(\S+)", front, re.M).group(1)
 model_id = f"claude-{{model}}-fake"
 events, transcript = [], []
-commands = sorted(p.stem for p in (cwd / ".claude" / "commands").glob("*.md")) if project else []
+commands = sorted(p.parent.name for p in (cwd / ".claude" / "skills").glob("*/SKILL.md")) if project else []
 agents = sorted(p.stem for p in (cwd / ".claude" / "agents").glob("*.md")) if project else []
 omitted = os.environ.get("FAKE_CLAUDE_INIT_OMIT")
 commands, agents = [name for name in commands if name != omitted], [name for name in agents if name != omitted]
