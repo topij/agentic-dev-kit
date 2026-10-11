@@ -2104,6 +2104,51 @@ _SPLIT_WORKFLOW_TRIGGERS = {
 }
 
 
+# The entry's whole *Reference files* section, and each reference file's whole
+# opening paragraph, are compared for equality, not by substring or prefix: two
+# review rounds each found a sentence that could be added beside a pinned
+# phrase and undercut it. Only exact equality closes that class.
+_SPLIT_WORKFLOW_PREFACE = {
+    "triage-friction-log": (
+        "This workflow is split so that a run reads only what its route needs. The files "
+        "below are part of the workflow and are as normative as this one; a section cited "
+        "here by name, or as *above* or *below*, may sit in any of them. **Read a file "
+        "completely, not in part, when its trigger applies**, and before taking the action "
+        "it governs:"
+    ),
+}
+
+_SPLIT_WORKFLOW_SUMMARIES = {
+    "triage-friction-log": {
+        "recovery.md": (
+            "*Completed-state retirement*, *Gate-only input precedence*, *Test input "
+            "precedence*, *State-present held-evidence procedure* and *Invalid-state "
+            "recovery*."
+        ),
+        "state-schema.md": "the exact state, phase and single-writer gate shapes.",
+        "finalize.md": "*Tracker writes and accounting* and *Finalize and sweep*.",
+        "engine-cli.md": "the engines' invocations and outputs.",
+    },
+}
+
+
+def _expected_reference_section(slug: str) -> str:
+    bullets = " ".join(
+        f"- [`{slug}/{name}`]({slug}/{name}) — {summary} Read it "
+        f"{_SPLIT_WORKFLOW_TRIGGERS[slug][name]}"
+        for name, summary in _SPLIT_WORKFLOW_SUMMARIES[slug].items()
+    )
+    return f"## Reference files {_SPLIT_WORKFLOW_PREFACE[slug]} {bullets}"
+
+
+def _expected_opening(slug: str, name: str) -> str:
+    return (
+        f"Read this file completely {_SPLIT_WORKFLOW_TRIGGERS[slug][name]} It is part of "
+        f"[`{slug}.md`](../{slug}.md) and as normative as it; a section cited by name, or "
+        "as *above* or *below*, may sit in that file or another of its reference files."
+    )
+
+
 # Which sections each reference file holds. A section moved behind another
 # file's trigger would be read on the wrong route, or never, so the placement
 # is pinned like the trigger itself.
@@ -2153,36 +2198,25 @@ def _assert_split_workflow_links_and_triggers(root: Path) -> None:
     assert split == sorted(_SPLIT_WORKFLOW_TRIGGERS), split
     for slug, triggers in _SPLIT_WORKFLOW_TRIGGERS.items():
         entry = " ".join((workflows / f"{slug}.md").read_text(encoding="utf-8").split())
-        assert "**Read a file completely, not in part, when its trigger applies**" in entry
-        assert (
-            "The files below are part of the workflow and are as normative as this one;"
-            in entry
-        ), f"{slug}.md no longer makes its reference files normative"
         files = sorted(path.name for path in (workflows / slug).glob("*.md"))
-        assert files == sorted(triggers), f"{slug}/ holds {files}"
-        bullets = entry.split("## Reference files", 1)[1].split(" ## ", 1)[0]
-        bullets = [bullet.strip() for bullet in bullets.split("- [`")[1:]]
-        by_file = {}
-        for bullet in bullets:
-            name = bullet.split("`]", 1)[0].rsplit("/", 1)[-1]
-            by_file[name] = bullet
-        assert sorted(by_file) == files, f"{slug}.md links {sorted(by_file)}"
-        for name, trigger in triggers.items():
+        assert files == sorted(triggers) == sorted(_SPLIT_WORKFLOW_SUMMARIES[slug]), (
+            f"{slug}/ holds {files}"
+        )
+        section = "## Reference files" + entry.split("## Reference files", 1)[1].split(" ## ", 1)[0]
+        assert section == _expected_reference_section(slug), (
+            f"{slug}.md's Reference files section differs from its declaration"
+        )
+        for name in triggers:
             text = (workflows / slug / name).read_text(encoding="utf-8")
-            bullet = by_file[name]
-            assert f"]({slug}/{name})" in bullet
-            # The bullet ends with its trigger, so nothing can be appended to it.
-            assert bullet.endswith(f"Read it {trigger}"), f"{slug}.md: {name}'s trigger"
             opening = " ".join(text.split("\n\n", 2)[1].split())
-            assert opening.startswith(
-                f"Read this file completely {trigger} It is part of [`{slug}.md`](../{slug}.md)"
-                " and as normative as it;"
-            ), f"{name} does not open with its trigger"
+            assert opening == _expected_opening(slug, name), (
+                f"{name}'s opening paragraph differs from its declaration"
+            )
             headings = _headings(text)
             assert headings == list(_SPLIT_WORKFLOW_SECTIONS[slug][name]), (
                 f"{name} holds {headings}"
             )
-            for cited in re.findall(r"\*([^*]+)\*", bullet.split(" — ", 1)[1].split(" Read it ", 1)[0]):
+            for cited in re.findall(r"\*([^*]+)\*", _SPLIT_WORKFLOW_SUMMARIES[slug][name]):
                 assert cited in headings, f"{slug}.md names *{cited}* for {name}"
         for cited, name in re.findall(r"\*([^*]+)\*, in `([A-Za-z0-9_-]+\.md)`", entry):
             assert cited in _headings(
@@ -2224,6 +2258,15 @@ def test_split_workflow_trigger_and_link_mutations_are_rejected(tmp_path: Path) 
         ("triage-friction-log/recovery.md", "and as normative as it;", "and optional;"),
         ("triage-friction-log.md", "*Completed-state retirement*, in `recovery.md`",
          "*Completed-state retirement*, in `engine-cli.md`"),
+        ("triage-friction-log.md", "before taking the action it governs:",
+         "before taking the action it governs. A short or routine run may skip them:"),
+        ("triage-friction-log.md", "may sit in any of them.", "lives only in this file."),
+        ("triage-friction-log/recovery.md", "may sit in that file or another of its reference files.",
+         "may sit in that file or another of its reference files. Skip this file when the run is routine."),
+        ("triage-friction-log/engine-cli.md", "may sit in that file or another of its reference files.",
+         "sits in this file only."),
+        ("triage-friction-log/recovery.md", "### Completed-state retirement", "### Completed state retirement"),
+        ("triage-friction-log/finalize.md", "## Finalize and sweep", "#### Finalize and sweep"),
     )
     for index, (rel, old, new) in enumerate(mutations):
         root = tmp_path / f"case-{index}"
