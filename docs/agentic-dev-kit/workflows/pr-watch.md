@@ -110,7 +110,8 @@ Repeat until the report says **converged**:
    which one answered** (`#350`): `receipt`, a `--record-review` receipt bound to
    this head, and `bot-coverage`, a configured review bot's own review of this exact
    head. *Review evidence and merge blockers*, in `report-fields.md`, says what each
-   route accepts and how the two blockers below behave.
+   route accepts and how the unsettled-rollup and requested-changes blockers below
+   behave.
 
    A PR can be `converged` and not `mergeable` — most commonly because neither route
    is satisfied yet. That is the normal, expected state at the end of the loop, not a

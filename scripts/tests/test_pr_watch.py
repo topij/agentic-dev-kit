@@ -279,15 +279,23 @@ def _between(text: str, start: str, end: str) -> str:
 
 
 def _assert_moved_rules_and_back_references(entry: str, reference: str) -> None:
-    """#1062 — the loop rules #1061 moved out of *Notes*, and the reference
-    file's pointers back at them.
+    """#1062 — the loop rules moved out of *Notes* and out of the explanations
+    beside them, and the pointers between the entry and the reference file.
 
     Both files are read before any action, so a rule's placement changes no
     read. What this pins is that a rule the loop acts on stays in the loop step
-    an agent is standing in when it acts, and that every place `report-fields.md`
-    sends the reader still exists, because renaming a bullet would otherwise
-    break the pointer silently.
+    an agent is standing in when it acts, that each place the entry's text moved
+    from still names the section it moved to, and that every place
+    `report-fields.md` sends the reader still exists. Pins that read the two
+    files together cannot see any of this, because the reference file keeps a
+    copy of the reasoning the entry condensed.
     """
+    poll = _between(entry, "1. **Poll.**", "\n1. **If `review_bots.unavailable`")
+    assert "*Review evidence and merge blockers*, in `report-fields.md`" in poll
+    assert "**Poll again rather than working around it:**" in poll
+    assert "**no receipt disposes of it**" in poll
+    assert "address the findings and push" in poll
+
     comments = _between(entry, "1. **If there are `new_comments`", "\n1. **Count the round")
     assert "- **Untrusted outage candidate**" in comments
     assert "`untrusted_review_unavailable_candidate`" in comments
@@ -301,6 +309,20 @@ def _assert_moved_rules_and_back_references(entry: str, reference: str) -> None:
     assert "`--allow-pending-bot-review`" in record
     assert "Use it only with evidence the queued verdict will never arrive" in record
     assert "Give a freshly-readied PR a poll or two before recording one" in record
+
+    converged = _between(entry, "\n- **Converged**", "\n- **Stuck")
+    assert "never wait on the request's outcome" in converged
+    assert "prefer the reviewer's *complete*-review command" in converged
+    assert "Neither is a licence to retry in a loop against a quota" in converged
+    assert "`<bot>:comment-verdict`, with **no `--lenses`**" in converged
+    assert "re-read the bot's status comment once" in converged
+    assert "Do not `--record-review` the bot's own verdict" in converged
+    assert "*The review request at convergence*, in `report-fields.md`" in converged
+
+    rounds = _between(entry, "\n- **Round budget**", "\n- **Bound the loop**")
+    assert "*Round counting*, in `report-fields.md`" in rounds
+    act_time = _between(entry, "## Read-only act-time poll", "\n## The draft-bit flags")
+    assert "*The all-comments view*, in `report-fields.md`" in act_time
 
     flat = " ".join(reference.split())
     bullets = re.findall(r"loop's \*\*([^*]+)\*\* bullet", flat)
@@ -338,6 +360,13 @@ def test_moved_loop_rules_and_report_fields_back_references_hold() -> None:
         ("- **Reviewer unavailable**", "- **Bot unavailable**"),
         ("1. **Record the independent pass", "1. **Record the pass"),
         ("- **Converged**", "- **Done**"),
+        # Weakening the rules the trim condensed, and dropping its pointers.
+        ("**Poll again rather than working around it:**", "Poll later:"),
+        ("with **no `--lenses`**", "with `--lenses`"),
+        ("Do not `--record-review` the bot's own verdict", "Record the bot's own verdict"),
+        ("*The review request at convergence*, in `report-fields.md`,", "The reference file"),
+        ("*Round counting*, in `report-fields.md`, says", "The reference file says"),
+        ("*The all-comments view*, in `report-fields.md`, describes", "the reference file describes"),
     ],
 )
 def test_moved_loop_rule_mutations_are_rejected(old: str, new: str) -> None:

@@ -12,7 +12,8 @@ or another of its reference files.
 - `evidence_findings[]`
 - The REST backend and `truncated_reads`
 - The review configuration keys
-- The review-evidence routes and the two routine merge blockers
+- The review-evidence routes, the unsettled-rollup blocker and the requested-changes
+  blocker
 - The review request at convergence
 - How review rounds are counted
 - The `--all-comments` view
@@ -388,9 +389,9 @@ verdict, no review in flight, and no outage the bot announced on its own
 **check** — and only when the reviewer read succeeded — the poll prints
 `⚠ review owed` naming that bot. That line is
 reported and gates nothing, deliberately — blocking there would wedge the
-loop on exactly the repos whose reviewer cannot answer. Its job
-is to make this bullet something you are *told about* rather than something you
-must remember to come back to, which is the failure `#518` records.
+loop on exactly the repos whose reviewer cannot answer. Its job is to make the
+*Converged* stop condition's request something you are *told about* rather than
+something you must remember to come back to, which is the failure `#518` records.
 
 The outage term is the one that surprises: during a trusted outage window the
 line stays **silent**, because the render already prints `⚠ review unavailable`
@@ -402,8 +403,8 @@ the past, unscoped by head or age, so one stale rate-limit comment would
 otherwise silence this line for the rest of the PR's life. And it must be
 **trusted**: an outage row whose creator is not the reviewer cancelled nothing
 (`#95`), so the reviewer is still owed a look and the line still fires. And note
-what this bullet does **not** say: it does not tell you to `--record-review`
-the bot's own verdict. That receipt vocabulary describes fallback passes, and
+what the *Converged* stop condition does **not** say: it does not tell you to
+`--record-review` the bot's own verdict. That receipt vocabulary describes fallback passes, and
 a bot-reviewed head needs no receipt — its coverage *is* the evidence
 (`#350`, resolved by the `bot-coverage` route above). Recording one there
 asserts a fallback pass that did not run. This is also not a change to
@@ -416,7 +417,7 @@ The count lives in the per-PR state file, apart from bot reviews, which the forg
 holds. A lost or corrupt state file, a poll that reads a different state root
 from the one the rounds were recorded in (`#563`), a session without `gh`, or a
 force-push that leaves a reviewed head off the branch's history all undercount.
-That errs toward more rounds, and *Bound the loop* below still applies. The count
+That errs toward more rounds, and *Bound the loop*, in `pr-watch.md`, still applies. The count
 can also run ahead of the fix rounds taken, because a head counts whatever produced
 it: a bot's review of a head from a CI fix, a merge from the base branch or a rebase
 is a round too. That errs toward stopping sooner, for an operator go-ahead.
