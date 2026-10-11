@@ -149,13 +149,17 @@ like good news, it looks like a missing handoff.
   equivalent:
 
   ```sh
-  gh api --paginate 'repos/<owner>/<repo>/pulls?state=open&per_page=100'
+  gh api --paginate 'repos/{owner}/{repo}/pulls?state=open&per_page=100'
   ```
 
   The REST response names the fields differently (`draft` for `isDraft`,
   `user.login` for `author`, which spells an app `dependabot[bot]` where `gh pr list`
   gives `app/dependabot`, so match an automation author in either form) and carries no `reviewDecision` or
-  `statusCheckRollup`; the per-PR read below supplies review and CI state. The
+  `statusCheckRollup`; the per-PR read below supplies review and CI state: on this
+  route, take CI-red from its `checks.failing`, CI-pending from `checks.pending`, and
+  awaiting-review from `review_decision`. `{owner}` and `{repo}` are `gh api`'s own
+  placeholders, filled from the current checkout's repository as `gh pr list` resolves
+  it; do not type a slug by hand. The
   truncation rule above covers this route too, in the form that fits it:
   `--paginate` follows every page until none remains, so a full page is not the
   signal here — **the exit status is**. A run counts as complete only when it exits
@@ -224,7 +228,7 @@ like good news, it looks like a missing handoff.
   gap (note it and continue) — never act on a partial payload. On a `github-issues`
   tracker, `gh issue list` is GraphQL and fails the same way as `gh pr list` above:
   that refusal is the tracker gap unless the REST route
-  `gh api --paginate 'repos/<owner>/<repo>/issues?state=open&per_page=100'` succeeds,
+  `gh api --paginate 'repos/{owner}/{repo}/issues?state=open&per_page=100'` succeeds,
   complete by the same exit-status rule. That route also returns pull requests, so
   drop every row that carries a `pull_request` key, and it returns each issue's body,
   so select the fields above with `--jq` rather than reading whole rows.

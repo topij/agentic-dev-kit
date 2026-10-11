@@ -3160,7 +3160,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         # proxy) must leave the PR list on its REST route, complete only by exit
         # status, and unavailable rather than empty when every route fails.
         assert (
-            "gh api --paginate 'repos/<owner>/<repo>/pulls?state=open&per_page=100'"
+            "gh api --paginate 'repos/{owner}/{repo}/pulls?state=open&per_page=100'"
         ) in flattened
         assert (
             "Treat that error as `gh` unavailable for every fallback purpose"
@@ -3185,6 +3185,18 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         # partial note replacing a real CI-red, a refused tracker read as fine,
         # and a status-surface gap read as a missing comment layer.
         assert "**Check `gh`'s own exit status, not a pipeline's**" in flattened
+        assert (
+            "Write `gh`'s output to a file and check its status before parsing, "
+            "or run under `set -o pipefail`"
+        ) in flattened
+        assert "the partial note is added to it, not put in its place" in flattened
+        assert (
+            "gh api --paginate 'repos/{owner}/{repo}/issues?state=open&per_page=100'"
+        ) in flattened
+        assert (
+            "take CI-red from its `checks.failing`, CI-pending from `checks.pending`, "
+            "and awaiting-review from `review_decision`"
+        ) in flattened
         assert "still makes the pull request CI-red" in flattened
         assert "that refusal is the tracker gap unless" in flattened
         assert "so it does not make this layer unavailable" in flattened
@@ -3742,8 +3754,8 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "", 1
         )),
         ("session-start", session, session.replace(
-            "'repos/<owner>/<repo>/pulls?state=open&per_page=100'",
-            "'repos/<owner>/<repo>/pulls?state=open'", 1
+            "'repos/{owner}/{repo}/pulls?state=open&per_page=100'",
+            "'repos/{owner}/{repo}/pulls?state=open'", 1
         )),
         ("session-start", session, session.replace(
             "Treat that error as `gh` unavailable for every\n  fallback purpose",
