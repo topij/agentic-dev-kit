@@ -53,7 +53,7 @@ The operator asked for an overnight autonomous session in separate worktrees, an
   - In-flight states keep the old judgement.
   - The panel rejected the earlier designs as HIGH regressions into a terminal hold; the PR's comments hold every round.
   - `make test` at `d9e951a3a421c8b959675d9e3daa0d0b4608a06a` on 2026-10-07, in the lane worktree, printed `4297 passed, 1 skipped`. Later commits are tests, docstrings, the CHANGELOG entry, the triage workflow doc and the manifest, reviewed by delta passes.
-- **#986** (#900's scratch sweep engine) is **open and held for the operator** at `d9a1fd571daf8181b434e362de48d055abce4dd6`. *(Correction: it merged later the same day as `dff111ae`; see the 2026-10-07 *scratch sweep engine merged* session entry in `kit-handoff.md`.)*
+- **#986** (#900's scratch sweep engine) is **open and held for the operator** at `d9a1fd571daf8181b434e362de48d055abce4dd6`. *(Correction: it merged later the same day as `dff111ae`; see the 2026-10-07 *scratch sweep engine merged* session entry, in `kit-handoff.md` or, once swept, in this file.)*
   - Every full two-lens pass found new fail-open edge cases in what the engine judges removable, so the cockpit stopped the loop rather than merge a file-deleting engine.
   - The round-5 disposition comment on the PR lists the open findings.
   - `make test` at that head on 2026-10-07, in `/Users/topi/Coding/dev-model-sessions/scratch-sweep/wt`, printed `4367 passed, 1 skipped`.
@@ -61,9 +61,9 @@ The operator asked for an overnight autonomous session in separate worktrees, an
 
 Decided: #986 was held, not merged. The operator's "merge when clean" did not cover a destructive engine with open low-to-medium fail-open findings.
 
-Not established: the `test` entry's own recovery branch still judges by `canonical_state` alone, which is the #859 class in test mode. It is parked in the friction log, untracked. *(Correction: it was filed as #1002 the same day and fixed by #1004; see the 2026-10-08 session entries in `kit-handoff.md`.)*
+Not established: the `test` entry's own recovery branch still judges by `canonical_state` alone, which is the #859 class in test mode. It is parked in the friction log, untracked. *(Correction: it was filed as #1002 the same day, and #1004 shipped its repair; see the 2026-10-08 session entries, in `kit-handoff.md` or, once swept, in this file.)*
 
-Lanes ran with no operator present, so no tracker write was made. This session's friction is parked in the friction log. *(Correction: the 2026-10-08 triage filed or archived these entries; see the 2026-10-08 *friction-log triage after the overnight batch* session entry in `kit-handoff.md`.)*
+Lanes ran with no operator present, so no tracker write was made. This session's friction is parked in the friction log. *(Correction: the 2026-10-08 triage filed or archived these entries; see the 2026-10-08 *friction-log triage after the overnight batch* session entry, in `kit-handoff.md` or, once swept, in this file.)*
 
 ### 2026-10-06 (merge gate ignores a bot's empty thread-reply review, in Claude Code)
 
