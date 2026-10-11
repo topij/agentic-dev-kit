@@ -2160,6 +2160,15 @@ register_budget_hooks() {
   if [ -f "$_mem_budget_src" ]; then
     echo "        [ -z \"\$JOB_NAME\" ] && cd \"\$CLAUDE_PROJECT_DIR\" && uv run --script ${_mem_budget_src} --quiet || true"
   fi
+  # The adopter's own cloud-only setup hook (tools a Claude Code cloud session
+  # lacks) gets a named slot here because this is where an adopter edits the
+  # array: without one, the natural edit is to append install steps to the kit's
+  # commands, which a later re-paste of this block silently drops. The steps
+  # stay the adopter's; kit_doctor judges only commands naming a kit script.
+  echo "      Your own cloud-only setup hook, if you need one (Claude Code only):"
+  echo "        add it as a further entry in the same hooks.SessionStart array, after"
+  echo "        the kit's, gated on [ \"\$CLAUDE_CODE_REMOTE\" = \"true\" ] || exit 0."
+  echo "        The install steps are yours; see docs/agentic-dev-kit/runtime-parity.md."
 }
 
 # ── cockpit command permissions (#606) ───────────────────────────────────

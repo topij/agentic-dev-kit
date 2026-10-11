@@ -325,6 +325,48 @@ prompt or the child's prose; its raw outputs were session-scoped and are quoted 
 excerpts, so the *Capability tiers* row of the capability matrix promotes only what
 the excerpts show.
 
+## Adopter-owned cloud setup hook
+
+A Claude Code cloud session sets `CLAUDE_CODE_REMOTE=true` and starts without the tools
+an adopter's local machine has (`zsh`, `rsync`, test dependencies). Installing them is
+the adopter's own `SessionStart` hook, and the steps stay out of the kit's scope. Its
+place in `.claude/settings.json` is a further entry in the same `hooks.SessionStart`
+array, after the kit's budget-tripwire entry that `init.sh` prints, rather than another
+command inside the kit's entry, so re-pasting the kit's block never touches it:
+
+```json
+{
+  "hooks": [
+    {
+      "type": "command",
+      "command": "[ \"$CLAUDE_CODE_REMOTE\" = \"true\" ] || exit 0; sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/cloud-setup.sh\" || true"
+    }
+  ]
+}
+```
+
+A script in that slot exits at once outside a cloud session and never fails the
+session start:
+
+```sh
+#!/bin/sh
+# Cloud-only setup: does nothing unless Claude Code runs it in a cloud session.
+[ "${CLAUDE_CODE_REMOTE:-}" = "true" ] || exit 0
+warn() { echo "cloud-setup: $1 failed; continuing" >&2; }
+# >>> your install steps here, one per line, each ending in `|| warn <name>`:
+# apt-get install -y zsh rsync || warn apt-get
+exit 0
+```
+
+`kit_doctor` judges only commands that name a kit script, so this entry adds no
+finding; give the script a name no kit engine uses, since a matching basename is
+judged as the kit's.
+
+The slot is Claude Code-only. Codex reads `SessionStart` from `.codex/hooks.json`, where
+the kit registers the document-budget tripwire, but `CLAUDE_CODE_REMOTE` is Claude Code's
+variable and this contract declares no Codex counterpart for a cloud session, so nothing
+goes into `.codex/hooks.json` for it.
+
 ## Product surfaces this contract relies on
 
 The Codex bindings follow the supported repository skill layout and explicit `$skill`

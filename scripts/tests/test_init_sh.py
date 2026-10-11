@@ -4291,6 +4291,26 @@ def test_no_budget_advisory_when_both_engines_are_absent(tmp_path: Path) -> None
     assert "SessionStart budget tripwires" not in result.stdout
 
 
+def test_the_claude_advisory_names_the_adopters_cloud_only_slot(tmp_path: Path) -> None:
+    """An adopter's own remote-only setup hook has a stated place: a further entry
+    in the same `hooks.SessionStart` array, after the kit's, gated on Claude
+    Code's `CLAUDE_CODE_REMOTE`. Printed inside the Claude block and after the
+    kit's commands, because a slot printed under Codex, or before the commands
+    it is to follow, names the wrong place. `kit_doctor`'s half is
+    `test_an_adopters_cloud_only_session_start_entry_changes_no_finding`."""
+    repo = _with_budget_engines(_fixture(tmp_path, config=V1_CONFIG, git=True))
+
+    stdout = _run_init(repo).stdout
+
+    claude_block = stdout[stdout.index("Claude — .claude/settings.json, under hooks.SessionStart") :]
+    slot = claude_block.index("cloud-only setup hook")
+    assert claude_block.index("check_memory_budget.py") < slot
+    assert "Claude Code only" in claude_block[slot:]
+    assert "same hooks.SessionStart array" in claude_block[slot:]
+    assert '[ "$CLAUDE_CODE_REMOTE" = "true" ] || exit 0' in claude_block[slot:]
+    assert "cloud-only" not in stdout[: stdout.index("Claude — .claude/settings.json, under hooks.SessionStart")]
+
+
 def _codex_registration_command() -> str:
     """The Codex registration's command string, read OUT OF the shipped file.
 

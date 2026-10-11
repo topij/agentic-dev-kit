@@ -6371,6 +6371,46 @@ def test_an_adopters_own_script_is_not_judged_as_a_kit_hook(tmp_path):
     assert report.dead_registrations == []
 
 
+def test_an_adopters_cloud_only_session_start_entry_changes_no_finding(tmp_path):
+    """The slot `init.sh` and `runtime-parity.md` give an adopter for its own
+    remote-only `SessionStart` hook: a further entry in the same
+    `hooks.SessionStart` array, after the kit's. The doctor must say nothing
+    about it — not `broken` for a script that is the adopter's business, and not
+    a changed verdict on the kit's own entries beside it.
+
+    Judged by DIFFERENCE rather than by a list of expected states: the same
+    repository is inspected with the shipped registrations alone and with the
+    extra entry appended, and the two reports must be identical. The adopter's
+    script is deliberately not created, so a doctor that did judge the command
+    would report it `broken` and the reports would differ."""
+    root = _fake_repo(tmp_path)
+    for rel in ("scripts/check_memory_budget.py", HOOK_REL):
+        _write(root / rel, "print('engine')\n")
+    settings = json.loads(_shipped("claude-settings.json").read_text(encoding="utf-8"))
+    _write(root / ".claude" / "settings.json", json.dumps(settings))
+    baseline = _inspect(root, {ENGINE: _sha("x")}, None).registrations
+    claude = [s for s in baseline if s.surface == ".claude/settings.json"]
+    assert {s.state for s in claude} == {"resolves"} and len(claude) == 3, (
+        "the baseline must judge the kit's three registrations, or the comparison "
+        f"below proves nothing: {[(s.state, s.detail) for s in claude]}"
+    )
+
+    settings["hooks"]["SessionStart"].append({"hooks": [{
+        "type": "command",
+        "command": '[ "$CLAUDE_CODE_REMOTE" = "true" ] || exit 0; '
+        'sh "$CLAUDE_PROJECT_DIR/.claude/hooks/cloud-setup.sh" || true',
+        "timeout": 300,
+    }]})
+    _write(root / ".claude" / "settings.json", json.dumps(settings))
+    report = _inspect(root, {ENGINE: _sha("x")}, None)
+
+    assert report.registrations == baseline, (
+        "an adopter's own SessionStart entry changed the registration report: "
+        f"{[(s.state, s.detail) for s in report.registrations]}"
+    )
+    assert report.dead_registrations == []
+
+
 def test_a_variable_that_merely_starts_with_root_is_not_expanded(tmp_path):
     """`$rootcause_dir` is one shell identifier — a shell resolves the longest
     name and never `$root` plus a literal remainder. A plain `str.replace`
