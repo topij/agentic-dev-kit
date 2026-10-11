@@ -283,7 +283,7 @@ other runtime never leaks into this one's instruction.
 as a `Run at:` line, and with `--agent-definition` it renders the Claude Code agent
 definition `.claude/agents/<lens>.md` whose frontmatter is what applies the compute
 on that runtime. `.agents/skills/pr-watch/SKILL.md` names `lens_compute.codex` as
-well and `.claude/commands/pr-watch.md` names the agent definitions, each rendered from
+well and `.claude/skills/pr-watch/SKILL.md` names the agent definitions, each rendered from
 its template under `scripts/lib/adapter_templates/`; `init.sh` seeds the definitions,
 and `kit_doctor.py` tracks the hook partly because of this key. Anything changing the
 key's meaning has to move all of them together.

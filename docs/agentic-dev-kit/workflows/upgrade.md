@@ -163,7 +163,12 @@ This comparison is deliberately outside `KIT_OWNED` and never changes the drift
 gate. `kit-current` equals the current rendered text after newline normalization; `kit-stale`
 matches an earlier rendered form and can be refreshed without losing authored
 behavior; `missing` can be installed; `adopter-owned` matches no known rendered
-form, so report it and leave it unchanged. The source kit's own adapters must first
+form, so report it and leave it unchanged. `kit-retired` is a kit-generated Claude
+command at `.claude/commands/<slug>.md`, the path the Claude binding used before it
+became a skill: delete it once the skill beside it is installed. An authored command at
+that path is `adopter-owned`, and the skill path beside it is then reported
+`adopter-owned` too rather than `missing`, because Claude Code runs a skill in
+preference to a same-named command and installing one would silently replace theirs. The source kit's own adapters must first
 equal what its renderer produces, or the command refuses: a broken generator cannot
 classify an adopter by comparing it with itself.
 
@@ -189,7 +194,7 @@ that reason.** A reader whose copy is out of date is reading the out-of-date cop
 instruction written *here* about *this file* reaches everyone except the person who needs
 it. The remedy has to come from outside: `kit_doctor` gives this file its own line at the
 top of the report rather than leaving it in the drift list with everything else, and the
-runtime adapters (`.claude/commands/upgrade.md`, `.agents/skills/upgrade/SKILL.md`) say
+runtime adapters (`.claude/skills/upgrade/SKILL.md`, `.agents/skills/upgrade/SKILL.md`) say
 to re-read this workflow from the clone before Step 2. Neither is a complete answer
 alone, and they fail in opposite directions, which is why each exists: the adapter is
 the only surface read before *any* of this, but it is adopter-owned and Step 4 keeps
@@ -815,9 +820,12 @@ entries are exactly where the risk is.
 
 - **Shared workflows** (`docs/agentic-dev-kit/workflows/`) — same state logic as engines.
   These are prompts an agent reads verbatim; a stale one silently teaches old behavior.
-- **Runtime adapters** (`.claude/commands/`, `.agents/skills/`) — follow Step 1's
+- **Runtime adapters** (`.claude/skills/`, `.agents/skills/`) — follow Step 1's
   rendered comparison per path. Refresh `kit-stale`, leave `kit-current` alone,
-  install `missing`, and report but preserve `adopter-owned`. Do not infer ownership
+  install `missing`, delete `kit-retired` after the skill beside it is in place, and
+  report but preserve `adopter-owned`. Take each refreshed or installed Codex skill's
+  `agents/openai.yaml` from the kit along with its `SKILL.md`, unless the adopter has
+  edited it. Do not infer ownership
   from a slug or from the presence of a shared-workflow link: the byte comparison is
   what distinguishes generated glue from authored policy. An adapter migration that
   Step 1's selected changelog entry names as required to obtain changed gate semantics

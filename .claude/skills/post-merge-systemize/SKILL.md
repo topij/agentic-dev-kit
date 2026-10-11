@@ -1,4 +1,5 @@
 ---
+name: post-merge-systemize
 description: Find recurring root causes across merged-PR review findings and route them to shared rules, the friction log, or an operator-approved tracker write. Use for scheduled post-merge retros, not ad hoc single-PR review.
 argument-hint: "[backfill] [test]"
 ---

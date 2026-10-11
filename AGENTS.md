@@ -326,7 +326,7 @@ the blast radius without removing it; hardening it is `#399`'s remaining half.
 This repo is the kit itself, so its own two-runtime setup is the worked example:
 
 - The runtime-neutral workflow definitions live in `docs/agentic-dev-kit/workflows/`.
-  `.claude/commands/` and `.agents/skills/` are thin bindings over them.
+  `.claude/skills/` and `.agents/skills/` are thin bindings over them.
 - **A workflow's behaviour is changed in the shared doc, never in one binding.**
   A change made in an adapter reaches one runtime and silently not the other,
   which is the failure `#243` and `#273` are filed about.

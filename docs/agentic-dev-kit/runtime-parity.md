@@ -17,42 +17,42 @@ workflow_contract:
   - name: session-start
     status: aligned
     shared: docs/agentic-dev-kit/workflows/session-start.md
-    claude: .claude/commands/session-start.md
+    claude: .claude/skills/session-start/SKILL.md
     codex: .agents/skills/session-start/SKILL.md
   - name: wrap-up
     status: aligned
     shared: docs/agentic-dev-kit/workflows/wrap-up.md
-    claude: .claude/commands/wrap-up.md
+    claude: .claude/skills/wrap-up/SKILL.md
     codex: .agents/skills/wrap-up/SKILL.md
   - name: pr-watch
     status: aligned
     shared: docs/agentic-dev-kit/workflows/pr-watch.md
-    claude: .claude/commands/pr-watch.md
+    claude: .claude/skills/pr-watch/SKILL.md
     codex: .agents/skills/pr-watch/SKILL.md
   - name: parallel
     status: aligned
     shared: docs/agentic-dev-kit/workflows/parallel.md
-    claude: .claude/commands/parallel.md
+    claude: .claude/skills/parallel/SKILL.md
     codex: .agents/skills/parallel/SKILL.md
   - name: adopt
     status: aligned
     shared: docs/agentic-dev-kit/workflows/adopt.md
-    claude: .claude/commands/adopt.md
+    claude: .claude/skills/adopt/SKILL.md
     codex: .agents/skills/adopt/SKILL.md
   - name: upgrade
     status: aligned
     shared: docs/agentic-dev-kit/workflows/upgrade.md
-    claude: .claude/commands/upgrade.md
+    claude: .claude/skills/upgrade/SKILL.md
     codex: .agents/skills/upgrade/SKILL.md
   - name: triage-friction-log
     status: aligned
     shared: docs/agentic-dev-kit/workflows/triage-friction-log.md
-    claude: .claude/commands/triage-friction-log.md
+    claude: .claude/skills/triage-friction-log/SKILL.md
     codex: .agents/skills/triage-friction-log/SKILL.md
   - name: post-merge-systemize
     status: aligned
     shared: docs/agentic-dev-kit/workflows/post-merge-systemize.md
-    claude: .claude/commands/post-merge-systemize.md
+    claude: .claude/skills/post-merge-systemize/SKILL.md
     codex: .agents/skills/post-merge-systemize/SKILL.md
   - name: parallel-headless
     status: companion
@@ -64,6 +64,10 @@ capability_matrix:
   - capability: Repository instructions
     status: aligned
   - capability: Workflow adapters
+    status: aligned
+  - capability: Skill discovery
+    status: intentional difference
+  - capability: Invocation control
     status: aligned
   - capability: Fresh-install footprint
     status: decided
@@ -197,7 +201,9 @@ on an agent following prose, and what stays unestablished were audited on 2026-1
 | Capability | Shared contract | Claude Code | Codex | Status / exit |
 |---|---|---|---|---|
 | Repository instructions | `AGENTS.md` | `CLAUDE.md` imports it | reads `AGENTS.md` directly | aligned |
-| Workflow adapters | `docs/agentic-dev-kit/workflows/` | `.claude/commands/` | `.agents/skills/` | aligned: the declaration above is authoritative |
+| Workflow adapters | `docs/agentic-dev-kit/workflows/` | `.claude/skills/` | `.agents/skills/` | aligned: the declaration above is authoritative |
+| Skill discovery | one adapter directory per runtime | reads `.claude/skills/`, not `.agents/skills/` | reads `.agents/skills/`, not `.claude/skills/` | intentional difference: each client reads only its own directory, so neither sees a workflow twice. Observed 2026-10-11 against Claude Code 2.1.296 and codex-cli 0.153.4 with a probe skill in each directory |
+| Invocation control | `EXPLICIT_INVOCATION_ONLY` in `scripts/lib/runtime_adapters.py`: `adopt`, `upgrade`, `triage-friction-log` | rendered `disable-model-invocation: true` | `policy.allow_implicit_invocation: false` in the skill's `agents/openai.yaml` | aligned: both hide the skill from the model and still run it when the operator names it. Observed 2026-10-11 against Claude Code 2.1.296 and codex-cli 0.153.4 |
 | Fresh-install footprint | the front matter's `adoption` block | every Claude adapter and surface | every Codex adapter and surface | decided (#878, 2026-10-01): `other_runtime: installed`, so an adopter that runs one runtime still receives the other's files, inert. Pinned per adopter by the kit's fresh-install fixtures; see [*Adoption footprint*](#adoption-footprint) |
 | Safety-critical doctrine | `docs/agentic-dev-kit/safety-critical-changes.md` | path-scoped `.claude/rules/` binding | precise root `AGENTS.md` routing for the merge-authority engines | aligned for the stamped supported-client observation: structure proves the route; prompt input and live events establish that the trusted run supplied it and read and applied the shared doctrine |
 | Document-budget tripwire | `check_doc_budget.py` | `SessionStart` | open-ended match-all `SessionStart` with a bounded command timeout | aligned: repository semantics are deterministic and the supported trusted client ran the equivalent lifecycle shape |

@@ -211,7 +211,7 @@ runtime adapters are intentionally thin:
 
 | Runtime | Repository adapter | Invocation |
 |---|---|---|
-| Claude Code | `.claude/commands/<name>.md` | `/session-start`, `/wrap-up`, `/pr-watch`, `/parallel`, `/adopt`, `/upgrade`, `/triage-friction-log`, `/post-merge-systemize` |
+| Claude Code | `.claude/skills/<name>/SKILL.md` | `/session-start`, `/wrap-up`, `/pr-watch`, `/parallel`, `/adopt`, `/upgrade`, `/triage-friction-log`, `/post-merge-systemize` |
 | Codex | `.agents/skills/<name>/SKILL.md` | `$session-start`, `$wrap-up`, `$pr-watch`, `$parallel`, `$adopt`, `$upgrade`, `$triage-friction-log`, `$post-merge-systemize` |
 
 [`docs/agentic-dev-kit/runtime-parity.md`](docs/agentic-dev-kit/runtime-parity.md)
@@ -252,8 +252,9 @@ the adoption surfaced. The principles it applies:
 - **Point the config at what's already there.** Already have a `ROADMAP.md` or similar
   plan? Set `paths.handoff` to it in `config/dev-model.yaml` rather than adding a
   second plan file — or rename it to `handoff.md` if you prefer the kit's name.
-- **Don't overwrite existing skills.** Check both `.claude/commands/<skill>.md` and
-  `.agents/skills/<skill>/SKILL.md`. Keep an adopter's existing workflow and install
+- **Don't overwrite existing skills.** Check `.claude/skills/<skill>/SKILL.md`,
+  `.claude/commands/<skill>.md` and `.agents/skills/<skill>/SKILL.md`. A Claude skill
+  shadows a same-named command, so an existing command counts as an existing workflow. Keep an adopter's existing workflow and install
   only the missing adapters.
 - **Namespace the scripts if `scripts/` is organized.** If the repo keeps `scripts/`
   in subdirs, vendor the kit under `scripts/devkit/` (or similar) and set
@@ -284,7 +285,7 @@ Each piece maps to one or more of the ten principles in
 | `scripts/lib/state_paths/` | #3 Cockpit + isolated lanes | The sandboxed state-path resolver so parallel agent lanes never clobber each other's scratch state. |
 | `docs/agentic-dev-kit/workflows/` | #1, #2, #3, #5 | Runtime-neutral definitions for `session-start`, `wrap-up`, `parallel`, `pr-watch`, `triage-friction-log`, `post-merge-systemize`, `adopt`, and `upgrade`. |
 | `docs/agentic-dev-kit/workflows/parallel-headless.md` | #3 Cockpit + isolated lanes | Unattended/headless lane launch mechanics split out of `parallel.md` — the one-shot descriptor, lane-contract preamble, supported Codex wrapper, and observed/terminal receipt. |
-| `.claude/commands/` + `.agents/skills/` | #1, #2, #3, #5 | Thin Claude and Codex adapters over the shared workflows, rendered by `scripts/lib/runtime_adapters.py` from their text in `scripts/lib/adapter_templates/<runtime>/<name>.md`. The authoritative inventory and explicit exceptions live in `docs/agentic-dev-kit/runtime-parity.md`. |
+| `.claude/skills/` + `.agents/skills/` | #1, #2, #3, #5 | Thin Claude and Codex adapters over the shared workflows, rendered by `scripts/lib/runtime_adapters.py` from their text in `scripts/lib/adapter_templates/<runtime>/<name>.md`. The authoritative inventory and explicit exceptions live in `docs/agentic-dev-kit/runtime-parity.md`. |
 | `scripts/check_memory_budget.py` | #1, #8 Mechanism over memory | A `SessionStart` hook (wired in `.claude/settings.json`) that warns when an agent-memory file outgrows its budget — the memory-side counterpart to `check_doc_budget.py`. |
 | `scripts/sweep_scratch.py` | #8 Mechanism over memory, #10 No hardcoding | Reports every entry under the `scratch.roots` in `config/dev-model.yaml` with its size, age and owner class (live: a registered worktree, a git dir another repository may depend on, or a configured repository's git dir or borrowed object store; inside `scratch.grace_window`; stale; or unclassified). `--apply --older-than <age>` removes stale entries only and keeps anything it cannot fully classify. Add a root by appending to `scratch.roots`; add one only if every child of it is disposable. |
 | `scripts/hooks/pr_followup_hook.py` | #5 PR follow-through | A `PostToolUse` hook that treats shell and response matches only as lifecycle candidates, never as proof or mutation authority. A literal `gh pr ready` token plus GitHub CLI's ready/draft acknowledgement selects the stronger candidate heading; creation URLs, existing-PR diagnostics, missing or transformed output, indirect actions, read-only lookalikes, lifecycle tokens in quoted/search text, and response-only ready/draft acknowledgements or PR URLs take the unresolved heading. The routes are non-authoritative and carry the same conditional lifecycle: establish that the operation was lifecycle-changing, resolve the exact pull request, require its repository and host to match the current checkout, read live draft state, assert the matching ready or bounded-draft route, and complete the watch policy. Constructed executables and argv are not reconstructed from shell text. This deliberately accepts harmless false-positive guidance for read-only URL output instead of embedding a shell parser or leaving alias/API creation silent. Registered for Claude in `.claude/settings.json` and Codex in `.codex/hooks.json`, each passing `--runtime`; `init.sh` prints the registrations and writes neither, having no way to tell a real registration from a mention of one. Codex command definitions must be reviewed through `/hooks`; `kit_doctor` assigns lifecycle semantics only to exact repository-owned command strings across the additive project `hooks.json` and inline `config.toml` sources. Altered strings retain generic path diagnostics, and repository checks cannot assert that the client trusted or loaded them. The engine reads `review.bots`, `review.fallback_commands.<runtime>`, `paths.engines`, `review.fallback_panel.lenses`, `review.fallback_panel.receipt_source` and `review.fallback_panel.lens_compute.<runtime>`. |
