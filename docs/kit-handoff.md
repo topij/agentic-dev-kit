@@ -20,6 +20,46 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-11 (skill bindings, invocation control and instruction-file size, in Claude Code)
+
+- **Skills and instruction files:** an assessment against Anthropic's updated skill
+  guidance and the current Claude Code and Codex instruction-file docs is recorded in
+  `saved_plans/skills-and-instructions-assessment_2026-10-11.md`. The work shipped
+  in three PRs, each merged on the operator's request:
+  - [#1052](https://github.com/topij/agentic-dev-kit/pull/1052) as `f7d8749a` — `AGENTS.md`
+    keeps its rules, and their history moved to `docs/kit-record-prose.md`. The
+    `CLAUDE.md` loading claim is now conditional.
+  - [#1053](https://github.com/topij/agentic-dev-kit/pull/1053) as `78d623c3` — Claude
+    bindings are skills under `.claude/skills/`. `adopt`, `upgrade` and
+    `triage-friction-log` run only when named, on both runtimes. The adapter report
+    classes old commands as `kit-retired` or `adopter-owned`.
+  - [#1054](https://github.com/topij/agentic-dev-kit/pull/1054) as `ea4010db` —
+    `triage-friction-log` is an entry plus reference files, and every run reads them all
+    before its first action.
+- **Decision:** the operator chose an unconditional read over per-file triggers on
+  #1054. Conditional triggers made one file's read depend on knowledge only another
+  supplied, and pinning prose could not stop a sentence elsewhere contradicting a
+  trigger. pr-watch stays one file, and its restructure is #1059.
+- **Runtime observations:** a probe repository on 2026-10-11 showed what Claude Code
+  2.1.296 and codex-cli 0.153.4 actually do. Each read only its own skill directory,
+  honoured its invocation-control key, and still ran a hidden skill when named.
+  `docs/agentic-dev-kit/runtime-parity.md` records the commands.
+- **Verification:** `make test` at `78d623c3325f84af435b4b3b48830f021a83d9af` on
+  2026-10-11, in a detached worktree under this session's scratchpad, printed
+  `4838 passed, 1 skipped`. Each PR's own stamp is on the PR.
+- **Filed this session:** [#1055](https://github.com/topij/agentic-dev-kit/issues/1055),
+  [#1056](https://github.com/topij/agentic-dev-kit/issues/1056),
+  [#1057](https://github.com/topij/agentic-dev-kit/issues/1057),
+  [#1058](https://github.com/topij/agentic-dev-kit/issues/1058),
+  [#1059](https://github.com/topij/agentic-dev-kit/issues/1059); an occurrence comment
+  on [#373](https://github.com/topij/agentic-dev-kit/issues/373). This wrap-up applies
+  #1056's record fix to the assessment.
+- **Not established:** skill trigger and completion evaluations, which are item 5 of the
+  assessment; an `/upgrade` run against an adopter checkout; and whether `upgrade.md`
+  should split. The operator confirmed the workstream name below.
+
+______________________________________________________________________
+
 ## Session — 2026-10-10 (record-prose preflight and executed-span review, in Codex)
 
 - **Review proportionality:** [#1039](https://github.com/topij/agentic-dev-kit/pull/1039)
@@ -205,70 +245,6 @@ Filed this session: #996, #997.
 
 ______________________________________________________________________
 
-## Session — 2026-10-07 (review round budget, in Claude Code)
-
-[#993](https://github.com/topij/agentic-dev-kit/pull/993) merged as
-`2d40c96024f642fa60b656b03d53d34a93349fdc`. A pull request's review now gets the
-opening review plus `review.round_budget` fix rounds. Past that, the watch loop posts
-a decision packet and stops for the operator instead of pushing another fix round.
-`pr_watch.py` counts distinct reviewed heads from configured bots' submitted reviews,
-`--record-review`, and the new `--record-round`, and reports them as `review_rounds`.
-It gates nothing. `pr-watch.md` carries the *Round budget* stop condition beside the
-generic loop bound, and the panel doctrine, safety-critical rule 3 and the
-follow-through hook say the same. The CHANGELOG entry tells adopters what to refresh.
-
-Decided: the operator set the default at the opening review plus 2 fix rounds. The
-motive is cost in adopting repositories: review tokens, and GitHub Actions minutes,
-which this public repository does not pay. The budget is report-only rather than a
-gate, so that a count the author partly self-reports cannot open or close a merge.
-Not built: routing a non-regression MEDIUM in a fix round like a LOW, which needs its
-own operator decision.
-
-Not established: whether the budget shortens review in practice; nothing has measured
-it yet. The count also misses rounds that go unrecorded, and `pr-watch.md` names those
-cases.
-
-Verification: `make test` at `59eeee935113e4f6fa015b6e97ff5cd1abc91107` on 2026-10-07,
-in `/Users/topi/Coding/agentic-dev-kit-round-budget`, printed `4332 passed, 1 skipped`.
-CI's `toolkit` run passed at that head.
-
-Review: two-lens panel rounds at `6db144ca`, `753e6099` and `59eeee93`. Each round's
-disposition comment on the PR holds its findings. The round at `59eeee93` found
-nothing above LOW, and the PR's own budget was spent there, so its LOW findings went
-to a ticket rather than a further round.
-
-Filed this session: #994.
-
-______________________________________________________________________
-
-## Session — 2026-10-07 (overnight autonomous parallel lanes, in Claude Code)
-
-The operator asked for an overnight autonomous session in separate worktrees, and authorized merging every PR "when clean". Three headless lanes ran under `launch_lane.py`, and the cockpit ran each PR's review and fix rounds.
-
-- **#984** (for #884 and #944) merged as `4e27661e075dba8d2569bc086c9effdf9c757b2b`.
-  - The suite now neutralises colour at `scripts/conftest.py` import.
-  - The `--carry-forward` help names the live draw flags.
-  - `FORCE_COLOR=3 make test` at `4b0e7d4e063e19a9384635596faba0c2eee2c36f` on 2026-10-06, in the lane worktree, printed `4293 passed, 1 skipped`. The one later commit changed a comment and its manifest hash, with CI's run only.
-- **#985** (for #859) merged as `6ccc1744291f887ffbee8c9fe31c16d731617831`.
-  - `recover` retires a completed state that fails only the frozen-artifact or forge-prefix checks, when git proves its sweep.
-  - It refuses one with no proven retirement and writes nothing.
-  - In-flight states keep the old judgement.
-  - The panel rejected the earlier designs as HIGH regressions into a terminal hold; the PR's comments hold every round.
-  - `make test` at `d9e951a3a421c8b959675d9e3daa0d0b4608a06a` on 2026-10-07, in the lane worktree, printed `4297 passed, 1 skipped`. Later commits are tests, docstrings, the CHANGELOG entry, the triage workflow doc and the manifest, reviewed by delta passes.
-- **#986** (#900's scratch sweep engine) is **open and held for the operator** at `d9a1fd571daf8181b434e362de48d055abce4dd6`. *(Correction: it merged later the same day as `dff111ae`; see the session entry above.)*
-  - Every full two-lens pass found new fail-open edge cases in what the engine judges removable, so the cockpit stopped the loop rather than merge a file-deleting engine.
-  - The round-5 disposition comment on the PR lists the open findings.
-  - `make test` at that head on 2026-10-07, in `/Users/topi/Coding/dev-model-sessions/scratch-sweep/wt`, printed `4367 passed, 1 skipped`.
-  - `--apply` was never run against a real directory.
-
-Decided: #986 was held, not merged. The operator's "merge when clean" did not cover a destructive engine with open low-to-medium fail-open findings.
-
-Not established: the `test` entry's own recovery branch still judges by `canonical_state` alone, which is the #859 class in test mode. It is parked in the friction log, untracked. *(Correction: it was filed as #1002 the same day and fixed by #1004; see the 2026-10-08 entry above.)*
-
-Lanes ran with no operator present, so no tracker write was made. This session's friction is parked in the friction log. *(Correction: the 2026-10-08 triage filed or archived these entries; see that entry above.)*
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -374,3 +350,17 @@ instruction-check coverage gaps to #1040; live cloud selection was not exercised
 
 ▶ Next: session-start cloud — assess #1040's inputs and verification prerequisites,
 then work on its instruction-check coverage gaps only if eligible.
+
+### Skills and instruction files
+
+**Status:** #1052 (`f7d8749a`), #1053 (`78d623c3`) and #1054 (`ea4010db`) shipped on
+2026-10-11. #1055 owns the Codex `openai.yaml` check, #1057 an absent reference file,
+#1058 the split's remaining pin gaps.
+**Owner:** `saved_plans/skills-and-instructions-assessment_2026-10-11.md`;
+[#1059](https://github.com/topij/agentic-dev-kit/issues/1059),
+[#1055](https://github.com/topij/agentic-dev-kit/issues/1055),
+[#1057](https://github.com/topij/agentic-dev-kit/issues/1057),
+[#1058](https://github.com/topij/agentic-dev-kit/issues/1058).
+
+▶ Next: #1059 — move pr-watch's loop instructions out of *Notes* into the loop steps,
+then split the remaining field glossary into `workflows/pr-watch/`, read unconditionally.

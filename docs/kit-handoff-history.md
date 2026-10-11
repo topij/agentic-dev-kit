@@ -5,6 +5,66 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-07 (review round budget, in Claude Code)
+
+[#993](https://github.com/topij/agentic-dev-kit/pull/993) merged as
+`2d40c96024f642fa60b656b03d53d34a93349fdc`. A pull request's review now gets the
+opening review plus `review.round_budget` fix rounds. Past that, the watch loop posts
+a decision packet and stops for the operator instead of pushing another fix round.
+`pr_watch.py` counts distinct reviewed heads from configured bots' submitted reviews,
+`--record-review`, and the new `--record-round`, and reports them as `review_rounds`.
+It gates nothing. `pr-watch.md` carries the *Round budget* stop condition beside the
+generic loop bound, and the panel doctrine, safety-critical rule 3 and the
+follow-through hook say the same. The CHANGELOG entry tells adopters what to refresh.
+
+Decided: the operator set the default at the opening review plus 2 fix rounds. The
+motive is cost in adopting repositories: review tokens, and GitHub Actions minutes,
+which this public repository does not pay. The budget is report-only rather than a
+gate, so that a count the author partly self-reports cannot open or close a merge.
+Not built: routing a non-regression MEDIUM in a fix round like a LOW, which needs its
+own operator decision.
+
+Not established: whether the budget shortens review in practice; nothing has measured
+it yet. The count also misses rounds that go unrecorded, and `pr-watch.md` names those
+cases.
+
+Verification: `make test` at `59eeee935113e4f6fa015b6e97ff5cd1abc91107` on 2026-10-07,
+in `/Users/topi/Coding/agentic-dev-kit-round-budget`, printed `4332 passed, 1 skipped`.
+CI's `toolkit` run passed at that head.
+
+Review: two-lens panel rounds at `6db144ca`, `753e6099` and `59eeee93`. Each round's
+disposition comment on the PR holds its findings. The round at `59eeee93` found
+nothing above LOW, and the PR's own budget was spent there, so its LOW findings went
+to a ticket rather than a further round.
+
+Filed this session: #994.
+
+### 2026-10-07 (overnight autonomous parallel lanes, in Claude Code)
+
+The operator asked for an overnight autonomous session in separate worktrees, and authorized merging every PR "when clean". Three headless lanes ran under `launch_lane.py`, and the cockpit ran each PR's review and fix rounds.
+
+- **#984** (for #884 and #944) merged as `4e27661e075dba8d2569bc086c9effdf9c757b2b`.
+  - The suite now neutralises colour at `scripts/conftest.py` import.
+  - The `--carry-forward` help names the live draw flags.
+  - `FORCE_COLOR=3 make test` at `4b0e7d4e063e19a9384635596faba0c2eee2c36f` on 2026-10-06, in the lane worktree, printed `4293 passed, 1 skipped`. The one later commit changed a comment and its manifest hash, with CI's run only.
+- **#985** (for #859) merged as `6ccc1744291f887ffbee8c9fe31c16d731617831`.
+  - `recover` retires a completed state that fails only the frozen-artifact or forge-prefix checks, when git proves its sweep.
+  - It refuses one with no proven retirement and writes nothing.
+  - In-flight states keep the old judgement.
+  - The panel rejected the earlier designs as HIGH regressions into a terminal hold; the PR's comments hold every round.
+  - `make test` at `d9e951a3a421c8b959675d9e3daa0d0b4608a06a` on 2026-10-07, in the lane worktree, printed `4297 passed, 1 skipped`. Later commits are tests, docstrings, the CHANGELOG entry, the triage workflow doc and the manifest, reviewed by delta passes.
+- **#986** (#900's scratch sweep engine) is **open and held for the operator** at `d9a1fd571daf8181b434e362de48d055abce4dd6`. *(Correction: it merged later the same day as `dff111ae`; see the session entry above.)*
+  - Every full two-lens pass found new fail-open edge cases in what the engine judges removable, so the cockpit stopped the loop rather than merge a file-deleting engine.
+  - The round-5 disposition comment on the PR lists the open findings.
+  - `make test` at that head on 2026-10-07, in `/Users/topi/Coding/dev-model-sessions/scratch-sweep/wt`, printed `4367 passed, 1 skipped`.
+  - `--apply` was never run against a real directory.
+
+Decided: #986 was held, not merged. The operator's "merge when clean" did not cover a destructive engine with open low-to-medium fail-open findings.
+
+Not established: the `test` entry's own recovery branch still judges by `canonical_state` alone, which is the #859 class in test mode. It is parked in the friction log, untracked. *(Correction: it was filed as #1002 the same day and fixed by #1004; see the 2026-10-08 entry above.)*
+
+Lanes ran with no operator present, so no tracker write was made. This session's friction is parked in the friction log. *(Correction: the 2026-10-08 triage filed or archived these entries; see that entry above.)*
+
 ### 2026-10-06 (merge gate ignores a bot's empty thread-reply review, in Claude Code)
 
 [#982](https://github.com/topij/agentic-dev-kit/pull/982) merged as

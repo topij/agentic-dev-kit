@@ -24,6 +24,23 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-10-11
+
+- **A CI-only failure in the pinned-preflight test passed on rerun.** Severity L, no
+  mechanism yet. On #1053's first CI run,
+  `test_panel_prompt.py::test_generated_preflight_authenticates_objects_before_execution[kitconfig]`
+  raised `FileNotFoundError` for the loose object
+  `.git/objects/a2/adf8d2f0151b3e4f74bc819d709bd39dcbf91d` in its fixture repository. The
+  same head passed on rerun, `make test` passed locally, and #1052 and #1054 passed the
+  test with the same `kitconfig.py`. The test assumes the blob is stored loose. Why it
+  was not, on that one run, is not established.
+- **Pinning prose did not converge on #1054; a design change did.** Severity L, kept for
+  accumulation alongside the 2026-10-10 repair-and-review chain entry. Successive
+  passes over the split triage workflow each found a sentence that could be added beside
+  a pinned trigger and undercut it, and each repair tightened only that pin. The
+  operator's choice to read every reference file unconditionally removed the class, and
+  the next pass found only LOW items.
+
 ## 2026-10-10
 
 - **The repair-and-review chain shape recurred in the record-prose preflight.**
