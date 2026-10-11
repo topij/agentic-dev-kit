@@ -2083,17 +2083,25 @@ isolation, and delegation mechanisms.""",
 # read depend on knowledge only another supplied, and any unpinned sentence
 # could contradict a trigger. Both statements are compared for exact equality,
 # so a sentence added, removed or reworded there fails.
+_UNCONDITIONAL_READ_PREFACE = (
+    "This workflow is split so that each of its files fits in a single read. The "
+    "files below are part of the workflow and are as normative as this one; a "
+    "section cited here by name, or as *above* or *below*, may sit in any of them. "
+    "**Read every one of them completely, not in part, before the first action of "
+    "any run**, whatever its entry, mode or phase."
+)
 _SPLIT_WORKFLOW_PREFACE = {
-    "triage-friction-log": (
-        "This workflow is split so that each of its files fits in a single read. The "
-        "files below are part of the workflow and are as normative as this one; a "
-        "section cited here by name, or as *above* or *below*, may sit in any of them. "
-        "**Read every one of them completely, not in part, before the first action of "
-        "any run**, whatever its entry, mode or phase."
-    ),
+    "pr-watch": _UNCONDITIONAL_READ_PREFACE,
+    "triage-friction-log": _UNCONDITIONAL_READ_PREFACE,
 }
 
 _SPLIT_WORKFLOW_SUMMARIES = {
+    "pr-watch": {
+        "report-fields.md": (
+            "*Seen state and comment filtering*, *Review-bot status*, *Evidence "
+            "findings*, *The REST backend* and *Review configuration*."
+        ),
+    },
     "triage-friction-log": {
         "recovery.md": (
             "*Completed-state retirement*, *Gate-only input precedence*, *Test input "
@@ -2109,6 +2117,16 @@ _SPLIT_WORKFLOW_SUMMARIES = {
 # Which sections each reference file holds. A section that moved files would
 # change no read, but a citation by file would then point at the wrong one.
 _SPLIT_WORKFLOW_SECTIONS = {
+    "pr-watch": {
+        "report-fields.md": (
+            "Seen state and comment filtering",
+            "Review-bot status",
+            "Known gaps",
+            "Evidence findings",
+            "The REST backend",
+            "Review configuration",
+        ),
+    },
     "triage-friction-log": {
         "recovery.md": (
             "Completed-state retirement",
@@ -2216,6 +2234,14 @@ def test_split_workflow_read_and_link_mutations_are_rejected(tmp_path: Path) -> 
         ("triage-friction-log/finalize.md", "and as normative as it;", "and optional;"),
         ("triage-friction-log/recovery.md", "### Completed-state retirement", "### Completed state retirement"),
         ("triage-friction-log/finalize.md", "## Finalize and sweep", "#### Finalize and sweep"),
+        ("pr-watch.md", "whatever its entry, mode or phase.",
+         "whatever its entry, mode or phase. A routine poll may skip them."),
+        ("pr-watch.md", "](pr-watch/report-fields.md) —", "](report-fields.md) —"),
+        ("pr-watch.md", "*Review configuration*, in `report-fields.md`",
+         "*Review settings*, in `report-fields.md`"),
+        ("pr-watch/report-fields.md", "before the first action of any run.",
+         "before the first action of any run. Read it only when a report field is unclear."),
+        ("pr-watch/report-fields.md", "## The REST backend", "#### The REST backend"),
     )
     for index, (rel, old, new) in enumerate(mutations):
         root = tmp_path / f"case-{index}"
