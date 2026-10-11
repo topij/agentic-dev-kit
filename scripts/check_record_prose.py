@@ -87,7 +87,13 @@ def git(root: Path, *args: str) -> str:
 def commit(root: Path, value: str) -> str:
     if not re.fullmatch(r"[0-9a-fA-F]{7,40}", value):
         raise CheckError("base and head must be commit hex shas, not moving refs")
-    return git(root, "rev-parse", "--verify", f"{value}^{{commit}}").strip()
+    # Revision expressions also resolve hex-named refs and peel tag objects.
+    # Enumerate the object database instead, without allowing a ref to choose
+    # between ambiguous object prefixes or stand in for a missing object.
+    objects = git(root, "rev-parse", f"--disambiguate={value.lower()}").splitlines()
+    if len(objects) != 1 or git(root, "cat-file", "-t", objects[0]).strip() != "commit":
+        raise CheckError(f"{value!r} is not an unambiguous commit object ID")
+    return objects[0]
 
 
 def blob(root: Path, revision: str, path: str) -> str:

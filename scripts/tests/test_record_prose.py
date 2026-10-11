@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -36,6 +37,27 @@ def commit(root: Path, message: str = "narrative update") -> str:
     git(root, "add", "-A")
     git(root, "commit", "-qm", message)
     return git(root, "rev-parse", "HEAD")
+
+
+def tree_snapshot(root: Path) -> dict:
+    result = {}
+    pending = [root]
+    while pending:
+        path = pending.pop()
+        info = path.lstat()
+        payload = None
+        if stat.S_ISLNK(info.st_mode):
+            payload = os.readlink(path)
+        elif stat.S_ISREG(info.st_mode):
+            payload = path.read_bytes()
+        elif stat.S_ISDIR(info.st_mode):
+            pending.extend(path.iterdir())
+        # Reads can update access time; it is not evidence of a checker write.
+        result[path.relative_to(root).as_posix()] = (
+            info.st_mode, info.st_uid, info.st_gid, info.st_mtime_ns,
+            info.st_ctime_ns, payload,
+        )
+    return result
 
 
 @pytest.fixture
@@ -92,6 +114,78 @@ def test_committed_snapshot_ignores_dirty_files_and_has_no_write(repo):
     assert report["limits"]
     assert git(root, "status", "--porcelain=v1") == before
     assert (root / "docs/plan.md").read_text() == "dirty working copy\n" * 100
+
+
+@pytest.mark.parametrize("namespace", ["heads", "tags"])
+@pytest.mark.parametrize("spelling", ["abcdef0", "abcdef0" + "0" * 33])
+@pytest.mark.parametrize("surface", ["base", "head", "stamp"])
+def test_hex_named_refs_cannot_supply_missing_commit_objects(repo, namespace, spelling, surface):
+    root, base = repo
+    assert not git(root, "rev-parse", f"--disambiguate={spelling}")
+    git(root, "update-ref", f"refs/{namespace}/{spelling}", base)
+    save(root, "docs/plan.md", f"`make test` at `{spelling if surface == 'stamp' else base}` on 2026-10-10.\n")
+    head = commit(root)
+    extra = (f"--{surface}", spelling) if surface != "stamp" else ()
+    code, report = run(repo, head, *extra)
+    assert code == 2, report
+    assert report["status"] == "unavailable"
+    assert report["stamps"] == []
+    assert report["unavailable"][0]["check"] == ("stamps" if surface == "stamp" else "input")
+
+
+@pytest.mark.parametrize("namespace", ["heads", "tags"])
+@pytest.mark.parametrize("spelling", ["short", "full", "uppercase"])
+def test_real_object_identity_is_independent_of_same_named_refs(repo, namespace, spelling):
+    root, base = repo
+    save(root, "docs/plan.md", "Different revision.\n")
+    other = commit(root)
+    value = base[:7] if spelling == "short" else base.upper() if spelling == "uppercase" else base
+    git(root, "update-ref", f"refs/{namespace}/{value}", other)
+    save(root, "docs/plan.md", f"`make test` at `{value}` on 2026-10-10.\n")
+    head = commit(root)
+    code, report = run(repo, head[:7], "--base", value)
+    assert code == 0, report
+    assert report["base"] == base
+    assert report["head"] == head
+    assert report["stamps"][0]["revision"] == base
+
+
+@pytest.mark.parametrize("kind", ["tree", "blob", "tag"])
+@pytest.mark.parametrize("surface", ["head", "stamp"])
+def test_noncommit_object_ids_are_unavailable(repo, kind, surface):
+    root, base = repo
+    git(root, "tag", "-a", "annotated", "-m", "tag object", base)
+    revision = git(root, "rev-parse", {"tree": f"{base}^{{tree}}",
+                                      "blob": f"{base}:docs/plan.md", "tag": "refs/tags/annotated"}[kind])
+    save(root, "docs/plan.md", f"`make test` at `{revision if surface == 'stamp' else base}` on 2026-10-10.\n")
+    code, report = run(repo, commit(root), *(("--head", revision) if surface == "head" else ()))
+    assert code == 2, report
+    assert report["status"] == "unavailable"
+    assert report["stamps"] == []
+
+
+def test_a_ref_cannot_disambiguate_colliding_commit_object_prefixes(repo):
+    root, _ = repo
+    subprocess.run(["git", "hash-object", "-t", "tree", "-w", "--stdin"],
+                   cwd=root, input=b"", capture_output=True, check=True)
+    objects = []
+    # These fixture messages yield distinct commit objects sharing a hex prefix.
+    for nonce in (9483, 12764):
+        data = ("tree 4b825dc642cb6eb9a060e54bf8d69288fbee4904\n"
+                "author test <test@example.com> 0 +0000\n"
+                "committer test <test@example.com> 0 +0000\n\n"
+                f"collision {nonce}\n")
+        result = subprocess.run(["git", "hash-object", "-t", "commit", "-w", "--stdin"],
+                                cwd=root, input=data, text=True, capture_output=True, check=True)
+        objects.append(result.stdout.strip())
+    prefix = objects[0][:7]
+    assert objects[0] != objects[1] and objects[1].startswith(prefix)
+    git(root, "update-ref", f"refs/heads/{prefix}", objects[0])
+    save(root, "docs/plan.md", f"`make test` at `{prefix}` on 2026-10-10.\n")
+    code, report = run(repo, commit(root))
+    assert code == 2, report
+    assert report["status"] == "unavailable"
+    assert report["unavailable"][0]["check"] == "stamps"
 
 
 @pytest.mark.parametrize("text,kind", [
@@ -620,11 +714,7 @@ def test_cli_does_not_write_fresh_engine_or_input_tree(repo, tmp_path, status):
         save(root, "code.py", "pass\n")
     head = commit(root)
 
-    def snapshot(path):
-        return {p.relative_to(path).as_posix(): p.read_bytes()
-                for p in path.rglob("*") if p.is_file()}
-
-    before = snapshot(fresh), snapshot(root)
+    before = tree_snapshot(fresh), tree_snapshot(root)
     env = os.environ.copy()
     env.pop("PYTHONDONTWRITEBYTECODE", None)
     env.pop("PYTHONPYCACHEPREFIX", None)
@@ -637,7 +727,31 @@ def test_cli_does_not_write_fresh_engine_or_input_tree(repo, tmp_path, status):
     report = json.loads(result.stdout)
     assert report["status"] == status
     assert result.returncode == (2 if status == "unavailable" else 0)
-    assert (snapshot(fresh), snapshot(root)) == before
+    assert (tree_snapshot(fresh), tree_snapshot(root)) == before
+
+
+@pytest.mark.parametrize("change", ["dangling-link", "directory-link", "empty-directory",
+                                   "permissions", "modification-time", "bytes"])
+def test_no_write_snapshot_detects_filesystem_changes(tmp_path, change):
+    root = tmp_path / "tree"
+    root.mkdir()
+    file = root / "record"
+    file.write_text("original")
+    before = tree_snapshot(root)
+    if change == "dangling-link":
+        (root / "link").symlink_to("missing-target")
+    elif change == "directory-link":
+        (root / "link").symlink_to(tmp_path, target_is_directory=True)
+    elif change == "empty-directory":
+        (root / "empty").mkdir()
+    elif change == "permissions":
+        file.chmod(file.stat().st_mode ^ stat.S_IXUSR)
+    elif change == "modification-time":
+        info = file.stat()
+        os.utime(file, ns=(info.st_atime_ns, info.st_mtime_ns + 1_000_000_000))
+    else:
+        file.write_text("changed")
+    assert tree_snapshot(root) != before
 
 
 @pytest.mark.parametrize("layout", ["scripts", "scripts/devkit", "tools/vendor/kit"])
