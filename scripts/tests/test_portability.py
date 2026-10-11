@@ -2048,7 +2048,7 @@ def _assert_codex_skill_adapters_are_valid_and_share_workflows() -> None:
     for skill_path in (REPO_ROOT / ".agents" / "skills").glob("*/SKILL.md"):
         name = skill_path.parent.name
         shared_path = f"docs/agentic-dev-kit/workflows/{name}.md"
-        claude_path = f".claude/commands/{name}.md"
+        claude_path = f".claude/skills/{name}/SKILL.md"
         declared_shared = shared_path if (REPO_ROOT / shared_path).is_file() else None
         _assert_codex_workflow_adapter(
             name,
@@ -2078,21 +2078,29 @@ isolation, and delegation mechanisms.""",
 
 
 _SPLIT_WORKFLOW_TRIGGERS = {
-    # Each split workflow's entry names every reference file and says when to
-    # read it. The triggers are what make the split safe: with the links kept
-    # and the triggers weakened to "optional", nothing else here fails.
-    "triage-friction-log": (
-        "**Read a file completely, not in part, when its trigger applies**",
-        "Read it when the run captures a `completed` state",
-        "Read it in LLM-only mode before writing or validating any state",
-        "Read it before the first tracker action",
-        "Read it once engine-backed mode is selected",
-    ),
-    "pr-watch": (
-        "**Read it completely, not in part**, before a final authorization poll",
-        "`review_bots` lists a bot as unavailable, pending or behind the head;",
-        "`evidence_findings[]` or `truncated_reads` is non-empty",
-    ),
+    # Each split workflow's entry links every reference file with the condition
+    # for reading it, and each reference file opens with the same condition. The
+    # triggers are what make the split safe, so each is pinned whole, in both
+    # places: narrowing a clause, weakening it to "optional", or swapping two
+    # files' triggers must fail here, since nothing else does.
+    "triage-friction-log": {
+        "recovery.md": (
+            "when the run captures a `completed` state, finds a blocking gate, recovery "
+            "intent, receipt or bundle, finds invalid state, or was entered with "
+            "`recover` or `test`."
+        ),
+        "state-schema.md": (
+            "in LLM-only mode before writing or validating any state, gate, report or "
+            "snapshot, and in either mode before judging a captured state's validity "
+            "yourself rather than through an engine."
+        ),
+        "finalize.md": (
+            "once operator decisions are recorded, before any tracker action, test-mode "
+            "`would-create` record or archive sweep, and on resuming a state in "
+            "`tracker-write` or a later phase."
+        ),
+        "engine-cli.md": "once engine-backed mode is selected, before the first engine call.",
+    },
 }
 
 
@@ -2101,16 +2109,24 @@ def _assert_split_workflow_links_and_triggers(root: Path) -> None:
     split = sorted(path.name for path in workflows.iterdir() if path.is_dir())
     assert split == sorted(_SPLIT_WORKFLOW_TRIGGERS), split
     for slug, triggers in _SPLIT_WORKFLOW_TRIGGERS.items():
-        entry = (workflows / f"{slug}.md").read_text(encoding="utf-8")
-        for reference in sorted((workflows / slug).glob("*.md")):
-            link = f"]({slug}/{reference.name})"
-            assert link in entry, f"{slug}.md does not link {reference.name}"
-            assert reference.read_text(encoding="utf-8").split("\n\n", 2)[1].startswith(
-                "Read this file completely"
-            ), f"{reference.name} does not open with its trigger"
-        flat = " ".join(entry.split())
-        for trigger in triggers:
-            assert trigger in flat, f"{slug}.md lost its trigger: {trigger!r}"
+        entry = " ".join((workflows / f"{slug}.md").read_text(encoding="utf-8").split())
+        assert "**Read a file completely, not in part, when its trigger applies**" in entry
+        files = sorted(path.name for path in (workflows / slug).glob("*.md"))
+        assert files == sorted(triggers), f"{slug}/ holds {files}"
+        bullets = entry.split("## Reference files", 1)[1].split("\n## ", 1)[0]
+        bullets = bullets.split(" ## ", 1)[0].split("- [`")[1:]
+        by_file = {}
+        for bullet in bullets:
+            name = bullet.split("`]", 1)[0].rsplit("/", 1)[-1]
+            by_file[name] = bullet
+        assert sorted(by_file) == files, f"{slug}.md links {sorted(by_file)}"
+        for name, trigger in triggers.items():
+            assert f"]({slug}/{name})" in by_file[name]
+            assert f"Read it {trigger}" in by_file[name], f"{slug}.md: {name}'s trigger"
+            opening = (workflows / slug / name).read_text(encoding="utf-8").split("\n\n", 2)[1]
+            assert " ".join(opening.split()).startswith(f"Read this file completely {trigger}"), (
+                f"{name} does not open with its trigger"
+            )
 
 
 def test_split_workflows_link_every_reference_file_with_its_trigger() -> None:
@@ -2121,39 +2137,38 @@ def test_split_workflows_link_every_reference_file_with_its_trigger() -> None:
 def test_split_workflow_trigger_and_link_mutations_are_rejected(tmp_path: Path) -> None:
     require_kit_source()
     source = REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows"
-    mutations = {
-        "triage-friction-log.md": (
-            ("**Read a file completely, not in part, when its trigger applies**",
-             "These files are optional background"),
-            ("](triage-friction-log/finalize.md)", "](finalize.md)"),
-        ),
-        "pr-watch.md": (
-            ("**Read it completely, not in part**, before a final authorization poll",
-             "Optional."),
-            ("`evidence_findings[]` or `truncated_reads` is non-empty", "anything"),
-        ),
-        "pr-watch/engine-reference.md": (
-            ("Read this file completely before", "You may read this file before"),
-        ),
-    }
-    for rel, pairs in mutations.items():
-        for old, new in pairs:
-            root = tmp_path / f"case-{len(list(tmp_path.iterdir()))}"
-            shutil.copytree(source, root / "docs" / "agentic-dev-kit" / "workflows")
-            target = root / "docs" / "agentic-dev-kit" / "workflows" / rel
-            text = target.read_text(encoding="utf-8")
-            # Match across the file's line breaks, and leave every other byte alone.
-            pattern = r"\s+".join(re.escape(word) for word in old.split())
-            mutated, applied = re.subn(pattern, new, text)
-            assert applied >= 1, (rel, old)
-            target.write_text(mutated, encoding="utf-8")
-            with pytest.raises(AssertionError):
-                _assert_split_workflow_links_and_triggers(root)
+    recovery = _SPLIT_WORKFLOW_TRIGGERS["triage-friction-log"]["recovery.md"]
+    engine_cli = _SPLIT_WORKFLOW_TRIGGERS["triage-friction-log"]["engine-cli.md"]
+    mutations = (
+        ("triage-friction-log.md", "**Read a file completely, not in part, when its trigger applies**",
+         "These files are optional background"),
+        ("triage-friction-log.md", "](triage-friction-log/finalize.md)", "](finalize.md)"),
+        ("triage-friction-log.md", "finds a blocking gate, recovery intent, receipt or bundle,", ""),
+        ("triage-friction-log.md", "test-mode `would-create` record or archive sweep,", ""),
+        ("triage-friction-log.md", "and in either mode before judging a captured state's validity "
+         "yourself rather than through an engine", ""),
+        ("triage-friction-log.md", recovery, engine_cli),
+        ("triage-friction-log/finalize.md", "and on resuming a state in `tracker-write` or a later phase",
+         ""),
+        ("triage-friction-log/recovery.md", "Read this file completely when", "You may read this file when"),
+    )
+    for index, (rel, old, new) in enumerate(mutations):
+        root = tmp_path / f"case-{index}"
+        shutil.copytree(source, root / "docs" / "agentic-dev-kit" / "workflows")
+        target = root / "docs" / "agentic-dev-kit" / "workflows" / rel
+        text = target.read_text(encoding="utf-8")
+        # Match across the file's line breaks, and leave every other byte alone.
+        pattern = r"\s+".join(re.escape(word) for word in old.split())
+        mutated, applied = re.subn(pattern, new, text)
+        assert applied >= 1, (rel, old)
+        target.write_text(mutated, encoding="utf-8")
+        with pytest.raises(AssertionError):
+            _assert_split_workflow_links_and_triggers(root)
 
 
 def test_parallel_adapter_policy_contradictions_are_rejected() -> None:
     for path in (
-        REPO_ROOT / ".claude" / "commands" / "parallel.md",
+        REPO_ROOT / ".claude" / "skills" / "parallel" / "SKILL.md",
         REPO_ROOT / ".agents" / "skills" / "parallel" / "SKILL.md",
     ):
         adapter = path.read_text(encoding="utf-8")
@@ -2234,7 +2249,7 @@ _PINNED_CODEX_HEADINGS = {"adopt": "Adopt", "upgrade": "Upgrade", "pr-watch": "P
 
 def _adapter_rel(slug: str, runtime: str) -> str:
     if runtime == "claude":
-        return f".claude/commands/{slug}.md"
+        return f".claude/skills/{slug}/SKILL.md"
     return f".agents/skills/{slug}/SKILL.md"
 
 
@@ -2253,9 +2268,9 @@ def _assert_pinned_adapter(adapter: str, slug: str, runtime: str) -> None:
 
 
 @pytest.mark.kit_repo_only(
-    ".claude/commands/adopt.md",
-    ".claude/commands/upgrade.md",
-    ".claude/commands/pr-watch.md",
+    ".claude/skills/adopt/SKILL.md",
+    ".claude/skills/upgrade/SKILL.md",
+    ".claude/skills/pr-watch/SKILL.md",
     ".agents/skills/adopt",
     ".agents/skills/upgrade",
     ".agents/skills/pr-watch",
@@ -2632,7 +2647,7 @@ def test_pull_request_visibility_is_ready_by_default_with_a_bounded_draft_except
     for name in adapter_names:
         shared_path = f"docs/agentic-dev-kit/workflows/{name}.md"
         adapters = (
-            REPO_ROOT / ".claude" / "commands" / f"{name}.md",
+            REPO_ROOT / ".claude" / "skills" / name / "SKILL.md",
             REPO_ROOT / ".agents" / "skills" / name / "SKILL.md",
         )
         for path in adapters:
@@ -2880,7 +2895,7 @@ fall back to reading only the tracked file. In this workflow:
   Apply the current runtime's `models.runtime_mappings` value only when the runtime
   can actually select a model or effort level for that step.
 - A workflow invocation means the current agent's native adapter: `/name` for the
-  shipped Claude commands or `$name` for the shipped Codex skills.
+  shipped Claude skills or `$name` for the shipped Codex skills.
 
 """
 
@@ -3351,8 +3366,8 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
 @pytest.mark.kit_repo_only(
     "docs/agentic-dev-kit/workflows/session-start.md",
     "docs/agentic-dev-kit/workflows/wrap-up.md",
-    ".claude/commands/session-start.md",
-    ".claude/commands/wrap-up.md",
+    ".claude/skills/session-start/SKILL.md",
+    ".claude/skills/wrap-up/SKILL.md",
     ".agents/skills/session-start",
     ".agents/skills/wrap-up",
     "docs/agentic-dev-kit/runtime-parity.md",
@@ -3368,7 +3383,7 @@ def test_bookend_integrations_are_shared_thin_declared_and_manifested() -> None:
     ).read_text(encoding="utf-8")
     for name in ("session-start", "wrap-up"):
         shared_path = f"docs/agentic-dev-kit/workflows/{name}.md"
-        claude_path = f".claude/commands/{name}.md"
+        claude_path = f".claude/skills/{name}/SKILL.md"
         codex_path = f".agents/skills/{name}/SKILL.md"
         shared = (REPO_ROOT / shared_path).read_text(encoding="utf-8")
         claude = (REPO_ROOT / claude_path).read_text(encoding="utf-8")
@@ -3383,7 +3398,7 @@ def test_bookend_integrations_are_shared_thin_declared_and_manifested() -> None:
             assert "### Authority contract" not in adapter
             assert "tracker-without-exact-payload-approval" not in adapter
             assert "non-interactive" not in adapter.lower()
-        assert len(claude.splitlines()) <= 12
+        assert len(claude.splitlines()) <= 13  # 12 plus the skill's `name` line
         assert len(codex.splitlines()) <= 14
         claude_description = yaml.safe_load(claude.split("---", 2)[1])["description"]
         codex_description = yaml.safe_load(codex.split("---", 2)[1])["description"]
@@ -3474,8 +3489,8 @@ def test_parallel_identity_chain_files_are_manifest_owned_for_adopter_upgrade() 
 
 
 @pytest.mark.kit_repo_only(
-    ".claude/commands/session-start.md",
-    ".claude/commands/wrap-up.md",
+    ".claude/skills/session-start/SKILL.md",
+    ".claude/skills/wrap-up/SKILL.md",
     ".agents/skills/session-start",
     ".agents/skills/wrap-up",
 )
@@ -3483,7 +3498,7 @@ def test_bookend_adapter_hostile_mutations_are_rejected(adapter_source: Path) ->
     for name in ("session-start", "wrap-up"):
         shared_path = f"docs/agentic-dev-kit/workflows/{name}.md"
         paths = (
-            adapter_source / ".claude" / "commands" / f"{name}.md",
+            adapter_source / ".claude" / "skills" / name / "SKILL.md",
             adapter_source / ".agents" / "skills" / name / "SKILL.md",
         )
         for runtime, path in zip(("claude", "codex"), paths, strict=True):
@@ -13691,14 +13706,14 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
 @pytest.mark.kit_repo_only(
     "config/dev-model.yaml",
     "docs/agentic-dev-kit/workflows/triage-friction-log.md",
-    ".claude/commands/triage-friction-log.md",
+    ".claude/skills/triage-friction-log/SKILL.md",
     ".agents/skills/triage-friction-log",
 )
 def test_triage_integration_is_config_owned_shared_and_thin(tmp_path: Path) -> None:
     workflow = read_workflow(
         REPO_ROOT / "docs/agentic-dev-kit/workflows/triage-friction-log.md"
     )
-    claude = (REPO_ROOT / ".claude/commands/triage-friction-log.md").read_text(
+    claude = (REPO_ROOT / ".claude/skills/triage-friction-log/SKILL.md").read_text(
         encoding="utf-8"
     )
     codex = (
@@ -13832,7 +13847,7 @@ def test_triage_integration_is_config_owned_shared_and_thin(tmp_path: Path) -> N
 
 @pytest.mark.kit_repo_only(
     "docs/agentic-dev-kit/workflows/triage-friction-log.md",
-    ".claude/commands/triage-friction-log.md",
+    ".claude/skills/triage-friction-log/SKILL.md",
     ".agents/skills/triage-friction-log",
 )
 def test_triage_semantic_and_adapter_mutations_are_rejected(tmp_path: Path) -> None:
@@ -14281,7 +14296,7 @@ def test_triage_semantic_and_adapter_mutations_are_rejected(tmp_path: Path) -> N
         raise AssertionError(f"semantic mutation survived: {mutation_index}")
 
     paths = (
-        ("claude", REPO_ROOT / ".claude/commands/triage-friction-log.md"),
+        ("claude", REPO_ROOT / ".claude/skills/triage-friction-log/SKILL.md"),
         ("codex", REPO_ROOT / ".agents/skills/triage-friction-log/SKILL.md"),
     )
     for runtime, path in paths:
@@ -14322,6 +14337,7 @@ def test_triage_config_and_adapter_migration_reaches_adopters() -> None:
         "triage.gate_path",
         "triage.recovery_bundle_pattern",
         "./init.sh --no-clobber",
+        # The frozen 2026-08-25 entry names the path the binding had then.
         ".claude/commands/triage-friction-log.md",
         ".agents/skills/triage-friction-log/SKILL.md",
         "Replace both old adapters",
@@ -14555,14 +14571,14 @@ def _assert_post_merge_semantics(workflow: str) -> None:
 @pytest.mark.kit_repo_only(
     "config/dev-model.yaml",
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md",
-    ".claude/commands/post-merge-systemize.md",
+    ".claude/skills/post-merge-systemize/SKILL.md",
     ".agents/skills/post-merge-systemize",
 )
 def test_post_merge_systemize_is_shared_thin_and_config_owned() -> None:
     shared_path = "docs/agentic-dev-kit/workflows/post-merge-systemize.md"
     shared = (REPO_ROOT / shared_path).read_text(encoding="utf-8")
     claude = (
-        REPO_ROOT / ".claude" / "commands" / "post-merge-systemize.md"
+        REPO_ROOT / ".claude" / "skills" / "post-merge-systemize" / "SKILL.md"
     ).read_text(encoding="utf-8")
     codex_dir = REPO_ROOT / ".agents" / "skills" / "post-merge-systemize"
     codex = (codex_dir / "SKILL.md").read_text(encoding="utf-8")
@@ -14584,7 +14600,7 @@ def test_post_merge_systemize_is_shared_thin_and_config_owned() -> None:
     claude_description = yaml.safe_load(claude.split("---", 2)[1])["description"]
     codex_description = yaml.safe_load(codex.split("---", 2)[1])["description"]
     assert claude_description == codex_description
-    assert len(claude.splitlines()) <= 12
+    assert len(claude.splitlines()) <= 13  # 12 plus the skill's `name` line
     assert len(codex.splitlines()) <= 16
     assert interface["display_name"] == "Post-Merge Systemize"
     assert "$post-merge-systemize" in interface["default_prompt"]
@@ -14687,12 +14703,12 @@ def test_post_merge_systemize_is_shared_thin_and_config_owned() -> None:
 
 
 @pytest.mark.kit_repo_only(
-    ".claude/commands/post-merge-systemize.md",
+    ".claude/skills/post-merge-systemize/SKILL.md",
     ".agents/skills/post-merge-systemize",
 )
 def test_post_merge_systemize_adapter_hostile_mutations_are_rejected() -> None:
     paths = (
-        REPO_ROOT / ".claude" / "commands" / "post-merge-systemize.md",
+        REPO_ROOT / ".claude" / "skills" / "post-merge-systemize" / "SKILL.md",
         REPO_ROOT / ".agents" / "skills" / "post-merge-systemize" / "SKILL.md",
     )
     for runtime, path in zip(("claude", "codex"), paths, strict=True):
@@ -15182,7 +15198,7 @@ def _assert_runtime_parity_contract_covers_workflows_and_adapters() -> None:
     }
     actual_claude = {
         path.relative_to(REPO_ROOT).as_posix()
-        for path in (REPO_ROOT / ".claude" / "commands").glob("*.md")
+        for path in (REPO_ROOT / ".claude" / "skills").glob("*/SKILL.md")
     }
     actual_codex = {
         path.relative_to(REPO_ROOT).as_posix()
@@ -15196,7 +15212,7 @@ def _assert_runtime_parity_contract_covers_workflows_and_adapters() -> None:
         name = entry["name"]
         expected_paths = {
             "shared": f"docs/agentic-dev-kit/workflows/{name}.md",
-            "claude": f".claude/commands/{name}.md",
+            "claude": f".claude/skills/{name}/SKILL.md",
             "codex": f".agents/skills/{name}/SKILL.md",
         }
         for key, expected in expected_paths.items():
@@ -15650,7 +15666,7 @@ def test_runtime_parity_contract_allows_a_codex_only_gap(
         "  - name: session-start\n"
         "    status: aligned\n"
         "    shared: docs/agentic-dev-kit/workflows/session-start.md\n"
-        "    claude: .claude/commands/session-start.md\n"
+        "    claude: .claude/skills/session-start/SKILL.md\n"
         "    codex: .agents/skills/session-start/SKILL.md\n"
     )
     codex_only = (
@@ -15663,7 +15679,7 @@ def test_runtime_parity_contract_allows_a_codex_only_gap(
     assert aligned in text
     parity_doc.write_text(text.replace(aligned, codex_only), encoding="utf-8")
     (repo / "docs" / "agentic-dev-kit" / "workflows" / "session-start.md").unlink()
-    (repo / ".claude" / "commands" / "session-start.md").unlink()
+    (repo / ".claude" / "skills" / "session-start" / "SKILL.md").unlink()
     monkeypatch.setattr(sys.modules[__name__], "REPO_ROOT", repo)
 
     _assert_codex_skill_adapters_are_valid_and_share_workflows()
@@ -18707,7 +18723,7 @@ def test_init_seeds_the_claude_lane_profile_once_and_migrates_the_policy_keys(
 
 
 @pytest.mark.kit_repo_only(
-    ".claude/commands/parallel.md",
+    ".claude/skills/parallel/SKILL.md",
     ".agents/skills/parallel/SKILL.md",
     "docs/agentic-dev-kit/workflows/parallel-headless.md",
 )
@@ -18729,7 +18745,7 @@ def test_parallel_adapters_carry_no_approval_policy_and_the_shared_workflow_does
         "dontAsk",
     )
     for adapter in (
-        REPO_ROOT / ".claude" / "commands" / "parallel.md",
+        REPO_ROOT / ".claude" / "skills" / "parallel" / "SKILL.md",
         REPO_ROOT / ".agents" / "skills" / "parallel" / "SKILL.md",
     ):
         text = adapter.read_text(encoding="utf-8")

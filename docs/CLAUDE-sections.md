@@ -116,7 +116,7 @@ illustrative):
 - a language/runtime conventions rule (`paths: **/*.py` or equivalent) — idioms, lint /
   typecheck / test specifics, environment gotchas.
 - a shared-library rule (`paths: libs/**` or equivalent) — cross-package invariants.
-- a skills/commands rule (`paths: .claude/commands/**`) — prompt conventions, tool
+- a skills/commands rule (`paths: .claude/skills/**`) — prompt conventions, tool
   pre-flight, review-loop mechanics.
 - a data/state rule (`paths: state/**`, cache code) — shared cache catalog, config
   loading, dependency pre-flight.

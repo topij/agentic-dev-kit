@@ -47,8 +47,8 @@ files. Add your own send, destructive and kill/recovery paths to it, or delete t
 absent, every pull request keeps the two-lens fallback review, while a list that misses a
 gate file sends that file to one lens (#930).
 It renders the narrative docs and root entry points — `AGENTS.md`, which holds
-the contract, and `CLAUDE.md`, which imports it with `@AGENTS.md` because Claude Code reads
-`CLAUDE.md` and not `AGENTS.md` — from `docs/templates/`, installs the pre-push hook, and
+the contract, and `CLAUDE.md`, which imports it with `@AGENTS.md` because once a `CLAUDE.md`
+exists Claude Code reads it instead of `AGENTS.md` — from `docs/templates/`, installs the pre-push hook, and
 adds the state sandbox to `.gitignore`.
 
 It renders a target when it is **missing, or its first line opens an HTML comment

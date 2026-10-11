@@ -1,6 +1,8 @@
 ---
+name: triage-friction-log
 description: Triage the friction-log inbox into tracker tickets — freeze entries, obtain exact operator decisions, file approved payloads, and open a reviewable archive-sweep PR.
 argument-hint: "[resume|new|recover|test]"
+disable-model-invocation: true
 ---
 
 Read `docs/agentic-dev-kit/workflows/triage-friction-log.md` completely and follow it.

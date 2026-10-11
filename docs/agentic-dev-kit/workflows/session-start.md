@@ -28,7 +28,7 @@ fall back to reading only the tracked file. In this workflow:
   Apply the current runtime's `models.runtime_mappings` value only when the runtime
   can actually select a model or effort level for that step.
 - A workflow invocation means the current agent's native adapter: `/name` for the
-  shipped Claude commands or `$name` for the shipped Codex skills.
+  shipped Claude skills or `$name` for the shipped Codex skills.
 
 ## Authoritative integration declaration
 

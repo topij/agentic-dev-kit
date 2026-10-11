@@ -12,7 +12,7 @@ here explain their relationships and do not replace their gates.
 flowchart LR
     Config["config/dev-model.yaml<br/>plus allowed local overlay"] --> Workflows["shared workflows<br/>docs/agentic-dev-kit/workflows/"]
     Config --> Engines["kit engines<br/>paths.engines"]
-    Workflows --> Claude["Claude commands<br/>.claude/commands/"]
+    Workflows --> Claude["Claude skills<br/>.claude/skills/"]
     Workflows --> Codex["Codex skills<br/>.agents/skills/"]
     Claude --> Agent["agent session"]
     Codex --> Agent
@@ -35,7 +35,7 @@ the merged view is the input to workflows and engines that require it. The
 overlay rules. A value in `models.runtime_mappings` is advisory unless a runtime
 control applies it and the result is observed.
 
-The shared workflows own behavior and authority. The Claude command and Codex
+The shared workflows own behavior and authority. The Claude skill and Codex
 skill files are thin entry points that load them; a runtime adapter may translate
 invocation and available mechanisms but cannot relax a shared failure or approval
 boundary. The [runtime parity contract](agentic-dev-kit/runtime-parity.md) lists
@@ -60,7 +60,7 @@ installed kit-owned files with the manifest and checks installation properties.
 | Installer | [`init.sh`](../init.sh), [`docs/templates/`](templates/) | Migrate supported config, seed unclaimed docs and agent guides, install the hook shim. |
 | Config reader | [`scripts/lib/kitconfig.py`](../scripts/lib/kitconfig.py) | Read the supported config subset and allowed local overlay. |
 | Workflow contracts | [`docs/agentic-dev-kit/workflows/`](agentic-dev-kit/workflows/) | Define preflight, authority, outcomes, and resume behavior. |
-| Runtime bindings | [Claude commands](../.claude/commands/), [Codex skills](../.agents/skills/) | Enter the shared workflows from each client. |
+| Runtime bindings | [Claude skills](../.claude/skills/), [Codex skills](../.agents/skills/) | Enter the shared workflows from each client. |
 | Review and lanes | [`pr_watch.py`](../scripts/pr_watch.py), [`dev_session.sh`](../scripts/dev_session.sh), [`launch_lane.py`](../scripts/launch_lane.py) | Poll and record review state, issue worktrees, and launch bounded headless sessions. |
 | State paths | [`scripts/lib/state_paths/`](../scripts/lib/state_paths/) | Resolve workflow artifacts into the declared state root or lane sandbox. |
 | Installation inspection | [`kit_doctor.py`](../scripts/kit_doctor.py), [`kit-manifest.json`](../kit-manifest.json) | Report kit-owned drift and installation properties. |
@@ -166,7 +166,7 @@ the details of artifacts, retries, and recovery.
 | --- | --- |
 | Project path, reviewer, model guidance, or integration setting | `config/dev-model.yaml`; migrate a new key through `init.sh` |
 | Workflow decision, failure, or approval rule | Shared file under `docs/agentic-dev-kit/workflows/` |
-| Runtime invocation or registration | Thin `.claude/commands/` or `.agents/skills/` binding, plus the [parity contract](agentic-dev-kit/runtime-parity.md) |
+| Runtime invocation or registration | Thin `.claude/skills/` or `.agents/skills/` binding, plus the [parity contract](agentic-dev-kit/runtime-parity.md) |
 | Deterministic command or state behavior | Engine under `paths.engines`, with the corresponding behavioral verification |
 | Adopter-facing starting content | Template under `docs/templates/`; preserve adopter-owned rendered files |
 

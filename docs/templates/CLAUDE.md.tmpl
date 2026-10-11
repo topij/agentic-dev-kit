@@ -9,9 +9,11 @@
 
 # Claude Code — {{PROJECT_NAME}}
 
-Claude Code reads `CLAUDE.md` and **not** `AGENTS.md`, so this file imports the
-contract rather than restating it: an `@path` import is expanded into context at
-session start, so the imported file arrives in full. One file states the
+Claude Code reads `AGENTS.md` on its own only where no `CLAUDE.md` exists. Once this
+file exists, Claude Code reads it **instead of** `AGENTS.md` by default, so this file
+imports the contract rather than restating it: an `@path` import is expanded into
+context at session start, so the imported file arrives in full. The import also works in
+sessions where Claude Code's own `AGENTS.md` reading is unavailable. One file states the
 contract and every runtime loads it — a per-runtime copy is a fork, and a fork
 drifts.
 

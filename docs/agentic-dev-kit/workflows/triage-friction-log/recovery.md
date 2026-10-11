@@ -2,10 +2,9 @@
 
 Read this file completely when the run captures a `completed` state, finds a blocking
 gate, recovery intent, receipt or bundle, finds invalid state, or was entered with
-`recover` or `test`. It is part of
-[`triage-friction-log.md`](../triage-friction-log.md) and as normative as it; a
-section cited by name, or as *above* or *below*, may sit in that file or another of its
-reference files.
+`recover` or `test`. It is part of [`triage-friction-log.md`](../triage-friction-log.md)
+and as normative as it; a section cited by name, or as *above* or *below*, may sit in
+that file or another of its reference files.
 
 Before classifying a state as invalid or abandonable, read *Validity and abandonability*
 in [`state-schema.md`](state-schema.md) completely.

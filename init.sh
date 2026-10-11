@@ -2489,8 +2489,9 @@ seed_doc "handoff-history" "$handoff_history_path"
 seed_doc "friction-log" "$friction_path"
 seed_doc "friction-log-archive" "$friction_archive_path"
 # The two runtime entry points (#92). AGENTS.md holds the contract; CLAUDE.md is
-# a thin binding that imports it, because Claude Code reads CLAUDE.md and NOT
-# AGENTS.md, and its `@path` import expands into context at session start. So one
+# a thin binding that imports it, because once a CLAUDE.md exists Claude Code
+# reads it INSTEAD OF AGENTS.md by default, and its `@path` import expands into
+# context at session start. So one
 # file states the contract and both runtimes load it in full — the alternative,
 # a copy of the contract per runtime, is the fork `safety-critical-changes.md`
 # forbids and `#273` is filed about.

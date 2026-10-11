@@ -26,6 +26,7 @@ import re
 import subprocess
 import sys
 import unicodedata
+from bisect import bisect_left, bisect_right
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
 
@@ -295,20 +296,29 @@ def check(root: Path, base: str, head: str, allowed: set[str]) -> dict:
 
     def closings(text: str, source: str, added: set[int] | None = None,
                  deleted: set[int] | None = None) -> None:
+        # Index changed coordinates once: long archives can leave many keywords
+        # waiting for a reference, so rescanning prefixes or line ranges per
+        # keyword makes the mandatory preflight quadratic in the input size.
+        added_lines = sorted(added) if added is not None else None
+        cuts = sorted(deleted or ())
         pending = []
+        cursor, line = 0, 1
         for token in _CLOSING_TOKEN.finditer(text):
+            line += text.count("\n", cursor, token.start())
+            cursor = token.end()
             if token["keyword"]:
-                pending.append(token)
+                pending.append((token.start(), line))
                 continue
             ref = token["ref"]
-            for keyword in pending:
-                line = text.count("\n", 0, keyword.start()) + 1
-                end = text.count("\n", 0, token.end()) + 1
-                if (added is not None and not added.intersection(range(line, end + 1))
-                        and not any(keyword.start() < cut < token.end() for cut in deleted or ())):
-                    continue
+            for start, keyword_line in pending:
+                if added_lines is not None:
+                    addition = bisect_left(added_lines, keyword_line)
+                    deletion = bisect_right(cuts, start)
+                    if not ((addition < len(added_lines) and added_lines[addition] <= line)
+                            or (deletion < len(cuts) and cuts[deletion] < token.end())):
+                        continue
                 if ref not in allowed:
-                    finding("closing-keywords", source, line,
+                    finding("closing-keywords", source, keyword_line,
                             f"closing reference {ref}: explicitly declare --allow-close {ref} only if intended")
             pending.clear()
 

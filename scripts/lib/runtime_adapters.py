@@ -18,7 +18,26 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-CURRENT_TEMPLATE_VERSION = 2
+CURRENT_TEMPLATE_VERSION = 3
+
+# Version 3 moved the Claude binding from a `.claude/commands/<slug>.md` command
+# to a `.claude/skills/<slug>/SKILL.md` skill. Claude Code folded commands into
+# skills, and only a skill accepts `name` and the invocation-control key below.
+# A skill also wins over a same-named command, so an adopter's authored command
+# would go silently dead the moment the kit installed the skill beside it:
+# `compare_adapters` therefore inspects the retired path too (see there).
+# The Codex binding did not change shape at version 3.
+LEGACY_CLAUDE_COMMAND_PATH = ".claude/commands/{slug}.md"
+
+# Workflows the operator starts deliberately, so the model must not load them on
+# its own from a loosely matching request ("upgrade the dependencies"). Claude
+# reads `disable-model-invocation: true` from the rendered skill; Codex reads
+# `policy.allow_implicit_invocation: false` from the skill's `agents/openai.yaml`,
+# which this module does not render. Both still run when invoked by name. Probed
+# live on 2026-10-11 against Claude Code 2.1.296 and codex-cli 0.153.4, in an
+# uncommitted scratch repository: `claude -p` and `codex exec` each left the marked
+# probe skill out of the skills they listed, and each ran it when named.
+EXPLICIT_INVOCATION_ONLY = frozenset({"adopt", "upgrade", "triage-friction-log"})
 
 _DISPLAY_NAMES = {
     "adopt": "Adopt",
@@ -212,7 +231,19 @@ def render_adapter(
     if template_version == 1 and runtime == "codex" and slug in _LEGACY_CODEX_BODIES:
         rendered_description = _LEGACY_CODEX_DESCRIPTIONS[slug]
 
-    if runtime == "claude":
+    if runtime == "claude" and template_version >= 3:
+        frontmatter = [
+            "---",
+            f"name: {slug}",
+            f"description: {_yaml_scalar(rendered_description)}",
+        ]
+        if slug in _ARGUMENT_HINTS:
+            frontmatter.append(f"argument-hint: {json.dumps(_ARGUMENT_HINTS[slug])}")
+        if slug in EXPLICIT_INVOCATION_ONLY:
+            frontmatter.append("disable-model-invocation: true")
+    elif runtime == "claude":
+        # Versions 1 and 2: the retired `.claude/commands/` form, rendered only
+        # to recognise a kit-generated command an adopter still carries.
         frontmatter = ["---", f"description: {_yaml_scalar(rendered_description)}"]
         if slug in _ARGUMENT_HINTS:
             frontmatter.append(f"argument-hint: {json.dumps(_ARGUMENT_HINTS[slug])}")
@@ -226,7 +257,8 @@ def render_adapter(
 
     if template_version == 1 and runtime == "codex" and slug in _LEGACY_CODEX_BODIES:
         body = _LEGACY_CODEX_BODIES[slug].format(workflow_path=workflow_path)
-    elif template_version == CURRENT_TEMPLATE_VERSION:
+    elif template_version in (2, CURRENT_TEMPLATE_VERSION):
+        # Version 3 changed the Claude front matter and path, not any body.
         heading = f"# {_DISPLAY_NAMES[slug]}\n\n" if runtime == "codex" else ""
         context = _context(runtime, slug)
         body = (
@@ -249,7 +281,7 @@ def render_adapter(
 
 def _adapter_path(runtime: str, slug: str) -> str:
     if runtime == "claude":
-        return f".claude/commands/{slug}.md"
+        return f".claude/skills/{slug}/SKILL.md"
     return f".agents/skills/{slug}/SKILL.md"
 
 
@@ -291,7 +323,7 @@ def compare_adapters(source_root: Path, adopter_root: Path) -> list[AdapterStatu
             except (OSError, UnicodeError, ValueError) as exc:
                 raise ValueError(f"cannot read source adapter {rel}: {exc}") from exc
             description = metadata.get("description", "")
-            if runtime == "codex" and metadata.get("name") != slug:
+            if metadata.get("name") != slug:
                 raise ValueError(f"source adapter {rel} declares the wrong name")
             workflow_path = f"docs/agentic-dev-kit/workflows/{slug}.md"
             if not (source_root / workflow_path).is_file():
@@ -302,58 +334,117 @@ def compare_adapters(source_root: Path, adopter_root: Path) -> list[AdapterStatu
                     f"source adapter {rel} does not equal the current rendered form"
                 )
 
-            adopter_path = adopter_root / rel
-            unsafe_path = _unsafe_adopter_path(adopter_root, rel)
-            if unsafe_path is not None:
-                statuses.append(
-                    AdapterStatus(runtime, slug, rel, "adopter-owned", unsafe_path)
+            retired = (
+                _retired_command_status(adopter_root, slug, description, workflow_path)
+                if runtime == "claude"
+                else None
+            )
+            statuses.append(
+                _adapter_status(
+                    adopter_root, runtime, slug, rel, current, description,
+                    workflow_path, retired,
                 )
-                continue
-            if not adopter_path.is_file():
-                statuses.append(
-                    AdapterStatus(runtime, slug, rel, "missing", "install the rendered adapter")
-                )
-                continue
-            try:
-                adopter_text = adopter_path.read_text(encoding="utf-8")
-            except (OSError, UnicodeError) as exc:
-                statuses.append(
-                    AdapterStatus(runtime, slug, rel, "adopter-owned", f"unreadable: {exc}")
-                )
-                continue
-            if adopter_text == current:
-                statuses.append(
-                    AdapterStatus(runtime, slug, rel, "kit-current", "matches rendered form")
-                )
-                continue
-            legacy = render_adapter(
+            )
+            if retired is not None:
+                statuses.append(retired)
+    return statuses
+
+
+def _adapter_status(
+    adopter_root: Path,
+    runtime: str,
+    slug: str,
+    rel: str,
+    current: str,
+    description: str,
+    workflow_path: str,
+    retired: AdapterStatus | None,
+) -> AdapterStatus:
+    """Classify the adapter at its current path."""
+
+    adopter_path = adopter_root / rel
+    unsafe_path = _unsafe_adopter_path(adopter_root, rel)
+    if unsafe_path is not None:
+        return AdapterStatus(runtime, slug, rel, "adopter-owned", unsafe_path)
+    if not adopter_path.is_file():
+        if retired is not None and retired.state == "adopter-owned":
+            # Installing the skill would shadow the authored command without a
+            # word, so the absence is reported as theirs to resolve, not ours to fill.
+            return AdapterStatus(
                 runtime,
                 slug,
-                description,
-                workflow_path,
-                template_version=1,
+                rel,
+                "adopter-owned",
+                f"not installed: a skill here would shadow the authored {retired.path}; "
+                "move that command's policy into config or the shared workflow first",
             )
-            if legacy != current and adopter_text == legacy:
-                statuses.append(
-                    AdapterStatus(
-                        runtime,
-                        slug,
-                        rel,
-                        "kit-stale",
-                        "matches an earlier rendered form; refresh freely",
-                    )
-                )
-                continue
-            statuses.append(
-                AdapterStatus(
-                    runtime,
-                    slug,
-                    rel,
-                    "adopter-owned",
-                    "does not match a rendered kit form; report and leave unchanged",
-                )
+        return AdapterStatus(runtime, slug, rel, "missing", "install the rendered adapter")
+    try:
+        adopter_text = adopter_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        return AdapterStatus(runtime, slug, rel, "adopter-owned", f"unreadable: {exc}")
+    if adopter_text == current:
+        return AdapterStatus(runtime, slug, rel, "kit-current", "matches rendered form")
+    # Earlier rendered forms at this same path. The Claude binding's earlier forms
+    # lived at the retired command path, which `_retired_command_status` covers.
+    earlier_versions = (1, 2) if runtime == "codex" else ()
+    for version in earlier_versions:
+        earlier = render_adapter(
+            runtime, slug, description, workflow_path, template_version=version
+        )
+        if earlier != current and adopter_text == earlier:
+            return AdapterStatus(
+                runtime,
+                slug,
+                rel,
+                "kit-stale",
+                "matches an earlier rendered form; refresh freely",
             )
-    return statuses
+    return AdapterStatus(
+        runtime,
+        slug,
+        rel,
+        "adopter-owned",
+        "does not match a rendered kit form; report and leave unchanged",
+    )
+
+
+def _retired_command_status(
+    adopter_root: Path, slug: str, description: str, workflow_path: str
+) -> AdapterStatus | None:
+    """Classify a Claude command left at the path version 3 retired, if any."""
+
+    rel = LEGACY_CLAUDE_COMMAND_PATH.format(slug=slug)
+    path = adopter_root / rel
+    if not path.exists() and not path.is_symlink():
+        return None
+    unsafe_path = _unsafe_adopter_path(adopter_root, rel)
+    if unsafe_path is not None:
+        return AdapterStatus("claude", slug, rel, "adopter-owned", unsafe_path)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        return AdapterStatus("claude", slug, rel, "adopter-owned", f"unreadable: {exc}")
+    for version in (1, 2):
+        if text == render_adapter(
+            "claude", slug, description, workflow_path, template_version=version
+        ):
+            return AdapterStatus(
+                "claude",
+                slug,
+                rel,
+                "kit-retired",
+                f"kit-generated command at a retired path; delete it once "
+                f"{_adapter_path('claude', slug)} is installed",
+            )
+    return AdapterStatus(
+        "claude",
+        slug,
+        rel,
+        "adopter-owned",
+        f"authored command at a retired path; a skill at {_adapter_path('claude', slug)} "
+        "shadows it, so move its policy into config or the shared workflow, then delete it",
+    )
 
 
 def render_adapter_report(statuses: list[AdapterStatus]) -> str:
@@ -366,6 +457,7 @@ def render_adapter_report(statuses: list[AdapterStatus]) -> str:
         "kit-stale": "↻",
         "adopter-owned": "!",
         "missing": "+",
+        "kit-retired": "-",
     }
     for runtime in ("claude", "codex"):
         lines.append(f"  {runtime}:")

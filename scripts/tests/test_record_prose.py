@@ -84,13 +84,13 @@ doc_budgets:
     return root, commit(root, "baseline")
 
 
-def run(repo: tuple[Path, str], head: str, *extra: str) -> tuple[int, dict]:
+def run(repo: tuple[Path, str], head: str, *extra: str, timeout: int = 90) -> tuple[int, dict]:
     require_kit_paths(ENGINE_REL)
     root, base = repo
     result = subprocess.run(
         ["uv", "run", str(ENGINE), "--root", str(root), "--base", base,
          "--head", head, "--json", *extra],
-        capture_output=True, text=True, timeout=90,
+        capture_output=True, text=True, timeout=timeout,
     )
     assert result.stdout, result.stderr
     report = json.loads(result.stdout)
@@ -254,6 +254,22 @@ def test_closing_pair_crosses_text_and_markup_with_exact_intent(repo, reference,
     code, report = run(repo, head, "--allow-close", reference)
     assert code == 0, report
     assert report["findings"] == []
+
+
+@pytest.mark.parametrize("allowed", [False, True])
+def test_large_archive_retains_every_closing_keyword_without_stalling(repo, allowed):
+    root, _ = repo
+    keyword_lines = 100_000
+    save(root, "docs/archive.md", "fixes\n" * keyword_lines + LOCAL_REF + "\n")
+    extra = ("--allow-close", LOCAL_REF) if allowed else ()
+    # This is a generous end-to-end deadline, including uv and Git startup, not
+    # a microbenchmark. The former repeated scans cannot finish this fixture.
+    code, report = run(repo, commit(root), *extra, timeout=30)
+    assert code == (0 if allowed else 1), report
+    findings = report["findings"]
+    assert [item["line"] for item in findings] == ([] if allowed else list(range(1, keyword_lines + 1)))
+    assert all(item["check"] == "closing-keywords" and item["source"] == "docs/archive.md"
+               for item in findings)
 
 
 def test_closing_keywords_pair_with_next_reference_without_reusing_later_references(repo):

@@ -415,9 +415,6 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("docs/agentic-dev-kit/workflows/session-start.md", "workflow"),
     ("docs/agentic-dev-kit/workflows/wrap-up.md", "workflow"),
     ("docs/agentic-dev-kit/workflows/pr-watch.md", "workflow"),
-    # Its reference file, linked from it; tracked for the same reason as
-    # triage-friction-log's below.
-    ("docs/agentic-dev-kit/workflows/pr-watch/engine-reference.md", "workflow"),
     ("docs/agentic-dev-kit/workflows/parallel.md", "workflow"),
     # Tracked for exactly the reason fallback-review-panel.md is (see below):
     # parallel.md is manifest-owned and /upgrade-refreshed, and links here

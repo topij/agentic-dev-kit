@@ -1,4 +1,5 @@
 ---
+name: parallel
 description: Plan, launch, inspect, reconcile, and remove isolated development lanes backed by Git worktrees and per-lane state sandboxes. Use when work can be split into disjoint file footprints, when the user requests parallel development, or when inspecting existing agent lanes.
 argument-hint: "[list|plan|new|pr-watch|merge|rm|path] [args...]"
 ---

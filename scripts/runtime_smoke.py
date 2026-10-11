@@ -643,11 +643,20 @@ def expected_codex_skills(repo: Path) -> list[str]:
 
 
 def expected_claude_commands(repo: Path) -> list[str]:
+    # A skill's name is its directory's, not `SKILL`. Claude Code 2.1.296 listed
+    # project skills under `slash_commands` in the init event, including one with
+    # `disable-model-invocation: true`, in the init event of
+    # `claude -p --output-format stream-json --verbose` run in an uncommitted
+    # scratch repository on 2026-10-11. So the row still reads that key.
     return sorted(
-        Path(entry["claude"]).stem
+        _claude_binding_name(Path(entry["claude"]))
         for entry in parity_declaration(repo)["workflow_contract"]
         if entry.get("claude")
     )
+
+
+def _claude_binding_name(path: Path) -> str:
+    return path.parent.name if path.name == "SKILL.md" else path.stem
 
 
 def lens_roster(config: dict[str, Any]) -> list[str]:

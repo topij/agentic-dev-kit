@@ -17,42 +17,42 @@ workflow_contract:
   - name: session-start
     status: aligned
     shared: docs/agentic-dev-kit/workflows/session-start.md
-    claude: .claude/commands/session-start.md
+    claude: .claude/skills/session-start/SKILL.md
     codex: .agents/skills/session-start/SKILL.md
   - name: wrap-up
     status: aligned
     shared: docs/agentic-dev-kit/workflows/wrap-up.md
-    claude: .claude/commands/wrap-up.md
+    claude: .claude/skills/wrap-up/SKILL.md
     codex: .agents/skills/wrap-up/SKILL.md
   - name: pr-watch
     status: aligned
     shared: docs/agentic-dev-kit/workflows/pr-watch.md
-    claude: .claude/commands/pr-watch.md
+    claude: .claude/skills/pr-watch/SKILL.md
     codex: .agents/skills/pr-watch/SKILL.md
   - name: parallel
     status: aligned
     shared: docs/agentic-dev-kit/workflows/parallel.md
-    claude: .claude/commands/parallel.md
+    claude: .claude/skills/parallel/SKILL.md
     codex: .agents/skills/parallel/SKILL.md
   - name: adopt
     status: aligned
     shared: docs/agentic-dev-kit/workflows/adopt.md
-    claude: .claude/commands/adopt.md
+    claude: .claude/skills/adopt/SKILL.md
     codex: .agents/skills/adopt/SKILL.md
   - name: upgrade
     status: aligned
     shared: docs/agentic-dev-kit/workflows/upgrade.md
-    claude: .claude/commands/upgrade.md
+    claude: .claude/skills/upgrade/SKILL.md
     codex: .agents/skills/upgrade/SKILL.md
   - name: triage-friction-log
     status: aligned
     shared: docs/agentic-dev-kit/workflows/triage-friction-log.md
-    claude: .claude/commands/triage-friction-log.md
+    claude: .claude/skills/triage-friction-log/SKILL.md
     codex: .agents/skills/triage-friction-log/SKILL.md
   - name: post-merge-systemize
     status: aligned
     shared: docs/agentic-dev-kit/workflows/post-merge-systemize.md
-    claude: .claude/commands/post-merge-systemize.md
+    claude: .claude/skills/post-merge-systemize/SKILL.md
     codex: .agents/skills/post-merge-systemize/SKILL.md
   - name: parallel-headless
     status: companion
@@ -64,6 +64,10 @@ capability_matrix:
   - capability: Repository instructions
     status: aligned
   - capability: Workflow adapters
+    status: aligned
+  - capability: Skill discovery
+    status: intentional difference
+  - capability: Invocation control
     status: aligned
   - capability: Fresh-install footprint
     status: decided
@@ -132,7 +136,7 @@ Parity means equivalent outcomes and safety guarantees:
   adopter-owned configuration.
 
 Parity does not mean copying one runtime's configuration shape into the other. Claude
-commands and Codex skills are adapters over the shared workflow. Claude settings and
+skills and Codex skills are adapters over the shared workflow. Claude settings and
 Codex project configuration remain runtime-native surfaces.
 
 ## Workflow status vocabulary
@@ -197,7 +201,9 @@ on an agent following prose, and what stays unestablished were audited on 2026-1
 | Capability | Shared contract | Claude Code | Codex | Status / exit |
 |---|---|---|---|---|
 | Repository instructions | `AGENTS.md` | `CLAUDE.md` imports it | reads `AGENTS.md` directly | aligned |
-| Workflow adapters | `docs/agentic-dev-kit/workflows/` | `.claude/commands/` | `.agents/skills/` | aligned: the declaration above is authoritative |
+| Workflow adapters | `docs/agentic-dev-kit/workflows/` | `.claude/skills/` | `.agents/skills/` | aligned: the declaration above is authoritative |
+| Skill discovery | one adapter directory per runtime | reads `.claude/skills/`, not `.agents/skills/` | reads `.agents/skills/`, not `.claude/skills/` | intentional difference: each client reads only its own directory, so neither sees a workflow twice. Observed 2026-10-11 against Claude Code 2.1.296 and codex-cli 0.153.4, in an uncommitted scratch repository holding one probe skill in each directory: `claude -p` and `codex exec --sandbox read-only` were each asked to list the probe skills they could see |
+| Invocation control | `EXPLICIT_INVOCATION_ONLY` in `scripts/lib/runtime_adapters.py`: `adopt`, `upgrade`, `triage-friction-log` | rendered `disable-model-invocation: true` | `policy.allow_implicit_invocation: false` in the skill's `agents/openai.yaml` | aligned: both hide the skill from the model and still run it when the operator names it. Observed 2026-10-11 against Claude Code 2.1.296 and codex-cli 0.153.4, in an uncommitted scratch repository holding one probe skill in each directory: `claude -p` and `codex exec --sandbox read-only` were each asked to list the probe skills they could see, then `claude -p "/probe-hidden"` and `codex exec '$probe-quiet'` ran each marked skill by name |
 | Fresh-install footprint | the front matter's `adoption` block | every Claude adapter and surface | every Codex adapter and surface | decided (#878, 2026-10-01): `other_runtime: installed`, so an adopter that runs one runtime still receives the other's files, inert. Pinned per adopter by the kit's fresh-install fixtures; see [*Adoption footprint*](#adoption-footprint) |
 | Safety-critical doctrine | `docs/agentic-dev-kit/safety-critical-changes.md` | path-scoped `.claude/rules/` binding | precise root `AGENTS.md` routing for the merge-authority engines | aligned for the stamped supported-client observation: structure proves the route; prompt input and live events establish that the trusted run supplied it and read and applied the shared doctrine |
 | Document-budget tripwire | `check_doc_budget.py` | `SessionStart` | open-ended match-all `SessionStart` with a bounded command timeout | aligned: repository semantics are deterministic and the supported trusted client ran the equivalent lifecycle shape |
@@ -209,9 +215,9 @@ on an agent following prose, and what stays unestablished were audited on 2026-1
 | Headless lane isolation | one kit-owned per-runtime wrapper (`launch_lane.py`): canonical one-shot descriptor, exact identity chain, environment replacement, child observation, config-declared transports, and terminal receipt | the same wrapper around stable local `claude -p` (`process-cwd` / `stdin` / `json-stdout`) | the same wrapper around stable local `codex exec -C` (`cd-flag` / `stdin-dash` / `last-message-file`) | aligned for both local unattended paths, at their stamped supported-client observations: inherited `DEVKIT_*`, repository overrides, and caller `PATH` are removed, descriptor keys replace them, the child independently binds worktree/repository/origin/lane/state/branch/base/commit/process identity before `exec`, the request binds the runtime and its transports, and success waits for final-text evidence — for Claude, exactly one successful JSON result object. Approval/sandbox policy is config-declared per runtime (`parallel.<runtime>_approval_policy`) from an engine-owned bounded vocabulary, passed as argv, bound into the request and the observed argv, and read back from the runtime's own denial record where the transport exposes one. Each runtime's policy carrier, the records behind these observations, and what each record does not promote are in [*Headless lane isolation per runtime*](#headless-lane-isolation-per-runtime). Native agent dispatch on either runtime, desktop/app tasks, app-server, Claude remote sessions, and cloud tasks are not substitutes; model/effort calibration remains separate |
 | Command permissions | repository policy, decided per surface: the cockpit's own settings and the lane profile are different files answering different questions | cockpit: `.claude/settings.json` permissions. Lane: the cockpit-owned `config/claude-lane-settings.json`, a command-prefix allow list passed with `--settings` under `--setting-sources ""` | cockpit: no shipped project rules. Lane: `--sandbox <policy>` from the engine-owned vocabulary, shipped `read-only`, with no per-command list to receive a grant | decided for the lane surface (`#606`, 2026-08-28): the profile is **task-scoping, not a security boundary** — measured, under the shipped profile with nothing added, a lane rewrote an engine the profile already grants and executed it outside the worktree with an empty `permission_denials`, so a prefix rule cannot constrain the contents of the file it names (`#631`). **`#631` is now decided as a declaration rather than a mechanism (2026-09-05):** what bounds a lane is the worktree and the forge's branch protection — the worktree scoping tool-mediated edits and branch protection what reaches the protected history, neither of them bounding the lane's process, and the escape measured above being exactly a process leaving the worktree. The Codex mirror of that boundary is `--sandbox workspace-write` from `launch_lane.py`'s engine-owned vocabulary rather than the allow list rendered into another syntax — the prefix list and the sandbox value are not interchangeable and do not map entry-for-entry — and **no lane-side execution guard is built without a request for one**, because an unrequested guard on a launch-authority file trades a fail-closed limitation for a fail-open mechanism. What it does deliver is fail-closed behaviour for a *confused* lane. On that basis the shipped Claude grants are decided on what each buys: `make test` (the `AGENTS.md` verification command, which a lane structurally could not run) and `kit_doctor.py` (without it a lane editing a kit-owned file cannot make its own PR green). **The mirror to Codex is the doctrine, not the grants** — `--sandbox` is a different *kind* of mechanism, bounding the process rather than the command name, so it is narrower exactly where the prefix list is weakest; when a Codex writing policy is chosen it inherits the reasoning above and not these entries. **One asymmetry is permanent and not a gap to close:** a Claude lane cannot write under `.claude/` at all (`#627`, measured in two repositories under two edit tools; no allow-list entry reaches the client's own guard) while a Codex lane edits its own adapter directory freely, so a runtime-parity change is not symmetrically delegable — split it, lane for the neutral half and the Codex adapter, cockpit for `.claude/`. **Cockpit surface now decided too (`#606`, 2026-08-29), on the same print-never-write doctrine as the hook registrations (`#303`):** `init.sh` prints the cockpit allow-list templated on the adopter's `paths.engines`, because the kit's own entry baked in `scripts` and an adopter vendoring under `scripts/devkit/` copied a rule that grants nothing. `kit_doctor` reports an installed engine that no `permissions.allow` rule reaches as `ungranted`, reading the grant from `.claude/settings.json` **and** the `.claude/settings.local.json` overlay — a grant in either covers the engine, so an adopter who keeps the overlay out of version control is not reported ungranted — informational, never failing, since approving each poll is a supported choice. The `SessionStart` matcher is dropped on **both** runtimes rather than only Codex: `"startup"` was read as Claude's limit until it was measured and turned out to be ours, a resumed session having silently skipped both budget tripwires ([evidence](../../saved_plans/claude-sessionstart-matcher-live-validation_2026-08-29.md)). Codex still has no per-command surface to receive the allow-list half |
 | Post-merge integrations | shared capability contract and `systemize` config | runtime-native forge, tracker, notify, and repository mechanisms | runtime-native forge, tracker, notify, and repository mechanisms | aligned for workflow outcomes: forge read and config are required; notification, tracker creation, reviewer access, and the atomic engine set have explicit degraded or fail-closed paths. The tracker remains payload-approval-gated. The engine set ships with the kit; where it is wholly absent, LLM-only mode remains agent-executed |
-| Session-start and wrap-up integrations | shared authoritative capability, authority, artifact, resumability, non-interactive, and completion declarations | runtime-native reads/writes behind thin commands | runtime-native reads/writes behind thin skills | aligned for repository structure: merged config and required failures stop; applicable optional sources must be attempted and have explicit degraded results; session-start PR readiness uses unfiltered review evidence, labels unverified resolution, and represents detached HEAD explicitly; conditionals classify at their trigger; interactive issue-shaped findings reach an exact-payload decision before parking; every changed repository artifact, including existing project status, takes the forge/review path; first-match terminal precedence prevents a degraded integration from masking an incomplete repository or merge path; tracker-only success cannot become a no-op; merge authority either permits and verifies the merge, routes isolated review and self-merge through the cockpit's paired lane wrappers and shared state sandbox, defaults a policy-less non-lane PR to operator authorization, or holds the exact reviewed head |
-| Triage integrations | shared capability, authority, durable-artifact, semantic-input, and completion declarations plus the `triage` config block | runtime-native tracker/notify/repository mechanisms behind a thin command | runtime-native tracker/notify/repository mechanisms behind a thin skill | aligned for workflow outcomes: merged config and frozen state are required; the configured draft/finalize pair is atomic, with honest agent-executed LLM-only behavior when both are absent; unattended approval requires notification send/thread read while interactive use can degrade to the current session; exact-payload approval, pre-attempt state, destination read-back, and accounted byte-identical sweep sets prevent duplicate writes and partial-batch data loss; test mode cannot touch tracker or source/forge state; unresolved approval, tracker, repository, or review paths remain operator-held |
-| Adapter upgrade | shared workflow refresh plus the fetched kit's adapter renderer | rendered kit form refreshed; authored command preserved | rendered kit form refreshed; authored skill preserved | aligned: `/upgrade` classifies the current rendered form, and the one prior generation the renderer records, separately from adopter-authored bytes, installs missing bindings, and never puts adapter ownership into the drift gate. Adapter text that matches neither render reads as adopter-owned, so it is preserved rather than refreshed |
+| Session-start and wrap-up integrations | shared authoritative capability, authority, artifact, resumability, non-interactive, and completion declarations | runtime-native reads/writes behind thin skills | runtime-native reads/writes behind thin skills | aligned for repository structure: merged config and required failures stop; applicable optional sources must be attempted and have explicit degraded results; session-start PR readiness uses unfiltered review evidence, labels unverified resolution, and represents detached HEAD explicitly; conditionals classify at their trigger; interactive issue-shaped findings reach an exact-payload decision before parking; every changed repository artifact, including existing project status, takes the forge/review path; first-match terminal precedence prevents a degraded integration from masking an incomplete repository or merge path; tracker-only success cannot become a no-op; merge authority either permits and verifies the merge, routes isolated review and self-merge through the cockpit's paired lane wrappers and shared state sandbox, defaults a policy-less non-lane PR to operator authorization, or holds the exact reviewed head |
+| Triage integrations | shared capability, authority, durable-artifact, semantic-input, and completion declarations plus the `triage` config block | runtime-native tracker/notify/repository mechanisms behind a thin skill | runtime-native tracker/notify/repository mechanisms behind a thin skill | aligned for workflow outcomes: merged config and frozen state are required; the configured draft/finalize pair is atomic, with honest agent-executed LLM-only behavior when both are absent; unattended approval requires notification send/thread read while interactive use can degrade to the current session; exact-payload approval, pre-attempt state, destination read-back, and accounted byte-identical sweep sets prevent duplicate writes and partial-batch data loss; test mode cannot touch tracker or source/forge state; unresolved approval, tracker, repository, or review paths remain operator-held |
+| Adapter upgrade | shared workflow refresh plus the fetched kit's adapter renderer | rendered kit form refreshed; authored skill preserved, and an authored command at the retired `.claude/commands/` path preserved and never shadowed; a kit-generated command there reported `kit-retired` | rendered kit form refreshed; authored skill preserved | aligned: `/upgrade` classifies the current rendered form, and each earlier form the renderer records, separately from adopter-authored bytes, installs missing bindings, and never puts adapter ownership into the drift gate. Adapter text that matches neither render reads as adopter-owned, so it is preserved rather than refreshed |
 | Drift inspection | `kit_doctor` plus the manifest-backed file report | registration paths resolved; cockpit `permissions.allow` coverage reported against the configured engine path; adopter-owned `.claude/agents/<lens>.md` compared with the running doctor's output for the configured roster, while installed generator drift stays on the file axis | merged project hook sources, project enablement, and structural lifecycle fields checked only for exact repository-owned command strings; altered strings retain generic path diagnostics; no adopter-owned generated lens-definition surface | intentional difference: a deliberate asymmetry for different lens carriers; runtime-adapter and general shell semantics remain |
 
 ### Headless lane isolation per runtime

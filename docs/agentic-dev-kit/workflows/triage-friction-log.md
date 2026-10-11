@@ -200,21 +200,22 @@ below are part of the workflow and are as normative as this one; a section cited
 name, or as *above* or *below*, may sit in any of them. **Read a file completely, not in
 part, when its trigger applies**, and before taking the action it governs:
 
-- [`triage-friction-log/recovery.md`](triage-friction-log/recovery.md) — *Completed-state
-  retirement*, *Gate-only input precedence*, *Test input precedence*, *State-present
-  held-evidence procedure* and *Invalid-state recovery*. Read it when the run captures a
-  `completed` state, finds a blocking gate, recovery intent, receipt or bundle, finds
-  invalid state, or was entered with `recover` or `test`.
-- [`triage-friction-log/state-schema.md`](triage-friction-log/state-schema.md) — the exact
-  state, phase and single-writer gate shapes. Read it in LLM-only mode before writing or
-  validating any state, gate, report or snapshot, and in either mode before judging a
-  captured state's validity yourself rather than through an engine.
-- [`triage-friction-log/finalize.md`](triage-friction-log/finalize.md) — *Tracker writes and
-  accounting* and *Finalize and sweep*. Read it before the first tracker action, and on
-  resuming a state in `tracker-write` or a later phase.
-- [`triage-friction-log/engine-cli.md`](triage-friction-log/engine-cli.md) — the engines'
-  invocations and outputs. Read it once engine-backed mode is selected, before the first
-  engine call.
+- [`triage-friction-log/recovery.md`](triage-friction-log/recovery.md) —
+  *Completed-state retirement*, *Gate-only input precedence*, *Test input precedence*,
+  *State-present held-evidence procedure* and *Invalid-state recovery*. Read it when the
+  run captures a `completed` state, finds a blocking gate, recovery intent, receipt or
+  bundle, finds invalid state, or was entered with `recover` or `test`.
+- [`triage-friction-log/state-schema.md`](triage-friction-log/state-schema.md) — the
+  exact state, phase and single-writer gate shapes. Read it in LLM-only mode before
+  writing or validating any state, gate, report or snapshot, and in either mode before
+  judging a captured state's validity yourself rather than through an engine.
+- [`triage-friction-log/finalize.md`](triage-friction-log/finalize.md) — *Tracker writes
+  and accounting* and *Finalize and sweep*. Read it once operator decisions are
+  recorded, before any tracker action, test-mode `would-create` record or archive sweep,
+  and on resuming a state in `tracker-write` or a later phase.
+- [`triage-friction-log/engine-cli.md`](triage-friction-log/engine-cli.md) — the
+  engines' invocations and outputs. Read it once engine-backed mode is selected, before
+  the first engine call.
 
 ## Authoritative integration declaration
 
@@ -457,8 +458,8 @@ state and report the same outcome without pretending the reminder was sent.
 
 ## Tracker writes, finalize and sweep
 
-Both are in [`triage-friction-log/finalize.md`](triage-friction-log/finalize.md). Read it
-completely before the first tracker action.
+Both are in [`triage-friction-log/finalize.md`](triage-friction-log/finalize.md), read
+under its trigger in *Reference files* above.
 
 ## Engine CLI
 

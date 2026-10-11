@@ -430,7 +430,7 @@ def test_shipped_runtime_adapters_equal_the_renderer_for_both_runtimes():
     statuses = runtime_adapters.compare_adapters(REPO_ROOT, REPO_ROOT)
     actual_paths = {
         path.relative_to(REPO_ROOT).as_posix()
-        for pattern in (".claude/commands/*.md", ".agents/skills/*/SKILL.md")
+        for pattern in (".claude/skills/*/SKILL.md", ".agents/skills/*/SKILL.md")
         for path in REPO_ROOT.glob(pattern)
     }
 
@@ -442,7 +442,7 @@ def test_shipped_runtime_adapters_equal_the_renderer_for_both_runtimes():
         encoding="utf-8"
     )
     assert "fetched kit's adapter renderer" in parity
-    assert "authored command preserved" in parity
+    assert "authored command at the retired" in parity
     assert "authored skill preserved" in parity
     assert not {
         path
@@ -590,6 +590,109 @@ def test_adapter_report_reports_a_missing_template_as_an_error(
     assert "Traceback" not in err
 
 
+def _retired_command(source: Path, slug: str) -> str:
+    """The command the version-2 renderer produced for this source's skill."""
+    skill = (source / runtime_adapters._adapter_path("claude", slug)).read_text(
+        encoding="utf-8"
+    )
+    return runtime_adapters.render_adapter(
+        "claude",
+        slug,
+        runtime_adapters._frontmatter(skill)["description"],
+        f"docs/agentic-dev-kit/workflows/{slug}.md",
+        template_version=2,
+    )
+
+
+def _claude_rows(statuses, slug):
+    return {
+        status.path: status
+        for status in statuses
+        if status.runtime == "claude" and status.slug == slug
+    }
+
+
+@pytest.mark.parametrize("skill_installed", [True, False])
+def test_a_kit_generated_retired_command_is_reported_for_deletion(
+    tmp_path, adapter_source, skill_installed
+):
+    adopter = tmp_path / "adopter"
+    skill_rel = ".claude/skills/pr-watch/SKILL.md"
+    command_rel = ".claude/commands/pr-watch.md"
+    if skill_installed:
+        _write(adopter / skill_rel, (adapter_source / skill_rel).read_text(encoding="utf-8"))
+    _write(adopter / command_rel, _retired_command(adapter_source, "pr-watch"))
+
+    rows = _claude_rows(
+        runtime_adapters.compare_adapters(adapter_source, adopter), "pr-watch"
+    )
+
+    assert rows[skill_rel].state == ("kit-current" if skill_installed else "missing")
+    assert rows[command_rel].state == "kit-retired"
+    assert skill_rel in rows[command_rel].detail
+    report = runtime_adapters.render_adapter_report(list(rows.values()))
+    assert f"- {command_rel}: kit-retired" in report
+
+
+@pytest.mark.parametrize("skill_installed", [True, False])
+def test_an_authored_retired_command_is_preserved_and_not_shadowed(
+    tmp_path, adapter_source, skill_installed
+):
+    adopter = tmp_path / "adopter"
+    skill_rel = ".claude/skills/wrap-up/SKILL.md"
+    command_rel = ".claude/commands/wrap-up.md"
+    if skill_installed:
+        _write(adopter / skill_rel, (adapter_source / skill_rel).read_text(encoding="utf-8"))
+    authored = _retired_command(adapter_source, "wrap-up") + "\nKeep this adopter policy.\n"
+    _write(adopter / command_rel, authored)
+
+    rows = _claude_rows(
+        runtime_adapters.compare_adapters(adapter_source, adopter), "wrap-up"
+    )
+
+    assert rows[command_rel].state == "adopter-owned"
+    assert "shadows it" in rows[command_rel].detail
+    if skill_installed:
+        assert rows[skill_rel].state == "kit-current"
+    else:
+        # Not `missing`: installing the skill would silently replace their command.
+        assert rows[skill_rel].state == "adopter-owned"
+        assert "would shadow" in rows[skill_rel].detail
+        assert not (adopter / skill_rel).exists()
+    assert (adopter / command_rel).read_text(encoding="utf-8") == authored
+
+
+def test_no_retired_row_without_a_retired_command(tmp_path, adapter_source):
+    statuses = runtime_adapters.compare_adapters(adapter_source, tmp_path / "adopter")
+    assert {status.path for status in statuses if status.runtime == "claude"} == {
+        runtime_adapters._adapter_path("claude", slug)
+        for slug in runtime_adapters.WORKFLOW_SLUGS
+    }
+    assert "kit-retired" not in {status.state for status in statuses}
+
+
+def test_explicit_only_workflows_carry_invocation_control_on_both_runtimes():
+    require_kit_source()
+    import yaml
+
+    explicit = runtime_adapters.EXPLICIT_INVOCATION_ONLY
+    assert explicit <= set(runtime_adapters.WORKFLOW_SLUGS)
+    for slug in runtime_adapters.WORKFLOW_SLUGS:
+        skill = (REPO_ROOT / runtime_adapters._adapter_path("claude", slug)).read_text(
+            encoding="utf-8"
+        )
+        metadata = yaml.safe_load(skill.split("---", 2)[1])
+        assert metadata["name"] == slug
+        assert metadata.get("disable-model-invocation", False) is (slug in explicit), slug
+        interface = yaml.safe_load(
+            (REPO_ROOT / ".agents" / "skills" / slug / "agents" / "openai.yaml").read_text(
+                encoding="utf-8"
+            )
+        )
+        implicit = interface.get("policy", {}).get("allow_implicit_invocation", True)
+        assert implicit is (slug not in explicit), slug
+
+
 @pytest.mark.parametrize("slug", ["adopt", "parallel", "pr-watch", "upgrade"])
 def test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned(
     tmp_path, slug, adapter_source
@@ -631,7 +734,7 @@ def test_authored_adapter_change_is_reported_and_preserved_for_each_runtime(
     shutil.copytree(adapter_source / ".claude", adopter / ".claude")
     shutil.copytree(adapter_source / ".agents", adopter / ".agents")
     changed = {
-        ".claude/commands/adopt.md",
+        ".claude/skills/adopt/SKILL.md",
         ".agents/skills/adopt/SKILL.md",
         ".agents/skills/wrap-up/SKILL.md",
     }
@@ -655,7 +758,7 @@ def test_authored_adapter_change_is_reported_and_preserved_for_each_runtime(
 @pytest.mark.parametrize(
     "runtime, rel",
     [
-        ("claude", ".claude/commands/adopt.md"),
+        ("claude", ".claude/skills/adopt/SKILL.md"),
         ("codex", ".agents/skills/adopt/SKILL.md"),
     ],
 )
@@ -912,7 +1015,7 @@ def test_adapter_report_refuses_a_source_adapter_the_renderer_does_not_own(
         adapter_source / "docs" / "agentic-dev-kit" / "workflows",
         source / "docs" / "agentic-dev-kit" / "workflows",
     )
-    path = source / ".claude" / "commands" / "adopt.md"
+    path = source / ".claude" / "skills" / "adopt" / "SKILL.md"
     path.write_text(path.read_text(encoding="utf-8") + "\nSource drift.\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match="does not equal the current rendered form"):
