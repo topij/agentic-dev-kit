@@ -30,7 +30,7 @@
   - [#1063](https://github.com/topij/agentic-dev-kit/pull/1063) as `ad65e539`: the
     reasoning behind loop step 1's merge blockers, the *Converged* review request, the
     round count and `--all-comments` moved to new sections of `report-fields.md`. A test
-    pins the rules left in the loop and the pointers #1063 added between the two files.
+    pins the loop rules it names and the pointers #1063 added between the two files.
 - **Review:** CodeRabbit skipped both PRs because its automatic reviews are disabled.
   An isolated adversarial lens ran a `fallback:lens` full pass at `4758f232` and at
   `e5e9b827`, and a `fallback:delta` pass at `c12224ae`. The dispositions are on each PR.
@@ -42,11 +42,14 @@
   (`8f41ea42`) had already shipped. On the operator's choice it now names #921.
 - **Verification:** `make test` at `c12224ae430d34e8b41cd113b0140b41d9b01caf` on
   2026-10-11, in `/Users/topi/Coding/agentic-dev-kit`, printed `4854 passed, 1 skipped`.
-  #1061's stamp is on that PR.
+  That sha is #1063's final head before its squash merge. #1061's own stamp, at
+  `4758f232`, is in #1061's body.
 - **Filed this session:** [#1062](https://github.com/topij/agentic-dev-kit/issues/1062);
   an occurrence comment on [#643](https://github.com/topij/agentic-dev-kit/issues/643).
 - **Not established:** whether an agent following the split pr-watch acts differently
-  from one following the single file. No trigger or behaviour evaluation ran.
+  from one following the single file. No trigger or behaviour evaluation ran. Moved loop
+  rules the test does not name, such as the disposition remedy and the stamp-behind-head
+  bullet, are unpinned, and no ticket carries them.
 
 ______________________________________________________________________
 
