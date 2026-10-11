@@ -1,13 +1,13 @@
 # Triage friction log — recovery and test routes
 
-Read this file completely when the run captures a `completed` state, finds a blocking
-gate, recovery intent, receipt or bundle, finds invalid state, or was entered with
-`recover` or `test`. It is part of [`triage-friction-log.md`](../triage-friction-log.md)
-and as normative as it; a section cited by name, or as *above* or *below*, may sit in
-that file or another of its reference files.
+Read this file completely, together with
+[`triage-friction-log.md`](../triage-friction-log.md) and its other reference files,
+before the first action of any run. It is part of that workflow and as normative as it;
+a section cited by name, or as *above* or *below*, may sit in that file or another of
+its reference files.
 
-Before classifying a state as invalid or abandonable, read *Validity and abandonability*
-in [`state-schema.md`](state-schema.md) completely.
+Whether a state is invalid or abandonable is decided by *Validity and abandonability* in
+[`state-schema.md`](state-schema.md), against the shapes its *Ordinary active state* declares.
 
 ## Contents
 

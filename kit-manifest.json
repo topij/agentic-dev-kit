@@ -48,7 +48,7 @@
     },
     "docs/agentic-dev-kit/workflows/adopt.md": {
       "role": "workflow",
-      "sha256": "b8b37144bd27b3c8e9b2ba27134e9eac4424a7ce60643be3bfc7387a3ea81397"
+      "sha256": "c4dd5dc9cfc7aeb59ba6c9309e0a17ba05cc7de66a7536c600ed535713707f1b"
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
@@ -72,23 +72,23 @@
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
-      "sha256": "2919d40c2379a915e1b59d5b39b64ffb25a204d0fff721d499324f238c699cc4"
+      "sha256": "c723ace0124b9c996a87d8577afdb5b55e96177bf32a3d144c487a2cd8ed4b62"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log/engine-cli.md": {
       "role": "workflow",
-      "sha256": "e68505617e8dfc20b0021aabbf3d605fdb9fa9c93d3f722aa64489ed48fec2e8"
+      "sha256": "fc826161750ca25016c9ebf26fd1460e8ee6551429ed544a5372fa172360302f"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log/finalize.md": {
       "role": "workflow",
-      "sha256": "0ef89977b99e056a964940510c8f6faaec260e6dfbb112d3aacd4f84373da7f9"
+      "sha256": "5206193b6583bab484c27e5ee6ce3f7432ff7a760622273cbdf98ae62d1663b1"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log/recovery.md": {
       "role": "workflow",
-      "sha256": "dddf66bca21ab80f4f77c47538ed7681c3fbb9d49f4a2d89f110bb1aa2ee55e9"
+      "sha256": "febcf9ea3906e4345ef762db0caee445395261a307a232aa4f8dd02d87df00ca"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log/state-schema.md": {
       "role": "workflow",
-      "sha256": "fe3632ef5b5dc44e4b95825aee1f23d868777c9c3c0e51db1e85fb9c0d5478cc"
+      "sha256": "6435271a1d09395dc61df3fe0b3e84b2e2033fd7f1b640f4434904b47b08e80b"
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
@@ -179,7 +179,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "543b1f26f643303ced4cc0a6b503a15c0bfc7aa42218949976c1e1c435907086"
+      "sha256": "35c1363a8a66385f9c95e71969f0e58517e272b912462328bdf402cb9b017ba8"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -645,7 +645,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "3394d6dbe62a66b8b2394a4c18e185e699d02921b8a45eb27e91f23095fac914"
+      "sha256": "80f435d83a5158761ce7b719eca420e2a22f3c106d2a498ee4c61bc3e90215f3"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

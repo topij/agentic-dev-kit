@@ -1,9 +1,10 @@
 # Triage friction log — engine CLI
 
-Read this file completely once engine-backed mode is selected, before the first engine
-call. It is part of [`triage-friction-log.md`](../triage-friction-log.md) and as
-normative as it; a section cited by name, or as *above* or *below*, may sit in that file
-or another of its reference files.
+Read this file completely, together with
+[`triage-friction-log.md`](../triage-friction-log.md) and its other reference files,
+before the first action of any run. It is part of that workflow and as normative as it;
+a section cited by name, or as *above* or *below*, may sit in that file or another of
+its reference files.
 
 ## Contents
 

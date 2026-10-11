@@ -1,8 +1,9 @@
-## Workflows: triage-friction-log reads its reference files on a trigger
+## Workflows: triage-friction-log is split into an entry plus reference files
 
 CHANGED (report / return shape): `docs/agentic-dev-kit/workflows/triage-friction-log.md`
-keeps part of its text in a directory of the same name beside it, and links each file
-with the condition for reading it. The new files are `KIT_OWNED`, so `kit_doctor` lists
+keeps part of its text in a directory of the same name beside it, so that each file fits
+in a single read. The entry and each reference file say to read all of them before the
+first action of any run. The new files are `KIT_OWNED`, so `kit_doctor` lists
 any you lack:
 
 - `docs/agentic-dev-kit/workflows/triage-friction-log/recovery.md`

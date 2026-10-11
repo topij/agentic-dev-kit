@@ -184,7 +184,7 @@ below names only a destination convention (`scripts/devkit/`), because the kit i
 ships no matching source path to anchor. For each piece, **copy only if the target
 doesn't already exist**:
 
-- **Shared workflows** → `docs/agentic-dev-kit/workflows/`.
+- **Shared workflows** → `docs/agentic-dev-kit/workflows/`, including each workflow's subdirectory of reference files, such as `triage-friction-log/`. An entry without its reference files sends the agent to files that are not there.
 - **Runtime adapters** → `.claude/skills/` and `.agents/skills/` (skip any target that collides with an existing workflow).
 - **Engine scripts** → `scripts/devkit/` (flat `scripts/` only under the Step-1 conditions). Set `paths.engines` to that directory; do not rewrite prompt files. The engines find the repo root by walking up for `.git`, which is unbounded, so any depth works in a real checkout. In a tree with **no `.git` at all** the two implementations differ: the *Python* engines (`scripts/lib/kitconfig.py`) fall back to depth arithmetic calibrated for `scripts/`, which resolves a vendored layout to the wrong directory — a known, deliberate limitation (issue #60). The *shell* engines have no fallback: `scripts/lib/repo_root.sh`'s `devkit_find_repo_root` just returns 1, and its callers exit — `scripts/dev_session.sh:65` prints `[dev-session] error: no .git repository found above …`, `scripts/reconcile_sessions.sh:54` the same with `[reconcile]`. Both fail loudly rather than guessing, by different routes.
 - **Safety doctrine** → `docs/agentic-dev-kit/safety-critical-changes.md`; install the thin `.claude/rules/safety-critical-changes.md` adapter when absent and merge `docs/AGENTS-sections.md` into an existing `AGENTS.md` when applicable.

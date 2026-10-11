@@ -442,8 +442,8 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # together, so this entry and .agents/skills/triage-friction-log/ are a pair.
     ("docs/agentic-dev-kit/workflows/triage-friction-log.md", "workflow"),
     # The workflow's reference files: part of the same workflow, linked from it,
-    # and read under its triggers. Untracked, an upgrade would refresh the entry
-    # and not the files it sends the reader to — #146's shape again.
+    # and read with it before any run acts. Untracked, an upgrade would refresh
+    # the entry and not the files it sends the reader to — #146's shape again.
     ("docs/agentic-dev-kit/workflows/triage-friction-log/recovery.md", "workflow"),
     ("docs/agentic-dev-kit/workflows/triage-friction-log/state-schema.md", "workflow"),
     ("docs/agentic-dev-kit/workflows/triage-friction-log/finalize.md", "workflow"),

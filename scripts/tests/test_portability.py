@@ -2077,44 +2077,19 @@ isolation, and delegation mechanisms.""",
     assert body in allowed_bodies
 
 
-_SPLIT_WORKFLOW_TRIGGERS = {
-    # Each split workflow's entry links every reference file with the condition
-    # for reading it, and each reference file opens with the same condition. The
-    # triggers are what make the split safe, so each is pinned whole, in both
-    # places: narrowing a clause, weakening it to "optional", or swapping two
-    # files' triggers must fail here, since nothing else does.
-    "triage-friction-log": {
-        "recovery.md": (
-            "when the run captures a `completed` state, finds a blocking gate, recovery "
-            "intent, receipt or bundle, finds invalid state, or was entered with "
-            "`recover` or `test`."
-        ),
-        "state-schema.md": (
-            "in LLM-only mode before writing or validating any state, gate, report or "
-            "snapshot, and in either mode before judging a captured state's validity "
-            "yourself rather than through an engine."
-        ),
-        "finalize.md": (
-            "once operator decisions are recorded, before any tracker action, test-mode "
-            "`would-create` record or archive sweep, and on resuming a state in "
-            "`tracker-write` or a later phase."
-        ),
-        "engine-cli.md": "once engine-backed mode is selected, before the first engine call.",
-    },
-}
-
-
-# The entry's whole *Reference files* section, and each reference file's whole
-# opening paragraph, are compared for equality, not by substring or prefix: two
-# review rounds each found a sentence that could be added beside a pinned
-# phrase and undercut it. Only exact equality closes that class.
+# A split workflow's entry links every reference file, and the entry and each
+# reference file say to read all of them before the first action of any run.
+# The read is unconditional on purpose: conditional triggers made one file's
+# read depend on knowledge only another supplied, and any unpinned sentence
+# could contradict a trigger. Both statements are compared for exact equality,
+# so a sentence added, removed or reworded there fails.
 _SPLIT_WORKFLOW_PREFACE = {
     "triage-friction-log": (
-        "This workflow is split so that a run reads only what its route needs. The files "
-        "below are part of the workflow and are as normative as this one; a section cited "
-        "here by name, or as *above* or *below*, may sit in any of them. **Read a file "
-        "completely, not in part, when its trigger applies**, and before taking the action "
-        "it governs:"
+        "This workflow is split so that each of its files fits in a single read. The "
+        "files below are part of the workflow and are as normative as this one; a "
+        "section cited here by name, or as *above* or *below*, may sit in any of them. "
+        "**Read every one of them completely, not in part, before the first action of "
+        "any run**, whatever its entry, mode or phase."
     ),
 }
 
@@ -2131,27 +2106,8 @@ _SPLIT_WORKFLOW_SUMMARIES = {
     },
 }
 
-
-def _expected_reference_section(slug: str) -> str:
-    bullets = " ".join(
-        f"- [`{slug}/{name}`]({slug}/{name}) — {summary} Read it "
-        f"{_SPLIT_WORKFLOW_TRIGGERS[slug][name]}"
-        for name, summary in _SPLIT_WORKFLOW_SUMMARIES[slug].items()
-    )
-    return f"## Reference files {_SPLIT_WORKFLOW_PREFACE[slug]} {bullets}"
-
-
-def _expected_opening(slug: str, name: str) -> str:
-    return (
-        f"Read this file completely {_SPLIT_WORKFLOW_TRIGGERS[slug][name]} It is part of "
-        f"[`{slug}.md`](../{slug}.md) and as normative as it; a section cited by name, or "
-        "as *above* or *below*, may sit in that file or another of its reference files."
-    )
-
-
-# Which sections each reference file holds. A section moved behind another
-# file's trigger would be read on the wrong route, or never, so the placement
-# is pinned like the trigger itself.
+# Which sections each reference file holds. A section that moved files would
+# change no read, but a citation by file would then point at the wrong one.
 _SPLIT_WORKFLOW_SECTIONS = {
     "triage-friction-log": {
         "recovery.md": (
@@ -2174,13 +2130,22 @@ _SPLIT_WORKFLOW_SECTIONS = {
     },
 }
 
-# Cross-file reads a reference file itself requires, pinned whole.
-_SPLIT_WORKFLOW_CROSS_READS = {
-    ("triage-friction-log", "recovery.md"): (
-        "Before classifying a state as invalid or abandonable, read *Validity and "
-        "abandonability* in [`state-schema.md`](state-schema.md) completely."
-    ),
-}
+
+def _expected_reference_section(slug: str) -> str:
+    bullets = " ".join(
+        f"- [`{slug}/{name}`]({slug}/{name}) — {summary}"
+        for name, summary in _SPLIT_WORKFLOW_SUMMARIES[slug].items()
+    )
+    return f"{_SPLIT_WORKFLOW_PREFACE[slug]} {bullets}"
+
+
+def _expected_opening(slug: str) -> str:
+    return (
+        f"Read this file completely, together with [`{slug}.md`](../{slug}.md) and its "
+        "other reference files, before the first action of any run. It is part of that "
+        "workflow and as normative as it; a section cited by name, or as *above* or "
+        "*below*, may sit in that file or another of its reference files."
+    )
 
 
 def _headings(text: str) -> list[str]:
@@ -2195,76 +2160,60 @@ def _headings(text: str) -> list[str]:
 def _assert_split_workflow_links_and_triggers(root: Path) -> None:
     workflows = root / "docs" / "agentic-dev-kit" / "workflows"
     split = sorted(path.name for path in workflows.iterdir() if path.is_dir())
-    assert split == sorted(_SPLIT_WORKFLOW_TRIGGERS), split
-    for slug, triggers in _SPLIT_WORKFLOW_TRIGGERS.items():
-        entry = " ".join((workflows / f"{slug}.md").read_text(encoding="utf-8").split())
-        files = sorted(path.name for path in (workflows / slug).glob("*.md"))
-        assert files == sorted(triggers) == sorted(_SPLIT_WORKFLOW_SUMMARIES[slug]), (
-            f"{slug}/ holds {files}"
-        )
-        section = "## Reference files" + entry.split("## Reference files", 1)[1].split(" ## ", 1)[0]
-        assert section == _expected_reference_section(slug), (
+    assert split == sorted(_SPLIT_WORKFLOW_SUMMARIES), split
+    for slug, summaries in _SPLIT_WORKFLOW_SUMMARIES.items():
+        raw = (workflows / f"{slug}.md").read_text(encoding="utf-8")
+        assert raw.count("\n## Reference files\n") == 1, f"{slug}.md: no Reference files section"
+        section = raw.split("\n## Reference files\n", 1)[1].split("\n## ", 1)[0]
+        assert " ".join(section.split()) == _expected_reference_section(slug), (
             f"{slug}.md's Reference files section differs from its declaration"
         )
-        for name in triggers:
+        files = sorted(path.name for path in (workflows / slug).glob("*.md"))
+        assert files == sorted(summaries), f"{slug}/ holds {files}"
+        entry = " ".join(raw.split())
+        for name, summary in summaries.items():
             text = (workflows / slug / name).read_text(encoding="utf-8")
             opening = " ".join(text.split("\n\n", 2)[1].split())
-            assert opening == _expected_opening(slug, name), (
+            assert opening == _expected_opening(slug), (
                 f"{name}'s opening paragraph differs from its declaration"
             )
             headings = _headings(text)
             assert headings == list(_SPLIT_WORKFLOW_SECTIONS[slug][name]), (
                 f"{name} holds {headings}"
             )
-            for cited in re.findall(r"\*([^*]+)\*", _SPLIT_WORKFLOW_SUMMARIES[slug][name]):
+            for cited in re.findall(r"\*([^*]+)\*", summary):
                 assert cited in headings, f"{slug}.md names *{cited}* for {name}"
         for cited, name in re.findall(r"\*([^*]+)\*, in `([A-Za-z0-9_-]+\.md)`", entry):
             assert cited in _headings(
                 (workflows / slug / name).read_text(encoding="utf-8")
             ), f"{slug}.md cites *{cited}* in {name}"
-    for (slug, name), sentence in _SPLIT_WORKFLOW_CROSS_READS.items():
-        text = " ".join((workflows / slug / name).read_text(encoding="utf-8").split())
-        assert sentence in text, f"{name} lost its cross-file read"
 
 
-def test_split_workflows_link_every_reference_file_with_its_trigger() -> None:
+def test_split_workflows_link_and_require_every_reference_file() -> None:
     require_kit_source()
     _assert_split_workflow_links_and_triggers(REPO_ROOT)
 
 
-def test_split_workflow_trigger_and_link_mutations_are_rejected(tmp_path: Path) -> None:
+def test_split_workflow_read_and_link_mutations_are_rejected(tmp_path: Path) -> None:
     require_kit_source()
     source = REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows"
-    recovery = _SPLIT_WORKFLOW_TRIGGERS["triage-friction-log"]["recovery.md"]
-    engine_cli = _SPLIT_WORKFLOW_TRIGGERS["triage-friction-log"]["engine-cli.md"]
     mutations = (
-        ("triage-friction-log.md", "**Read a file completely, not in part, when its trigger applies**",
-         "These files are optional background"),
-        ("triage-friction-log.md", "](triage-friction-log/finalize.md)", "](finalize.md)"),
-        ("triage-friction-log.md", "finds a blocking gate, recovery intent, receipt or bundle,", ""),
-        ("triage-friction-log.md", "test-mode `would-create` record or archive sweep,", ""),
-        ("triage-friction-log.md", "and in either mode before judging a captured state's validity "
-         "yourself rather than through an engine", ""),
-        ("triage-friction-log.md", recovery, engine_cli),
-        ("triage-friction-log/finalize.md", "and on resuming a state in `tracker-write` or a later phase",
-         ""),
-        ("triage-friction-log/recovery.md", "Read this file completely when", "You may read this file when"),
-        ("triage-friction-log.md", "or was entered with `recover` or `test`.",
-         "or was entered with `recover` or `test`. Skip it for a short run."),
-        ("triage-friction-log.md", "are part of the workflow and are as normative as this one;",
-         "are optional background reading;"),
-        ("triage-friction-log/recovery.md", "Before classifying a state as invalid or abandonable, read",
-         "Trust your own judgement rather than read"),
-        ("triage-friction-log/recovery.md", "and as normative as it;", "and optional;"),
+        ("triage-friction-log.md", "**Read every one of them completely, not in part, before the "
+         "first action of any run**", "These files are optional background"),
+        ("triage-friction-log.md", "whatever its entry, mode or phase.",
+         "whatever its entry, mode or phase. A short run may skip them."),
+        ("triage-friction-log.md", "are as normative as this one;", "are optional background;"),
+        ("triage-friction-log.md", "may sit in any of them.", "lives only in this file."),
+        ("triage-friction-log.md", "](triage-friction-log/finalize.md) —", "](finalize.md) —"),
+        ("triage-friction-log.md", "## Reference files", "### Reference files"),
         ("triage-friction-log.md", "*Completed-state retirement*, in `recovery.md`",
          "*Completed-state retirement*, in `engine-cli.md`"),
-        ("triage-friction-log.md", "before taking the action it governs:",
-         "before taking the action it governs. A short or routine run may skip them:"),
-        ("triage-friction-log.md", "may sit in any of them.", "lives only in this file."),
-        ("triage-friction-log/recovery.md", "may sit in that file or another of its reference files.",
-         "may sit in that file or another of its reference files. Skip this file when the run is routine."),
+        ("triage-friction-log/recovery.md", "Read this file completely,", "You may read this file,"),
+        ("triage-friction-log/recovery.md", "before the first action of any run.",
+         "before the first action of any run. Skip this file when the run is routine."),
         ("triage-friction-log/engine-cli.md", "may sit in that file or another of its reference files.",
          "sits in this file only."),
+        ("triage-friction-log/finalize.md", "and as normative as it;", "and optional;"),
         ("triage-friction-log/recovery.md", "### Completed-state retirement", "### Completed state retirement"),
         ("triage-friction-log/finalize.md", "## Finalize and sweep", "#### Finalize and sweep"),
     )

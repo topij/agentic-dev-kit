@@ -195,27 +195,20 @@ intent or held receipt.
 
 ## Reference files
 
-This workflow is split so that a run reads only what its route needs. The files
-below are part of the workflow and are as normative as this one; a section cited here by
-name, or as *above* or *below*, may sit in any of them. **Read a file completely, not in
-part, when its trigger applies**, and before taking the action it governs:
+This workflow is split so that each of its files fits in a single read. The files below
+are part of the workflow and are as normative as this one; a section cited here by name,
+or as *above* or *below*, may sit in any of them. **Read every one of them completely,
+not in part, before the first action of any run**, whatever its entry, mode or phase.
 
 - [`triage-friction-log/recovery.md`](triage-friction-log/recovery.md) —
   *Completed-state retirement*, *Gate-only input precedence*, *Test input precedence*,
-  *State-present held-evidence procedure* and *Invalid-state recovery*. Read it when the
-  run captures a `completed` state, finds a blocking gate, recovery intent, receipt or
-  bundle, finds invalid state, or was entered with `recover` or `test`.
+  *State-present held-evidence procedure* and *Invalid-state recovery*.
 - [`triage-friction-log/state-schema.md`](triage-friction-log/state-schema.md) — the
-  exact state, phase and single-writer gate shapes. Read it in LLM-only mode before
-  writing or validating any state, gate, report or snapshot, and in either mode before
-  judging a captured state's validity yourself rather than through an engine.
+  exact state, phase and single-writer gate shapes.
 - [`triage-friction-log/finalize.md`](triage-friction-log/finalize.md) — *Tracker writes
-  and accounting* and *Finalize and sweep*. Read it once operator decisions are
-  recorded, before any tracker action, test-mode `would-create` record or archive sweep,
-  and on resuming a state in `tracker-write` or a later phase.
+  and accounting* and *Finalize and sweep*.
 - [`triage-friction-log/engine-cli.md`](triage-friction-log/engine-cli.md) — the
-  engines' invocations and outputs. Read it once engine-backed mode is selected, before
-  the first engine call.
+  engines' invocations and outputs.
 
 ## Authoritative integration declaration
 
@@ -459,7 +452,7 @@ state and report the same outcome without pretending the reminder was sent.
 ## Tracker writes, finalize and sweep
 
 Both are in [`triage-friction-log/finalize.md`](triage-friction-log/finalize.md), read
-under its trigger in *Reference files* above.
+with the rest of the workflow before the first action.
 
 ## Engine CLI
 
