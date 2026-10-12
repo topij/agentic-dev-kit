@@ -25,17 +25,14 @@ local checkout already has must be set up first.
   setup script, not in `.claude/settings.json`: the kit ships that file to adopters, and
   cloud setup is the adopter's own hook
   ([runtime-parity: *Adopter-owned cloud setup hook*](docs/agentic-dev-kit/runtime-parity.md#adopter-owned-cloud-setup-hook)).
-- **Some tests fail there for environment reasons, not code.** `make test` at `e659936`
-  on 2026-10-12 in a cloud session failed exactly these, and passed the rest:
-  - tests that make a path unreadable and expect a refusal, which root ignores:
-    `test_kit_doctor.py::test_a_target_init_sh_will_not_touch_is_not_reported_as_unrendered[unreadable]`,
-    `test_sweep_scratch.py::test_linked_worktree_whose_git_dir_cannot_be_statted_is_kept`;
-  - tests of child-process and process-group cleanup, which the sandbox constrains:
-    `test_lane_launcher.py::test_descendant_cannot_outlive_a_successful_child_leader`,
-    `test_lane_launcher.py::test_detached_descendant_blocks_success_and_is_terminated`,
-    `test_lane_launcher.py::test_interruption_terminates_detached_launch_lineage`,
-    `test_runtime_smoke.py::test_a_child_that_outlives_its_timeout_is_stopped_with_what_it_started`,
-    `test_runtime_smoke.py::test_what_a_client_leaves_in_its_group_goes_with_it`.
+- **Some tests fail there for environment reasons, not code.** Two kinds:
+  - tests that make a path unreadable and expect a refusal, which a root user defeats:
+    `test_kit_doctor.py::test_a_target_init_sh_will_not_touch_is_not_reported_as_unrendered[unreadable]`
+    and `test_sweep_scratch.py::test_linked_worktree_whose_git_dir_cannot_be_statted_is_kept`;
+  - tests of child-process and process-group cleanup in `test_lane_launcher.py` and
+    `test_runtime_smoke.py`, which the sandbox constrains. Which of them fail varies by
+    run: two `make test` runs in one cloud session on 2026-10-12, at `e659936` and at
+    `9980a01`, failed different sets.
 
   Any other failure is real. For these, rely on CI or a local run, and say so in the
   verification claim rather than calling the run green.
