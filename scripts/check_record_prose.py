@@ -48,7 +48,7 @@ LIMITS = [
     "A historical stamp need not name the candidate head; the reviewer must judge its stated scope.",
     "Stamp fields use code spans and the connectors at, optional in, and on; raw HTML and unrelated connector wording are outside this scan.",
     "Closing keywords pair conservatively with the next issue reference across intervening text and markup; declare each intended reference exactly.",
-    "A narrative pairing is not reported when every line it spans was moved unchanged from one contiguous run of lines this change deletes from a narrative path; a copy, a new adjacency, a deletion inside it, or a pairing spanning more than MAX_MOVED_SPAN lines is still reported.",
+    "A narrative pairing is not reported when every line it spans was moved unchanged from one contiguous run of lines this change deletes from a narrative path; a copy, a new adjacency, a deletion inside it, a pairing spanning more than MAX_MOVED_SPAN lines, or one whose source is not among the first MAX_MOVE_CANDIDATES unclaimed deleted lines matching its first line is still reported.",
     "Every changed narrative file and commit message remains in full independent-review scope.",
 ]
 _HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")

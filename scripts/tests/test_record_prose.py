@@ -1081,3 +1081,30 @@ def test_pathological_identical_moves_fail_closed_within_a_bounded_time(repo):
     code, report = run((root, base), head, timeout=30)
     assert code == 1, report
     assert all(item["source"] == "docs/archive.md" for item in report["findings"])
+
+
+def test_pairing_moved_out_of_a_deleted_executable_narrative_file_is_not_reported(repo):
+    root, _ = repo
+    block = f"- The fix is\n- on {LOCAL_REF}.\n"
+    save(root, "docs/inbox.md", "# Inbox\n\n" + block)
+    (root / "docs/inbox.md").chmod(0o755)
+    save(root, "docs/archive.md", "# Archive\n")
+    base = commit(root)
+    (root / "docs/inbox.md").unlink()
+    save(root, "docs/archive.md", "# Archive\n\n" + block)
+    code, report = run((root, base), commit(root))
+    assert code == 0, report
+    assert report["findings"] == []
+
+
+def test_many_short_failing_pairings_over_identical_lines_stay_fast(repo):
+    root, _ = repo
+    # Every pairing is short and every deleted run starts like it, but no run
+    # holds its reference, so each tries candidates and fails. The candidate
+    # bound keeps that work per pairing constant.
+    group = "- fix\n" * 60
+    root, base, head = _sweep(root, "# Inbox\n\n" + (group + "- on #8\n") * 60, "# Archive\n",
+                              "# Inbox\n", "# Archive\n\n" + (group + f"- on {LOCAL_REF}\n") * 60)
+    code, report = run((root, base), head, "--allow-close", "#8", timeout=15)
+    assert code == 1, report
+    assert len(report["findings"]) == 60 * 60
