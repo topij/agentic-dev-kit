@@ -3201,8 +3201,8 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "take CI-red from its `checks.failing` and CI-pending from `checks.pending`."
         ) in flattened
         assert (
-            "Render a `null` as review state unknown, never as awaiting-review or as "
-            "reviewed."
+            "On this route render an empty `review_decision` as review state unknown, "
+            "never as awaiting-review or as reviewed."
         ) in flattened
         assert "awaiting-review from `review_decision`" not in flattened
         assert "still makes the pull request CI-red" in flattened

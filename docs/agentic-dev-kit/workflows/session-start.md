@@ -159,8 +159,9 @@ like good news, it looks like a missing handoff.
   route, take CI-red from its `checks.failing` and CI-pending from `checks.pending`.
   Its `review_decision` cannot say awaiting-review there: the engine derives it from
   the reviews list, which knows no required-reviewer rule, so it is only
-  `CHANGES_REQUESTED`, `APPROVED` or `null`. Render a `null` as review state unknown,
-  never as awaiting-review or as reviewed. `{owner}` and `{repo}` are `gh api`'s own
+  `CHANGES_REQUESTED`, `APPROVED` or the empty string `""`. On this route render an
+  empty `review_decision` as review state unknown, never as awaiting-review or as
+  reviewed. `{owner}` and `{repo}` are `gh api`'s own
   placeholders, filled from the current checkout's repository as `gh pr list` resolves
   it; do not type a slug by hand. The
   truncation rule above covers this route too, in the form that fits it:
