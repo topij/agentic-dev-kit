@@ -20,6 +20,42 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-12 (workflow reference files required by kit_doctor; cs-toolkit upgraded to the skill bindings, in Claude Code)
+
+- **Skills and instruction files:** [#1069](https://github.com/topij/agentic-dev-kit/pull/1069)
+  merged as `6f543433`, on the operator's request. `kit_doctor` now marks a file under
+  `workflows/<slug>/` `missing-required` when `<slug>.md` is installed at the kit's
+  version. On the operator's word, the tracker marks #1057 done.
+  - Review: CodeRabbit skipped. An adversarial `fallback:lens` full pass ran at
+    `e3e4ed04`, and a `fallback:delta` pass at `02e2c21b` repaired its LOW findings. The
+    delta pass's own LOW findings are #1070.
+  - Verification: `make test` at `02e2c21b38e2f7479d6b1087d5f17376738c29b8` on
+    2026-10-12, in `/Users/topi/Coding/agentic-dev-kit`, printed `4880 passed, 1 skipped`.
+- **cs-toolkit upgraded** from kit `0b8166b8` to `6f543433` in in-parallel-oy/cs-toolkit#2632,
+  merged as `4079572c`, on the operator's request. This was the first `/upgrade` under the
+  skill bindings.
+  - #1069 worked as intended there. Once the entries were refreshed, the five reference
+    files reported `missing-required`.
+  - **Decision (operator):** cs-toolkit keeps its seven `kit-retired` commands. Its own
+    `check_skills.py --strict` (CI), its plan-hygiene guard and `skill-index.yaml` still
+    read `.claude/commands/`. CUS-1692 migrates those, and #1071 asks `upgrade.md` to warn.
+  - #1066's GraphQL probe broke cs-toolkit's adopter-owned `tests/test_pr_watch.py` under
+    its live-path guard, and the PR pinned the probe there.
+  - The #428 state guard tripped on live cron writes in cs-toolkit's main checkout. The
+    stamped runs used a detached worktree, and the occurrence is on #467.
+  - Review: CodeRabbit's verdict was clean but excluded `docs/**`, so the two-lens panel
+    ran at `cbff90a1`. Its findings went to #1072 (an upstream link) and CUS-1693 (cs-toolkit
+    CI never runs `make test-devkit`).
+- **Filed this session:** [#1070](https://github.com/topij/agentic-dev-kit/issues/1070),
+  [#1071](https://github.com/topij/agentic-dev-kit/issues/1071),
+  [#1072](https://github.com/topij/agentic-dev-kit/issues/1072), CUS-1692, CUS-1693; an
+  occurrence comment on [#467](https://github.com/topij/agentic-dev-kit/issues/467).
+- **Not established:** OpenKitchen is not upgraded. `/tmp/agentic-dev-kit` still holds a
+  stale kit clone at `73371ee`; this session cloned under its scratchpad instead, because
+  `rm -rf` is denied.
+
+______________________________________________________________________
+
 ## Session — 2026-10-11 (pr-watch split into an entry and a reference file, in Claude Code)
 
 - **Skills and instruction files:** both PRs merged on the operator's request.
@@ -202,82 +238,6 @@ Closed workstream Kit friction-log triage: its step, deciding `469bcd58`, was su
 
 ______________________________________________________________________
 
-## Session — 2026-10-08 (overnight batch of headless lanes, in Claude Code)
-
-The operator asked for an overnight autonomous session with parallel lanes and authorized merging every PR
-"when clean", operator-class lanes included. It also approved filing #1002 and removing the merged
-`dev/scratch-sweep` lane. Headless Claude lanes ran under `launch_lane.py`, one per PR below. The cockpit ran every
-review and fix round, merged `main` into each later lane to clear `CHANGELOG.md` conflicts, and stamped
-`make test` at each merging head. `reconcile_sessions.sh` at wrap-up reconciled each lane as merged or held, as listed.
-
-- **#1003** (#999) merged as `695d35d0`, through `dev_session.sh merge` (self class).
-  - `panel_prompt.py --scratch` now refuses unless the tree is detached at `--head`.
-  - Review: one adversarial lens, then a delta pass.
-  - `make test` at `0319a8ff` on 2026-10-08, in its lane worktree, printed `4434 passed, 1 skipped`.
-- **#1004** (#1001, #1002) merged as `18bacdc2`.
-  - A recovery refusal names the check that failed.
-  - `test` judges a completed state as `recover` does.
-  - The panel showed no engine-written state reaches the `test` entry's forge-prefix refusal, so the claim was narrowed rather than tested.
-  - `make test` at `87d06984` on 2026-10-08, in its lane worktree, printed `4438 passed, 1 skipped`.
-- **#1005** (#1000) merged as `f508d220`.
-  - The scratch sweep judges root and entry containment by filesystem identity as well as by string.
-  - The engine classes it standard; the cockpit ran both lenses because it deletes files.
-  - `make test` at `b4645e26` on 2026-10-08, in its lane worktree, printed `4456 passed, 1 skipped`.
-- **#1006** (#991, #994) is **held for the operator** at `fd2dd68974a8cd0bf317c1e90985aa790bd80473`.
-  - Safety-critical paths match case-folded; `--record-round --head` takes only a hex sha.
-  - Every reviewed head has a two-lens receipt, and no round found anything above LOW.
-  - The round budget is spent with two LOWs open. Filing their ticket needs the operator, so the cockpit did not merge.
-  - The decision packet on the PR has both options.
-  - *(Correction: one more fix round followed, at `044f5ec6`. #1006 merged at that head as `f917d946`, and the one LOW that round left was filed as #1008.)*
-  - `make test` at `fd2dd689` on 2026-10-08, in its lane worktree, printed `4467 passed, 1 skipped`.
-
-Decided (cockpit): the operator's "merge when clean" was read as not covering a merge-gate PR with a LOW
-still open past a spent round budget.
-
-Not established: whether `sweep_scratch.py`'s per-component `stat` cost matters on a large root. A lens
-measured a large slowdown on a synthetic layout; nothing measured it on a real one.
-
-Filed this session: #1002. Lenses' mutation copies remain under this session's scratchpad, inside
-`scratch.roots`.
-
-______________________________________________________________________
-
-## Session — 2026-10-07 (scratch sweep engine merged, in Claude Code)
-
-[#986](https://github.com/topij/agentic-dev-kit/pull/986) merged as
-`dff111ae86ff0101358183c07ca8874d17bff46e`, on the operator's authorization, after
-fallback-panel rounds 6–9 in this session. `scripts/sweep_scratch.py` reports and,
-with `--apply --older-than`, removes stale direct children of `scratch.roots`. Each
-round's findings and dispositions are in its disposition comment on the PR.
-
-Decided (operator, 2026-10-07):
-- The global `rm -rf *` deny stays, so this engine is the only scratch-cleanup route.
-- Round-5 finding 1 is fixed within a bound rather than documented. An entry holding a bare
-  or separated git dir is kept, and so is one that holds a configured repository's git dir or
-  object store, including stores reached through `alternates`.
-- Round 6 also took the lens scratch-placement rule: *Scratch namespace* in
-  `fallback-review-panel.md` puts a lens's copies beside its handed tree, never
-  directly under the system temp dir.
-- Bare fixture repos in pytest basetemps pin their whole session entry. That is
-  documented and ticketed (#997) rather than loosened.
-- Round 8's `.git`-gone skip was reverted in round 9, because it dropped a bare
-  configured repo's object store (fail-open). That shape exits 2 again.
-
-Not established: how much space the sweep reclaims on this machine. A report-mode run
-during round 7 kept the largest session entries for the bare-fixture rule. `--apply`
-was never run against a real directory.
-
-Verification: `make test` at `258fee841388fb16c215dd37d0b5f79dfcc3f3c4` on 2026-10-07,
-in `/Users/topi/Coding/dev-model-sessions/scratch-sweep/wt`, printed `4426 passed, 1
-skipped`. CI's `Test` run on `main` passed at `dff111ae`.
-
-The lane worktree `/Users/topi/Coding/dev-model-sessions/scratch-sweep/wt`
-(`dev/scratch-sweep`) was left in place at this wrap-up.
-
-Filed this session: #996, #997.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -388,13 +348,19 @@ then work on its instruction-check coverage gaps only if eligible.
 
 **Status:** #1052 (`f7d8749a`), #1053 (`78d623c3`) and #1054 (`ea4010db`) shipped on
 2026-10-11, and #1061 (`367be931`) and #1063 (`ad65e539`) split pr-watch into an entry
-and `pr-watch/report-fields.md`. #1055 owns the Codex `openai.yaml` check, #1057 an
-absent reference file, #1058 the triage split's remaining pin gaps.
+and `pr-watch/report-fields.md`. #1069 (`6f543433`) makes an absent reference file
+`missing-required`. cs-toolkit runs the skill bindings since in-parallel-oy/cs-toolkit#2632;
+OpenKitchen is not upgraded. #1055 owns the Codex `openai.yaml` check, #1058 the triage
+split's remaining pin gaps, #1070 #1069's residual LOWs, #1071 the `kit-retired` deletion
+warning, #1072 a broken link in `pr-watch/report-fields.md`.
 **Owner:** `saved_plans/skills-and-instructions-assessment_2026-10-11.md`;
 [#1055](https://github.com/topij/agentic-dev-kit/issues/1055),
-[#1057](https://github.com/topij/agentic-dev-kit/issues/1057),
-[#1058](https://github.com/topij/agentic-dev-kit/issues/1058).
+[#1058](https://github.com/topij/agentic-dev-kit/issues/1058),
+[#1070](https://github.com/topij/agentic-dev-kit/issues/1070),
+[#1071](https://github.com/topij/agentic-dev-kit/issues/1071),
+[#1072](https://github.com/topij/agentic-dev-kit/issues/1072).
 
-▶ Next: #1057 — make `kit_doctor` report an absent reference file under
-`workflows/<slug>/` as `missing-required` when the adopter has `<slug>.md`, so
-`/upgrade` cannot leave `triage-friction-log/` or `pr-watch/` half-installed.
+▶ Next: #1072 — correct the `../fallback-review-panel.md` link in
+`workflows/pr-watch/report-fields.md` and add a test that relative links under
+`workflows/*/` resolve; then `/upgrade` OpenKitchen
+(`/Users/topi/Coding/home-server/OpenKitchen`) from a fresh kit clone.

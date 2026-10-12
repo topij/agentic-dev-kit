@@ -5,6 +5,78 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-08 (overnight batch of headless lanes, in Claude Code)
+
+The operator asked for an overnight autonomous session with parallel lanes and authorized merging every PR
+"when clean", operator-class lanes included. It also approved filing #1002 and removing the merged
+`dev/scratch-sweep` lane. Headless Claude lanes ran under `launch_lane.py`, one per PR below. The cockpit ran every
+review and repair round, merged `main` into each later lane to clear `CHANGELOG.md` conflicts, and stamped
+`make test` at each merging head. `reconcile_sessions.sh` at wrap-up reconciled each lane as merged or held, as listed.
+
+- **#1003** (#999) merged as `695d35d0`, through `dev_session.sh merge` (self class).
+  - `panel_prompt.py --scratch` now refuses unless the tree is detached at `--head`.
+  - Review: one adversarial lens, then a delta pass.
+  - `make test` at `0319a8ff` on 2026-10-08, in its lane worktree, printed `4434 passed, 1 skipped`.
+- **#1004** (#1001, #1002) merged as `18bacdc2`.
+  - A recovery refusal names the check that failed.
+  - `test` judges a completed state as `recover` does.
+  - The panel showed no engine-written state reaches the `test` entry's forge-prefix refusal, so the claim was narrowed rather than tested.
+  - `make test` at `87d06984` on 2026-10-08, in its lane worktree, printed `4438 passed, 1 skipped`.
+- **#1005** (#1000) merged as `f508d220`.
+  - The scratch sweep judges root and entry containment by filesystem identity as well as by string.
+  - The engine classes it standard; the cockpit ran both lenses because it deletes files.
+  - `make test` at `b4645e26` on 2026-10-08, in its lane worktree, printed `4456 passed, 1 skipped`.
+- **#1006** (#991, #994) is **held for the operator** at `fd2dd68974a8cd0bf317c1e90985aa790bd80473`.
+  - Safety-critical paths match case-folded; `--record-round --head` takes only a hex sha.
+  - Every reviewed head has a two-lens receipt, and no round found anything above LOW.
+  - The round budget is spent with two LOWs open. Filing their ticket needs the operator, so the cockpit did not merge.
+  - The decision packet on the PR has both options.
+  - *(Correction: one more repair round followed, at `044f5ec6`. #1006 merged at that head as `f917d946`, and the one LOW that round left was filed as #1008.)*
+  - `make test` at `fd2dd689` on 2026-10-08, in its lane worktree, printed `4467 passed, 1 skipped`.
+
+Decided (cockpit): the operator's "merge when clean" was read as not covering a merge-gate PR with a LOW
+still open past a spent round budget.
+
+Not established: whether `sweep_scratch.py`'s per-component `stat` cost matters on a large root. A lens
+measured a large slowdown on a synthetic layout; nothing measured it on a real one.
+
+Filed this session: #1002. Lenses' mutation copies remain under this session's scratchpad, inside
+`scratch.roots`.
+
+### 2026-10-07 (scratch sweep engine merged, in Claude Code)
+
+[#986](https://github.com/topij/agentic-dev-kit/pull/986) merged as
+`dff111ae86ff0101358183c07ca8874d17bff46e`, on the operator's authorization, after
+fallback-panel rounds 6–9 in this session. `scripts/sweep_scratch.py` reports and,
+with `--apply --older-than`, removes stale direct children of `scratch.roots`. Each
+round's findings and dispositions are in its disposition comment on the PR.
+
+Decided (operator, 2026-10-07):
+- The global `rm -rf *` deny stays, so this engine is the only scratch-cleanup route.
+- Round-5 finding 1 is handled within a bound rather than documented. An entry holding a bare
+  or separated git dir is kept, and so is one that holds a configured repository's git dir or
+  object store, including stores reached through `alternates`.
+- Round 6 also took the lens scratch-placement rule: *Scratch namespace* in
+  `fallback-review-panel.md` puts a lens's copies beside its handed tree, never
+  directly under the system temp dir.
+- Bare fixture repos in pytest basetemps pin their whole session entry. That is
+  documented and ticketed (#997) rather than loosened.
+- Round 8's `.git`-gone skip was reverted in round 9, because it dropped a bare
+  configured repo's object store (fail-open). That shape exits 2 again.
+
+Not established: how much space the sweep reclaims on this machine. A report-mode run
+during round 7 kept the largest session entries for the bare-fixture rule. `--apply`
+was never run against a real directory.
+
+Verification: `make test` at `258fee841388fb16c215dd37d0b5f79dfcc3f3c4` on 2026-10-07,
+in `/Users/topi/Coding/dev-model-sessions/scratch-sweep/wt`, printed `4426 passed, 1
+skipped`. CI's `Test` run on `main` passed at `dff111ae`.
+
+The lane worktree `/Users/topi/Coding/dev-model-sessions/scratch-sweep/wt`
+(`dev/scratch-sweep`) was left in place at this wrap-up.
+
+Filed this session: #996, #997.
+
 ### 2026-10-07 (review round budget, in Claude Code)
 
 [#993](https://github.com/topij/agentic-dev-kit/pull/993) merged as

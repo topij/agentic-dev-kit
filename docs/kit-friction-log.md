@@ -24,6 +24,15 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-10-12
+
+- **A review lens wrote into the tree it was handed, again.** Severity L, kept for
+  accumulation alongside the 2026-10-09 refs entry below. On in-parallel-oy/cs-toolkit#2632
+  the correctness lens's first command was `uv run … pytest` in its handed worktree. That
+  created gitignored `.venv/`, `.pytest_cache/`, `uv.lock` and `__pycache__/` there before
+  it moved to its own copy. `git status --short` stayed empty, so *Attestation* did not
+  catch it; the lens reported it itself.
+
 ## 2026-10-11
 
 - **Each #1063 lens pass found a LOW in the author's own claims about its tests.**
