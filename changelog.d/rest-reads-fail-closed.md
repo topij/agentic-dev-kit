@@ -3,12 +3,11 @@
 CHANGED (report shape): on the REST backend, `truncated_reads` now also lists a read
 that came back short of a count GitHub sent, not only one stopped by the page
 ceiling: a check-runs or combined-status read with fewer rows than its
-`total_count`, an issue-comment or inline-comment read with fewer items than the
-PR's `comments` / `review_comments`. `pr_watch` itself still gates nothing on it
-(#94 stays open for that), but its consumers do: triage's terminal `pr-watch`
-receipt needs the list empty, and session-start reports review findings unavailable
-when it is not. A comment deleted between the PR read and the comment read now lists
-that URL there, which leaves that receipt unsettled until a later poll reads clean.
+`total_count`, or an issue-comment or inline-comment read with fewer items than
+the PR's `comments` / `review_comments`. `pr_watch` itself still gates nothing on it
+(#94 stays open for that), but session-start reports review findings unavailable
+when the list is not empty. A comment deleted between the PR read and the comment
+read now lists that URL there for that one poll.
 
 CHANGED (engine CLI surface): a REST body that lacks `total_count`, `comments` or
 `review_comments`, carries a non-boolean `draft`, or holds a non-object list element

@@ -1071,8 +1071,8 @@ _REST_MAX_PAGES = 20
 _truncation_warned: set[str] = set()
 
 # URLs read incompletely during THIS process, in order: stopped by the page
-# ceiling, or (#94) ended short of a count GitHub sent. Surfaced two ways so the claim matches reality: in the JSON, and
-# printed by `render`.
+# ceiling, or (#94) ended short of a count GitHub sent. Surfaced two ways so the
+# claim matches reality: in the JSON, and printed by `render`.
 #
 # The JSON alone was not enough, and saying it was is a mistake this engine has
 # now made twice. `summarize_review_bots.signal` is the precedent worth copying —
@@ -1081,9 +1081,11 @@ _truncation_warned: set[str] = set()
 # `dev_session.sh merge` extracts only `mergeable`/`pr`/`base`/`head`.
 #
 # It gates nothing in this engine on purpose (REST cannot authorize a merge, and
-# blocking `converged` would wedge the watch loop). Its consumers do gate on it:
-# triage's `terminal_pr_watch_receipt` requires it empty, and session-start reads
-# a non-empty one as review findings unavailable. Here the render line is the whole
+# blocking `converged` would wedge the watch loop). Session-start reads a
+# non-empty one as review findings unavailable. Triage's
+# `terminal_pr_watch_receipt` also requires it empty, but no REST report reaches
+# that check: triage runs `--assert-ready` first, which refuses on REST, and a
+# REST report is never mergeable. Here the render line is the whole
 # mechanism: REST list endpoints return oldest-first, which means the ceiling
 # drops the NEWEST comments — where fresh findings live — and a read short of a
 # count may have dropped any of them, so an agent reading "converged" needs to
@@ -1149,9 +1151,10 @@ def _warn_read_incomplete(url: str, reason: str) -> None:
 
     Recorded in ``_truncated_reads`` beside the ceiling case, because the report
     a reader acts on is the same: the list is a prefix, not the whole. This engine
-    gates nothing on it, but triage's terminal-receipt check requires the list
-    empty, so a false positive (a comment deleted between the PR read and the
-    list read) leaves that receipt unsettled until a later poll reads clean. That errs closed. #94's
+    gates nothing on it; session-start reads a non-empty list as review findings
+    unavailable, so a false positive (a comment deleted between the PR read and
+    the list read) costs that one poll's findings until a later poll reads clean.
+    #94's
     re-audit at `e37b7bd` found every count GitHub sends discarded, so a short
     page with no ``Link`` read as complete. Deduped on stderr as
     :func:`_warn_pagination_truncated` is.
@@ -1205,14 +1208,15 @@ def _http_get_all(
     ``expected_count`` is the caller's count for this list (the PR object's
     ``comments`` / ``review_comments``), and fewer items than that records the
     read as incomplete. More is not a gap: a comment posted between the two
-    reads. This engine gates nothing on it; triage's terminal receipt does (see
-    :func:`_warn_read_incomplete`).
+    reads. This engine gates nothing on it (see :func:`_warn_read_incomplete`
+    for who reads it).
 
     Without a count (reviews, and the identity read of ``commits/<sha>/statuses``)
-    a dropped ``Link`` still reads as complete: #94 row 13 stays open. Treating a
-    full last page as suspect was tried and dropped, because a list an exact
-    multiple of ``per_page`` long is complete and stays that length on a quiet
-    PR, so it flagged every poll and held triage's terminal receipt unsettled.
+    a dropped ``Link`` still reads as complete: #94 rows 7 and 9 stay open
+    there. Treating a full last page as suspect was tried and dropped, because a
+    list an exact multiple of ``per_page`` long is complete and stays that length
+    on a quiet PR, so it flagged every poll and session-start would report that
+    PR's review findings unavailable indefinitely.
     """
     items: list = []
     next_url: str | None = url
@@ -2616,11 +2620,11 @@ def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
     """
     out: list[dict] = []
     for raw in view.get("comments") or []:
-        # Elements, not just the page: `_http_get_all` proves the RESPONSE is a
-        # list; a hostile or malformed element inside it still reaches `.get`
-        # here, and `build_report` runs outside `main`'s try, so an
-        # AttributeError from a string element exits 1 with a traceback rather
-        # than `error: …`. Same for the two surfaces below.
+        # Elements, not just the page: on REST `_http_get_all` now raises on a
+        # non-object element, but the `gh` backend and other callers hand this
+        # function lists nothing has checked. `build_report` runs outside
+        # `main`'s try, so an AttributeError from a string element exits 1
+        # with a traceback rather than `error: …`. Same for the two surfaces below.
         if not isinstance(raw, dict):
             continue
         body = raw.get("body") or ""
@@ -5825,8 +5829,8 @@ def build_report(
         "settle_age_minutes": settle_age_minutes,
         "rollup_settled": rollup_settled,
         "checks": checks,
-        # Reported, and gating nothing in this engine (triage's terminal receipt
-        # and session-start do read it; see `_truncated_reads`). It does not need
+        # Reported, and gating nothing in this engine (session-start reads it;
+        # see `_truncated_reads`). It does not need
         # to gate here: REST cannot authorize a merge at all, so the only thing
         # truncation can still mislead is `converged` — and blocking THAT would
         # wedge the watch loop,
@@ -5935,7 +5939,7 @@ def render(report: dict) -> str:
     # Truncation, on the surface a human or agent actually reads. It gates
     # nothing in this engine — REST cannot authorize a merge, and blocking
     # `converged` would wedge the loop — so in the human render this line is the
-    # entire mechanism (triage reads the JSON field). Deduplicated because
+    # entire mechanism (session-start reads the JSON field). Deduplicated because
     # `truncated_reads` records every read, and a report built by a caller other
     # than `main` may have read one URL twice.
     for truncated in dict.fromkeys(report.get("truncated_reads") or []):

@@ -148,8 +148,8 @@ So you don't mistake them for coverage:
 
 **`evidence_findings[]` says where the review evidence *isn't*.** Two entries,
 both **reported and gating nothing** in this engine — the same footing
-`bots_behind_head` and `truncated_reads` have. They describe evidence missing from the pull request
-while the merge gate is already satisfied, so blocking on either would refuse a
+`bots_behind_head` and `truncated_reads` have. They describe evidence missing from
+the pull request while the merge gate is already satisfied, so blocking on either would refuse a
 merge the deterministic checks correctly authorized, on a judgement drawn from
 prose.
 
@@ -207,14 +207,15 @@ rather than at the end of the data, and any read that came back short of a count
 GitHub sent: check runs or commit statuses short of their `total_count`, or issue
 or inline comments short of the pull request's `comments` / `review_comments`.
 Reviews carry no count, so a review read that lost its `Link` header still reads
-as complete. An entry means the poll did **not** see every check or comment, so `converged` may be premature. At the page ceiling what gets dropped
-is the newest, since REST list endpoints return oldest-first; a read short of a
-count says nothing about which items are missing. The engine gates nothing on it
-(blocking `converged` would wedge the loop) and prints it in the human render as
-well as the JSON. Its consumers do gate: triage's terminal `pr-watch` receipt
-requires the list empty, and session-start reports review findings unavailable
-when it is not, so a false positive leaves that receipt unsettled until a clean
-poll. Empty on the `gh` backend.
+as complete. An entry means the poll did **not** see every check or comment, so
+`converged` may be premature. At the page ceiling what gets dropped is the newest,
+since REST list endpoints return oldest-first; a read short of a count says nothing
+about which items are missing. The engine gates nothing on it (blocking
+`converged` would wedge the loop) and prints it in the human render as well as the
+JSON. Session-start reports review findings unavailable when it is not empty, so a
+false positive (a comment deleted between the two reads) costs that poll's
+findings. Triage's terminal `pr-watch` receipt also requires it empty, but a REST
+report never reaches that check. Empty on the `gh` backend.
 
 **`unavailable_reads`** lists, as `{surface, url, reason}`, any surface the REST
 read was refused. Today that is only `commit-statuses`, on any `403` from the

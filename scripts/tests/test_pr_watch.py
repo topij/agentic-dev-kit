@@ -12802,7 +12802,7 @@ def _one_page(pr_watch, monkeypatch: pytest.MonkeyPatch, body) -> None:
 def test_a_wrapped_read_short_of_its_total_count_is_recorded(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], key: str
 ) -> None:
-    """Rows 2 and 3: a page that says `total_count: 3` but carries one row and no
+    """Rows 2 and 5: a page that says `total_count: 3` but carries one row and no
     `Link` used to read as the whole rollup, so the two unread checks were simply
     absent. Now it is recorded as incomplete, and the rows that did arrive are kept.
     """
@@ -12817,9 +12817,15 @@ def test_a_wrapped_read_short_of_its_total_count_is_recorded(
 def test_a_wrapped_read_that_meets_its_total_count_records_nothing(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The counter-case: a complete read must stay silent, or every poll warns."""
+    """The counter-case: a complete read must stay silent, or every poll warns.
+    More rows than the count is not a gap either: a check that started between
+    GitHub computing the count and serving the page."""
     pr_watch = _load_pr_watch()
     _one_page(pr_watch, monkeypatch, {"total_count": 1, "check_runs": [{"name": "c"}]})
+    pr_watch._http_get_all_wrapped("https://api.github.com/w", "t", "check_runs")
+    _one_page(
+        pr_watch, monkeypatch, {"total_count": 1, "check_runs": [{"name": "c"}, {"name": "d"}]}
+    )
     pr_watch._http_get_all_wrapped("https://api.github.com/w", "t", "check_runs")
     assert pr_watch._truncated_reads == []
     assert capsys.readouterr().err == ""
@@ -12829,7 +12835,7 @@ def test_a_wrapped_read_that_meets_its_total_count_records_nothing(
 def test_a_wrapped_page_without_a_usable_total_count_raises(
     monkeypatch: pytest.MonkeyPatch, count
 ) -> None:
-    """Row 3's structural half: a body with no integer `total_count` is not this
+    """Rows 2 and 5, structurally: a body with no integer `total_count` is not this
     endpoint's shape, so nothing it says about completeness can be trusted.
     `True` is listed because `bool` is an `int` subclass in Python.
     """
@@ -12846,7 +12852,7 @@ def test_a_wrapped_page_without_a_usable_total_count_raises(
 def test_both_readers_raise_on_a_non_object_element(
     monkeypatch: pytest.MonkeyPatch, element
 ) -> None:
-    """Row 9: the row builders `continue`d past a non-object element, so a
+    """Row 3: the row builders `continue`d past a non-object element, so a
     garbled failing check vanished and left `all_green` true. Both readers raise.
     """
     pr_watch = _load_pr_watch()
@@ -12862,7 +12868,7 @@ def test_both_readers_raise_on_a_non_object_element(
 def test_a_bare_array_read_short_of_its_expected_count_is_recorded(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Rows 7 and 8, at the helper: fewer items than the caller's count is a gap.
+    """Row 8, at the helper: fewer items than the caller's count is a gap.
     More is not (a comment posted between the two reads), and an equal count is
     complete."""
     pr_watch = _load_pr_watch()
@@ -12882,6 +12888,11 @@ def test_a_bare_array_read_short_of_its_expected_count_is_recorded(
     assert pr_watch._truncated_reads == [url, url]
     assert capsys.readouterr().err == ""
 
+    # The strongest case: the surface comes back empty though the PR counts some.
+    _one_page(pr_watch, monkeypatch, [])
+    pr_watch._http_get_all("https://api.github.com/e", "t", expected_count=2)
+    assert pr_watch._truncated_reads == [url, url, "https://api.github.com/e"]
+
 
 def test_a_count_read_that_hits_the_ceiling_is_recorded_once(
     monkeypatch: pytest.MonkeyPatch,
@@ -12900,9 +12911,10 @@ def test_a_count_read_that_hits_the_ceiling_is_recorded_once(
 def test_a_read_without_a_count_is_not_judged_by_page_size(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Row 13 stays open: a full last page is not treated as suspect, because a
-    complete list an exact multiple of `per_page` long would flag every poll and
-    hold triage's terminal receipt unsettled on a quiet PR."""
+    """Rows 7 and 9 stay open for reviews: a full last page is not treated as
+    suspect, because a complete list an exact multiple of `per_page` long would
+    flag every poll, and session-start would report a quiet PR's review findings
+    unavailable indefinitely."""
     pr_watch = _load_pr_watch()
     _one_page(pr_watch, monkeypatch, [{"id": i} for i in range(100)])
     pr_watch._http_get_all("https://api.github.com/r?per_page=100", "t")
@@ -12966,7 +12978,7 @@ def _pr_body(**overrides) -> dict:
 def test_a_pr_body_without_a_boolean_draft_raises(
     monkeypatch: pytest.MonkeyPatch, draft
 ) -> None:
-    """Row 5: `bool(pr_data.get("draft"))` turned a missing field into "not a
+    """Row 13: `bool(pr_data.get("draft"))` turned a missing field into "not a
     draft", which drops the draft merge blocker on a body that never said."""
     pr_watch = _load_pr_watch()
     body = _pr_body()
@@ -12984,7 +12996,7 @@ def test_a_pr_body_without_a_boolean_draft_raises(
 def test_a_pr_body_without_usable_comment_counts_raises(
     monkeypatch: pytest.MonkeyPatch, field: str, value
 ) -> None:
-    """Rows 7 and 8: the counts are what the comment reads are judged against,
+    """Row 8: the counts are what the comment reads are judged against,
     so a body without them cannot vouch for those reads."""
     pr_watch = _load_pr_watch()
     body = _pr_body()
@@ -13004,7 +13016,7 @@ def test_a_pr_body_without_usable_comment_counts_raises(
 def test_a_comment_surface_short_of_the_pr_count_is_recorded(
     monkeypatch: pytest.MonkeyPatch, field: str, surface: str
 ) -> None:
-    """Rows 7 and 8, end to end: the PR says 2, the surface returns 1 with no
+    """Row 8, end to end: the PR says 2, the surface returns 1 with no
     `Link`. That surface, and only that one, is recorded. Each count is wired to
     its own surface, so swapping them fails one case of this test."""
     pr_watch = _load_pr_watch()
