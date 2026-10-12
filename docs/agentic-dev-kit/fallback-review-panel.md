@@ -233,7 +233,11 @@ unresolved reference is literal text to that parser. It does not fetch external
 URLs or verify fragment identifiers or raw HTML destinations. It compares parsed
 blocks at the surviving Git coordinates so deletions that activate links or
 stamps remain in scope, and checks raw keyword/reference pairings spanning deletion
-boundaries to catch newly joined references. Untouched blocks are outside its
+boundaries to catch newly joined references. A pairing is not reported when
+every line it spans moved unchanged, in order, from one contiguous run of lines
+the same change deletes from a narrative path, as an archive sweep moves them:
+that text is not new. A copy whose source stays, a pairing a move newly joins,
+and every commit message are still checked. Untouched blocks are outside its
 scan except that a changed reference definition rechecks the document's links.
 Stamp fields use parsed CommonMark inline code spans, including wrapped contents
 and alternate backtick delimiters. CommonMark emphasis and link wrappers do not
