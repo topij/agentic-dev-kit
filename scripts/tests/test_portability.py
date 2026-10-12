@@ -19059,6 +19059,37 @@ def test_parallel_adapters_carry_no_approval_policy_and_the_shared_workflow_does
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_upgrade_searches_adopter_references_before_deleting_a_kit_retired_command() -> None:
+    # #1071: deleting a `kit-retired` command broke an adopter whose own CI read
+    # `.claude/commands/`. Step 4 must search first, and keep the command when
+    # adopter tooling depends on it, rather than delete unconditionally.
+    workflow = (REPO_ROOT / "docs/agentic-dev-kit/workflows/upgrade.md").read_text()
+    step_4 = _flatten_prose(
+        workflow.split("## Step 4 — Refresh the non-engine pieces", 1)[1].split(
+            "## Step 5 — Verify", 1
+        )[0]
+    )
+    search = (
+        "**Before deleting a `kit-retired` command, search the repository for "
+        "references to `.claude/commands/` and to the command's own path**"
+    )
+    delete = "When nothing references it, delete it once the skill beside it is in place."
+    keep = (
+        "When adopter code or CI depends on it, keep the command and route that "
+        "tooling change separately"
+    )
+    for sentence in (search, delete, keep):
+        assert step_4.count(sentence) == 1, sentence
+    assert step_4.index(search) < step_4.index(delete) < step_4.index(keep)
+    assert "delete `kit-retired` after the skill beside it is in place" not in step_4
+    step_1 = _flatten_prose(workflow.split("## Step 2", 1)[0])
+    assert (
+        "delete it once the skill beside it is installed, after Step 4's reference search"
+        in step_1
+    )
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
 @pytest.mark.parametrize("failure", ["doctor", "mktemp", "suite", "budget", "none"])
 def test_upgrade_verification_stops_at_the_failed_command(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
