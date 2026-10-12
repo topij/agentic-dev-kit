@@ -339,7 +339,7 @@ nothing about what the merge rests on.
 different causes land here and only the observable one catches both. A repo
 that has turned off incremental auto-review (to stop spending a bounded review
 budget on fix rounds — see
-[`../fallback-review-panel.md`](../fallback-review-panel.md), *Before you
+[`../../fallback-review-panel.md`](../../fallback-review-panel.md), *Before you
 accept the outage as fixed*) has a reviewer that saw the head the PR opened at
 and nothing since. A bot that is merely *behind* reports a completed review
 bound to a stale head, which reads green at a glance. Coverage reports both;

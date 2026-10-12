@@ -2263,6 +2263,78 @@ def test_split_workflow_read_and_link_mutations_are_rejected(tmp_path: Path) -> 
             _assert_split_workflow_links_and_triggers(root)
 
 
+# A reference file sits one directory below its entry, so a link carried over
+# from the entry keeps a depth that no longer resolves (#1072). Inline links,
+# reference definitions and HTML hrefs are checked; fenced code is not prose.
+_SPLIT_LINK_FORMS = (
+    re.compile(r"\]\(\s*<?([^)\s>]+)>?(?:\s+(?:\"[^\"]*\"|'[^']*'|\([^)]*\)))?\s*\)"),
+    re.compile(r"^ {0,3}\[[^\]]+\]:\s*<?([^\s>]+)", re.MULTILINE),
+    re.compile(r"""<a\s[^>]*href=["']([^"']+)["']""", re.IGNORECASE),
+)
+_FENCED_BLOCK = re.compile(r"^ {0,3}(`{3,}|~{3,}).*?^ {0,3}\1[ \t]*$", re.MULTILINE | re.DOTALL)
+
+
+def _assert_split_workflow_relative_links_resolve(root: Path) -> None:
+    workflows = root / "docs" / "agentic-dev-kit" / "workflows"
+    for path in sorted(workflows.glob("*/*.md")):
+        prose = _FENCED_BLOCK.sub("", path.read_text(encoding="utf-8"))
+        for form in _SPLIT_LINK_FORMS:
+            for target in form.findall(prose):
+                if re.match(r"[a-z][a-z0-9+.-]*:", target) or target.startswith("#"):
+                    continue
+                resolved = (path.parent / target.partition("#")[0]).resolve()
+                rel = path.relative_to(workflows)
+                assert resolved.exists(), f"{rel} links {target!r}, which does not exist"
+                assert resolved.is_relative_to(root.resolve()), (
+                    f"{rel} links {target!r}, outside the repository"
+                )
+
+
+def test_split_workflow_relative_links_resolve() -> None:
+    require_kit_source()
+    _assert_split_workflow_relative_links_resolve(REPO_ROOT)
+
+
+def test_split_workflow_broken_links_are_rejected(tmp_path: Path) -> None:
+    require_kit_source()
+    source = REPO_ROOT / "docs" / "agentic-dev-kit"
+    rel = "workflows/pr-watch/report-fields.md"
+    good = "(../../fallback-review-panel.md)"
+    mutations = (
+        good.replace("../../", "../"),
+        good.replace(")", " \"title\")").replace("../../", "../"),
+        "(../../absent.md#anchor)",
+        "(../../../../../outside.md)",
+    )
+    appended = (
+        "\n[ref]: ../fallback-review-panel.md\n",
+        '\n<a href="../fallback-review-panel.md">x</a>\n',
+    )
+    cases = [(lambda text, new=new: text.replace(good, new, 1)) for new in mutations]
+    cases += [(lambda text, extra=extra: text + extra) for extra in appended]
+    # An existing file outside the copied tree, so only the containment check refuses it.
+    (tmp_path / "outside.md").write_text("", encoding="utf-8")
+    for index, mutate in enumerate(cases):
+        root = tmp_path / f"case-{index}"
+        shutil.copytree(source, root / "docs" / "agentic-dev-kit")
+        target = root / "docs" / "agentic-dev-kit" / rel
+        text = target.read_text(encoding="utf-8")
+        mutated = mutate(text)
+        assert mutated != text, index
+        target.write_text(mutated, encoding="utf-8")
+        with pytest.raises(AssertionError):
+            _assert_split_workflow_relative_links_resolve(root)
+    # The same broken link inside a fenced block is code, not a link.
+    root = tmp_path / "fenced"
+    shutil.copytree(source, root / "docs" / "agentic-dev-kit")
+    target = root / "docs" / "agentic-dev-kit" / rel
+    target.write_text(
+        target.read_text(encoding="utf-8") + "\n```text\n[x](../absent.md)\n```\n",
+        encoding="utf-8",
+    )
+    _assert_split_workflow_relative_links_resolve(root)
+
+
 def test_parallel_adapter_policy_contradictions_are_rejected() -> None:
     for path in (
         REPO_ROOT / ".claude" / "skills" / "parallel" / "SKILL.md",
