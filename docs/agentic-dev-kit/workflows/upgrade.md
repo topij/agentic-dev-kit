@@ -829,8 +829,11 @@ entries are exactly where the risk is.
   install `missing`, and report but preserve `adopter-owned`. **Before deleting a
   `kit-retired` command, search the repository for references to `.claude/commands/`
   and to the command's own path**: the adopter's own scripts, CI and config can read
-  the old location, and the rendered comparison does not see them. When nothing
-  references it, delete it once the skill beside it is in place. When adopter code or
+  the old location, and the rendered comparison does not see them. Skip the hits in
+  files `kit-manifest.json` lists, which are the kit's own and name that path to
+  describe it. A literal search misses a path the adopter builds from parts, so read
+  each remaining hit, and any adopter tooling that walks `.claude/`, before judging.
+  When nothing references it, delete it once the skill beside it is in place. When adopter code or
   CI depends on it, keep the command and route that tooling change separately: Claude
   Code runs the skill in preference to a same-named command, so the kept command is
   inert. Take each refreshed or installed Codex skill's
