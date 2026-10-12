@@ -2482,6 +2482,14 @@ def test_the_shell_source_dependency_is_a_KNOWN_GAP_not_an_oversight():
         "scripts/lib/systemize/heartbeat.py",
         "scripts/lib/systemize/identity.py",
         "scripts/lib/systemize/normalize.py",
+        # Path edges, not scanned ones: each workflow reference file is required
+        # by its entry (#1057), pinned edge by edge in
+        # test_the_real_kit_requires_every_workflow_reference_file_by_its_entry.
+        "docs/agentic-dev-kit/workflows/pr-watch/report-fields.md",
+        "docs/agentic-dev-kit/workflows/triage-friction-log/engine-cli.md",
+        "docs/agentic-dev-kit/workflows/triage-friction-log/finalize.md",
+        "docs/agentic-dev-kit/workflows/triage-friction-log/recovery.md",
+        "docs/agentic-dev-kit/workflows/triage-friction-log/state-schema.md",
     }
 
 
