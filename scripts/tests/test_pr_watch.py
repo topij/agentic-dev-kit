@@ -12789,7 +12789,7 @@ def test_unread_statuses_make_the_bot_read_unavailable_by_the_explicit_guard(
 
 
 # --- #94 step 1: REST reads judged complete from the data, not only the ceiling.
-# Each test names the re-audit row it pins. Incomplete reads are recorded in
+# A test that pins a re-audit row (on #94) names it. Incomplete reads are recorded in
 # `truncated_reads` like a ceiling truncation and, like it, gate nothing.
 
 
@@ -12843,7 +12843,7 @@ def test_a_wrapped_page_without_a_usable_total_count_raises(
 
 
 @pytest.mark.parametrize("element", ["x", 1, None, ["nested"]])
-def test_a_non_object_element_on_any_surface_raises(
+def test_both_readers_raise_on_a_non_object_element(
     monkeypatch: pytest.MonkeyPatch, element
 ) -> None:
     """Row 9: the row builders `continue`d past a non-object element, so a
@@ -12877,41 +12877,36 @@ def test_a_bare_array_read_short_of_its_expected_count_is_recorded(
     assert pr_watch._truncated_reads == [url]
     assert "1 items read, the pull request counts 2" in capsys.readouterr().err
 
+    # Recorded every time, warned once per URL, as the ceiling case is.
+    pr_watch._http_get_all(url, "t", expected_count=2)
+    assert pr_watch._truncated_reads == [url, url]
+    assert capsys.readouterr().err == ""
 
-def test_a_full_last_page_with_no_next_link_is_recorded(
+
+def test_a_count_read_that_hits_the_ceiling_is_recorded_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Row 13: reviews carry no count anywhere, so a dropped `Link` on a full
-    page was invisible. A full last page is now recorded; a short one is not.
-    The `per_page` the URL asked for is the measure."""
+    """The ceiling and the count are one verdict on one read, not two."""
     pr_watch = _load_pr_watch()
-    _one_page(pr_watch, monkeypatch, [{"id": 1}, {"id": 2}])
-
-    pr_watch._http_get_all("https://api.github.com/r?per_page=3", "t")
-    assert pr_watch._truncated_reads == []
-
-    pr_watch._http_get_all("https://api.github.com/r?per_page=2", "t")
-    assert pr_watch._truncated_reads == ["https://api.github.com/r?per_page=2"]
-
-    # A caller's count, where there is one, is the measure instead: an
-    # exactly-full page that meets it is complete.
-    pr_watch._truncated_reads.clear()
-    pr_watch._http_get_all("https://api.github.com/r?per_page=2", "t", expected_count=2)
-    assert pr_watch._truncated_reads == []
+    monkeypatch.setattr(
+        pr_watch,
+        "_http_get",
+        lambda url, token, **_kw: ([{"id": 1}], '<https://api.github.com/n>; rel="next"'),
+    )
+    pr_watch._http_get_all("https://api.github.com/c", "t", max_pages=1, expected_count=5)
+    assert pr_watch._truncated_reads == ["https://api.github.com/c"]
 
 
-def test_a_url_without_per_page_is_measured_against_githubs_default_of_30(
+def test_a_read_without_a_count_is_not_judged_by_page_size(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """GitHub serves 30 per page when the URL names no `per_page`."""
+    """Row 13 stays open: a full last page is not treated as suspect, because a
+    complete list an exact multiple of `per_page` long would flag every poll and
+    hold triage's terminal receipt unsettled on a quiet PR."""
     pr_watch = _load_pr_watch()
-    _one_page(pr_watch, monkeypatch, [{"id": i} for i in range(29)])
-    pr_watch._http_get_all("https://api.github.com/r", "t")
+    _one_page(pr_watch, monkeypatch, [{"id": i} for i in range(100)])
+    pr_watch._http_get_all("https://api.github.com/r?per_page=100", "t")
     assert pr_watch._truncated_reads == []
-
-    _one_page(pr_watch, monkeypatch, [{"id": i} for i in range(30)])
-    pr_watch._http_get_all("https://api.github.com/r", "t")
-    assert pr_watch._truncated_reads == ["https://api.github.com/r"]
 
 
 def test_an_incomplete_read_is_reported_but_does_not_gate(
@@ -12929,6 +12924,8 @@ def test_an_incomplete_read_is_reported_but_does_not_gate(
     )
     assert report["truncated_reads"] == ["https://api.github.com/w"]
     assert report["converged"] is True
+    # The render names both causes, not only the ceiling.
+    assert "hit the page ceiling or ended short of GitHub's count" in pr_watch.render(report)
 
 
 def _rest_view_routes(pr_watch, monkeypatch: pytest.MonkeyPatch, pr_body: dict, *, comments=0, inline=0):

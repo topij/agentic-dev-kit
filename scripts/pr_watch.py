@@ -1071,8 +1071,7 @@ _REST_MAX_PAGES = 20
 _truncation_warned: set[str] = set()
 
 # URLs read incompletely during THIS process, in order: stopped by the page
-# ceiling, or (#94) ended short of a count GitHub sent or on a full page with no
-# next link. Surfaced two ways so the claim matches reality: in the JSON, and
+# ceiling, or (#94) ended short of a count GitHub sent. Surfaced two ways so the claim matches reality: in the JSON, and
 # printed by `render`.
 #
 # The JSON alone was not enough, and saying it was is a mistake this engine has
@@ -1086,8 +1085,9 @@ _truncation_warned: set[str] = set()
 # triage's `terminal_pr_watch_receipt` requires it empty, and session-start reads
 # a non-empty one as review findings unavailable. Here the render line is the whole
 # mechanism: REST list endpoints return oldest-first, which means the ceiling
-# drops the NEWEST comments — where fresh findings live — and an agent reading
-# "converged" needs to see that its comment read was incomplete.
+# drops the NEWEST comments — where fresh findings live — and a read short of a
+# count may have dropped any of them, so an agent reading "converged" needs to
+# see that its comment read was incomplete.
 _truncated_reads: list[str] = []
 
 # Surfaces this process could not read AT ALL, as
@@ -1144,24 +1144,14 @@ def _warn_pagination_truncated(url: str, max_pages: int) -> None:
     )
 
 
-def _per_page(url: str) -> int:
-    """The ``per_page`` a paginated GitHub URL asked for, or GitHub's default of 30."""
-    values = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query).get("per_page")
-    try:
-        return int(values[-1]) if values else 30
-    except ValueError:
-        return 30
-
-
 def _warn_read_incomplete(url: str, reason: str) -> None:
     """Record and announce that the data, not the ceiling, says a read is short.
 
     Recorded in ``_truncated_reads`` beside the ceiling case, because the report
     a reader acts on is the same: the list is a prefix, not the whole. This engine
     gates nothing on it, but triage's terminal-receipt check requires the list
-    empty, so a false positive (a review list an exact multiple of ``per_page``
-    long, or a comment deleted between the PR read and the list read) leaves that
-    receipt unsettled until a later poll reads clean. That errs closed. #94's
+    empty, so a false positive (a comment deleted between the PR read and the
+    list read) leaves that receipt unsettled until a later poll reads clean. That errs closed. #94's
     re-audit at `e37b7bd` found every count GitHub sends discarded, so a short
     page with no ``Link`` read as complete. Deduped on stderr as
     :func:`_warn_pagination_truncated` is.
@@ -1215,16 +1205,18 @@ def _http_get_all(
     ``expected_count`` is the caller's count for this list (the PR object's
     ``comments`` / ``review_comments``), and fewer items than that records the
     read as incomplete. More is not a gap: a comment posted between the two
-    reads. Without a count (reviews), a last page that is full and carries no
-    next link records the same, since it cannot be told from a dropped ``Link``.
-    That case fires falsely only when the list is an exact multiple of
-    ``per_page`` long. This engine gates nothing on it; triage's terminal
-    receipt does (see :func:`_warn_read_incomplete`).
+    reads. This engine gates nothing on it; triage's terminal receipt does (see
+    :func:`_warn_read_incomplete`).
+
+    Without a count (reviews, and the identity read of ``commits/<sha>/statuses``)
+    a dropped ``Link`` still reads as complete: #94 row 13 stays open. Treating a
+    full last page as suspect was tried and dropped, because a list an exact
+    multiple of ``per_page`` long is complete and stays that length on a quiet
+    PR, so it flagged every poll and held triage's terminal receipt unsettled.
     """
     items: list = []
     next_url: str | None = url
     pages = 0
-    last_page_len = 0
     while next_url and pages < max_pages:
         data, link = _http_get(next_url, token)
         if not isinstance(data, list):
@@ -1233,18 +1225,14 @@ def _http_get_all(
             )
         _require_dict_items(data, next_url)
         items.extend(data)
-        last_page_len = len(data)
         next_url = _next_link(link)
         pages += 1
     if next_url:
         _warn_pagination_truncated(url, max_pages)
-    elif expected_count is not None:
-        if len(items) < expected_count:
-            _warn_read_incomplete(
-                url, f"{len(items)} items read, the pull request counts {expected_count}"
-            )
-    elif last_page_len >= _per_page(url):
-        _warn_read_incomplete(url, "its last page was full and carried no next link")
+    elif expected_count is not None and len(items) < expected_count:
+        _warn_read_incomplete(
+            url, f"{len(items)} items read, the pull request counts {expected_count}"
+        )
     return items
 
 
@@ -5837,9 +5825,11 @@ def build_report(
         "settle_age_minutes": settle_age_minutes,
         "rollup_settled": rollup_settled,
         "checks": checks,
-        # Reported, and gating nothing. It does not need to gate: REST cannot
-        # authorize a merge at all, so the only thing truncation can still
-        # mislead is `converged` — and blocking THAT would wedge the watch loop,
+        # Reported, and gating nothing in this engine (triage's terminal receipt
+        # and session-start do read it; see `_truncated_reads`). It does not need
+        # to gate here: REST cannot authorize a merge at all, so the only thing
+        # truncation can still mislead is `converged` — and blocking THAT would
+        # wedge the watch loop,
         # which is the one thing these two predicates exist to keep separate.
         # An earlier design made it a merge blocker and that was worse than
         # useless: a persistent pagination anomaly closed the gate for a PR
