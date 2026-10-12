@@ -1099,7 +1099,7 @@ class Report:
         """Files that are not installed and should be.
 
         Two states, one conclusion: `missing-required` is absent-and-depended-on
-        (derived from the import graph), `removed` is absent-and-recorded-as-
+        (derived from the import graph and the workflow layout), `removed` is absent-and-recorded-as-
         installed (derived from the baseline). Both mean the tree is broken
         rather than sized down, so both reach the exit code the same way — which
         is what this property is for.
@@ -3506,7 +3506,7 @@ def render(report: Report) -> str:
             # which an earlier draft did: `broken` holds TWO states with
             # different provenance, and only `removed` comes from the baseline.
             # A `missing-required` file may be one the repo recorded as
-            # DECLINED — absent, required by an installed engine, and on record
+            # DECLINED — absent, required by an installed engine or workflow, and on record
             # as exactly the opposite of installed. The per-state sections below
             # each name their own source; this line must not pick one of them
             # and assert it for both (the overstatement class #54 tracks).

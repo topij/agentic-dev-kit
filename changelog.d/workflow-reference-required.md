@@ -6,7 +6,8 @@ installed at the kit's version. That makes `kit_doctor` exit 1 where it used to 
 file as an ordinary `missing`, `declined` or `new-upstream`. Today this covers
 `pr-watch/report-fields.md` and the four `triage-friction-log/*.md` files.
 
-During `/upgrade`, install every such file; do not offer it as a decision. An entry left
-at an older version gets no such requirement until you refresh it, so re-run `kit_doctor`
-after refreshing a workflow entry. The summary note now reads `required by an installed
+An entry still at an older version gets no such requirement: the first report of an
+upgrade offers its reference files as ordinary `new-upstream` or `missing` files. During
+`/upgrade`, refresh the entry, re-run `kit_doctor`, and install every file it then reports
+`missing-required`; do not offer those as a decision. The summary note now reads `required by an installed
 engine or workflow`.

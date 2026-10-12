@@ -2689,16 +2689,20 @@ _WF = "docs/agentic-dev-kit/workflows"
 
 def test_a_workflow_reference_file_is_required_by_its_entry(tmp_path):
     """#1057: the one non-import edge. A reference file one level under
-    `workflows/<slug>/` is required by `<slug>.md`, decided by path. A file
-    deeper down, one whose entry is not owned or not present, and one outside
-    the workflows directory get no edge."""
+    `workflows/<slug>/` is required by `<slug>.md`, decided by path. Each
+    other case isolates one condition and gets no edge: a file deeper down, a
+    non-markdown file, an owned reference file absent from the tree, an entry
+    present but not owned, an entry owned but absent, and a file outside the
+    workflows directory."""
     root = _tree(
         tmp_path,
         {
             f"{_WF}/flow.md": "# entry\n",
             f"{_WF}/flow/ref.md": "# ref\n",
             f"{_WF}/flow/deeper/ref.md": "# deeper\n",
-            f"{_WF}/orphan/ref.md": "# no entry owned\n",
+            f"{_WF}/flow/notes.txt": "not markdown\n",
+            f"{_WF}/stray.md": "# entry present, not owned\n",
+            f"{_WF}/stray/ref.md": "# ref of an unowned entry\n",
             f"{_WF}/absent/ref.md": "# entry owned but not in the tree\n",
             "docs/elsewhere/flow/ref.md": "# outside\n",
             "docs/elsewhere/flow.md": "# outside entry\n",
@@ -2707,8 +2711,10 @@ def test_a_workflow_reference_file_is_required_by_its_entry(tmp_path):
     owned = (
         (f"{_WF}/flow.md", "workflow"),
         (f"{_WF}/flow/ref.md", "workflow"),
+        (f"{_WF}/flow/gone.md", "workflow"),
         (f"{_WF}/flow/deeper/ref.md", "workflow"),
-        (f"{_WF}/orphan/ref.md", "workflow"),
+        (f"{_WF}/flow/notes.txt", "workflow"),
+        (f"{_WF}/stray/ref.md", "workflow"),
         (f"{_WF}/absent.md", "workflow"),
         (f"{_WF}/absent/ref.md", "workflow"),
         ("docs/elsewhere/flow.md", "workflow"),
@@ -2718,9 +2724,10 @@ def test_a_workflow_reference_file_is_required_by_its_entry(tmp_path):
 
 
 def test_the_real_kit_requires_every_workflow_reference_file_by_its_entry():
-    """Equality over the kit's own tree, so a reference directory added later
-    without its entry being KIT_OWNED, or an entry losing its files' edges,
-    fails here."""
+    """Equality over the kit's own tree, so a new owned reference file under an
+    owned entry, or an entry losing its files' edges, fails here. A reference
+    file whose entry is not owned gets no edge and passes this test; that case
+    is `test_every_tracked_file_under_the_shared_workflows_is_kit_owned`'s."""
     graph = kit_doctor.derive_dependencies(REPO_ROOT)
     workflow_edges = {rel: deps for rel, deps in graph.items() if rel.startswith(f"{_WF}/")}
     triage = [f"{_WF}/triage-friction-log.md"]
@@ -2731,6 +2738,18 @@ def test_the_real_kit_requires_every_workflow_reference_file_by_its_entry():
         f"{_WF}/triage-friction-log/recovery.md": triage,
         f"{_WF}/triage-friction-log/state-schema.md": triage,
     }
+
+
+def test_every_entry_with_reference_files_tells_the_agent_to_read_them_all():
+    """The edge is decided by layout, and it is true only because each such
+    entry tells the agent to read every reference file before acting. An entry
+    without that instruction would make the edge a false `missing-required`."""
+    graph = kit_doctor.derive_dependencies(REPO_ROOT)
+    entries = {dep for rel, deps in graph.items() if rel.startswith(f"{_WF}/") for dep in deps}
+    assert entries, "no workflow entry has reference files"
+    for entry in sorted(entries):
+        text = " ".join((REPO_ROOT / entry).read_text(encoding="utf-8").split())
+        assert "Read every one of them completely, not in part, before the first action" in text, entry
 
 
 def _adopter_with_triage_entry(tmp_path: Path, entry_text: str) -> Path:
