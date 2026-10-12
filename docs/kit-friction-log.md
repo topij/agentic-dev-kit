@@ -24,14 +24,31 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
-## 2026-10-12
+## 2026-10-12 — Backlog migrated by triage session ae0b23b828f945bd9228c7c591ff0530
 
-- **A review lens wrote into the tree it was handed, again.** Severity L, kept for
-  accumulation alongside the 2026-10-09 refs entry below. On in-parallel-oy/cs-toolkit#2632
-  the correctness lens's first command was `uv run … pytest` in its handed worktree. That
-  created gitignored `.venv/`, `.pytest_cache/`, `uv.lock` and `__pycache__/` there before
-  it moved to its own copy. `git status --short` stayed empty, so *Attestation* did not
-  catch it; the lens reported it itself.
+Engine mode: `engine-backed`.
+
+Filed [#1078](https://github.com/topij/agentic-dev-kit/issues/1078) from TRI-01, the `2026-10-12` entry `A review lens wrote into the tree it was handed, again.`.
+
+Filed [#1079](https://github.com/topij/agentic-dev-kit/issues/1079) from TRI-03, the `2026-10-11` entry `A CI-only failure in the pinned-preflight test passed on rerun.`.
+
+Filed [#1080](https://github.com/topij/agentic-dev-kit/issues/1080) from TRI-05, the `2026-10-10` entry `The repair-and-review chain shape recurred in the record-prose preflight.`.
+
+Filed [#1081](https://github.com/topij/agentic-dev-kit/issues/1081) from TRI-10, the `2026-10-08` entry `The headless lane profile cannot read the lane's own ticket.`.
+
+Filed [#1082](https://github.com/topij/agentic-dev-kit/issues/1082) from TRI-12, the `2026-10-08` entry ``A cockpit `pr_watch` call invalidated its own `make test` stamp again.``.
+
+Filed [#1083](https://github.com/topij/agentic-dev-kit/issues/1083) from TRI-13, the `2026-10-08` entry ``A comment in `scripts/sweep_scratch.py` still describes the bare-repo skip by its object store.``.
+
+Archived without filing: TRI-04, the `2026-10-11` entry `Pinning prose did not converge on #1054; a design change did.`.
+
+Archived without filing: TRI-08, the `2026-10-09` entry `A review lens wrote refs into the tree it was handed.`.
+
+Archived without filing: TRI-09, the `2026-10-09` entry `The review-chain shape in the 2026-10-08 entry below recurred on #1028.`.
+
+Archived without filing: TRI-11, the `2026-10-08` entry `A full-pass review chain on an executed doc block found a new shape each round.`.
+
+Approval commands: `approve TRI-01 TRI-03 TRI-05 TRI-10 TRI-12 TRI-13`, `archive TRI-04 TRI-08 TRI-09 TRI-11`, `park TRI-02 TRI-06 TRI-07 TRI-14`. Approver: `topij`.
 
 ## 2026-10-11
 
@@ -39,33 +56,7 @@
   Severity L, kept for accumulation. The
   full pass and the delta pass each found a changelog fragment or commit message saying
   the tests caught more than they did.
-- **A CI-only failure in the pinned-preflight test passed on rerun.** Severity L, no
-  mechanism yet. On #1053's first CI run,
-  `test_panel_prompt.py::test_generated_preflight_authenticates_objects_before_execution[kitconfig]`
-  raised `FileNotFoundError` for the loose object
-  `.git/objects/a2/adf8d2f0151b3e4f74bc819d709bd39dcbf91d` in its fixture repository. The
-  same head passed on rerun, `make test` passed locally, and #1052 and #1054 passed the
-  test with the same `kitconfig.py`. The test assumes the blob is stored loose. Why it
-  was not, on that one run, is not established.
-- **Pinning prose did not converge on #1054; a design change did.** Severity L, kept for
-  accumulation alongside the 2026-10-10 repair-and-review chain entry. Successive
-  passes over the split triage workflow each found a sentence that could be added beside
-  a pinned trigger and undercut it, and each repair tightened only that pin. The
-  operator's choice to read every reference file unconditionally removed the class, and
-  the next pass found only LOW items.
-
 ## 2026-10-10
-
-- **The repair-and-review chain shape recurred in the record-prose preflight.**
-  Severity L, kept for accumulation alongside the 2026-10-08 and 2026-10-09 entries.
-  During the session on PR #1039, the decision packets followed terminal JSON,
-  canonical line counting, deletion effects and bytecode writes, keyword/reference
-  pairings, CommonMark stamp spans, stamp-field presentation, and the dependency-bootstrap
-  assurance. A repair's subsequent full review surfaced another input shape or
-  contract claim. The operator authorized the repair rounds, then chose to defer
-  the accepted P2 regression to #1041 and merge. The PR dispositions retain the
-  reproductions and decisions; this entry accumulates the review-chain occurrence,
-  rather than proposing a broader remedy from it.
 
 - **Archival preservation met the new narrative preflight's conservative lexer.**
   Severity L, parked because no workflow remedy was established. During this
@@ -80,15 +71,7 @@
 ## 2026-10-09
 
 - **A field-limited backlog read still exceeded the tool output limit.** Severity L, kept for accumulation. During this Codex session’s `session-start` read, `gh issue list --json number,title,labels,state,updatedAt,url --limit 500` returned label IDs, descriptions and colours, and the tool truncated the output. A rerun kept the complete query, checked its page ceiling, and rendered issue numbers, priority labels and titles compactly. This is related to #143’s payload-overflow shape; selecting fields alone did not keep the rendered payload within the tool limit.
-- **A review lens wrote refs into the tree it was handed.** Severity L, kept for accumulation. On in-parallel-oy/cs-toolkit#2609 the correctness lens ran `git fetch origin main` in its handed worktree. Its report gives the purpose as establishing the base's currency. *No writes in the tree you were given* forbids the write. Its `git status --short` stayed clean, so only refs were written. `git ls-remote` answers the same question without a write.
-- **The review-chain shape in the 2026-10-08 entry below recurred on #1028.** Severity L, kept for accumulation. Each adversarial pass over the new folding rules in `wrap-up.md` found new LOW findings: at `dae754b8`, at `2fe2ce11`, at `4cce8edb` and at `45819297`. A repair carried the next round's finding, when a kept-entry path added at `4cce8edb` sat outside both exception lists. The residue went to #1030.
-
 ## 2026-10-08
-
-- **The headless lane profile cannot read the lane's own ticket.** Severity M. Parked because no operator was present to approve a tracker write. `config/claude-lane-settings.json` allows no `gh issue view`, and under `dont-ask` a denied call ends the lane. `parallel.md` requires every lane brief to be grounded in the ticket body, so the cockpit put each ticket's full text into the task prompt. Lane `pr-watch-trio` also had a multi-line `git commit -m` message containing backticks refused, and fell back to repeated single-line `-m` flags. Both are the shape #1011 tracks: routine lane steps the profile denies. The fix is either a read-only `gh issue view` grant or a launcher step that embeds the ticket text. The profile is safety-critical.
-- **A full-pass review chain on an executed doc block found a new shape each round.** Severity L, kept for accumulation. On #1020 the lens found a different input-shape gap in the fragment lookup at each of its three reviewed heads: quoted names, then reused names and symlinks, then merge-only and type-changed fragments. The budget ran out with a Low-Medium open. An operator-authorized fourth round, on 2026-10-09, again found new shapes, this time test gaps (#1026). This is the shape #1012 names for skips, here met by a lookup over git history: list every history shape (rename, merge, delete, type change, reuse) before the first review.
-- **A cockpit `pr_watch` call invalidated its own `make test` stamp again.** Severity L, kept for accumulation. A `--record-round` call made while the stamp ran wrote `state/pr-watch/1020.json`, and the suite's real-state guard (#428) failed a run in which every test passed. The rerun on a quiet tree was the stamp.
-- **A comment in `scripts/sweep_scratch.py` still describes the bare-repo skip by its object store.** Severity L. #1021 corrected the doctrine's version of this wording. The delta lens on #1021 found that the comment around `scripts/sweep_scratch.py:401` ("skipping it would drop its object store") overstates it the same way. It should say that the configured repository's git dir and alternates chain would go unrecorded.
 
 - **An approval-pending triage session cannot survive a configuration change.** Severity L, kept for accumulation.
   Triage session `469bcd58` froze the kit inbox on 2026-10-05 and waited for decisions. Merges then changed
@@ -96,55 +79,3 @@
   "configuration identity mismatch", so its proposals could not be approved. A fresh draft replaced it. The binding
   is by design: only a `completed` state is exempt (*Completed-state retirement*). The cost is that operator
   decisions deferred across ordinary config merges are lost. Worth acting on only if it recurs.
-
-## 2026-10-08 — Backlog migrated by triage session 7f6626780abd4719b8a752a5ac8856ee
-
-Engine mode: `engine-backed`.
-
-Filed [#1009](https://github.com/topij/agentic-dev-kit/issues/1009) from TRI-01, the `2026-10-08` entry ``Parallel lanes collide on `CHANGELOG.md` and `kit-manifest.json`, and each collision costs a review round.``.
-
-Filed [#1010](https://github.com/topij/agentic-dev-kit/issues/1010) from TRI-02, the `2026-10-08` entry `A composed delta receipt cannot gain a disposition comment afterwards.`.
-
-Filed [#1011](https://github.com/topij/agentic-dev-kit/issues/1011) from TRI-05, the `2026-10-07` entry `A headless Claude lane cannot open a PR with a real body.`.
-
-Filed [#1012](https://github.com/topij/agentic-dev-kit/issues/1012) from TRI-08, the `2026-10-07` entry `Fix rounds on #986 kept creating the next round's findings.`.
-
-Filed [#1013](https://github.com/topij/agentic-dev-kit/issues/1013) from TRI-11, the `2026-10-05` entry `The disposition filename was supplied as literal text again.`.
-
-Filed [#1014](https://github.com/topij/agentic-dev-kit/issues/1014) from TRI-20, the `2026-10-03` entry `` `pr_watch.py`'s verification-stamp parser and `wrap-up.md`'s stamp wording disagree. ``.
-
-Archived without filing: TRI-03, the `2026-10-08` entry `Review lenses wrote into the tree they were handed, twice.`.
-
-Archived without filing: TRI-04, the `2026-10-08` entry `A headless lane could not restore its own mutation-test edits.`.
-
-Archived without filing: TRI-06, the `2026-10-07` entry ``The `test` entry's recovery branch still judges validity by `canonical_state` alone.``.
-
-Archived without filing: TRI-07, the `2026-10-07` entry `The two-lens panel did not converge on a new destructive engine.`.
-
-Archived without filing: TRI-09, the `2026-10-07` entry `A lens's report-mode run against the real shared scratch root was refused by the runtime's auto-mode classifier.`.
-
-Archived without filing: TRI-10, the `2026-10-07` entry ``A cockpit `make test` was killed by SIGTERM mid-suite.``.
-
-Archived without filing: TRI-12, the `2026-10-05` entry `An installation push preceded root verification's terminal result.`.
-
-Archived without filing: TRI-13, the `2026-10-05` entry `A fallback review's full suite overlapped its scratch mutations.`.
-
-Archived without filing: TRI-14, the `2026-10-04` entry `A PR poll initially put its receipt in the real state tree during synthetic validation.`.
-
-Archived without filing: TRI-15, the `2026-10-04` entry `The cockpit changed verification state while claiming an isolated run.`.
-
-Archived without filing: TRI-16, the `2026-10-04` entry `A public fallback disposition initially contained its local filename.`.
-
-Archived without filing: TRI-17, the `2026-10-03` entry `The matrix guard's LOW residue from #923's last delta pass.`.
-
-Archived without filing: TRI-18, the `2026-10-03` entry `#919's tracker body does not scope the row audit the records now assign to it.`.
-
-Archived without filing: TRI-19, the `2026-10-03` entry `` `make lint` does not see an untracked file, so a lint failure surfaced only after a stamp run started. ``.
-
-Archived without filing: TRI-21, the `2026-10-03` entry `A negative control anchored on a structural boundary stopped testing anything when an unrelated key moved that boundary.`.
-
-Archived without filing: TRI-22, the `2026-10-03` entry `The option offered for an operator decision overstated its own premise.`.
-
-Archived without filing: TRI-23, the `2026-10-03` entry `#923 is a further occurrence of the shape #838 tracks.`.
-
-Approval commands: `approve TRI-01 TRI-02 TRI-05 TRI-08 TRI-11 TRI-20`, `archive TRI-03 TRI-04 TRI-06 TRI-07 TRI-09 TRI-10 TRI-12 TRI-13 TRI-14 TRI-15 TRI-16 TRI-17 TRI-18 TRI-19 TRI-21 TRI-22 TRI-23`. Approver: `topij`.
