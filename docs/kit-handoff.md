@@ -44,15 +44,15 @@
   - The #428 state guard tripped on live cron writes in cs-toolkit's main checkout. The
     stamped runs used a detached worktree, and the occurrence is on #467.
   - Review: CodeRabbit's verdict was clean but excluded `docs/**`, so the two-lens panel
-    ran at `cbff90a1`. Its findings went to #1072 (an upstream link) and CUS-1693 (cs-toolkit
+    ran at `cbff90a1`. Its findings went to #1072 (a kit link) and CUS-1693 (cs-toolkit
     CI never runs `make test-devkit`).
 - **Filed this session:** [#1070](https://github.com/topij/agentic-dev-kit/issues/1070),
   [#1071](https://github.com/topij/agentic-dev-kit/issues/1071),
   [#1072](https://github.com/topij/agentic-dev-kit/issues/1072), CUS-1692, CUS-1693; an
   occurrence comment on [#467](https://github.com/topij/agentic-dev-kit/issues/467).
-- **Not established:** OpenKitchen is not upgraded. `/tmp/agentic-dev-kit` still holds a
-  stale kit clone at `73371ee`; this session cloned under its scratchpad instead, because
-  `rm -rf` is denied.
+- **Not established:** OpenKitchen is not upgraded. A stale kit clone at
+  `/tmp/agentic-dev-kit` made this session clone under its scratchpad instead, because
+  `rm -rf` is denied to the agent; the operator removed that clone at wrap-up.
 
 ______________________________________________________________________
 
