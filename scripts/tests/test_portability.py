@@ -3190,13 +3190,21 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "or run under `set -o pipefail`"
         ) in flattened
         assert "the partial note is added to it, not put in its place" in flattened
+        # The tracker route names the configured tracker repository, not the
+        # checkout's, and the REST review state never claims awaiting-review: the
+        # engine's REST `review_decision` cannot express it.
         assert (
-            "gh api --paginate 'repos/{owner}/{repo}/issues?state=open&per_page=100'"
+            "gh api --paginate 'repos/<tracker.project_name>/issues?state=open&per_page=100'"
+        ) in flattened
+        assert "repos/{owner}/{repo}/issues" not in flattened
+        assert (
+            "take CI-red from its `checks.failing` and CI-pending from `checks.pending`."
         ) in flattened
         assert (
-            "take CI-red from its `checks.failing`, CI-pending from `checks.pending`, "
-            "and awaiting-review from `review_decision`"
+            "Render a `null` as review state unknown, never as awaiting-review or as "
+            "reviewed."
         ) in flattened
+        assert "awaiting-review from `review_decision`" not in flattened
         assert "still makes the pull request CI-red" in flattened
         assert "that refusal is the tracker gap unless" in flattened
         assert "so it does not make this layer unavailable" in flattened

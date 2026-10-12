@@ -156,8 +156,11 @@ like good news, it looks like a missing handoff.
   `user.login` for `author`, which spells an app `dependabot[bot]` where `gh pr list`
   gives `app/dependabot`, so match an automation author in either form) and carries no `reviewDecision` or
   `statusCheckRollup`; the per-PR read below supplies review and CI state: on this
-  route, take CI-red from its `checks.failing`, CI-pending from `checks.pending`, and
-  awaiting-review from `review_decision`. `{owner}` and `{repo}` are `gh api`'s own
+  route, take CI-red from its `checks.failing` and CI-pending from `checks.pending`.
+  Its `review_decision` cannot say awaiting-review there: the engine derives it from
+  the reviews list, which knows no required-reviewer rule, so it is only
+  `CHANGES_REQUESTED`, `APPROVED` or `null`. Render a `null` as review state unknown,
+  never as awaiting-review or as reviewed. `{owner}` and `{repo}` are `gh api`'s own
   placeholders, filled from the current checkout's repository as `gh pr list` resolves
   it; do not type a slug by hand. The
   truncation rule above covers this route too, in the form that fits it:
@@ -167,9 +170,7 @@ like good news, it looks like a missing handoff.
   partial output is discarded, never read as the list. **Check `gh`'s own exit
   status, not a pipeline's**: piped into a parser, the pipeline reports the parser's
   status, and a mid-pagination failure reads as a complete list. Write `gh`'s output to
-  a file and check its status before parsing, or run under `set -o pipefail`. Each page
-  arrives as its own JSON array, so parse them all (or pass `--slurp`) rather than the
-  first. If every
+  a file and check its status before parsing, or run under `set -o pipefail`. If every
   route fails — `gh pr list`, this REST read, and any GitHub MCP the session offers,
   which can fail on its own credentials — render `PRs unavailable: <reason>`, never
   an empty list.
@@ -228,8 +229,11 @@ like good news, it looks like a missing handoff.
   gap (note it and continue) — never act on a partial payload. On a `github-issues`
   tracker, `gh issue list` is GraphQL and fails the same way as `gh pr list` above:
   that refusal is the tracker gap unless the REST route
-  `gh api --paginate 'repos/{owner}/{repo}/issues?state=open&per_page=100'` succeeds,
-  complete by the same exit-status rule. That route also returns pull requests, so
+  `gh api --paginate 'repos/<tracker.project_name>/issues?state=open&per_page=100'`
+  succeeds, complete by the same exit-status rule. Write the configured
+  `tracker.project_name` (an `<owner>/<repo>` slug) into the path rather than `gh`'s
+  `{owner}/{repo}` placeholders, which fill from the checkout and name a different
+  repository when the tracker lives elsewhere. That route also returns pull requests, so
   drop every row that carries a `pull_request` key, and it returns each issue's body,
   so select the fields above with `--jq` rather than reading whole rows.
 
