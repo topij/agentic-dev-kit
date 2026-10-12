@@ -27,6 +27,7 @@ import subprocess
 import sys
 import unicodedata
 from bisect import bisect_left, bisect_right
+from itertools import islice
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
 
@@ -47,7 +48,7 @@ LIMITS = [
     "A historical stamp need not name the candidate head; the reviewer must judge its stated scope.",
     "Stamp fields use code spans and the connectors at, optional in, and on; raw HTML and unrelated connector wording are outside this scan.",
     "Closing keywords pair conservatively with the next issue reference across intervening text and markup; declare each intended reference exactly.",
-    "A narrative pairing is not reported when every line it spans was moved unchanged from one contiguous run of lines this change deletes from a narrative path; a copy, a new adjacency, or a deletion inside it is still reported.",
+    "A narrative pairing is not reported when every line it spans was moved unchanged from one contiguous run of lines this change deletes from a narrative path; a copy, a new adjacency, a deletion inside it, or a pairing spanning more than MAX_MOVED_SPAN lines is still reported.",
     "Every changed narrative file and commit message remains in full independent-review scope.",
 ]
 _HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
@@ -61,6 +62,14 @@ _CLOSING_TOKEN = re.compile(
     r"\b(?P<keyword>close[sd]?|closing|fix(?:es|ed|ing)?|resolve[sd]?|resolving)\b",
     re.IGNORECASE,
 )
+
+
+# A moved pairing longer than this is reported rather than aligned, and at most
+# this many unclaimed deleted lines are tried as its source. Both bound the work
+# per pairing, so a long moved archive cannot make the mandatory preflight
+# superlinear; past either bound the pairing fails closed and is reported.
+MAX_MOVED_SPAN = 64
+MAX_MOVE_CANDIDATES = 8
 
 
 class CheckError(Exception):
@@ -205,29 +214,39 @@ class MoveLedger:
 
     def __init__(self, removed: list[list[str]]):
         self.removed = removed
-        self.index: dict[str, list[tuple[int, int]]] = {}
+        # Unclaimed deleted lines by content, in order; a claim removes its entry.
+        self.unclaimed: dict[str, dict[tuple[int, int], None]] = {}
         for run_id, run in enumerate(removed):
             for position, text in enumerate(run):
-                self.index.setdefault(text, []).append((run_id, position))
+                self.unclaimed.setdefault(text, {})[(run_id, position)] = None
         self.source: dict[tuple[str, int], tuple[int, int]] = {}
         self.target: dict[tuple[int, int], tuple[str, int]] = {}
 
     def moved(self, path: str, lines: list[str], first: int, last: int) -> bool:
         """Claim deleted lines reproducing lines first..last, contiguous and in order."""
-        for run_id, start in self.index.get(lines[first - 1], ()):
+        if last - first >= MAX_MOVED_SPAN:
+            return False
+        # A line one pairing already aligned keeps its alignment, so nested
+        # pairings over the same lines agree rather than compete.
+        aligned = self.source.get((path, first))
+        candidates = [aligned] if aligned else list(
+            islice(self.unclaimed.get(lines[first - 1], {}), MAX_MOVE_CANDIDATES))
+        for run_id, start in candidates:
             run = self.removed[run_id]
             if start + last - first >= len(run):
                 continue
-            pairs = [((path, first + offset), (run_id, start + offset))
-                     for offset in range(last - first + 1)]
-            # A line one pairing already aligned must keep its alignment, so
-            # nested pairings over the same lines agree rather than compete.
-            if all(run[origin[1]] == lines[head[1] - 1]
-                   and self.source.get(head, origin) == origin
-                   and self.target.get(origin, head) == head
-                   for head, origin in pairs):
+            pairs = []
+            for offset in range(last - first + 1):
+                head, origin = (path, first + offset), (run_id, start + offset)
+                if (run[origin[1]] != lines[head[1] - 1]
+                        or self.source.get(head, origin) != origin
+                        or self.target.get(origin, head) != head):
+                    break
+                pairs.append((head, origin))
+            else:
                 for head, origin in pairs:
                     self.source[head], self.target[origin] = origin, head
+                    self.unclaimed[run[origin[1]]].pop(origin, None)
                 return True
         return False
 
@@ -395,11 +414,17 @@ def check(root: Path, base: str, head: str, allowed: set[str]) -> dict:
     parser = MarkdownIt("commonmark")
     documents, removed = [], []
     for path in paths:
-        old = blob(root, boundary, path) if git(root, "ls-tree", "-z", boundary, "--", path) else ""
         # A deleted archive has no added blocks, but its deleted lines can still
         # be the origin of a move. Required budgeted inputs above still must
         # exist; deletion remains in the full review's diff.
         raw = blob(root, head, path) if git(root, "ls-tree", "-z", head, "--", path) else None
+        if raw is None:
+            # Only a regular file's deleted lines can be a move's source; any
+            # other deleted entry is skipped, as before moves were recognized.
+            entry = git(root, "ls-tree", "-z", boundary, "--", path)
+            if not entry or entry.split(" ", 1)[0] not in ("100644", "100755"):
+                continue
+        old = blob(root, boundary, path) if git(root, "ls-tree", "-z", boundary, "--", path) else ""
         added, unchanged, deleted, runs = changed_lines(root, boundary, head, path, raw or "", old)
         removed.extend(runs)
         if raw is not None:

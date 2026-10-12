@@ -1010,3 +1010,74 @@ def test_overlapping_pairings_keep_one_alignment_per_line(repo):
     code, report = run((root, base), commit(root))
     assert code == 0, report
     assert report["findings"] == []
+
+
+def test_pairing_moved_out_of_a_deleted_narrative_file_is_not_reported(repo):
+    root, _ = repo
+    block = f"- The fix is\n- on {LOCAL_REF}.\n"
+    save(root, "docs/inbox.md", "# Inbox\n\n" + block)
+    save(root, "docs/archive.md", "# Archive\n")
+    base = commit(root)
+    (root / "docs/inbox.md").unlink()
+    save(root, "docs/archive.md", "# Archive\n\n" + block)
+    code, report = run((root, base), commit(root))
+    assert code == 0, report
+    assert report["findings"] == []
+
+
+def test_pairing_moved_out_of_a_hunk_that_also_adds_lines_is_not_reported(repo):
+    root, _ = repo
+    # The sweep's usual shape: the swept entry's lines are replaced in place by
+    # a new entry, so the source hunk both deletes and adds.
+    block = f"- The fix is\n- on {LOCAL_REF}.\n"
+    root, base, head = _sweep(root, "# Inbox\n\n" + block, "# Archive\n",
+                              "# Inbox\n\n- A new entry.\n", "# Archive\n\n" + block)
+    code, report = run((root, base), head)
+    assert code == 0, report
+    assert report["findings"] == []
+
+
+def test_deleting_a_narrative_symlink_is_not_unavailable(repo):
+    root, _ = repo
+    (root / "docs/archive.md").symlink_to("plan.md")
+    base = commit(root)
+    (root / "docs/archive.md").unlink()
+    code, report = run((root, base), commit(root))
+    assert code == 0, report
+    assert report["findings"] == [] and report["unavailable"] == []
+
+
+def test_many_identical_moved_pairings_are_each_matched(repo):
+    root, _ = repo
+    # More identical copies than candidates tried per pairing: claimed sources
+    # must leave the index, or later copies find only claimed ones.
+    body = f"- Fix rounds on {LOCAL_REF}.\n" * 50
+    root, base, head = _sweep(root, "# Inbox\n\n" + body, "# Archive\n", "# Inbox\n", "# Archive\n\n" + body)
+    code, report = run((root, base), head)
+    assert code == 0, report
+    assert report["findings"] == []
+
+
+def test_moved_pairings_longer_than_the_span_bound_are_reported(repo):
+    root, _ = repo
+    keywords = 100
+    body = "".join(f"- fix {i}\n" for i in range(keywords)) + f"- on {LOCAL_REF}\n"
+    root, base, head = _sweep(root, "# Inbox\n\n" + body, "# Archive\n", "# Inbox\n", "# Archive\n\n" + body)
+    code, report = run((root, base), head)
+    assert code == 1, report
+    # The reference is on archive line keywords + 3; a pairing spanning more
+    # than 64 lines (reference - keyword >= 64) is reported, a shorter one is a move.
+    reference = keywords + 3
+    assert [item["line"] for item in report["findings"]] == [
+        line for line in range(3, reference) if reference - line >= 64]
+
+
+def test_pathological_identical_moves_fail_closed_within_a_bounded_time(repo):
+    root, _ = repo
+    # Identical keyword lines and one reference, moved wholesale. Past the
+    # candidate bound the pairings are reported; the run must stay fast.
+    body = "- fix\n" * 1500 + f"- on {LOCAL_REF}\n"
+    root, base, head = _sweep(root, "# Inbox\n\n" + body, "# Archive\n", "# Inbox\n", "# Archive\n\n" + body)
+    code, report = run((root, base), head, timeout=30)
+    assert code == 1, report
+    assert all(item["source"] == "docs/archive.md" for item in report["findings"])

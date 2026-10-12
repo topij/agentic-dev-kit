@@ -237,7 +237,8 @@ boundaries to catch newly joined references. A pairing is not reported when
 every line it spans moved unchanged, in order, from one contiguous run of lines
 the same change deletes from a narrative path, as an archive sweep moves them:
 that text is not new. A copy whose source stays, a pairing a move newly joins,
-and every commit message are still checked. Untouched blocks are outside its
+a moved pairing spanning more than 64 lines, and every commit message are still
+checked. Untouched blocks are outside its
 scan except that a changed reference definition rechecks the document's links.
 Stamp fields use parsed CommonMark inline code spans, including wrapped contents
 and alternate backtick delimiters. CommonMark emphasis and link wrappers do not
