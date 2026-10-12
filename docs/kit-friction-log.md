@@ -26,6 +26,11 @@
 
 ## 2026-10-12
 
+- **The repair-and-review chain shape recurred on a test-only PR.** Severity L, kept for
+  accumulation alongside the 2026-10-08 to 2026-10-11 entries. On #1074 the full pass
+  found input shapes the new link extractor missed. The repair's delta pass then found
+  further shapes in the repaired fence handling. Those went to #1075 rather than to
+  another round.
 - **A review lens wrote into the tree it was handed, again.** Severity L, kept for
   accumulation alongside the 2026-10-09 refs entry below. On in-parallel-oy/cs-toolkit#2632
   the correctness lens's first command was `uv run … pytest` in its handed worktree. That

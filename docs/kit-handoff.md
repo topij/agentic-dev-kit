@@ -20,6 +20,40 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-12 (workflow reference-file links tested; OpenKitchen upgraded to the skill bindings, in Claude Code)
+
+- **Skills and instruction files:** [#1074](https://github.com/topij/agentic-dev-kit/pull/1074)
+  merged as `55869a7e` on the operator's merge. It corrects `pr-watch/report-fields.md`'s
+  link to `fallback-review-panel.md` and adds a test that every relative link in a
+  workflow reference file points at an existing file.
+  - Review: CodeRabbit skipped. An adversarial `fallback:lens` full pass ran at
+    `5b9cc641`, and a `fallback:delta` pass at `8abd3b3d` reviewed the repair of its
+    LOW findings. The delta pass's own LOW findings are #1075.
+  - Verification: `make test` at `8abd3b3d599cf27ff052cc34a48aac288a323fda` on
+    2026-10-12, in `/Users/topi/Coding/agentic-dev-kit`, printed `4882 passed, 1 skipped`.
+- **OpenKitchen upgraded** from kit `c5da977` to `55869a7e` in topij/OpenKitchen#324,
+  merged as `cb810b88` on the operator's request. The upgrade ran from a linked worktree
+  off `origin/main`, because OpenKitchen's main checkout was on another session's branch
+  with uncommitted edits.
+  - The eight Claude commands were `kit-retired` and nothing in OpenKitchen read them,
+    so they were deleted once the skills were installed.
+  - Review: OpenKitchen configures no review bot, and the change is safety-critical
+    there, so the two-lens panel ran at `4c35c81b`. Its LOW finding on links to the
+    removed `.claude/commands/` is topij/OpenKitchen#325, on the operator's decision.
+  - Verification: `run_installed_tests.py` with a temporary `DEVKIT_STATE_ROOT`, run on
+    2026-10-12 in that worktree on the tree committed as `4c35c81b`, printed
+    `3756 passed, 109 skipped`. The PR body carries the full stamp.
+- **Filed this session:** [#1075](https://github.com/topij/agentic-dev-kit/issues/1075),
+  topij/OpenKitchen#325; occurrence comments on
+  [#61](https://github.com/topij/agentic-dev-kit/issues/61) (a hook missed in a linked
+  worktree), [#990](https://github.com/topij/agentic-dev-kit/issues/990),
+  [#992](https://github.com/topij/agentic-dev-kit/issues/992) and
+  [#1055](https://github.com/topij/agentic-dev-kit/issues/1055).
+- **Not established:** OpenKitchen's main checkout was not pulled. It stays on the other
+  session's branch.
+
+______________________________________________________________________
+
 ## Session — 2026-10-12 (workflow reference files required by kit_doctor; cs-toolkit upgraded to the skill bindings, in Claude Code)
 
 - **Skills and instruction files:** [#1069](https://github.com/topij/agentic-dev-kit/pull/1069)
@@ -224,20 +258,6 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-## Session — 2026-10-08 (friction-log triage after the overnight batch, in Claude Code)
-
-- **Triage session `469bcd58` superseded.** Its `resume` returned operator-held with "configuration identity mismatch": `config/dev-model.yaml` changed after it froze, in #993, #986 and #1006. On the operator's decision its isolated state root was left untouched as evidence, and a fresh live draft was started instead.
-- **Triage run `7f662678` completed** (engine-backed, `degraded-success` because it used the session in place of a notification). The operator approved filing TRI-01, 02, 05, 08, 11 and 20, and archiving the rest.
-  - Filed and read back: #1009, #1010, #1011, #1012, #1013, #1014.
-  - The archive sweep #1015 merged as `770092ab` at its reviewed head, `3207eb04`. Its review was the correctness lens (CodeRabbit skipped). The engine read back the merge and removed the sweep's worktree and branch.
-- **This wrap-up** moved the 2026-10-03 intro paragraph the sweep left behind into the archive. The lens on #1015 had found it.
-- Filed at wrap-up, on the operator's approval of each payload: #1016, #1017, #1018.
-- **Scratch:** the operator removed the probe directory that pinned session `2d56cdd2`'s scratchpad. The removal reset that entry's modified time, so `uv run scripts/sweep_scratch.py --apply --older-than 1d` cannot reclaim it before about 2026-10-09 14:50 UTC.
-
-Closed workstream Kit friction-log triage: its step, deciding `469bcd58`, was superseded by run `7f662678`, which completed through #1015.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -349,18 +369,19 @@ then work on its instruction-check coverage gaps only if eligible.
 **Status:** #1052 (`f7d8749a`), #1053 (`78d623c3`) and #1054 (`ea4010db`) shipped on
 2026-10-11, and #1061 (`367be931`) and #1063 (`ad65e539`) split pr-watch into an entry
 and `pr-watch/report-fields.md`. #1069 (`6f543433`) makes an absent reference file
-`missing-required`. cs-toolkit runs the skill bindings since in-parallel-oy/cs-toolkit#2632;
-OpenKitchen is not upgraded. #1055 owns the Codex `openai.yaml` check, #1058 the triage
-split's remaining pin gaps, #1070 #1069's residual LOWs, #1071 the `kit-retired` deletion
-warning, #1072 a broken link in `pr-watch/report-fields.md`.
+`missing-required`. cs-toolkit runs the skill bindings since in-parallel-oy/cs-toolkit#2632,
+and OpenKitchen since topij/OpenKitchen#324 (`cb810b88`). #1074 (`55869a7e`) corrected
+`pr-watch/report-fields.md`'s link and tests every relative link under `workflows/*/`.
+#1055 owns the Codex `openai.yaml` check, #1058 the triage split's remaining pin gaps,
+#1070 #1069's residual LOWs, #1071 the `kit-retired` deletion warning, #1075 the link
+check's residual LOWs.
 **Owner:** `saved_plans/skills-and-instructions-assessment_2026-10-11.md`;
 [#1055](https://github.com/topij/agentic-dev-kit/issues/1055),
 [#1058](https://github.com/topij/agentic-dev-kit/issues/1058),
 [#1070](https://github.com/topij/agentic-dev-kit/issues/1070),
 [#1071](https://github.com/topij/agentic-dev-kit/issues/1071),
-[#1072](https://github.com/topij/agentic-dev-kit/issues/1072).
+[#1075](https://github.com/topij/agentic-dev-kit/issues/1075).
 
-▶ Next: #1072 — correct the `../fallback-review-panel.md` link in
-`workflows/pr-watch/report-fields.md` and add a test that relative links under
-`workflows/*/` resolve; then `/upgrade` OpenKitchen
-(`/Users/topi/Coding/home-server/OpenKitchen`) from a fresh kit clone.
+▶ Next: #1071 — make `upgrade.md` Step 4 name the search for the adopter's own
+references to a `kit-retired` command, and the keep-and-route option, and pin that
+sentence with a portability test.

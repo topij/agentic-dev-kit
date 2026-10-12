@@ -5,6 +5,18 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-08 (friction-log triage after the overnight batch, in Claude Code)
+
+- **Triage session `469bcd58` superseded.** Its `resume` returned operator-held with "configuration identity mismatch": `config/dev-model.yaml` changed after it froze, in #993, #986 and #1006. On the operator's decision its isolated state root was left untouched as evidence, and a fresh live draft was started instead.
+- **Triage run `7f662678` completed** (engine-backed, `degraded-success` because it used the session in place of a notification). The operator approved filing TRI-01, 02, 05, 08, 11 and 20, and archiving the rest.
+  - Filed and read back: #1009, #1010, #1011, #1012, #1013, #1014.
+  - The archive sweep #1015 merged as `770092ab` at its reviewed head, `3207eb04`. Its review was the correctness lens (CodeRabbit skipped). The engine read back the merge and removed the sweep's worktree and branch.
+- **This wrap-up** moved the 2026-10-03 intro paragraph the sweep left behind into the archive. The lens on #1015 had found it.
+- Filed at wrap-up, on the operator's approval of each payload: #1016, #1017, #1018.
+- **Scratch:** the operator removed the probe directory that pinned session `2d56cdd2`'s scratchpad. The removal reset that entry's modified time, so `uv run scripts/sweep_scratch.py --apply --older-than 1d` cannot reclaim it before about 2026-10-09 14:50 UTC.
+
+Closed workstream Kit friction-log triage: its step, deciding `469bcd58`, was superseded by run `7f662678`, which completed through #1015.
+
 ### 2026-10-08 (overnight batch of headless lanes, in Claude Code)
 
 The operator asked for an overnight autonomous session with parallel lanes and authorized merging every PR
