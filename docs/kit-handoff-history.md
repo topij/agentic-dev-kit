@@ -15,7 +15,7 @@ and the next step there; this file is append-only history.
 - Filed at wrap-up, on the operator's approval of each payload: #1016, #1017, #1018.
 - **Scratch:** the operator removed the probe directory that pinned session `2d56cdd2`'s scratchpad. The removal reset that entry's modified time, so `uv run scripts/sweep_scratch.py --apply --older-than 1d` cannot reclaim it before about 2026-10-09 14:50 UTC.
 
-Closed workstream Kit friction-log triage: its step, deciding `469bcd58`, was superseded by run `7f662678`, which completed through #1015.
+Workstream Kit friction-log triage ended: its step, deciding `469bcd58`, was superseded by run `7f662678`, which completed through #1015.
 
 ### 2026-10-08 (overnight batch of headless lanes, in Claude Code)
 
