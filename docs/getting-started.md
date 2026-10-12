@@ -18,7 +18,8 @@ See the [README diagram](../README.md#how-it-fits-together) for the whole pictur
 **Prerequisites.** `init.sh` needs POSIX `sh` plus the usual coreutils/text tools it
 shells out to — `awk`, `grep`, `sed`, `mv`, `rm`, `cat`, `head`, `mkdir`, `chmod`, `touch`,
 `basename`, `dirname`, `date` and `git` — all standard on macOS
-and Linux. The engines additionally need
+and Linux. `panel_prompt.py` and `check_record_prose.py` call `git --no-lazy-fetch`, which needs Git
+2.44 or later. The engines additionally need
 [`uv`](https://docs.astral.sh/uv/) (they're PEP-723 single-file scripts) and, for
 `pr-watch` / `parallel`, the GitHub CLI `gh`, authenticated (`gh auth status`).
 Runtime engines use the stdlib-only `kitconfig.py` reader; this repository's
@@ -40,8 +41,9 @@ cp -r /path/to/agentic-dev-kit/. .
 > or refresh installed engines. The README's
 > [upgrade section](../README.md#upgrading-an-already-adopted-repo) explains the route.
 
-`init.sh` prompts you for a handful of values — project name, agent runtime, tracker board,
-the protected branch, your review bot — and stamps them into `config/dev-model.yaml`.
+`init.sh` prompts you for project name, agent runtime, operator logins, tracker board,
+the protected branch, your notification user key and your review bots, and stamps them
+into `config/dev-model.yaml`.
 That file arrives with `review.safety_critical_paths` listing only the kit's own gate
 files. Add your own send, destructive and kill/recovery paths to it, or delete the key:
 absent, every pull request keeps the two-lens fallback review, while a list that misses a
@@ -95,8 +97,8 @@ notify:
   user_key: "U0XXXXXXXXX"
 ```
 
-It is the only key you may set there; anything else is an error naming what it
-refused. `./init.sh` writes the *tracked* file, so a locally-set key keeps winning
+It and `state.test_guard_exclude` are the only keys you may set there; anything else
+is an error naming what it refused. `./init.sh` writes the *tracked* file, so a locally-set key keeps winning
 after a re-run — leave the tracked value blank rather than duplicating it.
 
 ## 2 · Your first briefing — `session-start`
