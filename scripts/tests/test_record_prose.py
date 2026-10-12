@@ -833,3 +833,278 @@ def test_partial_clone_missing_objects_do_not_trigger_fetches(repo, tmp_path, mo
     subprocess.run(["git", "show", f"{base}:config/dev-model.yaml"], cwd=partial,
                    capture_output=True, env=env, timeout=30)
     assert marker.exists()
+
+
+# An archive sweep moves record text between narrative paths byte for byte. The
+# destination's lines are new to its own diff, but the pairing is not new text.
+def _sweep(root: Path, inbox_before: str, archive_before: str,
+           inbox_after: str, archive_after: str) -> tuple[Path, str, str]:
+    save(root, "docs/inbox.md", inbox_before)
+    save(root, "docs/archive.md", archive_before)
+    base = commit(root)
+    save(root, "docs/inbox.md", inbox_after)
+    save(root, "docs/archive.md", archive_after)
+    return root, base, commit(root)
+
+
+def test_pairing_moved_whole_to_another_narrative_path_is_not_reported(repo):
+    root, _ = repo
+    entry = f"- **An entry.** The fix is either a grant or a launcher step.\n- **Next.** On {LOCAL_REF} the lens\n  found a gap.\n"
+    root, base, head = _sweep(root, "# Inbox\n\n## 2026-10-08\n\n" + entry, "# Archive\n",
+                              "# Inbox\n", "# Archive\n\n## 2026-10-08\n\n" + entry)
+    code, report = run((root, base), head)
+    assert code == 0, report
+    assert report["findings"] == []
+
+
+def test_moved_line_forming_a_new_pairing_is_reported(repo):
+    root, _ = repo
+    # The keyword's line moves; the reference's line was already in the archive,
+    # so the pairing between them did not exist before the change.
+    root, base, head = _sweep(root, "# Inbox\n\n- Ends with the fix.\n", f"# Archive\n\n- Mentions {LOCAL_REF}.\n",
+                              "# Inbox\n", f"# Archive\n\n- Ends with the fix.\n- Mentions {LOCAL_REF}.\n")
+    code, report = run((root, base), head)
+    assert code == 1, report
+    assert [item["check"] for item in report["findings"]] == ["closing-keywords"]
+    assert report["findings"][0]["source"] == "docs/archive.md"
+
+
+def test_copied_pairing_is_reported(repo):
+    root, _ = repo
+    line = f"- Fix rounds on {LOCAL_REF} kept going.\n"
+    # The inbox keeps its line: the archive's copy reproduces nothing deleted.
+    root, base, head = _sweep(root, "# Inbox\n\n" + line, "# Archive\n",
+                              "# Inbox\n\n" + line, "# Archive\n\n" + line)
+    code, report = run((root, base), head)
+    assert code == 1, report
+    assert [(item["source"], item["check"]) for item in report["findings"]] == [("docs/archive.md", "closing-keywords")]
+
+
+def test_one_deleted_pairing_covers_one_moved_copy(repo):
+    root, _ = repo
+    line = f"- Fix rounds on {LOCAL_REF} kept going.\n"
+    save(root, "docs/inbox.md", "# Inbox\n\n" + line)
+    save(root, "docs/archive.md", "# Archive\n")
+    base = commit(root)
+    # Two destinations, so each copy is matched on its own: only one may claim
+    # the single deleted line.
+    save(root, "docs/inbox.md", "# Inbox\n")
+    save(root, "docs/archive.md", "# Archive\n\n" + line)
+    save(root, "docs/history.md", "# History\n\n" + line)
+    code, report = run((root, base), commit(root))
+    assert code == 1, report
+    assert [item["check"] for item in report["findings"]] == ["closing-keywords"]
+
+
+def test_moved_lines_in_a_new_order_are_reported(repo):
+    root, _ = repo
+    # Both lines move, but reversed: the keyword now precedes the reference,
+    # a pairing the deleted text never held.
+    root, base, head = _sweep(root, f"# Inbox\n\n- On {LOCAL_REF} first.\n- The fix is\n", "# Archive\n",
+                              "# Inbox\n", f"# Archive\n\n- The fix is\n- On {LOCAL_REF} first.\n")
+    code, report = run((root, base), head)
+    assert code == 1, report
+    assert [item["check"] for item in report["findings"]] == ["closing-keywords"]
+
+
+def test_moved_pairing_split_by_new_text_is_reported(repo):
+    root, _ = repo
+    root, base, head = _sweep(root, f"# Inbox\n\n- The fix is\n- on {LOCAL_REF}.\n", "# Archive\n",
+                              "# Inbox\n", f"# Archive\n\n- The fix is\n- Inserted.\n- on {LOCAL_REF}.\n")
+    code, report = run((root, base), head)
+    assert code == 1, report
+    assert [item["check"] for item in report["findings"]] == ["closing-keywords"]
+
+
+def test_moved_pairing_in_a_commit_message_is_still_reported(repo):
+    root, _ = repo
+    line = f"- Fix rounds on {LOCAL_REF} kept going.\n"
+    save(root, "docs/inbox.md", "# Inbox\n\n" + line)
+    save(root, "docs/archive.md", "# Archive\n")
+    base = commit(root)
+    save(root, "docs/inbox.md", "# Inbox\n")
+    save(root, "docs/archive.md", "# Archive\n\n" + line)
+    code, report = run((root, base), commit(root, f"sweep: {line.strip()}"))
+    assert code == 1, report
+    assert [item["source"].split(":")[0] for item in report["findings"]] == ["commit"]
+
+
+def test_moved_lines_from_separate_deleted_runs_are_reported(repo):
+    root, _ = repo
+    # Each line is a move, but from different paths: they were never adjacent,
+    # so the pairing they now form is new.
+    save(root, "docs/inbox.md", "# Inbox\n\n- The fix is\n")
+    save(root, "docs/history.md", f"# History\n\n- On {LOCAL_REF} here.\n")
+    save(root, "docs/archive.md", "# Archive\n")
+    base = commit(root)
+    save(root, "docs/inbox.md", "# Inbox\n")
+    save(root, "docs/history.md", "# History\n")
+    save(root, "docs/archive.md", f"# Archive\n\n- The fix is\n- On {LOCAL_REF} here.\n")
+    code, report = run((root, base), commit(root))
+    assert code == 1, report
+    assert [item["check"] for item in report["findings"]] == ["closing-keywords"]
+
+
+def test_move_that_drops_a_line_inside_the_pairing_is_reported(repo):
+    root, _ = repo
+    # The keyword's nearest reference was #9; dropping that line joins the
+    # keyword to #7, a pairing the deleted run never held.
+    root, base, head = _sweep(root, f"# Inbox\n\n- The fix is\n- see {FOREIGN_REF}\n- on {LOCAL_REF}.\n", "# Archive\n",
+                              "# Inbox\n", f"# Archive\n\n- The fix is\n- on {LOCAL_REF}.\n")
+    code, report = run((root, base), head, "--allow-close", FOREIGN_REF)
+    assert code == 1, report
+    assert [(item["source"], item["detail"].split(":")[0]) for item in report["findings"]] == [
+        ("docs/archive.md", f"closing reference {LOCAL_REF}")]
+
+
+def test_moved_lines_at_matching_positions_of_different_runs_are_reported(repo):
+    root, _ = repo
+    # The keyword is the first line of one deleted run and the reference the
+    # second line of another, so their positions follow on without being one run.
+    save(root, "docs/inbox.md", "# Inbox\n\n- The fix is\n")
+    save(root, "docs/history.md", f"# History\n\n- x\n- on {LOCAL_REF}.\n")
+    save(root, "docs/archive.md", "# Archive\n")
+    base = commit(root)
+    save(root, "docs/inbox.md", "# Inbox\n")
+    save(root, "docs/history.md", "# History\n\n- x\n")
+    save(root, "docs/archive.md", f"# Archive\n\n- The fix is\n- on {LOCAL_REF}.\n")
+    code, report = run((root, base), commit(root))
+    assert code == 1, report
+    assert [item["check"] for item in report["findings"]] == ["closing-keywords"]
+
+
+def test_scattered_partial_sweep_with_shared_lines_is_not_reported(repo):
+    root, _ = repo
+    # Every other entry moves, in reverse order, between entries already
+    # archived. Blank and continuation lines repeat across entries, so a matcher
+    # that claims them greedily aligns them to the wrong source and loses moves.
+    count = 40
+    entries = [f"- **E{i}.** fix\n  line two\n  on #{i}\n\n" for i in range(count)]
+    moving, staying = entries[0::2], entries[1::2]
+    archive_after, pending = [], list(moving)
+    for i in range(count):
+        archive_after.append(f"- A{i}\n\n")
+        if i % 2 == 0 and pending:
+            archive_after.append(pending.pop())
+    root, base, head = _sweep(root, "# Inbox\n\n" + "".join(entries),
+                              "# Archive\n\n" + "".join(f"- A{i}\n\n" for i in range(count)),
+                              "# Inbox\n\n" + "".join(staying), "# Archive\n\n" + "".join(archive_after))
+    code, report = run((root, base), head)
+    assert code == 0, report
+    assert report["findings"] == []
+
+
+def test_overlapping_pairings_keep_one_alignment_per_line(repo):
+    root, _ = repo
+    # Two keywords pair with one reference, so their spans share lines. The
+    # inner pairing must align with the outer one's source, not take the other
+    # deleted copy that the archive's second block needs.
+    block = f"- fix\n- on {LOCAL_REF}\n"
+    save(root, "docs/history.md", "# History\n\n" + block)
+    save(root, "docs/inbox.md", "# Inbox\n\n- resolves\n" + block)
+    save(root, "docs/archive.md", "# Archive\n")
+    base = commit(root)
+    save(root, "docs/history.md", "# History\n")
+    save(root, "docs/inbox.md", "# Inbox\n")
+    save(root, "docs/archive.md", "# Archive\n\n- resolves\n" + block + "\n" + block)
+    code, report = run((root, base), commit(root))
+    assert code == 0, report
+    assert report["findings"] == []
+
+
+def test_pairing_moved_out_of_a_deleted_narrative_file_is_not_reported(repo):
+    root, _ = repo
+    block = f"- The fix is\n- on {LOCAL_REF}.\n"
+    save(root, "docs/inbox.md", "# Inbox\n\n" + block)
+    save(root, "docs/archive.md", "# Archive\n")
+    base = commit(root)
+    (root / "docs/inbox.md").unlink()
+    save(root, "docs/archive.md", "# Archive\n\n" + block)
+    code, report = run((root, base), commit(root))
+    assert code == 0, report
+    assert report["findings"] == []
+
+
+def test_pairing_moved_out_of_a_hunk_that_also_adds_lines_is_not_reported(repo):
+    root, _ = repo
+    # The sweep's usual shape: the swept entry's lines are replaced in place by
+    # a new entry, so the source hunk both deletes and adds.
+    block = f"- The fix is\n- on {LOCAL_REF}.\n"
+    root, base, head = _sweep(root, "# Inbox\n\n" + block, "# Archive\n",
+                              "# Inbox\n\n- A new entry.\n", "# Archive\n\n" + block)
+    code, report = run((root, base), head)
+    assert code == 0, report
+    assert report["findings"] == []
+
+
+def test_deleting_a_narrative_symlink_is_not_unavailable(repo):
+    root, _ = repo
+    (root / "docs/archive.md").symlink_to("plan.md")
+    base = commit(root)
+    (root / "docs/archive.md").unlink()
+    code, report = run((root, base), commit(root))
+    assert code == 0, report
+    assert report["findings"] == [] and report["unavailable"] == []
+
+
+def test_many_identical_moved_pairings_are_each_matched(repo):
+    root, _ = repo
+    # More identical copies than candidates tried per pairing: claimed sources
+    # must leave the index, or later copies find only claimed ones.
+    body = f"- Fix rounds on {LOCAL_REF}.\n" * 50
+    root, base, head = _sweep(root, "# Inbox\n\n" + body, "# Archive\n", "# Inbox\n", "# Archive\n\n" + body)
+    code, report = run((root, base), head)
+    assert code == 0, report
+    assert report["findings"] == []
+
+
+def test_moved_pairings_longer_than_the_span_bound_are_reported(repo):
+    root, _ = repo
+    keywords = 100
+    body = "".join(f"- fix {i}\n" for i in range(keywords)) + f"- on {LOCAL_REF}\n"
+    root, base, head = _sweep(root, "# Inbox\n\n" + body, "# Archive\n", "# Inbox\n", "# Archive\n\n" + body)
+    code, report = run((root, base), head)
+    assert code == 1, report
+    # The reference is on archive line keywords + 3; a pairing spanning more
+    # than 64 lines (reference - keyword >= 64) is reported, a shorter one is a move.
+    reference = keywords + 3
+    assert [item["line"] for item in report["findings"]] == [
+        line for line in range(3, reference) if reference - line >= 64]
+
+
+def test_pathological_identical_moves_fail_closed_within_a_bounded_time(repo):
+    root, _ = repo
+    # Identical keyword lines and one reference, moved wholesale. Past the
+    # candidate bound the pairings are reported; the run must stay fast.
+    body = "- fix\n" * 1500 + f"- on {LOCAL_REF}\n"
+    root, base, head = _sweep(root, "# Inbox\n\n" + body, "# Archive\n", "# Inbox\n", "# Archive\n\n" + body)
+    code, report = run((root, base), head, timeout=30)
+    assert code == 1, report
+    assert all(item["source"] == "docs/archive.md" for item in report["findings"])
+
+
+def test_pairing_moved_out_of_a_deleted_executable_narrative_file_is_not_reported(repo):
+    root, _ = repo
+    block = f"- The fix is\n- on {LOCAL_REF}.\n"
+    save(root, "docs/inbox.md", "# Inbox\n\n" + block)
+    (root / "docs/inbox.md").chmod(0o755)
+    save(root, "docs/archive.md", "# Archive\n")
+    base = commit(root)
+    (root / "docs/inbox.md").unlink()
+    save(root, "docs/archive.md", "# Archive\n\n" + block)
+    code, report = run((root, base), commit(root))
+    assert code == 0, report
+    assert report["findings"] == []
+
+
+def test_many_short_failing_pairings_over_identical_lines_stay_fast(repo):
+    root, _ = repo
+    # Every pairing is short and every deleted run starts like it, but no run
+    # holds its reference, so each tries candidates and fails. The candidate
+    # bound keeps that work per pairing constant.
+    group = "- fix\n" * 60
+    root, base, head = _sweep(root, "# Inbox\n\n" + (group + "- on #8\n") * 60, "# Archive\n",
+                              "# Inbox\n", "# Archive\n\n" + (group + f"- on {LOCAL_REF}\n") * 60)
+    code, report = run((root, base), head, "--allow-close", "#8", timeout=15)
+    assert code == 1, report
+    assert len(report["findings"]) == 60 * 60
