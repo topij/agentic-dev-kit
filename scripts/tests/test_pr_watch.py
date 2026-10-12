@@ -1865,6 +1865,7 @@ def test_a_failed_identity_read_keeps_the_rows_it_already_had(
             return {"total_count": 0, "check_runs": []}, None
         if "/status?" in url:
             return {
+                "total_count": 1,
                 "state": "success",
                 "statuses": [
                     {
@@ -2021,6 +2022,7 @@ def test_the_rest_identity_read_swallows_every_class_it_declares(
             return {"total_count": 0, "check_runs": []}, None
         if "/status?" in url:
             return {
+                "total_count": 1,
                 "state": "success",
                 "statuses": [
                     {
@@ -5382,6 +5384,7 @@ def test_a_healthy_mid_review_status_context_gets_its_identity_read_on_rest(
             "check-runs": {"total_count": 0, "check_runs": []},
             # The combined-status endpoint, which carries NO creator …
             "/status?": {
+                "total_count": 1,
                 "state": "pending",
                 "statuses": [
                     {
@@ -6873,13 +6876,15 @@ def test_rest_pr_view_assembles_the_same_shape_build_report_consumes(
         pr_watch,
         monkeypatch,
         {
-            "commits/deadbee/status": {"statuses": [{"context": "legacy", "state": "success", "description": "", "created_at": "2026-07-25T11:00:00Z"}]},
+            "commits/deadbee/status": {"total_count": 1, "statuses": [{"context": "legacy", "state": "success", "description": "", "created_at": "2026-07-25T11:00:00Z"}]},
             "pulls/9": {
                 "number": 9,
                 "title": "a title",
                 "html_url": "https://github.com/owner/repo/pull/9",
                 "state": "open",
                 "draft": False,
+                "comments": 1,
+                "review_comments": 1,
                 "base": {"ref": "main"},
                 "mergeable_state": "clean",
                 "head": {"sha": "deadbee"},
@@ -7050,15 +7055,15 @@ def test_rest_check_pagination_is_followed_then_bounded(monkeypatch: pytest.Monk
     _no_gh(pr_watch, monkeypatch)
 
     pages = {
-        "page=1": ({"check_runs": [{"name": "one"}]}, '<https://api.github.com/x?page=2>; rel="next"'),
-        "page=2": ({"check_runs": [{"name": "two"}]}, None),
+        "page=1": ({"total_count": 3, "check_runs": [{"name": "one"}]}, '<https://api.github.com/x?page=2>; rel="next"'),
+        "page=2": ({"total_count": 3, "check_runs": [{"name": "two"}]}, None),
     }
 
     def _get(url: str, token: str, **_kw):
         for fragment, payload in pages.items():
             if fragment in url:
                 return payload
-        return ({"check_runs": [{"name": "first"}]}, '<https://api.github.com/x?page=1>; rel="next"')
+        return ({"total_count": 3, "check_runs": [{"name": "first"}]}, '<https://api.github.com/x?page=1>; rel="next"')
 
     monkeypatch.setattr(pr_watch, "_http_get", _get)
     got = pr_watch._http_get_all_wrapped("https://api.github.com/x", "t", "check_runs")
@@ -7068,7 +7073,7 @@ def test_rest_check_pagination_is_followed_then_bounded(monkeypatch: pytest.Monk
     monkeypatch.setattr(
         pr_watch,
         "_http_get",
-        lambda url, token, **_kw: ({"check_runs": [{"name": "loop"}]}, '<https://api.github.com/same>; rel="next"'),
+        lambda url, token, **_kw: ({"total_count": 4, "check_runs": [{"name": "loop"}]}, '<https://api.github.com/same>; rel="next"'),
     )
     bounded = pr_watch._http_get_all_wrapped("https://api.github.com/same", "t", "check_runs", max_pages=4)
     assert len(bounded) == 4
@@ -7151,6 +7156,7 @@ def test_the_rest_identity_read_uses_the_bare_array_reader_for_plural_statuses(
             },
             # The #23 shape: the outage announced only as a status description.
             "/status?": {
+                "total_count": 1,
                 "state": "success",
                 "statuses": [
                     {
@@ -7207,7 +7213,7 @@ def test_fetch_check_details_on_rest_returns_rows_with_a_real_signal(
             # identity read fires and really does request the plural endpoint —
             # which needs its own BARE ARRAY body.
             "commits/abc123/statuses": [],
-            "commits/abc123/status": {"statuses": []},
+            "commits/abc123/status": {"total_count": 0, "statuses": []},
             "pulls/5": {"head": {"sha": "abc123"}},
         },
     )
@@ -7272,7 +7278,16 @@ def test_a_rest_poll_reads_each_check_surface_once(
     object_reads = _route_http(
         pr_watch,
         monkeypatch,
-        {"pulls/9": {"number": 9, "state": "open", "head": {"sha": "deadbee"}}},
+        {
+            "pulls/9": {
+                "number": 9,
+                "state": "open",
+                "draft": False,
+                "comments": 0,
+                "review_comments": 0,
+                "head": {"sha": "deadbee"},
+            }
+        },
     )
     wrapped_reads: list[str] = []
 
@@ -7379,7 +7394,15 @@ def test_rest_view_raises_the_changes_requested_merge_blocker(
         pr_watch,
         "_http_get",
         lambda url, token, **_kw: (
-            {"number": 1, "state": "open", "head": {"sha": "h"}, "statuses": []},
+            {
+                "number": 1,
+                "state": "open",
+                "draft": False,
+                "comments": 0,
+                "review_comments": 0,
+                "head": {"sha": "h"},
+                "statuses": [],
+            },
             None,
         ),
     )
@@ -7450,7 +7473,16 @@ def test_rest_view_names_a_merged_pr_merged(monkeypatch: pytest.MonkeyPatch) -> 
         pr_watch,
         "_http_get",
         lambda url, token, **_kw: (
-            {"number": 1, "state": "closed", "merged": True, "head": {"sha": "s"}, "statuses": []},
+            {
+                "number": 1,
+                "state": "closed",
+                "merged": True,
+                "draft": False,
+                "comments": 0,
+                "review_comments": 0,
+                "head": {"sha": "s"},
+                "statuses": [],
+            },
             None,
         ),
     )
@@ -7688,7 +7720,17 @@ def test_rest_pr_view_makes_one_git_call_for_six_urls(monkeypatch: pytest.Monkey
     monkeypatch.setattr(
         pr_watch,
         "_http_get",
-        lambda url, token, **_kw: ({"number": 1, "head": {"sha": "s"}, "statuses": []}, None),
+        lambda url, token, **_kw: (
+            {
+                "number": 1,
+                "draft": False,
+                "comments": 0,
+                "review_comments": 0,
+                "head": {"sha": "s"},
+                "statuses": [],
+            },
+            None,
+        ),
     )
     monkeypatch.setattr(pr_watch, "_http_get_all", lambda url, token, **_kw: [])
     monkeypatch.setattr(pr_watch, "_http_get_all_wrapped", lambda url, token, key, **_kw: [])
@@ -7773,13 +7815,13 @@ def test_the_status_surface_is_paginated_like_check_runs(
     _no_gh(pr_watch, monkeypatch)
 
     pages = {
-        "check-runs": ({"check_runs": []}, None),
+        "check-runs": ({"total_count": 0, "check_runs": []}, None),
         "status?per_page=100&page=2": (
-            {"statuses": [{"context": "late", "state": "pending", "description": "", "created_at": ""}]},
+            {"total_count": 2, "statuses": [{"context": "late", "state": "pending", "description": "", "created_at": ""}]},
             None,
         ),
         "status?per_page=100": (
-            {"statuses": [{"context": "early", "state": "success", "description": "", "created_at": ""}]},
+            {"total_count": 2, "statuses": [{"context": "early", "state": "success", "description": "", "created_at": ""}]},
             '<https://api.github.com/repos/owner/repo/commits/s/status?per_page=100&page=2>; rel="next"',
         ),
     }
@@ -7803,7 +7845,10 @@ def test_the_checks_fetch_asks_for_a_full_page(monkeypatch: pytest.MonkeyPatch) 
     pr_watch = _load_pr_watch()
     _no_gh(pr_watch, monkeypatch)
     attempted = _fake_urlopen(
-        monkeypatch, pr_watch, {"check-runs": ({"check_runs": []}, None), "status": ({"statuses": []}, None)}
+        monkeypatch, pr_watch, {
+            "check-runs": ({"total_count": 0, "check_runs": []}, None),
+            "status": ({"total_count": 0, "statuses": []}, None),
+        },
     )
 
     pr_watch._rest_fetch_checks("sha1", token="t0ken")
@@ -8087,7 +8132,17 @@ def test_an_unreadable_review_surface_does_not_read_as_no_findings(
         pr_watch,
         "_http_get",
         lambda url, token, **_kw: (
-            ({"number": 9, "state": "open", "head": {"sha": "h"}}, None)
+            (
+                {
+                    "number": 9,
+                    "state": "open",
+                    "draft": False,
+                    "comments": 0,
+                    "review_comments": 0,
+                    "head": {"sha": "h"},
+                },
+                None,
+            )
             if "pulls/9" in url and "reviews" not in url and "comments" not in url
             else (None, None)  # every list surface answers 200 + null
         ),
@@ -8140,7 +8195,7 @@ def test_the_wrapped_helper_reports_its_own_truncation(
         pr_watch,
         "_http_get",
         lambda url, token, **_kw: (
-            {"check_runs": [{"name": "c"}]},
+            {"total_count": 2, "check_runs": [{"name": "c"}]},
             '<https://api.github.com/n>; rel="next"',
         ),
     )
@@ -9729,6 +9784,8 @@ def test_the_rest_field_mappings_that_feed_merge_blockers_are_pinned(
                 "number": 9,
                 "state": "open",
                 "draft": True,
+                "comments": 0,
+                "review_comments": 0,
                 "base": {"ref": "release"},
                 "mergeable_state": "blocked",
                 "head": {"sha": "h"},
@@ -10566,6 +10623,9 @@ def test_both_transports_fetch_the_body_the_stamp_check_reads(
         lambda url, token, **kw: (
             {
                 "number": 9,
+                "draft": False,
+                "comments": 0,
+                "review_comments": 0,
                 "head": {"sha": HEAD_SHA},
                 "body": "`make test` at `deadbeef1234567` on 2026-09-02 printed ok",
             },
@@ -11788,7 +11848,14 @@ def test_both_transports_fetch_the_base_commit_the_class_reads(
         pr_watch,
         "_http_get",
         lambda url, token, **kw: (
-            {"number": 9, "head": {"sha": HEAD_SHA}, "base": {"ref": "main", "sha": CLASS_BASE}},
+            {
+                "number": 9,
+                "draft": False,
+                "comments": 0,
+                "review_comments": 0,
+                "head": {"sha": HEAD_SHA},
+                "base": {"ref": "main", "sha": CLASS_BASE},
+            },
             None,
         ),
     )
@@ -12534,6 +12601,8 @@ def _cloud_rest_opener(
             "html_url": "https://github.com/owner/repo/pull/9",
             "state": "open",
             "draft": False,
+            "comments": 0,
+            "review_comments": 0,
             "base": {"ref": "main", "sha": "base000"},
             "mergeable_state": "clean",
             "head": {"sha": "deadbee"},
@@ -12717,3 +12786,235 @@ def test_unread_statuses_make_the_bot_read_unavailable_by_the_explicit_guard(
         rest_reads=pr_watch.RestCheckReads("deadbee", [], None),
     )
     assert details == pr_watch.CheckDetails([], "unavailable")
+
+
+# --- #94 step 1: REST reads judged complete from the data, not only the ceiling.
+# Each test names the re-audit row it pins. Incomplete reads are recorded in
+# `truncated_reads` like a ceiling truncation and, like it, gate nothing.
+
+
+def _one_page(pr_watch, monkeypatch: pytest.MonkeyPatch, body) -> None:
+    """Answer every GET with ``body`` and no ``Link`` header."""
+    monkeypatch.setattr(pr_watch, "_http_get", lambda url, token, _b=body, **_kw: (_b, None))
+
+
+@pytest.mark.parametrize("key", ["check_runs", "statuses"])
+def test_a_wrapped_read_short_of_its_total_count_is_recorded(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], key: str
+) -> None:
+    """Rows 2 and 3: a page that says `total_count: 3` but carries one row and no
+    `Link` used to read as the whole rollup, so the two unread checks were simply
+    absent. Now it is recorded as incomplete, and the rows that did arrive are kept.
+    """
+    pr_watch = _load_pr_watch()
+    _one_page(pr_watch, monkeypatch, {"total_count": 3, key: [{"name": "c"}]})
+    items = pr_watch._http_get_all_wrapped("https://api.github.com/w?per_page=100", "t", key)
+    assert items == [{"name": "c"}]
+    assert pr_watch._truncated_reads == ["https://api.github.com/w?per_page=100"]
+    assert "INCOMPLETE (1 of total_count 3 read)" in capsys.readouterr().err
+
+
+def test_a_wrapped_read_that_meets_its_total_count_records_nothing(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The counter-case: a complete read must stay silent, or every poll warns."""
+    pr_watch = _load_pr_watch()
+    _one_page(pr_watch, monkeypatch, {"total_count": 1, "check_runs": [{"name": "c"}]})
+    pr_watch._http_get_all_wrapped("https://api.github.com/w", "t", "check_runs")
+    assert pr_watch._truncated_reads == []
+    assert capsys.readouterr().err == ""
+
+
+@pytest.mark.parametrize("count", [None, "3", True, -1, 2.0])
+def test_a_wrapped_page_without_a_usable_total_count_raises(
+    monkeypatch: pytest.MonkeyPatch, count
+) -> None:
+    """Row 3's structural half: a body with no integer `total_count` is not this
+    endpoint's shape, so nothing it says about completeness can be trusted.
+    `True` is listed because `bool` is an `int` subclass in Python.
+    """
+    pr_watch = _load_pr_watch()
+    body = {"check_runs": []}
+    if count is not None:
+        body["total_count"] = count
+    _one_page(pr_watch, monkeypatch, body)
+    with pytest.raises(RuntimeError, match="no usable 'total_count'"):
+        pr_watch._http_get_all_wrapped("https://api.github.com/w", "t", "check_runs")
+
+
+@pytest.mark.parametrize("element", ["x", 1, None, ["nested"]])
+def test_a_non_object_element_on_any_surface_raises(
+    monkeypatch: pytest.MonkeyPatch, element
+) -> None:
+    """Row 9: the row builders `continue`d past a non-object element, so a
+    garbled failing check vanished and left `all_green` true. Both readers raise.
+    """
+    pr_watch = _load_pr_watch()
+    _one_page(pr_watch, monkeypatch, {"total_count": 2, "check_runs": [{"name": "c"}, element]})
+    with pytest.raises(RuntimeError, match="element, expected JSON objects"):
+        pr_watch._http_get_all_wrapped("https://api.github.com/w", "t", "check_runs")
+
+    _one_page(pr_watch, monkeypatch, [{"id": 1}, element])
+    with pytest.raises(RuntimeError, match="element, expected JSON objects"):
+        pr_watch._http_get_all("https://api.github.com/a", "t")
+
+
+def test_a_bare_array_read_short_of_its_expected_count_is_recorded(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Rows 7 and 8, at the helper: fewer items than the caller's count is a gap.
+    More is not (a comment posted between the two reads), and an equal count is
+    complete."""
+    pr_watch = _load_pr_watch()
+    _one_page(pr_watch, monkeypatch, [{"id": 1}])
+    url = "https://api.github.com/c?per_page=100"
+
+    pr_watch._http_get_all(url, "t", expected_count=1)
+    pr_watch._http_get_all(url, "t", expected_count=0)
+    assert pr_watch._truncated_reads == []
+
+    pr_watch._http_get_all(url, "t", expected_count=2)
+    assert pr_watch._truncated_reads == [url]
+    assert "1 items read, the pull request counts 2" in capsys.readouterr().err
+
+
+def test_a_full_last_page_with_no_next_link_is_recorded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Row 13: reviews carry no count anywhere, so a dropped `Link` on a full
+    page was invisible. A full last page is now recorded; a short one is not.
+    The `per_page` the URL asked for is the measure."""
+    pr_watch = _load_pr_watch()
+    _one_page(pr_watch, monkeypatch, [{"id": 1}, {"id": 2}])
+
+    pr_watch._http_get_all("https://api.github.com/r?per_page=3", "t")
+    assert pr_watch._truncated_reads == []
+
+    pr_watch._http_get_all("https://api.github.com/r?per_page=2", "t")
+    assert pr_watch._truncated_reads == ["https://api.github.com/r?per_page=2"]
+
+
+def test_an_incomplete_read_is_reported_but_does_not_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Step 1 records and does not gate, as the ceiling case does (see
+    `test_a_truncated_read_is_reported_but_does_not_gate`). Gating belongs with
+    any later change that lets REST authorize a merge."""
+    pr_watch = _load_pr_watch()
+    _one_page(pr_watch, monkeypatch, {"total_count": 5, "check_runs": []})
+    pr_watch._http_get_all_wrapped("https://api.github.com/w", "t", "check_runs")
+
+    report = pr_watch.build_report(
+        _green_view(), [], set(), check_details=pr_watch.CheckDetails([], "skipped")
+    )
+    assert report["truncated_reads"] == ["https://api.github.com/w"]
+    assert report["converged"] is True
+
+
+def _rest_view_routes(pr_watch, monkeypatch: pytest.MonkeyPatch, pr_body: dict, *, comments=0, inline=0):
+    """Route the REST view's reads: ``pr_body`` for the PR, empty check surfaces,
+    and ``comments`` / ``inline`` items on the two comment surfaces."""
+
+    def _get(url, token, **_kw):
+        if url.endswith("/pulls/9"):
+            return pr_body, None
+        if "/check-runs" in url:
+            return {"total_count": 0, "check_runs": []}, None
+        if "/status" in url:
+            return {"total_count": 0, "statuses": []}, None
+        if "/issues/9/comments" in url:
+            return [{"id": i} for i in range(comments)], None
+        if "/pulls/9/comments" in url:
+            return [{"id": i} for i in range(inline)], None
+        return [], None
+
+    _no_gh(pr_watch, monkeypatch)
+    monkeypatch.setattr(pr_watch, "_http_get", _get)
+
+
+def _pr_body(**overrides) -> dict:
+    body = {
+        "number": 9,
+        "state": "open",
+        "draft": False,
+        "comments": 0,
+        "review_comments": 0,
+        "head": {"sha": "s"},
+    }
+    body.update(overrides)
+    return body
+
+
+@pytest.mark.parametrize("draft", ["missing", None, "false", 0, 1])
+def test_a_pr_body_without_a_boolean_draft_raises(
+    monkeypatch: pytest.MonkeyPatch, draft
+) -> None:
+    """Row 5: `bool(pr_data.get("draft"))` turned a missing field into "not a
+    draft", which drops the draft merge blocker on a body that never said."""
+    pr_watch = _load_pr_watch()
+    body = _pr_body()
+    if draft == "missing":
+        del body["draft"]
+    else:
+        body["draft"] = draft
+    _rest_view_routes(pr_watch, monkeypatch, body)
+    with pytest.raises(RuntimeError, match="no boolean draft field"):
+        pr_watch.fetch_pr_view(9)
+
+
+@pytest.mark.parametrize("field", ["comments", "review_comments"])
+@pytest.mark.parametrize("value", ["missing", None, "2", True, -1])
+def test_a_pr_body_without_usable_comment_counts_raises(
+    monkeypatch: pytest.MonkeyPatch, field: str, value
+) -> None:
+    """Rows 7 and 8: the counts are what the comment reads are judged against,
+    so a body without them cannot vouch for those reads."""
+    pr_watch = _load_pr_watch()
+    body = _pr_body()
+    if value == "missing":
+        del body[field]
+    else:
+        body[field] = value
+    _rest_view_routes(pr_watch, monkeypatch, body)
+    with pytest.raises(RuntimeError, match=f"no usable {field} count"):
+        pr_watch.fetch_pr_view(9)
+
+
+@pytest.mark.parametrize(
+    ("field", "surface"),
+    [("comments", "issues/9/comments"), ("review_comments", "pulls/9/comments")],
+)
+def test_a_comment_surface_short_of_the_pr_count_is_recorded(
+    monkeypatch: pytest.MonkeyPatch, field: str, surface: str
+) -> None:
+    """Rows 7 and 8, end to end: the PR says 2, the surface returns 1 with no
+    `Link`. That surface, and only that one, is recorded. Each count is wired to
+    its own surface, so swapping them fails one case of this test."""
+    pr_watch = _load_pr_watch()
+    _rest_view_routes(
+        pr_watch,
+        monkeypatch,
+        _pr_body(**{field: 2}),
+        comments=1 if field == "comments" else 0,
+        inline=1 if field == "review_comments" else 0,
+    )
+    pr_watch.fetch_pr_view(9)
+    assert len(pr_watch._truncated_reads) == 1
+    assert surface in pr_watch._truncated_reads[0]
+
+
+def test_the_largest_total_count_across_pages_is_the_measure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A check that starts between page reads raises `total_count` on the later
+    page. Judging against the first page's count alone would call the read whole."""
+    pr_watch = _load_pr_watch()
+    pages = iter(
+        [
+            ({"total_count": 1, "check_runs": [{"name": "a"}]}, '<https://api.github.com/p2>; rel="next"'),
+            ({"total_count": 3, "check_runs": [{"name": "b"}]}, None),
+        ]
+    )
+    monkeypatch.setattr(pr_watch, "_http_get", lambda url, token, **_kw: next(pages))
+    pr_watch._http_get_all_wrapped("https://api.github.com/w", "t", "check_runs")
+    assert pr_watch._truncated_reads == ["https://api.github.com/w"]

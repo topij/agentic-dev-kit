@@ -1140,7 +1140,59 @@ def _warn_pagination_truncated(url: str, max_pages: int) -> None:
     )
 
 
-def _http_get_all(url: str, token: str, *, max_pages: int = _REST_MAX_PAGES) -> list:
+def _per_page(url: str) -> int:
+    """The ``per_page`` a paginated GitHub URL asked for, or GitHub's default of 30."""
+    values = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query).get("per_page")
+    try:
+        return int(values[-1]) if values else 30
+    except ValueError:
+        return 30
+
+
+def _warn_read_incomplete(url: str, reason: str) -> None:
+    """Record and announce that the data, not the ceiling, says a read is short.
+
+    Recorded in ``_truncated_reads`` beside the ceiling case, because the report
+    a reader acts on is the same: the list is a prefix, not the whole. #94's
+    re-audit at `e37b7bd` found every count GitHub sends discarded, so a short
+    page with no ``Link`` read as complete. Deduped on stderr as
+    :func:`_warn_pagination_truncated` is.
+    """
+    _truncated_reads.append(url)
+    if url in _truncation_warned:
+        return
+    _truncation_warned.add(url)
+    print(
+        f"warning: GitHub read {url} is INCOMPLETE ({reason}) — items beyond what "
+        "was returned were not read",
+        file=sys.stderr,
+    )
+
+
+def _require_dict_items(items: list, url: str) -> None:
+    """Raise on a list element that is not a JSON object.
+
+    Every REST surface this engine pages (check runs, status contexts, reviews,
+    comments) is a list of objects. The row builders used to `continue` past
+    anything else, so a garbled element vanished and the surface read as smaller
+    than it was — a failing check dropped this way left `all_green` true (#94).
+    Raised for the same reason a non-list page is.
+    """
+    for item in items:
+        if not isinstance(item, dict):
+            raise RuntimeError(
+                f"GitHub API GET {url} returned a {type(item).__name__} element, "
+                "expected JSON objects"
+            )
+
+
+def _http_get_all(
+    url: str,
+    token: str,
+    *,
+    max_pages: int = _REST_MAX_PAGES,
+    expected_count: int | None = None,
+) -> list:
     """GET ``url`` following ``Link: rel="next"``, for endpoints whose body IS
     the JSON array (reviews, issue comments, inline comments).
 
@@ -1150,21 +1202,40 @@ def _http_get_all(url: str, token: str, *, max_pages: int = _REST_MAX_PAGES) -> 
     on `pulls/{n}/reviews` made `review_decision` empty, which removed the
     CHANGES_REQUESTED blocker and flipped `mergeable` from false to TRUE. On the
     comment surfaces it made every unread finding read as "no findings".
+
+    Completeness is judged from the data where GitHub sends a count:
+    ``expected_count`` is the caller's count for this list (the PR object's
+    ``comments`` / ``review_comments``), and fewer items than that records the
+    read as incomplete. More is not a gap: a comment posted between the two
+    reads. Without a count (reviews), a last page that is full and carries no
+    next link records the same, since it cannot be told from a dropped ``Link``.
+    That case fires falsely only when the list is an exact multiple of
+    ``per_page`` long, and then only in the report.
     """
     items: list = []
     next_url: str | None = url
     pages = 0
+    last_page_len = 0
     while next_url and pages < max_pages:
         data, link = _http_get(next_url, token)
         if not isinstance(data, list):
             raise RuntimeError(
                 f"GitHub API GET {next_url} returned {type(data).__name__}, expected a JSON array"
             )
+        _require_dict_items(data, next_url)
         items.extend(data)
+        last_page_len = len(data)
         next_url = _next_link(link)
         pages += 1
     if next_url:
         _warn_pagination_truncated(url, max_pages)
+    elif expected_count is not None:
+        if len(items) < expected_count:
+            _warn_read_incomplete(
+                url, f"{len(items)} items read, the pull request counts {expected_count}"
+            )
+    elif last_page_len >= _per_page(url):
+        _warn_read_incomplete(url, "its last page was full and carried no next link")
     return items
 
 
@@ -1179,10 +1250,16 @@ def _http_get_all_wrapped(
     GET against ~49 real check runs, which truncated the rollup so the missing
     checks read as "not present" rather than "not yet read". Callers must pass
     ``per_page=100`` on ``url`` as well, to keep the page count low.
+
+    Every page must carry an integer ``total_count``, which both wrapped
+    endpoints this reads always send, and fewer items than the largest count
+    seen records the read as incomplete (#94: a short page with no ``Link``
+    read as the whole rollup).
     """
     items: list = []
     next_url: str | None = url
     pages = 0
+    total = 0
     while next_url and pages < max_pages:
         data, link = _http_get(next_url, token)
         if not isinstance(data, dict):
@@ -1213,11 +1290,22 @@ def _http_get_all_wrapped(
                 f"GitHub API GET {next_url} returned {type(page).__name__} for "
                 f"{key!r}, expected a JSON array"
             )
+        count = data.get("total_count")
+        # `bool` is an `int` subclass, and `True` is not a count.
+        if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+            raise RuntimeError(
+                f"GitHub API GET {next_url} returned no usable 'total_count' "
+                f"({count!r}) — not this endpoint's shape"
+            )
+        total = max(total, count)
+        _require_dict_items(page, next_url)
         items.extend(page)
         next_url = _next_link(link)
         pages += 1
     if next_url:
         _warn_pagination_truncated(url, max_pages)
+    elif len(items) < total:
+        _warn_read_incomplete(url, f"{len(items)} of total_count {total} read")
     return items
 
 
@@ -1658,6 +1746,19 @@ def rest_pr_view(pr: int, *, token: str) -> tuple[dict, list[dict], RestCheckRea
     sha = head.get("sha") if isinstance(head, dict) else None
     if not sha:
         raise RuntimeError(f"PR #{pr} response carried no usable head SHA")
+    # A missing or non-boolean `draft` raises. Mapping it to False, as `bool()`
+    # did, dropped the draft merge blocker on a body that never said (#94).
+    draft = pr_data.get("draft")
+    if not isinstance(draft, bool):
+        raise RuntimeError(f"PR #{pr} response carried no boolean draft field ({draft!r})")
+    # The single-PR object always carries both counts; the comment reads are
+    # judged complete against them (#94).
+    counts = {}
+    for field in ("comments", "review_comments"):
+        value = pr_data.get(field)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise RuntimeError(f"PR #{pr} response carried no usable {field} count ({value!r})")
+        counts[field] = value
     check_runs, statuses = _rest_fetch_checks(sha, token=token, slug=slug)
     reviews = _http_get_all(_rest_api(f"pulls/{pr}/reviews?per_page=100", slug), token)
     view = {
@@ -1676,7 +1777,7 @@ def rest_pr_view(pr: int, *, token: str) -> tuple[dict, list[dict], RestCheckRea
             if pr_data.get("merged")
             else str(pr_data.get("state") or "").upper()
         ),
-        "isDraft": bool(pr_data.get("draft")),
+        "isDraft": draft,
         "baseRefName": (pr_data.get("base") or {}).get("ref"),
         "baseRefOid": (pr_data.get("base") or {}).get("sha"),
         # REST's `mergeable_state` (clean/dirty/blocked/behind/unstable/…) is a
@@ -1693,10 +1794,16 @@ def rest_pr_view(pr: int, *, token: str) -> tuple[dict, list[dict], RestCheckRea
         "statusCheckRollup": _rest_check_rows(check_runs, statuses or []),
         "reviews": reviews,
         "comments": _http_get_all(
-            _rest_api(f"issues/{pr}/comments?per_page=100", slug), token
+            _rest_api(f"issues/{pr}/comments?per_page=100", slug),
+            token,
+            expected_count=counts["comments"],
         ),
     }
-    inline = _http_get_all(_rest_api(f"pulls/{pr}/comments?per_page=100", slug), token)
+    inline = _http_get_all(
+        _rest_api(f"pulls/{pr}/comments?per_page=100", slug),
+        token,
+        expected_count=counts["review_comments"],
+    )
     return view, inline, RestCheckReads(sha, check_runs, statuses)
 
 
