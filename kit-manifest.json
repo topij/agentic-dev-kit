@@ -159,7 +159,7 @@
     },
     "scripts/check_record_prose.py": {
       "role": "engine",
-      "sha256": "7694e4613f749336c42b228cf43c42a1e6ea31ec65ffc912e1c678e93d5f7848"
+      "sha256": "dad8eb373dcb7c7f9a12ef640846fc33f97fac8223a8affa490e89c6284ae841"
     },
     "scripts/conftest.py": {
       "role": "engine",
@@ -684,7 +684,7 @@
     },
     "scripts/tests/test_record_prose.py": {
       "role": "test",
-      "sha256": "a48876927ca21926d66a845e483871eb1630de4670afa6d4c02f05c1d4b42da6"
+      "sha256": "c2a451087116198f3291f0f83c5126c332d7aa790a60df314dddc99138f90041"
     },
     "scripts/tests/test_repo_layout.py": {
       "role": "test",

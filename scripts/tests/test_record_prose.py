@@ -943,3 +943,70 @@ def test_moved_lines_from_separate_deleted_runs_are_reported(repo):
     code, report = run((root, base), commit(root))
     assert code == 1, report
     assert [item["check"] for item in report["findings"]] == ["closing-keywords"]
+
+
+def test_move_that_drops_a_line_inside_the_pairing_is_reported(repo):
+    root, _ = repo
+    # The keyword's nearest reference was #9; dropping that line joins the
+    # keyword to #7, a pairing the deleted run never held.
+    root, base, head = _sweep(root, f"# Inbox\n\n- The fix is\n- see {FOREIGN_REF}\n- on {LOCAL_REF}.\n", "# Archive\n",
+                              "# Inbox\n", f"# Archive\n\n- The fix is\n- on {LOCAL_REF}.\n")
+    code, report = run((root, base), head, "--allow-close", FOREIGN_REF)
+    assert code == 1, report
+    assert [(item["source"], item["detail"].split(":")[0]) for item in report["findings"]] == [
+        ("docs/archive.md", f"closing reference {LOCAL_REF}")]
+
+
+def test_moved_lines_at_matching_positions_of_different_runs_are_reported(repo):
+    root, _ = repo
+    # The keyword is the first line of one deleted run and the reference the
+    # second line of another, so their positions follow on without being one run.
+    save(root, "docs/inbox.md", "# Inbox\n\n- The fix is\n")
+    save(root, "docs/history.md", f"# History\n\n- x\n- on {LOCAL_REF}.\n")
+    save(root, "docs/archive.md", "# Archive\n")
+    base = commit(root)
+    save(root, "docs/inbox.md", "# Inbox\n")
+    save(root, "docs/history.md", "# History\n\n- x\n")
+    save(root, "docs/archive.md", f"# Archive\n\n- The fix is\n- on {LOCAL_REF}.\n")
+    code, report = run((root, base), commit(root))
+    assert code == 1, report
+    assert [item["check"] for item in report["findings"]] == ["closing-keywords"]
+
+
+def test_scattered_partial_sweep_with_shared_lines_is_not_reported(repo):
+    root, _ = repo
+    # Every other entry moves, in reverse order, between entries already
+    # archived. Blank and continuation lines repeat across entries, so a matcher
+    # that claims them greedily aligns them to the wrong source and loses moves.
+    count = 40
+    entries = [f"- **E{i}.** fix\n  line two\n  on #{i}\n\n" for i in range(count)]
+    moving, staying = entries[0::2], entries[1::2]
+    archive_after, pending = [], list(moving)
+    for i in range(count):
+        archive_after.append(f"- A{i}\n\n")
+        if i % 2 == 0 and pending:
+            archive_after.append(pending.pop())
+    root, base, head = _sweep(root, "# Inbox\n\n" + "".join(entries),
+                              "# Archive\n\n" + "".join(f"- A{i}\n\n" for i in range(count)),
+                              "# Inbox\n\n" + "".join(staying), "# Archive\n\n" + "".join(archive_after))
+    code, report = run((root, base), head)
+    assert code == 0, report
+    assert report["findings"] == []
+
+
+def test_overlapping_pairings_keep_one_alignment_per_line(repo):
+    root, _ = repo
+    # Two keywords pair with one reference, so their spans share lines. The
+    # inner pairing must align with the outer one's source, not take the other
+    # deleted copy that the archive's second block needs.
+    block = f"- fix\n- on {LOCAL_REF}\n"
+    save(root, "docs/history.md", "# History\n\n" + block)
+    save(root, "docs/inbox.md", "# Inbox\n\n- resolves\n" + block)
+    save(root, "docs/archive.md", "# Archive\n")
+    base = commit(root)
+    save(root, "docs/history.md", "# History\n")
+    save(root, "docs/inbox.md", "# Inbox\n")
+    save(root, "docs/archive.md", "# Archive\n\n- resolves\n" + block + "\n" + block)
+    code, report = run((root, base), commit(root))
+    assert code == 0, report
+    assert report["findings"] == []

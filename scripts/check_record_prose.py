@@ -27,7 +27,6 @@ import subprocess
 import sys
 import unicodedata
 from bisect import bisect_left, bisect_right
-from difflib import SequenceMatcher
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
 
@@ -192,37 +191,45 @@ def changed_lines(root: Path, boundary: str, head: str, path: str,
     return added, unchanged, deleted, removed
 
 
-def moved_lines(documents: list[tuple[str, list[str], set[int]]],
-                removed: list[list[str]]) -> dict[str, dict[int, tuple[int, int]]]:
-    """Map added lines to the deleted lines they reproduce, each deleted line once.
+class MoveLedger:
+    """Which deleted line each added narrative line reproduces, claimed per pairing.
 
     An archive sweep moves record text between narrative paths byte for byte, and
     per-path coordinates see the destination as new text. Only a reproduction of
     lines this same change deletes is a move: text that stays where it was is a
-    copy, and claiming each deleted line once keeps a duplicate from riding on it.
+    copy. Alignment is local to each candidate pairing, so lines shared across
+    entries (blank lines, repeated continuations) cannot be claimed by the wrong
+    source, and each deleted line covers one added line, so a duplicate cannot
+    ride on another copy's move.
     """
-    used = [[False] * len(run) for run in removed]
-    moved: dict[str, dict[int, tuple[int, int]]] = {}
-    for path, lines, added in documents:
-        numbers = sorted(added)
-        groups: list[list[int]] = []
-        for number in numbers:
-            if groups and groups[-1][-1] == number - 1:
-                groups[-1].append(number)
-            else:
-                groups.append([number])
-        for group in groups:
-            texts = [lines[number - 1] for number in group]
-            claimed = [False] * len(group)
-            for run_id, run in enumerate(removed):
-                matcher = SequenceMatcher(None, texts, run, autojunk=False)
-                for start, origin, size in matcher.get_matching_blocks():
-                    for offset in range(size):
-                        if claimed[start + offset] or used[run_id][origin + offset]:
-                            continue
-                        claimed[start + offset] = used[run_id][origin + offset] = True
-                        moved.setdefault(path, {})[group[start + offset]] = (run_id, origin + offset)
-    return moved
+
+    def __init__(self, removed: list[list[str]]):
+        self.removed = removed
+        self.index: dict[str, list[tuple[int, int]]] = {}
+        for run_id, run in enumerate(removed):
+            for position, text in enumerate(run):
+                self.index.setdefault(text, []).append((run_id, position))
+        self.source: dict[tuple[str, int], tuple[int, int]] = {}
+        self.target: dict[tuple[int, int], tuple[str, int]] = {}
+
+    def moved(self, path: str, lines: list[str], first: int, last: int) -> bool:
+        """Claim deleted lines reproducing lines first..last, contiguous and in order."""
+        for run_id, start in self.index.get(lines[first - 1], ()):
+            run = self.removed[run_id]
+            if start + last - first >= len(run):
+                continue
+            pairs = [((path, first + offset), (run_id, start + offset))
+                     for offset in range(last - first + 1)]
+            # A line one pairing already aligned must keep its alignment, so
+            # nested pairings over the same lines agree rather than compete.
+            if all(run[origin[1]] == lines[head[1] - 1]
+                   and self.source.get(head, origin) == origin
+                   and self.target.get(origin, head) == head
+                   for head, origin in pairs):
+                for head, origin in pairs:
+                    self.source[head], self.target[origin] = origin, head
+                return True
+        return False
 
 
 def changed_blocks(before: list, after: list, unchanged: dict[int, int]) -> set[int]:
@@ -338,18 +345,12 @@ def check(root: Path, base: str, head: str, allowed: set[str]) -> dict:
 
     def closings(text: str, source: str, added: set[int] | None = None,
                  deleted: set[int] | None = None,
-                 moved: dict[int, tuple[int, int]] | None = None) -> None:
+                 ledger: MoveLedger | None = None) -> None:
+        lines = markdown_lines(text) if ledger is not None else []
         # Index changed coordinates once: long archives can leave many keywords
         # waiting for a reference, so rescanning prefixes or line ranges per
         # keyword makes the mandatory preflight quadratic in the input size.
         added_lines = sorted(added) if added is not None else None
-        # For each moved line, the first line of the unbroken run of moved lines
-        # ending at it, each reproducing the next deleted line of the same run.
-        # One lookup per pairing keeps long moved archives linear.
-        chain_start: dict[int, int] = {}
-        for number, (run_id, index) in sorted((moved or {}).items()):
-            chain_start[number] = (chain_start[number - 1]
-                                   if moved.get(number - 1) == (run_id, index - 1) else number)
         cuts = sorted(deleted or ())
         pending = []
         cursor, line = 0, 1
@@ -370,7 +371,9 @@ def check(root: Path, base: str, head: str, allowed: set[str]) -> dict:
                     # A pairing carried whole from one deleted run existed, in
                     # this order, before the change; it is a move, not new text.
                     # Its lines are all added, so no deletion cut can fall inside.
-                    if chain_start.get(line, line + 1) <= keyword_line:
+                    if (ledger is not None
+                            and bisect_right(added_lines, line) - addition == line - keyword_line + 1
+                            and ledger.moved(source, lines, keyword_line, line)):
                         continue
                 if ref not in allowed:
                     finding("closing-keywords", source, keyword_line,
@@ -401,8 +404,7 @@ def check(root: Path, base: str, head: str, allowed: set[str]) -> dict:
         removed.extend(runs)
         if raw is not None:
             documents.append((path, raw, old, added, unchanged, deleted))
-    moved = moved_lines([(path, markdown_lines(raw), added)
-                         for path, raw, _, added, _, _ in documents], removed)
+    ledger = MoveLedger(removed)
     for path, raw, old, added, unchanged, deleted in documents:
         lines = markdown_lines(raw)
         text = "".join(lines)
@@ -414,7 +416,7 @@ def check(root: Path, base: str, head: str, allowed: set[str]) -> dict:
         old_environment: dict = {}
         old_tokens = parser.parse(before, old_environment)
         affected = added | changed_blocks(old_tokens, tokens, unchanged)
-        closings(text, path, added, deleted, moved.get(path, {}))
+        closings(text, path, added, deleted, ledger)
 
         def references(env):
             return {label: (ref.get("href"), ref.get("title"))
