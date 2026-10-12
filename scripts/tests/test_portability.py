@@ -19074,16 +19074,23 @@ def test_upgrade_searches_adopter_references_before_deleting_a_kit_retired_comma
         "references to `.claude/commands/` and to the command's own path**"
     )
     delete = "When nothing references it, delete it once the skill beside it is in place."
-    exclude = "Skip the hits in files `kit-manifest.json` lists"
+    exclude = (
+        "Skip the hits in files under `kit-manifest.json`'s `files` key that Step 1 "
+        "did not report `LOCALLY EDITED`"
+    )
+    adopter = "A hit in an `adopter_owned` file or a locally edited one is the adopter's."
+    read = (
+        "read each remaining hit, and any adopter tooling that walks `.claude/`, "
+        "before judging."
+    )
     keep = (
         "When adopter code or CI depends on it, keep the command and route that "
         "tooling change separately"
     )
-    for sentence in (search, exclude, delete, keep):
+    for sentence in (search, exclude, adopter, read, delete, keep):
         assert step_4.count(sentence) == 1, sentence
-    assert (
-        step_4.index(search) < step_4.index(exclude) < step_4.index(delete) < step_4.index(keep)
-    )
+    order = [step_4.index(sentence) for sentence in (search, exclude, adopter, read, delete, keep)]
+    assert order == sorted(order)
     assert "delete `kit-retired` after the skill beside it is in place" not in step_4
     step_1 = _flatten_prose(workflow.split("## Step 2", 1)[0])
     assert (
