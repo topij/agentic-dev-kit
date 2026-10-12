@@ -19075,10 +19075,14 @@ def test_upgrade_searches_adopter_references_before_deleting_a_kit_retired_comma
     )
     delete = "When nothing references it, delete it once the skill beside it is in place."
     exclude = (
-        "Skip the hits in files under `kit-manifest.json`'s `files` key that Step 1 "
-        "did not report `LOCALLY EDITED`"
+        "Skip only the hits in files under this repo's `kit-manifest.json` `files` key "
+        "that Step 1 reported unchanged or plain `STALE`: those hold the kit's own "
+        "bytes, which name that path to describe it."
     )
-    adopter = "A hit in an `adopter_owned` file or a locally edited one is the adopter's."
+    adopter = (
+        "Any other hit may be the adopter's, including one in an `adopter_owned` file "
+        "or in a file Step 1 reported `LOCALLY EDITED` or `differs`."
+    )
     read = (
         "read each remaining hit, and any adopter tooling that walks `.claude/`, "
         "before judging."
