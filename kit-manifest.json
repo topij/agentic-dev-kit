@@ -67,6 +67,9 @@
       "sha256": "120de7f89a0e7b75a03be26f40a7a34e5c2d093d9d24cdbcffab4559dfcaabec"
     },
     "docs/agentic-dev-kit/workflows/pr-watch/report-fields.md": {
+      "required_by": [
+        "docs/agentic-dev-kit/workflows/pr-watch.md"
+      ],
       "role": "workflow",
       "sha256": "8217beb260ebde32ba9230d4aace42f73f020790d657110e0cb75e1c624de11f"
     },
@@ -79,24 +82,36 @@
       "sha256": "c723ace0124b9c996a87d8577afdb5b55e96177bf32a3d144c487a2cd8ed4b62"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log/engine-cli.md": {
+      "required_by": [
+        "docs/agentic-dev-kit/workflows/triage-friction-log.md"
+      ],
       "role": "workflow",
       "sha256": "fc826161750ca25016c9ebf26fd1460e8ee6551429ed544a5372fa172360302f"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log/finalize.md": {
+      "required_by": [
+        "docs/agentic-dev-kit/workflows/triage-friction-log.md"
+      ],
       "role": "workflow",
       "sha256": "5206193b6583bab484c27e5ee6ce3f7432ff7a760622273cbdf98ae62d1663b1"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log/recovery.md": {
+      "required_by": [
+        "docs/agentic-dev-kit/workflows/triage-friction-log.md"
+      ],
       "role": "workflow",
       "sha256": "febcf9ea3906e4345ef762db0caee445395261a307a232aa4f8dd02d87df00ca"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log/state-schema.md": {
+      "required_by": [
+        "docs/agentic-dev-kit/workflows/triage-friction-log.md"
+      ],
       "role": "workflow",
       "sha256": "6435271a1d09395dc61df3fe0b3e84b2e2033fd7f1b640f4434904b47b08e80b"
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
-      "sha256": "78553944d4aca06808b6a3a27349534766e9f24a40dc094a2f6c69f0ce9f8023"
+      "sha256": "12328197d474f27f8def0e094c328427c72bac00313027ecd4156b0c149ed070"
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
@@ -183,7 +198,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "3b5d757e77a432247b65581cd4ec19487e8070850d51004d19be84d1eeb6e85d"
+      "sha256": "554bee1c7e2a51c121d06d0ceec982aaa64b7f6409bcf56d3a942bcee964e882"
     },
     "scripts/launch_lane.py": {
       "role": "engine",

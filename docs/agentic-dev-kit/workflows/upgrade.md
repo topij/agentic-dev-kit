@@ -728,9 +728,12 @@ Those are the kit's own libraries — `<engine-dir>/lib/kitconfig.py` above all,
 every Python engine imports — and refreshing a component on top of an absent one
 produces a broken install: `<engine-dir>/check_doc_budget.py` dies with
 `ModuleNotFoundError`, and `<engine-dir>/pr_watch.py` warns and silently falls back to
-built-in defaults, leaving the adopter's entire `review.*` config inert. `kit_doctor`
-derives this set from the Python import graph, so it is answering "what do *this*
-tree's installed components need", not a fixed list.
+built-in defaults, leaving the adopter's entire `review.*` config inert. A workflow's
+reference files are the other kind: each file under `workflows/<slug>/` is required by
+`workflows/<slug>.md`, which reads them all before acting, so an entry without them
+sends the agent to files that are not there (`#1057`). `kit_doctor` derives this set
+from the Python import graph and that workflow layout, so it is answering "what do
+*this* tree's installed components need", not a fixed list.
 
 **Then re-run `kit_doctor` after installing anything, and after refreshing anything.**
 The set is computed against the components present *when the report ran*, and against the
@@ -739,7 +742,7 @@ depends on it is installed here **and is byte-identical to what the kit ships**.
 import graph is derived from the kit's own tree, so it describes the kit's copy of an
 engine, and an older copy is present without running those imports — reading presence as
 agreement reported a healthy sized-down adopter as broken (`#661`). Two consequences for
-this step: installing a previously-`missing` engine or hook can introduce requirements
+this step: installing a previously-`missing` engine, hook or workflow can introduce requirements
 the first report had no reason to classify, and so can **refreshing a `stale` one**, which
 is the more likely of the two here. Re-run before you rely on the list again, and treat
 the report as converged only when a run that changed nothing still shows no

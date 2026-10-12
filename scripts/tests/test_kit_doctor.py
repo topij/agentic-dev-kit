@@ -2676,6 +2676,104 @@ def test_a_dependent_the_manifest_cannot_hash_drops_the_edge(tmp_path):
     assert [f.path for f in report.drifted] == ["scripts/check_doc_budget.py"]
 
 
+_WF = "docs/agentic-dev-kit/workflows"
+
+
+def test_a_workflow_reference_file_is_required_by_its_entry(tmp_path):
+    """#1057: the one non-import edge. A reference file one level under
+    `workflows/<slug>/` is required by `<slug>.md`, decided by path. A file
+    deeper down, one whose entry is not owned or not present, and one outside
+    the workflows directory get no edge."""
+    root = _tree(
+        tmp_path,
+        {
+            f"{_WF}/flow.md": "# entry\n",
+            f"{_WF}/flow/ref.md": "# ref\n",
+            f"{_WF}/flow/deeper/ref.md": "# deeper\n",
+            f"{_WF}/orphan/ref.md": "# no entry owned\n",
+            f"{_WF}/absent/ref.md": "# entry owned but not in the tree\n",
+            "docs/elsewhere/flow/ref.md": "# outside\n",
+            "docs/elsewhere/flow.md": "# outside entry\n",
+        },
+    )
+    owned = (
+        (f"{_WF}/flow.md", "workflow"),
+        (f"{_WF}/flow/ref.md", "workflow"),
+        (f"{_WF}/flow/deeper/ref.md", "workflow"),
+        (f"{_WF}/orphan/ref.md", "workflow"),
+        (f"{_WF}/absent.md", "workflow"),
+        (f"{_WF}/absent/ref.md", "workflow"),
+        ("docs/elsewhere/flow.md", "workflow"),
+        ("docs/elsewhere/flow/ref.md", "workflow"),
+    )
+    assert kit_doctor.derive_dependencies(root, owned) == {f"{_WF}/flow/ref.md": [f"{_WF}/flow.md"]}
+
+
+def test_the_real_kit_requires_every_workflow_reference_file_by_its_entry():
+    """Equality over the kit's own tree, so a reference directory added later
+    without its entry being KIT_OWNED, or an entry losing its files' edges,
+    fails here."""
+    graph = kit_doctor.derive_dependencies(REPO_ROOT)
+    workflow_edges = {rel: deps for rel, deps in graph.items() if rel.startswith(f"{_WF}/")}
+    triage = [f"{_WF}/triage-friction-log.md"]
+    assert workflow_edges == {
+        f"{_WF}/pr-watch/report-fields.md": [f"{_WF}/pr-watch.md"],
+        f"{_WF}/triage-friction-log/engine-cli.md": triage,
+        f"{_WF}/triage-friction-log/finalize.md": triage,
+        f"{_WF}/triage-friction-log/recovery.md": triage,
+        f"{_WF}/triage-friction-log/state-schema.md": triage,
+    }
+
+
+def _adopter_with_triage_entry(tmp_path: Path, entry_text: str) -> Path:
+    root = _fake_repo(tmp_path)
+    _write(root / _WF / "triage-friction-log.md", entry_text)
+    for name in ("recovery.md", "state-schema.md", "finalize.md"):
+        _write(root / _WF / "triage-friction-log" / name, f"# {name}\n")
+    return root
+
+
+def _triage_manifest(entry_sha: str | None) -> dict:
+    refs = [f"{_WF}/triage-friction-log/{n}" for n in ("recovery.md", "state-schema.md", "finalize.md", "engine-cli.md")]
+    manifest = _manifest({f"{_WF}/triage-friction-log.md": entry_sha, **{r: _sha(f"# {PurePosixPath(r).name}\n") for r in refs}})
+    for r in refs:
+        manifest["files"][r]["role"] = "workflow"
+        manifest["files"][r]["required_by"] = [f"{_WF}/triage-friction-log.md"]
+    manifest["files"][f"{_WF}/triage-friction-log.md"]["role"] = "workflow"
+    return manifest
+
+
+def test_an_installed_entry_without_one_reference_file_is_a_broken_install(tmp_path):
+    """#1057's acceptance fixture: the adopter has the entry at the kit's
+    version and lacks one reference file, so `/upgrade` Step 3 must install it
+    rather than offer it as a decision."""
+    root = _adopter_with_triage_entry(tmp_path, "# triage entry\n")
+    manifest = _triage_manifest(_sha("# triage entry\n"))
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(root, manifest, config)
+    absent = f"{_WF}/triage-friction-log/engine-cli.md"
+    states = {f.path: f.state for f in report.files}
+
+    assert states[absent] == "missing-required"
+    assert [f.path for f in report.broken] == [absent]
+    assert next(f.detail for f in report.files if f.path == absent) == "needed by triage-friction-log.md"
+
+
+def test_an_older_entry_does_not_require_reference_files_it_predates(tmp_path):
+    """The #661 version guard applies to this edge too: an entry from before
+    the split is present without reading the reference files, so their absence
+    is the ordinary new-file decision, and the entry itself is reported as drift."""
+    root = _adopter_with_triage_entry(tmp_path, "# triage entry, before the split\n")
+    manifest = _triage_manifest(_sha("# triage entry\n"))
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    report = kit_doctor.inspect(root, manifest, config)
+    states = {f.path: f.state for f in report.files}
+
+    assert states[f"{_WF}/triage-friction-log/engine-cli.md"] == "missing"
+    assert report.broken == []
+    assert states[f"{_WF}/triage-friction-log.md"] == "differs"
+
+
 def test_a_broken_install_is_not_a_green_exit(tmp_path, capsys):
     """The dependent is given its REAL hash, so it lands `unchanged` and
     `report.drifted` is empty — otherwise the exit code proves nothing.
