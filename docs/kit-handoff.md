@@ -26,11 +26,11 @@
   rather than over Slack): filed #1078, #1079, #1080, #1081, #1082 and #1083; archived
   TRI-04, TRI-08, TRI-09 and TRI-11; parked TRI-02, TRI-06, TRI-07 and TRI-14. Sweep PR
   [#1084](https://github.com/topij/agentic-dev-kit/pull/1084) merged as `e37b7bd9` at its
-  reviewed head `427d2fa5`. The record-prose preflight's failure on the moved pairings at
-  archive lines 4279 and 4459 was accepted as non-closing on the operator's decision.
+  reviewed head `427d2fa5`. The record-prose preflight failed on the moved keyword/reference
+  pairings at archive lines 4279 and 4459; the operator accepted them as moved history.
 - **Review proportionality:** [#1088](https://github.com/topij/agentic-dev-kit/pull/1088)
   merged as `2ca8ded9` on the operator's request. The preflight no longer reports a
-  closing-keyword pairing whose lines were moved unchanged, in order, from lines the
+  keyword/reference pairing whose lines were moved unchanged, in order, from lines the
   same change deletes from a narrative path. Copies, new adjacencies, pairings past
   `MAX_MOVED_SPAN` or `MAX_MOVE_CANDIDATES`, and commit messages are still reported.
   - Decided: archival preservation means exact bytes. This settles the parked TRI-06,
