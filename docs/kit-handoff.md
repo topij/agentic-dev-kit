@@ -46,10 +46,10 @@
   `4758f232`, is in #1061's body.
 - **Filed this session:** [#1062](https://github.com/topij/agentic-dev-kit/issues/1062);
   an occurrence comment on [#643](https://github.com/topij/agentic-dev-kit/issues/643).
-- **Not established:** whether an agent following the split pr-watch acts differently
-  from one following the single file. No trigger or behaviour evaluation ran. Moved loop
-  rules the test does not name, such as the disposition remedy and the stamp-behind-head
-  bullet, are unpinned, and no ticket carries them.
+- **Not established:** whether an agent acts differently under the split pr-watch; no
+  behaviour evaluation ran. Moved loop rules the test does not name, such as the
+  disposition remedy and the stamp-behind-head bullet, stay unpinned: #1062 listed them
+  and was marked done with two pinned, and no open ticket carries the rest.
 
 ______________________________________________________________________
 
