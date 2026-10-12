@@ -2266,20 +2266,43 @@ def test_split_workflow_read_and_link_mutations_are_rejected(tmp_path: Path) -> 
 # A reference file sits one directory below its entry, so a link carried over
 # from the entry keeps a depth that no longer resolves (#1072). Inline links,
 # reference definitions and HTML hrefs are checked; fenced code is not prose.
+# An inline destination in angle brackets is taken whole, spaces included.
 _SPLIT_LINK_FORMS = (
-    re.compile(r"\]\(\s*<?([^)\s>]+)>?(?:\s+(?:\"[^\"]*\"|'[^']*'|\([^)]*\)))?\s*\)"),
-    re.compile(r"^ {0,3}\[[^\]]+\]:\s*<?([^\s>]+)", re.MULTILINE),
+    re.compile(
+        r"\]\(\s*(?:<([^<>\n]*)>|([^)\s<][^)\s]*))"
+        r"(?:\s+(?:\"[^\"]*\"|'[^']*'|\([^)]*\)))?\s*\)"
+    ),
+    re.compile(r"^ {0,3}\[[^\]]+\]:\s*(?:<([^<>\n]*)>|(\S+))", re.MULTILINE),
     re.compile(r"""<a\s[^>]*href=["']([^"']+)["']""", re.IGNORECASE),
 )
-_FENCED_BLOCK = re.compile(r"^ {0,3}(`{3,}|~{3,}).*?^ {0,3}\1[ \t]*$", re.MULTILINE | re.DOTALL)
+_FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}(?=[^`]*$)|~{3,})")
+
+
+def _without_fenced_code(text: str) -> str:
+    """Drop CommonMark fenced blocks: a fence closes on a run of its own
+    character at least as long as its opener, and an unclosed one runs to the
+    end. A backtick opener's info string holds no backtick, so a line that
+    opens with an inline code span opens nothing."""
+    kept, fence = [], None
+    for line in text.splitlines(keepends=True):
+        if fence is None:
+            opened = _FENCE_OPEN.match(line)
+            if opened:
+                fence = opened.group(1)
+            else:
+                kept.append(line)
+        elif re.fullmatch(rf" {{0,3}}{re.escape(fence[0])}{{{len(fence)},}}[ \t]*\n?", line):
+            fence = None
+    return "".join(kept)
 
 
 def _assert_split_workflow_relative_links_resolve(root: Path) -> None:
     workflows = root / "docs" / "agentic-dev-kit" / "workflows"
     for path in sorted(workflows.glob("*/*.md")):
-        prose = _FENCED_BLOCK.sub("", path.read_text(encoding="utf-8"))
+        prose = _without_fenced_code(path.read_text(encoding="utf-8"))
         for form in _SPLIT_LINK_FORMS:
-            for target in form.findall(prose):
+            for found in form.finditer(prose):
+                target = next(group for group in found.groups() if group is not None)
                 if re.match(r"[a-z][a-z0-9+.-]*:", target) or target.startswith("#"):
                     continue
                 resolved = (path.parent / target.partition("#")[0]).resolve()
@@ -2309,30 +2332,39 @@ def test_split_workflow_broken_links_are_rejected(tmp_path: Path) -> None:
     appended = (
         "\n[ref]: ../fallback-review-panel.md\n",
         '\n<a href="../fallback-review-panel.md">x</a>\n',
+        "\n[x](<../bad dir/absent.md>)\n",
+        # A fence closed by a longer run of its character is closed there.
+        "\n```text\nx\n````\n[x](../absent.md)\n",
+        # A line opening with an inline code span opens no fence.
+        "\n```code``` [x](../absent.md)\n",
     )
     cases = [(lambda text, new=new: text.replace(good, new, 1)) for new in mutations]
     cases += [(lambda text, extra=extra: text + extra) for extra in appended]
     # An existing file outside the copied tree, so only the containment check refuses it.
     (tmp_path / "outside.md").write_text("", encoding="utf-8")
-    for index, mutate in enumerate(cases):
-        root = tmp_path / f"case-{index}"
-        shutil.copytree(source, root / "docs" / "agentic-dev-kit")
-        target = root / "docs" / "agentic-dev-kit" / rel
-        text = target.read_text(encoding="utf-8")
-        mutated = mutate(text)
-        assert mutated != text, index
-        target.write_text(mutated, encoding="utf-8")
-        with pytest.raises(AssertionError):
-            _assert_split_workflow_relative_links_resolve(root)
-    # The same broken link inside a fenced block is code, not a link.
-    root = tmp_path / "fenced"
-    shutil.copytree(source, root / "docs" / "agentic-dev-kit")
-    target = root / "docs" / "agentic-dev-kit" / rel
-    target.write_text(
-        target.read_text(encoding="utf-8") + "\n```text\n[x](../absent.md)\n```\n",
-        encoding="utf-8",
+    accepted = (
+        # Each check the cases above make must not refuse a link that resolves.
+        lambda text: text.replace(good, "(../../fallback-review-panel.md#low-findings-delta-review-or-ticket)", 1),
+        lambda text: text.replace(good, "(<../../fallback-review-panel.md>)", 1),
+        # A broken link inside fenced code is code, not a link.
+        lambda text: text + "\n```text\n[x](../absent.md)\n```\n",
+        lambda text: text + "\n~~~\n[x](../absent.md)\n~~~~\n",
+        lambda text: text + "\n```\n[x](../absent.md)\n",
     )
-    _assert_split_workflow_relative_links_resolve(root)
+    for kind, mutators in (("rejected", cases), ("accepted", accepted)):
+        for index, mutate in enumerate(mutators):
+            root = tmp_path / f"{kind}-{index}"
+            shutil.copytree(source, root / "docs" / "agentic-dev-kit")
+            target = root / "docs" / "agentic-dev-kit" / rel
+            text = target.read_text(encoding="utf-8")
+            mutated = mutate(text)
+            assert mutated != text, (kind, index)
+            target.write_text(mutated, encoding="utf-8")
+            if kind == "accepted":
+                _assert_split_workflow_relative_links_resolve(root)
+            else:
+                with pytest.raises(AssertionError):
+                    _assert_split_workflow_relative_links_resolve(root)
 
 
 def test_parallel_adapter_policy_contradictions_are_rejected() -> None:
