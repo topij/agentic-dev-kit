@@ -203,7 +203,12 @@ error. That fallback is deliberately **poll-only**:
   needs `gh`.
 
 **`truncated_reads`** lists any paginated read that stopped at the page ceiling
-rather than at the end of the data. A truncated read means the poll did **not**
+rather than at the end of the data, and any read that came back short of a count
+GitHub sent: check runs or commit statuses short of their `total_count`, issue or
+inline comments short of the pull request's `comments` / `review_comments`, or a
+review read whose last page was full and carried no next link. That last check
+also fires on a review list that is an exact multiple of 100 long. A truncated
+read means the poll did **not**
 see every check or comment, so `converged` may be premature — REST list
 endpoints return oldest-first, so what gets dropped is the newest. It gates
 nothing (blocking `converged` would wedge the loop) and is printed by the human

@@ -71,11 +71,11 @@
         "docs/agentic-dev-kit/workflows/pr-watch.md"
       ],
       "role": "workflow",
-      "sha256": "4c35733fef2d83396433453f20884923a227ec02b66e644daf391f9e50e8af30"
+      "sha256": "828346c6d7b3a276fa8b9c0ce184103f701770d2605027d972807df878d34c70"
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
-      "sha256": "2e1436b4485e0c9a39a46963e8e4ce26943cafc1e773f0f4c5a602f19cc23ecb"
+      "sha256": "a8ea4321934b2eefaf1fadf0bf22698c3b580a504392f23855722ecd837aabb4"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
@@ -560,7 +560,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "14b33ec22e2b1b863d9d060a81b58aabe9ec96c16d7f2ba4a973729e0d0bd1be"
+      "sha256": "acf3ea162098996c35c9b89f6d17470000034c77b48a30cd682642d26c36b09d"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
@@ -672,7 +672,7 @@
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "ec4501b8da8a51cd2c374fc559c1fc4dc0161ac92a2e4054581ad0b0b5ada3d9"
+      "sha256": "1dd74c37b4d306ed8c8f307fc4ea0f658ece2d6426760e906825eb7a349e5eb5"
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",

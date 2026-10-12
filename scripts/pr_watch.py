@@ -1070,8 +1070,10 @@ _REST_MAX_PAGES = 20
 
 _truncation_warned: set[str] = set()
 
-# URLs truncated by the page ceiling during THIS process, in order. Surfaced two
-# ways so the claim matches reality: in the JSON, and printed by `render`.
+# URLs read incompletely during THIS process, in order: stopped by the page
+# ceiling, or (#94) ended short of a count GitHub sent or on a full page with no
+# next link. Surfaced two ways so the claim matches reality: in the JSON, and
+# printed by `render`.
 #
 # The JSON alone was not enough, and saying it was is a mistake this engine has
 # now made twice. `summarize_review_bots.signal` is the precedent worth copying —
@@ -1079,8 +1081,10 @@ _truncation_warned: set[str] = set()
 # `workflows/pr-watch.md` documents it. A field with neither is read by nobody:
 # `dev_session.sh merge` extracts only `mergeable`/`pr`/`base`/`head`.
 #
-# It gates nothing on purpose (REST cannot authorize a merge, and blocking
-# `converged` would wedge the watch loop), so the render line is the whole
+# It gates nothing in this engine on purpose (REST cannot authorize a merge, and
+# blocking `converged` would wedge the watch loop). Its consumers do gate on it:
+# triage's `terminal_pr_watch_receipt` requires it empty, and session-start reads
+# a non-empty one as review findings unavailable. Here the render line is the whole
 # mechanism: REST list endpoints return oldest-first, which means the ceiling
 # drops the NEWEST comments — where fresh findings live — and an agent reading
 # "converged" needs to see that its comment read was incomplete.
@@ -1153,7 +1157,11 @@ def _warn_read_incomplete(url: str, reason: str) -> None:
     """Record and announce that the data, not the ceiling, says a read is short.
 
     Recorded in ``_truncated_reads`` beside the ceiling case, because the report
-    a reader acts on is the same: the list is a prefix, not the whole. #94's
+    a reader acts on is the same: the list is a prefix, not the whole. This engine
+    gates nothing on it, but triage's terminal-receipt check requires the list
+    empty, so a false positive (a review list an exact multiple of ``per_page``
+    long, or a comment deleted between the PR read and the list read) leaves that
+    receipt unsettled until a later poll reads clean. That errs closed. #94's
     re-audit at `e37b7bd` found every count GitHub sends discarded, so a short
     page with no ``Link`` read as complete. Deduped on stderr as
     :func:`_warn_pagination_truncated` is.
@@ -1210,7 +1218,8 @@ def _http_get_all(
     reads. Without a count (reviews), a last page that is full and carries no
     next link records the same, since it cannot be told from a dropped ``Link``.
     That case fires falsely only when the list is an exact multiple of
-    ``per_page`` long, and then only in the report.
+    ``per_page`` long. This engine gates nothing on it; triage's terminal
+    receipt does (see :func:`_warn_read_incomplete`).
     """
     items: list = []
     next_url: str | None = url
@@ -5934,13 +5943,15 @@ def render(report: dict) -> str:
             "reviewer will NOT be detected on this poll (see stderr)"
         )
     # Truncation, on the surface a human or agent actually reads. It gates
-    # nothing — REST cannot authorize a merge, and blocking `converged` would
-    # wedge the loop — so this line is the entire mechanism. Deduplicated because
+    # nothing in this engine — REST cannot authorize a merge, and blocking
+    # `converged` would wedge the loop — so in the human render this line is the
+    # entire mechanism (triage reads the JSON field). Deduplicated because
     # `truncated_reads` records every read, and a report built by a caller other
     # than `main` may have read one URL twice.
     for truncated in dict.fromkeys(report.get("truncated_reads") or []):
         lines.append(
-            f"  ⚠ a paginated read was TRUNCATED at the page ceiling ({truncated}) "
+            f"  ⚠ a paginated read was TRUNCATED ({truncated}): it hit the page "
+            "ceiling or ended short of GitHub's count "
             "— this poll did NOT see every check/comment, so `converged` may be "
             "premature"
         )

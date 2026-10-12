@@ -195,7 +195,7 @@ like good news, it looks like a missing handoff.
   follows the review and comment cursors, and `gh api --paginate` returns the inline
   comments as one array (checked against gh 2.97.0 on 2026-10-01, from its source and
   from live reads). Its REST backend stops at a page ceiling and names every read that
-  hit it in `truncated_reads[]`. Neither backend exposes thread resolution, so keep an
+  hit it, or that came back short of a count GitHub sent, in `truncated_reads[]`. Neither backend exposes thread resolution, so keep an
   actionable finding as a candidate and label its resolution unverified. Do not mark
   `forge-pr-read` ready from list metadata or an acknowledgement-filtered view alone.
   If the engine exits non-zero, if `truncated_reads[]` is non-empty, or if this second

@@ -12893,6 +12893,26 @@ def test_a_full_last_page_with_no_next_link_is_recorded(
     pr_watch._http_get_all("https://api.github.com/r?per_page=2", "t")
     assert pr_watch._truncated_reads == ["https://api.github.com/r?per_page=2"]
 
+    # A caller's count, where there is one, is the measure instead: an
+    # exactly-full page that meets it is complete.
+    pr_watch._truncated_reads.clear()
+    pr_watch._http_get_all("https://api.github.com/r?per_page=2", "t", expected_count=2)
+    assert pr_watch._truncated_reads == []
+
+
+def test_a_url_without_per_page_is_measured_against_githubs_default_of_30(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GitHub serves 30 per page when the URL names no `per_page`."""
+    pr_watch = _load_pr_watch()
+    _one_page(pr_watch, monkeypatch, [{"id": i} for i in range(29)])
+    pr_watch._http_get_all("https://api.github.com/r", "t")
+    assert pr_watch._truncated_reads == []
+
+    _one_page(pr_watch, monkeypatch, [{"id": i} for i in range(30)])
+    pr_watch._http_get_all("https://api.github.com/r", "t")
+    assert pr_watch._truncated_reads == ["https://api.github.com/r"]
+
 
 def test_an_incomplete_read_is_reported_but_does_not_gate(
     monkeypatch: pytest.MonkeyPatch,
@@ -13009,12 +13029,16 @@ def test_the_largest_total_count_across_pages_is_the_measure(
     """A check that starts between page reads raises `total_count` on the later
     page. Judging against the first page's count alone would call the read whole."""
     pr_watch = _load_pr_watch()
-    pages = iter(
-        [
-            ({"total_count": 1, "check_runs": [{"name": "a"}]}, '<https://api.github.com/p2>; rel="next"'),
-            ({"total_count": 3, "check_runs": [{"name": "b"}]}, None),
-        ]
-    )
-    monkeypatch.setattr(pr_watch, "_http_get", lambda url, token, **_kw: next(pages))
-    pr_watch._http_get_all_wrapped("https://api.github.com/w", "t", "check_runs")
-    assert pr_watch._truncated_reads == ["https://api.github.com/w"]
+    # Both orders: rising pins against the first page's count, falling against
+    # the last page's.
+    for counts in ((1, 3), (3, 1)):
+        pages = iter(
+            [
+                ({"total_count": counts[0], "check_runs": [{"name": "a"}]}, '<https://api.github.com/p2>; rel="next"'),
+                ({"total_count": counts[1], "check_runs": [{"name": "b"}]}, None),
+            ]
+        )
+        monkeypatch.setattr(pr_watch, "_http_get", lambda url, token, _p=pages, **_kw: next(_p))
+        pr_watch._truncated_reads.clear()
+        pr_watch._http_get_all_wrapped("https://api.github.com/w", "t", "check_runs")
+        assert pr_watch._truncated_reads == ["https://api.github.com/w"], counts
