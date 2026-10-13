@@ -165,7 +165,8 @@ matches an earlier rendered form and can be refreshed without losing authored
 behavior; `missing` can be installed; `adopter-owned` matches no known rendered
 form, so report it and leave it unchanged. `kit-retired` is a kit-generated Claude
 command at `.claude/commands/<slug>.md`, the path the Claude binding used before it
-became a skill: delete it once the skill beside it is installed. An authored command at
+became a skill: delete it once the skill beside it is installed, after Step 4's
+reference search. An authored command at
 that path is `adopter-owned`, and the skill path beside it is then reported
 `adopter-owned` too rather than `missing`, because Claude Code runs a skill in
 preference to a same-named command and installing one would silently replace theirs. The source kit's own adapters must first
@@ -825,8 +826,20 @@ entries are exactly where the risk is.
   These are prompts an agent reads verbatim; a stale one silently teaches old behavior.
 - **Runtime adapters** (`.claude/skills/`, `.agents/skills/`) — follow Step 1's
   rendered comparison per path. Refresh `kit-stale`, leave `kit-current` alone,
-  install `missing`, delete `kit-retired` after the skill beside it is in place, and
-  report but preserve `adopter-owned`. Take each refreshed or installed Codex skill's
+  install `missing`, and report but preserve `adopter-owned`. **Before deleting a
+  `kit-retired` command, search the repository for references to `.claude/commands/`
+  and to the command's own path**: the adopter's own scripts, CI and config can read
+  the old location, and the rendered comparison does not see them. Skip only the hits
+  in files under this repo's `kit-manifest.json` `files` key that Step 1 reported
+  unchanged or plain `STALE`: those hold the kit's own bytes, which name that path to
+  describe it. Any other hit may be the adopter's, including one in an `adopter_owned`
+  file or in a file Step 1 reported `LOCALLY EDITED` or `differs`. A literal search
+  misses a path the adopter builds from parts, so read each remaining hit, and any
+  adopter tooling that walks `.claude/`, before judging.
+  When nothing references it, delete it once the skill beside it is in place. When adopter code or
+  CI depends on it, keep the command and route that tooling change separately: Claude
+  Code runs the skill in preference to a same-named command, so the kept command is
+  inert. Take each refreshed or installed Codex skill's
   `agents/openai.yaml` from the kit along with its `SKILL.md`, unless the adopter has
   edited it. Do not infer ownership
   from a slug or from the presence of a shared-workflow link: the byte comparison is

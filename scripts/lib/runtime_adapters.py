@@ -435,7 +435,8 @@ def _retired_command_status(
                 rel,
                 "kit-retired",
                 f"kit-generated command at a retired path; delete it once "
-                f"{_adapter_path('claude', slug)} is installed",
+                f"{_adapter_path('claude', slug)} is installed, unless adopter code "
+                f"or CI references it (upgrade.md Step 4)",
             )
     return AdapterStatus(
         "claude",

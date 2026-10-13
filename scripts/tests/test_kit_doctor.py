@@ -630,6 +630,7 @@ def test_a_kit_generated_retired_command_is_reported_for_deletion(
     assert rows[skill_rel].state == ("kit-current" if skill_installed else "missing")
     assert rows[command_rel].state == "kit-retired"
     assert skill_rel in rows[command_rel].detail
+    assert "unless adopter code or CI references it (upgrade.md Step 4)" in rows[command_rel].detail
     report = runtime_adapters.render_adapter_report(list(rows.values()))
     assert f"- {command_rel}: kit-retired" in report
 
