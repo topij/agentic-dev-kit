@@ -117,8 +117,10 @@ def _loose_object(root: Path, oid: str) -> Path:
     Tests that corrupt or delete an object reach it by path, which only works
     while git stores it loose. A packed object once surfaced as a bare
     FileNotFoundError mid-test (#1079), indistinguishable from an engine defect.
+    An object missing altogether is named the same way.
     """
-    _git(root, "cat-file", "-e", oid)
+    if subprocess.run(["git", "cat-file", "-e", oid], cwd=root, capture_output=True).returncode:
+        pytest.fail(f"fixture setup: object {oid} does not exist in {root}", pytrace=False)
     path = root / ".git/objects" / oid[:2] / oid[2:]
     if not path.is_file():
         pytest.fail(f"fixture setup: object {oid} exists in {root} but is not stored loose "
@@ -166,6 +168,8 @@ def repo(tmp_path: Path) -> Path:
     _git(root, "config", "user.email", "t@example.com")
     _git(root, "config", "user.name", "t")
     # Keep objects loose: some tests tamper with them by path (_loose_object).
+    # No test pins this: a fixture this small never reaches the auto-gc
+    # threshold. It removes one way to pack, and _loose_object names any other.
     _git(root, "config", "gc.auto", "0")
     _git(root, "config", "remote.origin.url", "https://github.com/o/r.git")
     _git(root, "add", "-A")
@@ -1857,6 +1861,13 @@ def test_loose_object_names_a_packed_fixture_object(executable_preflight):
     _git(root, "gc", "-q", "--prune=now")
     assert not (root / ".git/objects" / oid[:2] / oid[2:]).exists(), "git gc left the object loose"
     with pytest.raises(pytest.fail.Exception, match=f"fixture setup: object {oid} .* not stored loose"):
+        _loose_object(root, oid)
+
+
+def test_loose_object_names_a_missing_fixture_object(executable_preflight):
+    root, _base, _head = executable_preflight
+    oid = "0" * 40
+    with pytest.raises(pytest.fail.Exception, match=f"fixture setup: object {oid} does not exist"):
         _loose_object(root, oid)
 
 
