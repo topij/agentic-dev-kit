@@ -29,20 +29,23 @@
 - **Headless lanes cannot regenerate `kit-manifest.json`, so no lane that edits a hashed
   file can push.** Severity M. Parked because this wrap-up ran with no operator present
   to approve a tracker payload; it is issue-shaped.
-  - **Repro:** in the 2026-10-13 overnight batch, all four `claude` lanes edited files
-    that `kit-manifest.json` hashes. Each lane ran the command `CONTRIBUTING.md` names,
-    `python3 scripts/kit_doctor.py --generate-manifest`. The lane profile
-    (`config/claude-lane-settings.json`) denied it, because it allows only
-    `Bash(uv run scripts/kit_doctor.py:*)`.
-  - **Effect:** the lane's `make test` failed on `test_kit_repo_self_check_is_clean`,
-    and the pre-push hook refused the push. Every lane stopped without a PR.
+  - **Repro:** in the 2026-10-13 overnight batch, the #1075, #1070 and #1079 lanes
+    edited files that `kit-manifest.json` hashes, and could not refresh it.
+    `CONTRIBUTING.md` names `python3 scripts/kit_doctor.py --generate-manifest`. The
+    lane profile (`config/claude-lane-settings.json`) allows only
+    `Bash(uv run scripts/kit_doctor.py:*)`, and the lanes did not reach for that
+    spelling.
+  - **Effect:** each of those lanes' `make test` failed on
+    `test_kit_repo_self_check_is_clean`, and the #1070 lane's push was refused by the
+    pre-push hook. Each stopped without a PR.
   - **Proposed change:** name the `uv run` spelling in the lane contract or the kickoff, or align
     `CONTRIBUTING.md` with the profile.
 - **`make test` outruns a headless lane's Bash time limit.** Severity M. Kept for
   accumulation, because the remedy is not established.
-  - In the same batch, each lane's first `make test` was killed at the 10-minute
-    background limit. The full runs that finished took about 16 to 20 minutes.
-  - One lane (#1089's) then ended on a denied call before committing.
+  - In the same batch, the first `make test` of the #1089, #1070 and #1079 lanes was
+    killed at the background time limit, as each lane reported. The durations of the
+    full runs are in each PR's `make test` stamp comment (#1096, #1097, #1099, #1100).
+  - The #1089 lane then ended on a denied call before committing.
   - Whether the lane contract should prescribe a longer foreground timeout, or the lanes
     should stop before the stamp and leave it to the cockpit, was not decided.
 - **The #1080 repair-chain shape recurred on LOW-only test-helper repairs.** Severity L,
@@ -50,6 +53,11 @@
   - On #1099 and #1100, each delta repair of a wording or pinning LOW drew a new LOW of
     the same size from the next delta lens.
   - #1100 converged once the claim was shortened to what the regex does.
+- **The archive sweep's moved-pairing case recurred, as in the 2026-10-12 entry below.**
+  Severity L, kept for accumulation. This wrap-up's sweep joined the 2026-10-11 and
+  2026-10-10 history blocks. That left "record fix" in moved text paired with `#1039`
+  at `docs/kit-handoff-history.md:72`, and the record-prose preflight failed on it. The
+  text stays as exact bytes, per the 2026-10-12 decision.
   - #1099's third pair went to its ticket instead of a third round.
 
 ## 2026-10-12

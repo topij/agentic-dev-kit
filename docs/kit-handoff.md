@@ -24,10 +24,11 @@
 
 - **How it ran:** an autonomous overnight session. The operator approved the four lanes
   and self-merge for the `self`-class ones. Each lane ran as a headless `claude` lane
-  (`dev_session.sh new --headless`, `launch_lane.py`). None of them opened its PR. Each
-  stopped at one of two walls, both parked in the friction log:
-  - the profile denied the `python3` spelling of the manifest regeneration;
-  - `make test` outran the lane's Bash time limit.
+  (`dev_session.sh new --headless`, `launch_lane.py`). None of them opened its PR.
+  The #1075, #1070 and #1079 lanes stopped because they could not regenerate
+  `kit-manifest.json`. The #1089 lane ended earlier, on a denied call after its
+  `make test` was killed at the Bash time limit. Both walls are parked in the friction
+  log.
 
   The cockpit finished each lane: rebase, `uv run scripts/kit_doctor.py
   --generate-manifest`, the stamp, the review, and `dev_session.sh merge`.
@@ -59,7 +60,8 @@
   that lane's worktree under `/Users/topi/Coding/dev-model-sessions/` on 2026-10-13.
   The LOW repairs had focused runs and current-head CI, as the LOW rule prescribes.
   After the last merge, `pytest scripts/tests/test_kit_doctor.py -k
-  self_check_is_clean` at `1666e247` in `/Users/topi/Coding/agentic-dev-kit` passed,
+  self_check_is_clean` at `1666e247` on 2026-10-14, in
+  `/Users/topi/Coding/agentic-dev-kit`, passed,
   which shows the four separately regenerated manifest hunks merged consistently.
 - **Filed this session:** #1098 and an occurrence comment on #1079. Both were written
   during the night under the operator's overnight grant. The wrap-up rule does not
@@ -230,7 +232,8 @@ archive sweep rewrites (friction log). #1096 (`8beee9a1`) pins its candidate bou
 with a positional test; #1089 stays open for the operator.
 #921 owns the cockpit check of verdict-line names.
 **Owner:** [#585](https://github.com/topij/agentic-dev-kit/issues/585),
-[#921](https://github.com/topij/agentic-dev-kit/issues/921); related #403,
+[#921](https://github.com/topij/agentic-dev-kit/issues/921),
+[#1089](https://github.com/topij/agentic-dev-kit/issues/1089); related #403,
 #666, #305, and the class's documented limits #928, #929, #930 and #931.
 
 ▶ Next: #921 — make the cockpit check that a delta lens returned both the
@@ -338,6 +341,8 @@ hiding later links (#1075), and #1100 (`5d29a75f`) covers #1069's residual LOWs
 **Owner:** `saved_plans/skills-and-instructions-assessment_2026-10-11.md`;
 [#1055](https://github.com/topij/agentic-dev-kit/issues/1055),
 [#1058](https://github.com/topij/agentic-dev-kit/issues/1058),
+[#1070](https://github.com/topij/agentic-dev-kit/issues/1070),
+[#1075](https://github.com/topij/agentic-dev-kit/issues/1075),
 [#1098](https://github.com/topij/agentic-dev-kit/issues/1098).
 
 ▶ Next: #1058 — pin the triage split's section placement and full normative sentences
