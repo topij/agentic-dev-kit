@@ -5,6 +5,52 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-10 (ticket execution environments, in Codex)
+
+- **Ticket execution environments:** [#1038](https://github.com/topij/agentic-dev-kit/pull/1038)
+  merged as `4271cbd7e6b8177554105205ee8f467e8b33e6ed` on the operator's request.
+  The shared ticket contract and workflow bindings carry execution requirements
+  into ticket drafting, session briefings and parallel planning.
+- **Decision:** the operator chose to file the remaining MEDIUM non-regression
+  coverage gaps and merge. [#1040](https://github.com/topij/agentic-dev-kit/issues/1040)
+  carries the approved follow-up and its `unknown` execution classification.
+  The [review disposition](https://github.com/topij/agentic-dev-kit/pull/1038#issuecomment-6100291789)
+  preserves the independent panel and the deferral.
+- **Verification:** `make test` at `30ad19f9df9af5e3d5df81ebb5039a21768118ca`
+  on 2026-10-10, in
+  `/private/tmp/claude-502/-Users-topi-Coding-agentic-dev-kit/codex-ticket-environment-4k5vbe5u/verify-30ad19f`,
+  passed. The portability checks inspect declarations and reviewed Markdown;
+  they do not execute an agent choosing work or creating tickets.
+- **Not established:** live cloud selection and the intended cloud setup's
+  verification capabilities. The operator confirmed the workstream name below.
+
+### 2026-10-09 (scratch alternate paths, in Codex)
+
+- **Scratch retention:** [#1034](https://github.com/topij/agentic-dev-kit/pull/1034)
+  merged as `79d33fb9eaca1d4da6dca0b1ca703fc384ffc657` on the operator's request,
+  addressing #1032. Unquoted alternate paths preserve whitespace and filesystem bytes.
+- **Verification:** `make test` at `fbc91bdcfa01b6fda7bb30f04dddfe8a403233f1` on 2026-10-09,
+  in `/private/tmp/claude-502/-Users-topi-Coding-agentic-dev-kit/codex-01a121d7-1032-4xh1wqvu/verify-fbc91bdc`,
+  printed `4538 passed, 1 skipped`. `gh run view 37976770841` from
+  `/Users/topi/Coding/agentic-dev-kit` on 2026-10-09 reported `Test` at
+  `79d33fb9eaca1d4da6dca0b1ca703fc384ffc657` completed with `success`.
+- **Review:** CodeRabbit skipped. The [independent adversarial receipt](https://github.com/topij/agentic-dev-kit/pull/1034#issuecomment-6087015179)
+  records focused tests and deliberate trimming, line-splitting and replacement-decoding mutations.
+- **Limits:** No production scratch sweep or adopter rollout ran in this session.
+
+### 2026-10-09 (workstreams named by subject, in Claude Code)
+
+- **#1028 merged as `50145a23`, by the operator.** `wrap-up.md` now names a workstream for its subject, never a date, a run mode or a session. A session with unrelated pull requests files each one under its subject's workstream. An unattended guess is marked `assignment unconfirmed`, and an interactive wrap-up offers the operator folds for misnamed and unconfirmed entries. `session-start.md`, `parallel.md` and the handoff template follow suit. `make test` at `45819297` on 2026-10-09 in `/Users/topi/Coding/agentic-dev-kit` → `4497 passed, 1 skipped`.
+- **Review.** CodeRabbit skipped the PR. The adversarial lens ran full passes at `dae754b8` and `2fe2ce11`. A delta pass at `4cce8edb` disputed containment and spent the round budget. The operator authorized one further round (option A of the decision packet on the PR). The delta pass at `45819297` found every repair contained, and its `fallback:delta` receipt is composed on `2fe2ce11`. The remaining LOW findings were filed, on the operator's approval of the exact text, as #1030, read back identical.
+- **cs-toolkit.** On the operator's approval of each fold, in-parallel-oy/cs-toolkit#2609 merged as `3d7a6b95`. It re-filed that repository's batch-named workstreams by subject. Two LOW wording findings from its delta pass were left, on the operator's choice, for cs-toolkit's next wrap-up. They are recorded only in #2609's disposition comment.
+- An occurrence was added to #852 on the operator's approval, and reads back identical: the round-1 receipt was not recorded before the repair was pushed.
+- Not established: whether an unattended batch wrap-up files its pull requests by subject under the new rules. None has run under them yet.
+
+### 2026-10-09 (tickets closed after the lane batch, in Claude Code)
+
+- On the operator's word, closed each ticket with a comment naming its merge commit: #1008, #1009, #1012, #1013, #1014, #1016, #1018. This supersedes, for those tickets, the previous entry's "still open" and "waits for the operator" lines. It also supersedes that entry's "not ticketed": #1017 now carries the gap.
+- #1017 stays open with a comment. #1023 covered the `forge-finalize` and `archive-sweep` phases; a finished `tracker-write` session's resume hint is the open design decision.
+
 ### 2026-10-09 (changelog fragments and the lane batch merged, in Claude Code)
 
 - **#1020 merged as `f9146c5f`.** The operator authorized a fourth fix round. It made `upgrade.md`'s fragment lookup read fragments written only by a merge commit (`diff-tree -c`) and type-changed fragments (`--diff-filter=AMT`), and set the fragment naming rule. Its review at `36a69208` found no fail-open in the lookup but left test gaps. The operator chose to merge and ticket them: filed and read back as #1026. `make test` at `36a69208` on 2026-10-09 in `/Users/topi/Coding/agentic-dev-kit` → `4477 passed, 1 skipped`.

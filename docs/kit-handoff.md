@@ -20,6 +20,44 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-13 (kit-retired command deletion checks adopter references; REST reads judged against GitHub's counts, in a Claude Code cloud session)
+
+- **Skills and instruction files:** [#1077](https://github.com/topij/agentic-dev-kit/pull/1077)
+  merged as `8bac932` on the operator's go-ahead. `upgrade.md` Step 4 now searches the
+  repository for references to `.claude/commands/` and to a `kit-retired` command's own
+  path before deleting it, and keeps the command when adopter code or CI depends on it;
+  Step 1 and the adapter-report hint say the same. Review: one adversarial
+  `fallback:lens` pass and three `fallback:delta` passes, recorded in the PR's review comment. Receipts were not
+  recorded, because `--record-review` refuses on the REST backend. #1071, which the PR
+  answers, was open when this entry was written; closing it waits for the operator.
+- **pr-watch REST backend:** [#1093](https://github.com/topij/agentic-dev-kit/pull/1093)
+  merged as `4fae786f` on the operator's go-ahead, from the cloud session through the
+  GitHub merge API. A REST read short of a count GitHub sends (check-runs and
+  combined-status `total_count`, the PR's `comments` / `review_comments`) is listed in
+  `truncated_reads`; a body missing those counts or a boolean `draft`, or holding a
+  non-object list element, exits 2. It gates nothing in `pr_watch`.
+  - Decided: only step 1 of the #94 plan (detection) was worth doing. Steps 2 and 3,
+    which would let a cloud session record receipts and merge through `pr_watch`, were
+    judged to cost more than they buy and are parked on #94.
+  - Decided: a "full last page with no next link" check for reviews was built and
+    dropped in review. A complete list an exact multiple of `per_page` long flagged
+    every poll on a quiet PR.
+  - Review: two-lens full panels at `7757f03`, `593ce38` and `ae4706c`, then a
+    two-lens delta at `454ae79`; receipts listed in the PR body, not recorded.
+  - Verification: `make test` at `454ae79be8ede08cf03556fc0472767ee9f35607` on
+    2026-10-12, in `/home/user/rest-failclosed` (cloud), printed
+    `8 failed, 4892 passed, 37 skipped`; the failures are the cloud-sandbox root and
+    process-group tests. CI on `7ffa549f` passed.
+- **Not established:** whether GitHub's `review_comments` count can permanently exceed
+  the inline-comment list (pending or hidden comments). The lenses could only sample
+  this repository, where every PR's inline count was zero. If it can, session-start
+  would report that PR's review findings unavailable on every poll.
+- **Residual LOWs from #1093's review, not filed:** no test reads a wrapped surface
+  exactly one row short of `total_count`, and one sentence on triage's terminal receipt
+  is loose in mechanism. Both are listed in the PR body.
+
+______________________________________________________________________
+
 ## Session — 2026-10-12 (friction-log triage; record-prose preflight recognises moved pairings, in Claude Code)
 
 - **Friction-log triage** (session `ae0b23b8`, engine-backed, approved in this session
@@ -214,60 +252,6 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-## Session — 2026-10-10 (ticket execution environments, in Codex)
-
-- **Ticket execution environments:** [#1038](https://github.com/topij/agentic-dev-kit/pull/1038)
-  merged as `4271cbd7e6b8177554105205ee8f467e8b33e6ed` on the operator's request.
-  The shared ticket contract and workflow bindings carry execution requirements
-  into ticket drafting, session briefings and parallel planning.
-- **Decision:** the operator chose to file the remaining MEDIUM non-regression
-  coverage gaps and merge. [#1040](https://github.com/topij/agentic-dev-kit/issues/1040)
-  carries the approved follow-up and its `unknown` execution classification.
-  The [review disposition](https://github.com/topij/agentic-dev-kit/pull/1038#issuecomment-6100291789)
-  preserves the independent panel and the deferral.
-- **Verification:** `make test` at `30ad19f9df9af5e3d5df81ebb5039a21768118ca`
-  on 2026-10-10, in
-  `/private/tmp/claude-502/-Users-topi-Coding-agentic-dev-kit/codex-ticket-environment-4k5vbe5u/verify-30ad19f`,
-  passed. The portability checks inspect declarations and reviewed Markdown;
-  they do not execute an agent choosing work or creating tickets.
-- **Not established:** live cloud selection and the intended cloud setup's
-  verification capabilities. The operator confirmed the workstream name below.
-
-______________________________________________________________________
-
-## Session — 2026-10-09 (scratch alternate paths, in Codex)
-
-- **Scratch retention:** [#1034](https://github.com/topij/agentic-dev-kit/pull/1034)
-  merged as `79d33fb9eaca1d4da6dca0b1ca703fc384ffc657` on the operator's request,
-  addressing #1032. Unquoted alternate paths preserve whitespace and filesystem bytes.
-- **Verification:** `make test` at `fbc91bdcfa01b6fda7bb30f04dddfe8a403233f1` on 2026-10-09,
-  in `/private/tmp/claude-502/-Users-topi-Coding-agentic-dev-kit/codex-01a121d7-1032-4xh1wqvu/verify-fbc91bdc`,
-  printed `4538 passed, 1 skipped`. `gh run view 37976770841` from
-  `/Users/topi/Coding/agentic-dev-kit` on 2026-10-09 reported `Test` at
-  `79d33fb9eaca1d4da6dca0b1ca703fc384ffc657` completed with `success`.
-- **Review:** CodeRabbit skipped. The [independent adversarial receipt](https://github.com/topij/agentic-dev-kit/pull/1034#issuecomment-6087015179)
-  records focused tests and deliberate trimming, line-splitting and replacement-decoding mutations.
-- **Limits:** No production scratch sweep or adopter rollout ran in this session.
-
-______________________________________________________________________
-
-## Session — 2026-10-09 (workstreams named by subject, in Claude Code)
-
-- **#1028 merged as `50145a23`, by the operator.** `wrap-up.md` now names a workstream for its subject, never a date, a run mode or a session. A session with unrelated pull requests files each one under its subject's workstream. An unattended guess is marked `assignment unconfirmed`, and an interactive wrap-up offers the operator folds for misnamed and unconfirmed entries. `session-start.md`, `parallel.md` and the handoff template follow suit. `make test` at `45819297` on 2026-10-09 in `/Users/topi/Coding/agentic-dev-kit` → `4497 passed, 1 skipped`.
-- **Review.** CodeRabbit skipped the PR. The adversarial lens ran full passes at `dae754b8` and `2fe2ce11`. A delta pass at `4cce8edb` disputed containment and spent the round budget. The operator authorized one further round (option A of the decision packet on the PR). The delta pass at `45819297` found every repair contained, and its `fallback:delta` receipt is composed on `2fe2ce11`. The remaining LOW findings were filed, on the operator's approval of the exact text, as #1030, read back identical.
-- **cs-toolkit.** On the operator's approval of each fold, in-parallel-oy/cs-toolkit#2609 merged as `3d7a6b95`. It re-filed that repository's batch-named workstreams by subject. Two LOW wording findings from its delta pass were left, on the operator's choice, for cs-toolkit's next wrap-up. They are recorded only in #2609's disposition comment.
-- An occurrence was added to #852 on the operator's approval, and reads back identical: the round-1 receipt was not recorded before the repair was pushed.
-- Not established: whether an unattended batch wrap-up files its pull requests by subject under the new rules. None has run under them yet.
-
-______________________________________________________________________
-
-## Session — 2026-10-09 (tickets closed after the lane batch, in Claude Code)
-
-- On the operator's word, closed each ticket with a comment naming its merge commit: #1008, #1009, #1012, #1013, #1014, #1016, #1018. This supersedes, for those tickets, the previous entry's "still open" and "waits for the operator" lines. It also supersedes that entry's "not ticketed": #1017 now carries the gap.
-- #1017 stays open with a comment. #1023 covered the `forge-finalize` and `archive-sweep` phases; a finished `tracker-write` session's resume hint is the open design decision.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -385,16 +369,29 @@ and `pr-watch/report-fields.md`. #1069 (`6f543433`) makes an absent reference fi
 `missing-required`. cs-toolkit runs the skill bindings since in-parallel-oy/cs-toolkit#2632,
 and OpenKitchen since topij/OpenKitchen#324 (`cb810b88`). #1074 (`55869a7e`) corrected
 `pr-watch/report-fields.md`'s link and tests every relative link under `workflows/*/`.
+#1077 (`8bac932`) makes `upgrade.md` Step 4 search for adopter references before
+deleting a `kit-retired` command (#1071).
 #1055 owns the Codex `openai.yaml` check, #1058 the triage split's remaining pin gaps,
-#1070 #1069's residual LOWs, #1071 the `kit-retired` deletion warning, #1075 the link
-check's residual LOWs.
+#1070 #1069's residual LOWs, #1075 the link check's residual LOWs.
 **Owner:** `saved_plans/skills-and-instructions-assessment_2026-10-11.md`;
 [#1055](https://github.com/topij/agentic-dev-kit/issues/1055),
 [#1058](https://github.com/topij/agentic-dev-kit/issues/1058),
 [#1070](https://github.com/topij/agentic-dev-kit/issues/1070),
-[#1071](https://github.com/topij/agentic-dev-kit/issues/1071),
 [#1075](https://github.com/topij/agentic-dev-kit/issues/1075).
 
-▶ Next: #1071 — make `upgrade.md` Step 4 name the search for the adopter's own
-references to a `kit-retired` command, and the keep-and-route option, and pin that
-sentence with a portability test.
+▶ Next: #1075 — make the split-workflow link check see links after a fence-like line
+in an HTML block or after a form feed, and kill its two surviving mutants.
+
+### pr-watch REST backend
+
+**Status:** #1093 (`4fae786f`) judges REST reads complete against the counts GitHub
+sends and rejects malformed bodies (step 1 of #94's plan). Reviews carry no count, so a
+review read that loses its `Link` header still reads as complete (#94 re-audit rows 7
+and 9). REST still cannot authorize a merge; letting a cloud session record receipts
+and merge (#94 steps 2 and 3) is parked as not worth its cost. #951 owns the cloud
+session's GraphQL block.
+**Owner:** [#94](https://github.com/topij/agentic-dev-kit/issues/94),
+[#951](https://github.com/topij/agentic-dev-kit/issues/951).
+
+▶ Next: #94 — decide whether the REST review read gets a completeness signal (rows 7
+and 9) or stays a documented gap, then say so on #94.
