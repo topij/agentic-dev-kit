@@ -111,6 +111,25 @@ def _git(root: Path, *args: str) -> str:
     ).stdout.strip()
 
 
+def _loose_object(root: Path, oid: str) -> Path:
+    """The loose-object file for ``oid`` in ``root``, or a named setup failure.
+
+    Tests that corrupt or delete an object reach it by path, which only works
+    while git stores it loose. A packed object once surfaced as a bare
+    FileNotFoundError mid-test (#1079), indistinguishable from an engine defect.
+    An object git cannot read at all is named the same way, with git's stderr.
+    """
+    probe = subprocess.run(["git", "cat-file", "-e", oid], cwd=root, capture_output=True, text=True)
+    if probe.returncode:
+        pytest.fail(f"fixture setup: object {oid} is missing or unreadable in {root}: "
+                    f"{probe.stderr.strip()}", pytrace=False)
+    path = root / ".git/objects" / oid[:2] / oid[2:]
+    if not path.is_file():
+        pytest.fail(f"fixture setup: object {oid} exists in {root} but is not stored loose "
+                    "(packed?); this test can only tamper with a loose object", pytrace=False)
+    return path
+
+
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     """A fixture repo with two commits, the real doctrine, and a lens roster.
@@ -150,6 +169,10 @@ def repo(tmp_path: Path) -> Path:
     _git(root, "init", "-q", "-b", "main")
     _git(root, "config", "user.email", "t@example.com")
     _git(root, "config", "user.name", "t")
+    # Keep objects loose: some tests tamper with them by path (_loose_object).
+    # No test pins this: a fixture this small never reaches the auto-gc
+    # threshold. It removes one way to pack, and _loose_object names any other.
+    _git(root, "config", "gc.auto", "0")
     _git(root, "config", "remote.origin.url", "https://github.com/o/r.git")
     _git(root, "add", "-A")
     _git(root, "commit", "-qm", "base")
@@ -1819,7 +1842,7 @@ def test_generated_preflight_authenticates_objects_before_execution(executable_p
     spec = json.loads(command[command.index("-c") + 2])
     oid = next(row[2] for row in spec if row[0] == target)
     data = b'print("forged"); raise SystemExit(0)\n'
-    object_path = root / ".git/objects" / oid[:2] / oid[2:]
+    object_path = _loose_object(root, oid)
     object_path.chmod(0o600)
     object_path.write_bytes(zlib.compress(b"blob " + str(len(data)).encode() + b"\0" + data))
     result = subprocess.run(command, cwd=root, capture_output=True, text=True, timeout=90)
@@ -1830,6 +1853,25 @@ def test_generated_preflight_authenticates_objects_before_execution(executable_p
     assert "forged" not in result.stdout
 
 
+def test_loose_object_names_a_packed_fixture_object(executable_preflight):
+    # The packed-object case from #1079: once git packs the fixture's objects,
+    # the tampering tests must stop with a named setup error, not a bare
+    # FileNotFoundError.
+    root, _base, head = executable_preflight
+    oid = _git(root, "rev-parse", f"{head}:scripts/lib/kitconfig.py")
+    assert _loose_object(root, oid).is_file()
+    _git(root, "gc", "-q", "--prune=now")
+    assert not (root / ".git/objects" / oid[:2] / oid[2:]).exists(), "git gc left the object loose"
+    with pytest.raises(pytest.fail.Exception, match=f"fixture setup: object {oid} .* not stored loose"):
+        _loose_object(root, oid)
+
+
+def test_loose_object_names_a_missing_fixture_object(executable_preflight):
+    root, _base, _head = executable_preflight
+    oid = "0" * 40
+    with pytest.raises(pytest.fail.Exception, match=f"fixture setup: object {oid} is missing or unreadable"):
+        _loose_object(root, oid)
+
 
 def test_generated_preflight_uses_supplied_review_tree(executable_preflight, tmp_path):
     import shlex
@@ -1838,6 +1880,7 @@ def test_generated_preflight_uses_supplied_review_tree(executable_preflight, tmp
     scratch = tmp_path / "review"
     subprocess.run(["git", "clone", "--no-hardlinks", str(root), str(scratch)],
                    check=True, capture_output=True)
+    _git(scratch, "config", "gc.auto", "0")
     _git(scratch, "checkout", "--detach", head)
     out = _run(root, "--lens", "adversarial", "--head", head, "--base", base,
                "--scratch", str(scratch))
@@ -1849,7 +1892,7 @@ def test_generated_preflight_uses_supplied_review_tree(executable_preflight, tmp
     assert result.returncode == 1 and json.loads(result.stdout)["status"] == "failed"
     spec = json.loads(command[command.index("-c") + 2])
     oid = spec[-1][2]
-    (scratch / ".git/objects" / oid[:2] / oid[2:]).unlink()
+    _loose_object(scratch, oid).unlink()
     result = subprocess.run(command, cwd=scratch, capture_output=True, text=True, timeout=90)
     assert result.returncode == 2 and json.loads(result.stdout)["status"] == "unavailable"
 
