@@ -282,8 +282,8 @@ added named delta draws; #993 (`2d40c960`) shipped the review round budget.
 #1039 (`fa905cd09c950b96fe926ceb21d69ff7c00dea7c`) shipped #585's record-prose
 preflight and executed-span guidance on 2026-10-10. The P2 regression the operator
 deferred to #1041 shipped in #1044 (`8f41ea42`); #403's precedence question was outside the change.
-#1088 (`2ca8ded9`) stops the preflight reporting a pairing moved unchanged between
-narrative paths; #1089 owns its candidate-bound test.
+#1088 (`2ca8ded9`) exempts pairings moved unchanged, not ones across a heading the
+archive sweep rewrites (friction log); #1089 owns its candidate-bound test.
 #921 owns the cockpit check of verdict-line names.
 **Owner:** [#585](https://github.com/topij/agentic-dev-kit/issues/585),
 [#921](https://github.com/topij/agentic-dev-kit/issues/921),
