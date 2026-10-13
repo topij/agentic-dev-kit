@@ -684,7 +684,7 @@
     },
     "scripts/tests/test_record_prose.py": {
       "role": "test",
-      "sha256": "b520ae72768675cfcddec76f57a50d15b84ab6b2e28139e0ba1c6fbe35f2bd40"
+      "sha256": "03ef13defcd581e8e274c15d60ae1ba6d6e387f0c40e44dedb8b6bd3d37cebd8"
     },
     "scripts/tests/test_repo_layout.py": {
       "role": "test",

@@ -1108,3 +1108,24 @@ def test_many_short_failing_pairings_over_identical_lines_stay_fast(repo):
     code, report = run((root, base), head, "--allow-close", "#8", timeout=15)
     assert code == 1, report
     assert len(report["findings"]) == 60 * 60
+
+
+@pytest.mark.parametrize("position, reported", [(8, False), (9, True)])
+def test_move_source_is_found_only_among_the_first_eight_candidates(repo, position, reported):
+    root, _ = repo
+    # Nine deleted runs start with the pairing's first line; only the run at
+    # `position` holds its reference. Candidates are tried in deletion order,
+    # so the source is found at the eighth and missed at the ninth.
+    block = f"- The fix is\n- on {LOCAL_REF}.\n"
+    runs = [block if i == position else f"- The fix is\n- decoy {i}.\n" for i in range(1, 10)]
+    keeps = "".join(f"- keep {i}\n" for i in range(1, 10))
+    root, base, head = _sweep(root, "# Inbox\n\n" + "".join(run + f"- keep {i}\n" for i, run in enumerate(runs, 1)),
+                              "# Archive\n", "# Inbox\n\n" + keeps, "# Archive\n\n" + block)
+    code, report = run((root, base), head)
+    if reported:
+        assert code == 1, report
+        assert [(item["source"], item["line"], item["check"]) for item in report["findings"]] == [
+            ("docs/archive.md", 3, "closing-keywords")]
+    else:
+        assert code == 0, report
+        assert report["findings"] == []
