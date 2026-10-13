@@ -1099,10 +1099,10 @@ class Report:
         """Files that are not installed and should be.
 
         Two states, one conclusion: `missing-required` is absent-and-depended-on
-        (derived from the import graph and the workflow layout), `removed` is absent-and-recorded-as-
-        installed (derived from the baseline). Both mean the tree is broken
-        rather than sized down, so both reach the exit code the same way — which
-        is what this property is for.
+        (derived from the import graph and the workflow layout), `removed` is
+        absent-and-recorded-as-installed (derived from the baseline). Both mean
+        the tree is broken rather than sized down, so both reach the exit code
+        the same way — which is what this property is for.
 
         Deliberately NOT folded into `drifted`: a file that is absent has not
         drifted from anything, and this report's whole position is that it does
