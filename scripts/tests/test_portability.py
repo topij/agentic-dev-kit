@@ -2308,7 +2308,8 @@ def _without_fenced_code(text: str) -> str:
     end. A backtick opener's info string holds no backtick, so a line that
     opens with an inline code span opens nothing. A fence-like line inside an
     HTML block opens nothing either; the block's lines stay in, so its hrefs
-    are checked. Lines end at a newline only: read_text has already folded
+    are checked, and so is link-shaped text that CommonMark would not parse
+    as a link there. Lines end at a newline only: read_text has already folded
     CRLF and CR, and a form feed or other splitlines break is no line end."""
     kept, fence, html_end, paragraph = [], None, None, False
     for line in text.split("\n"):
@@ -2385,6 +2386,13 @@ def test_split_workflow_broken_links_are_rejected(tmp_path: Path) -> None:
         "\n<pre>\n```\n</pre>\n[x](../absent.md)\n",
         "\n<div>\n```\n\n[x](../absent.md)\n",
         "\n<span>\n```\n\n[x](../absent.md)\n",
+        # Kind 1 runs to its terminator, past a blank line a lone <pre> would end at.
+        "\n<pre>\n\n```\n</pre>\n[x](../absent.md)\n",
+        # Kind 6 interrupts a paragraph: a listed tag name, and one closed by "/>".
+        "\ntext\n<ul>\n```\n\n[x](../absent.md)\n",
+        "\ntext\n<hr/>\n```\n\n[x](../absent.md)\n",
+        # A closed fence ends the paragraph, so a lone tag after it opens a block.
+        "\ntext\n```\nx\n```\n<span>\n```\n\n[x](../absent.md)\n",
         # A form feed ends no line, so the backticks after it open nothing.
         "\na\x0c```\n[x](../absent.md)\n",
     )
