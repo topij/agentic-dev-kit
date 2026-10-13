@@ -24,6 +24,16 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-10-12
+
+- **A handoff archive sweep still trips the record-prose preflight after #1088.** Severity
+  L, kept for accumulation. The move exemption needs every line of a pairing moved
+  unchanged. `archive_plan_sessions.py` rewrites each moved `## Session — …` heading to
+  `### …` and drops the separator line, so a pre-existing pairing that spans a session
+  boundary stays reported. It happened on this wrap-up: the last sentence of the 2026-10-09
+  block in `docs/kit-handoff-history.md` pairs with the first reference of the 2026-10-08
+  block below it. That history text is left unchanged.
+
 ## 2026-10-12 — Backlog migrated by triage session ae0b23b828f945bd9228c7c591ff0530
 
 Engine mode: `engine-backed`.
