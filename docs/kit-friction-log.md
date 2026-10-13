@@ -53,12 +53,12 @@
   - On #1099 and #1100, each delta repair of a wording or pinning LOW drew a new LOW of
     the same size from the next delta lens.
   - #1100 converged once the claim was shortened to what the regex does.
+  - #1099's third pair went to its ticket instead of a third round.
 - **The archive sweep's moved-pairing case recurred, as in the 2026-10-12 entry below.**
   Severity L, kept for accumulation. This wrap-up's sweep joined the 2026-10-11 and
-  2026-10-10 history blocks. That joined a ticket-state verb in moved text to the next
-  issue reference at `docs/kit-handoff-history.md:72`, and the record-prose preflight
-  failed on it. The text stays as exact bytes, per the 2026-10-12 decision.
-  - #1099's third pair went to its ticket instead of a third round.
+  2026-10-10 history blocks. The preflight then paired a GitHub keyword in the moved
+  text with the next issue reference, at `docs/kit-handoff-history.md:72`. The text
+  stays as exact bytes, per the 2026-10-12 decision.
 
 ## 2026-10-12
 
