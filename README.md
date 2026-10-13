@@ -3,8 +3,8 @@
 A portable development model for codebases built with the help of AI coding
 agents — interactive and unattended alike. It packages ten doctrine principles
 (see [`PRINCIPLES.md`](PRINCIPLES.md)) into the small set of files that actually
-make them stick: two narrative documents, a handful of skills, a few engine
-scripts, a state sandbox, and one safety-critical rule.
+make them stick: narrative documents, workflow skills, engine scripts, a state
+sandbox, and one safety-critical rule.
 
 **Copy-in, repo-owned.** You copy this template into your repo and run
 `./init.sh` once. From then on the kit is yours — no external package, no
@@ -98,7 +98,8 @@ rule proposals).
 shells out to — `awk`, `grep`, `sed`, `mv`, `rm`, `cat`, `head`, `mkdir`, `chmod`, `touch`,
 `basename`, `dirname`, `date` and `git` — all standard on macOS
 and Linux, none of them a runtime you have to install. The engines need [`uv`](https://docs.astral.sh/uv/) (they're PEP-723 single-file
-scripts), `git`, and — for `pr-watch` / `parallel` — the GitHub CLI `gh`,
+scripts), `git` 2.44 or later (for `git --no-lazy-fetch`), and — for `pr-watch` /
+`parallel` — the GitHub CLI `gh`,
 authenticated. **Runtime engines do not require PyYAML:**
 `scripts/lib/kitconfig.py`, the config reader they use, is stdlib-only.
 `scripts/lib/devmodel_config.py` is PyYAML-backed but is not an engine dependency;

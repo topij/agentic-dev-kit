@@ -1070,8 +1070,9 @@ _REST_MAX_PAGES = 20
 
 _truncation_warned: set[str] = set()
 
-# URLs truncated by the page ceiling during THIS process, in order. Surfaced two
-# ways so the claim matches reality: in the JSON, and printed by `render`.
+# URLs read incompletely during THIS process, in order: stopped by the page
+# ceiling, or (#94) ended short of a count GitHub sent. Surfaced two ways so the
+# claim matches reality: in the JSON, and printed by `render`.
 #
 # The JSON alone was not enough, and saying it was is a mistake this engine has
 # now made twice. `summarize_review_bots.signal` is the precedent worth copying —
@@ -1079,11 +1080,16 @@ _truncation_warned: set[str] = set()
 # `workflows/pr-watch.md` documents it. A field with neither is read by nobody:
 # `dev_session.sh merge` extracts only `mergeable`/`pr`/`base`/`head`.
 #
-# It gates nothing on purpose (REST cannot authorize a merge, and blocking
-# `converged` would wedge the watch loop), so the render line is the whole
+# It gates nothing in this engine on purpose (REST cannot authorize a merge, and
+# blocking `converged` would wedge the watch loop). Session-start reads a
+# non-empty one as review findings unavailable. Triage's
+# `terminal_pr_watch_receipt` also requires it empty, but no REST report reaches
+# that check: triage runs `--assert-ready` first, which refuses on REST, and a
+# REST report is never mergeable. Here the render line is the whole
 # mechanism: REST list endpoints return oldest-first, which means the ceiling
-# drops the NEWEST comments — where fresh findings live — and an agent reading
-# "converged" needs to see that its comment read was incomplete.
+# drops the NEWEST comments — where fresh findings live — and a read short of a
+# count may have dropped any of them, so an agent reading "converged" needs to
+# see that its comment read was incomplete.
 _truncated_reads: list[str] = []
 
 # Surfaces this process could not read AT ALL, as
@@ -1140,7 +1146,54 @@ def _warn_pagination_truncated(url: str, max_pages: int) -> None:
     )
 
 
-def _http_get_all(url: str, token: str, *, max_pages: int = _REST_MAX_PAGES) -> list:
+def _warn_read_incomplete(url: str, reason: str) -> None:
+    """Record and announce that the data, not the ceiling, says a read is short.
+
+    Recorded in ``_truncated_reads`` beside the ceiling case, because the report
+    a reader acts on is the same: the list is a prefix, not the whole. This engine
+    gates nothing on it; session-start reads a non-empty list as review findings
+    unavailable, so a false positive (a comment deleted between the PR read and
+    the list read) costs that one poll's findings until a later poll reads clean.
+    #94's
+    re-audit at `e37b7bd` found every count GitHub sends discarded, so a short
+    page with no ``Link`` read as complete. Deduped on stderr as
+    :func:`_warn_pagination_truncated` is.
+    """
+    _truncated_reads.append(url)
+    if url in _truncation_warned:
+        return
+    _truncation_warned.add(url)
+    print(
+        f"warning: GitHub read {url} is INCOMPLETE ({reason}) — items beyond what "
+        "was returned were not read",
+        file=sys.stderr,
+    )
+
+
+def _require_dict_items(items: list, url: str) -> None:
+    """Raise on a list element that is not a JSON object.
+
+    Every REST surface this engine pages (check runs, status contexts, reviews,
+    comments) is a list of objects. The row builders used to `continue` past
+    anything else, so a garbled element vanished and the surface read as smaller
+    than it was — a failing check dropped this way left `all_green` true (#94).
+    Raised for the same reason a non-list page is.
+    """
+    for item in items:
+        if not isinstance(item, dict):
+            raise RuntimeError(
+                f"GitHub API GET {url} returned a {type(item).__name__} element, "
+                "expected JSON objects"
+            )
+
+
+def _http_get_all(
+    url: str,
+    token: str,
+    *,
+    max_pages: int = _REST_MAX_PAGES,
+    expected_count: int | None = None,
+) -> list:
     """GET ``url`` following ``Link: rel="next"``, for endpoints whose body IS
     the JSON array (reviews, issue comments, inline comments).
 
@@ -1150,6 +1203,20 @@ def _http_get_all(url: str, token: str, *, max_pages: int = _REST_MAX_PAGES) -> 
     on `pulls/{n}/reviews` made `review_decision` empty, which removed the
     CHANGES_REQUESTED blocker and flipped `mergeable` from false to TRUE. On the
     comment surfaces it made every unread finding read as "no findings".
+
+    Completeness is judged from the data where GitHub sends a count:
+    ``expected_count`` is the caller's count for this list (the PR object's
+    ``comments`` / ``review_comments``), and fewer items than that records the
+    read as incomplete. More is not a gap: a comment posted between the two
+    reads. This engine gates nothing on it (see :func:`_warn_read_incomplete`
+    for who reads it).
+
+    Without a count (reviews, and the identity read of ``commits/<sha>/statuses``)
+    a dropped ``Link`` still reads as complete: #94 rows 7 and 9 stay open
+    there. Treating a full last page as suspect was tried and dropped, because a
+    list an exact multiple of ``per_page`` long is complete and stays that length
+    on a quiet PR, so it flagged every poll and session-start would report that
+    PR's review findings unavailable indefinitely.
     """
     items: list = []
     next_url: str | None = url
@@ -1160,11 +1227,16 @@ def _http_get_all(url: str, token: str, *, max_pages: int = _REST_MAX_PAGES) -> 
             raise RuntimeError(
                 f"GitHub API GET {next_url} returned {type(data).__name__}, expected a JSON array"
             )
+        _require_dict_items(data, next_url)
         items.extend(data)
         next_url = _next_link(link)
         pages += 1
     if next_url:
         _warn_pagination_truncated(url, max_pages)
+    elif expected_count is not None and len(items) < expected_count:
+        _warn_read_incomplete(
+            url, f"{len(items)} items read, the pull request counts {expected_count}"
+        )
     return items
 
 
@@ -1179,10 +1251,16 @@ def _http_get_all_wrapped(
     GET against ~49 real check runs, which truncated the rollup so the missing
     checks read as "not present" rather than "not yet read". Callers must pass
     ``per_page=100`` on ``url`` as well, to keep the page count low.
+
+    Every page must carry an integer ``total_count``, which both wrapped
+    endpoints this reads always send, and fewer items than the largest count
+    seen records the read as incomplete (#94: a short page with no ``Link``
+    read as the whole rollup).
     """
     items: list = []
     next_url: str | None = url
     pages = 0
+    total = 0
     while next_url and pages < max_pages:
         data, link = _http_get(next_url, token)
         if not isinstance(data, dict):
@@ -1213,11 +1291,22 @@ def _http_get_all_wrapped(
                 f"GitHub API GET {next_url} returned {type(page).__name__} for "
                 f"{key!r}, expected a JSON array"
             )
+        count = data.get("total_count")
+        # `bool` is an `int` subclass, and `True` is not a count.
+        if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+            raise RuntimeError(
+                f"GitHub API GET {next_url} returned no usable 'total_count' "
+                f"({count!r}) — not this endpoint's shape"
+            )
+        total = max(total, count)
+        _require_dict_items(page, next_url)
         items.extend(page)
         next_url = _next_link(link)
         pages += 1
     if next_url:
         _warn_pagination_truncated(url, max_pages)
+    elif len(items) < total:
+        _warn_read_incomplete(url, f"{len(items)} of total_count {total} read")
     return items
 
 
@@ -1658,6 +1747,19 @@ def rest_pr_view(pr: int, *, token: str) -> tuple[dict, list[dict], RestCheckRea
     sha = head.get("sha") if isinstance(head, dict) else None
     if not sha:
         raise RuntimeError(f"PR #{pr} response carried no usable head SHA")
+    # A missing or non-boolean `draft` raises. Mapping it to False, as `bool()`
+    # did, dropped the draft merge blocker on a body that never said (#94).
+    draft = pr_data.get("draft")
+    if not isinstance(draft, bool):
+        raise RuntimeError(f"PR #{pr} response carried no boolean draft field ({draft!r})")
+    # The single-PR object always carries both counts; the comment reads are
+    # judged complete against them (#94).
+    counts = {}
+    for field in ("comments", "review_comments"):
+        value = pr_data.get(field)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise RuntimeError(f"PR #{pr} response carried no usable {field} count ({value!r})")
+        counts[field] = value
     check_runs, statuses = _rest_fetch_checks(sha, token=token, slug=slug)
     reviews = _http_get_all(_rest_api(f"pulls/{pr}/reviews?per_page=100", slug), token)
     view = {
@@ -1676,7 +1778,7 @@ def rest_pr_view(pr: int, *, token: str) -> tuple[dict, list[dict], RestCheckRea
             if pr_data.get("merged")
             else str(pr_data.get("state") or "").upper()
         ),
-        "isDraft": bool(pr_data.get("draft")),
+        "isDraft": draft,
         "baseRefName": (pr_data.get("base") or {}).get("ref"),
         "baseRefOid": (pr_data.get("base") or {}).get("sha"),
         # REST's `mergeable_state` (clean/dirty/blocked/behind/unstable/…) is a
@@ -1693,10 +1795,16 @@ def rest_pr_view(pr: int, *, token: str) -> tuple[dict, list[dict], RestCheckRea
         "statusCheckRollup": _rest_check_rows(check_runs, statuses or []),
         "reviews": reviews,
         "comments": _http_get_all(
-            _rest_api(f"issues/{pr}/comments?per_page=100", slug), token
+            _rest_api(f"issues/{pr}/comments?per_page=100", slug),
+            token,
+            expected_count=counts["comments"],
         ),
     }
-    inline = _http_get_all(_rest_api(f"pulls/{pr}/comments?per_page=100", slug), token)
+    inline = _http_get_all(
+        _rest_api(f"pulls/{pr}/comments?per_page=100", slug),
+        token,
+        expected_count=counts["review_comments"],
+    )
     return view, inline, RestCheckReads(sha, check_runs, statuses)
 
 
@@ -2512,11 +2620,11 @@ def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
     """
     out: list[dict] = []
     for raw in view.get("comments") or []:
-        # Elements, not just the page: `_http_get_all` proves the RESPONSE is a
-        # list; a hostile or malformed element inside it still reaches `.get`
-        # here, and `build_report` runs outside `main`'s try, so an
-        # AttributeError from a string element exits 1 with a traceback rather
-        # than `error: …`. Same for the two surfaces below.
+        # Elements, not just the page: on REST `_http_get_all` now raises on a
+        # non-object element, but the `gh` backend and other callers hand this
+        # function lists nothing has checked. `build_report` runs outside
+        # `main`'s try, so an AttributeError from a string element exits 1
+        # with a traceback rather than `error: …`. Same for the two surfaces below.
         if not isinstance(raw, dict):
             continue
         body = raw.get("body") or ""
@@ -5721,9 +5829,11 @@ def build_report(
         "settle_age_minutes": settle_age_minutes,
         "rollup_settled": rollup_settled,
         "checks": checks,
-        # Reported, and gating nothing. It does not need to gate: REST cannot
-        # authorize a merge at all, so the only thing truncation can still
-        # mislead is `converged` — and blocking THAT would wedge the watch loop,
+        # Reported, and gating nothing in this engine (session-start reads it;
+        # see `_truncated_reads`). It does not need
+        # to gate here: REST cannot authorize a merge at all, so the only thing
+        # truncation can still mislead is `converged` — and blocking THAT would
+        # wedge the watch loop,
         # which is the one thing these two predicates exist to keep separate.
         # An earlier design made it a merge blocker and that was worse than
         # useless: a persistent pagination anomaly closed the gate for a PR
@@ -5827,13 +5937,15 @@ def render(report: dict) -> str:
             "reviewer will NOT be detected on this poll (see stderr)"
         )
     # Truncation, on the surface a human or agent actually reads. It gates
-    # nothing — REST cannot authorize a merge, and blocking `converged` would
-    # wedge the loop — so this line is the entire mechanism. Deduplicated because
+    # nothing in this engine — REST cannot authorize a merge, and blocking
+    # `converged` would wedge the loop — so in the human render this line is the
+    # entire mechanism (session-start reads the JSON field). Deduplicated because
     # `truncated_reads` records every read, and a report built by a caller other
     # than `main` may have read one URL twice.
     for truncated in dict.fromkeys(report.get("truncated_reads") or []):
         lines.append(
-            f"  ⚠ a paginated read was TRUNCATED at the page ceiling ({truncated}) "
+            f"  ⚠ a paginated read was TRUNCATED ({truncated}): it hit the page "
+            "ceiling or ended short of GitHub's count "
             "— this poll did NOT see every check/comment, so `converged` may be "
             "premature"
         )
