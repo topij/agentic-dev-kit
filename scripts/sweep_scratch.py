@@ -402,8 +402,9 @@ def repository_stores(worktrees: list[str]) -> list[str]:
             # A prunable registration: its directory was deleted. Its common git
             # dir is the one every other worktree of that repository reports.
             # A directory whose `.git` alone is gone is not skipped: a bare
-            # repository has no `.git` either, and skipping it would drop its
-            # object store. That case exits 2 (see the limits above).
+            # repository has no `.git` either, and skipping it would leave the
+            # configured repository's git dir and alternates chain unrecorded.
+            # That case exits 2 (see the limits above).
             continue
         if state == "unknown":
             raise ConfigError(f"cannot stat the registered worktree {worktree}")
