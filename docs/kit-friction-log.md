@@ -24,6 +24,34 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-10-14
+
+- **Headless lanes cannot regenerate `kit-manifest.json`, so no lane that edits a hashed
+  file can push.** Severity M. Parked because this wrap-up ran with no operator present
+  to approve a tracker payload; it is issue-shaped.
+  - **Repro:** in the 2026-10-13 overnight batch, all four `claude` lanes edited files
+    that `kit-manifest.json` hashes. Each lane ran the command `CONTRIBUTING.md` names,
+    `python3 scripts/kit_doctor.py --generate-manifest`. The lane profile
+    (`config/claude-lane-settings.json`) denied it, because it allows only
+    `Bash(uv run scripts/kit_doctor.py:*)`.
+  - **Effect:** the lane's `make test` failed on `test_kit_repo_self_check_is_clean`,
+    and the pre-push hook refused the push. Every lane stopped without a PR.
+  - **Proposed change:** name the `uv run` spelling in the lane contract or the kickoff, or align
+    `CONTRIBUTING.md` with the profile.
+- **`make test` outruns a headless lane's Bash time limit.** Severity M. Kept for
+  accumulation, because the remedy is not established.
+  - In the same batch, each lane's first `make test` was killed at the 10-minute
+    background limit. The full runs that finished took about 16 to 20 minutes.
+  - One lane (#1089's) then ended on a denied call before committing.
+  - Whether the lane contract should prescribe a longer foreground timeout, or the lanes
+    should stop before the stamp and leave it to the cockpit, was not decided.
+- **The #1080 repair-chain shape recurred on LOW-only test-helper repairs.** Severity L,
+  kept for accumulation.
+  - On #1099 and #1100, each delta repair of a wording or pinning LOW drew a new LOW of
+    the same size from the next delta lens.
+  - #1100 converged once the claim was shortened to what the regex does.
+  - #1099's third pair went to its ticket instead of a third round.
+
 ## 2026-10-12
 
 - **A handoff archive sweep still trips the record-prose preflight after #1088.** Severity

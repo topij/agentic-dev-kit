@@ -20,6 +20,57 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-13 (move-candidate bound, split-workflow link check, kit_doctor reference edge and panel_prompt fixture objects, from headless lanes, in Claude Code)
+
+- **How it ran:** an autonomous overnight session. The operator approved the four lanes
+  and self-merge for the `self`-class ones. Each lane ran as a headless `claude` lane
+  (`dev_session.sh new --headless`, `launch_lane.py`). None of them opened its PR. Each
+  stopped at one of two walls, both parked in the friction log:
+  - the profile denied the `python3` spelling of the manifest regeneration;
+  - `make test` outran the lane's Bash time limit.
+
+  The cockpit finished each lane: rebase, `uv run scripts/kit_doctor.py
+  --generate-manifest`, the stamp, the review, and `dev_session.sh merge`.
+  `reconcile_sessions.sh` reported all four scopes merged, and the lane sessions were
+  removed.
+- **Review:** CodeRabbit skipped every PR (automatic reviews are disabled). Each PR had
+  an isolated adversarial `fallback:lens` full pass. LOW findings took
+  `fallback:delta` repairs or tickets, with the dispositions and verbatim verdict lines
+  on each PR. The cockpit applied every mutant a lane named, in a scratch clone.
+- **Review proportionality:** [#1096](https://github.com/topij/agentic-dev-kit/pull/1096)
+  merged as `8beee9a1`. A positional test now pins `MAX_MOVE_CANDIDATES`, so the values
+  7, 9 and 1 each fail a behavioural case. The full pass had no findings.
+- **Skills and instruction files:**
+  - [#1097](https://github.com/topij/agentic-dev-kit/pull/1097) merged as `0f8e93f2`. A
+    fence-like line inside an HTML block, or after a form feed, no longer hides later
+    links from the split-workflow link check. A delta added four cases for the full
+    pass's surviving mutants. The state-machine gaps that pass found are
+    [#1098](https://github.com/topij/agentic-dev-kit/issues/1098).
+  - [#1100](https://github.com/topij/agentic-dev-kit/pull/1100) merged as `5d29a75f`.
+    It covers #1069's residual LOWs. Two deltas then narrowed the read-all pin and
+    shortened its docstring to what the regex matches.
+- **Panel prompt test fixtures:**
+  [#1099](https://github.com/topij/agentic-dev-kit/pull/1099) merged as `1666e247`.
+  Tampering tests reach fixture objects through `_loose_object`, which names a packed
+  or missing object as a setup error. Two deltas followed. Their last pair of LOWs went
+  to #1079 as a comment rather than a third repair round, because each round had
+  produced a new wording-sized LOW (the #1080 shape).
+- **Verification:** each PR carries its own `make test` stamp in a PR comment, run in
+  that lane's worktree under `/Users/topi/Coding/dev-model-sessions/` on 2026-10-13.
+  The LOW repairs had focused runs and current-head CI, as the LOW rule prescribes.
+  After the last merge, `pytest scripts/tests/test_kit_doctor.py -k
+  self_check_is_clean` at `1666e247` in `/Users/topi/Coding/agentic-dev-kit` passed,
+  which shows the four separately regenerated manifest hunks merged consistently.
+- **Filed this session:** #1098 and an occurrence comment on #1079. Both were written
+  during the night under the operator's overnight grant. The wrap-up rule does not
+  count that grant as approval for a tracker write, so the operator should confirm
+  both.
+- **Not established:** #1089, #1075, #1070 and #1079 are still open, for the operator to
+  mark done; #1079 now also carries the residual LOWs. The workstream assignment
+  of *Panel prompt test fixtures* is unconfirmed.
+
+______________________________________________________________________
+
 ## Session — 2026-10-13 (kit-retired command deletion checks adopter references; REST reads judged against GitHub's counts, in a Claude Code cloud session)
 
 - **Skills and instruction files:** [#1077](https://github.com/topij/agentic-dev-kit/pull/1077)
@@ -160,98 +211,6 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-## Session — 2026-10-11 (pr-watch split into an entry and a reference file, in Claude Code)
-
-- **Skills and instruction files:** both PRs merged on the operator's request.
-  - [#1061](https://github.com/topij/agentic-dev-kit/pull/1061) as `367be931`: the
-    instructions in pr-watch's *Notes* moved into the loop steps where they apply, and
-    the field glossary moved to `docs/agentic-dev-kit/workflows/pr-watch/report-fields.md`,
-    read unconditionally like the triage reference files.
-  - [#1063](https://github.com/topij/agentic-dev-kit/pull/1063) as `ad65e539`: the
-    reasoning behind loop step 1's merge blockers, the *Converged* review request, the
-    round count and `--all-comments` moved to new sections of `report-fields.md`. A test
-    pins the loop rules it names and the pointers #1063 added between the two files.
-- **Review:** CodeRabbit skipped both PRs because its automatic reviews are disabled.
-  An isolated adversarial lens ran a `fallback:lens` full pass at `4758f232` and at
-  `e5e9b827`, and a `fallback:delta` pass at `c12224ae`. The dispositions are on each PR.
-- **Decisions:** the operator chose to ticket two of #1061's LOW findings as #1062,
-  with the third corrected at this wrap-up, and to repair #1063's LOW findings in a
-  delta-reviewed commit. On the operator's word, #1059 and #1062 are marked done on the
-  tracker, each with a comment naming its merge commit.
-- **Corrected:** Review proportionality's `▶ Next:` named #1041, which #1044
-  (`8f41ea42`) had already shipped. On the operator's choice it now names #921.
-- **Verification:** `make test` at `c12224ae430d34e8b41cd113b0140b41d9b01caf` on
-  2026-10-11, in `/Users/topi/Coding/agentic-dev-kit`, printed `4854 passed, 1 skipped`.
-  That sha is #1063's final head before its squash merge. #1061's own stamp, at
-  `4758f232`, is in #1061's body.
-- **Filed this session:** [#1062](https://github.com/topij/agentic-dev-kit/issues/1062);
-  an occurrence comment on [#643](https://github.com/topij/agentic-dev-kit/issues/643).
-- **Not established:** whether an agent acts differently under the split pr-watch; no
-  behaviour evaluation ran. Moved loop rules the test does not name, such as the
-  disposition remedy and the stamp-behind-head bullet, stay unpinned: #1062 listed them
-  and was marked done with two pinned, and no open ticket carries the rest.
-
-______________________________________________________________________
-
-## Session — 2026-10-11 (skill bindings, invocation control and instruction-file size, in Claude Code)
-
-- **Skills and instruction files:** an assessment against Anthropic's updated skill
-  guidance and the current Claude Code and Codex instruction-file docs is recorded in
-  `saved_plans/skills-and-instructions-assessment_2026-10-11.md`. The work shipped
-  in three PRs, each merged on the operator's request:
-  - [#1052](https://github.com/topij/agentic-dev-kit/pull/1052) as `f7d8749a` — `AGENTS.md`
-    keeps its rules, and their history moved to `docs/kit-record-prose.md`. The
-    `CLAUDE.md` loading claim is now conditional.
-  - [#1053](https://github.com/topij/agentic-dev-kit/pull/1053) as `78d623c3` — Claude
-    bindings are skills under `.claude/skills/`. `adopt`, `upgrade` and
-    `triage-friction-log` run only when named, on both runtimes. The adapter report
-    classes old commands as `kit-retired` or `adopter-owned`.
-  - [#1054](https://github.com/topij/agentic-dev-kit/pull/1054) as `ea4010db` —
-    `triage-friction-log` is an entry plus reference files, and every run reads them all
-    before its first action.
-- **Decision:** the operator chose an unconditional read over per-file triggers on
-  #1054. Conditional triggers made one file's read depend on knowledge only another
-  supplied, and pinning prose could not stop a sentence elsewhere contradicting a
-  trigger. pr-watch stays one file, and its restructure is #1059.
-- **Runtime observations:** a probe repository on 2026-10-11 showed what Claude Code
-  2.1.296 and codex-cli 0.153.4 actually do. Each read only its own skill directory,
-  honoured its invocation-control key, and still ran a hidden skill when named.
-  `docs/agentic-dev-kit/runtime-parity.md` records the commands.
-- **Verification:** `make test` at `78d623c3325f84af435b4b3b48830f021a83d9af` on
-  2026-10-11, in a detached worktree under this session's scratchpad, printed
-  `4838 passed, 1 skipped`. Each PR's own stamp is on the PR.
-- **Filed this session:** [#1055](https://github.com/topij/agentic-dev-kit/issues/1055),
-  [#1056](https://github.com/topij/agentic-dev-kit/issues/1056),
-  [#1057](https://github.com/topij/agentic-dev-kit/issues/1057),
-  [#1058](https://github.com/topij/agentic-dev-kit/issues/1058),
-  [#1059](https://github.com/topij/agentic-dev-kit/issues/1059); an occurrence comment
-  on [#373](https://github.com/topij/agentic-dev-kit/issues/373). This wrap-up applies
-  #1056's record fix to the assessment.
-- **Not established:** skill trigger and completion evaluations, which are item 5 of the
-  assessment; an `/upgrade` run against an adopter checkout; and whether `upgrade.md`
-  should split. The operator confirmed the workstream name below.
-
-______________________________________________________________________
-
-## Session — 2026-10-10 (record-prose preflight and executed-span review, in Codex)
-
-- **Review proportionality:** [#1039](https://github.com/topij/agentic-dev-kit/pull/1039)
-  merged as `fa905cd09c950b96fe926ceb21d69ff7c00dea7c` on the operator's request.
-  It shipped #585's Git-snapshot record-prose preflight and shared executed-span
-  guidance. #403's shortening-versus-logging precedence question was outside the change.
-- **Decision:** the operator chose to file the accepted **P2 — Regression** about
-  the `uv run` no-network assurance and merge the reviewed candidate. Filed and
-  read back as [#1041](https://github.com/topij/agentic-dev-kit/issues/1041), with
-  `cloud` execution requirements. The [review disposition](https://github.com/topij/agentic-dev-kit/pull/1039#issuecomment-6101160726)
-  preserves the independent review and the unresolved deferral.
-- **Verification:** `make test` at `c02e4c67ffc2229e779009518b8c116d2a31abd8`
-  on 2026-10-10, in `/Users/topi/Coding/agentic-dev-kit`, passed.
-  The preflight itself does not establish command execution or numerical truth.
-- **Not established:** an offline dependency-bootstrap remedy or an adopter rollout.
-  The operator confirmed the workstream assignment.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -267,11 +226,11 @@ added named delta draws; #993 (`2d40c960`) shipped the review round budget.
 preflight and executed-span guidance on 2026-10-10. The P2 regression the operator
 deferred to #1041 shipped in #1044 (`8f41ea42`); #403's precedence question was outside the change.
 #1088 (`2ca8ded9`) exempts pairings moved unchanged, not ones across a heading the
-archive sweep rewrites (friction log); #1089 owns its candidate-bound test.
+archive sweep rewrites (friction log). #1096 (`8beee9a1`) pins its candidate bound
+with a positional test; #1089 stays open for the operator.
 #921 owns the cockpit check of verdict-line names.
 **Owner:** [#585](https://github.com/topij/agentic-dev-kit/issues/585),
-[#921](https://github.com/topij/agentic-dev-kit/issues/921),
-[#1089](https://github.com/topij/agentic-dev-kit/issues/1089); related #403,
+[#921](https://github.com/topij/agentic-dev-kit/issues/921); related #403,
 #666, #305, and the class's documented limits #928, #929, #930 and #931.
 
 ▶ Next: #921 — make the cockpit check that a delta lens returned both the
@@ -371,16 +330,18 @@ and OpenKitchen since topij/OpenKitchen#324 (`cb810b88`). #1074 (`55869a7e`) cor
 `pr-watch/report-fields.md`'s link and tests every relative link under `workflows/*/`.
 #1077 (`8bac932`) makes `upgrade.md` Step 4 search for adopter references before
 deleting a `kit-retired` command (#1071).
+#1097 (`0f8e93f2`) keeps a fence-like line in an HTML block or after a form feed from
+hiding later links (#1075), and #1100 (`5d29a75f`) covers #1069's residual LOWs
+(#1070); both tickets stay open for the operator.
 #1055 owns the Codex `openai.yaml` check, #1058 the triage split's remaining pin gaps,
-#1070 #1069's residual LOWs, #1075 the link check's residual LOWs.
+#1098 the link check's remaining state-machine gaps.
 **Owner:** `saved_plans/skills-and-instructions-assessment_2026-10-11.md`;
 [#1055](https://github.com/topij/agentic-dev-kit/issues/1055),
 [#1058](https://github.com/topij/agentic-dev-kit/issues/1058),
-[#1070](https://github.com/topij/agentic-dev-kit/issues/1070),
-[#1075](https://github.com/topij/agentic-dev-kit/issues/1075).
+[#1098](https://github.com/topij/agentic-dev-kit/issues/1098).
 
-▶ Next: #1075 — make the split-workflow link check see links after a fence-like line
-in an HTML block or after a form feed, and kill its two surviving mutants.
+▶ Next: #1058 — pin the triage split's section placement and full normative sentences
+in the mutation test in `scripts/tests/test_portability.py`.
 
 ### pr-watch REST backend
 
@@ -395,3 +356,15 @@ session's GraphQL block.
 
 ▶ Next: #94 — decide whether the REST review read gets a completeness signal (rows 7
 and 9) or stays a documented gap, then say so on #94.
+
+### Panel prompt test fixtures
+
+**Status:** #1099 (`1666e247`) makes the panel_prompt tampering tests reach fixture
+objects through `_loose_object`, which names a packed or missing object as a setup
+error, and turns auto-gc off in the fixtures. #1079 carries the residual LOWs from its
+last delta and stays open. Assignment unconfirmed: no existing workstream owned #1079.
+**Owner:** [#1079](https://github.com/topij/agentic-dev-kit/issues/1079).
+
+▶ Next: #1079 — pin git's stderr in the missing-object test's match, and make
+`_loose_object`'s wording claim existence rather than readability (the residual-LOW
+comment on #1079 has the acceptance criteria).
