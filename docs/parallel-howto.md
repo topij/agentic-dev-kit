@@ -96,8 +96,9 @@ scripts/dev_session.sh new <scope> --merge-class <self|operator>
 ```
 
 Substitute a lowercase slug for `<scope>` (e.g. `add-rate-limit`, `fix-cli-help`).
-`<scope>` is a placeholder — running it literally would create a branch named
-`dev/<scope>`, which you don't want.
+`<scope>` is a placeholder: typed literally, the shell reads `<scope` as an input
+redirection and the command fails, and `dev_session.sh` itself refuses any scope that is
+not a lowercase slug.
 
 What this does:
 
@@ -262,11 +263,12 @@ sandbox; recording refuses if a push landed between the review and receipt.
 ```bash
 scripts/dev_session.sh rm <scope>                 # keeps the branch if it's unmerged
 scripts/dev_session.sh rm <scope> --keep-branch   # always keep the branch
-scripts/dev_session.sh rm <scope> --force          # skip the safety checks
+scripts/dev_session.sh rm <scope> --force          # discard uncommitted changes
 ```
 
-`rm` tears down the *worktree*; it does not delete an unmerged branch unless you tell
-it to. Your cockpit session and current branch are untouched throughout.
+`rm` tears down the *worktree*. It deletes the branch only once the branch has landed
+(an ancestor of the base, or the head of a squash-merged PR) and is not protected; an
+unmerged branch is kept even with `--force`, so delete it yourself if you mean to. Your cockpit session and current branch are untouched throughout.
 
 ---
 

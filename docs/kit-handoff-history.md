@@ -5,6 +5,36 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-09 (changelog fragments and the lane batch merged, in Claude Code)
+
+- **#1020 merged as `f9146c5f`.** The operator authorized a fourth fix round. It made `upgrade.md`'s fragment lookup read fragments written only by a merge commit (`diff-tree -c`) and type-changed fragments (`--diff-filter=AMT`), and set the fragment naming rule. Its review at `36a69208` found no fail-open in the lookup but left test gaps. The operator chose to merge and ticket them: filed and read back as #1026. `make test` at `36a69208` on 2026-10-09 in `/Users/topi/Coding/agentic-dev-kit` → `4477 passed, 1 skipped`.
+- **On the operator's word, #1023 merged as `a95e9983` through `dev_session.sh merge`, and #1022 merged as `54655d9d` pinned to its reviewed head `6d5343ac`.** #1023's `tracker-write` resume-hint gap shipped as is, and is not ticketed.
+- `reconcile_sessions.sh pr-watch-trio triage-trio skip-shape-doctrine` reported every lane merged. The three lane sessions and branches were removed with `dev_session.sh rm --force`, which discarded only each lane's uncommitted `.pr-body.md`.
+- The tickets the merged PRs addressed are still open: #1008, #1009, #1012, #1013, #1014, #1016, #1017, #1018. Closing them waits for the operator.
+
+### 2026-10-08 (changelog fragments, then a three-lane batch run overnight, in Claude Code)
+
+- **#1009 designed and built as PR #1020, held for the operator.** On the operator's choice, once #1020 merges each PR would add `changelog.d/<branch-slug>.md`, with `CHANGELOG.md` frozen behind a BREAKING cutover entry and `upgrade.md` Step 1 printing each fragment version a commit in range wrote. Until then `main`'s rule is unchanged. A `git merge-tree` replay of #1004–#1006 showed only `CHANGELOG.md` conflicting; `kit-manifest.json` auto-merged, so it is unchanged. The adversarial lens reviewed `c254fd90`, `751bedee` and `44ada17e`, which spent the round budget, and the last review left a Low-Medium finding (a fragment written only by a merge commit prints nothing). The decision packet is on #1020. `make test` at `44ada17e` in the main checkout on 2026-10-08 → `4476 passed, 1 skipped`.
+- **Lanes launched headless from `main` at `fad8597b`.** The operator first chose interactive lanes, then asked for autonomous work overnight, so each lane ran through `launch_lane.py`. Each prompt carried its ticket text, because the lane profile has no `gh issue view`.
+  - `skip-shape-doctrine` (#1012) → #1021, merged as `43cb89ef` through `dev_session.sh merge`. It had a full lens pass at `ac635d8d` and two LOW delta repairs.
+  - `pr-watch-trio` (#1008, #1013, #1014) → #1022, held for the operator: it is safety-critical. Its panel receipt is at `6d5343ac`, and the disposition lists the open LOWs.
+  - `triage-trio` (#1016, #1017, #1018) → #1023, consciously parked by the cockpit, unmerged. It has a lens receipt at `6713c8a4`. Its #1017 fix leaves a Low-Medium gap for the `tracker-write` phase, and the right hint there is a design decision.
+- **#1022 and #1023 both ship `changelog.d/` fragments, so merge #1020 first.** Before #1020, nothing reads them.
+- `reconcile_sessions.sh pr-watch-trio triage-trio skip-shape-doctrine` reported `merged` for #1021, `held` for #1022 and `open` for #1023, which is parked as above. All three lane worktrees are kept, #1021's included, until the batch's open PRs settle.
+- Workstream assignment was not confirmed with the operator: this session added a new **Changelog fragments** entry and left every existing entry alone. #1008 is named in *Review proportionality*, and #1022 now carries it.
+
+### 2026-10-08 (friction-log triage after the overnight batch, in Claude Code)
+
+- **Triage session `469bcd58` superseded.** Its `resume` returned operator-held with "configuration identity mismatch": `config/dev-model.yaml` changed after it froze, in #993, #986 and #1006. On the operator's decision its isolated state root was left untouched as evidence, and a fresh live draft was started instead.
+- **Triage run `7f662678` completed** (engine-backed, `degraded-success` because it used the session in place of a notification). The operator approved filing TRI-01, 02, 05, 08, 11 and 20, and archiving the rest.
+  - Filed and read back: #1009, #1010, #1011, #1012, #1013, #1014.
+  - The archive sweep #1015 merged as `770092ab` at its reviewed head, `3207eb04`. Its review was the correctness lens (CodeRabbit skipped). The engine read back the merge and removed the sweep's worktree and branch.
+- **This wrap-up** moved the 2026-10-03 intro paragraph the sweep left behind into the archive. The lens on #1015 had found it.
+- Filed at wrap-up, on the operator's approval of each payload: #1016, #1017, #1018.
+- **Scratch:** the operator removed the probe directory that pinned session `2d56cdd2`'s scratchpad. The removal reset that entry's modified time, so `uv run scripts/sweep_scratch.py --apply --older-than 1d` cannot reclaim it before about 2026-10-09 14:50 UTC.
+
+Workstream Kit friction-log triage ended: its step, deciding `469bcd58`, was superseded by run `7f662678`, which completed through #1015.
+
 ### 2026-10-08 (overnight batch of headless lanes, in Claude Code)
 
 The operator asked for an overnight autonomous session with parallel lanes and authorized merging every PR

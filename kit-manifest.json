@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "04e3c1fe87aee05895ee15303c6d36bec242cde42b828a44f14ab97c62694078"
+      "sha256": "d075fb2f3f4dbedf91ca517dca92d31cedda24ab3a0bf8dc864e5004a4e97d52"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -71,11 +71,11 @@
         "docs/agentic-dev-kit/workflows/pr-watch.md"
       ],
       "role": "workflow",
-      "sha256": "4c35733fef2d83396433453f20884923a227ec02b66e644daf391f9e50e8af30"
+      "sha256": "042fdd0281962bb1720e878bae2d959401cbd40a33459d9cbc4725b5dfb7d937"
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
-      "sha256": "2e1436b4485e0c9a39a46963e8e4ce26943cafc1e773f0f4c5a602f19cc23ecb"
+      "sha256": "37c82f75e838597b6ad68aa85f529ff65e3cd67d85206d6c6809d9e42a2e621d"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
@@ -159,7 +159,7 @@
     },
     "scripts/check_record_prose.py": {
       "role": "engine",
-      "sha256": "2b9d6eb28c02c06db31073656c8c2d3a697eceab410053f17fe8d3c2b758964f"
+      "sha256": "a4048a23ce32768b8edbdebbdffdd9b7a84815653c5a0a39424a55a1218b2608"
     },
     "scripts/conftest.py": {
       "role": "engine",
@@ -560,7 +560,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "036f6b54f77b19b86f3a21401549073f0d74b5c7daeac3f3972a28b4d422a7e1"
+      "sha256": "887993518774d8b401ceb29576a92ea040a3cba636bb704a1e7ae70259dcfb59"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
@@ -672,7 +672,7 @@
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "a3debfed472dd8d6877d95f06147092aa026a7e3496175cc5e05162446fc8f4c"
+      "sha256": "da746a2416140f00bfca147d4025e8602efe888cb0c87fa931817bb5e9c04d82"
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",
@@ -684,7 +684,7 @@
     },
     "scripts/tests/test_record_prose.py": {
       "role": "test",
-      "sha256": "9321ab06be4019f5cae7e24d6d8cd9f8f04880e350cd7d7675789681ab6002d6"
+      "sha256": "b520ae72768675cfcddec76f57a50d15b84ab6b2e28139e0ba1c6fbe35f2bd40"
     },
     "scripts/tests/test_repo_layout.py": {
       "role": "test",

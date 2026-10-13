@@ -27,6 +27,7 @@ import subprocess
 import sys
 import unicodedata
 from bisect import bisect_left, bisect_right
+from itertools import islice
 from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
 
@@ -47,6 +48,7 @@ LIMITS = [
     "A historical stamp need not name the candidate head; the reviewer must judge its stated scope.",
     "Stamp fields use code spans and the connectors at, optional in, and on; raw HTML and unrelated connector wording are outside this scan.",
     "Closing keywords pair conservatively with the next issue reference across intervening text and markup; declare each intended reference exactly.",
+    "A narrative pairing is not reported when every line it spans was moved unchanged from one contiguous run of lines this change deletes from a narrative path; a copy, a new adjacency, a deletion inside it, a pairing spanning more than MAX_MOVED_SPAN lines, or one whose source is not among the first MAX_MOVE_CANDIDATES unclaimed deleted lines matching its first line is still reported.",
     "Every changed narrative file and commit message remains in full independent-review scope.",
 ]
 _HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
@@ -60,6 +62,14 @@ _CLOSING_TOKEN = re.compile(
     r"\b(?P<keyword>close[sd]?|closing|fix(?:es|ed|ing)?|resolve[sd]?|resolving)\b",
     re.IGNORECASE,
 )
+
+
+# A moved pairing longer than this is reported rather than aligned, and at most
+# this many unclaimed deleted lines are tried as its source. Both bound the work
+# per pairing, so a long moved archive cannot make the mandatory preflight
+# superlinear; past either bound the pairing fails closed and is reported.
+MAX_MOVED_SPAN = 64
+MAX_MOVE_CANDIDATES = 8
 
 
 class CheckError(Exception):
@@ -136,7 +146,7 @@ def markdown_lines(text: str) -> list[str]:
 
 
 def changed_lines(root: Path, boundary: str, head: str, path: str,
-                  text: str, before: str) -> tuple[set[int], dict[int, int], set[int]]:
+                  text: str, before: str) -> tuple[set[int], dict[int, int], set[int], list[list[str]]]:
     patch = git(root, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames",
                 "--text", "--unified=0", boundary, head, "--", path)
 
@@ -154,7 +164,10 @@ def changed_lines(root: Path, boundary: str, head: str, path: str,
 
     old_records, old_spans, _ = records(before)
     new_records, new_spans, gaps = records(text)
+    old_lines = markdown_lines(before)
     added, unchanged, deleted = set(), {}, set()
+    # Each hunk's deleted lines, in order: what a moved block may reproduce.
+    removed: list[list[str]] = []
     old_cursor, new_cursor = 1, 1
 
     def preserve(old_end, new_end):
@@ -175,12 +188,67 @@ def changed_lines(root: Path, boundary: str, head: str, path: str,
                      new_start if new_count else new_start + 1)
             for number in range(new_start, new_start + new_count):
                 added.update(new_spans[number])
+            if old_count:
+                removed.append([old_lines[logical - 1]
+                                for number in range(old_start, old_start + old_count)
+                                for logical in old_spans[number]])
             if old_count and not new_count:
                 deleted.add(gaps[new_start])
             old_cursor = old_start + old_count if old_count else old_start + 1
             new_cursor = new_start + new_count if new_count else new_start + 1
     preserve(len(old_records) + 1, len(new_records) + 1)
-    return added, unchanged, deleted
+    return added, unchanged, deleted, removed
+
+
+class MoveLedger:
+    """Which deleted line each added narrative line reproduces, claimed per pairing.
+
+    An archive sweep moves record text between narrative paths byte for byte, and
+    per-path coordinates see the destination as new text. Only a reproduction of
+    lines this same change deletes is a move: text that stays where it was is a
+    copy. Alignment is local to each candidate pairing, so lines shared across
+    entries (blank lines, repeated continuations) cannot be claimed by the wrong
+    source, and each deleted line covers one added line, so a duplicate cannot
+    ride on another copy's move.
+    """
+
+    def __init__(self, removed: list[list[str]]):
+        self.removed = removed
+        # Unclaimed deleted lines by content, in order; a claim removes its entry.
+        self.unclaimed: dict[str, dict[tuple[int, int], None]] = {}
+        for run_id, run in enumerate(removed):
+            for position, text in enumerate(run):
+                self.unclaimed.setdefault(text, {})[(run_id, position)] = None
+        self.source: dict[tuple[str, int], tuple[int, int]] = {}
+        self.target: dict[tuple[int, int], tuple[str, int]] = {}
+
+    def moved(self, path: str, lines: list[str], first: int, last: int) -> bool:
+        """Claim deleted lines reproducing lines first..last, contiguous and in order."""
+        if last - first >= MAX_MOVED_SPAN:
+            return False
+        # A line one pairing already aligned keeps its alignment, so nested
+        # pairings over the same lines agree rather than compete.
+        aligned = self.source.get((path, first))
+        candidates = [aligned] if aligned else list(
+            islice(self.unclaimed.get(lines[first - 1], {}), MAX_MOVE_CANDIDATES))
+        for run_id, start in candidates:
+            run = self.removed[run_id]
+            if start + last - first >= len(run):
+                continue
+            pairs = []
+            for offset in range(last - first + 1):
+                head, origin = (path, first + offset), (run_id, start + offset)
+                if (run[origin[1]] != lines[head[1] - 1]
+                        or self.source.get(head, origin) != origin
+                        or self.target.get(origin, head) != head):
+                    break
+                pairs.append((head, origin))
+            else:
+                for head, origin in pairs:
+                    self.source[head], self.target[origin] = origin, head
+                    self.unclaimed[run[origin[1]]].pop(origin, None)
+                return True
+        return False
 
 
 def changed_blocks(before: list, after: list, unchanged: dict[int, int]) -> set[int]:
@@ -295,7 +363,9 @@ def check(root: Path, base: str, head: str, allowed: set[str]) -> dict:
                                    "detail": detail})
 
     def closings(text: str, source: str, added: set[int] | None = None,
-                 deleted: set[int] | None = None) -> None:
+                 deleted: set[int] | None = None,
+                 ledger: MoveLedger | None = None) -> None:
+        lines = markdown_lines(text) if ledger is not None else []
         # Index changed coordinates once: long archives can leave many keywords
         # waiting for a reference, so rescanning prefixes or line ranges per
         # keyword makes the mandatory preflight quadratic in the input size.
@@ -317,6 +387,13 @@ def check(root: Path, base: str, head: str, allowed: set[str]) -> dict:
                     if not ((addition < len(added_lines) and added_lines[addition] <= line)
                             or (deletion < len(cuts) and cuts[deletion] < token.end())):
                         continue
+                    # A pairing carried whole from one deleted run existed, in
+                    # this order, before the change; it is a move, not new text.
+                    # Its lines are all added, so no deletion cut can fall inside.
+                    if (ledger is not None
+                            and bisect_right(added_lines, line) - addition == line - keyword_line + 1
+                            and ledger.moved(source, lines, keyword_line, line)):
+                        continue
                 if ref not in allowed:
                     finding("closing-keywords", source, keyword_line,
                             f"closing reference {ref}: explicitly declare --allow-close {ref} only if intended")
@@ -335,25 +412,36 @@ def check(root: Path, base: str, head: str, allowed: set[str]) -> dict:
                 finding("budgets", path, 1, "candidate exceeds its configured line budget")
 
     parser = MarkdownIt("commonmark")
+    documents, removed = [], []
     for path in paths:
-        # A deleted archive has no added blocks. Required budgeted inputs above
-        # still must exist; deletion remains in the full review's diff.
-        if not git(root, "ls-tree", "-z", head, "--", path):
-            continue
-        raw = blob(root, head, path)
+        # A deleted archive has no added blocks, but its deleted lines can still
+        # be the origin of a move. Required budgeted inputs above still must
+        # exist; deletion remains in the full review's diff.
+        raw = blob(root, head, path) if git(root, "ls-tree", "-z", head, "--", path) else None
+        if raw is None:
+            # Only a regular file's deleted lines can be a move's source; any
+            # other deleted entry is skipped, as before moves were recognized.
+            entry = git(root, "ls-tree", "-z", boundary, "--", path)
+            if not entry or entry.split(" ", 1)[0] not in ("100644", "100755"):
+                continue
+        old = blob(root, boundary, path) if git(root, "ls-tree", "-z", boundary, "--", path) else ""
+        added, unchanged, deleted, runs = changed_lines(root, boundary, head, path, raw or "", old)
+        removed.extend(runs)
+        if raw is not None:
+            documents.append((path, raw, old, added, unchanged, deleted))
+    ledger = MoveLedger(removed)
+    for path, raw, old, added, unchanged, deleted in documents:
         lines = markdown_lines(raw)
         text = "".join(lines)
         # Parse the entire document so reference definitions and code fences keep
         # their CommonMark meaning; select changed blocks only after parsing.
         environment: dict = {}
         tokens = parser.parse(text, environment)
-        old = blob(root, boundary, path) if git(root, "ls-tree", "-z", boundary, "--", path) else ""
         before = "".join(markdown_lines(old))
-        added, unchanged, deleted = changed_lines(root, boundary, head, path, raw, old)
         old_environment: dict = {}
         old_tokens = parser.parse(before, old_environment)
         affected = added | changed_blocks(old_tokens, tokens, unchanged)
-        closings(text, path, added, deleted)
+        closings(text, path, added, deleted, ledger)
 
         def references(env):
             return {label: (ref.get("href"), ref.get("title"))

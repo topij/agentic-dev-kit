@@ -20,6 +20,72 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-12 (friction-log triage; record-prose preflight recognises moved pairings, in Claude Code)
+
+- **Friction-log triage** (session `ae0b23b8`, engine-backed, approved in this session
+  rather than over Slack): filed #1078, #1079, #1080, #1081, #1082 and #1083; archived
+  TRI-04, TRI-08, TRI-09 and TRI-11; parked TRI-02, TRI-06, TRI-07 and TRI-14. Sweep PR
+  [#1084](https://github.com/topij/agentic-dev-kit/pull/1084) merged as `e37b7bd9` at its
+  reviewed head `427d2fa5`. The record-prose preflight failed on the moved keyword/reference
+  pairings at archive lines 4279 and 4459; the operator accepted them as moved history.
+- **Review proportionality:** [#1088](https://github.com/topij/agentic-dev-kit/pull/1088)
+  merged as `2ca8ded9` on the operator's request. The preflight no longer reports a
+  keyword/reference pairing whose lines were moved unchanged, in order, from lines the
+  same change deletes from a narrative path. Copies, new adjacencies, pairings past
+  `MAX_MOVED_SPAN` or `MAX_MOVE_CANDIDATES`, and commit messages are still reported.
+  - Decided: archival preservation means exact bytes. This settles the parked TRI-06,
+    which stays in the inbox until the next triage pass.
+  - Review: CodeRabbit skipped. Adversarial `fallback:lens` full passes ran at `3922348b`
+    and `042f36e2`, and `fallback:delta` passes at `40bef2ae` and `0463c18d`. The last
+    delta's LOW finding is #1089, on the operator's decision.
+  - Verification: `make test` at `042f36e2299c4e1a35913dc27fd6752140ec35a3` on
+    2026-10-12, in `/Users/topi/Coding/agentic-dev-kit`, printed `4894 passed, 1 skipped`.
+    The LOW repairs at `40bef2ae` and `0463c18d` had focused verification
+    (`scripts/tests/test_record_prose.py`, `make lint`, the drift check) and current-head
+    CI, as the LOW rule prescribes.
+- **Filed this session:** #1078, #1079, #1080, #1081, #1082, #1083, #1089,
+  [#1090](https://github.com/topij/agentic-dev-kit/issues/1090) and
+  [#1091](https://github.com/topij/agentic-dev-kit/issues/1091); an occurrence comment
+  on #1080.
+- **Not established:** #1082 overlaps the open #677 (the state guard reporting a
+  concurrent cockpit write as a suite leak). The two were not reconciled.
+
+______________________________________________________________________
+
+## Session — 2026-10-12 (workflow reference-file links tested; OpenKitchen upgraded to the skill bindings, in Claude Code)
+
+- **Skills and instruction files:** [#1074](https://github.com/topij/agentic-dev-kit/pull/1074)
+  merged as `55869a7e` on the operator's merge. It corrects `pr-watch/report-fields.md`'s
+  link to `fallback-review-panel.md` and adds a test that every relative link in a
+  workflow reference file points at an existing file.
+  - Review: CodeRabbit skipped. An adversarial `fallback:lens` full pass ran at
+    `5b9cc641`, and a `fallback:delta` pass at `8abd3b3d` reviewed the repair of its
+    LOW findings. The delta pass's own LOW findings are #1075.
+  - Verification: `make test` at `8abd3b3d599cf27ff052cc34a48aac288a323fda` on
+    2026-10-12, in `/Users/topi/Coding/agentic-dev-kit`, printed `4882 passed, 1 skipped`.
+- **OpenKitchen upgraded** from kit `c5da977` to `55869a7e` in topij/OpenKitchen#324,
+  merged as `cb810b88` on the operator's request. The upgrade ran from a linked worktree
+  off `origin/main`, because OpenKitchen's main checkout was on another session's branch
+  with uncommitted edits.
+  - The eight Claude commands were `kit-retired` and nothing in OpenKitchen read them,
+    so they were deleted once the skills were installed.
+  - Review: OpenKitchen configures no review bot, and the change is safety-critical
+    there, so the two-lens panel ran at `4c35c81b`. Its LOW finding on links to the
+    removed `.claude/commands/` is topij/OpenKitchen#325, on the operator's decision.
+  - Verification: `run_installed_tests.py` with a temporary `DEVKIT_STATE_ROOT`, run on
+    2026-10-12 in that worktree on the tree committed as `4c35c81b`, printed
+    `3756 passed, 109 skipped`. The PR body carries the full stamp.
+- **Filed this session:** [#1075](https://github.com/topij/agentic-dev-kit/issues/1075),
+  topij/OpenKitchen#325; occurrence comments on
+  [#61](https://github.com/topij/agentic-dev-kit/issues/61) (a hook missed in a linked
+  worktree), [#990](https://github.com/topij/agentic-dev-kit/issues/990),
+  [#992](https://github.com/topij/agentic-dev-kit/issues/992) and
+  [#1055](https://github.com/topij/agentic-dev-kit/issues/1055).
+- **Not established:** OpenKitchen's main checkout was not pulled. It stays on the other
+  session's branch.
+
+______________________________________________________________________
+
 ## Session — 2026-10-12 (workflow reference files required by kit_doctor; cs-toolkit upgraded to the skill bindings, in Claude Code)
 
 - **Skills and instruction files:** [#1069](https://github.com/topij/agentic-dev-kit/pull/1069)
@@ -202,42 +268,6 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-## Session — 2026-10-09 (changelog fragments and the lane batch merged, in Claude Code)
-
-- **#1020 merged as `f9146c5f`.** The operator authorized a fourth fix round. It made `upgrade.md`'s fragment lookup read fragments written only by a merge commit (`diff-tree -c`) and type-changed fragments (`--diff-filter=AMT`), and set the fragment naming rule. Its review at `36a69208` found no fail-open in the lookup but left test gaps. The operator chose to merge and ticket them: filed and read back as #1026. `make test` at `36a69208` on 2026-10-09 in `/Users/topi/Coding/agentic-dev-kit` → `4477 passed, 1 skipped`.
-- **On the operator's word, #1023 merged as `a95e9983` through `dev_session.sh merge`, and #1022 merged as `54655d9d` pinned to its reviewed head `6d5343ac`.** #1023's `tracker-write` resume-hint gap shipped as is, and is not ticketed.
-- `reconcile_sessions.sh pr-watch-trio triage-trio skip-shape-doctrine` reported every lane merged. The three lane sessions and branches were removed with `dev_session.sh rm --force`, which discarded only each lane's uncommitted `.pr-body.md`.
-- The tickets the merged PRs addressed are still open: #1008, #1009, #1012, #1013, #1014, #1016, #1017, #1018. Closing them waits for the operator.
-
-______________________________________________________________________
-
-## Session — 2026-10-08 (changelog fragments, then a three-lane batch run overnight, in Claude Code)
-
-- **#1009 designed and built as PR #1020, held for the operator.** On the operator's choice, once #1020 merges each PR would add `changelog.d/<branch-slug>.md`, with `CHANGELOG.md` frozen behind a BREAKING cutover entry and `upgrade.md` Step 1 printing each fragment version a commit in range wrote. Until then `main`'s rule is unchanged. A `git merge-tree` replay of #1004–#1006 showed only `CHANGELOG.md` conflicting; `kit-manifest.json` auto-merged, so it is unchanged. The adversarial lens reviewed `c254fd90`, `751bedee` and `44ada17e`, which spent the round budget, and the last review left a Low-Medium finding (a fragment written only by a merge commit prints nothing). The decision packet is on #1020. `make test` at `44ada17e` in the main checkout on 2026-10-08 → `4476 passed, 1 skipped`.
-- **Lanes launched headless from `main` at `fad8597b`.** The operator first chose interactive lanes, then asked for autonomous work overnight, so each lane ran through `launch_lane.py`. Each prompt carried its ticket text, because the lane profile has no `gh issue view`.
-  - `skip-shape-doctrine` (#1012) → #1021, merged as `43cb89ef` through `dev_session.sh merge`. It had a full lens pass at `ac635d8d` and two LOW delta repairs.
-  - `pr-watch-trio` (#1008, #1013, #1014) → #1022, held for the operator: it is safety-critical. Its panel receipt is at `6d5343ac`, and the disposition lists the open LOWs.
-  - `triage-trio` (#1016, #1017, #1018) → #1023, consciously parked by the cockpit, unmerged. It has a lens receipt at `6713c8a4`. Its #1017 fix leaves a Low-Medium gap for the `tracker-write` phase, and the right hint there is a design decision.
-- **#1022 and #1023 both ship `changelog.d/` fragments, so merge #1020 first.** Before #1020, nothing reads them.
-- `reconcile_sessions.sh pr-watch-trio triage-trio skip-shape-doctrine` reported `merged` for #1021, `held` for #1022 and `open` for #1023, which is parked as above. All three lane worktrees are kept, #1021's included, until the batch's open PRs settle.
-- Workstream assignment was not confirmed with the operator: this session added a new **Changelog fragments** entry and left every existing entry alone. #1008 is named in *Review proportionality*, and #1022 now carries it.
-
-______________________________________________________________________
-
-## Session — 2026-10-08 (friction-log triage after the overnight batch, in Claude Code)
-
-- **Triage session `469bcd58` superseded.** Its `resume` returned operator-held with "configuration identity mismatch": `config/dev-model.yaml` changed after it froze, in #993, #986 and #1006. On the operator's decision its isolated state root was left untouched as evidence, and a fresh live draft was started instead.
-- **Triage run `7f662678` completed** (engine-backed, `degraded-success` because it used the session in place of a notification). The operator approved filing TRI-01, 02, 05, 08, 11 and 20, and archiving the rest.
-  - Filed and read back: #1009, #1010, #1011, #1012, #1013, #1014.
-  - The archive sweep #1015 merged as `770092ab` at its reviewed head, `3207eb04`. Its review was the correctness lens (CodeRabbit skipped). The engine read back the merge and removed the sweep's worktree and branch.
-- **This wrap-up** moved the 2026-10-03 intro paragraph the sweep left behind into the archive. The lens on #1015 had found it.
-- Filed at wrap-up, on the operator's approval of each payload: #1016, #1017, #1018.
-- **Scratch:** the operator removed the probe directory that pinned session `2d56cdd2`'s scratchpad. The removal reset that entry's modified time, so `uv run scripts/sweep_scratch.py --apply --older-than 1d` cannot reclaim it before about 2026-10-09 14:50 UTC.
-
-Closed workstream Kit friction-log triage: its step, deciding `469bcd58`, was superseded by run `7f662678`, which completed through #1015.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -252,9 +282,12 @@ added named delta draws; #993 (`2d40c960`) shipped the review round budget.
 #1039 (`fa905cd09c950b96fe926ceb21d69ff7c00dea7c`) shipped #585's record-prose
 preflight and executed-span guidance on 2026-10-10. The P2 regression the operator
 deferred to #1041 shipped in #1044 (`8f41ea42`); #403's precedence question was outside the change.
+#1088 (`2ca8ded9`) exempts pairings moved unchanged, not ones across a heading the
+archive sweep rewrites (friction log); #1089 owns its candidate-bound test.
 #921 owns the cockpit check of verdict-line names.
 **Owner:** [#585](https://github.com/topij/agentic-dev-kit/issues/585),
-[#921](https://github.com/topij/agentic-dev-kit/issues/921); related #403,
+[#921](https://github.com/topij/agentic-dev-kit/issues/921),
+[#1089](https://github.com/topij/agentic-dev-kit/issues/1089); related #403,
 #666, #305, and the class's documented limits #928, #929, #930 and #931.
 
 ▶ Next: #921 — make the cockpit check that a delta lens returned both the
@@ -349,18 +382,19 @@ then work on its instruction-check coverage gaps only if eligible.
 **Status:** #1052 (`f7d8749a`), #1053 (`78d623c3`) and #1054 (`ea4010db`) shipped on
 2026-10-11, and #1061 (`367be931`) and #1063 (`ad65e539`) split pr-watch into an entry
 and `pr-watch/report-fields.md`. #1069 (`6f543433`) makes an absent reference file
-`missing-required`. cs-toolkit runs the skill bindings since in-parallel-oy/cs-toolkit#2632;
-OpenKitchen is not upgraded. #1055 owns the Codex `openai.yaml` check, #1058 the triage
-split's remaining pin gaps, #1070 #1069's residual LOWs, #1071 the `kit-retired` deletion
-warning, #1072 a broken link in `pr-watch/report-fields.md`.
+`missing-required`. cs-toolkit runs the skill bindings since in-parallel-oy/cs-toolkit#2632,
+and OpenKitchen since topij/OpenKitchen#324 (`cb810b88`). #1074 (`55869a7e`) corrected
+`pr-watch/report-fields.md`'s link and tests every relative link under `workflows/*/`.
+#1055 owns the Codex `openai.yaml` check, #1058 the triage split's remaining pin gaps,
+#1070 #1069's residual LOWs, #1071 the `kit-retired` deletion warning, #1075 the link
+check's residual LOWs.
 **Owner:** `saved_plans/skills-and-instructions-assessment_2026-10-11.md`;
 [#1055](https://github.com/topij/agentic-dev-kit/issues/1055),
 [#1058](https://github.com/topij/agentic-dev-kit/issues/1058),
 [#1070](https://github.com/topij/agentic-dev-kit/issues/1070),
 [#1071](https://github.com/topij/agentic-dev-kit/issues/1071),
-[#1072](https://github.com/topij/agentic-dev-kit/issues/1072).
+[#1075](https://github.com/topij/agentic-dev-kit/issues/1075).
 
-▶ Next: #1072 — correct the `../fallback-review-panel.md` link in
-`workflows/pr-watch/report-fields.md` and add a test that relative links under
-`workflows/*/` resolve; then `/upgrade` OpenKitchen
-(`/Users/topi/Coding/home-server/OpenKitchen`) from a fresh kit clone.
+▶ Next: #1071 — make `upgrade.md` Step 4 name the search for the adopter's own
+references to a `kit-retired` command, and the keep-and-route option, and pin that
+sentence with a portability test.
