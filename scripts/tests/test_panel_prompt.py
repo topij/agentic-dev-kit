@@ -117,10 +117,12 @@ def _loose_object(root: Path, oid: str) -> Path:
     Tests that corrupt or delete an object reach it by path, which only works
     while git stores it loose. A packed object once surfaced as a bare
     FileNotFoundError mid-test (#1079), indistinguishable from an engine defect.
-    An object missing altogether is named the same way.
+    An object git cannot read at all is named the same way, with git's stderr.
     """
-    if subprocess.run(["git", "cat-file", "-e", oid], cwd=root, capture_output=True).returncode:
-        pytest.fail(f"fixture setup: object {oid} does not exist in {root}", pytrace=False)
+    probe = subprocess.run(["git", "cat-file", "-e", oid], cwd=root, capture_output=True, text=True)
+    if probe.returncode:
+        pytest.fail(f"fixture setup: object {oid} is missing or unreadable in {root}: "
+                    f"{probe.stderr.strip()}", pytrace=False)
     path = root / ".git/objects" / oid[:2] / oid[2:]
     if not path.is_file():
         pytest.fail(f"fixture setup: object {oid} exists in {root} but is not stored loose "
@@ -1867,7 +1869,7 @@ def test_loose_object_names_a_packed_fixture_object(executable_preflight):
 def test_loose_object_names_a_missing_fixture_object(executable_preflight):
     root, _base, _head = executable_preflight
     oid = "0" * 40
-    with pytest.raises(pytest.fail.Exception, match=f"fixture setup: object {oid} does not exist"):
+    with pytest.raises(pytest.fail.Exception, match=f"fixture setup: object {oid} is missing or unreadable"):
         _loose_object(root, oid)
 
 
