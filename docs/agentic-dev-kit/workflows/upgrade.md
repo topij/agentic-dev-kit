@@ -745,9 +745,9 @@ engine, and an older copy is present without running those imports — reading p
 agreement reported a healthy sized-down adopter as broken (`#661`). Two consequences for
 this step: installing a previously-`missing` engine, hook or workflow can introduce
 requirements the first report had no reason to classify, and so can **refreshing a
-`stale` one**, which is the more likely of the two here. Re-run before you rely on the list again, and treat
-the report as converged only when a run that changed nothing still shows no
-`missing-required`.
+`stale` one**, which is the more likely of the two here. Re-run before you rely on the
+list again, and treat the report as converged only when a run that changed nothing
+still shows no `missing-required`.
 
 - **`missing-required`** → install it. This is the one absent-file case that is **not**
   an operator decision: an installed component depends on it, and the report names

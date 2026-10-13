@@ -2693,8 +2693,9 @@ def test_a_workflow_reference_file_is_required_by_its_entry(tmp_path):
     `workflows/<slug>/` is required by `<slug>.md`, decided by path. Each
     other case isolates one condition and gets no edge: a file deeper down, a
     non-markdown file, an owned reference file absent from the tree, an entry
-    present but not owned, an entry owned but absent, and a file outside the
-    workflows directory."""
+    present but not owned, an entry owned but absent, a file outside the
+    workflows directory, and one under a `workflows` directory that is not
+    `docs/agentic-dev-kit/workflows`."""
     root = _tree(
         tmp_path,
         {
@@ -2707,6 +2708,8 @@ def test_a_workflow_reference_file_is_required_by_its_entry(tmp_path):
             f"{_WF}/absent/ref.md": "# entry owned but not in the tree\n",
             "docs/elsewhere/flow/ref.md": "# outside\n",
             "docs/elsewhere/flow.md": "# outside entry\n",
+            "docs/other/workflows/flow/ref.md": "# outside, same parent name\n",
+            "docs/other/workflows/flow.md": "# outside entry, same parent name\n",
         },
     )
     owned = (
@@ -2720,6 +2723,8 @@ def test_a_workflow_reference_file_is_required_by_its_entry(tmp_path):
         (f"{_WF}/absent/ref.md", "workflow"),
         ("docs/elsewhere/flow.md", "workflow"),
         ("docs/elsewhere/flow/ref.md", "workflow"),
+        ("docs/other/workflows/flow.md", "workflow"),
+        ("docs/other/workflows/flow/ref.md", "workflow"),
     )
     assert kit_doctor.derive_dependencies(root, owned) == {f"{_WF}/flow/ref.md": [f"{_WF}/flow.md"]}
 
@@ -2741,16 +2746,41 @@ def test_the_real_kit_requires_every_workflow_reference_file_by_its_entry():
     }
 
 
+# The sentence in bold, after the start of the text or a '.', '!' or '?' and a space.
+_READ_ALL = re.compile(
+    r"(?:^|[.!?] )\*\*Read every one of them completely, not in part, before the first action"
+)
+
+
+@pytest.mark.parametrize(
+    ("text", "instructs"),
+    [
+        ("Files below. **Read every one of them completely, not in part, before the first action**.", True),
+        ("**Read every one of them completely, not in part, before the first action**.", True),
+        ('Never say "**Read every one of them completely, not in part, before the first action**".', False),
+        ("Do not **Read every one of them completely, not in part, before the first action**.", False),
+        ("Never: **Read every one of them completely, not in part, before the first action**.", False),
+        ("Files below. Read every one of them completely, not in part, before the first action.", False),
+    ],
+)
+def test_the_read_all_pin_matches_only_the_instruction(text, instructs):
+    assert bool(_READ_ALL.search(text)) is instructs
+
+
 def test_every_entry_with_reference_files_tells_the_agent_to_read_them_all():
     """The edge is decided by layout, and it is true only because each such
     entry tells the agent to read every reference file before acting. An entry
-    without that instruction would make the edge a false `missing-required`."""
+    without that instruction would make the edge a false `missing-required`.
+
+    The pin is `_READ_ALL`: the sentence in bold, after the start of the text
+    or a '.', '!' or '?' and a space. It is a text match and cannot tell an
+    instruction from a mention placed the same way."""
     graph = kit_doctor.derive_dependencies(REPO_ROOT)
     entries = {dep for rel, deps in graph.items() if rel.startswith(f"{_WF}/") for dep in deps}
     assert entries, "no workflow entry has reference files"
     for entry in sorted(entries):
         text = " ".join((REPO_ROOT / entry).read_text(encoding="utf-8").split())
-        assert "Read every one of them completely, not in part, before the first action" in text, entry
+        assert _READ_ALL.search(text), entry
 
 
 def _adopter_with_triage_entry(tmp_path: Path, entry_text: str) -> Path:
