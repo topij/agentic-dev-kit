@@ -55,7 +55,7 @@
   - #1100 converged once the claim was shortened to what the regex does.
 - **The archive sweep's moved-pairing case recurred, as in the 2026-10-12 entry below.**
   Severity L, kept for accumulation. This wrap-up's sweep joined the 2026-10-11 and
-  2026-10-10 history blocks. That left "record fix" in moved text paired with `#1039`
+  2026-10-10 history blocks. That left a closing keyword in moved text paired with the next issue reference
   at `docs/kit-handoff-history.md:72`, and the record-prose preflight failed on it. The
   text stays as exact bytes, per the 2026-10-12 decision.
   - #1099's third pair went to its ticket instead of a third round.
