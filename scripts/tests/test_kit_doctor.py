@@ -2746,10 +2746,10 @@ def test_the_real_kit_requires_every_workflow_reference_file_by_its_entry():
     }
 
 
-# The instruction as an instruction: bold, and opening a sentence, so a quoted
-# or negated mention of the same words does not count.
+# The instruction as an instruction: bold, and opening a sentence, so a quoted,
+# colon-introduced or mid-sentence mention of the same words does not count.
 _READ_ALL = re.compile(
-    r"(?:^|[.!?:] )\*\*Read every one of them completely, not in part, before the first action"
+    r"(?:^|[.!?] )\*\*Read every one of them completely, not in part, before the first action"
 )
 
 
@@ -2760,6 +2760,7 @@ _READ_ALL = re.compile(
         ("**Read every one of them completely, not in part, before the first action**.", True),
         ('Never say "**Read every one of them completely, not in part, before the first action**".', False),
         ("Do not **Read every one of them completely, not in part, before the first action**.", False),
+        ("Never: **Read every one of them completely, not in part, before the first action**.", False),
         ("Files below. Read every one of them completely, not in part, before the first action.", False),
     ],
 )
@@ -2773,8 +2774,9 @@ def test_every_entry_with_reference_files_tells_the_agent_to_read_them_all():
     without that instruction would make the edge a false `missing-required`.
 
     The pin is `_READ_ALL`: the sentence in bold at a sentence start, which
-    rejects a quoted or negated mention. It is still a text match, so a bold
-    sentence that only describes the instruction would pass."""
+    rejects a quoted, colon-introduced or mid-sentence mention. It is still a
+    text match, so a negation in the sentence before it, or a bold sentence
+    that only describes the instruction, would pass."""
     graph = kit_doctor.derive_dependencies(REPO_ROOT)
     entries = {dep for rel, deps in graph.items() if rel.startswith(f"{_WF}/") for dep in deps}
     assert entries, "no workflow entry has reference files"
