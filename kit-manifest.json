@@ -576,7 +576,7 @@
     },
     "scripts/sweep_scratch.py": {
       "role": "engine",
-      "sha256": "687bb064d658460a5ef6162c86b069e687ba6821503d987eee648f85a6270586"
+      "sha256": "eda2699f5d80b0e2416e53d98817782ceb1a79a7076daba54d85400dfc3c1888"
     },
     "scripts/tests/_repo_layout.py": {
       "role": "test",
