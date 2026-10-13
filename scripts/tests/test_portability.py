@@ -2276,24 +2276,63 @@ _SPLIT_LINK_FORMS = (
     re.compile(r"""<a\s[^>]*href=["']([^"']+)["']""", re.IGNORECASE),
 )
 _FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}(?=[^`]*$)|~{3,})")
+# CommonMark HTML blocks as (start, end) pairs; kinds 1-5 end on the line that
+# holds their terminator, kinds 6 and 7 at a blank line.
+_BLANK_LINE = re.compile(r"[ \t]*")
+_HTML_BLOCKS = (
+    (re.compile(r" {0,3}<(?:pre|script|style|textarea)(?:[ \t>]|$)", re.I),
+     re.compile(r"</(?:pre|script|style|textarea)>", re.I)),
+    (re.compile(r" {0,3}<!--"), re.compile(r"-->")),
+    (re.compile(r" {0,3}<\?"), re.compile(r"\?>")),
+    (re.compile(r" {0,3}<![A-Za-z]"), re.compile(r">")),
+    (re.compile(r" {0,3}<!\[CDATA\["), re.compile(r"\]\]>")),
+    (re.compile(
+        r" {0,3}</?(?:address|article|aside|base|basefont|blockquote|body|caption|center"
+        r"|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer"
+        r"|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu"
+        r"|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table"
+        r"|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:[ \t>]|/>|$)", re.I), _BLANK_LINE),
+)
+# Kind 7, a lone complete tag, cannot interrupt a paragraph.
+_HTML_BLOCK_LONE_TAG = re.compile(
+    r" {0,3}(?:<[A-Za-z][A-Za-z0-9-]*"
+    r"(?:\s+[A-Za-z_:][\w.:-]*(?:\s*=\s*(?:[^\s\"'=<>`]+|'[^']*'|\"[^\"]*\"))?)*\s*/?>"
+    r"|</[A-Za-z][A-Za-z0-9-]*\s*>)[ \t]*"
+)
+_NOT_PARAGRAPH = re.compile(r" {0,3}(?:#{1,6}(?:[ \t]|$)|([-*_])(?:[ \t]*\1){2,}[ \t]*$)|[ \t]*$")
 
 
 def _without_fenced_code(text: str) -> str:
     """Drop CommonMark fenced blocks: a fence closes on a run of its own
     character at least as long as its opener, and an unclosed one runs to the
     end. A backtick opener's info string holds no backtick, so a line that
-    opens with an inline code span opens nothing."""
-    kept, fence = [], None
-    for line in text.splitlines(keepends=True):
-        if fence is None:
-            opened = _FENCE_OPEN.match(line)
-            if opened:
-                fence = opened.group(1)
-            else:
-                kept.append(line)
-        elif re.fullmatch(rf" {{0,3}}{re.escape(fence[0])}{{{len(fence)},}}[ \t]*\n?", line):
-            fence = None
-    return "".join(kept)
+    opens with an inline code span opens nothing. A fence-like line inside an
+    HTML block opens nothing either; the block's lines stay in, so its hrefs
+    are checked. Lines end at a newline only: read_text has already folded
+    CRLF and CR, and a form feed or other splitlines break is no line end."""
+    kept, fence, html_end, paragraph = [], None, None, False
+    for line in text.split("\n"):
+        if fence is not None:
+            if re.fullmatch(rf" {{0,3}}{re.escape(fence[0])}{{{len(fence)},}}[ \t]*", line):
+                fence = None
+            continue
+        if html_end is None and (opened := _FENCE_OPEN.match(line)):
+            fence, paragraph = opened.group(1), False
+            continue
+        kept.append(line)
+        if html_end is not None:
+            if _BLANK_LINE.fullmatch(line) if html_end is _BLANK_LINE else html_end.search(line):
+                html_end = None
+            continue
+        end = next((end for start, end in _HTML_BLOCKS if start.match(line)), None)
+        if end is None and not paragraph and _HTML_BLOCK_LONE_TAG.fullmatch(line):
+            end = _BLANK_LINE
+        if end is None:
+            paragraph = not _NOT_PARAGRAPH.match(line)
+        else:
+            html_end = end if end is _BLANK_LINE or not end.search(line) else None
+            paragraph = False
+    return "\n".join(kept)
 
 
 def _assert_split_workflow_relative_links_resolve(root: Path) -> None:
@@ -2337,6 +2376,17 @@ def test_split_workflow_broken_links_are_rejected(tmp_path: Path) -> None:
         "\n```text\nx\n````\n[x](../absent.md)\n",
         # A line opening with an inline code span opens no fence.
         "\n```code``` [x](../absent.md)\n",
+        # A tilde fence closes on a tilde run.
+        "\n~~~\nx\n~~~\n[x](../absent.md)\n",
+        # A reference destination in angle brackets is taken whole, spaces included.
+        "\n[ref]: <../../fallback-review-panel.md draft.md>\n",
+        # A fence-like line inside an HTML block opens nothing (#1075).
+        "\n<!--\n```\n-->\n[x](../absent.md)\n",
+        "\n<pre>\n```\n</pre>\n[x](../absent.md)\n",
+        "\n<div>\n```\n\n[x](../absent.md)\n",
+        "\n<span>\n```\n\n[x](../absent.md)\n",
+        # A form feed ends no line, so the backticks after it open nothing.
+        "\na\x0c```\n[x](../absent.md)\n",
     )
     cases = [(lambda text, new=new: text.replace(good, new, 1)) for new in mutations]
     cases += [(lambda text, extra=extra: text + extra) for extra in appended]
@@ -2350,6 +2400,11 @@ def test_split_workflow_broken_links_are_rejected(tmp_path: Path) -> None:
         lambda text: text + "\n```text\n[x](../absent.md)\n```\n",
         lambda text: text + "\n~~~\n[x](../absent.md)\n~~~~\n",
         lambda text: text + "\n```\n[x](../absent.md)\n",
+        # A fence after an HTML block has ended, or where a lone tag cannot
+        # interrupt a paragraph, is still a fence.
+        lambda text: text + "\n<!-- x -->\n```\n[x](../absent.md)\n",
+        lambda text: text + "\n<div>\n\n```\n[x](../absent.md)\n",
+        lambda text: text + "\ntext\n<span>\n```\n[x](../absent.md)\n",
     )
     for kind, mutators in (("rejected", cases), ("accepted", accepted)):
         for index, mutate in enumerate(mutators):
