@@ -39,6 +39,10 @@ LEGACY_CLAUDE_COMMAND_PATH = ".claude/commands/{slug}.md"
 # probe skill out of the skills they listed, and each ran it when named.
 EXPLICIT_INVOCATION_ONLY = frozenset({"adopt", "upgrade", "triage-friction-log"})
 
+# The Codex half of that control lives in a file the adopter may have edited for
+# its other keys, so the report checks the one key and judges nothing else (#1055).
+CODEX_INTERFACE_PATH = ".agents/skills/{slug}/agents/openai.yaml"
+
 _DISPLAY_NAMES = {
     "adopt": "Adopt",
     "parallel": "Parallel Development",
@@ -347,7 +351,81 @@ def compare_adapters(source_root: Path, adopter_root: Path) -> list[AdapterStatu
             )
             if retired is not None:
                 statuses.append(retired)
+            if runtime == "codex" and slug in EXPLICIT_INVOCATION_ONLY:
+                statuses.append(_invocation_policy_status(adopter_root, slug))
     return statuses
+
+
+_TOP_LEVEL_POLICY = re.compile(r"policy:[ \t]*(#.*)?")
+_IMPLICIT_OFF = re.compile(r"[ \t]+allow_implicit_invocation:[ \t]*(false|False|FALSE)[ \t]*(#.*)?")
+
+
+def _disables_implicit_invocation(text: str) -> bool:
+    """Whether a top-level ``policy`` block sets ``allow_implicit_invocation: false``.
+
+    Only the block form the kit ships is recognised, without a YAML dependency
+    the engines do not carry. A flow mapping, a quoted value or a repeated
+    ``policy`` key reads as not set: the row then asks for the kit's form, which
+    is a check the adopter can satisfy, rather than vouching for a parse it
+    did not do.
+    """
+
+    lines = text.splitlines()
+    starts = [index for index, line in enumerate(lines) if re.match(r"policy[ \t]*:", line)]
+    if len(starts) != 1 or not _TOP_LEVEL_POLICY.fullmatch(lines[starts[0]]):
+        return False
+    child_indent = None
+    for line in lines[starts[0] + 1 :]:
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if not line[0].isspace():
+            break
+        indent = line[: len(line) - len(line.lstrip())]
+        if child_indent is None:
+            child_indent = indent
+        if indent == child_indent and _IMPLICIT_OFF.fullmatch(line):
+            return True
+    return False
+
+
+def _invocation_policy_status(adopter_root: Path, slug: str) -> AdapterStatus:
+    """Classify whether an explicit-only Codex skill disables implicit invocation."""
+
+    rel = CODEX_INTERFACE_PATH.format(slug=slug)
+    unsafe_path = _unsafe_adopter_path(adopter_root, rel)
+    if unsafe_path is not None:
+        return AdapterStatus("codex", slug, rel, "adopter-owned", unsafe_path)
+    path = adopter_root / rel
+    if not path.is_file():
+        return AdapterStatus(
+            "codex",
+            slug,
+            rel,
+            "missing",
+            "take the kit's file: it sets policy.allow_implicit_invocation: false, "
+            "without which Codex loads this skill unasked",
+        )
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        return AdapterStatus("codex", slug, rel, "adopter-owned", f"unreadable: {exc}")
+    if _disables_implicit_invocation(text):
+        return AdapterStatus(
+            "codex",
+            slug,
+            rel,
+            "kit-current",
+            "sets policy.allow_implicit_invocation: false; other keys not judged",
+        )
+    return AdapterStatus(
+        "codex",
+        slug,
+        rel,
+        "policy-stale",
+        "does not set policy.allow_implicit_invocation: false, so Codex loads this "
+        "skill unasked; take the kit's file, or add that policy block if the other "
+        "keys are yours",
+    )
 
 
 def _adapter_status(
@@ -459,6 +537,7 @@ def render_adapter_report(statuses: list[AdapterStatus]) -> str:
         "adopter-owned": "!",
         "missing": "+",
         "kit-retired": "-",
+        "policy-stale": "↻",
     }
     for runtime in ("claude", "codex"):
         lines.append(f"  {runtime}:")

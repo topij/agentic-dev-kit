@@ -432,6 +432,9 @@ def test_shipped_runtime_adapters_equal_the_renderer_for_both_runtimes():
         path.relative_to(REPO_ROOT).as_posix()
         for pattern in (".claude/skills/*/SKILL.md", ".agents/skills/*/SKILL.md")
         for path in REPO_ROOT.glob(pattern)
+    } | {
+        runtime_adapters.CODEX_INTERFACE_PATH.format(slug=slug)
+        for slug in runtime_adapters.EXPLICIT_INVOCATION_ONLY
     }
 
     assert statuses
@@ -692,6 +695,96 @@ def test_explicit_only_workflows_carry_invocation_control_on_both_runtimes():
         )
         implicit = interface.get("policy", {}).get("allow_implicit_invocation", True)
         assert implicit is (slug not in explicit), slug
+
+
+_KIT_INTERFACE = """interface:
+  display_name: "Upgrade"
+  short_description: "Adopter wording the report must not judge"
+policy:
+  allow_implicit_invocation: false
+"""
+
+
+@pytest.mark.parametrize(
+    "interface, state",
+    [
+        (_KIT_INTERFACE, "kit-current"),
+        # The shape OpenKitchen carried after refreshing SKILL.md alone (#1055).
+        (_KIT_INTERFACE.split("policy:")[0], "policy-stale"),
+        (_KIT_INTERFACE.replace("false", "true"), "policy-stale"),
+        (_KIT_INTERFACE.replace("false", '"false"'), "policy-stale"),
+        (_KIT_INTERFACE.replace("policy:\n ", "other:\n "), "policy-stale"),
+        (_KIT_INTERFACE + "policy:\n  allow_implicit_invocation: true\n", "policy-stale"),
+        (
+            _KIT_INTERFACE.replace("  allow_implicit_invocation", "  nested:\n    allow_implicit_invocation"),
+            "policy-stale",
+        ),
+        (None, "missing"),
+    ],
+    ids=[
+        "kit-current",
+        "no-policy",
+        "allowed",
+        "quoted",
+        "other-key",
+        "repeated-policy",
+        "nested-deeper",
+        "absent",
+    ],
+)
+def test_adapter_report_checks_the_codex_invocation_policy(
+    tmp_path, adapter_source, interface, state
+):
+    adopter = tmp_path / "adopter"
+    shutil.copytree(adapter_source / ".agents", adopter / ".agents")
+    rows = {}
+    for slug in runtime_adapters.EXPLICIT_INVOCATION_ONLY:
+        path = adopter / runtime_adapters.CODEX_INTERFACE_PATH.format(slug=slug)
+        if interface is None:
+            path.unlink()
+        else:
+            path.write_text(interface, encoding="utf-8")
+        rows[slug] = path.read_bytes() if path.exists() else None
+
+    statuses = runtime_adapters.compare_adapters(adapter_source, adopter)
+    policy = {
+        status.slug: status for status in statuses if status.path.endswith("openai.yaml")
+    }
+
+    # One row per explicit-only skill, none for the rest, and the file is never rewritten.
+    assert set(policy) == runtime_adapters.EXPLICIT_INVOCATION_ONLY
+    for slug, status in policy.items():
+        assert status.runtime == "codex"
+        assert status.state == state, status
+        assert "allow_implicit_invocation: false" in status.detail
+        if state != "kit-current":
+            assert "take the kit's file" in status.detail
+        path = adopter / status.path
+        assert (path.read_bytes() if path.exists() else None) == rows[slug]
+    # The SKILL.md beside it is classified on its own bytes as before.
+    assert {
+        status.state for status in statuses if status.path.startswith(".agents/")
+        and status.path.endswith("SKILL.md")
+    } == {"kit-current"}
+    report = runtime_adapters.render_adapter_report(statuses)
+    assert f".agents/skills/upgrade/agents/openai.yaml: {state}" in report
+
+
+def test_adapter_report_preserves_a_symlinked_codex_interface_as_adopter_owned(
+    tmp_path, adapter_source
+):
+    adopter = tmp_path / "adopter"
+    outside = tmp_path / "outside.yaml"
+    outside.write_text(_KIT_INTERFACE, encoding="utf-8")
+    path = adopter / runtime_adapters.CODEX_INTERFACE_PATH.format(slug="adopt")
+    path.parent.mkdir(parents=True)
+    path.symlink_to(outside)
+
+    statuses = runtime_adapters.compare_adapters(adapter_source, adopter)
+    status = next(item for item in statuses if item.path == path.relative_to(adopter).as_posix())
+
+    assert status.state == "adopter-owned"
+    assert "symlink" in status.detail
 
 
 @pytest.mark.parametrize("slug", ["adopt", "parallel", "pr-watch", "upgrade"])
