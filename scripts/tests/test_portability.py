@@ -3170,7 +3170,7 @@ interactive invocation, then **stop**
 and let the operator choose; do not auto-start the work. In a non-interactive
 invocation, omit the question and exit after rendering the briefing, including
 the recommendation or no-pick explanation. When the
-outer request already and separately authorizes follow-on work, complete this read-only
+outer request already and separately authorizes follow-on work, complete this briefing
 workflow first, then continue under that authority.
 
 ```text
@@ -3276,9 +3276,9 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "environment-incompatible-or-unknown": (
                 "visible-blocker-no-executable-recommendation",
             ),
-            "session-start-write": ("prohibited-read-only-workflow",),
+            "session-start-write": ("prohibited-except-pr-watch-settle-baseline",),
             "non-interactive-invocation": (
-                "render-once-and-exit-without-wait-or-write",
+                "render-once-and-exit-without-wait",
             ),
             "runtime-policy-override": ("shared-declaration-wins-and-stop",),
         }
@@ -3289,11 +3289,11 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             ),
             "degraded-success": (
                 "Required capabilities are ready and an optional source is unavailable, or a conditional remediation read prevents a Now promotion, or execution-environment evidence prevents an executable recommendation.",
-                "Render the briefing once, label every gap at its normal display location, and make no write.",
+                "Render the briefing once, label every gap at its normal display location, and make no write except the pr-watch settle baseline.",
             ),
             "successful-completion": (
                 "Required capabilities and every applicable optional or triggered conditional source are ready; every explicitly inapplicable source is named.",
-                "Render the complete briefing and one recommendation. In an interactive invocation, wait for the operator; in a non-interactive invocation, exit. A separately authorized outer request may begin work only after this read-only workflow completes.",
+                "Render the complete briefing and one recommendation. In an interactive invocation, wait for the operator; in a non-interactive invocation, exit. A separately authorized outer request may begin work only after this briefing workflow completes.",
             ),
         }
         assert "kitconfig.load_config()" in flattened
@@ -3302,15 +3302,16 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "`forge-pr-read`, `ci-cron-read`, and `tracker-read` are always applicable"
             in flattened
         )
-        assert "creates no repository, forge, tracker, notification, or local-state" in flattened
+        assert "creates no repository content, forge, tracker, or notification" in flattened
+        assert "Its only permitted state write is the pr-watch settle baseline" in flattened
         assert "A previous chat response is not resume evidence" in flattened
         assert "must never render as an empty list" in flattened
         assert "keep that candidate out of `Now`" in flattened
         assert "`git symbolic-ref --short -q HEAD`" in flattened
         assert "report `DETACHED at <sha>` rather than a blank branch" in flattened
         # #663: each pull request's review evidence is read through the watch
-        # engine, read-only, and judged from the unfiltered list rather than the
-        # watch loop's acknowledged view.
+        # engine, without acknowledgements, and judged from the unfiltered list
+        # rather than the watch loop's acknowledged view.
         assert (
             "uv run <engine-dir>/pr_watch.py <PR#> --json --no-persist --all-comments"
         ) in flattened
@@ -3862,7 +3863,7 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "`repository-state-read` | required", "`repository-state-read` | optional", 1
         )),
         ("session-start", session, session.replace(
-            "`session-start-write` | `prohibited-read-only-workflow`",
+            "`session-start-write` | `prohibited-except-pr-watch-settle-baseline`",
             "`session-start-write` | `writes-allowed`", 1
         )),
         ("session-start", session, session.replace(
@@ -3915,7 +3916,7 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "must preserve the full unfiltered content",
             "may filter content through local acknowledgement state", 1
         )),
-        # #663: the per-PR read is the watch engine's, read-only and unfiltered.
+        # #663: the per-PR read uses the watch engine without acknowledgements or filtering.
         ("session-start", session, session.replace(
             "Judge from `all_comments[]`, never from `new_comments[]`",
             "Judge from `new_comments[]`", 1

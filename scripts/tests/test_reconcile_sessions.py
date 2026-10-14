@@ -28,7 +28,7 @@ and `$GH_REPO`; the `gh` one its whole argv — which is what pins the propertie
 no output could show: that the probe reads the LANE's state sandbox rather than
 the caller's, that it is aimed at the repository the run already resolved, that
 that repository is resolved once per run, and that it passes `--no-persist` so
-reconciling never mutates a lane's seen-set, settle baseline or receipt.
+reconciling never mutates a lane's seen-set, pending acknowledgements or receipt.
 """
 
 from __future__ import annotations
@@ -457,18 +457,20 @@ def test_an_ordinary_not_held_answer_is_silent(harness: Harness) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# the probe is read-only and lane-scoped
+# the probe is non-acknowledging and lane-scoped
 # --------------------------------------------------------------------------- #
 
 
-def test_the_probe_reads_the_lanes_own_sandbox_and_never_persists(harness: Harness) -> None:
+def test_the_probe_reads_the_lanes_own_sandbox_and_passes_no_persist(harness: Harness) -> None:
     """Two properties of the invocation that no output could show: the state root
     it is handed, and the flags it carries.
 
     The receipt and seen-set live in the LANE's sandbox, so a probe against the
     caller's state root would answer for the wrong lane. And reconciliation is a
-    report, so it must ask for no persistence — a settle baseline written or a
-    pending seen-set consumed on the way past would be a mutation of lane state.
+    report, so it must pass `--no-persist` — a pending seen-set replaced or
+    consumed on the way past would acknowledge comments nobody read. (The settle
+    baseline is the one thing a `--no-persist` poll still records; it is a timing
+    fact, not an acknowledgement — see `persist_settle_baseline`.)
 
     Precisely, because a round-8 lens found the earlier wording overclaiming:
     this asserts that `--no-persist` is PASSED. That `pr_watch.py` honours it is

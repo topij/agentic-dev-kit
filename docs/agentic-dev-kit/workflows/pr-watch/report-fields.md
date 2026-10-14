@@ -295,7 +295,11 @@ either wording can follow the other, and **`no settle baseline recorded` can
 reappear** rather than showing once. The same wording covers a stored stamp
 that is unusable at all — unparseable, the zero time, or one meaningfully in
 the future (a state file copied between machines, or a clock corrected
-backwards) — which fails closed like everything else here.
+backwards) — which fails closed like everything else here. Persisting polls and
+gh `--no-persist` record the clock, so an authorizing caller can establish a
+baseline. REST `--no-persist` preserves watch state to keep incompatible check
+counts out of the gh baseline; REST cannot authorize a merge. Writes use the existing unlocked state file; serialize
+operations on that file, and see the act-time poll section for failure handling.
 
 Neither wording is a deadline: the gate opens once that has been true for
 `review.settle_grace_minutes` continuously. A rollup that dips and returns to

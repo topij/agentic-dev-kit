@@ -70,14 +70,16 @@ complete.
 | `incomplete-pagination` | `report-unavailable-or-page-to-completion` |
 | `remediation-unavailable` | `no-now-promotion-for-that-candidate` |
 | `environment-incompatible-or-unknown` | `visible-blocker-no-executable-recommendation` |
-| `session-start-write` | `prohibited-read-only-workflow` |
-| `non-interactive-invocation` | `render-once-and-exit-without-wait-or-write` |
+| `session-start-write` | `prohibited-except-pr-watch-settle-baseline` |
+| `non-interactive-invocation` | `render-once-and-exit-without-wait` |
 | `runtime-policy-override` | `shared-declaration-wins-and-stop` |
 
 ### Durable result, resumability, and completion
 
-`session-start` creates no repository, forge, tracker, notification, or local-state
-artifact. Its load-bearing result is the briefing returned to the invoker; the live
+`session-start` creates no repository content, forge, tracker, or notification
+artifact. Its only permitted state write is the pr-watch settle baseline; serialize
+that read with other operations on the same per-PR state file. Its load-bearing
+result is the briefing returned to the invoker; the live
 sources remain authoritative. A previous chat response is not resume evidence. Retry by
 gathering the sources again, and never reuse an earlier empty or clean verdict for a
 source that failed on the retry.
@@ -85,8 +87,8 @@ source that failed on the retry.
 | Outcome | Condition | Required result |
 |---|---|---|
 | `hard-stop` | A required capability is unavailable or shared/runtime policy conflicts. | Name the failed capability and remediation; do not render the normal briefing or recommendation. |
-| `degraded-success` | Required capabilities are ready and an optional source is unavailable, or a conditional remediation read prevents a `Now` promotion, or execution-environment evidence prevents an executable recommendation. | Render the briefing once, label every gap at its normal display location, and make no write. |
-| `successful-completion` | Required capabilities and every applicable optional or triggered conditional source are ready; every explicitly inapplicable source is named. | Render the complete briefing and one recommendation. In an interactive invocation, wait for the operator; in a non-interactive invocation, exit. A separately authorized outer request may begin work only after this read-only workflow completes. |
+| `degraded-success` | Required capabilities are ready and an optional source is unavailable, or a conditional remediation read prevents a `Now` promotion, or execution-environment evidence prevents an executable recommendation. | Render the briefing once, label every gap at its normal display location, and make no write except the pr-watch settle baseline. |
+| `successful-completion` | Required capabilities and every applicable optional or triggered conditional source are ready; every explicitly inapplicable source is named. | Render the complete briefing and one recommendation. In an interactive invocation, wait for the operator; in a non-interactive invocation, exit. A separately authorized outer request may begin work only after this briefing workflow completes. |
 
 ## What it reads
 
@@ -95,7 +97,7 @@ source that failed on the retry.
 | Living handoff   | `<handoff>` — every entry under `## Workstreams` (status, owner, `▶ Next:`), plus the newest session entries as context                  |
 | Friction inbox   | `<friction-log>` — entries since the last "Backlog migrated" marker                                                                  |
 | Tracker backlog  | your tracker's list-issues command/script — project `tracker.project_name` (open only — drop `completed`/`canceled`). Pass an explicit row limit *and* select fields; see the gather for why these are two separate limits and why a full page must be treated as truncated |
-| Open PRs         | `gh pr list` (or its REST equivalent, `gh api --paginate` on the `pulls` route) plus a read-only `pr_watch.py --json --no-persist --all-comments` poll per pull request — anything draft / CI-red / awaiting-review (the PR-follow-through rule). Page both the list and review findings completely |
+| Open PRs         | `gh pr list` (or its REST equivalent, `gh api --paginate` on the `pulls` route) plus a non-acknowledging `pr_watch.py --json --no-persist --all-comments` poll per pull request — anything draft / CI-red / awaiting-review (the PR-follow-through rule). Page both the list and review findings completely |
 | Working tree     | `git status --short` plus a symbolic-branch read or explicit `DETACHED at <sha>` classification — unfinished business from last session |
 | CI/cron health   | your cron/CI runner's status command (adapt to your infra — e.g. a wrapper script that logs recent job outcomes)                         |
 | Config drift     | your host config-apply step, if you have one (e.g. a `verify --json`-style check comparing committed config against applied host state) — drop this bullet entirely if it doesn't generalize to your setup |
@@ -177,7 +179,7 @@ like good news, it looks like a missing handoff.
   an empty list.
 
   The list response is discovery, not complete review health. For every returned pull
-  request, read its review evidence through the watch engine, read-only:
+  request, read its review evidence through the watch engine without acknowledging comments:
 
   ```sh
   uv run <engine-dir>/pr_watch.py <PR#> --json --no-persist --all-comments
@@ -187,8 +189,10 @@ like good news, it looks like a missing handoff.
   `state` (including one submitted without a body), and every inline review comment,
   independent of `pr-watch` acknowledgement or seen state and of its noise markers.
   Judge from `all_comments[]`, never from `new_comments[]`, which is the
-  acknowledgement-filtered view the watch loop reads. `--no-persist` leaves the pull
-  request's watch state as it was, so this read writes nothing. Another runtime may
+  acknowledgement-filtered view the watch loop reads. `--no-persist` acknowledges
+  nothing, so in serialized use this read leaves the pull request's seen-set and pending acknowledgements
+  as they were; on gh the only state it records is the settle baseline, the timing
+  fact the merge gate needs. REST `--no-persist` records no watch state. Another runtime may
   translate the invocation but must preserve the full unfiltered content.
 
   On the `gh` backend the engine pages all three surfaces to the end: `gh pr view`
@@ -526,7 +530,7 @@ interactive invocation, then **stop**
 and let the operator choose; do not auto-start the work. In a non-interactive
 invocation, omit the question and exit after rendering the briefing, including
 the recommendation or no-pick explanation. When the
-outer request already and separately authorizes follow-on work, complete this read-only
+outer request already and separately authorizes follow-on work, complete this briefing
 workflow first, then continue under that authority.
 
 ```text
@@ -550,8 +554,9 @@ wrapped up gets no preference for it.
 
 ## Notes
 
-- **Read-only.** This skill never edits, commits, or starts work — it only reports
-  and recommends. It's safe to run anytime to re-orient mid-session.
+- **No content edits or acknowledgements.** This skill reports and recommends;
+  it never commits or starts work. The pr-watch settle baseline is its only permitted
+  state write. Serialize that poll with other operations on the same state file.
 - If `<handoff>` or `<friction-log>` is over its line budget (a
   session-start tripwire may have warned), mention it as a 🟢 housekeeping item
   (`wrap-up` sweeps the handoff; the `triage-friction-log` workflow graduates the inbox) — don't

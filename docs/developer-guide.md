@@ -53,7 +53,7 @@ unclaimed templates; it does not replace the drift inspection and file refresh i
 
 ```mermaid
 flowchart LR
-    Brief["session-start<br/>read-only briefing"] --> Branch["branch and work"]
+    Brief["session-start<br/>briefing"] --> Branch["branch and work"]
     Branch --> Verify["project verification"]
     Verify --> PR["ready PR"]
     PR --> Watch["pr-watch<br/>CI and review"]

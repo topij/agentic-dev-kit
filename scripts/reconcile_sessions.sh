@@ -485,8 +485,13 @@ _resolve_repo_nwo() {
 #    report `mergeable` and `converged` for this exact PR, base, and head, with
 #    an explicit empty blocker list. Read the engine verdicts; do not rebuild
 #    their predicates from forge rollups. `--no-persist` keeps this probe
-#    read-only: reconciliation must never mutate a lane's seen-set, settle
-#    baseline, or review receipt.
+#    from acknowledging anything: in serialized use, reconciliation preserves a lane's
+#    seen-set, pending acknowledgements, and review receipt. Serialize operations
+#    on the same per-PR state file. The one thing it
+#    may record on gh is the settle baseline — when the probe observed this head's
+#    rollup at its current size — which is a timing fact, computed exactly as
+#    the lane's own poll would, and cannot open the gate before the grace
+#    window has run from the first observation.
 _held_check() {
     local session_dir="$1" branch="$2" pr="$3" base="$4" head_oid="$5"
     local merge_class recorded_base report
