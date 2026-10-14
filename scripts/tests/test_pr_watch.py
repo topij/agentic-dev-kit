@@ -329,7 +329,7 @@ def _assert_moved_rules_and_back_references(entry: str, reference: str) -> None:
 
     rounds = _between(entry, "\n- **Round budget**", "\n- **Bound the loop**")
     assert "*Round counting*, in `report-fields.md`" in rounds
-    act_time = _between(entry, "## Read-only act-time poll", "\n## The draft-bit flags")
+    act_time = _between(entry, "## Act-time poll without acknowledgements", "\n## The draft-bit flags")
     assert "*The all-comments view*, in `report-fields.md`" in act_time
 
     flat = " ".join(reference.split())
@@ -9477,14 +9477,13 @@ def test_main_resolves_the_backend_before_it_reads(
     assert seen_backend == ["rest"], "main did not thread the backend it resolved"
 
 
-def test_no_persist_builds_the_report_without_rewriting_watch_state(
+def test_no_persist_builds_the_report_without_calling_persist_poll(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The final authorization probe must not acknowledge an unread comment.
+    """Pin main's dispatch away from the normal persistence function.
 
-    Patching ``persist_poll`` itself pins the production call site: an
-    implementation that merely avoids ``save_state`` through another path would
-    still fail this test if ``main`` accidentally invokes the state transition.
+    This rejects a call to ``persist_poll``; the real-state tests below check
+    which fields the separate settle-baseline writer preserves.
     """
     pr_watch = _load_pr_watch()
     original_state = {
@@ -9626,7 +9625,7 @@ def test_two_no_persist_polls_across_the_grace_window_settle_the_gate(
     `settle_grace_minutes`, at the same check count, opens the gate.
 
     Also pins the other direction: a second poll INSIDE the grace window does
-    not open it, so recording the baseline from a read-only poll cannot make a
+    not open it, so recording the baseline from a `--no-persist` poll cannot make a
     PR mergeable sooner than a plain poll would."""
     pr_watch = _load_pr_watch()
     monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path / "watch-state")
@@ -9644,7 +9643,7 @@ def test_two_no_persist_polls_across_the_grace_window_settle_the_gate(
         monkeypatch, capsys, pr_watch, view, first_seen + timedelta(minutes=grace / 2)
     )
     assert early["rollup_settled"] is False
-    assert early["mergeable"] is False, "a read-only poll settled inside the grace"
+    assert early["mergeable"] is False, "a --no-persist poll settled inside the grace"
 
     later = first_seen + timedelta(minutes=grace + 1)
     second = _poll_main_at(monkeypatch, capsys, pr_watch, view, later)

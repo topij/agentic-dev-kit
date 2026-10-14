@@ -3916,7 +3916,7 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "must preserve the full unfiltered content",
             "may filter content through local acknowledgement state", 1
         )),
-        # #663: the per-PR read is the watch engine's, read-only and unfiltered.
+        # #663: the per-PR read uses the watch engine without acknowledgements or filtering.
         ("session-start", session, session.replace(
             "Judge from `all_comments[]`, never from `new_comments[]`",
             "Judge from `new_comments[]`", 1
