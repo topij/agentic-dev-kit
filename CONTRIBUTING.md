@@ -38,10 +38,11 @@ report a `make test` run.
   commit the result with your change:
 
   ```
-  python3 scripts/kit_doctor.py --generate-manifest
+  uv run scripts/kit_doctor.py --generate-manifest
   ```
 
-  CI runs `python3 scripts/kit_doctor.py` and fails while the manifest is stale. That
+  It writes `kit-manifest.json` itself, so don't redirect its output onto the file.
+  Use this `uv run` spelling: it is the one a headless lane's profile allows. CI runs `python3 scripts/kit_doctor.py` and fails while the manifest is stale. That
   applies to a comment-only change too, because the manifest hashes bytes.
 - **An observable change needs a changelog fragment.** Add a new file in
   [`changelog.d/`](changelog.d/), as `AGENTS.md` describes. A comment, doc wording or a
