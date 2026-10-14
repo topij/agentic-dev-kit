@@ -485,8 +485,9 @@ _resolve_repo_nwo() {
 #    report `mergeable` and `converged` for this exact PR, base, and head, with
 #    an explicit empty blocker list. Read the engine verdicts; do not rebuild
 #    their predicates from forge rollups. `--no-persist` keeps this probe
-#    from acknowledging anything: reconciliation must never mutate a lane's
-#    seen-set, pending acknowledgements, or review receipt. The one thing it
+#    from acknowledging anything: in serialized use, reconciliation preserves a lane's
+#    seen-set, pending acknowledgements, and review receipt. Serialize operations
+#    on the same per-PR state file. The one thing it
 #    may record is the settle baseline — when the probe observed this head's
 #    rollup at its current size — which is a timing fact, computed exactly as
 #    the lane's own poll would, and cannot open the gate before the grace

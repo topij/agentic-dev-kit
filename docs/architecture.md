@@ -92,7 +92,8 @@ sequenceDiagram
     Agent->>Records: wrap-up and next action
 ```
 
-`session-start` is read-only. `pr-watch` checks the exact PR head and review
+`session-start` makes no content edits or acknowledgements; its pr-watch read may
+record the settle baseline. `pr-watch` checks the exact PR head and review
 evidence; opening a PR is not completion. `wrap-up` writes the configured handoff
 and routes friction, then follows the repository PR path for changed artifacts.
 Merge authority is separate from review readiness. For a non-lane PR without a

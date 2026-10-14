@@ -296,8 +296,9 @@ reappear** rather than showing once. The same wording covers a stored stamp
 that is unusable at all — unparseable, the zero time, or one meaningfully in
 the future (a state file copied between machines, or a clock corrected
 backwards) — which fails closed like everything else here. Every poll records
-the clock, a `--no-persist` one included, so a caller that only polls read-only
-still sees it clear.
+the clock, a `--no-persist` one included, so a caller that only uses that mode
+can establish a baseline. Writes use the existing unlocked state file; serialize
+operations on that file, and see the act-time poll section for failure handling.
 
 Neither wording is a deadline: the gate opens once that has been true for
 `review.settle_grace_minutes` continuously. A rollup that dips and returns to

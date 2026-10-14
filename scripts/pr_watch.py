@@ -48,8 +48,8 @@ state file, so what a review found survives the merge only where somebody wrote
 it onto the pull request — `--record-review --disposition` is the engine writing
 it, under a fixed heading the same engine reads back.
 
-`--mark-seen` NEVER re-polls `gh`. Every plain poll (any invocation without
-`--mark-seen`) persists the exact ``all_seen_keys`` it just reported into a
+`--mark-seen` NEVER re-polls `gh`. Every persisting poll (without
+`--no-persist`) records the exact ``all_seen_keys`` it just reported into a
 per-PR "pending" slot (`state["pending_seen"]`). `--mark-seen` promotes THAT
 stored set into `seen` and clears the slot — it does not re-derive the ack set
 from a fresh fetch. This closes the ordering hazard where a comment posted
@@ -60,14 +60,15 @@ reported poll's set structurally can't be acked — it stays unseen and surfaces
 on the next poll. Calling `--mark-seen` cold (no prior poll reported since the
 last ack) acks nothing and says so via `report["note"]`.
 
-`--no-persist` makes a plain poll acknowledge nothing: it leaves `seen`,
+In serialized use, `--no-persist` makes a plain poll acknowledge nothing: it leaves `seen`,
 `pending_seen`, the bot-pending clock, the receipt and the round count as they
 are, so a later `--mark-seen` acks what the last PERSISTING poll reported, not
 this one. It still records the settle baseline (`head`, `max_total` with its
 backend label, `settle_since` with its count) exactly as a plain poll computes it — an
 observation-timing fact, not an acknowledgement — so a caller that only ever
 polls with `--no-persist` does not hold the merge gate at `no settle baseline
-recorded` forever. See `persist_settle_baseline`.
+recorded` forever. Serialize operations on the same per-PR state file; this
+uses the existing unlocked writer. See `persist_settle_baseline`.
 
 The transport is a thin layer; the classification + diff + done logic are pure
 functions (tested). Stdlib only.
@@ -4058,8 +4059,8 @@ def mark_seen(pr: int) -> dict:
     """Promote the PENDING set from the last *reported* poll into ``seen``.
 
     Deliberately does **not** talk to ``gh``. It reads ``state["pending_seen"]`` —
-    the exact ``all_seen_keys`` a prior plain poll (any invocation without
-    ``--mark-seen``) persisted — unions it into ``seen``, and clears the pending
+    the exact ``all_seen_keys`` a prior persisting poll (without
+    ``--no-persist``) recorded — unions it into ``seen``, and clears the pending
     slot. A comment posted after that poll and before this call was never fetched
     into ``pending_seen``, so it structurally cannot be acked here: it stays
     unseen and re-surfaces on the next poll instead of being silently buried by
@@ -6583,7 +6584,7 @@ def persist_settle_baseline(pr: int, report: dict) -> bool:
 
     Returns whether the state file was written.
 
-    **Why a read-only poll writes this at all.** The settle baseline is an
+    **Why a non-acknowledging poll writes this at all.** The settle baseline is an
     observation-timing fact — "this head's rollup has been this size since T" —
     not an acknowledgement. Before this, a caller that only ever polled with
     ``--no-persist`` (a cockpit refreshing a Merge button, a merge wrapper retried
@@ -6601,11 +6602,12 @@ def persist_settle_baseline(pr: int, report: dict) -> bool:
     (the false-settle guard's inputs) are written with it, as a plain poll writes
     them, so the next poll compares against what this one saw.
 
-    **What it never writes.** ``seen``, ``pending_seen`` (the slot
+    **What serialized polls preserve.** ``seen``, ``pending_seen`` (the slot
     ``--mark-seen`` promotes), ``bot_pending_since``, ``review_receipt`` and
-    ``review_rounds`` are left exactly as they are on disk. ``--no-persist``
+    ``review_rounds`` retain the values read immediately before saving. ``--no-persist``
     exists so an authorization probe cannot acknowledge a comment nobody read
-    (#354); none of these fields is touched, so that still holds.
+    (#354); it does not populate the pending slot with this poll's comments.
+    Concurrent writers can still lose updates, as described below.
 
     **Fail-closed edges.** No write when:
 
@@ -6617,17 +6619,16 @@ def persist_settle_baseline(pr: int, report: dict) -> bool:
       receipt this poll could not see. :func:`persist_poll` does overwrite it;
       this path is not entitled to.
 
-    A failed write is reported on stderr and swallowed: the poll's report is
-    already built and correct, and a baseline that was not recorded only leaves
-    the gate closed.
+    A failed write warns on stderr and invalidates merge authorization in this
+    poll's report. The truncating writer may already have damaged the state
+    file; this does not restore receipts or acknowledgements.
 
     **Concurrency.** Like every writer of this file, this is an unlocked
     read-modify-write (see :func:`save_state` for why the write is truncating).
-    The state is re-read immediately before the write, after the network phase,
-    so the window in which a concurrent ``--mark-seen`` or ``--record-review``
-    could be lost is the few statements between that read and the write — far
-    narrower than :func:`persist_poll`'s, whose ``seen`` comes from a read taken
-    before :func:`build_report`.
+    Serialize all operations on the same per-PR state file, including
+    ``--no-persist`` polls, persisting polls, acknowledgements and review writes.
+    Re-reading after the network phase preserves updates that arrived before
+    that read, but an update between the read and save can still be overwritten.
     """
     if not report.get("head"):
         return False
@@ -6648,6 +6649,13 @@ def persist_settle_baseline(pr: int, report: dict) -> bool:
     try:
         save_state(pr, state)
     except OSError as exc:
+        # The writer may have truncated away the evidence used by build_report.
+        # An act-time caller must not authorize a merge from that stale report.
+        report["mergeable"] = False
+        report["done"] = False
+        report.setdefault("merge_blockers", []).append(
+            "could not record the settle baseline; recheck watch state before merging"
+        )
         print(
             f"warning: --no-persist could not record the settle baseline: {exc}",
             file=sys.stderr,
@@ -6718,14 +6726,16 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help=(
             "with a plain poll: report current PR state without acknowledging "
-            "anything — the seen-set, the pending slot --mark-seen promotes, the "
+            "anything — in serialized use, the seen-set, the pending slot "
+            "--mark-seen promotes, the "
             "bot clock, the receipt and the round count are left as they are. "
             "It still records the settle baseline (head, check count, and when "
             "the rollup was first seen at that count), an observation-timing fact "
             "the merge gate needs and a plain poll would record the same way. Use "
             "for an act-time authorization check after the interactive watch loop, "
             "for a cockpit that only ever polls, and with --all-comments for "
-            "session-start's review read"
+            "session-start's review read. Serialize operations on the same "
+            "per-PR state file"
         ),
     )
     parser.add_argument(

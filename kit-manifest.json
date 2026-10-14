@@ -64,18 +64,18 @@
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "666985ad32994bdfb364cd584d001fb30e208f70428d9bba9fa6229b448d7c2a"
+      "sha256": "0a9c08bbc2a7e6105fc838782bbd9faf4522da9e0351639e5b2f225d733a8895"
     },
     "docs/agentic-dev-kit/workflows/pr-watch/report-fields.md": {
       "required_by": [
         "docs/agentic-dev-kit/workflows/pr-watch.md"
       ],
       "role": "workflow",
-      "sha256": "323bdd5d2ee93cd01987dca8c4efe10c655c67f3c836df217accb4ccdf51a36b"
+      "sha256": "75e8d45ff82d9a15a1b666a177fc3455545c910f9d0670384a8f424ef16d1801"
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
-      "sha256": "d079a4bdee8fa34c79d18dec5c2cbb75f7db462dbd7f49281a420fda16675f1e"
+      "sha256": "ab910948b7fc3b581ba66b2a1030c86f655534bf9a946c45490bcd42e0e2962d"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
@@ -560,11 +560,11 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "bee846338c4e568067f16ef42eac5633d7f4b96318968f5d3298f69a63df2062"
+      "sha256": "4d6650437c833f6b5d9af00093d5db6897e14118d39fe75eca9884168a5050aa"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
-      "sha256": "e494be43936451405baa9fbd830ab8323be7ac9121b3d5dbc6da13dcde96abac"
+      "sha256": "b70828a831a4dd0e99eb3e857efef246142833b8c5a5ed733e6760b618606d22"
     },
     "scripts/run_installed_tests.py": {
       "role": "engine",
@@ -664,7 +664,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "9b13aff35eb4deedae4504c2102fb1a3e596ced56b079cf9fa38b07cb6a36e10"
+      "sha256": "77308976f5622d2c382a83190d1d80debb8741a022082a47bbd5a598dff85fbf"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
@@ -672,7 +672,7 @@
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "b489bf28d21fc65480cbece66c377e6d571b41d89e061e492305d3c236cfcbee"
+      "sha256": "baeb0ccaf94dc983723c7d929dc9b955e6fa987ce34722a017717031e44a0d4a"
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",

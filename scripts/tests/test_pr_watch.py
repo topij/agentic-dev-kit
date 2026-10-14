@@ -9734,8 +9734,8 @@ def test_no_persist_does_not_rewrite_an_unchanged_baseline(
 ) -> None:
     """A cockpit polls every minute. Once the stamp is on disk and the rollup
     holds still, the baseline it would write equals the stored one, so the
-    file is left byte-for-byte alone — no churn, and no window in which a
-    concurrent `--mark-seen` could be lost."""
+    save function must not be called. Comparing final bytes alone would miss
+    rewriting identical JSON."""
     pr_watch = _load_pr_watch()
     monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path / "watch-state")
     view = _green_view(headRefOid="abc123")
@@ -9743,11 +9743,66 @@ def test_no_persist_does_not_rewrite_an_unchanged_baseline(
     _poll_main_at(monkeypatch, capsys, pr_watch, view, first_seen)
     before = (pr_watch.STATE_DIR / "9.json").read_bytes()
 
+    def unexpected_save(*args: object) -> None:
+        pytest.fail("unchanged baseline called save_state")
+
+    monkeypatch.setattr(pr_watch, "save_state", unexpected_save)
     _poll_main_at(
         monkeypatch, capsys, pr_watch, view, first_seen + timedelta(minutes=1)
     )
 
     assert (pr_watch.STATE_DIR / "9.json").read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    ("truncate", "error_type"), [(False, PermissionError), (True, OSError)]
+)
+def test_no_persist_failed_write_blocks_an_otherwise_authorized_poll(
+    truncate: bool,
+    error_type: type[OSError],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Even a diagnostic-only refresh can damage the receipt on disk.
+
+    Pin refusal before opening and after truncating the state file; both must
+    invalidate the report that was authorized from the pre-write evidence.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path / "watch-state")
+    now = datetime(2026, 10, 14, 9, 0, tzinfo=timezone.utc)
+    view = _green_view(headRefOid="abc123")
+    prior = {
+        "head": "abc123",
+        "max_total": 1,
+        "settle_since": {
+            "head": "abc123",
+            "at": _iso(now - timedelta(minutes=pr_watch._SETTLE_GRACE_MINUTES + 1)),
+            "total": 1,
+        },
+        "review_receipt": {"head": "abc123", "source": "fallback:panel"},
+    }
+    _write_state(pr_watch, prior)
+
+    def failed_save(pr: int, state: dict) -> None:
+        if truncate:
+            pr_watch._seen_path(pr).write_text("", encoding="utf-8")
+        raise error_type("simulated baseline write failure")
+
+    monkeypatch.setattr(pr_watch, "save_state", failed_save)
+    report = _poll_main_at(monkeypatch, capsys, pr_watch, view, now)
+
+    assert report["checks"]["all_green"] is True
+    assert report["converged"] is True
+    assert report["rollup_settled"] is True
+    assert report["review_evidence"]["valid"] is True
+    assert report["mergeable"] is False
+    assert report["done"] is False
+    assert report["merge_blockers"] == [
+        "could not record the settle baseline; recheck watch state before merging"
+    ]
+    assert pr_watch.load_state(9) == ({} if truncate else prior)
 
 
 @pytest.mark.parametrize("content", ["{not json", "[1, 2]", ""])
