@@ -488,7 +488,7 @@ _resolve_repo_nwo() {
 #    from acknowledging anything: in serialized use, reconciliation preserves a lane's
 #    seen-set, pending acknowledgements, and review receipt. Serialize operations
 #    on the same per-PR state file. The one thing it
-#    may record is the settle baseline — when the probe observed this head's
+#    may record on gh is the settle baseline — when the probe observed this head's
 #    rollup at its current size — which is a timing fact, computed exactly as
 #    the lane's own poll would, and cannot open the gate before the grace
 #    window has run from the first observation.

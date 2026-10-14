@@ -350,7 +350,7 @@ uv run <engine-dir>/pr_watch.py <PR#> --json --no-persist
 
 `--no-persist` performs the same current-state reads and builds the same report,
 but acknowledges nothing: in serialized use, the seen-set, the pending set `--mark-seen` promotes, the
-bot-pending clock, the receipt and the round count stay as they were. It still
+bot-pending clock, the receipt and the round count stay as they were. On gh it
 records the settle baseline — the head, its check count and when the rollup was
 first seen at that count — exactly as a plain poll computes it. That is a fact about
 when the poll looked, not an acknowledgement, and without it a caller that only ever
@@ -362,7 +362,10 @@ only for a plain poll; it cannot be combined with `--mark-seen`, `--record-revie
 this mode for its last `mergeable` check, after the normal watch-and-acknowledge loop
 has finished. Serialize all operations on the same per-PR state file, including
 these polls: the existing unlocked writer can overwrite concurrent acknowledgements
-or review writes. A failed baseline write blocks this poll's merge authorization;
+or review writes. REST `--no-persist` leaves the watch state unchanged because
+REST cannot authorize a merge and its check count must not contaminate the gh
+baseline. This does not reset existing baselines or change persisting REST polls.
+A failed persistence re-read or write blocks this poll's merge authorization;
 the truncating write may already have damaged stored state, so recheck the state and
 review evidence before retrying.
 

@@ -9804,6 +9804,137 @@ def test_no_persist_failed_write_blocks_an_otherwise_authorized_poll(
     assert pr_watch.load_state(9) == ({} if truncate else prior)
 
 
+@pytest.mark.parametrize(
+    "failure", ["malformed", "non-object", "empty", "invalid-utf8", "missing", "read-denied"]
+)
+def test_no_persist_refuses_authorization_when_state_is_lost_after_initial_read(
+    failure: str,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The initial receipt and clock authorize; the late re-read must not.
+
+    Exercise the transition through main, rather than beginning with corrupt
+    state and obtaining a report that was already blocked.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path / "watch-state")
+    now = datetime(2026, 10, 14, 9, 0, tzinfo=timezone.utc)
+    prior = {
+        "head": "abc123",
+        "max_total": 1,
+        "max_total_backend": "gh",
+        "settle_since": {
+            "head": "abc123",
+            "at": _iso(now - timedelta(minutes=pr_watch._SETTLE_GRACE_MINUTES + 1)),
+            "total": 1,
+        },
+        "review_receipt": {"head": "abc123", "source": "fallback:panel"},
+    }
+    _write_state(pr_watch, prior)
+    path = pr_watch._seen_path(9)
+    original = path.read_bytes()
+    real_build = pr_watch.build_report
+    real_read = Path.read_text
+    late_read = False
+
+    def read_text(target: Path, *args: object, **kwargs: object) -> str:
+        if failure == "read-denied" and late_read and target == path:
+            raise PermissionError("late state read refused")
+        return real_read(target, *args, **kwargs)
+
+    def authorized_then_lost(*args: object, **kwargs: object) -> dict:
+        nonlocal late_read
+        report = real_build(*args, **kwargs)
+        assert report["mergeable"] is True, "fixture never reached authorized state"
+        if failure == "malformed":
+            path.write_text("{not json", encoding="utf-8")
+        elif failure == "non-object":
+            path.write_text("[]", encoding="utf-8")
+        elif failure == "empty":
+            path.write_text("", encoding="utf-8")
+        elif failure == "invalid-utf8":
+            path.write_bytes(b"\xff")
+        elif failure == "missing":
+            path.unlink()
+        late_read = True
+        return report
+
+    monkeypatch.setattr(Path, "read_text", read_text)
+    monkeypatch.setattr(pr_watch, "_real_build_report", authorized_then_lost, raising=False)
+    report = _poll_main_at(monkeypatch, capsys, pr_watch, _green_view(), now)
+
+    assert report["mergeable"] is False
+    assert report["done"] is False
+    assert report["merge_blockers"]
+    expected = {
+        "malformed": b"{not json",
+        "non-object": b"[]",
+        "empty": b"",
+        "invalid-utf8": b"\xff",
+        "read-denied": original,
+    }
+    if failure == "missing":
+        assert not path.exists(), "lost evidence was replaced with a stale clock"
+    else:
+        assert path.read_bytes() == expected[failure], "unreadable state was overwritten"
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_rest_no_persist_cannot_contaminate_the_gh_settle_baseline(
+    existing: bool,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Keep REST observations out of gh's monotone count, without resetting it.
+
+    A fresh REST read creates no file. Against a settled gh baseline, a larger
+    REST rollup must leave the file byte-identical, so gh remains authorized.
+    """
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path / "watch-state")
+    now = datetime(2026, 10, 14, 9, 0, tzinfo=timezone.utc)
+    path = pr_watch._seen_path(9)
+    if existing:
+        _write_state(pr_watch, {
+            "head": "abc123",
+            "max_total": 1,
+            "max_total_backend": "gh",
+            "settle_since": {
+                "head": "abc123",
+                "at": _iso(now - timedelta(minutes=pr_watch._SETTLE_GRACE_MINUTES + 1)),
+                "total": 1,
+            },
+            "seen": ["previously-acknowledged"],
+            "pending_seen": ["last-persisting-poll"],
+            "review_receipt": {"head": "abc123", "source": "fallback:panel"},
+        })
+        before = path.read_bytes()
+    view = _green_view()
+    view["statusCheckRollup"].append({
+        "__typename": "CheckRun", "name": "rest-extra", "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+    })
+    monkeypatch.setattr(pr_watch, "_active_backend_name", lambda: "rest")
+    rest = _poll_main_at(monkeypatch, capsys, pr_watch, view, now)
+    assert rest["backend"] == "rest"
+    assert rest["checks"]["total"] == 2
+    assert rest["mergeable"] is False
+    if existing:
+        assert path.read_bytes() == before
+        monkeypatch.setattr(pr_watch, "_active_backend_name", lambda: "gh")
+        gh = _poll_main_at(monkeypatch, capsys, pr_watch, _green_view(), now)
+        assert gh["checks"]["total"] == 1
+        assert gh["max_total"] == 1
+        assert gh["settling"] is False
+        assert gh["rollup_settled"] is True
+        assert gh["mergeable"] is True
+    else:
+        assert not path.exists()
+
+
 @pytest.mark.parametrize("content", ["{not json", "[1, 2]", ""])
 def test_no_persist_never_overwrites_an_unreadable_state_file(
     content: str,

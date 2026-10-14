@@ -191,8 +191,8 @@ like good news, it looks like a missing handoff.
   Judge from `all_comments[]`, never from `new_comments[]`, which is the
   acknowledgement-filtered view the watch loop reads. `--no-persist` acknowledges
   nothing, so in serialized use this read leaves the pull request's seen-set and pending acknowledgements
-  as they were; the only state it records is the settle baseline, the timing fact the
-  merge gate needs. Another runtime may
+  as they were; on gh the only state it records is the settle baseline, the timing
+  fact the merge gate needs. REST `--no-persist` records no watch state. Another runtime may
   translate the invocation but must preserve the full unfiltered content.
 
   On the `gh` backend the engine pages all three surfaces to the end: `gh pr view`

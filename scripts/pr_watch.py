@@ -63,11 +63,13 @@ last ack) acks nothing and says so via `report["note"]`.
 In serialized use, `--no-persist` makes a plain poll acknowledge nothing: it leaves `seen`,
 `pending_seen`, the bot-pending clock, the receipt and the round count as they
 are, so a later `--mark-seen` acks what the last PERSISTING poll reported, not
-this one. It still records the settle baseline (`head`, `max_total` with its
+this one. On the gh backend it records the settle baseline (`head`, `max_total` with its
 backend label, `settle_since` with its count) exactly as a plain poll computes it — an
 observation-timing fact, not an acknowledgement — so a caller that only ever
 polls with `--no-persist` does not hold the merge gate at `no settle baseline
-recorded` forever. Serialize operations on the same per-PR state file; this
+recorded` forever. REST `--no-persist` leaves watch state unchanged: it cannot
+authorize a merge, and its check count must not contaminate the gh baseline.
+Serialize operations on the same per-PR state file; this
 uses the existing unlocked writer. See `persist_settle_baseline`.
 
 The transport is a thin layer; the classification + diff + done logic are pure
@@ -6527,7 +6529,8 @@ def _settle_baseline_fields(report: dict) -> dict:
     """The settle-baseline facts a poll records: one shape for both writers.
 
     :func:`persist_poll` writes these on a plain poll and
-    :func:`persist_settle_baseline` writes ONLY these on a ``--no-persist`` poll.
+    :func:`persist_settle_baseline` writes ONLY these on a gh ``--no-persist`` poll.
+    REST ``--no-persist`` reports record no watch state.
     Building them in one place is what keeps the two from drifting: a second copy
     that, say, dropped ``total`` would write a stamp :func:`read_settle_since`
     refuses, and the gate would never open from that path.
@@ -6564,9 +6567,10 @@ def _settle_baseline_fields(report: dict) -> dict:
         # the same checks, which is #94 territory.
         "max_total_backend": report.get("backend"),
         # The settle baseline (#190/#39), head-scoped like `bot_pending_since`.
-        # It MUST ride every poll: a gate whose baseline is never persisted finds
+        # It rides persisting polls and gh --no-persist polls: an authorizing path
+        # whose baseline is never persisted finds
         # no baseline on every poll, re-stamps it, and blocks forever — a wedge,
-        # not a guard. "Every poll" includes `--no-persist` ones, through
+        # not a guard. gh `--no-persist` records it through
         # :func:`persist_settle_baseline`.
         "settle_since": {
             "head": report["head"],
@@ -6580,9 +6584,12 @@ def _settle_baseline_fields(report: dict) -> dict:
 
 
 def persist_settle_baseline(pr: int, report: dict) -> bool:
-    """Record ONLY the settle baseline from a ``--no-persist`` poll.
+    """Record ONLY the settle baseline from a gh ``--no-persist`` poll.
 
-    Returns whether the state file was written.
+    Returns whether the state file was written. REST reports cannot authorize a
+    merge and may count different check surfaces, so they remain non-writing.
+    Existing persisting REST polls retain the cross-backend limitation
+    described by :func:`_settle_baseline_fields`; this does not reset their guard.
 
     **Why a non-acknowledging poll writes this at all.** The settle baseline is an
     observation-timing fact — "this head's rollup has been this size since T" —
@@ -6612,12 +6619,15 @@ def persist_settle_baseline(pr: int, report: dict) -> bool:
     **Fail-closed edges.** No write when:
 
     - the report has no head — no baseline can be scoped to it;
+    - the report is REST — that transport cannot authorize a merge;
     - the stored fields already equal these — the common steady state, and it
       keeps a poller that runs every minute from rewriting the file every minute;
     - the state file exists but cannot be read as a JSON object. ``load_state``
       reads that as ``{}``, and writing over it would replace a seen-set and a
       receipt this poll could not see. :func:`persist_poll` does overwrite it;
-      this path is not entitled to.
+      this path is not entitled to. A failed re-read or non-object value
+      invalidates this poll's authorization. If state disappears after an
+      authorized initial read, refuse without replacing the lost evidence.
 
     A failed write warns on stderr and invalidates merge authorization in this
     poll's report. The truncating writer may already have damaged the state
@@ -6632,6 +6642,15 @@ def persist_settle_baseline(pr: int, report: dict) -> bool:
     """
     if not report.get("head"):
         return False
+    # All REST --no-persist reports are poll-only and cannot authorize a merge,
+    # whether fresh, settled, or carrying receipt/comment history. Preserve the
+    # prior non-writing behavior for that whole shape: REST can count contexts
+    # gh omits, so it must not contaminate that baseline. gh records observations;
+    # this does not reset any guard or change the existing persisting REST poll.
+    # gh, missing, and unrecognized backend labels do not take this exemption;
+    # production reports supply the resolved gh/rest label.
+    if report.get("backend") == "rest":
+        return False
     fields = _settle_baseline_fields(report)
     path = _seen_path(pr)
     state: dict = {}
@@ -6639,10 +6658,27 @@ def persist_settle_baseline(pr: int, report: dict) -> bool:
         try:
             loaded = json.loads(path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+            report["mergeable"] = False
+            report["done"] = False
+            report.setdefault("merge_blockers", []).append(
+                "could not reread watch state; recheck review and settle evidence"
+            )
             return False
         if not isinstance(loaded, dict):
+            report["mergeable"] = False
+            report["done"] = False
+            report.setdefault("merge_blockers", []).append(
+                "watch state is not an object; recheck review and settle evidence"
+            )
             return False
         state = loaded
+    elif report.get("mergeable"):
+        report["mergeable"] = False
+        report["done"] = False
+        report.setdefault("merge_blockers", []).append(
+            "watch state disappeared; recheck review and settle evidence"
+        )
+        return False
     if all(state.get(key) == value for key, value in fields.items()):
         return False
     state.update(fields)
@@ -6729,13 +6765,13 @@ def main(argv: list[str] | None = None) -> int:
             "anything — in serialized use, the seen-set, the pending slot "
             "--mark-seen promotes, the "
             "bot clock, the receipt and the round count are left as they are. "
-            "It still records the settle baseline (head, check count, and when "
+            "On gh it records the settle baseline (head, check count, and when "
             "the rollup was first seen at that count), an observation-timing fact "
             "the merge gate needs and a plain poll would record the same way. Use "
             "for an act-time authorization check after the interactive watch loop, "
             "for a cockpit that only ever polls, and with --all-comments for "
             "session-start's review read. Serialize operations on the same "
-            "per-PR state file"
+            "per-PR state file. REST --no-persist leaves watch state unchanged"
         ),
     )
     parser.add_argument(
