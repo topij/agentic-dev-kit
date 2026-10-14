@@ -340,19 +340,27 @@ Repeat until the report says **converged**:
 
 The normal poll persists the report's comment acknowledgment set, check-count
 baseline, head, and bot-pending clock so the interactive loop can make progress.
-That is intentional during the loop, but it is the wrong side effect for a final
-authorization probe that must not silently acknowledge anything the operator has
-not read. Use:
+That is intentional during the loop, but acknowledging is the wrong side effect for
+a final authorization probe that must not silently acknowledge anything the operator
+has not read. Use:
 
 ```sh
 uv run <engine-dir>/pr_watch.py <PR#> --json --no-persist
 ```
 
 `--no-persist` performs the same current-state reads and builds the same report,
-but leaves the per-PR state file unchanged. It is valid only for a plain poll; it
-cannot be combined with `--mark-seen`, `--record-review`, `--record-round`,
-`--assert-draft`, or `--assert-ready`. A merge wrapper should use this mode for its last `mergeable`
-check, after the normal watch-and-acknowledge loop has finished.
+but acknowledges nothing: the seen-set, the pending set `--mark-seen` promotes, the
+bot-pending clock, the receipt and the round count stay as they were. It still
+records the settle baseline — the head, its check count and when the rollup was
+first seen at that count — exactly as a plain poll computes it. That is a fact about
+when the poll looked, not an acknowledgement, and without it a caller that only ever
+polls with `--no-persist`, such as a cockpit behind a Merge button, would hold the
+gate at `no settle baseline recorded` forever. It cannot open the gate sooner: the
+grace window still runs from the first observation at an unchanged count. It is valid
+only for a plain poll; it cannot be combined with `--mark-seen`, `--record-review`,
+`--record-round`, `--assert-draft`, or `--assert-ready`. A merge wrapper should use
+this mode for its last `mergeable` check, after the normal watch-and-acknowledge loop
+has finished.
 
 `--all-comments`, valid only with `--json` on a plain poll, adds `all_comments[]`
 to the report; *The all-comments view*, in `report-fields.md`, describes it. The

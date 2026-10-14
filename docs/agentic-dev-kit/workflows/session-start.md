@@ -187,8 +187,10 @@ like good news, it looks like a missing handoff.
   `state` (including one submitted without a body), and every inline review comment,
   independent of `pr-watch` acknowledgement or seen state and of its noise markers.
   Judge from `all_comments[]`, never from `new_comments[]`, which is the
-  acknowledgement-filtered view the watch loop reads. `--no-persist` leaves the pull
-  request's watch state as it was, so this read writes nothing. Another runtime may
+  acknowledgement-filtered view the watch loop reads. `--no-persist` acknowledges
+  nothing, so this read leaves the pull request's seen-set and pending acknowledgements
+  as they were; the only state it records is the settle baseline, the timing fact the
+  merge gate needs. Another runtime may
   translate the invocation but must preserve the full unfiltered content.
 
   On the `gh` backend the engine pages all three surfaces to the end: `gh pr view`

@@ -9534,6 +9534,266 @@ def test_no_persist_refuses_state_changing_modes(
     assert "--no-persist is only valid with a plain poll" in capsys.readouterr().err
 
 
+# What a `--no-persist` poll may write: the settle baseline and nothing else.
+# `max_total_backend` rides with `max_total` because it names the transport that
+# produced that count; nothing reads it.
+_SETTLE_BASELINE_KEYS = ("head", "max_total", "max_total_backend", "settle_since")
+
+
+def _iso(moment: datetime) -> str:
+    return moment.isoformat().replace("+00:00", "Z")
+
+
+def _poll_main_at(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    pr_watch: ModuleType,
+    view: dict,
+    now: datetime,
+    *,
+    no_persist: bool = True,
+    inline: list[dict] | None = None,
+) -> dict:
+    """One real `main` poll at a pinned clock, against the REAL state file.
+
+    Unlike `_poll_via_main`, nothing here stubs `load_state` or `save_state`: the
+    subject is what a poll leaves on disk for the NEXT poll, so the file has to
+    be real. Only the network reads and the clock are pinned.
+    """
+    monkeypatch.setattr(pr_watch, "resolve_pr", lambda explicit: 9)
+    monkeypatch.setattr(
+        pr_watch, "fetch_pr_view", lambda pr: (view, list(inline or []), None)
+    )
+    monkeypatch.setattr(
+        pr_watch,
+        "fetch_check_details",
+        lambda pr, **kw: pr_watch.CheckDetails([], "skipped"),
+    )
+    real_build = getattr(pr_watch, "_real_build_report", pr_watch.build_report)
+    pr_watch._real_build_report = real_build
+    monkeypatch.setattr(
+        pr_watch, "build_report", lambda *a, **kw: real_build(*a, **{**kw, "now": now})
+    )
+    argv = ["9", "--json"] + (["--no-persist"] if no_persist else [])
+    assert pr_watch.main(argv) == 0
+    return json.loads(capsys.readouterr().out)
+
+
+def _write_state(pr_watch: ModuleType, state: dict) -> None:
+    pr_watch.save_state(9, state)
+
+
+def test_no_persist_on_a_fresh_state_records_only_the_settle_baseline(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """(1) A cockpit that only ever polls with `--no-persist` must still start
+    the settle clock, or the gate reports `no settle baseline recorded` forever
+    — observed live on 2026-10-14, a PR green, reviewed and CLEAN, never
+    mergeable until some session ran a plain poll.
+
+    And it must start ONLY that clock: no `seen`, no `pending_seen` (which
+    `--mark-seen` would promote), no `bot_pending_since`."""
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path / "watch-state")
+    now = datetime(2026, 10, 14, 9, 0, tzinfo=timezone.utc)
+    view, inline, _seen = _three_comment_view(pr_watch)
+
+    report = _poll_main_at(monkeypatch, capsys, pr_watch, view, now, inline=inline)
+
+    assert report["all_seen_keys"], "the fixture must offer keys that could be acked"
+    written = pr_watch.load_state(9)
+    assert set(written) == set(_SETTLE_BASELINE_KEYS), sorted(written)
+    assert written["head"] == "abc123"
+    assert written["max_total"] == 1
+    assert written["settle_since"] == {"head": "abc123", "at": _iso(now), "total": 1}
+    assert pr_watch.read_settle_since(written, "abc123") == (_iso(now), 1)
+    assert "seen" not in written and "pending_seen" not in written
+    assert "bot_pending_since" not in written
+    # The first observation is not itself settled: it only starts the clock.
+    assert report["rollup_settled"] is False
+
+
+def test_two_no_persist_polls_across_the_grace_window_settle_the_gate(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """(2) The live failure, end to end through `main`: a PR with green CI, a
+    receipt for its head and a CLEAN merge state, polled ONLY with
+    `--no-persist`. The first poll starts the clock; a second one past
+    `settle_grace_minutes`, at the same check count, opens the gate.
+
+    Also pins the other direction: a second poll INSIDE the grace window does
+    not open it, so recording the baseline from a read-only poll cannot make a
+    PR mergeable sooner than a plain poll would."""
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path / "watch-state")
+    receipt = {"head": "abc123", "source": "fallback:panel"}
+    _write_state(pr_watch, {"review_receipt": receipt})
+    view = _green_view(headRefOid="abc123")
+    grace = pr_watch._SETTLE_GRACE_MINUTES
+    first_seen = datetime(2026, 10, 14, 9, 0, tzinfo=timezone.utc)
+
+    first = _poll_main_at(monkeypatch, capsys, pr_watch, view, first_seen)
+    assert first["mergeable"] is False
+    assert any("no settle baseline recorded" in b for b in first["merge_blockers"])
+
+    early = _poll_main_at(
+        monkeypatch, capsys, pr_watch, view, first_seen + timedelta(minutes=grace / 2)
+    )
+    assert early["rollup_settled"] is False
+    assert early["mergeable"] is False, "a read-only poll settled inside the grace"
+
+    later = first_seen + timedelta(minutes=grace + 1)
+    second = _poll_main_at(monkeypatch, capsys, pr_watch, view, later)
+    assert second["settle_age_minutes"] == pytest.approx(grace + 1)
+    assert second["rollup_settled"] is True
+    assert second["merge_blockers"] == []
+    assert second["mergeable"] is True
+    # The receipt it merged on is the one on disk, untouched by either poll.
+    assert pr_watch.load_state(9)["review_receipt"] == receipt
+
+
+def test_no_persist_leaves_the_seen_set_pending_slot_and_clocks_alone(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """(3) Recording the baseline must not overwrite what a persisting poll and
+    `--mark-seen` own. The pending slot is the sharp one: if a `--no-persist`
+    poll replaced it with its own `all_seen_keys`, the next `--mark-seen` would
+    acknowledge comments the operator never saw reported (#354)."""
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path / "watch-state")
+    view, inline, seen = _three_comment_view(pr_watch)
+    prior = {
+        "seen": sorted(seen),
+        "pending_seen": ["issue:the-last-persisting-poll-reported-this"],
+        "bot_pending_since": {"head": "abc123", "bots": {"coderabbit": _ago_iso(3)}},
+        "review_receipt": {"head": "abc123", "source": "fallback:panel"},
+        "review_rounds": [{"head": "abc123"}],
+        "head": "abc123",
+        "max_total": 1,
+    }
+    _write_state(pr_watch, prior)
+    now = datetime.now(timezone.utc)
+
+    report = _poll_main_at(monkeypatch, capsys, pr_watch, view, now, inline=inline)
+
+    after = pr_watch.load_state(9)
+    assert after["settle_since"] == {"head": "abc123", "at": _iso(now), "total": 1}
+    for key, value in prior.items():
+        assert after[key] == value, f"--no-persist rewrote {key!r}"
+    assert set(report["all_seen_keys"]) != set(prior["pending_seen"])
+    # And the ack that follows covers the last PERSISTING poll, not this one.
+    assert pr_watch.mark_seen(9)["marked_seen_keys"] == prior["pending_seen"]
+
+
+def test_no_persist_resets_the_stamp_on_a_head_change_as_a_plain_poll_does(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """(4) A push restarts the clock (#39): a long-settled stamp for the old head
+    must not survive into the new one, and `max_total` resets to the new
+    commit's count. Driven twice from the same prior state — once with
+    `--no-persist`, once as a plain poll — and the baselines must be identical,
+    which is the claim that this path computes it "exactly as a plain poll"."""
+    pr_watch = _load_pr_watch()
+    prior = {
+        "head": "old111",
+        "max_total": 5,
+        "settle_since": {"head": "old111", "at": _ago_iso(600.0), "total": 5},
+    }
+    view = _green_view(headRefOid="abc123")
+    now = datetime.now(timezone.utc)
+    written: dict[str, dict] = {}
+    for label, no_persist in (("no-persist", True), ("plain", False)):
+        monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path / label)
+        _write_state(pr_watch, prior)
+        report = _poll_main_at(
+            monkeypatch, capsys, pr_watch, view, now, no_persist=no_persist
+        )
+        assert report["head_changed"] is True
+        assert report["rollup_settled"] is False
+        written[label] = pr_watch.load_state(9)
+
+    baseline = {k: written["no-persist"].get(k) for k in _SETTLE_BASELINE_KEYS}
+    assert baseline["head"] == "abc123"
+    assert baseline["max_total"] == 1, "max_total kept the old head's count"
+    assert baseline["settle_since"] == {"head": "abc123", "at": _iso(now), "total": 1}
+    assert baseline == {k: written["plain"].get(k) for k in _SETTLE_BASELINE_KEYS}
+
+
+def test_no_persist_does_not_rewrite_an_unchanged_baseline(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A cockpit polls every minute. Once the stamp is on disk and the rollup
+    holds still, the baseline it would write equals the stored one, so the
+    file is left byte-for-byte alone — no churn, and no window in which a
+    concurrent `--mark-seen` could be lost."""
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path / "watch-state")
+    view = _green_view(headRefOid="abc123")
+    first_seen = datetime(2026, 10, 14, 9, 0, tzinfo=timezone.utc)
+    _poll_main_at(monkeypatch, capsys, pr_watch, view, first_seen)
+    before = (pr_watch.STATE_DIR / "9.json").read_bytes()
+
+    _poll_main_at(
+        monkeypatch, capsys, pr_watch, view, first_seen + timedelta(minutes=1)
+    )
+
+    assert (pr_watch.STATE_DIR / "9.json").read_bytes() == before
+
+
+@pytest.mark.parametrize("content", ["{not json", "[1, 2]", ""])
+def test_no_persist_never_overwrites_an_unreadable_state_file(
+    content: str,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`load_state` reads a corrupt file as {}. A plain poll then overwrites it;
+    a `--no-persist` poll must not, because whatever it replaced — a seen-set,
+    a receipt — is something this poll could not see. Fail closed: no baseline
+    is recorded, so the gate stays shut, and the file is left for a human."""
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path / "watch-state")
+    pr_watch.STATE_DIR.mkdir(parents=True)
+    path = pr_watch.STATE_DIR / "9.json"
+    path.write_text(content, encoding="utf-8")
+
+    report = _poll_main_at(
+        monkeypatch, capsys, pr_watch, _green_view(), datetime.now(timezone.utc)
+    )
+
+    assert path.read_text(encoding="utf-8") == content
+    assert report["mergeable"] is False
+
+
+def test_no_persist_records_nothing_for_a_report_without_a_head(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """No head, no baseline: a stamp scoped to `None` is one `read_settle_since`
+    refuses, and writing `head: null` would erase the false-settle guard's
+    input for the next poll."""
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path / "watch-state")
+    report = pr_watch.build_report(
+        _green_view(headRefOid=None),
+        [],
+        set(),
+        check_details=pr_watch.CheckDetails([], "skipped"),
+    )
+
+    assert pr_watch.persist_settle_baseline(9, report) is False
+    assert not (pr_watch.STATE_DIR / "9.json").exists()
+
+
 def _three_comment_view(pr_watch: ModuleType) -> tuple[dict, list[dict], set[str]]:
     """One acknowledged issue comment, one noise review, one bodyless
     CHANGES_REQUESTED review, and one fresh inline finding.
@@ -9609,14 +9869,16 @@ def test_all_comments_keeps_an_outdated_inline_comments_line() -> None:
     ]
 
 
-def test_all_comments_through_main_is_read_only(
+def test_all_comments_through_main_acknowledges_nothing(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """The form `session-start` runs: `--json --no-persist --all-comments`. It
-    reads the PR's existing acknowledgements, reports past them, and writes no
-    watch state."""
+    reads the PR's existing acknowledgements, reports past them, and acknowledges
+    nothing: the only state it may write is the settle baseline, which is an
+    observation-timing fact (see `persist_settle_baseline`), never a seen or
+    pending key."""
     pr_watch = _load_pr_watch()
     state_dir = tmp_path / "watch-state"
     monkeypatch.setattr(pr_watch, "STATE_DIR", state_dir)
@@ -9635,7 +9897,10 @@ def test_all_comments_through_main_is_read_only(
     assert [c["kind"] for c in report["all_comments"]] == [
         "issue", "review", "review", "inline"
     ]
-    assert not state_dir.exists()
+    written = json.loads((state_dir / "9.json").read_text(encoding="utf-8"))
+    assert set(written) == set(_SETTLE_BASELINE_KEYS), (
+        f"--no-persist wrote more than the settle baseline: {sorted(written)}"
+    )
 
 
 @pytest.mark.parametrize(

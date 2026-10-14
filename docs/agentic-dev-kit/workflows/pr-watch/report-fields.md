@@ -295,7 +295,9 @@ either wording can follow the other, and **`no settle baseline recorded` can
 reappear** rather than showing once. The same wording covers a stored stamp
 that is unusable at all — unparseable, the zero time, or one meaningfully in
 the future (a state file copied between machines, or a clock corrected
-backwards) — which fails closed like everything else here.
+backwards) — which fails closed like everything else here. Every poll records
+the clock, a `--no-persist` one included, so a caller that only polls read-only
+still sees it clear.
 
 Neither wording is a deadline: the gate opens once that has been true for
 `review.settle_grace_minutes` continuously. A rollup that dips and returns to
