@@ -117,11 +117,12 @@ def _loose_object(root: Path, oid: str) -> Path:
     Tests that corrupt or delete an object reach it by path, which only works
     while git stores it loose. A packed object once surfaced as a bare
     FileNotFoundError mid-test (#1079), indistinguishable from an engine defect.
-    An object git cannot read at all is named the same way, with git's stderr.
+    An object ``git cat-file -e`` reports missing is named the same way, with
+    git's stderr. That probe checks existence only; it does not read the object.
     """
     probe = subprocess.run(["git", "cat-file", "-e", oid], cwd=root, capture_output=True, text=True)
     if probe.returncode:
-        pytest.fail(f"fixture setup: object {oid} is missing or unreadable in {root}: "
+        pytest.fail(f"fixture setup: object {oid} is missing in {root}: "
                     f"{probe.stderr.strip()}", pytrace=False)
     path = root / ".git/objects" / oid[:2] / oid[2:]
     if not path.is_file():
@@ -1869,8 +1870,14 @@ def test_loose_object_names_a_packed_fixture_object(executable_preflight):
 def test_loose_object_names_a_missing_fixture_object(executable_preflight):
     root, _base, _head = executable_preflight
     oid = "0" * 40
-    with pytest.raises(pytest.fail.Exception, match=f"fixture setup: object {oid} is missing or unreadable"):
+    with pytest.raises(pytest.fail.Exception, match=f"fixture setup: object {oid} is missing in "):
         _loose_object(root, oid)
+    # `cat-file -e` is silent for a well-formed id it cannot find, so pin git's
+    # stderr through a name it cannot resolve: the message must carry it.
+    name = "no-such-object"
+    with pytest.raises(pytest.fail.Exception,
+                       match=f"fixture setup: object {name} is missing in .*: fatal: Not a valid object name {name}$"):
+        _loose_object(root, name)
 
 
 def test_generated_preflight_uses_supplied_review_tree(executable_preflight, tmp_path):
