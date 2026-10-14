@@ -344,6 +344,12 @@ grant reaches:
   `--generate-manifest`, so that checking the manifest before regenerating it does not
   end the run. It admits `#464`'s broken redirect exactly as it admits the correct
   invocation; a prefix rule cannot see a redirect, so that belongs in the lane contract.
+  **A task prompt for a lane that may edit a hashed file names the allowed form
+  verbatim:** `uv run scripts/kit_doctor.py --generate-manifest`, which writes the
+  manifest itself and must not be redirected. The pre-push hook's refusal message
+  names only `kit_doctor.py --generate-manifest`, and a `python3 scripts/kit_doctor.py`
+  call matches no entry here and is denied; lanes that reached for that spelling
+  stopped without a PR (`#1102`).
 
 **A lane doing kit-owned Claude-adapter work is not a supported case** (`#606`
 deciding `#627`). A lane cannot write under `.claude/` — measured across `commands/`,
