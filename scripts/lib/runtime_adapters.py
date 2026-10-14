@@ -5,10 +5,10 @@ same-named command or skill of its own.  Their *kit* form is nevertheless
 derivable.  This module is the one renderer for that form and the comparison
 used by ``kit_doctor --adapter-report``.
 
-The comparison is intentionally informational.  A byte match means the file is
-generated kit glue and may be refreshed; a mismatch means the adopter owns the
-file and it must be reported and left alone.  It never turns an adapter into a
-drift-gate failure.
+The comparison is intentionally informational. Rendered bindings are compared
+with known kit forms; unknown forms are left to the adopter. Codex interface
+files are inspected only for the explicit invocation-policy setting, without
+claiming ownership of their other keys. Neither comparison changes the drift gate.
 """
 
 from __future__ import annotations
@@ -377,7 +377,7 @@ def _disables_implicit_invocation(text: str) -> bool:
 
     try:
         document = yaml.compose(text, Loader=yaml.SafeLoader)
-    except yaml.YAMLError:
+    except (yaml.YAMLError, RecursionError):
         return False
 
     def values(node, name):

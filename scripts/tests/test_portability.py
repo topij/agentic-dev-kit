@@ -21091,7 +21091,10 @@ def test_supported_standalone_entry_points_declare_python_floor_and_dependencies
     text = engine.read_text(encoding="utf-8")
     metadata = text.split("# /// script\n", 1)[1].split("# ///", 1)[0]
     parsed = tomllib.loads("\n".join(line.removeprefix("# ") for line in metadata.splitlines()))
-    assert parsed == {"requires-python": ">=3.12", "dependencies": []}
+    # Adapter-policy inspection needs YAML parsing; the other listed engines
+    # retain their empty dependency declaration.
+    dependencies = ["pyyaml"] if name == "kit_doctor.py" else []
+    assert parsed == {"requires-python": ">=3.12", "dependencies": dependencies}
 
 
 def _assert_parallel_files_lanes_by_subject(text: str) -> None:

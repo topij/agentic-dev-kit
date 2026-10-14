@@ -307,7 +307,7 @@
         "scripts/kit_doctor.py"
       ],
       "role": "engine",
-      "sha256": "fede14b436677e583e7b83268fe35db209cfd0338a7fb9d7d48e4e6e512cf267"
+      "sha256": "e49e9f7509f5e6fd5a6208ac2adaec86a95f36b1316f1a8b41e5ba880b211fab"
     },
     "scripts/lib/state_paths/__init__.py": {
       "required_by": [
@@ -632,7 +632,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "a47f8a85f82d9ccce8f608ddd306118af08bfc7925f3324a20e2535b7388f0f2"
+      "sha256": "9bf02b4eb63303eacdc90b04333fbe4eae44b212b85a499e4a3137c6b5d79fce"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -664,7 +664,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "5529850683a56c321cd4b79be6de36aed4bd942da62a66899919eb900026bead"
+      "sha256": "5426f72860dcd732bd07e3c46e9c1c766eaaa627689ce318c089e69766ac3201"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

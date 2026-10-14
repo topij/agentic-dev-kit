@@ -510,7 +510,7 @@ def test_renderer_reads_the_templates_beside_itself_in_a_vendored_layout(tmp_pat
     # No `.git` above the tree, and the kit's own copy of this template says
     # something else, so only a read beside the vendored module renders this.
     result = subprocess.run(
-        [sys.executable, "-c", script, str(library)],
+        [sys.executable, "-I", "-S", "-c", script, str(library)],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -724,6 +724,7 @@ policy:
         (_KIT_INTERFACE + '"policy": {allow_implicit_invocation: true}\n', "policy-stale"),
         ('description: "hello\npolicy:\n  allow_implicit_invocation: false\n"\n', "policy-stale"),
         ("policy: [\n", "policy-stale"),
+        ("policy: " + "[" * 2000 + "false" + "]" * 2000 + "\n", "policy-stale"),
         ("defaults: &defaults {allow_implicit_invocation: false}\npolicy:\n  <<: *defaults\n",
          "policy-stale"),
         (
@@ -746,6 +747,7 @@ policy:
         "quoted-duplicate-policy",
         "multiline-string-is-not-policy",
         "malformed-yaml",
+        "deeply-nested-policy",
         "merge-inherited-setting",
         "nested-deeper",
         "absent",
@@ -806,19 +808,18 @@ def test_adapter_report_preserves_a_symlinked_codex_interface_as_adopter_owned(
     assert "symlink" in status.detail
 
 
-def test_codex_policy_inspection_names_its_unavailable_dependency(monkeypatch):
-    import builtins
-
-    original_import = builtins.__import__
-
-    def without_yaml(name, *args, **kwargs):
-        if name == "yaml":
-            raise ImportError("simulated unavailable YAML parser")
-        return original_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "__import__", without_yaml)
-    with pytest.raises(ValueError, match="requires PyYAML.*uv run"):
-        runtime_adapters._disables_implicit_invocation(_KIT_INTERFACE)
+def test_codex_policy_inspection_names_its_unavailable_dependency(tmp_path, adapter_source):
+    adopter = tmp_path / "adopter"
+    shutil.copytree(adapter_source / ".agents", adopter / ".agents")
+    # Isolated bare Python excludes site-packages even when pytest has PyYAML.
+    result = subprocess.run(
+        [sys.executable, "-I", "-S", str(ENGINE_DIR / "kit_doctor.py"),
+         "--root", str(adopter), "--adapter-report", "--adapter-source", str(adapter_source)],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 2
+    assert "requires PyYAML" in result.stderr and "uv run" in result.stderr
+    assert "Traceback" not in result.stderr
 
 
 @pytest.mark.parametrize("slug", ["adopt", "parallel", "pr-watch", "upgrade"])
@@ -1079,6 +1080,8 @@ def test_doctor_default_report_starts_without_the_adapter_renderer(tmp_path):
     result = subprocess.run(
         [
             sys.executable,
+            "-I",
+            "-S",
             str(engine / "kit_doctor.py"),
             "--root",
             str(root),
