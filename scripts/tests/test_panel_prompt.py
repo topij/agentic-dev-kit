@@ -1880,6 +1880,17 @@ def test_loose_object_names_a_missing_fixture_object(executable_preflight):
         _loose_object(root, name)
 
 
+def test_loose_object_forwards_the_probe_stderr(tmp_path, monkeypatch):
+    diagnostic = f"object-store diagnostic from {tmp_path.name}"
+    probe = subprocess.CompletedProcess(
+        ["git", "cat-file"], returncode=1, stdout="", stderr=f"\n{diagnostic}\n"
+    )
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: probe)
+
+    with pytest.raises(pytest.fail.Exception, match=re.escape(diagnostic) + r"$"):
+        _loose_object(tmp_path, "1" * 40)
+
+
 def test_generated_preflight_uses_supplied_review_tree(executable_preflight, tmp_path):
     import shlex
 
