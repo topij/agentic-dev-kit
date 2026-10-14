@@ -356,36 +356,49 @@ def compare_adapters(source_root: Path, adopter_root: Path) -> list[AdapterStatu
     return statuses
 
 
-_TOP_LEVEL_POLICY = re.compile(r"policy:[ \t]*(#.*)?")
-_IMPLICIT_OFF = re.compile(r"[ \t]+allow_implicit_invocation:[ \t]*(false|False|FALSE)[ \t]*(#.*)?")
-
-
 def _disables_implicit_invocation(text: str) -> bool:
-    """Whether a top-level ``policy`` block sets ``allow_implicit_invocation: false``.
+    """Recognise an unambiguous, explicit YAML boolean policy setting.
 
-    Only the block form the kit ships is recognised, without a YAML dependency
-    the engines do not carry. A flow mapping, a quoted value or a repeated
-    ``policy`` key reads as not set: the row then asks for the kit's form, which
-    is a check the adopter can satisfy, rather than vouching for a parse it
-    did not do.
+    Compose nodes instead of constructing a dict: dict construction loses
+    duplicate keys, and scanning lines mistakes multiline strings for mappings.
+    Other keys are not evaluated. Merge-inherited settings are not confirmed;
+    an explicit setting avoids depending on a runtime's YAML merge support.
+    Keep the import here so rendering adapters and the default doctor report
+    retain their bare-Python route.
     """
 
-    lines = text.splitlines()
-    starts = [index for index, line in enumerate(lines) if re.match(r"policy[ \t]*:", line)]
-    if len(starts) != 1 or not _TOP_LEVEL_POLICY.fullmatch(lines[starts[0]]):
+    try:
+        import yaml
+    except ImportError as exc:
+        raise ValueError(
+            "Codex policy inspection requires PyYAML; run kit_doctor.py with "
+            "uv run so its declared dependency is available"
+        ) from exc
+
+    try:
+        document = yaml.compose(text, Loader=yaml.SafeLoader)
+    except yaml.YAMLError:
         return False
-    child_indent = None
-    for line in lines[starts[0] + 1 :]:
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        if not line[0].isspace():
-            break
-        indent = line[: len(line) - len(line.lstrip())]
-        if child_indent is None:
-            child_indent = indent
-        if indent == child_indent and _IMPLICIT_OFF.fullmatch(line):
-            return True
-    return False
+
+    def values(node, name):
+        if not isinstance(node, yaml.MappingNode) or node.tag != "tag:yaml.org,2002:map":
+            return []
+        return [
+            value for key, value in node.value
+            if isinstance(key, yaml.ScalarNode)
+            and key.tag == "tag:yaml.org,2002:str" and key.value == name
+        ]
+
+    policies = values(document, "policy")
+    if len(policies) != 1:
+        return False
+    settings = values(policies[0], "allow_implicit_invocation")
+    return (
+        len(settings) == 1
+        and isinstance(settings[0], yaml.ScalarNode)
+        and settings[0].tag == "tag:yaml.org,2002:bool"
+        and settings[0].value.lower() == "false"
+    )
 
 
 def _invocation_policy_status(adopter_root: Path, slug: str) -> AdapterStatus:
@@ -403,7 +416,7 @@ def _invocation_policy_status(adopter_root: Path, slug: str) -> AdapterStatus:
             rel,
             "missing",
             "take the kit's file: it sets policy.allow_implicit_invocation: false, "
-            "without which Codex loads this skill unasked",
+            "to disable implicit invocation",
         )
     try:
         text = path.read_text(encoding="utf-8")
@@ -422,9 +435,9 @@ def _invocation_policy_status(adopter_root: Path, slug: str) -> AdapterStatus:
         slug,
         rel,
         "policy-stale",
-        "does not set policy.allow_implicit_invocation: false, so Codex loads this "
-        "skill unasked; take the kit's file, or add that policy block if the other "
-        "keys are yours",
+        "cannot confirm an unambiguous, explicit policy.allow_implicit_invocation: false; "
+        "inspect the YAML, then take the kit's file or reconcile that policy setting "
+        "while preserving your other keys",
     )
 
 

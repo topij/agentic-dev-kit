@@ -709,12 +709,23 @@ policy:
     "interface, state",
     [
         (_KIT_INTERFACE, "kit-current"),
+        (_KIT_INTERFACE.replace("policy:\n  allow_implicit_invocation: false",
+                                '"policy": {"allow_implicit_invocation": false}'), "kit-current"),
         # The shape OpenKitchen carried after refreshing SKILL.md alone (#1055).
         (_KIT_INTERFACE.split("policy:")[0], "policy-stale"),
         (_KIT_INTERFACE.replace("false", "true"), "policy-stale"),
         (_KIT_INTERFACE.replace("false", '"false"'), "policy-stale"),
         (_KIT_INTERFACE.replace("policy:\n ", "other:\n "), "policy-stale"),
         (_KIT_INTERFACE + "policy:\n  allow_implicit_invocation: true\n", "policy-stale"),
+        (_KIT_INTERFACE + "  allow_implicit_invocation: true\n", "policy-stale"),
+        (_KIT_INTERFACE.replace("false", "true") + "  allow_implicit_invocation: false\n",
+         "policy-stale"),
+        (_KIT_INTERFACE + '  "allow_implicit_invocation": true\n', "policy-stale"),
+        (_KIT_INTERFACE + '"policy": {allow_implicit_invocation: true}\n', "policy-stale"),
+        ('description: "hello\npolicy:\n  allow_implicit_invocation: false\n"\n', "policy-stale"),
+        ("policy: [\n", "policy-stale"),
+        ("defaults: &defaults {allow_implicit_invocation: false}\npolicy:\n  <<: *defaults\n",
+         "policy-stale"),
         (
             _KIT_INTERFACE.replace("  allow_implicit_invocation", "  nested:\n    allow_implicit_invocation"),
             "policy-stale",
@@ -723,11 +734,19 @@ policy:
     ],
     ids=[
         "kit-current",
+        "flow-and-quoted-keys",
         "no-policy",
         "allowed",
         "quoted",
         "other-key",
         "repeated-policy",
+        "duplicate-child-false-true",
+        "duplicate-child-true-false",
+        "quoted-duplicate-child",
+        "quoted-duplicate-policy",
+        "multiline-string-is-not-policy",
+        "malformed-yaml",
+        "merge-inherited-setting",
         "nested-deeper",
         "absent",
     ],
@@ -785,6 +804,21 @@ def test_adapter_report_preserves_a_symlinked_codex_interface_as_adopter_owned(
 
     assert status.state == "adopter-owned"
     assert "symlink" in status.detail
+
+
+def test_codex_policy_inspection_names_its_unavailable_dependency(monkeypatch):
+    import builtins
+
+    original_import = builtins.__import__
+
+    def without_yaml(name, *args, **kwargs):
+        if name == "yaml":
+            raise ImportError("simulated unavailable YAML parser")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", without_yaml)
+    with pytest.raises(ValueError, match="requires PyYAML.*uv run"):
+        runtime_adapters._disables_implicit_invocation(_KIT_INTERFACE)
 
 
 @pytest.mark.parametrize("slug", ["adopt", "parallel", "pr-watch", "upgrade"])

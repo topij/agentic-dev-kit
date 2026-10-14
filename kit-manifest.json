@@ -111,7 +111,7 @@
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
-      "sha256": "488247b234aaf1c3b8b472fedf00bb4ad8a0b917074f7ebfb5d2a8169bc8af7a"
+      "sha256": "f8ca74c74d5a2f0bcdace12b6fc41e4d588aa15be8e3df0e4143fbe40ec9581e"
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
@@ -198,7 +198,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "6770744cfe82d62e6490920a0271a26500286a16f2bf9d28d66bda6267485457"
+      "sha256": "b440e4ee4e3a4f8526867d30f9b1ea6c02d0dd427cd0201774d4b8c10443f778"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -307,7 +307,7 @@
         "scripts/kit_doctor.py"
       ],
       "role": "engine",
-      "sha256": "4604ecbff190e592b6dbc645d40e88e904297fd4ff961e238089bce6e5ec9420"
+      "sha256": "fede14b436677e583e7b83268fe35db209cfd0338a7fb9d7d48e4e6e512cf267"
     },
     "scripts/lib/state_paths/__init__.py": {
       "required_by": [
@@ -632,7 +632,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "4141e1a88ab344a1ead9bc313bcc1c6b591d186d5deea86065dbb9254df13baf"
+      "sha256": "a47f8a85f82d9ccce8f608ddd306118af08bfc7925f3324a20e2535b7388f0f2"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
