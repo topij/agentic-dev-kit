@@ -160,7 +160,7 @@ uv run "${KIT:?KIT is not set — re-run Step 0}"/scripts/kit_doctor.py \
 ```
 
 This comparison is deliberately outside `KIT_OWNED` and never changes the drift
-gate. `kit-current` equals the current rendered text after newline normalization; `kit-stale`
+gate. For `SKILL.md` rows, `kit-current` equals the current rendered text after newline normalization; `kit-stale`
 matches an earlier rendered form and can be refreshed without losing authored
 behavior; `missing` can be installed; `adopter-owned` matches no known rendered
 form, so report it and leave it unchanged. `kit-retired` is a kit-generated Claude
@@ -172,6 +172,20 @@ that path is `adopter-owned`, and the skill path beside it is then reported
 preference to a same-named command and installing one would silently replace theirs. The source kit's own adapters must first
 equal what its renderer produces, or the command refuses: a broken generator cannot
 classify an adopter by comparing it with itself.
+
+A Codex `agents/openai.yaml` row beside an `adopter-owned` `SKILL.md` is also
+`adopter-owned`, even when the interface is absent: do not install kit policy for
+an adopter-authored skill. Otherwise, rows for the explicit-only skills inspect
+only `policy.allow_implicit_invocation`. Here `kit-current` confirms an unambiguous,
+explicit YAML boolean `false`, not a byte match or ownership of the other keys.
+`policy-stale` means that setting could not be confirmed; inspect the file for an
+absent, differing, duplicate, malformed or merge-inherited setting. A quoted
+`"false"` is a string, not the required boolean. `missing` means take the kit's file;
+unsafe or unreadable files remain `adopter-owned`. Run the command above through
+`uv run` to provide the YAML parser declared by the fetched doctor. Before emitting
+adopter rows, it requires the explicit-only source interfaces to be readable, safe
+files with that same unambiguous policy. If source validation fails, inspect and
+repair or replace the fetched kit before using its files; no adopter rows are emitted.
 
 **A related risk sits one level up, in this very file, and whether the run above even
 catches it depends on when your installed copy was built.** `upgrade.md` has been
@@ -826,7 +840,11 @@ entries are exactly where the risk is.
   These are prompts an agent reads verbatim; a stale one silently teaches old behavior.
 - **Runtime adapters** (`.claude/skills/`, `.agents/skills/`) — follow Step 1's
   rendered comparison per path. Refresh `kit-stale`, leave `kit-current` alone,
-  install `missing`, and report but preserve `adopter-owned`. **Before deleting a
+  install `missing`, and report but preserve `adopter-owned`. For a Codex
+  `openai.yaml` row marked `policy-stale`, inspect the YAML and reconcile an explicit
+  `policy.allow_implicit_invocation: false` setting, preserving the adopter's other
+  keys; take the kit's whole file only when those keys have no adopter changes.
+  **Before deleting a
   `kit-retired` command, search the repository for references to `.claude/commands/`
   and to the command's own path**: the adopter's own scripts, CI and config can read
   the old location, and the rendered comparison does not see them. Skip only the hits

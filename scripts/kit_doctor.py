@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.12"
-# dependencies = []
+# dependencies = ["pyyaml"]
 # ///
 """Report how far an adopting repo has drifted from the kit it was installed from.
 

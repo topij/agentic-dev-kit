@@ -5,10 +5,11 @@ same-named command or skill of its own.  Their *kit* form is nevertheless
 derivable.  This module is the one renderer for that form and the comparison
 used by ``kit_doctor --adapter-report``.
 
-The comparison is intentionally informational.  A byte match means the file is
-generated kit glue and may be refreshed; a mismatch means the adopter owns the
-file and it must be reported and left alone.  It never turns an adapter into a
-drift-gate failure.
+The comparison is intentionally informational. Rendered bindings are compared
+with known kit forms; unknown forms are left to the adopter. Codex interface
+files beside adopter-owned bindings remain adopter-owned. Otherwise they are
+inspected only for the explicit invocation-policy setting, without claiming
+ownership of their other keys. Neither comparison changes the drift gate.
 """
 
 from __future__ import annotations
@@ -38,6 +39,10 @@ LEGACY_CLAUDE_COMMAND_PATH = ".claude/commands/{slug}.md"
 # uncommitted scratch repository: `claude -p` and `codex exec` each left the marked
 # probe skill out of the skills they listed, and each ran it when named.
 EXPLICIT_INVOCATION_ONLY = frozenset({"adopt", "upgrade", "triage-friction-log"})
+
+# The Codex half of that control lives in a file the adopter may have edited for
+# its other keys, so the report checks only policy.allow_implicit_invocation (#1055).
+CODEX_INTERFACE_PATH = ".agents/skills/{slug}/agents/openai.yaml"
 
 _DISPLAY_NAMES = {
     "adopt": "Adopt",
@@ -312,6 +317,24 @@ def _unsafe_adopter_path(root: Path, rel: str) -> str | None:
 def compare_adapters(source_root: Path, adopter_root: Path) -> list[AdapterStatus]:
     """Compare an adopter against adapters rendered from a source kit checkout."""
 
+    # A missing adopter interface is told to copy the source file. Validate
+    # that recommendation before computing any adopter rows, just as source
+    # SKILL.md bindings must satisfy their rendered contract.
+    for slug in sorted(EXPLICIT_INVOCATION_ONLY):
+        rel = CODEX_INTERFACE_PATH.format(slug=slug)
+        unsafe_path = _unsafe_adopter_path(source_root, rel)
+        if unsafe_path is not None:
+            raise ValueError(f"unsafe source interface {rel}: {unsafe_path}")
+        try:
+            source_text = (source_root / rel).read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            raise ValueError(f"cannot read source interface {rel}: {exc}") from exc
+        if not _disables_implicit_invocation(source_text):
+            raise ValueError(
+                f"source interface {rel} must set an unambiguous, explicit "
+                "policy.allow_implicit_invocation: false; inspect the source kit"
+            )
+
     statuses: list[AdapterStatus] = []
     for runtime in RUNTIMES:
         for slug in WORKFLOW_SLUGS:
@@ -339,15 +362,112 @@ def compare_adapters(source_root: Path, adopter_root: Path) -> list[AdapterStatu
                 if runtime == "claude"
                 else None
             )
-            statuses.append(
-                _adapter_status(
-                    adopter_root, runtime, slug, rel, current, description,
-                    workflow_path, retired,
-                )
+            binding = _adapter_status(
+                adopter_root, runtime, slug, rel, current, description,
+                workflow_path, retired,
             )
+            statuses.append(binding)
             if retired is not None:
                 statuses.append(retired)
+            if runtime == "codex" and slug in EXPLICIT_INVOCATION_ONLY:
+                # A matching slug does not make an authored skill ours. Its
+                # interface follows the binding's existing ownership decision.
+                if binding.state == "adopter-owned":
+                    statuses.append(AdapterStatus(
+                        "codex", slug, CODEX_INTERFACE_PATH.format(slug=slug),
+                        "adopter-owned",
+                        "skill binding is adopter-owned; preserve its invocation policy",
+                    ))
+                else:
+                    statuses.append(_invocation_policy_status(adopter_root, slug))
     return statuses
+
+
+def _disables_implicit_invocation(text: str) -> bool:
+    """Recognise an unambiguous, explicit YAML boolean policy setting.
+
+    Compose nodes instead of constructing a dict: dict construction loses
+    duplicate keys, and scanning lines mistakes multiline strings for mappings.
+    Other keys are not evaluated. Merge-inherited settings are not confirmed;
+    an explicit setting avoids depending on a runtime's YAML merge support.
+    Keep the import here so rendering adapters and the default doctor report
+    retain their bare-Python route.
+    """
+
+    try:
+        import yaml
+    except ImportError as exc:
+        raise ValueError(
+            "Codex policy inspection requires PyYAML; run kit_doctor.py with "
+            "uv run so its declared dependency is available"
+        ) from exc
+
+    try:
+        document = yaml.compose(text, Loader=yaml.SafeLoader)
+    except (yaml.YAMLError, RecursionError):
+        return False
+
+    def values(node, name):
+        if not isinstance(node, yaml.MappingNode) or node.tag != "tag:yaml.org,2002:map":
+            return []
+        return [
+            value for key, value in node.value
+            if isinstance(key, yaml.ScalarNode)
+            and key.tag == "tag:yaml.org,2002:str" and key.value == name
+        ]
+
+    policies = values(document, "policy")
+    if len(policies) != 1:
+        return False
+    settings = values(policies[0], "allow_implicit_invocation")
+    return (
+        len(settings) == 1
+        and isinstance(settings[0], yaml.ScalarNode)
+        and settings[0].tag == "tag:yaml.org,2002:bool"
+        and settings[0].value.lower() == "false"
+    )
+
+
+def _invocation_policy_status(adopter_root: Path, slug: str) -> AdapterStatus:
+    """Classify whether an explicit-only Codex skill disables implicit invocation."""
+
+    rel = CODEX_INTERFACE_PATH.format(slug=slug)
+    path = adopter_root / rel
+    try:
+        unsafe_path = _unsafe_adopter_path(adopter_root, rel)
+        if unsafe_path is not None:
+            return AdapterStatus("codex", slug, rel, "adopter-owned", unsafe_path)
+        # Predicate probes can suppress permission errors. Only a missing-file
+        # error from the read justifies recommending a replacement file.
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return AdapterStatus(
+            "codex",
+            slug,
+            rel,
+            "missing",
+            "take the kit's file: it sets policy.allow_implicit_invocation: false, "
+            "to disable implicit invocation",
+        )
+    except (OSError, UnicodeError) as exc:
+        return AdapterStatus("codex", slug, rel, "adopter-owned", f"unreadable: {exc}")
+    if _disables_implicit_invocation(text):
+        return AdapterStatus(
+            "codex",
+            slug,
+            rel,
+            "kit-current",
+            "sets policy.allow_implicit_invocation: false; other keys not judged",
+        )
+    return AdapterStatus(
+        "codex",
+        slug,
+        rel,
+        "policy-stale",
+        "cannot confirm an unambiguous, explicit policy.allow_implicit_invocation: false; "
+        "inspect the YAML, then take the kit's file or reconcile that policy setting "
+        "while preserving your other keys",
+    )
 
 
 def _adapter_status(
@@ -459,6 +579,7 @@ def render_adapter_report(statuses: list[AdapterStatus]) -> str:
         "adopter-owned": "!",
         "missing": "+",
         "kit-retired": "-",
+        "policy-stale": "↻",
     }
     for runtime in ("claude", "codex"):
         lines.append(f"  {runtime}:")

@@ -432,6 +432,9 @@ def test_shipped_runtime_adapters_equal_the_renderer_for_both_runtimes():
         path.relative_to(REPO_ROOT).as_posix()
         for pattern in (".claude/skills/*/SKILL.md", ".agents/skills/*/SKILL.md")
         for path in REPO_ROOT.glob(pattern)
+    } | {
+        runtime_adapters.CODEX_INTERFACE_PATH.format(slug=slug)
+        for slug in runtime_adapters.EXPLICIT_INVOCATION_ONLY
     }
 
     assert statuses
@@ -507,7 +510,7 @@ def test_renderer_reads_the_templates_beside_itself_in_a_vendored_layout(tmp_pat
     # No `.git` above the tree, and the kit's own copy of this template says
     # something else, so only a read beside the vendored module renders this.
     result = subprocess.run(
-        [sys.executable, "-c", script, str(library)],
+        [sys.executable, "-I", "-S", "-c", script, str(library)],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -694,6 +697,287 @@ def test_explicit_only_workflows_carry_invocation_control_on_both_runtimes():
         assert implicit is (slug not in explicit), slug
 
 
+_KIT_INTERFACE = """interface:
+  display_name: "Upgrade"
+  short_description: "Adopter wording the report must not judge"
+policy:
+  allow_implicit_invocation: false
+"""
+
+
+@pytest.mark.parametrize(
+    "interface, state",
+    [
+        (_KIT_INTERFACE, "kit-current"),
+        (_KIT_INTERFACE.replace("policy:\n  allow_implicit_invocation: false",
+                                '"policy": {"allow_implicit_invocation": false}'), "kit-current"),
+        # The shape OpenKitchen carried after refreshing SKILL.md alone (#1055).
+        (_KIT_INTERFACE.split("policy:")[0], "policy-stale"),
+        (_KIT_INTERFACE.replace("false", "true"), "policy-stale"),
+        (_KIT_INTERFACE.replace("false", '"false"'), "policy-stale"),
+        (_KIT_INTERFACE.replace("policy:\n ", "other:\n "), "policy-stale"),
+        (_KIT_INTERFACE + "policy:\n  allow_implicit_invocation: true\n", "policy-stale"),
+        (_KIT_INTERFACE + "  allow_implicit_invocation: true\n", "policy-stale"),
+        (_KIT_INTERFACE.replace("false", "true") + "  allow_implicit_invocation: false\n",
+         "policy-stale"),
+        (_KIT_INTERFACE + '  "allow_implicit_invocation": true\n', "policy-stale"),
+        (_KIT_INTERFACE + '"policy": {allow_implicit_invocation: true}\n', "policy-stale"),
+        ('description: "hello\npolicy:\n  allow_implicit_invocation: false\n"\n', "policy-stale"),
+        ("policy: [\n", "policy-stale"),
+        ("policy: " + "[" * 2000 + "false" + "]" * 2000 + "\n", "policy-stale"),
+        ("defaults: &defaults {allow_implicit_invocation: false}\npolicy:\n  <<: *defaults\n",
+         "policy-stale"),
+        (
+            _KIT_INTERFACE.replace("  allow_implicit_invocation", "  nested:\n    allow_implicit_invocation"),
+            "policy-stale",
+        ),
+        (None, "missing"),
+    ],
+    ids=[
+        "kit-current",
+        "flow-and-quoted-keys",
+        "no-policy",
+        "allowed",
+        "quoted",
+        "other-key",
+        "repeated-policy",
+        "duplicate-child-false-true",
+        "duplicate-child-true-false",
+        "quoted-duplicate-child",
+        "quoted-duplicate-policy",
+        "multiline-string-is-not-policy",
+        "malformed-yaml",
+        "deeply-nested-policy",
+        "merge-inherited-setting",
+        "nested-deeper",
+        "absent",
+    ],
+)
+def test_adapter_report_checks_the_codex_invocation_policy(
+    tmp_path, adapter_source, interface, state
+):
+    adopter = tmp_path / "adopter"
+    shutil.copytree(adapter_source / ".agents", adopter / ".agents")
+    rows = {}
+    for slug in runtime_adapters.EXPLICIT_INVOCATION_ONLY:
+        path = adopter / runtime_adapters.CODEX_INTERFACE_PATH.format(slug=slug)
+        if interface is None:
+            path.unlink()
+        else:
+            path.write_text(interface, encoding="utf-8")
+        rows[slug] = path.read_bytes() if path.exists() else None
+
+    statuses = runtime_adapters.compare_adapters(adapter_source, adopter)
+    policy = {
+        status.slug: status for status in statuses if status.path.endswith("openai.yaml")
+    }
+
+    # One row per explicit-only skill, none for the rest, and the file is never rewritten.
+    assert set(policy) == runtime_adapters.EXPLICIT_INVOCATION_ONLY
+    for slug, status in policy.items():
+        assert status.runtime == "codex"
+        assert status.state == state, status
+        assert "allow_implicit_invocation: false" in status.detail
+        if state != "kit-current":
+            assert "take the kit's file" in status.detail
+        path = adopter / status.path
+        assert (path.read_bytes() if path.exists() else None) == rows[slug]
+    # The SKILL.md beside it is classified on its own bytes as before.
+    assert {
+        status.state for status in statuses if status.path.startswith(".agents/")
+        and status.path.endswith("SKILL.md")
+    } == {"kit-current"}
+    report = runtime_adapters.render_adapter_report(statuses)
+    assert f".agents/skills/upgrade/agents/openai.yaml: {state}" in report
+
+
+@pytest.mark.parametrize("slug", sorted(runtime_adapters.EXPLICIT_INVOCATION_ONLY))
+@pytest.mark.parametrize("binding", ["authored", "missing"])
+@pytest.mark.parametrize("interface, policy_state", [
+    (None, "missing"),
+    (_KIT_INTERFACE, "kit-current"),
+    (_KIT_INTERFACE.replace("false", "true"), "policy-stale"),
+])
+def test_adapter_report_policy_respects_the_skill_ownership(
+    tmp_path, adapter_source, capsys, slug, binding, interface, policy_state
+):
+    adopter = tmp_path / "adopter"
+    skill = adopter / f".agents/skills/{slug}/SKILL.md"
+    policy = adopter / runtime_adapters.CODEX_INTERFACE_PATH.format(slug=slug)
+    if binding == "authored":
+        skill.parent.mkdir(parents=True)
+        skill.write_text(
+            f"---\nname: {slug}\ndescription: An unrelated adopter workflow.\n"
+            "---\n\n# Private workflow\n\nRun for matching requests.\n",
+            encoding="utf-8",
+        )
+    if interface is not None:
+        policy.parent.mkdir(parents=True, exist_ok=True)
+        policy.write_text(interface, encoding="utf-8")
+    before = {path: path.read_bytes() if path.exists() else None for path in (skill, policy)}
+
+    code = kit_doctor.main([
+        "--root", str(adopter), "--adapter-report",
+        "--adapter-source", str(adapter_source), "--json",
+    ])
+
+    captured = capsys.readouterr()
+    assert code == 0 and captured.err == ""
+    rows = {row["path"]: row for row in json.loads(captured.out)["adapters"]}
+    skill_row = rows[skill.relative_to(adopter).as_posix()]
+    policy_row = rows[policy.relative_to(adopter).as_posix()]
+    if binding == "authored":
+        assert skill_row["state"] == "adopter-owned"
+        assert policy_row["state"] == "adopter-owned", policy_row
+        assert "take the kit's file" not in policy_row["detail"]
+    else:
+        assert skill_row["state"] == "missing"
+        assert policy_row["state"] == policy_state, policy_row
+    for path, original in before.items():
+        assert (path.read_bytes() if path.exists() else None) == original
+
+
+@pytest.mark.parametrize("slug", sorted(runtime_adapters.EXPLICIT_INVOCATION_ONLY))
+@pytest.mark.parametrize("shape", ["missing", "enabled", "duplicate", "malformed",
+                                   "invalid-utf8", "directory", "symlink"])
+def test_adapter_report_rejects_an_invalid_source_policy(
+    tmp_path, capsys, adapter_source, slug, shape
+):
+    path = adapter_source / runtime_adapters.CODEX_INTERFACE_PATH.format(slug=slug)
+    if shape == "missing":
+        path.unlink()
+    elif shape == "enabled":
+        path.write_text(_KIT_INTERFACE.replace("false", "true"), encoding="utf-8")
+    elif shape == "duplicate":
+        path.write_text(_KIT_INTERFACE + "  allow_implicit_invocation: true\n", encoding="utf-8")
+    elif shape == "malformed":
+        path.write_text("policy: [\n", encoding="utf-8")
+    elif shape == "invalid-utf8":
+        path.write_bytes(b"\xff")
+    elif shape == "directory":
+        path.unlink()
+        path.mkdir()
+    else:
+        outside = tmp_path / "outside.yaml"
+        outside.write_text(_KIT_INTERFACE, encoding="utf-8")
+        path.unlink()
+        path.symlink_to(outside)
+    before = path.read_bytes() if path.is_file() else None
+    adopter = tmp_path / "empty-adopter"
+
+    code = kit_doctor.main([
+        "--root", str(adopter), "--adapter-report",
+        "--adapter-source", str(adapter_source), "--json",
+    ])
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "source interface" in captured.err
+    assert path.relative_to(adapter_source).as_posix() in captured.err
+    assert captured.out == ""  # No partial rows or unsafe copying recommendation.
+    assert not adopter.exists()
+    assert (path.read_bytes() if path.is_file() else None) == before
+
+
+def test_adapter_report_preserves_a_symlinked_codex_interface_as_adopter_owned(
+    tmp_path, adapter_source
+):
+    adopter = tmp_path / "adopter"
+    outside = tmp_path / "outside.yaml"
+    outside.write_text(_KIT_INTERFACE, encoding="utf-8")
+    path = adopter / runtime_adapters.CODEX_INTERFACE_PATH.format(slug="adopt")
+    path.parent.mkdir(parents=True)
+    path.symlink_to(outside)
+
+    statuses = runtime_adapters.compare_adapters(adapter_source, adopter)
+    status = next(item for item in statuses if item.path == path.relative_to(adopter).as_posix())
+
+    assert status.state == "adopter-owned"
+    assert "symlink" in status.detail
+
+
+@pytest.mark.parametrize("probe_raises", [False, True])
+def test_adapter_report_preserves_a_policy_when_permission_probes_cannot_read_it(
+    tmp_path, adapter_source, monkeypatch, probe_raises
+):
+    adopter = tmp_path / "adopter"
+    path = adopter / runtime_adapters.CODEX_INTERFACE_PATH.format(slug="adopt")
+    path.parent.mkdir(parents=True)
+    path.write_text(_KIT_INTERFACE, encoding="utf-8")
+    before = path.read_bytes()
+    original_is_file = Path.is_file
+    original_exists = Path.exists
+    original_read_text = Path.read_text
+
+    def denied_probe(candidate):
+        if candidate == path:
+            if probe_raises:
+                raise PermissionError("policy ancestor is not searchable")
+            return False
+        return original_is_file(candidate)
+
+    def denied_exists(candidate):
+        return False if candidate == path else original_exists(candidate)
+
+    def denied_read(candidate, *args, **kwargs):
+        if candidate == path:
+            raise PermissionError("policy ancestor is not searchable")
+        return original_read_text(candidate, *args, **kwargs)
+
+    # Path predicates differ across supported Python versions: they may raise
+    # or suppress an OS permission error. Neither outcome establishes absence.
+    with monkeypatch.context() as patched:
+        patched.setattr(Path, "exists", denied_exists)
+        patched.setattr(Path, "is_file", denied_probe)
+        patched.setattr(Path, "read_text", denied_read)
+        statuses = runtime_adapters.compare_adapters(adapter_source, adopter)
+    status = next(item for item in statuses if item.path == path.relative_to(adopter).as_posix())
+    assert status.state == "adopter-owned", status
+    assert "take the kit's file" not in status.detail
+    assert path.read_bytes() == before
+
+
+def test_adapter_report_preserves_a_policy_behind_an_unsearchable_ancestor(
+    tmp_path, adapter_source
+):
+    adopter = tmp_path / "adopter"
+    path = adopter / runtime_adapters.CODEX_INTERFACE_PATH.format(slug="adopt")
+    path.parent.mkdir(parents=True)
+    path.write_text(_KIT_INTERFACE, encoding="utf-8")
+    before = path.read_bytes()
+    ancestor = path.parent
+    mode = ancestor.stat().st_mode
+    try:
+        ancestor.chmod(0)
+        try:
+            path.read_bytes()
+        except PermissionError:
+            pass
+        else:
+            pytest.skip("process can bypass directory search permissions")
+        status = runtime_adapters._invocation_policy_status(adopter, "adopt")
+        assert status.state == "adopter-owned", status
+        assert "unreadable" in status.detail
+        assert "take the kit's file" not in status.detail
+    finally:
+        ancestor.chmod(mode)
+    assert path.read_bytes() == before
+
+
+def test_codex_policy_inspection_names_its_unavailable_dependency(tmp_path, adapter_source):
+    adopter = tmp_path / "adopter"
+    shutil.copytree(adapter_source / ".agents", adopter / ".agents")
+    # Isolated bare Python excludes site-packages even when pytest has PyYAML.
+    result = subprocess.run(
+        [sys.executable, "-I", "-S", str(ENGINE_DIR / "kit_doctor.py"),
+         "--root", str(adopter), "--adapter-report", "--adapter-source", str(adapter_source)],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 2
+    assert "requires PyYAML" in result.stderr and "uv run" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
 @pytest.mark.parametrize("slug", ["adopt", "parallel", "pr-watch", "upgrade"])
 def test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned(
     tmp_path, slug, adapter_source
@@ -725,6 +1009,11 @@ def test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned(
 
     assert status.state == "kit-stale"
     assert "refresh freely" in status.detail
+    if slug in runtime_adapters.EXPLICIT_INVOCATION_ONLY:
+        policy_rel = runtime_adapters.CODEX_INTERFACE_PATH.format(slug=slug)
+        policy = next(item for item in statuses if item.path == policy_rel)
+        assert policy.state == "missing"
+        assert "take the kit's file" in policy.detail
 
 
 @pytest.mark.evidence
@@ -952,6 +1241,8 @@ def test_doctor_default_report_starts_without_the_adapter_renderer(tmp_path):
     result = subprocess.run(
         [
             sys.executable,
+            "-I",
+            "-S",
             str(engine / "kit_doctor.py"),
             "--root",
             str(root),

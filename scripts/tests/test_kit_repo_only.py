@@ -116,6 +116,7 @@ def test_renderer_dependency_probe_obeys_the_declared_installation(tmp_path, ren
         (library / "runtime_adapters.py").write_text(
             'RUNTIMES = ("codex",)\n'
             'WORKFLOW_SLUGS = ("wrap-up",)\n'
+            'EXPLICIT_INVOCATION_ONLY = frozenset()\n'
             'def _adapter_path(runtime, slug):\n'
             '    return f".agents/skills/{slug}/SKILL.md"\n'
             'def render_adapter(runtime, slug, description, shared):\n'
