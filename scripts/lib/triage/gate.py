@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from .canonical import CanonicalError, digest, digest_bytes, dumps, loads_exact
-from .model import TOKEN_RE, TriageError
+from .model import TOKEN_RE, TriageError, repository_identity_matches
 from .storage import ArtifactStore, exclusive_create, observe, unlink_inode
 
 GATE_CORE_KEYS = {
@@ -52,10 +52,10 @@ def validate_record(
         raise TriageError("gate owner metadata is malformed", outcome="operator-held")
     if core["owner_run_identity"] is not None and not isinstance(core["owner_run_identity"], dict):
         raise TriageError("gate run identity is malformed", outcome="operator-held")
-    if repository_identity is not None and core["repository_identity"] != repository_identity:
-        raise TriageError("gate repository identity is foreign", outcome="operator-held")
+    if repository_identity is not None and not repository_identity_matches(core["repository_identity"], repository_identity):
+        raise TriageError("gate repository identity is foreign", outcome="operator-held", code="repository-identity")
     if config_fingerprint is not None and core["config_fingerprint"] != config_fingerprint:
-        raise TriageError("gate configuration identity is foreign", outcome="operator-held")
+        raise TriageError("gate configuration identity is foreign", outcome="operator-held", code="configuration-identity")
     return record
 
 

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -20,6 +21,12 @@ from triage.model import (
     CAPABILITIES,  # noqa: E402
     TriageError,  # noqa: E402
     load_settings,  # noqa: E402
+)
+from triage.outcome import (  # noqa: E402
+    check_receipt,
+    disposition_fields,
+    receipt_path_error,
+    write_receipt,
 )
 from triage.providers import GitHubForge, GitHubIssues, LinearIssues  # noqa: E402
 from triage.storage import observe  # noqa: E402
@@ -40,16 +47,30 @@ def parser() -> argparse.ArgumentParser:
     trackers.add_argument("--enable-github-tracker", action="store_true", help="allow an approved live GitHub tracker transition through gh")
     trackers.add_argument("--enable-tracker", action="store_true", help="select the approved tracker adapter from merged configuration")
     result.add_argument("--enable-github-forge", action="store_true", help="allow an approved finalization transition through git and gh")
+    result.add_argument("--outcome-receipt", type=Path, help=f"absolute path for this invocation's outcome receipt (default ${RECEIPT_ENV})")
+    result.add_argument("--invocation-id", help=f"caller-chosen id the receipt is bound to (default ${INVOCATION_ENV})")
+    result.add_argument("--check-outcome-receipt", type=Path, help="classify an outcome receipt for --invocation-id and exit")
+    result.add_argument("--expect-context", choices=("interactive", "unattended"), help="with --check-outcome-receipt: the context the caller invoked")
+    result.add_argument("--expect-mode", choices=("live", "test"), help="with --check-outcome-receipt: the mode the caller invoked")
     return result
 
 
-def hard_stop(detail: str) -> dict:
+# An outer wrapper that cannot pass flags through (a scheduled agent run invokes
+# the CLI itself) exports these instead; a flag wins over its variable.
+RECEIPT_ENV = "DEVKIT_TRIAGE_OUTCOME_RECEIPT"
+INVOCATION_ENV = "DEVKIT_TRIAGE_INVOCATION_ID"
+# Exit statuses of --check-outcome-receipt, by verdict.
+CHECK_EXIT = {"completed": 0, "waiting": 0, "refused": 1}
+
+
+def hard_stop(detail: str, code: str = "invalid-invocation") -> dict:
     return {
         "capabilities": {
             name: {"status": "not-triggered", "mechanism": "CLI input validation stopped before engine invocation"}
             for name in CAPABILITIES
         },
         "outcome": "hard-stop",
+        **disposition_fields("hard-stop", refusal_code=code),
         "execution_mode": "unknown",
         "engine_mode": None,
         "report": None,
@@ -66,11 +87,52 @@ def hard_stop(detail: str) -> dict:
     }
 
 
+def _receipt_target(args: argparse.Namespace | None) -> tuple[Path | None, str | None]:
+    path = args.outcome_receipt if args is not None else None
+    invocation_id = args.invocation_id if args is not None else None
+    if path is None and os.environ.get(RECEIPT_ENV):
+        path = Path(os.environ[RECEIPT_ENV])
+    if invocation_id is None and os.environ.get(INVOCATION_ENV):
+        invocation_id = os.environ[INVOCATION_ENV]
+    return path, invocation_id
+
+
+def _check(args: argparse.Namespace) -> int:
+    run_flags = (args.entry, args.request, args.approval_context, args.outcome_receipt)
+    if any(flag is not None for flag in run_flags) or args.enable_github_tracker or args.enable_tracker or args.enable_github_forge:
+        print(dumps(hard_stop("--check-outcome-receipt takes only --invocation-id, --expect-context and --expect-mode")).decode())
+        return 2
+    invocation_id = args.invocation_id if args.invocation_id is not None else os.environ.get(INVOCATION_ENV)
+    try:
+        if not args.check_outcome_receipt.is_absolute():
+            raise TriageError("outcome receipt path must be absolute", code="invalid-invocation")
+        verdict = check_receipt(
+            args.check_outcome_receipt,
+            invocation_id=invocation_id,
+            context=args.expect_context,
+            mode=args.expect_mode,
+        )
+    except TriageError as exc:
+        print(dumps(hard_stop(str(exc), exc.code)).decode())
+        return 2
+    print(dumps(verdict).decode())
+    return CHECK_EXIT.get(verdict["verdict"], 2)
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         args = parser().parse_args(argv)
     except TriageError as exc:
-        print(dumps(hard_stop(str(exc))).decode())
+        return _finish(hard_stop(str(exc)), None, entry=None, context=None, status=2)
+    if args.check_outcome_receipt is not None:
+        return _check(args)
+    if args.expect_context is not None or args.expect_mode is not None:
+        return _finish(hard_stop("--expect-context and --expect-mode need --check-outcome-receipt"), args, entry=args.entry, context=args.context, status=2)
+    receipt_error = receipt_path_error(*_receipt_target(args))
+    if receipt_error is not None:
+        # No receipt can be bound, so none is written: the caller's check then
+        # finds it missing or stale, never a success.
+        print(dumps(hard_stop(receipt_error)).decode())
         return 2
     request = {}
     if args.request is not None:
@@ -82,8 +144,7 @@ def main(argv: list[str] | None = None) -> int:
             if not isinstance(request, dict):
                 raise CanonicalError("request root must be an object")
         except (OSError, CanonicalError, TriageError) as exc:
-            print(dumps(hard_stop(str(exc))).decode())
-            return 2
+            return _finish(hard_stop(str(exc)), args, entry=args.entry, context=args.context, status=2)
     tracker = None
     approval_context = None
     if args.approval_context is not None:
@@ -96,8 +157,7 @@ def main(argv: list[str] | None = None) -> int:
                 raise CanonicalError("approval context has the wrong shape")
             approval_context = ApprovalContext(**raw_context)
         except (OSError, CanonicalError, TriageError, TypeError) as exc:
-            print(dumps(hard_stop(str(exc))).decode())
-            return 2
+            return _finish(hard_stop(str(exc)), args, entry=args.entry, context=args.context, status=2)
     try:
         configured = load_settings(Path(__file__)) if args.enable_github_forge or args.enable_github_tracker or args.enable_tracker else None
         if args.enable_github_tracker or args.enable_tracker:
@@ -109,13 +169,32 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 raise TriageError(f"unsupported selected tracker backend: {backend}")
     except (OSError, TriageError, TypeError, ValueError) as exc:
-        print(dumps(hard_stop(str(exc))).decode())
-        return 2
+        code = exc.code if isinstance(exc, TriageError) else "unclassified"
+        return _finish(hard_stop(str(exc), code), args, entry=args.entry, context=args.context, status=2)
     authority = GitHubForge(configured.paths.repo, pr_watch=configured.paths.engine_dir / "pr_watch.py") if configured is not None else None
     forge = authority if args.enable_github_forge else None
     result = run(args.entry, context=args.context, request=request, start=Path(__file__), tracker=tracker, approval_context=approval_context, forge=forge, head_authority=authority)
+    status = 0 if result["outcome"] in {"successful-completion", "degraded-success", "operator-held"} else 2
+    return _finish(result, args, entry=args.entry, context=args.context, status=status)
+
+
+def _finish(result: dict, args: argparse.Namespace | None, *, entry: str | None, context: str | None, status: int) -> int:
+    """Print the result and, when a receipt was asked for, publish it.
+
+    The result is printed whatever happens to the receipt: the engine may
+    already have acted, and its result is the only report of that. A receipt
+    that cannot be written makes the exit status 2, and the caller's check finds
+    no receipt for its invocation."""
     print(dumps(result).decode())
-    return 0 if result["outcome"] in {"successful-completion", "degraded-success", "operator-held"} else 2
+    path, invocation_id = _receipt_target(args)
+    if receipt_path_error(path, invocation_id) is not None or path is None or invocation_id is None:
+        return status
+    try:
+        write_receipt(path, result, invocation_id=invocation_id, entry=entry, context=context)
+    except (OSError, TriageError) as exc:
+        print(f"outcome receipt not written: {exc}", file=sys.stderr)
+        return 2
+    return status
 
 
 if __name__ == "__main__":

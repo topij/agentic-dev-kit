@@ -8,7 +8,15 @@ from typing import Any
 
 from .canonical import decode_bytes, digest, digest_bytes, dumps, encode_bytes, loads_exact
 from .gate import acquire, owner_status, validate_record
-from .model import BASE_KEYS, OID_RE, Settings, TriageError, canonical_state, repository_identity
+from .model import (
+    BASE_KEYS,
+    OID_RE,
+    Settings,
+    TriageError,
+    canonical_state,
+    repository_identity,
+    repository_identity_matches,
+)
 from .storage import (
     ArtifactStore,
     Observation,
@@ -196,14 +204,19 @@ def resume_gate_only(store: ArtifactStore, settings: Settings, envelope: dict[st
     if digest(core) != envelope.get("prepared_core_digest") or digest(intent) != envelope.get("intended_intent_digest"):
         raise TriageError("prepared gate-only bundle digest mismatch", outcome="operator-held")
     expected_bundle_path = store.recovery_path(core.get("old_gate_digest", ""))
+    current_identity = repository_identity(settings)
     if (
-        core.get("repository_identity") != repository_identity(settings)
-        or core.get("mode") != store.mode
+        not repository_identity_matches(core.get("repository_identity"), current_identity)
+        or not repository_identity_matches(intent.get("repository_identity"), current_identity)
+    ):
+        raise TriageError("prepared gate-only bundle is foreign", outcome="operator-held", code="repository-identity")
+    if (
+        core.get("mode") != store.mode
         or core.get("configured_bundle_path") != str(expected_bundle_path)
         or intent.get("prepared_core_digest") != envelope["prepared_core_digest"]
         or intent.get("old_gate_digest") != core.get("old_gate_digest")
         or intent.get("configured_bundle_path") != str(expected_bundle_path)
-        or intent.get("repository_identity") != repository_identity(settings)
+        or intent.get("repository_identity") != core.get("repository_identity")
         or intent.get("mode") != store.mode
     ):
         raise TriageError("prepared gate-only bundle is foreign", outcome="operator-held")

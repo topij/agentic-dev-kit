@@ -89,6 +89,24 @@ Refresh the remote ref read-only on resume: the recorded head must remain an anc
 the current protected head. Record the observed current head separately. A non-ancestor,
 missing, or unverifiable transition hard-stops before tracker or repository writes.
 
+### Repository identity
+
+Repository identity is the origin URL and the root of the repository's main worktree,
+so every linked worktree of one repository names the same root and continues the
+same shared session. Membership is established by Git: a linked worktree names the
+main worktree its common git dir records, after that main worktree proves to share the
+common dir. A checkout that is its own common dir names itself; a linked worktree of a
+bare repository has no main worktree and names itself too, so its sessions do not
+continue elsewhere. Probes drop every `GIT_*` environment variable. An identity
+recorded before #1103 by a linked worktree names that worktree; it is compared, never
+rewritten, and matches while that path is still a worktree top level of the same
+repository with the same origin. Once that worktree is removed the session holds with
+`repository-identity`; re-adding a linked worktree of the repository at the recorded
+path restores it. An independent clone, a changed origin, a subdirectory, a nested
+repository, or a relative recorded root never matches. The report path is bound below
+the root the identity names, not below the invoking checkout, so a report a temporary
+worktree writes survives it.
+
 ## Semantic input matrix
 
 Validate only the syntactic entry keyword before capability probing: an unknown or
@@ -316,6 +334,11 @@ Select the first matching row and report exactly one overall outcome.
 | `approval-or-triggered-write-not-terminal` | Approval is pending or a triggered notification, tracker, repository, or review path lacks an authoritative terminal state. | `operator-held` |
 | `optional-degradation-after-terminal-work` | Required and triggered work is terminal, but an optional interactive notification or compute enhancement degraded. | `degraded-success` |
 | `all-triggered-contracts-terminal` | No prior row matches and every triggered capability is terminal. | `successful-completion` |
+
+The engine also reports a `disposition` (`completed`, `waiting` or `refused`) that
+tells an `operator-held` wait from an `operator-held` refusal, and a scheduled caller can
+bind it to its invocation with an outcome receipt; see *Dispositions and outcome
+receipts* in [`triage-friction-log/engine-cli.md`](triage-friction-log/engine-cli.md).
 
 ## Entry points and context
 

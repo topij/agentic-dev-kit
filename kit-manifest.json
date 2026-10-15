@@ -79,14 +79,14 @@
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
-      "sha256": "c723ace0124b9c996a87d8577afdb5b55e96177bf32a3d144c487a2cd8ed4b62"
+      "sha256": "da57c24fd6ab7ce3ad93fc54ac962860a7b1a202a1d636f0f40586d57cf6b52c"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log/engine-cli.md": {
       "required_by": [
         "docs/agentic-dev-kit/workflows/triage-friction-log.md"
       ],
       "role": "workflow",
-      "sha256": "fc826161750ca25016c9ebf26fd1460e8ee6551429ed544a5372fa172360302f"
+      "sha256": "a0d3ddc78b92c40b950cf5898ebcbb9b19616da5c57deb800274e3bb0804798d"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log/finalize.md": {
       "required_by": [
@@ -107,7 +107,7 @@
         "docs/agentic-dev-kit/workflows/triage-friction-log.md"
       ],
       "role": "workflow",
-      "sha256": "6435271a1d09395dc61df3fe0b3e84b2e2033fd7f1b640f4434904b47b08e80b"
+      "sha256": "6154b0cb52d5e0df31aed892471bc803b3f4d7b8433e51c16baf3426290f590f"
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
@@ -198,7 +198,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "b440e4ee4e3a4f8526867d30f9b1ea6c02d0dd427cd0201774d4b8c10443f778"
+      "sha256": "274ad2420628e4fb9e4cc2dcf08fe81cc8404a2195792139b2510486356c2f33"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -474,6 +474,7 @@
         "scripts/lib/triage/gate.py",
         "scripts/lib/triage/inbox.py",
         "scripts/lib/triage/model.py",
+        "scripts/lib/triage/outcome.py",
         "scripts/lib/triage/providers.py",
         "scripts/lib/triage/recovery.py",
         "scripts/lib/triage/storage.py",
@@ -488,7 +489,7 @@
         "scripts/triage_friction_log.py"
       ],
       "role": "engine",
-      "sha256": "5e37a3a051ba5e3788b6a7900b9194b886cc5da1586aa145ccdf73f003a03a99"
+      "sha256": "1a4129c19e18721300ccf91d389c57d25f0dacba123f3f1d5013ba0c3d1277e8"
     },
     "scripts/lib/triage/finalize.py": {
       "required_by": [
@@ -503,7 +504,7 @@
         "scripts/lib/triage/recovery.py"
       ],
       "role": "engine",
-      "sha256": "0aa166d3cc68201de478a2a3932d5f2d68f556254a21d47ec683c91a47a83318"
+      "sha256": "b1f1bea7a10cbf86f06743644163e299d48992745b718c527b57e72aa6639736"
     },
     "scripts/lib/triage/inbox.py": {
       "required_by": [
@@ -521,13 +522,22 @@
         "scripts/lib/triage/finalize.py",
         "scripts/lib/triage/gate.py",
         "scripts/lib/triage/inbox.py",
+        "scripts/lib/triage/outcome.py",
         "scripts/lib/triage/providers.py",
         "scripts/lib/triage/recovery.py",
         "scripts/lib/triage/storage.py",
         "scripts/triage_friction_log.py"
       ],
       "role": "engine",
-      "sha256": "ecb6f86ecb62096435d0aa6838ca856bc387a1d78b3d136132d89accc3e8fd39"
+      "sha256": "1d19f8f53fba6bede9e2afed88bd349b3cd6287ea181b5c8321c6c40293c84bd"
+    },
+    "scripts/lib/triage/outcome.py": {
+      "required_by": [
+        "scripts/lib/triage/engine.py",
+        "scripts/triage_friction_log.py"
+      ],
+      "role": "engine",
+      "sha256": "9fc24eaaf8215a03654bfe4b6dbf6e5bc701a4a11a66559749bf6b31f72cda9c"
     },
     "scripts/lib/triage/providers.py": {
       "required_by": [
@@ -542,17 +552,18 @@
         "scripts/lib/triage/engine.py"
       ],
       "role": "engine",
-      "sha256": "cf7e695d527e8d8b0571587da5ac4857af50d9673b0b35bb14d173260a67ebfa"
+      "sha256": "8c209696cd3cfa183238301e919a2370dce9cf439e8920ff8e4cf911da2a517f"
     },
     "scripts/lib/triage/storage.py": {
       "required_by": [
         "scripts/lib/triage/engine.py",
         "scripts/lib/triage/gate.py",
+        "scripts/lib/triage/outcome.py",
         "scripts/lib/triage/recovery.py",
         "scripts/triage_friction_log.py"
       ],
       "role": "engine",
-      "sha256": "a1334256a0c3cea6fd84d1d2fb725f15070aca483dfc61a9a6b2ad6b34333108"
+      "sha256": "11c775ebd044a82795b8ea7cd8998eb5ae8c8d2517db45bf65dfd6de657580e2"
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
@@ -632,7 +643,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "4e7b6a78056fcd12bb03a1f78ccf67279636fb95c50aab15202ea625e7b5bcb4"
+      "sha256": "a4c5e43761a94ed9f02ef03ff67d422a76f73d0bc3d436087039e0abf7911f23"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -770,12 +781,16 @@
       "role": "test",
       "sha256": "26676cf8cf5e265499a3d22c38e5d959f61fbe8e8efc1fcc6ce5af7b79952323"
     },
+    "scripts/tests/test_triage_worktree_identity.py": {
+      "role": "test",
+      "sha256": "2c7a20366cf9d28c2c93c8109ceed4946281605a8a2ccbbbaa59a0d89c9e5c91"
+    },
     "scripts/triage_friction_log.py": {
       "required_by": [
         "scripts/finalize_triage.py"
       ],
       "role": "engine",
-      "sha256": "6e6e0cd53a5ecc843fbca28a7abeb8eb93d2a40aec88219a383254cbbc1eca2f"
+      "sha256": "be7aba7b9b0fff10bde8012b197fe56189668c92d5f47c9f17e27d38de1806b2"
     },
     "scripts/verify_live_validation_bundle.py": {
       "role": "repo-only",

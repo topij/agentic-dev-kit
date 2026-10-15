@@ -33,7 +33,9 @@ Every phase has an exact base shape. It retains `mode`, the complete structured
 `repository_evidence`, and `pull_request_evidence`. `mode` is `live` or `test` and
 equals `run_identity.mode`; `engine_mode` is `engine-backed` or `llm-only`.
 `run_identity` has exactly `repository_identity`, `friction_log`,
-`protected_branch_head`, `mode`, `session`, and `config_fingerprint`; its repository,
+`protected_branch_head`, `mode`, `session`, and `config_fingerprint`.
+`repository_identity` has exactly `root` and `remote`; how a resumed run matches it is
+*Repository identity* in the workflow. Its repository,
 friction-log path, mode, protected head, and config fingerprint equal the frozen run
 identity. `gate_owner_token` matches the gate that last claimed this state and the
 declared owner-token grammar. `gate_binding` has exactly the configured gate path,
