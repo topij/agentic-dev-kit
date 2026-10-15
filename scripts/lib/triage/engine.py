@@ -740,14 +740,14 @@ def _write_report(path: Path, state: dict[str, Any], capabilities: dict[str, dic
 
 
 def _refusal_resume_action(exc: TriageError) -> str:
-    """The safe next step for a refused run. A repository-identity refusal of a
-    session recorded by a since-removed linked worktree is undone by re-adding a
-    worktree at the recorded root, and only before `recover`, which captures the
-    state as held evidence the re-add cannot release."""
+    """The safe next step for a refused run. A repository-identity refusal is
+    answered from a checkout of the recorded repository; a session no checkout
+    can match (one a linked worktree recorded before #1103) is retired with
+    interactive `recover`."""
     if exc.code == "repository-identity":
         return (
-            "run from a checkout of the recorded repository, with its origin; if a removed linked "
-            "worktree recorded this session, re-add a linked worktree at its recorded root before any recover"
+            "run from a checkout of the recorded repository, with its origin; a session no checkout "
+            "of this repository matches is retired with interactive recover"
         )
     return "inspect retained evidence and follow the named recovery route"
 
@@ -2120,13 +2120,18 @@ def run(
                 )
             if state["phase"] == "awaiting-approval" and isinstance(request.get("approval"), dict):
                 _approval_authority(state, request, approval_context)
+            # Every resume writes the report, which lives below the identity's
+            # root (the primary checkout, for a linked worktree). Prove its
+            # directory writable before the session is rebound or advanced, so an
+            # unwritable root refuses here instead of raising mid-transition with
+            # the gate held. A reserved session's report path is not bound yet.
             if state.get("proposal_payloads"):
-                # Every later phase rewrites the bound report, which lives below
-                # the identity's root (the primary checkout, for a linked
-                # worktree). Prove it writable before the session is rebound or
-                # advanced, so an unwritable root refuses here instead of raising
-                # mid-transition with the gate held.
                 _require_writable_directory(Path(state["proposal_payloads"][0]["report_binding"]["path"]).parent)
+            elif state["phase"] == "reserved":
+                _require_writable_directory(store.report_path(
+                    session=state["run_identity"]["session"], day=today_string(),
+                    root=state["run_identity"]["repository_identity"]["root"],
+                ).parent)
             state, state_digest = _rebind(store, lease, state, state_raw)
             tracker_transition = tracker is not None and (
                 (state["phase"] == "awaiting-approval" and isinstance(request.get("approval"), dict))

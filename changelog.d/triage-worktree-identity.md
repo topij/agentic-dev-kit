@@ -3,18 +3,16 @@
 CHANGED (report / return shape): a triage run identity's `repository_identity.root` is
 now the repository's main worktree for every linked worktree of it, not the invoking
 checkout (#1103). A session drafted in one worktree continues from the primary checkout
-or a later linked worktree that resolves the same state root. Identities already
-recorded are compared, not rewritten: a primary-checkout session matches unchanged, and
-one a linked worktree recorded before this change matches while that worktree still
-exists. If it was removed, the session holds with `refusal_code`
-`repository-identity`; re-add a linked worktree of the repository at the recorded path
-to continue it, before any interactive `recover` (which captures the state as held
-evidence the re-add cannot release); the refusal's `resume_action` says so. Identity
-needs Git 2.36 or later (the kit requires 2.44). An independent clone of the
-same remote, a changed origin, invalid state and an active session's configuration
-mismatch still hold. A linked worktree whose main worktree is not a checkout of the same
-common dir (a bare repository's, or one whose primary used `--separate-git-dir`) still
-names itself.
+or a later linked worktree that resolves the same state directory. Identities are
+compared by exact equality and never rewritten: a primary-checkout session matches
+unchanged. A session a linked worktree recorded before this change names that
+worktree, so it no longer matches and holds with `refusal_code` `repository-identity`;
+retire it with interactive `recover` (none existed in the kit, cs-toolkit or
+OpenKitchen state roots on 2026-10-15). An independent clone of the same remote, a
+changed origin, invalid state and an active session's configuration mismatch still
+hold. A linked worktree whose main worktree is not a checkout of the same common dir (a
+bare repository's, or one whose primary used `--separate-git-dir`), or one on a Git
+older than 2.36, still names itself.
 
 CHANGED (report / return shape): the triage report a run writes is bound below the root
 the run identity names, so a draft started in a linked worktree writes its report under

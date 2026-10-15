@@ -83,8 +83,8 @@ numbers rather than coercing them. Construct a run identity binding repository i
 `<friction-log>`, protected-branch head, execution mode, session id, and config
 fingerprint. Hash the exact frozen inbox bytes separately. State, report, and snapshot
 metadata carry the run identity and frozen digest. A resumed run must match every
-immutable identity field, repository identity by the membership rule in *Repository
-identity* below. The recorded protected-branch head is immutable draft
+immutable identity field exactly; *Repository identity* below says what the repository
+identity names. The recorded protected-branch head is immutable draft
 provenance, not a requirement that the moving protected ref remain equal forever.
 Refresh the remote ref read-only on resume: the recorded head must remain an ancestor of
 the current protected head. Record the observed current head separately. A non-ancestor,
@@ -94,23 +94,23 @@ missing, or unverifiable transition hard-stops before tracker or repository writ
 
 Repository identity is the origin URL and the root of the repository's main worktree,
 so every linked worktree of one repository names the same root and continues the
-same shared session. Membership is established by Git: a linked worktree names the
-main worktree its common git dir records, after that main worktree proves to share the
+same shared session. Git names the main worktree: a linked worktree takes the main
+worktree its common git dir records, after that main worktree proves to share the
 common dir. A checkout that is its own common dir names itself. A linked worktree whose
 main worktree Git cannot name as a checkout of that common dir names itself too, as
-before #1103: a bare repository's linked worktree, and one whose primary was made with
-`--separate-git-dir`. Its sessions continue elsewhere only through the membership rule
-below, while it exists. Probes need Git 2.36 or later (`git worktree list -z`) and drop the environment
-variables that relocate a repository (`GIT_DIR`, `GIT_WORK_TREE` and the like). An identity
-recorded before #1103 by a linked worktree names that worktree; it is compared, never
-rewritten, and matches while that path is still a worktree top level of the same
-repository with the same origin. Once that worktree is removed the session holds with
-`repository-identity`; re-adding a linked worktree of the repository at the recorded
-path restores it. Re-add it before any interactive `recover`: `recover` captures the
-state as held evidence, which the re-add then cannot release. An independent clone, a changed origin, a subdirectory, a nested
-repository, or a relative recorded root never matches. The report path is bound below
-the root the identity names, not below the invoking checkout, so a report a temporary
-worktree writes survives it.
+before #1103: a bare repository's linked worktree, one whose primary was made with
+`--separate-git-dir`, and any linked worktree on a Git older than 2.36 (no
+`git worktree list -z`); its sessions do not continue from another worktree. The probes
+read only the invoking checkout and drop the environment variables that relocate a
+repository (`GIT_DIR`, `GIT_WORK_TREE` and the like).
+
+A resumed run's identity must equal the recorded one exactly. A recorded root is never
+probed, because it comes from state on disk that may name a removed, moved or corrupted
+path. An identity a linked worktree recorded before #1103 names that worktree, so it
+does not match and the session holds with `repository-identity`; retire it with
+interactive `recover`. An independent clone, a changed origin, or any other root never
+matches. The report path is bound below the root the identity names, not below the
+invoking checkout, so a report a temporary worktree writes survives it.
 
 ## Semantic input matrix
 
@@ -212,7 +212,7 @@ intent or held receipt.
 | Only one configured engine present | Hard-stop before artifact or external write. |
 | Interactive invocation with notification unavailable | Present exact payloads in-session and persist exact decisions; record degradation. |
 | Scheduled or unattended invocation with notification unavailable | Hard-stop before creating a new approval session; preserve an existing session as operator-held. |
-| Missing, malformed, or identity-mismatched live frozen snapshot/state outside `recover`, other than a `completed` state a session-starting entry retires across a configuration change (*Completed-state retirement*) | Hard-stop before tracker writes; name `recover` as the safe interactive transition; after an attempted or verified write, preserve operator-held evidence and never whole-sweep. A repository-identity mismatch (`refusal_code` `repository-identity`) is held instead, and its first remedy is the one *Repository identity* names, re-adding the recorded worktree, before any `recover`. Test-state remediation stays on the isolated `test` entry. |
+| Missing, malformed, or identity-mismatched live frozen snapshot/state outside `recover`, other than a `completed` state a session-starting entry retires across a configuration change (*Completed-state retirement*) | Hard-stop before tracker writes; name `recover` as the safe interactive transition; after an attempted or verified write, preserve operator-held evidence and never whole-sweep. A repository-identity mismatch is held with `refusal_code` `repository-identity` rather than hard-stopped. Test-state remediation stays on the isolated `test` entry. |
 | Tracker or finalization write fails or is ambiguous | Read back before retry; unresolved state is operator-held. |
 | Test mode | Permit declared local artifacts and optional `[TEST]` notification only; prohibit tracker, source-document, and forge writes. |
 

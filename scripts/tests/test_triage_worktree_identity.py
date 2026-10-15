@@ -213,12 +213,13 @@ def test_invalid_state_read_from_a_linked_worktree_is_held_unchanged(
 # --- identities recorded before #1103 -------------------------------------------
 
 
-def test_a_pre_1103_linked_worktree_identity_continues_while_that_worktree_exists(
+def test_a_pre_1103_linked_worktree_identity_is_held_for_recover(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Before #1103 a linked worktree recorded its own root. The stored identity is
-    compared, never rewritten; it continues while membership can be proven, holds
-    once the worktree is gone, and continues again when one is re-added there."""
+    """Before #1103 a linked worktree recorded its own root. The recorded root is
+    never probed: such an identity does not equal the main worktree's, so the
+    session holds with `repository-identity`, its bytes unchanged, and the refusal
+    names interactive `recover` as the way to retire it."""
     import triage.model as model
 
     root = repository(tmp_path)
@@ -228,26 +229,29 @@ def test_a_pre_1103_linked_worktree_identity_continues_while_that_worktree_exist
         before_1103.setattr(model, "canonical_repository_root", lambda repo: str(repo))
         presented, legacy = draft_awaiting_approval(old, state_root)
     assert presented["run_identity"]["repository_identity"]["root"] == str(old.resolve())
-    report = Path(presented["proposal_payloads"][0]["report_binding"]["path"])
-    assert report.is_relative_to(old.resolve())
+    for start in (root, old):
+        held = run(None, context="unattended", request={}, start=start)
+        assert (held["disposition"], held["refusal_code"]) == ("refused", "repository-identity"), held["detail"]
+        assert "retired with interactive recover" in held["resume_action"]
+        assert (state_root / LIVE_STATE).read_bytes() == legacy
+        assert not (state_root / "triage/triage-pipeline-gate_live.lock").exists()
 
-    continued = run(None, context="unattended", request={}, start=root)
-    assert (continued["disposition"], continued["waiting_on"]) == ("waiting", "approval"), continued["detail"]
-    assert loads_exact((state_root / LIVE_STATE).read_bytes())["run_identity"] == presented["run_identity"]
 
-    git(root, "worktree", "remove", "--force", str(old))
-    before = (state_root / LIVE_STATE).read_bytes()
+def test_a_corrupted_recorded_root_is_refused_not_probed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A root with a NUL byte crashed the old membership probe with the gate held;
+    with equality only, it is an ordinary identity refusal."""
+    root = repository(tmp_path)
+    state_root = shared_state(tmp_path, monkeypatch)
+    presented, _ = draft_awaiting_approval(root, state_root)
+    identity = {**presented["run_identity"]["repository_identity"], "root": "/tmp/a\u0000b"}
+    corrupted = dumps({**presented, "run_identity": {**presented["run_identity"], "repository_identity": identity}})
+    (state_root / LIVE_STATE).write_bytes(corrupted)
     held = run(None, context="unattended", request={}, start=root)
     assert (held["disposition"], held["refusal_code"]) == ("refused", "repository-identity")
-    # The refusal names the safe route: re-add before `recover`, which would
-    # capture the state as held evidence the re-add cannot release.
-    assert "re-add a linked worktree at its recorded root before any recover" in held["resume_action"]
-    assert (state_root / LIVE_STATE).read_bytes() == before
-    assert not old.exists()
-
-    git(root, "worktree", "add", "--detach", str(old), "HEAD")
-    restored = run(None, context="unattended", request={}, start=root)
-    assert (restored["disposition"], restored["waiting_on"]) == ("waiting", "approval"), restored["detail"]
+    assert (state_root / LIVE_STATE).read_bytes() == corrupted
+    assert not (state_root / "triage/triage-pipeline-gate_live.lock").exists()
 
 
 def test_a_linked_worktree_draft_writes_its_report_in_the_primary_checkout(
@@ -269,54 +273,33 @@ def current(root: Path) -> dict:
     return repository_identity(load_settings(root))
 
 
-def test_membership_requires_an_absolute_worktree_top_level_of_this_repository(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_identities_match_by_equality_only(tmp_path: Path) -> None:
     root = repository(tmp_path)
     worktree = linked(root, "member")
     identity = current(root)
-    remote = identity["remote"]
-    assert repository_identity_matches({"root": str(worktree), "remote": remote}, identity)
-    # The primary under a different spelling: a symlink to it.
-    alias = tmp_path / "alias"
-    alias.symlink_to(root, target_is_directory=True)
-    assert repository_identity_matches({"root": str(alias), "remote": remote}, identity)
-    # Each of these shares the shape but is not this repository's worktree.
-    nested = root / "nested"
-    nested.mkdir()
-    git(nested, "init", "-q", "-b", "main")
-    bare = tmp_path / "bare.git"
-    git(tmp_path, "init", "-q", "--bare", str(bare))
-    clone = clone_sharing_remote(root, "clone")
+    assert repository_identity_matches(dict(identity), identity)
     for rejected in (
-        {"root": str(root / "docs"), "remote": remote},           # subdirectory
-        {"root": "repo", "remote": remote},                        # relative
-        {"root": str(nested), "remote": remote},                   # nested repository
-        {"root": str(bare), "remote": remote},                     # bare repository
-        {"root": str(clone), "remote": remote},                    # unrelated clone
-        {"root": str(tmp_path / "gone"), "remote": remote},        # removed path
-        {"root": str(worktree), "remote": remote + ".other"},      # other remote
-        {"root": str(worktree), "remote": remote, "extra": "x"},   # malformed
-        str(worktree),                                             # malformed
+        {"root": str(worktree), "remote": identity["remote"]},          # another worktree's root
+        {"root": str(root / "docs"), "remote": identity["remote"]},     # subdirectory
+        {**identity, "remote": identity["remote"] + ".other"},          # other remote
+        {**identity, "extra": "x"},                                     # malformed
+        str(root),                                                      # malformed
     ):
         assert not repository_identity_matches(rejected, identity), rejected
-    # Relative even where the current directory would resolve it to the root.
-    monkeypatch.chdir(tmp_path)
-    assert not repository_identity_matches({"root": "repo", "remote": remote}, identity)
 
 
-def test_a_caller_git_dir_does_not_make_a_foreign_root_a_member(
+def test_a_caller_git_dir_does_not_change_the_current_identity(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A hook exports GIT_DIR; with it inherited, `git -C <anything>` would report
-    this repository and every recorded root would pass."""
+    """A hook exports GIT_DIR; with it inherited, the probes of a clone would
+    describe this repository instead."""
     root = repository(tmp_path)
-    identity = current(root)
     clone = clone_sharing_remote(root, "clone")
-    # With both inherited, git reports the clone as a worktree of this repository.
+    git(clone, "remote", "set-url", "origin", "https://github.com/example/clone.git")
+    expected = current(clone)
     monkeypatch.setenv("GIT_DIR", str(root / ".git"))
-    monkeypatch.setenv("GIT_WORK_TREE", str(clone))
-    assert not repository_identity_matches({"root": str(clone), "remote": identity["remote"]}, identity)
+    monkeypatch.setenv("GIT_WORK_TREE", str(root))
+    assert current(clone) == expected
 
 
 def test_configuration_variables_still_apply_to_the_recorded_remote(
@@ -357,12 +340,10 @@ def test_a_linked_worktree_of_a_bare_repository_names_itself(tmp_path: Path) -> 
     assert current(worktree)["root"] == str(worktree.resolve())
 
 
-def test_a_separate_git_dir_primary_s_linked_worktree_names_itself_and_continues_by_membership(
-    tmp_path: Path,
-) -> None:
+def test_a_separate_git_dir_primary_s_linked_worktree_names_itself(tmp_path: Path) -> None:
     """Git reports a `--separate-git-dir` primary's git dir as the main worktree.
     That is no checkout, so the linked worktree names itself, as before #1103,
-    and still matches the primary's identity through membership."""
+    and does not continue the primary's sessions."""
     root = repository(tmp_path)
     separate = tmp_path / "separate.git"
     shutil.move(str(root / ".git"), str(separate))
@@ -371,14 +352,14 @@ def test_a_separate_git_dir_primary_s_linked_worktree_names_itself_and_continues
     assert primary["root"] == str(root.resolve())
     worktree = linked(root, "member")
     assert current(worktree)["root"] == str(worktree.resolve())
-    assert repository_identity_matches(primary, current(worktree))
+    assert not repository_identity_matches(primary, current(worktree))
 
 
-def test_gate_and_gate_only_evidence_match_identities_by_membership(
+def test_gate_and_gate_only_evidence_match_identities_by_equality(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The gate record and gate-only state evidence compare repository identity
-    through the same membership rule as the state, and refuse with codes."""
+    by the same equality rule as the state, and refuse with codes."""
     from triage.canonical import dumps as canonical_dumps
     from triage.engine import _gate_only_state_value
     from triage.gate import acquire, validate_record
@@ -391,14 +372,15 @@ def test_gate_and_gate_only_evidence_match_identities_by_membership(
     settings = load_settings(root)
     store = ArtifactStore(settings, "live")
     legacy = {"root": str(worktree.resolve()), "remote": current(root)["remote"]}
-    lease = acquire(store, repository_identity=legacy, config_fingerprint=settings.fingerprint, run_identity=None)
+    lease = acquire(store, repository_identity=current(worktree), config_fingerprint=settings.fingerprint, run_identity=None)
     record = lease.record
     lease.release()
     assert validate_record(record, repository_identity=current(root), config_fingerprint=settings.fingerprint) == record
     clone = clone_sharing_remote(root, "independent-clone")
-    with pytest.raises(TriageError) as foreign:
-        validate_record(record, repository_identity=current(clone), config_fingerprint=settings.fingerprint)
-    assert foreign.value.code == "repository-identity"
+    for foreign_identity in (current(clone), legacy):
+        with pytest.raises(TriageError) as foreign:
+            validate_record(record, repository_identity=foreign_identity, config_fingerprint=settings.fingerprint)
+        assert foreign.value.code == "repository-identity"
     with pytest.raises(TriageError) as drifted:
         validate_record(record, repository_identity=current(root), config_fingerprint="0" * 64)
     assert drifted.value.code == "configuration-identity"
@@ -410,15 +392,16 @@ def test_gate_and_gate_only_evidence_match_identities_by_membership(
         "prepared_core_digest": "b" * 64,
         "old_gate_digest": digest_text,
         "configured_bundle_path": str(store.recovery_path(digest_text)),
-        "repository_identity": legacy,
+        "repository_identity": current(worktree),
         "mode": "live",
         "replacement_gate_run_identity": {"kind": "gate-only-recovery", "mode": "live", "prepared_core_digest": "b" * 64},
     }
     assert _gate_only_state_value(store, canonical_dumps(intent)) == intent
-    foreign_intent = {**intent, "repository_identity": current(clone)}
-    with pytest.raises(TriageError) as held:
-        _gate_only_state_value(store, canonical_dumps(foreign_intent))
-    assert held.value.code == "repository-identity"
+    for foreign_identity in (current(clone), legacy):
+        foreign_intent = {**intent, "repository_identity": foreign_identity}
+        with pytest.raises(TriageError) as held:
+            _gate_only_state_value(store, canonical_dumps(foreign_intent))
+        assert held.value.code == "repository-identity"
 
 
 def test_an_unattended_run_over_a_reserved_session_waits_on_analysis(
@@ -532,6 +515,7 @@ def test_an_analysis_resume_checks_the_report_root_before_it_advances_state(
     worktree = linked(root, "cron-worktree")
     frozen = run("new", context="interactive", request={}, start=worktree)
     assert frozen["waiting_on"] == "analysis"
+    reserved = (state_root / LIVE_STATE).read_bytes()
     reports = root / "reports"
     reports.mkdir(exist_ok=True)
     reports.chmod(0o555)
@@ -539,9 +523,8 @@ def test_an_analysis_resume_checks_the_report_root_before_it_advances_state(
         refused = run("resume", context="interactive", request=request(root), start=worktree)
         assert (refused["outcome"], refused["disposition"]) == ("hard-stop", "refused")
         assert "report directory is not writable" in refused["detail"]
-        # The resume rebinds its gate claim, but the phase does not advance.
-        retained = loads_exact((state_root / LIVE_STATE).read_bytes())
-        assert retained["phase"] == "reserved" and "proposal_payloads" not in retained
+        # Checked before the rebind: the state is byte-for-byte unchanged.
+        assert (state_root / LIVE_STATE).read_bytes() == reserved
         assert not (state_root / "triage/triage-pipeline-gate_live.lock").exists()
     finally:
         reports.chmod(0o755)

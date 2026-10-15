@@ -366,14 +366,6 @@ def _worktree_locations(path: Path | str) -> tuple[str, str, str] | None:
     return lines[0], lines[1], lines[2]
 
 
-def _common_dir(path: Path | str) -> str | None:
-    result = _identity_git(path, "rev-parse", "--path-format=absolute", "--git-common-dir")
-    lines = result.stdout.split("\n")
-    if result.returncode or len(lines) != 2 or lines[1] != "" or not lines[0]:
-        return None
-    return lines[0]
-
-
 def canonical_repository_root(repo: Path) -> str:
     """The checkout root that names this repository in a run identity (#1103).
 
@@ -388,16 +380,15 @@ def canonical_repository_root(repo: Path) -> str:
     checkout of that common dir names itself, as before #1103: a linked worktree
     of a bare repository, and one whose primary was made with
     `--separate-git-dir` (Git then reports the git dir as the main worktree).
-    A session such a worktree records still continues from another worktree
-    only through `repository_identity_matches`' membership test, while the
-    recording worktree exists. A path that is not a worktree at all stops.
+    So does a linked worktree on a Git older than 2.36, which has no
+    `worktree list -z`. A path that is not a worktree at all stops.
 
     The report a session writes lives below this root too (`report_location`), so
     a report written by a temporary worktree outlives it."""
     here = _worktree_locations(repo)
     if here is None:
         raise TriageError(
-            "repository checkout is not a Git worktree (or Git is older than 2.36, which identity needs)",
+            "repository checkout is not a Git worktree (or Git is older than 2.31, which identity probes need)",
             code="repository-identity",
         )
     _, git_dir, common = here
@@ -437,52 +428,15 @@ def repository_identity(settings: Settings) -> dict[str, Any]:
 def repository_identity_matches(recorded: Any, current: dict[str, Any]) -> bool:
     """Whether a recorded repository identity names the repository `current` does.
 
-    Equal identities match. A recorded identity whose root differs matches only
-    when its remote is equal and its root is verifiably a worktree of the same
-    repository, so an identity written before #1103 by a linked worktree still
-    continues. Stored identities are compared, never rewritten: approval and gate
-    bindings digest the bytes they were written with.
-
-    Inputs that reach the membership test — a recorded root different from the
-    current one, behind an equal remote — and what each gets:
-
-    - a linked worktree (pre-#1103 identity) that still exists: matches;
-    - a linked worktree since removed: held, since membership cannot be proven
-      (re-adding a worktree of this repository at the recorded path restores it);
-    - another worktree of this repository now at the recorded path: matches;
-    - the primary checkout under another spelling (symlink, case): matches,
-      because the comparison is by file identity, not by string;
-    - an unrelated clone, a nested repository or a submodule at the recorded
-      path: held, its common dir differs;
-    - a subdirectory of a worktree rather than its top level: held;
-    - a relative recorded root, which `git -C` would read against the current
-      directory: held;
-    - a bare repository or git dir, which has no worktree: held;
-    - a caller environment whose `GIT_DIR` points at this repository: ignored,
-      since `_identity_git` drops the variables that relocate a repository.
-
-    A different remote, a malformed identity, or a `current` without both keys is
-    held before any probe."""
-    if recorded == current:
-        return True
-    if not (
-        isinstance(recorded, dict)
-        and set(recorded) == {"root", "remote"}
-        and isinstance(current, dict)
-        and set(current) == {"root", "remote"}
-        and all(isinstance(value, str) and value for value in (*recorded.values(), *current.values()))
-        and recorded["remote"] == current["remote"]
-        and Path(recorded["root"]).is_absolute()
-    ):
-        return False
-    ours = _common_dir(current["root"])
-    theirs = _worktree_locations(recorded["root"])
-    return (
-        ours is not None
-        and theirs is not None
-        and _same_file(theirs[0], recorded["root"])
-        and _same_file(theirs[2], ours)
-    )
+    Exact equality, and nothing else: a recorded root is never probed with Git,
+    because it comes from state on disk that may name a removed, moved or
+    corrupted path. Every worktree of a repository records the same root
+    (`canonical_repository_root`), so a session continues across worktrees by
+    equality alone. An identity a linked worktree recorded before #1103 names
+    that worktree and no longer matches; such a session is retired with
+    interactive `recover`. Stored identities are compared, never rewritten:
+    approval and gate bindings digest the bytes they were written with."""
+    return isinstance(recorded, dict) and recorded == current
 
 
 def new_run_identity(settings: Settings, mode: str, session: str | None = None) -> dict[str, Any]:
