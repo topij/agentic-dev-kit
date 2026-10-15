@@ -5,6 +5,102 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-12 (friction-log triage; record-prose preflight recognises moved pairings, in Claude Code)
+
+- **Friction-log triage** (session `ae0b23b8`, engine-backed, approved in this session
+  rather than over Slack): filed #1078, #1079, #1080, #1081, #1082 and #1083; archived
+  TRI-04, TRI-08, TRI-09 and TRI-11; parked TRI-02, TRI-06, TRI-07 and TRI-14. Sweep PR
+  [#1084](https://github.com/topij/agentic-dev-kit/pull/1084) merged as `e37b7bd9` at its
+  reviewed head `427d2fa5`. The record-prose preflight failed on the moved keyword/reference
+  pairings at archive lines 4279 and 4459; the operator accepted them as moved history.
+- **Review proportionality:** [#1088](https://github.com/topij/agentic-dev-kit/pull/1088)
+  merged as `2ca8ded9` on the operator's request. The preflight no longer reports a
+  keyword/reference pairing whose lines were moved unchanged, in order, from lines the
+  same change deletes from a narrative path. Copies, new adjacencies, pairings past
+  `MAX_MOVED_SPAN` or `MAX_MOVE_CANDIDATES`, and commit messages are still reported.
+  - Decided: archival preservation means exact bytes. This settles the parked TRI-06,
+    which stays in the inbox until the next triage pass.
+  - Review: CodeRabbit skipped. Adversarial `fallback:lens` full passes ran at `3922348b`
+    and `042f36e2`, and `fallback:delta` passes at `40bef2ae` and `0463c18d`. The last
+    delta's LOW finding is #1089, on the operator's decision.
+  - Verification: `make test` at `042f36e2299c4e1a35913dc27fd6752140ec35a3` on
+    2026-10-12, in `/Users/topi/Coding/agentic-dev-kit`, printed `4894 passed, 1 skipped`.
+    The LOW repairs at `40bef2ae` and `0463c18d` had focused verification
+    (`scripts/tests/test_record_prose.py`, `make lint`, the drift check) and current-head
+    CI, as the LOW rule prescribes.
+- **Filed this session:** #1078, #1079, #1080, #1081, #1082, #1083, #1089,
+  [#1090](https://github.com/topij/agentic-dev-kit/issues/1090) and
+  [#1091](https://github.com/topij/agentic-dev-kit/issues/1091); an occurrence comment
+  on #1080.
+- **Not established:** #1082 overlaps the open #677 (the state guard reporting a
+  concurrent cockpit write as a suite leak). The two were not reconciled.
+
+### 2026-10-12 (workflow reference-file links tested; OpenKitchen upgraded to the skill bindings, in Claude Code)
+
+- **Skills and instruction files:** [#1074](https://github.com/topij/agentic-dev-kit/pull/1074)
+  merged as `55869a7e` on the operator's merge. It corrects `pr-watch/report-fields.md`'s
+  link to `fallback-review-panel.md` and adds a test that every relative link in a
+  workflow reference file points at an existing file.
+  - Review: CodeRabbit skipped. An adversarial `fallback:lens` full pass ran at
+    `5b9cc641`, and a `fallback:delta` pass at `8abd3b3d` reviewed the repair of its
+    LOW findings. The delta pass's own LOW findings are #1075.
+  - Verification: `make test` at `8abd3b3d599cf27ff052cc34a48aac288a323fda` on
+    2026-10-12, in `/Users/topi/Coding/agentic-dev-kit`, printed `4882 passed, 1 skipped`.
+- **OpenKitchen upgraded** from kit `c5da977` to `55869a7e` in topij/OpenKitchen#324,
+  merged as `cb810b88` on the operator's request. The upgrade ran from a linked worktree
+  off `origin/main`, because OpenKitchen's main checkout was on another session's branch
+  with uncommitted edits.
+  - The eight Claude commands were `kit-retired` and nothing in OpenKitchen read them,
+    so they were deleted once the skills were installed.
+  - Review: OpenKitchen configures no review bot, and the change is safety-critical
+    there, so the two-lens panel ran at `4c35c81b`. Its LOW finding on links to the
+    removed `.claude/commands/` is topij/OpenKitchen#325, on the operator's decision.
+  - Verification: `run_installed_tests.py` with a temporary `DEVKIT_STATE_ROOT`, run on
+    2026-10-12 in that worktree on the tree committed as `4c35c81b`, printed
+    `3756 passed, 109 skipped`. The PR body carries the full stamp.
+- **Filed this session:** [#1075](https://github.com/topij/agentic-dev-kit/issues/1075),
+  topij/OpenKitchen#325; occurrence comments on
+  [#61](https://github.com/topij/agentic-dev-kit/issues/61) (a hook missed in a linked
+  worktree), [#990](https://github.com/topij/agentic-dev-kit/issues/990),
+  [#992](https://github.com/topij/agentic-dev-kit/issues/992) and
+  [#1055](https://github.com/topij/agentic-dev-kit/issues/1055).
+- **Not established:** OpenKitchen's main checkout was not pulled. It stays on the other
+  session's branch.
+
+### 2026-10-12 (workflow reference files required by kit_doctor; cs-toolkit upgraded to the skill bindings, in Claude Code)
+
+- **Skills and instruction files:** [#1069](https://github.com/topij/agentic-dev-kit/pull/1069)
+  merged as `6f543433`, on the operator's request. `kit_doctor` now marks a file under
+  `workflows/<slug>/` `missing-required` when `<slug>.md` is installed at the kit's
+  version. On the operator's word, the tracker marks #1057 done.
+  - Review: CodeRabbit skipped. An adversarial `fallback:lens` full pass ran at
+    `e3e4ed04`, and a `fallback:delta` pass at `02e2c21b` repaired its LOW findings. The
+    delta pass's own LOW findings are #1070.
+  - Verification: `make test` at `02e2c21b38e2f7479d6b1087d5f17376738c29b8` on
+    2026-10-12, in `/Users/topi/Coding/agentic-dev-kit`, printed `4880 passed, 1 skipped`.
+- **cs-toolkit upgraded** from kit `0b8166b8` to `6f543433` in in-parallel-oy/cs-toolkit#2632,
+  merged as `4079572c`, on the operator's request. This was the first `/upgrade` under the
+  skill bindings.
+  - #1069 worked as intended there. Once the entries were refreshed, the five reference
+    files reported `missing-required`.
+  - **Decision (operator):** cs-toolkit keeps its seven `kit-retired` commands. Its own
+    `check_skills.py --strict` (CI), its plan-hygiene guard and `skill-index.yaml` still
+    read `.claude/commands/`. CUS-1692 migrates those, and #1071 asks `upgrade.md` to warn.
+  - #1066's GraphQL probe broke cs-toolkit's adopter-owned `tests/test_pr_watch.py` under
+    its live-path guard, and the PR pinned the probe there.
+  - The #428 state guard tripped on live cron writes in cs-toolkit's main checkout. The
+    stamped runs used a detached worktree, and the occurrence is on #467.
+  - Review: CodeRabbit's verdict was clean but excluded `docs/**`, so the two-lens panel
+    ran at `cbff90a1`. Its findings went to #1072 (a kit link) and CUS-1693 (cs-toolkit
+    CI never runs `make test-devkit`).
+- **Filed this session:** [#1070](https://github.com/topij/agentic-dev-kit/issues/1070),
+  [#1071](https://github.com/topij/agentic-dev-kit/issues/1071),
+  [#1072](https://github.com/topij/agentic-dev-kit/issues/1072), CUS-1692, CUS-1693; an
+  occurrence comment on [#467](https://github.com/topij/agentic-dev-kit/issues/467).
+- **Not established:** OpenKitchen is not upgraded. A stale kit clone at
+  `/tmp/agentic-dev-kit` made this session clone under its scratchpad instead, because
+  `rm -rf` is denied to the agent; the operator removed that clone at wrap-up.
+
 ### 2026-10-11 (pr-watch split into an entry and a reference file, in Claude Code)
 
 - **Skills and instruction files:** both PRs merged on the operator's request.
