@@ -739,6 +739,19 @@ def _write_report(path: Path, state: dict[str, Any], capabilities: dict[str, dic
     atomic_replace(path, _report_text(state, capabilities, outcome))
 
 
+def _refusal_resume_action(exc: TriageError) -> str:
+    """The safe next step for a refused run. A repository-identity refusal of a
+    session recorded by a since-removed linked worktree is undone by re-adding a
+    worktree at the recorded root, and only before `recover`, which captures the
+    state as held evidence the re-add cannot release."""
+    if exc.code == "repository-identity":
+        return (
+            "run from a checkout of the recorded repository; for a session a removed linked "
+            "worktree recorded, re-add a linked worktree at its recorded root before any recover"
+        )
+    return "inspect retained evidence and follow the named recovery route"
+
+
 def _require_writable_directory(directory: Path) -> None:
     try:
         directory.mkdir(parents=True, exist_ok=True)
@@ -2181,7 +2194,7 @@ def run(
             engine_mode=result_engine_mode,
             report=result_report,
             frozen=result_frozen,
-            resume_action="inspect retained evidence and follow the named recovery route",
+            resume_action=_refusal_resume_action(exc),
             detail=str(exc),
             refusal_code=exc.code,
             identifiers=retained.get("verified_tracker_identifiers"),

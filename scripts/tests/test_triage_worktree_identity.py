@@ -239,6 +239,9 @@ def test_a_pre_1103_linked_worktree_identity_continues_while_that_worktree_exist
     before = (state_root / LIVE_STATE).read_bytes()
     held = run(None, context="unattended", request={}, start=root)
     assert (held["disposition"], held["refusal_code"]) == ("refused", "repository-identity")
+    # The refusal names the safe route: re-add before `recover`, which would
+    # capture the state as held evidence the re-add cannot release.
+    assert "re-add a linked worktree at its recorded root before any recover" in held["resume_action"]
     assert (state_root / LIVE_STATE).read_bytes() == before
     assert not old.exists()
 
@@ -316,6 +319,20 @@ def test_a_caller_git_dir_does_not_make_a_foreign_root_a_member(
     assert not repository_identity_matches({"root": str(clone), "remote": identity["remote"]}, identity)
 
 
+def test_configuration_variables_still_apply_to_the_recorded_remote(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only the variables that relocate a repository are dropped; a remote that
+    git rewrites through `url.<base>.insteadOf` from the environment reads as git
+    reports it, as it did when an identity was recorded."""
+    root = repository(tmp_path)
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "url.git@github.com:.insteadOf")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "https://github.com/")
+    assert current(root)["remote"] == git(root, "remote", "get-url", "origin")
+    assert current(root)["remote"] == "git@github.com:example/project.git"
+
+
 def test_a_linked_worktree_whose_gitfile_is_broken_names_no_repository(tmp_path: Path) -> None:
     """Moving the primary moves the common dir the worktree's gitfile points
     into, so the worktree is no Git worktree at all."""
@@ -355,6 +372,63 @@ def test_a_separate_git_dir_primary_s_linked_worktree_names_itself_and_continues
     worktree = linked(root, "member")
     assert current(worktree)["root"] == str(worktree.resolve())
     assert repository_identity_matches(primary, current(worktree))
+
+
+def test_gate_and_gate_only_evidence_match_identities_by_membership(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The gate record and gate-only state evidence compare repository identity
+    through the same membership rule as the state, and refuse with codes."""
+    from triage.canonical import dumps as canonical_dumps
+    from triage.engine import _gate_only_state_value
+    from triage.gate import acquire, validate_record
+    from triage.model import TriageError
+    from triage.storage import ArtifactStore
+
+    root = repository(tmp_path)
+    shared_state(tmp_path, monkeypatch)
+    worktree = linked(root, "old-cron-worktree")
+    settings = load_settings(root)
+    store = ArtifactStore(settings, "live")
+    legacy = {"root": str(worktree.resolve()), "remote": current(root)["remote"]}
+    lease = acquire(store, repository_identity=legacy, config_fingerprint=settings.fingerprint, run_identity=None)
+    record = lease.record
+    lease.release()
+    assert validate_record(record, repository_identity=current(root), config_fingerprint=settings.fingerprint) == record
+    clone = clone_sharing_remote(root, "independent-clone")
+    with pytest.raises(TriageError) as foreign:
+        validate_record(record, repository_identity=current(clone), config_fingerprint=settings.fingerprint)
+    assert foreign.value.code == "repository-identity"
+    with pytest.raises(TriageError) as drifted:
+        validate_record(record, repository_identity=current(root), config_fingerprint="0" * 64)
+    assert drifted.value.code == "configuration-identity"
+
+    digest_text = "a" * 64
+    intent = {
+        "kind": "gate-only-recovery-intent",
+        "schema_version": 1,
+        "prepared_core_digest": "b" * 64,
+        "old_gate_digest": digest_text,
+        "configured_bundle_path": str(store.recovery_path(digest_text)),
+        "repository_identity": legacy,
+        "mode": "live",
+        "replacement_gate_run_identity": {"kind": "gate-only-recovery", "mode": "live", "prepared_core_digest": "b" * 64},
+    }
+    assert _gate_only_state_value(store, canonical_dumps(intent)) == intent
+    foreign_intent = {**intent, "repository_identity": current(clone)}
+    with pytest.raises(TriageError) as held:
+        _gate_only_state_value(store, canonical_dumps(foreign_intent))
+    assert held.value.code == "repository-identity"
+
+
+def test_an_unattended_run_over_a_reserved_session_waits_on_analysis(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = repository(tmp_path)
+    shared_state(tmp_path, monkeypatch)
+    run("new", context="interactive", request={}, start=root)
+    waiting = run(None, context="unattended", request={}, start=linked(root, "cron-worktree"))
+    assert (waiting["outcome"], waiting["disposition"], waiting["waiting_on"]) == ("operator-held", "waiting", "analysis")
 
 
 # --- dispositions -----------------------------------------------------------------

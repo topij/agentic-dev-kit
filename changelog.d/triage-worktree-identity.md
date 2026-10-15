@@ -8,7 +8,9 @@ recorded are compared, not rewritten: a primary-checkout session matches unchang
 one a linked worktree recorded before this change matches while that worktree still
 exists. If it was removed, the session holds with `refusal_code`
 `repository-identity`; re-add a linked worktree of the repository at the recorded path
-to continue it, or finish or retire it from there first. An independent clone of the
+to continue it, before any interactive `recover` (which captures the state as held
+evidence the re-add cannot release); the refusal's `resume_action` says so. Identity
+needs Git 2.31 or later (the kit requires 2.44). An independent clone of the
 same remote, a changed origin, invalid state and an active session's configuration
 mismatch still hold. A linked worktree whose main worktree is not a checkout of the same
 common dir (a bare repository's, or one whose primary used `--separate-git-dir`) still
@@ -27,9 +29,8 @@ key set needs the three keys. A caller that treated every exit-0 `operator-held`
 wait should read `disposition` instead.
 
 CHANGED (report / return shape): a checkout whose identity cannot be established (no
-`origin`, or not a Git worktree)
-now stops with `hard-stop` and `refusal_code` `repository-identity` before the gate is
-tried, where a missing `origin` used to read as a held gate (`operator-held`, exit 0).
+`origin`, or not a Git worktree) now stops with `hard-stop` and `refusal_code`
+`repository-identity` before the gate is tried, where a missing `origin` used to read as a held gate (`operator-held`, exit 0).
 
 CHANGED (gate semantics): a draft or analysis resume now checks that the report
 directory below the identity's root is writable before it reserves a session or

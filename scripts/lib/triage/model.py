@@ -318,14 +318,30 @@ def git_output(repo: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
+# Variables that make git read a repository other than the one at `-C <path>`.
+_GIT_LOCATION_VARIABLES = frozenset({
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_COMMON_DIR",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_NAMESPACE",
+    "GIT_CEILING_DIRECTORIES",
+    "GIT_DISCOVERY_ACROSS_FILESYSTEM",
+})
+
+
 def _identity_git(path: Path | str, *args: str) -> subprocess.CompletedProcess[str]:
     """Run git against the checkout at `path` and nothing else.
 
-    Every `GIT_*` variable is dropped: `GIT_DIR`, `GIT_WORK_TREE` and
-    `GIT_COMMON_DIR` relocate the repository a command reads, so with one set
-    (a hook exports `GIT_DIR`) every path would report the caller's repository
-    and any recorded checkout would pass as a member of it."""
-    environment = {name: value for name, value in os.environ.items() if not name.startswith("GIT_")}
+    The variables that relocate a repository are dropped: with `GIT_DIR`,
+    `GIT_WORK_TREE` or `GIT_COMMON_DIR` set (a hook exports `GIT_DIR`), every
+    path would report the caller's repository and any recorded checkout would
+    pass as a member of it. Configuration variables (`GIT_CONFIG_*`) are kept,
+    so a remote rewritten by `url.<base>.insteadOf` reads the same as it did
+    when the identity was recorded."""
+    environment = {name: value for name, value in os.environ.items() if name not in _GIT_LOCATION_VARIABLES}
     return subprocess.run(
         ["git", "-C", str(path), *args], check=False, capture_output=True, text=True, env=environment
     )
@@ -380,7 +396,10 @@ def canonical_repository_root(repo: Path) -> str:
     a report written by a temporary worktree outlives it."""
     here = _worktree_locations(repo)
     if here is None:
-        raise TriageError("repository checkout is not a Git worktree", code="repository-identity")
+        raise TriageError(
+            "repository checkout is not a Git worktree (or Git is older than 2.31, which identity needs)",
+            code="repository-identity",
+        )
     _, git_dir, common = here
     if _same_file(git_dir, common):
         return str(repo)
@@ -440,7 +459,7 @@ def repository_identity_matches(recorded: Any, current: dict[str, Any]) -> bool:
       directory: held;
     - a bare repository or git dir, which has no worktree: held;
     - a caller environment whose `GIT_DIR` points at this repository: ignored,
-      since `_identity_git` drops every `GIT_*` variable.
+      since `_identity_git` drops the variables that relocate a repository.
 
     A different remote, a malformed identity, or a `current` without both keys is
     held before any probe."""

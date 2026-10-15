@@ -100,12 +100,14 @@ common dir. A checkout that is its own common dir names itself. A linked worktre
 main worktree Git cannot name as a checkout of that common dir names itself too, as
 before #1103: a bare repository's linked worktree, and one whose primary was made with
 `--separate-git-dir`. Its sessions continue elsewhere only through the membership rule
-below, while it exists. Probes drop every `GIT_*` environment variable. An identity
+below, while it exists. Probes need Git 2.31 or later and drop the environment
+variables that relocate a repository (`GIT_DIR`, `GIT_WORK_TREE` and the like). An identity
 recorded before #1103 by a linked worktree names that worktree; it is compared, never
 rewritten, and matches while that path is still a worktree top level of the same
 repository with the same origin. Once that worktree is removed the session holds with
 `repository-identity`; re-adding a linked worktree of the repository at the recorded
-path restores it. An independent clone, a changed origin, a subdirectory, a nested
+path restores it. Re-add it before any interactive `recover`: `recover` captures the
+state as held evidence, which the re-add then cannot release. An independent clone, a changed origin, a subdirectory, a nested
 repository, or a relative recorded root never matches. The report path is bound below
 the root the identity names, not below the invoking checkout, so a report a temporary
 worktree writes survives it.
