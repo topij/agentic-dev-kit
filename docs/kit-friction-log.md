@@ -24,22 +24,45 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-10-15
+
+- **Launcher shutdown verification hit its timing assertion.** Severity M, kept for accumulation.
+  `make test` at `5635a764884ef61b0a690234c10bc68e1ec628b2` on 2026-10-15 in
+  `/private/tmp/devkit-overnight-20261014-01a13bcb/sessions/oct14-policy-report-r2/wt`
+  failed `test_sigterm_ignoring_child_is_forcibly_stopped_within_the_configured_bound`.
+  The cause is unknown; no time-limit change was made. Evidence is under `/private/tmp/devkit-overnight-20261014-01a13bcb/`:
+  `make-test-1108-ownership.log` and `make-test-1108-ownership-repeat.log`.
+- **Review service stopped before a terminal report.** Severity M, kept for accumulation;
+  the mechanism is unknown. The Codex review of `bb4e0de47de710886020b1eb247563f4c36f1c33`
+  ended with a safety-screening response and supplied no approval receipt. Evidence: `/private/tmp/devkit-overnight-20261014-01a13bcb/reviews/review-1108-r1.log`, rollout
+  `01a13c0b-b847-79e3-b271-5381b24bf55c`. Any remedy must preserve incomplete-review reporting.
+- **Review began before author verification settled.** Severity M, kept for accumulation.
+  The review of `f54cea61a7e1aaff26c3334140774e88ef27ab55` began while `make test` was
+  running in the policy lane. The suite and reviewer found a renderer stand-in regression;
+  its correction moved the head and required another review allowance. Finish author
+  verification before dispatching a budget-limited review of the exact head.
+- **Review claimed post-restoration verification despite overlap.** Severity M, kept for accumulation.
+  At `5635a764884ef61b0a690234c10bc68e1ec628b2`, the reviewer mutated its private copy
+  while its suite ran, then described that run as after restoration. The cockpit withheld
+  a receipt and required corrected evidence. Original and amended review logs are under
+  `/private/tmp/devkit-overnight-20261014-01a13bcb/reviews/`: `review-1108-ownership.log` and `review-1108-ownership-amended.log`.
+
 ## 2026-10-14
 
-- **Headless lanes cannot regenerate `kit-manifest.json`, so no lane that edits a hashed
-  file can push.** Severity M. Parked because this wrap-up ran with no operator present
-  to approve a tracker payload; it is issue-shaped.
+- **Headless lanes used a denied manifest-refresh spelling during the 2026-10-13 batch.**
+  Severity M. This entry records the original incident and its later correction.
   - **Repro:** in the 2026-10-13 overnight batch, the #1075, #1070 and #1079 lanes
     edited files that `kit-manifest.json` hashes, and could not refresh it.
-    `CONTRIBUTING.md` names `python3 scripts/kit_doctor.py --generate-manifest`. The
+    At that revision, `CONTRIBUTING.md` named `python3 scripts/kit_doctor.py --generate-manifest`. The
     lane profile (`config/claude-lane-settings.json`) allows only
     `Bash(uv run scripts/kit_doctor.py:*)`, and the lanes did not reach for that
     spelling.
   - **Effect:** each of those lanes' `make test` failed on
     `test_kit_repo_self_check_is_clean`, and the #1070 lane's push was refused by the
     pre-push hook. Each stopped without a PR.
-  - **Proposed change:** name the `uv run` spelling in the lane contract or the kickoff, or align
-    `CONTRIBUTING.md` with the profile.
+  - **Correction — 2026-10-15:** [#1106](https://github.com/topij/agentic-dev-kit/pull/1106)
+    documented `uv run scripts/kit_doctor.py --generate-manifest`. Routine polling and
+    cleanup denials are recorded on [#1011](https://github.com/topij/agentic-dev-kit/issues/1011#issuecomment-6185414536).
 - **`make test` outruns a headless lane's Bash time limit.** Severity M. Kept for
   accumulation, because the remedy is not established.
   - In the same batch, the first `make test` of the #1089, #1070 and #1079 lanes was

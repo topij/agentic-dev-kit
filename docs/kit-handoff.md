@@ -20,6 +20,25 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-15 (Codex policy reporting, fixture diagnostics and lane manifest guidance)
+
+- **Skills and instruction files:** [#1108](https://github.com/topij/agentic-dev-kit/pull/1108)
+  merged as `f066b3ae3d4b902e7c8d30c8ea78eff25d9d7c95`. Added Codex invocation-policy reporting.
+  Original scope `oct14-policy-report` is consciously parked; its replacement shipped.
+- **Panel prompt test fixtures:** [#1107](https://github.com/topij/agentic-dev-kit/pull/1107)
+  shipped git-stderr provenance coverage and missing-object wording on 2026-10-14.
+  Original scope `oct14-fixture-stderr` is consciously parked; its replacement shipped.
+- **Headless lane manifest refresh:** [#1106](https://github.com/topij/agentic-dev-kit/pull/1106)
+  documented the allowed refresh command on 2026-10-14. Original scope
+  `oct14-manifest-command` is consciously parked; its replacement shipped.
+- **Decisions and evidence:** workstream assignments were confirmed. PR comments retain
+  verification and review receipts. Failed launcher receipts were not treated as completion.
+- **Filed with exact-payload approval:** [#1109](https://github.com/topij/agentic-dev-kit/issues/1109)
+  and an [occurrence on #1011](https://github.com/topij/agentic-dev-kit/issues/1011#issuecomment-6185414536).
+  Review-screening and verification-ordering incidents remain in the friction inbox.
+
+______________________________________________________________________
+
 ## Session — 2026-10-13 (move-candidate bound, split-workflow link check, kit_doctor reference edge and panel_prompt fixture objects, from headless lanes, in Claude Code)
 
 - **How it ran:** an autonomous overnight session. The operator approved the four lanes
@@ -335,9 +354,10 @@ and OpenKitchen since topij/OpenKitchen#324 (`cb810b88`). #1074 (`55869a7e`) cor
 deleting a `kit-retired` command (#1071).
 #1097 (`0f8e93f2`) keeps a fence-like line in an HTML block or after a form feed from
 hiding later links (#1075), and #1100 (`5d29a75f`) covers #1069's residual LOWs
-(#1070); both tickets stay open for the operator.
-#1055 owns the Codex `openai.yaml` check, #1058 the triage split's remaining pin gaps,
-#1098 the link check's remaining state-machine gaps.
+(#1070).
+#1108 (`f066b3ae3d4b902e7c8d30c8ea78eff25d9d7c95`) added the Codex invocation-policy report for #1055.
+#1058 owns the triage split's remaining pin gaps, and #1098 the link check's remaining
+state-machine gaps.
 **Owner:** `saved_plans/skills-and-instructions-assessment_2026-10-11.md`;
 [#1055](https://github.com/topij/agentic-dev-kit/issues/1055),
 [#1058](https://github.com/topij/agentic-dev-kit/issues/1058),
@@ -364,12 +384,17 @@ and 9) or stays a documented gap, then say so on #94.
 
 ### Panel prompt test fixtures
 
-**Status:** #1099 (`1666e247`) makes the panel_prompt tampering tests reach fixture
-objects through `_loose_object`, which names a packed or missing object as a setup
-error, and turns auto-gc off in the fixtures. #1079 carries the residual LOWs from its
-last delta and stays open. Assignment unconfirmed: no existing workstream owned #1079.
+**Status:** #1099 (`1666e247`) routed tampering tests through `_loose_object` and
+turned fixture auto-gc off. #1107 (`fc35fbe8`) added git-stderr provenance coverage
+and narrowed the missing-object wording. Workstream assignment confirmed.
 **Owner:** [#1079](https://github.com/topij/agentic-dev-kit/issues/1079).
 
-▶ Next: #1079 — pin git's stderr in the missing-object test's match, and make
-`_loose_object`'s wording claim existence rather than readability (the residual-LOW
-comment on #1079 has the acceptance criteria).
+▶ Next: review #1079 against the delivered fixture changes and decide its tracker disposition.
+
+### Headless lane manifest refresh
+
+**Status:** #1106 (`2276c153`) documented `uv run scripts/kit_doctor.py --generate-manifest`
+for the headless lane profile.
+**Owner:** [#1102](https://github.com/topij/agentic-dev-kit/issues/1102).
+
+▶ Next: review #1102 against the delivered lane guidance and decide its tracker disposition.
