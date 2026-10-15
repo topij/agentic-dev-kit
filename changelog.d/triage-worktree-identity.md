@@ -10,7 +10,7 @@ exists. If it was removed, the session holds with `refusal_code`
 `repository-identity`; re-add a linked worktree of the repository at the recorded path
 to continue it, before any interactive `recover` (which captures the state as held
 evidence the re-add cannot release); the refusal's `resume_action` says so. Identity
-needs Git 2.31 or later (the kit requires 2.44). An independent clone of the
+needs Git 2.36 or later (the kit requires 2.44). An independent clone of the
 same remote, a changed origin, invalid state and an active session's configuration
 mismatch still hold. A linked worktree whose main worktree is not a checkout of the same
 common dir (a bare repository's, or one whose primary used `--separate-git-dir`) still
@@ -32,11 +32,11 @@ CHANGED (report / return shape): a checkout whose identity cannot be established
 `origin`, or not a Git worktree) now stops with `hard-stop` and `refusal_code`
 `repository-identity` before the gate is tried, where a missing `origin` used to read as a held gate (`operator-held`, exit 0).
 
-CHANGED (gate semantics): a draft or analysis resume now checks that the report
-directory below the identity's root is writable before it reserves a session or
-advances its phase, and stops with `hard-stop` otherwise. Later phases still write the
-report unchecked, so keep the primary checkout's report root writable by every account
-that runs triage, scheduled jobs in temporary worktrees included.
+CHANGED (gate semantics): every triage run that writes the report now checks that the
+report directory below the identity's root is writable first (a draft before it
+reserves a session, a resume before it rebinds or advances one) and stops with
+`hard-stop`, gate released, otherwise. Keep the primary checkout's report root writable
+by every account that runs triage, scheduled jobs in temporary worktrees included.
 
 What an adopter must do: refresh the triage engines together, including the new
 `lib/triage/outcome.py` that `engine.py` imports (`/upgrade` takes it from

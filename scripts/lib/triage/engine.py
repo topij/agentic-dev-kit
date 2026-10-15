@@ -746,8 +746,8 @@ def _refusal_resume_action(exc: TriageError) -> str:
     state as held evidence the re-add cannot release."""
     if exc.code == "repository-identity":
         return (
-            "run from a checkout of the recorded repository; for a session a removed linked "
-            "worktree recorded, re-add a linked worktree at its recorded root before any recover"
+            "run from a checkout of the recorded repository, with its origin; if a removed linked "
+            "worktree recorded this session, re-add a linked worktree at its recorded root before any recover"
         )
     return "inspect retained evidence and follow the named recovery route"
 
@@ -1931,7 +1931,7 @@ def run(
                 outcome, detail, plan, waiting_on = _blocking_recovery(settings, store, request, approval_context)
                 return _result(capabilities, outcome, mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="review or resume the exact recorded recovery transition", detail=detail, recovery_plan=plan, waiting_on=waiting_on)
             gate_code = gate_error.code if gate_error.code in {"repository-identity", "configuration-identity"} else "single-writer-gate"
-            return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="use interactive recover for a proven-dead owner", detail=str(gate_error), refusal_code=gate_code)
+            return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action=_refusal_resume_action(gate_error) if gate_code == "repository-identity" else "use interactive recover for a proven-dead owner", detail=str(gate_error), refusal_code=gate_code)
         capabilities["single-writer-state-gate"] = {"status": "ready", "mechanism": "exclusive complete-record hard-link gate"}
         try:
             state_observation, state_raw = observe(store.state_path)
@@ -2120,6 +2120,13 @@ def run(
                 )
             if state["phase"] == "awaiting-approval" and isinstance(request.get("approval"), dict):
                 _approval_authority(state, request, approval_context)
+            if state.get("proposal_payloads"):
+                # Every later phase rewrites the bound report, which lives below
+                # the identity's root (the primary checkout, for a linked
+                # worktree). Prove it writable before the session is rebound or
+                # advanced, so an unwritable root refuses here instead of raising
+                # mid-transition with the gate held.
+                _require_writable_directory(Path(state["proposal_payloads"][0]["report_binding"]["path"]).parent)
             state, state_digest = _rebind(store, lease, state, state_raw)
             tracker_transition = tracker is not None and (
                 (state["phase"] == "awaiting-approval" and isinstance(request.get("approval"), dict))

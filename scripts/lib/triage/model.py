@@ -397,7 +397,7 @@ def canonical_repository_root(repo: Path) -> str:
     here = _worktree_locations(repo)
     if here is None:
         raise TriageError(
-            "repository checkout is not a Git worktree (or Git is older than 2.31, which identity needs)",
+            "repository checkout is not a Git worktree (or Git is older than 2.36, which identity needs)",
             code="repository-identity",
         )
     _, git_dir, common = here

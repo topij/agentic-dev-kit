@@ -141,11 +141,9 @@ started, provided both resolve the same state directory: a shared absolute
 symlink to the primary checkout's. An independent clone of the same remote is refused
 with `repository-identity`, however it shares the state directory. A draft started in a
 linked worktree writes its report below the primary checkout's `triage.report_root`, so
-the scheduled run must be able to write there. A draft or analysis resume checks that
-directory is writable before it reserves a new session or advances the session's phase,
-and stops with `hard-stop` otherwise. A completed session that a session-starting entry retires first
-stays retired (its bytes kept, as *Completed-state retirement* describes), and the next
-run starts fresh. The later phases (approval, tracker write, finalize) write the report without that
-check: an unwritable report root there raises out of the engine with the gate still
-held, as it did before this check existed, and interactive `recover` clears it. Keep
-the primary checkout's report root writable by every account that runs triage.
+the scheduled run must be able to write there. Every run that writes the report checks
+that directory is writable first: a draft before it reserves a session, and a resume
+before it rebinds or advances the session. Otherwise it stops with `hard-stop` and the
+gate released. A completed session that a session-starting entry retires first stays
+retired (its bytes kept, as *Completed-state retirement* describes), and the next run
+starts fresh.

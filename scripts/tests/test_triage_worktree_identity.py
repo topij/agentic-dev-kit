@@ -549,6 +549,33 @@ def test_an_analysis_resume_checks_the_report_root_before_it_advances_state(
     assert (resumed["disposition"], resumed["waiting_on"]) == ("waiting", "approval")
 
 
+@needs_unprivileged
+def test_an_approval_resume_checks_the_report_root_before_it_advances_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A later phase rewrites the bound report too; an unwritable root refuses
+    cleanly before the session moves, rather than raising with the gate held."""
+    root = repository(tmp_path)
+    state_root = shared_state(tmp_path, monkeypatch)
+    worktree = linked(root, "cron-worktree")
+    presented, _ = draft_awaiting_approval(worktree, state_root)
+    tracker = verified_tracker(presented)
+    reports = root / "reports"
+    reports.chmod(0o555)
+    try:
+        refused = run(
+            "resume", context="interactive", request={"approval": approval_for(presented)}, start=worktree,
+            approval_context=approval_context(presented), tracker=tracker, head_authority=FakeForge([]),
+        )
+        assert (refused["outcome"], refused["disposition"]) == ("hard-stop", "refused")
+        assert "report directory is not writable" in refused["detail"]
+        assert loads_exact((state_root / LIVE_STATE).read_bytes())["phase"] == "awaiting-approval"
+        assert not (state_root / "triage/triage-pipeline-gate_live.lock").exists()
+        assert tracker.calls == []
+    finally:
+        reports.chmod(0o755)
+
+
 def test_a_cli_hard_stop_carries_a_refusal_disposition(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
     spec = importlib.util.spec_from_file_location("triage_cli_disposition", ENGINE_DIR / "triage_friction_log.py")
     cli = importlib.util.module_from_spec(spec)
