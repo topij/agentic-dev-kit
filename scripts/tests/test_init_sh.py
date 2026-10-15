@@ -2647,7 +2647,9 @@ def test_the_override_installs_a_shared_hook_from_a_linked_worktree(tmp_path: Pa
     assert _shared_shim(primary).read_bytes() == _shared_shim(repo).read_bytes()
 
 
-@pytest.mark.parametrize("hooks_path, shared", [(".githooks", False), ("absolute", True)])
+@pytest.mark.parametrize(
+    "hooks_path, shared", [(".githooks", False), ("absolute", True), ("absolute-inside", True)]
+)
 def test_a_linked_worktree_writes_only_a_hooks_path_of_its_own(
     tmp_path: Path, hooks_path: str, shared: bool
 ) -> None:
@@ -2655,7 +2657,12 @@ def test_a_linked_worktree_writes_only_a_hooks_path_of_its_own(
     copy is its own; an absolute one outside it is shared like the common dir's."""
     repo = _fixture(tmp_path, config=shipped_config(), git=True, hooks=True)
     worktree = _linked_worktree(repo)
-    value = str(tmp_path / "shared-hooks") if hooks_path == "absolute" else hooks_path
+    value = {
+        "absolute": str(tmp_path / "shared-hooks"),
+        # Inside this worktree, but the value is in the shared config, so every
+        # checkout resolves it to this same directory.
+        "absolute-inside": str(worktree / ".githooks"),
+    }.get(hooks_path, hooks_path)
     subprocess.run(
         ["git", "config", "core.hooksPath", value],
         cwd=repo, check=True, env=_env(repo.parent), capture_output=True,
@@ -2665,6 +2672,7 @@ def test_a_linked_worktree_writes_only_a_hooks_path_of_its_own(
 
     if shared:
         assert not (tmp_path / "shared-hooks" / "pre-push").exists()
+        assert not (worktree / ".githooks" / "pre-push").exists()
         assert "deferred" in proc.stderr
     else:
         assert (worktree / ".githooks" / "pre-push").is_file()
@@ -2718,7 +2726,9 @@ def test_a_separate_git_dir_primary_still_installs(tmp_path: Path) -> None:
     assert "deferred" not in proc.stderr
 
 
-@pytest.mark.parametrize("route", ["symlink", "climbs-out-absent", "climbs-out-present", "climbs-out-via-missing"])
+@pytest.mark.parametrize(
+    "route", ["symlink", "symlink-then-up", "climbs-out-absent", "climbs-out-present", "climbs-out-via-missing"]
+)
 def test_a_linked_worktree_judges_a_relative_hooks_path_by_where_it_lands(tmp_path: Path, route: str) -> None:
     """A relative path that reaches outside the worktree, through a symlink or
     with `..`, is shared; whether the directory already exists does not matter."""
@@ -2729,6 +2739,12 @@ def test_a_linked_worktree_judges_a_relative_hooks_path_by_where_it_lands(tmp_pa
         outside.mkdir()
         (worktree / ".hl").symlink_to(outside, target_is_directory=True)
         value = ".hl"
+    elif route == "symlink-then-up":
+        # `.hl/..` collapses textually to the worktree, but physically it is the
+        # parent of the symlink's target.
+        (outside / "deep").mkdir(parents=True)
+        (worktree / ".hl").symlink_to(outside / "deep", target_is_directory=True)
+        value = ".hl/../hk"
     elif route == "climbs-out-via-missing":
         # The `..` sits under a directory that does not exist, so nothing can
         # canonicalise it, and the path only begins below the worktree: it is the
@@ -2746,6 +2762,7 @@ def test_a_linked_worktree_judges_a_relative_hooks_path_by_where_it_lands(tmp_pa
     proc = _run_init(worktree)
 
     assert not (outside / "pre-push").exists()
+    assert not (outside / "hk" / "pre-push").exists()
     assert "deferred" in proc.stderr
 
 

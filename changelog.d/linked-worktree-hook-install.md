@@ -3,12 +3,13 @@
 CHANGED (engine CLI surface): run from a linked worktree, `init.sh` (and `make
 install-hooks`, which runs its `install_hooks`) no longer writes the pre-push shim into
 a hooks directory other checkouts share (#990). That covers the common dir's `hooks/`
-and an absolute `core.hooksPath` outside the worktree. A byte-identical, executable shim is
+and any absolute `core.hooksPath`. A byte-identical, executable shim is
 reported `already current`. Anything else (absent, or a shim for another engines dir) is reported
 `deferred` on stderr and left unwritten, so the primary checkout and other worktrees keep
 their hook until the upgrade merges. A relative `core.hooksPath` below the worktree, and
-every run from the primary checkout, behave as before; one that climbs out with `..` is
-judged by where it lands.
+every run from the primary checkout, behave as before. One that climbs out with `..` or
+passes through a symlink is judged by where it physically lands, and a `..` under a
+directory that does not exist yet counts as shared.
 
 What an adopter must do: after an upgrade that ran in a linked worktree and printed
 `deferred`, install the hook once it has merged. In the primary checkout on the merged

@@ -147,7 +147,7 @@ Present a table the operator confirms **before any write**:
 | `pr-watch` (#5), safety rule (#6) | none | **install** |
 | Root entry points | e.g. `AGENTS.md` ABSENT, `CLAUDE.md` IN_USE | **the absent one gets seeded** from `docs/templates/` when **the operator runs `init.sh`** (Step 3c) — not by `/adopt`; an IN_USE one is left byte-identical |
 | — a `MARKED` target | e.g. `AGENTS.md` MARKED | **Name it in the plan and again in the Step 3c handoff.** Step 3c's `--no-clobber` leaves it alone and says so; the operator then deletes line 1 to keep the content permanently, or deletes the file to have it seeded. `/adopt` does neither on their behalf and does not run `init.sh` at all |
-| pre-push hook | not installed | **installed when the operator runs `init.sh`** (Step 3c) — nothing else installs it, so if they skip that step the repo has no hook |
+| pre-push hook | not installed | **installed when the operator runs `init.sh`** (Step 3c) — nothing else installs it, so if they skip that step the repo has no hook; run from a linked worktree, it only reports a shared hooks directory (`deferred`) |
 | tracker | e.g. GitHub Issues | `tracker.backend: github-issues` |
 | review bot | e.g. CodeRabbit (org) | `review.bots: [coderabbit]` |
 
@@ -385,7 +385,8 @@ in; the flag is what makes guessing wrong survivable.
 >
 > It seeds the docs and entry points that are **missing**, leaving every file already on
 > disk byte-identical; installs the pre-push hook **unless a non-shim hook is already there**,
-> in which case it says so and leaves yours alone; and appends the kit's `.gitignore`
+> in which case it says so and leaves yours alone (run from a linked worktree, it only
+> reports a hooks directory other checkouts share: see `deferred` below); and appends the kit's `.gitignore`
 > entries — all of them except `config/*.local.yaml`, which the adoption already added
 > because it could not wait for this step. Nothing else in the adoption seeds a doc,
 > installs the hook, or adds the rest of those ignores. Read what it prints — the
@@ -441,6 +442,11 @@ completed Step 3c `init.sh` run. Verify that run from what it printed.**
     contracts. Raise it; never edit their file to fix it.
   - `installed <hookdir>/<hook> -> <src>` — the hook is in place, at the directory
     `core.hooksPath` selects, which is not always `.git/hooks`.
+  - `already current: <hookdir>/<hook> -> <src> (shared by every checkout; not rewritten)` —
+    run from a linked worktree, the shared hook is already the kit's shim.
+  - `note: deferred <hookdir>/<hook> — …` — run from a linked worktree, the shared hook
+    was **not** written (#990). Install it from the primary checkout (`./init.sh
+    --no-clobber`), or set `DEVKIT_INSTALL_SHARED_HOOKS=1`, before calling the adoption done.
 
   Then have them confirm one thing the output cannot show: that any file they chose to keep
   still reads the way they expect. `init.sh` reports what it *did*, which is not the same as

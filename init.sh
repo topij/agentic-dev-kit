@@ -45,7 +45,10 @@ Bootstraps the agentic-dev-kit in the current repo:
      missing (never duplicates a line on re-run).
   6. Installs the pre-push hook as a shim (honoring core.hooksPath), and
      reports — never writes — the PR follow-through hook's registration for
-     each runtime that is missing it.
+     each runtime that is missing it. From a linked worktree, a hooks
+     directory other checkouts share is reported, not written (`already
+     current` or `deferred`) unless DEVKIT_INSTALL_SHARED_HOOKS=1 is set:
+     install it from the primary checkout once the change has merged.
   7. Prints the runtime-specific session-start invocation.
 
 Options:
@@ -2234,22 +2237,28 @@ install_hooks() {
   # or DEVKIT_INSTALL_SHARED_HOOKS=1 says the operator means it. What counts as
   # shared, listed so each case is decided rather than discovered:
   # - the common dir's hooks (`--git-path hooks` from a linked worktree): shared;
-  # - an absolute core.hooksPath outside this worktree: shared;
+  # - any absolute core.hooksPath, even one inside this worktree: shared, since
+  #   the value lives in the repository's shared config and every checkout
+  #   resolves it to that same directory;
   # - a hooks path reached through a symlink, so its physical path is not below
   #   this worktree's top level: treated as shared;
   # - a relative core.hooksPath below this worktree: git resolves it inside each
   #   worktree, so it is this worktree's own and is written as before;
   # - a relative core.hooksPath that climbs out (`../x`): judged by where it
   #   physically lands, so outside this worktree it is shared. The longest
-  #   existing prefix is canonicalised; a `..` in the part that does not exist
-  #   yet cannot be resolved and counts as shared, so the answer never depends
-  #   on whether the directory was created earlier;
+  #   existing prefix is canonicalised physically (`cd -P`, so a symlink
+  #   followed by `..` lands where the kernel puts it); a `..` in the part that
+  #   does not exist yet cannot be resolved and counts as shared, even where it
+  #   would land inside (conservative: deferred, never written);
   # - a `~/...` hooksPath: `git config --get` does not expand it, so it is read
   #   as relative, as the writer always has (pre-existing);
   # - the primary checkout, or a checkout whose git dir is its common dir
   #   (a submodule, a --separate-git-dir checkout): not a linked worktree,
   #   written as before;
-  # - a bare repository's linked worktree: shared, so it takes the override.
+  # - a bare repository's linked worktree: shared, so it takes the override;
+  # - a Git older than 2.31 (no `--path-format`): both probes come back empty,
+  #   nothing is classed linked, and the shim is written as before. The kit
+  #   requires Git 2.44 or later.
   _hooks_shared=""
   _git_dir="$(git rev-parse --path-format=absolute --git-dir 2>/dev/null || true)"
   _common_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
@@ -2257,7 +2266,7 @@ install_hooks() {
     _top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
     [ -n "$_top" ] || _top="/nonexistent-worktree-top"
     case "$hookdir" in
-      /*) _hooks_abs="$hookdir" ;;
+      /*) _hooks_abs="$hookdir"; _hooks_shared=1 ;;
       *) _hooks_abs="$(pwd -P)/$hookdir" ;;
     esac
     _hooks_probe="$_hooks_abs"
@@ -2266,7 +2275,7 @@ install_hooks() {
       _hooks_rest="/$(basename "$_hooks_probe")$_hooks_rest"
       _hooks_probe="$(dirname "$_hooks_probe")"
     done
-    _hooks_abs="$(cd "$_hooks_probe" && pwd -P)$_hooks_rest"
+    _hooks_abs="$(cd -P "$_hooks_probe" && pwd -P)$_hooks_rest"
     case "$_hooks_abs/" in
       */../*) _hooks_shared=1 ;;
       "$_top"/*) ;;
@@ -2295,7 +2304,7 @@ SHIM
       if [ -f "$hookdir/$hook" ] && [ -x "$hookdir/$hook" ] && printf '%s\n' "$shim" | cmp -s - "$hookdir/$hook"; then
         echo "already current: $hookdir/$hook -> $src (shared by every checkout; not rewritten)"
       else
-        echo "note: deferred $hookdir/$hook — it is shared by every checkout of this repository" >&2
+        echo "note: deferred $hookdir/$hook — it is, or may be, shared by every checkout of this repository" >&2
         echo "      and this is a linked worktree, so it was not written; other checkouts keep" >&2
         echo "      their current hook. After this change merges, install it from a checkout of" >&2
         echo "      the merged revision: in the primary checkout, run \`make install-hooks\` where" >&2
