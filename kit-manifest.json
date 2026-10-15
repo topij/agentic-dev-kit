@@ -307,7 +307,7 @@
         "scripts/kit_doctor.py"
       ],
       "role": "engine",
-      "sha256": "d4919727d66c4127757a459fa9ac94fe1deeb0df86edbd70d3b4eae0dfbaadda"
+      "sha256": "8999c3cb28cd68693a2c2032a7e2181e03470300a64ebc0075607a8464cfbeb1"
     },
     "scripts/lib/state_paths/__init__.py": {
       "required_by": [
@@ -632,7 +632,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "d6cd5d1d7b9004abc03479029201a522e4dc7662a3ef8ad122b108875a021392"
+      "sha256": "79da42a6e5a2be0cd104ce3fb4c59abfc70fb1c09a616888839b5aa725620d50"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",

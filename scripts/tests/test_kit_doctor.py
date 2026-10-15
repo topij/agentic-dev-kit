@@ -850,6 +850,74 @@ def test_adapter_report_preserves_a_symlinked_codex_interface_as_adopter_owned(
     assert "symlink" in status.detail
 
 
+@pytest.mark.parametrize("probe_raises", [False, True])
+def test_adapter_report_preserves_a_policy_when_permission_probes_cannot_read_it(
+    tmp_path, adapter_source, monkeypatch, probe_raises
+):
+    adopter = tmp_path / "adopter"
+    path = adopter / runtime_adapters.CODEX_INTERFACE_PATH.format(slug="adopt")
+    path.parent.mkdir(parents=True)
+    path.write_text(_KIT_INTERFACE, encoding="utf-8")
+    before = path.read_bytes()
+    original_is_file = Path.is_file
+    original_exists = Path.exists
+    original_read_text = Path.read_text
+
+    def denied_probe(candidate):
+        if candidate == path:
+            if probe_raises:
+                raise PermissionError("policy ancestor is not searchable")
+            return False
+        return original_is_file(candidate)
+
+    def denied_exists(candidate):
+        return False if candidate == path else original_exists(candidate)
+
+    def denied_read(candidate, *args, **kwargs):
+        if candidate == path:
+            raise PermissionError("policy ancestor is not searchable")
+        return original_read_text(candidate, *args, **kwargs)
+
+    # Path predicates differ across supported Python versions: they may raise
+    # or suppress an OS permission error. Neither outcome establishes absence.
+    with monkeypatch.context() as patched:
+        patched.setattr(Path, "exists", denied_exists)
+        patched.setattr(Path, "is_file", denied_probe)
+        patched.setattr(Path, "read_text", denied_read)
+        statuses = runtime_adapters.compare_adapters(adapter_source, adopter)
+    status = next(item for item in statuses if item.path == path.relative_to(adopter).as_posix())
+    assert status.state == "adopter-owned", status
+    assert "take the kit's file" not in status.detail
+    assert path.read_bytes() == before
+
+
+def test_adapter_report_preserves_a_policy_behind_an_unsearchable_ancestor(
+    tmp_path, adapter_source
+):
+    adopter = tmp_path / "adopter"
+    path = adopter / runtime_adapters.CODEX_INTERFACE_PATH.format(slug="adopt")
+    path.parent.mkdir(parents=True)
+    path.write_text(_KIT_INTERFACE, encoding="utf-8")
+    before = path.read_bytes()
+    ancestor = path.parent
+    mode = ancestor.stat().st_mode
+    try:
+        ancestor.chmod(0)
+        try:
+            path.read_bytes()
+        except PermissionError:
+            pass
+        else:
+            pytest.skip("process can bypass directory search permissions")
+        status = runtime_adapters._invocation_policy_status(adopter, "adopt")
+        assert status.state == "adopter-owned", status
+        assert "unreadable" in status.detail
+        assert "take the kit's file" not in status.detail
+    finally:
+        ancestor.chmod(mode)
+    assert path.read_bytes() == before
+
+
 def test_codex_policy_inspection_names_its_unavailable_dependency(tmp_path, adapter_source):
     adopter = tmp_path / "adopter"
     shutil.copytree(adapter_source / ".agents", adopter / ".agents")

@@ -40,7 +40,7 @@ LEGACY_CLAUDE_COMMAND_PATH = ".claude/commands/{slug}.md"
 EXPLICIT_INVOCATION_ONLY = frozenset({"adopt", "upgrade", "triage-friction-log"})
 
 # The Codex half of that control lives in a file the adopter may have edited for
-# its other keys, so the report checks the one key and judges nothing else (#1055).
+# its other keys, so the report checks only policy.allow_implicit_invocation (#1055).
 CODEX_INTERFACE_PATH = ".agents/skills/{slug}/agents/openai.yaml"
 
 _DISPLAY_NAMES = {
@@ -423,11 +423,15 @@ def _invocation_policy_status(adopter_root: Path, slug: str) -> AdapterStatus:
     """Classify whether an explicit-only Codex skill disables implicit invocation."""
 
     rel = CODEX_INTERFACE_PATH.format(slug=slug)
-    unsafe_path = _unsafe_adopter_path(adopter_root, rel)
-    if unsafe_path is not None:
-        return AdapterStatus("codex", slug, rel, "adopter-owned", unsafe_path)
     path = adopter_root / rel
-    if not path.is_file():
+    try:
+        unsafe_path = _unsafe_adopter_path(adopter_root, rel)
+        if unsafe_path is not None:
+            return AdapterStatus("codex", slug, rel, "adopter-owned", unsafe_path)
+        # Predicate probes can suppress permission errors. Only a missing-file
+        # error from the read justifies recommending a replacement file.
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
         return AdapterStatus(
             "codex",
             slug,
@@ -436,8 +440,6 @@ def _invocation_policy_status(adopter_root: Path, slug: str) -> AdapterStatus:
             "take the kit's file: it sets policy.allow_implicit_invocation: false, "
             "to disable implicit invocation",
         )
-    try:
-        text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as exc:
         return AdapterStatus("codex", slug, rel, "adopter-owned", f"unreadable: {exc}")
     if _disables_implicit_invocation(text):
