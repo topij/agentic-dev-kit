@@ -117,8 +117,8 @@ caller whether the run progressed. Every result therefore also carries:
 
 | Key | Values |
 |---|---|
-| `disposition` | `completed` for `successful-completion` or `degraded-success`; `waiting` when the run left durable state that a later invocation or an operator decision continues; `refused` for every other result, including a hard stop. |
-| `waiting_on` | for `waiting` only, else null: `analysis` (an interactive resume supplies proposals), `notification-delivery` (a resume reads back the retained notification attempt), `approval`, `tracker-write` (a resume with the tracker adapter selected), `finalize` (a resume carrying `finalize: true`), `recovery-approval`, or `rerun` (an applied recovery transition left state the next ordinary run continues from). |
+| `disposition` | `completed` for `successful-completion` or `degraded-success`; `waiting` when the run left an active session at a phase a later invocation or an operator decision continues, judged by that phase (so a tracker or forge hold whose read-back was ambiguous also reads `waiting`, with the capability map saying why); `refused` for every other result, including a hard stop. |
+| `waiting_on` | for `waiting` only, else null: `analysis` (an interactive resume supplies proposals), `notification-delivery` (a resume reads back the retained notification attempt), `approval`, `tracker-write` (a resume with the tracker adapter selected), `finalize` (a resume carrying `finalize: true`, with `--enable-github-forge`), `recovery-approval`, or `rerun` (an applied recovery transition left state the next ordinary run continues from). |
 | `refusal_code` | for `refused` only, else null: `repository-identity`, `configuration-identity`, `single-writer-gate` (another invocation holds the gate, or its owner is not proven dead), `active-state` (`new` against an active session), `invalid-invocation`, or `unclassified`. |
 
 The disposition is derived from the outcome, and an `operator-held` result is `waiting`
@@ -137,7 +137,11 @@ uv run <engine-dir>/triage_friction_log.py --outcome-receipt /abs/receipts/triag
 DEVKIT_TRIAGE_OUTCOME_RECEIPT=/abs/receipts/triage.json DEVKIT_TRIAGE_INVOCATION_ID=run-2026-10-16 <agent command that runs the CLI>
 ```
 
-A flag wins over its variable. Each CLI call atomically replaces the receipt with
+A flag wins over its variable. Before the engine runs, each CLI call clears the
+receipt path: a file there that is not a triage outcome receipt is refused (exit 2, the
+file untouched, the engine not run), and an earlier receipt is removed, so a call that
+dies before publishing leaves no receipt rather than an earlier call's outcome. After
+the engine returns, the call publishes a receipt with
 `kind: triage-invocation-outcome`, the invocation id, `sequence` (the count of calls
 under that id), entry, context, mode, outcome, disposition, `waiting_on`,
 `refusal_code`, the complete result and its digest. The last call's receipt is the
@@ -163,6 +167,10 @@ and read `verdict` and `waiting_on` to tell a pending approval from a completed 
 Repository identity is the main worktree's root for every worktree of one repository
 (*Repository identity* in [`triage-friction-log.md`](../triage-friction-log.md)), so a scheduled
 run in a temporary linked worktree continues the session a primary-checkout run
-started, provided both resolve one state root (`DEVKIT_STATE_ROOT` or
-`.devkit_state_root`). An independent clone of the same remote is refused with
-`repository-identity`, however it shares the state root.
+started, provided both resolve the same state directory: a shared absolute
+`DEVKIT_STATE_ROOT`, a `.devkit_state_root` marker, or a worktree `state/` that is a
+symlink to the primary checkout's. An independent clone of the same remote is refused
+with `repository-identity`, however it shares the state directory. A draft started in a
+linked worktree writes its report below the primary checkout's `triage.report_root`, so
+the scheduled run must be able to write there. A report write that fails after the state
+is persisted leaves the gate held until interactive `recover`, as it did before.

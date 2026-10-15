@@ -368,9 +368,13 @@ def canonical_repository_root(repo: Path) -> str:
     checkout whose git dir is its own common dir (a submodule, a
     `--separate-git-dir` checkout). A linked worktree names the main worktree Git
     records for its common dir, once that main worktree proves to have that same
-    common dir. A linked worktree of a bare repository has no main worktree and
-    names itself, as before #1103: its sessions do not continue from another
-    worktree. Anything else cannot be verified and stops.
+    common dir. A linked worktree whose main worktree Git cannot name as a
+    checkout of that common dir names itself, as before #1103: a linked worktree
+    of a bare repository, and one whose primary was made with
+    `--separate-git-dir` (Git then reports the git dir as the main worktree).
+    A session such a worktree records still continues from another worktree
+    only through `repository_identity_matches`' membership test, while the
+    recording worktree exists. A path that is not a worktree at all stops.
 
     The report a session writes lives below this root too (`report_location`), so
     a report written by a temporary worktree outlives it."""
@@ -383,8 +387,6 @@ def canonical_repository_root(repo: Path) -> str:
     listing = _identity_git(repo, "worktree", "list", "--porcelain", "-z")
     first = listing.stdout.split("\0\0", 1)[0].split("\0")
     if listing.returncode or not first or not first[0].startswith("worktree "):
-        raise TriageError("linked worktree's main worktree cannot be read", code="repository-identity")
-    if "bare" in first[1:]:
         return str(repo)
     main = Path(first[0][len("worktree "):])
     located = _worktree_locations(main) if main.is_absolute() else None
@@ -394,7 +396,7 @@ def canonical_repository_root(repo: Path) -> str:
         or not _same_file(located[1], located[2])
         or not _same_file(located[2], common)
     ):
-        raise TriageError("linked worktree's main worktree is not a checkout of this repository", code="repository-identity")
+        return str(repo)
     return str(main.resolve())
 
 

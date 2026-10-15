@@ -95,9 +95,11 @@ Repository identity is the origin URL and the root of the repository's main work
 so every linked worktree of one repository names the same root and continues the
 same shared session. Membership is established by Git: a linked worktree names the
 main worktree its common git dir records, after that main worktree proves to share the
-common dir. A checkout that is its own common dir names itself; a linked worktree of a
-bare repository has no main worktree and names itself too, so its sessions do not
-continue elsewhere. Probes drop every `GIT_*` environment variable. An identity
+common dir. A checkout that is its own common dir names itself. A linked worktree whose
+main worktree Git cannot name as a checkout of that common dir names itself too, as
+before #1103: a bare repository's linked worktree, and one whose primary was made with
+`--separate-git-dir`. Its sessions continue elsewhere only through the membership rule
+below, while it exists. Probes drop every `GIT_*` environment variable. An identity
 recorded before #1103 by a linked worktree names that worktree; it is compared, never
 rewritten, and matches while that path is still a worktree top level of the same
 repository with the same origin. Once that worktree is removed the session holds with

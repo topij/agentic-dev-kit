@@ -30,7 +30,7 @@ from typing import Any
 
 from .canonical import CanonicalError, digest, dumps, loads_exact
 from .model import REFUSAL_CODES, TOKEN_RE, TriageError
-from .storage import atomic_replace, observe
+from .storage import atomic_replace, observe, unlink_inode
 
 COMPLETED_OUTCOMES = ("successful-completion", "degraded-success")
 DISPOSITIONS = ("completed", "waiting", "refused")
@@ -115,29 +115,42 @@ def receipt_path_error(path: Path | None, invocation_id: str | None) -> str | No
     return _invocation_id_error(invocation_id)
 
 
-def write_receipt(path: Path, result: dict[str, Any], *, invocation_id: str, entry: str | None, context: str | None) -> dict[str, Any]:
-    """Publish the receipt for one CLI invocation, replacing any earlier one.
+def claim_receipt(path: Path, *, invocation_id: str) -> int:
+    """Clear the receipt path before a call runs; return the call's `sequence`.
 
-    An agent run may call the CLI more than once under one invocation id (a
-    freeze, then an analysis resume), so the receipt is replaced rather than
-    created exclusively, and `sequence` counts the calls under that id. The last
-    call's receipt is the invocation's outcome."""
-    _, previous_raw = observe(path)
+    A file at the path that is not a receipt is refused, never replaced: the
+    path comes from a flag or an environment variable, and a typo must not
+    overwrite state, a document or an inbox. An earlier receipt is removed
+    before the engine runs, so a call that dies before publishing (a crash, a
+    kill, a timeout) leaves no receipt, which the check reports missing, rather
+    than an earlier call's outcome under the same id. `sequence` counts the calls
+    under one id: an agent run may call the CLI more than once (a freeze, then an
+    analysis resume), and the last call's receipt is the invocation's outcome."""
+    observation, raw = observe(path)
+    if raw is None:
+        return 1
+    try:
+        previous = loads_exact(raw)
+    except CanonicalError:
+        previous = None
+    if not isinstance(previous, dict) or previous.get("kind") != RECEIPT_KIND:
+        raise TriageError("outcome receipt path holds a file that is not a triage outcome receipt", code="invalid-invocation")
     sequence = 1
-    if previous_raw is not None:
-        try:
-            previous = loads_exact(previous_raw)
-        except CanonicalError:
-            previous = None
-        if (
-            isinstance(previous, dict)
-            and previous.get("kind") == RECEIPT_KIND
-            and previous.get("invocation_id") == invocation_id
-            and isinstance(previous.get("sequence"), int)
-            and not isinstance(previous.get("sequence"), bool)
-            and previous["sequence"] >= 1
-        ):
-            sequence = previous["sequence"] + 1
+    if (
+        previous.get("invocation_id") == invocation_id
+        and isinstance(previous.get("sequence"), int)
+        and not isinstance(previous.get("sequence"), bool)
+        and previous["sequence"] >= 1
+    ):
+        sequence = previous["sequence"] + 1
+    unlink_inode(path, observation, raw)
+    return sequence
+
+
+def write_receipt(
+    path: Path, result: dict[str, Any], *, invocation_id: str, entry: str | None, context: str | None, sequence: int
+) -> dict[str, Any]:
+    """Publish the receipt for one CLI call, after `claim_receipt` cleared the path."""
     receipt = {
         "kind": RECEIPT_KIND,
         "schema_version": 1,

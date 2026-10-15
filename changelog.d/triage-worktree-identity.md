@@ -10,7 +10,9 @@ exists. If it was removed, the session holds with `refusal_code`
 `repository-identity`; re-add a linked worktree of the repository at the recorded path
 to continue it, or finish or retire it from there first. An independent clone of the
 same remote, a changed origin, invalid state and an active session's configuration
-mismatch still hold. A linked worktree of a bare repository still names itself.
+mismatch still hold. A linked worktree whose main worktree is not a checkout of the same
+common dir (a bare repository's, or one whose primary used `--separate-git-dir`) still
+names itself.
 
 CHANGED (report / return shape): the triage report a run writes is bound below the root
 the run identity names, so a draft started in a linked worktree writes its report under
@@ -25,14 +27,15 @@ key set needs the three keys. A caller that treated every exit-0 `operator-held`
 wait should read `disposition` instead.
 
 CHANGED (report / return shape): a checkout whose identity cannot be established (no
-`origin`, not a Git worktree, a linked worktree whose main worktree does not verify)
+`origin`, or not a Git worktree)
 now stops with `hard-stop` and `refusal_code` `repository-identity` before the gate is
 tried, where a missing `origin` used to read as a held gate (`operator-held`, exit 0).
 
 ADDED (engine CLI surface): `triage_friction_log.py` takes `--outcome-receipt <abs path>`
 and `--invocation-id <id>`, or `DEVKIT_TRIAGE_OUTCOME_RECEIPT` and
 `DEVKIT_TRIAGE_INVOCATION_ID`, and publishes an invocation-bound receipt after each
-call. `--check-outcome-receipt <abs path> --invocation-id <id> [--expect-context …]
+call. It refuses a receipt path that holds a file other than a receipt, and clears an
+earlier receipt before the engine runs, so a call that dies leaves none. `--check-outcome-receipt <abs path> --invocation-id <id> [--expect-context …]
 [--expect-mode …]` classifies it and exits 0 for completed or waiting, 1 for refused and
 2 for missing, stale, wrong-invocation or malformed evidence. A scheduled wrapper whose
 exit status does not come from the CLI (a `claude -p` triage job, for one) should export

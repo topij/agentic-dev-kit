@@ -24,6 +24,7 @@ from triage.model import (
 )
 from triage.outcome import (  # noqa: E402
     check_receipt,
+    claim_receipt,
     disposition_fields,
     receipt_path_error,
     write_receipt,
@@ -58,6 +59,8 @@ def parser() -> argparse.ArgumentParser:
 # An outer wrapper that cannot pass flags through (a scheduled agent run invokes
 # the CLI itself) exports these instead; a flag wins over its variable.
 RECEIPT_ENV = "DEVKIT_TRIAGE_OUTCOME_RECEIPT"
+# Receipt paths this process already cleared, with the sequence each call takes.
+_CLAIMED: dict[Path, int] = {}
 INVOCATION_ENV = "DEVKIT_TRIAGE_INVOCATION_ID"
 # Exit statuses of --check-outcome-receipt, by verdict.
 CHECK_EXIT = {"completed": 0, "waiting": 0, "refused": 1}
@@ -134,6 +137,14 @@ def main(argv: list[str] | None = None) -> int:
         # finds it missing or stale, never a success.
         print(dumps(hard_stop(receipt_error)).decode())
         return 2
+    path, invocation_id = _receipt_target(args)
+    if path is not None and invocation_id is not None:
+        try:
+            _CLAIMED[path] = claim_receipt(path, invocation_id=invocation_id)
+        except (OSError, TriageError) as exc:
+            code = exc.code if isinstance(exc, TriageError) else "invalid-invocation"
+            print(dumps(hard_stop(f"outcome receipt path cannot be claimed: {exc}", code)).decode())
+            return 2
     request = {}
     if args.request is not None:
         try:
@@ -190,7 +201,8 @@ def _finish(result: dict, args: argparse.Namespace | None, *, entry: str | None,
     if receipt_path_error(path, invocation_id) is not None or path is None or invocation_id is None:
         return status
     try:
-        write_receipt(path, result, invocation_id=invocation_id, entry=entry, context=context)
+        sequence = _CLAIMED.pop(path) if path in _CLAIMED else claim_receipt(path, invocation_id=invocation_id)
+        write_receipt(path, result, invocation_id=invocation_id, entry=entry, context=context, sequence=sequence)
     except (OSError, TriageError) as exc:
         print(f"outcome receipt not written: {exc}", file=sys.stderr)
         return 2

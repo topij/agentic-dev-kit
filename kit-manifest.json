@@ -79,14 +79,14 @@
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
-      "sha256": "da57c24fd6ab7ce3ad93fc54ac962860a7b1a202a1d636f0f40586d57cf6b52c"
+      "sha256": "4809a9192253e878f0d58d1bfc12e225642fb1c2d1a059d9e00ad1adc9213311"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log/engine-cli.md": {
       "required_by": [
         "docs/agentic-dev-kit/workflows/triage-friction-log.md"
       ],
       "role": "workflow",
-      "sha256": "a0d3ddc78b92c40b950cf5898ebcbb9b19616da5c57deb800274e3bb0804798d"
+      "sha256": "54d65bd0ad05440cab184d387bcec642bd82f2da3ad2ea7d9b8ea4785b0c024c"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log/finalize.md": {
       "required_by": [
@@ -529,7 +529,7 @@
         "scripts/triage_friction_log.py"
       ],
       "role": "engine",
-      "sha256": "1d19f8f53fba6bede9e2afed88bd349b3cd6287ea181b5c8321c6c40293c84bd"
+      "sha256": "d26620fb2dadcf3f22cc3cb74dbf8359bc18e55c2dd4367b86d7254bdb05a96b"
     },
     "scripts/lib/triage/outcome.py": {
       "required_by": [
@@ -537,7 +537,7 @@
         "scripts/triage_friction_log.py"
       ],
       "role": "engine",
-      "sha256": "9fc24eaaf8215a03654bfe4b6dbf6e5bc701a4a11a66559749bf6b31f72cda9c"
+      "sha256": "e1c2b415b5a4850b401e1757fbc77fe685ea1f7966294bfa6e288078fe6f7590"
     },
     "scripts/lib/triage/providers.py": {
       "required_by": [
@@ -783,14 +783,14 @@
     },
     "scripts/tests/test_triage_worktree_identity.py": {
       "role": "test",
-      "sha256": "2c7a20366cf9d28c2c93c8109ceed4946281605a8a2ccbbbaa59a0d89c9e5c91"
+      "sha256": "9807ce8ae94327aa4c7644f873115724312dcbaacd1d4635ee3732dc547868bd"
     },
     "scripts/triage_friction_log.py": {
       "required_by": [
         "scripts/finalize_triage.py"
       ],
       "role": "engine",
-      "sha256": "be7aba7b9b0fff10bde8012b197fe56189668c92d5f47c9f17e27d38de1806b2"
+      "sha256": "3eeba850d87440e38a57269938544b297247e067a0f1b261026a6d0c1170aaf5"
     },
     "scripts/verify_live_validation_bundle.py": {
       "role": "repo-only",

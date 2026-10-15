@@ -315,15 +315,45 @@ def test_a_caller_git_dir_does_not_make_a_foreign_root_a_member(
     assert not repository_identity_matches({"root": str(clone), "remote": identity["remote"]}, identity)
 
 
-def test_a_linked_worktree_whose_main_worktree_is_missing_cannot_name_one(tmp_path: Path) -> None:
+def test_a_linked_worktree_whose_gitfile_is_broken_names_no_repository(tmp_path: Path) -> None:
+    """Moving the primary moves the common dir the worktree's gitfile points
+    into, so the worktree is no Git worktree at all."""
     from triage.model import TriageError, canonical_repository_root
 
     root = repository(tmp_path)
     worktree = linked(root, "member")
     shutil.move(str(root), str(tmp_path / "moved"))
-    with pytest.raises(TriageError) as raised:
+    with pytest.raises(TriageError, match="not a Git worktree") as raised:
         canonical_repository_root(worktree)
     assert raised.value.code == "repository-identity"
+
+
+def test_a_linked_worktree_of_a_bare_repository_names_itself(tmp_path: Path) -> None:
+    root = repository(tmp_path)
+    bare = tmp_path / "bare.git"
+    git(tmp_path, "clone", "--quiet", "--bare", str(root), str(bare))
+    git(bare, "remote", "set-url", "origin", "https://github.com/example/project.git")
+    git(bare, "update-ref", "refs/remotes/origin/main", "HEAD")
+    worktree = tmp_path / "bare-worktree"
+    git(bare, "worktree", "add", "--detach", str(worktree), "HEAD")
+    assert current(worktree)["root"] == str(worktree.resolve())
+
+
+def test_a_separate_git_dir_primary_s_linked_worktree_names_itself_and_continues_by_membership(
+    tmp_path: Path,
+) -> None:
+    """Git reports a `--separate-git-dir` primary's git dir as the main worktree.
+    That is no checkout, so the linked worktree names itself, as before #1103,
+    and still matches the primary's identity through membership."""
+    root = repository(tmp_path)
+    separate = tmp_path / "separate.git"
+    shutil.move(str(root / ".git"), str(separate))
+    (root / ".git").write_text(f"gitdir: {separate}\n", encoding="utf-8")
+    primary = current(root)
+    assert primary["root"] == str(root.resolve())
+    worktree = linked(root, "member")
+    assert current(worktree)["root"] == str(worktree.resolve())
+    assert repository_identity_matches(primary, current(worktree))
 
 
 # --- dispositions -----------------------------------------------------------------
@@ -341,6 +371,23 @@ def test_a_linked_worktree_whose_main_worktree_is_missing_cannot_name_one(tmp_pa
 def test_dispositions_are_derived_and_refused_unless_a_wait_is_named(outcome, waiting_on, refusal_code, expected) -> None:
     fields = disposition_fields(outcome, waiting_on=waiting_on, refusal_code=refusal_code)
     assert (fields["disposition"], fields["waiting_on"], fields["refusal_code"]) == expected
+
+
+def test_only_resumable_phases_are_waits() -> None:
+    """`propose` (an unattended draft with no notification provider) has no
+    continuation and `completed` is not a wait; every other phase names one."""
+    from triage.model import PHASES
+    from triage.outcome import PHASE_WAITING_ON
+
+    assert PHASE_WAITING_ON == {
+        "reserved": "analysis",
+        "notification-delivery": "notification-delivery",
+        "awaiting-approval": "approval",
+        "tracker-write": "tracker-write",
+        "forge-finalize": "finalize",
+        "archive-sweep": "finalize",
+    }
+    assert set(PHASES) - set(PHASE_WAITING_ON) == {"propose", "completed"}
 
 
 def test_an_empty_inbox_draft_is_a_completed_no_op(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -417,7 +464,8 @@ def test_receipts_separate_refusal_pending_approval_and_completion(
     assert cli.main(["--outcome-receipt", str(receipt), "--invocation-id", "run-2", "resume", "--context", "unattended"]) == 0
     assert check(cli, receipt, "run-2", capsys=capsys)[1]["sequence"] == 2
 
-    # Completed no-op: an empty inbox after the session completes and retires.
+    # Completed no-op: with no active state and an emptied inbox, a fresh draft finds
+    # no candidates.
     state = state_root / LIVE_STATE
     state.unlink()
     (worktree / "docs/kit-friction-log.md").write_bytes(b"# Log\n")
@@ -425,6 +473,45 @@ def test_receipts_separate_refusal_pending_approval_and_completion(
     assert cli.main(["--outcome-receipt", str(receipt), "--invocation-id", "run-3", "--context", "unattended"]) == 0
     status, verdict = check(cli, receipt, "run-3", "--expect-context", "unattended", capsys=capsys)
     assert (status, verdict["verdict"], verdict["outcome"]) == (0, "completed", "successful-completion")
+
+
+def test_a_call_that_dies_leaves_no_receipt_rather_than_the_last_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = repository(tmp_path)
+    shared_state(tmp_path, monkeypatch)
+    receipt = tmp_path / "triage.json"
+    cli = load_cli(monkeypatch, root)
+    request_path = tmp_path / "request.json"
+    request_path.write_bytes(dumps(request(root)))
+    assert cli.main(["--outcome-receipt", str(receipt), "--invocation-id", "run-1", "new", "--request", str(request_path)]) == 0
+    assert check(cli, receipt, "run-1", capsys=capsys)[1]["verdict"] == "waiting"
+
+    def crash(*args, **kwargs):
+        raise RuntimeError("killed mid-run")
+
+    monkeypatch.setattr(cli, "run", crash)
+    with pytest.raises(RuntimeError):
+        cli.main(["--outcome-receipt", str(receipt), "--invocation-id", "run-1", "resume"])
+    status, verdict = check(cli, receipt, "run-1", capsys=capsys)
+    assert (status, verdict["verdict"]) == (2, "evidence-missing")
+
+
+def test_a_receipt_path_holding_another_file_is_refused_untouched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls = []
+    spec = importlib.util.spec_from_file_location("triage_cli_foreign", ENGINE_DIR / "triage_friction_log.py")
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    monkeypatch.setattr(cli, "run", lambda *a, **k: calls.append(a))
+    target = tmp_path / "notes.md"
+    target.write_bytes(b"PRECIOUS\n")
+    assert cli.main(["resume", "--outcome-receipt", str(target), "--invocation-id", "run-1"]) == 2
+    printed = loads_exact(capsys.readouterr().out.strip().encode())
+    assert "not a triage outcome receipt" in printed["detail"]
+    assert target.read_bytes() == b"PRECIOUS\n"
+    assert calls == []
 
 
 @pytest.mark.parametrize("tamper", ["digest", "disposition", "shape", "not-json"])
