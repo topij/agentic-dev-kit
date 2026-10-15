@@ -173,8 +173,10 @@ preference to a same-named command and installing one would silently replace the
 equal what its renderer produces, or the command refuses: a broken generator cannot
 classify an adopter by comparing it with itself.
 
-Codex `agents/openai.yaml` rows for the explicit-only skills inspect only
-`policy.allow_implicit_invocation`. Here `kit-current` confirms an unambiguous,
+A Codex `agents/openai.yaml` row beside an `adopter-owned` `SKILL.md` is also
+`adopter-owned`, even when the interface is absent: do not install kit policy for
+an adopter-authored skill. Otherwise, rows for the explicit-only skills inspect
+only `policy.allow_implicit_invocation`. Here `kit-current` confirms an unambiguous,
 explicit YAML boolean `false`, not a byte match or ownership of the other keys.
 `policy-stale` means that setting could not be confirmed; inspect the file for an
 absent, differing, duplicate, malformed or merge-inherited setting. A quoted

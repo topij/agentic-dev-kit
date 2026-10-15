@@ -792,6 +792,52 @@ def test_adapter_report_checks_the_codex_invocation_policy(
 
 
 @pytest.mark.parametrize("slug", sorted(runtime_adapters.EXPLICIT_INVOCATION_ONLY))
+@pytest.mark.parametrize("binding", ["authored", "missing"])
+@pytest.mark.parametrize("interface, policy_state", [
+    (None, "missing"),
+    (_KIT_INTERFACE, "kit-current"),
+    (_KIT_INTERFACE.replace("false", "true"), "policy-stale"),
+])
+def test_adapter_report_policy_respects_the_skill_ownership(
+    tmp_path, adapter_source, capsys, slug, binding, interface, policy_state
+):
+    adopter = tmp_path / "adopter"
+    skill = adopter / f".agents/skills/{slug}/SKILL.md"
+    policy = adopter / runtime_adapters.CODEX_INTERFACE_PATH.format(slug=slug)
+    if binding == "authored":
+        skill.parent.mkdir(parents=True)
+        skill.write_text(
+            f"---\nname: {slug}\ndescription: An unrelated adopter workflow.\n"
+            "---\n\n# Private workflow\n\nRun for matching requests.\n",
+            encoding="utf-8",
+        )
+    if interface is not None:
+        policy.parent.mkdir(parents=True, exist_ok=True)
+        policy.write_text(interface, encoding="utf-8")
+    before = {path: path.read_bytes() if path.exists() else None for path in (skill, policy)}
+
+    code = kit_doctor.main([
+        "--root", str(adopter), "--adapter-report",
+        "--adapter-source", str(adapter_source), "--json",
+    ])
+
+    captured = capsys.readouterr()
+    assert code == 0 and captured.err == ""
+    rows = {row["path"]: row for row in json.loads(captured.out)["adapters"]}
+    skill_row = rows[skill.relative_to(adopter).as_posix()]
+    policy_row = rows[policy.relative_to(adopter).as_posix()]
+    if binding == "authored":
+        assert skill_row["state"] == "adopter-owned"
+        assert policy_row["state"] == "adopter-owned", policy_row
+        assert "take the kit's file" not in policy_row["detail"]
+    else:
+        assert skill_row["state"] == "missing"
+        assert policy_row["state"] == policy_state, policy_row
+    for path, original in before.items():
+        assert (path.read_bytes() if path.exists() else None) == original
+
+
+@pytest.mark.parametrize("slug", sorted(runtime_adapters.EXPLICIT_INVOCATION_ONLY))
 @pytest.mark.parametrize("shape", ["missing", "enabled", "duplicate", "malformed",
                                    "invalid-utf8", "directory", "symlink"])
 def test_adapter_report_rejects_an_invalid_source_policy(
@@ -963,6 +1009,11 @@ def test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned(
 
     assert status.state == "kit-stale"
     assert "refresh freely" in status.detail
+    if slug in runtime_adapters.EXPLICIT_INVOCATION_ONLY:
+        policy_rel = runtime_adapters.CODEX_INTERFACE_PATH.format(slug=slug)
+        policy = next(item for item in statuses if item.path == policy_rel)
+        assert policy.state == "missing"
+        assert "take the kit's file" in policy.detail
 
 
 @pytest.mark.evidence

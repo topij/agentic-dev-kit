@@ -7,8 +7,9 @@ used by ``kit_doctor --adapter-report``.
 
 The comparison is intentionally informational. Rendered bindings are compared
 with known kit forms; unknown forms are left to the adopter. Codex interface
-files are inspected only for the explicit invocation-policy setting, without
-claiming ownership of their other keys. Neither comparison changes the drift gate.
+files beside adopter-owned bindings remain adopter-owned. Otherwise they are
+inspected only for the explicit invocation-policy setting, without claiming
+ownership of their other keys. Neither comparison changes the drift gate.
 """
 
 from __future__ import annotations
@@ -361,16 +362,24 @@ def compare_adapters(source_root: Path, adopter_root: Path) -> list[AdapterStatu
                 if runtime == "claude"
                 else None
             )
-            statuses.append(
-                _adapter_status(
-                    adopter_root, runtime, slug, rel, current, description,
-                    workflow_path, retired,
-                )
+            binding = _adapter_status(
+                adopter_root, runtime, slug, rel, current, description,
+                workflow_path, retired,
             )
+            statuses.append(binding)
             if retired is not None:
                 statuses.append(retired)
             if runtime == "codex" and slug in EXPLICIT_INVOCATION_ONLY:
-                statuses.append(_invocation_policy_status(adopter_root, slug))
+                # A matching slug does not make an authored skill ours. Its
+                # interface follows the binding's existing ownership decision.
+                if binding.state == "adopter-owned":
+                    statuses.append(AdapterStatus(
+                        "codex", slug, CODEX_INTERFACE_PATH.format(slug=slug),
+                        "adopter-owned",
+                        "skill binding is adopter-owned; preserve its invocation policy",
+                    ))
+                else:
+                    statuses.append(_invocation_policy_status(adopter_root, slug))
     return statuses
 
 
