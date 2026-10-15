@@ -44,8 +44,8 @@
     `already current`; anything else is `deferred`, unless
     `DEVKIT_INSTALL_SHARED_HOOKS=1` is set.
   - Review: three panel rounds, and the round budget is spent. The decision packet's
-    open findings are stale `init.sh --help` / `adopt.md` prose (MEDIUM) and two LOW
-    classification gaps.
+    open findings are stale `init.sh --help` / `adopt.md` prose (MEDIUM) and five LOW
+    findings.
   - Verification: `make test` at `5fda739deb899a75a959e7c2b1e2df0282e478e3` on
     2026-10-15, in `/Users/topi/Coding/agentic-dev-kit-wt/linked-worktree-hooks`,
     printed `5041 passed, 1 skipped`.
@@ -351,8 +351,8 @@ for the headless lane profile.
 
 **Status:** [#1111](https://github.com/topij/agentic-dev-kit/pull/1111) is open at
 `9ee0fd9b`, held for the operator with its round budget spent; the decision packet on the
-PR recommends option C (ship identity and dispositions, move the receipt surface to a
-follow-up) or A. cs-toolkit's scheduled triage needs the identity half. Assignment
+PR recommends option A if the receipt surface is wanted now, otherwise C (ship identity
+and dispositions, move the receipt surface to a follow-up). cs-toolkit's scheduled triage needs the identity half. Assignment
 unconfirmed — may belong to Triage engine hardening.
 **Owner:** [#1103](https://github.com/topij/agentic-dev-kit/issues/1103); PR #1111.
 
@@ -361,12 +361,12 @@ unconfirmed — may belong to Triage engine hardening.
 ### Shared hook installation
 
 **Status:** [#1112](https://github.com/topij/agentic-dev-kit/pull/1112) is open at
-`5fda739d`, held for the operator with its round budget spent; its open findings are a
-docs MEDIUM and two LOW classification gaps (decision packet on the PR). #990's lens
+`5fda739d`, held for the operator with its round budget spent; its open findings are one
+docs MEDIUM and five LOW findings (decision packet on the PR). #990's lens
 rendering and migration items are untouched. Assignment unconfirmed.
 **Owner:** [#990](https://github.com/topij/agentic-dev-kit/issues/990); PR #1112.
 
-▶ Next: operator decides #1112's decision packet; option A is one round correcting `init.sh --help` and `adopt.md` plus the symlink-then-`..` and absolute-in-worktree cases.
+▶ Next: operator decides #1112's decision packet (option A is the one further round the packet scopes).
 
 ### Consumer upgrades
 
@@ -378,4 +378,4 @@ unconfirmed.
 **Owner:** `saved_plans/consumer-upgrade-assessment_2026-10-15.md`; #1103, #990, #1011,
 #1109, #979.
 
-▶ Next: after #1111 merges, `/upgrade` cs-toolkit from a fresh linked worktree of its `origin/main` (assessment, plan step 2), with operator approval.
+▶ Next: after #1111 merges, `/upgrade` cs-toolkit from a fresh linked worktree of its `origin/main` (plan step 2 of the local `saved_plans/consumer-upgrade-assessment_2026-10-15.md`), with operator approval.

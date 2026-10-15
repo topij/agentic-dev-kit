@@ -35,7 +35,7 @@
     `/Users/topi/Coding/agentic-dev-kit/.git/hooks/pre-push`.
   - **Effect:** checked afterwards, the file is the standard kit shim with mode 755,
     so its content is unchanged. The lens reported it.
-  - **Proposed remedy:** the lens contract names `git clone --no-hardlinks`, never
+  - **Proposed remedy:** the lens contract should name `git clone --no-hardlinks`, never
     `cp -R`, for a writable copy of a worktree. Same family as #1078 (lenses writing
     into what they were handed).
 - **A review lens ran a global `pkill -f "pytest scripts/tests"`.** Severity L, kept for
