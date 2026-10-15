@@ -791,6 +791,48 @@ def test_adapter_report_checks_the_codex_invocation_policy(
     assert f".agents/skills/upgrade/agents/openai.yaml: {state}" in report
 
 
+@pytest.mark.parametrize("slug", sorted(runtime_adapters.EXPLICIT_INVOCATION_ONLY))
+@pytest.mark.parametrize("shape", ["missing", "enabled", "duplicate", "malformed",
+                                   "invalid-utf8", "directory", "symlink"])
+def test_adapter_report_rejects_an_invalid_source_policy(
+    tmp_path, capsys, adapter_source, slug, shape
+):
+    path = adapter_source / runtime_adapters.CODEX_INTERFACE_PATH.format(slug=slug)
+    if shape == "missing":
+        path.unlink()
+    elif shape == "enabled":
+        path.write_text(_KIT_INTERFACE.replace("false", "true"), encoding="utf-8")
+    elif shape == "duplicate":
+        path.write_text(_KIT_INTERFACE + "  allow_implicit_invocation: true\n", encoding="utf-8")
+    elif shape == "malformed":
+        path.write_text("policy: [\n", encoding="utf-8")
+    elif shape == "invalid-utf8":
+        path.write_bytes(b"\xff")
+    elif shape == "directory":
+        path.unlink()
+        path.mkdir()
+    else:
+        outside = tmp_path / "outside.yaml"
+        outside.write_text(_KIT_INTERFACE, encoding="utf-8")
+        path.unlink()
+        path.symlink_to(outside)
+    before = path.read_bytes() if path.is_file() else None
+    adopter = tmp_path / "empty-adopter"
+
+    code = kit_doctor.main([
+        "--root", str(adopter), "--adapter-report",
+        "--adapter-source", str(adapter_source), "--json",
+    ])
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "source interface" in captured.err
+    assert path.relative_to(adapter_source).as_posix() in captured.err
+    assert captured.out == ""  # No partial rows or unsafe copying recommendation.
+    assert not adopter.exists()
+    assert (path.read_bytes() if path.is_file() else None) == before
+
+
 def test_adapter_report_preserves_a_symlinked_codex_interface_as_adopter_owned(
     tmp_path, adapter_source
 ):

@@ -180,7 +180,10 @@ explicit YAML boolean `false`, not a byte match or ownership of the other keys.
 absent, differing, duplicate, malformed or merge-inherited setting. A quoted
 `"false"` is a string, not the required boolean. `missing` means take the kit's file;
 unsafe or unreadable files remain `adopter-owned`. Run the command above through
-`uv run` to provide the YAML parser declared by the fetched doctor.
+`uv run` to provide the YAML parser declared by the fetched doctor. Before emitting
+adopter rows, it requires the explicit-only source interfaces to be readable, safe
+files with that same unambiguous policy. If source validation fails, inspect and
+repair or replace the fetched kit before using its files; no adopter rows are emitted.
 
 **A related risk sits one level up, in this very file, and whether the run above even
 catches it depends on when your installed copy was built.** `upgrade.md` has been

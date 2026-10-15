@@ -12,3 +12,8 @@ the setting while preserving adopter edits, or take the kit's file when its othe
 keys are appropriate. Differing, duplicate, malformed and merge-inherited settings
 are not confirmed. A quoted `"false"` is a string. Unsafe or unreadable files remain
 `adopter-owned`; inspect them without overwriting them automatically.
+
+Before reporting adopter rows, the command validates the explicit-only source
+interfaces. If one is missing, unsafe, unreadable or cannot confirm that policy,
+repair or replace the source kit and rerun the report; the command exits with an
+error instead of recommending that source file.

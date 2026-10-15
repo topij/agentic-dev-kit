@@ -316,6 +316,24 @@ def _unsafe_adopter_path(root: Path, rel: str) -> str | None:
 def compare_adapters(source_root: Path, adopter_root: Path) -> list[AdapterStatus]:
     """Compare an adopter against adapters rendered from a source kit checkout."""
 
+    # A missing adopter interface is told to copy the source file. Validate
+    # that recommendation before computing any adopter rows, just as source
+    # SKILL.md bindings must satisfy their rendered contract.
+    for slug in sorted(EXPLICIT_INVOCATION_ONLY):
+        rel = CODEX_INTERFACE_PATH.format(slug=slug)
+        unsafe_path = _unsafe_adopter_path(source_root, rel)
+        if unsafe_path is not None:
+            raise ValueError(f"unsafe source interface {rel}: {unsafe_path}")
+        try:
+            source_text = (source_root / rel).read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            raise ValueError(f"cannot read source interface {rel}: {exc}") from exc
+        if not _disables_implicit_invocation(source_text):
+            raise ValueError(
+                f"source interface {rel} must set an unambiguous, explicit "
+                "policy.allow_implicit_invocation: false; inspect the source kit"
+            )
+
     statuses: list[AdapterStatus] = []
     for runtime in RUNTIMES:
         for slug in WORKFLOW_SLUGS:

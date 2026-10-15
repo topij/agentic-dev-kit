@@ -283,10 +283,13 @@ def generated_adapter_source(root: Path) -> Path:
             if runtime == "codex":
                 interface = adapter.parent / "agents" / "openai.yaml"
                 interface.parent.mkdir()
-                interface.write_text(json.dumps({"interface": {
+                metadata = {"interface": {
                     "short_description": "Exercise the shared development workflow",
                     "default_prompt": f"Use ${slug} for this task.",
-                }}), encoding="utf-8")
+                }}
+                if slug in runtime_adapters.EXPLICIT_INVOCATION_ONLY:
+                    metadata["policy"] = {"allow_implicit_invocation": False}
+                interface.write_text(json.dumps(metadata), encoding="utf-8")
     return root
 
 
