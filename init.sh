@@ -2268,7 +2268,7 @@ install_hooks() {
     done
     _hooks_abs="$(cd "$_hooks_probe" && pwd -P)$_hooks_rest"
     case "$_hooks_abs/" in
-      */../*|*/./*) _hooks_shared=1 ;;
+      */../*) _hooks_shared=1 ;;
       "$_top"/*) ;;
       *) _hooks_shared=1 ;;
     esac

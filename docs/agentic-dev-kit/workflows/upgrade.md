@@ -1038,5 +1038,6 @@ checkout of the merged revision. In the primary checkout, once it is on that rev
 run `make install-hooks` if the repository has that target, or else re-run
 `./init.sh --no-clobber`. Alternatively run
 `DEVKIT_INSTALL_SHARED_HOOKS=1 ./init.sh --no-clobber` from a fresh linked worktree of
-it. Then confirm `kit_doctor` reports the hook installed. Until then, checkouts keep the
+it. Then confirm, from the primary checkout, that `kit_doctor` reports the hook installed
+(from a linked worktree it can report it missing, `#61`). Until then, checkouts keep the
 hook they had.

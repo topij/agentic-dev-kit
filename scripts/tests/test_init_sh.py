@@ -2610,11 +2610,14 @@ def test_a_linked_worktree_leaves_a_differing_shared_shim_byte_identical(tmp_pat
     )
     _shared_shim(repo).parent.mkdir(parents=True, exist_ok=True)
     _shared_shim(repo).write_text(old, encoding="utf-8")
+    # Executable, as a working shim is, so only the byte comparison can defer it.
+    _shared_shim(repo).chmod(0o755)
 
     proc = _run_init(worktree)
 
     assert _shared_shim(repo).read_text(encoding="utf-8") == old
     assert "deferred" in proc.stderr
+    assert "already current" not in proc.stdout
 
 
 def test_a_linked_worktree_reports_an_identical_shared_shim_as_current(tmp_path: Path) -> None:
@@ -2728,7 +2731,8 @@ def test_a_linked_worktree_judges_a_relative_hooks_path_by_where_it_lands(tmp_pa
         value = ".hl"
     elif route == "climbs-out-via-missing":
         # The `..` sits under a directory that does not exist, so nothing can
-        # canonicalise it; textually the path is still below the worktree.
+        # canonicalise it, and the path only begins below the worktree: it is the
+        # `..` rule that marks it shared.
         value = "missing/../../outside-hooks"
     else:
         value = "../outside-hooks"
