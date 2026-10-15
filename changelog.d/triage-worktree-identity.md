@@ -1,4 +1,4 @@
-## Triage engine: linked worktrees share a session; results carry a disposition; scheduled callers can check an outcome receipt
+## Triage engine: linked worktrees share a session; results carry a disposition
 
 CHANGED (report / return shape): a triage run identity's `repository_identity.root` is
 now the repository's main worktree for every linked worktree of it, not the invoking
@@ -31,13 +31,13 @@ CHANGED (report / return shape): a checkout whose identity cannot be established
 now stops with `hard-stop` and `refusal_code` `repository-identity` before the gate is
 tried, where a missing `origin` used to read as a held gate (`operator-held`, exit 0).
 
-ADDED (engine CLI surface): `triage_friction_log.py` takes `--outcome-receipt <abs path>`
-and `--invocation-id <id>`, or `DEVKIT_TRIAGE_OUTCOME_RECEIPT` and
-`DEVKIT_TRIAGE_INVOCATION_ID`, and publishes an invocation-bound receipt after each
-call. It refuses a receipt path that holds a file other than a receipt, and clears an
-earlier receipt before the engine runs, so a call that dies leaves none. `--check-outcome-receipt <abs path> --invocation-id <id> [--expect-context …]
-[--expect-mode …]` classifies it and exits 0 for completed or waiting, 1 for refused and
-2 for missing, stale, wrong-invocation or malformed evidence. A scheduled wrapper whose
-exit status does not come from the CLI (a `claude -p` triage job, for one) should export
-the two variables with a fresh id per run and gate on the check. Nothing changes for a
-caller that passes neither.
+CHANGED (gate semantics): a draft or analysis resume now checks that the report
+directory below the identity's root is writable before it reserves a session or
+advances its phase, and stops with `hard-stop` otherwise. Later phases still write the
+report unchecked, so keep the primary checkout's report root writable by every account
+that runs triage, scheduled jobs in temporary worktrees included.
+
+What an adopter must do: refresh the triage engines together, including the new
+`lib/triage/outcome.py` that `engine.py` imports (`/upgrade` takes it from
+`kit-manifest.json`), and the new kit-owned test
+`scripts/tests/test_triage_worktree_identity.py`.

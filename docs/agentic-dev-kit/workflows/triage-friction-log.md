@@ -339,9 +339,8 @@ Select the first matching row and report exactly one overall outcome.
 | `all-triggered-contracts-terminal` | No prior row matches and every triggered capability is terminal. | `successful-completion` |
 
 The engine also reports a `disposition` (`completed`, `waiting` or `refused`) that
-tells an `operator-held` wait from an `operator-held` refusal, and a scheduled caller can
-bind it to its invocation with an outcome receipt; see *Dispositions and outcome
-receipts* in [`triage-friction-log/engine-cli.md`](triage-friction-log/engine-cli.md).
+tells an `operator-held` wait from an `operator-held` refusal; see *Dispositions* in
+[`triage-friction-log/engine-cli.md`](triage-friction-log/engine-cli.md).
 
 ## Entry points and context
 

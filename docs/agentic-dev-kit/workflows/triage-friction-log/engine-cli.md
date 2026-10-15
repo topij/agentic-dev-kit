@@ -9,7 +9,7 @@ its reference files.
 ## Contents
 
 - Entry points, inputs and outputs of both engines
-- Dispositions, and the outcome receipt a scheduled caller checks
+- Dispositions, and running from a linked worktree
 
 ## Engine CLI
 
@@ -109,7 +109,7 @@ It reports the configured engine mode after configuration has loaded, the frozen
 snapshot path after active-state validation, and the report path when that state carries
 an exact report binding; those fields are null before their respective authority exists.
 
-## Dispositions and outcome receipts
+## Dispositions
 
 `operator-held` names both a legitimate wait for the operator and a refusal, and the
 CLI exits 0 for both, so neither the outcome nor the exit status tells a scheduled
@@ -127,50 +127,9 @@ in `propose` (an unattended draft that had no notification provider) has no
 continuation, so a result reporting it is `refused`. Classify on these keys, never on
 `detail`.
 
-A caller whose own exit status does not come from the CLI, such as a scheduled agent
-run that invokes the CLI itself, asks for an invocation-bound receipt. Choose a fresh
-invocation id per scheduled run (`[A-Za-z0-9][A-Za-z0-9_-]{0,127}`) and an absolute
-receipt path with no symlinked ancestor, and pass both, as flags or exported:
-
-```console
-uv run <engine-dir>/triage_friction_log.py --outcome-receipt /abs/receipts/triage.json --invocation-id run-2026-10-16 --context unattended
-DEVKIT_TRIAGE_OUTCOME_RECEIPT=/abs/receipts/triage.json DEVKIT_TRIAGE_INVOCATION_ID=run-2026-10-16 <agent command that runs the CLI>
-```
-
-A flag wins over its variable. Before the engine runs, each CLI call clears the
-receipt path: a file there that is not a triage outcome receipt is refused (exit 2, the
-file untouched, the engine not run), and an earlier receipt is removed, so a call that
-dies before publishing leaves no receipt rather than an earlier call's outcome. The two
-receipt flags are read before the rest of the command line is parsed, so a malformed
-argument elsewhere does not stop the clearing. Clearing is best effort and has two
-limits: a call that cannot tell its receipt path (its `--outcome-receipt` has no value
-and the variable is unset) cannot clear it, and a path whose directory refuses the
-unlink stops the call (exit 2) with the earlier receipt still in place. A caller that
-runs the CLI more than once per check is safest with the environment variables, which
-every call reads, or with a fresh invocation id per call. After
-the engine returns, the call publishes a receipt with
-`kind: triage-invocation-outcome`, the invocation id, `sequence` (1 for the first call under that id, and one more than the receipt it
-replaces after that; a call that dies leaves none, so the next restarts at 1), entry, context, mode, outcome, disposition, `waiting_on`,
-`refusal_code`, the complete result and its digest. The last call's receipt is the
-invocation's outcome. A path given without an id, or an id without a path, a relative
-path, or a malformed id is refused before the engine runs, and no receipt is written.
-A receipt that cannot be published leaves the printed result in place and makes the
-exit status 2.
-
-After the run, check the receipt against the id you chose:
-
-```console
-uv run <engine-dir>/triage_friction_log.py --check-outcome-receipt /abs/receipts/triage.json --invocation-id run-2026-10-16 --expect-context unattended --expect-mode live
-```
-
-It prints a canonical JSON `verdict` and exits 0 for `completed` and `waiting`, 1 for
-`refused`, and 2 for `evidence-missing` (no receipt), `evidence-stale` (a receipt for
-another invocation id: an earlier run left it and this one wrote none),
-`evidence-wrong-invocation` (the right id, but another context or mode than
-`--expect-context` or `--expect-mode`; a refusal recorded before its mode or context was
-known, as `unknown` or null, stays `refused`), `evidence-malformed` (shape, digest or field
-consistency fails), or a usage error. Treat every exit other than 0 as a failed run,
-and read `verdict` and `waiting_on` to tell a pending approval from a completed no-op.
+A scheduled caller whose own exit status does not come from the CLI (an agent run that
+invokes the CLI itself) reads the disposition from the CLI's printed result. An
+invocation-bound receipt for such callers is separate follow-up work.
 
 Repository identity is the main worktree's root for every worktree of one repository
 whose main worktree is a checkout (a bare repository's linked worktree, and one whose
@@ -186,4 +145,7 @@ the scheduled run must be able to write there. A draft or analysis resume checks
 directory is writable before it reserves a new session or advances the session's phase,
 and stops with `hard-stop` otherwise. A completed session that a session-starting entry retires first
 stays retired (its bytes kept, as *Completed-state retirement* describes), and the next
-run starts fresh.
+run starts fresh. The later phases (approval, tracker write, finalize) write the report without that
+check: an unwritable report root there raises out of the engine with the gate still
+held, as it did before this check existed, and interactive `recover` clears it. Keep
+the primary checkout's report root writable by every account that runs triage.
