@@ -636,7 +636,7 @@
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
-      "sha256": "610f4805b192aeb7fe9ccb219e0204f82259918f9ff6f30d833442e5f77da7d8"
+      "sha256": "3231955cdd9a6e91bc8329767e3075da64dec24dbf1143afd0aec713c73526f7"
     },
     "scripts/tests/test_kitconfig.py": {
       "role": "test",
