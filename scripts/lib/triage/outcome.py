@@ -115,7 +115,7 @@ def receipt_path_error(path: Path | None, invocation_id: str | None) -> str | No
     return _invocation_id_error(invocation_id)
 
 
-def claim_receipt(path: Path, *, invocation_id: str) -> int:
+def claim_receipt(path: Path, *, invocation_id: str | None) -> int:
     """Clear the receipt path before a call runs; return the call's `sequence`.
 
     A file at the path that is not a receipt is refused, never replaced: the
@@ -123,9 +123,10 @@ def claim_receipt(path: Path, *, invocation_id: str) -> int:
     overwrite state, a document or an inbox. An earlier receipt is removed
     before the engine runs, so a call that dies before publishing (a crash, a
     kill, a timeout) leaves no receipt, which the check reports missing, rather
-    than an earlier call's outcome under the same id. `sequence` counts the calls
-    under one id: an agent run may call the CLI more than once (a freeze, then an
-    analysis resume), and the last call's receipt is the invocation's outcome."""
+    than an earlier call's outcome under the same id. `sequence` is one more
+    than the receipt it replaces under the same id, else 1: an agent run may call
+    the CLI more than once (a freeze, then an analysis resume), and the last
+    call's receipt is the invocation's outcome."""
     observation, raw = observe(path)
     if raw is None:
         return 1
@@ -233,6 +234,13 @@ def check_receipt(
         return verdict("evidence-malformed", "receipt fields disagree with its result or with each other")
     if receipt["invocation_id"] != invocation_id:
         return verdict("evidence-stale", "receipt belongs to another invocation")
-    if (context is not None and receipt["context"] != context) or (mode is not None and receipt["mode"] != mode):
+    # A refusal before the mode or context was established records "unknown" or
+    # null there; it cannot contradict what the caller invoked, so it stays a
+    # refusal rather than reading as another invocation.
+    recorded_context = receipt["context"]
+    recorded_mode = receipt["mode"]
+    if (context is not None and recorded_context is not None and recorded_context != context) or (
+        mode is not None and recorded_mode != "unknown" and recorded_mode != mode
+    ):
         return verdict("evidence-wrong-invocation", "receipt records another context or mode than the caller invoked")
     return verdict(receipt["disposition"], f"call {receipt['sequence']} under this invocation", receipt)

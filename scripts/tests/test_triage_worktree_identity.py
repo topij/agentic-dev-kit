@@ -390,6 +390,21 @@ def test_only_resumable_phases_are_waits() -> None:
     assert set(PHASES) - set(PHASE_WAITING_ON) == {"propose", "completed"}
 
 
+def test_refusal_codes_name_a_missing_origin_an_active_state_and_an_unattended_recover(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = repository(tmp_path)
+    shared_state(tmp_path, monkeypatch)
+    unattended = run("recover", context="unattended", request={}, start=root)
+    assert (unattended["disposition"], unattended["refusal_code"]) == ("refused", "invalid-invocation")
+    run("new", context="interactive", request=request(root), start=root)
+    again = run("new", context="interactive", request={}, start=root)
+    assert (again["disposition"], again["refusal_code"]) == ("refused", "active-state")
+    git(root, "remote", "remove", "origin")
+    orphan = run(None, context="interactive", request={}, start=root)
+    assert (orphan["outcome"], orphan["refusal_code"]) == ("hard-stop", "repository-identity")
+
+
 def test_an_empty_inbox_draft_is_a_completed_no_op(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     root = repository(tmp_path)
     (root / "docs/kit-friction-log.md").write_bytes(b"# Log\n")
@@ -514,6 +529,72 @@ def test_a_receipt_path_holding_another_file_is_refused_untouched(
     assert calls == []
 
 
+@pytest.mark.parametrize("broken, expected", [
+    # argparse refuses the call; the id is valid, so the refusal is the receipt
+    (["--context", "unatended"], (1, "refused")),
+    # the binding is malformed, so no receipt can be written at all
+    (["--invocation-id", "bad id"], (2, "evidence-missing")),
+])
+def test_a_call_refused_before_the_engine_still_clears_the_last_receipt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    broken: list[str],
+    expected: tuple[int, str],
+) -> None:
+    """With the receipt given as flags, a later call that never reaches the
+    engine must not leave the earlier call's receipt readable as the outcome."""
+    root = repository(tmp_path)
+    shared_state(tmp_path, monkeypatch)
+    receipt = tmp_path / "triage.json"
+    cli = load_cli(monkeypatch, root)
+    request_path = tmp_path / "request.json"
+    request_path.write_bytes(dumps(request(root)))
+    assert cli.main(["--outcome-receipt", str(receipt), "--invocation-id", "run-1", "new", "--request", str(request_path)]) == 0
+    assert check(cli, receipt, "run-1", capsys=capsys)[1]["verdict"] == "waiting"
+
+    arguments = ["--outcome-receipt", str(receipt), "--invocation-id", "run-1", "resume", *broken]
+    assert cli.main(arguments) == 2
+    status, verdict = check(cli, receipt, "run-1", capsys=capsys)
+    assert (status, verdict["verdict"]) == expected
+
+
+def test_an_unwritable_report_root_refuses_before_any_state_exists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The report is written in the primary checkout; an unwritable report root
+    used to fail after the reservation and leave the gate held."""
+    root = repository(tmp_path)
+    state_root = shared_state(tmp_path, monkeypatch)
+    worktree = linked(root, "cron-worktree")
+    reports = root / "reports"
+    reports.mkdir()
+    reports.chmod(0o555)
+    try:
+        refused = run("new", context="interactive", request=request(root), start=worktree)
+        assert (refused["outcome"], refused["disposition"]) == ("hard-stop", "refused")
+        assert "report directory is not writable" in refused["detail"]
+        assert not (state_root / LIVE_STATE).exists()
+        assert not (state_root / "triage/triage-pipeline-gate_live.lock").exists()
+    finally:
+        reports.chmod(0o755)
+    drafted = run("new", context="interactive", request=request(root), start=worktree)
+    assert (drafted["disposition"], drafted["waiting_on"]) == ("waiting", "approval")
+
+
+def test_a_refusal_before_the_mode_is_known_stays_refused_under_expected_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = repository(tmp_path)
+    shared_state(tmp_path, monkeypatch)
+    receipt = tmp_path / "triage.json"
+    cli = load_cli(monkeypatch, root)
+    missing = tmp_path / "no-such-request.json"
+    assert cli.main(["--outcome-receipt", str(receipt), "--invocation-id", "run-1", "resume", "--request", str(missing)]) == 2
+    status, verdict = check(cli, receipt, "run-1", "--expect-mode", "live", "--expect-context", "interactive", capsys=capsys)
+    assert (status, verdict["verdict"], verdict["refusal_code"]) == (1, "refused", "invalid-invocation")
+
+
 @pytest.mark.parametrize("tamper", ["digest", "disposition", "shape", "not-json"])
 def test_a_tampered_receipt_is_malformed_evidence(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tamper: str
@@ -540,11 +621,12 @@ def test_a_tampered_receipt_is_malformed_evidence(
 @pytest.mark.parametrize("arguments, reason", [
     (["--outcome-receipt", "relative.json", "--invocation-id", "run-1"], "absolute"),
     (["--invocation-id", "run-1"], "both"),
-    (["--outcome-receipt", "/tmp/x.json", "--invocation-id", "bad id"], "invocation id"),
+    (["--outcome-receipt", "ABSOLUTE", "--invocation-id", "bad id"], "invocation id"),
 ])
 def test_a_receipt_that_cannot_be_bound_is_refused_before_the_engine_runs(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], arguments: list[str], reason: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], arguments: list[str], reason: str
 ) -> None:
+    arguments = [str(tmp_path / "x.json") if item == "ABSOLUTE" else item for item in arguments]
     calls = []
     spec = importlib.util.spec_from_file_location("triage_cli_unbound", ENGINE_DIR / "triage_friction_log.py")
     cli = importlib.util.module_from_spec(spec)

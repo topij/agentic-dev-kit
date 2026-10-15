@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import difflib
+import os
 import re
 from collections.abc import Callable
 from copy import deepcopy
@@ -738,6 +739,15 @@ def _write_report(path: Path, state: dict[str, Any], capabilities: dict[str, dic
     atomic_replace(path, _report_text(state, capabilities, outcome))
 
 
+def _require_writable_directory(directory: Path) -> None:
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise TriageError(f"report directory cannot be created: {exc}") from exc
+    if not os.access(directory, os.W_OK | os.X_OK):
+        raise TriageError(f"report directory is not writable: {directory}")
+
+
 def _new_draft(
     settings: Settings,
     store: ArtifactStore,
@@ -776,6 +786,10 @@ def _new_draft(
         repo=settings.paths.repo,
         also=(Path(identity["repository_identity"]["root"]),),
     )
+    # The report lives below the identity's root, which for a linked worktree is
+    # the primary checkout. Prove its directory writable before any state exists:
+    # a report write failing after the reservation leaves the gate held.
+    _require_writable_directory(report_path.parent)
     frozen_path = store.frozen_path(session=identity["session"], day=day, mkdir=True)
     content = snapshot_content(inbox_raw, candidates)
     frozen_snapshot = {
@@ -879,6 +893,7 @@ def _resume_reserved(
     frozen_raw = decode_bytes(state["frozen_snapshot"]["raw"])
     candidates = parse(frozen_raw)
     report_path = store.report_path(session=state["run_identity"]["session"], day=today_string(), root=state["run_identity"]["repository_identity"]["root"])
+    _require_writable_directory(report_path.parent)
     proposals, proposal_digests, _ = _proposal_records(
         candidates,
         request.get("proposals"),

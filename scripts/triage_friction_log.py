@@ -93,6 +93,10 @@ def hard_stop(detail: str, code: str = "invalid-invocation") -> dict:
 def _receipt_target(args: argparse.Namespace | None) -> tuple[Path | None, str | None]:
     path = args.outcome_receipt if args is not None else None
     invocation_id = args.invocation_id if args is not None else None
+    return _with_environment(path, invocation_id)
+
+
+def _with_environment(path: Path | None, invocation_id: str | None) -> tuple[Path | None, str | None]:
     if path is None and os.environ.get(RECEIPT_ENV):
         path = Path(os.environ[RECEIPT_ENV])
     if invocation_id is None and os.environ.get(INVOCATION_ENV):
@@ -122,29 +126,47 @@ def _check(args: argparse.Namespace) -> int:
     return CHECK_EXIT.get(verdict["verdict"], 2)
 
 
-def main(argv: list[str] | None = None) -> int:
+def _early_receipt_target(argv: list[str]) -> tuple[Path | None, str | None, bool]:
+    """The receipt path and id as given, read before the full parse, and whether
+    the call is a receipt check. A call that then fails to parse, or whose id is
+    malformed, has still cleared the path, so the caller's check finds no receipt
+    rather than an earlier call's outcome under the same id."""
+    early = argparse.ArgumentParser(add_help=False)
+    early.add_argument("--outcome-receipt", type=Path)
+    early.add_argument("--invocation-id")
+    early.add_argument("--check-outcome-receipt")
     try:
-        args = parser().parse_args(argv)
-    except TriageError as exc:
-        return _finish(hard_stop(str(exc)), None, entry=None, context=None, status=2)
-    if args.check_outcome_receipt is not None:
-        return _check(args)
-    if args.expect_context is not None or args.expect_mode is not None:
-        return _finish(hard_stop("--expect-context and --expect-mode need --check-outcome-receipt"), args, entry=args.entry, context=args.context, status=2)
-    receipt_error = receipt_path_error(*_receipt_target(args))
-    if receipt_error is not None:
-        # No receipt can be bound, so none is written: the caller's check then
-        # finds it missing or stale, never a success.
-        print(dumps(hard_stop(receipt_error)).decode())
-        return 2
-    path, invocation_id = _receipt_target(args)
-    if path is not None and invocation_id is not None:
+        known, _ = early.parse_known_args(argv)
+    except SystemExit:
+        return (*_with_environment(None, None), False)
+    return (*_with_environment(known.outcome_receipt, known.invocation_id), known.check_outcome_receipt is not None)
+
+
+def main(argv: list[str] | None = None) -> int:
+    _CLAIMED.clear()
+    path, invocation_id, checking = _early_receipt_target(sys.argv[1:] if argv is None else list(argv))
+    if not checking and path is not None and path.is_absolute():
         try:
             _CLAIMED[path] = claim_receipt(path, invocation_id=invocation_id)
         except (OSError, TriageError) as exc:
             code = exc.code if isinstance(exc, TriageError) else "invalid-invocation"
             print(dumps(hard_stop(f"outcome receipt path cannot be claimed: {exc}", code)).decode())
             return 2
+    try:
+        args = parser().parse_args(argv)
+    except TriageError as exc:
+        return _finish(hard_stop(str(exc)), None, entry=None, context=None, status=2, target=(path, invocation_id))
+    if args.check_outcome_receipt is not None:
+        return _check(args)
+    if args.expect_context is not None or args.expect_mode is not None:
+        return _finish(hard_stop("--expect-context and --expect-mode need --check-outcome-receipt"), args, entry=args.entry, context=args.context, status=2)
+    receipt_error = receipt_path_error(*_receipt_target(args))
+    if receipt_error is not None:
+        # No receipt can be bound, so none is written, and an absolute path was
+        # cleared above: the caller's check finds it missing or stale, never a
+        # success.
+        print(dumps(hard_stop(receipt_error)).decode())
+        return 2
     request = {}
     if args.request is not None:
         try:
@@ -189,7 +211,15 @@ def main(argv: list[str] | None = None) -> int:
     return _finish(result, args, entry=args.entry, context=args.context, status=status)
 
 
-def _finish(result: dict, args: argparse.Namespace | None, *, entry: str | None, context: str | None, status: int) -> int:
+def _finish(
+    result: dict,
+    args: argparse.Namespace | None,
+    *,
+    entry: str | None,
+    context: str | None,
+    status: int,
+    target: tuple[Path | None, str | None] | None = None,
+) -> int:
     """Print the result and, when a receipt was asked for, publish it.
 
     The result is printed whatever happens to the receipt: the engine may
@@ -197,7 +227,7 @@ def _finish(result: dict, args: argparse.Namespace | None, *, entry: str | None,
     that cannot be written makes the exit status 2, and the caller's check finds
     no receipt for its invocation."""
     print(dumps(result).decode())
-    path, invocation_id = _receipt_target(args)
+    path, invocation_id = target if target is not None else _receipt_target(args)
     if receipt_path_error(path, invocation_id) is not None or path is None or invocation_id is None:
         return status
     try:

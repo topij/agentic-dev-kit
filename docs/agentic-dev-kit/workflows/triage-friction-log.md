@@ -83,7 +83,8 @@ numbers rather than coercing them. Construct a run identity binding repository i
 `<friction-log>`, protected-branch head, execution mode, session id, and config
 fingerprint. Hash the exact frozen inbox bytes separately. State, report, and snapshot
 metadata carry the run identity and frozen digest. A resumed run must match every
-immutable identity field. The recorded protected-branch head is immutable draft
+immutable identity field, repository identity by the membership rule in *Repository
+identity* below. The recorded protected-branch head is immutable draft
 provenance, not a requirement that the moving protected ref remain equal forever.
 Refresh the remote ref read-only on resume: the recorded head must remain an ancestor of
 the current protected head. Record the observed current head separately. A non-ancestor,
