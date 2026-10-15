@@ -445,8 +445,10 @@ completed Step 3c `init.sh` run. Verify that run from what it printed.**
   - `already current: <hookdir>/<hook> -> <src> (shared by every checkout; not rewritten)` —
     run from a linked worktree, the shared hook is already the kit's shim.
   - `note: deferred <hookdir>/<hook> — …` — run from a linked worktree, the shared hook
-    was **not** written (#990). Install it from the primary checkout (`./init.sh
-    --no-clobber`), or set `DEVKIT_INSTALL_SHARED_HOOKS=1`, before calling the adoption done.
+    was **not** written (#990). Say so in the adoption's PR body. After the adoption
+    merges, install it from a checkout of the merged revision: `./init.sh --no-clobber` in
+    the primary checkout once it is on that revision, or `DEVKIT_INSTALL_SHARED_HOOKS=1
+    ./init.sh --no-clobber` from a linked worktree of it.
 
   Then have them confirm one thing the output cannot show: that any file they chose to keep
   still reads the way they expect. `init.sh` reports what it *did*, which is not the same as

@@ -48,7 +48,7 @@
     },
     "docs/agentic-dev-kit/workflows/adopt.md": {
       "role": "workflow",
-      "sha256": "c70826e200dbd3016441085f3b3da00412a916c17e9d9d05c2f5ff3eebe942d3"
+      "sha256": "ef46220f08fde5821222df5328df3cc366ca131df9120f39ee8dde43f363dc4f"
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
@@ -143,7 +143,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "0a43a099bca8b66799284cc27ed5f1ebd34918e9c7964aa6cca200bfe142f8b1"
+      "sha256": "86cd7c48183f6765910a1baf63b72160a05ada4a1c030267f47ab2bb18ce21c8"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",

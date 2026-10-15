@@ -2238,8 +2238,9 @@ install_hooks() {
   # shared, listed so each case is decided rather than discovered:
   # - the common dir's hooks (`--git-path hooks` from a linked worktree): shared;
   # - any absolute core.hooksPath, even one inside this worktree: shared, since
-  #   the value lives in the repository's shared config and every checkout
-  #   resolves it to that same directory;
+  #   the value normally lives in the repository's shared config and every
+  #   checkout resolves it to that same directory (a per-worktree value under
+  #   extensions.worktreeConfig is treated the same way: deferred, never written);
   # - a hooks path reached through a symlink, so its physical path is not below
   #   this worktree's top level: treated as shared;
   # - a relative core.hooksPath below this worktree: git resolves it inside each
@@ -2256,9 +2257,8 @@ install_hooks() {
   #   (a submodule, a --separate-git-dir checkout): not a linked worktree,
   #   written as before;
   # - a bare repository's linked worktree: shared, so it takes the override;
-  # - a Git older than 2.31 (no `--path-format`): both probes come back empty,
-  #   nothing is classed linked, and the shim is written as before. The kit
-  #   requires Git 2.44 or later.
+  # - the probes need Git 2.31 or later for `--path-format`; the kit requires
+  #   Git 2.44 or later, and on an older Git this classification is not defined.
   _hooks_shared=""
   _git_dir="$(git rev-parse --path-format=absolute --git-dir 2>/dev/null || true)"
   _common_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
