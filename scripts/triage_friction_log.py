@@ -41,7 +41,7 @@ class CanonicalArgumentParser(argparse.ArgumentParser):
 def parser() -> argparse.ArgumentParser:
     result = CanonicalArgumentParser(description=__doc__)
     result.add_argument("entry", nargs="?", choices=("resume", "new", "recover", "test"))
-    result.add_argument("--context", choices=("interactive", "unattended"), default="interactive")
+    result.add_argument("--context", choices=("interactive", "unattended"), help="execution context (default interactive)")
     result.add_argument("--request", type=Path, help="RFC 8785 canonical request JSON")
     result.add_argument("--approval-context", type=Path, help="runtime-attested canonical approval identity/read-back")
     trackers = result.add_mutually_exclusive_group()
@@ -105,7 +105,7 @@ def _with_environment(path: Path | None, invocation_id: str | None) -> tuple[Pat
 
 
 def _check(args: argparse.Namespace) -> int:
-    run_flags = (args.entry, args.request, args.approval_context, args.outcome_receipt)
+    run_flags = (args.entry, args.request, args.approval_context, args.outcome_receipt, args.context)
     if any(flag is not None for flag in run_flags) or args.enable_github_tracker or args.enable_tracker or args.enable_github_forge:
         print(dumps(hard_stop("--check-outcome-receipt takes only --invocation-id, --expect-context and --expect-mode")).decode())
         return 2
@@ -126,20 +126,47 @@ def _check(args: argparse.Namespace) -> int:
     return CHECK_EXIT.get(verdict["verdict"], 2)
 
 
+_RECEIPT_DESTS = ("outcome_receipt", "invocation_id", "check_outcome_receipt")
+
+
 def _early_receipt_target(argv: list[str]) -> tuple[Path | None, str | None, bool]:
     """The receipt path and id as given, read before the full parse, and whether
     the call is a receipt check. A call that then fails to parse, or whose id is
     malformed, has still cleared the path, so the caller's check finds no receipt
-    rather than an earlier call's outcome under the same id."""
-    early = argparse.ArgumentParser(add_help=False)
-    early.add_argument("--outcome-receipt", type=Path)
-    early.add_argument("--invocation-id")
-    early.add_argument("--check-outcome-receipt")
-    try:
-        known, _ = early.parse_known_args(argv)
-    except SystemExit:
-        return (*_with_environment(None, None), False)
-    return (*_with_environment(known.outcome_receipt, known.invocation_id), known.check_outcome_receipt is not None)
+    rather than an earlier call's outcome under the same id.
+
+    The flags are read by hand rather than by a second argparse pass, which
+    gives up on the whole command line at the first malformed option: a flag
+    missing its value would then hide a receipt path given beside it. Long
+    options and their unambiguous prefixes are recognised as the full parser
+    recognises them; a value is the `=` part or the next argument unless that
+    starts with `-`; a later valid value wins. A receipt path this cannot read
+    (its own flag has no value) falls back to the environment, and failing that
+    nothing is cleared, as `engine-cli.md` says."""
+    options = parser()._option_string_actions
+    longs = [name for name in options if name.startswith("--")]
+    found: dict[str, str | None] = {}
+    index = 0
+    while index < len(argv):
+        argument = argv[index]
+        if argument == "--":
+            break
+        if argument.startswith("--") and len(argument) > 2:
+            name, has_value, value = argument.partition("=")
+            matches = [name] if name in options else [option for option in longs if option.startswith(name)]
+            dests = {options[option].dest for option in matches}
+            dest = dests.pop() if len(dests) == 1 else None
+            if dest in _RECEIPT_DESTS:
+                if not has_value:
+                    following = argv[index + 1] if index + 1 < len(argv) else None
+                    value = following if following is not None and not following.startswith("-") else ""
+                    if value:
+                        index += 1
+                if value or dest == "check_outcome_receipt":
+                    found[dest] = value or None
+        index += 1
+    path = Path(found["outcome_receipt"]) if found.get("outcome_receipt") else None
+    return (*_with_environment(path, found.get("invocation_id")), "check_outcome_receipt" in found)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -158,6 +185,7 @@ def main(argv: list[str] | None = None) -> int:
         return _finish(hard_stop(str(exc)), None, entry=None, context=None, status=2, target=(path, invocation_id))
     if args.check_outcome_receipt is not None:
         return _check(args)
+    args.context = args.context or "interactive"
     if args.expect_context is not None or args.expect_mode is not None:
         return _finish(hard_stop("--expect-context and --expect-mode need --check-outcome-receipt"), args, entry=args.entry, context=args.context, status=2)
     receipt_error = receipt_path_error(*_receipt_target(args))

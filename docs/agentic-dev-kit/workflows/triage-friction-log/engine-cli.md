@@ -118,7 +118,7 @@ caller whether the run progressed. Every result therefore also carries:
 | Key | Values |
 |---|---|
 | `disposition` | `completed` for `successful-completion` or `degraded-success`; `waiting` when the run left an active session at a phase a later invocation or an operator decision continues, judged by that phase (so a tracker or forge hold whose read-back was ambiguous also reads `waiting`, with the capability map saying why); `refused` for every other result, including a hard stop. |
-| `waiting_on` | for `waiting` only, else null: `analysis` (an interactive resume supplies proposals), `notification-delivery` (a resume reads back the retained notification attempt), `approval`, `tracker-write` (a resume with the tracker adapter selected), `finalize` (a resume carrying `finalize: true`, with `--enable-github-forge`), `recovery-approval`, or `rerun` (an applied recovery transition left state the next ordinary run continues from). |
+| `waiting_on` | for `waiting` only, else null: `analysis` (an interactive resume supplies proposals), `notification-delivery` (a resume reads back the retained notification attempt), `approval`, `tracker-write` (a resume with the tracker adapter selected), `finalize` (a resume carrying `finalize: true`, with `--enable-github-forge`), `recovery-approval`, or `rerun` (an applied state-present recovery left state the next ordinary run continues from). A gate-only or test-gate recovery ends in its terminal held receipt, which reads `refused` until the operator acts on it. |
 | `refusal_code` | for `refused` only, else null: `repository-identity`, `configuration-identity`, `single-writer-gate` (the gate could not be acquired: another invocation holds it, its owner is not proven dead, or its record cannot be read or validated), `active-state` (`new` against an active session), `invalid-invocation`, or `unclassified`. |
 
 The disposition is derived from the outcome, and an `operator-held` result is `waiting`
@@ -140,7 +140,14 @@ DEVKIT_TRIAGE_OUTCOME_RECEIPT=/abs/receipts/triage.json DEVKIT_TRIAGE_INVOCATION
 A flag wins over its variable. Before the engine runs, each CLI call clears the
 receipt path: a file there that is not a triage outcome receipt is refused (exit 2, the
 file untouched, the engine not run), and an earlier receipt is removed, so a call that
-dies before publishing leaves no receipt rather than an earlier call's outcome. After
+dies before publishing leaves no receipt rather than an earlier call's outcome. The two
+receipt flags are read before the rest of the command line is parsed, so a malformed
+argument elsewhere does not stop the clearing. Clearing is best effort and has two
+limits: a call that cannot tell its receipt path (its `--outcome-receipt` has no value
+and the variable is unset) cannot clear it, and a path whose directory refuses the
+unlink stops the call (exit 2) with the earlier receipt still in place. A caller that
+runs the CLI more than once per check is safest with the environment variables, which
+every call reads, or with a fresh invocation id per call. After
 the engine returns, the call publishes a receipt with
 `kind: triage-invocation-outcome`, the invocation id, `sequence` (1 for the first call under that id, and one more than the receipt it
 replaces after that; a call that dies leaves none, so the next restarts at 1), entry, context, mode, outcome, disposition, `waiting_on`,
@@ -160,12 +167,15 @@ It prints a canonical JSON `verdict` and exits 0 for `completed` and `waiting`, 
 `refused`, and 2 for `evidence-missing` (no receipt), `evidence-stale` (a receipt for
 another invocation id: an earlier run left it and this one wrote none),
 `evidence-wrong-invocation` (the right id, but another context or mode than
-`--expect-context` or `--expect-mode`), `evidence-malformed` (shape, digest or field
+`--expect-context` or `--expect-mode`; a refusal recorded before its mode or context was
+known, as `unknown` or null, stays `refused`), `evidence-malformed` (shape, digest or field
 consistency fails), or a usage error. Treat every exit other than 0 as a failed run,
 and read `verdict` and `waiting_on` to tell a pending approval from a completed no-op.
 
 Repository identity is the main worktree's root for every worktree of one repository
-(*Repository identity* in [`triage-friction-log.md`](../triage-friction-log.md)), so a scheduled
+whose main worktree is a checkout (a bare repository's linked worktree, and one whose
+primary used `--separate-git-dir`, name themselves; *Repository identity* in
+[`triage-friction-log.md`](../triage-friction-log.md)), so a scheduled
 run in a temporary linked worktree continues the session a primary-checkout run
 started, provided both resolve the same state directory: a shared absolute
 `DEVKIT_STATE_ROOT`, a `.devkit_state_root` marker, or a worktree `state/` that is a
@@ -173,4 +183,7 @@ symlink to the primary checkout's. An independent clone of the same remote is re
 with `repository-identity`, however it shares the state directory. A draft started in a
 linked worktree writes its report below the primary checkout's `triage.report_root`, so
 the scheduled run must be able to write there. A draft or analysis resume checks that
-directory is writable before it persists anything, and stops with `hard-stop` otherwise.
+directory is writable before it reserves a new session or advances the session's phase,
+and stops with `hard-stop` otherwise. A completed session that a session-starting entry retires first
+stays retired (its bytes kept, as *Completed-state retirement* describes), and the next
+run starts fresh.

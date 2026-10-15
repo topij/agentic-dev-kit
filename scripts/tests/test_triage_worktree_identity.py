@@ -7,6 +7,7 @@ temporary state root they share through `DEVKIT_STATE_ROOT`.
 from __future__ import annotations
 
 import importlib.util
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -559,6 +560,13 @@ def test_a_call_refused_before_the_engine_still_clears_the_last_receipt(
     assert (status, verdict["verdict"]) == expected
 
 
+# A root user writes through mode bits, so a permission refusal cannot be staged.
+needs_unprivileged = pytest.mark.skipif(
+    hasattr(os, "geteuid") and os.geteuid() == 0, reason="root ignores directory mode bits"
+)
+
+
+@needs_unprivileged
 def test_an_unwritable_report_root_refuses_before_any_state_exists(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -593,6 +601,106 @@ def test_a_refusal_before_the_mode_is_known_stays_refused_under_expected_mode(
     assert cli.main(["--outcome-receipt", str(receipt), "--invocation-id", "run-1", "resume", "--request", str(missing)]) == 2
     status, verdict = check(cli, receipt, "run-1", "--expect-mode", "live", "--expect-context", "interactive", capsys=capsys)
     assert (status, verdict["verdict"], verdict["refusal_code"]) == (1, "refused", "invalid-invocation")
+
+
+@needs_unprivileged
+def test_an_analysis_resume_checks_the_report_root_before_it_advances_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = repository(tmp_path)
+    state_root = shared_state(tmp_path, monkeypatch)
+    worktree = linked(root, "cron-worktree")
+    frozen = run("new", context="interactive", request={}, start=worktree)
+    assert frozen["waiting_on"] == "analysis"
+    reports = root / "reports"
+    reports.mkdir(exist_ok=True)
+    reports.chmod(0o555)
+    try:
+        refused = run("resume", context="interactive", request=request(root), start=worktree)
+        assert (refused["outcome"], refused["disposition"]) == ("hard-stop", "refused")
+        assert "report directory is not writable" in refused["detail"]
+        # The resume rebinds its gate claim, but the phase does not advance.
+        retained = loads_exact((state_root / LIVE_STATE).read_bytes())
+        assert retained["phase"] == "reserved" and "proposal_payloads" not in retained
+        assert not (state_root / "triage/triage-pipeline-gate_live.lock").exists()
+    finally:
+        reports.chmod(0o755)
+    resumed = run("resume", context="interactive", request=request(root), start=worktree)
+    assert (resumed["disposition"], resumed["waiting_on"]) == ("waiting", "approval")
+
+
+@pytest.mark.parametrize("arguments", [
+    ["resume", "--outcome-receipt", "RECEIPT", "--invocation-id"],                      # id has no value
+    ["resume", "--outcome-receipt", "RECEIPT", "--invocation-id", "run-1", "--request", "--outcome-receipt"],
+    ["resume", "--outcome-receipt=RECEIPT", "--invocation-id=run-1", "--context"],        # = form, later flag broken
+    ["resume", "--outcome", "RECEIPT", "--invocation-id", "--context", "x"],             # abbreviated flag
+])
+def test_a_flag_missing_its_value_does_not_hide_the_receipt_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], arguments: list[str]
+) -> None:
+    root = repository(tmp_path)
+    shared_state(tmp_path, monkeypatch)
+    receipt = tmp_path / "triage.json"
+    cli = load_cli(monkeypatch, root)
+    request_path = tmp_path / "request.json"
+    request_path.write_bytes(dumps(request(root)))
+    assert cli.main(["--outcome-receipt", str(receipt), "--invocation-id", "run-1", "new", "--request", str(request_path)]) == 0
+    arguments = [item.replace("RECEIPT", str(receipt)) for item in arguments]
+    assert cli.main(arguments) == 2
+    status, verdict = check(cli, receipt, "run-1", capsys=capsys)
+    assert status != 0
+    assert verdict["verdict"] in {"evidence-missing", "refused"}
+
+
+def test_a_json_file_that_is_not_a_receipt_is_refused_untouched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls = []
+    spec = importlib.util.spec_from_file_location("triage_cli_json", ENGINE_DIR / "triage_friction_log.py")
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    monkeypatch.setattr(cli, "run", lambda *a, **k: calls.append(a))
+    monkeypatch.delenv(cli.RECEIPT_ENV, raising=False)
+    target = tmp_path / "state.json"
+    target.write_bytes(b'{"kind":"triage-run-state"}')
+    assert cli.main(["resume", "--outcome-receipt", str(target), "--invocation-id", "run-1"]) == 2
+    assert target.read_bytes() == b'{"kind":"triage-run-state"}'
+    assert calls == []
+
+
+def test_a_flag_wins_over_its_variable_and_the_check_refuses_run_flags(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = repository(tmp_path)
+    shared_state(tmp_path, monkeypatch)
+    from_env = tmp_path / "env.json"
+    from_flag = tmp_path / "flag.json"
+    cli = load_cli(monkeypatch, root)
+    monkeypatch.setenv(cli.RECEIPT_ENV, str(from_env))
+    monkeypatch.setenv(cli.INVOCATION_ENV, "env-id")
+    cli.main(["--outcome-receipt", str(from_flag), "--invocation-id", "flag-id", "resume"])
+    assert from_flag.exists() and not from_env.exists()
+    assert loads_exact(from_flag.read_bytes())["invocation_id"] == "flag-id"
+    monkeypatch.delenv(cli.RECEIPT_ENV)
+    monkeypatch.delenv(cli.INVOCATION_ENV)
+    status, verdict = check(cli, from_flag, "flag-id", "--expect-mode", "live", capsys=capsys)
+    assert (status, verdict["verdict"]) == (1, "refused")
+    capsys.readouterr()
+    assert cli.main(["--check-outcome-receipt", str(from_flag), "--invocation-id", "flag-id", "--context", "unattended"]) == 2
+
+
+def test_another_mode_than_the_caller_invoked_is_wrong_invocation_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = repository(tmp_path)
+    shared_state(tmp_path, monkeypatch)
+    receipt = tmp_path / "triage.json"
+    cli = load_cli(monkeypatch, root)
+    request_path = tmp_path / "request.json"
+    request_path.write_bytes(dumps(request(root)))
+    assert cli.main(["--outcome-receipt", str(receipt), "--invocation-id", "run-1", "new", "--request", str(request_path)]) == 0
+    status, verdict = check(cli, receipt, "run-1", "--expect-mode", "test", capsys=capsys)
+    assert (status, verdict["verdict"]) == (2, "evidence-wrong-invocation")
 
 
 @pytest.mark.parametrize("tamper", ["digest", "disposition", "shape", "not-json"])
