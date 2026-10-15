@@ -17,6 +17,9 @@
 # repo, whose plan lives at docs/kit-*.md and is in use, it instead re-renders
 # the root AGENTS.md and CLAUDE.md, which carry the kit-own marker and so are
 # seedable here. Either way it is a side effect this target must not have.
+# From a linked worktree that function reports rather than writes a hooks
+# directory every checkout shares (#990); set DEVKIT_INSTALL_SHARED_HOOKS=1 to
+# install from one deliberately.
 # So this target extracts and runs just the install_hooks()
 # function body straight out of init.sh — it always reflects init.sh's
 # current logic, never a stale/diverged copy — after resolving
