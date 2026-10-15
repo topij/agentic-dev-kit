@@ -2594,7 +2594,7 @@ def test_a_linked_worktree_defers_a_shared_hook_it_would_create(tmp_path: Path) 
 
     assert not _shared_shim(repo).exists()
     assert "deferred" in proc.stderr
-    assert "--no-clobber in the primary checkout" in proc.stderr
+    assert "in the primary checkout, run `make install-hooks`" in proc.stderr
 
 
 def test_a_linked_worktree_leaves_a_differing_shared_shim_byte_identical(tmp_path: Path) -> None:
@@ -2667,6 +2667,82 @@ def test_a_linked_worktree_writes_only_a_hooks_path_of_its_own(
         assert (worktree / ".githooks" / "pre-push").is_file()
         assert not (repo / ".githooks" / "pre-push").exists()
     assert not _shared_shim(repo).exists()
+
+
+def test_a_linked_worktree_does_not_call_a_non_executable_shim_current(tmp_path: Path) -> None:
+    """Git does not run a hook without its execute bit, so an identical but
+    inert shim is not current; from a linked worktree it is deferred."""
+    repo = _fixture(tmp_path, config=shipped_config(), git=True, hooks=True)
+    _run_init(repo)
+    _shared_shim(repo).chmod(0o644)
+    worktree = _linked_worktree(repo)
+
+    proc = _run_init(worktree)
+
+    assert "already current" not in proc.stdout
+    assert "deferred" in proc.stderr
+    assert not os.access(_shared_shim(repo), os.X_OK)
+
+
+def test_the_primary_checkout_installs_into_an_absolute_hooks_path_outside_it(tmp_path: Path) -> None:
+    """The deferral is for linked worktrees only: a primary checkout whose
+    core.hooksPath points outside it (a pre-commit style setup) installs as before."""
+    repo = _fixture(tmp_path, config=shipped_config(), git=True, hooks=True)
+    outside = tmp_path / "global-hooks"
+    subprocess.run(
+        ["git", "config", "core.hooksPath", str(outside)],
+        cwd=repo, check=True, env=_env(repo.parent), capture_output=True,
+    )
+
+    proc = _run_init(repo)
+
+    assert (outside / "pre-push").is_file()
+    assert "deferred" not in proc.stderr
+
+
+def test_a_separate_git_dir_primary_still_installs(tmp_path: Path) -> None:
+    """Its git dir is its common dir, so it is not a linked worktree."""
+    repo = _fixture(tmp_path, config=shipped_config(), hooks=True)
+    git_dir = tmp_path / "separate.git"
+    subprocess.run(
+        ["git", "init", "-q", "--separate-git-dir", str(git_dir)],
+        cwd=repo, check=True, env=_env(tmp_path), capture_output=True,
+    )
+
+    proc = _run_init(repo)
+
+    assert (git_dir / "hooks" / "pre-push").is_file()
+    assert "deferred" not in proc.stderr
+
+
+@pytest.mark.parametrize("route", ["symlink", "climbs-out-absent", "climbs-out-present", "climbs-out-via-missing"])
+def test_a_linked_worktree_judges_a_relative_hooks_path_by_where_it_lands(tmp_path: Path, route: str) -> None:
+    """A relative path that reaches outside the worktree, through a symlink or
+    with `..`, is shared; whether the directory already exists does not matter."""
+    repo = _fixture(tmp_path, config=shipped_config(), git=True, hooks=True)
+    worktree = _linked_worktree(repo)
+    outside = tmp_path / "outside-hooks"
+    if route == "symlink":
+        outside.mkdir()
+        (worktree / ".hl").symlink_to(outside, target_is_directory=True)
+        value = ".hl"
+    elif route == "climbs-out-via-missing":
+        # The `..` sits under a directory that does not exist, so nothing can
+        # canonicalise it; textually the path is still below the worktree.
+        value = "missing/../../outside-hooks"
+    else:
+        value = "../outside-hooks"
+        if route == "climbs-out-present":
+            outside.mkdir()
+    subprocess.run(
+        ["git", "config", "core.hooksPath", value],
+        cwd=repo, check=True, env=_env(repo.parent), capture_output=True,
+    )
+
+    proc = _run_init(worktree)
+
+    assert not (outside / "pre-push").exists()
+    assert "deferred" in proc.stderr
 
 
 def test_gitignore_append_preserves_a_file_with_no_trailing_newline(tmp_path: Path) -> None:

@@ -2237,8 +2237,15 @@ install_hooks() {
   # - an absolute core.hooksPath outside this worktree: shared;
   # - a hooks path reached through a symlink, so its physical path is not below
   #   this worktree's top level: treated as shared;
-  # - a relative core.hooksPath: git resolves it inside each worktree, so it is
-  #   this worktree's own and is written as before;
+  # - a relative core.hooksPath below this worktree: git resolves it inside each
+  #   worktree, so it is this worktree's own and is written as before;
+  # - a relative core.hooksPath that climbs out (`../x`): judged by where it
+  #   physically lands, so outside this worktree it is shared. The longest
+  #   existing prefix is canonicalised; a `..` in the part that does not exist
+  #   yet cannot be resolved and counts as shared, so the answer never depends
+  #   on whether the directory was created earlier;
+  # - a `~/...` hooksPath: `git config --get` does not expand it, so it is read
+  #   as relative, as the writer always has (pre-existing);
   # - the primary checkout, or a checkout whose git dir is its common dir
   #   (a submodule, a --separate-git-dir checkout): not a linked worktree,
   #   written as before;
@@ -2253,10 +2260,15 @@ install_hooks() {
       /*) _hooks_abs="$hookdir" ;;
       *) _hooks_abs="$(pwd -P)/$hookdir" ;;
     esac
-    if [ -d "$_hooks_abs" ]; then
-      _hooks_abs="$(cd "$_hooks_abs" && pwd -P)"
-    fi
+    _hooks_probe="$_hooks_abs"
+    _hooks_rest=""
+    while [ ! -d "$_hooks_probe" ]; do
+      _hooks_rest="/$(basename "$_hooks_probe")$_hooks_rest"
+      _hooks_probe="$(dirname "$_hooks_probe")"
+    done
+    _hooks_abs="$(cd "$_hooks_probe" && pwd -P)$_hooks_rest"
     case "$_hooks_abs/" in
+      */../*|*/./*) _hooks_shared=1 ;;
       "$_top"/*) ;;
       *) _hooks_shared=1 ;;
     esac
@@ -2280,13 +2292,14 @@ exec "\$root/$src" "\$@"
 SHIM
 )"
     if [ -n "$_hooks_shared" ] && [ "${DEVKIT_INSTALL_SHARED_HOOKS:-}" != "1" ]; then
-      if [ -f "$hookdir/$hook" ] && printf '%s\n' "$shim" | cmp -s - "$hookdir/$hook"; then
+      if [ -f "$hookdir/$hook" ] && [ -x "$hookdir/$hook" ] && printf '%s\n' "$shim" | cmp -s - "$hookdir/$hook"; then
         echo "already current: $hookdir/$hook -> $src (shared by every checkout; not rewritten)"
       else
         echo "note: deferred $hookdir/$hook — it is shared by every checkout of this repository" >&2
         echo "      and this is a linked worktree, so it was not written; other checkouts keep" >&2
         echo "      their current hook. After this change merges, install it from a checkout of" >&2
-        echo "      the merged revision: re-run ./init.sh --no-clobber in the primary checkout," >&2
+        echo "      the merged revision: in the primary checkout, run \`make install-hooks\` where" >&2
+        echo "      the repository has that target (the kit's own does), else ./init.sh --no-clobber;" >&2
         echo "      or set DEVKIT_INSTALL_SHARED_HOOKS=1 to install from a linked worktree." >&2
       fi
       continue

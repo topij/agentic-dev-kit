@@ -723,10 +723,11 @@ stamps `kit.version`; and it installs the pre-push hook as a shim (honoring
 are live in the primary checkout and in every other worktree at once. Rewriting the shim
 there before this upgrade merges would change the hook every other session runs. A shim
 naming a moved engines dir is a silent no-op in a checkout still on the old layout.
-`init.sh` therefore reports such a shim as `already current` when it is byte-identical.
+`init.sh` therefore reports such a shim as `already current` when it is byte-identical
+and executable.
 Otherwise it prints `deferred` and leaves it unwritten. A relative `core.hooksPath`
-resolves inside each worktree, so that copy is the worktree's own and is written as
-before. Running from the primary checkout is unchanged. Install a deferred shim after
+below the worktree resolves inside each worktree, so that copy is the worktree's own and
+is written as before; one that climbs out with `..` is judged by where it lands. Running from the primary checkout is unchanged. Install a deferred shim after
 the merge, as Step 6 says.
 
 For the seeded docs, what `--no-clobber` leaves standing is every file that already exists —
@@ -1033,8 +1034,9 @@ complete, so the material unfinished-work exception in `pr-watch` does not apply
 **If Step 2 ran in a linked worktree and `init.sh` printed `deferred` for the pre-push
 hook, the shared hook still has to be installed once the upgrade has merged.** Say so in
 the PR body, so the operator sees it at merge time. After the merge, run it from a
-checkout of the merged revision. Either re-run `./init.sh --no-clobber` in the primary
-checkout once it is on that revision, or run
+checkout of the merged revision. In the primary checkout, once it is on that revision,
+run `make install-hooks` if the repository has that target, or else re-run
+`./init.sh --no-clobber`. Alternatively run
 `DEVKIT_INSTALL_SHARED_HOOKS=1 ./init.sh --no-clobber` from a fresh linked worktree of
 it. Then confirm `kit_doctor` reports the hook installed. Until then, checkouts keep the
 hook they had.
