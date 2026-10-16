@@ -21,9 +21,10 @@ ignored by Git in the primary checkout, as `/reports/` is in the kit.
 ADDED (report / return shape): every triage result, and the CLI's own hard stops, carry
 `disposition` (`completed`, `waiting` or `refused`), `waiting_on` and `refusal_code`.
 `operator-held` is `waiting` only where the engine names what it waits on; every other
-`operator-held` result is `refused`. A tracker or forge write that read-back left
-unresolved waits on `reconciliation`, which may need the operator: alert on it rather
-than treat it as a routine wait. A test that compares a whole result or a pinned
+`operator-held` result is `refused`. An unresolved tracker write, or an unverified
+forge write, waits on `reconciliation`. A rerun reads a tracker write back again; a
+forge write it does not, so that one needs the operator. Alert on `reconciliation`
+rather than treat it as a routine wait. A test that compares a whole result or a pinned
 key set needs the three keys. A caller that treated every exit-0 `operator-held` as a
 wait should read `disposition` instead.
 

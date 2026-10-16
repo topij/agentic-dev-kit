@@ -31,9 +31,11 @@ DISPOSITIONS = ("completed", "waiting", "refused")
 # `finalize`: a resume carrying `finalize: true`. `recovery-approval`: the exact
 # approval of a recorded recovery plan. `rerun`: an applied recovery transition
 # left state that the next ordinary run resumes or restarts from.
-# `reconciliation`: a retained tracker or forge write that read-back left
-# unresolved; a rerun reads it back again, and advances only once the provider
-# shows it resolved, which may need the operator (a duplicate removed, say).
+# `reconciliation`: the last retained tracker or forge write is unverified. A
+# tracker write is read back on each rerun and advances once the tracker shows
+# exactly the recorded write, which may need the operator (a duplicate removed,
+# say). A forge write is not read back again, so no rerun advances it, except a
+# failed branch-create that read-back proves left nothing.
 WAITING_ON = (
     "analysis",
     "notification-delivery",
