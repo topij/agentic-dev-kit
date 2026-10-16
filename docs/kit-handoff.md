@@ -27,11 +27,14 @@
   `62e0ffaa` on the operator's request, pinned to the reviewed head `7a59669e`.
   - Shipped: linked worktrees name the main worktree. A recorded identity matches by
     string comparison only: it equals the current one, or equals it with the invoking
-    checkout's own root, so a session a linked worktree recorded before #1103
+    checkout's own root, so a session a linked worktree recorded before #1111
     continues from that worktree's path. A checkout whose main worktree cannot be
-    proven names itself, including every checkout on a Git older than 2.31. Results
-    carry `disposition` / `waiting_on` / `refusal_code`, and an unverified tracker or
-    forge write waits on `reconciliation`.
+    proven names itself, including every checkout on a Git older than 2.31; #1116
+    names one `--separate-git-dir` layout whose linked worktrees name a phantom root
+    instead. Results
+    carry `disposition` / `waiting_on` / `refusal_code`. An unverified tracker or forge
+    write waits on `reconciliation`, except an unsettled forge `pr-watch` or
+    `merge-read-back`, which waits on `finalize`.
   - Decided: the invocation-bound outcome receipt is out of #1111 (operator's option C).
     Its code is on branch `feat/triage-outcome-receipts` at `fabed73e`, and #1103
     stays open for it. Membership probing of recorded roots was replaced by equality,
@@ -48,7 +51,7 @@
 - **Consumer upgrades:** no consumer was upgraded. cs-toolkit's scheduled triage
   needs #1111 installed there.
 - **Filed this session:** #1116, #1117; comments on #1103 (receipt branch) and #61.
-- **Assignment:** confirmed by the operator. The three entries below drop their
+- **Assignment:** confirmed by the operator. The three workstream entries drop their
   `assignment unconfirmed` markers, and the triage entry is renamed for what remains.
 
 ______________________________________________________________________
@@ -345,14 +348,15 @@ for the headless lane profile.
 ### Triage outcome receipts
 
 **Status:** #1111 (`62e0ffaa`) shipped linked-worktree repository identity and result
-dispositions. The invocation-bound outcome receipt is the open half: its code, reviewed
-through three rounds, is on branch `feat/triage-outcome-receipts` (`fabed73e`), and
-#1111's round-3 decision packet names the findings a redesign must meet. #1116 holds
-#1111's residual LOW findings.
+dispositions. The invocation-bound outcome receipt is the open half: its code is on
+branch `feat/triage-outcome-receipts` at `fabed73e`, #1111's round-4 head. Two #1111
+comments name the findings a redesign must meet: the round-3 decision packet, and the
+round-4 comment's MEDIUM that check mode can overwrite the receipt it checks, which the
+branch tip still has. #1116 holds #1111's residual LOW findings.
 **Owner:** [#1103](https://github.com/topij/agentic-dev-kit/issues/1103);
 [#1116](https://github.com/topij/agentic-dev-kit/issues/1116).
 
-▶ Next: #1103 — design the outcome receipt against #1111's round-3 decision packet, starting from branch `feat/triage-outcome-receipts`.
+▶ Next: #1103 — design the outcome receipt against #1111's round-3 decision packet and round-4 findings, starting from branch `feat/triage-outcome-receipts`.
 
 ### Shared hook installation
 
