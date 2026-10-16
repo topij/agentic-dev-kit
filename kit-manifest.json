@@ -198,7 +198,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "b440e4ee4e3a4f8526867d30f9b1ea6c02d0dd427cd0201774d4b8c10443f778"
+      "sha256": "6d011ba3312f7770d4481f4f514f24c068997e97df619f1f891f6cc757d35439"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -606,6 +606,18 @@
       "role": "test",
       "sha256": "66979af482546118a359db5ec3ecd5559a4dfc757ad431c198a23c26e5a9b872"
     },
+    "scripts/tests/fixtures/ticket-creation-regions/post-merge-systemize.md": {
+      "role": "test",
+      "sha256": "d40ffcdcce6678fca9621f1f7fa055f0c3b91da01ae4d503e9f3e7bdc5111a29"
+    },
+    "scripts/tests/fixtures/ticket-creation-regions/triage-friction-log.md": {
+      "role": "test",
+      "sha256": "874ee483a745946f4284eabde581577422770ce72364063053b39abe183f6e65"
+    },
+    "scripts/tests/fixtures/ticket-creation-regions/wrap-up.md": {
+      "role": "test",
+      "sha256": "bffd13f67ba2538d7f5fbb8e96cc79a8914c2b1ec15abaa2c87432ca8b385f85"
+    },
     "scripts/tests/fixtures/ticket-execution-environment-contract.md": {
       "role": "test",
       "sha256": "f82c190510d21fc7ea1c803b15d1047cc5dae7b2d684fb185af54499b0cf2a25"
@@ -664,7 +676,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "5426f72860dcd732bd07e3c46e9c1c766eaaa627689ce318c089e69766ac3201"
+      "sha256": "016569819b50dde484fb10a86f8c684f012ec3b12080c710b437a047dfb9148d"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
