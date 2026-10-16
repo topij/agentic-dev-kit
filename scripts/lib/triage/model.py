@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import uuid
@@ -42,10 +43,25 @@ CAPABILITIES = (
 )
 
 
+# Machine-readable refusal reasons a result's `refusal_code` carries, so an
+# automated caller can tell an identity or configuration refusal from other
+# refusals without parsing `detail` (#1103). A refusal no site classifies is
+# `unclassified`; the code never turns a refusal into anything else.
+REFUSAL_CODES = (
+    "repository-identity",
+    "configuration-identity",
+    "single-writer-gate",
+    "active-state",
+    "invalid-invocation",
+    "unclassified",
+)
+
+
 class TriageError(RuntimeError):
-    def __init__(self, message: str, *, outcome: str = "hard-stop") -> None:
+    def __init__(self, message: str, *, outcome: str = "hard-stop", code: str = "unclassified") -> None:
         super().__init__(message)
         self.outcome = outcome
+        self.code = code if code in REFUSAL_CODES else "unclassified"
 
 
 _CODE_FENCE = re.compile(r" {0,3}(`{3,}|~{3,})")
@@ -302,11 +318,135 @@ def git_output(repo: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
+# Variables that make git read a repository other than the one at `-C <path>`.
+_GIT_LOCATION_VARIABLES = frozenset({
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_COMMON_DIR",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_NAMESPACE",
+    "GIT_CEILING_DIRECTORIES",
+    "GIT_DISCOVERY_ACROSS_FILESYSTEM",
+})
+
+
+def _identity_git(path: Path | str, *args: str) -> subprocess.CompletedProcess[str]:
+    """Run git against the checkout at `path` and nothing else.
+
+    The variables that relocate a repository are dropped: with `GIT_DIR`,
+    `GIT_WORK_TREE` or `GIT_COMMON_DIR` set (a hook exports `GIT_DIR`), every
+    path would report the caller's repository and any recorded checkout would
+    pass as a member of it. Configuration variables (`GIT_CONFIG_*`) are kept,
+    so a remote rewritten by `url.<base>.insteadOf` reads the same as it did
+    when the identity was recorded."""
+    environment = {name: value for name, value in os.environ.items() if name not in _GIT_LOCATION_VARIABLES}
+    return subprocess.run(
+        ["git", "-C", str(path), *args], check=False, capture_output=True, text=True, env=environment
+    )
+
+
+def _same_file(left: str | Path, right: str | Path) -> bool:
+    try:
+        return os.path.samefile(left, right)
+    except OSError:
+        return False
+
+
+def _worktree_locations(path: Path | str) -> tuple[str, str, str] | None:
+    """The top level, git dir and common dir of the worktree at `path`, or None
+    when `path` is not inside a worktree (a bare repository has no top level)."""
+    result = _identity_git(
+        path, "rev-parse", "--path-format=absolute", "--show-toplevel", "--git-dir", "--git-common-dir"
+    )
+    lines = result.stdout.split("\n")
+    if result.returncode or len(lines) != 4 or lines[3] != "" or not all(lines[:3]):
+        return None
+    return lines[0], lines[1], lines[2]
+
+
+def canonical_repository_root(repo: Path) -> str:
+    """The checkout root that names this repository in a run identity (#1103).
+
+    Every worktree of one repository names the same root, so a session created in
+    one linked worktree continues from the primary checkout or from a later linked
+    worktree that shares its state root. The primary checkout names itself, as
+    `str(settings.paths.repo)`, exactly as before this function existed; so does a
+    checkout whose git dir is its own common dir (a submodule, a
+    `--separate-git-dir` checkout). A linked worktree names the main worktree Git
+    records for its common dir, once that main worktree proves to have that same
+    common dir. A linked worktree whose main worktree Git cannot name as a
+    checkout of that common dir names itself, as before #1103: a linked worktree
+    of a bare repository, and one whose primary was made with
+    `--separate-git-dir` (Git then reports the git dir as the main worktree).
+    So does a linked worktree on a Git older than 2.36, which has no
+    `worktree list -z`, and every checkout on a Git older than 2.31, which has
+    no `rev-parse --path-format`. Whenever the main worktree cannot be proven,
+    the checkout names itself, as every run did before #1103; only a path where
+    Git sees no work tree at all (a broken gitfile, say) stops.
+
+    The report a session writes lives below this root too (`report_location`), so
+    a report written by a temporary worktree outlives it."""
+    here = _worktree_locations(repo)
+    if here is None:
+        # A Git too old for `--path-format`, or any other failed probe, in a
+        # place Git still sees a work tree: name the checkout, as before #1103.
+        if _identity_git(repo, "rev-parse", "--show-toplevel").returncode == 0:
+            return str(repo)
+        raise TriageError("repository checkout is not a Git worktree", code="repository-identity")
+    _, git_dir, common = here
+    if _same_file(git_dir, common):
+        return str(repo)
+    listing = _identity_git(repo, "worktree", "list", "--porcelain", "-z")
+    first = listing.stdout.split("\0\0", 1)[0].split("\0")
+    if listing.returncode or not first or not first[0].startswith("worktree "):
+        return str(repo)
+    main = Path(first[0][len("worktree "):])
+    located = _worktree_locations(main) if main.is_absolute() else None
+    if (
+        located is None
+        or not _same_file(located[0], main)
+        or not _same_file(located[1], located[2])
+        or not _same_file(located[2], common)
+    ):
+        return str(repo)
+    return str(main.resolve())
+
+
+def report_location(settings: Settings, root: str | Path) -> tuple[Path, Path]:
+    """The configured report root and the checkout it sits in, for the checkout a
+    run identity names rather than the one invoking the engine (#1103)."""
+    base = Path(root)
+    return base, base / settings.paths.report_root.relative_to(settings.paths.repo)
+
+
 def repository_identity(settings: Settings) -> dict[str, Any]:
-    return {
-        "root": str(settings.paths.repo),
-        "remote": git_output(settings.paths.repo, "remote", "get-url", "origin"),
-    }
+    repo = settings.paths.repo
+    remote = _identity_git(repo, "remote", "get-url", "origin")
+    if remote.returncode:
+        raise TriageError(f"git remote get-url origin failed: {remote.stderr.strip()}", code="repository-identity")
+    return {"root": canonical_repository_root(repo), "remote": remote.stdout.strip()}
+
+
+def repository_identity_matches(recorded: Any, current: dict[str, Any], *, own_root: str | None = None) -> bool:
+    """Whether a recorded repository identity names the repository `current` does.
+
+    Exact equality, and nothing else: a recorded root is never probed with Git,
+    because it comes from state on disk that may name a removed, moved or
+    corrupted path. Every worktree of a repository records the same root
+    (`canonical_repository_root`), so a session continues across worktrees by
+    equality alone. `own_root` is the invoking checkout's own root,
+    `str(settings.paths.repo)`: a recorded identity equal to `current` with that
+    root also matches. That is what every run recorded before #1103, so a
+    session a linked worktree recorded then continues from a checkout at that
+    worktree's path, as it did before; it does not continue from any other
+    worktree. A caller that passes no `own_root` matches by equality alone.
+    Stored identities are compared, never rewritten: approval and gate bindings
+    digest the bytes they were written with."""
+    if not isinstance(recorded, dict):
+        return False
+    return recorded == current or (own_root is not None and recorded == {**current, "root": own_root})
 
 
 def new_run_identity(settings: Settings, mode: str, session: str | None = None) -> dict[str, Any]:
@@ -494,9 +634,11 @@ def validate_state(value: Any, *, settings: Settings, mode: str, retiring: bool 
             and value.get("config_fingerprint") == identity["config_fingerprint"]
         )
         if not drifted_completed:
-            raise TriageError("configuration identity mismatch", outcome="operator-held")
-    if identity.get("repository_identity") != repository_identity(settings):
-        raise TriageError("repository identity mismatch", outcome="operator-held")
+            raise TriageError("configuration identity mismatch", outcome="operator-held", code="configuration-identity")
+    if not repository_identity_matches(
+        identity.get("repository_identity"), repository_identity(settings), own_root=str(settings.paths.repo)
+    ):
+        raise TriageError("repository identity mismatch", outcome="operator-held", code="repository-identity")
     if identity.get("friction_log") != str(settings.paths.friction_log.relative_to(settings.paths.repo)):
         raise TriageError("friction-log identity mismatch", outcome="operator-held")
     if (
@@ -613,7 +755,8 @@ def validate_state(value: Any, *, settings: Settings, mode: str, retiring: bool 
             ],
         }
         binding = proposals[0]["report_binding"]
-        expected_report = str(settings.paths.repo / settings.paths.report_pattern.replace("{mode}", mode).replace("{session}", identity["session"]))
+        report_base, _ = report_location(settings, identity["repository_identity"]["root"])
+        expected_report = str(report_base / settings.paths.report_pattern.replace("{mode}", mode).replace("{session}", identity["session"]))
         if (
             not isinstance(binding, dict)
             or set(binding) != {"path", "report_core", "report_core_digest"}

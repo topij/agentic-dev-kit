@@ -50,8 +50,11 @@ def observe(path: Path, *, read: bool = True, allow_links: bool = False) -> tupl
 
 
 def preflight_artifacts(
-    artifacts: list[Path], *, controls: list[Path], repo: Path
+    artifacts: list[Path], *, controls: list[Path], repo: Path, also: tuple[Path, ...] = ()
 ) -> None:
+    """`also` names further checkouts an artifact may sit in (the one a run
+    identity names, when another worktree invokes the engine); an artifact is
+    refused when the checkout containing it tracks it."""
     lexical = [Path(os.path.abspath(path)) for path in artifacts]
     if len(lexical) != len(set(lexical)):
         raise TriageError("artifact publication paths collide", outcome="hard-stop")
@@ -71,10 +74,12 @@ def preflight_artifacts(
             if identity in artifact_identities or identity in control_identities:
                 raise TriageError("artifact target aliases another artifact or control input", outcome="hard-stop")
             artifact_identities.add(identity)
-        if artifact.is_relative_to(repo):
-            relative = str(artifact.relative_to(repo))
+        for checkout in (repo, *also):
+            if not artifact.is_relative_to(checkout):
+                continue
+            relative = str(artifact.relative_to(checkout))
             tracked = subprocess.run(
-                ["git", "-C", str(repo), "ls-files", "--error-unmatch", "--", relative],
+                ["git", "-C", str(checkout), "ls-files", "--error-unmatch", "--", relative],
                 check=False,
                 capture_output=True,
                 text=True,
@@ -418,10 +423,14 @@ class ArtifactStore:
         fragment = self.settings.paths.frozen_pattern.replace("{date}", day).replace("{session}", session)
         return self.resolve(fragment, mkdir=mkdir)
 
-    def report_path(self, *, session: str, day: str) -> Path:
+    def report_path(self, *, session: str, day: str, root: str) -> Path:
+        """The report path below `root`, the checkout the run identity names."""
+        from .model import report_location
+
+        base, report_root = report_location(self.settings, root)
         relative = self.settings.paths.report_pattern.replace("{mode}", self.mode).replace("{date}", day).replace("{session}", session)
-        path = (self.settings.paths.repo / relative).resolve()
-        if not path.is_relative_to(self.settings.paths.report_root):
+        path = (base / relative).resolve()
+        if not path.is_relative_to(report_root.resolve()):
             raise TriageError("report path escaped report root")
         return path
 

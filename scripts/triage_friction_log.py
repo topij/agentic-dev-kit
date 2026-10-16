@@ -21,6 +21,7 @@ from triage.model import (
     TriageError,  # noqa: E402
     load_settings,  # noqa: E402
 )
+from triage.outcome import disposition_fields  # noqa: E402
 from triage.providers import GitHubForge, GitHubIssues, LinearIssues  # noqa: E402
 from triage.storage import observe  # noqa: E402
 
@@ -43,13 +44,14 @@ def parser() -> argparse.ArgumentParser:
     return result
 
 
-def hard_stop(detail: str) -> dict:
+def hard_stop(detail: str, code: str = "invalid-invocation") -> dict:
     return {
         "capabilities": {
             name: {"status": "not-triggered", "mechanism": "CLI input validation stopped before engine invocation"}
             for name in CAPABILITIES
         },
         "outcome": "hard-stop",
+        **disposition_fields("hard-stop", refusal_code=code),
         "execution_mode": "unknown",
         "engine_mode": None,
         "report": None,
@@ -109,7 +111,8 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 raise TriageError(f"unsupported selected tracker backend: {backend}")
     except (OSError, TriageError, TypeError, ValueError) as exc:
-        print(dumps(hard_stop(str(exc))).decode())
+        code = exc.code if isinstance(exc, TriageError) else "unclassified"
+        print(dumps(hard_stop(str(exc), code)).decode())
         return 2
     authority = GitHubForge(configured.paths.repo, pr_watch=configured.paths.engine_dir / "pr_watch.py") if configured is not None else None
     forge = authority if args.enable_github_forge else None

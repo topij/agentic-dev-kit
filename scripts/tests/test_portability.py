@@ -2150,7 +2150,7 @@ _SPLIT_WORKFLOW_SECTIONS = {
             "The single-writer gate file",
         ),
         "finalize.md": ("Tracker writes and accounting", "Finalize and sweep"),
-        "engine-cli.md": ("Engine CLI",),
+        "engine-cli.md": ("Engine CLI", "Dispositions"),
     },
 }
 

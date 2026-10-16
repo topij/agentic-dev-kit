@@ -9,6 +9,7 @@ its reference files.
 ## Contents
 
 - Entry points, inputs and outputs of both engines
+- Dispositions, and running from a linked worktree
 
 ## Engine CLI
 
@@ -100,10 +101,50 @@ substitutes for a provider read-back.
 Conventional `--help` prints argparse help and exits. Every execution attempt otherwise
 prints a canonical JSON result and returns success for a completed, degraded, or
 operator-held transition. A hard stop returns a nonzero status. The result
-always reports the capability map, outcome, execution mode, verified tracker
+always reports the capability map, outcome, disposition (below), execution mode, verified tracker
 identifiers, recovery plan when present, safe
 resume action and detail, observed protected head when a write preflight ran, and the
 retained pull-request URL and observed/reviewed heads when authoritative evidence exists.
 It reports the configured engine mode after configuration has loaded, the frozen
 snapshot path after active-state validation, and the report path when that state carries
 an exact report binding; those fields are null before their respective authority exists.
+
+## Dispositions
+
+`operator-held` names both a legitimate wait for the operator and a refusal, and the
+CLI exits 0 for both, so neither the outcome nor the exit status tells a scheduled
+caller whether the run progressed. Every result therefore also carries:
+
+| Key | Values |
+|---|---|
+| `disposition` | `completed` for `successful-completion` or `degraded-success`; `waiting` when the run left an active session at a phase a later invocation or an operator decision continues, judged by that phase and its last retained write (an unresolved tracker write or an unverified forge write reads `waiting` on `reconciliation`, with the capability map saying why); `refused` for every other result, including a hard stop. |
+| `waiting_on` | for `waiting` only, else null: `analysis` (an interactive resume supplies proposals), `notification-delivery` (a resume reads back the retained notification attempt; one whose read-back stays unresolved may need the operator), `approval`, `tracker-write` (a resume with the tracker adapter selected), `finalize` (a resume carrying `finalize: true`, with `--enable-github-forge`), `recovery-approval`, `rerun` (an applied state-present recovery left state the next ordinary run continues from), or `reconciliation` (the last retained write is unverified. A tracker write is read back on each rerun and advances once the tracker shows exactly the recorded write, which may need the operator, such as removing a duplicate. A forge write other than an unsettled `pr-watch` or `merge-read-back` is not read back again, so no rerun advances it and it needs the operator; the exception is a failed `branch-create`, which a rerun retries once read-back shows it left nothing. A scheduled caller should alert on `reconciliation` rather than wait). A gate-only or test-gate recovery ends in its terminal held receipt, which reads `refused` until the operator acts on it. |
+| `refusal_code` | for `refused` only, else null: `repository-identity`, `configuration-identity`, `single-writer-gate` (the gate could not be acquired: another invocation holds it, its owner is not proven dead, or its record cannot be read or validated), `active-state` (`new` against an active session), `invalid-invocation`, or `unclassified`. |
+
+The disposition is derived from the outcome, and an `operator-held` result is `waiting`
+only where the engine names what it waits on; any other is `refused`. A session resting
+in `propose` (an unattended draft that had no notification provider) has no
+continuation, so a result reporting it is `refused`. Classify on these keys, never on
+`detail`.
+
+A scheduled caller whose own exit status does not come from the CLI (an agent run that
+invokes the CLI itself) reads the disposition from the CLI's printed result. An
+invocation-bound receipt for such callers is separate follow-up work.
+
+Repository identity is the main worktree's root for every worktree of one repository
+whose main worktree is a checkout (a bare repository's linked worktree, one whose
+primary used `--separate-git-dir`, any linked worktree on a Git older than 2.36, and
+every checkout on a Git older than 2.31 name themselves; *Repository identity* in
+[`triage-friction-log.md`](../triage-friction-log.md)), so a scheduled
+run in a temporary linked worktree continues the session a primary-checkout run
+started, provided both resolve the same state directory: a shared absolute
+`DEVKIT_STATE_ROOT`, a `.devkit_state_root` marker, or a worktree `state/` that is a
+symlink to the primary checkout's. An independent clone of the same remote is refused
+with `repository-identity`, however it shares the state directory. A draft started in a
+linked worktree writes its report below the primary checkout's `triage.report_root`, so
+the scheduled run must be able to write there. Every run that writes the report checks
+that directory is writable first: a draft before it reserves a session, and a resume
+before it rebinds or advances the session. Otherwise it stops with `hard-stop` and the
+gate released. A completed session that a session-starting entry retires first stays
+retired (its bytes kept, as *Completed-state retirement* describes), and the next run
+starts fresh.

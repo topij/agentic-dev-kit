@@ -83,11 +83,41 @@ numbers rather than coercing them. Construct a run identity binding repository i
 `<friction-log>`, protected-branch head, execution mode, session id, and config
 fingerprint. Hash the exact frozen inbox bytes separately. State, report, and snapshot
 metadata carry the run identity and frozen digest. A resumed run must match every
-immutable identity field. The recorded protected-branch head is immutable draft
+immutable identity field exactly; *Repository identity* below says what the repository
+identity names. The recorded protected-branch head is immutable draft
 provenance, not a requirement that the moving protected ref remain equal forever.
 Refresh the remote ref read-only on resume: the recorded head must remain an ancestor of
 the current protected head. Record the observed current head separately. A non-ancestor,
 missing, or unverifiable transition hard-stops before tracker or repository writes.
+
+### Repository identity
+
+Repository identity is the origin URL and the root of the repository's main worktree,
+so every linked worktree of one repository names the same root and continues the
+same shared session. Git names the main worktree: a linked worktree takes the main
+worktree its common git dir records, after that main worktree proves to share the
+common dir. A checkout that is its own common dir names itself. A linked worktree whose
+main worktree Git cannot name as a checkout of that common dir names itself too, as
+before #1103: a bare repository's linked worktree, one whose primary was made with
+`--separate-git-dir`, and any linked worktree on a Git older than 2.36 (no
+`git worktree list -z`); its sessions do not continue from another worktree. On a Git
+older than 2.31 (no `git rev-parse --path-format`) every checkout names itself the
+same way. Only a checkout where Git sees no work tree at all, such as one whose gitfile is
+broken, is refused. The probes
+run in the invoking checkout and in the main worktree Git names for it, never in a
+recorded root, and drop the environment variables that relocate a repository
+(`GIT_DIR`, `GIT_WORK_TREE` and the like).
+
+A resumed run's identity must equal the recorded one exactly, or equal it with the
+invoking checkout's own root in place of the main worktree's. A recorded root is never
+probed, because it comes from state on disk that may name a removed, moved or corrupted
+path. The second form is what every run recorded before #1103: a session a linked
+worktree recorded then names that worktree, so it continues from a checkout at that
+worktree's path, as it did before, and from no other; anywhere else it holds with
+`repository-identity`. If that worktree was removed, add a worktree at the same path
+again to continue it. An independent clone, a changed origin, or any other root never
+matches. The report path is bound below the root the identity names, not below the
+invoking checkout, so a report a temporary worktree writes survives it.
 
 ## Semantic input matrix
 
@@ -189,7 +219,7 @@ intent or held receipt.
 | Only one configured engine present | Hard-stop before artifact or external write. |
 | Interactive invocation with notification unavailable | Present exact payloads in-session and persist exact decisions; record degradation. |
 | Scheduled or unattended invocation with notification unavailable | Hard-stop before creating a new approval session; preserve an existing session as operator-held. |
-| Missing, malformed, or identity-mismatched live frozen snapshot/state outside `recover`, other than a `completed` state a session-starting entry retires across a configuration change (*Completed-state retirement*) | Hard-stop before tracker writes; name `recover` as the safe interactive transition; after an attempted or verified write, preserve operator-held evidence and never whole-sweep. Test-state remediation stays on the isolated `test` entry. |
+| Missing, malformed, or identity-mismatched live frozen snapshot/state outside `recover`, other than a `completed` state a session-starting entry retires across a configuration change (*Completed-state retirement*) | Hard-stop before tracker writes; name `recover` as the safe interactive transition; after an attempted or verified write, preserve operator-held evidence and never whole-sweep. A repository-identity mismatch is held with `refusal_code` `repository-identity` rather than hard-stopped, and names running from a checkout of the recorded repository rather than `recover`. Test-state remediation stays on the isolated `test` entry. |
 | Tracker or finalization write fails or is ambiguous | Read back before retry; unresolved state is operator-held. |
 | Test mode | Permit declared local artifacts and optional `[TEST]` notification only; prohibit tracker, source-document, and forge writes. |
 
@@ -316,6 +346,10 @@ Select the first matching row and report exactly one overall outcome.
 | `approval-or-triggered-write-not-terminal` | Approval is pending or a triggered notification, tracker, repository, or review path lacks an authoritative terminal state. | `operator-held` |
 | `optional-degradation-after-terminal-work` | Required and triggered work is terminal, but an optional interactive notification or compute enhancement degraded. | `degraded-success` |
 | `all-triggered-contracts-terminal` | No prior row matches and every triggered capability is terminal. | `successful-completion` |
+
+The engine also reports a `disposition` (`completed`, `waiting` or `refused`) that
+tells an `operator-held` wait from an `operator-held` refusal; see *Dispositions* in
+[`triage-friction-log/engine-cli.md`](triage-friction-log/engine-cli.md).
 
 ## Entry points and context
 
