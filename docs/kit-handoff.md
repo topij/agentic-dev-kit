@@ -20,6 +20,38 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-16 (ticket-creation region snapshots; split-workflow placement and citation pins; REST review-read gap decision, in a Claude Code cloud session)
+
+- **Ticket execution environments:** [#1114](https://github.com/topij/agentic-dev-kit/pull/1114)
+  (`9a3473df`) pins the ticket-creation instructions of `triage-friction-log`,
+  `post-merge-systemize` and `wrap-up` by region snapshots under
+  `scripts/tests/fixtures/ticket-creation-regions/`, and checks that `wrap-up` declares
+  environment metadata before a ticket is presented and inside the approved payload.
+  Its changelog fragment is `changelog.d/project-thread-na11fx.md`. Not established: a
+  contradiction written outside a region, or an agent's classification.
+- **Skills and instruction files:** [#1115](https://github.com/topij/agentic-dev-kit/pull/1115)
+  (`738d1b2e`) gives the split-workflow heading-placement and summary-citation
+  assertions a mutation case each that only it rejects, and mutates every reference
+  file's opening tail clause. #1058 stays open for the operator.
+- **pr-watch REST backend:** the operator kept #94 rows 7 and 9 as a documented gap
+  while REST cannot authorize a merge; the `&page=N` design for when cloud merge is
+  revived is [on #94](https://github.com/topij/agentic-dev-kit/issues/94#issuecomment-6213171824).
+- Both PRs were merged from the cloud session through the GitHub MCP on the operator's
+  word. Their `--record-review fallback:panel` commands could not run there (#951) and
+  are in each squash message for a local run.
+- Verification: `make test` in `/home/user/agentic-dev-kit` (cloud, root) at
+  `71d04d3efe6ceb15b34c41989e3f46d313c8e386` on 2026-10-16 printed
+  `7 failed, 5004 passed, 38 skipped`; every failure is in the cloud-environment set
+  `CLAUDE.md` names. CI `Test` was green on each merged head.
+- The friction-log triage was not run: the skill is operator-invoked only, so a
+  delegated session on the operator's device could not start it.
+- Closed workstream Ticket execution environments: #1114 covers #1040, closed on the
+  operator's word.
+- Closed workstream pr-watch REST backend: nothing moves until cloud merge is revived;
+  #94 and #951 hold the detail.
+
+______________________________________________________________________
+
 ## Session — 2026-10-16 (triage repository identity redesigned and merged; shared-hook install merged; residual review findings filed, in Claude Code)
 
 - **Triage outcome receipts** (renamed from *Triage repository identity and outcome
@@ -278,16 +310,6 @@ confirm no state root holds a `proposal_correction`, then remove the shim (#979)
 
 ▶ Next: #1030 — cover every workstream a session worked on in the "Update only that workstream's entry" bullet, pin the half-pinned clauses, give creating and detecting entries one run-mode carve-out, and define what happens to a kept entry that cannot be named and to references after a rename.
 
-### Ticket execution environments
-
-**Status:** the shared contract and workflow bindings shipped in #1038
-(`4271cbd7e6b8177554105205ee8f467e8b33e6ed`). The operator deferred the
-instruction-check coverage gaps to #1040; live cloud selection was not exercised.
-**Owner:** [#1040](https://github.com/topij/agentic-dev-kit/issues/1040).
-
-▶ Next: session-start cloud — assess #1040's inputs and verification prerequisites,
-then work on its instruction-check coverage gaps only if eligible.
-
 ### Skills and instruction files
 
 **Status:** #1052 (`f7d8749a`), #1053 (`78d623c3`) and #1054 (`ea4010db`) shipped on
@@ -302,7 +324,8 @@ deleting a `kit-retired` command (#1071).
 hiding later links (#1075), and #1100 (`5d29a75f`) covers #1069's residual LOWs
 (#1070).
 #1108 (`f066b3ae3d4b902e7c8d30c8ea78eff25d9d7c95`) added the Codex invocation-policy report for #1055.
-#1058 owns the triage split's remaining pin gaps, and #1098 the link check's remaining
+#1115 (`738d1b2e`) pins the triage split's section placement and summary citations
+for #1058, which stays open for the operator. #1098 owns the link check's remaining
 state-machine gaps.
 **Owner:** `saved_plans/skills-and-instructions-assessment_2026-10-11.md`;
 [#1055](https://github.com/topij/agentic-dev-kit/issues/1055),
@@ -311,22 +334,8 @@ state-machine gaps.
 [#1075](https://github.com/topij/agentic-dev-kit/issues/1075),
 [#1098](https://github.com/topij/agentic-dev-kit/issues/1098).
 
-▶ Next: #1058 — pin the triage split's section placement and full normative sentences
-in the mutation test in `scripts/tests/test_portability.py`.
-
-### pr-watch REST backend
-
-**Status:** #1093 (`4fae786f`) judges REST reads complete against the counts GitHub
-sends and rejects malformed bodies (step 1 of #94's plan). Reviews carry no count, so a
-review read that loses its `Link` header still reads as complete (#94 re-audit rows 7
-and 9). REST still cannot authorize a merge; letting a cloud session record receipts
-and merge (#94 steps 2 and 3) is parked as not worth its cost. #951 owns the cloud
-session's GraphQL block.
-**Owner:** [#94](https://github.com/topij/agentic-dev-kit/issues/94),
-[#951](https://github.com/topij/agentic-dev-kit/issues/951).
-
-▶ Next: #94 — decide whether the REST review read gets a completeness signal (rows 7
-and 9) or stays a documented gap, then say so on #94.
+▶ Next: #1098 — make the split-workflow link check treat setext headings, indented
+code and reference definitions as their own blocks, not paragraph text.
 
 ### Panel prompt test fixtures
 
