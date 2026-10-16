@@ -24,7 +24,8 @@ You need `git` 2.44 or later, `make`, Python 3, and [`uv`](https://docs.astral.s
 On Windows, use WSL.
 
 ```
-make install-hooks   # the pre-push hook catches a stale kit-manifest.json
+make install-hooks   # the pre-push hook catches a stale kit-manifest.json; run it in the
+                     # primary checkout (a linked worktree only reports, #990)
 make test            # the verification command; it takes a while
 ```
 

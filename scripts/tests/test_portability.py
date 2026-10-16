@@ -2248,6 +2248,19 @@ def test_split_workflow_read_and_link_mutations_are_rejected(tmp_path: Path) -> 
         ("pr-watch/report-fields.md", "before the first action of any run.",
          "before the first action of any run. Read it only when a report field is unclear."),
         ("pr-watch/report-fields.md", "## The REST backend", "#### The REST backend"),
+        # A heading no summary or entry citation names: only the placement check sees it.
+        ("triage-friction-log/recovery.md", "### Gate-only recovery transition",
+         "### Gate-only recovery step"),
+        # The clause after each reference file's semicolon (#1058).
+        ("triage-friction-log/recovery.md", "may sit in that file or another of its reference files.",
+         "sits in this file only."),
+        ("triage-friction-log/state-schema.md", "may sit in that file or another of its reference files.",
+         "sits in this file only."),
+        ("triage-friction-log/finalize.md", "may sit in that file or another of its reference files.",
+         "sits in this file only."),
+        ("pr-watch/report-fields.md", "may sit in that file or another of its reference files.",
+         "sits in this file only."),
+        ("pr-watch.md", "may sit in any of them.", "lives only in this file."),
     )
     for index, (rel, old, new) in enumerate(mutations):
         root = tmp_path / f"case-{index}"
@@ -2261,6 +2274,50 @@ def test_split_workflow_read_and_link_mutations_are_rejected(tmp_path: Path) -> 
         target.write_text(mutated, encoding="utf-8")
         with pytest.raises(AssertionError):
             _assert_split_workflow_links_and_triggers(root)
+
+
+def test_split_workflow_section_placement_and_citation_mutations_are_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # #1058: each case fails one placement or citation assertion that no
+    # other assertion in the helper would catch for it.
+    require_kit_source()
+    source = REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows"
+
+    def fresh(case: str) -> tuple[Path, Path]:
+        root = tmp_path / case
+        shutil.copytree(source, root / "docs" / "agentic-dev-kit" / "workflows")
+        return root, root / "docs" / "agentic-dev-kit" / "workflows" / "triage-friction-log"
+
+    # A section moved, whole and unchanged, from one reference file to another.
+    root, triage = fresh("moved-section")
+    schema = (triage / "state-schema.md").read_text(encoding="utf-8")
+    start = schema.index("\n## Validity and abandonability\n")
+    end = schema.index("\n## The single-writer gate file\n")
+    moved = schema[start:end]
+    (triage / "state-schema.md").write_text(schema[:start] + schema[end:], encoding="utf-8")
+    cli = (triage / "engine-cli.md").read_text(encoding="utf-8")
+    (triage / "engine-cli.md").write_text(cli.rstrip("\n") + "\n" + moved + "\n", encoding="utf-8")
+    with pytest.raises(AssertionError, match=r"state-schema\.md holds"):
+        _assert_split_workflow_links_and_triggers(root)
+
+    # A summary bullet that cites a section no reference file holds. The entry
+    # and the declaration are changed together, so the Reference files section
+    # still equals its declaration and only the citation check is left to fail.
+    root, _ = fresh("absent-citation")
+    entry = root / "docs" / "agentic-dev-kit" / "workflows" / "triage-friction-log.md"
+    text = entry.read_text(encoding="utf-8")
+    assert text.count("*Finalize and sweep*") == 1
+    entry.write_text(text.replace("*Finalize and sweep*", "*Finalize and archive*"), encoding="utf-8")
+    summaries = {
+        slug: dict(files) for slug, files in _SPLIT_WORKFLOW_SUMMARIES.items()
+    }
+    summaries["triage-friction-log"]["finalize.md"] = summaries["triage-friction-log"][
+        "finalize.md"
+    ].replace("*Finalize and sweep*", "*Finalize and archive*")
+    monkeypatch.setattr(sys.modules[__name__], "_SPLIT_WORKFLOW_SUMMARIES", summaries)
+    with pytest.raises(AssertionError, match=r"names \*Finalize and archive\* for finalize\.md"):
+        _assert_split_workflow_links_and_triggers(root)
 
 
 # A reference file sits one directory below its entry, so a link carried over
@@ -3678,6 +3735,28 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "Then resolve `merge-authority`: invoke `forge-merge-write` only when "
             "the declared class and current request authorize it"
         ) in flattened
+        _assert_wrap_up_ticket_metadata_declaration(workflow)
+
+
+def _assert_wrap_up_ticket_metadata_declaration(workflow: str) -> None:
+    # Parse the declared metadata timing, payload binding and position. This
+    # validates those declarations, not an agent's classification or a tracker
+    # write; additions elsewhere in the region are the snapshot's to reject.
+    timing = re.findall(
+        r"^   (Before|After) ([^,\n]+), include its execution environment,$",
+        workflow, re.MULTILINE,
+    )
+    assert timing == [("Before", "presenting a proposed ticket")], (
+        "wrap-up metadata timing"
+    )
+    flattened = " ".join(workflow.split())
+    binding = "This metadata belongs in the exact payload the operator approves."
+    assert flattened.count(binding) == 1, "wrap-up metadata payload binding"
+    gate = "Do not proceed with the tracker write until the operator confirms the exact payload."
+    assert flattened.count(gate) == 1, "wrap-up tracker-write gate"
+    assert flattened.index(binding) < flattened.index(gate), (
+        "wrap-up metadata precedes the tracker-write gate"
+    )
 
 
 @pytest.mark.kit_repo_only(
@@ -4320,6 +4399,11 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "Closing a workstream is not among them",
             "Closing a workstream is among them", 1
         )),
+        # Pins the wrap-up branch's call to the metadata declaration check.
+        ("wrap-up", wrap, wrap.replace(
+            "This metadata belongs in the exact payload the operator approves.",
+            "This metadata is added after the operator approves the payload.", 1
+        )),
     )
     for mutation_index, (name, original, mutated) in enumerate(mutations):
         assert mutated != original, mutation_index
@@ -4427,6 +4511,212 @@ def test_ticket_environment_contract_snapshot_runs_in_namespaced_engine_layout(t
     finally:
         doctrine.write_bytes(original)
         assert doctrine.read_bytes() == original
+
+
+# The ticket-creation instruction region of each workflow that writes a tracker
+# item: from the instruction that adds execution-environment metadata to the
+# first text after the instructions that bind it to the approved payload. Each
+# anchor must occur exactly once in the whole workflow, entry and reference files.
+_TICKET_CREATION_REGIONS = {
+    "triage-friction-log": (
+        "Before computing proposal digests, classify each proposed ticket",
+        "If parsing fails under the held gate before reservation",
+    ),
+    "post-merge-systemize": (
+        "### Tracker route\n",
+        "## Step 4 — Report, notify, and stop\n",
+    ),
+    "wrap-up": (
+        "   Before presenting a proposed ticket, include its execution environment,",
+        "   **The go-ahead is the operator's own turn in this session.**",
+    ),
+}
+
+
+def _assert_ticket_creation_region_snapshot(name: str, workflow: str) -> None:
+    # Pin the reviewed text of a ticket-creation region, so a change or an
+    # addition inside it is rejected even while every declared clause the
+    # semantic checks parse is still present. This is an equality check, not a
+    # natural-language contradiction parser, and it says nothing about text
+    # outside the region, an agent's classification, or tracker execution.
+    # Updating a region and its snapshot together requires independent review.
+    start, end = _TICKET_CREATION_REGIONS[name]
+    assert workflow.count(start) == 1, f"{name} creation-region start anchor"
+    assert workflow.count(end) == 1, f"{name} creation-region end anchor"
+    begin, finish = workflow.index(start), workflow.index(end)
+    assert begin < finish, f"{name} creation-region anchor order"
+    expected = shipped_test_input(f"ticket-creation-regions/{name}.md").read_text(
+        encoding="utf-8"
+    )
+    assert workflow[begin:finish] == expected, f"{name} creation-region snapshot"
+
+
+@pytest.mark.kit_repo_only(
+    "docs/agentic-dev-kit/workflows/triage-friction-log.md",
+    "docs/agentic-dev-kit/workflows/post-merge-systemize.md",
+    "docs/agentic-dev-kit/workflows/wrap-up.md",
+)
+def test_ticket_creation_regions_match_their_reviewed_snapshots() -> None:
+    for name in _TICKET_CREATION_REGIONS:
+        workflow = read_workflow(REPO_ROOT / f"docs/agentic-dev-kit/workflows/{name}.md")
+        _assert_ticket_creation_region_snapshot(name, workflow)
+
+
+@pytest.mark.kit_repo_only(
+    "docs/agentic-dev-kit/workflows/triage-friction-log.md",
+    "docs/agentic-dev-kit/workflows/post-merge-systemize.md",
+    "docs/agentic-dev-kit/workflows/wrap-up.md",
+)
+def test_ticket_creation_contradictory_additions_are_rejected_by_the_snapshot(
+    tmp_path: Path,
+) -> None:
+    # #1040: each addition keeps every intended clause, so the declared-field
+    # check accepts it and the region snapshot is the assertion that rejects it.
+    def read(name: str) -> str:
+        return read_workflow(REPO_ROOT / f"docs/agentic-dev-kit/workflows/{name}.md")
+
+    triage, post_merge, wrap = read("triage-friction-log"), read("post-merge-systemize"), read("wrap-up")
+    triage_clause = "Never add it after approval or rewrite retained proposals on resume."
+    post_merge_clause = "retained approved proposals are not rewritten on resume."
+    wrap_clause = "   This metadata belongs in the exact payload the operator approves.\n"
+    additions = (
+        ("triage-friction-log", triage.replace(
+            triage_clause,
+            triage_clause + " In engine-backed drafting the metadata may instead be\n"
+            "added after the tracker write, and retained proposals may be rewritten on resume.",
+            1,
+        )),
+        ("triage-friction-log", triage.replace(
+            "record `agent-executed`.",
+            "record `agent-executed`. A proposal may omit its execution-environment\n"
+            "section until after the tracker write.",
+            1,
+        )),
+        ("post-merge-systemize", post_merge.replace(
+            post_merge_clause,
+            post_merge_clause + "\nThe section may instead be added after tracker creation, "
+            "and a retained approved proposal may be rewritten on resume.",
+            1,
+        )),
+        ("post-merge-systemize", post_merge.replace(
+            "do not claim an identifier.",
+            "do not claim an identifier. After creation, rewrite the retained approved\n"
+            "proposal to add any missing execution-environment section.",
+            1,
+        )),
+        ("wrap-up", wrap.replace(
+            wrap_clause,
+            wrap_clause + "   The metadata may instead be added after the tracker write, outside\n"
+            "   the payload the operator approves.\n",
+            1,
+        )),
+    )
+    for index, (name, mutated) in enumerate(additions):
+        original = {"triage-friction-log": triage, "post-merge-systemize": post_merge, "wrap-up": wrap}[name]
+        assert mutated != original, index
+        # The intended clauses all remain, and the declared-field checks accept them.
+        if name == "triage-friction-log":
+            assert triage_clause in mutated
+            _assert_triage_semantics(mutated, tmp_path)
+        elif name == "post-merge-systemize":
+            assert post_merge_clause in mutated
+            _assert_post_merge_semantics(mutated)
+        else:
+            assert wrap_clause in mutated
+            _assert_wrap_up_ticket_metadata_declaration(mutated)
+        with pytest.raises(AssertionError, match=f"{name} creation-region snapshot"):
+            _assert_ticket_creation_region_snapshot(name, mutated)
+
+
+@pytest.mark.kit_repo_only(
+    "docs/agentic-dev-kit/workflows/triage-friction-log.md",
+    "docs/agentic-dev-kit/workflows/post-merge-systemize.md",
+    "docs/agentic-dev-kit/workflows/wrap-up.md",
+)
+def test_ticket_creation_hostile_duplicates_and_moves_are_rejected() -> None:
+    def read(name: str) -> str:
+        return read_workflow(REPO_ROOT / f"docs/agentic-dev-kit/workflows/{name}.md")
+
+    workflows = {name: read(name) for name in _TICKET_CREATION_REGIONS}
+    region = {
+        name: shipped_test_input(f"ticket-creation-regions/{name}.md").read_text(
+            encoding="utf-8"
+        )
+        for name in _TICKET_CREATION_REGIONS
+    }
+    cases = []
+    for name, workflow in workflows.items():
+        start, end = _TICKET_CREATION_REGIONS[name]
+        assert workflow.count(region[name]) == 1
+        # A second, overriding instruction opening with the start anchor.
+        override = (
+            "\n" + start + " only after the tracker write, and rewrite retained\n"
+            "proposals on resume.\n"
+        )
+        cases.append((name, workflow + override, f"{name} creation-region start anchor"))
+        # The end anchor duplicated ahead of the region, making a decoy boundary.
+        cases.append((name, end + "\n\n" + workflow, f"{name} creation-region end anchor"))
+        # The whole region moved to the end, after the text that should follow it.
+        moved = workflow.replace(region[name], "", 1) + "\n" + region[name]
+        cases.append((name, moved, f"{name} creation-region anchor order"))
+    for name, mutated, message in cases:
+        assert mutated != workflows[name]
+        with pytest.raises(AssertionError, match=message):
+            _assert_ticket_creation_region_snapshot(name, mutated)
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/wrap-up.md")
+def test_wrap_up_ticket_metadata_declaration_mutations_are_rejected() -> None:
+    # #1040: metadata timing moved after the tracker write, the payload binding
+    # removed or duplicated, the metadata moved below the tracker-write gate, a
+    # contradictory timing line added, and the gate duplicated. Each is rejected
+    # by the declared-field check on its own, independently of the region
+    # snapshot and of manifest drift.
+    wrap = read_workflow(REPO_ROOT / "docs/agentic-dev-kit/workflows/wrap-up.md")
+    _assert_wrap_up_ticket_metadata_declaration(wrap)
+    metadata = (
+        "   Before presenting a proposed ticket, include its execution environment,\n"
+        "   required inputs, verification prerequisites, and configured environment label\n"
+        "   under [`ticket-execution-environment.md`](../ticket-execution-environment.md).\n"
+        "   This metadata belongs in the exact payload the operator approves.\n\n"
+    )
+    assert wrap.count(metadata) == 1
+    gate_paragraph_end = "A decline is a park, not\n   an argument.\n\n"
+    assert wrap.count(gate_paragraph_end) == 1
+    cases = (
+        (wrap.replace(
+            "   Before presenting a proposed ticket, include",
+            "   After the tracker write succeeds, include", 1,
+        ), "wrap-up metadata timing"),
+        (wrap.replace(
+            "This metadata belongs in the exact payload the operator approves.",
+            "This metadata is added after the operator approves the payload.", 1,
+        ), "wrap-up metadata payload binding"),
+        (wrap.replace(metadata, "", 1).replace(
+            gate_paragraph_end, gate_paragraph_end + metadata, 1,
+        ), "wrap-up metadata precedes the tracker-write gate"),
+        (wrap.replace(
+            metadata,
+            metadata + "   After the tracker write succeeds, include its execution environment,\n"
+            "   in a comment on the created item.\n\n",
+            1,
+        ), "wrap-up metadata timing"),
+        (wrap.replace(
+            metadata,
+            metadata + "   This metadata belongs in the exact payload the operator approves.\n\n",
+            1,
+        ), "wrap-up metadata payload binding"),
+        (wrap.replace(
+            gate_paragraph_end,
+            gate_paragraph_end + "   Do not proceed with the tracker write until the operator confirms the\n"
+            "   exact payload.\n\n",
+            1,
+        ), "wrap-up tracker-write gate"),
+    )
+    for mutated, message in cases:
+        assert mutated != wrap
+        with pytest.raises(AssertionError, match=message):
+            _assert_wrap_up_ticket_metadata_declaration(mutated)
 
 
 @pytest.mark.evidence

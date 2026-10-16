@@ -403,6 +403,9 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/fixtures/shipped-registrations/claude-settings.json", "test"),
     ("scripts/tests/fixtures/init-config.json", "test"),
     ("scripts/tests/fixtures/ticket-execution-environment-contract.md", "test"),
+    ("scripts/tests/fixtures/ticket-creation-regions/triage-friction-log.md", "test"),
+    ("scripts/tests/fixtures/ticket-creation-regions/post-merge-systemize.md", "test"),
+    ("scripts/tests/fixtures/ticket-creation-regions/wrap-up.md", "test"),
     ("scripts/tests/fixtures/entry-point-markers.json", "test"),
     # `state_paths` is a package with its own `tests/`, hashed the same way for
     # the same reason: it sits under `scripts/lib/`, so `_remap` covers it

@@ -26,6 +26,27 @@
 
 ## 2026-10-15
 
+- **A review lens rewrote the kit's shared pre-push hook from a copied worktree.**
+  Severity M; parked because the operator held tracker writes for separate approval.
+  - **Repro:** the round-3 correctness lens on #1112 copied its handed linked worktree
+    with `cp -R`, which copies the `.git` gitfile and so shares the real repository's
+    worktree admin dir. From that copy it ran `git worktree add` and
+    `DEVKIT_INSTALL_SHARED_HOOKS=1 make install-hooks`, which wrote
+    `/Users/topi/Coding/agentic-dev-kit/.git/hooks/pre-push`.
+  - **Effect:** checked afterwards, the file is the standard kit shim with mode 755,
+    so its content is unchanged. The lens reported it.
+  - **Proposed remedy:** the lens contract should name `git clone --no-hardlinks`, never
+    `cp -R`, for a writable copy of a worktree. Same family as #1078 (lenses writing
+    into what they were handed).
+- **A review lens ran a global `pkill -f "pytest scripts/tests"`.** Severity L, kept for
+  accumulation. The round-2 correctness lens on #1111 used it to stop its own stray run,
+  and it could have killed another lens's suite in the same session. No collateral
+  failure was observed.
+- **Backgrounded lens suites failed SIGINT tests again.** Severity L, an occurrence of
+  #992's shape. Two lenses on #1111 reported 25 `test_portability.py` archive failures
+  ("SIGINT did not interrupt the synthetic child") from runs started with `&`. The same
+  tests passed in the foreground, at base and at head.
+
 - **Launcher shutdown verification hit its timing assertion.** Severity M, kept for accumulation.
   `make test` at `5635a764884ef61b0a690234c10bc68e1ec628b2` on 2026-10-15 in
   `/private/tmp/devkit-overnight-20261014-01a13bcb/sessions/oct14-policy-report-r2/wt`

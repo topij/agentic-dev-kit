@@ -20,6 +20,56 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-15 (triage linked-worktree identity and outcome receipts; shared-hook install from linked worktrees; consumer-upgrade assessment, in Claude Code)
+
+- **Triage repository identity and outcome receipts:** [#1111](https://github.com/topij/agentic-dev-kit/pull/1111)
+  (for #1103) is open and ready at `9ee0fd9b`, held for the operator.
+  - What it does: linked worktrees name the main worktree; recorded identities are
+    compared by verified Git membership, never rewritten; results carry
+    `disposition` / `waiting_on` / `refusal_code`; the CLI can publish and check an
+    invocation-bound outcome receipt.
+  - Review: the two-lens panel ran three rounds (`342f0a9a`, `cc3eb05f`, `9ee0fd9b`),
+    and the round budget is spent. The decision packet on the PR names the open
+    findings. The receipt-clearing path drew a finding in every round, so the packet
+    treats it as design feedback rather than proposing another patch.
+  - Found by the author in round 1, then corrected: a `--separate-git-dir` primary's linked
+    worktree would have hard-stopped.
+  - Verification: `make test` at `9ee0fd9bd486e0e8860233cfaa02a62287a3562a` on
+    2026-10-15, in `/Users/topi/Coding/agentic-dev-kit-wt/triage-worktree-identity`,
+    printed `5069 passed, 1 skipped`.
+- **Shared hook installation:** [#1112](https://github.com/topij/agentic-dev-kit/pull/1112)
+  (for #990 item 2) is open and ready at `5fda739d`, held for the operator.
+  - What it does: from a linked worktree, `init.sh` / `make install-hooks` report a
+    shared hooks directory instead of writing it. A byte-identical, executable shim is
+    `already current`; anything else is `deferred`, unless
+    `DEVKIT_INSTALL_SHARED_HOOKS=1` is set.
+  - Review: three panel rounds, and the round budget is spent. The decision packet's
+    open findings are stale `init.sh --help` / `adopt.md` prose (MEDIUM) and five LOW
+    findings.
+  - Verification: `make test` at `5fda739deb899a75a959e7c2b1e2df0282e478e3` on
+    2026-10-15, in `/Users/topi/Coding/agentic-dev-kit-wt/linked-worktree-hooks`,
+    printed `5041 passed, 1 skipped`.
+  - #990's items 1 (lens definitions rendered for the kit's config) and 3 (migration
+    gaps) are untouched and remain on #990.
+- **Consumer upgrades:** the assessment is `saved_plans/consumer-upgrade-assessment_2026-10-15.md`
+  (local, not committed).
+  - Read-only facts: cs-toolkit records kit `6f543433` and OpenKitchen `55869a7e`
+    (their `kit-manifest.json` on `origin/main`).
+  - cs-toolkit's retained triage state is a completed live session bound to its
+    primary checkout. It matches exactly under #1111, and it still carries the #979
+    receipt.
+  - Its 2026-10-09 scheduled draft stopped on the identity mismatch in a `/tmp`
+    worktree, and the finalize job logged a passed deliverable check anyway.
+  - #989's items do not trigger for either consumer's install scope.
+  - #1011 and #1109 matter only to OpenKitchen, which installs lanes; cs-toolkit
+    declines them.
+  - No consumer was upgraded and no tracker write was made, on the operator's
+    instruction.
+- **Assignment:** all three workstream entries below are new, and the operator did not
+  confirm the assignment.
+
+______________________________________________________________________
+
 ## Session — 2026-10-15 (Codex policy reporting, fixture diagnostics and lane manifest guidance)
 
 - **Skills and instruction files:** [#1108](https://github.com/topij/agentic-dev-kit/pull/1108)
@@ -127,108 +177,6 @@ ______________________________________________________________________
 - **Residual LOWs from #1093's review, not filed:** no test reads a wrapped surface
   exactly one row short of `total_count`, and one sentence on triage's terminal receipt
   is loose in mechanism. Both are listed in the PR body.
-
-______________________________________________________________________
-
-## Session — 2026-10-12 (friction-log triage; record-prose preflight recognises moved pairings, in Claude Code)
-
-- **Friction-log triage** (session `ae0b23b8`, engine-backed, approved in this session
-  rather than over Slack): filed #1078, #1079, #1080, #1081, #1082 and #1083; archived
-  TRI-04, TRI-08, TRI-09 and TRI-11; parked TRI-02, TRI-06, TRI-07 and TRI-14. Sweep PR
-  [#1084](https://github.com/topij/agentic-dev-kit/pull/1084) merged as `e37b7bd9` at its
-  reviewed head `427d2fa5`. The record-prose preflight failed on the moved keyword/reference
-  pairings at archive lines 4279 and 4459; the operator accepted them as moved history.
-- **Review proportionality:** [#1088](https://github.com/topij/agentic-dev-kit/pull/1088)
-  merged as `2ca8ded9` on the operator's request. The preflight no longer reports a
-  keyword/reference pairing whose lines were moved unchanged, in order, from lines the
-  same change deletes from a narrative path. Copies, new adjacencies, pairings past
-  `MAX_MOVED_SPAN` or `MAX_MOVE_CANDIDATES`, and commit messages are still reported.
-  - Decided: archival preservation means exact bytes. This settles the parked TRI-06,
-    which stays in the inbox until the next triage pass.
-  - Review: CodeRabbit skipped. Adversarial `fallback:lens` full passes ran at `3922348b`
-    and `042f36e2`, and `fallback:delta` passes at `40bef2ae` and `0463c18d`. The last
-    delta's LOW finding is #1089, on the operator's decision.
-  - Verification: `make test` at `042f36e2299c4e1a35913dc27fd6752140ec35a3` on
-    2026-10-12, in `/Users/topi/Coding/agentic-dev-kit`, printed `4894 passed, 1 skipped`.
-    The LOW repairs at `40bef2ae` and `0463c18d` had focused verification
-    (`scripts/tests/test_record_prose.py`, `make lint`, the drift check) and current-head
-    CI, as the LOW rule prescribes.
-- **Filed this session:** #1078, #1079, #1080, #1081, #1082, #1083, #1089,
-  [#1090](https://github.com/topij/agentic-dev-kit/issues/1090) and
-  [#1091](https://github.com/topij/agentic-dev-kit/issues/1091); an occurrence comment
-  on #1080.
-- **Not established:** #1082 overlaps the open #677 (the state guard reporting a
-  concurrent cockpit write as a suite leak). The two were not reconciled.
-
-______________________________________________________________________
-
-## Session — 2026-10-12 (workflow reference-file links tested; OpenKitchen upgraded to the skill bindings, in Claude Code)
-
-- **Skills and instruction files:** [#1074](https://github.com/topij/agentic-dev-kit/pull/1074)
-  merged as `55869a7e` on the operator's merge. It corrects `pr-watch/report-fields.md`'s
-  link to `fallback-review-panel.md` and adds a test that every relative link in a
-  workflow reference file points at an existing file.
-  - Review: CodeRabbit skipped. An adversarial `fallback:lens` full pass ran at
-    `5b9cc641`, and a `fallback:delta` pass at `8abd3b3d` reviewed the repair of its
-    LOW findings. The delta pass's own LOW findings are #1075.
-  - Verification: `make test` at `8abd3b3d599cf27ff052cc34a48aac288a323fda` on
-    2026-10-12, in `/Users/topi/Coding/agentic-dev-kit`, printed `4882 passed, 1 skipped`.
-- **OpenKitchen upgraded** from kit `c5da977` to `55869a7e` in topij/OpenKitchen#324,
-  merged as `cb810b88` on the operator's request. The upgrade ran from a linked worktree
-  off `origin/main`, because OpenKitchen's main checkout was on another session's branch
-  with uncommitted edits.
-  - The eight Claude commands were `kit-retired` and nothing in OpenKitchen read them,
-    so they were deleted once the skills were installed.
-  - Review: OpenKitchen configures no review bot, and the change is safety-critical
-    there, so the two-lens panel ran at `4c35c81b`. Its LOW finding on links to the
-    removed `.claude/commands/` is topij/OpenKitchen#325, on the operator's decision.
-  - Verification: `run_installed_tests.py` with a temporary `DEVKIT_STATE_ROOT`, run on
-    2026-10-12 in that worktree on the tree committed as `4c35c81b`, printed
-    `3756 passed, 109 skipped`. The PR body carries the full stamp.
-- **Filed this session:** [#1075](https://github.com/topij/agentic-dev-kit/issues/1075),
-  topij/OpenKitchen#325; occurrence comments on
-  [#61](https://github.com/topij/agentic-dev-kit/issues/61) (a hook missed in a linked
-  worktree), [#990](https://github.com/topij/agentic-dev-kit/issues/990),
-  [#992](https://github.com/topij/agentic-dev-kit/issues/992) and
-  [#1055](https://github.com/topij/agentic-dev-kit/issues/1055).
-- **Not established:** OpenKitchen's main checkout was not pulled. It stays on the other
-  session's branch.
-
-______________________________________________________________________
-
-## Session — 2026-10-12 (workflow reference files required by kit_doctor; cs-toolkit upgraded to the skill bindings, in Claude Code)
-
-- **Skills and instruction files:** [#1069](https://github.com/topij/agentic-dev-kit/pull/1069)
-  merged as `6f543433`, on the operator's request. `kit_doctor` now marks a file under
-  `workflows/<slug>/` `missing-required` when `<slug>.md` is installed at the kit's
-  version. On the operator's word, the tracker marks #1057 done.
-  - Review: CodeRabbit skipped. An adversarial `fallback:lens` full pass ran at
-    `e3e4ed04`, and a `fallback:delta` pass at `02e2c21b` repaired its LOW findings. The
-    delta pass's own LOW findings are #1070.
-  - Verification: `make test` at `02e2c21b38e2f7479d6b1087d5f17376738c29b8` on
-    2026-10-12, in `/Users/topi/Coding/agentic-dev-kit`, printed `4880 passed, 1 skipped`.
-- **cs-toolkit upgraded** from kit `0b8166b8` to `6f543433` in in-parallel-oy/cs-toolkit#2632,
-  merged as `4079572c`, on the operator's request. This was the first `/upgrade` under the
-  skill bindings.
-  - #1069 worked as intended there. Once the entries were refreshed, the five reference
-    files reported `missing-required`.
-  - **Decision (operator):** cs-toolkit keeps its seven `kit-retired` commands. Its own
-    `check_skills.py --strict` (CI), its plan-hygiene guard and `skill-index.yaml` still
-    read `.claude/commands/`. CUS-1692 migrates those, and #1071 asks `upgrade.md` to warn.
-  - #1066's GraphQL probe broke cs-toolkit's adopter-owned `tests/test_pr_watch.py` under
-    its live-path guard, and the PR pinned the probe there.
-  - The #428 state guard tripped on live cron writes in cs-toolkit's main checkout. The
-    stamped runs used a detached worktree, and the occurrence is on #467.
-  - Review: CodeRabbit's verdict was clean but excluded `docs/**`, so the two-lens panel
-    ran at `cbff90a1`. Its findings went to #1072 (a kit link) and CUS-1693 (cs-toolkit
-    CI never runs `make test-devkit`).
-- **Filed this session:** [#1070](https://github.com/topij/agentic-dev-kit/issues/1070),
-  [#1071](https://github.com/topij/agentic-dev-kit/issues/1071),
-  [#1072](https://github.com/topij/agentic-dev-kit/issues/1072), CUS-1692, CUS-1693; an
-  occurrence comment on [#467](https://github.com/topij/agentic-dev-kit/issues/467).
-- **Not established:** OpenKitchen is not upgraded. A stale kit clone at
-  `/tmp/agentic-dev-kit` made this session clone under its scratchpad instead, because
-  `rm -rf` is denied to the agent; the operator removed that clone at wrap-up.
 
 ______________________________________________________________________
 
@@ -398,3 +346,36 @@ for the headless lane profile.
 **Owner:** [#1102](https://github.com/topij/agentic-dev-kit/issues/1102).
 
 ▶ Next: review #1102 against the delivered lane guidance and decide its tracker disposition.
+
+### Triage repository identity and outcome receipts
+
+**Status:** [#1111](https://github.com/topij/agentic-dev-kit/pull/1111) is open at
+`9ee0fd9b`, held for the operator with its round budget spent; the decision packet on the
+PR recommends option A if the receipt surface is wanted now, otherwise C (ship identity
+and dispositions, move the receipt surface to a follow-up). cs-toolkit's scheduled triage needs the identity half. Assignment
+unconfirmed — may belong to Triage engine hardening.
+**Owner:** [#1103](https://github.com/topij/agentic-dev-kit/issues/1103); PR #1111.
+
+▶ Next: operator decides #1111's decision packet (A, B or C); then pr-watch 1111 for the chosen route.
+
+### Shared hook installation
+
+**Status:** [#1112](https://github.com/topij/agentic-dev-kit/pull/1112) is open at
+`5fda739d`, held for the operator with its round budget spent; its open findings are one
+docs MEDIUM and five LOW findings (decision packet on the PR). #990's lens
+rendering and migration items are untouched. Assignment unconfirmed.
+**Owner:** [#990](https://github.com/topij/agentic-dev-kit/issues/990); PR #1112.
+
+▶ Next: operator decides #1112's decision packet (option A is the one further round the packet scopes).
+
+### Consumer upgrades
+
+**Status:** neither consumer was upgraded. The plan, the facts read from each consumer
+and the issue-by-consumer impact are in
+`saved_plans/consumer-upgrade-assessment_2026-10-15.md` (local). cs-toolkit's
+scheduled triage is blocked until #1111's identity change is installed there. Assignment
+unconfirmed.
+**Owner:** `saved_plans/consumer-upgrade-assessment_2026-10-15.md`; #1103, #990, #1011,
+#1109, #979.
+
+▶ Next: after #1111 merges, `/upgrade` cs-toolkit from a fresh linked worktree of its `origin/main` (plan step 2 of the local `saved_plans/consumer-upgrade-assessment_2026-10-15.md`), with operator approval.

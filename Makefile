@@ -23,6 +23,11 @@
 # `paths.engines` the same way init.sh does (via config/dev-model.yaml,
 # falling back to `scripts`), reusing scripts/lib/kitconfig.py to read it.
 #
+# From a linked worktree that function reports rather than writes a hooks
+# directory every checkout shares, and exits 0 either way (#990): run this
+# target from the primary checkout, or set DEVKIT_INSTALL_SHARED_HOOKS=1 to
+# install from a linked worktree deliberately.
+#
 # check-syntax
 # ------------
 # `bash -n` on the shell scripts a hook or session can source, `sh -n` on

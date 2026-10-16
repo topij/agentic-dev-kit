@@ -718,6 +718,20 @@ value; it probes `paths.engines` from where engines actually are rather than def
 stamps `kit.version`; and it installs the pre-push hook as a shim (honoring
 `core.hooksPath`).
 
+**From a linked worktree it does not write a hooks directory other checkouts share**
+(`#990`). The common dir's `hooks/`, and any absolute `core.hooksPath` (it lives in the
+shared config), are live in the primary checkout and in every other worktree at once. Rewriting the shim
+there before this upgrade merges would change the hook every other session runs. A shim
+naming a moved engines dir is a silent no-op in a checkout still on the old layout.
+`init.sh` therefore reports such a shim as `already current` when it is byte-identical
+and executable.
+Otherwise it prints `deferred` and leaves it unwritten. A relative `core.hooksPath`
+below the worktree resolves inside each worktree, so that copy is the worktree's own and
+is written as before. One that climbs out with `..`, or passes through a symlink, is
+judged by where it physically lands, and a `..` under a directory that does not exist yet
+counts as shared. Running from the primary checkout is unchanged. Install a deferred shim
+after the merge, as Step 6 says.
+
 For the seeded docs, what `--no-clobber` leaves standing is every file that already exists —
 whether it is genuinely in use or still carries a marker. A file whose **first line opens an
 HTML comment beginning with** the unrendered marker or the kit-own marker is the only kind
@@ -1010,6 +1024,17 @@ engine you had to edit, a config key that didn't exist, a `missing` piece the re
 couldn't classify. Tag `[kit]` on anything that is a kit-side fix and open an issue
 upstream. That is Principle #2 applied to the kit itself, and it is how the four shapes
 this skill handles were discovered in the first place.
+
+**If Step 2 ran in a linked worktree and `init.sh` printed `deferred` for the pre-push
+hook, the shared hook still has to be installed once the upgrade has merged.** Include
+that in the PR body you open below, so the operator sees it at merge time. After the
+merge, run it from a checkout of the merged revision. In the primary checkout, once it is
+on that revision, run `make install-hooks` if the repository has that target, or else
+re-run `./init.sh --no-clobber`. Alternatively run
+`DEVKIT_INSTALL_SHARED_HOOKS=1 ./init.sh --no-clobber` from a fresh linked worktree of
+it. Then confirm, from the primary checkout, that `kit_doctor` reports the hook installed
+(from a linked worktree it can report it missing, `#61`). Until then, checkouts keep the
+hook they had.
 
 Open the completed work as a **ready-for-review PR** summarizing: schema version before
 → after, which engines were refreshed / diffed / deliberately skipped, and any
