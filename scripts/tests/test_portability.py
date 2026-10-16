@@ -4342,6 +4342,11 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "Closing a workstream is not among them",
             "Closing a workstream is among them", 1
         )),
+        # Pins the wrap-up branch's call to the metadata declaration check.
+        ("wrap-up", wrap, wrap.replace(
+            "This metadata belongs in the exact payload the operator approves.",
+            "This metadata is added after the operator approves the payload.", 1
+        )),
     )
     for mutation_index, (name, original, mutated) in enumerate(mutations):
         assert mutated != original, mutation_index
@@ -4605,9 +4610,11 @@ def test_ticket_creation_hostile_duplicates_and_moves_are_rejected() -> None:
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/wrap-up.md")
 def test_wrap_up_ticket_metadata_declaration_mutations_are_rejected() -> None:
-    # #1040: the correctness finding's two mutations, each rejected by the
-    # declared-field check on its own, independently of the region snapshot
-    # and of manifest drift.
+    # #1040: metadata timing moved after the tracker write, the payload binding
+    # removed or duplicated, the metadata moved below the tracker-write gate, a
+    # contradictory timing line added, and the gate duplicated. Each is rejected
+    # by the declared-field check on its own, independently of the region
+    # snapshot and of manifest drift.
     wrap = read_workflow(REPO_ROOT / "docs/agentic-dev-kit/workflows/wrap-up.md")
     _assert_wrap_up_ticket_metadata_declaration(wrap)
     metadata = (
@@ -4637,6 +4644,17 @@ def test_wrap_up_ticket_metadata_declaration_mutations_are_rejected() -> None:
             "   in a comment on the created item.\n\n",
             1,
         ), "wrap-up metadata timing"),
+        (wrap.replace(
+            metadata,
+            metadata + "   This metadata belongs in the exact payload the operator approves.\n\n",
+            1,
+        ), "wrap-up metadata payload binding"),
+        (wrap.replace(
+            gate_paragraph_end,
+            gate_paragraph_end + "   Do not proceed with the tracker write until the operator confirms the\n"
+            "   exact payload.\n\n",
+            1,
+        ), "wrap-up tracker-write gate"),
     )
     for mutated, message in cases:
         assert mutated != wrap

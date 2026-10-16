@@ -1,8 +1,8 @@
 ## Ticket-creation instructions are pinned by region snapshots
 
-CHANGED (test inputs): `scripts/tests/test_portability.py` now reads three snapshots
+CHANGED (test inputs): `scripts/tests/test_portability.py` now reads snapshots
 under `scripts/tests/fixtures/ticket-creation-regions/`. When refreshing the
-portability tests, copy those three files with it; without them the new tests fail on
+portability tests, copy those files with it; without them the new tests fail on
 a missing shipped input. Each snapshot pins the reviewed ticket-creation instructions
 of `triage-friction-log`, `post-merge-systemize` or `wrap-up`, from the
 execution-environment metadata instruction to the text that follows its payload
