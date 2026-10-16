@@ -24,6 +24,14 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-10-16
+
+- **A lens wrote generically named helper files into the shared session scratchpad.** Severity L, kept for accumulation.
+  #1111's round-9 correctness lens reported writing `mutate.py`, `muts1.json`, `preflight.sh`, `probe1.py` and an `orig/`
+  directory directly into the scratchpad other rounds and lenses share. It said it had not checked whether those names
+  already existed, so it may have overwritten an earlier round's file. The *Scratch namespace* contract item names the
+  copy directory by lens and revision, but not loose helper files beside it. Worth acting on only if it recurs.
+
 ## 2026-10-15
 
 - **A review lens rewrote the kit's shared pre-push hook from a copied worktree.**
