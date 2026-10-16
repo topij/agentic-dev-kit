@@ -11,7 +11,7 @@ with `refusal_code` `repository-identity` from any other checkout. An independen
 changed origin, invalid state and an active session's configuration mismatch still
 hold. A linked worktree whose main worktree is not a checkout of the same common dir (a
 bare repository's, or one whose primary used `--separate-git-dir`), or one on a Git
-older than 2.36, still names itself.
+older than 2.36, still names itself, and on a Git older than 2.31 every checkout does.
 
 CHANGED (report / return shape): the triage report a run writes is bound below the root
 the run identity names, so a draft started in a linked worktree writes its report under
@@ -21,10 +21,10 @@ ignored by Git in the primary checkout, as `/reports/` is in the kit.
 ADDED (report / return shape): every triage result, and the CLI's own hard stops, carry
 `disposition` (`completed`, `waiting` or `refused`), `waiting_on` and `refusal_code`.
 `operator-held` is `waiting` only where the engine names what it waits on; every other
-`operator-held` result is `refused`. An unresolved tracker write, or an unverified
-forge write, waits on `reconciliation`. A rerun reads a tracker write back again; a
-forge write it does not, so that one needs the operator. Alert on `reconciliation`
-rather than treat it as a routine wait. A test that compares a whole result or a pinned
+`operator-held` result is `refused`. A retained tracker or forge write that is
+unverified waits on `reconciliation` (the *Dispositions* table in `engine-cli.md`
+names which, and which a rerun can advance). Alert on `reconciliation` rather than
+treat it as a routine wait. A test that compares a whole result or a pinned
 key set needs the three keys. A caller that treated every exit-0 `operator-held` as a
 wait should read `disposition` instead.
 

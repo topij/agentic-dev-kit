@@ -133,8 +133,8 @@ invocation-bound receipt for such callers is separate follow-up work.
 
 Repository identity is the main worktree's root for every worktree of one repository
 whose main worktree is a checkout (a bare repository's linked worktree, one whose
-primary used `--separate-git-dir`, and any linked worktree on a Git older than 2.36 name
-themselves; *Repository identity* in
+primary used `--separate-git-dir`, any linked worktree on a Git older than 2.36, and
+every checkout on a Git older than 2.31 name themselves; *Repository identity* in
 [`triage-friction-log.md`](../triage-friction-log.md)), so a scheduled
 run in a temporary linked worktree continues the session a primary-checkout run
 started, provided both resolve the same state directory: a shared absolute

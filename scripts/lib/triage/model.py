@@ -381,16 +381,20 @@ def canonical_repository_root(repo: Path) -> str:
     of a bare repository, and one whose primary was made with
     `--separate-git-dir` (Git then reports the git dir as the main worktree).
     So does a linked worktree on a Git older than 2.36, which has no
-    `worktree list -z`. A path that is not a worktree at all stops.
+    `worktree list -z`, and every checkout on a Git older than 2.31, which has
+    no `rev-parse --path-format`. Whenever the main worktree cannot be proven,
+    the checkout names itself, as every run did before #1103; only a path where
+    Git sees no work tree at all (a broken gitfile, say) stops.
 
     The report a session writes lives below this root too (`report_location`), so
     a report written by a temporary worktree outlives it."""
     here = _worktree_locations(repo)
     if here is None:
-        raise TriageError(
-            "repository checkout is not a Git worktree (or Git is older than 2.31, which identity probes need)",
-            code="repository-identity",
-        )
+        # A Git too old for `--path-format`, or any other failed probe, in a
+        # place Git still sees a work tree: name the checkout, as before #1103.
+        if _identity_git(repo, "rev-parse", "--show-toplevel").returncode == 0:
+            return str(repo)
+        raise TriageError("repository checkout is not a Git worktree", code="repository-identity")
     _, git_dir, common = here
     if _same_file(git_dir, common):
         return str(repo)

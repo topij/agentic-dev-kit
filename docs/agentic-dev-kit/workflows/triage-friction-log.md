@@ -100,7 +100,10 @@ common dir. A checkout that is its own common dir names itself. A linked worktre
 main worktree Git cannot name as a checkout of that common dir names itself too, as
 before #1103: a bare repository's linked worktree, one whose primary was made with
 `--separate-git-dir`, and any linked worktree on a Git older than 2.36 (no
-`git worktree list -z`); its sessions do not continue from another worktree. The probes
+`git worktree list -z`); its sessions do not continue from another worktree. On a Git
+older than 2.31 (no `git rev-parse --path-format`) every checkout names itself the
+same way. Only a checkout where Git sees no work tree at all, such as one whose gitfile is
+broken, is refused. The probes
 run in the invoking checkout and in the main worktree Git names for it, never in a
 recorded root, and drop the environment variables that relocate a repository
 (`GIT_DIR`, `GIT_WORK_TREE` and the like).

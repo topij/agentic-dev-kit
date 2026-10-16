@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -423,13 +424,64 @@ def test_configuration_variables_still_apply_to_the_recorded_remote(
     assert current(root)["remote"] == "git@github.com:example/project.git"
 
 
-def test_a_linked_worktree_whose_gitfile_is_broken_names_no_repository(tmp_path: Path) -> None:
+def old_git(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Put a `git` on PATH that answers `--path-format=absolute` as a Git older
+    than 2.31 does: it echoes the unknown option and handles the rest."""
+    real = shutil.which("git")
+    assert real is not None
+    shim_dir = tmp_path / "old-git-bin"
+    shim_dir.mkdir()
+    shim = shim_dir / "git"
+    shim.write_text(
+        "#!/bin/sh\n"
+        "for arg in \"$@\"; do\n"
+        "  if [ \"$arg\" = --path-format=absolute ]; then\n"
+        "    printf '%s\\n' \"$arg\"\n"
+        "    for kept in \"$@\"; do\n"
+        "      shift\n"
+        "      [ \"$kept\" = --path-format=absolute ] || set -- \"$@\" \"$kept\"\n"
+        "    done\n"
+        f"    exec '{real}' \"$@\"\n"
+        "  fi\n"
+        "done\n"
+        f"exec '{real}' \"$@\"\n"
+    )
+    shim.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{shim_dir}{os.pathsep}{os.environ['PATH']}")
+
+
+def test_on_a_git_older_than_2_31_every_checkout_names_itself(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Such a Git has no `rev-parse --path-format`, so the main worktree cannot
+    be proven. Every checkout names itself, as every run did before #1103, and
+    triage runs rather than refusing."""
+    root = repository(tmp_path)
+    worktree = linked(root, "member")
+    state_root = shared_state(tmp_path, monkeypatch)
+    old_git(tmp_path, monkeypatch)
+    probe = subprocess.run(["git", "-C", str(root), "rev-parse", "--path-format=absolute", "--git-dir"],
+                           capture_output=True, text=True, check=True)
+    assert probe.stdout.splitlines()[0] == "--path-format=absolute"
+    for checkout in (root, worktree):
+        settings = load_settings(checkout)
+        assert repository_identity(settings)["root"] == str(settings.paths.repo)
+    presented, _ = draft_awaiting_approval(root, state_root)
+    assert presented["run_identity"]["repository_identity"]["root"] == str(load_settings(root).paths.repo)
+
+
+@pytest.mark.parametrize("git_age", ["current", "older-than-2.31"])
+def test_a_linked_worktree_whose_gitfile_is_broken_names_no_repository(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_age: str
+) -> None:
     """Moving the primary moves the common dir the worktree's gitfile points
-    into, so the worktree is no Git worktree at all."""
+    into, so the worktree is no Git worktree at all, whatever the Git."""
     from triage.model import TriageError, canonical_repository_root
 
     root = repository(tmp_path)
     worktree = linked(root, "member")
+    if git_age != "current":
+        old_git(tmp_path, monkeypatch)
     shutil.move(str(root), str(tmp_path / "moved"))
     with pytest.raises(TriageError, match="not a Git worktree") as raised:
         canonical_repository_root(worktree)
