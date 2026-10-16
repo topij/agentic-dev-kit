@@ -5,6 +5,42 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-13 (kit-retired command deletion checks adopter references; REST reads judged against GitHub's counts, in a Claude Code cloud session)
+
+- **Skills and instruction files:** [#1077](https://github.com/topij/agentic-dev-kit/pull/1077)
+  merged as `8bac932` on the operator's go-ahead. `upgrade.md` Step 4 now searches the
+  repository for references to `.claude/commands/` and to a `kit-retired` command's own
+  path before deleting it, and keeps the command when adopter code or CI depends on it;
+  Step 1 and the adapter-report hint say the same. Review: one adversarial
+  `fallback:lens` pass and three `fallback:delta` passes, recorded in the PR's review comment. Receipts were not
+  recorded, because `--record-review` refuses on the REST backend. #1071, which the PR
+  answers, was open when this entry was written; closing it waits for the operator.
+- **pr-watch REST backend:** [#1093](https://github.com/topij/agentic-dev-kit/pull/1093)
+  merged as `4fae786f` on the operator's go-ahead, from the cloud session through the
+  GitHub merge API. A REST read short of a count GitHub sends (check-runs and
+  combined-status `total_count`, the PR's `comments` / `review_comments`) is listed in
+  `truncated_reads`; a body missing those counts or a boolean `draft`, or holding a
+  non-object list element, exits 2. It gates nothing in `pr_watch`.
+  - Decided: only step 1 of the #94 plan (detection) was worth doing. Steps 2 and 3,
+    which would let a cloud session record receipts and merge through `pr_watch`, were
+    judged to cost more than they buy and are parked on #94.
+  - Decided: a "full last page with no next link" check for reviews was built and
+    dropped in review. A complete list an exact multiple of `per_page` long flagged
+    every poll on a quiet PR.
+  - Review: two-lens full panels at `7757f03`, `593ce38` and `ae4706c`, then a
+    two-lens delta at `454ae79`; receipts listed in the PR body, not recorded.
+  - Verification: `make test` at `454ae79be8ede08cf03556fc0472767ee9f35607` on
+    2026-10-12, in `/home/user/rest-failclosed` (cloud), printed
+    `8 failed, 4892 passed, 37 skipped`; the failures are the cloud-sandbox root and
+    process-group tests. CI on `7ffa549f` passed.
+- **Not established:** whether GitHub's `review_comments` count can permanently exceed
+  the inline-comment list (pending or hidden comments). The lenses could only sample
+  this repository, where every PR's inline count was zero. If it can, session-start
+  would report that PR's review findings unavailable on every poll.
+- **Residual LOWs from #1093's review, not filed:** no test reads a wrapped surface
+  exactly one row short of `total_count`, and one sentence on triage's terminal receipt
+  is loose in mechanism. Both are listed in the PR body.
+
 ### 2026-10-12 (friction-log triage; record-prose preflight recognises moved pairings, in Claude Code)
 
 - **Friction-log triage** (session `ae0b23b8`, engine-backed, approved in this session

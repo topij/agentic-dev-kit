@@ -20,6 +20,42 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-16 (triage repository identity redesigned and merged; shared-hook install merged; residual review findings filed, in Claude Code)
+
+- **Triage outcome receipts** (renamed from *Triage repository identity and outcome
+  receipts*): [#1111](https://github.com/topij/agentic-dev-kit/pull/1111) merged as
+  `62e0ffaa` on the operator's request, pinned to the reviewed head `7a59669e`.
+  - Shipped: linked worktrees name the main worktree. A recorded identity matches by
+    string comparison only: it equals the current one, or equals it with the invoking
+    checkout's own root, so a session a linked worktree recorded before #1111
+    continues from that worktree's path. A checkout whose main worktree cannot be
+    proven names itself, including every checkout on a Git older than 2.31; #1116
+    names one `--separate-git-dir` layout whose linked worktrees name a phantom root
+    instead. Results
+    carry `disposition` / `waiting_on` / `refusal_code`. An unverified tracker or forge
+    write waits on `reconciliation`, except an unsettled forge `pr-watch` or
+    `merge-read-back`, which waits on `finalize`.
+  - Decided: the invocation-bound outcome receipt is out of #1111 (operator's option C).
+    Its code is on branch `feat/triage-outcome-receipts` at `fabed73e`, and #1103
+    stays open for it. Membership probing of recorded roots was replaced by equality,
+    on the operator's call, after its rounds kept finding edges in that probing.
+  - Review: the two-lens round at `7a59669e` left no finding above LOW; each round's
+    disposition is on #1111. Residual LOW findings: #1116.
+  - Verification: `make test` at `7a59669e0e3d6c64387354e6825f791bfbe6bfac` on
+    2026-10-16, in `/Users/topi/Coding/agentic-dev-kit-wt/triage-worktree-identity`,
+    printed `5099 passed, 1 skipped`.
+- **Shared hook installation:** [#1112](https://github.com/topij/agentic-dev-kit/pull/1112)
+  merged as `aff05641`, pinned to `cf1a5402`, after a round with nothing above LOW.
+  Residual LOW findings: #1117. `kit_doctor`'s hook advice from a linked worktree is
+  noted on #61.
+- **Consumer upgrades:** no consumer was upgraded. cs-toolkit's scheduled triage
+  needs #1111 installed there.
+- **Filed this session:** #1116, #1117; comments on #1103 (receipt branch) and #61.
+- **Assignment:** confirmed by the operator. The three workstream entries drop their
+  `assignment unconfirmed` markers, and the triage entry is renamed for what remains.
+
+______________________________________________________________________
+
 ## Session — 2026-10-15 (triage linked-worktree identity and outcome receipts; shared-hook install from linked worktrees; consumer-upgrade assessment, in Claude Code)
 
 - **Triage repository identity and outcome receipts:** [#1111](https://github.com/topij/agentic-dev-kit/pull/1111)
@@ -139,44 +175,6 @@ ______________________________________________________________________
 - **Not established:** #1089, #1075, #1070 and #1079 are still open, for the operator to
   mark done; #1079 now also carries the residual LOWs. The workstream assignment
   of *Panel prompt test fixtures* is unconfirmed.
-
-______________________________________________________________________
-
-## Session — 2026-10-13 (kit-retired command deletion checks adopter references; REST reads judged against GitHub's counts, in a Claude Code cloud session)
-
-- **Skills and instruction files:** [#1077](https://github.com/topij/agentic-dev-kit/pull/1077)
-  merged as `8bac932` on the operator's go-ahead. `upgrade.md` Step 4 now searches the
-  repository for references to `.claude/commands/` and to a `kit-retired` command's own
-  path before deleting it, and keeps the command when adopter code or CI depends on it;
-  Step 1 and the adapter-report hint say the same. Review: one adversarial
-  `fallback:lens` pass and three `fallback:delta` passes, recorded in the PR's review comment. Receipts were not
-  recorded, because `--record-review` refuses on the REST backend. #1071, which the PR
-  answers, was open when this entry was written; closing it waits for the operator.
-- **pr-watch REST backend:** [#1093](https://github.com/topij/agentic-dev-kit/pull/1093)
-  merged as `4fae786f` on the operator's go-ahead, from the cloud session through the
-  GitHub merge API. A REST read short of a count GitHub sends (check-runs and
-  combined-status `total_count`, the PR's `comments` / `review_comments`) is listed in
-  `truncated_reads`; a body missing those counts or a boolean `draft`, or holding a
-  non-object list element, exits 2. It gates nothing in `pr_watch`.
-  - Decided: only step 1 of the #94 plan (detection) was worth doing. Steps 2 and 3,
-    which would let a cloud session record receipts and merge through `pr_watch`, were
-    judged to cost more than they buy and are parked on #94.
-  - Decided: a "full last page with no next link" check for reviews was built and
-    dropped in review. A complete list an exact multiple of `per_page` long flagged
-    every poll on a quiet PR.
-  - Review: two-lens full panels at `7757f03`, `593ce38` and `ae4706c`, then a
-    two-lens delta at `454ae79`; receipts listed in the PR body, not recorded.
-  - Verification: `make test` at `454ae79be8ede08cf03556fc0472767ee9f35607` on
-    2026-10-12, in `/home/user/rest-failclosed` (cloud), printed
-    `8 failed, 4892 passed, 37 skipped`; the failures are the cloud-sandbox root and
-    process-group tests. CI on `7ffa549f` passed.
-- **Not established:** whether GitHub's `review_comments` count can permanently exceed
-  the inline-comment list (pending or hidden comments). The lenses could only sample
-  this repository, where every PR's inline count was zero. If it can, session-start
-  would report that PR's review findings unavailable on every poll.
-- **Residual LOWs from #1093's review, not filed:** no test reads a wrapped surface
-  exactly one row short of `total_count`, and one sentence on triage's terminal receipt
-  is loose in mechanism. Both are listed in the PR body.
 
 ______________________________________________________________________
 
@@ -347,35 +345,37 @@ for the headless lane profile.
 
 ▶ Next: review #1102 against the delivered lane guidance and decide its tracker disposition.
 
-### Triage repository identity and outcome receipts
+### Triage outcome receipts
 
-**Status:** [#1111](https://github.com/topij/agentic-dev-kit/pull/1111) is open at
-`9ee0fd9b`, held for the operator with its round budget spent; the decision packet on the
-PR recommends option A if the receipt surface is wanted now, otherwise C (ship identity
-and dispositions, move the receipt surface to a follow-up). cs-toolkit's scheduled triage needs the identity half. Assignment
-unconfirmed — may belong to Triage engine hardening.
-**Owner:** [#1103](https://github.com/topij/agentic-dev-kit/issues/1103); PR #1111.
+**Status:** #1111 (`62e0ffaa`) shipped linked-worktree repository identity and result
+dispositions. The invocation-bound outcome receipt is the open half: its code is on
+branch `feat/triage-outcome-receipts` at `fabed73e`, #1111's round-4 head. Two #1111
+comments name the findings a redesign must meet: the round-3 decision packet, and the
+round-4 comment's MEDIUM that check mode can overwrite the receipt it checks, which the
+branch tip still has. #1116 holds #1111's residual LOW findings.
+**Owner:** [#1103](https://github.com/topij/agentic-dev-kit/issues/1103);
+[#1116](https://github.com/topij/agentic-dev-kit/issues/1116).
 
-▶ Next: operator decides #1111's decision packet (A, B or C); then pr-watch 1111 for the chosen route.
+▶ Next: #1103 — design the outcome receipt against #1111's round-3 decision packet and round-4 findings, starting from branch `feat/triage-outcome-receipts`.
 
 ### Shared hook installation
 
-**Status:** [#1112](https://github.com/topij/agentic-dev-kit/pull/1112) is open at
-`5fda739d`, held for the operator with its round budget spent; its open findings are one
-docs MEDIUM and five LOW findings (decision packet on the PR). #990's lens
-rendering and migration items are untouched. Assignment unconfirmed.
-**Owner:** [#990](https://github.com/topij/agentic-dev-kit/issues/990); PR #1112.
+**Status:** #1112 (`aff05641`) stopped `init.sh` run from a linked worktree from writing
+the hooks every checkout shares. #1117 holds its residual LOW findings. #990's items 1
+(lens definitions rendered for the kit's config) and 3 (migration gaps) are open.
+**Owner:** [#990](https://github.com/topij/agentic-dev-kit/issues/990);
+[#1117](https://github.com/topij/agentic-dev-kit/issues/1117).
 
-▶ Next: operator decides #1112's decision packet (option A is the one further round the packet scopes).
+▶ Next: #990 item 1 — render the lens agent definitions from the adopter's config rather than the kit's.
 
 ### Consumer upgrades
 
-**Status:** neither consumer was upgraded. The plan, the facts read from each consumer
-and the issue-by-consumer impact are in
-`saved_plans/consumer-upgrade-assessment_2026-10-15.md` (local). cs-toolkit's
-scheduled triage is blocked until #1111's identity change is installed there. Assignment
-unconfirmed.
+**Status:** neither consumer was upgraded. With #1111 merged, cs-toolkit's scheduled
+triage runs from its temporary worktrees once its kit is upgraded; a deployment change
+that gates those jobs on an outcome receipt waits on #1103. The plan and the facts read
+from each consumer are in `saved_plans/consumer-upgrade-assessment_2026-10-15.md`
+(local).
 **Owner:** `saved_plans/consumer-upgrade-assessment_2026-10-15.md`; #1103, #990, #1011,
 #1109, #979.
 
-▶ Next: after #1111 merges, `/upgrade` cs-toolkit from a fresh linked worktree of its `origin/main` (plan step 2 of the local `saved_plans/consumer-upgrade-assessment_2026-10-15.md`), with operator approval.
+▶ Next: `/upgrade` cs-toolkit from a fresh linked worktree of its `origin/main` (plan step 2 of the local `saved_plans/consumer-upgrade-assessment_2026-10-15.md`), with operator approval.
