@@ -2248,6 +2248,19 @@ def test_split_workflow_read_and_link_mutations_are_rejected(tmp_path: Path) -> 
         ("pr-watch/report-fields.md", "before the first action of any run.",
          "before the first action of any run. Read it only when a report field is unclear."),
         ("pr-watch/report-fields.md", "## The REST backend", "#### The REST backend"),
+        # A heading no summary or entry citation names: only the placement check sees it.
+        ("triage-friction-log/recovery.md", "### Gate-only recovery transition",
+         "### Gate-only recovery step"),
+        # The clause after each reference file's semicolon (#1058).
+        ("triage-friction-log/recovery.md", "may sit in that file or another of its reference files.",
+         "sits in this file only."),
+        ("triage-friction-log/state-schema.md", "may sit in that file or another of its reference files.",
+         "sits in this file only."),
+        ("triage-friction-log/finalize.md", "may sit in that file or another of its reference files.",
+         "sits in this file only."),
+        ("pr-watch/report-fields.md", "may sit in that file or another of its reference files.",
+         "sits in this file only."),
+        ("pr-watch.md", "may sit in any of them.", "lives only in this file."),
     )
     for index, (rel, old, new) in enumerate(mutations):
         root = tmp_path / f"case-{index}"
@@ -2261,6 +2274,50 @@ def test_split_workflow_read_and_link_mutations_are_rejected(tmp_path: Path) -> 
         target.write_text(mutated, encoding="utf-8")
         with pytest.raises(AssertionError):
             _assert_split_workflow_links_and_triggers(root)
+
+
+def test_split_workflow_section_placement_and_citation_mutations_are_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # #1058: each case fails one placement or citation assertion that no
+    # other assertion in the helper would catch for it.
+    require_kit_source()
+    source = REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows"
+
+    def fresh(case: str) -> tuple[Path, Path]:
+        root = tmp_path / case
+        shutil.copytree(source, root / "docs" / "agentic-dev-kit" / "workflows")
+        return root, root / "docs" / "agentic-dev-kit" / "workflows" / "triage-friction-log"
+
+    # A section moved, whole and unchanged, from one reference file to another.
+    root, triage = fresh("moved-section")
+    schema = (triage / "state-schema.md").read_text(encoding="utf-8")
+    start = schema.index("\n## Validity and abandonability\n")
+    end = schema.index("\n## The single-writer gate file\n")
+    moved = schema[start:end]
+    (triage / "state-schema.md").write_text(schema[:start] + schema[end:], encoding="utf-8")
+    cli = (triage / "engine-cli.md").read_text(encoding="utf-8")
+    (triage / "engine-cli.md").write_text(cli.rstrip("\n") + "\n" + moved + "\n", encoding="utf-8")
+    with pytest.raises(AssertionError, match=r"state-schema\.md holds"):
+        _assert_split_workflow_links_and_triggers(root)
+
+    # A summary bullet that cites a section no reference file holds. The entry
+    # and the declaration are changed together, so the Reference files section
+    # still equals its declaration and only the citation check is left to fail.
+    root, _ = fresh("absent-citation")
+    entry = root / "docs" / "agentic-dev-kit" / "workflows" / "triage-friction-log.md"
+    text = entry.read_text(encoding="utf-8")
+    assert text.count("*Finalize and sweep*") == 1
+    entry.write_text(text.replace("*Finalize and sweep*", "*Finalize and archive*"), encoding="utf-8")
+    summaries = {
+        slug: dict(files) for slug, files in _SPLIT_WORKFLOW_SUMMARIES.items()
+    }
+    summaries["triage-friction-log"]["finalize.md"] = summaries["triage-friction-log"][
+        "finalize.md"
+    ].replace("*Finalize and sweep*", "*Finalize and archive*")
+    monkeypatch.setattr(sys.modules[__name__], "_SPLIT_WORKFLOW_SUMMARIES", summaries)
+    with pytest.raises(AssertionError, match=r"names \*Finalize and archive\* for finalize\.md"):
+        _assert_split_workflow_links_and_triggers(root)
 
 
 # A reference file sits one directory below its entry, so a link carried over
